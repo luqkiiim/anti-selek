@@ -16,15 +16,16 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
     }
 
-    if (!session?.user?.isAdmin) {
-      return NextResponse.json({ error: "Unauthorized: Admin only" }, { status: 403 });
-    }
-
     const body = await request.json();
     const { name, type = "POINTS", playerIds = [] } = body;
 
     if (!name) {
       return NextResponse.json({ error: "Session name required" }, { status: 400 });
+    }
+
+    // Authorization check
+    if (!session?.user?.isAdmin) {
+      return NextResponse.json({ error: "Unauthorized: Admin only" }, { status: 403 });
     }
 
     // Create session with unique code
@@ -48,6 +49,7 @@ export async function POST(request: Request) {
         name,
         type,
         status: "WAITING",
+        courts: {
           create: [
             { courtNumber: 1 },
             { courtNumber: 2 },
