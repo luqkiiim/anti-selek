@@ -42,7 +42,7 @@ export async function POST(
   // Check if admin or one of the players
   const user = await prisma.user.findUnique({ where: { id: session.user.id } });
   const adminEmails = process.env.ADMIN_EMAILS?.split(",").map(e => e.trim()) || [];
-  const isAdmin = user && adminEmails.includes(user.email);
+  const isAdmin = user?.email && adminEmails.includes(user.email);
   const isPlayer = [match.team1User1Id, match.team1User2Id, match.team2User1Id, match.team2User2Id].includes(session.user.id);
 
   if (!isAdmin && !isPlayer) {

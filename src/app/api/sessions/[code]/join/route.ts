@@ -22,7 +22,7 @@ export async function POST(
     // If admin is trying to add someone else
     if (targetUserId && targetUserId !== session.user.id) {
       const adminEmails = process.env.ADMIN_EMAILS?.split(",").map(e => e.trim()) || [];
-      const isAdmin = adminEmails.includes(session.user.email!);
+      const isAdmin = session.user.email && adminEmails.includes(session.user.email);
       if (!isAdmin) {
         return NextResponse.json({ error: "Unauthorized: Only admins can add other players" }, { status: 403 });
       }

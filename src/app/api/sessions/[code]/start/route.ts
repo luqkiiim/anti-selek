@@ -24,7 +24,7 @@ export async function POST(
   // Check admin
   const user = await prisma.user.findUnique({ where: { id: session.user.id } });
   const adminEmails = process.env.ADMIN_EMAILS?.split(",").map(e => e.trim()) || [];
-  if (!user || !adminEmails.includes(user.email)) {
+  if (!user?.email || !adminEmails.includes(user.email)) {
     return NextResponse.json({ error: "Admin only" }, { status: 403 });
   }
 

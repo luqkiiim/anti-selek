@@ -17,7 +17,7 @@ export async function POST(
 
     // Check if the requester is an admin or the player themselves
     const adminEmails = process.env.ADMIN_EMAILS?.split(",").map(e => e.trim()) || [];
-    const isAdmin = adminEmails.includes(session.user.email!);
+    const isAdmin = session.user.email && adminEmails.includes(session.user.email);
     
     if (!isAdmin && session.user.id !== userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
