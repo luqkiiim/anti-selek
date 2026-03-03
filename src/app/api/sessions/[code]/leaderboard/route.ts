@@ -20,12 +20,29 @@ export async function GET(
       players: {
         include: { user: { select: { id: true, name: true, elo: true } } },
       },
+      matches: {
+        where: { status: { in: ["COMPLETED", "PENDING_APPROVAL"] } },
+        select: {
+          team1User1Id: true,
+          team1User2Id: true,
+          team2User1Id: true,
+          team2User2Id: true,
+        }
+      }
     },
   });
 
   if (!sessionData) {
     return NextResponse.json({ error: "Session not found" }, { status: 404 });
   }
+
+  // Calculate match counts
+  const matchCounts: Record<string, number> = {};
+  sessionData.matches.forEach(m => {
+    [m.team1User1Id, m.team1User2Id, m.team2User1Id, m.team2User2Id].forEach(id => {
+      matchCounts[id] = (matchCounts[id] || 0) + 1;
+    });
+  });
 
   // Session points leaderboard
   const sessionPointsLeaderboard = sessionData.players
@@ -34,6 +51,7 @@ export async function GET(
       name: p.user.name,
       sessionPoints: p.sessionPoints,
       elo: p.user.elo,
+      matchesPlayed: matchCounts[p.userId] || 0,
     }))
     .sort((a, b) => b.sessionPoints - a.sessionPoints);
 
@@ -44,6 +62,7 @@ export async function GET(
       name: p.user.name,
       sessionPoints: p.sessionPoints,
       elo: p.user.elo,
+      matchesPlayed: matchCounts[p.userId] || 0,
     }))
     .sort((a, b) => b.elo - a.elo);
 

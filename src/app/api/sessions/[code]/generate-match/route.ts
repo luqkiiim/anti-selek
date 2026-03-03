@@ -24,6 +24,11 @@ export async function POST(
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
     }
+    
+    // Authorization check
+    if (!(session.user as any).isAdmin) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+    }
 
     const { code } = await params;
     const body = await request.json().catch(() => ({}));
@@ -33,7 +38,7 @@ export async function POST(
       return NextResponse.json({ error: "Court ID required" }, { status: 400 });
     }
 
-    // 1. Fetch fresh session data with all players and ALL matches
+    // 1. Fetch fresh session data with all players, matches and the session start time
     const sessionData = await prisma.session.findUnique({
       where: { code },
       include: {
@@ -52,94 +57,74 @@ export async function POST(
       return NextResponse.json({ error: "Session not active" }, { status: 400 });
     }
 
-    // 2. Calculate match counts and track the most recently finished players
-    const matchCounts: Record<string, number> = {};
-    sessionData.players.forEach(p => {
-      matchCounts[p.userId] = 0;
-    });
-    
-    // Find the most recently completed match in the entire session
-    const lastCompletedMatch = [...sessionData.matches]
-      .filter(m => m.status === "COMPLETED")
-      .sort((a, b) => {
-        const timeA = a.completedAt ? new Date(a.completedAt).getTime() : 0;
-        const timeB = b.completedAt ? new Date(b.completedAt).getTime() : 0;
-        return timeB - timeA;
-      })[0];
+    // 2. Identify busy players (those currently on court)
+    // We treat PENDING and IN_PROGRESS as busy.
+    // PENDING_APPROVAL players are technically off-court and could be available for the NEXT court.
+    const busyPlayerIds = new Set(
+      sessionData.matches
+        .filter(m => ["PENDING", "IN_PROGRESS"].includes(m.status))
+        .flatMap(m => [m.team1User1Id, m.team1User2Id, m.team2User1Id, m.team2User2Id])
+    );
 
-    const recentlyFinishedIds = lastCompletedMatch 
-      ? new Set([lastCompletedMatch.team1User1Id, lastCompletedMatch.team1User2Id, lastCompletedMatch.team2User1Id, lastCompletedMatch.team2User2Id])
-      : new Set();
+    // 3. Calculate player stats for fair selection
+    const playerStats: Record<string, { matchCount: number; lastMatchAt: number }> = {};
+    
+    sessionData.players.forEach(p => {
+      playerStats[p.userId] = {
+        matchCount: 0,
+        lastMatchAt: sessionData.createdAt.getTime(), // Default to session start
+      };
+    });
 
     sessionData.matches.forEach(m => {
+      const matchTime = (m.completedAt || m.createdAt).getTime();
       [m.team1User1Id, m.team1User2Id, m.team2User1Id, m.team2User2Id].forEach(id => {
-        if (matchCounts[id] !== undefined) {
-          matchCounts[id]++;
+        if (playerStats[id]) {
+          playerStats[id].matchCount++;
+          if (matchTime > playerStats[id].lastMatchAt) {
+            playerStats[id].lastMatchAt = matchTime;
+          }
         }
       });
     });
 
-    // Calculate the session average match count (among those who have played at least once)
-    const activeMatchCounts = Object.values(matchCounts).filter(c => c > 0);
-    const sessionAvg = activeMatchCounts.length > 0 
-      ? activeMatchCounts.reduce((a, b) => a + b, 0) / activeMatchCounts.length 
-      : 0;
-    
-    // We treat late joiners as having (Average - 1) matches so they join the rotation 
-    // naturally without having to play 5 games in a row.
-    const matchFloor = Math.max(0, Math.floor(sessionAvg) - 1);
-
-    // 3. Identify currently busy players (those in matches not yet completed)
-    const activeMatchPlayerIds = new Set(
-      sessionData.matches
-        .filter(m => ["PENDING", "IN_PROGRESS", "PENDING_APPROVAL"].includes(m.status))
-        .flatMap((m) => [
-          m.team1User1Id, m.team1User2Id, m.team2User1Id, m.team2User2Id
-        ])
-    );
-
-    // 4. Filter and Sort available players
-    // PRIMARY: REST RULE (Prioritize people who were NOT in the last finished match)
-    // SECONDARY: FEWEST matches played (using Virtual Floor for late joiners)
-    // TERTIARY: Randomize
+    // 4. Select the 4 available players who have played the least and waited the longest
     const availablePlayers = sessionData.players
-      .filter((p) => !activeMatchPlayerIds.has(p.userId) && !p.isPaused)
-      .map(p => {
-        const actualCount = matchCounts[p.userId] || 0;
-        return {
-          ...p,
-          _isResting: recentlyFinishedIds.has(p.userId) ? 1 : 0,
-          _matchCount: actualCount,
-          // If they are far behind the average (late joiner), we bring them up to the floor
-          _effectiveCount: Math.max(actualCount, matchFloor),
-          _random: Math.random()
-        };
-      })
+      .filter(p => !busyPlayerIds.has(p.userId) && !p.isPaused)
+      .map(p => ({
+        ...p,
+        _matchCount: playerStats[p.userId].matchCount,
+        _lastMatchAt: playerStats[p.userId].lastMatchAt,
+        _random: Math.random()
+      }))
       .sort((a, b) => {
-        if (a._isResting !== b._isResting) {
-          return a._isResting - b._isResting;
+        // Priority 1: Fewest matches played
+        if (a._matchCount !== b._matchCount) {
+          return a._matchCount - b._matchCount;
         }
-        if (a._effectiveCount !== b._effectiveCount) {
-          return a._effectiveCount - b._effectiveCount;
+        // Priority 2: Waited longest since their last match started
+        if (a._lastMatchAt !== b._lastMatchAt) {
+          return a._lastMatchAt - b._lastMatchAt;
         }
+        // Priority 3: Random tie-breaker
         return a._random - b._random;
       });
 
-    // Logging for debugging imbalance
-    console.log(`[Matchmaking] Session: ${code}, Available: ${availablePlayers.length}`);
-    availablePlayers.slice(0, 10).forEach(p => {
-      console.log(` - Player: ${p.user.name}, Matches: ${p._matchCount}`);
+    console.log(`[Matchmaking] Court: ${courtId}, Available: ${availablePlayers.length}`);
+    availablePlayers.slice(0, 8).forEach(p => {
+      console.log(` - ${p.user.name}: matches=${p._matchCount}, lastAt=${new Date(p._lastMatchAt).toLocaleTimeString()}`);
     });
 
     if (availablePlayers.length < 4) {
-      return NextResponse.json({ error: `Not enough available players (need 4, have ${availablePlayers.length})` }, { status: 400 });
+      return NextResponse.json({ 
+        error: `Not enough players available (need 4, have ${availablePlayers.length})` 
+      }, { status: 400 });
     }
 
-    // 5. Select the 4 players who have played the least
     const selectedPlayers = availablePlayers.slice(0, 4);
     const selectedIds = selectedPlayers.map(p => p.userId);
 
-    // 6. Find the most balanced teams among these 4 based on ELO
+    // 5. Find the most balanced teams among these 4 based on ELO and partner history
     const partitions = getDoublesPartitions(selectedIds);
     let bestPartition = partitions[0];
     let bestScore = Infinity;
@@ -154,9 +139,9 @@ export async function POST(
       const team2AvgElo = (p3.user.elo + p4.user.elo) / 2;
       let balanceScore = Math.abs(team1AvgElo - team2AvgElo);
 
-      // Repeat partner penalty
+      // Penalty for repeating recent partners
       if (p1.lastPartnerId === p2.userId || p2.lastPartnerId === p1.userId) {
-        balanceScore += 1000; // Even heavier penalty to ensure variety
+        balanceScore += 1000;
       }
       if (p3.lastPartnerId === p4.userId || p4.lastPartnerId === p3.userId) {
         balanceScore += 1000;
@@ -168,29 +153,32 @@ export async function POST(
       }
     }
 
-    // 7. Create the match
-    const newMatch = await prisma.match.create({
-      data: {
-        sessionId: sessionData.id,
-        courtId,
-        status: "IN_PROGRESS",
-        team1User1Id: bestPartition.team1[0],
-        team1User2Id: bestPartition.team1[1],
-        team2User1Id: bestPartition.team2[0],
-        team2User2Id: bestPartition.team2[1],
-      },
-      include: {
-        team1User1: { select: { id: true, name: true } },
-        team1User2: { select: { id: true, name: true } },
-        team2User1: { select: { id: true, name: true } },
-        team2User2: { select: { id: true, name: true } },
-      },
-    });
+    // 6. Transaction to create the match and assign it to the court
+    const newMatch = await prisma.$transaction(async (tx) => {
+      const match = await tx.match.create({
+        data: {
+          sessionId: sessionData.id,
+          courtId,
+          status: "IN_PROGRESS",
+          team1User1Id: bestPartition.team1[0],
+          team1User2Id: bestPartition.team1[1],
+          team2User1Id: bestPartition.team2[0],
+          team2User2Id: bestPartition.team2[1],
+        },
+        include: {
+          team1User1: { select: { id: true, name: true } },
+          team1User2: { select: { id: true, name: true } },
+          team2User1: { select: { id: true, name: true } },
+          team2User2: { select: { id: true, name: true } },
+        },
+      });
 
-    // 8. Assign to court
-    await prisma.court.update({
-      where: { id: courtId },
-      data: { currentMatchId: newMatch.id },
+      await tx.court.update({
+        where: { id: courtId },
+        data: { currentMatchId: match.id },
+      });
+
+      return match;
     });
 
     console.log(`[Matchmaking] Created Match: ${newMatch.id} on Court ${courtId}`);

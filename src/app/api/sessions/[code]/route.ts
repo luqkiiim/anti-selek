@@ -30,7 +30,7 @@ export async function GET(
         orderBy: { sessionPoints: "desc" },
       },
       matches: {
-        where: { status: "COMPLETED" },
+        where: { status: { in: ["COMPLETED", "PENDING_APPROVAL"] } },
         select: {
           id: true,
           team1User1Id: true,
@@ -38,6 +38,8 @@ export async function GET(
           team2User1Id: true,
           team2User2Id: true,
           winnerTeam: true,
+          status: true,
+          completedAt: true,
         },
       },
     },

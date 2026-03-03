@@ -59,6 +59,7 @@ export async function POST(
       team2Score,
       winnerTeam,
       status: "PENDING_APPROVAL",
+      completedAt: new Date(),
     },
     include: {
       team1User1: { select: { id: true, name: true } },

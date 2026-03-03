@@ -25,6 +25,7 @@ interface Match {
   team2User2: { id: string; name: string };
   team1Score?: number;
   team2Score?: number;
+  completedAt?: string;
 }
 
 interface CompletedMatchInfo {
@@ -34,6 +35,7 @@ interface CompletedMatchInfo {
   team2User1Id: string;
   team2User2Id: string;
   winnerTeam: number;
+  completedAt?: string;
 }
 
 interface Court {
@@ -548,6 +550,7 @@ export default function SessionPage() {
                   <tr>
                     <th className="px-4 py-3 text-left text-[10px] font-black text-gray-400 uppercase tracking-widest">#</th>
                     <th className="px-4 py-3 text-left text-[10px] font-black text-gray-400 uppercase tracking-widest">Player</th>
+                    <th className="px-4 py-3 text-center text-[10px] font-black text-gray-400 uppercase tracking-widest">MP</th>
                     <th className="px-4 py-3 text-center text-[10px] font-black text-gray-400 uppercase tracking-widest">W/L</th>
                     <th className="px-4 py-3 text-right text-[10px] font-black text-gray-400 uppercase tracking-widest">Pts</th>
                   </tr>
@@ -590,6 +593,9 @@ export default function SessionPage() {
                                 )}
                               </div>
                             </div>
+                          </td>
+                          <td className="px-4 py-4 whitespace-nowrap text-center">
+                            <span className="text-xs font-bold text-gray-600">{stats.played}</span>
                           </td>
                           <td className="px-4 py-4 whitespace-nowrap text-center">
                             <div className="text-[10px] font-black tracking-tighter">
