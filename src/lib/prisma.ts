@@ -4,16 +4,20 @@ import { createClient } from "@libsql/client";
 
 const globalForPrisma = global as unknown as { prisma: PrismaClient };
 
+// Detection for build environment vs runtime
+const isBuildTime = process.env.NEXT_PHASE === 'phase-production-build' || 
+                   process.env.NODE_ENV === 'production' && !process.env.TURSO_DATABASE_URL;
+
 function getPrisma() {
   const tursoUrl = process.env.TURSO_DATABASE_URL;
   const tursoToken = process.env.TURSO_AUTH_TOKEN;
 
-  console.log("Database connection check:");
-  console.log("- TURSO_DATABASE_URL exists:", !!tursoUrl);
-  console.log("- TURSO_AUTH_TOKEN exists:", !!tursoToken);
+  // During build time, return a basic client to satisfy imports without connecting
+  if (isBuildTime) {
+    return globalForPrisma.prisma || new PrismaClient();
+  }
 
   if (tursoUrl && tursoToken) {
-    console.log("Mode: CLOUD (Turso)");
     try {
       const libsql = createClient({
         url: tursoUrl,
@@ -22,11 +26,10 @@ function getPrisma() {
       const adapter = new PrismaLibSql(libsql as any);
       return new PrismaClient({ adapter } as any);
     } catch (e) {
-      console.error("CRITICAL: Failed to initialize Turso adapter:", e);
+      console.error("Failed to initialize Turso adapter:", e);
     }
   }
   
-  console.log("Mode: LOCAL (SQLite)");
   return globalForPrisma.prisma || new PrismaClient();
 }
 
