@@ -14,7 +14,7 @@ if (useLibSQL) {
     authToken: process.env.TURSO_AUTH_TOKEN!,
   });
   const adapter = new PrismaLibSql(libsql as any);
-  prismaInstance = new PrismaClient({ adapter });
+  prismaInstance = new PrismaClient({ adapter } as any);
 } else {
   prismaInstance = globalForPrisma.prisma || new PrismaClient();
 }
