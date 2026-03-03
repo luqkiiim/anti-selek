@@ -35,15 +35,16 @@ export async function POST(
     return NextResponse.json({ error: "Invalid score" }, { status: 400 });
   }
 
-  // Validate: must win by 2, cap at 30
+  // Validate: 21+ win by 2, OR cap at 30
   const maxScore = Math.max(team1Score, team2Score);
   const minScore = Math.min(team1Score, team2Score);
+  
   const isWinBy2 = maxScore >= 21 && maxScore - minScore >= 2;
-  const isCap = maxScore === 30 && minScore <= 28;
+  const isCapAt30 = maxScore === 30 && maxScore - minScore === 1; // 30-29 specifically
 
-  if (!isWinBy2 && !isCap) {
+  if (!isWinBy2 && !isCapAt30) {
     return NextResponse.json(
-      { error: "Score must be 21+ win by 2, or 30-28/29-27 cap" },
+      { error: "Score must be 21+ win by 2, or 30-29 cap" },
       { status: 400 }
     );
   }

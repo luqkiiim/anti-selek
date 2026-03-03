@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -33,10 +33,24 @@ export default function AdminPlayersPage() {
     const text = await res.text();
     try {
       return text ? JSON.parse(text) : {};
-    } catch (e) {
+    } catch {
       return { error: "Invalid server response" };
     }
   };
+
+  const fetchPlayers = useCallback(async () => {
+    try {
+      const res = await fetch("/api/admin/players");
+      const data = await safeJson(res);
+      if (!res.ok) throw new Error(data.error || "Failed to fetch players");
+      setPlayers(Array.isArray(data) ? data : []);
+    } catch (err: any) {
+      console.error(err);
+      setError(err.message || "Failed to load players");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
     if (status === "unauthenticated") {
@@ -50,21 +64,7 @@ export default function AdminPlayersPage() {
     if (session?.user?.isAdmin) {
       fetchPlayers();
     }
-  }, [session]);
-
-  const fetchPlayers = async () => {
-    try {
-      const res = await fetch("/api/admin/players");
-      const data = await safeJson(res);
-      if (!res.ok) throw new Error(data.error || "Failed to fetch players");
-      setPlayers(Array.isArray(data) ? data : []);
-    } catch (err: any) {
-      console.error(err);
-      setError(err.message || "Failed to load players");
-    } finally {
-      setLoading(false);
-    }
-  };
+  }, [session, fetchPlayers]);
 
   const handleAddPlayer = async (e: React.FormEvent) => {
     e.preventDefault();

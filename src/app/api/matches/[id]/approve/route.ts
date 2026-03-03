@@ -68,14 +68,23 @@ export async function POST(
 
   const team1AvgElo = (match.team1User1.elo + match.team1User2.elo) / 2;
   const team2AvgElo = (match.team2User1.elo + match.team2User2.elo) / 2;
-  const eloDelta = calculateEloChange(team1AvgElo, team2AvgElo);
+  
+  let team1EloChange: number;
+  let team2EloChange: number;
 
-  const winnerEloChange = winnerTeam === 1 ? eloDelta : -eloDelta;
-  const loserEloChange = -eloDelta;
+  if (winnerTeam === 1) {
+    const delta = calculateEloChange(team1AvgElo, team2AvgElo);
+    team1EloChange = delta;
+    team2EloChange = -delta;
+  } else {
+    const delta = calculateEloChange(team2AvgElo, team1AvgElo);
+    team1EloChange = -delta;
+    team2EloChange = delta;
+  }
 
   // Transaction: update match, points, ELO, clear court
   const result = await prisma.$transaction(async (tx) => {
-    // Update match
+    // ... (rest of match and points update)
     const updatedMatch = await tx.match.update({
       where: { id },
       data: {
@@ -146,19 +155,19 @@ export async function POST(
     // Update ELO for all 4 players
     await tx.user.update({
       where: { id: match.team1User1Id },
-      data: { elo: { increment: winnerTeam === 1 ? winnerEloChange : loserEloChange } },
+      data: { elo: { increment: team1EloChange } },
     });
     await tx.user.update({
       where: { id: match.team1User2Id },
-      data: { elo: { increment: winnerTeam === 1 ? winnerEloChange : loserEloChange } },
+      data: { elo: { increment: team1EloChange } },
     });
     await tx.user.update({
       where: { id: match.team2User1Id },
-      data: { elo: { increment: winnerTeam === 2 ? winnerEloChange : loserEloChange } },
+      data: { elo: { increment: team2EloChange } },
     });
     await tx.user.update({
       where: { id: match.team2User2Id },
-      data: { elo: { increment: winnerTeam === 2 ? winnerEloChange : loserEloChange } },
+      data: { elo: { increment: team2EloChange } },
     });
 
     // Clear current match from court
