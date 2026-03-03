@@ -99,6 +99,8 @@ export async function POST(
         team1Score: finalTeam1Score,
         team2Score: finalTeam2Score,
         winnerTeam,
+        team1EloChange: team1EloChange,
+        team2EloChange: team2EloChange,
         status: "COMPLETED",
         completedAt: new Date(),
       },

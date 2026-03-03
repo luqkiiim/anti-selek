@@ -28,6 +28,7 @@ interface UserStats {
     opponents: { id: string; name: string }[];
     score: string;
     result: "WIN" | "LOSS";
+    eloChange?: number;
   }[];
 }
 
@@ -167,7 +168,7 @@ export default function ProfilePage() {
                     </div>
 
                     {/* Result Badge */}
-                    <div className="flex-shrink-0">
+                    <div className="flex flex-col items-center gap-1">
                       <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${
                         match.result === "WIN" 
                           ? "bg-green-100 text-green-800" 
@@ -175,6 +176,13 @@ export default function ProfilePage() {
                       }`}>
                         {match.result}
                       </span>
+                      {typeof match.eloChange === "number" && (
+                        <span className={`text-[10px] font-black uppercase tracking-tighter ${
+                          match.eloChange >= 0 ? "text-green-600" : "text-red-600"
+                        }`}>
+                          {match.eloChange >= 0 ? "+" : ""}{match.eloChange} ELO
+                        </span>
+                      )}
                     </div>
 
                     {/* Match Details */}

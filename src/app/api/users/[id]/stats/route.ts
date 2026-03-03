@@ -60,6 +60,7 @@ export async function GET(
 
     const myScore = isTeam1 ? match.team1Score : match.team2Score;
     const opponentScore = isTeam1 ? match.team2Score : match.team1Score;
+    const myEloChange = isTeam1 ? match.team1EloChange : match.team2EloChange;
 
     pointsScored += myScore || 0;
     pointsConceded += opponentScore || 0;
@@ -80,6 +81,7 @@ export async function GET(
         : [match.team1User1, match.team1User2],
       score: `${myScore} - ${opponentScore}`,
       result: isWinner ? "WIN" : "LOSS",
+      eloChange: myEloChange,
     };
   });
 

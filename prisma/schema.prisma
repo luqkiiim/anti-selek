@@ -84,6 +84,8 @@ model Match {
   team2Score   Int?
 
   winnerTeam   Int?     // 1 or 2
+  team1EloChange Int?
+  team2EloChange Int?
 
   createdAt    DateTime @default(now())
   completedAt  DateTime?
