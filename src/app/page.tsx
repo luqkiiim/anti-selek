@@ -17,6 +17,7 @@ interface Session {
   id: string;
   code: string;
   name: string;
+  type: string;
   status: string;
   createdAt: string;
   players: { user: { id: string; name: string } }[];
@@ -31,6 +32,7 @@ export default function Home() {
   const [selectedPlayerIds, setSelectedPlayerIds] = useState<string[]>([]);
   const [joinCode, setJoinCode] = useState("");
   const [newSessionName, setNewSessionName] = useState("");
+  const [sessionType, setSessionType] = useState("POINTS");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -94,6 +96,7 @@ export default function Home() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ 
           name: newSessionName,
+          type: sessionType,
           playerIds: selectedPlayerIds
         }),
       });
@@ -182,23 +185,53 @@ export default function Home() {
 
         {/* Create Session */}
         {user?.isAdmin && (
-          <div className="bg-white rounded-lg shadow p-6 mb-6">
-            <h2 className="text-lg font-semibold mb-4">Create New Session</h2>
-            <div className="flex gap-2 mb-4">
-              <input
-                type="text"
-                placeholder="Session name"
-                value={newSessionName}
-                onChange={(e) => setNewSessionName(e.target.value)}
-                className="flex-1 px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
-              />
-              <button
-                onClick={createSession}
-                className="bg-blue-600 text-white px-6 py-2 rounded-md hover:bg-blue-700 font-medium"
-              >
-                Create
-              </button>
+          <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-6 mb-6">
+            <h2 className="text-lg font-black text-gray-900 uppercase tracking-widest mb-4">Create New Session</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Session Name</label>
+                <input
+                  type="text"
+                  placeholder="e.g., Friday Social"
+                  value={newSessionName}
+                  onChange={(e) => setNewSessionName(e.target.value)}
+                  className="w-full px-4 py-3 border-2 border-gray-100 rounded-xl focus:outline-none focus:border-blue-500 font-bold transition-all"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Ranking System</label>
+                <div className="flex gap-2 p-1.5 bg-gray-50 rounded-xl border-2 border-gray-100">
+                  <button
+                    onClick={() => setSessionType("POINTS")}
+                    className={`flex-1 py-2 px-3 rounded-lg text-xs font-black uppercase tracking-wider transition-all ${
+                      sessionType === "POINTS" 
+                        ? "bg-white text-blue-600 shadow-sm border border-gray-100" 
+                        : "text-gray-400 hover:text-gray-600"
+                    }`}
+                  >
+                    Points Based
+                  </button>
+                  <button
+                    onClick={() => setSessionType("ELO")}
+                    className={`flex-1 py-2 px-3 rounded-lg text-xs font-black uppercase tracking-wider transition-all ${
+                      sessionType === "ELO" 
+                        ? "bg-white text-purple-600 shadow-sm border border-gray-100" 
+                        : "text-gray-400 hover:text-gray-600"
+                    }`}
+                  >
+                    ELO Based
+                  </button>
+                </div>
+              </div>
             </div>
+
+            <button
+              onClick={createSession}
+              disabled={!newSessionName.trim()}
+              className="w-full bg-gray-900 text-white py-4 rounded-xl font-black uppercase tracking-widest text-sm shadow-lg active:scale-[0.98] transition-all disabled:opacity-50 disabled:active:scale-100 mb-6"
+            >
+              Start Session
+            </button>
             
             {allPlayers.length > 0 && (
               <div>
@@ -254,17 +287,24 @@ export default function Home() {
               {sessions.map((s) => (
                 <div
                   key={s.id}
-                  className="flex justify-between items-center p-3 border rounded hover:bg-gray-50"
+                  className="flex justify-between items-center p-4 border border-gray-100 rounded-2xl hover:bg-gray-50 transition-colors group"
                 >
                   <div>
-                    <p className="font-medium">{s.name}</p>
-                    <p className="text-sm text-gray-500">
-                      Code: {s.code} • {s.status} • {s.players.length} players
+                    <div className="flex items-center gap-2 mb-1">
+                      <p className="font-black text-gray-900">{s.name}</p>
+                      <span className={`text-[10px] font-black px-1.5 py-0.5 rounded uppercase tracking-wider ${
+                        s.type === 'ELO' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'
+                      }`}>
+                        {s.type || 'POINTS'}
+                      </span>
+                    </div>
+                    <p className="text-xs text-gray-500 font-bold uppercase tracking-widest">
+                      Code: <span className="text-gray-900">{s.code}</span> • {s.status} • {s.players.length} Players
                     </p>
                   </div>
                   <button
                     onClick={() => router.push(`/session/${s.code}`)}
-                    className="text-blue-600 hover:underline"
+                    className="bg-white text-gray-900 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider border-2 border-gray-100 shadow-sm group-hover:bg-gray-900 group-hover:text-white group-hover:border-gray-900 transition-all active:scale-95"
                   >
                     Enter
                   </button>

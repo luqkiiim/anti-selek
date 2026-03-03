@@ -32,6 +32,7 @@ model Session {
   id        String   @id @default(cuid())
   code      String   @unique
   name      String
+  type      String   @default("POINTS") // POINTS or ELO
   status    String   @default("WAITING") // WAITING, ACTIVE, COMPLETED
   createdAt DateTime @default(now())
   endedAt   DateTime?

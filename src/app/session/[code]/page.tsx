@@ -54,6 +54,7 @@ interface SessionData {
   id: string;
   code: string;
   name: string;
+  type: string;
   status: string;
   courts: Court[];
   players: Player[];
@@ -539,9 +540,13 @@ export default function SessionPage() {
         {/* Combined Mobile Leaderboard / Standings */}
         <div className="space-y-6">
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-            <div className="bg-blue-600 px-5 py-4 flex justify-between items-center">
-              <h2 className="text-sm font-black text-white uppercase tracking-widest">Live Standings</h2>
-              <span className="text-[10px] font-bold text-blue-100 uppercase">Updates in real-time</span>
+            <div className={`${sessionData.type === 'ELO' ? 'bg-purple-600' : 'bg-blue-600'} px-5 py-4 flex justify-between items-center transition-colors`}>
+              <h2 className="text-sm font-black text-white uppercase tracking-widest">
+                {sessionData.type === 'ELO' ? 'ELO Rankings' : 'Live Standings'}
+              </h2>
+              <span className="text-[10px] font-bold text-white/70 uppercase tracking-widest">
+                {sessionData.type === 'ELO' ? 'Dynamic Ratings' : 'Point Totals'}
+              </span>
             </div>
             
             <div className="overflow-x-auto">
@@ -552,12 +557,18 @@ export default function SessionPage() {
                     <th className="px-4 py-3 text-left text-[10px] font-black text-gray-400 uppercase tracking-widest">Player</th>
                     <th className="px-4 py-3 text-center text-[10px] font-black text-gray-400 uppercase tracking-widest">MP</th>
                     <th className="px-4 py-3 text-center text-[10px] font-black text-gray-400 uppercase tracking-widest">W/L</th>
-                    <th className="px-4 py-3 text-right text-[10px] font-black text-gray-400 uppercase tracking-widest">Pts</th>
+                    <th className="px-4 py-3 text-right text-[10px] font-black text-gray-400 uppercase tracking-widest">
+                      {sessionData.type === 'ELO' ? 'ELO' : 'Pts'}
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50">
                   {sessionData.players
-                    .sort((a, b) => b.sessionPoints - a.sessionPoints)
+                    .sort((a, b) => 
+                      sessionData.type === 'ELO' 
+                        ? b.user.elo - a.user.elo 
+                        : b.sessionPoints - a.sessionPoints
+                    )
                     .map((player, idx) => {
                       const stats = calculatePlayerSessionStats(player.userId);
                       const isMe = player.userId === currentUserId;
@@ -566,7 +577,11 @@ export default function SessionPage() {
                       return (
                         <tr key={player.userId} className={`active:bg-gray-50 transition-colors ${player.isPaused ? 'opacity-40 grayscale' : ''}`}>
                           <td className="px-4 py-4 whitespace-nowrap">
-                            <span className={`w-6 h-6 rounded-lg flex items-center justify-center text-[10px] font-black ${idx < 3 ? 'bg-yellow-100 text-yellow-700' : 'bg-gray-100 text-gray-500'}`}>
+                            <span className={`w-6 h-6 rounded-lg flex items-center justify-center text-[10px] font-black ${
+                              idx < 3 
+                                ? sessionData.type === 'ELO' ? 'bg-purple-100 text-purple-700' : 'bg-yellow-100 text-yellow-700' 
+                                : 'bg-gray-100 text-gray-500'
+                            }`}>
                               {idx + 1}
                             </span>
                           </td>
@@ -577,7 +592,7 @@ export default function SessionPage() {
                                 {isMe && <span className="ml-1 text-[8px] bg-blue-100 text-blue-700 px-1 rounded">ME</span>}
                               </Link>
                               <div className="flex items-center gap-2 mt-1">
-                                <span className="text-[9px] font-bold text-gray-400">ELO {player.user.elo}</span>
+                                {sessionData.type !== 'ELO' && <span className="text-[9px] font-bold text-gray-400 uppercase">ELO {player.user.elo}</span>}
                                 {canToggle && (
                                   <button
                                     onClick={(e) => {
@@ -605,7 +620,9 @@ export default function SessionPage() {
                             </div>
                           </td>
                           <td className="px-4 py-4 whitespace-nowrap text-right">
-                            <span className="text-base font-black text-blue-600">{player.sessionPoints}</span>
+                            <span className={`text-base font-black ${sessionData.type === 'ELO' ? 'text-purple-600' : 'text-blue-600'}`}>
+                              {sessionData.type === 'ELO' ? player.user.elo : player.sessionPoints}
+                            </span>
                           </td>
                         </tr>
                       );

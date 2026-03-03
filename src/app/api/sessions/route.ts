@@ -21,7 +21,7 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const { name, playerIds = [] } = body;
+    const { name, type = "POINTS", playerIds = [] } = body;
 
     if (!name) {
       return NextResponse.json({ error: "Session name required" }, { status: 400 });
@@ -46,7 +46,8 @@ export async function POST(request: Request) {
       data: {
         code,
         name,
-        courts: {
+        type,
+        status: "WAITING",
           create: [
             { courtNumber: 1 },
             { courtNumber: 2 },
