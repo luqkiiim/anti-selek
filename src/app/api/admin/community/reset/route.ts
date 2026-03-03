@@ -3,9 +3,12 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
 
 export async function POST(request: Request) {
   try {
+    // Check if we are in a build environment or similar
+    // auth() should only be called during actual request handling
     const session = await auth();
 
     if (!session?.user?.isAdmin) {
@@ -37,4 +40,9 @@ export async function POST(request: Request) {
     console.error("Community reset error:", error);
     return NextResponse.json({ error: `Failed to reset community: ${error.message}` }, { status: 500 });
   }
+}
+
+// Add a dummy GET to explicitly mark this as an API route that shouldn't be pre-rendered
+export async function GET() {
+  return new NextResponse("Method Not Allowed", { status: 405 });
 }

@@ -2,13 +2,22 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
 
 export async function POST() {
-  const session = await auth();
+  try {
+    const session = await auth();
 
-  if (!session) {
-    return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+    if (!session) {
+      return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+    }
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    return NextResponse.json({ success: true }); // Always return success for signout attempts
   }
+}
 
-  return NextResponse.json({ success: true });
+export async function GET() {
+  return new NextResponse("Method Not Allowed", { status: 405 });
 }

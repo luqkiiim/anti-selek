@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
 
 export async function POST(
   request: Request,
@@ -35,4 +36,8 @@ export async function POST(
     console.error("Reset ELO error:", error);
     return NextResponse.json({ error: `Failed to reset ELO: ${error.message}` }, { status: 500 });
   }
+}
+
+export async function GET() {
+  return new NextResponse("Method Not Allowed", { status: 405 });
 }

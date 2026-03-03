@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
 
 export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
 
 export async function POST(request: Request) {
   try {
@@ -73,4 +74,8 @@ export async function POST(request: Request) {
       { status: 500 }
     );
   }
+}
+
+export async function GET() {
+  return new NextResponse("Method Not Allowed", { status: 405 });
 }
