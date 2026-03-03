@@ -1,5 +1,5 @@
 import { PrismaClient } from "@prisma/client";
-import { PrismaLibSql } from "@prisma/adapter-libsql";
+import { PrismaLibSQL } from "@prisma/adapter-libsql";
 import { createClient } from "@libsql/client";
 
 const globalForPrisma = globalThis as unknown as { prisma: PrismaClient | undefined };
@@ -16,7 +16,7 @@ function getPrisma() {
         url: tursoUrl,
         authToken: tursoToken,
       });
-      const adapter = new PrismaLibSql(libsql as any);
+      const adapter = new PrismaLibSQL(libsql as any);
       return new PrismaClient({ adapter } as any);
     } catch (e) {
       console.error("CRITICAL: Failed to initialize Prisma with LibSQL adapter:", e);
