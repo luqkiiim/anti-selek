@@ -8,8 +8,12 @@ function getPrisma() {
   const tursoUrl = process.env.TURSO_DATABASE_URL;
   const tursoToken = process.env.TURSO_AUTH_TOKEN;
 
-  // If we have Turso credentials, always try to use them
+  console.log("Database connection check:");
+  console.log("- TURSO_DATABASE_URL exists:", !!tursoUrl);
+  console.log("- TURSO_AUTH_TOKEN exists:", !!tursoToken);
+
   if (tursoUrl && tursoToken) {
+    console.log("Mode: CLOUD (Turso)");
     try {
       const libsql = createClient({
         url: tursoUrl,
@@ -18,11 +22,11 @@ function getPrisma() {
       const adapter = new PrismaLibSql(libsql as any);
       return new PrismaClient({ adapter } as any);
     } catch (e) {
-      console.error("Failed to initialize LibSQL adapter:", e);
+      console.error("CRITICAL: Failed to initialize Turso adapter:", e);
     }
   }
   
-  // Fallback to local SQLite (for build time or local dev)
+  console.log("Mode: LOCAL (SQLite)");
   return globalForPrisma.prisma || new PrismaClient();
 }
 
