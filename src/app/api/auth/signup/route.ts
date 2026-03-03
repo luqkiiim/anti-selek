@@ -66,10 +66,10 @@ export async function POST(request: Request) {
       name: user.name,
       isClaimed: user.isClaimed,
     });
-  } catch (error) {
-    console.error("Signup error:", error);
+  } catch (error: any) {
+    console.error("Signup error details:", error);
     return NextResponse.json(
-      { error: "Failed to create user" },
+      { error: `Failed to create user: ${error.message}` },
       { status: 500 }
     );
   }
