@@ -79,30 +79,41 @@ export async function POST(
       });
     });
 
+    // Calculate the session average match count (among those who have played at least once)
+    const activeMatchCounts = Object.values(matchCounts).filter(c => c > 0);
+    const sessionAvg = activeMatchCounts.length > 0 
+      ? activeMatchCounts.reduce((a, b) => a + b, 0) / activeMatchCounts.length 
+      : 0;
+    
+    // We treat late joiners as having (Average - 1) matches so they join the rotation 
+    // naturally without having to play 5 games in a row.
+    const matchFloor = Math.max(0, Math.floor(sessionAvg) - 1);
+
     // ... (Step 3 remains same)
 
     // 4. Filter and Sort available players
     // PRIMARY: REST RULE (Prioritize people who were NOT in the last finished match)
-    // SECONDARY: FEWEST matches played (Balance)
+    // SECONDARY: FEWEST matches played (using Virtual Floor for late joiners)
     // TERTIARY: Randomize
     const availablePlayers = sessionData.players
       .filter((p) => !activeMatchPlayerIds.has(p.userId) && !p.isPaused)
-      .map(p => ({
-        ...p,
-        _isResting: recentlyFinishedIds.has(p.userId) ? 1 : 0, // 0 = waiting longest, 1 = just finished
-        _matchCount: matchCounts[p.userId] || 0,
-        _random: Math.random()
-      }))
+      .map(p => {
+        const actualCount = matchCounts[p.userId] || 0;
+        return {
+          ...p,
+          _isResting: recentlyFinishedIds.has(p.userId) ? 1 : 0,
+          // If they are far behind the average (late joiner), we bring them up to the floor
+          _effectiveCount: Math.max(actualCount, matchFloor),
+          _random: Math.random()
+        };
+      })
       .sort((a, b) => {
-        // Priority 1: Rest those who just played if others are available
         if (a._isResting !== b._isResting) {
           return a._isResting - b._isResting;
         }
-        // Priority 2: Balance match counts
-        if (a._matchCount !== b._matchCount) {
-          return a._matchCount - b._matchCount;
+        if (a._effectiveCount !== b._effectiveCount) {
+          return a._effectiveCount - b._effectiveCount;
         }
-        // Priority 3: Randomize
         return a._random - b._random;
       });
 
