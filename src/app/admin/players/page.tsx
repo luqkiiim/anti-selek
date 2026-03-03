@@ -27,6 +27,8 @@ export default function AdminPlayersPage() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [editingElo, setEditingElo] = useState<Record<string, string>>({});
+  const [savingElo, setSavingElo] = useState<Record<string, boolean>>({});
 
   // Helper to safely parse JSON
   const safeJson = async (res: Response) => {
@@ -95,6 +97,45 @@ export default function AdminPlayersPage() {
       fetchPlayers();
     } catch (err: any) {
       setError(err.message);
+    }
+  };
+
+  const handleEloChange = (id: string, value: string) => {
+    setEditingElo(prev => ({ ...prev, [id]: value }));
+  };
+
+  const handleUpdateElo = async (id: string, name: string) => {
+    const newElo = editingElo[id];
+    if (!newElo || isNaN(parseInt(newElo))) return;
+
+    setSavingElo(prev => ({ ...prev, [id]: true }));
+    setError("");
+    setSuccess("");
+    
+    try {
+      const res = await fetch(`/api/admin/players/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ elo: parseInt(newElo) }),
+      });
+
+      const data = await safeJson(res);
+
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to update ELO");
+      }
+
+      setSuccess(`${name}'s ELO updated to ${newElo}.`);
+      setEditingElo(prev => {
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      });
+      fetchPlayers();
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setSavingElo(prev => ({ ...prev, [id]: false }));
     }
   };
 
@@ -294,7 +335,23 @@ export default function AdminPlayersPage() {
                           </Link>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          <span className="font-bold">{player.elo}</span>
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="number"
+                              className="w-20 px-2 py-1 text-xs font-bold border rounded bg-gray-50 focus:bg-white focus:outline-none focus:border-blue-500"
+                              value={editingElo[player.id] !== undefined ? editingElo[player.id] : player.elo}
+                              onChange={(e) => handleEloChange(player.id, e.target.value)}
+                            />
+                            {editingElo[player.id] !== undefined && (
+                              <button
+                                onClick={() => handleUpdateElo(player.id, player.name)}
+                                disabled={savingElo[player.id]}
+                                className="text-[10px] bg-blue-600 text-white px-2 py-1 rounded font-black uppercase tracking-tighter hover:bg-blue-700 disabled:opacity-50"
+                              >
+                                {savingElo[player.id] ? "..." : "Save"}
+                              </button>
+                            )}
+                          </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           {player.isClaimed ? (
