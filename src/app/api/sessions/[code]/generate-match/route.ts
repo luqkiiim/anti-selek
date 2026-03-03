@@ -89,7 +89,14 @@ export async function POST(
     // naturally without having to play 5 games in a row.
     const matchFloor = Math.max(0, Math.floor(sessionAvg) - 1);
 
-    // ... (Step 3 remains same)
+    // 3. Identify currently busy players (those in matches not yet completed)
+    const activeMatchPlayerIds = new Set(
+      sessionData.matches
+        .filter(m => ["PENDING", "IN_PROGRESS", "PENDING_APPROVAL"].includes(m.status))
+        .flatMap((m) => [
+          m.team1User1Id, m.team1User2Id, m.team2User1Id, m.team2User2Id
+        ])
+    );
 
     // 4. Filter and Sort available players
     // PRIMARY: REST RULE (Prioritize people who were NOT in the last finished match)
@@ -102,6 +109,7 @@ export async function POST(
         return {
           ...p,
           _isResting: recentlyFinishedIds.has(p.userId) ? 1 : 0,
+          _matchCount: actualCount,
           // If they are far behind the average (late joiner), we bring them up to the floor
           _effectiveCount: Math.max(actualCount, matchFloor),
           _random: Math.random()
