@@ -34,7 +34,8 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         }
 
         const adminEmails = (process.env.ADMIN_EMAILS || "").split(",").map(e => e.trim());
-        const isAdmin = user.email !== null && adminEmails.includes(user.email);
+        const userEmail = user.email;
+        const isAdmin = userEmail ? adminEmails.includes(userEmail) : false;
 
         return {
           id: user.id,
