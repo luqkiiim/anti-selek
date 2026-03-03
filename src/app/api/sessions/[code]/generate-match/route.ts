@@ -52,14 +52,26 @@ export async function POST(
       return NextResponse.json({ error: "Session not active" }, { status: 400 });
     }
 
-    // 2. Calculate match counts for participation balancing
+    // 2. Calculate match counts and track the most recently finished players
     const matchCounts: Record<string, number> = {};
     sessionData.players.forEach(p => {
       matchCounts[p.userId] = 0;
     });
     
+    // Find the most recently completed match in the entire session
+    const lastCompletedMatch = [...sessionData.matches]
+      .filter(m => m.status === "COMPLETED")
+      .sort((a, b) => {
+        const timeA = a.completedAt ? new Date(a.completedAt).getTime() : 0;
+        const timeB = b.completedAt ? new Date(b.completedAt).getTime() : 0;
+        return timeB - timeA;
+      })[0];
+
+    const recentlyFinishedIds = lastCompletedMatch 
+      ? new Set([lastCompletedMatch.team1User1Id, lastCompletedMatch.team1User2Id, lastCompletedMatch.team2User1Id, lastCompletedMatch.team2User2Id])
+      : new Set();
+
     sessionData.matches.forEach(m => {
-      // Count every time a user appears in any match record for this session
       [m.team1User1Id, m.team1User2Id, m.team2User1Id, m.team2User2Id].forEach(id => {
         if (matchCounts[id] !== undefined) {
           matchCounts[id]++;
@@ -67,38 +79,37 @@ export async function POST(
       });
     });
 
-    // 3. Identify currently busy players (those in matches not yet completed)
-    const activeMatchPlayerIds = new Set(
-      sessionData.matches
-        .filter(m => ["PENDING", "IN_PROGRESS", "PENDING_APPROVAL"].includes(m.status))
-        .flatMap((m) => [
-          m.team1User1Id, m.team1User2Id, m.team2User1Id, m.team2User2Id
-        ])
-    );
+    // ... (Step 3 remains same)
 
     // 4. Filter and Sort available players
-    // PRIMARY: FEWEST matches played
-    // SECONDARY: Randomize among those with same count to ensure rotation
+    // PRIMARY: REST RULE (Prioritize people who were NOT in the last finished match)
+    // SECONDARY: FEWEST matches played (Balance)
+    // TERTIARY: Randomize
     const availablePlayers = sessionData.players
       .filter((p) => !activeMatchPlayerIds.has(p.userId) && !p.isPaused)
       .map(p => ({
         ...p,
-        _sortKey: Math.random() // Add random key for shuffling same-count players
+        _isResting: recentlyFinishedIds.has(p.userId) ? 1 : 0, // 0 = waiting longest, 1 = just finished
+        _matchCount: matchCounts[p.userId] || 0,
+        _random: Math.random()
       }))
       .sort((a, b) => {
-        const countA = matchCounts[a.userId] || 0;
-        const countB = matchCounts[b.userId] || 0;
-        
-        if (countA !== countB) {
-          return countA - countB;
+        // Priority 1: Rest those who just played if others are available
+        if (a._isResting !== b._isResting) {
+          return a._isResting - b._isResting;
         }
-        
-        return a._sortKey - b._sortKey; // Random sort for same match count
+        // Priority 2: Balance match counts
+        if (a._matchCount !== b._matchCount) {
+          return a._matchCount - b._matchCount;
+        }
+        // Priority 3: Randomize
+        return a._random - b._random;
       });
 
+    // Logging for debugging imbalance
     console.log(`[Matchmaking] Session: ${code}, Available: ${availablePlayers.length}`);
-    availablePlayers.slice(0, 8).forEach(p => {
-      console.log(` - Player: ${p.user.name}, Matches: ${matchCounts[p.userId]}, ELO: ${p.user.elo}`);
+    availablePlayers.slice(0, 10).forEach(p => {
+      console.log(` - Player: ${p.user.name}, Matches: ${p._matchCount}`);
     });
 
     if (availablePlayers.length < 4) {
