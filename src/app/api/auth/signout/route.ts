@@ -16,7 +16,3 @@ export async function POST() {
     return NextResponse.json({ success: true }); // Always return success for signout attempts
   }
 }
-
-export async function GET() {
-  return new NextResponse("Method Not Allowed", { status: 405 });
-}

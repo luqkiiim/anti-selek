@@ -74,7 +74,3 @@ export async function POST(request: Request) {
     );
   }
 }
-
-export async function GET() {
-  return new NextResponse("Method Not Allowed", { status: 405 });
-}

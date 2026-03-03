@@ -38,8 +38,3 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: `Failed to reset community: ${error.message}` }, { status: 500 });
   }
 }
-
-// Ensure GET is defined and not trying to do anything
-export async function GET() {
-  return NextResponse.json({ error: "Method not allowed" }, { status: 405 });
-}
