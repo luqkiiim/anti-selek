@@ -12,6 +12,16 @@ export default function SignupPage() {
   const [loading, setLoading] = useState(false);
   const router = useRouter();
 
+  // Helper to safely parse JSON
+  const safeJson = async (res: Response) => {
+    const text = await res.text();
+    try {
+      return text ? JSON.parse(text) : {};
+    } catch (e) {
+      return { error: "Invalid server response" };
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
@@ -24,7 +34,7 @@ export default function SignupPage() {
         body: JSON.stringify({ email, password, name }),
       });
 
-      const data = await res.json();
+      const data = await safeJson(res);
 
       if (!res.ok) {
         setError(data.error || "Signup failed");
@@ -42,7 +52,10 @@ export default function SignupPage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-100 px-4">
       <div className="max-w-md w-full bg-white rounded-lg shadow-md p-8">
-        <h1 className="text-2xl font-bold text-center mb-6">Sign Up</h1>
+        <h1 className="text-2xl font-bold text-center mb-2">Sign Up</h1>
+        <p className="text-sm text-gray-500 text-center mb-6">
+          If an admin already created your profile, use the <strong>exact same name</strong> to claim it.
+        </p>
 
         {error && (
           <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">

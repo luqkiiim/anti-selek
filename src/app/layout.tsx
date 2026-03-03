@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Badminton Mexicano",
+  title: "Anti-Selek",
   description: "Schedule matches, track scores, and maintain ELO ratings",
 };
 

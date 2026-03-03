@@ -7,55 +7,70 @@ function generateCode(): string {
 }
 
 export async function POST(request: Request) {
-  const session = await auth();
+  try {
+    const session = await auth();
 
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
-  }
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+    }
 
-  const { name } = await request.json();
+    if (!session?.user?.isAdmin) {
+      return NextResponse.json({ error: "Unauthorized: Admin only" }, { status: 403 });
+    }
 
-  if (!name) {
-    return NextResponse.json({ error: "Session name required" }, { status: 400 });
-  }
+    const body = await request.json();
+    const { name, playerIds = [] } = body;
 
-  // Create session with unique code
-  let code = generateCode();
-  let attempts = 0;
-  while (attempts < 10) {
-    const existing = await prisma.session.findUnique({ where: { code } });
-    if (!existing) break;
-    code = generateCode();
-    attempts++;
-  }
+    if (!name) {
+      return NextResponse.json({ error: "Session name required" }, { status: 400 });
+    }
 
-  const newSession = await prisma.session.create({
-    data: {
-      code,
-      name,
-      courts: {
-        create: [
-          { courtNumber: 1 },
-          { courtNumber: 2 },
-          { courtNumber: 3 },
-        ],
-      },
-      players: {
-        create: {
-          userId: session.user.id,
-          sessionPoints: 0,
+    // Create session with unique code
+    let code = generateCode();
+    let attempts = 0;
+    while (attempts < 10) {
+      const existing = await prisma.session.findUnique({ where: { code } });
+      if (!existing) break;
+      code = generateCode();
+      attempts++;
+    }
+
+    // Ensure unique player IDs and include creator
+    const uniquePlayerIds = Array.from(new Set([...(Array.isArray(playerIds) ? playerIds : []), session.user.id]));
+
+    console.log("Creating session with players:", uniquePlayerIds);
+
+    const newSession = await prisma.session.create({
+      data: {
+        code,
+        name,
+        courts: {
+          create: [
+            { courtNumber: 1 },
+            { courtNumber: 2 },
+            { courtNumber: 3 },
+          ],
+        },
+        players: {
+          create: uniquePlayerIds.map((pid) => ({
+            userId: pid,
+            sessionPoints: 0,
+          })),
         },
       },
-    },
-    include: {
-      courts: true,
-      players: {
-        include: { user: { select: { id: true, name: true, email: true, elo: true } } },
+      include: {
+        courts: true,
+        players: {
+          include: { user: { select: { id: true, name: true, email: true, elo: true } } },
+        },
       },
-    },
-  });
+    });
 
-  return NextResponse.json(newSession);
+    return NextResponse.json(newSession);
+  } catch (error: any) {
+    console.error("Session creation error details:", error);
+    return NextResponse.json({ error: `Failed to create session: ${error.message || 'Unknown error'}` }, { status: 500 });
+  }
 }
 
 export async function GET() {
@@ -65,10 +80,12 @@ export async function GET() {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
 
+  const where = session.user.isAdmin 
+    ? {} 
+    : { players: { some: { userId: session.user.id } } };
+
   const sessions = await prisma.session.findMany({
-    where: {
-      players: { some: { userId: session.user.id } },
-    },
+    where,
     orderBy: { createdAt: "desc" },
     include: {
       courts: true,

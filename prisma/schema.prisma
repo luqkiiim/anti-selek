@@ -1,5 +1,6 @@
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
+  previewFeatures = ["driverAdapters"]
 }
 
 datasource db {
@@ -9,9 +10,10 @@ datasource db {
 
 model User {
   id           String   @id @default(cuid())
-  email        String   @unique
-  passwordHash String
+  email        String?  @unique
+  passwordHash String?
   name         String
+  isClaimed    Boolean  @default(false)
   elo          Int      @default(1000)
   isActive     Boolean  @default(true)
   createdAt    DateTime @default(now())
@@ -56,6 +58,7 @@ model SessionPlayer {
   userId       String
   sessionPoints Int     @default(0)
   lastPartnerId String? // player ID of last partner (for repeat-partner penalty)
+  isPaused     Boolean  @default(false)
 
   session     Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -87,8 +90,8 @@ model Match {
   session      Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
   court        Court    @relation(fields: [courtId], references: [id], onDelete: Cascade)
   courtAsCurrentMatch Court? @relation("CourtCurrentMatch")
-  team1User1   User     @relation("Team1Player1", fields: [team1User1Id], references: [id])
-  team1User2   User     @relation("Team1Player2", fields: [team1User2Id], references: [id])
-  team2User1   User     @relation("Team2Player1", fields: [team2User1Id], references: [id])
-  team2User2   User     @relation("Team2Player2", fields: [team2User2Id], references: [id])
+  team1User1   User     @relation("Team1Player1", fields: [team1User1Id], references: [id], onDelete: Cascade)
+  team1User2   User     @relation("Team1Player2", fields: [team1User2Id], references: [id], onDelete: Cascade)
+  team2User1   User     @relation("Team2Player1", fields: [team2User1Id], references: [id], onDelete: Cascade)
+  team2User2   User     @relation("Team2Player2", fields: [team2User2Id], references: [id], onDelete: Cascade)
 }

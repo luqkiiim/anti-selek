@@ -6,47 +6,77 @@ export async function POST(
   request: Request,
   { params }: { params: Promise<{ code: string }> }
 ) {
-  const session = await auth();
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
-  }
+  try {
+    const session = await auth();
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+    }
 
-  const userId = session.user.id;
-  const { code } = await params;
-  const sessionData = await prisma.session.findUnique({
-    where: { code },
-    include: { players: true },
-  });
+    const { code } = await params;
+    const body = await request.json().catch(() => ({}));
+    const { userId: targetUserId } = body;
 
-  if (!sessionData) {
-    return NextResponse.json({ error: "Session not found" }, { status: 404 });
-  }
+    // Determine who is joining
+    let userIdToJoin = session.user.id;
+    
+    // If admin is trying to add someone else
+    if (targetUserId && targetUserId !== session.user.id) {
+      const adminEmails = process.env.ADMIN_EMAILS?.split(",").map(e => e.trim()) || [];
+      const isAdmin = adminEmails.includes(session.user.email!);
+      if (!isAdmin) {
+        return NextResponse.json({ error: "Unauthorized: Only admins can add other players" }, { status: 403 });
+      }
+      userIdToJoin = targetUserId;
+    }
 
-  if (sessionData.status !== "WAITING" && sessionData.status !== "ACTIVE") {
-    return NextResponse.json({ error: "Session not joinable" }, { status: 400 });
-  }
+    const sessionData = await prisma.session.findUnique({
+      where: { code },
+      include: { players: true },
+    });
 
-  // Check if already a player
-  const existingPlayer = sessionData.players.find(p => p.userId === userId);
-  if (existingPlayer) {
-    return NextResponse.json(sessionData);
-  }
+    if (!sessionData) {
+      return NextResponse.json({ error: "Session not found" }, { status: 404 });
+    }
 
-  // Add player
-  const updatedSession = await prisma.session.update({
-    where: { code },
-    data: {
-      players: {
-        create: { userId, sessionPoints: 0 },
+    if (sessionData.status === "COMPLETED") {
+      return NextResponse.json({ error: "Session already ended" }, { status: 400 });
+    }
+
+    // Check if already in session
+    const existing = await prisma.sessionPlayer.findUnique({
+      where: {
+        sessionId_userId: {
+          sessionId: sessionData.id,
+          userId: userIdToJoin,
+        },
       },
-    },
-    include: {
-      courts: { include: { currentMatch: true } },
-      players: {
-        include: { user: { select: { id: true, name: true, elo: true } } },
-      },
-    },
-  });
+    });
 
-  return NextResponse.json(updatedSession);
+    if (existing) {
+      return NextResponse.json(sessionData);
+    }
+
+    const updatedSession = await prisma.session.update({
+      where: { id: sessionData.id },
+      data: {
+        players: {
+          create: {
+            userId: userIdToJoin,
+            sessionPoints: 0,
+          },
+        },
+      },
+      include: {
+        courts: { include: { currentMatch: true } },
+        players: {
+          include: { user: { select: { id: true, name: true, elo: true } } },
+        },
+      },
+    });
+
+    return NextResponse.json(updatedSession);
+  } catch (error: any) {
+    console.error("Join session error:", error);
+    return NextResponse.json({ error: `Failed to join session: ${error.message}` }, { status: 500 });
+  }
 }

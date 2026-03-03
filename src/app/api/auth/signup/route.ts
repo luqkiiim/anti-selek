@@ -13,31 +13,56 @@ export async function POST(request: Request) {
       );
     }
 
-    const existingUser = await prisma.user.findUnique({
+    // Check if email already registered
+    const existingByEmail = await prisma.user.findUnique({
       where: { email },
     });
 
-    if (existingUser) {
+    if (existingByEmail) {
       return NextResponse.json(
         { error: "Email already registered" },
         { status: 400 }
       );
     }
 
-    const passwordHash = await bcrypt.hash(password, 10);
-
-    const user = await prisma.user.create({
-      data: {
-        email,
-        passwordHash,
+    // Check if there's an unclaimed profile with the same name
+    const existingByName = await prisma.user.findFirst({
+      where: { 
         name,
+        isClaimed: false
       },
     });
+
+    const passwordHash = await bcrypt.hash(password, 10);
+
+    let user;
+    if (existingByName) {
+      // Claim the existing profile
+      user = await prisma.user.update({
+        where: { id: existingByName.id },
+        data: {
+          email,
+          passwordHash,
+          isClaimed: true,
+        },
+      });
+    } else {
+      // Create new claimed user
+      user = await prisma.user.create({
+        data: {
+          email,
+          passwordHash,
+          name,
+          isClaimed: true,
+        },
+      });
+    }
 
     return NextResponse.json({
       id: user.id,
       email: user.email,
       name: user.name,
+      isClaimed: user.isClaimed,
     });
   } catch (error) {
     console.error("Signup error:", error);

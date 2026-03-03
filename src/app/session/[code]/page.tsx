@@ -3,12 +3,17 @@
 import { useEffect, useState, useCallback } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter, useParams } from "next/navigation";
+import Link from "next/link";
 
 interface Player {
   userId: string;
-  name: string;
-  elo: number;
   sessionPoints: number;
+  isPaused: boolean;
+  user: {
+    id: string;
+    name: string;
+    elo: number;
+  };
 }
 
 interface Match {
@@ -22,10 +27,25 @@ interface Match {
   team2Score?: number;
 }
 
+interface CompletedMatchInfo {
+  id: string;
+  team1User1Id: string;
+  team1User2Id: string;
+  team2User1Id: string;
+  team2User2Id: string;
+  winnerTeam: number;
+}
+
 interface Court {
   id: string;
   courtNumber: number;
   currentMatch: Match | null;
+}
+
+interface CommunityUser {
+  id: string;
+  name: string;
+  elo: number;
 }
 
 interface SessionData {
@@ -35,6 +55,7 @@ interface SessionData {
   status: string;
   courts: Court[];
   players: Player[];
+  matches?: CompletedMatchInfo[];
 }
 
 export default function SessionPage() {
@@ -47,21 +68,36 @@ export default function SessionPage() {
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [showScoreModal, setShowScoreModal] = useState<string | null>(null);
-  const [team1Score, setTeam1Score] = useState("");
-  const [team2Score, setTeam2Score] = useState("");
-  const [submitting, setSubmitting] = useState(false);
+  
+  // Late joiner state
+  const [showRosterModal, setShowRosterModal] = useState(false);
+  const [communityPlayers, setCommunityPlayers] = useState<CommunityUser[]>([]);
+  const [addingPlayerId, setAddingPlayerId] = useState<string | null>(null);
+
+  // Track scores per match locally
+  const [matchScores, setMatchScores] = useState<Record<string, { team1: string; team2: string }>>({});
+  const [submittingMatchId, setSubmittingMatchId] = useState<string | null>(null);
+
+  // Helper to safely parse JSON
+  const safeJson = async (res: Response) => {
+    const text = await res.text();
+    try {
+      return text ? JSON.parse(text) : {};
+    } catch (e) {
+      console.error("Failed to parse JSON:", text);
+      return { error: "Invalid server response" };
+    }
+  };
 
   const fetchSession = useCallback(async () => {
     if (!code) return;
     try {
       const res = await fetch(`/api/sessions/${code}`);
+      const data = await safeJson(res);
       if (!res.ok) {
-        const data = await res.json();
         setError(data.error || "Failed to load session");
         return;
       }
-      const data = await res.json();
       setSessionData(data);
     } catch (err) {
       console.error(err);
@@ -73,8 +109,20 @@ export default function SessionPage() {
     try {
       const res = await fetch("/api/user/me");
       if (res.ok) {
-        const data = await res.json();
+        const data = await safeJson(res);
         setUser(data);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const fetchCommunityPlayers = async () => {
+    try {
+      const res = await fetch("/api/admin/players");
+      const data = await safeJson(res);
+      if (res.ok) {
+        setCommunityPlayers(Array.isArray(data) ? data : []);
       }
     } catch (err) {
       console.error(err);
@@ -99,7 +147,12 @@ export default function SessionPage() {
   const startSession = async () => {
     try {
       const res = await fetch(`/api/sessions/${code}/start`, { method: "POST" });
-      if (res.ok) fetchSession();
+      if (res.ok) {
+        fetchSession();
+      } else {
+        const data = await safeJson(res);
+        setError(data.error || "Failed to start session");
+      }
     } catch (err) {
       console.error(err);
     }
@@ -110,9 +163,52 @@ export default function SessionPage() {
       const res = await fetch(`/api/sessions/${code}/end`, { method: "POST" });
       if (res.ok) {
         router.push("/");
+      } else {
+        const data = await safeJson(res);
+        setError(data.error || "Failed to end session");
       }
     } catch (err) {
       console.error(err);
+    }
+  };
+
+  const togglePausePlayer = async (userId: string, currentPaused: boolean) => {
+    try {
+      const res = await fetch(`/api/sessions/${code}/pause-player`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId, isPaused: !currentPaused }),
+      });
+      if (res.ok) {
+        fetchSession();
+      } else {
+        const data = await safeJson(res);
+        setError(data.error || "Failed to update player status");
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const addPlayerToSession = async (userId: string) => {
+    setAddingPlayerId(userId);
+    try {
+      const adminRes = await fetch(`/api/sessions/${code}/join`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId }),
+      });
+
+      if (adminRes.ok) {
+        fetchSession();
+      } else {
+        const data = await safeJson(adminRes);
+        setError(data.error || "Failed to add player");
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setAddingPlayerId(null);
     }
   };
 
@@ -126,7 +222,7 @@ export default function SessionPage() {
       if (res.ok) {
         fetchSession();
       } else {
-        const data = await res.json();
+        const data = await safeJson(res);
         setError(data.error || "Failed to generate match");
       }
     } catch (err) {
@@ -134,31 +230,49 @@ export default function SessionPage() {
     }
   };
 
+  const handleScoreChange = (matchId: string, team: 'team1' | 'team2', value: string) => {
+    setMatchScores(prev => ({
+      ...prev,
+      [matchId]: {
+        ...(prev[matchId] || { team1: "", team2: "" }),
+        [team]: value
+      }
+    }));
+  };
+
   const submitScore = async (matchId: string) => {
-    if (!team1Score || !team2Score) return;
-    setSubmitting(true);
+    const scores = matchScores[matchId];
+    if (!scores || !scores.team1 || !scores.team2) return;
+    
+    setSubmittingMatchId(matchId);
+    setError("");
+    
     try {
       const res = await fetch(`/api/matches/${matchId}/score`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          team1Score: parseInt(team1Score),
-          team2Score: parseInt(team2Score),
+          team1Score: parseInt(scores.team1),
+          team2Score: parseInt(scores.team2),
         }),
       });
       if (res.ok) {
-        setShowScoreModal(null);
-        setTeam1Score("");
-        setTeam2Score("");
+        // Clear local scores for this match
+        setMatchScores(prev => {
+          const newScores = { ...prev };
+          delete newScores[matchId];
+          return newScores;
+        });
         fetchSession();
       } else {
-        const data = await res.json();
+        const data = await safeJson(res);
         setError(data.error || "Failed to submit score");
       }
     } catch (err) {
       console.error(err);
+      setError("Network error submitting score");
     } finally {
-      setSubmitting(false);
+      setSubmittingMatchId(null);
     }
   };
 
@@ -175,7 +289,7 @@ export default function SessionPage() {
       if (res.ok) {
         fetchSession();
       } else {
-        const data = await res.json();
+        const data = await safeJson(res);
         setError(data.error || "Failed to approve score");
       }
     } catch (err) {
@@ -186,7 +300,7 @@ export default function SessionPage() {
   if (status === "loading" || !sessionData) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        Loading...
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
       </div>
     );
   }
@@ -194,226 +308,356 @@ export default function SessionPage() {
   const isAdmin = user?.isAdmin;
   const currentUserId = session?.user?.id || "";
 
+  // Helper to calculate player stats for the session
+  const calculatePlayerSessionStats = (userId: string) => {
+    const sessionMatches = sessionData.matches || [];
+    let played = 0;
+    let wins = 0;
+    let losses = 0;
+
+    sessionMatches.forEach(m => {
+      const isTeam1 = m.team1User1Id === userId || m.team1User2Id === userId;
+      const isTeam2 = m.team2User1Id === userId || m.team2User2Id === userId;
+
+      if (isTeam1 || isTeam2) {
+        played++;
+        if (isTeam1 && m.winnerTeam === 1) wins++;
+        else if (isTeam2 && m.winnerTeam === 2) wins++;
+        else losses++;
+      }
+    });
+
+    return { played, wins, losses };
+  };
+
+  // Filter out players already in session
+  const playersNotInSession = communityPlayers.filter(
+    cp => !sessionData.players.some(sp => sp.userId === cp.id)
+  );
+
   return (
-    <div className="min-h-screen bg-gray-100">
-      {/* Header */}
-      <nav className="bg-white shadow">
-        <div className="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
-          <div>
-            <h1 className="text-xl font-bold text-gray-900">{sessionData.name}</h1>
-            <p className="text-sm text-gray-500">Code: {sessionData.code} • {sessionData.status}</p>
+    <div className="min-h-screen bg-gray-50 flex flex-col">
+      {/* Mobile-Friendly Header */}
+      <nav className="bg-white shadow-sm sticky top-0 z-30 border-b border-gray-200">
+        <div className="max-w-7xl mx-auto px-4 py-3 flex justify-between items-center">
+          <div className="flex flex-col">
+            <h1 className="text-lg font-black text-gray-900 leading-tight truncate max-w-[200px]">{sessionData.name}</h1>
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-bold bg-blue-100 text-blue-700 px-1.5 rounded uppercase tracking-wider">{sessionData.code}</span>
+              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{sessionData.status}</span>
+            </div>
           </div>
           <button
             onClick={() => router.push("/")}
-            className="text-sm text-blue-600 hover:underline"
+            className="bg-gray-100 text-gray-600 px-3 py-1.5 rounded-lg text-sm font-bold active:scale-95 transition-transform"
           >
-            Back
+            Exit
           </button>
         </div>
       </nav>
 
-      <main className="max-w-7xl mx-auto px-4 py-6">
+      <main className="max-w-7xl mx-auto px-4 py-4 w-full flex-1">
         {error && (
-          <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
-            {error}
-            <button onClick={() => setError("")} className="float-right font-bold">×</button>
+          <div className="bg-red-500 text-white px-4 py-3 rounded-xl mb-4 flex justify-between items-center shadow-lg animate-bounce">
+            <span className="text-sm font-bold">{error}</span>
+            <button onClick={() => setError("")} className="font-bold text-xl ml-2 leading-none">&times;</button>
           </div>
         )}
 
-        {/* Admin Controls */}
-        {isAdmin && sessionData.status === "WAITING" && (
-          <div className="bg-white rounded-lg shadow p-4 mb-6">
+        {/* Admin Quick Actions */}
+        {isAdmin && (
+          <div className="flex overflow-x-auto gap-2 pb-4 scrollbar-hide no-scrollbar">
+            {sessionData.status === "WAITING" && (
+              <button
+                onClick={startSession}
+                className="whitespace-nowrap bg-green-600 text-white px-4 py-2.5 rounded-xl font-black text-sm uppercase tracking-wider shadow-md active:bg-green-700 active:scale-95 transition-all"
+              >
+                Start Session
+              </button>
+            )}
             <button
-              onClick={startSession}
-              className="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700"
+              onClick={() => {
+                fetchCommunityPlayers();
+                setShowRosterModal(true);
+              }}
+              className="whitespace-nowrap bg-blue-600 text-white px-4 py-2.5 rounded-xl font-black text-sm uppercase tracking-wider shadow-md active:bg-blue-700 active:scale-95 transition-all"
             >
-              Start Session
+              Add Players
             </button>
+            {sessionData.status === "ACTIVE" && (
+              <button
+                onClick={endSession}
+                className="whitespace-nowrap bg-red-600 text-white px-4 py-2.5 rounded-xl font-black text-sm uppercase tracking-wider shadow-md active:bg-red-700 active:scale-95 transition-all"
+              >
+                End Session
+              </button>
+            )}
           </div>
         )}
 
-        {isAdmin && sessionData.status === "ACTIVE" && (
-          <div className="bg-white rounded-lg shadow p-4 mb-6">
-            <button
-              onClick={endSession}
-              className="bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700"
-            >
-              End Session
-            </button>
-          </div>
-        )}
-
-        {/* Courts */}
-        <div className="grid md:grid-cols-3 gap-6 mb-8">
+        {/* Courts Grid - Stacked on Mobile, Grid on Tablet/Desktop */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
           {sessionData.courts
             .sort((a, b) => a.courtNumber - b.courtNumber)
-            .map((court) => (
-              <div key={court.id} className="bg-white rounded-lg shadow p-4">
-                <div className="flex justify-between items-center mb-4">
-                  <h2 className="text-lg font-bold">Court {court.courtNumber}</h2>
-                  {sessionData.status === "ACTIVE" && !court.currentMatch && isAdmin && (
-                    <button
-                      onClick={() => generateMatch(court.id)}
-                      className="text-sm bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700"
-                    >
-                      New Match
-                    </button>
-                  )}
-                </div>
+            .map((court) => {
+              const currentMatch = court.currentMatch;
+              const isParticipant = currentMatch && [
+                currentMatch.team1User1.id,
+                currentMatch.team1User2.id,
+                currentMatch.team2User1.id,
+                currentMatch.team2User2.id
+              ].includes(currentUserId);
+              
+              const canEdit = currentMatch?.status === "IN_PROGRESS" && (isAdmin || isParticipant);
+              const scores = currentMatch ? (matchScores[currentMatch.id] || { team1: "", team2: "" }) : { team1: "", team2: "" };
 
-                {court.currentMatch ? (
-                  <div className="space-y-3">
-                    {/* Team 1 */}
-                    <div className="border rounded p-3 bg-blue-50">
-                      <p className="text-sm text-gray-500 mb-1">Team 1</p>
-                      <p className="font-medium">
-                        {court.currentMatch.team1User1.name} & {court.currentMatch.team1User2.name}
-                      </p>
-                      {court.currentMatch.status === "PENDING_APPROVAL" && (
-                        <p className="text-sm text-orange-600">
-                          Score: {court.currentMatch.team1Score} - {court.currentMatch.team2Score}
+              return (
+                <div key={court.id} className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden flex flex-col">
+                  <div className="bg-gray-50/80 px-4 py-2.5 border-b border-gray-100 flex justify-between items-center">
+                    <h2 className="text-sm font-black text-gray-500 uppercase tracking-widest">Court {court.courtNumber}</h2>
+                    {sessionData.status === "ACTIVE" && !court.currentMatch && isAdmin && (
+                      <button
+                        onClick={() => generateMatch(court.id)}
+                        className="text-[10px] bg-blue-600 text-white px-2.5 py-1.5 rounded-lg font-black uppercase tracking-wider active:scale-95 transition-all"
+                      >
+                        New Match
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="p-4 flex-1 flex flex-col justify-center">
+                    {currentMatch ? (
+                      <div className="space-y-3">
+                        {/* Team 1 Card */}
+                        <div className={`p-3 rounded-xl border-2 transition-all ${currentMatch.status === 'PENDING_APPROVAL' ? 'bg-gray-50 border-gray-100' : 'bg-blue-50/50 border-blue-100'}`}>
+                          <div className="flex justify-between items-center gap-3">
+                            <div className="flex-1 min-w-0">
+                              <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest mb-0.5">Team 1</p>
+                              <p className="font-bold text-gray-900 truncate text-sm leading-tight">
+                                {currentMatch.team1User1.name}<br/>{currentMatch.team1User2.name}
+                              </p>
+                            </div>
+                            {canEdit ? (
+                              <input
+                                type="number"
+                                inputMode="numeric"
+                                value={scores.team1}
+                                onChange={(e) => handleScoreChange(currentMatch.id, 'team1', e.target.value)}
+                                className="w-14 h-12 border-2 border-blue-200 rounded-xl text-center font-black text-xl focus:outline-none focus:border-blue-500 bg-white"
+                                placeholder="0"
+                              />
+                            ) : currentMatch.status === "PENDING_APPROVAL" && (
+                              <div className="text-2xl font-black text-gray-900 pr-2">{currentMatch.team1Score}</div>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* VS Divider */}
+                        <div className="relative flex items-center justify-center py-1">
+                          <div className="h-px bg-gray-100 flex-1"></div>
+                          <span className="mx-3 text-[10px] font-black text-gray-300 italic uppercase">VS</span>
+                          <div className="h-px bg-gray-100 flex-1"></div>
+                        </div>
+
+                        {/* Team 2 Card */}
+                        <div className={`p-3 rounded-xl border-2 transition-all ${currentMatch.status === 'PENDING_APPROVAL' ? 'bg-gray-50 border-gray-100' : 'bg-red-50/50 border-red-100'}`}>
+                          <div className="flex justify-between items-center gap-3">
+                            <div className="flex-1 min-w-0">
+                              <p className="text-[10px] font-black text-red-600 uppercase tracking-widest mb-0.5">Team 2</p>
+                              <p className="font-bold text-gray-900 truncate text-sm leading-tight">
+                                {currentMatch.team2User1.name}<br/>{currentMatch.team2User2.name}
+                              </p>
+                            </div>
+                            {canEdit ? (
+                              <input
+                                type="number"
+                                inputMode="numeric"
+                                value={scores.team2}
+                                onChange={(e) => handleScoreChange(currentMatch.id, 'team2', e.target.value)}
+                                className="w-14 h-12 border-2 border-red-200 rounded-xl text-center font-black text-xl focus:outline-none focus:border-red-500 bg-white"
+                                placeholder="0"
+                              />
+                            ) : currentMatch.status === "PENDING_APPROVAL" && (
+                              <div className="text-2xl font-black text-gray-900 pr-2">{currentMatch.team2Score}</div>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Action Buttons */}
+                        {canEdit && (
+                          <div className="pt-2">
+                            <button
+                              onClick={() => submitScore(currentMatch.id)}
+                              disabled={submittingMatchId === currentMatch.id || !scores.team1 || !scores.team2}
+                              className="w-full bg-green-600 text-white py-3 rounded-xl font-black uppercase text-sm shadow-md active:bg-green-700 active:scale-95 disabled:opacity-50 transition-all"
+                            >
+                              {submittingMatchId === currentMatch.id ? "Saving..." : "Submit Score"}
+                            </button>
+                          </div>
+                        )}
+
+                        {currentMatch.status === "PENDING_APPROVAL" && (
+                          <div className="pt-2 space-y-2">
+                            {isAdmin && (
+                              <button
+                                onClick={() => approveScore(currentMatch.id)}
+                                className="w-full bg-blue-600 text-white py-3 rounded-xl font-black uppercase text-sm shadow-md active:bg-blue-700 active:scale-95 transition-all"
+                              >
+                                Approve Results
+                              </button>
+                            )}
+                            <div className="bg-orange-50 text-orange-700 text-[10px] font-black py-2 rounded-lg text-center uppercase tracking-widest border border-orange-100">
+                              Awaiting Approval
+                            </div>
+                          </div>
+                        )}
+                        
+                        {currentMatch.status === "IN_PROGRESS" && !canEdit && (
+                          <div className="py-2 text-center">
+                            <span className="inline-flex items-center px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest bg-blue-100 text-blue-800">
+                              Match Active
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="text-center py-10 px-4">
+                        <div className="text-3xl mb-2 opacity-20">🏸</div>
+                        <p className="text-xs text-gray-400 font-bold uppercase tracking-widest">
+                          {sessionData.status === "ACTIVE" ? "Next match soon" : "Court Inactive"}
                         </p>
-                      )}
-                    </div>
-
-                    <div className="text-center font-bold text-xl">VS</div>
-
-                    {/* Team 2 */}
-                    <div className="border rounded p-3 bg-red-50">
-                      <p className="text-sm text-gray-500 mb-1">Team 2</p>
-                      <p className="font-medium">
-                        {court.currentMatch.team2User1.name} & {court.currentMatch.team2User2.name}
-                      </p>
-                    </div>
-
-                    {/* Actions */}
-                    {court.currentMatch.status === "IN_PROGRESS" && (
-                      <div className="pt-2">
-                        {isAdmin ||
-                        [
-                          court.currentMatch.team1User1.id,
-                          court.currentMatch.team1User2.id,
-                          court.currentMatch.team2User1.id,
-                          court.currentMatch.team2User2.id,
-                        ].includes(currentUserId) ? (
-                          <button
-                            onClick={() => setShowScoreModal(court.currentMatch!.id)}
-                            className="w-full bg-green-600 text-white py-2 rounded-md hover:bg-green-700"
-                          >
-                            Submit Score
-                          </button>
-                        ) : (
-                          <p className="text-sm text-gray-500 text-center">Waiting for score...</p>
-                        )}
-                      </div>
-                    )}
-
-                    {court.currentMatch.status === "PENDING_APPROVAL" && (
-                      <div className="pt-2">
-                        {isAdmin && (
-                          <button
-                            onClick={() =>
-                              approveScore(court.currentMatch!.id)
-                            }
-                            className="w-full bg-green-600 text-white py-2 rounded-md hover:bg-green-700 mb-2"
-                          >
-                            Approve Score
-                          </button>
-                        )}
-                        <p className="text-sm text-gray-500 text-center">Awaiting approval</p>
                       </div>
                     )}
                   </div>
-                ) : (
-                  <div className="text-center py-8 text-gray-500">
-                    {sessionData.status === "ACTIVE" ? "Waiting for match" : "Court idle"}
-                  </div>
-                )}
-              </div>
-            ))}
+                </div>
+              );
+            })}
         </div>
 
-        {/* Leaderboards */}
-        <div className="grid md:grid-cols-2 gap-6">
-          {/* Session Points */}
-          <div className="bg-white rounded-lg shadow p-4">
-            <h2 className="text-lg font-bold mb-4">Session Points</h2>
-            <div className="space-y-2">
-              {sessionData.players
-                .sort((a, b) => b.sessionPoints - a.sessionPoints)
-                .map((player, idx) => (
-                  <div key={player.userId} className="flex justify-between items-center p-2 border-b">
-                    <span className="text-gray-600">#{idx + 1} {player.name}</span>
-                    <span className="font-bold">{player.sessionPoints}</span>
-                  </div>
-                ))}
+        {/* Combined Mobile Leaderboard / Standings */}
+        <div className="space-y-6">
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+            <div className="bg-blue-600 px-5 py-4 flex justify-between items-center">
+              <h2 className="text-sm font-black text-white uppercase tracking-widest">Live Standings</h2>
+              <span className="text-[10px] font-bold text-blue-100 uppercase">Updates in real-time</span>
             </div>
-          </div>
+            
+            <div className="overflow-x-auto">
+              <table className="min-w-full">
+                <thead className="bg-gray-50/50 border-b border-gray-100">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-[10px] font-black text-gray-400 uppercase tracking-widest">#</th>
+                    <th className="px-4 py-3 text-left text-[10px] font-black text-gray-400 uppercase tracking-widest">Player</th>
+                    <th className="px-4 py-3 text-center text-[10px] font-black text-gray-400 uppercase tracking-widest">W/L</th>
+                    <th className="px-4 py-3 text-right text-[10px] font-black text-gray-400 uppercase tracking-widest">Pts</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                  {sessionData.players
+                    .sort((a, b) => b.sessionPoints - a.sessionPoints)
+                    .map((player, idx) => {
+                      const stats = calculatePlayerSessionStats(player.userId);
+                      const isMe = player.userId === currentUserId;
+                      const canToggle = isAdmin || isMe;
 
-          {/* ELO */}
-          <div className="bg-white rounded-lg shadow p-4">
-            <h2 className="text-lg font-bold mb-4">ELO Rating</h2>
-            <div className="space-y-2">
-              {sessionData.players
-                .sort((a, b) => b.elo - a.elo)
-                .map((player, idx) => (
-                  <div key={player.userId} className="flex justify-between items-center p-2 border-b">
-                    <span className="text-gray-600">#{idx + 1} {player.name}</span>
-                    <span className="font-bold">{player.elo}</span>
-                  </div>
-                ))}
+                      return (
+                        <tr key={player.userId} className={`active:bg-gray-50 transition-colors ${player.isPaused ? 'opacity-40 grayscale' : ''}`}>
+                          <td className="px-4 py-4 whitespace-nowrap">
+                            <span className={`w-6 h-6 rounded-lg flex items-center justify-center text-[10px] font-black ${idx < 3 ? 'bg-yellow-100 text-yellow-700' : 'bg-gray-100 text-gray-500'}`}>
+                              {idx + 1}
+                            </span>
+                          </td>
+                          <td className="px-4 py-4 min-w-[140px]">
+                            <div className="flex flex-col">
+                              <Link href={`/profile/${player.user.id}`} className="font-bold text-gray-900 text-sm hover:text-blue-600 leading-tight">
+                                {player.user.name}
+                                {isMe && <span className="ml-1 text-[8px] bg-blue-100 text-blue-700 px-1 rounded">ME</span>}
+                              </Link>
+                              <div className="flex items-center gap-2 mt-1">
+                                <span className="text-[9px] font-bold text-gray-400">ELO {player.user.elo}</span>
+                                {canToggle && (
+                                  <button
+                                    onClick={(e) => {
+                                      e.preventDefault();
+                                      togglePausePlayer(player.userId, player.isPaused);
+                                    }}
+                                    className={`text-[8px] px-1.5 py-0.5 rounded font-black uppercase tracking-tighter ${
+                                      player.isPaused ? "bg-red-500 text-white" : "bg-gray-200 text-gray-600"
+                                    }`}
+                                  >
+                                    {player.isPaused ? "Resume" : "Pause"}
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-4 py-4 whitespace-nowrap text-center">
+                            <div className="text-[10px] font-black tracking-tighter">
+                              <span className="text-green-600">{stats.wins}</span>
+                              <span className="mx-0.5 text-gray-200">/</span>
+                              <span className="text-red-500">{stats.losses}</span>
+                            </div>
+                          </td>
+                          <td className="px-4 py-4 whitespace-nowrap text-right">
+                            <span className="text-base font-black text-blue-600">{player.sessionPoints}</span>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                </tbody>
+              </table>
             </div>
           </div>
         </div>
       </main>
 
-      {/* Score Modal */}
-      {showScoreModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-lg p-6 max-w-sm w-full">
-            <h3 className="text-lg font-bold mb-4">Submit Score</h3>
-            <div className="space-y-4">
+      {/* Mobile-Friendly Roster Modal */}
+      {showRosterModal && (
+        <div className="fixed inset-0 bg-gray-900/80 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4 z-50">
+          <div className="bg-white rounded-t-3xl sm:rounded-2xl shadow-2xl max-w-md w-full max-h-[90vh] flex flex-col animate-in slide-in-from-bottom duration-300">
+            <div className="p-6 border-b flex justify-between items-center">
               <div>
-                <label className="block text-sm font-medium mb-1">Team 1 Score</label>
-                <input
-                  type="number"
-                  value={team1Score}
-                  onChange={(e) => setTeam1Score(e.target.value)}
-                  className="w-full px-3 py-2 border rounded"
-                  placeholder="e.g., 21"
-                />
+                <h2 className="text-xl font-black text-gray-900">Add Players</h2>
+                <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-1">Join the rotation</p>
               </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">Team 2 Score</label>
-                <input
-                  type="number"
-                  value={team2Score}
-                  onChange={(e) => setTeam2Score(e.target.value)}
-                  className="w-full px-3 py-2 border rounded"
-                  placeholder="e.g., 17"
-                />
-              </div>
-              <p className="text-xs text-gray-500">
-                Win by 2, cap at 30 (e.g., 30-28)
-              </p>
-            </div>
-            <div className="flex gap-2 mt-4">
-              <button
-                onClick={() => {
-                  setShowScoreModal(null);
-                  setTeam1Score("");
-                  setTeam2Score("");
-                }}
-                className="flex-1 bg-gray-300 text-gray-700 py-2 rounded-md"
+              <button 
+                onClick={() => setShowRosterModal(false)}
+                className="bg-gray-100 text-gray-400 hover:text-gray-600 w-8 h-8 rounded-full flex items-center justify-center text-xl font-bold"
               >
-                Cancel
+                &times;
               </button>
+            </div>
+            
+            <div className="flex-1 overflow-y-auto p-4 space-y-2">
+              {playersNotInSession.length === 0 ? (
+                <div className="text-center py-12 text-gray-400 italic text-sm">
+                  Everyone is already playing!
+                </div>
+              ) : (
+                playersNotInSession.map(player => (
+                  <div key={player.id} className="flex justify-between items-center p-4 bg-gray-50 rounded-2xl active:bg-gray-100 transition-colors">
+                    <div>
+                      <p className="font-black text-gray-900">{player.name}</p>
+                      <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">ELO: {player.elo}</p>
+                    </div>
+                    <button
+                      onClick={() => addPlayerToSession(player.id)}
+                      disabled={addingPlayerId === player.id}
+                      className="bg-blue-600 text-white px-5 py-2 rounded-xl text-xs font-black uppercase tracking-wider shadow-sm active:scale-95 disabled:opacity-50 transition-all"
+                    >
+                      {addingPlayerId === player.id ? "..." : "Add"}
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+            
+            <div className="p-6 bg-white border-t sm:rounded-b-2xl">
               <button
-                onClick={() => submitScore(showScoreModal)}
-                disabled={submitting}
-                className="flex-1 bg-green-600 text-white py-2 rounded-md hover:bg-green-700 disabled:opacity-50"
+                onClick={() => setShowRosterModal(false)}
+                className="w-full bg-gray-900 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-sm shadow-lg active:scale-95 transition-all"
               >
-                {submitting ? "Submitting..." : "Submit"}
+                Done
               </button>
             </div>
           </div>

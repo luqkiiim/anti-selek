@@ -27,6 +27,17 @@ export async function GET(
         include: { user: { select: { id: true, name: true, elo: true } } },
         orderBy: { sessionPoints: "desc" },
       },
+      matches: {
+        where: { status: "COMPLETED" },
+        select: {
+          id: true,
+          team1User1Id: true,
+          team1User2Id: true,
+          team2User1Id: true,
+          team2User2Id: true,
+          winnerTeam: true,
+        },
+      },
     },
   });
 
