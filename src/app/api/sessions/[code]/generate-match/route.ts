@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
+export const dynamic = "force-dynamic";
+
 // Helper: get all possible doubles partitions for exactly 4 players
 function getDoublesPartitions(players: string[]): { team1: [string, string]; team2: [string, string] }[] {
   if (players.length < 4) return [];

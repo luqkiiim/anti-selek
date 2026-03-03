@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
+export const dynamic = "force-dynamic";
+
 const K_FACTOR = 32;
 
 function calculateEloChange(winnerElo: number, loserElo: number): number {
