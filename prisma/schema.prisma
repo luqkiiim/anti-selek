@@ -1,0 +1,94 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  name         String
+  elo          Int      @default(1000)
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  sessionPlayers SessionPlayer[]
+
+  // Match relations (team memberships)
+  matchesAsTeam1Player1   Match[] @relation("Team1Player1")
+  matchesAsTeam1Player2   Match[] @relation("Team1Player2")
+  matchesAsTeam2Player1   Match[] @relation("Team2Player1")
+  matchesAsTeam2Player2   Match[] @relation("Team2Player2")
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  code      String   @unique
+  name      String
+  status    String   @default("WAITING") // WAITING, ACTIVE, COMPLETED
+  createdAt DateTime @default(now())
+  endedAt   DateTime?
+
+  players SessionPlayer[]
+  courts  Court[]
+  matches Match[]
+}
+
+model Court {
+  id            String   @id @default(cuid())
+  sessionId     String
+  courtNumber   Int      // 1, 2, or 3
+  currentMatchId String? @unique
+
+  session      Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  currentMatch Match?   @relation("CourtCurrentMatch", fields: [currentMatchId], references: [id])
+  matches      Match[]
+}
+
+model SessionPlayer {
+  id           String   @id @default(cuid())
+  sessionId    String
+  userId       String
+  sessionPoints Int     @default(0)
+  lastPartnerId String? // player ID of last partner (for repeat-partner penalty)
+
+  session     Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([sessionId, userId])
+}
+
+model Match {
+  id           String   @id @default(cuid())
+  sessionId    String
+  courtId      String
+  status       String   @default("PENDING") // PENDING, IN_PROGRESS, COMPLETED, PENDING_APPROVAL
+
+  // Team 1
+  team1User1Id String
+  team1User2Id String
+  team1Score   Int?
+
+  // Team 2
+  team2User1Id String
+  team2User2Id String
+  team2Score   Int?
+
+  winnerTeam   Int?     // 1 or 2
+
+  createdAt    DateTime @default(now())
+  completedAt  DateTime?
+
+  session      Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  court        Court    @relation(fields: [courtId], references: [id], onDelete: Cascade)
+  courtAsCurrentMatch Court? @relation("CourtCurrentMatch")
+  team1User1   User     @relation("Team1Player1", fields: [team1User1Id], references: [id])
+  team1User2   User     @relation("Team1Player2", fields: [team1User2Id], references: [id])
+  team2User1   User     @relation("Team2Player1", fields: [team2User1Id], references: [id])
+  team2User2   User     @relation("Team2Player2", fields: [team2User2Id], references: [id])
+}
