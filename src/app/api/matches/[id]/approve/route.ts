@@ -6,9 +6,17 @@ export const dynamic = "force-dynamic";
 
 const K_FACTOR = 32;
 
-function calculateEloChange(winnerElo: number, loserElo: number): number {
+function calculateEloChange(winnerElo: number, loserElo: number, winnerScore: number, loserScore: number): number {
   const expectedWinner = 1 / (1 + Math.pow(10, (loserElo - winnerElo) / 400));
-  return Math.round(K_FACTOR * (1 - expectedWinner));
+  const scoreDiff = winnerScore - loserScore;
+  
+  // Margin of victory multiplier
+  // Minimal win (diff of 2): multiplier = 1.0
+  // Close win (30-29): multiplier = 0.95
+  // Large win (e.g., 21-5, diff of 16): multiplier = 1 + (16-2)*0.05 = 1.7
+  const marginMultiplier = 1 + (scoreDiff - 2) * 0.05;
+  
+  return Math.round(K_FACTOR * (1 - expectedWinner) * marginMultiplier);
 }
 
 export async function POST(
@@ -73,11 +81,11 @@ export async function POST(
   let team2EloChange: number;
 
   if (winnerTeam === 1) {
-    const delta = calculateEloChange(team1AvgElo, team2AvgElo);
+    const delta = calculateEloChange(team1AvgElo, team2AvgElo, team1Points, team2Points);
     team1EloChange = delta;
     team2EloChange = -delta;
   } else {
-    const delta = calculateEloChange(team2AvgElo, team1AvgElo);
+    const delta = calculateEloChange(team2AvgElo, team1AvgElo, team2Points, team1Points);
     team1EloChange = -delta;
     team2EloChange = delta;
   }
