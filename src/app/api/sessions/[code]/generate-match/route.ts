@@ -78,9 +78,13 @@ export async function POST(
 
     // 4. Filter and Sort available players
     // PRIMARY: FEWEST matches played
-    // SECONDARY: HIGHEST ELO (to keep quality high among the eligible pool)
+    // SECONDARY: Randomize among those with same count to ensure rotation
     const availablePlayers = sessionData.players
       .filter((p) => !activeMatchPlayerIds.has(p.userId) && !p.isPaused)
+      .map(p => ({
+        ...p,
+        _sortKey: Math.random() // Add random key for shuffling same-count players
+      }))
       .sort((a, b) => {
         const countA = matchCounts[a.userId] || 0;
         const countB = matchCounts[b.userId] || 0;
@@ -89,7 +93,7 @@ export async function POST(
           return countA - countB;
         }
         
-        return b.user.elo - a.user.elo;
+        return a._sortKey - b._sortKey; // Random sort for same match count
       });
 
     console.log(`[Matchmaking] Session: ${code}, Available: ${availablePlayers.length}`);

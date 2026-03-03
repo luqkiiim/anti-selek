@@ -17,10 +17,11 @@ function getPrisma() {
         authToken: tursoToken,
       });
       const adapter = new PrismaLibSQL(libsql as any);
+      // NOTE: For driverAdapters, Prisma ignores the 'provider' in schema.prisma 
+      // and uses the engine logic of the adapter instead.
       return new PrismaClient({ adapter } as any);
     } catch (e) {
       console.error("CRITICAL: Failed to initialize Prisma with LibSQL adapter:", e);
-      // We fall back, which will trigger the 'Unable to open database' error if local dev.db is missing.
     }
   }
   
@@ -30,6 +31,7 @@ function getPrisma() {
   }
 
   console.log("Initializing standard PrismaClient (Local SQLite Mode)...");
+  // Standard PrismaClient uses DATABASE_URL from .env
   const client = new PrismaClient();
   
   if (process.env.NODE_ENV !== "production") {
