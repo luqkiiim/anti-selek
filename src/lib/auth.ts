@@ -34,7 +34,7 @@ const config = {
         }
 
         const adminEmails = (process.env.ADMIN_EMAILS || "").split(",").map(e => e.trim());
-        const userEmail = user.email;
+        const userEmail = user.email || "";
         const isAdmin = userEmail ? adminEmails.includes(userEmail) : false;
 
         return {
@@ -68,7 +68,12 @@ const config = {
   session: {
     strategy: "jwt" as const,
   },
-  secret: process.env.AUTH_SECRET,
+  secret: process.env.AUTH_SECRET || "development-secret-placeholder",
 };
 
-export const { handlers, signIn, signOut, auth } = NextAuth(config);
+const nextAuth = NextAuth(config);
+
+export const handlers = nextAuth.handlers;
+export const auth = nextAuth.auth;
+export const signIn = nextAuth.signIn;
+export const signOut = nextAuth.signOut;

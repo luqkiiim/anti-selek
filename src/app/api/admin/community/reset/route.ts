@@ -3,12 +3,9 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
-export const runtime = "nodejs";
 
 export async function POST(request: Request) {
   try {
-    // Check if we are in a build environment or similar
-    // auth() should only be called during actual request handling
     const session = await auth();
 
     if (!session?.user?.isAdmin) {
@@ -42,7 +39,7 @@ export async function POST(request: Request) {
   }
 }
 
-// Add a dummy GET to explicitly mark this as an API route that shouldn't be pre-rendered
+// Ensure GET is defined and not trying to do anything
 export async function GET() {
-  return new NextResponse("Method Not Allowed", { status: 405 });
+  return NextResponse.json({ error: "Method not allowed" }, { status: 405 });
 }
