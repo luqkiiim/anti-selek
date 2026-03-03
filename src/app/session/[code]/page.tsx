@@ -587,25 +587,27 @@ export default function SessionPage() {
                           </td>
                           <td className="px-4 py-4 min-w-[140px]">
                             <div className="flex flex-col">
-                              <Link href={`/profile/${player.user.id}`} className="font-bold text-gray-900 text-sm hover:text-blue-600 leading-tight">
-                                {player.user.name}
-                                {isMe && <span className="ml-1 text-[8px] bg-blue-100 text-blue-700 px-1 rounded">ME</span>}
-                              </Link>
-                              <div className="flex items-center gap-2 mt-1">
-                                {sessionData.type !== 'ELO' && <span className="text-[9px] font-bold text-gray-400 uppercase">ELO {player.user.elo}</span>}
+                              <div className="flex items-center gap-2">
+                                <Link href={`/profile/${player.user.id}`} className="font-bold text-gray-900 text-sm hover:text-blue-600 leading-tight">
+                                  {player.user.name}
+                                  {isMe && <span className="ml-1 text-[8px] bg-blue-100 text-blue-700 px-1 rounded">ME</span>}
+                                </Link>
                                 {canToggle && (
                                   <button
                                     onClick={(e) => {
                                       e.preventDefault();
                                       togglePausePlayer(player.userId, player.isPaused);
                                     }}
-                                    className={`text-[8px] px-1.5 py-0.5 rounded font-black uppercase tracking-tighter ${
+                                    className={`text-[8px] px-1.5 py-0.5 rounded font-black uppercase tracking-tighter shrink-0 ${
                                       player.isPaused ? "bg-red-500 text-white" : "bg-gray-200 text-gray-600"
                                     }`}
                                   >
                                     {player.isPaused ? "Resume" : "Pause"}
                                   </button>
                                 )}
+                              </div>
+                              <div className="flex items-center gap-2 mt-1">
+                                {sessionData.type !== 'ELO' && <span className="text-[9px] font-bold text-gray-400 uppercase">ELO {player.user.elo}</span>}
                               </div>
                             </div>
                           </td>
