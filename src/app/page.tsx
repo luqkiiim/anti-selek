@@ -229,7 +229,22 @@ export default function Home() {
 
               {/* Player Selection for New Session */}
               <div className="space-y-2">
-                <p className="text-[10px] font-black uppercase tracking-widest text-blue-100">Quick-Add Players</p>
+                <div className="flex justify-between items-center">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-blue-100">Quick-Add Players</p>
+                  <button
+                    onClick={() => {
+                      const allOtherIds = allPlayers.filter(p => p.id !== user?.id).map(p => p.id);
+                      if (selectedPlayerIds.length === allOtherIds.length) {
+                        setSelectedPlayerIds([]);
+                      } else {
+                        setSelectedPlayerIds(allOtherIds);
+                      }
+                    }}
+                    className="text-[9px] font-black uppercase tracking-widest bg-white/20 px-2 py-1 rounded-lg hover:bg-white/30 transition-all"
+                  >
+                    {selectedPlayerIds.length === allPlayers.filter(p => p.id !== user?.id).length ? 'Deselect All' : 'Select All'}
+                  </button>
+                </div>
                 <div className="max-h-40 overflow-y-auto pr-2 space-y-1 custom-scrollbar">
                   {allPlayers.filter(p => p.id !== user.id).map(player => (
                     <button
