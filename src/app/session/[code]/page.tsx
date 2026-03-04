@@ -75,6 +75,7 @@ export default function SessionPage() {
   
   // Late joiner state
   const [showRosterModal, setShowRosterModal] = useState(false);
+  const [rosterSearch, setRosterSearch] = useState("");
   const [communityPlayers, setCommunityPlayers] = useState<CommunityUser[]>([]);
   const [addingPlayerId, setAddingPlayerId] = useState<string | null>(null);
 
@@ -357,10 +358,10 @@ export default function SessionPage() {
     return { played, wins, losses };
   };
 
-  // Filter out players already in session
-  const playersNotInSession = communityPlayers.filter(
-    cp => !sessionData.players.some(sp => sp.userId === cp.id)
-  );
+  // Filter out players already in session AND apply search
+  const playersNotInSession = communityPlayers
+    .filter(cp => !sessionData.players.some(sp => sp.userId === cp.id))
+    .filter(cp => cp.name.toLowerCase().includes(rosterSearch.toLowerCase()));
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
@@ -681,11 +682,25 @@ export default function SessionPage() {
                 <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-1">Join the rotation</p>
               </div>
               <button 
-                onClick={() => setShowRosterModal(false)}
+                onClick={() => {
+                  setShowRosterModal(false);
+                  setRosterSearch("");
+                }}
                 className="bg-gray-100 text-gray-400 hover:text-gray-600 w-8 h-8 rounded-full flex items-center justify-center text-xl font-bold"
               >
                 &times;
               </button>
+            </div>
+            
+            {/* Search Bar */}
+            <div className="px-6 py-3 border-b bg-gray-50/50">
+              <input
+                type="text"
+                placeholder="Search players..."
+                value={rosterSearch}
+                onChange={(e) => setRosterSearch(e.target.value)}
+                className="w-full bg-white border-2 border-gray-100 rounded-xl px-4 py-2 text-sm font-bold focus:outline-none focus:border-blue-500 transition-all"
+              />
             </div>
             
             <div className="flex-1 overflow-y-auto p-4 space-y-2">
