@@ -40,30 +40,6 @@ export async function POST(
       return NextResponse.json({ error: "Court ID required" }, { status: 400 });
     }
 
-    // 0. Handle Reshuffle: Delete existing match if requested
-    if (forceReshuffle) {
-      const court = await prisma.court.findUnique({
-        where: { id: courtId },
-        include: { currentMatch: true },
-      });
-
-      if (court?.currentMatch) {
-        // Only allow reshuffle if match isn't approved/completed
-        const allowedStatuses = [MatchStatus.PENDING, MatchStatus.IN_PROGRESS];
-        if (!allowedStatuses.includes(court.currentMatch.status as any)) {
-          return NextResponse.json({ error: "Cannot reshuffle a match that is already scored or completed." }, { status: 400 });
-        }
-
-        await prisma.$transaction([
-          prisma.match.delete({ where: { id: court.currentMatch.id } }),
-          prisma.court.update({
-            where: { id: courtId },
-            data: { currentMatchId: null },
-          }),
-        ]);
-      }
-    }
-
     // 1. Fetch fresh session data
     const sessionData = await prisma.session.findUnique({
       where: { code },
@@ -77,6 +53,31 @@ export async function POST(
 
     if (!sessionData) return NextResponse.json({ error: "Session not found" }, { status: 404 });
     if (sessionData.status !== SessionStatus.ACTIVE) return NextResponse.json({ error: "Session not active" }, { status: 400 });
+
+    const targetCourt = await prisma.court.findFirst({
+      where: { id: courtId, sessionId: sessionData.id },
+      include: { currentMatch: true },
+    });
+    if (!targetCourt) {
+      return NextResponse.json({ error: "Court not found in this session" }, { status: 404 });
+    }
+
+    // 2. Handle Reshuffle: Delete existing match if requested
+    if (forceReshuffle && targetCourt.currentMatch) {
+      // Only allow reshuffle if match isn't approved/completed
+      const allowedStatuses = [MatchStatus.PENDING, MatchStatus.IN_PROGRESS];
+      if (!allowedStatuses.includes(targetCourt.currentMatch.status as any)) {
+        return NextResponse.json({ error: "Cannot reshuffle a match that is already scored or completed." }, { status: 400 });
+      }
+
+      await prisma.$transaction([
+        prisma.match.delete({ where: { id: targetCourt.currentMatch.id } }),
+        prisma.court.update({
+          where: { id: courtId },
+          data: { currentMatchId: null },
+        }),
+      ]);
+    }
 
     // 2. Identify busy players (those on court)
     const busyPlayerIds = getBusyPlayerIds(sessionData.matches);

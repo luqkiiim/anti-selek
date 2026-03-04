@@ -6,18 +6,48 @@ export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
   try {
-    const { email, password, name } = await request.json();
+    const body = await request.json().catch(() => null);
+    if (!body || typeof body !== "object") {
+      return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
+    }
+    const { email, password, name } = body as {
+      email?: unknown;
+      password?: unknown;
+      name?: unknown;
+    };
 
-    if (!email || !password || !name) {
+    if (
+      typeof email !== "string" ||
+      typeof password !== "string" ||
+      typeof name !== "string"
+    ) {
       return NextResponse.json(
         { error: "Missing required fields" },
         { status: 400 }
       );
     }
 
+    const normalizedEmail = email.trim().toLowerCase();
+    const normalizedName = name.trim();
+    if (!normalizedEmail || !normalizedName) {
+      return NextResponse.json(
+        { error: "Missing required fields" },
+        { status: 400 }
+      );
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
+      return NextResponse.json({ error: "Invalid email format" }, { status: 400 });
+    }
+    if (password.length < 8) {
+      return NextResponse.json(
+        { error: "Password must be at least 8 characters" },
+        { status: 400 }
+      );
+    }
+
     // Check if email already registered
     const existingByEmail = await prisma.user.findUnique({
-      where: { email },
+      where: { email: normalizedEmail },
     });
 
     if (existingByEmail) {
@@ -30,7 +60,7 @@ export async function POST(request: Request) {
     // Check if there's an unclaimed profile with the same name
     const existingByName = await prisma.user.findFirst({
       where: { 
-        name,
+        name: normalizedName,
         isClaimed: false
       },
     });
@@ -43,7 +73,7 @@ export async function POST(request: Request) {
       user = await prisma.user.update({
         where: { id: existingByName.id },
         data: {
-          email,
+          email: normalizedEmail,
           passwordHash,
           isClaimed: true,
         },
@@ -52,9 +82,9 @@ export async function POST(request: Request) {
       // Create new claimed user
       user = await prisma.user.create({
         data: {
-          email,
+          email: normalizedEmail,
           passwordHash,
-          name,
+          name: normalizedName,
           isClaimed: true,
         },
       });
@@ -66,10 +96,10 @@ export async function POST(request: Request) {
       name: user.name,
       isClaimed: user.isClaimed,
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error("Signup error details:", error);
     return NextResponse.json(
-      { error: `Failed to create user: ${error.message}` },
+      { error: "Failed to create user" },
       { status: 500 }
     );
   }

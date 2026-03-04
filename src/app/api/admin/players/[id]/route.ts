@@ -16,8 +16,38 @@ export async function PATCH(
     }
 
     const { id } = await params;
-    const body = await request.json();
+    const body = await request.json().catch(() => null);
+    if (!body || typeof body !== "object") {
+      return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
+    }
     const { name, email, elo, isActive } = body;
+
+    if (
+      name !== undefined &&
+      (typeof name !== "string" || name.trim().length === 0)
+    ) {
+      return NextResponse.json({ error: "Invalid name" }, { status: 400 });
+    }
+
+    if (
+      email !== undefined &&
+      email !== null &&
+      (typeof email !== "string" ||
+        !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()))
+    ) {
+      return NextResponse.json({ error: "Invalid email" }, { status: 400 });
+    }
+
+    if (
+      elo !== undefined &&
+      (!Number.isInteger(elo) || elo < 0 || elo > 5000)
+    ) {
+      return NextResponse.json({ error: "Invalid ELO" }, { status: 400 });
+    }
+
+    if (isActive !== undefined && typeof isActive !== "boolean") {
+      return NextResponse.json({ error: "Invalid isActive value" }, { status: 400 });
+    }
 
     // Check if user exists
     const user = await prisma.user.findUnique({
@@ -31,18 +61,18 @@ export async function PATCH(
     const updated = await prisma.user.update({
       where: { id },
       data: {
-        name: name !== undefined ? name : undefined,
-        email: email !== undefined ? email : undefined,
-        elo: elo !== undefined ? parseInt(elo) : undefined,
+        name: name !== undefined ? name.trim() : undefined,
+        email: email !== undefined ? (email ? email.trim() : null) : undefined,
+        elo: elo !== undefined ? elo : undefined,
         isActive: isActive !== undefined ? isActive : undefined,
       },
     });
 
     return NextResponse.json(updated);
-  } catch (error: any) {
+  } catch (error) {
     console.error("Admin update player error details:", error);
     return NextResponse.json(
-      { error: `Failed to update player: ${error.message || 'Unknown error'}` },
+      { error: "Failed to update player" },
       { status: 500 }
     );
   }
@@ -81,10 +111,10 @@ export async function DELETE(
     });
 
     return NextResponse.json({ success: true });
-  } catch (error: any) {
+  } catch (error) {
     console.error("Admin delete player error details:", error);
     return NextResponse.json(
-      { error: `Failed to delete player: ${error.message || 'Unknown error'}` },
+      { error: "Failed to delete player" },
       { status: 500 }
     );
   }

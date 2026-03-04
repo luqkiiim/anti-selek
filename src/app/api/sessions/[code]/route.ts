@@ -9,6 +9,11 @@ export async function GET(
   request: Request,
   { params }: { params: Promise<{ code: string }> }
 ) {
+  const session = await auth();
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+  }
+
   const { code } = await params;
 
   const sessionData = await prisma.session.findUnique({
@@ -48,6 +53,11 @@ export async function GET(
 
   if (!sessionData) {
     return NextResponse.json({ error: "Session not found" }, { status: 404 });
+  }
+
+  const isMember = sessionData.players.some((p) => p.userId === session.user.id);
+  if (!session.user.isAdmin && !isMember) {
+    return NextResponse.json({ error: "Not authorized for this session" }, { status: 403 });
   }
 
   return NextResponse.json(sessionData);
