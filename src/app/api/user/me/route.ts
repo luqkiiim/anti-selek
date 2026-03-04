@@ -31,5 +31,5 @@ export async function GET() {
   const userEmail = user.email;
   const isAdmin = userEmail ? adminEmails.includes(userEmail) : false;
 
-  return NextResponse.json({ ...user, isAdmin });
+  return NextResponse.json({ user: { ...user, isAdmin } });
 }

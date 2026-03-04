@@ -50,7 +50,11 @@ export default function Home() {
   const fetchUser = async () => {
     const res = await fetch("/api/user/me");
     const data = await safeJson(res);
-    if (data.user) setUser(data.user);
+    if (data.user) {
+      setUser(data.user);
+      return data.user;
+    }
+    return null;
   };
 
   const fetchSessions = async () => {
@@ -70,9 +74,12 @@ export default function Home() {
     if (status === "unauthenticated") {
       router.push("/signin");
     } else if (status === "authenticated") {
-      fetchUser();
-      fetchSessions();
-      fetchAllPlayers();
+      fetchUser().then((userData) => {
+        fetchSessions();
+        if (userData?.isAdmin) {
+          fetchAllPlayers();
+        }
+      });
     }
   }, [status, router]);
 
