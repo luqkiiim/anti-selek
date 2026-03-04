@@ -111,10 +111,13 @@ export default function SessionPage() {
 
   const fetchUser = async () => {
     try {
-      const res = await fetch("/api/user/me");
+      const res = await fetch(\"/api/user/me\");
       if (res.ok) {
         const data = await safeJson(res);
-        setUser(data);
+        if (data.user) {
+          console.log(\"Session User Data:\", data.user);
+          setUser(data.user);
+        }
       }
     } catch (err) {
       console.error(err);
@@ -310,7 +313,8 @@ export default function SessionPage() {
   }
 
   const isAdmin = user?.isAdmin;
-  const currentUserId = session?.user?.id || "";
+  console.log(\"isAdmin in render:\", isAdmin);
+  const currentUserId = session?.user?.id || \"\";
 
   // Helper to calculate player stats for the session
   const calculatePlayerSessionStats = (userId: string) => {
