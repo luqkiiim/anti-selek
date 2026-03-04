@@ -4,16 +4,6 @@ import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
 
-// Helper: Shuffle array
-function shuffle<T>(array: T[]): T[] {
-  const newArray = [...array];
-  for (let i = newArray.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [newArray[i], newArray[j]] = [newArray[j], newArray[i]];
-  }
-  return newArray;
-}
-
 // Helper: get all possible doubles partitions for exactly 4 players
 function getDoublesPartitions(players: string[]): { team1: [string, string]; team2: [string, string] }[] {
   if (players.length < 4) return [];
@@ -68,69 +58,80 @@ export async function POST(
         .flatMap(m => [m.team1User1Id, m.team1User2Id, m.team2User1Id, m.team2User2Id])
     );
 
-    // 3. Calculate actual match counts
-    const playerStats: Record<string, { matchCount: number }> = {};
+    // 3. Calculate actual match counts and last match times
+    const playerStats: Record<string, { matchCount: number; lastMatchAt: number }> = {};
+    const sessionStartTime = sessionData.createdAt.getTime();
+    
     sessionData.players.forEach(p => {
-      playerStats[p.userId] = { matchCount: 0 };
+      playerStats[p.userId] = { matchCount: 0, lastMatchAt: sessionStartTime };
     });
 
     sessionData.matches.forEach(m => {
+      const matchTime = (m.completedAt || m.createdAt).getTime();
       [m.team1User1Id, m.team1User2Id, m.team2User1Id, m.team2User2Id].forEach(id => {
-        if (playerStats[id]) playerStats[id].matchCount++;
+        if (playerStats[id]) {
+          playerStats[id].matchCount++;
+          if (matchTime > playerStats[id].lastMatchAt) playerStats[id].lastMatchAt = matchTime;
+        }
       });
     });
 
-    // 4. Calculate Session Average (from active players)
-    const activeCounts = Object.values(playerStats).map(s => s.matchCount).filter(c => c > 0);
-    const sessionAvg = activeCounts.length > 0 ? activeCounts.reduce((a, b) => a + b, 0) / activeCounts.length : 0;
-    const matchFloor = Math.floor(sessionAvg);
+    // 4. Calculate Session Max
+    const allCounts = Object.values(playerStats).map(s => s.matchCount);
+    const maxCount = allCounts.length > 0 ? Math.max(...allCounts) : 0;
 
-    // 5. THE SHUFFLE-POOL SELECTION LOGIC
-    // Group available players by their effective match count
+    // 5. SEAMLESS INTEGRATION SELECTION
+    const now = Date.now();
+    const activeLastMatches = Object.values(playerStats)
+      .filter(s => s.lastMatchAt > sessionStartTime)
+      .map(s => s.lastMatchAt);
+    
+    let minWait = sessionStartTime;
+    let maxWait = now;
+    if (activeLastMatches.length > 0) {
+      minWait = Math.min(...activeLastMatches);
+      maxWait = Math.max(...activeLastMatches);
+    }
+
     const availablePlayers = sessionData.players
       .filter(p => !busyPlayerIds.has(p.userId) && !p.isPaused)
       .map(p => {
-        const actual = playerStats[p.userId].matchCount;
-        // INSTANT AVERAGE: Boost late/unpaused players to the current floor
-        const effective = Math.max(actual, matchFloor);
-        return { ...p, _effectiveCount: effective, _actual: actual };
+        const stats = playerStats[p.userId];
+        let effectiveLastMatchAt = stats.lastMatchAt;
+
+        // If player is a late joiner or unpaused and hasn't played yet (or is behind)
+        if (stats.matchCount < maxCount && stats.lastMatchAt === sessionStartTime) {
+          // Insert them randomly into the current waiting line range
+          // This ensures they mix immediately and don't clump as a block
+          effectiveLastMatchAt = minWait + Math.random() * (maxWait - minWait);
+        }
+
+        return {
+          ...p,
+          _actual: stats.matchCount,
+          _effectiveCount: maxCount, // Treat everyone as having the same match count (No catch-up)
+          _effectiveLastMatchAt: effectiveLastMatchAt,
+          _random: Math.random()
+        };
+      })
+      .sort((a, b) => {
+        // Purely wait-time based rotation now that match counts are leveled
+        if (a._effectiveLastMatchAt !== b._effectiveLastMatchAt) {
+          return a._effectiveLastMatchAt - b._effectiveLastMatchAt;
+        }
+        return a._random - b._random;
       });
+
+    console.log(`[Matchmaking] Max: ${maxCount}, Available: ${availablePlayers.length}`);
 
     if (availablePlayers.length < 4) {
       return NextResponse.json({ error: `Not enough players available (need 4, have ${availablePlayers.length})` }, { status: 400 });
     }
 
-    // Sort by effective count, then shuffle within each count level to ensure mixing
-    const sortedByCount = availablePlayers.sort((a, b) => a._effectiveCount - b._effectiveCount);
-    
-    // We take the group of players at the lowest match count level
-    const minCount = sortedByCount[0]._effectiveCount;
-    const primaryPool = availablePlayers.filter(p => p._effectiveCount === minCount);
-    
-    let selected: typeof availablePlayers = [];
-    
-    if (primaryPool.length >= 4) {
-      // If we have enough people at the same level (e.g. 12 people at 4 matches),
-      // we shuffle them and pick 4. This GURANTEES mixing of unpaused players.
-      selected = shuffle(primaryPool).slice(0, 4);
-    } else {
-      // If not enough at the lowest level, take all of them and fill from the next level
-      selected = [...primaryPool];
-      const secondaryPool = availablePlayers
-        .filter(p => p._effectiveCount > minCount)
-        .sort((a, b) => a._effectiveCount - b._effectiveCount);
-      
-      const nextLevelCount = secondaryPool[0]?._effectiveCount;
-      const fillers = shuffle(secondaryPool.filter(p => p._effectiveCount === nextLevelCount));
-      
-      selected.push(...fillers.slice(0, 4 - selected.length));
-    }
-
-    console.log(`[Matchmaking] Avg: ${sessionAvg.toFixed(1)}, Selected: ${selected.map(p => p.user.name).join(', ')}`);
-
+    const selected = availablePlayers.slice(0, 4);
     const selectedIds = selected.map(p => p.userId);
 
-    // 6. Partition into teams (ELO Balancing)
+    // 6. Partition into teams (ELO & Partner Balancing)
     const partitions = getDoublesPartitions(selectedIds);
     let bestPartition = partitions[0];
     let bestScore = Infinity;
