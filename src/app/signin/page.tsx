@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useState } from "react";
+import { Suspense, useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { signIn } from "next-auth/react";
@@ -13,6 +13,11 @@ function SigninForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const registered = searchParams.get("registered");
+
+  useEffect(() => {
+    console.log("SigninForm mounted");
+    console.log("SearchParams:", Object.fromEntries(searchParams.entries()));
+  }, [searchParams]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -42,7 +47,7 @@ function SigninForm() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-100 px-4">
       <div className="max-w-md w-full bg-white rounded-lg shadow-md p-8">
-        <h1 className="text-2xl font-bold text-center mb-6">Sign In</h1>
+        <h1 className="text-2xl font-bold text-center mb-6">Sign In (Diagnostic)</h1>
 
         {registered && (
           <div className="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-4">
@@ -101,7 +106,7 @@ function SigninForm() {
 
 export default function SigninPage() {
   return (
-    <Suspense fallback={<div className="min-h-screen flex items-center justify-center">Loading...</div>}>
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center font-bold text-xl">Diagnostic: Loading Sign In...</div>}>
       <SigninForm />
     </Suspense>
   );
