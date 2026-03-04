@@ -1,32 +1,33 @@
 import { describe, it, expect } from "vitest";
 import { getBusyPlayerIds } from "./busyFilter";
+import { MatchStatus } from "../../types/enums";
 
 describe("getBusyPlayerIds", () => {
   it("should include players from PENDING, IN_PROGRESS, and PENDING_APPROVAL matches", () => {
     const matches = [
       {
-        status: "IN_PROGRESS",
+        status: MatchStatus.IN_PROGRESS,
         team1User1Id: "p1",
         team1User2Id: "p2",
         team2User1Id: "p3",
         team2User2Id: "p4",
       },
       {
-        status: "PENDING_APPROVAL",
+        status: MatchStatus.PENDING_APPROVAL,
         team1User1Id: "p5",
         team1User2Id: "p6",
         team2User1Id: "p7",
         team2User2Id: "p8",
       },
       {
-        status: "PENDING",
+        status: MatchStatus.PENDING,
         team1User1Id: "p9",
         team1User2Id: "p10",
         team2User1Id: "p11",
         team2User2Id: "p12",
       },
       {
-        status: "COMPLETED",
+        status: MatchStatus.COMPLETED,
         team1User1Id: "p13",
         team1User2Id: "p14",
         team2User1Id: "p15",

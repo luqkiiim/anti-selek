@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { MatchStatus } from "@/types/enums";
 
 export const dynamic = "force-dynamic";
 
@@ -30,7 +31,7 @@ export async function GET(
         orderBy: { sessionPoints: "desc" },
       },
       matches: {
-        where: { status: { in: ["COMPLETED", "PENDING_APPROVAL"] } },
+        where: { status: { in: [MatchStatus.COMPLETED, MatchStatus.PENDING_APPROVAL] } },
         select: {
           id: true,
           team1User1Id: true,

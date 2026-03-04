@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { selectMatchPlayers } from "@/lib/matchmaking/selectPlayers";
 import { getBusyPlayerIds } from "@/lib/matchmaking/busyFilter";
+import { MatchStatus, SessionStatus } from "@/types/enums";
 
 export const dynamic = "force-dynamic";
 
@@ -51,7 +52,7 @@ export async function POST(
     });
 
     if (!sessionData) return NextResponse.json({ error: "Session not found" }, { status: 404 });
-    if (sessionData.status !== "ACTIVE") return NextResponse.json({ error: "Session not active" }, { status: 400 });
+    if (sessionData.status !== SessionStatus.ACTIVE) return NextResponse.json({ error: "Session not active" }, { status: 400 });
 
     // 2. Identify busy players (those on court)
     const busyPlayerIds = getBusyPlayerIds(sessionData.matches);
@@ -101,11 +102,30 @@ export async function POST(
 
     // 8. Create Match
     const newMatch = await prisma.$transaction(async (tx) => {
+      // 8a. RE-CHECK: Ensure selected players didn't become busy since we last checked
+      const concurrentBusyMatches = await tx.match.findMany({
+        where: {
+          sessionId: sessionData.id,
+          status: { in: [MatchStatus.PENDING, MatchStatus.IN_PROGRESS, MatchStatus.PENDING_APPROVAL] },
+          OR: [
+            { team1User1Id: { in: selectedIds } },
+            { team1User2Id: { in: selectedIds } },
+            { team2User1Id: { in: selectedIds } },
+            { team2User2Id: { in: selectedIds } },
+          ],
+        },
+      });
+
+      if (concurrentBusyMatches.length > 0) {
+        throw new Error("PLAYERS_BUSY");
+      }
+
+      // 8b. Create the match
       const match = await tx.match.create({
         data: {
           sessionId: sessionData.id,
           courtId,
-          status: "IN_PROGRESS",
+          status: MatchStatus.IN_PROGRESS,
           team1User1Id: bestPartition.team1[0],
           team1User2Id: bestPartition.team1[1],
           team2User1Id: bestPartition.team2[0],
@@ -119,16 +139,27 @@ export async function POST(
         },
       });
 
-      await tx.court.update({
-        where: { id: courtId },
+      // 8c. RE-CHECK: Ensure court is still free using atomic updateMany
+      const updatedCourt = await tx.court.updateMany({
+        where: { id: courtId, currentMatchId: null },
         data: { currentMatchId: match.id },
       });
+
+      if (updatedCourt.count === 0) {
+        throw new Error("COURT_BUSY");
+      }
 
       return match;
     });
 
     return NextResponse.json(newMatch);
   } catch (error: any) {
+    if (error.message === "PLAYERS_BUSY") {
+      return NextResponse.json({ error: "One or more selected players just started another match. Please retry." }, { status: 409 });
+    }
+    if (error.message === "COURT_BUSY") {
+      return NextResponse.json({ error: "This court already has a match in progress." }, { status: 409 });
+    }
     console.error("Generate match error:", error);
     return NextResponse.json({ error: `Failed to generate match: ${error.message}` }, { status: 500 });
   }

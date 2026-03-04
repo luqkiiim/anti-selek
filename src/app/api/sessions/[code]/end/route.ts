@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { SessionStatus } from "@/types/enums";
 
 export const dynamic = "force-dynamic";
 
@@ -28,7 +29,7 @@ export async function POST(
 
   const updated = await prisma.session.update({
     where: { code },
-    data: { status: "COMPLETED", endedAt: new Date() },
+    data: { status: SessionStatus.COMPLETED, endedAt: new Date() },
     include: {
       courts: { include: { currentMatch: true } },
       players: {

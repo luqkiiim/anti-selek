@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { SessionStatus, SessionType } from "@/types/enums";
 
 export const dynamic = "force-dynamic";
 
@@ -17,7 +18,7 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const { name, type = "POINTS", playerIds = [] } = body;
+    const { name, type = SessionType.POINTS, playerIds = [] } = body;
 
     if (!name) {
       return NextResponse.json({ error: "Session name required" }, { status: 400 });
@@ -48,7 +49,7 @@ export async function POST(request: Request) {
         code,
         name,
         type,
-        status: "WAITING",
+        status: SessionStatus.WAITING,
         courts: {
           create: [
             { courtNumber: 1 },

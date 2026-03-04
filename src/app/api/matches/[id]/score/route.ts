@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { MatchStatus } from "@/types/enums";
 
 export const dynamic = "force-dynamic";
 
@@ -51,16 +52,33 @@ export async function POST(
 
   const winnerTeam = team1Score > team2Score ? 1 : 2;
 
-  // Update match with pending approval status
-  const updated = await prisma.match.update({
-    where: { id },
+  // Update match with pending approval status using atomic updateMany
+  const updatedResult = await prisma.match.updateMany({
+    where: { id, status: MatchStatus.IN_PROGRESS },
     data: {
       team1Score,
       team2Score,
       winnerTeam,
-      status: "PENDING_APPROVAL",
+      status: MatchStatus.PENDING_APPROVAL,
       completedAt: new Date(),
     },
+  });
+
+  if (updatedResult.count === 0) {
+    // Re-fetch to see current status for better error message
+    const currentMatch = await prisma.match.findUnique({ where: { id } });
+    return NextResponse.json(
+      { 
+        error: `Cannot submit score. Match is currently ${currentMatch?.status || 'unknown'}. Expected ${MatchStatus.IN_PROGRESS}.`,
+        status: currentMatch?.status 
+      },
+      { status: 409 }
+    );
+  }
+
+  // Fetch updated match for the response
+  const updated = await prisma.match.findUnique({
+    where: { id },
     include: {
       team1User1: { select: { id: true, name: true } },
       team1User2: { select: { id: true, name: true } },

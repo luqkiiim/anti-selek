@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { MatchStatus } from "@/types/enums";
 
 export const dynamic = "force-dynamic";
 
@@ -45,7 +46,7 @@ export async function POST(
     return NextResponse.json({ error: "Match not found" }, { status: 404 });
   }
 
-  if (match.status !== "PENDING_APPROVAL") {
+  if (match.status !== MatchStatus.PENDING_APPROVAL) {
     return NextResponse.json({ error: "Match not pending approval" }, { status: 400 });
   }
 
@@ -92,108 +93,110 @@ export async function POST(
   }
 
   // Transaction: update match, points, ELO, clear court
-  const result = await prisma.$transaction(async (tx) => {
-    // ... (rest of match and points update)
-    // Update match status
-    const updatedMatch = await tx.match.update({
-      where: { id },
-      data: {
-        team1Score: finalTeam1Score,
-        team2Score: finalTeam2Score,
-        winnerTeam,
-        team1EloChange: team1EloChange,
-        team2EloChange: team2EloChange,
-        status: "COMPLETED",
-        completedAt: now,
-      },
+  try {
+    const result = await prisma.$transaction(async (tx) => {
+      // 1. ATOMIC UPDATE: Only update if still PENDING_APPROVAL
+      const updatedMatchResult = await tx.match.updateMany({
+        where: { id, status: MatchStatus.PENDING_APPROVAL },
+        data: {
+          team1Score: finalTeam1Score,
+          team2Score: finalTeam2Score,
+          winnerTeam,
+          team1EloChange: team1EloChange,
+          team2EloChange: team2EloChange,
+          status: MatchStatus.COMPLETED,
+          completedAt: now,
+        },
+      });
+
+      if (updatedMatchResult.count === 0) {
+        throw new Error("ALREADY_PROCESSED");
+      }
+
+      // 2. Fetch the match again to confirm state (since updateMany doesn't return the object)
+      const updatedMatch = await tx.match.findUnique({
+        where: { id },
+      });
+
+      // Update session points and matchmaking state
+      await tx.sessionPlayer.updateMany({
+        where: {
+          sessionId: match.sessionId,
+          userId: { in: [match.team1User1Id, match.team1User2Id] },
+        },
+        data: {
+          sessionPoints: { increment: team1Points },
+          matchesPlayed: { increment: 1 },
+          lastPlayedAt: now,
+          availableSince: now,
+        },
+      });
+
+      await tx.sessionPlayer.updateMany({
+        where: {
+          sessionId: match.sessionId,
+          userId: { in: [match.team2User1Id, match.team2User2Id] },
+        },
+        data: {
+          sessionPoints: { increment: team2Points },
+          matchesPlayed: { increment: 1 },
+          lastPlayedAt: now,
+          availableSince: now,
+        },
+      });
+
+      // Update last partner for each player
+      await tx.sessionPlayer.update({
+        where: { sessionId_userId: { sessionId: match.sessionId, userId: match.team1User1Id } },
+        data: { lastPartnerId: match.team1User2Id },
+      });
+      await tx.sessionPlayer.update({
+        where: { sessionId_userId: { sessionId: match.sessionId, userId: match.team1User2Id } },
+        data: { lastPartnerId: match.team1User1Id },
+      });
+      await tx.sessionPlayer.update({
+        where: { sessionId_userId: { sessionId: match.sessionId, userId: match.team2User1Id } },
+        data: { lastPartnerId: match.team2User2Id },
+      });
+      await tx.sessionPlayer.update({
+        where: { sessionId_userId: { sessionId: match.sessionId, userId: match.team2User2Id } },
+        data: { lastPartnerId: match.team2User1Id },
+      });
+
+      // Update ELO for all 4 players
+      await tx.user.update({
+        where: { id: match.team1User1Id },
+        data: { elo: { increment: team1EloChange } },
+      });
+      await tx.user.update({
+        where: { id: match.team1User2Id },
+        data: { elo: { increment: team1EloChange } },
+      });
+      await tx.user.update({
+        where: { id: match.team2User1Id },
+        data: { elo: { increment: team2EloChange } },
+      });
+      await tx.user.update({
+        where: { id: match.team2User2Id },
+        data: { elo: { increment: team2EloChange } },
+      });
+
+      // Clear current match from court
+      await tx.court.update({
+        where: { id: match.courtId },
+        data: { currentMatchId: null },
+      });
+
+      return updatedMatch;
     });
 
-    // Update session points and matchmaking state
-    const allPlayerIds = [match.team1User1Id, match.team1User2Id, match.team2User1Id, match.team2User2Id];
-    
-    await tx.sessionPlayer.updateMany({
-      where: {
-        sessionId: match.sessionId,
-        userId: { in: [match.team1User1Id, match.team1User2Id] },
-      },
-      data: {
-        sessionPoints: { increment: team1Points },
-        matchesPlayed: { increment: 1 },
-        lastPlayedAt: now,
-        availableSince: now,
-      },
-    });
-
-    await tx.sessionPlayer.updateMany({
-      where: {
-        sessionId: match.sessionId,
-        userId: { in: [match.team2User1Id, match.team2User2Id] },
-      },
-      data: {
-        sessionPoints: { increment: team2Points },
-        matchesPlayed: { increment: 1 },
-        lastPlayedAt: now,
-        availableSince: now,
-      },
-    });
-
-    // Update last partner for each player
-    const sp1 = await tx.sessionPlayer.findUnique({
-      where: { sessionId_userId: { sessionId: match.sessionId, userId: match.team1User1Id } }
-    });
-    const sp2 = await tx.sessionPlayer.findUnique({
-      where: { sessionId_userId: { sessionId: match.sessionId, userId: match.team1User2Id } }
-    });
-    const sp3 = await tx.sessionPlayer.findUnique({
-      where: { sessionId_userId: { sessionId: match.sessionId, userId: match.team2User1Id } }
-    });
-    const sp4 = await tx.sessionPlayer.findUnique({
-      where: { sessionId_userId: { sessionId: match.sessionId, userId: match.team2User2Id } }
-    });
-
-    if (sp1) await tx.sessionPlayer.update({
-      where: { id: sp1.id },
-      data: { lastPartnerId: match.team1User2Id },
-    });
-    if (sp2) await tx.sessionPlayer.update({
-      where: { id: sp2.id },
-      data: { lastPartnerId: match.team1User1Id },
-    });
-    if (sp3) await tx.sessionPlayer.update({
-      where: { id: sp3.id },
-      data: { lastPartnerId: match.team2User2Id },
-    });
-    if (sp4) await tx.sessionPlayer.update({
-      where: { id: sp4.id },
-      data: { lastPartnerId: match.team2User1Id },
-    });
-
-    // Update ELO for all 4 players
-    await tx.user.update({
-      where: { id: match.team1User1Id },
-      data: { elo: { increment: team1EloChange } },
-    });
-    await tx.user.update({
-      where: { id: match.team1User2Id },
-      data: { elo: { increment: team1EloChange } },
-    });
-    await tx.user.update({
-      where: { id: match.team2User1Id },
-      data: { elo: { increment: team2EloChange } },
-    });
-    await tx.user.update({
-      where: { id: match.team2User2Id },
-      data: { elo: { increment: team2EloChange } },
-    });
-
-    // Clear current match from court
-    await tx.court.update({
-      where: { id: match.courtId },
-      data: { currentMatchId: null },
-    });
-
-    return updatedMatch;
-  });
+    return NextResponse.json(result);
+  } catch (error: any) {
+    if (error.message === "ALREADY_PROCESSED") {
+      return NextResponse.json({ error: "Match already approved or modified." }, { status: 409 });
+    }
+    throw error;
+  }
 
   return NextResponse.json(result);
 }

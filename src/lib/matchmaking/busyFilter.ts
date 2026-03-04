@@ -1,3 +1,5 @@
+import { MatchStatus } from "../../types/enums";
+
 /**
  * Identifies user IDs who are currently busy on a court.
  * Busy status includes: PENDING, IN_PROGRESS, PENDING_APPROVAL.
@@ -11,7 +13,11 @@ export function getBusyPlayerIds(matches: {
 }[]): Set<string> {
   const busyIds = new Set<string>();
   
-  const busyStatuses = ["PENDING", "IN_PROGRESS", "PENDING_APPROVAL"];
+  const busyStatuses = [
+    MatchStatus.PENDING,
+    MatchStatus.IN_PROGRESS,
+    MatchStatus.PENDING_APPROVAL
+  ];
   
   matches
     .filter(m => busyStatuses.includes(m.status))

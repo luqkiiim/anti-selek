@@ -47,8 +47,9 @@ A web app for scheduling badminton matches with true rolling Mexicano format.
 
 3. Initialize database:
    ```bash
-   npx prisma migrate dev --name init
+   npx prisma migrate dev
    ```
+   *Note: If you pull new code with schema changes, always run `npx prisma migrate dev` to sync your local database.*
 
 4. Run development server:
    ```bash

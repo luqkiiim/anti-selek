@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
+import { MatchStatus, SessionStatus, SessionType } from "@/types/enums";
 
 interface Player {
   userId: string;
@@ -370,7 +371,7 @@ export default function SessionPage() {
         {/* Admin Quick Actions */}
         {isAdmin && (
           <div className="flex overflow-x-auto gap-2 pb-4 scrollbar-hide no-scrollbar">
-            {sessionData.status === "WAITING" && (
+            {sessionData.status === SessionStatus.WAITING && (
               <button
                 onClick={startSession}
                 className="whitespace-nowrap bg-green-600 text-white px-4 py-2.5 rounded-xl font-black text-sm uppercase tracking-wider shadow-md active:bg-green-700 active:scale-95 transition-all"
@@ -387,7 +388,7 @@ export default function SessionPage() {
             >
               Add Players
             </button>
-            {sessionData.status === "ACTIVE" && (
+            {sessionData.status === SessionStatus.ACTIVE && (
               <button
                 onClick={endSession}
                 className="whitespace-nowrap bg-red-600 text-white px-4 py-2.5 rounded-xl font-black text-sm uppercase tracking-wider shadow-md active:bg-red-700 active:scale-95 transition-all"
@@ -411,14 +412,14 @@ export default function SessionPage() {
                 currentMatch.team2User2.id
               ].includes(currentUserId);
               
-              const canEdit = currentMatch?.status === "IN_PROGRESS" && (isAdmin || isParticipant);
+              const canEdit = currentMatch?.status === MatchStatus.IN_PROGRESS && (isAdmin || isParticipant);
               const scores = currentMatch ? (matchScores[currentMatch.id] || { team1: "", team2: "" }) : { team1: "", team2: "" };
 
               return (
                 <div key={court.id} className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden flex flex-col">
                   <div className="bg-gray-50/80 px-4 py-2.5 border-b border-gray-100 flex justify-between items-center">
                     <h2 className="text-sm font-black text-gray-500 uppercase tracking-widest">Court {court.courtNumber}</h2>
-                    {sessionData.status === "ACTIVE" && !court.currentMatch && isAdmin && (
+                    {sessionData.status === SessionStatus.ACTIVE && !court.currentMatch && isAdmin && (
                       <button
                         onClick={() => generateMatch(court.id)}
                         className="text-[10px] bg-blue-600 text-white px-2.5 py-1.5 rounded-lg font-black uppercase tracking-wider active:scale-95 transition-all"
@@ -432,7 +433,7 @@ export default function SessionPage() {
                     {currentMatch ? (
                       <div className="space-y-3">
                         {/* Team 1 Card */}
-                        <div className={`p-3 rounded-xl border-2 transition-all ${currentMatch.status === 'PENDING_APPROVAL' ? 'bg-gray-50 border-gray-100' : 'bg-blue-50/50 border-blue-100'}`}>
+                        <div className={`p-3 rounded-xl border-2 transition-all ${currentMatch.status === MatchStatus.PENDING_APPROVAL ? 'bg-gray-50 border-gray-100' : 'bg-blue-50/50 border-blue-100'}`}>
                           <div className="flex justify-between items-center gap-3">
                             <div className="flex-1 min-w-0">
                               <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest mb-0.5">Team 1</p>
@@ -449,7 +450,7 @@ export default function SessionPage() {
                                 className="w-14 h-12 border-2 border-blue-200 rounded-xl text-center font-black text-xl focus:outline-none focus:border-blue-500 bg-white"
                                 placeholder="0"
                               />
-                            ) : currentMatch.status === "PENDING_APPROVAL" && (
+                            ) : currentMatch.status === MatchStatus.PENDING_APPROVAL && (
                               <div className="text-2xl font-black text-gray-900 pr-2">{currentMatch.team1Score}</div>
                             )}
                           </div>
@@ -463,7 +464,7 @@ export default function SessionPage() {
                         </div>
 
                         {/* Team 2 Card */}
-                        <div className={`p-3 rounded-xl border-2 transition-all ${currentMatch.status === 'PENDING_APPROVAL' ? 'bg-gray-50 border-gray-100' : 'bg-red-50/50 border-red-100'}`}>
+                        <div className={`p-3 rounded-xl border-2 transition-all ${currentMatch.status === MatchStatus.PENDING_APPROVAL ? 'bg-gray-50 border-gray-100' : 'bg-red-50/50 border-red-100'}`}>
                           <div className="flex justify-between items-center gap-3">
                             <div className="flex-1 min-w-0">
                               <p className="text-[10px] font-black text-red-600 uppercase tracking-widest mb-0.5">Team 2</p>
@@ -480,7 +481,7 @@ export default function SessionPage() {
                                 className="w-14 h-12 border-2 border-red-200 rounded-xl text-center font-black text-xl focus:outline-none focus:border-red-500 bg-white"
                                 placeholder="0"
                               />
-                            ) : currentMatch.status === "PENDING_APPROVAL" && (
+                            ) : currentMatch.status === MatchStatus.PENDING_APPROVAL && (
                               <div className="text-2xl font-black text-gray-900 pr-2">{currentMatch.team2Score}</div>
                             )}
                           </div>
@@ -499,7 +500,7 @@ export default function SessionPage() {
                           </div>
                         )}
 
-                        {currentMatch.status === "PENDING_APPROVAL" && (
+                        {currentMatch.status === MatchStatus.PENDING_APPROVAL && (
                           <div className="pt-2 space-y-2">
                             {isAdmin && (
                               <button
@@ -515,7 +516,7 @@ export default function SessionPage() {
                           </div>
                         )}
                         
-                        {currentMatch.status === "IN_PROGRESS" && !canEdit && (
+                        {currentMatch.status === MatchStatus.IN_PROGRESS && !canEdit && (
                           <div className="py-2 text-center">
                             <span className="inline-flex items-center px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest bg-blue-100 text-blue-800">
                               Match Active
@@ -527,7 +528,7 @@ export default function SessionPage() {
                       <div className="text-center py-10 px-4">
                         <div className="text-3xl mb-2 opacity-20">🏸</div>
                         <p className="text-xs text-gray-400 font-bold uppercase tracking-widest">
-                          {sessionData.status === "ACTIVE" ? "Next match soon" : "Court Inactive"}
+                          {sessionData.status === SessionStatus.ACTIVE ? "Next match soon" : "Court Inactive"}
                         </p>
                       </div>
                     )}
@@ -540,12 +541,12 @@ export default function SessionPage() {
         {/* Combined Mobile Leaderboard / Standings */}
         <div className="space-y-6">
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-            <div className={`${sessionData.type === 'ELO' ? 'bg-purple-600' : 'bg-blue-600'} px-5 py-4 flex justify-between items-center transition-colors`}>
+            <div className={`${sessionData.type === SessionType.ELO ? 'bg-purple-600' : 'bg-blue-600'} px-5 py-4 flex justify-between items-center transition-colors`}>
               <h2 className="text-sm font-black text-white uppercase tracking-widest">
-                {sessionData.type === 'ELO' ? 'ELO Rankings' : 'Live Standings'}
+                {sessionData.type === SessionType.ELO ? 'ELO Rankings' : 'Live Standings'}
               </h2>
               <span className="text-[10px] font-bold text-white/70 uppercase tracking-widest">
-                {sessionData.type === 'ELO' ? 'Dynamic Ratings' : 'Point Totals'}
+                {sessionData.type === SessionType.ELO ? 'Dynamic Ratings' : 'Point Totals'}
               </span>
             </div>
             
@@ -558,14 +559,14 @@ export default function SessionPage() {
                     <th className="px-4 py-3 text-center text-[10px] font-black text-gray-400 uppercase tracking-widest">MP</th>
                     <th className="px-4 py-3 text-center text-[10px] font-black text-gray-400 uppercase tracking-widest">W/L</th>
                     <th className="px-4 py-3 text-right text-[10px] font-black text-gray-400 uppercase tracking-widest">
-                      {sessionData.type === 'ELO' ? 'ELO' : 'Pts'}
+                      {sessionData.type === SessionType.ELO ? SessionType.ELO : 'Pts'}
                     </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50">
                   {sessionData.players
                     .sort((a, b) => 
-                      sessionData.type === 'ELO' 
+                      sessionData.type === SessionType.ELO 
                         ? b.user.elo - a.user.elo 
                         : b.sessionPoints - a.sessionPoints
                     )
@@ -579,7 +580,7 @@ export default function SessionPage() {
                           <td className="px-4 py-4 whitespace-nowrap">
                             <span className={`w-6 h-6 rounded-lg flex items-center justify-center text-[10px] font-black ${
                               idx < 3 
-                                ? sessionData.type === 'ELO' ? 'bg-purple-100 text-purple-700' : 'bg-yellow-100 text-yellow-700' 
+                                ? sessionData.type === SessionType.ELO ? 'bg-purple-100 text-purple-700' : 'bg-yellow-100 text-yellow-700' 
                                 : 'bg-gray-100 text-gray-500'
                             }`}>
                               {idx + 1}
@@ -607,7 +608,7 @@ export default function SessionPage() {
                                 )}
                               </div>
                               <div className="flex items-center gap-2 mt-1">
-                                {sessionData.type !== 'ELO' && <span className="text-[9px] font-bold text-gray-400 uppercase">ELO {player.user.elo}</span>}
+                                {sessionData.type !== SessionType.ELO && <span className="text-[9px] font-bold text-gray-400 uppercase">ELO {player.user.elo}</span>}
                               </div>
                             </div>
                           </td>
@@ -622,8 +623,8 @@ export default function SessionPage() {
                             </div>
                           </td>
                           <td className="px-4 py-4 whitespace-nowrap text-right">
-                            <span className={`text-base font-black ${sessionData.type === 'ELO' ? 'text-purple-600' : 'text-blue-600'}`}>
-                              {sessionData.type === 'ELO' ? player.user.elo : player.sessionPoints}
+                            <span className={`text-base font-black ${sessionData.type === SessionType.ELO ? 'text-purple-600' : 'text-blue-600'}`}>
+                              {sessionData.type === SessionType.ELO ? player.user.elo : player.sessionPoints}
                             </span>
                           </td>
                         </tr>

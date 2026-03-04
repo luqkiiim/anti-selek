@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { MatchStatus } from "@/types/enums";
 
 export const dynamic = "force-dynamic";
 
@@ -26,7 +27,7 @@ export async function GET(
   // Fetch all completed matches for this user
   const matches = await prisma.match.findMany({
     where: {
-      status: "COMPLETED",
+      status: MatchStatus.COMPLETED,
       OR: [
         { team1User1Id: id },
         { team1User2Id: id },

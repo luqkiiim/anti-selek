@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { SessionStatus } from "@/types/enums";
 
 export const dynamic = "force-dynamic";
 
@@ -40,7 +41,7 @@ export async function POST(
       return NextResponse.json({ error: "Session not found" }, { status: 404 });
     }
 
-    if (sessionData.status === "COMPLETED") {
+    if (sessionData.status === SessionStatus.COMPLETED) {
       return NextResponse.json({ error: "Session already ended" }, { status: 400 });
     }
 

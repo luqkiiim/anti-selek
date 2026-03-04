@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { SessionStatus } from "@/types/enums";
 
 export const dynamic = "force-dynamic";
 
@@ -30,13 +31,13 @@ export async function POST(
     return NextResponse.json({ error: "Admin only" }, { status: 403 });
   }
 
-  if (sessionData.status !== "WAITING") {
+  if (sessionData.status !== SessionStatus.WAITING) {
     return NextResponse.json({ error: "Session already started" }, { status: 400 });
   }
 
   const updated = await prisma.session.update({
     where: { code },
-    data: { status: "ACTIVE" },
+    data: { status: SessionStatus.ACTIVE },
     include: {
       courts: { include: { currentMatch: true } },
       players: {
