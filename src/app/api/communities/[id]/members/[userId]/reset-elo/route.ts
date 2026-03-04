@@ -44,21 +44,35 @@ export async function POST(
       return NextResponse.json({ error: "Player not found in this community" }, { status: 404 });
     }
 
-    const updated = await prisma.user.update({
-      where: { id: userId },
-      data: { elo: 1000 },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        elo: true,
-        isActive: true,
-        isClaimed: true,
-        createdAt: true,
-      },
-    });
+    const [updatedMembership, updatedUser] = await prisma.$transaction([
+      prisma.communityMember.update({
+        where: {
+          communityId_userId: {
+            communityId,
+            userId,
+          },
+        },
+        data: { elo: 1000 },
+        select: { role: true, elo: true },
+      }),
+      prisma.user.findUniqueOrThrow({
+        where: { id: userId },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          isActive: true,
+          isClaimed: true,
+          createdAt: true,
+        },
+      }),
+    ]);
 
-    return NextResponse.json({ ...updated, role: targetMembership.role });
+    return NextResponse.json({
+      ...updatedUser,
+      role: updatedMembership.role,
+      elo: updatedMembership.elo,
+    });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Unknown error";
     console.error("Community admin reset ELO error:", error);

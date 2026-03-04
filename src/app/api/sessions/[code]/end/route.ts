@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { getCommunityEloByUserId, withCommunityElo } from "@/lib/communityElo";
 import { SessionStatus } from "@/types/enums";
 
 export const dynamic = "force-dynamic";
@@ -50,7 +51,18 @@ export async function POST(
       },
     });
 
-    return NextResponse.json(updated);
+    const players =
+      updated.communityId && updated.players.length > 0
+        ? withCommunityElo(
+            updated.players,
+            await getCommunityEloByUserId(
+              updated.communityId,
+              updated.players.map((p) => p.userId)
+            )
+          )
+        : updated.players;
+
+    return NextResponse.json({ ...updated, players });
   } catch (error) {
     console.error("End session error:", error);
     return NextResponse.json({ error: "Failed to end session" }, { status: 500 });

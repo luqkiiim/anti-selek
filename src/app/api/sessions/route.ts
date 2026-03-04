@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { getCommunityEloByUserId, withCommunityElo } from "@/lib/communityElo";
 import { SessionStatus, SessionType } from "@/types/enums";
 
 export const dynamic = "force-dynamic";
@@ -117,7 +118,18 @@ export async function POST(request: Request) {
       },
     });
 
-    return NextResponse.json(newSession);
+    const players =
+      newSession.communityId && newSession.players.length > 0
+        ? withCommunityElo(
+            newSession.players,
+            await getCommunityEloByUserId(
+              newSession.communityId,
+              newSession.players.map((p) => p.userId)
+            )
+          )
+        : newSession.players;
+
+    return NextResponse.json({ ...newSession, players });
   } catch (error) {
     console.error("Session creation error details:", error);
     return NextResponse.json({ error: "Failed to create session" }, { status: 500 });
@@ -162,7 +174,18 @@ export async function GET(request: Request) {
       },
     });
 
-    return NextResponse.json(sessions);
+    if (sessions.length === 0) {
+      return NextResponse.json(sessions);
+    }
+
+    const userIds = Array.from(new Set(sessions.flatMap((s) => s.players.map((p) => p.userId))));
+    const communityEloByUserId = await getCommunityEloByUserId(communityId, userIds);
+    const sessionsWithCommunityElo = sessions.map((s) => ({
+      ...s,
+      players: withCommunityElo(s.players, communityEloByUserId),
+    }));
+
+    return NextResponse.json(sessionsWithCommunityElo);
   } catch (error) {
     console.error("Session list error:", error);
     return NextResponse.json({ error: "Failed to load tournaments" }, { status: 500 });

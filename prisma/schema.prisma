@@ -49,6 +49,7 @@ model CommunityMember {
   communityId String
   userId      String
   role        String   @default("MEMBER") // MEMBER or ADMIN
+  elo         Int      @default(1000)
   createdAt   DateTime @default(now())
 
   community Community @relation(fields: [communityId], references: [id], onDelete: Cascade)

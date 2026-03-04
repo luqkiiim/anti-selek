@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { getCommunityEloByUserId } from "@/lib/communityElo";
 import { MatchStatus } from "@/types/enums";
 
 export const dynamic = "force-dynamic";
@@ -65,13 +66,24 @@ export async function GET(
     });
   });
 
+  const communityEloByUserId =
+    sessionData.communityId && sessionData.players.length > 0
+      ? await getCommunityEloByUserId(
+          sessionData.communityId,
+          sessionData.players.map((p) => p.userId)
+        )
+      : new Map<string, number>();
+
+  const getPlayerElo = (userId: string, fallbackElo: number) =>
+    communityEloByUserId.get(userId) ?? fallbackElo;
+
   // Session points leaderboard
   const sessionPointsLeaderboard = sessionData.players
     .map((p) => ({
       userId: p.userId,
       name: p.user.name,
       sessionPoints: p.sessionPoints,
-      elo: p.user.elo,
+      elo: getPlayerElo(p.userId, p.user.elo),
       matchesPlayed: matchCounts[p.userId] || 0,
     }))
     .sort((a, b) => b.sessionPoints - a.sessionPoints);
@@ -82,7 +94,7 @@ export async function GET(
       userId: p.userId,
       name: p.user.name,
       sessionPoints: p.sessionPoints,
-      elo: p.user.elo,
+      elo: getPlayerElo(p.userId, p.user.elo),
       matchesPlayed: matchCounts[p.userId] || 0,
     }))
     .sort((a, b) => b.elo - a.elo);

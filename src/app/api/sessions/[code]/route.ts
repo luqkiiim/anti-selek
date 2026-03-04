@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { getCommunityEloByUserId, withCommunityElo } from "@/lib/communityElo";
 import { MatchStatus } from "@/types/enums";
 
 export const dynamic = "force-dynamic";
@@ -75,8 +76,20 @@ export async function GET(
     return NextResponse.json({ error: "Not authorized for this session" }, { status: 403 });
   }
 
+  const players =
+    sessionData.communityId && sessionData.players.length > 0
+      ? withCommunityElo(
+          sessionData.players,
+          await getCommunityEloByUserId(
+            sessionData.communityId,
+            sessionData.players.map((p) => p.userId)
+          )
+        )
+      : sessionData.players;
+
   return NextResponse.json({
     ...sessionData,
+    players,
     viewerCommunityRole: communityRole,
     viewerCanManage: session.user.isAdmin || communityRole === "ADMIN",
   });

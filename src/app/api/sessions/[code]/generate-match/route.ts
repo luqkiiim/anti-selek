@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { getCommunityEloByUserId } from "@/lib/communityElo";
 import { selectMatchPlayers } from "@/lib/matchmaking/selectPlayers";
 import { getBusyPlayerIds } from "@/lib/matchmaking/busyFilter";
 import { MatchStatus, SessionStatus } from "@/types/enums";
@@ -114,6 +115,17 @@ export async function POST(
 
     const selectedIds = selected.map(p => p.userId);
 
+    const communityEloByUserId =
+      sessionData.communityId && sessionData.players.length > 0
+        ? await getCommunityEloByUserId(
+            sessionData.communityId,
+            sessionData.players.map((p) => p.userId)
+          )
+        : new Map<string, number>();
+
+    const getPlayerElo = (player: (typeof sessionData.players)[number]) =>
+      communityEloByUserId.get(player.userId) ?? player.user.elo;
+
     // 6. Partition into teams (ELO & Partner Balancing)
     const partitions = getDoublesPartitions(selectedIds);
     let bestPartition = partitions[0];
@@ -125,8 +137,8 @@ export async function POST(
       const p3 = sessionData.players.find(p => p.userId === partition.team2[0])!;
       const p4 = sessionData.players.find(p => p.userId === partition.team2[1])!;
 
-      const team1AvgElo = (p1.user.elo + p2.user.elo) / 2;
-      const team2AvgElo = (p3.user.elo + p4.user.elo) / 2;
+      const team1AvgElo = (getPlayerElo(p1) + getPlayerElo(p2)) / 2;
+      const team2AvgElo = (getPlayerElo(p3) + getPlayerElo(p4)) / 2;
       let balanceScore = Math.abs(team1AvgElo - team2AvgElo);
 
       if (p1.lastPartnerId === p2.userId || p2.lastPartnerId === p1.userId) balanceScore += 1000;

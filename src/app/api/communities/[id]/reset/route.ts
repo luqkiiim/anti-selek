@@ -69,8 +69,8 @@ export async function POST(
       }
 
       if (memberIds.length > 0) {
-        await tx.user.updateMany({
-          where: { id: { in: memberIds } },
+        await tx.communityMember.updateMany({
+          where: { communityId: id },
           data: { elo: 1000 },
         });
       }

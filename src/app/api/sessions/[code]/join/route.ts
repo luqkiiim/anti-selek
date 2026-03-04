@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { getCommunityEloByUserId, withCommunityElo } from "@/lib/communityElo";
 import { SessionStatus } from "@/types/enums";
 
 export const dynamic = "force-dynamic";
@@ -109,7 +110,18 @@ export async function POST(
       },
     });
 
-    return NextResponse.json(updatedSession);
+    const players =
+      updatedSession.communityId && updatedSession.players.length > 0
+        ? withCommunityElo(
+            updatedSession.players,
+            await getCommunityEloByUserId(
+              updatedSession.communityId,
+              updatedSession.players.map((p) => p.userId)
+            )
+          )
+        : updatedSession.players;
+
+    return NextResponse.json({ ...updatedSession, players });
   } catch (error) {
     console.error("Join session error:", error);
     return NextResponse.json({ error: "Failed to join session" }, { status: 500 });

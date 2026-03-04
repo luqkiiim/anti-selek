@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE "CommunityMember" ADD COLUMN "elo" INTEGER NOT NULL DEFAULT 1000;

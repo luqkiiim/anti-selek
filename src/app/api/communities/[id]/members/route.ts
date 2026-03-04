@@ -38,7 +38,6 @@ export async function GET(
             id: true,
             name: true,
             email: true,
-            elo: true,
             isActive: true,
             isClaimed: true,
             createdAt: true,
@@ -93,7 +92,7 @@ export async function GET(
         id: m.user.id,
         name: m.user.name,
         email: m.user.email,
-        elo: m.user.elo,
+        elo: m.elo,
         isActive: m.user.isActive,
         isClaimed: m.user.isClaimed,
         createdAt: m.user.createdAt,
@@ -161,7 +160,6 @@ export async function POST(
       id: string;
       name: string;
       email: string | null;
-      elo: number;
       isActive: boolean;
       isClaimed: boolean;
       createdAt: Date;
@@ -169,7 +167,7 @@ export async function POST(
     if (normalizedEmail) {
       const existingUser = await prisma.user.findUnique({
         where: { email: normalizedEmail },
-        select: { id: true, name: true, email: true, elo: true, isActive: true, isClaimed: true, createdAt: true },
+        select: { id: true, name: true, email: true, isActive: true, isClaimed: true, createdAt: true },
       });
 
       if (existingUser) {
@@ -183,14 +181,14 @@ export async function POST(
             passwordHash,
             isClaimed: !!passwordHash,
           },
-          select: { id: true, name: true, email: true, elo: true, isActive: true, isClaimed: true, createdAt: true },
+          select: { id: true, name: true, email: true, isActive: true, isClaimed: true, createdAt: true },
         });
       }
     } else {
       const existingUnclaimed = await prisma.user.findFirst({
         where: { name: normalizedName, isClaimed: false },
         orderBy: { createdAt: "asc" },
-        select: { id: true, name: true, email: true, elo: true, isActive: true, isClaimed: true, createdAt: true },
+        select: { id: true, name: true, email: true, isActive: true, isClaimed: true, createdAt: true },
       });
 
       if (existingUnclaimed) {
@@ -203,7 +201,7 @@ export async function POST(
             passwordHash: null,
             isClaimed: false,
           },
-          select: { id: true, name: true, email: true, elo: true, isActive: true, isClaimed: true, createdAt: true },
+          select: { id: true, name: true, email: true, isActive: true, isClaimed: true, createdAt: true },
         });
       }
     }
@@ -223,6 +221,7 @@ export async function POST(
       },
       select: {
         role: true,
+        elo: true,
       },
     });
 
@@ -230,7 +229,7 @@ export async function POST(
       id: user.id,
       name: user.name,
       email: user.email,
-      elo: user.elo,
+      elo: membership.elo,
       isActive: user.isActive,
       isClaimed: user.isClaimed,
       createdAt: user.createdAt,

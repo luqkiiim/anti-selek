@@ -90,7 +90,7 @@ export async function PATCH(
       }
     }
 
-    const updated = await prisma.user.update({
+    const updatedUser = await prisma.user.update({
       where: { id: userId },
       data: {
         name: typeof name === "string" ? name.trim() : undefined,
@@ -100,21 +100,45 @@ export async function PATCH(
               ? normalizedEmail
               : null
             : undefined,
-        elo: typeof elo === "number" ? elo : undefined,
         isActive: typeof isActive === "boolean" ? isActive : undefined,
       },
       select: {
         id: true,
         name: true,
         email: true,
-        elo: true,
         isActive: true,
         isClaimed: true,
         createdAt: true,
       },
     });
 
-    return NextResponse.json({ ...updated, role: membership.role });
+    const updatedMembership =
+      typeof elo === "number"
+        ? await prisma.communityMember.update({
+            where: {
+              communityId_userId: {
+                communityId,
+                userId,
+              },
+            },
+            data: { elo },
+            select: { role: true, elo: true },
+          })
+        : await prisma.communityMember.findUnique({
+            where: {
+              communityId_userId: {
+                communityId,
+                userId,
+              },
+            },
+            select: { role: true, elo: true },
+          });
+
+    return NextResponse.json({
+      ...updatedUser,
+      role: updatedMembership?.role ?? membership.role,
+      elo: updatedMembership?.elo ?? membership.elo,
+    });
   } catch (error) {
     console.error("Community admin update player error:", error);
     return NextResponse.json({ error: "Failed to update player" }, { status: 500 });

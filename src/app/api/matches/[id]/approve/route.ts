@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { getCommunityEloByUserId } from "@/lib/communityElo";
 import { isValidBadmintonScore } from "@/lib/matchRules";
 import { MatchStatus } from "@/types/enums";
 
@@ -106,8 +107,19 @@ export async function POST(
     const winnerTeam = team1Points > team2Points ? 1 : 2;
     const now = new Date();
 
-    const team1AvgElo = (match.team1User1.elo + match.team1User2.elo) / 2;
-    const team2AvgElo = (match.team2User1.elo + match.team2User2.elo) / 2;
+    const playerIds = [match.team1User1Id, match.team1User2Id, match.team2User1Id, match.team2User2Id];
+    const communityEloByUserId =
+      match.session.communityId
+        ? await getCommunityEloByUserId(match.session.communityId, playerIds)
+        : new Map<string, number>();
+
+    const team1User1Elo = communityEloByUserId.get(match.team1User1Id) ?? match.team1User1.elo;
+    const team1User2Elo = communityEloByUserId.get(match.team1User2Id) ?? match.team1User2.elo;
+    const team2User1Elo = communityEloByUserId.get(match.team2User1Id) ?? match.team2User1.elo;
+    const team2User2Elo = communityEloByUserId.get(match.team2User2Id) ?? match.team2User2.elo;
+
+    const team1AvgElo = (team1User1Elo + team1User2Elo) / 2;
+    const team2AvgElo = (team2User1Elo + team2User2Elo) / 2;
 
     let team1EloChange: number;
     let team2EloChange: number;
@@ -194,22 +206,39 @@ export async function POST(
         });
 
         // Update ELO for all 4 players
-        await tx.user.update({
-          where: { id: match.team1User1Id },
-          data: { elo: { increment: team1EloChange } },
-        });
-        await tx.user.update({
-          where: { id: match.team1User2Id },
-          data: { elo: { increment: team1EloChange } },
-        });
-        await tx.user.update({
-          where: { id: match.team2User1Id },
-          data: { elo: { increment: team2EloChange } },
-        });
-        await tx.user.update({
-          where: { id: match.team2User2Id },
-          data: { elo: { increment: team2EloChange } },
-        });
+        if (match.session.communityId) {
+          await tx.communityMember.updateMany({
+            where: {
+              communityId: match.session.communityId,
+              userId: { in: [match.team1User1Id, match.team1User2Id] },
+            },
+            data: { elo: { increment: team1EloChange } },
+          });
+          await tx.communityMember.updateMany({
+            where: {
+              communityId: match.session.communityId,
+              userId: { in: [match.team2User1Id, match.team2User2Id] },
+            },
+            data: { elo: { increment: team2EloChange } },
+          });
+        } else {
+          await tx.user.update({
+            where: { id: match.team1User1Id },
+            data: { elo: { increment: team1EloChange } },
+          });
+          await tx.user.update({
+            where: { id: match.team1User2Id },
+            data: { elo: { increment: team1EloChange } },
+          });
+          await tx.user.update({
+            where: { id: match.team2User1Id },
+            data: { elo: { increment: team2EloChange } },
+          });
+          await tx.user.update({
+            where: { id: match.team2User2Id },
+            data: { elo: { increment: team2EloChange } },
+          });
+        }
 
         // Clear current match from court
         await tx.court.update({
