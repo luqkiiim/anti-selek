@@ -40,6 +40,8 @@ export default function CommunityAdminPage() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [editingName, setEditingName] = useState<Record<string, string>>({});
+  const [savingName, setSavingName] = useState<Record<string, boolean>>({});
   const [editingElo, setEditingElo] = useState<Record<string, string>>({});
   const [savingElo, setSavingElo] = useState<Record<string, boolean>>({});
   const [resettingCommunity, setResettingCommunity] = useState(false);
@@ -135,6 +137,53 @@ export default function CommunityAdminPage() {
 
   const handleEloChange = (id: string, value: string) => {
     setEditingElo((prev) => ({ ...prev, [id]: value }));
+  };
+
+  const handleNameChange = (id: string, value: string) => {
+    setEditingName((prev) => ({ ...prev, [id]: value }));
+  };
+
+  const handleUpdateName = async (id: string, currentName: string) => {
+    const nextNameRaw = editingName[id];
+    if (nextNameRaw === undefined) return;
+
+    const nextName = nextNameRaw.trim();
+    if (!nextName || nextName === currentName) {
+      setEditingName((prev) => {
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      });
+      return;
+    }
+
+    setSavingName((prev) => ({ ...prev, [id]: true }));
+    setError("");
+    setSuccess("");
+
+    try {
+      const res = await fetch(`/api/communities/${communityId}/members/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: nextName }),
+      });
+      const data = await safeJson(res);
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to update player name");
+      }
+
+      setSuccess(`Player name updated to "${nextName}".`);
+      setEditingName((prev) => {
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      });
+      await fetchCommunityAndPlayers();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to update player name");
+    } finally {
+      setSavingName((prev) => ({ ...prev, [id]: false }));
+    }
   };
 
   const handleUpdateElo = async (id: string, playerName: string) => {
@@ -371,14 +420,30 @@ export default function CommunityAdminPage() {
                       .map((player) => (
                         <tr key={player.id} className="hover:bg-gray-50 transition-colors">
                           <td className="px-6 py-4 whitespace-nowrap">
-                            <Link href={`/profile/${player.id}`} className="group block">
-                              <div className="text-sm font-bold text-gray-900 group-hover:text-blue-600 group-hover:underline">
-                                {player.name}
+                            <div className="space-y-1">
+                              <div className="flex items-center gap-2">
+                                <input
+                                  type="text"
+                                  className="w-44 px-2 py-1 text-sm font-bold border rounded bg-gray-50 focus:bg-white focus:outline-none focus:border-blue-500"
+                                  value={editingName[player.id] !== undefined ? editingName[player.id] : player.name}
+                                  onChange={(e) => handleNameChange(player.id, e.target.value)}
+                                />
+                                {editingName[player.id] !== undefined &&
+                                  editingName[player.id].trim() !== player.name && (
+                                    <button
+                                      onClick={() => handleUpdateName(player.id, player.name)}
+                                      disabled={savingName[player.id]}
+                                      className="text-[10px] bg-blue-600 text-white px-2 py-1 rounded font-black uppercase tracking-tighter hover:bg-blue-700 disabled:opacity-50"
+                                    >
+                                      {savingName[player.id] ? "..." : "Save"}
+                                    </button>
+                                  )}
                               </div>
-                              <div className="text-xs text-gray-500 group-hover:text-blue-400">
-                                {player.email || "No email"}
-                              </div>
-                            </Link>
+                              <div className="text-xs text-gray-500">{player.email || "No email"}</div>
+                              <Link href={`/profile/${player.id}`} className="text-[11px] text-blue-600 hover:underline">
+                                View profile
+                              </Link>
+                            </div>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                             <div className="flex items-center gap-2">
