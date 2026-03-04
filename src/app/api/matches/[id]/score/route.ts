@@ -32,6 +32,11 @@ export async function POST(
       select: {
         id: true,
         status: true,
+        session: {
+          select: {
+            communityId: true,
+          },
+        },
         team1User1Id: true,
         team1User2Id: true,
         team2User1Id: true,
@@ -43,7 +48,21 @@ export async function POST(
       return NextResponse.json({ error: "Match not found" }, { status: 404 });
     }
 
-    const isAdmin = !!session.user.isAdmin;
+    let isCommunityAdmin = false;
+    if (match.session.communityId) {
+      const membership = await prisma.communityMember.findUnique({
+        where: {
+          communityId_userId: {
+            communityId: match.session.communityId,
+            userId: session.user.id,
+          },
+        },
+        select: { role: true },
+      });
+      isCommunityAdmin = membership?.role === "ADMIN";
+    }
+
+    const isAdmin = isCommunityAdmin;
     const isParticipant = [
       match.team1User1Id,
       match.team1User2Id,
