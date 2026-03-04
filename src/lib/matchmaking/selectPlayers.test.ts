@@ -151,10 +151,10 @@ describe("selectMatchPlayers (Match Rate Logic)", () => {
     expect(selectedIds).not.toContain("B");
   });
 
-  it("should prevent a bubble (max 2 from lowest cohort by actual count)", () => {
+  it("should prevent a mini-bubble for a small rejoin cohort", () => {
     const t0 = Date.now();
     
-    // 4 players with 0 matches (joined recently)
+    // 4 rejoiners with 0 matches
     const lowCohort: PlayerCandidate[] = Array.from({ length: 4 }, (_, i) => ({
       userId: `low_${i}`,
       matchesPlayed: 0,
@@ -163,8 +163,8 @@ describe("selectMatchPlayers (Match Rate Logic)", () => {
       availableSince: new Date(t0 - 10 * 60 * 1000),
     }));
     
-    // 10 players with 10 matches (joined long ago)
-    const others: PlayerCandidate[] = Array.from({ length: 10 }, (_, i) => ({
+    // 12 established players with higher match counts
+    const others: PlayerCandidate[] = Array.from({ length: 12 }, (_, i) => ({
       userId: `other_${i}`,
       matchesPlayed: 10,
       joinedAt: new Date(t0 - 200 * 60 * 1000),
@@ -174,11 +174,38 @@ describe("selectMatchPlayers (Match Rate Logic)", () => {
 
     const selected = selectMatchPlayers([...lowCohort, ...others]);
     
-    // Should select exactly 2 from lowCohort despite their low rate (0 rate)
+    // In a 4/16 cohort split, select only 1 low player to avoid low-low bubbling.
     const lowInSelection = selected!.filter(p => p.userId.startsWith("low_"));
-    expect(lowInSelection.length).toBe(2);
+    expect(lowInSelection.length).toBe(1);
     
     const othersInSelection = selected!.filter(p => p.userId.startsWith("other_"));
+    expect(othersInSelection.length).toBe(3);
+  });
+
+  it("should still select 2 from lowest cohort when others are scarce", () => {
+    const t0 = Date.now();
+
+    const lowCohort: PlayerCandidate[] = Array.from({ length: 4 }, (_, i) => ({
+      userId: `low_${i}`,
+      matchesPlayed: 0,
+      joinedAt: new Date(t0 - 10 * 60 * 1000),
+      inactiveSeconds: 0,
+      availableSince: new Date(t0 - 10 * 60 * 1000),
+    }));
+
+    const others: PlayerCandidate[] = Array.from({ length: 2 }, (_, i) => ({
+      userId: `other_${i}`,
+      matchesPlayed: 10,
+      joinedAt: new Date(t0 - 200 * 60 * 1000),
+      inactiveSeconds: 0,
+      availableSince: new Date(t0 - 100 * 60 * 1000),
+    }));
+
+    const selected = selectMatchPlayers([...lowCohort, ...others]);
+    const lowInSelection = selected!.filter((p) => p.userId.startsWith("low_"));
+    const othersInSelection = selected!.filter((p) => p.userId.startsWith("other_"));
+
+    expect(lowInSelection.length).toBe(2);
     expect(othersInSelection.length).toBe(2);
   });
 
