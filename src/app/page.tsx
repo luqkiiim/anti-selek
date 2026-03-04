@@ -122,6 +122,14 @@ export default function Home() {
     );
   };
 
+  const selectAllPlayers = () => {
+    if (selectedPlayerIds.length === allPlayers.length) {
+      setSelectedPlayerIds([]);
+    } else {
+      setSelectedPlayerIds(allPlayers.map(p => p.id));
+    }
+  };
+
   const joinSession = async () => {
     if (!joinCode.trim()) return;
     setError("");
@@ -235,7 +243,15 @@ export default function Home() {
             
             {allPlayers.length > 0 && (
               <div>
-                <p className="text-sm font-medium text-gray-700 mb-2">Pre-add players from community:</p>
+                <div className="flex justify-between items-center mb-2">
+                  <p className="text-sm font-medium text-gray-700">Pre-add players from community:</p>
+                  <button
+                    onClick={selectAllPlayers}
+                    className="text-[10px] font-black uppercase tracking-widest text-blue-600 hover:text-blue-800 transition-colors"
+                  >
+                    {selectedPlayerIds.length === allPlayers.length && allPlayers.length > 0 ? "Deselect All" : "Select All"}
+                  </button>
+                </div>
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 max-h-48 overflow-y-auto p-3 border rounded-md bg-gray-50">
                   {allPlayers.map(player => (
                     <label key={player.id} className="flex items-center gap-2 text-sm cursor-pointer hover:bg-white p-1 rounded transition-colors border border-transparent hover:border-gray-200">
