@@ -188,7 +188,7 @@ export default function ProfilePage() {
                     {/* Match Details */}
                     <div className="flex items-center justify-center gap-4 w-full md:w-1/3">
                       <div className="text-right flex-1">
-                        <p className="text-sm font-medium text-gray-900">You & {match.partner.name}</p>
+                        <p className="text-sm font-medium text-gray-900">{data.user.name} & {match.partner.name}</p>
                       </div>
                       <div className="bg-gray-100 px-3 py-1 rounded font-mono font-bold text-gray-800">
                         {match.score}

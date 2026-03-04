@@ -465,7 +465,9 @@ export default function CommunityPage() {
                       #{index + 1}
                     </span>
                     <div>
-                      <p className="text-sm font-black text-gray-900">{player.name}</p>
+                      <Link href={`/profile/${player.id}`} className="text-sm font-black text-gray-900 hover:text-blue-600 hover:underline">
+                        {player.name}
+                      </Link>
                       <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">{player.role}</p>
                     </div>
                   </div>
