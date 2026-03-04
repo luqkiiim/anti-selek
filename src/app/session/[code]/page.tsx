@@ -217,44 +217,45 @@ export default function SessionPage() {
       setAddingPlayerId(null);
     }
   };
-const generateMatch = async (courtId: string) => {
-  try {
-    const res = await fetch(`/api/sessions/${code}/generate-match`, {
-      method: \"POST\",
-      headers: { \"Content-Type\": \"application/json\" },
-      body: JSON.stringify({ courtId }),
-    });
-    if (res.ok) {
-      fetchSession();
-    } else {
-      const data = await safeJson(res);
-      setError(data.error || \"Failed to generate match\");
-    }
-  } catch (err) {
-    console.error(err);
-    setError(\"Network error generating match\");
-  }
-};
 
-const reshuffleMatch = async (courtId: string) => {
-  if (!confirm(\"Are you sure you want to reshuffle? This will delete the current match and pick new players.\")) return;
-  try {
-    const res = await fetch(`/api/sessions/${code}/generate-match`, {
-      method: \"POST\",
-      headers: { \"Content-Type\": \"application/json\" },
-      body: JSON.stringify({ courtId, forceReshuffle: true }),
-    });
-    if (res.ok) {
-      fetchSession();
-    } else {
-      const data = await safeJson(res);
-      setError(data.error || \"Failed to reshuffle match\");
+  const generateMatch = async (courtId: string) => {
+    try {
+      const res = await fetch(`/api/sessions/${code}/generate-match`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ courtId }),
+      });
+      if (res.ok) {
+        fetchSession();
+      } else {
+        const data = await safeJson(res);
+        setError(data.error || "Failed to generate match");
+      }
+    } catch (err) {
+      console.error(err);
+      setError("Network error generating match");
     }
-  } catch (err) {
-    console.error(err);
-    setError(\"Network error reshuffling match\");
-  }
-};
+  };
+
+  const reshuffleMatch = async (courtId: string) => {
+    if (!confirm("Are you sure you want to reshuffle? This will delete the current match and pick new players.")) return;
+    try {
+      const res = await fetch(`/api/sessions/${code}/generate-match`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ courtId, forceReshuffle: true }),
+      });
+      if (res.ok) {
+        fetchSession();
+      } else {
+        const data = await safeJson(res);
+        setError(data.error || "Failed to reshuffle match");
+      }
+    } catch (err) {
+      console.error(err);
+      setError("Network error reshuffling match");
+    }
+  };
 
   const handleScoreChange = (matchId: string, team: 'team1' | 'team2', value: string) => {
     setMatchScores(prev => ({
