@@ -20,7 +20,7 @@ export function getBusyPlayerIds(matches: {
   ];
   
   matches
-    .filter(m => busyStatuses.includes(m.status))
+    .filter(m => (busyStatuses as string[]).includes(m.status))
     .forEach(m => {
       busyIds.add(m.team1User1Id);
       busyIds.add(m.team1User2Id);
