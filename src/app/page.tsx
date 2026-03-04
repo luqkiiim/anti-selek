@@ -47,16 +47,6 @@ export default function Home() {
     }
   };
 
-  useEffect(() => {
-    if (status === "unauthenticated") {
-      router.push("/signin");
-    } else if (status === "authenticated") {
-      fetchUser();
-      fetchSessions();
-      fetchAllPlayers();
-    }
-  }, [status, router]);
-
   const fetchUser = async () => {
     const res = await fetch("/api/user/me");
     const data = await safeJson(res);
@@ -75,6 +65,16 @@ export default function Home() {
     const data = await safeJson(res);
     if (Array.isArray(data)) setAllPlayers(data);
   };
+
+  useEffect(() => {
+    if (status === "unauthenticated") {
+      router.push("/signin");
+    } else if (status === "authenticated") {
+      fetchUser();
+      fetchSessions();
+      fetchAllPlayers();
+    }
+  }, [status, router]);
 
   const createSession = async () => {
     if (!newSessionName) return;

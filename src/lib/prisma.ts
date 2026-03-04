@@ -13,8 +13,8 @@ function getPrisma() {
     console.log("Initializing Prisma with LibSQL adapter (Turso Mode)...");
     try {
       const libsql = createClient({
-        url: tursoUrl,
-        authToken: tursoToken,
+        url: tursoUrl as string,
+        authToken: tursoToken as string,
       });
       const adapter = new PrismaLibSQL(libsql as any);
       return new PrismaClient({ adapter } as any);
