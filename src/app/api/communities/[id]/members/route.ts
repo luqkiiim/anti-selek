@@ -48,6 +48,46 @@ export async function GET(
       orderBy: { createdAt: "asc" },
     });
 
+    const completedMatches = await prisma.match.findMany({
+      where: {
+        status: "COMPLETED",
+        session: { communityId: id },
+      },
+      select: {
+        winnerTeam: true,
+        team1User1Id: true,
+        team1User2Id: true,
+        team2User1Id: true,
+        team2User2Id: true,
+      },
+    });
+
+    const statsByUserId = new Map<string, { wins: number; losses: number }>();
+    for (const member of members) {
+      statsByUserId.set(member.user.id, { wins: 0, losses: 0 });
+    }
+
+    for (const match of completedMatches) {
+      if (match.winnerTeam !== 1 && match.winnerTeam !== 2) {
+        continue;
+      }
+
+      const team1Ids = [match.team1User1Id, match.team1User2Id];
+      const team2Ids = [match.team2User1Id, match.team2User2Id];
+      const winners = match.winnerTeam === 1 ? team1Ids : team2Ids;
+      const losers = match.winnerTeam === 1 ? team2Ids : team1Ids;
+
+      for (const winnerId of winners) {
+        const stat = statsByUserId.get(winnerId);
+        if (stat) stat.wins += 1;
+      }
+
+      for (const loserId of losers) {
+        const stat = statsByUserId.get(loserId);
+        if (stat) stat.losses += 1;
+      }
+    }
+
     return NextResponse.json(
       members.map((m) => ({
         id: m.user.id,
@@ -57,6 +97,8 @@ export async function GET(
         isActive: m.user.isActive,
         isClaimed: m.user.isClaimed,
         createdAt: m.user.createdAt,
+        wins: statsByUserId.get(m.user.id)?.wins ?? 0,
+        losses: statsByUserId.get(m.user.id)?.losses ?? 0,
         role: m.role,
       }))
     );

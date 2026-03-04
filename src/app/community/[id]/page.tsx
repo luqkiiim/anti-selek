@@ -27,6 +27,8 @@ interface CommunityMember {
   name: string;
   email?: string | null;
   elo: number;
+  wins: number;
+  losses: number;
   role: "ADMIN" | "MEMBER";
 }
 
@@ -449,7 +451,13 @@ export default function CommunityPage() {
                       <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">{player.role}</p>
                     </div>
                   </div>
-                  <p className="text-sm font-black text-gray-900">{player.elo}</p>
+                  <div className="text-right">
+                    <p className="text-sm font-black text-gray-900">{player.elo}</p>
+                    <p className="text-[10px] font-black uppercase tracking-wider">
+                      <span className="text-green-600">W {player.wins}</span>{" "}
+                      <span className="text-red-600">L {player.losses}</span>
+                    </p>
+                  </div>
                 </div>
               ))
             )}
