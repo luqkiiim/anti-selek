@@ -65,6 +65,7 @@ export async function POST(request: Request) {
 export async function GET() {
   try {
     const session = await auth();
+    console.log("Session in GET /api/admin/players:", JSON.stringify(session));
 
     if (!session?.user?.isAdmin) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 403 });

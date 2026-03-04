@@ -6,9 +6,9 @@ export const dynamic = "force-dynamic";
 
 export async function GET() {
   const session = await auth();
+  console.log("Session in GET /api/user/me:", JSON.stringify(session));
 
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+  if (!session?.user?.id) {    return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
 
   const user = await prisma.user.findUnique({

@@ -137,7 +137,7 @@ export default function Home() {
             <span className="text-xl">🏸</span>
           </div>
           <div>
-            <h1 className="text-lg font-black text-gray-900 tracking-tight leading-none">MEXICANO</h1>
+            <h1 className="text-lg font-black text-gray-900 tracking-tight leading-none">ANTI-SELEK</h1>
             <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Badminton Manager</p>
           </div>
         </div>
@@ -161,17 +161,6 @@ export default function Home() {
       </div>
 
       <div className="max-w-md mx-auto px-6 pt-8 space-y-8">
-        {/* User Welcome */}
-        <div className="flex items-center gap-4 bg-white p-5 rounded-3xl shadow-sm border border-gray-100">
-          <div className="w-12 h-12 bg-blue-50 rounded-2xl flex items-center justify-center text-xl font-black text-blue-600">
-            {user?.name?.[0].toUpperCase()}
-          </div>
-          <div>
-            <p className="text-xs text-gray-400 font-bold uppercase tracking-widest">Welcome back</p>
-            <h2 className="text-lg font-black text-gray-900 leading-tight">{user?.name}</h2>
-          </div>
-        </div>
-
         {/* Join Session */}
         <div className="bg-white p-6 rounded-3xl shadow-md border border-gray-100 space-y-4">
           <div>
