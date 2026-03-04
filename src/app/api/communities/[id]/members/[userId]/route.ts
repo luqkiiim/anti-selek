@@ -68,7 +68,10 @@ export async function PATCH(
     ) {
       return NextResponse.json({ error: "Invalid email" }, { status: 400 });
     }
-    if (elo !== undefined && (!Number.isInteger(elo) || elo < 0 || elo > 5000)) {
+    if (
+      elo !== undefined &&
+      (typeof elo !== "number" || !Number.isInteger(elo) || elo < 0 || elo > 5000)
+    ) {
       return NextResponse.json({ error: "Invalid ELO" }, { status: 400 });
     }
     if (isActive !== undefined && typeof isActive !== "boolean") {
