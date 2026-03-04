@@ -219,30 +219,6 @@ export default function CommunityAdminPage() {
     }
   };
 
-  const handleResetElo = async (id: string, playerName: string) => {
-    if (!confirm(`Are you sure you want to reset ${playerName}'s ELO to 1000?`)) {
-      return;
-    }
-
-    setError("");
-    setSuccess("");
-
-    try {
-      const res = await fetch(`/api/communities/${communityId}/members/${id}/reset-elo`, {
-        method: "POST",
-      });
-      const data = await safeJson(res);
-      if (!res.ok) {
-        throw new Error(data.error || "Failed to reset ELO");
-      }
-
-      setSuccess(`${playerName}'s ELO has been reset to 1000.`);
-      await fetchCommunityAndPlayers();
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Failed to reset ELO");
-    }
-  };
-
   const handleRemovePlayer = async (id: string, playerName: string) => {
     if (!confirm(`Remove ${playerName} from this community?`)) {
       return;
@@ -489,13 +465,6 @@ export default function CommunityAdminPage() {
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                             <div className="flex justify-end gap-3">
-                              <button
-                                onClick={() => handleResetElo(player.id, player.name)}
-                                className="text-orange-600 hover:text-orange-900 text-xs font-bold uppercase"
-                                title="Reset ELO to 1000"
-                              >
-                                Reset ELO
-                              </button>
                               <button
                                 onClick={() => handleRemovePlayer(player.id, player.name)}
                                 className="text-red-600 hover:text-red-900 text-xs font-bold uppercase"
