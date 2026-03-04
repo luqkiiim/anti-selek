@@ -320,7 +320,7 @@ export default function CommunityPage() {
         )}
       </div>
 
-      <div className="max-w-md mx-auto px-6 pt-8 space-y-8">
+      <div className="max-w-6xl mx-auto px-6 pt-8 space-y-8">
         {canManageCommunity && showHostPanel && (
           <>
             <div className="bg-blue-600 p-6 rounded-3xl shadow-xl shadow-blue-100 space-y-5 text-white">
@@ -423,113 +423,117 @@ export default function CommunityPage() {
           </>
         )}
 
-        <div className="bg-white p-6 rounded-3xl shadow-md border border-gray-100 space-y-4">
-          <h3 className="text-sm font-black text-gray-900 uppercase tracking-widest">Leaderboard</h3>
-          <div className="space-y-2">
-            {leaderboard.length === 0 ? (
-              <div className="bg-gray-50 border-2 border-dashed border-gray-100 rounded-2xl p-4 text-center">
-                <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">No players yet</p>
-              </div>
-            ) : (
-              leaderboard.map((player, index) => (
-                <div
-                  key={player.id}
-                  className="bg-gray-50 border border-gray-100 rounded-2xl px-4 py-3 flex items-center justify-between"
-                >
-                  <div className="flex items-center gap-3">
-                    <span className="text-[10px] font-black uppercase tracking-widest text-blue-600 w-6">
-                      #{index + 1}
-                    </span>
-                    <div>
-                      <Link href={`/profile/${player.id}`} className="text-sm font-black text-gray-900 hover:text-blue-600 hover:underline">
-                        {player.name}
-                      </Link>
-                      <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">{player.role}</p>
-                    </div>
-                  </div>
-                  <p className="text-[10px] font-black uppercase tracking-wider whitespace-nowrap">
-                    <span className="text-green-600">W {player.wins}</span>{" "}
-                    <span className="text-red-600">L {player.losses}</span>
-                  </p>
-                  <p className="text-sm font-black text-gray-900 text-right">{player.elo}</p>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
+          <div className="bg-white p-6 rounded-3xl shadow-md border border-gray-100 space-y-4">
+            <h3 className="text-sm font-black text-gray-900 uppercase tracking-widest">Leaderboard</h3>
+            <div className="space-y-2">
+              {leaderboard.length === 0 ? (
+                <div className="bg-gray-50 border-2 border-dashed border-gray-100 rounded-2xl p-4 text-center">
+                  <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">No players yet</p>
                 </div>
-              ))
-            )}
-          </div>
-        </div>
-
-        <div className="bg-white p-6 rounded-3xl shadow-md border border-gray-100 space-y-4">
-          <h3 className="text-sm font-black text-gray-900 uppercase tracking-widest">Current Tournaments</h3>
-          <div className="space-y-3">
-            {activeTournaments.length === 0 ? (
-              <div className="bg-gray-50 border-2 border-dashed border-gray-100 rounded-2xl p-4 text-center">
-                <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">No active tournaments</p>
-              </div>
-            ) : (
-              activeTournaments.map((tournament) => {
-                const isParticipant = tournament.players.some((p) => p.user.id === user?.id);
-                return (
-                  <div key={tournament.id} className="block bg-gray-50 p-4 rounded-2xl border border-gray-100">
-                    <div className="flex justify-between items-start mb-2">
-                      <h4 className="font-black text-gray-900">{tournament.name}</h4>
-                      <span className="text-[10px] font-black text-blue-600 bg-blue-50 px-2 py-1 rounded-lg uppercase tracking-widest">
-                        {tournament.status}
+              ) : (
+                leaderboard.map((player, index) => (
+                  <div
+                    key={player.id}
+                    className="bg-gray-50 border border-gray-100 rounded-2xl px-4 py-3 flex items-center justify-between"
+                  >
+                    <div className="flex items-center gap-3">
+                      <span className="text-[10px] font-black uppercase tracking-widest text-blue-600 w-6">
+                        #{index + 1}
                       </span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">
-                        {tournament.players.length} Players - {tournament.type}
-                      </p>
-                      {isParticipant ? (
-                        <Link
-                          href={`/session/${tournament.code}`}
-                          className="text-[10px] bg-blue-600 text-white px-3 py-1.5 rounded-lg font-black uppercase tracking-wider"
-                        >
-                          Open
+                      <div>
+                        <Link href={`/profile/${player.id}`} className="text-sm font-black text-gray-900 hover:text-blue-600 hover:underline">
+                          {player.name}
                         </Link>
-                      ) : (
-                        <button
-                          onClick={() => joinTournament(tournament.code)}
-                          className="text-[10px] bg-gray-900 text-white px-3 py-1.5 rounded-lg font-black uppercase tracking-wider"
-                        >
-                          Join
-                        </button>
-                      )}
+                        <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">{player.role}</p>
+                      </div>
                     </div>
+                    <p className="text-[10px] font-black uppercase tracking-wider whitespace-nowrap">
+                      <span className="text-green-600">W {player.wins}</span>{" "}
+                      <span className="text-red-600">L {player.losses}</span>
+                    </p>
+                    <p className="text-sm font-black text-gray-900 text-right">{player.elo}</p>
                   </div>
-                );
-              })
-            )}
+                ))
+              )}
+            </div>
           </div>
-        </div>
 
-        <div className="bg-white p-6 rounded-3xl shadow-md border border-gray-100 space-y-4 pb-10">
-          <h3 className="text-sm font-black text-gray-900 uppercase tracking-widest">Past Tournaments</h3>
-          <div className="space-y-3">
-            {pastTournaments.length === 0 ? (
-              <div className="bg-gray-50 border-2 border-dashed border-gray-100 rounded-2xl p-4 text-center">
-                <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">No past tournaments</p>
-              </div>
-            ) : (
-              pastTournaments.map((tournament) => (
-                <Link
-                  key={tournament.id}
-                  href={`/session/${tournament.code}`}
-                  className="block bg-gray-50 p-4 rounded-2xl border border-gray-100 hover:border-blue-400 transition-colors"
-                >
-                  <div className="flex justify-between items-start mb-2">
-                    <h4 className="font-black text-gray-900">{tournament.name}</h4>
-                    <span className="text-[10px] font-black text-gray-600 bg-gray-200 px-2 py-1 rounded-lg uppercase tracking-widest">
-                      {tournament.status}
-                    </span>
+          <div className="space-y-8">
+            <div className="bg-white p-6 rounded-3xl shadow-md border border-gray-100 space-y-4">
+              <h3 className="text-sm font-black text-gray-900 uppercase tracking-widest">Current Tournaments</h3>
+              <div className="space-y-3">
+                {activeTournaments.length === 0 ? (
+                  <div className="bg-gray-50 border-2 border-dashed border-gray-100 rounded-2xl p-4 text-center">
+                    <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">No active tournaments</p>
                   </div>
-                  <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">
-                    {tournament.players.length} Players - {tournament.type} -{" "}
-                    {new Date(tournament.createdAt).toLocaleDateString()}
-                  </p>
-                </Link>
-              ))
-            )}
+                ) : (
+                  activeTournaments.map((tournament) => {
+                    const isParticipant = tournament.players.some((p) => p.user.id === user?.id);
+                    return (
+                      <div key={tournament.id} className="block bg-gray-50 p-4 rounded-2xl border border-gray-100">
+                        <div className="flex justify-between items-start mb-2">
+                          <h4 className="font-black text-gray-900">{tournament.name}</h4>
+                          <span className="text-[10px] font-black text-blue-600 bg-blue-50 px-2 py-1 rounded-lg uppercase tracking-widest">
+                            {tournament.status}
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">
+                            {tournament.players.length} Players - {tournament.type}
+                          </p>
+                          {isParticipant ? (
+                            <Link
+                              href={`/session/${tournament.code}`}
+                              className="text-[10px] bg-blue-600 text-white px-3 py-1.5 rounded-lg font-black uppercase tracking-wider"
+                            >
+                              Open
+                            </Link>
+                          ) : (
+                            <button
+                              onClick={() => joinTournament(tournament.code)}
+                              className="text-[10px] bg-gray-900 text-white px-3 py-1.5 rounded-lg font-black uppercase tracking-wider"
+                            >
+                              Join
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+
+            <div className="bg-white p-6 rounded-3xl shadow-md border border-gray-100 space-y-4 pb-10">
+              <h3 className="text-sm font-black text-gray-900 uppercase tracking-widest">Past Tournaments</h3>
+              <div className="space-y-3">
+                {pastTournaments.length === 0 ? (
+                  <div className="bg-gray-50 border-2 border-dashed border-gray-100 rounded-2xl p-4 text-center">
+                    <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">No past tournaments</p>
+                  </div>
+                ) : (
+                  pastTournaments.map((tournament) => (
+                    <Link
+                      key={tournament.id}
+                      href={`/session/${tournament.code}`}
+                      className="block bg-gray-50 p-4 rounded-2xl border border-gray-100 hover:border-blue-400 transition-colors"
+                    >
+                      <div className="flex justify-between items-start mb-2">
+                        <h4 className="font-black text-gray-900">{tournament.name}</h4>
+                        <span className="text-[10px] font-black text-gray-600 bg-gray-200 px-2 py-1 rounded-lg uppercase tracking-widest">
+                          {tournament.status}
+                        </span>
+                      </div>
+                      <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">
+                        {tournament.players.length} Players - {tournament.type} -{" "}
+                        {new Date(tournament.createdAt).toLocaleDateString()}
+                      </p>
+                    </Link>
+                  ))
+                )}
+              </div>
+            </div>
           </div>
         </div>
       </div>
