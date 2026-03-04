@@ -17,7 +17,7 @@ export default function SignupPage() {
     const text = await res.text();
     try {
       return text ? JSON.parse(text) : {};
-    } catch (e) {
+    } catch {
       return { error: "Invalid server response" };
     }
   };

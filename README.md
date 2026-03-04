@@ -1,63 +1,64 @@
 # Tournament App (Badminton Mexicano)
 
-A web app for running rolling badminton sessions with live court management, score approval, and player ratings.
+Community-based badminton tournament app with live court management, score approval, and matchmaking fairness controls.
 
-## What It Does
+## Highlights
 
 - Email/password authentication (NextAuth credentials)
-- Community-admin managed session creation with 6-character session code
-- 3-court live session flow (create match, submit score, approve result)
-- Session formats:
-  - `POINTS`: leaderboard by session points
-  - `ELO`: leaderboard by global ELO
-- Player pause/resume support for temporary breaks
-- Late-join support (community admins can add players into active sessions)
-- Matchmaking fairness using time-adjusted match-rate + wait time
+- Community-scoped administration (no global player admin workflow)
+- Community-scoped ELO (`CommunityMember.elo`)
+- Tournament/session lifecycle with 6-character code
+- Configurable court count per tournament (not fixed to 3)
+- Pause/resume players during active tournaments
+- Admin late-join support (add players into active tournament)
+- Match score submission + admin approval flow
+- Matchmaking fairness with wait-time + match-rate balancing and anti-bubble controls
 
-## Stack
+## Tech Stack
 
 - Next.js `16.1.6` (App Router)
 - React `19.2.3`
 - TypeScript
 - Tailwind CSS v4
 - Prisma `5.22.0`
-- SQLite (local) + LibSQL/Turso adapter (cloud mode)
-- NextAuth v5 beta (credentials provider)
-- Vitest (unit tests for matchmaking helpers)
+- SQLite (local) + LibSQL/Turso adapter (runtime cloud mode)
+- NextAuth v5 beta (credentials)
+- Vitest (matchmaking unit tests)
+
+## Environment
+
+Create `.env`:
+
+```env
+# Local database for Prisma migrations/dev
+DATABASE_URL="file:C:/path/to/project/prisma/dev.db"
+
+# Auth
+AUTH_SECRET="replace-with-a-strong-secret"
+
+# Admin allowlist (comma-separated emails)
+ADMIN_EMAILS="you@example.com"
+
+# Cloud runtime database (optional but required for Vercel+Turso)
+TURSO_DATABASE_URL="libsql://..."
+TURSO_AUTH_TOKEN="..."
+```
 
 ## Local Setup
 
-### Prerequisites
-
-- Node.js 20+
-- npm
-
-### 1. Install dependencies
+1. Install dependencies
 
 ```bash
 npm install
 ```
 
-### 2. Configure environment
-
-Create `.env`:
-
-```env
-DATABASE_URL="file:./dev.db"
-AUTH_SECRET="replace-with-a-strong-secret"
-
-# Optional (cloud mode via Turso/LibSQL)
-# TURSO_DATABASE_URL="libsql://..."
-# TURSO_AUTH_TOKEN="..."
-```
-
-### 3. Run database migrations
+2. Run local migrations
 
 ```bash
 npx prisma migrate dev
 ```
 
-### 4. Start the app
+3. Start the app
 
 ```bash
 npm run dev
@@ -67,84 +68,90 @@ Open `http://localhost:3000`.
 
 ## Scripts
 
-- `npm run dev` - start dev server
+- `npm run dev` - dev server
 - `npm run build` - production build
-- `npm run start` - run production server
-- `npm run lint` - run ESLint
-- `npm test` - run Vitest
+- `npm run start` - production server
+- `npm run lint` - ESLint
+- `npm run test` - Vitest
 
-## Community Admin Setup
+## Verification Commands
 
-1. Sign up a user.
-2. Create a community with that user (creator becomes `ADMIN` for that community).
-3. Open the community page and use the `Admin` button in the top-right.
+- Lint:
 
-Community admin capabilities include:
+```bash
+npm run lint
+```
 
-- Create sessions and preselect participants
-- Start/end session
-- Generate/reshuffle matches
-- Approve/override scores
-- Add community players
-- Reset community data (destructive, scoped to that community)
+- Build:
 
-## Core Game Rules
+```bash
+npm run build
+```
 
-### Score validation
+- Tests (Windows/iCloud environments may require thread pool mode):
 
-A submitted game must be:
+```bash
+npx vitest run --pool=threads
+```
 
-- `21+` with win-by-2, or
-- `30-29` cap
+## Community Workflow
 
-### Session points
+1. Sign up.
+2. Create or join a community.
+3. Community admin can:
+   - Add/remove members
+   - Edit member name and community ELO
+   - Create tournament and choose courts + participants
+   - Start/end tournament
+   - Generate/reshuffle matches
+   - Approve/override scores
+   - Reset the community (destructive and scoped)
 
-Each player receives their team game score for that match.
+## Scoring and ELO Rules
 
-### ELO
-
-- Starting ELO: `1000`
-- K-factor: `32`
-- Team ELO is team average
-- Margin multiplier is applied in approval flow
-- Same delta is applied to both players on each team
+- Score validity: `21+` win-by-2 or `30-29` cap
+- Session points: each player gets their team score
+- ELO:
+  - Base rating: `1000`
+  - K-factor: `32`
+  - Team ELO uses team average
+  - Margin multiplier applied in approval flow
+  - Same delta applied to both teammates
+- For community tournaments, ELO updates are applied to `CommunityMember.elo`
 
 ## Matchmaking Summary
 
-Player selection for a new match prioritizes:
+Player selection priority:
 
 1. Lower match-rate (matches per active time)
-2. Longer wait time (`availableSince`)
-3. Random tiebreak
+2. Longer waiting time (`availableSince`)
+3. Random tie-breaker
 
-Additional logic:
+Additional constraints:
 
-- Busy players (already on active/pending courts) are excluded
-- Paused players are excluded
-- A bubble-prevention rule limits over-selection from the lowest matches-played cohort
-- Team partitioning minimizes ELO difference and penalizes repeat partners
+- Busy players excluded (active/pending matches)
+- Paused players excluded
+- Anti-bubble logic to avoid repeated clustering of lowest-cohort players
+- Team partitioning minimizes ELO gap and penalizes repeat partners
 
 ## Data Model (High Level)
 
-- `User`: account + ELO + claim state
-- `Session`: code, status, type
-- `SessionPlayer`: per-session points and matchmaking state
-- `Court`: session court slot with optional current match
-- `Match`: teams, score, approval/completion status, ELO deltas
+- `User`: account identity/profile
+- `Community`: scoped group
+- `CommunityMember`: role + community-specific ELO
+- `Session`: tournament instance in a community
+- `SessionPlayer`: per-session points + matchmaking state
+- `Court`: court slot and current match pointer
+- `Match`: teams, scores, status, ELO deltas
 
-## Deployment Notes
+## Deployment Notes (Vercel + Turso)
 
-- Set production env vars: `DATABASE_URL`, `AUTH_SECRET`.
-- If using Turso, also set `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN`.
-- Run migrations in deployment pipeline:
+- Set `AUTH_SECRET`, `ADMIN_EMAILS`, `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN` in Vercel.
+- App runtime uses Turso when `TURSO_DATABASE_URL` + `TURSO_AUTH_TOKEN` are present.
+- Prisma datasource is SQLite, so `prisma migrate deploy` targets `DATABASE_URL` file DB.
+- For Turso schema updates, apply SQL migrations directly to Turso (via Turso CLI or LibSQL client).
 
-```bash
-npx prisma migrate deploy
-```
+## Safety Notes
 
-## Current Improvement Priorities
-
-1. Tighten API authorization consistency across all routes.
-2. Add stronger input validation and standardized error responses.
-3. Expand integration tests for session/match route authorization and race conditions.
-4. Add audit logging for admin/destructive operations.
+- Community reset deletes tournaments/sessions/matches for that community and resets that community’s member ELOs.
+- Admin actions are permission-checked against community membership role.

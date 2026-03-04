@@ -16,8 +16,12 @@ function getPrisma() {
         url: tursoUrl as string,
         authToken: tursoToken as string,
       });
-      const adapter = new PrismaLibSQL(libsql as any);
-      return new PrismaClient({ adapter } as any);
+      const adapter = new PrismaLibSQL(
+        libsql as unknown as ConstructorParameters<typeof PrismaLibSQL>[0]
+      );
+      return new PrismaClient(
+        { adapter } as unknown as ConstructorParameters<typeof PrismaClient>[0]
+      );
     } catch (e) {
       console.error("CRITICAL: Failed to initialize Prisma with LibSQL adapter:", e);
     }

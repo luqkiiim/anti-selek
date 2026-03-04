@@ -250,8 +250,9 @@ export async function POST(
       });
 
       return NextResponse.json(result);
-    } catch (error: any) {
-      if (error.message === "ALREADY_PROCESSED") {
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "";
+      if (message === "ALREADY_PROCESSED") {
         return NextResponse.json({ error: "Match already approved or modified." }, { status: 409 });
       }
       throw error;

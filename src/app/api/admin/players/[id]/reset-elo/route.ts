@@ -31,8 +31,9 @@ export async function POST(
     });
 
     return NextResponse.json(updated);
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Unknown error";
     console.error("Reset ELO error:", error);
-    return NextResponse.json({ error: `Failed to reset ELO: ${error.message}` }, { status: 500 });
+    return NextResponse.json({ error: `Failed to reset ELO: ${message}` }, { status: 500 });
   }
 }

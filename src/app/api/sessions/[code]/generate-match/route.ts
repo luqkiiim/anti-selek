@@ -79,8 +79,8 @@ export async function POST(
     // 2. Handle Reshuffle: Delete existing match if requested
     if (forceReshuffle && targetCourt.currentMatch) {
       // Only allow reshuffle if match isn't approved/completed
-      const allowedStatuses = [MatchStatus.PENDING, MatchStatus.IN_PROGRESS];
-      if (!allowedStatuses.includes(targetCourt.currentMatch.status as any)) {
+      const allowedStatuses: string[] = [MatchStatus.PENDING, MatchStatus.IN_PROGRESS];
+      if (!allowedStatuses.includes(targetCourt.currentMatch.status)) {
         return NextResponse.json({ error: "Cannot reshuffle a match that is already scored or completed." }, { status: 400 });
       }
 
@@ -203,11 +203,12 @@ export async function POST(
     });
 
     return NextResponse.json(newMatch);
-  } catch (error: any) {
-    if (error.message === "PLAYERS_BUSY") {
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "";
+    if (message === "PLAYERS_BUSY") {
       return NextResponse.json({ error: "One or more selected players just started another match. Please retry." }, { status: 409 });
     }
-    if (error.message === "COURT_BUSY") {
+    if (message === "COURT_BUSY") {
       return NextResponse.json({ error: "This court already has a match in progress." }, { status: 409 });
     }
     console.error("Generate match error:", error);

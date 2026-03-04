@@ -100,8 +100,12 @@ export async function POST(request: Request) {
     });
 
     return NextResponse.json({ ...created, role: "ADMIN" }, { status: 201 });
-  } catch (error: any) {
-    if (error?.code === "P2002") {
+  } catch (error: unknown) {
+    const code =
+      typeof error === "object" && error !== null && "code" in error
+        ? (error as { code?: unknown }).code
+        : undefined;
+    if (code === "P2002") {
       return NextResponse.json({ error: "Community name already exists" }, { status: 409 });
     }
     console.error("Create community error:", error);

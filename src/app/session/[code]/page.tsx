@@ -65,6 +65,11 @@ interface SessionData {
   matches?: CompletedMatchInfo[];
 }
 
+interface CurrentUser {
+  id: string;
+  isAdmin?: boolean;
+}
+
 export default function SessionPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
@@ -72,8 +77,7 @@ export default function SessionPage() {
   const code = params?.code as string;
 
   const [sessionData, setSessionData] = useState<SessionData | null>(null);
-  const [user, setUser] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState<CurrentUser | null>(null);
   const [error, setError] = useState("");
   
   // Late joiner state
@@ -87,15 +91,15 @@ export default function SessionPage() {
   const [submittingMatchId, setSubmittingMatchId] = useState<string | null>(null);
 
   // Helper to safely parse JSON
-  const safeJson = async (res: Response) => {
+  const safeJson = useCallback(async (res: Response) => {
     const text = await res.text();
     try {
       return text ? JSON.parse(text) : {};
-    } catch (e) {
+    } catch {
       console.error("Failed to parse JSON:", text);
       return { error: "Invalid server response" };
     }
-  };
+  }, []);
 
   const fetchSession = useCallback(async () => {
     if (!code) return;
@@ -111,21 +115,21 @@ export default function SessionPage() {
       console.error(err);
       setError("Failed to load session");
     }
-  }, [code]);
+  }, [code, safeJson]);
 
-  const fetchUser = async () => {
+  const fetchUser = useCallback(async () => {
     try {
       const res = await fetch("/api/user/me");
       if (res.ok) {
         const data = await safeJson(res);
         if (data.user) {
-          setUser(data.user);
+          setUser(data.user as CurrentUser);
         }
       }
     } catch (err) {
       console.error(err);
     }
-  };
+  }, [safeJson]);
 
   const fetchCommunityPlayers = async () => {
     if (!sessionData?.communityId) return;
@@ -135,7 +139,20 @@ export default function SessionPage() {
       if (res.ok) {
         setCommunityPlayers(
           Array.isArray(data)
-            ? data.map((p: any) => ({ id: p.id, name: p.name, elo: p.elo }))
+            ? data
+                .map((p: unknown) => {
+                  if (typeof p !== "object" || p === null) return null;
+                  const candidate = p as { id?: unknown; name?: unknown; elo?: unknown };
+                  if (
+                    typeof candidate.id !== "string" ||
+                    typeof candidate.name !== "string" ||
+                    typeof candidate.elo !== "number"
+                  ) {
+                    return null;
+                  }
+                  return { id: candidate.id, name: candidate.name, elo: candidate.elo };
+                })
+                .filter((p): p is CommunityUser => p !== null)
             : []
         );
       }
@@ -157,7 +174,7 @@ export default function SessionPage() {
       const interval = setInterval(fetchSession, 3000);
       return () => clearInterval(interval);
     }
-  }, [session, code, fetchSession]);
+  }, [session, code, fetchSession, fetchUser]);
 
   const startSession = async () => {
     try {
@@ -342,7 +359,7 @@ export default function SessionPage() {
     );
   }
 
-  const isAdmin = !!sessionData.viewerCanManage || user?.isAdmin || (session?.user as any)?.isAdmin;
+  const isAdmin = !!sessionData.viewerCanManage || !!user?.isAdmin || !!session?.user?.isAdmin;
   const currentUserId = session?.user?.id || "";
 
   // Helper to calculate player stats for the session
