@@ -54,9 +54,12 @@ interface CommunityUser {
 interface SessionData {
   id: string;
   code: string;
+  communityId?: string | null;
   name: string;
   type: string;
   status: string;
+  viewerCanManage?: boolean;
+  viewerCommunityRole?: string | null;
   courts: Court[];
   players: Player[];
   matches?: CompletedMatchInfo[];
@@ -125,11 +128,16 @@ export default function SessionPage() {
   };
 
   const fetchCommunityPlayers = async () => {
+    if (!sessionData?.communityId) return;
     try {
-      const res = await fetch("/api/admin/players");
+      const res = await fetch(`/api/communities/${sessionData.communityId}/members`);
       const data = await safeJson(res);
       if (res.ok) {
-        setCommunityPlayers(Array.isArray(data) ? data : []);
+        setCommunityPlayers(
+          Array.isArray(data)
+            ? data.map((p: any) => ({ id: p.id, name: p.name, elo: p.elo }))
+            : []
+        );
       }
     } catch (err) {
       console.error(err);
@@ -333,7 +341,7 @@ export default function SessionPage() {
     );
   }
 
-  const isAdmin = user?.isAdmin || (session?.user as any)?.isAdmin;
+  const isAdmin = !!sessionData.viewerCanManage || user?.isAdmin || (session?.user as any)?.isAdmin;
   const currentUserId = session?.user?.id || "";
 
   // Helper to calculate player stats for the session

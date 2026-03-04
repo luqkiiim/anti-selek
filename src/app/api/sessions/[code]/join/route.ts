@@ -21,16 +21,6 @@ export async function POST(
 
     // Determine who is joining
     let userIdToJoin = session.user.id;
-    
-    // If admin is trying to add someone else
-    if (targetUserId && targetUserId !== session.user.id) {
-      const adminEmails = process.env.ADMIN_EMAILS?.split(",").map(e => e.trim()) || [];
-      const isAdmin = session.user.email && adminEmails.includes(session.user.email);
-      if (!isAdmin) {
-        return NextResponse.json({ error: "Unauthorized: Only admins can add other players" }, { status: 403 });
-      }
-      userIdToJoin = targetUserId;
-    }
 
     const sessionData = await prisma.session.findUnique({
       where: { code },
@@ -43,6 +33,46 @@ export async function POST(
 
     if (sessionData.status === SessionStatus.COMPLETED) {
       return NextResponse.json({ error: "Session already ended" }, { status: 400 });
+    }
+
+    let requesterCommunityRole: string | null = null;
+    if (sessionData.communityId) {
+      const requesterMembership = await prisma.communityMember.findUnique({
+        where: {
+          communityId_userId: {
+            communityId: sessionData.communityId,
+            userId: session.user.id,
+          },
+        },
+        select: { role: true },
+      });
+      requesterCommunityRole = requesterMembership?.role ?? null;
+      if (!requesterCommunityRole && !session.user.isAdmin) {
+        return NextResponse.json({ error: "Not a member of this community" }, { status: 403 });
+      }
+    }
+
+    // If admin is trying to add someone else
+    if (targetUserId && targetUserId !== session.user.id) {
+      const isCommunityAdmin = requesterCommunityRole === "ADMIN";
+      if (!session.user.isAdmin && !isCommunityAdmin) {
+        return NextResponse.json({ error: "Only community admins can add other players" }, { status: 403 });
+      }
+      userIdToJoin = targetUserId;
+    }
+
+    if (sessionData.communityId) {
+      const targetMembership = await prisma.communityMember.findUnique({
+        where: {
+          communityId_userId: {
+            communityId: sessionData.communityId,
+            userId: userIdToJoin,
+          },
+        },
+      });
+      if (!targetMembership) {
+        return NextResponse.json({ error: "Target player is not a member of this community" }, { status: 400 });
+      }
     }
 
     // Check if already in session
@@ -80,8 +110,8 @@ export async function POST(
     });
 
     return NextResponse.json(updatedSession);
-  } catch (error: any) {
+  } catch (error) {
     console.error("Join session error:", error);
-    return NextResponse.json({ error: `Failed to join session: ${error.message}` }, { status: 500 });
+    return NextResponse.json({ error: "Failed to join session" }, { status: 500 });
   }
 }

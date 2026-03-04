@@ -27,10 +27,6 @@ export async function POST(
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
     }
-    
-    if (!(session.user as any).isAdmin) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
-    }
 
     const { code } = await params;
     const body = await request.json().catch(() => ({}));
@@ -53,6 +49,23 @@ export async function POST(
 
     if (!sessionData) return NextResponse.json({ error: "Session not found" }, { status: 404 });
     if (sessionData.status !== SessionStatus.ACTIVE) return NextResponse.json({ error: "Session not active" }, { status: 400 });
+
+    let isCommunityAdmin = false;
+    if (sessionData.communityId) {
+      const membership = await prisma.communityMember.findUnique({
+        where: {
+          communityId_userId: {
+            communityId: sessionData.communityId,
+            userId: session.user.id,
+          },
+        },
+        select: { role: true },
+      });
+      isCommunityAdmin = membership?.role === "ADMIN";
+    }
+    if (!session.user.isAdmin && !isCommunityAdmin) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+    }
 
     const targetCourt = await prisma.court.findFirst({
       where: { id: courtId, sessionId: sessionData.id },
@@ -186,6 +199,6 @@ export async function POST(
       return NextResponse.json({ error: "This court already has a match in progress." }, { status: 409 });
     }
     console.error("Generate match error:", error);
-    return NextResponse.json({ error: `Failed to generate match: ${error.message}` }, { status: 500 });
+    return NextResponse.json({ error: "Failed to generate match" }, { status: 500 });
   }
 }

@@ -15,23 +15,41 @@ export async function POST(
     }
 
     const { code } = await params;
-    const { userId, isPaused } = await request.json();
-
-    // Check if the requester is an admin or the player themselves
-    const adminEmails = process.env.ADMIN_EMAILS?.split(",").map(e => e.trim()) || [];
-    const isAdmin = session.user.email && adminEmails.includes(session.user.email);
-    
-    if (!isAdmin && session.user.id !== userId) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+    const body = await request.json().catch(() => null);
+    if (!body || typeof body !== "object") {
+      return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
+    }
+    const { userId, isPaused } = body as { userId?: unknown; isPaused?: unknown };
+    if (typeof userId !== "string" || typeof isPaused !== "boolean") {
+      return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
     }
 
     const sessionData = await prisma.session.findUnique({
       where: { code },
-      select: { id: true },
+      select: { id: true, communityId: true },
     });
 
     if (!sessionData) {
       return NextResponse.json({ error: "Session not found" }, { status: 404 });
+    }
+
+    let isCommunityAdmin = false;
+    if (sessionData.communityId) {
+      const membership = await prisma.communityMember.findUnique({
+        where: {
+          communityId_userId: {
+            communityId: sessionData.communityId,
+            userId: session.user.id,
+          },
+        },
+        select: { role: true },
+      });
+      isCommunityAdmin = membership?.role === "ADMIN";
+    }
+
+    // Check if the requester is a manager or the player themselves
+    if (!session.user.isAdmin && !isCommunityAdmin && session.user.id !== userId) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
     }
 
     const existingPlayer = await prisma.sessionPlayer.findUnique({

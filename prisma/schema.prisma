@@ -20,6 +20,8 @@ model User {
   updatedAt    DateTime @updatedAt
 
   sessionPlayers SessionPlayer[]
+  communities    CommunityMember[]
+  createdCommunities Community[] @relation("CommunityCreator")
 
   // Match relations (team memberships)
   matchesAsTeam1Player1   Match[] @relation("Team1Player1")
@@ -28,15 +30,44 @@ model User {
   matchesAsTeam2Player2   Match[] @relation("Team2Player2")
 }
 
+model Community {
+  id                 String   @id @default(cuid())
+  name               String   @unique
+  isPasswordProtected Boolean @default(false)
+  passwordHash       String?
+  createdById        String
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  createdBy User @relation("CommunityCreator", fields: [createdById], references: [id], onDelete: Cascade)
+  members   CommunityMember[]
+  sessions  Session[]
+}
+
+model CommunityMember {
+  id          String   @id @default(cuid())
+  communityId String
+  userId      String
+  role        String   @default("MEMBER") // MEMBER or ADMIN
+  createdAt   DateTime @default(now())
+
+  community Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([communityId, userId])
+}
+
 model Session {
   id        String   @id @default(cuid())
   code      String   @unique
+  communityId String?
   name      String
   type      String   @default("POINTS") // POINTS or ELO
   status    String   @default("WAITING") // WAITING, ACTIVE, COMPLETED
   createdAt DateTime @default(now())
   endedAt   DateTime?
 
+  community Community? @relation(fields: [communityId], references: [id], onDelete: Cascade)
   players SessionPlayer[]
   courts  Court[]
   matches Match[]

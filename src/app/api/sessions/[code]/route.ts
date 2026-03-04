@@ -55,10 +55,29 @@ export async function GET(
     return NextResponse.json({ error: "Session not found" }, { status: 404 });
   }
 
-  const isMember = sessionData.players.some((p) => p.userId === session.user.id);
-  if (!session.user.isAdmin && !isMember) {
+  let communityRole: string | null = null;
+  if (sessionData.communityId) {
+    const membership = await prisma.communityMember.findUnique({
+      where: {
+        communityId_userId: {
+          communityId: sessionData.communityId,
+          userId: session.user.id,
+        },
+      },
+      select: { role: true },
+    });
+    communityRole = membership?.role ?? null;
+  }
+
+  const isSessionPlayer = sessionData.players.some((p) => p.userId === session.user.id);
+  const canView = session.user.isAdmin || !!communityRole || isSessionPlayer;
+  if (!canView) {
     return NextResponse.json({ error: "Not authorized for this session" }, { status: 403 });
   }
 
-  return NextResponse.json(sessionData);
+  return NextResponse.json({
+    ...sessionData,
+    viewerCommunityRole: communityRole,
+    viewerCanManage: session.user.isAdmin || communityRole === "ADMIN",
+  });
 }

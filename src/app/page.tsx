@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useSession, signOut } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -12,6 +12,23 @@ interface User {
   email: string;
   elo: number;
   isAdmin: boolean;
+}
+
+interface Community {
+  id: string;
+  name: string;
+  role: "ADMIN" | "MEMBER";
+  isPasswordProtected: boolean;
+  membersCount: number;
+  sessionsCount: number;
+}
+
+interface CommunityMember {
+  id: string;
+  name: string;
+  email?: string | null;
+  elo: number;
+  role: "ADMIN" | "MEMBER";
 }
 
 interface Session {
@@ -27,100 +44,204 @@ interface Session {
 export default function Home() {
   const { data: session, status } = useSession();
   const router = useRouter();
+
   const [user, setUser] = useState<User | null>(null);
+  const [communities, setCommunities] = useState<Community[]>([]);
+  const [selectedCommunityId, setSelectedCommunityId] = useState("");
+  const [communityMembers, setCommunityMembers] = useState<CommunityMember[]>([]);
+
   const [sessions, setSessions] = useState<Session[]>([]);
-  const [allPlayers, setAllPlayers] = useState<User[]>([]);
   const [selectedPlayerIds, setSelectedPlayerIds] = useState<string[]>([]);
-  const [joinCode, setJoinCode] = useState("");
   const [newSessionName, setNewSessionName] = useState("");
   const [sessionType, setSessionType] = useState<SessionType>(SessionType.POINTS);
+
+  const [newCommunityName, setNewCommunityName] = useState("");
+  const [newCommunityPassword, setNewCommunityPassword] = useState("");
+  const [joinCommunityName, setJoinCommunityName] = useState("");
+  const [joinCommunityPassword, setJoinCommunityPassword] = useState("");
+
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  // Helper to safely parse JSON
   const safeJson = async (res: Response) => {
     const text = await res.text();
     try {
       return text ? JSON.parse(text) : {};
-    } catch (e) {
+    } catch {
       return { error: "Invalid server response" };
     }
   };
+
+  const selectedCommunity = useMemo(
+    () => communities.find((c) => c.id === selectedCommunityId) || null,
+    [communities, selectedCommunityId]
+  );
+  const canManageCommunity = !!selectedCommunity && (selectedCommunity.role === "ADMIN" || !!user?.isAdmin);
 
   const fetchUser = async () => {
     const res = await fetch("/api/user/me");
     const data = await safeJson(res);
     if (data.user) {
       setUser(data.user);
-      return data.user;
+      return data.user as User;
     }
     return null;
   };
 
-  const fetchSessions = async () => {
-    const res = await fetch("/api/sessions");
+  const fetchCommunities = async () => {
+    const res = await fetch("/api/communities");
     const data = await safeJson(res);
-    if (Array.isArray(data)) setSessions(data);
-    setLoading(false);
+    if (!res.ok) throw new Error(data.error || "Failed to load communities");
+    const list = Array.isArray(data) ? data : [];
+    setCommunities(list);
+
+    const stillValid = list.some((c: Community) => c.id === selectedCommunityId);
+    if (!selectedCommunityId || !stillValid) {
+      setSelectedCommunityId(list[0]?.id || "");
+    }
   };
 
-  const fetchAllPlayers = async () => {
-    const res = await fetch("/api/admin/players");
+  const fetchSessions = async (communityId: string) => {
+    if (!communityId) {
+      setSessions([]);
+      return;
+    }
+    const res = await fetch(`/api/sessions?communityId=${encodeURIComponent(communityId)}`);
     const data = await safeJson(res);
-    if (Array.isArray(data)) setAllPlayers(data);
+    if (!res.ok) throw new Error(data.error || "Failed to load tournaments");
+    setSessions(Array.isArray(data) ? data : []);
+  };
+
+  const fetchCommunityMembers = async (communityId: string) => {
+    if (!communityId) {
+      setCommunityMembers([]);
+      return;
+    }
+    const res = await fetch(`/api/communities/${communityId}/members`);
+    const data = await safeJson(res);
+    if (!res.ok) throw new Error(data.error || "Failed to load community members");
+    setCommunityMembers(Array.isArray(data) ? data : []);
   };
 
   useEffect(() => {
     if (status === "unauthenticated") {
       router.push("/signin");
-    } else if (status === "authenticated") {
-      fetchUser().then((userData) => {
-        fetchSessions();
-        if (userData?.isAdmin) {
-          fetchAllPlayers();
+      return;
+    }
+
+    if (status === "authenticated") {
+      (async () => {
+        try {
+          setError("");
+          await fetchUser();
+          await fetchCommunities();
+        } catch (err: any) {
+          setError(err.message || "Failed to load dashboard");
+        } finally {
+          setLoading(false);
         }
-      });
+      })();
     }
   }, [status, router]);
 
-  const createSession = async () => {
-    if (!newSessionName) return;
+  useEffect(() => {
+    if (!selectedCommunityId || status !== "authenticated") return;
+    (async () => {
+      try {
+        setError("");
+        await fetchSessions(selectedCommunityId);
+        await fetchCommunityMembers(selectedCommunityId);
+      } catch (err: any) {
+        setError(err.message || "Failed to load community data");
+      }
+    })();
+  }, [selectedCommunityId, status]);
+
+  useEffect(() => {
+    setSelectedPlayerIds([]);
+  }, [selectedCommunityId]);
+
+  const createCommunity = async () => {
+    if (!newCommunityName.trim()) return;
     setError("");
-    const res = await fetch("/api/sessions", {
+    const res = await fetch("/api/communities", {
       method: "POST",
-      body: JSON.stringify({ 
-        name: newSessionName, 
-        type: sessionType,
-        playerIds: selectedPlayerIds 
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: newCommunityName,
+        password: newCommunityPassword || undefined,
       }),
     });
     const data = await safeJson(res);
-    if (data.code) {
-      router.push(`/session/${data.code}`);
-    } else {
-      setError(data.error || "Failed to create session");
+    if (!res.ok) {
+      setError(data.error || "Failed to create community");
+      return;
     }
+    setNewCommunityName("");
+    setNewCommunityPassword("");
+    await fetchCommunities();
+    if (data?.id) setSelectedCommunityId(data.id);
   };
 
-  const joinSession = async () => {
-    if (!joinCode) return;
+  const joinCommunity = async () => {
+    if (!joinCommunityName.trim()) return;
     setError("");
-    const res = await fetch(`/api/sessions/${joinCode.toUpperCase()}/join`, {
+    const res = await fetch("/api/communities/join", {
       method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: joinCommunityName,
+        password: joinCommunityPassword || undefined,
+      }),
     });
     const data = await safeJson(res);
-    if (data.code) {
-      router.push(`/session/${data.code}`);
-    } else {
-      setError(data.error || "Failed to join session");
+    if (!res.ok) {
+      setError(data.error || "Failed to join community");
+      return;
     }
+    setJoinCommunityName("");
+    setJoinCommunityPassword("");
+    await fetchCommunities();
+    if (data?.id) setSelectedCommunityId(data.id);
+  };
+
+  const createSession = async () => {
+    if (!newSessionName.trim() || !selectedCommunityId) return;
+    setError("");
+    const res = await fetch("/api/sessions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: newSessionName,
+        type: sessionType,
+        communityId: selectedCommunityId,
+        playerIds: selectedPlayerIds,
+      }),
+    });
+    const data = await safeJson(res);
+    if (!res.ok) {
+      setError(data.error || "Failed to create tournament");
+      return;
+    }
+    setNewSessionName("");
+    setSelectedPlayerIds([]);
+    router.push(`/session/${data.code}`);
+  };
+
+  const joinTournament = async (code: string) => {
+    setError("");
+    const res = await fetch(`/api/sessions/${code}/join`, { method: "POST" });
+    const data = await safeJson(res);
+    if (!res.ok) {
+      setError(data.error || "Failed to join tournament");
+      return;
+    }
+    router.push(`/session/${code}`);
   };
 
   const togglePlayerSelection = (playerId: string) => {
-    setSelectedPlayerIds(prev => 
-      prev.includes(playerId) 
-        ? prev.filter(id => id !== playerId)
-        : [...prev, playerId]
+    setSelectedPlayerIds((prev) =>
+      prev.includes(playerId) ? prev.filter((id) => id !== playerId) : [...prev, playerId]
     );
   };
 
@@ -137,28 +258,27 @@ export default function Home() {
 
   return (
     <main className="min-h-screen bg-gray-50 pb-20">
-      {/* Header */}
       <div className="bg-white border-b border-gray-100 px-6 py-4 flex justify-between items-center sticky top-0 z-10 shadow-sm">
         <div className="flex items-center gap-3">
           <div className="bg-blue-600 text-white p-2 rounded-xl shadow-blue-200 shadow-lg">
-            <span className="text-xl">🏸</span>
+            <span className="text-xl">A</span>
           </div>
           <div>
             <h1 className="text-lg font-black text-gray-900 tracking-tight leading-none">ANTI-SELEK</h1>
-            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Badminton Manager</p>
+            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Community Tournaments</p>
           </div>
         </div>
-        
+
         <div className="flex items-center gap-4">
           {user?.isAdmin && (
-            <Link 
+            <Link
               href="/admin/players"
               className="text-xs font-black text-gray-400 uppercase tracking-wider hover:text-blue-600 transition-colors hidden sm:block"
             >
               Players
             </Link>
           )}
-          <button 
+          <button
             onClick={() => signOut()}
             className="text-xs font-black text-red-500 uppercase tracking-wider active:scale-95 transition-all"
           >
@@ -168,51 +288,98 @@ export default function Home() {
       </div>
 
       <div className="max-w-md mx-auto px-6 pt-8 space-y-8">
-        {/* Join Session */}
-        <div className="bg-white p-6 rounded-3xl shadow-md border border-gray-100 space-y-4">
-          <div>
-            <h3 className="text-sm font-black text-gray-900 uppercase tracking-widest mb-1">Enter Arena</h3>
-            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Got a code? Join the match now.</p>
-          </div>
-          <div className="flex gap-2">
-            <input
-              type="text"
-              value={joinCode}
-              onChange={(e) => setJoinCode(e.target.value)}
-              placeholder="CODE"
-              className="flex-1 bg-gray-50 border-2 border-gray-100 rounded-2xl px-4 py-3 font-black text-center tracking-widest focus:outline-none focus:border-blue-500 transition-all uppercase"
-            />
-            <button
-              onClick={joinSession}
-              className="bg-gray-900 text-white px-6 rounded-2xl font-black uppercase text-xs active:scale-95 transition-all shadow-lg"
-            >
-              Join
-            </button>
-          </div>
+        <div className="bg-white p-6 rounded-3xl shadow-md border border-gray-100 space-y-3">
+          <h3 className="text-sm font-black text-gray-900 uppercase tracking-widest">Join Community</h3>
+          <input
+            type="text"
+            value={joinCommunityName}
+            onChange={(e) => setJoinCommunityName(e.target.value)}
+            placeholder="Community Name"
+            className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl px-4 py-3 font-bold focus:outline-none focus:border-blue-500 transition-all"
+          />
+          <input
+            type="password"
+            value={joinCommunityPassword}
+            onChange={(e) => setJoinCommunityPassword(e.target.value)}
+            placeholder="Password (if required)"
+            className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl px-4 py-3 font-bold focus:outline-none focus:border-blue-500 transition-all"
+          />
+          <button
+            onClick={joinCommunity}
+            className="w-full bg-gray-900 text-white px-6 py-3 rounded-2xl font-black uppercase text-xs active:scale-95 transition-all shadow-lg"
+          >
+            Join
+          </button>
         </div>
 
-        {/* Create Session (Admin Only) */}
-        {user?.isAdmin && (
+        <div className="bg-white p-6 rounded-3xl shadow-md border border-gray-100 space-y-3">
+          <h3 className="text-sm font-black text-gray-900 uppercase tracking-widest">Create Community</h3>
+          <input
+            type="text"
+            value={newCommunityName}
+            onChange={(e) => setNewCommunityName(e.target.value)}
+            placeholder="Unique Community Name"
+            className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl px-4 py-3 font-bold focus:outline-none focus:border-blue-500 transition-all"
+          />
+          <input
+            type="password"
+            value={newCommunityPassword}
+            onChange={(e) => setNewCommunityPassword(e.target.value)}
+            placeholder="Optional Password"
+            className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl px-4 py-3 font-bold focus:outline-none focus:border-blue-500 transition-all"
+          />
+          <button
+            onClick={createCommunity}
+            className="w-full bg-blue-600 text-white px-6 py-3 rounded-2xl font-black uppercase text-xs active:scale-95 transition-all shadow-lg"
+          >
+            Create
+          </button>
+        </div>
+
+        <div className="bg-white p-6 rounded-3xl shadow-md border border-gray-100 space-y-3">
+          <h3 className="text-sm font-black text-gray-900 uppercase tracking-widest">Current Community</h3>
+          <select
+            value={selectedCommunityId}
+            onChange={(e) => setSelectedCommunityId(e.target.value)}
+            className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl px-4 py-3 font-bold focus:outline-none focus:border-blue-500 transition-all"
+          >
+            {!communities.length && <option value="">No communities yet</option>}
+            {communities.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name} ({c.role})
+              </option>
+            ))}
+          </select>
+          {selectedCommunity && (
+            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">
+              {selectedCommunity.membersCount} Members - {selectedCommunity.sessionsCount} Tournaments
+            </p>
+          )}
+        </div>
+
+        {canManageCommunity && (
           <div className="bg-blue-600 p-6 rounded-3xl shadow-xl shadow-blue-100 space-y-5 text-white">
             <div>
               <h3 className="text-sm font-black uppercase tracking-widest mb-1">Host Tournament</h3>
-              <p className="text-[10px] text-blue-100 font-bold uppercase tracking-wider">Start a new rolling Mexicano session</p>
+              <p className="text-[10px] text-blue-100 font-bold uppercase tracking-wider">
+                Everyone in this community can see this tournament.
+              </p>
             </div>
-            
+
             <div className="space-y-3">
               <input
                 type="text"
                 value={newSessionName}
                 onChange={(e) => setNewSessionName(e.target.value)}
-                placeholder="Session Name"
+                placeholder="Tournament Name"
                 className="w-full bg-blue-500/50 border-2 border-blue-400/30 rounded-2xl px-4 py-3 placeholder:text-blue-200 font-bold focus:outline-none focus:border-white transition-all"
               />
-              
+
               <div className="grid grid-cols-2 gap-2">
                 <button
                   onClick={() => setSessionType(SessionType.POINTS)}
                   className={`py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
-                    sessionType === SessionType.POINTS ? 'bg-white text-blue-600 shadow-md' : 'bg-blue-500/30 text-white'
+                    sessionType === SessionType.POINTS ? "bg-white text-blue-600 shadow-md" : "bg-blue-500/30 text-white"
                   }`}
                 >
                   Points Format
@@ -220,20 +387,19 @@ export default function Home() {
                 <button
                   onClick={() => setSessionType(SessionType.ELO)}
                   className={`py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
-                    sessionType === SessionType.ELO ? 'bg-white text-blue-600 shadow-md' : 'bg-blue-500/30 text-white'
+                    sessionType === SessionType.ELO ? "bg-white text-blue-600 shadow-md" : "bg-blue-500/30 text-white"
                   }`}
                 >
                   ELO Format
                 </button>
               </div>
 
-              {/* Player Selection for New Session */}
               <div className="space-y-2">
                 <div className="flex justify-between items-center">
                   <p className="text-[10px] font-black uppercase tracking-widest text-blue-100">Quick-Add Players</p>
                   <button
                     onClick={() => {
-                      const allOtherIds = allPlayers.filter(p => p.id !== user?.id).map(p => p.id);
+                      const allOtherIds = communityMembers.filter((p) => p.id !== user?.id).map((p) => p.id);
                       if (selectedPlayerIds.length === allOtherIds.length) {
                         setSelectedPlayerIds([]);
                       } else {
@@ -242,22 +408,24 @@ export default function Home() {
                     }}
                     className="text-[9px] font-black uppercase tracking-widest bg-white/20 px-2 py-1 rounded-lg hover:bg-white/30 transition-all"
                   >
-                    {selectedPlayerIds.length === allPlayers.filter(p => p.id !== user?.id).length ? 'Deselect All' : 'Select All'}
+                    {selectedPlayerIds.length === communityMembers.filter((p) => p.id !== user?.id).length ? "Deselect All" : "Select All"}
                   </button>
                 </div>
                 <div className="max-h-40 overflow-y-auto pr-2 space-y-1 custom-scrollbar">
-                  {allPlayers.filter(p => p.id !== user.id).map(player => (
-                    <button
-                      key={player.id}
-                      onClick={() => togglePlayerSelection(player.id)}
-                      className={`w-full flex justify-between items-center px-3 py-2 rounded-xl text-xs font-bold transition-all ${
-                        selectedPlayerIds.includes(player.id) ? 'bg-white/20 border-white/40' : 'bg-blue-700/30 border-transparent'
-                      } border`}
-                    >
-                      <span>{player.name}</span>
-                      {selectedPlayerIds.includes(player.id) && <span>✓</span>}
-                    </button>
-                  ))}
+                  {communityMembers
+                    .filter((p) => p.id !== user?.id)
+                    .map((player) => (
+                      <button
+                        key={player.id}
+                        onClick={() => togglePlayerSelection(player.id)}
+                        className={`w-full flex justify-between items-center px-3 py-2 rounded-xl text-xs font-bold transition-all ${
+                          selectedPlayerIds.includes(player.id) ? "bg-white/20 border-white/40" : "bg-blue-700/30 border-transparent"
+                        } border`}
+                      >
+                        <span>{player.name}</span>
+                        {selectedPlayerIds.includes(player.id) && <span>OK</span>}
+                      </button>
+                    ))}
                 </div>
               </div>
 
@@ -265,56 +433,79 @@ export default function Home() {
                 onClick={createSession}
                 className="w-full bg-white text-blue-600 py-4 rounded-2xl font-black uppercase tracking-widest text-xs active:scale-95 transition-all shadow-lg mt-2"
               >
-                Create Session
+                Create Tournament
               </button>
             </div>
           </div>
         )}
 
-        {/* Sessions List */}
         <div className="space-y-4 pb-10">
           <div className="flex justify-between items-end px-2">
             <div>
-              <h3 className="text-sm font-black text-gray-900 uppercase tracking-widest mb-0.5">Active Arenas</h3>
-              <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Your recent tournaments</p>
+              <h3 className="text-sm font-black text-gray-900 uppercase tracking-widest mb-0.5">Tournaments</h3>
+              <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">
+                Active and past tournaments in this community
+              </p>
             </div>
           </div>
-          
+
           <div className="space-y-3">
             {sessions.length === 0 ? (
               <div className="bg-white p-10 rounded-3xl border-2 border-dashed border-gray-100 text-center">
-                <p className="text-xs text-gray-400 font-bold uppercase tracking-widest">No active sessions</p>
+                <p className="text-xs text-gray-400 font-bold uppercase tracking-widest">No tournaments yet</p>
               </div>
             ) : (
-              sessions.map((s) => (
-                <Link
-                  key={s.id}
-                  href={`/session/${s.code}`}
-                  className="block bg-white p-5 rounded-3xl shadow-sm border border-gray-100 active:scale-95 active:bg-gray-50 transition-all group"
-                >
-                  <div className="flex justify-between items-start mb-2">
-                    <h4 className="font-black text-gray-900 group-hover:text-blue-600 transition-colors">{s.name}</h4>
-                    <span className="text-[10px] font-black text-blue-600 bg-blue-50 px-2 py-1 rounded-lg uppercase tracking-widest">{s.code}</span>
+              sessions.map((s) => {
+                const isParticipant = s.players.some((p) => p.user.id === user?.id);
+                return (
+                  <div
+                    key={s.id}
+                    className="block bg-white p-5 rounded-3xl shadow-sm border border-gray-100 transition-all group"
+                  >
+                    <div className="flex justify-between items-start mb-2">
+                      <h4 className="font-black text-gray-900 group-hover:text-blue-600 transition-colors">{s.name}</h4>
+                      <span className="text-[10px] font-black text-blue-600 bg-blue-50 px-2 py-1 rounded-lg uppercase tracking-widest">
+                        {s.status}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">
+                        {s.players.length} Players - {s.type}
+                      </p>
+                      <div className="flex items-center gap-2">
+                        {s.status === SessionStatus.ACTIVE && <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>}
+                        {isParticipant ? (
+                          <Link
+                            href={`/session/${s.code}`}
+                            className="text-[10px] bg-blue-600 text-white px-3 py-1.5 rounded-lg font-black uppercase tracking-wider"
+                          >
+                            Open
+                          </Link>
+                        ) : (
+                          <button
+                            onClick={() => joinTournament(s.code)}
+                            className="text-[10px] bg-gray-900 text-white px-3 py-1.5 rounded-lg font-black uppercase tracking-wider"
+                          >
+                            Join
+                          </button>
+                        )}
+                      </div>
+                    </div>
                   </div>
-                  <div className="flex justify-between items-center">
-                    <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">
-                      {s.players.length} Players • {s.type}
-                    </p>
-                    <div className={`w-2 h-2 rounded-full ${s.status === SessionStatus.ACTIVE ? 'bg-green-500 animate-pulse' : 'bg-gray-300'}`}></div>
-                  </div>
-                </Link>
-              ))
+                );
+              })
             )}
           </div>
         </div>
       </div>
 
-      {/* Error Toast */}
       {error && (
         <div className="fixed bottom-6 left-6 right-6 z-50">
           <div className="bg-red-600 text-white px-6 py-4 rounded-2xl shadow-2xl flex justify-between items-center">
             <p className="text-xs font-black uppercase tracking-wide">{error}</p>
-            <button onClick={() => setError("")} className="font-black">×</button>
+            <button onClick={() => setError("")} className="font-black">
+              x
+            </button>
           </div>
         </div>
       )}

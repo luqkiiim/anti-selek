@@ -36,6 +36,9 @@ export async function POST(
     const match = await prisma.match.findUnique({
       where: { id },
       include: {
+        session: {
+          select: { communityId: true },
+        },
         court: true,
         team1User1: { select: { id: true, name: true, elo: true } },
         team1User2: { select: { id: true, name: true, elo: true } },
@@ -53,7 +56,20 @@ export async function POST(
     }
 
     // Check if admin or one of the players
-    const isAdmin = !!session.user.isAdmin;
+    let isCommunityAdmin = false;
+    if (match.session.communityId) {
+      const membership = await prisma.communityMember.findUnique({
+        where: {
+          communityId_userId: {
+            communityId: match.session.communityId,
+            userId: session.user.id,
+          },
+        },
+        select: { role: true },
+      });
+      isCommunityAdmin = membership?.role === "ADMIN";
+    }
+    const isAdmin = !!session.user.isAdmin || isCommunityAdmin;
     const isPlayer = [match.team1User1Id, match.team1User2Id, match.team2User1Id, match.team2User2Id].includes(session.user.id);
 
     if (!isAdmin && !isPlayer) {

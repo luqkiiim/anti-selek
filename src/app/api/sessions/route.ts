@@ -17,16 +17,38 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
     }
 
-    const body = await request.json();
-    const { name, type = SessionType.POINTS, playerIds = [] } = body;
+    const body = await request.json().catch(() => null);
+    if (!body || typeof body !== "object") {
+      return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
+    }
+    const { name, type = SessionType.POINTS, playerIds = [], communityId } = body as {
+      name?: unknown;
+      type?: SessionType;
+      playerIds?: unknown;
+      communityId?: unknown;
+    };
 
-    if (!name) {
+    if (typeof name !== "string" || !name.trim()) {
       return NextResponse.json({ error: "Session name required" }, { status: 400 });
     }
+    if (typeof communityId !== "string" || !communityId) {
+      return NextResponse.json({ error: "Community is required" }, { status: 400 });
+    }
 
-    // Authorization check
-    if (!session?.user?.isAdmin) {
-      return NextResponse.json({ error: "Unauthorized: Admin only" }, { status: 403 });
+    const requesterMembership = await prisma.communityMember.findUnique({
+      where: {
+        communityId_userId: {
+          communityId,
+          userId: session.user.id,
+        },
+      },
+    });
+
+    if (!requesterMembership && !session.user.isAdmin) {
+      return NextResponse.json({ error: "Not a community member" }, { status: 403 });
+    }
+    if (!session.user.isAdmin && requesterMembership?.role !== "ADMIN") {
+      return NextResponse.json({ error: "Only community admins can create tournaments" }, { status: 403 });
     }
 
     // Create session with unique code
@@ -40,16 +62,36 @@ export async function POST(request: Request) {
     }
 
     // Ensure unique player IDs and include creator
-    const uniquePlayerIds = Array.from(new Set([...(Array.isArray(playerIds) ? playerIds : []), session.user.id]));
+    const requestedPlayerIds = Array.isArray(playerIds)
+      ? playerIds.filter((id): id is string => typeof id === "string")
+      : [];
+
+    const memberRows = await prisma.communityMember.findMany({
+      where: { communityId },
+      select: { userId: true },
+    });
+    const memberSet = new Set(memberRows.map((m) => m.userId));
+
+    const uniquePlayerIds = Array.from(
+      new Set([...requestedPlayerIds, session.user.id])
+    ).filter((id) => memberSet.has(id));
+
+    if (uniquePlayerIds.length < 2) {
+      return NextResponse.json(
+        { error: "At least 2 community members are required to create a tournament" },
+        { status: 400 }
+      );
+    }
 
     console.log("Creating session with players:", uniquePlayerIds);
 
     const newSession = await prisma.session.create({
-      data: {
-        code,
-        name,
-        type,
-        status: SessionStatus.WAITING,
+        data: {
+          code,
+          communityId,
+          name: name.trim(),
+          type,
+          status: SessionStatus.WAITING,
         courts: {
           create: [
             { courtNumber: 1 },
@@ -73,33 +115,53 @@ export async function POST(request: Request) {
     });
 
     return NextResponse.json(newSession);
-  } catch (error: any) {
+  } catch (error) {
     console.error("Session creation error details:", error);
-    return NextResponse.json({ error: `Failed to create session: ${error.message || 'Unknown error'}` }, { status: 500 });
+    return NextResponse.json({ error: "Failed to create session" }, { status: 500 });
   }
 }
 
-export async function GET() {
-  const session = await auth();
+export async function GET(request: Request) {
+  try {
+    const session = await auth();
 
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
-  }
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+    }
 
-  const where = session.user.isAdmin 
-    ? {} 
-    : { players: { some: { userId: session.user.id } } };
+    const url = new URL(request.url);
+    const communityId = url.searchParams.get("communityId");
+    if (!communityId) {
+      return NextResponse.json([]);
+    }
 
-  const sessions = await prisma.session.findMany({
-    where,
-    orderBy: { createdAt: "desc" },
-    include: {
-      courts: true,
-      players: {
-        include: { user: { select: { id: true, name: true, elo: true } } },
+    const membership = await prisma.communityMember.findUnique({
+      where: {
+        communityId_userId: {
+          communityId,
+          userId: session.user.id,
+        },
       },
-    },
-  });
+    });
 
-  return NextResponse.json(sessions);
+    if (!membership && !session.user.isAdmin) {
+      return NextResponse.json({ error: "Not authorized for this community" }, { status: 403 });
+    }
+
+    const sessions = await prisma.session.findMany({
+      where: { communityId },
+      orderBy: { createdAt: "desc" },
+      include: {
+        courts: true,
+        players: {
+          include: { user: { select: { id: true, name: true, elo: true } } },
+        },
+      },
+    });
+
+    return NextResponse.json(sessions);
+  } catch (error) {
+    console.error("Session list error:", error);
+    return NextResponse.json({ error: "Failed to load tournaments" }, { status: 500 });
+  }
 }
