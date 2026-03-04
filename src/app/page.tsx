@@ -59,6 +59,9 @@ export default function Home() {
   const [newCommunityPassword, setNewCommunityPassword] = useState("");
   const [joinCommunityName, setJoinCommunityName] = useState("");
   const [joinCommunityPassword, setJoinCommunityPassword] = useState("");
+  const [newPlayerName, setNewPlayerName] = useState("");
+  const [existingPlayerEmail, setExistingPlayerEmail] = useState("");
+  const [addingPlayer, setAddingPlayer] = useState(false);
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -228,6 +231,37 @@ export default function Home() {
     router.push(`/session/${data.code}`);
   };
 
+  const addPlayerToCommunity = async () => {
+    if (!selectedCommunityId || !newPlayerName.trim()) return;
+
+    setError("");
+    setAddingPlayer(true);
+    try {
+      const res = await fetch(`/api/communities/${selectedCommunityId}/members`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: newPlayerName,
+          email: existingPlayerEmail || undefined,
+        }),
+      });
+      const data = await safeJson(res);
+      if (!res.ok) {
+        setError(data.error || "Failed to add player");
+        return;
+      }
+
+      setNewPlayerName("");
+      setExistingPlayerEmail("");
+      await fetchCommunityMembers(selectedCommunityId);
+      await fetchCommunities();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to add player");
+    } finally {
+      setAddingPlayer(false);
+    }
+  };
+
   const joinTournament = async (code: string) => {
     setError("");
     const res = await fetch(`/api/sessions/${code}/join`, { method: "POST" });
@@ -358,85 +392,115 @@ export default function Home() {
         </div>
 
         {canManageCommunity && (
-          <div className="bg-blue-600 p-6 rounded-3xl shadow-xl shadow-blue-100 space-y-5 text-white">
-            <div>
-              <h3 className="text-sm font-black uppercase tracking-widest mb-1">Host Tournament</h3>
-              <p className="text-[10px] text-blue-100 font-bold uppercase tracking-wider">
-                Everyone in this community can see this tournament.
+          <>
+            <div className="bg-white p-6 rounded-3xl shadow-md border border-gray-100 space-y-3">
+              <h3 className="text-sm font-black text-gray-900 uppercase tracking-widest">Add Player to Community</h3>
+              <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">
+                Add by name to create an unclaimed player profile, or provide an email to add an existing signed-up user.
               </p>
-            </div>
-
-            <div className="space-y-3">
               <input
                 type="text"
-                value={newSessionName}
-                onChange={(e) => setNewSessionName(e.target.value)}
-                placeholder="Tournament Name"
-                className="w-full bg-blue-500/50 border-2 border-blue-400/30 rounded-2xl px-4 py-3 placeholder:text-blue-200 font-bold focus:outline-none focus:border-white transition-all"
+                value={newPlayerName}
+                onChange={(e) => setNewPlayerName(e.target.value)}
+                placeholder="Player Name"
+                className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl px-4 py-3 font-bold focus:outline-none focus:border-blue-500 transition-all"
               />
-
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  onClick={() => setSessionType(SessionType.POINTS)}
-                  className={`py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
-                    sessionType === SessionType.POINTS ? "bg-white text-blue-600 shadow-md" : "bg-blue-500/30 text-white"
-                  }`}
-                >
-                  Points Format
-                </button>
-                <button
-                  onClick={() => setSessionType(SessionType.ELO)}
-                  className={`py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
-                    sessionType === SessionType.ELO ? "bg-white text-blue-600 shadow-md" : "bg-blue-500/30 text-white"
-                  }`}
-                >
-                  ELO Format
-                </button>
-              </div>
-
-              <div className="space-y-2">
-                <div className="flex justify-between items-center">
-                  <p className="text-[10px] font-black uppercase tracking-widest text-blue-100">Quick-Add Players</p>
-                  <button
-                    onClick={() => {
-                      const allOtherIds = communityMembers.filter((p) => p.id !== user?.id).map((p) => p.id);
-                      if (selectedPlayerIds.length === allOtherIds.length) {
-                        setSelectedPlayerIds([]);
-                      } else {
-                        setSelectedPlayerIds(allOtherIds);
-                      }
-                    }}
-                    className="text-[9px] font-black uppercase tracking-widest bg-white/20 px-2 py-1 rounded-lg hover:bg-white/30 transition-all"
-                  >
-                    {selectedPlayerIds.length === communityMembers.filter((p) => p.id !== user?.id).length ? "Deselect All" : "Select All"}
-                  </button>
-                </div>
-                <div className="max-h-40 overflow-y-auto pr-2 space-y-1 custom-scrollbar">
-                  {communityMembers
-                    .filter((p) => p.id !== user?.id)
-                    .map((player) => (
-                      <button
-                        key={player.id}
-                        onClick={() => togglePlayerSelection(player.id)}
-                        className={`w-full flex justify-between items-center px-3 py-2 rounded-xl text-xs font-bold transition-all ${
-                          selectedPlayerIds.includes(player.id) ? "bg-white/20 border-white/40" : "bg-blue-700/30 border-transparent"
-                        } border`}
-                      >
-                        <span>{player.name}</span>
-                        {selectedPlayerIds.includes(player.id) && <span>OK</span>}
-                      </button>
-                    ))}
-                </div>
-              </div>
-
+              <input
+                type="email"
+                value={existingPlayerEmail}
+                onChange={(e) => setExistingPlayerEmail(e.target.value)}
+                placeholder="Existing user email (optional)"
+                className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl px-4 py-3 font-bold focus:outline-none focus:border-blue-500 transition-all"
+              />
               <button
-                onClick={createSession}
-                className="w-full bg-white text-blue-600 py-4 rounded-2xl font-black uppercase tracking-widest text-xs active:scale-95 transition-all shadow-lg mt-2"
+                onClick={addPlayerToCommunity}
+                disabled={addingPlayer || !newPlayerName.trim() || !selectedCommunityId}
+                className="w-full bg-gray-900 text-white px-6 py-3 rounded-2xl font-black uppercase text-xs active:scale-95 transition-all shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Create Tournament
+                {addingPlayer ? "Adding..." : "Add Player"}
               </button>
             </div>
-          </div>
+
+            <div className="bg-blue-600 p-6 rounded-3xl shadow-xl shadow-blue-100 space-y-5 text-white">
+              <div>
+                <h3 className="text-sm font-black uppercase tracking-widest mb-1">Host Tournament</h3>
+                <p className="text-[10px] text-blue-100 font-bold uppercase tracking-wider">
+                  Everyone in this community can see this tournament.
+                </p>
+              </div>
+
+              <div className="space-y-3">
+                <input
+                  type="text"
+                  value={newSessionName}
+                  onChange={(e) => setNewSessionName(e.target.value)}
+                  placeholder="Tournament Name"
+                  className="w-full bg-blue-500/50 border-2 border-blue-400/30 rounded-2xl px-4 py-3 placeholder:text-blue-200 font-bold focus:outline-none focus:border-white transition-all"
+                />
+
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    onClick={() => setSessionType(SessionType.POINTS)}
+                    className={`py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
+                      sessionType === SessionType.POINTS ? "bg-white text-blue-600 shadow-md" : "bg-blue-500/30 text-white"
+                    }`}
+                  >
+                    Points Format
+                  </button>
+                  <button
+                    onClick={() => setSessionType(SessionType.ELO)}
+                    className={`py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
+                      sessionType === SessionType.ELO ? "bg-white text-blue-600 shadow-md" : "bg-blue-500/30 text-white"
+                    }`}
+                  >
+                    ELO Format
+                  </button>
+                </div>
+
+                <div className="space-y-2">
+                  <div className="flex justify-between items-center">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-blue-100">Quick-Add Players</p>
+                    <button
+                      onClick={() => {
+                        const allOtherIds = communityMembers.filter((p) => p.id !== user?.id).map((p) => p.id);
+                        if (selectedPlayerIds.length === allOtherIds.length) {
+                          setSelectedPlayerIds([]);
+                        } else {
+                          setSelectedPlayerIds(allOtherIds);
+                        }
+                      }}
+                      className="text-[9px] font-black uppercase tracking-widest bg-white/20 px-2 py-1 rounded-lg hover:bg-white/30 transition-all"
+                    >
+                      {selectedPlayerIds.length === communityMembers.filter((p) => p.id !== user?.id).length ? "Deselect All" : "Select All"}
+                    </button>
+                  </div>
+                  <div className="max-h-40 overflow-y-auto pr-2 space-y-1 custom-scrollbar">
+                    {communityMembers
+                      .filter((p) => p.id !== user?.id)
+                      .map((player) => (
+                        <button
+                          key={player.id}
+                          onClick={() => togglePlayerSelection(player.id)}
+                          className={`w-full flex justify-between items-center px-3 py-2 rounded-xl text-xs font-bold transition-all ${
+                            selectedPlayerIds.includes(player.id) ? "bg-white/20 border-white/40" : "bg-blue-700/30 border-transparent"
+                          } border`}
+                        >
+                          <span>{player.name}</span>
+                          {selectedPlayerIds.includes(player.id) && <span>OK</span>}
+                        </button>
+                      ))}
+                  </div>
+                </div>
+
+                <button
+                  onClick={createSession}
+                  className="w-full bg-white text-blue-600 py-4 rounded-2xl font-black uppercase tracking-widest text-xs active:scale-95 transition-all shadow-lg mt-2"
+                >
+                  Create Tournament
+                </button>
+              </div>
+            </div>
+          </>
         )}
 
         <div className="space-y-4 pb-10">
