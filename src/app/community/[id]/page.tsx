@@ -59,6 +59,7 @@ export default function CommunityPage() {
   const [selectedPlayerIds, setSelectedPlayerIds] = useState<string[]>([]);
   const [newPlayerName, setNewPlayerName] = useState("");
   const [existingPlayerEmail, setExistingPlayerEmail] = useState("");
+  const [showAddPlayerModal, setShowAddPlayerModal] = useState(false);
 
   const [loading, setLoading] = useState(true);
   const [creatingSession, setCreatingSession] = useState(false);
@@ -234,6 +235,7 @@ export default function CommunityPage() {
 
       setNewPlayerName("");
       setExistingPlayerEmail("");
+      setShowAddPlayerModal(false);
       await refreshCommunityData();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Failed to add player");
@@ -297,6 +299,12 @@ export default function CommunityPage() {
         {canManageCommunity && (
           <div className="flex items-center gap-2">
             <button
+              onClick={() => setShowAddPlayerModal(true)}
+              className="bg-gray-100 text-gray-700 px-4 py-2 rounded-xl font-black uppercase text-[10px] active:scale-95 transition-all shadow-lg"
+            >
+              Add Player
+            </button>
+            <button
               onClick={() => setShowHostPanel((prev) => !prev)}
               className="bg-blue-600 text-white px-4 py-2 rounded-xl font-black uppercase text-[10px] active:scale-95 transition-all shadow-lg"
             >
@@ -313,38 +321,6 @@ export default function CommunityPage() {
       </div>
 
       <div className="max-w-md mx-auto px-6 pt-8 space-y-8">
-        {canManageCommunity && (
-          <>
-            <div className="bg-white p-6 rounded-3xl shadow-md border border-gray-100 space-y-3">
-              <h3 className="text-sm font-black text-gray-900 uppercase tracking-widest">Add Player to Community</h3>
-              <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">
-                Add by name to create an unclaimed profile, or provide email to add an existing account.
-              </p>
-              <input
-                type="text"
-                value={newPlayerName}
-                onChange={(e) => setNewPlayerName(e.target.value)}
-                placeholder="Player Name"
-                className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl px-4 py-3 font-bold focus:outline-none focus:border-blue-500 transition-all"
-              />
-              <input
-                type="email"
-                value={existingPlayerEmail}
-                onChange={(e) => setExistingPlayerEmail(e.target.value)}
-                placeholder="Existing user email (optional)"
-                className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl px-4 py-3 font-bold focus:outline-none focus:border-blue-500 transition-all"
-              />
-              <button
-                onClick={addPlayerToCommunity}
-                disabled={addingPlayer || !newPlayerName.trim()}
-                className="w-full bg-gray-900 text-white px-6 py-3 rounded-2xl font-black uppercase text-xs active:scale-95 transition-all shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {addingPlayer ? "Adding..." : "Add Player"}
-              </button>
-            </div>
-          </>
-        )}
-
         {canManageCommunity && showHostPanel && (
           <>
             <div className="bg-blue-600 p-6 rounded-3xl shadow-xl shadow-blue-100 space-y-5 text-white">
@@ -565,6 +541,60 @@ export default function CommunityPage() {
             <button onClick={() => setError("")} className="font-black">
               x
             </button>
+          </div>
+        </div>
+      )}
+
+      {canManageCommunity && showAddPlayerModal && (
+        <div className="fixed inset-0 bg-gray-900/80 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4 z-50">
+          <div className="bg-white rounded-t-3xl sm:rounded-2xl shadow-2xl max-w-md w-full max-h-[90vh] flex flex-col animate-in slide-in-from-bottom duration-300">
+            <div className="p-6 border-b flex justify-between items-center">
+              <div>
+                <h2 className="text-xl font-black text-gray-900">Add Player</h2>
+                <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-1">
+                  Add by name, optionally with email
+                </p>
+              </div>
+              <button
+                onClick={() => setShowAddPlayerModal(false)}
+                className="bg-gray-100 text-gray-400 hover:text-gray-600 w-8 h-8 rounded-full flex items-center justify-center text-xl font-bold"
+              >
+                &times;
+              </button>
+            </div>
+
+            <div className="p-6 space-y-3">
+              <input
+                type="text"
+                value={newPlayerName}
+                onChange={(e) => setNewPlayerName(e.target.value)}
+                placeholder="Player Name"
+                className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl px-4 py-3 font-bold focus:outline-none focus:border-blue-500 transition-all"
+              />
+              <input
+                type="email"
+                value={existingPlayerEmail}
+                onChange={(e) => setExistingPlayerEmail(e.target.value)}
+                placeholder="Existing user email (optional)"
+                className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl px-4 py-3 font-bold focus:outline-none focus:border-blue-500 transition-all"
+              />
+            </div>
+
+            <div className="p-6 bg-white border-t sm:rounded-b-2xl flex gap-2">
+              <button
+                onClick={() => setShowAddPlayerModal(false)}
+                className="flex-1 bg-gray-200 text-gray-700 py-3 rounded-2xl font-black uppercase tracking-widest text-xs active:scale-95 transition-all"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={addPlayerToCommunity}
+                disabled={addingPlayer || !newPlayerName.trim()}
+                className="flex-1 bg-gray-900 text-white py-3 rounded-2xl font-black uppercase tracking-widest text-xs active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {addingPlayer ? "Adding..." : "Add Player"}
+              </button>
+            </div>
           </div>
         </div>
       )}
