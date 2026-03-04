@@ -61,7 +61,6 @@ export default function CommunityPage() {
   const [loading, setLoading] = useState(true);
   const [creatingSession, setCreatingSession] = useState(false);
   const [addingPlayer, setAddingPlayer] = useState(false);
-  const [resettingCommunity, setResettingCommunity] = useState(false);
   const [showHostPanel, setShowHostPanel] = useState(false);
   const [error, setError] = useState("");
 
@@ -254,42 +253,6 @@ export default function CommunityPage() {
     }
   };
 
-  const resetCommunity = async () => {
-    if (!user?.isAdmin) return;
-
-    const confirmation = prompt(
-      "This will DELETE ALL SESSIONS and ALL MATCH HISTORY, and reset all ELOs to 1000. This cannot be undone. Type 'RESET' to confirm:"
-    );
-    if (confirmation !== "RESET") {
-      if (confirmation !== null) {
-        setError("Reset cancelled. You must type RESET exactly.");
-      }
-      return;
-    }
-
-    setResettingCommunity(true);
-    setError("");
-    try {
-      const res = await fetch("/api/admin/community/reset", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ confirmation: "RESET" }),
-      });
-      const data = await safeJson(res);
-      if (!res.ok) {
-        setError(data.error || "Failed to reset community");
-        return;
-      }
-
-      await refreshCommunityData();
-      alert("Community has been fully reset.");
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Failed to reset community");
-    } finally {
-      setResettingCommunity(false);
-    }
-  };
-
   const togglePlayerSelection = (playerId: string) => {
     setSelectedPlayerIds((prev) =>
       prev.includes(playerId) ? prev.filter((id) => id !== playerId) : [...prev, playerId]
@@ -328,12 +291,20 @@ export default function CommunityPage() {
         </div>
 
         {canManageCommunity && (
-          <button
-            onClick={() => setShowHostPanel((prev) => !prev)}
-            className="bg-blue-600 text-white px-4 py-2 rounded-xl font-black uppercase text-[10px] active:scale-95 transition-all shadow-lg"
-          >
-            {showHostPanel ? "Hide Host" : "Host Tournament"}
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowHostPanel((prev) => !prev)}
+              className="bg-blue-600 text-white px-4 py-2 rounded-xl font-black uppercase text-[10px] active:scale-95 transition-all shadow-lg"
+            >
+              {showHostPanel ? "Hide Host" : "Host Tournament"}
+            </button>
+            <Link
+              href={`/community/${communityId}/admin`}
+              className="bg-gray-900 text-white px-4 py-2 rounded-xl font-black uppercase text-[10px] active:scale-95 transition-all shadow-lg"
+            >
+              Admin
+            </Link>
+          </div>
         )}
       </div>
 
@@ -368,22 +339,6 @@ export default function CommunityPage() {
               </button>
             </div>
           </>
-        )}
-
-        {user?.isAdmin && (
-          <div className="bg-white p-6 rounded-3xl shadow-md border border-red-200 space-y-3">
-            <h3 className="text-sm font-black text-red-600 uppercase tracking-widest">Reset Community</h3>
-            <p className="text-[10px] text-red-500 font-bold uppercase tracking-wider">
-              Deletes all sessions and match history, and resets all ELO to 1000.
-            </p>
-            <button
-              onClick={resetCommunity}
-              disabled={resettingCommunity}
-              className="w-full bg-red-600 text-white px-6 py-3 rounded-2xl font-black uppercase text-xs active:scale-95 transition-all shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {resettingCommunity ? "Resetting..." : "Reset Community"}
-            </button>
-          </div>
         )}
 
         {canManageCommunity && showHostPanel && (
