@@ -38,7 +38,7 @@ export async function POST(
       return NextResponse.json({ error: "Court ID required" }, { status: 400 });
     }
 
-    // 1. Fetch fresh session data with all players, matches and the session start time
+    // 1. Fetch fresh session data
     const sessionData = await prisma.session.findUnique({
       where: { code },
       include: {
@@ -64,13 +64,14 @@ export async function POST(
         .flatMap(m => [m.team1User1Id, m.team1User2Id, m.team2User1Id, m.team2User2Id])
     );
 
-    // 3. Calculate player stats for fair selection
+    // 3. Calculate player stats
     const playerStats: Record<string, { matchCount: number; lastMatchAt: number }> = {};
+    const sessionStartTime = sessionData.createdAt.getTime();
     
     sessionData.players.forEach(p => {
       playerStats[p.userId] = {
         matchCount: 0,
-        lastMatchAt: sessionData.createdAt.getTime(), // Default to session start
+        lastMatchAt: sessionStartTime,
       };
     });
 
@@ -86,8 +87,7 @@ export async function POST(
       });
     });
 
-    // 4. Calculate Virtual Match Floor for late joiners / unpaused players
-    // We calculate the average match count of players who have actually played.
+    // 4. Calculate True Session Average
     const activeMatchCounts = Object.values(playerStats)
       .map(s => s.matchCount)
       .filter(count => count > 0);
@@ -96,30 +96,42 @@ export async function POST(
       ? activeMatchCounts.reduce((a, b) => a + b, 0) / activeMatchCounts.length 
       : 0;
 
-    // We treat players with 0 or very few matches as having (Average - 1) 
-    // This allows them to join the rotation naturally without playing 10 games in a row together.
-    const virtualMatchFloor = Math.max(0, Math.floor(sessionAvg) - 1);
+    // 5. Filter and Sort available players with Jittered Entry
+    const now = Date.now();
+    const sessionDuration = now - sessionStartTime;
 
-    // 5. Select the 4 available players
     const availablePlayers = sessionData.players
       .filter(p => !busyPlayerIds.has(p.userId) && !p.isPaused)
       .map(p => {
         const actualCount = playerStats[p.userId].matchCount;
+        let lastAt = playerStats[p.userId].lastMatchAt;
+
+        // LATE JOINER / UNPAUSED ROTATION LOGIC:
+        // If they haven't played yet (or very little), we treat them as having played the average.
+        // We also jitter their "last match time" so they don't all jump to the front of the queue together.
+        const isLateOrUnpaused = actualCount < sessionAvg && lastAt === sessionStartTime;
+        
+        if (isLateOrUnpaused) {
+          // Stable jitter based on userId (0.0 to 1.0)
+          const jitter = (p.userId.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0) % 100) / 100;
+          // Distribute their virtual "last match" across the first 80% of the session
+          lastAt = sessionStartTime + (sessionDuration * 0.8 * jitter);
+        }
+
         return {
           ...p,
           _actualMatchCount: actualCount,
-          // Effective count helps bring late joiners into the rotation
-          _effectiveMatchCount: Math.max(actualCount, virtualMatchFloor),
-          _lastMatchAt: playerStats[p.userId].lastMatchAt,
+          _effectiveMatchCount: Math.max(actualCount, Math.floor(sessionAvg)),
+          _lastMatchAt: lastAt,
           _random: Math.random()
         };
       })
       .sort((a, b) => {
-        // Priority 1: Fewest effective matches played
+        // Priority 1: Fewest matches (including virtual floor)
         if (a._effectiveMatchCount !== b._effectiveMatchCount) {
           return a._effectiveMatchCount - b._effectiveMatchCount;
         }
-        // Priority 2: Waited longest since their last match started/finished
+        // Priority 2: Longest wait (using actual match time or jittered start time)
         if (a._lastMatchAt !== b._lastMatchAt) {
           return a._lastMatchAt - b._lastMatchAt;
         }
@@ -127,9 +139,9 @@ export async function POST(
         return a._random - b._random;
       });
 
-    console.log(`[Matchmaking] Court: ${courtId}, Avg: ${sessionAvg.toFixed(2)}, Floor: ${virtualMatchFloor}`);
+    console.log(`[Matchmaking] Avg: ${sessionAvg.toFixed(2)}, Available: ${availablePlayers.length}`);
     availablePlayers.slice(0, 8).forEach(p => {
-      console.log(` - ${p.user.name}: matches(act=${p._actualMatchCount}, eff=${p._effectiveMatchCount}), lastAt=${new Date(p._lastMatchAt).toLocaleTimeString()}`);
+      console.log(` - ${p.user.name}: actual=${p._actualMatchCount}, eff=${p._effectiveMatchCount}, waitScore=${((now - p._lastMatchAt)/60000).toFixed(1)}m`);
     });
 
     if (availablePlayers.length < 4) {
@@ -141,7 +153,7 @@ export async function POST(
     const selectedPlayers = availablePlayers.slice(0, 4);
     const selectedIds = selectedPlayers.map(p => p.userId);
 
-    // 6. Find the most balanced teams among these 4 based on ELO and partner history
+    // 6. Balanced Team Generation
     const partitions = getDoublesPartitions(selectedIds);
     let bestPartition = partitions[0];
     let bestScore = Infinity;
@@ -156,13 +168,8 @@ export async function POST(
       const team2AvgElo = (p3.user.elo + p4.user.elo) / 2;
       let balanceScore = Math.abs(team1AvgElo - team2AvgElo);
 
-      // Penalty for repeating recent partners
-      if (p1.lastPartnerId === p2.userId || p2.lastPartnerId === p1.userId) {
-        balanceScore += 1000;
-      }
-      if (p3.lastPartnerId === p4.userId || p4.lastPartnerId === p3.userId) {
-        balanceScore += 1000;
-      }
+      if (p1.lastPartnerId === p2.userId || p2.lastPartnerId === p1.userId) balanceScore += 1000;
+      if (p3.lastPartnerId === p4.userId || p4.lastPartnerId === p3.userId) balanceScore += 1000;
 
       if (balanceScore < bestScore) {
         bestScore = balanceScore;
@@ -170,7 +177,7 @@ export async function POST(
       }
     }
 
-    // 7. Transaction to create the match and assign it to the court
+    // 7. Create Match
     const newMatch = await prisma.$transaction(async (tx) => {
       const match = await tx.match.create({
         data: {
@@ -198,7 +205,6 @@ export async function POST(
       return match;
     });
 
-    console.log(`[Matchmaking] Created Match: ${newMatch.id} on Court ${courtId}`);
     return NextResponse.json(newMatch);
   } catch (error: any) {
     console.error("Generate match error:", error);
