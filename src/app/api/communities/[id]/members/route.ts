@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import bcrypt from "bcryptjs";
 
 export const dynamic = "force-dynamic";
 
@@ -38,6 +39,9 @@ export async function GET(
             name: true,
             email: true,
             elo: true,
+            isActive: true,
+            isClaimed: true,
+            createdAt: true,
           },
         },
       },
@@ -50,6 +54,9 @@ export async function GET(
         name: m.user.name,
         email: m.user.email,
         elo: m.user.elo,
+        isActive: m.user.isActive,
+        isClaimed: m.user.isClaimed,
+        createdAt: m.user.createdAt,
         role: m.role,
       }))
     );
@@ -91,40 +98,57 @@ export async function POST(
       return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
     }
 
-    const { name, email } = body as { name?: unknown; email?: unknown };
+    const { name, email, password } = body as { name?: unknown; email?: unknown; password?: unknown };
     if (typeof name !== "string" || name.trim().length < 2) {
       return NextResponse.json({ error: "Player name must be at least 2 characters" }, { status: 400 });
     }
     if (email !== undefined && typeof email !== "string") {
       return NextResponse.json({ error: "Invalid email" }, { status: 400 });
     }
+    if (password !== undefined && typeof password !== "string") {
+      return NextResponse.json({ error: "Invalid password" }, { status: 400 });
+    }
 
     const normalizedName = name.trim();
     const normalizedEmail =
       typeof email === "string" && email.trim().length > 0 ? email.trim().toLowerCase() : null;
+    const normalizedPassword =
+      typeof password === "string" && password.length > 0 ? password : null;
 
-    let user: { id: string; name: string; email: string | null; elo: number };
+    let user: {
+      id: string;
+      name: string;
+      email: string | null;
+      elo: number;
+      isActive: boolean;
+      isClaimed: boolean;
+      createdAt: Date;
+    };
     if (normalizedEmail) {
       const existingUser = await prisma.user.findUnique({
         where: { email: normalizedEmail },
-        select: { id: true, name: true, email: true, elo: true },
+        select: { id: true, name: true, email: true, elo: true, isActive: true, isClaimed: true, createdAt: true },
       });
 
-      if (!existingUser) {
-        return NextResponse.json(
-          {
-            error:
-              "No user found with that email. Ask them to sign up first, or leave email empty to create an unclaimed player profile.",
+      if (existingUser) {
+        user = existingUser;
+      } else {
+        const passwordHash = normalizedPassword ? await bcrypt.hash(normalizedPassword, 10) : null;
+        user = await prisma.user.create({
+          data: {
+            name: normalizedName,
+            email: normalizedEmail,
+            passwordHash,
+            isClaimed: !!passwordHash,
           },
-          { status: 404 }
-        );
+          select: { id: true, name: true, email: true, elo: true, isActive: true, isClaimed: true, createdAt: true },
+        });
       }
-      user = existingUser;
     } else {
       const existingUnclaimed = await prisma.user.findFirst({
         where: { name: normalizedName, isClaimed: false },
         orderBy: { createdAt: "asc" },
-        select: { id: true, name: true, email: true, elo: true },
+        select: { id: true, name: true, email: true, elo: true, isActive: true, isClaimed: true, createdAt: true },
       });
 
       if (existingUnclaimed) {
@@ -137,7 +161,7 @@ export async function POST(
             passwordHash: null,
             isClaimed: false,
           },
-          select: { id: true, name: true, email: true, elo: true },
+          select: { id: true, name: true, email: true, elo: true, isActive: true, isClaimed: true, createdAt: true },
         });
       }
     }
@@ -165,6 +189,9 @@ export async function POST(
       name: user.name,
       email: user.email,
       elo: user.elo,
+      isActive: user.isActive,
+      isClaimed: user.isClaimed,
+      createdAt: user.createdAt,
       role: membership.role,
     });
   } catch (error) {
