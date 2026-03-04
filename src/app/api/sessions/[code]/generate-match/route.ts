@@ -51,14 +51,14 @@ export async function POST(
     if (!sessionData) return NextResponse.json({ error: "Session not found" }, { status: 404 });
     if (sessionData.status !== "ACTIVE") return NextResponse.json({ error: "Session not active" }, { status: 400 });
 
-    // 2. Identify busy players
+    // 2. Identify busy players (those on court)
     const busyPlayerIds = new Set(
       sessionData.matches
         .filter(m => ["PENDING", "IN_PROGRESS"].includes(m.status))
         .flatMap(m => [m.team1User1Id, m.team1User2Id, m.team2User1Id, m.team2User2Id])
     );
 
-    // 3. Calculate match counts and last match times
+    // 3. Calculate actual player stats
     const playerStats: Record<string, { matchCount: number; lastMatchAt: number }> = {};
     const sessionStartTime = sessionData.createdAt.getTime();
     
@@ -76,58 +76,62 @@ export async function POST(
       });
     });
 
-    // 4. Determine Session Average
-    const counts = Object.values(playerStats).map(s => s.matchCount).filter(c => c > 0);
-    const sessionAvg = counts.length > 0 ? counts.reduce((a, b) => a + b, 0) / counts.length : 0;
-    const floor = Math.floor(sessionAvg);
+    // 4. Calculate Session Average (based on players who have actually played)
+    const activeCounts = Object.values(playerStats).map(s => s.matchCount).filter(c => c > 0);
+    const sessionAvg = activeCounts.length > 0 ? activeCounts.reduce((a, b) => a + b, 0) / activeCounts.length : 0;
+    const matchFloor = Math.floor(sessionAvg);
 
-    // 5. Grouped Selection Logic
-    // We split players into those needing catch-up ("Behind") and those who are "On Track"
+    // 5. Select Available Players using "Instant Average" Logic
+    const now = Date.now();
     const availablePlayers = sessionData.players
       .filter(p => !busyPlayerIds.has(p.userId) && !p.isPaused)
-      .map(p => ({
-        ...p,
-        _actualMatchCount: playerStats[p.userId].matchCount,
-        _lastMatchAt: playerStats[p.userId].lastMatchAt,
-      }));
+      .map(p => {
+        const actualCount = playerStats[p.userId].matchCount;
+        let effectiveCount = actualCount;
+        let effectiveLastMatchAt = playerStats[p.userId].lastMatchAt;
+
+        // INSTANT AVERAGE RULE:
+        // If a player is behind the session average floor (late joiner or unpaused),
+        // we instantly assign them the floor match count and place them at the end of the line (lastMatchAt = now).
+        if (actualCount < matchFloor) {
+          effectiveCount = matchFloor;
+          effectiveLastMatchAt = now;
+        }
+
+        return {
+          ...p,
+          _actualCount: actualCount,
+          _effectiveCount: effectiveCount,
+          _effectiveLastMatchAt: effectiveLastMatchAt,
+          _random: Math.random()
+        };
+      })
+      .sort((a, b) => {
+        // Priority 1: Fewest matches (effective)
+        if (a._effectiveCount !== b._effectiveCount) {
+          return a._effectiveCount - b._effectiveCount;
+        }
+        // Priority 2: Longest wait (effective)
+        if (a._effectiveLastMatchAt !== b._effectiveLastMatchAt) {
+          return a._effectiveLastMatchAt - b._effectiveLastMatchAt;
+        }
+        // Priority 3: Random
+        return a._random - b._random;
+      });
+
+    console.log(`[Matchmaking] Session Avg: ${sessionAvg.toFixed(1)}, Available: ${availablePlayers.length}`);
+    availablePlayers.slice(0, 8).forEach(p => {
+      console.log(` - ${p.user.name}: Actual=${p._actualCount}, Eff=${p._effectiveCount}, WaitScore=${((now - p._effectiveLastMatchAt)/60000).toFixed(1)}m`);
+    });
 
     if (availablePlayers.length < 4) {
       return NextResponse.json({ error: `Not enough players available (need 4, have ${availablePlayers.length})` }, { status: 400 });
     }
 
-    const behindPool = availablePlayers
-      .filter(p => p._actualMatchCount < floor)
-      .sort((a, b) => a._lastMatchAt - b._lastMatchAt); // Oldest wait first
-    
-    const onTrackPool = availablePlayers
-      .filter(p => p._actualMatchCount >= floor)
-      .sort((a, b) => {
-        if (a._actualMatchCount !== b._actualMatchCount) return a._actualMatchCount - b._actualMatchCount;
-        return a._lastMatchAt - b._lastMatchAt;
-      });
-
-    // Selection Strategy: Pick 2 from Behind, 2 from On Track to ensure mixing
-    const selected: typeof availablePlayers = [];
-    
-    // Pick up to 2 from Behind
-    selected.push(...behindPool.splice(0, 2));
-    // Pick up to 2 from On Track
-    selected.push(...onTrackPool.splice(0, 2));
-    
-    // Fill remaining slots (if any pool was too small) from the rest, prioritized by wait time
-    const remaining = [...behindPool, ...onTrackPool].sort((a, b) => {
-      if (a._actualMatchCount !== b._actualMatchCount) return a._actualMatchCount - b._actualMatchCount;
-      return a._lastMatchAt - b._lastMatchAt;
-    });
-
-    while (selected.length < 4 && remaining.length > 0) {
-      selected.push(remaining.shift()!);
-    }
-
-    console.log(`[Matchmaking] Avg: ${sessionAvg.toFixed(1)}, Selected: ${selected.map(p => `${p.user.name}(${p._actualMatchCount})`).join(', ')}`);
-
-    // 6. Partition into teams (ELO Balancing)
+    const selected = availablePlayers.slice(0, 4);
     const selectedIds = selected.map(p => p.userId);
+
+    // 6. Partition into teams (ELO & Partner Balancing)
     const partitions = getDoublesPartitions(selectedIds);
     let bestPartition = partitions[0];
     let bestScore = Infinity;
@@ -142,7 +146,6 @@ export async function POST(
       const team2AvgElo = (p3.user.elo + p4.user.elo) / 2;
       let balanceScore = Math.abs(team1AvgElo - team2AvgElo);
 
-      // Partner variety penalty
       if (p1.lastPartnerId === p2.userId || p2.lastPartnerId === p1.userId) balanceScore += 1000;
       if (p3.lastPartnerId === p4.userId || p4.lastPartnerId === p3.userId) balanceScore += 1000;
 
