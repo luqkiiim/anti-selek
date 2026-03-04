@@ -197,6 +197,4 @@ export async function POST(
     }
     throw error;
   }
-
-  return NextResponse.json(result);
 }
