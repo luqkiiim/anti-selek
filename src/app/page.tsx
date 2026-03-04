@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useSession, signOut } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { SessionType } from "@/types/enums";
+import { SessionStatus, SessionType } from "@/types/enums";
 
 interface User {
   id: string;
