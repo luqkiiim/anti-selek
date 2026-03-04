@@ -67,6 +67,8 @@ export default function Home() {
   };
 
   useEffect(() => {
+    console.log("Session Status:", status);
+    console.log("Session Data:", session);
     if (status === "unauthenticated") {
       router.push("/signin");
     } else if (status === "authenticated") {
@@ -123,6 +125,12 @@ export default function Home() {
         <div className="flex flex-col items-center gap-4">
           <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
           <p className="text-gray-500 font-bold uppercase tracking-widest text-xs">Loading Arena...</p>
+          <button 
+            onClick={() => signOut({ callbackUrl: "/signin" })}
+            className="mt-4 text-[10px] text-red-400 font-bold uppercase hover:underline"
+          >
+            Force Logout
+          </button>
         </div>
       </div>
     );
