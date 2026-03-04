@@ -65,6 +65,8 @@ export async function POST(
           create: {
             userId: userIdToJoin,
             sessionPoints: 0,
+            joinedAt: new Date(),
+            availableSince: new Date(),
           },
         },
       },

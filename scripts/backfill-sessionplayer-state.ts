@@ -29,7 +29,9 @@ async function backfill() {
 
     const matchesPlayed = matches.length;
     const lastPlayedAt = matches.length > 0 ? matches[0].completedAt : null;
-    const joinedAt = sp.session.createdAt;
+
+    // Requirement 4: Keep existing sp.joinedAt if it's there
+    const joinedAt = sp.joinedAt || sp.session.createdAt;
 
     let availableSince = joinedAt;
     if (sp.isPaused) {

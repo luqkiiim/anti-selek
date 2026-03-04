@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { selectMatchPlayers } from "@/lib/matchmaking/selectPlayers";
+import { getBusyPlayerIds } from "@/lib/matchmaking/busyFilter";
 
 export const dynamic = "force-dynamic";
 
@@ -53,11 +54,7 @@ export async function POST(
     if (sessionData.status !== "ACTIVE") return NextResponse.json({ error: "Session not active" }, { status: 400 });
 
     // 2. Identify busy players (those on court)
-    const busyPlayerIds = new Set(
-      sessionData.matches
-        .filter(m => ["PENDING", "IN_PROGRESS", "PENDING_APPROVAL"].includes(m.status))
-        .flatMap(m => [m.team1User1Id, m.team1User2Id, m.team2User1Id, m.team2User2Id])
-    );
+    const busyPlayerIds = getBusyPlayerIds(sessionData.matches);
 
     // 3. Select Available Players
     const availableCandidates = sessionData.players

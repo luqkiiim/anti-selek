@@ -44,7 +44,7 @@ export async function POST(
       data: { 
         isPaused,
         pausedAt: isPaused ? new Date() : null,
-        availableSince: isPaused ? undefined : new Date(), // Reset waiting time when unpausing
+        availableSince: isPaused ? undefined : new Date(), 
       },
     });
 
