@@ -76,12 +76,12 @@ export async function POST(
       });
     });
 
-    // 4. Calculate Session Average (based on players who have actually played)
+    // 4. Calculate Session Average Floor
     const activeCounts = Object.values(playerStats).map(s => s.matchCount).filter(c => c > 0);
     const sessionAvg = activeCounts.length > 0 ? activeCounts.reduce((a, b) => a + b, 0) / activeCounts.length : 0;
     const matchFloor = Math.floor(sessionAvg);
 
-    // 5. Select Available Players using "Instant Average" Logic
+    // 5. Select Available Players
     const now = Date.now();
     const availablePlayers = sessionData.players
       .filter(p => !busyPlayerIds.has(p.userId) && !p.isPaused)
@@ -91,11 +91,14 @@ export async function POST(
         let effectiveLastMatchAt = playerStats[p.userId].lastMatchAt;
 
         // INSTANT AVERAGE RULE:
-        // If a player is behind the session average floor (late joiner or unpaused),
-        // we instantly assign them the floor match count and place them at the end of the line (lastMatchAt = now).
+        // If a player is behind (unpaused or late joiner), they instantly get the floor match count.
         if (actualCount < matchFloor) {
           effectiveCount = matchFloor;
-          effectiveLastMatchAt = now;
+          
+          // To ensure mixing, we stagger their "virtual wait time" across the session duration.
+          // This prevents them from all jumping to the front or back of the line together.
+          const jitter = (p.userId.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0) % 100) / 100;
+          effectiveLastMatchAt = sessionStartTime + (jitter * (now - sessionStartTime));
         }
 
         return {
@@ -119,10 +122,7 @@ export async function POST(
         return a._random - b._random;
       });
 
-    console.log(`[Matchmaking] Session Avg: ${sessionAvg.toFixed(1)}, Available: ${availablePlayers.length}`);
-    availablePlayers.slice(0, 8).forEach(p => {
-      console.log(` - ${p.user.name}: Actual=${p._actualCount}, Eff=${p._effectiveCount}, WaitScore=${((now - p._effectiveLastMatchAt)/60000).toFixed(1)}m`);
-    });
+    console.log(`[Matchmaking] Avg: ${sessionAvg.toFixed(1)}, Available: ${availablePlayers.length}`);
 
     if (availablePlayers.length < 4) {
       return NextResponse.json({ error: `Not enough players available (need 4, have ${availablePlayers.length})` }, { status: 400 });
