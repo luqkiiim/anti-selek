@@ -29,8 +29,8 @@ async function backfill() {
 
     const matchesPlayed = matches.length;
     const lastPlayedAt = matches.length > 0 ? matches[0].completedAt : null;
-
-    // Requirement 4: Keep existing sp.joinedAt if it's there
+    
+    // Preserve joinedAt: Only use session.createdAt as fallback if it's genuinely missing
     const joinedAt = sp.joinedAt || sp.session.createdAt;
 
     let availableSince = joinedAt;
@@ -47,6 +47,7 @@ async function backfill() {
         lastPlayedAt,
         joinedAt,
         availableSince,
+        inactiveSeconds: 0, // Reset to zero for backfill as requested
       },
     });
   }

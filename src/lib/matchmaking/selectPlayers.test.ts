@@ -1,65 +1,180 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { selectMatchPlayers, PlayerCandidate } from "./selectPlayers";
 
-describe("selectMatchPlayers", () => {
+describe("selectMatchPlayers (Match Rate Logic)", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-03-04T12:00:00Z"));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it("should select 4 players when enough are available", () => {
-    const players: PlayerCandidate[] = [
-      { userId: "1", matchesPlayed: 0, availableSince: new Date(1000) },
-      { userId: "2", matchesPlayed: 0, availableSince: new Date(2000) },
-      { userId: "3", matchesPlayed: 0, availableSince: new Date(3000) },
-      { userId: "4", matchesPlayed: 0, availableSince: new Date(4000) },
-      { userId: "5", matchesPlayed: 0, availableSince: new Date(5000) },
-    ];
+    const now = Date.now();
+    const players: PlayerCandidate[] = Array.from({ length: 5 }, (_, i) => ({
+      userId: `${i}`,
+      matchesPlayed: 0,
+      availableSince: new Date(now - 1000),
+      joinedAt: new Date(now - 2000),
+      inactiveSeconds: 0,
+    }));
     const selected = selectMatchPlayers(players);
     expect(selected).toHaveLength(4);
   });
 
-  it("should prioritize unpaused/late joiners eventually (waiting time)", () => {
-    // 16 players with 4 matches, 4 players with 0 matches (unpaused now)
-    const activePlayers: PlayerCandidate[] = Array.from({ length: 16 }, (_, i) => ({
-      userId: `active_${i}`,
-      matchesPlayed: 4,
-      availableSince: new Date(1000), // Waiting for a long time since last match
-    }));
+  it("should NOT prioritize late joiners for 'catch up' if their rate is higher", () => {
+    const t0 = Date.now(); // This is now the mocked 'now'
     
-    const unpausedPlayers: PlayerCandidate[] = Array.from({ length: 4 }, (_, i) => ({
+    // Early players: joined 2 hours ago, played 8 matches
+    // Rate: 8 matches / 2 hours = 4 matches/hour
+    const earlyPlayers: PlayerCandidate[] = Array.from({ length: 4 }, (_, i) => ({
+      userId: `early_${i}`,
+      matchesPlayed: 8,
+      joinedAt: new Date(t0 - 2 * 60 * 60 * 1000),
+      inactiveSeconds: 0,
+      availableSince: new Date(t0),
+    }));
+
+    // Late players: joined 1 hour ago, played 8 matches (SAME as early)
+    // Rate: 8 matches / 1 hour = 8 matches/hour
+    const latePlayers: PlayerCandidate[] = Array.from({ length: 4 }, (_, i) => ({
       userId: `late_${i}`,
-      matchesPlayed: 0,
-      availableSince: new Date(2000), // Unpaused recently (after active players finished their matches)
+      matchesPlayed: 8,
+      joinedAt: new Date(t0 - 1 * 60 * 60 * 1000),
+      inactiveSeconds: 0,
+      availableSince: new Date(t0),
     }));
 
-    // In reality, active players finish their matches and their availableSince becomes NOW.
-    // If active players just finished:
-    const now = 5000;
-    activePlayers.forEach(p => p.availableSince = new Date(now));
-    
-    // Late joiners unpaused slightly before that:
-    unpausedPlayers.forEach(p => p.availableSince = new Date(now - 1000));
+    // Add extra players with very high rate
+    const extra: PlayerCandidate[] = Array.from({ length: 4 }, (_, i) => ({
+      userId: `extra_${i}`,
+      matchesPlayed: 8, 
+      joinedAt: new Date(t0 - 0.5 * 60 * 60 * 1000), // joined 30 min ago, 16/hour
+      inactiveSeconds: 0,
+      availableSince: new Date(t0),
+    }));
 
-    const selected = selectMatchPlayers([...activePlayers, ...unpausedPlayers]);
+    const selected = selectMatchPlayers([...earlyPlayers, ...latePlayers, ...extra]);
     
-    // With matchFloor, late joiners' effectiveCount becomes 4 (same as others).
-    // Their availableSince is older (now-1000 vs now), so they should be picked.
-    const lateSelected = selected!.filter(p => p.userId.startsWith("late_"));
-    expect(lateSelected.length).toBeGreaterThan(0);
+    // Early players have a lower rate (4 vs 8 vs 16), so they should be selected
+    const selectedIds = selected!.map(p => p.userId);
+    earlyPlayers.forEach(p => {
+      expect(selectedIds).toContain(p.userId);
+    });
+    latePlayers.forEach(p => {
+      expect(selectedIds).not.toContain(p.userId);
+    });
   });
 
-  it("should prevent a bubble (max 2 from lowest cohort)", () => {
-    // 4 players with 0 matches, 10 players with 1 match
+  it("should exclude paused time from the rate calculation", () => {
+    const t0 = Date.now();
+    
+    // Player A: joined 2 hours ago, played 4 matches, NO inactive time
+    // Rate: 4 / 2h = 2 matches/hour
+    const playerA: PlayerCandidate = {
+      userId: "A",
+      matchesPlayed: 4,
+      joinedAt: new Date(t0 - 2 * 60 * 60 * 1000),
+      inactiveSeconds: 0,
+      availableSince: new Date(t0),
+    };
+
+    // Player B: joined 2 hours ago, played 4 matches, but was PAUSED for 1 hour
+    // Rate: 4 / (2h - 1h) = 4 matches/hour
+    const playerB: PlayerCandidate = {
+      userId: "B",
+      matchesPlayed: 4,
+      joinedAt: new Date(t0 - 2 * 60 * 60 * 1000),
+      inactiveSeconds: 3600, // 1 hour
+      availableSince: new Date(t0),
+    };
+
+    // 6 Extra players with very LOW rate (e.g. 1 match in 4 hours = 0.25/hour)
+    // We give them 4 matches (same as A and B) but joined 16 hours ago.
+    const extra: PlayerCandidate[] = Array.from({ length: 6 }, (_, i) => ({
+      userId: `extra_${i}`,
+      matchesPlayed: 4, 
+      joinedAt: new Date(t0 - 16 * 60 * 60 * 1000),
+      inactiveSeconds: 0,
+      availableSince: new Date(t0 - 1000), // waiting 1s longer
+    }));
+
+    const selected = selectMatchPlayers([playerA, playerB, ...extra]);
+    
+    // Rates:
+    // A: 2/hour
+    // B: 4/hour
+    // Extras: 0.25/hour
+    // Selected should be 4 Extras. Neither A nor B should be in.
+    const selectedIds = selected!.map(p => p.userId);
+    expect(selectedIds).not.toContain("A");
+    expect(selectedIds).not.toContain("B");
+  });
+
+  it("should prioritize Player A over Player B when slots are limited", () => {
+    const t0 = Date.now();
+    
+    const playerA: PlayerCandidate = {
+      userId: "A",
+      matchesPlayed: 4,
+      joinedAt: new Date(t0 - 2 * 60 * 60 * 1000),
+      inactiveSeconds: 0,
+      availableSince: new Date(t0),
+    };
+
+    const playerB: PlayerCandidate = {
+      userId: "B",
+      matchesPlayed: 4,
+      joinedAt: new Date(t0 - 2 * 60 * 60 * 1000),
+      inactiveSeconds: 3600, // 1 hour
+      availableSince: new Date(t0),
+    };
+
+    // 3 Extras with low rate (same matchesPlayed)
+    const extra: PlayerCandidate[] = Array.from({ length: 3 }, (_, i) => ({
+      userId: `extra_${i}`,
+      matchesPlayed: 4, 
+      joinedAt: new Date(t0 - 16 * 60 * 60 * 1000),
+      inactiveSeconds: 0,
+      availableSince: new Date(t0 - 1000),
+    }));
+
+    const selected = selectMatchPlayers([playerA, playerB, ...extra]);
+    
+    // Slots: 3 Extras (0.25 rate) + 1 more
+    // A (2 rate) vs B (4 rate)
+    // A should be selected.
+    const selectedIds = selected!.map(p => p.userId);
+    expect(selectedIds).toContain("A");
+    expect(selectedIds).not.toContain("B");
+  });
+
+  it("should prevent a bubble (max 2 from lowest cohort by actual count)", () => {
+    const t0 = Date.now();
+    
+    // 4 players with 0 matches (joined recently)
     const lowCohort: PlayerCandidate[] = Array.from({ length: 4 }, (_, i) => ({
       userId: `low_${i}`,
       matchesPlayed: 0,
-      availableSince: new Date(1000),
+      joinedAt: new Date(t0 - 10 * 60 * 1000), // joined 10 min ago
+      inactiveSeconds: 0,
+      availableSince: new Date(t0 - 10 * 60 * 1000),
     }));
     
+    // 10 players with 10 matches (joined long ago)
     const others: PlayerCandidate[] = Array.from({ length: 10 }, (_, i) => ({
       userId: `other_${i}`,
-      matchesPlayed: 1,
-      availableSince: new Date(2000),
+      matchesPlayed: 10,
+      joinedAt: new Date(t0 - 200 * 60 * 1000),
+      inactiveSeconds: 0,
+      availableSince: new Date(t0 - 100 * 60 * 1000),
     }));
 
     const selected = selectMatchPlayers([...lowCohort, ...others]);
     
+    // Should select exactly 2 from lowCohort despite their low rate (0 rate)
     const lowInSelection = selected!.filter(p => p.userId.startsWith("low_"));
     expect(lowInSelection.length).toBe(2);
     
@@ -67,60 +182,27 @@ describe("selectMatchPlayers", () => {
     expect(othersInSelection.length).toBe(2);
   });
 
-  it("should handle the case where there are not enough 'others' to prevent a bubble", () => {
-    // 4 players with 0 matches, 1 player with 1 match
-    const lowCohort: PlayerCandidate[] = Array.from({ length: 4 }, (_, i) => ({
-      userId: `low_${i}`,
+  it("should prioritize by availableSince when rates are equal", () => {
+    const t0 = Date.now();
+    
+    // All joined at same time, same matches
+    const players: PlayerCandidate[] = Array.from({ length: 6 }, (_, i) => ({
+      userId: `${i}`,
       matchesPlayed: 0,
-      availableSince: new Date(1000),
-    }));
-    
-    const others: PlayerCandidate[] = Array.from({ length: 1 }, (_, i) => ({
-      userId: `other_${0}`,
-      matchesPlayed: 1,
-      availableSince: new Date(2000),
+      joinedAt: new Date(t0 - 10000),
+      inactiveSeconds: 0,
+      availableSince: new Date(t0 - (i * 1000)), // Player 5 waiting longest
     }));
 
-    const selected = selectMatchPlayers([...lowCohort, ...others]);
-    
-    // Bubble prevention shouldn't trigger because others.length < 2
-    // It should just pick the top 4 based on effectiveCount and availableSince.
-    // effectiveCount for lowCohort will be floor(avg(1)) = 1.
-    // All have effectiveCount=1. lowCohort has older availableSince.
-    const lowInSelection = selected!.filter(p => p.userId.startsWith("low_"));
-    expect(lowInSelection.length).toBe(4);
-  });
-
-  it("should exclude paused time (waiting time resets on unpause)", () => {
-    // Player A was playing, then paused for 1 hour, then unpaused.
-    // Player B was waiting for 10 minutes.
-    
-    const now = Date.now();
-    const tenMinAgo = now - 10 * 60 * 1000;
-    
-    const playerA: PlayerCandidate = {
-      userId: "A",
-      matchesPlayed: 2,
-      availableSince: new Date(now), // Just unpaused
-    };
-    
-    const playerB: PlayerCandidate = {
-      userId: "B",
-      matchesPlayed: 2,
-      availableSince: new Date(tenMinAgo), // Waiting for 10 min
-    };
-
-    const others: PlayerCandidate[] = Array.from({ length: 3 }, (_, i) => ({
-      userId: `other_${i}`,
-      matchesPlayed: 2,
-      availableSince: new Date(tenMinAgo - 1000),
-    }));
-
-    const selected = selectMatchPlayers([playerA, playerB, ...others]);
-    
-    // Player B and 'others' should be picked before Player A because their availableSince is older.
+    const selected = selectMatchPlayers(players);
     const selectedIds = selected!.map(p => p.userId);
-    expect(selectedIds).toContain("B");
-    expect(selectedIds).not.toContain("A");
+    
+    // Should pick those who waited longest: 5, 4, 3, 2
+    expect(selectedIds).toContain("5");
+    expect(selectedIds).toContain("4");
+    expect(selectedIds).toContain("3");
+    expect(selectedIds).toContain("2");
+    expect(selectedIds).not.toContain("0");
+    expect(selectedIds).not.toContain("1");
   });
 });

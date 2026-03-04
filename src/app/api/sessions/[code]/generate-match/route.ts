@@ -58,7 +58,14 @@ export async function POST(
 
     // 3. Select Available Players
     const availableCandidates = sessionData.players
-      .filter(p => !busyPlayerIds.has(p.userId) && !p.isPaused);
+      .filter(p => !busyPlayerIds.has(p.userId) && !p.isPaused)
+      .map(p => ({
+        userId: p.userId,
+        matchesPlayed: p.matchesPlayed,
+        availableSince: p.availableSince,
+        joinedAt: p.joinedAt,
+        inactiveSeconds: p.inactiveSeconds,
+      }));
 
     const selected = selectMatchPlayers(availableCandidates);
 
@@ -66,7 +73,7 @@ export async function POST(
       return NextResponse.json({ error: `Not enough players available (need 4, have ${availableCandidates.length})` }, { status: 400 });
     }
 
-    const selectedIds = (selected as any[]).map(p => p.userId);
+    const selectedIds = selected.map(p => p.userId);
 
     // 6. Partition into teams (ELO & Partner Balancing)
     const partitions = getDoublesPartitions(selectedIds);
@@ -74,10 +81,10 @@ export async function POST(
     let bestScore = Infinity;
 
     for (const partition of partitions) {
-      const p1 = (selected as any[]).find(p => p.userId === partition.team1[0])!;
-      const p2 = (selected as any[]).find(p => p.userId === partition.team1[1])!;
-      const p3 = (selected as any[]).find(p => p.userId === partition.team2[0])!;
-      const p4 = (selected as any[]).find(p => p.userId === partition.team2[1])!;
+      const p1 = sessionData.players.find(p => p.userId === partition.team1[0])!;
+      const p2 = sessionData.players.find(p => p.userId === partition.team1[1])!;
+      const p3 = sessionData.players.find(p => p.userId === partition.team2[0])!;
+      const p4 = sessionData.players.find(p => p.userId === partition.team2[1])!;
 
       const team1AvgElo = (p1.user.elo + p2.user.elo) / 2;
       const team2AvgElo = (p3.user.elo + p4.user.elo) / 2;

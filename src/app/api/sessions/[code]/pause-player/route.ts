@@ -34,6 +34,27 @@ export async function POST(
       return NextResponse.json({ error: "Session not found" }, { status: 404 });
     }
 
+    const existingPlayer = await prisma.sessionPlayer.findUnique({
+      where: {
+        sessionId_userId: {
+          sessionId: sessionData.id,
+          userId,
+        },
+      },
+      select: { pausedAt: true, inactiveSeconds: true },
+    });
+
+    if (!existingPlayer) {
+      return NextResponse.json({ error: "Player not found in session" }, { status: 404 });
+    }
+
+    let inactiveSecondsToIncrement = 0;
+    if (!isPaused && existingPlayer.pausedAt) {
+      // Transitioning from Paused to Unpaused
+      const durationMs = Date.now() - existingPlayer.pausedAt.getTime();
+      inactiveSecondsToIncrement = Math.floor(durationMs / 1000);
+    }
+
     const updated = await prisma.sessionPlayer.update({
       where: {
         sessionId_userId: {
@@ -45,6 +66,7 @@ export async function POST(
         isPaused,
         pausedAt: isPaused ? new Date() : null,
         availableSince: isPaused ? undefined : new Date(), 
+        inactiveSeconds: { increment: inactiveSecondsToIncrement },
       },
     });
 
