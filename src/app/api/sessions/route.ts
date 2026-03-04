@@ -12,7 +12,6 @@ function generateCode(): string {
 export async function POST(request: Request) {
   try {
     const session = await auth();
-    console.log("Session in POST /api/sessions:", JSON.stringify(session));
 
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 });

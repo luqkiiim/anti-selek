@@ -37,8 +37,6 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         const userEmail = user.email || "";
         const isAdmin = userEmail ? adminEmails.includes(userEmail) : false;
 
-        console.log("Authorize check:", { userEmail, adminEmails, isAdmin });
-
         return {
           id: user.id,
           email: user.email,
@@ -50,16 +48,20 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   ],
   callbacks: {
     async jwt({ token, user }: any) {
-      if (user && user.id) {
+      if (user) {
         token.id = user.id;
-        token.isAdmin = (user as any).isAdmin;
+        token.email = user.email;
       }
       return token;
     },
     async session({ session, token }: any) {
       if (session.user) {
         session.user.id = token.id as string;
-        session.user.isAdmin = token.isAdmin as boolean;
+        session.user.email = token.email as string;
+        
+        // Re-calculate isAdmin from environment list to be safe
+        const adminEmails = (process.env.ADMIN_EMAILS || "").split(",").map(e => e.trim());
+        session.user.isAdmin = !!session.user.email && adminEmails.includes(session.user.email);
       }
       return session;
     },
