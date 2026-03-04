@@ -217,24 +217,44 @@ export default function SessionPage() {
       setAddingPlayerId(null);
     }
   };
-
-  const generateMatch = async (courtId: string) => {
-    try {
-      const res = await fetch(`/api/sessions/${code}/generate-match`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ courtId }),
-      });
-      if (res.ok) {
-        fetchSession();
-      } else {
-        const data = await safeJson(res);
-        setError(data.error || "Failed to generate match");
-      }
-    } catch (err) {
-      console.error(err);
+const generateMatch = async (courtId: string) => {
+  try {
+    const res = await fetch(`/api/sessions/${code}/generate-match`, {
+      method: \"POST\",
+      headers: { \"Content-Type\": \"application/json\" },
+      body: JSON.stringify({ courtId }),
+    });
+    if (res.ok) {
+      fetchSession();
+    } else {
+      const data = await safeJson(res);
+      setError(data.error || \"Failed to generate match\");
     }
-  };
+  } catch (err) {
+    console.error(err);
+    setError(\"Network error generating match\");
+  }
+};
+
+const reshuffleMatch = async (courtId: string) => {
+  if (!confirm(\"Are you sure you want to reshuffle? This will delete the current match and pick new players.\")) return;
+  try {
+    const res = await fetch(`/api/sessions/${code}/generate-match`, {
+      method: \"POST\",
+      headers: { \"Content-Type\": \"application/json\" },
+      body: JSON.stringify({ courtId, forceReshuffle: true }),
+    });
+    if (res.ok) {
+      fetchSession();
+    } else {
+      const data = await safeJson(res);
+      setError(data.error || \"Failed to reshuffle match\");
+    }
+  } catch (err) {
+    console.error(err);
+    setError(\"Network error reshuffling match\");
+  }
+};
 
   const handleScoreChange = (matchId: string, team: 'team1' | 'team2', value: string) => {
     setMatchScores(prev => ({
@@ -311,7 +331,7 @@ export default function SessionPage() {
     );
   }
 
-  const isAdmin = user?.isAdmin;
+  const isAdmin = user?.isAdmin || (session?.user as any)?.isAdmin;
   const currentUserId = session?.user?.id || "";
 
   // Helper to calculate player stats for the session
@@ -421,14 +441,25 @@ export default function SessionPage() {
                 <div key={court.id} className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden flex flex-col">
                   <div className="bg-gray-50/80 px-4 py-2.5 border-b border-gray-100 flex justify-between items-center">
                     <h2 className="text-sm font-black text-gray-500 uppercase tracking-widest">Court {court.courtNumber}</h2>
-                    {sessionData.status === SessionStatus.ACTIVE && !court.currentMatch && isAdmin && (
-                      <button
-                        onClick={() => generateMatch(court.id)}
-                        className="text-[10px] bg-blue-600 text-white px-2.5 py-1.5 rounded-lg font-black uppercase tracking-wider active:scale-95 transition-all"
-                      >
-                        New Match
-                      </button>
-                    )}
+                    <div className="flex gap-2">
+                      {sessionData.status === SessionStatus.ACTIVE && !court.currentMatch && isAdmin && (
+                        <button
+                          onClick={() => generateMatch(court.id)}
+                          className="text-[10px] bg-blue-600 text-white px-2.5 py-1.5 rounded-lg font-black uppercase tracking-wider active:scale-95 transition-all"
+                        >
+                          New Match
+                        </button>
+                      )}
+                      {currentMatch && currentMatch.status === MatchStatus.IN_PROGRESS && isAdmin && (
+                        <button
+                          onClick={() => reshuffleMatch(court.id)}
+                          className="text-[10px] bg-gray-200 text-gray-600 px-2.5 py-1.5 rounded-lg font-black uppercase tracking-wider active:scale-95 transition-all flex items-center gap-1"
+                          title="Pick different players"
+                        >
+                          🔄 Reshuffle
+                        </button>
+                      )}
+                    </div>
                   </div>
 
                   <div className="p-4 flex-1 flex flex-col justify-center">

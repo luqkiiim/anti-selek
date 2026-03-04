@@ -34,10 +34,34 @@ export async function POST(
 
     const { code } = await params;
     const body = await request.json().catch(() => ({}));
-    const { courtId } = body;
+    const { courtId, forceReshuffle = false } = body;
 
     if (!courtId) {
       return NextResponse.json({ error: "Court ID required" }, { status: 400 });
+    }
+
+    // 0. Handle Reshuffle: Delete existing match if requested
+    if (forceReshuffle) {
+      const court = await prisma.court.findUnique({
+        where: { id: courtId },
+        include: { currentMatch: true },
+      });
+
+      if (court?.currentMatch) {
+        // Only allow reshuffle if match isn't approved/completed
+        const allowedStatuses = [MatchStatus.PENDING, MatchStatus.IN_PROGRESS];
+        if (!allowedStatuses.includes(court.currentMatch.status as any)) {
+          return NextResponse.json({ error: "Cannot reshuffle a match that is already scored or completed." }, { status: 400 });
+        }
+
+        await prisma.$transaction([
+          prisma.match.delete({ where: { id: court.currentMatch.id } }),
+          prisma.court.update({
+            where: { id: courtId },
+            data: { currentMatchId: null },
+          }),
+        ]);
+      }
     }
 
     // 1. Fetch fresh session data
