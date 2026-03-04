@@ -61,6 +61,13 @@ model SessionPlayer {
   lastPartnerId String? // player ID of last partner (for repeat-partner penalty)
   isPaused     Boolean  @default(false)
 
+  // Persisted matchmaking state
+  matchesPlayed  Int      @default(0)
+  availableSince DateTime @default(now())
+  lastPlayedAt   DateTime?
+  pausedAt       DateTime?
+  joinedAt       DateTime @default(now())
+
   session     Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 

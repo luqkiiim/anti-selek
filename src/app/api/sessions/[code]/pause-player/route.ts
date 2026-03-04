@@ -41,7 +41,11 @@ export async function POST(
           userId,
         },
       },
-      data: { isPaused },
+      data: { 
+        isPaused,
+        pausedAt: isPaused ? new Date() : null,
+        availableSince: isPaused ? undefined : new Date(), // Reset waiting time when unpausing
+      },
     });
 
     return NextResponse.json(updated);

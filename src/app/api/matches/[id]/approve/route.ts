@@ -73,6 +73,7 @@ export async function POST(
   const team1Points = finalTeam1Score!;
   const team2Points = finalTeam2Score!;
   const winnerTeam = team1Points > team2Points ? 1 : 2;
+  const now = new Date();
 
   const team1AvgElo = (match.team1User1.elo + match.team1User2.elo) / 2;
   const team2AvgElo = (match.team2User1.elo + match.team2User2.elo) / 2;
@@ -93,6 +94,7 @@ export async function POST(
   // Transaction: update match, points, ELO, clear court
   const result = await prisma.$transaction(async (tx) => {
     // ... (rest of match and points update)
+    // Update match status
     const updatedMatch = await tx.match.update({
       where: { id },
       data: {
@@ -102,20 +104,23 @@ export async function POST(
         team1EloChange: team1EloChange,
         team2EloChange: team2EloChange,
         status: "COMPLETED",
-        completedAt: new Date(),
+        completedAt: now,
       },
     });
 
-    // Update session points: team 1 gets team1Points, team 2 gets team2Points
+    // Update session points and matchmaking state
+    const allPlayerIds = [match.team1User1Id, match.team1User2Id, match.team2User1Id, match.team2User2Id];
+    
     await tx.sessionPlayer.updateMany({
       where: {
         sessionId: match.sessionId,
         userId: { in: [match.team1User1Id, match.team1User2Id] },
       },
       data: {
-        sessionPoints: {
-          increment: team1Points,
-        },
+        sessionPoints: { increment: team1Points },
+        matchesPlayed: { increment: 1 },
+        lastPlayedAt: now,
+        availableSince: now,
       },
     });
 
@@ -125,9 +130,10 @@ export async function POST(
         userId: { in: [match.team2User1Id, match.team2User2Id] },
       },
       data: {
-        sessionPoints: {
-          increment: team2Points,
-        },
+        sessionPoints: { increment: team2Points },
+        matchesPlayed: { increment: 1 },
+        lastPlayedAt: now,
+        availableSince: now,
       },
     });
 
