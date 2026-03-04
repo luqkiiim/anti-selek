@@ -51,14 +51,14 @@ export async function POST(
     if (!sessionData) return NextResponse.json({ error: "Session not found" }, { status: 404 });
     if (sessionData.status !== "ACTIVE") return NextResponse.json({ error: "Session not active" }, { status: 400 });
 
-    // 2. Identify busy players (those currently on court)
+    // 2. Identify busy players (those on court)
     const busyPlayerIds = new Set(
       sessionData.matches
         .filter(m => ["PENDING", "IN_PROGRESS"].includes(m.status))
         .flatMap(m => [m.team1User1Id, m.team1User2Id, m.team2User1Id, m.team2User2Id])
     );
 
-    // 3. Calculate actual match counts and last match times
+    // 3. Calculate actual player stats
     const playerStats: Record<string, { matchCount: number; lastMatchAt: number }> = {};
     const sessionStartTime = sessionData.createdAt.getTime();
     
@@ -76,53 +76,58 @@ export async function POST(
       });
     });
 
-    // 4. Calculate Session Max
-    const allCounts = Object.values(playerStats).map(s => s.matchCount);
-    const maxCount = allCounts.length > 0 ? Math.max(...allCounts) : 0;
+    // 4. Calculate Session Average Floor
+    const activeCounts = Object.values(playerStats).map(s => s.matchCount).filter(c => c > 0);
+    const sessionAvg = activeCounts.length > 0 ? activeCounts.reduce((a, b) => a + b, 0) / activeCounts.length : 0;
+    const matchFloor = Math.floor(sessionAvg);
 
-    // 5. SEAMLESS INTEGRATION SELECTION
-    const now = Date.now();
-    const activeLastMatches = Object.values(playerStats)
+    // 5. Calculate waiting times for active rotation
+    const activeTimes = Object.values(playerStats)
       .filter(s => s.lastMatchAt > sessionStartTime)
       .map(s => s.lastMatchAt);
     
-    let minWait = sessionStartTime;
-    let maxWait = now;
-    if (activeLastMatches.length > 0) {
-      minWait = Math.min(...activeLastMatches);
-      maxWait = Math.max(...activeLastMatches);
-    }
+    const now = Date.now();
+    const minWait = activeTimes.length > 0 ? Math.min(...activeTimes) : sessionStartTime;
+    const maxWait = activeTimes.length > 0 ? Math.max(...activeTimes) : now;
 
+    // 6. Select Available Players
     const availablePlayers = sessionData.players
       .filter(p => !busyPlayerIds.has(p.userId) && !p.isPaused)
       .map(p => {
         const stats = playerStats[p.userId];
-        let effectiveLastMatchAt = stats.lastMatchAt;
+        let effectiveCount = stats.matchCount;
+        let effectiveLastAt = stats.lastMatchAt;
 
-        // If player is a late joiner or unpaused and hasn't played yet (or is behind)
-        if (stats.matchCount < maxCount && stats.lastMatchAt === sessionStartTime) {
-          // Insert them randomly into the current waiting line range
-          // This ensures they mix immediately and don't clump as a block
-          effectiveLastMatchAt = minWait + Math.random() * (maxWait - minWait);
+        // INSTANT AVERAGE & INJECTION:
+        // If a player is behind (unpaused or late joiner), they instantly get the floor match count
+        // AND are injected into the current rotation's time range to ensure immediate mixing.
+        if (stats.matchCount < matchFloor) {
+          effectiveCount = matchFloor;
+          // Only inject if they haven't played since unpausing/joining
+          if (stats.lastMatchAt === sessionStartTime) {
+             const jitter = (p.userId.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0) % 100) / 100;
+             effectiveLastAt = minWait + (jitter * (maxWait - minWait));
+          }
         }
 
-        return {
-          ...p,
+        return { 
+          ...p, 
+          _effCount: effectiveCount, 
+          _effLastAt: effectiveLastAt, 
           _actual: stats.matchCount,
-          _effectiveCount: maxCount, // Treat everyone as having the same match count (No catch-up)
-          _effectiveLastMatchAt: effectiveLastMatchAt,
-          _random: Math.random()
+          _random: Math.random() 
         };
       })
       .sort((a, b) => {
-        // Purely wait-time based rotation now that match counts are leveled
-        if (a._effectiveLastMatchAt !== b._effectiveLastMatchAt) {
-          return a._effectiveLastMatchAt - b._effectiveLastMatchAt;
-        }
+        // Priority 1: Match Count (Boosted for unpaused/late joiners)
+        if (a._effCount !== b._effCount) return a._effCount - b._effCount;
+        // Priority 2: Waiting Time (Injected for unpaused/late joiners)
+        if (a._effLastAt !== b._effLastAt) return a._effLastAt - b._effLastAt;
+        // Priority 3: Random tie-breaker
         return a._random - b._random;
       });
 
-    console.log(`[Matchmaking] Max: ${maxCount}, Available: ${availablePlayers.length}`);
+    console.log(`[Matchmaking] Avg: ${sessionAvg.toFixed(1)}, Available: ${availablePlayers.length}`);
 
     if (availablePlayers.length < 4) {
       return NextResponse.json({ error: `Not enough players available (need 4, have ${availablePlayers.length})` }, { status: 400 });
@@ -131,7 +136,7 @@ export async function POST(
     const selected = availablePlayers.slice(0, 4);
     const selectedIds = selected.map(p => p.userId);
 
-    // 6. Partition into teams (ELO & Partner Balancing)
+    // 7. Partition into teams (ELO & Partner Balancing)
     const partitions = getDoublesPartitions(selectedIds);
     let bestPartition = partitions[0];
     let bestScore = Infinity;
@@ -155,7 +160,7 @@ export async function POST(
       }
     }
 
-    // 7. Create Match
+    // 8. Create Match
     const newMatch = await prisma.$transaction(async (tx) => {
       const match = await tx.match.create({
         data: {
