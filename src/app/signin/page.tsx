@@ -47,7 +47,7 @@ function SigninForm() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-100 px-4">
       <div className="max-w-md w-full bg-white rounded-lg shadow-md p-8">
-        <h1 className="text-2xl font-bold text-center mb-6">Sign In (Diagnostic)</h1>
+        <h1 className="text-2xl font-bold text-center mb-6">Sign In</h1>
 
         {registered && (
           <div className="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-4">

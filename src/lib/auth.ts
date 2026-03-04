@@ -37,6 +37,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         const userEmail = user.email || "";
         const isAdmin = userEmail ? adminEmails.includes(userEmail) : false;
 
+        console.log("Authorize check:", { userEmail, adminEmails, isAdmin });
+
         return {
           id: user.id,
           email: user.email,
