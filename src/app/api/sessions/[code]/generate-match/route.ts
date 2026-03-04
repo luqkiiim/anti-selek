@@ -58,8 +58,6 @@ export async function POST(
     }
 
     // 2. Identify busy players (those currently on court)
-    // We treat PENDING and IN_PROGRESS as busy.
-    // PENDING_APPROVAL players are technically off-court and could be available for the NEXT court.
     const busyPlayerIds = new Set(
       sessionData.matches
         .filter(m => ["PENDING", "IN_PROGRESS"].includes(m.status))
@@ -88,21 +86,40 @@ export async function POST(
       });
     });
 
-    // 4. Select the 4 available players who have played the least and waited the longest
+    // 4. Calculate Virtual Match Floor for late joiners / unpaused players
+    // We calculate the average match count of players who have actually played.
+    const activeMatchCounts = Object.values(playerStats)
+      .map(s => s.matchCount)
+      .filter(count => count > 0);
+    
+    const sessionAvg = activeMatchCounts.length > 0 
+      ? activeMatchCounts.reduce((a, b) => a + b, 0) / activeMatchCounts.length 
+      : 0;
+
+    // We treat players with 0 or very few matches as having (Average - 1) 
+    // This allows them to join the rotation naturally without playing 10 games in a row together.
+    const virtualMatchFloor = Math.max(0, Math.floor(sessionAvg) - 1);
+
+    // 5. Select the 4 available players
     const availablePlayers = sessionData.players
       .filter(p => !busyPlayerIds.has(p.userId) && !p.isPaused)
-      .map(p => ({
-        ...p,
-        _matchCount: playerStats[p.userId].matchCount,
-        _lastMatchAt: playerStats[p.userId].lastMatchAt,
-        _random: Math.random()
-      }))
+      .map(p => {
+        const actualCount = playerStats[p.userId].matchCount;
+        return {
+          ...p,
+          _actualMatchCount: actualCount,
+          // Effective count helps bring late joiners into the rotation
+          _effectiveMatchCount: Math.max(actualCount, virtualMatchFloor),
+          _lastMatchAt: playerStats[p.userId].lastMatchAt,
+          _random: Math.random()
+        };
+      })
       .sort((a, b) => {
-        // Priority 1: Fewest matches played
-        if (a._matchCount !== b._matchCount) {
-          return a._matchCount - b._matchCount;
+        // Priority 1: Fewest effective matches played
+        if (a._effectiveMatchCount !== b._effectiveMatchCount) {
+          return a._effectiveMatchCount - b._effectiveMatchCount;
         }
-        // Priority 2: Waited longest since their last match started
+        // Priority 2: Waited longest since their last match started/finished
         if (a._lastMatchAt !== b._lastMatchAt) {
           return a._lastMatchAt - b._lastMatchAt;
         }
@@ -110,9 +127,9 @@ export async function POST(
         return a._random - b._random;
       });
 
-    console.log(`[Matchmaking] Court: ${courtId}, Available: ${availablePlayers.length}`);
+    console.log(`[Matchmaking] Court: ${courtId}, Avg: ${sessionAvg.toFixed(2)}, Floor: ${virtualMatchFloor}`);
     availablePlayers.slice(0, 8).forEach(p => {
-      console.log(` - ${p.user.name}: matches=${p._matchCount}, lastAt=${new Date(p._lastMatchAt).toLocaleTimeString()}`);
+      console.log(` - ${p.user.name}: matches(act=${p._actualMatchCount}, eff=${p._effectiveMatchCount}), lastAt=${new Date(p._lastMatchAt).toLocaleTimeString()}`);
     });
 
     if (availablePlayers.length < 4) {
@@ -124,7 +141,7 @@ export async function POST(
     const selectedPlayers = availablePlayers.slice(0, 4);
     const selectedIds = selectedPlayers.map(p => p.userId);
 
-    // 5. Find the most balanced teams among these 4 based on ELO and partner history
+    // 6. Find the most balanced teams among these 4 based on ELO and partner history
     const partitions = getDoublesPartitions(selectedIds);
     let bestPartition = partitions[0];
     let bestScore = Infinity;
@@ -153,7 +170,7 @@ export async function POST(
       }
     }
 
-    // 6. Transaction to create the match and assign it to the court
+    // 7. Transaction to create the match and assign it to the court
     const newMatch = await prisma.$transaction(async (tx) => {
       const match = await tx.match.create({
         data: {
