@@ -55,6 +55,7 @@ export default function CommunityPage() {
 
   const [newSessionName, setNewSessionName] = useState("");
   const [sessionType, setSessionType] = useState<SessionType>(SessionType.POINTS);
+  const [courtCount, setCourtCount] = useState(3);
   const [selectedPlayerIds, setSelectedPlayerIds] = useState<string[]>([]);
   const [newPlayerName, setNewPlayerName] = useState("");
   const [existingPlayerEmail, setExistingPlayerEmail] = useState("");
@@ -190,6 +191,7 @@ export default function CommunityPage() {
         body: JSON.stringify({
           name: newSessionName,
           type: sessionType,
+          courtCount,
           communityId,
           playerIds: selectedPlayerIds,
         }),
@@ -202,6 +204,7 @@ export default function CommunityPage() {
 
       setNewSessionName("");
       setSelectedPlayerIds([]);
+      setCourtCount(3);
       router.push(`/session/${data.code}`);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Failed to create tournament");
@@ -378,6 +381,21 @@ export default function CommunityPage() {
                   >
                     ELO Format
                   </button>
+                </div>
+
+                <div className="space-y-1">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-blue-100">Courts Available</p>
+                  <select
+                    value={courtCount}
+                    onChange={(e) => setCourtCount(parseInt(e.target.value, 10))}
+                    className="w-full bg-blue-500/50 border-2 border-blue-400/30 rounded-2xl px-4 py-3 font-bold focus:outline-none focus:border-white transition-all"
+                  >
+                    {Array.from({ length: 10 }, (_, i) => i + 1).map((count) => (
+                      <option key={count} value={count} className="text-gray-900">
+                        {count} Court{count > 1 ? "s" : ""}
+                      </option>
+                    ))}
+                  </select>
                 </div>
 
                 <div className="space-y-2">

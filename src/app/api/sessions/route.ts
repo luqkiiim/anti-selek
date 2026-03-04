@@ -21,11 +21,12 @@ export async function POST(request: Request) {
     if (!body || typeof body !== "object") {
       return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
     }
-    const { name, type = SessionType.POINTS, playerIds = [], communityId } = body as {
+    const { name, type = SessionType.POINTS, playerIds = [], communityId, courtCount = 3 } = body as {
       name?: unknown;
       type?: SessionType;
       playerIds?: unknown;
       communityId?: unknown;
+      courtCount?: unknown;
     };
 
     if (typeof name !== "string" || !name.trim()) {
@@ -33,6 +34,9 @@ export async function POST(request: Request) {
     }
     if (typeof communityId !== "string" || !communityId) {
       return NextResponse.json({ error: "Community is required" }, { status: 400 });
+    }
+    if (!Number.isInteger(courtCount) || (courtCount as number) < 1 || (courtCount as number) > 10) {
+      return NextResponse.json({ error: "Court count must be an integer between 1 and 10" }, { status: 400 });
     }
 
     const requesterMembership = await prisma.communityMember.findUnique({
@@ -85,6 +89,7 @@ export async function POST(request: Request) {
 
     console.log("Creating session with players:", uniquePlayerIds);
 
+    const normalizedCourtCount = courtCount as number;
     const newSession = await prisma.session.create({
         data: {
           code,
@@ -93,11 +98,9 @@ export async function POST(request: Request) {
           type,
           status: SessionStatus.WAITING,
         courts: {
-          create: [
-            { courtNumber: 1 },
-            { courtNumber: 2 },
-            { courtNumber: 3 },
-          ],
+          create: Array.from({ length: normalizedCourtCount }, (_, i) => ({
+            courtNumber: i + 1,
+          })),
         },
         players: {
           create: uniquePlayerIds.map((pid) => ({
