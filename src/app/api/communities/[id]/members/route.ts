@@ -25,7 +25,7 @@ export async function GET(
       },
     });
 
-    if (!membership && !session.user.isAdmin) {
+    if (!membership) {
       return NextResponse.json({ error: "Not authorized" }, { status: 403 });
     }
 
@@ -81,7 +81,7 @@ export async function POST(
       select: { role: true },
     });
 
-    const canManage = !!session.user.isAdmin || requesterMembership?.role === "ADMIN";
+    const canManage = requesterMembership?.role === "ADMIN";
     if (!canManage) {
       return NextResponse.json({ error: "Not authorized" }, { status: 403 });
     }

@@ -5,13 +5,13 @@ A web app for running rolling badminton sessions with live court management, sco
 ## What It Does
 
 - Email/password authentication (NextAuth credentials)
-- Admin-managed session creation with 6-character session code
+- Community-admin managed session creation with 6-character session code
 - 3-court live session flow (create match, submit score, approve result)
 - Session formats:
   - `POINTS`: leaderboard by session points
   - `ELO`: leaderboard by global ELO
 - Player pause/resume support for temporary breaks
-- Late-join support (admin can add players into active sessions)
+- Late-join support (community admins can add players into active sessions)
 - Matchmaking fairness using time-adjusted match-rate + wait time
 
 ## Stack
@@ -45,7 +45,6 @@ Create `.env`:
 ```env
 DATABASE_URL="file:./dev.db"
 AUTH_SECRET="replace-with-a-strong-secret"
-ADMIN_EMAILS="admin@example.com"
 
 # Optional (cloud mode via Turso/LibSQL)
 # TURSO_DATABASE_URL="libsql://..."
@@ -74,20 +73,20 @@ Open `http://localhost:3000`.
 - `npm run lint` - run ESLint
 - `npm test` - run Vitest
 
-## Admin Setup
+## Community Admin Setup
 
 1. Sign up a user.
-2. Add that user email to `ADMIN_EMAILS`.
-3. Restart the app.
+2. Create a community with that user (creator becomes `ADMIN` for that community).
+3. Open the community page and use the `Admin` button in the top-right.
 
-Admin capabilities include:
+Community admin capabilities include:
 
 - Create sessions and preselect participants
 - Start/end session
 - Generate/reshuffle matches
 - Approve/override scores
-- Manage players (create/edit/delete/reset ELO)
-- Community reset (destructive)
+- Add community players
+- Reset community data (destructive, scoped to that community)
 
 ## Core Game Rules
 
@@ -135,7 +134,7 @@ Additional logic:
 
 ## Deployment Notes
 
-- Set production env vars: `DATABASE_URL`, `AUTH_SECRET`, `ADMIN_EMAILS`.
+- Set production env vars: `DATABASE_URL`, `AUTH_SECRET`.
 - If using Turso, also set `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN`.
 - Run migrations in deployment pipeline:
 

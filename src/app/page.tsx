@@ -5,14 +5,6 @@ import { useSession, signOut } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 
-interface User {
-  id: string;
-  name: string;
-  email: string;
-  elo: number;
-  isAdmin: boolean;
-}
-
 interface Community {
   id: string;
   name: string;
@@ -26,7 +18,6 @@ export default function Home() {
   const { status } = useSession();
   const router = useRouter();
 
-  const [user, setUser] = useState<User | null>(null);
   const [communities, setCommunities] = useState<Community[]>([]);
   const [newCommunityName, setNewCommunityName] = useState("");
   const [newCommunityPassword, setNewCommunityPassword] = useState("");
@@ -48,14 +39,6 @@ export default function Home() {
     }
   }, []);
 
-  const fetchUser = useCallback(async () => {
-    const res = await fetch("/api/user/me");
-    const data = await safeJson(res);
-    if (data.user) {
-      setUser(data.user as User);
-    }
-  }, [safeJson]);
-
   const fetchCommunities = useCallback(async () => {
     const res = await fetch("/api/communities");
     const data = await safeJson(res);
@@ -73,7 +56,6 @@ export default function Home() {
       (async () => {
         try {
           setError("");
-          await fetchUser();
           await fetchCommunities();
         } catch (err: unknown) {
           setError(err instanceof Error ? err.message : "Failed to load dashboard");
@@ -82,7 +64,7 @@ export default function Home() {
         }
       })();
     }
-  }, [status, router, fetchUser, fetchCommunities]);
+  }, [status, router, fetchCommunities]);
 
   const createCommunity = async () => {
     if (!newCommunityName.trim()) return;
@@ -175,14 +157,6 @@ export default function Home() {
         </div>
 
         <div className="flex items-center gap-4">
-          {user?.isAdmin && (
-            <Link
-              href="/admin/players"
-              className="text-xs font-black text-gray-400 uppercase tracking-wider hover:text-blue-600 transition-colors hidden sm:block"
-            >
-              Players
-            </Link>
-          )}
           <button
             onClick={() => signOut()}
             className="text-xs font-black text-red-500 uppercase tracking-wider active:scale-95 transition-all"

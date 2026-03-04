@@ -1,17 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-
-interface User {
-  id: string;
-  name: string;
-  email: string;
-  elo: number;
-  isAdmin: boolean;
-}
 
 interface Community {
   id: string;
@@ -36,12 +28,12 @@ export default function CommunityAdminPage() {
   const params = useParams<{ id: string }>();
   const communityId = typeof params.id === "string" ? params.id : "";
 
-  const [user, setUser] = useState<User | null>(null);
   const [community, setCommunity] = useState<Community | null>(null);
   const [members, setMembers] = useState<CommunityMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [resettingCommunity, setResettingCommunity] = useState(false);
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
 
   const safeJson = useCallback(async (res: Response) => {
     const text = await res.text();
@@ -55,25 +47,18 @@ export default function CommunityAdminPage() {
   const refreshData = useCallback(async () => {
     if (!communityId) return;
 
-    const [meRes, communitiesRes] = await Promise.all([fetch("/api/user/me"), fetch("/api/communities")]);
-    const [meData, communitiesData] = await Promise.all([safeJson(meRes), safeJson(communitiesRes)]);
-
-    if (!meRes.ok || !meData.user) {
-      throw new Error(meData.error || "Failed to load user");
-    }
+    const communitiesRes = await fetch("/api/communities");
+    const communitiesData = await safeJson(communitiesRes);
     if (!communitiesRes.ok) {
       throw new Error(communitiesData.error || "Failed to load communities");
     }
 
-    const me = meData.user as User;
-    const list = Array.isArray(communitiesData) ? (communitiesData as Community[]) : [];
-    const currentCommunity = list.find((c) => c.id === communityId) || null;
+    const communityList = Array.isArray(communitiesData) ? (communitiesData as Community[]) : [];
+    const currentCommunity = communityList.find((c) => c.id === communityId) || null;
     if (!currentCommunity) {
       throw new Error("Community not found or access denied");
     }
-
-    const canManage = me.isAdmin || currentCommunity.role === "ADMIN";
-    if (!canManage) {
+    if (currentCommunity.role !== "ADMIN") {
       router.replace(`/community/${communityId}`);
       throw new Error("Only community admins can access this page");
     }
@@ -84,7 +69,6 @@ export default function CommunityAdminPage() {
       throw new Error(membersData.error || "Failed to load community members");
     }
 
-    setUser(me);
     setCommunity(currentCommunity);
     setMembers(Array.isArray(membersData) ? membersData : []);
   }, [communityId, router, safeJson]);
@@ -101,6 +85,7 @@ export default function CommunityAdminPage() {
       try {
         setLoading(true);
         setError("");
+        setSuccess("");
         await refreshData();
       } catch (err: unknown) {
         setError(err instanceof Error ? err.message : "Failed to load admin page");
@@ -112,7 +97,7 @@ export default function CommunityAdminPage() {
 
   const resetCommunity = async () => {
     const confirmation = prompt(
-      "This will DELETE ALL TOURNAMENTS in this community and reset ELO for its members to 1000. Type 'RESET' to confirm:"
+      "This will DELETE ALL TOURNAMENTS in this community and reset member ELO to 1000. Type 'RESET' to confirm:"
     );
     if (confirmation !== "RESET") {
       if (confirmation !== null) {
@@ -123,6 +108,7 @@ export default function CommunityAdminPage() {
 
     setResettingCommunity(true);
     setError("");
+    setSuccess("");
     try {
       const res = await fetch(`/api/communities/${communityId}/reset`, {
         method: "POST",
@@ -135,8 +121,8 @@ export default function CommunityAdminPage() {
         return;
       }
 
+      setSuccess("Community reset complete.");
       await refreshData();
-      alert("Community reset complete.");
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Failed to reset community");
     } finally {
@@ -144,106 +130,95 @@ export default function CommunityAdminPage() {
     }
   };
 
+  const sortedMembers = useMemo(
+    () => members.slice().sort((a, b) => b.elo - a.elo || a.name.localeCompare(b.name)),
+    [members]
+  );
+
   if (status === "loading" || loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-6">
-        <div className="flex flex-col items-center gap-4">
-          <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-          <p className="text-gray-500 font-bold uppercase tracking-widest text-xs">Loading Admin...</p>
-        </div>
+      <div className="min-h-screen flex items-center justify-center">
+        Loading...
       </div>
     );
   }
 
   return (
-    <main className="min-h-screen bg-gray-50 pb-20">
-      <div className="bg-white border-b border-gray-100 px-6 py-4 flex justify-between items-center sticky top-0 z-10 shadow-sm">
-        <div className="flex items-center gap-3">
-          <Link
-            href={`/community/${communityId}`}
-            className="text-[10px] font-black text-gray-500 uppercase tracking-widest border border-gray-200 rounded-xl px-3 py-2 hover:text-blue-600 hover:border-blue-300 transition-colors"
-          >
-            Back
-          </Link>
-          <div>
-            <h1 className="text-lg font-black text-gray-900 tracking-tight leading-none">Community Admin</h1>
-            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">
-              {community?.name || "Community"}
-            </p>
+    <div className="min-h-screen bg-gray-100">
+      <nav className="bg-white shadow">
+        <div className="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
+          <div className="flex items-center gap-4">
+            <Link href="/" className="text-xl font-bold text-gray-900">
+              Anti-Selek
+            </Link>
+            <span className="text-gray-400">|</span>
+            <span className="text-lg font-semibold text-blue-600">Admin: {community?.name || "Community"}</span>
           </div>
-        </div>
-      </div>
-
-      <div className="max-w-md mx-auto px-6 pt-8 space-y-8">
-        <div className="bg-white p-6 rounded-3xl shadow-md border border-red-200 space-y-3">
-          <h3 className="text-sm font-black text-red-600 uppercase tracking-widest">Reset Community</h3>
-          <p className="text-[10px] text-red-500 font-bold uppercase tracking-wider">
-            Delete all tournaments in this community and reset member ELO to 1000.
-          </p>
-          <button
-            onClick={resetCommunity}
-            disabled={resettingCommunity}
-            className="w-full bg-red-600 text-white px-6 py-3 rounded-2xl font-black uppercase text-xs active:scale-95 transition-all shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {resettingCommunity ? "Resetting..." : "Reset Community"}
-          </button>
-        </div>
-
-        <div className="bg-white p-6 rounded-3xl shadow-md border border-gray-100 space-y-4">
-          <div className="flex items-center justify-between">
-            <h3 className="text-sm font-black text-gray-900 uppercase tracking-widest">Players</h3>
-            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">{members.length} total</p>
-          </div>
-
-          <div className="space-y-2">
-            {members.length === 0 ? (
-              <div className="bg-gray-50 border-2 border-dashed border-gray-100 rounded-2xl p-4 text-center">
-                <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">No players yet</p>
-              </div>
-            ) : (
-              members
-                .slice()
-                .sort((a, b) => b.elo - a.elo || a.name.localeCompare(b.name))
-                .map((member, index) => (
-                  <div
-                    key={member.id}
-                    className="bg-gray-50 border border-gray-100 rounded-2xl px-4 py-3 flex items-center justify-between"
-                  >
-                    <div className="min-w-0">
-                      <p className="text-sm font-black text-gray-900 truncate">
-                        #{index + 1} {member.name}
-                      </p>
-                      <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider truncate">
-                        {member.email || "No email"} - {member.role}
-                      </p>
-                    </div>
-                    <p className="text-sm font-black text-gray-900">{member.elo}</p>
-                  </div>
-                ))
-            )}
-          </div>
-        </div>
-
-        {user?.isAdmin && (
-          <Link
-            href="/admin/players"
-            className="block text-center bg-gray-900 text-white px-6 py-3 rounded-2xl font-black uppercase text-xs active:scale-95 transition-all shadow-lg"
-          >
-            Open Global Player Admin
-          </Link>
-        )}
-      </div>
-
-      {error && (
-        <div className="fixed bottom-6 left-6 right-6 z-50">
-          <div className="bg-red-600 text-white px-6 py-4 rounded-2xl shadow-2xl flex justify-between items-center">
-            <p className="text-xs font-black uppercase tracking-wide">{error}</p>
-            <button onClick={() => setError("")} className="font-black">
-              x
+          <div className="flex items-center gap-4">
+            <button
+              onClick={resetCommunity}
+              disabled={resettingCommunity}
+              className="text-xs bg-red-50 text-red-600 border border-red-200 px-3 py-1 rounded hover:bg-red-600 hover:text-white transition-all font-bold disabled:opacity-60 disabled:cursor-not-allowed"
+            >
+              {resettingCommunity ? "Resetting..." : "Reset Community"}
             </button>
+            <Link href={`/community/${communityId}`} className="text-sm text-blue-600 hover:underline">
+              Back to Community
+            </Link>
           </div>
         </div>
-      )}
-    </main>
+      </nav>
+
+      <main className="max-w-7xl mx-auto px-4 py-8">
+        {error && (
+          <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-2 rounded mb-4 text-sm">
+            {error}
+          </div>
+        )}
+        {success && (
+          <div className="bg-green-100 border border-green-400 text-green-700 px-4 py-2 rounded mb-4 text-sm">
+            {success}
+          </div>
+        )}
+
+        <div className="bg-white rounded-lg shadow overflow-hidden">
+          <div className="px-6 py-4 border-b flex justify-between items-center">
+            <h2 className="text-lg font-semibold">Community Players</h2>
+            <span className="text-xs text-gray-500">{sortedMembers.length} total</span>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Rank</th>
+                  <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Player</th>
+                  <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Email</th>
+                  <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Role</th>
+                  <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">ELO</th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {sortedMembers.map((member, index) => (
+                  <tr key={member.id} className="hover:bg-gray-50 transition-colors">
+                    <td className="px-6 py-4 whitespace-nowrap text-xs font-bold text-blue-600">#{index + 1}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">{member.name}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{member.email || "No email"}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-xs font-bold text-gray-700">{member.role}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-900">{member.elo}</td>
+                  </tr>
+                ))}
+                {sortedMembers.length === 0 && (
+                  <tr>
+                    <td colSpan={5} className="px-6 py-8 text-center text-gray-500 italic">
+                      No players in this community yet.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </main>
+    </div>
   );
 }

@@ -25,10 +25,5 @@ export async function GET() {
     return NextResponse.json({ error: "User not found" }, { status: 404 });
   }
 
-  // Check if admin
-  const adminEmails = process.env.ADMIN_EMAILS?.split(",").map(e => e.trim()) || [];
-  const userEmail = user.email;
-  const isAdmin = userEmail ? adminEmails.includes(userEmail) : false;
-
-  return NextResponse.json({ user: { ...user, isAdmin } });
+  return NextResponse.json({ user: { ...user, isAdmin: false } });
 }

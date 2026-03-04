@@ -33,35 +33,29 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           return null;
         }
 
-        const adminEmails = (process.env.ADMIN_EMAILS || "").split(",").map(e => e.trim());
-        const userEmail = user.email || "";
-        const isAdmin = userEmail ? adminEmails.includes(userEmail) : false;
-
         return {
           id: user.id,
           email: user.email,
           name: user.name,
-          isAdmin: isAdmin,
+          isAdmin: false,
         };
       },
     }),
   ],
   callbacks: {
-    async jwt({ token, user }: any) {
+    async jwt({ token, user }) {
       if (user) {
         token.id = user.id;
         token.email = user.email;
       }
       return token;
     },
-    async session({ session, token }: any) {
+    async session({ session, token }) {
       if (session.user) {
         session.user.id = token.id as string;
         session.user.email = token.email as string;
-        
-        // Re-calculate isAdmin from environment list to be safe
-        const adminEmails = (process.env.ADMIN_EMAILS || "").split(",").map(e => e.trim());
-        session.user.isAdmin = !!session.user.email && adminEmails.includes(session.user.email);
+        // Admin authorization is community-scoped, not global.
+        session.user.isAdmin = false;
       }
       return session;
     },

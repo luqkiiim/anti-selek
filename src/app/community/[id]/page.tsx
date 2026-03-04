@@ -11,7 +11,6 @@ interface User {
   name: string;
   email: string;
   elo: number;
-  isAdmin: boolean;
 }
 
 interface Community {
@@ -92,7 +91,7 @@ export default function CommunityPage() {
     [sessions]
   );
 
-  const canManageCommunity = !!community && (community.role === "ADMIN" || !!user?.isAdmin);
+  const canManageCommunity = !!community && community.role === "ADMIN";
 
   useEffect(() => {
     setSelectedPlayerIds([]);
