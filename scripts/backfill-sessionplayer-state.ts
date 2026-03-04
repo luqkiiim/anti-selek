@@ -1,6 +1,4 @@
-import { PrismaClient } from "@prisma/client";
-
-const prisma = new PrismaClient();
+import { prisma } from "../src/lib/prisma";
 
 async function backfill() {
   console.log("Starting backfill for SessionPlayer matchmaking state...");
@@ -31,7 +29,7 @@ async function backfill() {
 
     const matchesPlayed = matches.length;
     const lastPlayedAt = matches.length > 0 ? matches[0].completedAt : null;
-    const joinedAt = sp.session.createdAt; // Fallback since SessionPlayer didn't have createdAt
+    const joinedAt = sp.session.createdAt;
 
     let availableSince = joinedAt;
     if (sp.isPaused) {
