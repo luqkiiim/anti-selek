@@ -8,13 +8,11 @@ export function selectMatchPlayers(players: PlayerCandidate[]) {
   if (players.length < 4) return null;
 
   // 1. Calculate Match Floor
-  const activeCounts = players
-    .filter((p) => p.matchesPlayed > 0)
-    .map((p) => p.matchesPlayed);
+  const allCounts = players.map((p) => p.matchesPlayed);
 
   const sessionAvg =
-    activeCounts.length > 0
-      ? activeCounts.reduce((a, b) => a + b, 0) / activeCounts.length
+    allCounts.length > 0
+      ? allCounts.reduce((a, b) => a + b, 0) / allCounts.length
       : 0;
   const matchFloor = Math.floor(sessionAvg);
 
