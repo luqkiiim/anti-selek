@@ -390,14 +390,14 @@ export default function SessionPage() {
     .filter(cp => cp.name.toLowerCase().includes(rosterSearch.toLowerCase()));
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
+    <div className="min-h-screen bg-[radial-gradient(1100px_460px_at_8%_-10%,#f8dcb4,transparent),radial-gradient(900px_420px_at_100%_0%,#f2c38f,transparent),#f6ede0] flex flex-col">
       {/* Mobile-Friendly Header */}
-      <nav className="bg-white shadow-sm sticky top-0 z-30 border-b border-gray-200">
+      <nav className="bg-[#fff8ee]/95 backdrop-blur shadow-sm sticky top-0 z-30 border-b border-[#e5cfb2]">
         <div className="max-w-7xl mx-auto px-4 py-3 flex justify-between items-center">
           <div className="flex flex-col">
             <h1 className="text-lg font-black text-gray-900 leading-tight truncate max-w-[200px]">{sessionData.name}</h1>
             <div className="flex items-center gap-2">
-              <span className="text-[10px] font-bold bg-blue-100 text-blue-700 px-1.5 rounded uppercase tracking-wider">{sessionData.code}</span>
+              <span className="text-[10px] font-black bg-[#f3c997] text-[#7f4215] border border-[#dfb987] px-2 py-0.5 rounded uppercase tracking-wider">{sessionData.code}</span>
               <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{sessionData.status}</span>
             </div>
           </div>
@@ -412,7 +412,7 @@ export default function SessionPage() {
 
       <main className="max-w-7xl mx-auto px-4 py-4 w-full flex-1">
         {error && (
-          <div className="bg-red-500 text-white px-4 py-3 rounded-xl mb-4 flex justify-between items-center shadow-lg animate-bounce">
+          <div className="bg-red-500 text-white px-4 py-3 rounded-xl mb-4 flex justify-between items-center shadow-lg">
             <span className="text-sm font-bold">{error}</span>
             <button onClick={() => setError("")} className="font-bold text-xl ml-2 leading-none">&times;</button>
           </div>
@@ -434,7 +434,7 @@ export default function SessionPage() {
                 fetchCommunityPlayers();
                 setShowRosterModal(true);
               }}
-              className="whitespace-nowrap bg-blue-600 text-white px-4 py-2.5 rounded-xl font-black text-sm uppercase tracking-wider shadow-md active:bg-blue-700 active:scale-95 transition-all"
+              className="whitespace-nowrap bg-[#c56a1f] text-white px-4 py-2.5 rounded-xl font-black text-sm uppercase tracking-wider shadow-md active:bg-[#a75316] active:scale-95 transition-all"
             >
               Add Players
             </button>
@@ -481,10 +481,10 @@ export default function SessionPage() {
                       {currentMatch && currentMatch.status === MatchStatus.IN_PROGRESS && isAdmin && (
                         <button
                           onClick={() => reshuffleMatch(court.id)}
-                          className="text-[10px] bg-gray-200 text-gray-600 px-2.5 py-1.5 rounded-lg font-black uppercase tracking-wider active:scale-95 transition-all flex items-center gap-1"
+                          className="text-[10px] bg-[#e9d5bb] text-[#6a543f] px-2.5 py-1.5 rounded-lg font-black uppercase tracking-wider active:scale-95 transition-all flex items-center gap-1"
                           title="Pick different players"
                         >
-                          🔄 Reshuffle
+                          Reshuffle
                         </button>
                       )}
                     </div>
@@ -525,10 +525,10 @@ export default function SessionPage() {
                         </div>
 
                         {/* Team 2 Card */}
-                        <div className={`p-3 rounded-xl border-2 transition-all ${currentMatch.status === MatchStatus.PENDING_APPROVAL ? 'bg-gray-50 border-gray-100' : 'bg-red-50/50 border-red-100'}`}>
+                        <div className={`p-3 rounded-xl border-2 transition-all ${currentMatch.status === MatchStatus.PENDING_APPROVAL ? 'bg-gray-50 border-gray-100' : 'bg-[#fff4e6] border-[#efcba0]'}`}>
                           <div className="flex justify-between items-center gap-3">
                             <div className="flex-1 min-w-0">
-                              <p className="text-[10px] font-black text-red-600 uppercase tracking-widest mb-0.5">Team 2</p>
+                              <p className="text-[10px] font-black text-[#a75316] uppercase tracking-widest mb-0.5">Team 2</p>
                               <p className="font-bold text-gray-900 truncate text-sm leading-tight">
                                 {currentMatch.team2User1.name}<br/>{currentMatch.team2User2.name}
                               </p>
@@ -539,7 +539,7 @@ export default function SessionPage() {
                                 inputMode="numeric"
                                 value={scores.team2}
                                 onChange={(e) => handleScoreChange(currentMatch.id, 'team2', e.target.value)}
-                                className="w-14 h-12 border-2 border-red-200 rounded-xl text-center font-black text-xl focus:outline-none focus:border-red-500 bg-white"
+                                className="w-14 h-12 border-2 border-[#efcba0] rounded-xl text-center font-black text-xl focus:outline-none focus:border-[#c56a1f] bg-white"
                                 placeholder="0"
                               />
                             ) : currentMatch.status === MatchStatus.PENDING_APPROVAL && (
@@ -554,7 +554,7 @@ export default function SessionPage() {
                             <button
                               onClick={() => submitScore(currentMatch.id)}
                               disabled={submittingMatchId === currentMatch.id || !scores.team1 || !scores.team2}
-                              className="w-full bg-green-600 text-white py-3 rounded-xl font-black uppercase text-sm shadow-md active:bg-green-700 active:scale-95 disabled:opacity-50 transition-all"
+                              className="w-full bg-[#3f2f21] text-white py-3 rounded-xl font-black uppercase text-sm shadow-md active:bg-[#2f2418] active:scale-95 disabled:opacity-50 transition-all"
                             >
                               {submittingMatchId === currentMatch.id ? "Saving..." : "Submit Score"}
                             </button>
@@ -566,7 +566,7 @@ export default function SessionPage() {
                             {isAdmin && (
                               <button
                                 onClick={() => approveScore(currentMatch.id)}
-                                className="w-full bg-blue-600 text-white py-3 rounded-xl font-black uppercase text-sm shadow-md active:bg-blue-700 active:scale-95 transition-all"
+                                className="w-full bg-[#c56a1f] text-white py-3 rounded-xl font-black uppercase text-sm shadow-md active:bg-[#a75316] active:scale-95 transition-all"
                               >
                                 Approve Results
                               </button>
@@ -587,7 +587,7 @@ export default function SessionPage() {
                       </div>
                     ) : (
                       <div className="text-center py-10 px-4">
-                        <div className="text-3xl mb-2 opacity-20">🏸</div>
+                        <div className="text-xs mb-2 opacity-40 font-black tracking-[0.35em]">COURT</div>
                         <p className="text-xs text-gray-400 font-bold uppercase tracking-widest">
                           {sessionData.status === SessionStatus.ACTIVE ? "Next match soon" : "Court Inactive"}
                         </p>
@@ -602,7 +602,7 @@ export default function SessionPage() {
         {/* Combined Mobile Leaderboard / Standings */}
         <div className="space-y-6">
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-            <div className={`${sessionData.type === SessionType.ELO ? 'bg-purple-600' : 'bg-blue-600'} px-5 py-4 flex justify-between items-center transition-colors`}>
+            <div className={`${sessionData.type === SessionType.ELO ? 'bg-[#a75316]' : 'bg-[#c56a1f]'} px-5 py-4 flex justify-between items-center transition-colors`}>
               <h2 className="text-sm font-black text-white uppercase tracking-widest">
                 {sessionData.type === SessionType.ELO ? 'ELO Rankings' : 'Live Standings'}
               </h2>
@@ -641,7 +641,7 @@ export default function SessionPage() {
                           <td className="px-4 py-4 whitespace-nowrap">
                             <span className={`w-6 h-6 rounded-lg flex items-center justify-center text-[10px] font-black ${
                               idx < 3 
-                                ? sessionData.type === SessionType.ELO ? 'bg-purple-100 text-purple-700' : 'bg-yellow-100 text-yellow-700' 
+                                ? 'bg-[#f2cb9d] text-[#7f4215]'
                                 : 'bg-gray-100 text-gray-500'
                             }`}>
                               {idx + 1}
@@ -659,7 +659,7 @@ export default function SessionPage() {
                                   className="font-bold text-gray-900 text-sm hover:text-blue-600 leading-tight"
                                 >
                                   {player.user.name}
-                                  {isMe && <span className="ml-1 text-[8px] bg-blue-100 text-blue-700 px-1 rounded">ME</span>}
+                                  {isMe && <span className="ml-1 text-[8px] bg-[#f3c997] text-[#7f4215] px-1 rounded">ME</span>}
                                 </Link>
                                 {canToggle && (
                                   <button
@@ -691,7 +691,7 @@ export default function SessionPage() {
                             </div>
                           </td>
                           <td className="px-4 py-4 whitespace-nowrap text-right">
-                            <span className={`text-base font-black ${sessionData.type === SessionType.ELO ? 'text-purple-600' : 'text-blue-600'}`}>
+                            <span className="text-base font-black text-[#a75316]">
                               {sessionData.type === SessionType.ELO ? player.user.elo : player.sessionPoints}
                             </span>
                           </td>
@@ -707,7 +707,7 @@ export default function SessionPage() {
 
       {/* Mobile-Friendly Roster Modal */}
       {showRosterModal && (
-        <div className="fixed inset-0 bg-gray-900/80 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4 z-50">
+        <div className="fixed inset-0 bg-[#2f2418]/70 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4 z-50">
           <div className="bg-white rounded-t-3xl sm:rounded-2xl shadow-2xl max-w-md w-full max-h-[90vh] flex flex-col animate-in slide-in-from-bottom duration-300">
             <div className="p-6 border-b flex justify-between items-center">
               <div>
@@ -732,7 +732,7 @@ export default function SessionPage() {
                 placeholder="Search players..."
                 value={rosterSearch}
                 onChange={(e) => setRosterSearch(e.target.value)}
-                className="w-full bg-white border-2 border-gray-100 rounded-xl px-4 py-2 text-sm font-bold focus:outline-none focus:border-blue-500 transition-all"
+                className="w-full bg-white border-2 border-gray-100 rounded-xl px-4 py-2 text-sm font-bold focus:outline-none focus:border-[#c56a1f] transition-all"
               />
             </div>
             
@@ -751,7 +751,7 @@ export default function SessionPage() {
                     <button
                       onClick={() => addPlayerToSession(player.id)}
                       disabled={addingPlayerId === player.id}
-                      className="bg-blue-600 text-white px-5 py-2 rounded-xl text-xs font-black uppercase tracking-wider shadow-sm active:scale-95 disabled:opacity-50 transition-all"
+                      className="bg-[#c56a1f] text-white px-5 py-2 rounded-xl text-xs font-black uppercase tracking-wider shadow-sm active:scale-95 disabled:opacity-50 transition-all"
                     >
                       {addingPlayerId === player.id ? "..." : "Add"}
                     </button>
@@ -763,7 +763,7 @@ export default function SessionPage() {
             <div className="p-6 bg-white border-t sm:rounded-b-2xl">
               <button
                 onClick={() => setShowRosterModal(false)}
-                className="w-full bg-gray-900 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-sm shadow-lg active:scale-95 transition-all"
+                className="w-full bg-[#3f2f21] text-white py-4 rounded-2xl font-black uppercase tracking-widest text-sm shadow-lg active:scale-95 transition-all"
               >
                 Done
               </button>
