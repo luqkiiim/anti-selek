@@ -526,7 +526,7 @@ export default function CommunityAdminPage() {
                     .sort((a, b) => b.elo - a.elo || a.name.localeCompare(b.name))
                     .map((player) => (
                       <tr key={player.id} className="hover:bg-gray-50 transition-colors">
-                        <td className="px-4 py-4 align-top">
+                        <td className="px-4 py-4 align-middle">
                           <div className="space-y-1">
                             <div className="flex items-center gap-2">
                               <input
@@ -552,7 +552,7 @@ export default function CommunityAdminPage() {
                             </Link>
                           </div>
                         </td>
-                        <td className="px-4 py-4 text-sm text-gray-500 align-top">
+                        <td className="px-4 py-4 text-sm text-gray-500 align-middle">
                           <div className="flex items-center gap-2">
                             <input
                               type="number"
