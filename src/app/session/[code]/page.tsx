@@ -390,9 +390,9 @@ export default function SessionPage() {
     .filter(cp => cp.name.toLowerCase().includes(rosterSearch.toLowerCase()));
 
   return (
-    <div className="min-h-screen bg-[radial-gradient(1100px_460px_at_8%_-10%,#f8dcb4,transparent),radial-gradient(900px_420px_at_100%_0%,#f2c38f,transparent),#f6ede0] flex flex-col">
+    <div className="min-h-screen bg-white flex flex-col">
       {/* Mobile-Friendly Header */}
-      <nav className="bg-[#fff8ee]/95 backdrop-blur shadow-sm sticky top-0 z-30 border-b border-[#e5cfb2]">
+      <nav className="bg-white/95 backdrop-blur shadow-sm sticky top-0 z-30 border-b border-[#e5cfb2]">
         <div className="max-w-7xl mx-auto px-4 py-3 flex justify-between items-center">
           <div className="flex flex-col">
             <h1 className="text-lg font-black text-gray-900 leading-tight truncate max-w-[200px]">{sessionData.name}</h1>

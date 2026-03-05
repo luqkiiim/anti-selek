@@ -57,13 +57,9 @@ export default function CommunityPage() {
   const [sessionType, setSessionType] = useState<SessionType>(SessionType.POINTS);
   const [courtCount, setCourtCount] = useState(3);
   const [selectedPlayerIds, setSelectedPlayerIds] = useState<string[]>([]);
-  const [newPlayerName, setNewPlayerName] = useState("");
-  const [existingPlayerEmail, setExistingPlayerEmail] = useState("");
-  const [showAddPlayerCard, setShowAddPlayerCard] = useState(false);
 
   const [loading, setLoading] = useState(true);
   const [creatingSession, setCreatingSession] = useState(false);
-  const [addingPlayer, setAddingPlayer] = useState(false);
   const [showHostPanel, setShowHostPanel] = useState(false);
   const [error, setError] = useState("");
 
@@ -156,31 +152,6 @@ export default function CommunityPage() {
     })();
   }, [status, router, communityId]);
 
-  const refreshCommunityData = async () => {
-    if (!communityId) return;
-
-    const [membersRes, sessionsRes, communitiesRes] = await Promise.all([
-      fetch(`/api/communities/${communityId}/members`),
-      fetch(`/api/sessions?communityId=${encodeURIComponent(communityId)}`),
-      fetch("/api/communities"),
-    ]);
-    const [membersData, sessionsData, communitiesData] = await Promise.all([
-      safeJson(membersRes),
-      safeJson(sessionsRes),
-      safeJson(communitiesRes),
-    ]);
-
-    if (!membersRes.ok) throw new Error(membersData.error || "Failed to load community members");
-    if (!sessionsRes.ok) throw new Error(sessionsData.error || "Failed to load tournaments");
-    if (!communitiesRes.ok) throw new Error(communitiesData.error || "Failed to load communities");
-
-    setCommunityMembers(Array.isArray(membersData) ? membersData : []);
-    setSessions(Array.isArray(sessionsData) ? sessionsData : []);
-    const list = Array.isArray(communitiesData) ? (communitiesData as Community[]) : [];
-    const currentCommunity = list.find((c) => c.id === communityId) || null;
-    setCommunity(currentCommunity);
-  };
-
   const createSession = async () => {
     if (!newSessionName.trim() || !communityId) return;
     setCreatingSession(true);
@@ -211,36 +182,6 @@ export default function CommunityPage() {
       setError(err instanceof Error ? err.message : "Failed to create tournament");
     } finally {
       setCreatingSession(false);
-    }
-  };
-
-  const addPlayerToCommunity = async () => {
-    if (!communityId || !newPlayerName.trim()) return;
-    setAddingPlayer(true);
-    setError("");
-    try {
-      const res = await fetch(`/api/communities/${communityId}/members`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: newPlayerName,
-          email: existingPlayerEmail || undefined,
-        }),
-      });
-      const data = await safeJson(res);
-      if (!res.ok) {
-        setError(data.error || "Failed to add player");
-        return;
-      }
-
-      setNewPlayerName("");
-      setExistingPlayerEmail("");
-      setShowAddPlayerCard(false);
-      await refreshCommunityData();
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Failed to add player");
-    } finally {
-      setAddingPlayer(false);
     }
   };
 
@@ -529,58 +470,6 @@ export default function CommunityPage() {
               </div>
             </div>
 
-            {canManageCommunity && (
-              <div className="bg-white p-6 rounded-3xl shadow-md border border-gray-100">
-                <button
-                  onClick={() => setShowAddPlayerCard((prev) => !prev)}
-                  className="w-full flex items-center justify-between text-left"
-                >
-                  <div>
-                    <h3 className="text-sm font-black text-gray-900 uppercase tracking-widest">Add Player to Community</h3>
-                    <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider mt-1">
-                      Add by name or optional email
-                    </p>
-                  </div>
-                  <span className="text-[10px] font-black uppercase tracking-widest text-blue-600">
-                    {showAddPlayerCard ? "Hide" : "Open"}
-                  </span>
-                </button>
-
-                {showAddPlayerCard && (
-                  <div className="mt-4 space-y-3">
-                    <input
-                      type="text"
-                      value={newPlayerName}
-                      onChange={(e) => setNewPlayerName(e.target.value)}
-                      placeholder="Player Name"
-                      className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl px-4 py-3 font-bold focus:outline-none focus:border-blue-500 transition-all"
-                    />
-                    <input
-                      type="email"
-                      value={existingPlayerEmail}
-                      onChange={(e) => setExistingPlayerEmail(e.target.value)}
-                      placeholder="Existing user email (optional)"
-                      className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl px-4 py-3 font-bold focus:outline-none focus:border-blue-500 transition-all"
-                    />
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => setShowAddPlayerCard(false)}
-                        className="flex-1 bg-gray-200 text-gray-700 py-3 rounded-2xl font-black uppercase tracking-widest text-xs active:scale-95 transition-all"
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        onClick={addPlayerToCommunity}
-                        disabled={addingPlayer || !newPlayerName.trim()}
-                        className="flex-1 bg-gray-900 text-white py-3 rounded-2xl font-black uppercase tracking-widest text-xs active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        {addingPlayer ? "Adding..." : "Add Player"}
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
           </div>
         </div>
       </div>

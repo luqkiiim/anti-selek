@@ -40,8 +40,8 @@ function SigninForm() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-4 py-10 bg-[radial-gradient(900px_420px_at_12%_-5%,#f8dcb4,transparent),radial-gradient(900px_420px_at_100%_0%,#f2c38f,transparent),#f6ede0]">
-      <div className="max-w-md w-full bg-[#fff8ee] rounded-3xl shadow-xl border border-[#e5cfb2] overflow-hidden">
+    <div className="min-h-screen flex items-center justify-center px-4 py-10 bg-white">
+      <div className="max-w-md w-full bg-white rounded-3xl shadow-xl border border-[#e5cfb2] overflow-hidden">
         <div className="px-8 py-6 bg-[#c56a1f] text-white">
           <p className="text-[10px] font-black uppercase tracking-[0.22em]">Court Heat</p>
           <h1 className="text-2xl font-black mt-1">Sign In</h1>
