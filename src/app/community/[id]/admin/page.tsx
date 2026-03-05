@@ -502,16 +502,16 @@ export default function CommunityAdminPage() {
               )}
             </div>
 
-            <div className="hidden xl:block overflow-x-auto">
-              <table className="min-w-[980px] divide-y divide-gray-100">
+            <div className="hidden xl:block">
+              <table className="w-full table-fixed divide-y divide-gray-100">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th className="px-6 py-3 text-left text-[10px] font-black text-gray-500 uppercase tracking-widest">Player</th>
-                    <th className="px-6 py-3 text-left text-[10px] font-black text-gray-500 uppercase tracking-widest">ELO</th>
-                    <th className="px-6 py-3 text-left text-[10px] font-black text-gray-500 uppercase tracking-widest">Claimed</th>
-                    <th className="px-6 py-3 text-left text-[10px] font-black text-gray-500 uppercase tracking-widest">Status</th>
-                    <th className="px-6 py-3 text-left text-[10px] font-black text-gray-500 uppercase tracking-widest">Role</th>
-                    <th className="px-6 pr-8 py-3 w-[130px] min-w-[130px] text-right text-[10px] font-black text-gray-500 uppercase tracking-widest">Actions</th>
+                    <th className="w-[38%] px-4 py-3 text-left text-[10px] font-black text-gray-500 uppercase tracking-widest">Player</th>
+                    <th className="w-[16%] px-4 py-3 text-left text-[10px] font-black text-gray-500 uppercase tracking-widest">ELO</th>
+                    <th className="w-[12%] px-4 py-3 text-left text-[10px] font-black text-gray-500 uppercase tracking-widest">Claimed</th>
+                    <th className="w-[12%] px-4 py-3 text-left text-[10px] font-black text-gray-500 uppercase tracking-widest">Status</th>
+                    <th className="w-[10%] px-4 py-3 text-left text-[10px] font-black text-gray-500 uppercase tracking-widest">Role</th>
+                    <th className="w-[12%] px-4 py-3 text-right text-[10px] font-black text-gray-500 uppercase tracking-widest">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-100">
@@ -520,12 +520,12 @@ export default function CommunityAdminPage() {
                     .sort((a, b) => b.elo - a.elo || a.name.localeCompare(b.name))
                     .map((player) => (
                       <tr key={player.id} className="hover:bg-gray-50 transition-colors">
-                        <td className="px-6 py-4 whitespace-nowrap">
+                        <td className="px-4 py-4 align-top">
                           <div className="space-y-1">
                             <div className="flex items-center gap-2">
                               <input
                                 type="text"
-                                className="w-44 px-2 py-1 text-sm font-bold border rounded bg-gray-50 focus:bg-white focus:outline-none focus:border-blue-500"
+                                className="w-full max-w-[220px] px-2 py-1 text-sm font-bold border rounded bg-gray-50 focus:bg-white focus:outline-none focus:border-blue-500"
                                 value={editingName[player.id] !== undefined ? editingName[player.id] : player.name}
                                 onChange={(e) => handleNameChange(player.id, e.target.value)}
                               />
@@ -540,17 +540,17 @@ export default function CommunityAdminPage() {
                                   </button>
                                 )}
                             </div>
-                            <div className="text-xs text-gray-500">{player.email || "No email"}</div>
+                            <div className="text-xs text-gray-500 truncate">{player.email || "No email"}</div>
                             <Link href={`/profile/${player.id}?communityId=${communityId}`} className="text-[11px] text-blue-600 hover:underline">
                               View profile
                             </Link>
                           </div>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        <td className="px-4 py-4 text-sm text-gray-500 align-top">
                           <div className="flex items-center gap-2">
                             <input
                               type="number"
-                              className="w-20 px-2 py-1 text-xs font-bold border rounded bg-gray-50 focus:bg-white focus:outline-none focus:border-blue-500"
+                              className="w-16 px-2 py-1 text-xs font-bold border rounded bg-gray-50 focus:bg-white focus:outline-none focus:border-blue-500"
                               value={editingElo[player.id] !== undefined ? editingElo[player.id] : player.elo}
                               onChange={(e) => handleEloChange(player.id, e.target.value)}
                             />
@@ -565,7 +565,7 @@ export default function CommunityAdminPage() {
                             )}
                           </div>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
+                        <td className="px-4 py-4 align-top">
                           {player.isClaimed ? (
                             <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800">
                               Claimed
@@ -576,7 +576,7 @@ export default function CommunityAdminPage() {
                             </span>
                           )}
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
+                        <td className="px-4 py-4 align-top">
                           <span
                             className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
                               player.isActive ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"
@@ -585,10 +585,10 @@ export default function CommunityAdminPage() {
                             {player.isActive ? "Active" : "Inactive"}
                           </span>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-xs font-bold text-gray-700">
+                        <td className="px-4 py-4 text-xs font-bold text-gray-700 align-top">
                           {player.role}
                         </td>
-                        <td className="px-6 pr-8 py-4 min-w-[130px] whitespace-nowrap text-right text-sm font-medium">
+                        <td className="px-4 py-4 text-right text-sm font-medium align-top">
                           <div className="flex justify-end gap-3">
                             <button
                               onClick={() => handleRemovePlayer(player.id, player.name)}
