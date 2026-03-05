@@ -1,17 +1,17 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #2f2418;
+  --background: #f8fafc;
+  --foreground: #111827;
   --court-surface: #ffffff;
-  --court-panel: #ffffff;
-  --court-line: #e5cfb2;
-  --court-ink: #2f2418;
-  --court-muted: #7c674f;
-  --court-accent: #c56a1f;
-  --court-accent-strong: #a75316;
-  --court-accent-soft: #f3c997;
-  --court-accent-faint: #fff0db;
+  --court-panel: #f8fafc;
+  --court-line: #cbd5e1;
+  --court-ink: #111827;
+  --court-muted: #64748b;
+  --court-accent: #0ea5e9;
+  --court-accent-strong: #0284c7;
+  --court-accent-soft: #e0f2fe;
+  --court-accent-faint: #f0f9ff;
 }
 
 @theme inline {
@@ -27,66 +27,66 @@ body {
   font-family: var(--font-geist-sans), "Segoe UI", Tahoma, sans-serif;
 }
 
-/* Court Heat theme mapping for existing utility classes */
+/* Slate Sport theme mapping for existing utility classes */
 .bg-white { background-color: var(--court-surface) !important; }
 .bg-gray-50,
 .bg-gray-50\/50,
 .bg-gray-50\/80 { background-color: var(--court-panel) !important; }
-.bg-gray-100 { background-color: #f0e2cd !important; }
-.bg-gray-200 { background-color: #e9d5bb !important; }
+.bg-gray-100 { background-color: #e2e8f0 !important; }
+.bg-gray-200 { background-color: #cbd5e1 !important; }
 
 .text-gray-900 { color: var(--court-ink) !important; }
-.text-gray-800 { color: #3f2f21 !important; }
-.text-gray-700 { color: #554230 !important; }
-.text-gray-600 { color: #6a543f !important; }
+.text-gray-800 { color: #1f2937 !important; }
+.text-gray-700 { color: #334155 !important; }
+.text-gray-600 { color: #475569 !important; }
 .text-gray-500 { color: var(--court-muted) !important; }
-.text-gray-400 { color: #9a846e !important; }
-.text-gray-300 { color: #b59f88 !important; }
+.text-gray-400 { color: #94a3b8 !important; }
+.text-gray-300 { color: #cbd5e1 !important; }
 
-.border-gray-50 { border-color: #f2e4d1 !important; }
+.border-gray-50 { border-color: #f1f5f9 !important; }
 .border-gray-100 { border-color: var(--court-line) !important; }
-.border-gray-200 { border-color: #d9c2a5 !important; }
-.border-gray-300 { border-color: #ceb697 !important; }
+.border-gray-200 { border-color: #cbd5e1 !important; }
+.border-gray-300 { border-color: #94a3b8 !important; }
 
 .bg-blue-600 { background-color: var(--court-accent) !important; }
 .bg-blue-700 { background-color: var(--court-accent-strong) !important; }
 .bg-blue-100 { background-color: var(--court-accent-soft) !important; }
 .bg-blue-50 { background-color: var(--court-accent-faint) !important; }
-.bg-blue-500\/50 { background-color: rgb(197 106 31 / 50%) !important; }
-.bg-blue-500\/30 { background-color: rgb(197 106 31 / 30%) !important; }
-.bg-blue-700\/30 { background-color: rgb(167 83 22 / 30%) !important; }
+.bg-blue-500\/50 { background-color: rgb(14 165 233 / 50%) !important; }
+.bg-blue-500\/30 { background-color: rgb(14 165 233 / 30%) !important; }
+.bg-blue-700\/30 { background-color: rgb(2 132 199 / 30%) !important; }
 
 .text-blue-700 { color: var(--court-accent-strong) !important; }
 .text-blue-600 { color: var(--court-accent) !important; }
-.text-blue-500 { color: #d07428 !important; }
-.placeholder\:text-blue-200::placeholder { color: #f8d9af !important; }
+.text-blue-500 { color: #0ea5e9 !important; }
+.placeholder\:text-blue-200::placeholder { color: #bae6fd !important; }
 
-.border-blue-100 { border-color: #efcba0 !important; }
-.border-blue-200 { border-color: #e8bd89 !important; }
-.border-blue-300 { border-color: #dfa96f !important; }
-.border-blue-400\/30 { border-color: rgb(205 128 56 / 30%) !important; }
+.border-blue-100 { border-color: #bae6fd !important; }
+.border-blue-200 { border-color: #7dd3fc !important; }
+.border-blue-300 { border-color: #38bdf8 !important; }
+.border-blue-400\/30 { border-color: rgb(56 189 248 / 30%) !important; }
 .border-blue-500 { border-color: var(--court-accent) !important; }
 
 .focus\:border-blue-500:focus { border-color: var(--court-accent) !important; }
-.focus\:ring-blue-500:focus { --tw-ring-color: rgb(197 106 31 / 45%) !important; }
+.focus\:ring-blue-500:focus { --tw-ring-color: rgb(14 165 233 / 45%) !important; }
 
 .hover\:text-blue-600:hover { color: var(--court-accent) !important; }
-.hover\:border-blue-300:hover { border-color: #dfa96f !important; }
-.hover\:border-blue-400:hover { border-color: #d89857 !important; }
+.hover\:border-blue-300:hover { border-color: #38bdf8 !important; }
+.hover\:border-blue-400:hover { border-color: #0ea5e9 !important; }
 .hover\:border-blue-500:hover { border-color: var(--court-accent) !important; }
 .hover\:bg-blue-50:hover { background-color: var(--court-accent-faint) !important; }
 
-.shadow-blue-100 { --tw-shadow-color: rgb(197 106 31 / 20%) !important; }
-.shadow-blue-200 { --tw-shadow-color: rgb(197 106 31 / 25%) !important; }
+.shadow-blue-100 { --tw-shadow-color: rgb(14 165 233 / 18%) !important; }
+.shadow-blue-200 { --tw-shadow-color: rgb(14 165 233 / 22%) !important; }
 
-/* Keep ELO color family aligned with the same warm accent direction */
-.bg-purple-600 { background-color: #a65a1c !important; }
-.bg-purple-100 { background-color: #f2cb9d !important; }
-.text-purple-800 { color: #6d3711 !important; }
-.text-purple-700 { color: #7f4215 !important; }
-.text-purple-600 { color: #a65a1c !important; }
+/* Keep ELO color family aligned with a cool complementary accent */
+.bg-purple-600 { background-color: #7c3aed !important; }
+.bg-purple-100 { background-color: #ede9fe !important; }
+.text-purple-800 { color: #5b21b6 !important; }
+.text-purple-700 { color: #6d28d9 !important; }
+.text-purple-600 { color: #7c3aed !important; }
 
 .selection\:bg-blue-100::selection,
 .selection\:bg-purple-100::selection {
-  background-color: #f1c88f;
+  background-color: #e0f2fe;
 }

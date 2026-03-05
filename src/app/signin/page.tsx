@@ -41,11 +41,11 @@ function SigninForm() {
 
   return (
     <div className="min-h-screen flex items-center justify-center px-4 py-10 bg-white">
-      <div className="max-w-lg w-full bg-white rounded-3xl shadow-xl border border-[#e5cfb2] overflow-hidden">
-        <div className="px-8 py-6 bg-[#c56a1f] text-white">
+      <div className="max-w-lg w-full bg-white rounded-3xl shadow-xl border border-gray-200 overflow-hidden">
+        <div className="px-8 py-6 bg-blue-600 text-white">
           <p className="text-[10px] font-black uppercase tracking-[0.22em]">Court Heat</p>
           <h1 className="text-2xl font-black mt-1">Sign In</h1>
-          <p className="text-xs text-orange-100 mt-1">Continue to your tournament dashboard.</p>
+          <p className="text-xs text-blue-100 mt-1">Continue to your tournament dashboard.</p>
         </div>
 
         <div className="p-8">
@@ -64,23 +64,23 @@ function SigninForm() {
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="block text-xs font-black uppercase tracking-wider text-[#6a543f]">Email</label>
+              <label className="block text-xs font-black uppercase tracking-wider text-gray-600">Email</label>
               <input
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="mt-1 block w-full px-3 py-2.5 border border-[#ceb697] rounded-xl shadow-sm bg-[#fff3e1] focus:outline-none focus:ring-[#c56a1f] focus:border-[#c56a1f]"
+                className="mt-1 block w-full px-3 py-2.5 border border-gray-300 rounded-xl shadow-sm bg-gray-50 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                 required
               />
             </div>
 
             <div>
-              <label className="block text-xs font-black uppercase tracking-wider text-[#6a543f]">Password</label>
+              <label className="block text-xs font-black uppercase tracking-wider text-gray-600">Password</label>
               <input
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="mt-1 block w-full px-3 py-2.5 border border-[#ceb697] rounded-xl shadow-sm bg-[#fff3e1] focus:outline-none focus:ring-[#c56a1f] focus:border-[#c56a1f]"
+                className="mt-1 block w-full px-3 py-2.5 border border-gray-300 rounded-xl shadow-sm bg-gray-50 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                 required
               />
             </div>
@@ -88,15 +88,15 @@ function SigninForm() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-[#c56a1f] text-white py-2.5 px-4 rounded-xl hover:bg-[#a75316] disabled:opacity-50 font-black uppercase tracking-wider text-sm"
+              className="w-full bg-blue-600 text-white py-2.5 px-4 rounded-xl hover:bg-blue-700 disabled:opacity-50 font-black uppercase tracking-wider text-sm"
             >
               {loading ? "Signing in..." : "Sign In"}
             </button>
           </form>
 
-          <p className="mt-4 text-center text-sm text-[#6a543f]">
+          <p className="mt-4 text-center text-sm text-gray-600">
             Don&apos;t have an account?{" "}
-            <Link href="/signup" className="text-[#c56a1f] font-bold hover:underline">
+            <Link href="/signup" className="text-blue-600 font-bold hover:underline">
               Sign Up
             </Link>
           </p>
@@ -108,8 +108,9 @@ function SigninForm() {
 
 export default function SigninPage() {
   return (
-    <Suspense fallback={<div className="min-h-screen flex items-center justify-center font-bold text-xl text-[#6a543f]">Loading Sign In...</div>}>
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center font-bold text-xl text-gray-600">Loading Sign In...</div>}>
       <SigninForm />
     </Suspense>
   );
 }
+
