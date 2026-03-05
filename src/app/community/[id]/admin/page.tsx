@@ -45,6 +45,7 @@ export default function CommunityAdminPage() {
   const [editingElo, setEditingElo] = useState<Record<string, string>>({});
   const [savingElo, setSavingElo] = useState<Record<string, boolean>>({});
   const [resettingCommunity, setResettingCommunity] = useState(false);
+  const [deletingCommunity, setDeletingCommunity] = useState(false);
 
   const safeJson = async (res: Response) => {
     const text = await res.text();
@@ -278,6 +279,40 @@ export default function CommunityAdminPage() {
     }
   };
 
+  const handleDeleteCommunity = async () => {
+    const confirmation = prompt(
+      "This will permanently DELETE this community and all related data. Type 'DELETE' to confirm:"
+    );
+    if (confirmation !== "DELETE") {
+      if (confirmation !== null) {
+        alert("Delete cancelled. You must type DELETE exactly.");
+      }
+      return;
+    }
+
+    setError("");
+    setSuccess("");
+    setDeletingCommunity(true);
+
+    try {
+      const res = await fetch(`/api/communities/${communityId}`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ confirmation: "DELETE" }),
+      });
+      const data = await safeJson(res);
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to delete community");
+      }
+
+      router.push("/");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to delete community");
+    } finally {
+      setDeletingCommunity(false);
+    }
+  };
+
   if (status === "loading" || loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -300,10 +335,17 @@ export default function CommunityAdminPage() {
           <div className="flex items-center gap-4">
             <button
               onClick={handleResetCommunity}
-              disabled={resettingCommunity}
+              disabled={resettingCommunity || deletingCommunity}
               className="text-xs bg-red-50 text-red-600 border border-red-200 px-3 py-1 rounded hover:bg-red-600 hover:text-white transition-all font-bold disabled:opacity-60 disabled:cursor-not-allowed"
             >
               {resettingCommunity ? "Resetting..." : "Reset Community"}
+            </button>
+            <button
+              onClick={handleDeleteCommunity}
+              disabled={deletingCommunity || resettingCommunity}
+              className="text-xs bg-red-600 text-white border border-red-700 px-3 py-1 rounded hover:bg-red-700 transition-all font-bold disabled:opacity-60 disabled:cursor-not-allowed"
+            >
+              {deletingCommunity ? "Deleting..." : "Delete Community"}
             </button>
             <Link href={`/community/${communityId}`} className="text-sm text-blue-600 hover:underline">
               Back to Community

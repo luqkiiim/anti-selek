@@ -26,7 +26,7 @@ export async function POST(
       select: { role: true },
     });
 
-    if (requesterMembership?.role !== "ADMIN") {
+    if (requesterMembership?.role !== "ADMIN" && !session.user.isAdmin) {
       return NextResponse.json({ error: "Not authorized" }, { status: 403 });
     }
 

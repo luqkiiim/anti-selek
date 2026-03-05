@@ -4,7 +4,13 @@ import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
 
-async function requireCommunityAdmin(communityId: string, requesterId: string) {
+async function requireCommunityAdmin(
+  communityId: string,
+  requesterId: string,
+  isGlobalAdmin: boolean
+) {
+  if (isGlobalAdmin) return true;
+
   const membership = await prisma.communityMember.findUnique({
     where: {
       communityId_userId: {
@@ -29,7 +35,11 @@ export async function PATCH(
     }
 
     const { id: communityId, userId } = await params;
-    const canManage = await requireCommunityAdmin(communityId, session.user.id);
+    const canManage = await requireCommunityAdmin(
+      communityId,
+      session.user.id,
+      !!session.user.isAdmin
+    );
     if (!canManage) {
       return NextResponse.json({ error: "Not authorized" }, { status: 403 });
     }
@@ -156,7 +166,11 @@ export async function DELETE(
     }
 
     const { id: communityId, userId } = await params;
-    const canManage = await requireCommunityAdmin(communityId, session.user.id);
+    const canManage = await requireCommunityAdmin(
+      communityId,
+      session.user.id,
+      !!session.user.isAdmin
+    );
     if (!canManage) {
       return NextResponse.json({ error: "Not authorized" }, { status: 403 });
     }

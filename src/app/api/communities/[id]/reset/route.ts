@@ -26,7 +26,7 @@ export async function POST(
       select: { role: true },
     });
 
-    const canReset = membership?.role === "ADMIN";
+    const canReset = membership?.role === "ADMIN" || session.user.isAdmin;
     if (!canReset) {
       return NextResponse.json({ error: "Not authorized" }, { status: 403 });
     }

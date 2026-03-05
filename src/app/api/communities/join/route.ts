@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
+import { isGlobalAdminEmail } from "@/lib/globalAdmin";
 
 export const dynamic = "force-dynamic";
 
@@ -45,6 +46,8 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: "Invalid password" }, { status: 403 });
       }
     }
+    const shouldBeAdmin =
+      !!session.user.isAdmin || isGlobalAdminEmail(session.user.email ?? null);
 
     const membership = await prisma.communityMember.upsert({
       where: {
@@ -53,11 +56,11 @@ export async function POST(request: Request) {
           userId: session.user.id,
         },
       },
-      update: {},
+      update: shouldBeAdmin ? { role: "ADMIN" } : {},
       create: {
         communityId: community.id,
         userId: session.user.id,
-        role: "MEMBER",
+        role: shouldBeAdmin ? "ADMIN" : "MEMBER",
       },
       select: {
         role: true,

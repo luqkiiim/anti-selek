@@ -2,6 +2,7 @@ import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
+import { isGlobalAdminEmail, normalizeAuthEmail } from "@/lib/globalAdmin";
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   providers: [
@@ -16,8 +17,13 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           return null;
         }
 
+        const normalizedEmail = normalizeAuthEmail(credentials.email as string);
+        if (!normalizedEmail) {
+          return null;
+        }
+
         const user = await prisma.user.findUnique({
-          where: { email: credentials.email as string },
+          where: { email: normalizedEmail },
         });
 
         if (!user || !user.passwordHash) {
@@ -35,9 +41,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
         return {
           id: user.id,
-          email: user.email,
+          email: user.email ?? normalizedEmail,
           name: user.name,
-          isAdmin: false,
+          isAdmin: isGlobalAdminEmail(user.email ?? normalizedEmail),
         };
       },
     }),
@@ -51,15 +57,18 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         if (typeof user.email === "string") {
           token.email = user.email;
         }
+        token.isAdmin = !!user.isAdmin;
+      } else if (typeof token.email === "string") {
+        token.isAdmin = isGlobalAdminEmail(token.email);
       }
+      if (typeof token.isAdmin !== "boolean") token.isAdmin = false;
       return token;
     },
     async session({ session, token }) {
       if (session.user) {
         session.user.id = token.id as string;
         session.user.email = token.email as string;
-        // Admin authorization is community-scoped, not global.
-        session.user.isAdmin = false;
+        session.user.isAdmin = !!token.isAdmin;
       }
       return session;
     },

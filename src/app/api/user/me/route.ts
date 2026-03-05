@@ -1,13 +1,15 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { isGlobalAdminEmail } from "@/lib/globalAdmin";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
   const session = await auth();
 
-  if (!session?.user?.id) {    return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
 
   const user = await prisma.user.findUnique({
@@ -25,5 +27,10 @@ export async function GET() {
     return NextResponse.json({ error: "User not found" }, { status: 404 });
   }
 
-  return NextResponse.json({ user: { ...user, isAdmin: false } });
+  return NextResponse.json({
+    user: {
+      ...user,
+      isAdmin: !!session.user.isAdmin || isGlobalAdminEmail(user.email),
+    },
+  });
 }

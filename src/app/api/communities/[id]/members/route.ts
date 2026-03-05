@@ -129,7 +129,7 @@ export async function POST(
       select: { role: true },
     });
 
-    const canManage = requesterMembership?.role === "ADMIN";
+    const canManage = requesterMembership?.role === "ADMIN" || session.user.isAdmin;
     if (!canManage) {
       return NextResponse.json({ error: "Not authorized" }, { status: 403 });
     }

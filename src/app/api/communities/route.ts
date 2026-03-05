@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
+import { isGlobalAdminEmail } from "@/lib/globalAdmin";
 
 export const dynamic = "force-dynamic";
 
@@ -10,6 +11,18 @@ export async function GET() {
     const session = await auth();
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+    }
+    const isGlobalAdmin =
+      !!session.user.isAdmin || isGlobalAdminEmail(session.user.email ?? null);
+
+    if (isGlobalAdmin) {
+      await prisma.communityMember.updateMany({
+        where: {
+          userId: session.user.id,
+          NOT: { role: "ADMIN" },
+        },
+        data: { role: "ADMIN" },
+      });
     }
 
     const memberships = await prisma.communityMember.findMany({
@@ -37,7 +50,7 @@ export async function GET() {
       memberships.map((m) => ({
         id: m.community.id,
         name: m.community.name,
-        role: m.role,
+        role: isGlobalAdmin ? "ADMIN" : m.role,
         isPasswordProtected: m.community.isPasswordProtected,
         createdAt: m.community.createdAt,
         membersCount: m.community._count.members,
