@@ -468,7 +468,13 @@ export default function CommunityAdminPage() {
                       </div>
 
                       <div className="flex flex-wrap items-center gap-2">
-                        <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-200 text-gray-700">
+                        <span
+                          className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                            player.role === "ADMIN"
+                              ? "bg-purple-100 text-purple-800"
+                              : "bg-blue-100 text-blue-800"
+                          }`}
+                        >
                           {player.role}
                         </span>
                         {player.isClaimed ? (
@@ -506,12 +512,12 @@ export default function CommunityAdminPage() {
               <table className="w-full table-fixed divide-y divide-gray-100">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th className="w-[38%] px-4 py-3 text-left text-[10px] font-black text-gray-500 uppercase tracking-widest">Player</th>
-                    <th className="w-[16%] px-4 py-3 text-left text-[10px] font-black text-gray-500 uppercase tracking-widest">ELO</th>
-                    <th className="w-[12%] px-4 py-3 text-left text-[10px] font-black text-gray-500 uppercase tracking-widest">Claimed</th>
-                    <th className="w-[12%] px-4 py-3 text-left text-[10px] font-black text-gray-500 uppercase tracking-widest">Status</th>
-                    <th className="w-[10%] px-4 py-3 text-left text-[10px] font-black text-gray-500 uppercase tracking-widest">Role</th>
-                    <th className="w-[12%] px-4 py-3 text-right text-[10px] font-black text-gray-500 uppercase tracking-widest">Actions</th>
+                    <th className="w-[36%] px-4 py-3 text-left text-[10px] font-black text-gray-500 uppercase tracking-widest">Player</th>
+                    <th className="w-[22%] px-4 py-3 text-left text-[10px] font-black text-gray-500 uppercase tracking-widest">ELO</th>
+                    <th className="w-[11%] px-4 py-3 text-center text-[10px] font-black text-gray-500 uppercase tracking-widest">Claimed</th>
+                    <th className="w-[11%] px-4 py-3 text-center text-[10px] font-black text-gray-500 uppercase tracking-widest">Status</th>
+                    <th className="w-[10%] px-4 py-3 text-center text-[10px] font-black text-gray-500 uppercase tracking-widest">Role</th>
+                    <th className="w-[10%] px-4 py-3 text-center text-[10px] font-black text-gray-500 uppercase tracking-widest">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-100">
@@ -565,7 +571,7 @@ export default function CommunityAdminPage() {
                             )}
                           </div>
                         </td>
-                        <td className="px-4 py-4 align-top">
+                        <td className="px-4 py-4 align-top text-center">
                           {player.isClaimed ? (
                             <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800">
                               Claimed
@@ -576,7 +582,7 @@ export default function CommunityAdminPage() {
                             </span>
                           )}
                         </td>
-                        <td className="px-4 py-4 align-top">
+                        <td className="px-4 py-4 align-top text-center">
                           <span
                             className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
                               player.isActive ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"
@@ -585,14 +591,22 @@ export default function CommunityAdminPage() {
                             {player.isActive ? "Active" : "Inactive"}
                           </span>
                         </td>
-                        <td className="px-4 py-4 text-xs font-bold text-gray-700 align-top">
-                          {player.role}
+                        <td className="px-4 py-4 text-xs font-bold text-gray-700 align-top text-center">
+                          <span
+                            className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                              player.role === "ADMIN"
+                                ? "bg-purple-100 text-purple-800"
+                                : "bg-blue-100 text-blue-800"
+                            }`}
+                          >
+                            {player.role}
+                          </span>
                         </td>
-                        <td className="px-4 py-4 text-right text-sm font-medium align-top">
-                          <div className="flex justify-end gap-3">
+                        <td className="px-4 py-4 text-center text-sm font-medium align-top">
+                          <div className="flex justify-center gap-3">
                             <button
                               onClick={() => handleRemovePlayer(player.id, player.name)}
-                              className="text-red-600 hover:text-red-900 text-xs font-bold uppercase"
+                              className="inline-flex items-center px-2.5 py-1 rounded-full text-red-600 border border-red-200 bg-red-50 hover:bg-red-100 text-xs font-bold uppercase"
                             >
                               Remove
                             </button>
