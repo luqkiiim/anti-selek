@@ -96,6 +96,7 @@ export async function POST(
         players: {
           create: {
             userId: userIdToJoin,
+            isGuest: false,
             sessionPoints: 0,
             joinedAt: new Date(),
             availableSince: new Date(),

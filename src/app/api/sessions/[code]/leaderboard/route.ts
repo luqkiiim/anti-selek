@@ -82,6 +82,7 @@ export async function GET(
     .map((p) => ({
       userId: p.userId,
       name: p.user.name,
+      isGuest: p.isGuest,
       sessionPoints: p.sessionPoints,
       elo: getPlayerElo(p.userId, p.user.elo),
       matchesPlayed: matchCounts[p.userId] || 0,
@@ -93,6 +94,7 @@ export async function GET(
     .map((p) => ({
       userId: p.userId,
       name: p.user.name,
+      isGuest: p.isGuest,
       sessionPoints: p.sessionPoints,
       elo: getPlayerElo(p.userId, p.user.elo),
       matchesPlayed: matchCounts[p.userId] || 0,

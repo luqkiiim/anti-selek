@@ -10,6 +10,7 @@ interface Player {
   userId: string;
   sessionPoints: number;
   isPaused: boolean;
+  isGuest: boolean;
   user: {
     id: string;
     name: string;
@@ -85,6 +86,8 @@ export default function SessionPage() {
   const [rosterSearch, setRosterSearch] = useState("");
   const [communityPlayers, setCommunityPlayers] = useState<CommunityUser[]>([]);
   const [addingPlayerId, setAddingPlayerId] = useState<string | null>(null);
+  const [guestName, setGuestName] = useState("");
+  const [addingGuest, setAddingGuest] = useState(false);
 
   // Track scores per match locally
   const [matchScores, setMatchScores] = useState<Record<string, { team1: string; team2: string }>>({});
@@ -261,6 +264,35 @@ export default function SessionPage() {
     } catch (err) {
       console.error(err);
       setError("Network error generating match");
+    }
+  };
+
+  const addGuestToSession = async () => {
+    const name = guestName.trim();
+    if (!name) return;
+
+    setAddingGuest(true);
+    setError("");
+
+    try {
+      const res = await fetch(`/api/sessions/${code}/guests`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name }),
+      });
+      const data = await safeJson(res);
+      if (!res.ok) {
+        setError(data.error || "Failed to add guest");
+        return;
+      }
+
+      setGuestName("");
+      fetchSession();
+    } catch (err) {
+      console.error(err);
+      setError("Failed to add guest");
+    } finally {
+      setAddingGuest(false);
     }
   };
 
@@ -654,7 +686,7 @@ export default function SessionPage() {
                               <div className="flex items-center gap-2">
                                 <Link
                                   href={
-                                    sessionData.communityId
+                                    sessionData.communityId && !player.isGuest
                                       ? `/profile/${player.user.id}?communityId=${sessionData.communityId}`
                                       : `/profile/${player.user.id}`
                                   }
@@ -662,6 +694,11 @@ export default function SessionPage() {
                                 >
                                   {player.user.name}
                                   {isMe && <span className="ml-1 text-[8px] bg-[#f3c997] text-[#7f4215] px-1 rounded">ME</span>}
+                                  {player.isGuest && (
+                                    <span className="ml-1 text-[8px] bg-gray-200 text-gray-600 px-1 rounded uppercase tracking-wider">
+                                      Guest
+                                    </span>
+                                  )}
                                 </Link>
                                 {canToggle && (
                                   <button
@@ -720,6 +757,7 @@ export default function SessionPage() {
                 onClick={() => {
                   setShowRosterModal(false);
                   setRosterSearch("");
+                  setGuestName("");
                 }}
                 className="bg-gray-100 text-gray-400 hover:text-gray-600 w-8 h-8 rounded-full flex items-center justify-center text-xl font-bold"
               >
@@ -728,7 +766,25 @@ export default function SessionPage() {
             </div>
             
             {/* Search Bar */}
-            <div className="px-6 py-3 border-b bg-gray-50/50">
+            <div className="px-6 py-3 border-b bg-gray-50/50 space-y-3">
+              {isAdmin && (
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    placeholder="Guest name..."
+                    value={guestName}
+                    onChange={(e) => setGuestName(e.target.value)}
+                    className="flex-1 bg-white border-2 border-gray-100 rounded-xl px-4 py-2 text-sm font-bold focus:outline-none focus:border-[#c56a1f] transition-all"
+                  />
+                  <button
+                    onClick={addGuestToSession}
+                    disabled={addingGuest || !guestName.trim()}
+                    className="bg-[#3f2f21] text-white px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {addingGuest ? "Adding..." : "Add Guest"}
+                  </button>
+                </div>
+              )}
               <input
                 type="text"
                 placeholder="Search players..."
@@ -764,7 +820,11 @@ export default function SessionPage() {
             
             <div className="p-6 bg-white border-t sm:rounded-b-2xl">
               <button
-                onClick={() => setShowRosterModal(false)}
+                onClick={() => {
+                  setShowRosterModal(false);
+                  setRosterSearch("");
+                  setGuestName("");
+                }}
                 className="w-full bg-[#3f2f21] text-white py-4 rounded-2xl font-black uppercase tracking-widest text-sm shadow-lg active:scale-95 transition-all"
               >
                 Done

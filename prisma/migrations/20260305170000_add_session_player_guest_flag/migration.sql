@@ -1,0 +1,1 @@
+ALTER TABLE "SessionPlayer" ADD COLUMN "isGuest" BOOLEAN NOT NULL DEFAULT false;

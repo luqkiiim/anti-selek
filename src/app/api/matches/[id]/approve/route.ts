@@ -207,20 +207,46 @@ export async function POST(
 
         // Update ELO for all 4 players
         if (match.session.communityId) {
-          await tx.communityMember.updateMany({
-            where: {
-              communityId: match.session.communityId,
-              userId: { in: [match.team1User1Id, match.team1User2Id] },
-            },
-            data: { elo: { increment: team1EloChange } },
-          });
-          await tx.communityMember.updateMany({
-            where: {
-              communityId: match.session.communityId,
-              userId: { in: [match.team2User1Id, match.team2User2Id] },
-            },
-            data: { elo: { increment: team2EloChange } },
-          });
+          const team1Ids = [match.team1User1Id, match.team1User2Id];
+          const team2Ids = [match.team2User1Id, match.team2User2Id];
+
+          const team1CommunityMemberIds = team1Ids.filter((userId) => communityEloByUserId.has(userId));
+          const team2CommunityMemberIds = team2Ids.filter((userId) => communityEloByUserId.has(userId));
+          const team1GuestIds = team1Ids.filter((userId) => !communityEloByUserId.has(userId));
+          const team2GuestIds = team2Ids.filter((userId) => !communityEloByUserId.has(userId));
+
+          if (team1CommunityMemberIds.length > 0) {
+            await tx.communityMember.updateMany({
+              where: {
+                communityId: match.session.communityId,
+                userId: { in: team1CommunityMemberIds },
+              },
+              data: { elo: { increment: team1EloChange } },
+            });
+          }
+          if (team2CommunityMemberIds.length > 0) {
+            await tx.communityMember.updateMany({
+              where: {
+                communityId: match.session.communityId,
+                userId: { in: team2CommunityMemberIds },
+              },
+              data: { elo: { increment: team2EloChange } },
+            });
+          }
+
+          // Guests are session-scoped, but we still update their user ELO to keep in-session balancing sensible.
+          if (team1GuestIds.length > 0) {
+            await tx.user.updateMany({
+              where: { id: { in: team1GuestIds } },
+              data: { elo: { increment: team1EloChange } },
+            });
+          }
+          if (team2GuestIds.length > 0) {
+            await tx.user.updateMany({
+              where: { id: { in: team2GuestIds } },
+              data: { elo: { increment: team2EloChange } },
+            });
+          }
         } else {
           await tx.user.update({
             where: { id: match.team1User1Id },

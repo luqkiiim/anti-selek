@@ -106,6 +106,7 @@ export async function POST(request: Request) {
         players: {
           create: uniquePlayerIds.map((pid) => ({
             userId: pid,
+            isGuest: false,
             sessionPoints: 0,
           })),
         },
