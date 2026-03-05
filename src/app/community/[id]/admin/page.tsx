@@ -411,7 +411,7 @@ export default function CommunityAdminPage() {
               <span className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">{players.length} total</span>
             </div>
             <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-100">
+              <table className="min-w-[980px] divide-y divide-gray-100">
                 <thead className="bg-gray-50">
                   <tr>
                     <th className="px-6 py-3 text-left text-[10px] font-black text-gray-500 uppercase tracking-widest">Player</th>
@@ -419,7 +419,7 @@ export default function CommunityAdminPage() {
                     <th className="px-6 py-3 text-left text-[10px] font-black text-gray-500 uppercase tracking-widest">Claimed</th>
                     <th className="px-6 py-3 text-left text-[10px] font-black text-gray-500 uppercase tracking-widest">Status</th>
                     <th className="px-6 py-3 text-left text-[10px] font-black text-gray-500 uppercase tracking-widest">Role</th>
-                    <th className="px-6 py-3 text-right text-[10px] font-black text-gray-500 uppercase tracking-widest">Actions</th>
+                    <th className="px-6 pr-8 py-3 w-[130px] min-w-[130px] text-right text-[10px] font-black text-gray-500 uppercase tracking-widest">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-100">
@@ -496,7 +496,7 @@ export default function CommunityAdminPage() {
                         <td className="px-6 py-4 whitespace-nowrap text-xs font-bold text-gray-700">
                           {player.role}
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                        <td className="px-6 pr-8 py-4 min-w-[130px] whitespace-nowrap text-right text-sm font-medium">
                           <div className="flex justify-end gap-3">
                             <button
                               onClick={() => handleRemovePlayer(player.id, player.name)}
