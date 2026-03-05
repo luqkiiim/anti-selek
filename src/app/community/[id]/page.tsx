@@ -358,7 +358,7 @@ export default function CommunityPage() {
           </>
         )}
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
           <div className="bg-white p-6 rounded-3xl shadow-md border border-gray-100 space-y-4">
             <h3 className="text-sm font-black text-gray-900 uppercase tracking-widest">Leaderboard</h3>
             <div className="space-y-2">

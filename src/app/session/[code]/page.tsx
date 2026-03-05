@@ -393,9 +393,11 @@ export default function SessionPage() {
     <div className="min-h-screen bg-white flex flex-col">
       {/* Mobile-Friendly Header */}
       <nav className="bg-white/95 backdrop-blur shadow-sm sticky top-0 z-30 border-b border-[#e5cfb2]">
-        <div className="max-w-7xl mx-auto px-4 py-3 flex justify-between items-center">
+        <div className="max-w-7xl mx-auto px-4 py-3 flex flex-wrap gap-3 justify-between items-center">
           <div className="flex flex-col">
-            <h1 className="text-lg font-black text-gray-900 leading-tight truncate max-w-[200px]">{sessionData.name}</h1>
+            <h1 className="text-lg font-black text-gray-900 leading-tight truncate max-w-[160px] sm:max-w-[260px] md:max-w-[360px]">
+              {sessionData.name}
+            </h1>
             <div className="flex items-center gap-2">
               <span className="text-[10px] font-black bg-[#f3c997] text-[#7f4215] border border-[#dfb987] px-2 py-0.5 rounded uppercase tracking-wider">{sessionData.code}</span>
               <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{sessionData.status}</span>
@@ -450,7 +452,7 @@ export default function SessionPage() {
         )}
 
         {/* Courts Grid - Stacked on Mobile, Grid on Tablet/Desktop */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
+        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4 mb-8">
           {sessionData.courts
             .sort((a, b) => a.courtNumber - b.courtNumber)
             .map((court) => {
@@ -612,7 +614,7 @@ export default function SessionPage() {
             </div>
             
             <div className="overflow-x-auto">
-              <table className="min-w-full">
+              <table className="min-w-[680px] w-full">
                 <thead className="bg-gray-50/50 border-b border-gray-100">
                   <tr>
                     <th className="px-4 py-3 text-left text-[10px] font-black text-gray-400 uppercase tracking-widest">#</th>
@@ -708,7 +710,7 @@ export default function SessionPage() {
       {/* Mobile-Friendly Roster Modal */}
       {showRosterModal && (
         <div className="fixed inset-0 bg-[#2f2418]/70 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4 z-50">
-          <div className="bg-white rounded-t-3xl sm:rounded-2xl shadow-2xl max-w-md w-full max-h-[90vh] flex flex-col animate-in slide-in-from-bottom duration-300">
+          <div className="bg-white rounded-t-3xl sm:rounded-2xl shadow-2xl max-w-lg w-full max-h-[90vh] flex flex-col animate-in slide-in-from-bottom duration-300">
             <div className="p-6 border-b flex justify-between items-center">
               <div>
                 <h2 className="text-xl font-black text-gray-900">Add Players</h2>

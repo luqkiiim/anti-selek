@@ -166,7 +166,7 @@ export default function Home() {
         </div>
       </div>
 
-      <div className="max-w-md mx-auto px-6 pt-8 space-y-8">
+      <div className="max-w-2xl mx-auto px-6 pt-8 space-y-8">
         <div className="bg-white p-6 rounded-3xl shadow-md border border-gray-100 space-y-4">
           <div className="flex items-center justify-between gap-3">
             <h3 className="text-sm font-black text-gray-900 uppercase tracking-widest">Communities</h3>
@@ -228,7 +228,7 @@ export default function Home() {
       {isCreateCommunityOpen && (
         <div className="fixed inset-0 z-40 flex items-center justify-center p-6">
           <div className="absolute inset-0 bg-black/40" onClick={() => setIsCreateCommunityOpen(false)}></div>
-          <div className="relative w-full max-w-md bg-white rounded-3xl shadow-2xl border border-gray-100 p-6 space-y-3">
+          <div className="relative w-full max-w-lg bg-white rounded-3xl shadow-2xl border border-gray-100 p-6 space-y-3">
             <h3 className="text-sm font-black text-gray-900 uppercase tracking-widest">Create Community</h3>
             <input
               type="text"
@@ -266,7 +266,7 @@ export default function Home() {
       {isJoinCommunityOpen && (
         <div className="fixed inset-0 z-40 flex items-center justify-center p-6">
           <div className="absolute inset-0 bg-black/40" onClick={() => setIsJoinCommunityOpen(false)}></div>
-          <div className="relative w-full max-w-md bg-white rounded-3xl shadow-2xl border border-gray-100 p-6 space-y-3">
+          <div className="relative w-full max-w-lg bg-white rounded-3xl shadow-2xl border border-gray-100 p-6 space-y-3">
             <h3 className="text-sm font-black text-gray-900 uppercase tracking-widest">Join Community</h3>
             <input
               type="text"

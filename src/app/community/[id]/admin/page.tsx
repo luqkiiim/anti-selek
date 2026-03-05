@@ -367,7 +367,7 @@ export default function CommunityAdminPage() {
           </div>
         )}
 
-        <div className="grid grid-cols-1 xl:grid-cols-3 gap-8 items-start">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
           <div className="bg-white p-6 rounded-3xl shadow-md border border-gray-100 space-y-4">
             <h3 className="text-sm font-black text-gray-900 uppercase tracking-widest">Create Player Profile</h3>
             <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">
@@ -405,12 +405,104 @@ export default function CommunityAdminPage() {
             </form>
           </div>
 
-          <div className="xl:col-span-2 bg-white rounded-3xl shadow-md border border-gray-100 overflow-hidden">
+          <div className="lg:col-span-2 bg-white rounded-3xl shadow-md border border-gray-100 overflow-hidden">
             <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center">
               <h3 className="text-sm font-black text-gray-900 uppercase tracking-widest">Community Players</h3>
               <span className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">{players.length} total</span>
             </div>
-            <div className="overflow-x-auto">
+
+            <div className="xl:hidden p-4 space-y-3">
+              {players.length === 0 ? (
+                <div className="px-4 py-8 text-center text-gray-500 italic">No players in the community yet.</div>
+              ) : (
+                players
+                  .slice()
+                  .sort((a, b) => b.elo - a.elo || a.name.localeCompare(b.name))
+                  .map((player) => (
+                    <div key={player.id} className="rounded-2xl border border-gray-100 bg-gray-50 p-4 space-y-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0 flex-1 space-y-2">
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="text"
+                              className="w-full px-2 py-1 text-sm font-bold border rounded bg-white focus:outline-none focus:border-blue-500"
+                              value={editingName[player.id] !== undefined ? editingName[player.id] : player.name}
+                              onChange={(e) => handleNameChange(player.id, e.target.value)}
+                            />
+                            {editingName[player.id] !== undefined &&
+                              editingName[player.id].trim() !== player.name && (
+                                <button
+                                  onClick={() => handleUpdateName(player.id, player.name)}
+                                  disabled={savingName[player.id]}
+                                  className="text-[10px] bg-blue-600 text-white px-2 py-1 rounded font-black uppercase tracking-tighter hover:bg-blue-700 disabled:opacity-50"
+                                >
+                                  {savingName[player.id] ? "..." : "Save"}
+                                </button>
+                              )}
+                          </div>
+                          <p className="text-xs text-gray-500 truncate">{player.email || "No email"}</p>
+                          <Link href={`/profile/${player.id}?communityId=${communityId}`} className="text-[11px] text-blue-600 hover:underline">
+                            View profile
+                          </Link>
+                        </div>
+                        <div className="shrink-0 space-y-2 text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            <input
+                              type="number"
+                              className="w-20 px-2 py-1 text-xs font-bold border rounded bg-white focus:outline-none focus:border-blue-500"
+                              value={editingElo[player.id] !== undefined ? editingElo[player.id] : player.elo}
+                              onChange={(e) => handleEloChange(player.id, e.target.value)}
+                            />
+                            {editingElo[player.id] !== undefined && (
+                              <button
+                                onClick={() => handleUpdateElo(player.id, player.name)}
+                                disabled={savingElo[player.id]}
+                                className="text-[10px] bg-blue-600 text-white px-2 py-1 rounded font-black uppercase tracking-tighter hover:bg-blue-700 disabled:opacity-50"
+                              >
+                                {savingElo[player.id] ? "..." : "Save"}
+                              </button>
+                            )}
+                          </div>
+                          <p className="text-xs font-black text-gray-700">ELO {player.elo}</p>
+                        </div>
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-200 text-gray-700">
+                          {player.role}
+                        </span>
+                        {player.isClaimed ? (
+                          <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800">
+                            Claimed
+                          </span>
+                        ) : (
+                          <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-yellow-100 text-yellow-800">
+                            Unclaimed
+                          </span>
+                        )}
+                        <span
+                          className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                            player.isActive ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"
+                          }`}
+                        >
+                          {player.isActive ? "Active" : "Inactive"}
+                        </span>
+                      </div>
+
+                      <div className="pt-1">
+                        <button
+                          onClick={() => handleRemovePlayer(player.id, player.name)}
+                          className="w-full text-center text-red-600 border border-red-200 bg-red-50 hover:bg-red-100 py-2 rounded-xl text-xs font-black uppercase"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    </div>
+                  ))
+              )}
+            </div>
+
+            <div className="hidden xl:block overflow-x-auto">
               <table className="min-w-[980px] divide-y divide-gray-100">
                 <thead className="bg-gray-50">
                   <tr>
