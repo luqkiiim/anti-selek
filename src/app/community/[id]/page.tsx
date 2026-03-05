@@ -57,6 +57,8 @@ export default function CommunityPage() {
   const [sessionType, setSessionType] = useState<SessionType>(SessionType.POINTS);
   const [courtCount, setCourtCount] = useState(3);
   const [selectedPlayerIds, setSelectedPlayerIds] = useState<string[]>([]);
+  const [guestNameInput, setGuestNameInput] = useState("");
+  const [guestNames, setGuestNames] = useState<string[]>([]);
 
   const [loading, setLoading] = useState(true);
   const [creatingSession, setCreatingSession] = useState(false);
@@ -95,6 +97,8 @@ export default function CommunityPage() {
 
   useEffect(() => {
     setSelectedPlayerIds([]);
+    setGuestNames([]);
+    setGuestNameInput("");
   }, [communityId]);
 
   useEffect(() => {
@@ -166,6 +170,7 @@ export default function CommunityPage() {
           courtCount,
           communityId,
           playerIds: selectedPlayerIds,
+          guestNames,
         }),
       });
       const data = await safeJson(res);
@@ -176,6 +181,8 @@ export default function CommunityPage() {
 
       setNewSessionName("");
       setSelectedPlayerIds([]);
+      setGuestNames([]);
+      setGuestNameInput("");
       setCourtCount(3);
       router.push(`/session/${data.code}`);
     } catch (err: unknown) {
@@ -204,6 +211,21 @@ export default function CommunityPage() {
     setSelectedPlayerIds((prev) =>
       prev.includes(playerId) ? prev.filter((id) => id !== playerId) : [...prev, playerId]
     );
+  };
+
+  const addGuestName = () => {
+    const trimmed = guestNameInput.trim();
+    if (!trimmed) return;
+    if (guestNames.some((name) => name.toLowerCase() === trimmed.toLowerCase())) {
+      setGuestNameInput("");
+      return;
+    }
+    setGuestNames((prev) => [...prev, trimmed]);
+    setGuestNameInput("");
+  };
+
+  const removeGuestName = (nameToRemove: string) => {
+    setGuestNames((prev) => prev.filter((name) => name !== nameToRemove));
   };
 
   if (status === "loading" || loading) {
@@ -344,6 +366,48 @@ export default function CommunityPage() {
                         </button>
                       ))}
                   </div>
+                </div>
+
+                <div className="space-y-2">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-blue-100">Session Guests</p>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={guestNameInput}
+                      onChange={(e) => setGuestNameInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          addGuestName();
+                        }
+                      }}
+                      placeholder="Guest name"
+                      className="w-full bg-blue-500/50 border-2 border-blue-400/30 rounded-2xl px-4 py-3 placeholder:text-blue-200 font-bold focus:outline-none focus:border-white transition-all"
+                    />
+                    <button
+                      type="button"
+                      onClick={addGuestName}
+                      disabled={!guestNameInput.trim()}
+                      className="bg-white text-blue-600 px-4 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      Add
+                    </button>
+                  </div>
+                  {guestNames.length > 0 && (
+                    <div className="flex flex-wrap gap-2">
+                      {guestNames.map((guestName) => (
+                        <button
+                          key={guestName}
+                          type="button"
+                          onClick={() => removeGuestName(guestName)}
+                          className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-wider bg-white/20 px-2.5 py-1.5 rounded-lg hover:bg-white/30 transition-all"
+                        >
+                          {guestName}
+                          <span>x</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 <button

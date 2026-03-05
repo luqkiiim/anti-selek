@@ -22,10 +22,11 @@ export async function POST(request: Request) {
     if (!body || typeof body !== "object") {
       return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
     }
-    const { name, type = SessionType.POINTS, playerIds = [], communityId, courtCount = 3 } = body as {
+    const { name, type = SessionType.POINTS, playerIds = [], guestNames = [], communityId, courtCount = 3 } = body as {
       name?: unknown;
       type?: SessionType;
       playerIds?: unknown;
+      guestNames?: unknown;
       communityId?: unknown;
       courtCount?: unknown;
     };
@@ -70,6 +71,20 @@ export async function POST(request: Request) {
     const requestedPlayerIds = Array.isArray(playerIds)
       ? playerIds.filter((id): id is string => typeof id === "string")
       : [];
+    const requestedGuestNames = Array.isArray(guestNames)
+      ? guestNames.filter((guestName): guestName is string => typeof guestName === "string")
+      : [];
+
+    const guestNameByLower = new Map<string, string>();
+    for (const guestName of requestedGuestNames) {
+      const trimmed = guestName.trim();
+      if (trimmed.length < 2) continue;
+      const key = trimmed.toLowerCase();
+      if (!guestNameByLower.has(key)) {
+        guestNameByLower.set(key, trimmed);
+      }
+    }
+    const normalizedGuestNames = Array.from(guestNameByLower.values());
 
     const memberRows = await prisma.communityMember.findMany({
       where: { communityId },
@@ -81,9 +96,9 @@ export async function POST(request: Request) {
       new Set([...requestedPlayerIds, session.user.id])
     ).filter((id) => memberSet.has(id));
 
-    if (uniquePlayerIds.length < 2) {
+    if (uniquePlayerIds.length + normalizedGuestNames.length < 2) {
       return NextResponse.json(
-        { error: "At least 2 community members are required to create a tournament" },
+        { error: "At least 2 total players (members and/or guests) are required to create a tournament" },
         { status: 400 }
       );
     }
@@ -91,33 +106,71 @@ export async function POST(request: Request) {
     console.log("Creating session with players:", uniquePlayerIds);
 
     const normalizedCourtCount = courtCount as number;
-    const newSession = await prisma.session.create({
+    const newSession = await prisma.$transaction(async (tx) => {
+      const createdSession = await tx.session.create({
         data: {
           code,
           communityId,
           name: name.trim(),
           type,
           status: SessionStatus.WAITING,
-        courts: {
-          create: Array.from({ length: normalizedCourtCount }, (_, i) => ({
-            courtNumber: i + 1,
-          })),
+          courts: {
+            create: Array.from({ length: normalizedCourtCount }, (_, i) => ({
+              courtNumber: i + 1,
+            })),
+          },
+          players: {
+            create: uniquePlayerIds.map((pid) => ({
+              userId: pid,
+              isGuest: false,
+              sessionPoints: 0,
+            })),
+          },
         },
-        players: {
-          create: uniquePlayerIds.map((pid) => ({
-            userId: pid,
-            isGuest: false,
+      });
+
+      if (normalizedGuestNames.length > 0) {
+        const createdGuests = await Promise.all(
+          normalizedGuestNames.map((guestName) =>
+            tx.user.create({
+              data: {
+                name: guestName,
+                email: null,
+                passwordHash: null,
+                isClaimed: false,
+                elo: 1000,
+              },
+              select: { id: true },
+            })
+          )
+        );
+
+        await tx.sessionPlayer.createMany({
+          data: createdGuests.map((guest) => ({
+            sessionId: createdSession.id,
+            userId: guest.id,
+            isGuest: true,
             sessionPoints: 0,
+            joinedAt: new Date(),
+            availableSince: new Date(),
           })),
+        });
+      }
+
+      return tx.session.findUnique({
+        where: { id: createdSession.id },
+        include: {
+          courts: true,
+          players: {
+            include: { user: { select: { id: true, name: true, email: true, elo: true } } },
+          },
         },
-      },
-      include: {
-        courts: true,
-        players: {
-          include: { user: { select: { id: true, name: true, email: true, elo: true } } },
-        },
-      },
+      });
     });
+
+    if (!newSession) {
+      return NextResponse.json({ error: "Failed to load created tournament" }, { status: 500 });
+    }
 
     const players =
       newSession.communityId && newSession.players.length > 0
