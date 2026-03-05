@@ -360,14 +360,14 @@ export default function CommunityAdminPage() {
         </div>
       </div>
 
-      <div className="max-w-6xl mx-auto px-6 pt-8 space-y-8">
+      <div className="max-w-7xl mx-auto px-6 pt-8 space-y-8">
         {success && (
           <div className="bg-green-100 border border-green-300 text-green-700 px-4 py-3 rounded-2xl text-sm font-semibold">
             {success}
           </div>
         )}
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
+        <div className="grid grid-cols-1 lg:grid-cols-[320px_minmax(0,1fr)] gap-8 items-start">
           <div className="bg-white p-6 rounded-3xl shadow-md border border-gray-100 space-y-4">
             <h3 className="text-sm font-black text-gray-900 uppercase tracking-widest">Create Player Profile</h3>
             <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">
@@ -405,7 +405,7 @@ export default function CommunityAdminPage() {
             </form>
           </div>
 
-          <div className="lg:col-span-2 bg-white rounded-3xl shadow-md border border-gray-100 overflow-hidden">
+          <div className="bg-white rounded-3xl shadow-md border border-gray-100 overflow-hidden">
             <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center">
               <h3 className="text-sm font-black text-gray-900 uppercase tracking-widest">Community Players</h3>
               <span className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">{players.length} total</span>
@@ -469,10 +469,10 @@ export default function CommunityAdminPage() {
 
                       <div className="flex flex-wrap items-center gap-2">
                         <span
-                          className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                          className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full border ${
                             player.role === "ADMIN"
-                              ? "bg-purple-100 text-purple-800"
-                              : "bg-blue-100 text-blue-800"
+                              ? "bg-[#ede9fe] text-[#5b21b6] border-[#ddd6fe]"
+                              : "bg-[#dbeafe] text-[#1e40af] border-[#bfdbfe]"
                           }`}
                         >
                           {player.role}
@@ -509,15 +509,15 @@ export default function CommunityAdminPage() {
             </div>
 
             <div className="hidden xl:block">
-              <table className="w-full table-fixed divide-y divide-gray-100">
+              <table className="w-full table-auto divide-y divide-gray-100">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th className="w-[36%] px-4 py-3 text-left text-[10px] font-black text-gray-500 uppercase tracking-widest">Player</th>
-                    <th className="w-[22%] px-4 py-3 text-left text-[10px] font-black text-gray-500 uppercase tracking-widest">ELO</th>
-                    <th className="w-[11%] px-4 py-3 text-center text-[10px] font-black text-gray-500 uppercase tracking-widest">Claimed</th>
-                    <th className="w-[11%] px-4 py-3 text-center text-[10px] font-black text-gray-500 uppercase tracking-widest">Status</th>
-                    <th className="w-[10%] px-4 py-3 text-center text-[10px] font-black text-gray-500 uppercase tracking-widest">Role</th>
-                    <th className="w-[10%] px-4 py-3 text-center text-[10px] font-black text-gray-500 uppercase tracking-widest">Actions</th>
+                    <th className="px-4 py-3 text-left text-[10px] font-black text-gray-500 uppercase tracking-widest">Player</th>
+                    <th className="px-4 py-3 text-left text-[10px] font-black text-gray-500 uppercase tracking-widest">ELO</th>
+                    <th className="px-4 py-3 text-center text-[10px] font-black text-gray-500 uppercase tracking-widest whitespace-nowrap">Claimed</th>
+                    <th className="px-4 py-3 text-center text-[10px] font-black text-gray-500 uppercase tracking-widest whitespace-nowrap">Status</th>
+                    <th className="px-4 py-3 text-center text-[10px] font-black text-gray-500 uppercase tracking-widest whitespace-nowrap">Role</th>
+                    <th className="px-4 py-3 text-center text-[10px] font-black text-gray-500 uppercase tracking-widest whitespace-nowrap">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-100">
@@ -531,7 +531,7 @@ export default function CommunityAdminPage() {
                             <div className="flex items-center gap-2">
                               <input
                                 type="text"
-                                className="w-full max-w-[220px] px-2 py-1 text-sm font-bold border rounded bg-gray-50 focus:bg-white focus:outline-none focus:border-blue-500"
+                                className="w-full max-w-[200px] px-2 py-1 text-sm font-bold border rounded bg-gray-50 focus:bg-white focus:outline-none focus:border-blue-500"
                                 value={editingName[player.id] !== undefined ? editingName[player.id] : player.name}
                                 onChange={(e) => handleNameChange(player.id, e.target.value)}
                               />
@@ -571,7 +571,7 @@ export default function CommunityAdminPage() {
                             )}
                           </div>
                         </td>
-                        <td className="px-4 py-4 align-top text-center">
+                        <td className="px-4 py-4 align-middle text-center">
                           {player.isClaimed ? (
                             <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800">
                               Claimed
@@ -582,7 +582,7 @@ export default function CommunityAdminPage() {
                             </span>
                           )}
                         </td>
-                        <td className="px-4 py-4 align-top text-center">
+                        <td className="px-4 py-4 align-middle text-center">
                           <span
                             className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
                               player.isActive ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"
@@ -591,18 +591,18 @@ export default function CommunityAdminPage() {
                             {player.isActive ? "Active" : "Inactive"}
                           </span>
                         </td>
-                        <td className="px-4 py-4 text-xs font-bold text-gray-700 align-top text-center">
+                        <td className="px-4 py-4 text-xs font-bold text-gray-700 align-middle text-center">
                           <span
-                            className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                            className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full border ${
                               player.role === "ADMIN"
-                                ? "bg-purple-100 text-purple-800"
-                                : "bg-blue-100 text-blue-800"
+                                ? "bg-[#ede9fe] text-[#5b21b6] border-[#ddd6fe]"
+                                : "bg-[#dbeafe] text-[#1e40af] border-[#bfdbfe]"
                             }`}
                           >
                             {player.role}
                           </span>
                         </td>
-                        <td className="px-4 py-4 text-center text-sm font-medium align-top">
+                        <td className="px-4 py-4 text-center text-sm font-medium align-middle">
                           <div className="flex justify-center gap-3">
                             <button
                               onClick={() => handleRemovePlayer(player.id, player.name)}
