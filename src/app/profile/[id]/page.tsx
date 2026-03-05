@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
-import { useRouter, useParams } from "next/navigation";
+import { useRouter, useParams, useSearchParams } from "next/navigation";
 
 interface UserStats {
   user: {
@@ -11,6 +11,9 @@ interface UserStats {
     elo: number;
     createdAt: string;
   };
+  context?: {
+    communityId: string;
+  } | null;
   stats: {
     totalMatches: number;
     wins: number;
@@ -35,7 +38,9 @@ export default function ProfilePage() {
   const { data: session, status } = useSession();
   const router = useRouter();
   const params = useParams();
+  const searchParams = useSearchParams();
   const id = params?.id as string;
+  const communityId = searchParams.get("communityId") || "";
 
   const [data, setData] = useState<UserStats | null>(null);
   const [loading, setLoading] = useState(true);
@@ -51,7 +56,8 @@ export default function ProfilePage() {
     const fetchData = async () => {
       if (!id) return;
       try {
-        const res = await fetch(`/api/users/${id}/stats`);
+        const query = communityId ? `?communityId=${encodeURIComponent(communityId)}` : "";
+        const res = await fetch(`/api/users/${id}/stats${query}`);
         if (!res.ok) throw new Error("Failed to load profile");
         const json = await res.json();
         setData(json);
@@ -66,7 +72,7 @@ export default function ProfilePage() {
     if (session?.user) {
       fetchData();
     }
-  }, [id, session]);
+  }, [id, session, communityId]);
 
   if (status === "loading" || loading) {
     return (
@@ -117,7 +123,7 @@ export default function ProfilePage() {
               <h2 className="text-2xl font-bold text-gray-900">{data.user.name}</h2>
               <p className="text-gray-500 text-sm">Joined {new Date(data.user.createdAt).toLocaleDateString()}</p>
               <div className="mt-2 inline-block bg-purple-100 text-purple-800 text-sm font-bold px-3 py-1 rounded-full">
-                ELO: {data.user.elo}
+                {data.context?.communityId ? "Community ELO" : "ELO"}: {data.user.elo}
               </div>
             </div>
           </div>

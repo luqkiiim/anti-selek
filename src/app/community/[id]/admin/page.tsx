@@ -416,7 +416,7 @@ export default function CommunityAdminPage() {
                                   )}
                               </div>
                               <div className="text-xs text-gray-500">{player.email || "No email"}</div>
-                              <Link href={`/profile/${player.id}`} className="text-[11px] text-blue-600 hover:underline">
+                              <Link href={`/profile/${player.id}?communityId=${communityId}`} className="text-[11px] text-blue-600 hover:underline">
                                 View profile
                               </Link>
                             </div>

@@ -650,7 +650,14 @@ export default function SessionPage() {
                           <td className="px-4 py-4 min-w-[140px]">
                             <div className="flex flex-col">
                               <div className="flex items-center gap-2">
-                                <Link href={`/profile/${player.user.id}`} className="font-bold text-gray-900 text-sm hover:text-blue-600 leading-tight">
+                                <Link
+                                  href={
+                                    sessionData.communityId
+                                      ? `/profile/${player.user.id}?communityId=${sessionData.communityId}`
+                                      : `/profile/${player.user.id}`
+                                  }
+                                  className="font-bold text-gray-900 text-sm hover:text-blue-600 leading-tight"
+                                >
                                   {player.user.name}
                                   {isMe && <span className="ml-1 text-[8px] bg-blue-100 text-blue-700 px-1 rounded">ME</span>}
                                 </Link>
