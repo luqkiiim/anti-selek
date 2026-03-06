@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { computeRollbackEloDeltas } from "@/lib/sessionLifecycle";
 import { MatchStatus, SessionStatus } from "@/types/enums";
 
 export const dynamic = "force-dynamic";
@@ -116,22 +117,10 @@ export async function POST(
         },
       });
 
-      const eloReverseDeltaByUserId = new Map<string, number>();
-      const applyReverseDelta = (userId: string, delta: number) => {
-        if (isGuestByUserId.get(userId) === true || delta === 0) return;
-        const previous = eloReverseDeltaByUserId.get(userId) ?? 0;
-        eloReverseDeltaByUserId.set(userId, previous + delta);
-      };
-
-      for (const match of completedMatches) {
-        const team1ReverseDelta = -(match.team1EloChange ?? 0);
-        const team2ReverseDelta = -(match.team2EloChange ?? 0);
-
-        applyReverseDelta(match.team1User1Id, team1ReverseDelta);
-        applyReverseDelta(match.team1User2Id, team1ReverseDelta);
-        applyReverseDelta(match.team2User1Id, team2ReverseDelta);
-        applyReverseDelta(match.team2User2Id, team2ReverseDelta);
-      }
+      const eloReverseDeltaByUserId = computeRollbackEloDeltas(
+        completedMatches,
+        isGuestByUserId
+      );
 
       for (const [userId, delta] of eloReverseDeltaByUserId.entries()) {
         if (delta === 0) continue;
