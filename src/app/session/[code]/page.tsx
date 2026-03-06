@@ -969,19 +969,11 @@ export default function SessionPage() {
                       key={player.id}
                       className="flex justify-between items-center p-4 bg-gray-50 rounded-2xl active:bg-gray-100 transition-colors"
                     >
-                      <div>
-                        <p className="font-black text-gray-900">{player.name}</p>
-                        <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">
-                          ELO: {player.elo}
-                        </p>
-                        {isMixicano && (
-                          <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">
-                            {player.gender} /{" "}
-                            {player.partnerPreference === PartnerPreference.FEMALE_FLEX
-                              ? "Female Flex"
-                              : "Open"}
-                          </p>
-                        )}
+                      <div className="flex items-center gap-2 min-w-0">
+                        <p className="font-black text-gray-900 truncate">{player.name}</p>
+                        <span className="text-[10px] text-gray-500 font-bold uppercase tracking-wider whitespace-nowrap">
+                          ELO {player.elo}
+                        </span>
                       </div>
                       <button
                         onClick={() => addPlayerToSession(player.id)}
