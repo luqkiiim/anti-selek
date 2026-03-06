@@ -38,6 +38,8 @@ export async function GET(
             id: true,
             name: true,
             email: true,
+            gender: true,
+            partnerPreference: true,
             isActive: true,
             isClaimed: true,
             createdAt: true,
@@ -92,6 +94,8 @@ export async function GET(
         id: m.user.id,
         name: m.user.name,
         email: m.user.email,
+        gender: m.user.gender,
+        partnerPreference: m.user.partnerPreference,
         elo: m.elo,
         isActive: m.user.isActive,
         isClaimed: m.user.isClaimed,
@@ -160,6 +164,8 @@ export async function POST(
       id: string;
       name: string;
       email: string | null;
+      gender: string;
+      partnerPreference: string;
       isActive: boolean;
       isClaimed: boolean;
       createdAt: Date;
@@ -167,7 +173,16 @@ export async function POST(
     if (normalizedEmail) {
       const existingUser = await prisma.user.findUnique({
         where: { email: normalizedEmail },
-        select: { id: true, name: true, email: true, isActive: true, isClaimed: true, createdAt: true },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          gender: true,
+          partnerPreference: true,
+          isActive: true,
+          isClaimed: true,
+          createdAt: true,
+        },
       });
 
       if (existingUser) {
@@ -181,14 +196,32 @@ export async function POST(
             passwordHash,
             isClaimed: !!passwordHash,
           },
-          select: { id: true, name: true, email: true, isActive: true, isClaimed: true, createdAt: true },
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            gender: true,
+            partnerPreference: true,
+            isActive: true,
+            isClaimed: true,
+            createdAt: true,
+          },
         });
       }
     } else {
       const existingUnclaimed = await prisma.user.findFirst({
         where: { name: normalizedName, isClaimed: false },
         orderBy: { createdAt: "asc" },
-        select: { id: true, name: true, email: true, isActive: true, isClaimed: true, createdAt: true },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          gender: true,
+          partnerPreference: true,
+          isActive: true,
+          isClaimed: true,
+          createdAt: true,
+        },
       });
 
       if (existingUnclaimed) {
@@ -201,7 +234,16 @@ export async function POST(
             passwordHash: null,
             isClaimed: false,
           },
-          select: { id: true, name: true, email: true, isActive: true, isClaimed: true, createdAt: true },
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            gender: true,
+            partnerPreference: true,
+            isActive: true,
+            isClaimed: true,
+            createdAt: true,
+          },
         });
       }
     }
@@ -229,6 +271,8 @@ export async function POST(
       id: user.id,
       name: user.name,
       email: user.email,
+      gender: user.gender,
+      partnerPreference: user.partnerPreference,
       elo: membership.elo,
       isActive: user.isActive,
       isClaimed: user.isClaimed,

@@ -2,7 +2,13 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getCommunityEloByUserId, withCommunityElo } from "@/lib/communityElo";
-import { SessionStatus, SessionType } from "@/types/enums";
+import {
+  PartnerPreference,
+  PlayerGender,
+  SessionMode,
+  SessionStatus,
+  SessionType,
+} from "@/types/enums";
 
 export const dynamic = "force-dynamic";
 
@@ -22,11 +28,24 @@ export async function POST(request: Request) {
     if (!body || typeof body !== "object") {
       return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
     }
-    const { name, type = SessionType.POINTS, playerIds = [], guestNames = [], communityId, courtCount = 3 } = body as {
+    const {
+      name,
+      type = SessionType.POINTS,
+      mode = SessionMode.MEXICANO,
+      playerIds = [],
+      guestNames = [],
+      playerConfigs = [],
+      guestConfigs = [],
+      communityId,
+      courtCount = 3,
+    } = body as {
       name?: unknown;
       type?: SessionType;
+      mode?: SessionMode;
       playerIds?: unknown;
       guestNames?: unknown;
+      playerConfigs?: unknown;
+      guestConfigs?: unknown;
       communityId?: unknown;
       courtCount?: unknown;
     };
@@ -39,6 +58,9 @@ export async function POST(request: Request) {
     }
     if (!Number.isInteger(courtCount) || (courtCount as number) < 1 || (courtCount as number) > 10) {
       return NextResponse.json({ error: "Court count must be an integer between 1 and 10" }, { status: 400 });
+    }
+    if (![SessionMode.MEXICANO, SessionMode.MIXICANO].includes(mode)) {
+      return NextResponse.json({ error: "Invalid session mode" }, { status: 400 });
     }
 
     const requesterMembership = await prisma.communityMember.findUnique({
@@ -71,20 +93,115 @@ export async function POST(request: Request) {
     const requestedPlayerIds = Array.isArray(playerIds)
       ? playerIds.filter((id): id is string => typeof id === "string")
       : [];
-    const requestedGuestNames = Array.isArray(guestNames)
-      ? guestNames.filter((guestName): guestName is string => typeof guestName === "string")
-      : [];
 
-    const guestNameByLower = new Map<string, string>();
-    for (const guestName of requestedGuestNames) {
-      const trimmed = guestName.trim();
-      if (trimmed.length < 2) continue;
-      const key = trimmed.toLowerCase();
-      if (!guestNameByLower.has(key)) {
-        guestNameByLower.set(key, trimmed);
+    const playerConfigMap = new Map<
+      string,
+      { gender?: PlayerGender; partnerPreference?: PartnerPreference }
+    >();
+    if (Array.isArray(playerConfigs)) {
+      for (const config of playerConfigs) {
+        if (typeof config !== "object" || config === null) continue;
+        const candidate = config as {
+          userId?: unknown;
+          gender?: unknown;
+          partnerPreference?: unknown;
+        };
+        if (typeof candidate.userId !== "string") continue;
+        const normalized: { gender?: PlayerGender; partnerPreference?: PartnerPreference } = {};
+        if (
+          typeof candidate.gender === "string" &&
+          [PlayerGender.MALE, PlayerGender.FEMALE, PlayerGender.UNSPECIFIED].includes(
+            candidate.gender as PlayerGender
+          )
+        ) {
+          normalized.gender = candidate.gender as PlayerGender;
+        }
+        if (
+          typeof candidate.partnerPreference === "string" &&
+          [PartnerPreference.OPEN, PartnerPreference.FEMALE_FLEX].includes(
+            candidate.partnerPreference as PartnerPreference
+          )
+        ) {
+          normalized.partnerPreference = candidate.partnerPreference as PartnerPreference;
+        }
+        playerConfigMap.set(candidate.userId, normalized);
       }
     }
-    const normalizedGuestNames = Array.from(guestNameByLower.values());
+
+    const normalizedGuestsByName = new Map<
+      string,
+      {
+        name: string;
+        gender: PlayerGender;
+        partnerPreference: PartnerPreference;
+        initialElo: number;
+      }
+    >();
+
+    const upsertGuest = (
+      guestName: string,
+      gender: PlayerGender = PlayerGender.UNSPECIFIED,
+      partnerPreference: PartnerPreference = PartnerPreference.OPEN,
+      initialElo = 1000
+    ) => {
+      const trimmed = guestName.trim();
+      if (trimmed.length < 2) return;
+      const key = trimmed.toLowerCase();
+      if (normalizedGuestsByName.has(key)) return;
+      normalizedGuestsByName.set(key, {
+        name: trimmed,
+        gender,
+        partnerPreference,
+        initialElo,
+      });
+    };
+
+    if (Array.isArray(guestNames)) {
+      for (const guestName of guestNames) {
+        if (typeof guestName === "string") {
+          upsertGuest(guestName);
+        }
+      }
+    }
+
+    if (Array.isArray(guestConfigs)) {
+      for (const guest of guestConfigs) {
+        if (typeof guest !== "object" || guest === null) continue;
+        const candidate = guest as {
+          name?: unknown;
+          gender?: unknown;
+          partnerPreference?: unknown;
+          initialElo?: unknown;
+        };
+        if (typeof candidate.name !== "string") continue;
+
+        const gender =
+          typeof candidate.gender === "string" &&
+          [PlayerGender.MALE, PlayerGender.FEMALE, PlayerGender.UNSPECIFIED].includes(
+            candidate.gender as PlayerGender
+          )
+            ? (candidate.gender as PlayerGender)
+            : PlayerGender.UNSPECIFIED;
+        const partnerPreference =
+          typeof candidate.partnerPreference === "string" &&
+          [PartnerPreference.OPEN, PartnerPreference.FEMALE_FLEX].includes(
+            candidate.partnerPreference as PartnerPreference
+          )
+            ? (candidate.partnerPreference as PartnerPreference)
+            : PartnerPreference.OPEN;
+        const initialElo =
+          typeof candidate.initialElo === "number" &&
+          Number.isInteger(candidate.initialElo) &&
+          candidate.initialElo >= 0 &&
+          candidate.initialElo <= 5000
+            ? candidate.initialElo
+            : 1000;
+
+        upsertGuest(candidate.name, gender, partnerPreference, initialElo);
+      }
+    }
+
+    const normalizedGuests = Array.from(normalizedGuestsByName.values());
 
     const memberRows = await prisma.communityMember.findMany({
       where: { communityId },
@@ -96,7 +213,7 @@ export async function POST(request: Request) {
       new Set([...requestedPlayerIds, session.user.id])
     ).filter((id) => memberSet.has(id));
 
-    if (uniquePlayerIds.length + normalizedGuestNames.length < 2) {
+    if (uniquePlayerIds.length + normalizedGuests.length < 2) {
       return NextResponse.json(
         { error: "At least 2 total players (members and/or guests) are required to create a tournament" },
         { status: 400 }
@@ -104,6 +221,55 @@ export async function POST(request: Request) {
     }
 
     console.log("Creating session with players:", uniquePlayerIds);
+
+    const selectedUsers = await prisma.user.findMany({
+      where: { id: { in: uniquePlayerIds } },
+      select: {
+        id: true,
+        name: true,
+        gender: true,
+        partnerPreference: true,
+      },
+    });
+    const selectedUserById = new Map(selectedUsers.map((u) => [u.id, u]));
+
+    const memberSessionConfigs = uniquePlayerIds.map((userId) => {
+      const selectedUser = selectedUserById.get(userId);
+      const override = playerConfigMap.get(userId);
+      const sessionGender =
+        override?.gender ?? (selectedUser?.gender as PlayerGender | undefined) ?? PlayerGender.UNSPECIFIED;
+      const sessionPartnerPreference =
+        override?.partnerPreference ??
+        (selectedUser?.partnerPreference as PartnerPreference | undefined) ??
+        PartnerPreference.OPEN;
+
+      if (
+        mode === SessionMode.MIXICANO &&
+        ![PlayerGender.MALE, PlayerGender.FEMALE].includes(sessionGender)
+      ) {
+        throw new Error(`MIXICANO requires gender for ${selectedUser?.name || "selected players"}`);
+      }
+
+      return {
+        userId,
+        isGuest: false,
+        gender: sessionGender,
+        partnerPreference: sessionPartnerPreference,
+        sessionPoints: 0,
+      };
+    });
+
+    if (mode === SessionMode.MIXICANO) {
+      const invalidGuest = normalizedGuests.find(
+        (guest) => ![PlayerGender.MALE, PlayerGender.FEMALE].includes(guest.gender)
+      );
+      if (invalidGuest) {
+        return NextResponse.json(
+          { error: `MIXICANO requires guest gender for ${invalidGuest.name}` },
+          { status: 400 }
+        );
+      }
+    }
 
     const normalizedCourtCount = courtCount as number;
     const newSession = await prisma.$transaction(async (tx) => {
@@ -113,6 +279,7 @@ export async function POST(request: Request) {
           communityId,
           name: name.trim(),
           type,
+          mode,
           status: SessionStatus.WAITING,
           courts: {
             create: Array.from({ length: normalizedCourtCount }, (_, i) => ({
@@ -120,36 +287,38 @@ export async function POST(request: Request) {
             })),
           },
           players: {
-            create: uniquePlayerIds.map((pid) => ({
-              userId: pid,
-              isGuest: false,
-              sessionPoints: 0,
-            })),
+            create: memberSessionConfigs,
           },
         },
       });
 
-      if (normalizedGuestNames.length > 0) {
+      if (normalizedGuests.length > 0) {
         const createdGuests = await Promise.all(
-          normalizedGuestNames.map((guestName) =>
+          normalizedGuests.map((guest) =>
             tx.user.create({
               data: {
-                name: guestName,
+                name: guest.name,
                 email: null,
                 passwordHash: null,
                 isClaimed: false,
-                elo: 1000,
+                elo: guest.initialElo,
+                gender: guest.gender,
+                partnerPreference: guest.partnerPreference,
               },
-              select: { id: true },
+              select: { id: true, gender: true, partnerPreference: true },
             })
           )
         );
 
         await tx.sessionPlayer.createMany({
-          data: createdGuests.map((guest) => ({
+          data: createdGuests.map((guest, idx) => ({
             sessionId: createdSession.id,
             userId: guest.id,
             isGuest: true,
+            gender: guest.gender,
+            partnerPreference:
+              (guest.partnerPreference as PartnerPreference | undefined) ??
+              normalizedGuests[idx].partnerPreference,
             sessionPoints: 0,
             joinedAt: new Date(),
             availableSince: new Date(),
@@ -162,7 +331,18 @@ export async function POST(request: Request) {
         include: {
           courts: true,
           players: {
-            include: { user: { select: { id: true, name: true, email: true, elo: true } } },
+            include: {
+              user: {
+                select: {
+                  id: true,
+                  name: true,
+                  email: true,
+                  elo: true,
+                  gender: true,
+                  partnerPreference: true,
+                },
+              },
+            },
           },
         },
       });
@@ -185,6 +365,10 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ ...newSession, players });
   } catch (error) {
+    const message = error instanceof Error ? error.message : "";
+    if (message.startsWith("MIXICANO requires")) {
+      return NextResponse.json({ error: message }, { status: 400 });
+    }
     console.error("Session creation error details:", error);
     return NextResponse.json({ error: "Failed to create session" }, { status: 500 });
   }

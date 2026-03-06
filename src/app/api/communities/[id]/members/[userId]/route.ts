@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { PartnerPreference, PlayerGender } from "@/types/enums";
 
 export const dynamic = "force-dynamic";
 
@@ -61,11 +62,13 @@ export async function PATCH(
       return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
     }
 
-    const { name, email, elo, isActive } = body as {
+    const { name, email, elo, isActive, gender, partnerPreference } = body as {
       name?: unknown;
       email?: unknown;
       elo?: unknown;
       isActive?: unknown;
+      gender?: unknown;
+      partnerPreference?: unknown;
     };
 
     if (name !== undefined && (typeof name !== "string" || name.trim().length === 0)) {
@@ -86,6 +89,24 @@ export async function PATCH(
     }
     if (isActive !== undefined && typeof isActive !== "boolean") {
       return NextResponse.json({ error: "Invalid isActive value" }, { status: 400 });
+    }
+    if (
+      gender !== undefined &&
+      (typeof gender !== "string" ||
+        ![PlayerGender.MALE, PlayerGender.FEMALE, PlayerGender.UNSPECIFIED].includes(
+          gender as PlayerGender
+        ))
+    ) {
+      return NextResponse.json({ error: "Invalid gender" }, { status: 400 });
+    }
+    if (
+      partnerPreference !== undefined &&
+      (typeof partnerPreference !== "string" ||
+        ![PartnerPreference.OPEN, PartnerPreference.FEMALE_FLEX].includes(
+          partnerPreference as PartnerPreference
+        ))
+    ) {
+      return NextResponse.json({ error: "Invalid partner preference" }, { status: 400 });
     }
 
     const normalizedEmail = typeof email === "string" ? email.trim().toLowerCase() : email;
@@ -110,12 +131,17 @@ export async function PATCH(
               ? normalizedEmail
               : null
             : undefined,
+        gender: typeof gender === "string" ? gender : undefined,
+        partnerPreference:
+          typeof partnerPreference === "string" ? partnerPreference : undefined,
         isActive: typeof isActive === "boolean" ? isActive : undefined,
       },
       select: {
         id: true,
         name: true,
         email: true,
+        gender: true,
+        partnerPreference: true,
         isActive: true,
         isClaimed: true,
         createdAt: true,

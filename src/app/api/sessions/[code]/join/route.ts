@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getCommunityEloByUserId, withCommunityElo } from "@/lib/communityElo";
-import { SessionStatus } from "@/types/enums";
+import { PartnerPreference, PlayerGender, SessionMode, SessionStatus } from "@/types/enums";
 
 export const dynamic = "force-dynamic";
 
@@ -18,7 +18,12 @@ export async function POST(
 
     const { code } = await params;
     const body = await request.json().catch(() => ({}));
-    const { userId: targetUserId } = body;
+    const { userId: targetUserId, gender: overrideGender, partnerPreference: overridePreference } =
+      body as {
+        userId?: unknown;
+        gender?: unknown;
+        partnerPreference?: unknown;
+      };
 
     // Determine who is joining
     let userIdToJoin = session.user.id;
@@ -54,7 +59,7 @@ export async function POST(
     }
 
     // If admin is trying to add someone else
-    if (targetUserId && targetUserId !== session.user.id) {
+    if (typeof targetUserId === "string" && targetUserId !== session.user.id) {
       const isCommunityAdmin = requesterCommunityRole === "ADMIN";
       if (!session.user.isAdmin && !isCommunityAdmin) {
         return NextResponse.json({ error: "Only community admins can add other players" }, { status: 403 });
@@ -90,6 +95,43 @@ export async function POST(
       return NextResponse.json(sessionData);
     }
 
+    const userProfile = await prisma.user.findUnique({
+      where: { id: userIdToJoin },
+      select: {
+        gender: true,
+        partnerPreference: true,
+      },
+    });
+    if (!userProfile) {
+      return NextResponse.json({ error: "User not found" }, { status: 404 });
+    }
+
+    const sessionGender =
+      typeof overrideGender === "string" &&
+      [PlayerGender.MALE, PlayerGender.FEMALE, PlayerGender.UNSPECIFIED].includes(
+        overrideGender as PlayerGender
+      )
+        ? (overrideGender as PlayerGender)
+        : ((userProfile.gender as PlayerGender | undefined) ?? PlayerGender.UNSPECIFIED);
+    const sessionPartnerPreference =
+      typeof overridePreference === "string" &&
+      [PartnerPreference.OPEN, PartnerPreference.FEMALE_FLEX].includes(
+        overridePreference as PartnerPreference
+      )
+        ? (overridePreference as PartnerPreference)
+        : ((userProfile.partnerPreference as PartnerPreference | undefined) ??
+          PartnerPreference.OPEN);
+
+    if (
+      sessionData.mode === SessionMode.MIXICANO &&
+      ![PlayerGender.MALE, PlayerGender.FEMALE].includes(sessionGender)
+    ) {
+      return NextResponse.json(
+        { error: "MIXICANO requires gender (MALE/FEMALE) for joining players" },
+        { status: 400 }
+      );
+    }
+
     const updatedSession = await prisma.session.update({
       where: { id: sessionData.id },
       data: {
@@ -97,6 +139,8 @@ export async function POST(
           create: {
             userId: userIdToJoin,
             isGuest: false,
+            gender: sessionGender,
+            partnerPreference: sessionPartnerPreference,
             sessionPoints: 0,
             joinedAt: new Date(),
             availableSince: new Date(),
@@ -106,7 +150,11 @@ export async function POST(
       include: {
         courts: { include: { currentMatch: true } },
         players: {
-          include: { user: { select: { id: true, name: true, elo: true } } },
+          include: {
+            user: {
+              select: { id: true, name: true, elo: true, gender: true, partnerPreference: true },
+            },
+          },
         },
       },
     });

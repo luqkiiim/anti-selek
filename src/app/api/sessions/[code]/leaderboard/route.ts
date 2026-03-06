@@ -20,7 +20,17 @@ export async function GET(
     where: { code },
     include: {
       players: {
-        include: { user: { select: { id: true, name: true, elo: true } } },
+        include: {
+          user: {
+            select: {
+              id: true,
+              name: true,
+              elo: true,
+              gender: true,
+              partnerPreference: true,
+            },
+          },
+        },
       },
       matches: {
         where: { status: { in: [MatchStatus.COMPLETED, MatchStatus.PENDING_APPROVAL] } },

@@ -1,7 +1,12 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { SessionStatus } from "@/types/enums";
+import {
+  PartnerPreference,
+  PlayerGender,
+  SessionMode,
+  SessionStatus,
+} from "@/types/enums";
 
 export const dynamic = "force-dynamic";
 
@@ -20,7 +25,12 @@ export async function POST(
       return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
     }
 
-    const { name, initialElo } = body as { name?: unknown; initialElo?: unknown };
+    const { name, initialElo, gender, partnerPreference } = body as {
+      name?: unknown;
+      initialElo?: unknown;
+      gender?: unknown;
+      partnerPreference?: unknown;
+    };
     if (typeof name !== "string" || name.trim().length < 2) {
       return NextResponse.json({ error: "Guest name must be at least 2 characters" }, { status: 400 });
     }
@@ -33,10 +43,25 @@ export async function POST(
       guestElo = initialElo;
     }
 
+    const normalizedGender =
+      typeof gender === "string" &&
+      [PlayerGender.MALE, PlayerGender.FEMALE, PlayerGender.UNSPECIFIED].includes(
+        gender as PlayerGender
+      )
+        ? (gender as PlayerGender)
+        : PlayerGender.UNSPECIFIED;
+    const normalizedPartnerPreference =
+      typeof partnerPreference === "string" &&
+      [PartnerPreference.OPEN, PartnerPreference.FEMALE_FLEX].includes(
+        partnerPreference as PartnerPreference
+      )
+        ? (partnerPreference as PartnerPreference)
+        : PartnerPreference.OPEN;
+
     const { code } = await params;
     const sessionData = await prisma.session.findUnique({
       where: { code },
-      select: { id: true, communityId: true, status: true },
+      select: { id: true, communityId: true, status: true, mode: true },
     });
 
     if (!sessionData) {
@@ -44,6 +69,15 @@ export async function POST(
     }
     if (sessionData.status === SessionStatus.COMPLETED) {
       return NextResponse.json({ error: "Session already ended" }, { status: 400 });
+    }
+    if (
+      sessionData.mode === SessionMode.MIXICANO &&
+      ![PlayerGender.MALE, PlayerGender.FEMALE].includes(normalizedGender)
+    ) {
+      return NextResponse.json(
+        { error: "MIXICANO requires guest gender (MALE/FEMALE)" },
+        { status: 400 }
+      );
     }
 
     let canManage = !!session.user.isAdmin;
@@ -85,11 +119,15 @@ export async function POST(
           passwordHash: null,
           isClaimed: false,
           elo: guestElo,
+          gender: normalizedGender,
+          partnerPreference: normalizedPartnerPreference,
         },
         select: {
           id: true,
           name: true,
           elo: true,
+          gender: true,
+          partnerPreference: true,
         },
       });
 
@@ -98,6 +136,8 @@ export async function POST(
           sessionId: sessionData.id,
           userId: user.id,
           isGuest: true,
+          gender: user.gender,
+          partnerPreference: user.partnerPreference,
           sessionPoints: 0,
           joinedAt: new Date(),
           availableSince: new Date(),
@@ -112,6 +152,8 @@ export async function POST(
       name: createdGuest.name,
       elo: createdGuest.elo,
       isGuest: true,
+      gender: createdGuest.gender,
+      partnerPreference: createdGuest.partnerPreference,
     });
   } catch (error) {
     console.error("Create guest error:", error);

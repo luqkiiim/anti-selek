@@ -14,6 +14,8 @@ model User {
   passwordHash String?
   name         String
   isClaimed    Boolean  @default(false)
+  gender       String   @default("UNSPECIFIED") // MALE, FEMALE, UNSPECIFIED
+  partnerPreference String @default("OPEN") // OPEN, FEMALE_FLEX
   elo          Int      @default(1000)
   isActive     Boolean  @default(true)
   createdAt    DateTime @default(now())
@@ -64,6 +66,7 @@ model Session {
   communityId String?
   name      String
   type      String   @default("POINTS") // POINTS or ELO
+  mode      String   @default("MEXICANO") // MEXICANO or MIXICANO
   status    String   @default("WAITING") // WAITING, ACTIVE, COMPLETED
   createdAt DateTime @default(now())
   endedAt   DateTime?
@@ -90,6 +93,8 @@ model SessionPlayer {
   sessionId    String
   userId       String
   isGuest      Boolean  @default(false)
+  gender       String   @default("UNSPECIFIED") // MALE, FEMALE, UNSPECIFIED
+  partnerPreference String @default("OPEN") // OPEN, FEMALE_FLEX
   sessionPoints Int     @default(0)
   lastPartnerId String? // player ID of last partner (for repeat-partner penalty)
   isPaused     Boolean  @default(false)

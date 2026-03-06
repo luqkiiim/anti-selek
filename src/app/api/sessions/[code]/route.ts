@@ -33,7 +33,17 @@ export async function GET(
         },
       },
       players: {
-        include: { user: { select: { id: true, name: true, elo: true } } },
+        include: {
+          user: {
+            select: {
+              id: true,
+              name: true,
+              elo: true,
+              gender: true,
+              partnerPreference: true,
+            },
+          },
+        },
         orderBy: { sessionPoints: "desc" },
       },
       matches: {
