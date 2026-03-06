@@ -957,7 +957,7 @@ export default function SessionPage() {
               />
             </div>
             
-            <div className="flex-1 overflow-y-auto p-4 space-y-2">
+            <div className="flex-1 overflow-y-auto p-2.5 space-y-1.5">
               {playersNotInSession.length === 0 ? (
                 <div className="text-center py-12 text-gray-400 italic text-sm">
                   Everyone is already playing!
@@ -967,18 +967,18 @@ export default function SessionPage() {
                   return (
                     <div
                       key={player.id}
-                      className="flex justify-between items-center p-4 bg-gray-50 rounded-2xl active:bg-gray-100 transition-colors"
+                      className="flex justify-between items-center px-3 py-2 bg-gray-50 rounded-xl border border-gray-100 active:bg-gray-100 transition-colors"
                     >
                       <div className="flex items-center gap-2 min-w-0">
-                        <p className="font-black text-gray-900 truncate">{player.name}</p>
-                        <span className="text-[10px] text-gray-500 font-bold uppercase tracking-wider whitespace-nowrap">
+                        <p className="font-black text-sm text-gray-900 truncate">{player.name}</p>
+                        <span className="text-[9px] text-gray-500 font-bold uppercase tracking-wider whitespace-nowrap">
                           ELO {player.elo}
                         </span>
                       </div>
                       <button
                         onClick={() => addPlayerToSession(player.id)}
                         disabled={addingPlayerId === player.id}
-                        className="bg-blue-600 text-white px-5 py-2 rounded-xl text-xs font-black uppercase tracking-wider shadow-sm active:scale-95 disabled:opacity-50 transition-all"
+                        className="bg-blue-600 text-white px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider shadow-sm active:scale-95 disabled:opacity-50 transition-all"
                       >
                         {addingPlayerId === player.id ? "..." : "Add"}
                       </button>
