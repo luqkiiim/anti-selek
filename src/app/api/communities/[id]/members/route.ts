@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
-import { PlayerGender } from "@/types/enums";
+import { PartnerPreference, PlayerGender } from "@/types/enums";
 
 export const dynamic = "force-dynamic";
 
@@ -147,7 +147,13 @@ export async function POST(
       return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
     }
 
-    const { name, email, password } = body as { name?: unknown; email?: unknown; password?: unknown };
+    const { name, email, password, gender, partnerPreference } = body as {
+      name?: unknown;
+      email?: unknown;
+      password?: unknown;
+      gender?: unknown;
+      partnerPreference?: unknown;
+    };
     if (typeof name !== "string" || name.trim().length < 2) {
       return NextResponse.json({ error: "Player name must be at least 2 characters" }, { status: 400 });
     }
@@ -156,6 +162,24 @@ export async function POST(
     }
     if (password !== undefined && typeof password !== "string") {
       return NextResponse.json({ error: "Invalid password" }, { status: 400 });
+    }
+    if (
+      gender !== undefined &&
+      (typeof gender !== "string" ||
+        ![PlayerGender.MALE, PlayerGender.FEMALE, PlayerGender.UNSPECIFIED].includes(
+          gender as PlayerGender
+        ))
+    ) {
+      return NextResponse.json({ error: "Invalid gender" }, { status: 400 });
+    }
+    if (
+      partnerPreference !== undefined &&
+      (typeof partnerPreference !== "string" ||
+        ![PartnerPreference.OPEN, PartnerPreference.FEMALE_FLEX].includes(
+          partnerPreference as PartnerPreference
+        ))
+    ) {
+      return NextResponse.json({ error: "Invalid partner preference" }, { status: 400 });
     }
 
     const normalizedName = name.trim();
@@ -174,6 +198,7 @@ export async function POST(
       isClaimed: boolean;
       createdAt: Date;
     };
+    let userWasCreated = false;
     if (normalizedEmail) {
       const existingUser = await prisma.user.findUnique({
         where: { email: normalizedEmail },
@@ -211,6 +236,7 @@ export async function POST(
             createdAt: true,
           },
         });
+        userWasCreated = true;
       }
     } else {
       const existingUnclaimed = await prisma.user.findFirst({
@@ -249,7 +275,39 @@ export async function POST(
             createdAt: true,
           },
         });
+        userWasCreated = true;
       }
+    }
+
+    const requestedGender =
+      gender === PlayerGender.MALE || gender === PlayerGender.FEMALE
+        ? (gender as PlayerGender)
+        : undefined;
+    const resolvedGender =
+      requestedGender ??
+      ([PlayerGender.MALE, PlayerGender.FEMALE].includes(user.gender as PlayerGender)
+        ? (user.gender as PlayerGender)
+        : PlayerGender.MALE);
+
+    const resolvedPartnerPreference =
+      typeof partnerPreference === "string"
+        ? (partnerPreference as PartnerPreference)
+        : (requestedGender === PlayerGender.FEMALE ||
+            (userWasCreated && resolvedGender === PlayerGender.FEMALE))
+          ? PartnerPreference.FEMALE_FLEX
+          : (user.partnerPreference as PartnerPreference);
+
+    if (
+      resolvedGender !== user.gender ||
+      resolvedPartnerPreference !== user.partnerPreference
+    ) {
+      await prisma.user.update({
+        where: { id: user.id },
+        data: {
+          gender: resolvedGender,
+          partnerPreference: resolvedPartnerPreference,
+        },
+      });
     }
 
     const membership = await prisma.communityMember.upsert({
@@ -271,24 +329,12 @@ export async function POST(
       },
     });
 
-    const effectiveGender =
-      [PlayerGender.MALE, PlayerGender.FEMALE].includes(user.gender as PlayerGender)
-        ? user.gender
-        : PlayerGender.MALE;
-
-    if (effectiveGender !== user.gender) {
-      await prisma.user.update({
-        where: { id: user.id },
-        data: { gender: effectiveGender },
-      });
-    }
-
     return NextResponse.json({
       id: user.id,
       name: user.name,
       email: user.email,
-      gender: effectiveGender,
-      partnerPreference: user.partnerPreference,
+      gender: resolvedGender,
+      partnerPreference: resolvedPartnerPreference,
       elo: membership.elo,
       isActive: user.isActive,
       isClaimed: user.isClaimed,

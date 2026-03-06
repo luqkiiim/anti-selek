@@ -121,6 +121,13 @@ export async function PATCH(
       }
     }
 
+    const resolvedPartnerPreference =
+      typeof partnerPreference === "string"
+        ? (partnerPreference as PartnerPreference)
+        : gender === PlayerGender.FEMALE
+          ? PartnerPreference.FEMALE_FLEX
+          : undefined;
+
     const updatedUser = await prisma.user.update({
       where: { id: userId },
       data: {
@@ -132,8 +139,7 @@ export async function PATCH(
               : null
             : undefined,
         gender: typeof gender === "string" ? gender : undefined,
-        partnerPreference:
-          typeof partnerPreference === "string" ? partnerPreference : undefined,
+        partnerPreference: resolvedPartnerPreference,
         isActive: typeof isActive === "boolean" ? isActive : undefined,
       },
       select: {
