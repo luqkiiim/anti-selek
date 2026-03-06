@@ -767,11 +767,21 @@ export default function SessionPage() {
                   <tr>
                     <th className="px-4 py-3 text-left text-[10px] font-black text-gray-400 uppercase tracking-widest">#</th>
                     <th className="px-4 py-3 text-left text-[10px] font-black text-gray-400 uppercase tracking-widest">Player</th>
-                    <th className="px-4 py-3 text-center text-[10px] font-black text-gray-400 uppercase tracking-widest">MP</th>
-                    <th className="px-4 py-3 text-center text-[10px] font-black text-gray-400 uppercase tracking-widest">W/L</th>
-                    <th className="px-4 py-3 text-right text-[10px] font-black text-gray-400 uppercase tracking-widest">
-                      {sessionData.type === SessionType.ELO ? SessionType.ELO : 'Pts'}
-                    </th>
+                    {sessionData.type === SessionType.POINTS ? (
+                      <>
+                        <th className="px-4 py-3 text-right text-[10px] font-black text-gray-400 uppercase tracking-widest">Pts</th>
+                        <th className="px-4 py-3 text-right text-[10px] font-black text-gray-400 uppercase tracking-widest">GD</th>
+                        <th className="px-4 py-3 text-center text-[10px] font-black text-gray-400 uppercase tracking-widest">MP</th>
+                      </>
+                    ) : (
+                      <>
+                        <th className="px-4 py-3 text-center text-[10px] font-black text-gray-400 uppercase tracking-widest">MP</th>
+                        <th className="px-4 py-3 text-center text-[10px] font-black text-gray-400 uppercase tracking-widest">W/L</th>
+                        <th className="px-4 py-3 text-right text-[10px] font-black text-gray-400 uppercase tracking-widest">
+                          {SessionType.ELO}
+                        </th>
+                      </>
+                    )}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50">
@@ -835,11 +845,6 @@ export default function SessionPage() {
                               </div>
                               <div className="flex items-center gap-2 mt-1">
                                 {sessionData.type !== SessionType.ELO && <span className="text-[9px] font-bold text-gray-400 uppercase">ELO {player.user.elo}</span>}
-                                {sessionData.type === SessionType.POINTS && (
-                                  <span className="text-[9px] font-bold text-gray-400 uppercase">
-                                    GD {pointDiff > 0 ? `+${pointDiff}` : pointDiff}
-                                  </span>
-                                )}
                               </div>
                               {isAdmin && isMixicano && (
                                 <div className="mt-2 flex flex-wrap items-center gap-1.5">
@@ -930,21 +935,37 @@ export default function SessionPage() {
                               )}
                             </div>
                           </td>
-                          <td className="px-4 py-4 whitespace-nowrap text-center">
-                            <span className="text-xs font-bold text-gray-600">{stats.played}</span>
-                          </td>
-                          <td className="px-4 py-4 whitespace-nowrap text-center">
-                            <div className="text-[10px] font-black tracking-tighter">
-                              <span className="text-green-600">{stats.wins}</span>
-                              <span className="mx-0.5 text-gray-200">/</span>
-                              <span className="text-red-500">{stats.losses}</span>
-                            </div>
-                          </td>
-                          <td className="px-4 py-4 whitespace-nowrap text-right">
-                            <span className="text-base font-black text-blue-700">
-                              {sessionData.type === SessionType.ELO ? player.user.elo : player.sessionPoints}
-                            </span>
-                          </td>
+                          {sessionData.type === SessionType.POINTS ? (
+                            <>
+                              <td className="px-4 py-4 whitespace-nowrap text-right">
+                                <span className="text-base font-black text-blue-700">{player.sessionPoints}</span>
+                              </td>
+                              <td className="px-4 py-4 whitespace-nowrap text-right">
+                                <span className={`text-sm font-black ${pointDiff >= 0 ? "text-green-600" : "text-red-500"}`}>
+                                  {pointDiff > 0 ? `+${pointDiff}` : pointDiff}
+                                </span>
+                              </td>
+                              <td className="px-4 py-4 whitespace-nowrap text-center">
+                                <span className="text-xs font-bold text-gray-600">{stats.played}</span>
+                              </td>
+                            </>
+                          ) : (
+                            <>
+                              <td className="px-4 py-4 whitespace-nowrap text-center">
+                                <span className="text-xs font-bold text-gray-600">{stats.played}</span>
+                              </td>
+                              <td className="px-4 py-4 whitespace-nowrap text-center">
+                                <div className="text-[10px] font-black tracking-tighter">
+                                  <span className="text-green-600">{stats.wins}</span>
+                                  <span className="mx-0.5 text-gray-200">/</span>
+                                  <span className="text-red-500">{stats.losses}</span>
+                                </div>
+                              </td>
+                              <td className="px-4 py-4 whitespace-nowrap text-right">
+                                <span className="text-base font-black text-blue-700">{player.user.elo}</span>
+                              </td>
+                            </>
+                          )}
                         </tr>
                       );
                     })}
