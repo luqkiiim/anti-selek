@@ -119,6 +119,7 @@ export default function SessionPage() {
   const [matchScores, setMatchScores] = useState<Record<string, { team1: string; team2: string }>>({});
   const [submittingMatchId, setSubmittingMatchId] = useState<string | null>(null);
   const [reopeningMatchId, setReopeningMatchId] = useState<string | null>(null);
+  const [undoingCourtId, setUndoingCourtId] = useState<string | null>(null);
 
   // Helper to safely parse JSON
   const safeJson = useCallback(async (res: Response) => {
@@ -382,6 +383,30 @@ export default function SessionPage() {
     } catch (err) {
       console.error(err);
       setError("Network error reshuffling match");
+    }
+  };
+
+  const undoMatchSelection = async (courtId: string) => {
+    if (!confirm("Undo this match selection? The 4 selected players will return to the pool.")) return;
+    setUndoingCourtId(courtId);
+    setError("");
+    try {
+      const res = await fetch(`/api/sessions/${code}/generate-match`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ courtId, undoCurrentMatch: true }),
+      });
+      if (res.ok) {
+        fetchSession();
+      } else {
+        const data = await safeJson(res);
+        setError(data.error || "Failed to undo match");
+      }
+    } catch (err) {
+      console.error(err);
+      setError("Network error undoing match");
+    } finally {
+      setUndoingCourtId(null);
     }
   };
 
@@ -671,6 +696,16 @@ export default function SessionPage() {
                           title="Pick different players"
                         >
                           Reshuffle
+                        </button>
+                      )}
+                      {currentMatch && currentMatch.status === MatchStatus.IN_PROGRESS && isAdmin && (
+                        <button
+                          onClick={() => undoMatchSelection(court.id)}
+                          disabled={undoingCourtId === court.id}
+                          className="text-[10px] bg-rose-50 text-rose-700 border border-rose-200 px-2.5 py-1.5 rounded-lg font-black uppercase tracking-wider active:scale-95 transition-all flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                          title="Put selected players back in pool"
+                        >
+                          {undoingCourtId === court.id ? "Undoing..." : "Undo"}
                         </button>
                       )}
                     </div>

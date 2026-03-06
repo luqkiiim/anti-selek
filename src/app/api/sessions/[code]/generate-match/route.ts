@@ -85,10 +85,24 @@ export async function POST(
 
     const { code } = await params;
     const body = await request.json().catch(() => ({}));
-    const { courtId, forceReshuffle = false } = body;
+    const {
+      courtId,
+      forceReshuffle = false,
+      undoCurrentMatch = false,
+    } = body as {
+      courtId?: string;
+      forceReshuffle?: boolean;
+      undoCurrentMatch?: boolean;
+    };
 
     if (!courtId) {
       return NextResponse.json({ error: "Court ID required" }, { status: 400 });
+    }
+    if (forceReshuffle && undoCurrentMatch) {
+      return NextResponse.json(
+        { error: "Choose either reshuffle or undo, not both." },
+        { status: 400 }
+      );
     }
 
     // 1. Fetch fresh session data
@@ -130,7 +144,32 @@ export async function POST(
       return NextResponse.json({ error: "Court not found in this session" }, { status: 404 });
     }
 
-    // 2. Handle Reshuffle: Delete existing match if requested
+    // 2. Handle Undo: Remove existing match and return players to pool.
+    if (undoCurrentMatch) {
+      if (!targetCourt.currentMatch) {
+        return NextResponse.json({ error: "No active match to undo." }, { status: 400 });
+      }
+
+      const undoableStatuses: string[] = [MatchStatus.PENDING, MatchStatus.IN_PROGRESS];
+      if (!undoableStatuses.includes(targetCourt.currentMatch.status)) {
+        return NextResponse.json(
+          { error: "Only unscored matches can be undone." },
+          { status: 400 }
+        );
+      }
+
+      await prisma.$transaction([
+        prisma.match.delete({ where: { id: targetCourt.currentMatch.id } }),
+        prisma.court.update({
+          where: { id: courtId },
+          data: { currentMatchId: null },
+        }),
+      ]);
+
+      return NextResponse.json({ ok: true, undoneMatchId: targetCourt.currentMatch.id });
+    }
+
+    // 3. Handle Reshuffle: Delete existing match if requested
     if (forceReshuffle && targetCourt.currentMatch) {
       // Only allow reshuffle if match isn't approved/completed
       const allowedStatuses: string[] = [MatchStatus.PENDING, MatchStatus.IN_PROGRESS];
@@ -145,12 +184,15 @@ export async function POST(
           data: { currentMatchId: null },
         }),
       ]);
+
+      // Keep busy-player computation in sync with deleted reshuffle match.
+      sessionData.matches = sessionData.matches.filter((m) => m.id !== targetCourt.currentMatch!.id);
     }
 
-    // 2. Identify busy players (those on court)
+    // 4. Identify busy players (those on court)
     const busyPlayerIds = getBusyPlayerIds(sessionData.matches);
 
-    // 3. Select Available Players
+    // 5. Select Available Players
     const availableCandidates = sessionData.players
       .filter(p => !busyPlayerIds.has(p.userId) && !p.isPaused)
       .map(p => ({
