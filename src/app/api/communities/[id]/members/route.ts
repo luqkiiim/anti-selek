@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
+import { PlayerGender } from "@/types/enums";
 
 export const dynamic = "force-dynamic";
 
@@ -94,7 +95,10 @@ export async function GET(
         id: m.user.id,
         name: m.user.name,
         email: m.user.email,
-        gender: m.user.gender,
+        gender:
+          [PlayerGender.MALE, PlayerGender.FEMALE].includes(m.user.gender as PlayerGender)
+            ? m.user.gender
+            : PlayerGender.MALE,
         partnerPreference: m.user.partnerPreference,
         elo: m.elo,
         isActive: m.user.isActive,
@@ -267,11 +271,23 @@ export async function POST(
       },
     });
 
+    const effectiveGender =
+      [PlayerGender.MALE, PlayerGender.FEMALE].includes(user.gender as PlayerGender)
+        ? user.gender
+        : PlayerGender.MALE;
+
+    if (effectiveGender !== user.gender) {
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { gender: effectiveGender },
+      });
+    }
+
     return NextResponse.json({
       id: user.id,
       name: user.name,
       email: user.email,
-      gender: user.gender,
+      gender: effectiveGender,
       partnerPreference: user.partnerPreference,
       elo: membership.elo,
       isActive: user.isActive,

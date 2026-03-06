@@ -84,7 +84,7 @@ export default function CommunityPage() {
     Record<string, { gender: PlayerGender; partnerPreference: PartnerPreference }>
   >({});
   const [guestNameInput, setGuestNameInput] = useState("");
-  const [guestGenderInput, setGuestGenderInput] = useState<PlayerGender>(PlayerGender.UNSPECIFIED);
+  const [guestGenderInput, setGuestGenderInput] = useState<PlayerGender>(PlayerGender.MALE);
   const [guestPreferenceInput, setGuestPreferenceInput] = useState<PartnerPreference>(
     PartnerPreference.OPEN
   );
@@ -130,7 +130,7 @@ export default function CommunityPage() {
     setSelectedPlayerConfigById({});
     setGuestConfigs([]);
     setGuestNameInput("");
-    setGuestGenderInput(PlayerGender.UNSPECIFIED);
+    setGuestGenderInput(PlayerGender.MALE);
     setGuestPreferenceInput(PartnerPreference.OPEN);
   }, [communityId]);
 
@@ -191,25 +191,8 @@ export default function CommunityPage() {
 
   const createSession = async () => {
     if (!newSessionName.trim() || !communityId) return;
-    if (
-      sessionMode === SessionMode.MIXICANO &&
-      ![PlayerGender.MALE, PlayerGender.FEMALE].includes(user?.gender as PlayerGender)
-    ) {
-      setError("Set your own profile gender to MALE or FEMALE before hosting MIXICANO");
-      return;
-    }
 
     if (sessionMode === SessionMode.MIXICANO) {
-      const invalidMember = selectedPlayerIds.find((playerId) => {
-        const config = selectedPlayerConfigById[playerId];
-        return !config || ![PlayerGender.MALE, PlayerGender.FEMALE].includes(config.gender);
-      });
-      if (invalidMember) {
-        const member = communityMembers.find((m) => m.id === invalidMember);
-        setError(`MIXICANO requires MALE/FEMALE gender for ${member?.name || "all selected players"}`);
-        return;
-      }
-
       const invalidGuest = guestConfigs.find(
         (guest) => ![PlayerGender.MALE, PlayerGender.FEMALE].includes(guest.gender)
       );
@@ -227,7 +210,7 @@ export default function CommunityPage() {
         const config = selectedPlayerConfigById[playerId];
         return {
           userId: playerId,
-          gender: config?.gender ?? fallbackMember?.gender ?? PlayerGender.UNSPECIFIED,
+          gender: config?.gender ?? fallbackMember?.gender ?? PlayerGender.MALE,
           partnerPreference:
             config?.partnerPreference ??
             fallbackMember?.partnerPreference ??
@@ -261,7 +244,7 @@ export default function CommunityPage() {
       setSelectedPlayerConfigById({});
       setGuestConfigs([]);
       setGuestNameInput("");
-      setGuestGenderInput(PlayerGender.UNSPECIFIED);
+      setGuestGenderInput(PlayerGender.MALE);
       setGuestPreferenceInput(PartnerPreference.OPEN);
       setCourtCount(3);
       router.push(`/session/${data.code}`);
@@ -303,7 +286,7 @@ export default function CommunityPage() {
         setSelectedPlayerConfigById((old) => ({
           ...old,
           [playerId]: {
-            gender: member.gender ?? PlayerGender.UNSPECIFIED,
+            gender: member.gender ?? PlayerGender.MALE,
             partnerPreference: member.partnerPreference ?? PartnerPreference.OPEN,
           },
         }));
@@ -335,29 +318,12 @@ export default function CommunityPage() {
       },
     ]);
     setGuestNameInput("");
-    setGuestGenderInput(PlayerGender.UNSPECIFIED);
+    setGuestGenderInput(PlayerGender.MALE);
     setGuestPreferenceInput(PartnerPreference.OPEN);
   };
 
   const removeGuestName = (nameToRemove: string) => {
     setGuestConfigs((prev) => prev.filter((guest) => guest.name !== nameToRemove));
-  };
-
-  const updateSelectedPlayerConfig = (
-    userId: string,
-    next: Partial<{ gender: PlayerGender; partnerPreference: PartnerPreference }>
-  ) => {
-    setSelectedPlayerConfigById((prev) => {
-      const existing = prev[userId];
-      if (!existing) return prev;
-      return {
-        ...prev,
-        [userId]: {
-          gender: next.gender ?? existing.gender,
-          partnerPreference: next.partnerPreference ?? existing.partnerPreference,
-        },
-      };
-    });
   };
 
   if (status === "loading" || loading) {
@@ -472,7 +438,7 @@ export default function CommunityPage() {
                 </div>
                 {sessionMode === SessionMode.MIXICANO && (
                   <p className="text-[10px] font-bold text-blue-100 uppercase tracking-wider">
-                    Mixicano requires MALE/FEMALE gender for all selected players and guests.
+                    Core members default to MALE. Set guest gender only when needed.
                   </p>
                 )}
 
@@ -508,7 +474,7 @@ export default function CommunityPage() {
                             >((acc, playerId) => {
                               const member = communityMembers.find((p) => p.id === playerId);
                               acc[playerId] = {
-                                gender: member?.gender ?? PlayerGender.UNSPECIFIED,
+                                gender: member?.gender ?? PlayerGender.MALE,
                                 partnerPreference:
                                   member?.partnerPreference ?? PartnerPreference.OPEN,
                               };
@@ -542,72 +508,6 @@ export default function CommunityPage() {
                   </div>
                 </div>
 
-                {sessionMode === SessionMode.MIXICANO && selectedPlayerIds.length > 0 && (
-                  <div className="space-y-2">
-                    <p className="text-[10px] font-black uppercase tracking-widest text-blue-100">
-                      Selected Player Preferences
-                    </p>
-                    <div className="max-h-44 overflow-y-auto space-y-2 pr-1 custom-scrollbar">
-                      {selectedPlayerIds.map((playerId) => {
-                        const selectedMember = communityMembers.find((member) => member.id === playerId);
-                        if (!selectedMember) return null;
-                        const config = selectedPlayerConfigById[playerId] ?? {
-                          gender: PlayerGender.UNSPECIFIED,
-                          partnerPreference: PartnerPreference.OPEN,
-                        };
-                        return (
-                          <div
-                            key={playerId}
-                            className="rounded-xl bg-blue-500/30 border border-blue-300/40 p-2.5 space-y-2"
-                          >
-                            <p className="text-xs font-black text-white">{selectedMember.name}</p>
-                            <div className="grid grid-cols-2 gap-2">
-                              <select
-                                value={config.gender}
-                                onChange={(e) =>
-                                  updateSelectedPlayerConfig(playerId, {
-                                    gender: e.target.value as PlayerGender,
-                                  })
-                                }
-                                className="w-full bg-blue-500/40 border border-blue-300/50 rounded-lg px-2 py-1.5 text-[11px] font-bold focus:outline-none focus:border-white"
-                              >
-                                <option value={PlayerGender.UNSPECIFIED} className="text-gray-900">
-                                  Unspecified
-                                </option>
-                                <option value={PlayerGender.MALE} className="text-gray-900">
-                                  Male
-                                </option>
-                                <option value={PlayerGender.FEMALE} className="text-gray-900">
-                                  Female
-                                </option>
-                              </select>
-                              <select
-                                value={config.partnerPreference}
-                                onChange={(e) =>
-                                  updateSelectedPlayerConfig(playerId, {
-                                    partnerPreference: e.target.value as PartnerPreference,
-                                  })
-                                }
-                                className="w-full bg-blue-500/40 border border-blue-300/50 rounded-lg px-2 py-1.5 text-[11px] font-bold focus:outline-none focus:border-white"
-                              >
-                                <option value={PartnerPreference.OPEN} className="text-gray-900">
-                                  Open
-                                </option>
-                                <option
-                                  value={PartnerPreference.FEMALE_FLEX}
-                                  className="text-gray-900"
-                                >
-                                  Female Flex
-                                </option>
-                              </select>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-
                 <div className="space-y-2">
                   <p className="text-[10px] font-black uppercase tracking-widest text-blue-100">Session Guests</p>
                   <div
@@ -637,9 +537,6 @@ export default function CommunityPage() {
                           onChange={(e) => setGuestGenderInput(e.target.value as PlayerGender)}
                           className="w-full bg-blue-500/50 border-2 border-blue-400/30 rounded-2xl px-3 py-3 text-[11px] font-bold focus:outline-none focus:border-white transition-all"
                         >
-                          <option value={PlayerGender.UNSPECIFIED} className="text-gray-900">
-                            Gender
-                          </option>
                           <option value={PlayerGender.MALE} className="text-gray-900">
                             Male
                           </option>

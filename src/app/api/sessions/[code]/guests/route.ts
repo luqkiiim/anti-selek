@@ -49,7 +49,7 @@ export async function POST(
         gender as PlayerGender
       )
         ? (gender as PlayerGender)
-        : PlayerGender.UNSPECIFIED;
+        : PlayerGender.MALE;
     const normalizedPartnerPreference =
       typeof partnerPreference === "string" &&
       [PartnerPreference.OPEN, PartnerPreference.FEMALE_FLEX].includes(

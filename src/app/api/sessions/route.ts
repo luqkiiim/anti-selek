@@ -140,7 +140,8 @@ export async function POST(request: Request) {
 
     const upsertGuest = (
       guestName: string,
-      gender: PlayerGender = PlayerGender.UNSPECIFIED,
+      gender: PlayerGender =
+        mode === SessionMode.MIXICANO ? PlayerGender.MALE : PlayerGender.UNSPECIFIED,
       partnerPreference: PartnerPreference = PartnerPreference.OPEN,
       initialElo = 1000
     ) => {
@@ -181,7 +182,9 @@ export async function POST(request: Request) {
             candidate.gender as PlayerGender
           )
             ? (candidate.gender as PlayerGender)
-            : PlayerGender.UNSPECIFIED;
+            : mode === SessionMode.MIXICANO
+              ? PlayerGender.MALE
+              : PlayerGender.UNSPECIFIED;
         const partnerPreference =
           typeof candidate.partnerPreference === "string" &&
           [PartnerPreference.OPEN, PartnerPreference.FEMALE_FLEX].includes(
@@ -236,19 +239,21 @@ export async function POST(request: Request) {
     const memberSessionConfigs = uniquePlayerIds.map((userId) => {
       const selectedUser = selectedUserById.get(userId);
       const override = playerConfigMap.get(userId);
+      const rawGender = override?.gender ?? (selectedUser?.gender as PlayerGender | undefined);
       const sessionGender =
-        override?.gender ?? (selectedUser?.gender as PlayerGender | undefined) ?? PlayerGender.UNSPECIFIED;
+        mode === SessionMode.MIXICANO
+          ? [PlayerGender.MALE, PlayerGender.FEMALE].includes(rawGender as PlayerGender)
+            ? (rawGender as PlayerGender)
+            : PlayerGender.MALE
+          : [PlayerGender.MALE, PlayerGender.FEMALE, PlayerGender.UNSPECIFIED].includes(
+                rawGender as PlayerGender
+              )
+            ? (rawGender as PlayerGender)
+            : PlayerGender.UNSPECIFIED;
       const sessionPartnerPreference =
         override?.partnerPreference ??
         (selectedUser?.partnerPreference as PartnerPreference | undefined) ??
         PartnerPreference.OPEN;
-
-      if (
-        mode === SessionMode.MIXICANO &&
-        ![PlayerGender.MALE, PlayerGender.FEMALE].includes(sessionGender)
-      ) {
-        throw new Error(`MIXICANO requires gender for ${selectedUser?.name || "selected players"}`);
-      }
 
       return {
         userId,

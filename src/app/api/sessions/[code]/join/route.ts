@@ -106,13 +106,19 @@ export async function POST(
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
-    const sessionGender =
+    const rawGender =
       typeof overrideGender === "string" &&
       [PlayerGender.MALE, PlayerGender.FEMALE, PlayerGender.UNSPECIFIED].includes(
         overrideGender as PlayerGender
       )
         ? (overrideGender as PlayerGender)
         : ((userProfile.gender as PlayerGender | undefined) ?? PlayerGender.UNSPECIFIED);
+    const sessionGender =
+      sessionData.mode === SessionMode.MIXICANO
+        ? [PlayerGender.MALE, PlayerGender.FEMALE].includes(rawGender)
+          ? rawGender
+          : PlayerGender.MALE
+        : rawGender;
     const sessionPartnerPreference =
       typeof overridePreference === "string" &&
       [PartnerPreference.OPEN, PartnerPreference.FEMALE_FLEX].includes(
@@ -121,16 +127,6 @@ export async function POST(
         ? (overridePreference as PartnerPreference)
         : ((userProfile.partnerPreference as PartnerPreference | undefined) ??
           PartnerPreference.OPEN);
-
-    if (
-      sessionData.mode === SessionMode.MIXICANO &&
-      ![PlayerGender.MALE, PlayerGender.FEMALE].includes(sessionGender)
-    ) {
-      return NextResponse.json(
-        { error: "MIXICANO requires gender (MALE/FEMALE) for joining players" },
-        { status: 400 }
-      );
-    }
 
     const updatedSession = await prisma.session.update({
       where: { id: sessionData.id },

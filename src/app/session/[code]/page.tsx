@@ -99,7 +99,7 @@ export default function SessionPage() {
   const [communityPlayers, setCommunityPlayers] = useState<CommunityUser[]>([]);
   const [addingPlayerId, setAddingPlayerId] = useState<string | null>(null);
   const [guestName, setGuestName] = useState("");
-  const [guestGender, setGuestGender] = useState<PlayerGender>(PlayerGender.UNSPECIFIED);
+  const [guestGender, setGuestGender] = useState<PlayerGender>(PlayerGender.MALE);
   const [guestPreference, setGuestPreference] = useState<PartnerPreference>(PartnerPreference.OPEN);
   const [addingGuest, setAddingGuest] = useState(false);
   const [savingPreferencesFor, setSavingPreferencesFor] = useState<string | null>(null);
@@ -270,14 +270,11 @@ export default function SessionPage() {
 
   const addPlayerToSession = async (userId: string) => {
     const candidate = communityPlayers.find((player) => player.id === userId);
-    if (
+    const effectiveGender =
       sessionData?.mode === SessionMode.MIXICANO &&
-      candidate &&
-      ![PlayerGender.MALE, PlayerGender.FEMALE].includes(candidate.gender)
-    ) {
-      setError(`Set MALE/FEMALE gender for ${candidate.name} before adding to MIXICANO`);
-      return;
-    }
+      (!candidate || ![PlayerGender.MALE, PlayerGender.FEMALE].includes(candidate.gender))
+        ? PlayerGender.MALE
+        : candidate?.gender;
 
     setAddingPlayerId(userId);
     try {
@@ -286,7 +283,7 @@ export default function SessionPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           userId,
-          gender: candidate?.gender,
+          gender: effectiveGender,
           partnerPreference: candidate?.partnerPreference,
         }),
       });
@@ -354,7 +351,7 @@ export default function SessionPage() {
       }
 
       setGuestName("");
-      setGuestGender(PlayerGender.UNSPECIFIED);
+      setGuestGender(PlayerGender.MALE);
       setGuestPreference(PartnerPreference.OPEN);
       fetchSession();
     } catch (err) {
@@ -570,7 +567,7 @@ export default function SessionPage() {
               onClick={() => {
                 fetchCommunityPlayers();
                 setGuestName("");
-                setGuestGender(PlayerGender.UNSPECIFIED);
+                setGuestGender(PlayerGender.MALE);
                 setGuestPreference(PartnerPreference.OPEN);
                 setShowRosterModal(true);
               }}
@@ -909,7 +906,7 @@ export default function SessionPage() {
                   setShowRosterModal(false);
                   setRosterSearch("");
                   setGuestName("");
-                  setGuestGender(PlayerGender.UNSPECIFIED);
+                  setGuestGender(PlayerGender.MALE);
                   setGuestPreference(PartnerPreference.OPEN);
                 }}
                 className="bg-gray-100 text-gray-400 hover:text-gray-600 w-8 h-8 rounded-full flex items-center justify-center text-xl font-bold"
@@ -940,7 +937,6 @@ export default function SessionPage() {
                         onChange={(e) => setGuestGender(e.target.value as PlayerGender)}
                         className="bg-white border-2 border-gray-100 rounded-xl px-3 py-2 text-[11px] font-bold focus:outline-none focus:border-blue-500 transition-all"
                       >
-                        <option value={PlayerGender.UNSPECIFIED}>Gender</option>
                         <option value={PlayerGender.MALE}>Male</option>
                         <option value={PlayerGender.FEMALE}>Female</option>
                       </select>
@@ -979,9 +975,6 @@ export default function SessionPage() {
                 </div>
               ) : (
                 playersNotInSession.map((player) => {
-                  const missingMixicanoGender =
-                    isMixicano && ![PlayerGender.MALE, PlayerGender.FEMALE].includes(player.gender);
-
                   return (
                     <div
                       key={player.id}
@@ -1003,9 +996,8 @@ export default function SessionPage() {
                       </div>
                       <button
                         onClick={() => addPlayerToSession(player.id)}
-                        disabled={addingPlayerId === player.id || missingMixicanoGender}
+                        disabled={addingPlayerId === player.id}
                         className="bg-blue-600 text-white px-5 py-2 rounded-xl text-xs font-black uppercase tracking-wider shadow-sm active:scale-95 disabled:opacity-50 transition-all"
-                        title={missingMixicanoGender ? "Set MALE/FEMALE in admin first" : undefined}
                       >
                         {addingPlayerId === player.id ? "..." : "Add"}
                       </button>
@@ -1021,7 +1013,7 @@ export default function SessionPage() {
                   setShowRosterModal(false);
                   setRosterSearch("");
                   setGuestName("");
-                  setGuestGender(PlayerGender.UNSPECIFIED);
+                  setGuestGender(PlayerGender.MALE);
                   setGuestPreference(PartnerPreference.OPEN);
                 }}
                 className="w-full bg-gray-900 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-sm shadow-lg active:scale-95 transition-all"

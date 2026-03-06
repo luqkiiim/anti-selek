@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
+import { PlayerGender } from "@/types/enums";
 
 interface Community {
   id: string;
@@ -18,6 +19,7 @@ interface Player {
   id: string;
   name: string;
   email: string | null;
+  gender: PlayerGender;
   elo: number;
   isActive: boolean;
   isClaimed: boolean;
@@ -44,6 +46,7 @@ export default function CommunityAdminPage() {
   const [savingName, setSavingName] = useState<Record<string, boolean>>({});
   const [editingElo, setEditingElo] = useState<Record<string, string>>({});
   const [savingElo, setSavingElo] = useState<Record<string, boolean>>({});
+  const [savingGender, setSavingGender] = useState<Record<string, boolean>>({});
   const [resettingCommunity, setResettingCommunity] = useState(false);
   const [deletingCommunity, setDeletingCommunity] = useState(false);
 
@@ -241,6 +244,35 @@ export default function CommunityAdminPage() {
       await fetchCommunityAndPlayers();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Failed to remove player");
+    }
+  };
+
+  const handleUpdateGender = async (id: string, nextGender: PlayerGender) => {
+    setSavingGender((prev) => ({ ...prev, [id]: true }));
+    setError("");
+    setSuccess("");
+
+    try {
+      const res = await fetch(`/api/communities/${communityId}/members/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ gender: nextGender }),
+      });
+      const data = await safeJson(res);
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to update gender");
+      }
+
+      setPlayers((prev) =>
+        prev.map((player) =>
+          player.id === id ? { ...player, gender: nextGender } : player
+        )
+      );
+      setSuccess("Player gender updated.");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to update gender");
+    } finally {
+      setSavingGender((prev) => ({ ...prev, [id]: false }));
     }
   };
 
@@ -495,6 +527,23 @@ export default function CommunityAdminPage() {
                         </span>
                       </div>
 
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="text-[10px] font-black uppercase tracking-widest text-gray-500">
+                          Gender
+                        </span>
+                        <select
+                          value={player.gender}
+                          onChange={(e) =>
+                            handleUpdateGender(player.id, e.target.value as PlayerGender)
+                          }
+                          disabled={savingGender[player.id]}
+                          className="px-2 py-1 text-xs font-bold border rounded bg-white focus:outline-none focus:border-blue-500 disabled:opacity-60"
+                        >
+                          <option value={PlayerGender.MALE}>Male</option>
+                          <option value={PlayerGender.FEMALE}>Female</option>
+                        </select>
+                      </div>
+
                       <div className="pt-1">
                         <button
                           onClick={() => handleRemovePlayer(player.id, player.name)}
@@ -517,6 +566,7 @@ export default function CommunityAdminPage() {
                     <th className="px-4 py-3 text-center text-[10px] font-black text-gray-500 uppercase tracking-widest whitespace-nowrap">Claimed</th>
                     <th className="px-4 py-3 text-center text-[10px] font-black text-gray-500 uppercase tracking-widest whitespace-nowrap">Status</th>
                     <th className="px-4 py-3 text-center text-[10px] font-black text-gray-500 uppercase tracking-widest whitespace-nowrap">Role</th>
+                    <th className="px-4 py-3 text-center text-[10px] font-black text-gray-500 uppercase tracking-widest whitespace-nowrap">Gender</th>
                     <th className="px-4 py-3 text-center text-[10px] font-black text-gray-500 uppercase tracking-widest whitespace-nowrap">Actions</th>
                   </tr>
                 </thead>
@@ -602,6 +652,19 @@ export default function CommunityAdminPage() {
                             {player.role}
                           </span>
                         </td>
+                        <td className="px-4 py-4 align-middle text-center">
+                          <select
+                            value={player.gender}
+                            onChange={(e) =>
+                              handleUpdateGender(player.id, e.target.value as PlayerGender)
+                            }
+                            disabled={savingGender[player.id]}
+                            className="px-2 py-1 text-xs font-bold border rounded bg-gray-50 focus:bg-white focus:outline-none focus:border-blue-500 disabled:opacity-60"
+                          >
+                            <option value={PlayerGender.MALE}>Male</option>
+                            <option value={PlayerGender.FEMALE}>Female</option>
+                          </select>
+                        </td>
                         <td className="px-4 py-4 text-center text-sm font-medium align-middle">
                           <div className="flex justify-center gap-3">
                             <button
@@ -616,7 +679,7 @@ export default function CommunityAdminPage() {
                     ))}
                   {players.length === 0 && (
                     <tr>
-                      <td colSpan={6} className="px-6 py-8 text-center text-gray-500 italic">
+                      <td colSpan={7} className="px-6 py-8 text-center text-gray-500 italic">
                         No players in the community yet.
                       </td>
                     </tr>
