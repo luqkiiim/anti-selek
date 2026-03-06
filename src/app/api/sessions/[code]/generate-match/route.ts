@@ -7,6 +7,7 @@ import { getBusyPlayerIds } from "@/lib/matchmaking/busyFilter";
 import { MatchStatus, SessionStatus } from "@/types/enums";
 
 export const dynamic = "force-dynamic";
+const REPEAT_PARTNER_PENALTY = 15;
 
 // Helper: get all possible doubles partitions for exactly 4 players
 function getDoublesPartitions(players: string[]): { team1: [string, string]; team2: [string, string] }[] {
@@ -141,8 +142,8 @@ export async function POST(
       const team2AvgElo = (getPlayerElo(p3) + getPlayerElo(p4)) / 2;
       let balanceScore = Math.abs(team1AvgElo - team2AvgElo);
 
-      if (p1.lastPartnerId === p2.userId || p2.lastPartnerId === p1.userId) balanceScore += 1000;
-      if (p3.lastPartnerId === p4.userId || p4.lastPartnerId === p3.userId) balanceScore += 1000;
+      if (p1.lastPartnerId === p2.userId || p2.lastPartnerId === p1.userId) balanceScore += REPEAT_PARTNER_PENALTY;
+      if (p3.lastPartnerId === p4.userId || p4.lastPartnerId === p3.userId) balanceScore += REPEAT_PARTNER_PENALTY;
 
       if (balanceScore < bestScore) {
         bestScore = balanceScore;
