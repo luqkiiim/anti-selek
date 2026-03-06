@@ -58,12 +58,6 @@ interface GuestConfig {
   partnerPreference: PartnerPreference;
 }
 
-interface PlayerConfig {
-  userId: string;
-  gender: PlayerGender;
-  partnerPreference: PartnerPreference;
-}
-
 export default function CommunityPage() {
   const { status } = useSession();
   const router = useRouter();
@@ -80,9 +74,6 @@ export default function CommunityPage() {
   const [sessionMode, setSessionMode] = useState<SessionMode>(SessionMode.MEXICANO);
   const [courtCount, setCourtCount] = useState(3);
   const [selectedPlayerIds, setSelectedPlayerIds] = useState<string[]>([]);
-  const [selectedPlayerConfigById, setSelectedPlayerConfigById] = useState<
-    Record<string, { gender: PlayerGender; partnerPreference: PartnerPreference }>
-  >({});
   const [guestNameInput, setGuestNameInput] = useState("");
   const [guestGenderInput, setGuestGenderInput] = useState<PlayerGender>(PlayerGender.MALE);
   const [guestPreferenceInput, setGuestPreferenceInput] = useState<PartnerPreference>(
@@ -127,7 +118,6 @@ export default function CommunityPage() {
 
   useEffect(() => {
     setSelectedPlayerIds([]);
-    setSelectedPlayerConfigById({});
     setGuestConfigs([]);
     setGuestNameInput("");
     setGuestGenderInput(PlayerGender.MALE);
@@ -205,19 +195,6 @@ export default function CommunityPage() {
     setCreatingSession(true);
     setError("");
     try {
-      const playerConfigs: PlayerConfig[] = selectedPlayerIds.map((playerId) => {
-        const fallbackMember = communityMembers.find((member) => member.id === playerId);
-        const config = selectedPlayerConfigById[playerId];
-        return {
-          userId: playerId,
-          gender: config?.gender ?? fallbackMember?.gender ?? PlayerGender.MALE,
-          partnerPreference:
-            config?.partnerPreference ??
-            fallbackMember?.partnerPreference ??
-            PartnerPreference.OPEN,
-        };
-      });
-
       const res = await fetch("/api/sessions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -229,7 +206,6 @@ export default function CommunityPage() {
           communityId,
           playerIds: selectedPlayerIds,
           guestNames: guestConfigs.map((guest) => guest.name),
-          playerConfigs,
           guestConfigs,
         }),
       });
@@ -241,7 +217,6 @@ export default function CommunityPage() {
 
       setNewSessionName("");
       setSelectedPlayerIds([]);
-      setSelectedPlayerConfigById({});
       setGuestConfigs([]);
       setGuestNameInput("");
       setGuestGenderInput(PlayerGender.MALE);
@@ -271,28 +246,9 @@ export default function CommunityPage() {
   };
 
   const togglePlayerSelection = (playerId: string) => {
-    setSelectedPlayerIds((prev) => {
-      if (prev.includes(playerId)) {
-        setSelectedPlayerConfigById((old) => {
-          const next = { ...old };
-          delete next[playerId];
-          return next;
-        });
-        return prev.filter((id) => id !== playerId);
-      }
-
-      const member = communityMembers.find((p) => p.id === playerId);
-      if (member) {
-        setSelectedPlayerConfigById((old) => ({
-          ...old,
-          [playerId]: {
-            gender: member.gender ?? PlayerGender.MALE,
-            partnerPreference: member.partnerPreference ?? PartnerPreference.OPEN,
-          },
-        }));
-      }
-      return [...prev, playerId];
-    });
+    setSelectedPlayerIds((prev) =>
+      prev.includes(playerId) ? prev.filter((id) => id !== playerId) : [...prev, playerId]
+    );
   };
 
   const addGuestName = () => {
@@ -465,22 +421,8 @@ export default function CommunityPage() {
                         const allOtherIds = communityMembers.filter((p) => p.id !== user?.id).map((p) => p.id);
                         if (selectedPlayerIds.length === allOtherIds.length) {
                           setSelectedPlayerIds([]);
-                          setSelectedPlayerConfigById({});
                         } else {
                           setSelectedPlayerIds(allOtherIds);
-                          setSelectedPlayerConfigById(
-                            allOtherIds.reduce<
-                              Record<string, { gender: PlayerGender; partnerPreference: PartnerPreference }>
-                            >((acc, playerId) => {
-                              const member = communityMembers.find((p) => p.id === playerId);
-                              acc[playerId] = {
-                                gender: member?.gender ?? PlayerGender.MALE,
-                                partnerPreference:
-                                  member?.partnerPreference ?? PartnerPreference.OPEN,
-                              };
-                              return acc;
-                            }, {})
-                          );
                         }
                       }}
                       className="text-[9px] font-black uppercase tracking-widest bg-white/20 px-2 py-1 rounded-lg hover:bg-white/30 transition-all"

@@ -269,23 +269,12 @@ export default function SessionPage() {
   };
 
   const addPlayerToSession = async (userId: string) => {
-    const candidate = communityPlayers.find((player) => player.id === userId);
-    const effectiveGender =
-      sessionData?.mode === SessionMode.MIXICANO &&
-      (!candidate || ![PlayerGender.MALE, PlayerGender.FEMALE].includes(candidate.gender))
-        ? PlayerGender.MALE
-        : candidate?.gender;
-
     setAddingPlayerId(userId);
     try {
       const adminRes = await fetch(`/api/sessions/${code}/join`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          userId,
-          gender: effectiveGender,
-          partnerPreference: candidate?.partnerPreference,
-        }),
+        body: JSON.stringify({ userId }),
       });
 
       if (adminRes.ok) {
