@@ -577,8 +577,8 @@ export default function SessionPage() {
           </div>
         )}
 
-        {/* Courts Grid - Stacked on Mobile, Grid on Tablet/Desktop */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4 mb-8">
+        {/* Courts Grid - Up to 3 columns on tablet/desktop */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 mb-8">
           {sessionData.courts
             .sort((a, b) => a.courtNumber - b.courtNumber)
             .map((court) => {
@@ -594,8 +594,8 @@ export default function SessionPage() {
               const scores = currentMatch ? (matchScores[currentMatch.id] || { team1: "", team2: "" }) : { team1: "", team2: "" };
 
               return (
-                <div key={court.id} className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden flex flex-col">
-                  <div className="bg-gray-50/80 px-4 py-2.5 border-b border-gray-100 flex justify-between items-center">
+                <div key={court.id} className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden flex flex-col min-w-0">
+                  <div className="bg-gray-50/80 px-3 py-2.5 border-b border-gray-100 flex justify-between items-center">
                     <h2 className="text-sm font-black text-gray-500 uppercase tracking-widest">Court {court.courtNumber}</h2>
                     <div className="flex gap-2">
                       {sessionData.status === SessionStatus.ACTIVE && !court.currentMatch && isAdmin && (
@@ -618,7 +618,7 @@ export default function SessionPage() {
                     </div>
                   </div>
 
-                  <div className="p-4 flex-1 flex flex-col justify-center">
+                  <div className="p-3 flex-1 flex flex-col justify-center">
                     {currentMatch ? (
                       <div className="space-y-3">
                         {/* Team 1 Card */}
