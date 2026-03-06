@@ -205,7 +205,6 @@ export default function CommunityPage() {
           courtCount,
           communityId,
           playerIds: selectedPlayerIds,
-          guestNames: guestConfigs.map((guest) => guest.name),
           guestConfigs,
         }),
       });

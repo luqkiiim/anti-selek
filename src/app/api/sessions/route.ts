@@ -143,12 +143,13 @@ export async function POST(request: Request) {
       gender: PlayerGender =
         mode === SessionMode.MIXICANO ? PlayerGender.MALE : PlayerGender.UNSPECIFIED,
       partnerPreference: PartnerPreference = PartnerPreference.OPEN,
-      initialElo = 1000
+      initialElo = 1000,
+      overwrite = false
     ) => {
       const trimmed = guestName.trim();
       if (trimmed.length < 2) return;
       const key = trimmed.toLowerCase();
-      if (normalizedGuestsByName.has(key)) return;
+      if (normalizedGuestsByName.has(key) && !overwrite) return;
       normalizedGuestsByName.set(key, {
         name: trimmed,
         gender,
@@ -200,7 +201,8 @@ export async function POST(request: Request) {
             ? candidate.initialElo
             : 1000;
 
-        upsertGuest(candidate.name, gender, partnerPreference, initialElo);
+        // Explicit guest configs must override defaults from guestNames.
+        upsertGuest(candidate.name, gender, partnerPreference, initialElo, true);
       }
     }
 
