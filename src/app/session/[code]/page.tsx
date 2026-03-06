@@ -103,6 +103,8 @@ export default function SessionPage() {
   const [guestPreference, setGuestPreference] = useState<PartnerPreference>(PartnerPreference.OPEN);
   const [addingGuest, setAddingGuest] = useState(false);
   const [savingPreferencesFor, setSavingPreferencesFor] = useState<string | null>(null);
+  const [editingGenderFor, setEditingGenderFor] = useState<string | null>(null);
+  const [editingPreferenceFor, setEditingPreferenceFor] = useState<string | null>(null);
 
   // Track scores per match locally
   const [matchScores, setMatchScores] = useState<Record<string, { team1: string; team2: string }>>({});
@@ -811,37 +813,79 @@ export default function SessionPage() {
                               </div>
                               {isAdmin && isMixicano && (
                                 <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                                  <select
-                                    value={player.gender}
-                                    onChange={(e) =>
-                                      updatePlayerPreference(
-                                        player.userId,
-                                        e.target.value as PlayerGender,
-                                        player.partnerPreference
-                                      )
-                                    }
-                                    disabled={savingPreferencesFor === player.userId}
-                                    className="h-7 bg-white border border-gray-200 rounded-md px-2 text-[10px] font-black uppercase tracking-wide text-gray-600 focus:outline-none focus:border-blue-400 disabled:opacity-50"
-                                  >
-                                    <option value={PlayerGender.UNSPECIFIED}>Unspecified</option>
-                                    <option value={PlayerGender.MALE}>Male</option>
-                                    <option value={PlayerGender.FEMALE}>Female</option>
-                                  </select>
-                                  <select
-                                    value={player.partnerPreference}
-                                    onChange={(e) =>
-                                      updatePlayerPreference(
-                                        player.userId,
-                                        player.gender,
-                                        e.target.value as PartnerPreference
-                                      )
-                                    }
-                                    disabled={savingPreferencesFor === player.userId}
-                                    className="h-7 bg-white border border-gray-200 rounded-md px-2 text-[10px] font-black uppercase tracking-wide text-gray-600 focus:outline-none focus:border-blue-400 disabled:opacity-50"
-                                  >
-                                    <option value={PartnerPreference.OPEN}>Open</option>
-                                    <option value={PartnerPreference.FEMALE_FLEX}>Female Flex</option>
-                                  </select>
+                                  {editingGenderFor === player.userId ? (
+                                    <select
+                                      value={player.gender}
+                                      onChange={async (e) => {
+                                        const nextGender = e.target.value as PlayerGender;
+                                        setEditingGenderFor(null);
+                                        await updatePlayerPreference(
+                                          player.userId,
+                                          nextGender,
+                                          player.partnerPreference
+                                        );
+                                      }}
+                                      onBlur={() => setEditingGenderFor(null)}
+                                      disabled={savingPreferencesFor === player.userId}
+                                      className="h-7 bg-white border border-gray-200 rounded-md px-2 text-[10px] font-black uppercase tracking-wide text-gray-600 focus:outline-none focus:border-blue-400 disabled:opacity-50"
+                                      autoFocus
+                                    >
+                                      <option value={PlayerGender.MALE}>Male</option>
+                                      <option value={PlayerGender.FEMALE}>Female</option>
+                                    </select>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setEditingPreferenceFor(null);
+                                        setEditingGenderFor(player.userId);
+                                      }}
+                                      className={`h-7 px-2 rounded-full text-[10px] font-black uppercase tracking-wide border transition-colors ${
+                                        player.gender === PlayerGender.FEMALE
+                                          ? "bg-rose-100 text-rose-700 border-rose-200"
+                                          : "bg-sky-100 text-sky-700 border-sky-200"
+                                      }`}
+                                    >
+                                      {player.gender === PlayerGender.FEMALE ? "Female" : "Male"}
+                                    </button>
+                                  )}
+
+                                  {editingPreferenceFor === player.userId ? (
+                                    <select
+                                      value={player.partnerPreference}
+                                      onChange={async (e) => {
+                                        const nextPreference = e.target.value as PartnerPreference;
+                                        setEditingPreferenceFor(null);
+                                        await updatePlayerPreference(
+                                          player.userId,
+                                          player.gender,
+                                          nextPreference
+                                        );
+                                      }}
+                                      onBlur={() => setEditingPreferenceFor(null)}
+                                      disabled={savingPreferencesFor === player.userId}
+                                      className="h-7 bg-white border border-gray-200 rounded-md px-2 text-[10px] font-black uppercase tracking-wide text-gray-600 focus:outline-none focus:border-blue-400 disabled:opacity-50"
+                                      autoFocus
+                                    >
+                                      <option value={PartnerPreference.OPEN}>Open</option>
+                                      <option value={PartnerPreference.FEMALE_FLEX}>Female Flex</option>
+                                    </select>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setEditingGenderFor(null);
+                                        setEditingPreferenceFor(player.userId);
+                                      }}
+                                      className={`h-7 px-2 rounded-full text-[10px] font-black uppercase tracking-wide border transition-colors ${
+                                        player.partnerPreference === PartnerPreference.FEMALE_FLEX
+                                          ? "bg-violet-100 text-violet-700 border-violet-200"
+                                          : "bg-gray-100 text-gray-600 border-gray-200"
+                                      }`}
+                                    >
+                                      {player.partnerPreference === PartnerPreference.FEMALE_FLEX ? "Female Flex" : "Open"}
+                                    </button>
+                                  )}
                                   {savingPreferencesFor === player.userId && (
                                     <span className="text-[9px] font-black text-gray-400 uppercase tracking-wider">
                                       Saving...
