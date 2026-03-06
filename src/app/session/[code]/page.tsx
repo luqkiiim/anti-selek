@@ -765,8 +765,8 @@ export default function SessionPage() {
               <table className="min-w-[680px] w-full">
                 <thead className="bg-gray-50/50 border-b border-gray-100">
                   <tr>
-                    <th className="px-4 py-3 text-left text-[10px] font-black text-gray-400 uppercase tracking-widest">#</th>
-                    <th className="px-4 py-3 text-left text-[10px] font-black text-gray-400 uppercase tracking-widest">Player</th>
+                    <th className="w-10 px-2 py-3 text-left text-[10px] font-black text-gray-400 uppercase tracking-widest">#</th>
+                    <th className="px-2 py-3 text-left text-[10px] font-black text-gray-400 uppercase tracking-widest">Player</th>
                     {sessionData.type === SessionType.POINTS ? (
                       <>
                         <th className="w-24 px-4 py-3 text-center text-[10px] font-black text-gray-400 uppercase tracking-widest">Pts</th>
@@ -801,7 +801,7 @@ export default function SessionPage() {
 
                       return (
                         <tr key={player.userId} className={`active:bg-gray-50 transition-colors ${player.isPaused ? 'opacity-40 grayscale' : ''}`}>
-                          <td className="px-4 py-4 whitespace-nowrap">
+                          <td className="w-10 px-2 py-4 whitespace-nowrap">
                             <span className={`w-6 h-6 rounded-lg flex items-center justify-center text-[10px] font-black ${
                               idx < 3 
                                 ? 'bg-blue-100 text-blue-700'
@@ -810,7 +810,7 @@ export default function SessionPage() {
                               {idx + 1}
                             </span>
                           </td>
-                          <td className="px-4 py-4 min-w-[140px]">
+                          <td className="px-2 py-4 min-w-[140px]">
                             <div className="flex flex-col">
                               <div className="flex items-center gap-2">
                                 <Link
