@@ -545,7 +545,7 @@ export default function CommunityAdminPage() {
                             Unclaimed
                           </span>
                         )}
-                        <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-100 text-gray-700 border border-gray-200">
+                        <span className="px-2 h-7 inline-flex items-center justify-center whitespace-nowrap text-xs leading-none font-semibold rounded-full bg-gray-100 text-gray-700 border border-gray-200">
                           {getGenderPillLabel(player)}
                         </span>
                       </div>
@@ -561,12 +561,12 @@ export default function CommunityAdminPage() {
                               prev === player.id ? null : player.id
                             )
                           }
-                          className="px-2 inline-flex h-7 text-xs leading-5 font-semibold rounded-full bg-gray-100 text-gray-700 border border-gray-200 hover:bg-gray-200 transition-colors"
+                          className="px-2 h-7 inline-flex items-center justify-center whitespace-nowrap text-xs leading-none font-semibold rounded-full bg-gray-100 text-gray-700 border border-gray-200 hover:bg-gray-200 transition-colors"
                         >
                           {getGenderPillLabel(player)}
                         </button>
                         {openPreferenceEditorFor === player.id && (
-                          <div className="absolute top-full right-0 mt-2 z-20 bg-white border border-gray-200 rounded-xl shadow-lg p-2.5 w-44 space-y-2">
+                          <div className="absolute bottom-full right-0 mb-2 z-20 bg-white border border-gray-200 rounded-xl shadow-lg p-2.5 w-44 space-y-2">
                             <div className="space-y-1">
                               <p className="text-[9px] font-black uppercase tracking-wider text-gray-400">
                                 Gender
@@ -732,12 +732,12 @@ export default function CommunityAdminPage() {
                                   prev === player.id ? null : player.id
                                 )
                               }
-                              className="px-2 inline-flex h-7 text-xs leading-5 font-semibold rounded-full bg-gray-100 text-gray-700 border border-gray-200 hover:bg-gray-200 transition-colors"
+                              className="px-2 h-7 inline-flex items-center justify-center whitespace-nowrap text-xs leading-none font-semibold rounded-full bg-gray-100 text-gray-700 border border-gray-200 hover:bg-gray-200 transition-colors"
                             >
                               {getGenderPillLabel(player)}
                             </button>
                             {openPreferenceEditorFor === player.id && (
-                              <div className="absolute top-full right-0 mt-2 z-20 bg-white border border-gray-200 rounded-xl shadow-lg p-2.5 w-44 space-y-2 text-left">
+                              <div className="absolute bottom-full right-0 mb-2 z-20 bg-white border border-gray-200 rounded-xl shadow-lg p-2.5 w-44 space-y-2 text-left">
                                 <div className="space-y-1">
                                   <p className="text-[9px] font-black uppercase tracking-wider text-gray-400">
                                     Gender
