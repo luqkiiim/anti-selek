@@ -906,7 +906,7 @@ export default function SessionPage() {
                     )}
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-50">
+                <tbody className="divide-y divide-gray-200">
                   {sessionData.players
                     .sort((a, b) => 
                       sessionData.type === SessionType.ELO 
