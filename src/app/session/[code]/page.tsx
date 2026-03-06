@@ -527,10 +527,12 @@ export default function SessionPage() {
             </div>
           </div>
           <button
-            onClick={() => router.push("/")}
+            onClick={() =>
+              router.push(sessionData.communityId ? `/community/${sessionData.communityId}` : "/")
+            }
             className="bg-gray-100 text-gray-600 px-3 py-1.5 rounded-lg text-sm font-bold active:scale-95 transition-transform"
           >
-            Exit
+            Back
           </button>
         </div>
       </nav>
