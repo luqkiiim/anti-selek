@@ -45,7 +45,10 @@ interface CompletedMatchInfo {
   team1User2Id: string;
   team2User1Id: string;
   team2User2Id: string;
+  team1Score?: number;
+  team2Score?: number;
   winnerTeam: number;
+  status: string;
   completedAt?: string;
 }
 
@@ -504,6 +507,23 @@ export default function SessionPage() {
     return { played, wins, losses };
   };
 
+  const calculatePlayerPointDiff = (userId: string) => {
+    const sessionMatches = sessionData.matches || [];
+    let pointDiff = 0;
+
+    sessionMatches.forEach((m) => {
+      if (m.status !== MatchStatus.COMPLETED) return;
+      if (typeof m.team1Score !== "number" || typeof m.team2Score !== "number") return;
+
+      const isTeam1 = m.team1User1Id === userId || m.team1User2Id === userId;
+      const isTeam2 = m.team2User1Id === userId || m.team2User2Id === userId;
+      if (isTeam1) pointDiff += m.team1Score - m.team2Score;
+      if (isTeam2) pointDiff += m.team2Score - m.team1Score;
+    });
+
+    return pointDiff;
+  };
+
   // Filter out players already in session AND apply search
   const playersNotInSession = communityPlayers
     .filter(cp => !sessionData.players.some(sp => sp.userId === cp.id))
@@ -759,12 +779,15 @@ export default function SessionPage() {
                     .sort((a, b) => 
                       sessionData.type === SessionType.ELO 
                         ? b.user.elo - a.user.elo 
-                        : b.sessionPoints - a.sessionPoints
+                        : b.sessionPoints - a.sessionPoints ||
+                          calculatePlayerPointDiff(b.userId) - calculatePlayerPointDiff(a.userId) ||
+                          a.user.name.localeCompare(b.user.name)
                     )
                     .map((player, idx) => {
                       const stats = calculatePlayerSessionStats(player.userId);
                       const isMe = player.userId === currentUserId;
                       const canToggle = isAdmin || isMe;
+                      const pointDiff = calculatePlayerPointDiff(player.userId);
 
                       return (
                         <tr key={player.userId} className={`active:bg-gray-50 transition-colors ${player.isPaused ? 'opacity-40 grayscale' : ''}`}>
@@ -812,6 +835,11 @@ export default function SessionPage() {
                               </div>
                               <div className="flex items-center gap-2 mt-1">
                                 {sessionData.type !== SessionType.ELO && <span className="text-[9px] font-bold text-gray-400 uppercase">ELO {player.user.elo}</span>}
+                                {sessionData.type === SessionType.POINTS && (
+                                  <span className="text-[9px] font-bold text-gray-400 uppercase">
+                                    GD {pointDiff > 0 ? `+${pointDiff}` : pointDiff}
+                                  </span>
+                                )}
                               </div>
                               {isAdmin && isMixicano && (
                                 <div className="mt-2 flex flex-wrap items-center gap-1.5">

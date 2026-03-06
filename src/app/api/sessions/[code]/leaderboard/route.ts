@@ -39,6 +39,9 @@ export async function GET(
           team1User2Id: true,
           team2User1Id: true,
           team2User2Id: true,
+          team1Score: true,
+          team2Score: true,
+          status: true,
         }
       }
     },
@@ -70,10 +73,26 @@ export async function GET(
 
   // Calculate match counts
   const matchCounts: Record<string, number> = {};
+  const pointDiffByUserId: Record<string, number> = {};
   sessionData.matches.forEach(m => {
     [m.team1User1Id, m.team1User2Id, m.team2User1Id, m.team2User2Id].forEach(id => {
       matchCounts[id] = (matchCounts[id] || 0) + 1;
     });
+
+    if (
+      m.status === MatchStatus.COMPLETED &&
+      typeof m.team1Score === "number" &&
+      typeof m.team2Score === "number"
+    ) {
+      const team1Diff = m.team1Score - m.team2Score;
+      const team2Diff = m.team2Score - m.team1Score;
+      [m.team1User1Id, m.team1User2Id].forEach((id) => {
+        pointDiffByUserId[id] = (pointDiffByUserId[id] || 0) + team1Diff;
+      });
+      [m.team2User1Id, m.team2User2Id].forEach((id) => {
+        pointDiffByUserId[id] = (pointDiffByUserId[id] || 0) + team2Diff;
+      });
+    }
   });
 
   const communityEloByUserId =
@@ -96,8 +115,13 @@ export async function GET(
       sessionPoints: p.sessionPoints,
       elo: getPlayerElo(p.userId, p.user.elo),
       matchesPlayed: matchCounts[p.userId] || 0,
+      pointDiff: pointDiffByUserId[p.userId] || 0,
     }))
-    .sort((a, b) => b.sessionPoints - a.sessionPoints);
+    .sort((a, b) =>
+      b.sessionPoints - a.sessionPoints ||
+      b.pointDiff - a.pointDiff ||
+      a.name.localeCompare(b.name)
+    );
 
   // ELO leaderboard
   const eloLeaderboard = sessionData.players

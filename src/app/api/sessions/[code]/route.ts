@@ -54,6 +54,8 @@ export async function GET(
           team1User2Id: true,
           team2User1Id: true,
           team2User2Id: true,
+          team1Score: true,
+          team2Score: true,
           winnerTeam: true,
           status: true,
           completedAt: true,

@@ -3,7 +3,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getCommunityEloByUserId } from "@/lib/communityElo";
 import { isValidBadmintonScore } from "@/lib/matchRules";
-import { MatchStatus } from "@/types/enums";
+import { MatchStatus, SessionType } from "@/types/enums";
 
 export const dynamic = "force-dynamic";
 
@@ -38,7 +38,7 @@ export async function POST(
       where: { id },
       include: {
         session: {
-          select: { communityId: true },
+          select: { communityId: true, type: true },
         },
         court: true,
         team1User1: { select: { id: true, name: true, elo: true } },
@@ -106,6 +106,10 @@ export async function POST(
     const team2Points = finalTeam2Score;
     const winnerTeam = team1Points > team2Points ? 1 : 2;
     const now = new Date();
+    const team1StandingPoints =
+      match.session.type === SessionType.POINTS ? (winnerTeam === 1 ? 3 : 0) : team1Points;
+    const team2StandingPoints =
+      match.session.type === SessionType.POINTS ? (winnerTeam === 2 ? 3 : 0) : team2Points;
 
     const playerIds = [match.team1User1Id, match.team1User2Id, match.team2User1Id, match.team2User2Id];
     const communityEloByUserId =
@@ -167,7 +171,7 @@ export async function POST(
             userId: { in: [match.team1User1Id, match.team1User2Id] },
           },
           data: {
-            sessionPoints: { increment: team1Points },
+            sessionPoints: { increment: team1StandingPoints },
             matchesPlayed: { increment: 1 },
             lastPlayedAt: now,
             availableSince: now,
@@ -180,7 +184,7 @@ export async function POST(
             userId: { in: [match.team2User1Id, match.team2User2Id] },
           },
           data: {
-            sessionPoints: { increment: team2Points },
+            sessionPoints: { increment: team2StandingPoints },
             matchesPlayed: { increment: 1 },
             lastPlayedAt: now,
             availableSince: now,
