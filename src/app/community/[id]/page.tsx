@@ -16,6 +16,7 @@ interface User {
   id: string;
   name: string;
   email: string;
+  isAdmin?: boolean;
   elo: number;
   gender: PlayerGender;
   partnerPreference: PartnerPreference;
@@ -49,6 +50,7 @@ interface Session {
   type: string;
   status: string;
   createdAt: string;
+  endedAt?: string | null;
   players: { user: { id: string; name: string } }[];
 }
 
@@ -95,6 +97,7 @@ export default function CommunityPage() {
   const [showPlayersModal, setShowPlayersModal] = useState(false);
   const [showGuestsModal, setShowGuestsModal] = useState(false);
   const [playerSearch, setPlayerSearch] = useState("");
+  const [rollingBackTournamentCode, setRollingBackTournamentCode] = useState<string | null>(null);
   const [error, setError] = useState("");
 
   const safeJson = async (res: Response) => {
@@ -121,11 +124,19 @@ export default function CommunityPage() {
   );
 
   const pastTournaments = useMemo(
-    () => sessions.filter((s) => s.status === SessionStatus.COMPLETED),
+    () =>
+      sessions
+        .filter((s) => s.status === SessionStatus.COMPLETED)
+        .sort((a, b) => {
+          const aTime = new Date(a.endedAt ?? a.createdAt).getTime();
+          const bTime = new Date(b.endedAt ?? b.createdAt).getTime();
+          return bTime - aTime;
+        }),
     [sessions]
   );
+  const latestPastTournamentId = pastTournaments[0]?.id ?? null;
 
-  const canManageCommunity = !!community && community.role === "ADMIN";
+  const canManageCommunity = (!!community && community.role === "ADMIN") || !!user?.isAdmin;
   const selectablePlayers = communityMembers.filter((member) => member.id !== user?.id);
   const filteredSelectablePlayers = selectablePlayers.filter((member) =>
     member.name.toLowerCase().includes(playerSearch.toLowerCase())
@@ -261,6 +272,60 @@ export default function CommunityPage() {
       router.push(`/session/${code}`);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Failed to join tournament");
+    }
+  };
+
+  const rollbackTournament = async (tournament: Session) => {
+    if (!canManageCommunity) return;
+
+    const confirmed = confirm(
+      `Rollback and delete "${tournament.name}"?\n\nThis will reverse Elo changes from this tournament and cannot be undone.`
+    );
+    if (!confirmed) return;
+
+    setRollingBackTournamentCode(tournament.code);
+    setError("");
+    try {
+      const rollbackRes = await fetch(`/api/sessions/${tournament.code}/rollback`, {
+        method: "POST",
+      });
+      const rollbackData = await safeJson(rollbackRes);
+      if (!rollbackRes.ok) {
+        setError(rollbackData.error || "Failed to rollback tournament");
+        return;
+      }
+
+      const [membersRes, sessionsRes, communitiesRes] = await Promise.all([
+        fetch(`/api/communities/${communityId}/members`),
+        fetch(`/api/sessions?communityId=${encodeURIComponent(communityId)}`),
+        fetch("/api/communities"),
+      ]);
+      const [membersData, sessionsData] = await Promise.all([
+        safeJson(membersRes),
+        safeJson(sessionsRes),
+      ]);
+      const communitiesData = await safeJson(communitiesRes);
+
+      if (!membersRes.ok) {
+        throw new Error(membersData.error || "Failed to refresh community members");
+      }
+      if (!sessionsRes.ok) {
+        throw new Error(sessionsData.error || "Failed to refresh tournaments");
+      }
+      if (!communitiesRes.ok) {
+        throw new Error(communitiesData.error || "Failed to refresh communities");
+      }
+
+      setCommunityMembers(Array.isArray(membersData) ? membersData : []);
+      setSessions(Array.isArray(sessionsData) ? sessionsData : []);
+      if (Array.isArray(communitiesData)) {
+        const refreshedCommunity = (communitiesData as Community[]).find((c) => c.id === communityId) || null;
+        setCommunity(refreshedCommunity);
+      }
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to rollback tournament");
+    } finally {
+      setRollingBackTournamentCode(null);
     }
   };
 
@@ -567,24 +632,49 @@ export default function CommunityPage() {
                     <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">No past tournaments</p>
                   </div>
                 ) : (
-                  pastTournaments.map((tournament) => (
-                    <Link
-                      key={tournament.id}
-                      href={`/session/${tournament.code}`}
-                      className="block bg-gray-50 p-4 rounded-2xl border border-gray-100 hover:border-blue-400 transition-colors"
-                    >
-                      <div className="flex justify-between items-start mb-2">
-                        <h4 className="font-black text-gray-900">{tournament.name}</h4>
-                        <span className="text-[10px] font-black text-gray-600 bg-gray-200 px-2 py-1 rounded-lg uppercase tracking-widest">
-                          {tournament.status}
-                        </span>
+                  pastTournaments.map((tournament) => {
+                    const canRollbackLatest =
+                      canManageCommunity && tournament.id === latestPastTournamentId;
+                    return (
+                      <div
+                        key={tournament.id}
+                        className="bg-gray-50 p-4 rounded-2xl border border-gray-100"
+                      >
+                        <div className="flex justify-between items-start mb-2">
+                          <h4 className="font-black text-gray-900">{tournament.name}</h4>
+                          <span className="text-[10px] font-black text-gray-600 bg-gray-200 px-2 py-1 rounded-lg uppercase tracking-widest">
+                            {tournament.status}
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-center gap-2">
+                          <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">
+                            {tournament.players.length} Players - {tournament.type} -{" "}
+                            {new Date(tournament.createdAt).toLocaleDateString()}
+                          </p>
+                          <div className="flex items-center gap-2 shrink-0">
+                            <Link
+                              href={`/session/${tournament.code}`}
+                              className="text-[10px] bg-gray-900 text-white px-3 py-1.5 rounded-lg font-black uppercase tracking-wider"
+                            >
+                              Open
+                            </Link>
+                            {canRollbackLatest && (
+                              <button
+                                type="button"
+                                onClick={() => rollbackTournament(tournament)}
+                                disabled={rollingBackTournamentCode !== null}
+                                className="text-[10px] bg-red-600 text-white px-3 py-1.5 rounded-lg font-black uppercase tracking-wider disabled:opacity-50 disabled:cursor-not-allowed"
+                              >
+                                {rollingBackTournamentCode === tournament.code
+                                  ? "Rolling Back..."
+                                  : "Rollback"}
+                              </button>
+                            )}
+                          </div>
+                        </div>
                       </div>
-                      <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">
-                        {tournament.players.length} Players - {tournament.type} -{" "}
-                        {new Date(tournament.createdAt).toLocaleDateString()}
-                      </p>
-                    </Link>
-                  ))
+                    );
+                  })
                 )}
               </div>
             </div>
