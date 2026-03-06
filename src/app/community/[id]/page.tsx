@@ -84,6 +84,9 @@ export default function CommunityPage() {
   const [loading, setLoading] = useState(true);
   const [creatingSession, setCreatingSession] = useState(false);
   const [showHostPanel, setShowHostPanel] = useState(false);
+  const [showPlayersModal, setShowPlayersModal] = useState(false);
+  const [showGuestsModal, setShowGuestsModal] = useState(false);
+  const [playerSearch, setPlayerSearch] = useState("");
   const [error, setError] = useState("");
 
   const safeJson = async (res: Response) => {
@@ -115,6 +118,10 @@ export default function CommunityPage() {
   );
 
   const canManageCommunity = !!community && community.role === "ADMIN";
+  const selectablePlayers = communityMembers.filter((member) => member.id !== user?.id);
+  const filteredSelectablePlayers = selectablePlayers.filter((member) =>
+    member.name.toLowerCase().includes(playerSearch.toLowerCase())
+  );
 
   useEffect(() => {
     setSelectedPlayerIds([]);
@@ -122,6 +129,9 @@ export default function CommunityPage() {
     setGuestNameInput("");
     setGuestGenderInput(PlayerGender.MALE);
     setGuestPreferenceInput(PartnerPreference.OPEN);
+    setPlayerSearch("");
+    setShowPlayersModal(false);
+    setShowGuestsModal(false);
   }, [communityId]);
 
   useEffect(() => {
@@ -412,132 +422,29 @@ export default function CommunityPage() {
                   </select>
                 </div>
 
-                <div className="space-y-2">
-                  <div className="flex justify-between items-center">
-                    <p className="text-[10px] font-black uppercase tracking-widest text-blue-100">Quick-Add Players</p>
-                    <button
-                      onClick={() => {
-                        const allOtherIds = communityMembers.filter((p) => p.id !== user?.id).map((p) => p.id);
-                        if (selectedPlayerIds.length === allOtherIds.length) {
-                          setSelectedPlayerIds([]);
-                        } else {
-                          setSelectedPlayerIds(allOtherIds);
-                        }
-                      }}
-                      className="text-[9px] font-black uppercase tracking-widest bg-white/20 px-2 py-1 rounded-lg hover:bg-white/30 transition-all"
-                    >
-                      {selectedPlayerIds.length === communityMembers.filter((p) => p.id !== user?.id).length
-                        ? "Deselect All"
-                        : "Select All"}
-                    </button>
-                  </div>
-                  <div className="max-h-40 overflow-y-auto pr-2 space-y-1 custom-scrollbar">
-                    {communityMembers
-                      .filter((p) => p.id !== user?.id)
-                      .map((player) => (
-                        <button
-                          key={player.id}
-                          onClick={() => togglePlayerSelection(player.id)}
-                          className={`w-full flex justify-between items-center px-3 py-2 rounded-xl text-xs font-bold transition-all ${
-                            selectedPlayerIds.includes(player.id) ? "bg-white/20 border-white/40" : "bg-blue-700/30 border-transparent"
-                          } border`}
-                        >
-                          <span>{player.name}</span>
-                          {selectedPlayerIds.includes(player.id) && <span>OK</span>}
-                        </button>
-                      ))}
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <p className="text-[10px] font-black uppercase tracking-widest text-blue-100">Session Guests</p>
-                  <div
-                    className={`grid gap-2 ${
-                      sessionMode === SessionMode.MIXICANO
-                        ? "grid-cols-1 md:grid-cols-[2fr_1fr_1fr_auto]"
-                        : "grid-cols-[1fr_auto]"
-                    }`}
-                  >
-                    <input
-                      type="text"
-                      value={guestNameInput}
-                      onChange={(e) => setGuestNameInput(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") {
-                          e.preventDefault();
-                          addGuestName();
-                        }
-                      }}
-                      placeholder="Guest name"
-                      className="w-full bg-blue-500/50 border-2 border-blue-400/30 rounded-2xl px-4 py-3 placeholder:text-blue-200 font-bold focus:outline-none focus:border-white transition-all"
-                    />
-                    {sessionMode === SessionMode.MIXICANO && (
-                      <>
-                        <select
-                          value={guestGenderInput}
-                          onChange={(e) => setGuestGenderInput(e.target.value as PlayerGender)}
-                          className="w-full bg-blue-500/50 border-2 border-blue-400/30 rounded-2xl px-3 py-3 text-[11px] font-bold focus:outline-none focus:border-white transition-all"
-                        >
-                          <option value={PlayerGender.MALE} className="text-gray-900">
-                            Male
-                          </option>
-                          <option value={PlayerGender.FEMALE} className="text-gray-900">
-                            Female
-                          </option>
-                        </select>
-                        <select
-                          value={guestPreferenceInput}
-                          onChange={(e) =>
-                            setGuestPreferenceInput(e.target.value as PartnerPreference)
-                          }
-                          className="w-full bg-blue-500/50 border-2 border-blue-400/30 rounded-2xl px-3 py-3 text-[11px] font-bold focus:outline-none focus:border-white transition-all"
-                        >
-                          <option value={PartnerPreference.OPEN} className="text-gray-900">
-                            Open
-                          </option>
-                          <option
-                            value={PartnerPreference.FEMALE_FLEX}
-                            className="text-gray-900"
-                          >
-                            Female Flex
-                          </option>
-                        </select>
-                      </>
-                    )}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                  <div className="bg-blue-700/30 border border-white/20 rounded-xl px-3 py-3 space-y-2">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-blue-100">Players</p>
+                    <p className="text-xs font-bold">{selectedPlayerIds.length} selected</p>
                     <button
                       type="button"
-                      onClick={addGuestName}
-                      disabled={!guestNameInput.trim()}
-                      className="bg-white text-blue-600 px-4 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest disabled:opacity-50 disabled:cursor-not-allowed"
+                      onClick={() => setShowPlayersModal(true)}
+                      className="w-full bg-white text-blue-600 px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest"
                     >
-                      Add
+                      Add Players
                     </button>
                   </div>
-                  {guestConfigs.length > 0 && (
-                    <div className="flex flex-wrap gap-2">
-                      {guestConfigs.map((guest) => (
-                        <button
-                          key={guest.name}
-                          type="button"
-                          onClick={() => removeGuestName(guest.name)}
-                          className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-wider bg-white/20 px-2.5 py-1.5 rounded-lg hover:bg-white/30 transition-all"
-                        >
-                          {guest.name}
-                          {sessionMode === SessionMode.MIXICANO && (
-                            <span className="text-[9px] text-blue-100">
-                              ({guest.gender === PlayerGender.MALE
-                                ? "M"
-                                : guest.gender === PlayerGender.FEMALE
-                                  ? "F"
-                                  : "?"}
-                              /{guest.partnerPreference === PartnerPreference.FEMALE_FLEX ? "Flex" : "Open"})
-                            </span>
-                          )}
-                          <span>x</span>
-                        </button>
-                      ))}
-                    </div>
-                  )}
+                  <div className="bg-blue-700/30 border border-white/20 rounded-xl px-3 py-3 space-y-2">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-blue-100">Guests</p>
+                    <p className="text-xs font-bold">{guestConfigs.length} pre-added</p>
+                    <button
+                      type="button"
+                      onClick={() => setShowGuestsModal(true)}
+                      className="w-full bg-white text-blue-600 px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest"
+                    >
+                      Add Guests
+                    </button>
+                  </div>
                 </div>
 
                 <button
@@ -667,6 +574,229 @@ export default function CommunityPage() {
           </div>
         </div>
       </div>
+
+      {showPlayersModal && (
+        <div className="fixed inset-0 bg-gray-900/70 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4 z-50">
+          <div className="bg-white rounded-t-3xl sm:rounded-2xl shadow-2xl max-w-lg w-full max-h-[90vh] flex flex-col animate-in slide-in-from-bottom duration-300">
+            <div className="px-4 py-3 border-b flex justify-between items-center">
+              <div>
+                <h2 className="text-base font-black text-gray-900">Add Players</h2>
+                <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-0.5">
+                  {selectedPlayerIds.length} selected
+                </p>
+              </div>
+              <button
+                onClick={() => {
+                  setShowPlayersModal(false);
+                  setPlayerSearch("");
+                }}
+                className="bg-gray-100 text-gray-400 hover:text-gray-600 w-7 h-7 rounded-full flex items-center justify-center text-lg font-bold"
+              >
+                &times;
+              </button>
+            </div>
+
+            <div className="px-3 py-2 border-b bg-gray-50/50 space-y-2">
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  placeholder="Search players..."
+                  value={playerSearch}
+                  onChange={(e) => setPlayerSearch(e.target.value)}
+                  className="w-full h-9 bg-white border border-gray-200 rounded-lg px-3 text-xs font-bold focus:outline-none focus:border-blue-500 transition-all"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    const allOtherIds = selectablePlayers.map((p) => p.id);
+                    if (selectedPlayerIds.length === allOtherIds.length) {
+                      setSelectedPlayerIds([]);
+                    } else {
+                      setSelectedPlayerIds(allOtherIds);
+                    }
+                  }}
+                  className="h-9 bg-gray-900 text-white px-3 rounded-lg text-[10px] font-black uppercase tracking-widest whitespace-nowrap"
+                >
+                  {selectedPlayerIds.length === selectablePlayers.length ? "Deselect All" : "Select All"}
+                </button>
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-2.5 space-y-1.5">
+              {filteredSelectablePlayers.length === 0 ? (
+                <div className="text-center py-10 text-gray-400 italic text-sm">No players found.</div>
+              ) : (
+                filteredSelectablePlayers.map((player) => {
+                  const isSelected = selectedPlayerIds.includes(player.id);
+                  return (
+                    <button
+                      key={player.id}
+                      type="button"
+                      onClick={() => togglePlayerSelection(player.id)}
+                      className={`w-full flex justify-between items-center px-3 py-2 rounded-xl border text-left transition-colors ${
+                        isSelected
+                          ? "bg-blue-50 border-blue-200"
+                          : "bg-gray-50 border-gray-100 hover:bg-gray-100"
+                      }`}
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <p className="font-black text-sm text-gray-900 truncate">{player.name}</p>
+                        <span className="text-[9px] text-gray-500 font-bold uppercase tracking-wider whitespace-nowrap">
+                          ELO {player.elo}
+                        </span>
+                      </div>
+                      <span
+                        className={`text-[10px] font-black uppercase tracking-widest ${
+                          isSelected ? "text-blue-600" : "text-gray-400"
+                        }`}
+                      >
+                        {isSelected ? "Selected" : "Add"}
+                      </span>
+                    </button>
+                  );
+                })
+              )}
+            </div>
+
+            <div className="p-3 bg-white border-t sm:rounded-b-2xl flex justify-end">
+              <button
+                onClick={() => {
+                  setShowPlayersModal(false);
+                  setPlayerSearch("");
+                }}
+                className="bg-gray-900 text-white px-4 py-2 rounded-lg font-black uppercase tracking-widest text-[10px] shadow-sm active:scale-95 transition-all"
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showGuestsModal && (
+        <div className="fixed inset-0 bg-gray-900/70 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4 z-50">
+          <div className="bg-white rounded-t-3xl sm:rounded-2xl shadow-2xl max-w-lg w-full max-h-[90vh] flex flex-col animate-in slide-in-from-bottom duration-300">
+            <div className="px-4 py-3 border-b flex justify-between items-center">
+              <div>
+                <h2 className="text-base font-black text-gray-900">Add Guests</h2>
+                <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-0.5">
+                  {guestConfigs.length} pre-added
+                </p>
+              </div>
+              <button
+                onClick={() => {
+                  setShowGuestsModal(false);
+                  setGuestNameInput("");
+                }}
+                className="bg-gray-100 text-gray-400 hover:text-gray-600 w-7 h-7 rounded-full flex items-center justify-center text-lg font-bold"
+              >
+                &times;
+              </button>
+            </div>
+
+            <div className="px-3 py-2 border-b bg-gray-50/50 space-y-2">
+              <div
+                className={`grid gap-2 ${
+                  sessionMode === SessionMode.MIXICANO
+                    ? "grid-cols-1 sm:grid-cols-[2fr_1fr_1fr_auto]"
+                    : "grid-cols-[1fr_auto]"
+                }`}
+              >
+                <input
+                  type="text"
+                  value={guestNameInput}
+                  onChange={(e) => setGuestNameInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      addGuestName();
+                    }
+                  }}
+                  placeholder="Guest name"
+                  className="h-9 bg-white border border-gray-200 rounded-lg px-3 text-xs font-bold focus:outline-none focus:border-blue-500 transition-all"
+                />
+                {sessionMode === SessionMode.MIXICANO && (
+                  <>
+                    <select
+                      value={guestGenderInput}
+                      onChange={(e) => setGuestGenderInput(e.target.value as PlayerGender)}
+                      className="h-9 bg-white border border-gray-200 rounded-lg px-2 text-[10px] font-bold focus:outline-none focus:border-blue-500 transition-all"
+                    >
+                      <option value={PlayerGender.MALE} className="text-gray-900">
+                        Male
+                      </option>
+                      <option value={PlayerGender.FEMALE} className="text-gray-900">
+                        Female
+                      </option>
+                    </select>
+                    <select
+                      value={guestPreferenceInput}
+                      onChange={(e) => setGuestPreferenceInput(e.target.value as PartnerPreference)}
+                      className="h-9 bg-white border border-gray-200 rounded-lg px-2 text-[10px] font-bold focus:outline-none focus:border-blue-500 transition-all"
+                    >
+                      <option value={PartnerPreference.OPEN} className="text-gray-900">
+                        Open
+                      </option>
+                      <option value={PartnerPreference.FEMALE_FLEX} className="text-gray-900">
+                        Female Flex
+                      </option>
+                    </select>
+                  </>
+                )}
+                <button
+                  type="button"
+                  onClick={addGuestName}
+                  disabled={!guestNameInput.trim()}
+                  className="h-9 bg-gray-900 text-white px-3 rounded-lg text-[10px] font-black uppercase tracking-widest disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Add
+                </button>
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-2.5 space-y-1.5">
+              {guestConfigs.length === 0 ? (
+                <div className="text-center py-10 text-gray-400 italic text-sm">No guests added yet.</div>
+              ) : (
+                guestConfigs.map((guest) => (
+                  <div
+                    key={guest.name}
+                    className="flex justify-between items-center px-3 py-2 rounded-xl border bg-gray-50 border-gray-100"
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <p className="font-black text-sm text-gray-900 truncate">{guest.name}</p>
+                      {sessionMode === SessionMode.MIXICANO && (
+                        <span className="text-[9px] text-gray-500 font-bold uppercase tracking-wider whitespace-nowrap">
+                          {guest.gender === PlayerGender.FEMALE ? "F" : "M"} / {guest.partnerPreference === PartnerPreference.FEMALE_FLEX ? "Flex" : "Open"}
+                        </span>
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => removeGuestName(guest.name)}
+                      className="text-[10px] text-red-600 font-black uppercase tracking-widest"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+
+            <div className="p-3 bg-white border-t sm:rounded-b-2xl flex justify-end">
+              <button
+                onClick={() => {
+                  setShowGuestsModal(false);
+                  setGuestNameInput("");
+                }}
+                className="bg-gray-900 text-white px-4 py-2 rounded-lg font-black uppercase tracking-widest text-[10px] shadow-sm active:scale-95 transition-all"
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {error && (
         <div className="fixed bottom-6 left-6 right-6 z-50">
