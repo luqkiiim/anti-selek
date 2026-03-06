@@ -925,9 +925,13 @@ export default function SessionPage() {
                         <tr key={player.userId} className={`active:bg-gray-50 transition-colors ${player.isPaused ? 'opacity-40 grayscale' : ''}`}>
                           <td className="w-10 px-2 py-4 whitespace-nowrap">
                             <span className={`w-6 h-6 rounded-lg flex items-center justify-center text-[10px] font-black ${
-                              idx < 3 
-                                ? 'bg-blue-100 text-blue-700'
-                                : 'bg-gray-100 text-gray-500'
+                              idx === 0
+                                ? "bg-amber-100 text-amber-700 border border-amber-300"
+                                : idx === 1
+                                  ? "bg-slate-100 text-slate-700 border border-slate-300"
+                                  : idx === 2
+                                    ? "bg-orange-100 text-orange-700 border border-orange-300"
+                                    : "bg-gray-100 text-gray-500"
                             }`}>
                               {idx + 1}
                             </span>
