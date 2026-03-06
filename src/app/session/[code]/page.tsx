@@ -837,11 +837,6 @@ export default function SessionPage() {
                                     Me
                                   </span>
                                 )}
-                                {player.isGuest && (
-                                  <span className="h-6 px-2 rounded-full text-[9px] font-black uppercase tracking-wide bg-gray-100 text-gray-600 border border-gray-200 inline-flex items-center">
-                                    Guest
-                                  </span>
-                                )}
                               </div>
                               <div className="flex items-center gap-1.5 flex-wrap relative">
                                 {sessionData.type !== SessionType.ELO && (
@@ -873,9 +868,14 @@ export default function SessionPage() {
                                       )
                                     }
                                     className="h-6 px-2 rounded-full text-[9px] font-black uppercase tracking-wide border inline-flex items-center bg-blue-100 text-blue-700 border-blue-200"
-                                  >
-                                    Edit
-                                  </button>
+                                    >
+                                      Edit
+                                    </button>
+                                )}
+                                {player.isGuest && (
+                                  <span className="h-6 px-2 rounded-full text-[9px] font-black uppercase tracking-wide bg-gray-100 text-gray-600 border border-gray-200 inline-flex items-center">
+                                    Guest
+                                  </span>
                                 )}
                                 {savingPreferencesFor === player.userId && (
                                   <span className="text-[9px] font-black text-gray-400 uppercase tracking-wider">
