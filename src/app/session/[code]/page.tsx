@@ -118,6 +118,7 @@ export default function SessionPage() {
   // Track scores per match locally
   const [matchScores, setMatchScores] = useState<Record<string, { team1: string; team2: string }>>({});
   const [submittingMatchId, setSubmittingMatchId] = useState<string | null>(null);
+  const [reopeningMatchId, setReopeningMatchId] = useState<string | null>(null);
 
   // Helper to safely parse JSON
   const safeJson = useCallback(async (res: Response) => {
@@ -451,6 +452,32 @@ export default function SessionPage() {
     }
   };
 
+  const reopenScoreForEdit = async (matchId: string) => {
+    setReopeningMatchId(matchId);
+    setError("");
+    try {
+      const res = await fetch(`/api/matches/${matchId}/reopen`, {
+        method: "POST",
+      });
+      if (res.ok) {
+        setMatchScores((prev) => {
+          const next = { ...prev };
+          delete next[matchId];
+          return next;
+        });
+        fetchSession();
+      } else {
+        const data = await safeJson(res);
+        setError(data.error || "Failed to reopen score entry");
+      }
+    } catch (err) {
+      console.error(err);
+      setError("Network error reopening score entry");
+    } finally {
+      setReopeningMatchId(null);
+    }
+  };
+
   const updatePlayerPreference = async (
     userId: string,
     nextGender: PlayerGender,
@@ -723,12 +750,21 @@ export default function SessionPage() {
                         {currentMatch.status === MatchStatus.PENDING_APPROVAL && (
                           <div className="pt-2 space-y-2">
                             {isAdmin && (
-                              <button
-                                onClick={() => approveScore(currentMatch.id)}
-                                className="w-full bg-blue-600 text-white py-3 rounded-xl font-black uppercase text-sm shadow-md active:bg-blue-700 active:scale-95 transition-all"
-                              >
-                                Approve Results
-                              </button>
+                              <div className="grid grid-cols-2 gap-2">
+                                <button
+                                  onClick={() => approveScore(currentMatch.id)}
+                                  className="w-full bg-blue-600 text-white py-3 rounded-xl font-black uppercase text-sm shadow-md active:bg-blue-700 active:scale-95 transition-all"
+                                >
+                                  Approve Results
+                                </button>
+                                <button
+                                  onClick={() => reopenScoreForEdit(currentMatch.id)}
+                                  disabled={reopeningMatchId === currentMatch.id}
+                                  className="w-full bg-gray-100 text-gray-700 border border-gray-200 py-3 rounded-xl font-black uppercase text-sm active:bg-gray-200 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                  {reopeningMatchId === currentMatch.id ? "Opening..." : "Back To Edit"}
+                                </button>
+                              </div>
                             )}
                             <div className="bg-orange-50 text-orange-700 text-[10px] font-black py-2 rounded-lg text-center uppercase tracking-widest border border-orange-100">
                               Awaiting Approval
@@ -1009,7 +1045,9 @@ export default function SessionPage() {
               {isAdmin && (
                 <div
                   className={`grid gap-2 ${
-                    isMixicano ? "grid-cols-1 sm:grid-cols-[2fr_1fr_1fr_1fr_auto]" : "grid-cols-[1fr_1fr_auto]"
+                    isMixicano
+                      ? "grid-cols-1 sm:grid-cols-2 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto]"
+                      : "grid-cols-1 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]"
                   }`}
                 >
                   <input
@@ -1053,7 +1091,7 @@ export default function SessionPage() {
                   <button
                     onClick={addGuestToSession}
                     disabled={addingGuest || !guestName.trim()}
-                    className="h-9 bg-gray-900 text-white px-3 rounded-lg text-[10px] font-black uppercase tracking-wider disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="h-9 bg-gray-900 text-white px-3 rounded-lg text-[10px] font-black uppercase tracking-wider disabled:opacity-50 disabled:cursor-not-allowed w-full sm:w-auto"
                   >
                     {addingGuest ? "Adding..." : "Add"}
                   </button>

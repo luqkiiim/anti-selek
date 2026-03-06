@@ -710,8 +710,8 @@ export default function CommunityPage() {
               <div
                 className={`grid gap-2 ${
                   sessionMode === SessionMode.MIXICANO
-                    ? "grid-cols-1 sm:grid-cols-[2fr_1fr_1fr_1fr_auto]"
-                    : "grid-cols-[1fr_1fr_auto]"
+                    ? "grid-cols-1 sm:grid-cols-2 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto]"
+                    : "grid-cols-1 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]"
                 }`}
               >
                 <input
@@ -770,7 +770,7 @@ export default function CommunityPage() {
                   type="button"
                   onClick={addGuestName}
                   disabled={!guestNameInput.trim()}
-                  className="h-9 bg-gray-900 text-white px-3 rounded-lg text-[10px] font-black uppercase tracking-widest disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="h-9 bg-gray-900 text-white px-3 rounded-lg text-[10px] font-black uppercase tracking-widest disabled:opacity-50 disabled:cursor-not-allowed w-full sm:w-auto"
                 >
                   Add
                 </button>
