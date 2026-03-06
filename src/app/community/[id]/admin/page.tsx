@@ -41,8 +41,7 @@ export default function CommunityAdminPage() {
   const [success, setSuccess] = useState("");
 
   const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const [newPlayerGender, setNewPlayerGender] = useState<PlayerGender>(PlayerGender.MALE);
   const [editingName, setEditingName] = useState<Record<string, string>>({});
   const [savingName, setSavingName] = useState<Record<string, boolean>>({});
   const [editingElo, setEditingElo] = useState<Record<string, string>>({});
@@ -145,8 +144,7 @@ export default function CommunityAdminPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name,
-          email: email || undefined,
-          password: password || undefined,
+          gender: newPlayerGender,
         }),
       });
 
@@ -157,8 +155,7 @@ export default function CommunityAdminPage() {
 
       setSuccess(`Player profile for "${name}" added to community.`);
       setName("");
-      setEmail("");
-      setPassword("");
+      setNewPlayerGender(PlayerGender.MALE);
       await fetchCommunityAndPlayers();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Failed to add player");
@@ -445,7 +442,7 @@ export default function CommunityAdminPage() {
           <div className="bg-white p-6 rounded-3xl shadow-md border border-gray-100 space-y-4">
             <h3 className="text-sm font-black text-gray-900 uppercase tracking-widest">Create Player Profile</h3>
             <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">
-              Add a player to this community. They can claim later with same email.
+              Add a player to this community.
             </p>
             <form onSubmit={handleAddPlayer} className="space-y-3">
               <input
@@ -456,20 +453,14 @@ export default function CommunityAdminPage() {
                 placeholder="Player Name"
                 required
               />
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
+              <select
+                value={newPlayerGender}
+                onChange={(e) => setNewPlayerGender(e.target.value as PlayerGender)}
                 className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl px-4 py-3 font-bold focus:outline-none focus:border-blue-500 transition-all"
-                placeholder="Email (optional)"
-              />
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl px-4 py-3 font-bold focus:outline-none focus:border-blue-500 transition-all"
-                placeholder="Password (optional)"
-              />
+              >
+                <option value={PlayerGender.MALE}>Male</option>
+                <option value={PlayerGender.FEMALE}>Female</option>
+              </select>
               <button
                 type="submit"
                 className="w-full bg-blue-600 text-white py-3 rounded-2xl font-black uppercase tracking-widest text-xs active:scale-95 transition-all"
