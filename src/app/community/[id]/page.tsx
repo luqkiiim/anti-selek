@@ -390,6 +390,11 @@ export default function CommunityPage() {
                     ELO Format
                   </button>
                 </div>
+                <p className="text-[10px] font-bold text-blue-100 uppercase tracking-wider">
+                  {sessionType === SessionType.POINTS
+                    ? "Win = 3 points. Rankings by points, then point difference."
+                    : "Ratings update each approved match. Rankings shown by live ELO."}
+                </p>
 
                 <div className="grid grid-cols-2 gap-2">
                   <button
@@ -413,11 +418,11 @@ export default function CommunityPage() {
                     Mixicano
                   </button>
                 </div>
-                {sessionMode === SessionMode.MIXICANO && (
-                  <p className="text-[10px] font-bold text-blue-100 uppercase tracking-wider">
-                    Female defaults to mixed/women only. Tag OPEN only for women who can play men&apos;s doubles.
-                  </p>
-                )}
+                <p className="text-[10px] font-bold text-blue-100 uppercase tracking-wider">
+                  {sessionMode === SessionMode.MEXICANO
+                    ? "Open doubles rotation. Teams are balanced by current ratings and fairness."
+                    : "Supports mixed/women rules. Female defaults to mixed/women only; set OPEN for women allowed in men&apos;s doubles."}
+                </p>
 
                 <div className="space-y-1">
                   <p className="text-[10px] font-black uppercase tracking-widest text-blue-100">Courts Available</p>
