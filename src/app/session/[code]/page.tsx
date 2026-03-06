@@ -884,11 +884,10 @@ export default function SessionPage() {
       {/* Mobile-Friendly Roster Modal */}
       {showRosterModal && (
         <div className="fixed inset-0 bg-gray-900/70 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4 z-50">
-          <div className="bg-white rounded-t-3xl sm:rounded-2xl shadow-2xl max-w-lg w-full max-h-[90vh] flex flex-col animate-in slide-in-from-bottom duration-300">
-            <div className="p-6 border-b flex justify-between items-center">
+          <div className="bg-white rounded-t-3xl sm:rounded-2xl shadow-2xl max-w-lg w-full max-h-[92vh] flex flex-col animate-in slide-in-from-bottom duration-300">
+            <div className="px-4 py-3 border-b flex justify-between items-center">
               <div>
-                <h2 className="text-xl font-black text-gray-900">Add Players</h2>
-                <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-1">Join the rotation</p>
+                <h2 className="text-base font-black text-gray-900">Add Players</h2>
               </div>
               <button 
                 onClick={() => {
@@ -898,14 +897,14 @@ export default function SessionPage() {
                   setGuestGender(PlayerGender.MALE);
                   setGuestPreference(PartnerPreference.OPEN);
                 }}
-                className="bg-gray-100 text-gray-400 hover:text-gray-600 w-8 h-8 rounded-full flex items-center justify-center text-xl font-bold"
+                className="bg-gray-100 text-gray-400 hover:text-gray-600 w-7 h-7 rounded-full flex items-center justify-center text-lg font-bold"
               >
                 &times;
               </button>
             </div>
             
             {/* Search Bar */}
-            <div className="px-6 py-3 border-b bg-gray-50/50 space-y-3">
+            <div className="px-3 py-2 border-b bg-gray-50/50 space-y-2">
               {isAdmin && (
                 <div
                   className={`grid gap-2 ${
@@ -917,14 +916,14 @@ export default function SessionPage() {
                     placeholder="Guest name..."
                     value={guestName}
                     onChange={(e) => setGuestName(e.target.value)}
-                    className="flex-1 bg-white border-2 border-gray-100 rounded-xl px-4 py-2 text-sm font-bold focus:outline-none focus:border-blue-500 transition-all"
+                    className="flex-1 h-9 bg-white border border-gray-200 rounded-lg px-3 text-xs font-bold focus:outline-none focus:border-blue-500 transition-all"
                   />
                   {isMixicano && (
                     <>
                       <select
                         value={guestGender}
                         onChange={(e) => setGuestGender(e.target.value as PlayerGender)}
-                        className="bg-white border-2 border-gray-100 rounded-xl px-3 py-2 text-[11px] font-bold focus:outline-none focus:border-blue-500 transition-all"
+                        className="h-9 bg-white border border-gray-200 rounded-lg px-2 text-[10px] font-bold focus:outline-none focus:border-blue-500 transition-all"
                       >
                         <option value={PlayerGender.MALE}>Male</option>
                         <option value={PlayerGender.FEMALE}>Female</option>
@@ -932,7 +931,7 @@ export default function SessionPage() {
                       <select
                         value={guestPreference}
                         onChange={(e) => setGuestPreference(e.target.value as PartnerPreference)}
-                        className="bg-white border-2 border-gray-100 rounded-xl px-3 py-2 text-[11px] font-bold focus:outline-none focus:border-blue-500 transition-all"
+                        className="h-9 bg-white border border-gray-200 rounded-lg px-2 text-[10px] font-bold focus:outline-none focus:border-blue-500 transition-all"
                       >
                         <option value={PartnerPreference.OPEN}>Open</option>
                         <option value={PartnerPreference.FEMALE_FLEX}>Female Flex</option>
@@ -942,9 +941,9 @@ export default function SessionPage() {
                   <button
                     onClick={addGuestToSession}
                     disabled={addingGuest || !guestName.trim()}
-                    className="bg-gray-900 text-white px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="h-9 bg-gray-900 text-white px-3 rounded-lg text-[10px] font-black uppercase tracking-wider disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    {addingGuest ? "Adding..." : "Add Guest"}
+                    {addingGuest ? "Adding..." : "Add"}
                   </button>
                 </div>
               )}
@@ -953,7 +952,7 @@ export default function SessionPage() {
                 placeholder="Search players..."
                 value={rosterSearch}
                 onChange={(e) => setRosterSearch(e.target.value)}
-                className="w-full bg-white border-2 border-gray-100 rounded-xl px-4 py-2 text-sm font-bold focus:outline-none focus:border-blue-500 transition-all"
+                className="w-full h-9 bg-white border border-gray-200 rounded-lg px-3 text-xs font-bold focus:outline-none focus:border-blue-500 transition-all"
               />
             </div>
             
@@ -988,7 +987,7 @@ export default function SessionPage() {
               )}
             </div>
             
-            <div className="p-6 bg-white border-t sm:rounded-b-2xl">
+            <div className="p-3 bg-white border-t sm:rounded-b-2xl flex justify-end">
               <button
                 onClick={() => {
                   setShowRosterModal(false);
@@ -997,7 +996,7 @@ export default function SessionPage() {
                   setGuestGender(PlayerGender.MALE);
                   setGuestPreference(PartnerPreference.OPEN);
                 }}
-                className="w-full bg-gray-900 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-sm shadow-lg active:scale-95 transition-all"
+                className="bg-gray-900 text-white px-4 py-2 rounded-lg font-black uppercase tracking-widest text-[10px] shadow-sm active:scale-95 transition-all"
               >
                 Done
               </button>
