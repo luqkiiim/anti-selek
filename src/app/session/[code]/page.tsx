@@ -249,6 +249,9 @@ export default function SessionPage() {
   };
 
   const endSession = async () => {
+    if (!confirm("End this session now? This will close all courts and finalize standings.")) {
+      return;
+    }
     try {
       const res = await fetch(`/api/sessions/${code}/end`, { method: "POST" });
       if (res.ok) {
