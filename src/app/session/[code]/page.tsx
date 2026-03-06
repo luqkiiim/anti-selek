@@ -845,7 +845,7 @@ export default function SessionPage() {
             </div>
             
             <div className="overflow-x-auto">
-              <table className="min-w-[680px] w-full">
+              <table className="min-w-[760px] w-full">
                 <thead className="bg-gray-50/50 border-b border-gray-100">
                   <tr>
                     <th className="w-10 px-2 py-3 text-left text-[10px] font-black text-gray-400 uppercase tracking-widest">#</th>
@@ -855,14 +855,15 @@ export default function SessionPage() {
                         <th className="w-24 px-4 py-3 text-center text-[10px] font-black text-gray-400 uppercase tracking-widest">Pts</th>
                         <th className="w-24 px-4 py-3 text-center text-[10px] font-black text-gray-400 uppercase tracking-widest">Diff</th>
                         <th className="w-24 px-4 py-3 text-center text-[10px] font-black text-gray-400 uppercase tracking-widest">MP</th>
+                        <th className="w-24 px-4 py-3 text-center text-[10px] font-black text-gray-400 uppercase tracking-widest">W/L</th>
                       </>
                     ) : (
                       <>
-                        <th className="px-4 py-3 text-center text-[10px] font-black text-gray-400 uppercase tracking-widest">MP</th>
-                        <th className="px-4 py-3 text-center text-[10px] font-black text-gray-400 uppercase tracking-widest">W/L</th>
                         <th className="px-4 py-3 text-right text-[10px] font-black text-gray-400 uppercase tracking-widest">
                           {SessionType.ELO}
                         </th>
+                        <th className="px-4 py-3 text-center text-[10px] font-black text-gray-400 uppercase tracking-widest">MP</th>
+                        <th className="px-4 py-3 text-center text-[10px] font-black text-gray-400 uppercase tracking-widest">W/L</th>
                       </>
                     )}
                   </tr>
@@ -1027,9 +1028,19 @@ export default function SessionPage() {
                               <td className="w-24 px-4 py-4 whitespace-nowrap text-center">
                                 <span className="text-xs font-bold text-gray-600">{stats.played}</span>
                               </td>
+                              <td className="w-24 px-4 py-4 whitespace-nowrap text-center">
+                                <div className="text-[10px] font-black tracking-tighter">
+                                  <span className="text-green-600">{stats.wins}</span>
+                                  <span className="mx-0.5 text-gray-200">/</span>
+                                  <span className="text-red-500">{stats.losses}</span>
+                                </div>
+                              </td>
                             </>
                           ) : (
                             <>
+                              <td className="px-4 py-4 whitespace-nowrap text-right">
+                                <span className="text-base font-black text-blue-700">{player.user.elo}</span>
+                              </td>
                               <td className="px-4 py-4 whitespace-nowrap text-center">
                                 <span className="text-xs font-bold text-gray-600">{stats.played}</span>
                               </td>
@@ -1039,9 +1050,6 @@ export default function SessionPage() {
                                   <span className="mx-0.5 text-gray-200">/</span>
                                   <span className="text-red-500">{stats.losses}</span>
                                 </div>
-                              </td>
-                              <td className="px-4 py-4 whitespace-nowrap text-right">
-                                <span className="text-base font-black text-blue-700">{player.user.elo}</span>
                               </td>
                             </>
                           )}

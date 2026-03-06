@@ -497,7 +497,8 @@ export default function CommunityPage() {
                       </div>
                     </div>
                     <p className="text-[10px] font-black uppercase tracking-wider whitespace-nowrap">
-                      <span className="text-green-600">W {player.wins}</span>{" "}
+                      <span className="text-green-600">W {player.wins}</span>
+                      <span className="text-gray-300"> / </span>
                       <span className="text-red-600">L {player.losses}</span>
                     </p>
                     <p className="text-sm font-black text-gray-900 text-right">{player.elo}</p>
