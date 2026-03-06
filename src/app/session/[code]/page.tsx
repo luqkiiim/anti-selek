@@ -113,13 +113,49 @@ export default function SessionPage() {
   const [guestInitialElo, setGuestInitialElo] = useState<number>(1000);
   const [addingGuest, setAddingGuest] = useState(false);
   const [savingPreferencesFor, setSavingPreferencesFor] = useState<string | null>(null);
-  const [openPreferenceEditorFor, setOpenPreferenceEditorFor] = useState<string | null>(null);
+  const [openPreferenceEditor, setOpenPreferenceEditor] = useState<{
+    userId: string;
+    top: number;
+    left: number;
+    openUp: boolean;
+  } | null>(null);
 
   // Track scores per match locally
   const [matchScores, setMatchScores] = useState<Record<string, { team1: string; team2: string }>>({});
   const [submittingMatchId, setSubmittingMatchId] = useState<string | null>(null);
   const [reopeningMatchId, setReopeningMatchId] = useState<string | null>(null);
   const [undoingCourtId, setUndoingCourtId] = useState<string | null>(null);
+
+  const togglePreferenceEditor = (userId: string, triggerEl: HTMLElement) => {
+    setOpenPreferenceEditor((prev) => {
+      if (prev?.userId === userId) return null;
+
+      const rect = triggerEl.getBoundingClientRect();
+      const panelWidth = 176; // matches w-44
+      const panelHeight = 220; // approximate editor height
+      const margin = 8;
+      const openUp = window.innerHeight - rect.bottom < panelHeight;
+
+      const left = Math.min(
+        Math.max(margin, rect.left),
+        Math.max(margin, window.innerWidth - panelWidth - margin)
+      );
+      const top = openUp ? rect.top - margin : rect.bottom + margin;
+
+      return { userId, top, left, openUp };
+    });
+  };
+
+  useEffect(() => {
+    if (!openPreferenceEditor) return;
+    const close = () => setOpenPreferenceEditor(null);
+    window.addEventListener("resize", close);
+    window.addEventListener("scroll", close, true);
+    return () => {
+      window.removeEventListener("resize", close);
+      window.removeEventListener("scroll", close, true);
+    };
+  }, [openPreferenceEditor]);
 
   // Helper to safely parse JSON
   const safeJson = useCallback(async (res: Response) => {
@@ -939,10 +975,8 @@ export default function SessionPage() {
                                 {isAdmin && isMixicano && (
                                   <button
                                     type="button"
-                                    onClick={() =>
-                                      setOpenPreferenceEditorFor((prev) =>
-                                        prev === player.userId ? null : player.userId
-                                      )
+                                    onClick={(e) =>
+                                      togglePreferenceEditor(player.userId, e.currentTarget)
                                     }
                                     className="h-6 px-2 rounded-full text-[9px] font-black uppercase tracking-wide border inline-flex items-center bg-blue-100 text-blue-700 border-blue-200"
                                     >
@@ -959,20 +993,31 @@ export default function SessionPage() {
                                     Saving...
                                   </span>
                                 )}
-                                {openPreferenceEditorFor === player.userId && isAdmin && isMixicano && (
-                                  <div className="absolute top-full left-0 mt-1 z-20 bg-white border border-gray-200 rounded-xl shadow-lg p-2.5 w-44 space-y-2">
+                                {openPreferenceEditor?.userId === player.userId &&
+                                  isAdmin &&
+                                  isMixicano && (
+                                  <div
+                                    className="fixed z-40 bg-white border border-gray-200 rounded-xl shadow-lg p-2.5 w-44 space-y-2"
+                                    style={{
+                                      left: openPreferenceEditor.left,
+                                      top: openPreferenceEditor.top,
+                                      transform: openPreferenceEditor.openUp
+                                        ? "translateY(-100%)"
+                                        : "translateY(0)",
+                                    }}
+                                  >
                                     <div className="space-y-1">
                                       <p className="text-[9px] font-black uppercase tracking-wider text-gray-400">
                                         Gender
                                       </p>
-                                    <select
-                                      value={player.gender}
-                                      onChange={async (e) => {
-                                        const nextGender = e.target.value as PlayerGender;
-                                        setOpenPreferenceEditorFor(null);
-                                        const nextPreference =
-                                          nextGender === PlayerGender.MALE
-                                            ? PartnerPreference.OPEN
+                                      <select
+                                        value={player.gender}
+                                        onChange={async (e) => {
+                                          const nextGender = e.target.value as PlayerGender;
+                                          setOpenPreferenceEditor(null);
+                                          const nextPreference =
+                                            nextGender === PlayerGender.MALE
+                                              ? PartnerPreference.OPEN
                                             : PartnerPreference.FEMALE_FLEX;
                                         await updatePlayerPreference(
                                           player.userId,
@@ -995,7 +1040,7 @@ export default function SessionPage() {
                                           value={player.partnerPreference}
                                           onChange={async (e) => {
                                             const nextPreference = e.target.value as PartnerPreference;
-                                            setOpenPreferenceEditorFor(null);
+                                            setOpenPreferenceEditor(null);
                                             await updatePlayerPreference(
                                               player.userId,
                                               player.gender,
@@ -1016,7 +1061,7 @@ export default function SessionPage() {
                                     <div className="flex justify-end">
                                       <button
                                         type="button"
-                                        onClick={() => setOpenPreferenceEditorFor(null)}
+                                        onClick={() => setOpenPreferenceEditor(null)}
                                         className="text-[9px] font-black uppercase tracking-widest text-gray-500"
                                       >
                                         Close
