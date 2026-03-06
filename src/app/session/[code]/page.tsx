@@ -770,7 +770,7 @@ export default function SessionPage() {
                     {sessionData.type === SessionType.POINTS ? (
                       <>
                         <th className="px-4 py-3 text-right text-[10px] font-black text-gray-400 uppercase tracking-widest">Pts</th>
-                        <th className="px-4 py-3 text-right text-[10px] font-black text-gray-400 uppercase tracking-widest">GD</th>
+                        <th className="px-4 py-3 text-right text-[10px] font-black text-gray-400 uppercase tracking-widest">Diff</th>
                         <th className="px-4 py-3 text-center text-[10px] font-black text-gray-400 uppercase tracking-widest">MP</th>
                       </>
                     ) : (
@@ -941,7 +941,7 @@ export default function SessionPage() {
                                 <span className="text-base font-black text-blue-700">{player.sessionPoints}</span>
                               </td>
                               <td className="px-4 py-4 whitespace-nowrap text-right">
-                                <span className={`text-sm font-black ${pointDiff >= 0 ? "text-green-600" : "text-red-500"}`}>
+                                <span className={`text-sm font-medium ${pointDiff >= 0 ? "text-green-600" : "text-red-500"}`}>
                                   {pointDiff > 0 ? `+${pointDiff}` : pointDiff}
                                 </span>
                               </td>
