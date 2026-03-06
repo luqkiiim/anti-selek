@@ -16,6 +16,10 @@ function generateCode(): string {
   return Math.random().toString(36).substring(2, 8).toUpperCase();
 }
 
+function defaultPartnerPreferenceForGender(gender: PlayerGender): PartnerPreference {
+  return gender === PlayerGender.FEMALE ? PartnerPreference.FEMALE_FLEX : PartnerPreference.OPEN;
+}
+
 export async function POST(request: Request) {
   try {
     const session = await auth();
@@ -142,7 +146,7 @@ export async function POST(request: Request) {
       guestName: string,
       gender: PlayerGender =
         mode === SessionMode.MIXICANO ? PlayerGender.MALE : PlayerGender.UNSPECIFIED,
-      partnerPreference: PartnerPreference = PartnerPreference.OPEN,
+      partnerPreference: PartnerPreference = defaultPartnerPreferenceForGender(gender),
       initialElo = 1000,
       overwrite = false
     ) => {
@@ -192,7 +196,7 @@ export async function POST(request: Request) {
             candidate.partnerPreference as PartnerPreference
           )
             ? (candidate.partnerPreference as PartnerPreference)
-            : PartnerPreference.OPEN;
+            : defaultPartnerPreferenceForGender(gender);
         const initialElo =
           typeof candidate.initialElo === "number" &&
           Number.isInteger(candidate.initialElo) &&
@@ -254,8 +258,10 @@ export async function POST(request: Request) {
             : PlayerGender.UNSPECIFIED;
       const sessionPartnerPreference =
         override?.partnerPreference ??
-        (selectedUser?.partnerPreference as PartnerPreference | undefined) ??
-        PartnerPreference.OPEN;
+        (override?.gender === PlayerGender.FEMALE
+          ? defaultPartnerPreferenceForGender(sessionGender)
+          : (selectedUser?.partnerPreference as PartnerPreference | undefined) ??
+            defaultPartnerPreferenceForGender(sessionGender));
 
       return {
         userId,

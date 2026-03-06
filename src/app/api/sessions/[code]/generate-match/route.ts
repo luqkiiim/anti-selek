@@ -59,8 +59,9 @@ function isValidMixicanoPartition(
 
   const matchType = inferMixicanoMatchType(team1, team2);
 
-  // Women marked FEMALE_FLEX can only play mixed doubles or women's doubles.
-  const violatesFemaleFlex = players.some((player) => {
+  // By default, female players are restricted to mixed/women's doubles.
+  // Female players tagged OPEN can also appear in men's doubles.
+  const violatesFemaleRestriction = players.some((player) => {
     const gender = player.gender as PlayerGender;
     const preference = player.partnerPreference as PartnerPreference;
     return (
@@ -70,7 +71,7 @@ function isValidMixicanoPartition(
     );
   });
 
-  return !violatesFemaleFlex;
+  return !violatesFemaleRestriction;
 }
 
 export async function POST(

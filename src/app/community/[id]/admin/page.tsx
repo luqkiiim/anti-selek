@@ -538,7 +538,7 @@ export default function CommunityAdminPage() {
                         )}
                         <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-100 text-gray-700 border border-gray-200">
                           {player.gender === PlayerGender.FEMALE ? "Female" : "Male"} /{" "}
-                          {player.partnerPreference === PartnerPreference.FEMALE_FLEX ? "Flex" : "Open"}
+                          {player.partnerPreference === PartnerPreference.OPEN ? "Open Tag" : "Default"}
                         </span>
                       </div>
 
@@ -568,7 +568,14 @@ export default function CommunityAdminPage() {
                                 onChange={async (e) => {
                                   const nextGender = e.target.value as PlayerGender;
                                   setOpenPreferenceEditorFor(null);
-                                  await handleUpdatePreferences(player.id, { gender: nextGender });
+                                  const nextPreference =
+                                    nextGender === PlayerGender.MALE
+                                      ? PartnerPreference.OPEN
+                                      : PartnerPreference.FEMALE_FLEX;
+                                  await handleUpdatePreferences(player.id, {
+                                    gender: nextGender,
+                                    partnerPreference: nextPreference,
+                                  });
                                 }}
                                 disabled={savingPreferences[player.id]}
                                 className="h-8 w-full bg-white border border-gray-200 rounded-lg px-2 text-[10px] font-black uppercase tracking-wide text-gray-700 focus:outline-none focus:border-blue-400 disabled:opacity-60"
@@ -579,23 +586,29 @@ export default function CommunityAdminPage() {
                             </div>
                             <div className="space-y-1">
                               <p className="text-[9px] font-black uppercase tracking-wider text-gray-400">
-                                Preference
+                                Open Tag
                               </p>
-                              <select
-                                value={player.partnerPreference}
-                                onChange={async (e) => {
-                                  const nextPreference = e.target.value as PartnerPreference;
-                                  setOpenPreferenceEditorFor(null);
-                                  await handleUpdatePreferences(player.id, {
-                                    partnerPreference: nextPreference,
-                                  });
-                                }}
-                                disabled={savingPreferences[player.id]}
-                                className="h-8 w-full bg-white border border-gray-200 rounded-lg px-2 text-[10px] font-black uppercase tracking-wide text-gray-700 focus:outline-none focus:border-blue-400 disabled:opacity-60"
-                              >
-                                <option value={PartnerPreference.OPEN}>Open</option>
-                                <option value={PartnerPreference.FEMALE_FLEX}>Female Flex</option>
-                              </select>
+                              {player.gender === PlayerGender.FEMALE ? (
+                                <select
+                                  value={player.partnerPreference}
+                                  onChange={async (e) => {
+                                    const nextPreference = e.target.value as PartnerPreference;
+                                    setOpenPreferenceEditorFor(null);
+                                    await handleUpdatePreferences(player.id, {
+                                      partnerPreference: nextPreference,
+                                    });
+                                  }}
+                                  disabled={savingPreferences[player.id]}
+                                  className="h-8 w-full bg-white border border-gray-200 rounded-lg px-2 text-[10px] font-black uppercase tracking-wide text-gray-700 focus:outline-none focus:border-blue-400 disabled:opacity-60"
+                                >
+                                  <option value={PartnerPreference.FEMALE_FLEX}>Default</option>
+                                  <option value={PartnerPreference.OPEN}>Open Tag</option>
+                                </select>
+                              ) : (
+                                <p className="text-[10px] font-black uppercase tracking-wide text-gray-500 px-1 py-2">
+                                  Not Needed
+                                </p>
+                              )}
                             </div>
                             {savingPreferences[player.id] && (
                               <p className="text-[9px] font-black uppercase tracking-wider text-gray-400">
@@ -707,8 +720,8 @@ export default function CommunityAdminPage() {
                             <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-100 text-gray-700 border border-gray-200">
                               {player.gender === PlayerGender.FEMALE ? "Female" : "Male"} /{" "}
                               {player.partnerPreference === PartnerPreference.FEMALE_FLEX
-                                ? "Flex"
-                                : "Open"}
+                                ? "Default"
+                                : "Open Tag"}
                             </span>
                             <button
                               type="button"
@@ -732,8 +745,13 @@ export default function CommunityAdminPage() {
                                     onChange={async (e) => {
                                       const nextGender = e.target.value as PlayerGender;
                                       setOpenPreferenceEditorFor(null);
+                                      const nextPreference =
+                                        nextGender === PlayerGender.MALE
+                                          ? PartnerPreference.OPEN
+                                          : PartnerPreference.FEMALE_FLEX;
                                       await handleUpdatePreferences(player.id, {
                                         gender: nextGender,
+                                        partnerPreference: nextPreference,
                                       });
                                     }}
                                     disabled={savingPreferences[player.id]}
@@ -745,23 +763,29 @@ export default function CommunityAdminPage() {
                                 </div>
                                 <div className="space-y-1">
                                   <p className="text-[9px] font-black uppercase tracking-wider text-gray-400">
-                                    Preference
+                                    Open Tag
                                   </p>
-                                  <select
-                                    value={player.partnerPreference}
-                                    onChange={async (e) => {
-                                      const nextPreference = e.target.value as PartnerPreference;
-                                      setOpenPreferenceEditorFor(null);
-                                      await handleUpdatePreferences(player.id, {
-                                        partnerPreference: nextPreference,
-                                      });
-                                    }}
-                                    disabled={savingPreferences[player.id]}
-                                    className="h-8 w-full bg-white border border-gray-200 rounded-lg px-2 text-[10px] font-black uppercase tracking-wide text-gray-700 focus:outline-none focus:border-blue-400 disabled:opacity-60"
-                                  >
-                                    <option value={PartnerPreference.OPEN}>Open</option>
-                                    <option value={PartnerPreference.FEMALE_FLEX}>Female Flex</option>
-                                  </select>
+                                  {player.gender === PlayerGender.FEMALE ? (
+                                    <select
+                                      value={player.partnerPreference}
+                                      onChange={async (e) => {
+                                        const nextPreference = e.target.value as PartnerPreference;
+                                        setOpenPreferenceEditorFor(null);
+                                        await handleUpdatePreferences(player.id, {
+                                          partnerPreference: nextPreference,
+                                        });
+                                      }}
+                                      disabled={savingPreferences[player.id]}
+                                      className="h-8 w-full bg-white border border-gray-200 rounded-lg px-2 text-[10px] font-black uppercase tracking-wide text-gray-700 focus:outline-none focus:border-blue-400 disabled:opacity-60"
+                                    >
+                                      <option value={PartnerPreference.FEMALE_FLEX}>Default</option>
+                                      <option value={PartnerPreference.OPEN}>Open Tag</option>
+                                    </select>
+                                  ) : (
+                                    <p className="text-[10px] font-black uppercase tracking-wide text-gray-500 px-1 py-2">
+                                      Not Needed
+                                    </p>
+                                  )}
                                 </div>
                                 {savingPreferences[player.id] && (
                                   <p className="text-[9px] font-black uppercase tracking-wider text-gray-400">

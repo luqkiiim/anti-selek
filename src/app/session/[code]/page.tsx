@@ -200,7 +200,9 @@ export default function SessionPage() {
                       candidate.partnerPreference as PartnerPreference
                     )
                       ? (candidate.partnerPreference as PartnerPreference)
-                      : PartnerPreference.OPEN;
+                      : gender === PlayerGender.FEMALE
+                        ? PartnerPreference.FEMALE_FLEX
+                        : PartnerPreference.OPEN;
 
                   return {
                     id: candidate.id,
@@ -963,43 +965,53 @@ export default function SessionPage() {
                                       <p className="text-[9px] font-black uppercase tracking-wider text-gray-400">
                                         Gender
                                       </p>
-                                      <select
-                                        value={player.gender}
-                                        onChange={async (e) => {
-                                          const nextGender = e.target.value as PlayerGender;
-                                          setOpenPreferenceEditorFor(null);
-                                          await updatePlayerPreference(
-                                            player.userId,
-                                            nextGender,
-                                            player.partnerPreference
-                                          );
-                                        }}
-                                        className="h-8 w-full bg-white border border-gray-200 rounded-lg px-2 text-[10px] font-black uppercase tracking-wide text-gray-700 focus:outline-none focus:border-blue-400"
-                                      >
+                                    <select
+                                      value={player.gender}
+                                      onChange={async (e) => {
+                                        const nextGender = e.target.value as PlayerGender;
+                                        setOpenPreferenceEditorFor(null);
+                                        const nextPreference =
+                                          nextGender === PlayerGender.MALE
+                                            ? PartnerPreference.OPEN
+                                            : PartnerPreference.FEMALE_FLEX;
+                                        await updatePlayerPreference(
+                                          player.userId,
+                                          nextGender,
+                                          nextPreference
+                                        );
+                                      }}
+                                      className="h-8 w-full bg-white border border-gray-200 rounded-lg px-2 text-[10px] font-black uppercase tracking-wide text-gray-700 focus:outline-none focus:border-blue-400"
+                                    >
                                         <option value={PlayerGender.MALE}>Male</option>
                                         <option value={PlayerGender.FEMALE}>Female</option>
                                       </select>
                                     </div>
                                     <div className="space-y-1">
                                       <p className="text-[9px] font-black uppercase tracking-wider text-gray-400">
-                                        Preference
+                                        Open Tag
                                       </p>
-                                      <select
-                                        value={player.partnerPreference}
-                                        onChange={async (e) => {
-                                          const nextPreference = e.target.value as PartnerPreference;
-                                          setOpenPreferenceEditorFor(null);
-                                          await updatePlayerPreference(
-                                            player.userId,
-                                            player.gender,
-                                            nextPreference
-                                          );
-                                        }}
-                                        className="h-8 w-full bg-white border border-gray-200 rounded-lg px-2 text-[10px] font-black uppercase tracking-wide text-gray-700 focus:outline-none focus:border-blue-400"
-                                      >
-                                        <option value={PartnerPreference.OPEN}>Open</option>
-                                        <option value={PartnerPreference.FEMALE_FLEX}>Female Flex</option>
-                                      </select>
+                                      {player.gender === PlayerGender.FEMALE ? (
+                                        <select
+                                          value={player.partnerPreference}
+                                          onChange={async (e) => {
+                                            const nextPreference = e.target.value as PartnerPreference;
+                                            setOpenPreferenceEditorFor(null);
+                                            await updatePlayerPreference(
+                                              player.userId,
+                                              player.gender,
+                                              nextPreference
+                                            );
+                                          }}
+                                          className="h-8 w-full bg-white border border-gray-200 rounded-lg px-2 text-[10px] font-black uppercase tracking-wide text-gray-700 focus:outline-none focus:border-blue-400"
+                                        >
+                                          <option value={PartnerPreference.FEMALE_FLEX}>Default</option>
+                                          <option value={PartnerPreference.OPEN}>Open Tag</option>
+                                        </select>
+                                      ) : (
+                                        <p className="text-[10px] font-black uppercase tracking-wide text-gray-500 px-1 py-2">
+                                          Not Needed
+                                        </p>
+                                      )}
                                     </div>
                                     <div className="flex justify-end">
                                       <button
@@ -1118,7 +1130,15 @@ export default function SessionPage() {
                     <>
                       <select
                         value={guestGender}
-                        onChange={(e) => setGuestGender(e.target.value as PlayerGender)}
+                        onChange={(e) => {
+                          const nextGender = e.target.value as PlayerGender;
+                          setGuestGender(nextGender);
+                          setGuestPreference(
+                            nextGender === PlayerGender.FEMALE
+                              ? PartnerPreference.FEMALE_FLEX
+                              : PartnerPreference.OPEN
+                          );
+                        }}
                         className="h-9 bg-white border border-gray-200 rounded-lg px-2 text-[10px] font-bold focus:outline-none focus:border-blue-500 transition-all"
                       >
                         <option value={PlayerGender.MALE}>Male</option>
@@ -1129,8 +1149,14 @@ export default function SessionPage() {
                         onChange={(e) => setGuestPreference(e.target.value as PartnerPreference)}
                         className="h-9 bg-white border border-gray-200 rounded-lg px-2 text-[10px] font-bold focus:outline-none focus:border-blue-500 transition-all"
                       >
-                        <option value={PartnerPreference.OPEN}>Open</option>
-                        <option value={PartnerPreference.FEMALE_FLEX}>Female Flex</option>
+                        {guestGender === PlayerGender.FEMALE ? (
+                          <>
+                            <option value={PartnerPreference.FEMALE_FLEX}>Default</option>
+                            <option value={PartnerPreference.OPEN}>Open Tag</option>
+                          </>
+                        ) : (
+                          <option value={PartnerPreference.OPEN}>Open</option>
+                        )}
                       </select>
                     </>
                   )}

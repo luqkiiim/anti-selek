@@ -415,7 +415,7 @@ export default function CommunityPage() {
                 </div>
                 {sessionMode === SessionMode.MIXICANO && (
                   <p className="text-[10px] font-bold text-blue-100 uppercase tracking-wider">
-                    Core members default to MALE. Set guest gender only when needed.
+                    Female defaults to mixed/women only. Tag OPEN only for women who can play men&apos;s doubles.
                   </p>
                 )}
 
@@ -743,7 +743,15 @@ export default function CommunityPage() {
                   <>
                     <select
                       value={guestGenderInput}
-                      onChange={(e) => setGuestGenderInput(e.target.value as PlayerGender)}
+                      onChange={(e) => {
+                        const nextGender = e.target.value as PlayerGender;
+                        setGuestGenderInput(nextGender);
+                        setGuestPreferenceInput(
+                          nextGender === PlayerGender.FEMALE
+                            ? PartnerPreference.FEMALE_FLEX
+                            : PartnerPreference.OPEN
+                        );
+                      }}
                       className="h-9 bg-white border border-gray-200 rounded-lg px-2 text-[10px] font-bold focus:outline-none focus:border-blue-500 transition-all"
                     >
                       <option value={PlayerGender.MALE} className="text-gray-900">
@@ -758,12 +766,20 @@ export default function CommunityPage() {
                       onChange={(e) => setGuestPreferenceInput(e.target.value as PartnerPreference)}
                       className="h-9 bg-white border border-gray-200 rounded-lg px-2 text-[10px] font-bold focus:outline-none focus:border-blue-500 transition-all"
                     >
-                      <option value={PartnerPreference.OPEN} className="text-gray-900">
-                        Open
-                      </option>
-                      <option value={PartnerPreference.FEMALE_FLEX} className="text-gray-900">
-                        Female Flex
-                      </option>
+                      {guestGenderInput === PlayerGender.FEMALE ? (
+                        <>
+                          <option value={PartnerPreference.FEMALE_FLEX} className="text-gray-900">
+                            Default
+                          </option>
+                          <option value={PartnerPreference.OPEN} className="text-gray-900">
+                            Open Tag
+                          </option>
+                        </>
+                      ) : (
+                        <option value={PartnerPreference.OPEN} className="text-gray-900">
+                          Open
+                        </option>
+                      )}
                     </select>
                   </>
                 )}
@@ -791,7 +807,11 @@ export default function CommunityPage() {
                       <p className="font-black text-sm text-gray-900 truncate">{guest.name}</p>
                       {sessionMode === SessionMode.MIXICANO && (
                         <span className="text-[9px] text-gray-500 font-bold uppercase tracking-wider whitespace-nowrap">
-                          {guest.gender === PlayerGender.FEMALE ? "F" : "M"} / {guest.partnerPreference === PartnerPreference.FEMALE_FLEX ? "Flex" : "Open"}
+                          {guest.gender === PlayerGender.FEMALE
+                            ? guest.partnerPreference === PartnerPreference.OPEN
+                              ? "F / Open Tag"
+                              : "F / Default"
+                            : "M"}
                         </span>
                       )}
                       <span className="text-[9px] text-gray-500 font-bold uppercase tracking-wider whitespace-nowrap">

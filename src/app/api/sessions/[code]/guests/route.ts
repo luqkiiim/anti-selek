@@ -56,7 +56,9 @@ export async function POST(
         partnerPreference as PartnerPreference
       )
         ? (partnerPreference as PartnerPreference)
-        : PartnerPreference.OPEN;
+        : normalizedGender === PlayerGender.FEMALE
+          ? PartnerPreference.FEMALE_FLEX
+          : PartnerPreference.OPEN;
 
     const { code } = await params;
     const sessionData = await prisma.session.findUnique({

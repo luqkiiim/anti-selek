@@ -111,7 +111,14 @@ export async function PATCH(
       },
       data: {
         gender: typeof gender === "string" ? gender : undefined,
-        partnerPreference: typeof partnerPreference === "string" ? partnerPreference : undefined,
+        partnerPreference:
+          typeof partnerPreference === "string"
+            ? partnerPreference
+            : gender === PlayerGender.FEMALE
+              ? PartnerPreference.FEMALE_FLEX
+              : gender === PlayerGender.MALE
+                ? PartnerPreference.OPEN
+              : undefined,
       },
       include: {
         user: { select: { id: true, name: true } },

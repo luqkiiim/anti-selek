@@ -6,6 +6,10 @@ import { PartnerPreference, PlayerGender, SessionMode, SessionStatus } from "@/t
 
 export const dynamic = "force-dynamic";
 
+function defaultPartnerPreferenceForGender(gender: PlayerGender): PartnerPreference {
+  return gender === PlayerGender.FEMALE ? PartnerPreference.FEMALE_FLEX : PartnerPreference.OPEN;
+}
+
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ code: string }> }
@@ -119,14 +123,21 @@ export async function POST(
           ? rawGender
           : PlayerGender.MALE
         : rawGender;
+    const hasOverrideGender =
+      typeof overrideGender === "string" &&
+      [PlayerGender.MALE, PlayerGender.FEMALE, PlayerGender.UNSPECIFIED].includes(
+        overrideGender as PlayerGender
+      );
     const sessionPartnerPreference =
       typeof overridePreference === "string" &&
       [PartnerPreference.OPEN, PartnerPreference.FEMALE_FLEX].includes(
         overridePreference as PartnerPreference
       )
         ? (overridePreference as PartnerPreference)
-        : ((userProfile.partnerPreference as PartnerPreference | undefined) ??
-          PartnerPreference.OPEN);
+        : hasOverrideGender && sessionGender === PlayerGender.FEMALE
+          ? defaultPartnerPreferenceForGender(sessionGender)
+          : ((userProfile.partnerPreference as PartnerPreference | undefined) ??
+            defaultPartnerPreferenceForGender(sessionGender));
 
     const updatedSession = await prisma.session.update({
       where: { id: sessionData.id },
