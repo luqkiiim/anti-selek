@@ -52,6 +52,15 @@ export default function CommunityAdminPage() {
   const [resettingCommunity, setResettingCommunity] = useState(false);
   const [deletingCommunity, setDeletingCommunity] = useState(false);
 
+  const getGenderPillLabel = (player: Player) => {
+    if (player.gender === PlayerGender.FEMALE) {
+      return player.partnerPreference === PartnerPreference.OPEN
+        ? "Female/Open"
+        : "Female";
+    }
+    return "Male";
+  };
+
   const safeJson = async (res: Response) => {
     const text = await res.text();
     try {
@@ -537,14 +546,13 @@ export default function CommunityAdminPage() {
                           </span>
                         )}
                         <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-100 text-gray-700 border border-gray-200">
-                          {player.gender === PlayerGender.FEMALE ? "Female" : "Male"} /{" "}
-                          {player.partnerPreference === PartnerPreference.OPEN ? "Open Tag" : "Default"}
+                          {getGenderPillLabel(player)}
                         </span>
                       </div>
 
                       <div className="flex items-center justify-between gap-3 relative">
                         <span className="text-[10px] font-black uppercase tracking-widest text-gray-500">
-                          Preferences
+                          Gender
                         </span>
                         <button
                           type="button"
@@ -553,9 +561,9 @@ export default function CommunityAdminPage() {
                               prev === player.id ? null : player.id
                             )
                           }
-                          className="h-7 px-3 rounded-full text-[10px] font-black uppercase tracking-wide border inline-flex items-center bg-blue-100 text-blue-700 border-blue-200"
+                          className="px-2 inline-flex h-7 text-xs leading-5 font-semibold rounded-full bg-gray-100 text-gray-700 border border-gray-200 hover:bg-gray-200 transition-colors"
                         >
-                          Edit
+                          {getGenderPillLabel(player)}
                         </button>
                         {openPreferenceEditorFor === player.id && (
                           <div className="absolute top-full right-0 mt-2 z-20 bg-white border border-gray-200 rounded-xl shadow-lg p-2.5 w-44 space-y-2">
@@ -648,7 +656,7 @@ export default function CommunityAdminPage() {
                     <th className="px-4 py-3 text-left text-[10px] font-black text-gray-500 uppercase tracking-widest">Player</th>
                     <th className="px-4 py-3 text-left text-[10px] font-black text-gray-500 uppercase tracking-widest">ELO</th>
                     <th className="px-4 py-3 text-center text-[10px] font-black text-gray-500 uppercase tracking-widest whitespace-nowrap">Claimed</th>
-                    <th className="px-4 py-3 text-center text-[10px] font-black text-gray-500 uppercase tracking-widest whitespace-nowrap">Edit</th>
+                    <th className="px-4 py-3 text-center text-[10px] font-black text-gray-500 uppercase tracking-widest whitespace-nowrap">Gender</th>
                     <th className="px-4 py-3 text-center text-[10px] font-black text-gray-500 uppercase tracking-widest whitespace-nowrap">Role</th>
                     <th className="px-4 py-3 text-center text-[10px] font-black text-gray-500 uppercase tracking-widest whitespace-nowrap">Actions</th>
                   </tr>
@@ -717,12 +725,6 @@ export default function CommunityAdminPage() {
                         </td>
                         <td className="px-4 py-4 align-middle text-center">
                           <div className="relative inline-flex items-center gap-2">
-                            <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-100 text-gray-700 border border-gray-200">
-                              {player.gender === PlayerGender.FEMALE ? "Female" : "Male"} /{" "}
-                              {player.partnerPreference === PartnerPreference.FEMALE_FLEX
-                                ? "Default"
-                                : "Open Tag"}
-                            </span>
                             <button
                               type="button"
                               onClick={() =>
@@ -730,9 +732,9 @@ export default function CommunityAdminPage() {
                                   prev === player.id ? null : player.id
                                 )
                               }
-                              className="h-7 px-3 rounded-full text-[10px] font-black uppercase tracking-wide border inline-flex items-center bg-blue-100 text-blue-700 border-blue-200"
+                              className="px-2 inline-flex h-7 text-xs leading-5 font-semibold rounded-full bg-gray-100 text-gray-700 border border-gray-200 hover:bg-gray-200 transition-colors"
                             >
-                              Edit
+                              {getGenderPillLabel(player)}
                             </button>
                             {openPreferenceEditorFor === player.id && (
                               <div className="absolute top-full right-0 mt-2 z-20 bg-white border border-gray-200 rounded-xl shadow-lg p-2.5 w-44 space-y-2 text-left">
