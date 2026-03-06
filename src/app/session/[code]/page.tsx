@@ -931,7 +931,7 @@ export default function SessionPage() {
                                   ? "bg-slate-100 text-slate-700 border border-slate-300"
                                   : idx === 2
                                     ? "bg-orange-100 text-orange-700 border border-orange-300"
-                                    : "bg-gray-100 text-gray-500"
+                                    : "bg-white text-gray-500 border border-gray-300"
                             }`}>
                               {idx + 1}
                             </span>
