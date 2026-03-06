@@ -49,6 +49,9 @@ export default function CommunityAdminPage() {
   const [savingElo, setSavingElo] = useState<Record<string, boolean>>({});
   const [savingPreferences, setSavingPreferences] = useState<Record<string, boolean>>({});
   const [openPreferenceEditorFor, setOpenPreferenceEditorFor] = useState<string | null>(null);
+  const [preferenceEditorDirection, setPreferenceEditorDirection] = useState<"up" | "down">(
+    "down"
+  );
   const [resettingCommunity, setResettingCommunity] = useState(false);
   const [deletingCommunity, setDeletingCommunity] = useState(false);
 
@@ -59,6 +62,18 @@ export default function CommunityAdminPage() {
         : "Female";
     }
     return "Male";
+  };
+
+  const togglePreferenceEditor = (playerId: string, triggerEl: HTMLElement) => {
+    if (openPreferenceEditorFor === playerId) {
+      setOpenPreferenceEditorFor(null);
+      return;
+    }
+    const rect = triggerEl.getBoundingClientRect();
+    const estimatedPopoverHeight = 220;
+    const spaceBelow = window.innerHeight - rect.bottom;
+    setPreferenceEditorDirection(spaceBelow < estimatedPopoverHeight ? "up" : "down");
+    setOpenPreferenceEditorFor(playerId);
   };
 
   const safeJson = async (res: Response) => {
@@ -556,17 +571,19 @@ export default function CommunityAdminPage() {
                         </span>
                         <button
                           type="button"
-                          onClick={() =>
-                            setOpenPreferenceEditorFor((prev) =>
-                              prev === player.id ? null : player.id
-                            )
-                          }
+                          onClick={(e) => togglePreferenceEditor(player.id, e.currentTarget)}
                           className="px-2 h-7 inline-flex items-center justify-center whitespace-nowrap text-xs leading-none font-semibold rounded-full bg-gray-100 text-gray-700 border border-gray-200 hover:bg-gray-200 transition-colors"
                         >
                           {getGenderPillLabel(player)}
                         </button>
                         {openPreferenceEditorFor === player.id && (
-                          <div className="absolute bottom-full right-0 mb-2 z-20 bg-white border border-gray-200 rounded-xl shadow-lg p-2.5 w-44 space-y-2">
+                          <div
+                            className={`absolute right-0 z-20 bg-white border border-gray-200 rounded-xl shadow-lg p-2.5 w-44 space-y-2 ${
+                              preferenceEditorDirection === "up"
+                                ? "bottom-full mb-2"
+                                : "top-full mt-2"
+                            }`}
+                          >
                             <div className="space-y-1">
                               <p className="text-[9px] font-black uppercase tracking-wider text-gray-400">
                                 Gender
@@ -727,17 +744,19 @@ export default function CommunityAdminPage() {
                           <div className="relative inline-flex items-center gap-2">
                             <button
                               type="button"
-                              onClick={() =>
-                                setOpenPreferenceEditorFor((prev) =>
-                                  prev === player.id ? null : player.id
-                                )
-                              }
+                              onClick={(e) => togglePreferenceEditor(player.id, e.currentTarget)}
                               className="px-2 h-7 inline-flex items-center justify-center whitespace-nowrap text-xs leading-none font-semibold rounded-full bg-gray-100 text-gray-700 border border-gray-200 hover:bg-gray-200 transition-colors"
                             >
                               {getGenderPillLabel(player)}
                             </button>
                             {openPreferenceEditorFor === player.id && (
-                              <div className="absolute bottom-full right-0 mb-2 z-20 bg-white border border-gray-200 rounded-xl shadow-lg p-2.5 w-44 space-y-2 text-left">
+                              <div
+                                className={`absolute right-0 z-20 bg-white border border-gray-200 rounded-xl shadow-lg p-2.5 w-44 space-y-2 text-left ${
+                                  preferenceEditorDirection === "up"
+                                    ? "bottom-full mb-2"
+                                    : "top-full mt-2"
+                                }`}
+                              >
                                 <div className="space-y-1">
                                   <p className="text-[9px] font-black uppercase tracking-wider text-gray-400">
                                     Gender
