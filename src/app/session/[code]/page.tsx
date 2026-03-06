@@ -769,9 +769,9 @@ export default function SessionPage() {
                     <th className="px-4 py-3 text-left text-[10px] font-black text-gray-400 uppercase tracking-widest">Player</th>
                     {sessionData.type === SessionType.POINTS ? (
                       <>
-                        <th className="px-4 py-3 text-right text-[10px] font-black text-gray-400 uppercase tracking-widest">Pts</th>
-                        <th className="px-4 py-3 text-right text-[10px] font-black text-gray-400 uppercase tracking-widest">Diff</th>
-                        <th className="px-4 py-3 text-center text-[10px] font-black text-gray-400 uppercase tracking-widest">MP</th>
+                        <th className="w-24 px-4 py-3 text-center text-[10px] font-black text-gray-400 uppercase tracking-widest">Pts</th>
+                        <th className="w-24 px-4 py-3 text-center text-[10px] font-black text-gray-400 uppercase tracking-widest">Diff</th>
+                        <th className="w-24 px-4 py-3 text-center text-[10px] font-black text-gray-400 uppercase tracking-widest">MP</th>
                       </>
                     ) : (
                       <>
@@ -937,15 +937,15 @@ export default function SessionPage() {
                           </td>
                           {sessionData.type === SessionType.POINTS ? (
                             <>
-                              <td className="px-4 py-4 whitespace-nowrap text-right">
+                              <td className="w-24 px-4 py-4 whitespace-nowrap text-center">
                                 <span className="text-base font-black text-blue-700">{player.sessionPoints}</span>
                               </td>
-                              <td className="px-4 py-4 whitespace-nowrap text-right">
+                              <td className="w-24 px-4 py-4 whitespace-nowrap text-center">
                                 <span className={`text-sm font-medium ${pointDiff >= 0 ? "text-green-600" : "text-red-500"}`}>
                                   {pointDiff > 0 ? `+${pointDiff}` : pointDiff}
                                 </span>
                               </td>
-                              <td className="px-4 py-4 whitespace-nowrap text-center">
+                              <td className="w-24 px-4 py-4 whitespace-nowrap text-center">
                                 <span className="text-xs font-bold text-gray-600">{stats.played}</span>
                               </td>
                             </>
