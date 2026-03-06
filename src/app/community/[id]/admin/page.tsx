@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { PlayerGender } from "@/types/enums";
+import { PartnerPreference, PlayerGender } from "@/types/enums";
 
 interface Community {
   id: string;
@@ -20,6 +20,7 @@ interface Player {
   name: string;
   email: string | null;
   gender: PlayerGender;
+  partnerPreference: PartnerPreference;
   elo: number;
   isActive: boolean;
   isClaimed: boolean;
@@ -46,7 +47,8 @@ export default function CommunityAdminPage() {
   const [savingName, setSavingName] = useState<Record<string, boolean>>({});
   const [editingElo, setEditingElo] = useState<Record<string, string>>({});
   const [savingElo, setSavingElo] = useState<Record<string, boolean>>({});
-  const [savingGender, setSavingGender] = useState<Record<string, boolean>>({});
+  const [savingPreferences, setSavingPreferences] = useState<Record<string, boolean>>({});
+  const [openPreferenceEditorFor, setOpenPreferenceEditorFor] = useState<string | null>(null);
   const [resettingCommunity, setResettingCommunity] = useState(false);
   const [deletingCommunity, setDeletingCommunity] = useState(false);
 
@@ -247,8 +249,12 @@ export default function CommunityAdminPage() {
     }
   };
 
-  const handleUpdateGender = async (id: string, nextGender: PlayerGender) => {
-    setSavingGender((prev) => ({ ...prev, [id]: true }));
+  const handleUpdatePreferences = async (
+    id: string,
+    updates: { gender?: PlayerGender; partnerPreference?: PartnerPreference }
+  ) => {
+    if (updates.gender === undefined && updates.partnerPreference === undefined) return;
+    setSavingPreferences((prev) => ({ ...prev, [id]: true }));
     setError("");
     setSuccess("");
 
@@ -256,23 +262,35 @@ export default function CommunityAdminPage() {
       const res = await fetch(`/api/communities/${communityId}/members/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ gender: nextGender }),
+        body: JSON.stringify(updates),
       });
       const data = await safeJson(res);
       if (!res.ok) {
-        throw new Error(data.error || "Failed to update gender");
+        throw new Error(data.error || "Failed to update player preferences");
       }
 
       setPlayers((prev) =>
         prev.map((player) =>
-          player.id === id ? { ...player, gender: nextGender } : player
+          player.id === id
+            ? {
+                ...player,
+                gender:
+                  typeof data.gender === "string"
+                    ? (data.gender as PlayerGender)
+                    : player.gender,
+                partnerPreference:
+                  typeof data.partnerPreference === "string"
+                    ? (data.partnerPreference as PartnerPreference)
+                    : player.partnerPreference,
+              }
+            : player
         )
       );
-      setSuccess("Player gender updated.");
+      setSuccess("Player preferences updated.");
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Failed to update gender");
+      setError(err instanceof Error ? err.message : "Failed to update player preferences");
     } finally {
-      setSavingGender((prev) => ({ ...prev, [id]: false }));
+      setSavingPreferences((prev) => ({ ...prev, [id]: false }));
     }
   };
 
@@ -518,30 +536,83 @@ export default function CommunityAdminPage() {
                             Unclaimed
                           </span>
                         )}
-                        <span
-                          className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                            player.isActive ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"
-                          }`}
-                        >
-                          {player.isActive ? "Active" : "Inactive"}
+                        <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-100 text-gray-700 border border-gray-200">
+                          {player.gender === PlayerGender.FEMALE ? "Female" : "Male"} /{" "}
+                          {player.partnerPreference === PartnerPreference.FEMALE_FLEX ? "Flex" : "Open"}
                         </span>
                       </div>
 
-                      <div className="flex items-center justify-between gap-3">
+                      <div className="flex items-center justify-between gap-3 relative">
                         <span className="text-[10px] font-black uppercase tracking-widest text-gray-500">
-                          Gender
+                          Preferences
                         </span>
-                        <select
-                          value={player.gender}
-                          onChange={(e) =>
-                            handleUpdateGender(player.id, e.target.value as PlayerGender)
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setOpenPreferenceEditorFor((prev) =>
+                              prev === player.id ? null : player.id
+                            )
                           }
-                          disabled={savingGender[player.id]}
-                          className="px-2 py-1 text-xs font-bold border rounded bg-white focus:outline-none focus:border-blue-500 disabled:opacity-60"
+                          className="h-7 px-3 rounded-full text-[10px] font-black uppercase tracking-wide border inline-flex items-center bg-blue-100 text-blue-700 border-blue-200"
                         >
-                          <option value={PlayerGender.MALE}>Male</option>
-                          <option value={PlayerGender.FEMALE}>Female</option>
-                        </select>
+                          Edit
+                        </button>
+                        {openPreferenceEditorFor === player.id && (
+                          <div className="absolute top-full right-0 mt-2 z-20 bg-white border border-gray-200 rounded-xl shadow-lg p-2.5 w-44 space-y-2">
+                            <div className="space-y-1">
+                              <p className="text-[9px] font-black uppercase tracking-wider text-gray-400">
+                                Gender
+                              </p>
+                              <select
+                                value={player.gender}
+                                onChange={async (e) => {
+                                  const nextGender = e.target.value as PlayerGender;
+                                  setOpenPreferenceEditorFor(null);
+                                  await handleUpdatePreferences(player.id, { gender: nextGender });
+                                }}
+                                disabled={savingPreferences[player.id]}
+                                className="h-8 w-full bg-white border border-gray-200 rounded-lg px-2 text-[10px] font-black uppercase tracking-wide text-gray-700 focus:outline-none focus:border-blue-400 disabled:opacity-60"
+                              >
+                                <option value={PlayerGender.MALE}>Male</option>
+                                <option value={PlayerGender.FEMALE}>Female</option>
+                              </select>
+                            </div>
+                            <div className="space-y-1">
+                              <p className="text-[9px] font-black uppercase tracking-wider text-gray-400">
+                                Preference
+                              </p>
+                              <select
+                                value={player.partnerPreference}
+                                onChange={async (e) => {
+                                  const nextPreference = e.target.value as PartnerPreference;
+                                  setOpenPreferenceEditorFor(null);
+                                  await handleUpdatePreferences(player.id, {
+                                    partnerPreference: nextPreference,
+                                  });
+                                }}
+                                disabled={savingPreferences[player.id]}
+                                className="h-8 w-full bg-white border border-gray-200 rounded-lg px-2 text-[10px] font-black uppercase tracking-wide text-gray-700 focus:outline-none focus:border-blue-400 disabled:opacity-60"
+                              >
+                                <option value={PartnerPreference.OPEN}>Open</option>
+                                <option value={PartnerPreference.FEMALE_FLEX}>Female Flex</option>
+                              </select>
+                            </div>
+                            {savingPreferences[player.id] && (
+                              <p className="text-[9px] font-black uppercase tracking-wider text-gray-400">
+                                Saving...
+                              </p>
+                            )}
+                            <div className="flex justify-end">
+                              <button
+                                type="button"
+                                onClick={() => setOpenPreferenceEditorFor(null)}
+                                className="text-[9px] font-black uppercase tracking-widest text-gray-500"
+                              >
+                                Close
+                              </button>
+                            </div>
+                          </div>
+                        )}
                       </div>
 
                       <div className="pt-1">
@@ -564,9 +635,8 @@ export default function CommunityAdminPage() {
                     <th className="px-4 py-3 text-left text-[10px] font-black text-gray-500 uppercase tracking-widest">Player</th>
                     <th className="px-4 py-3 text-left text-[10px] font-black text-gray-500 uppercase tracking-widest">ELO</th>
                     <th className="px-4 py-3 text-center text-[10px] font-black text-gray-500 uppercase tracking-widest whitespace-nowrap">Claimed</th>
-                    <th className="px-4 py-3 text-center text-[10px] font-black text-gray-500 uppercase tracking-widest whitespace-nowrap">Status</th>
+                    <th className="px-4 py-3 text-center text-[10px] font-black text-gray-500 uppercase tracking-widest whitespace-nowrap">Edit</th>
                     <th className="px-4 py-3 text-center text-[10px] font-black text-gray-500 uppercase tracking-widest whitespace-nowrap">Role</th>
-                    <th className="px-4 py-3 text-center text-[10px] font-black text-gray-500 uppercase tracking-widest whitespace-nowrap">Gender</th>
                     <th className="px-4 py-3 text-center text-[10px] font-black text-gray-500 uppercase tracking-widest whitespace-nowrap">Actions</th>
                   </tr>
                 </thead>
@@ -633,13 +703,83 @@ export default function CommunityAdminPage() {
                           )}
                         </td>
                         <td className="px-4 py-4 align-middle text-center">
-                          <span
-                            className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                              player.isActive ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"
-                            }`}
-                          >
-                            {player.isActive ? "Active" : "Inactive"}
-                          </span>
+                          <div className="relative inline-flex items-center gap-2">
+                            <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-100 text-gray-700 border border-gray-200">
+                              {player.gender === PlayerGender.FEMALE ? "Female" : "Male"} /{" "}
+                              {player.partnerPreference === PartnerPreference.FEMALE_FLEX
+                                ? "Flex"
+                                : "Open"}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setOpenPreferenceEditorFor((prev) =>
+                                  prev === player.id ? null : player.id
+                                )
+                              }
+                              className="h-7 px-3 rounded-full text-[10px] font-black uppercase tracking-wide border inline-flex items-center bg-blue-100 text-blue-700 border-blue-200"
+                            >
+                              Edit
+                            </button>
+                            {openPreferenceEditorFor === player.id && (
+                              <div className="absolute top-full right-0 mt-2 z-20 bg-white border border-gray-200 rounded-xl shadow-lg p-2.5 w-44 space-y-2 text-left">
+                                <div className="space-y-1">
+                                  <p className="text-[9px] font-black uppercase tracking-wider text-gray-400">
+                                    Gender
+                                  </p>
+                                  <select
+                                    value={player.gender}
+                                    onChange={async (e) => {
+                                      const nextGender = e.target.value as PlayerGender;
+                                      setOpenPreferenceEditorFor(null);
+                                      await handleUpdatePreferences(player.id, {
+                                        gender: nextGender,
+                                      });
+                                    }}
+                                    disabled={savingPreferences[player.id]}
+                                    className="h-8 w-full bg-white border border-gray-200 rounded-lg px-2 text-[10px] font-black uppercase tracking-wide text-gray-700 focus:outline-none focus:border-blue-400 disabled:opacity-60"
+                                  >
+                                    <option value={PlayerGender.MALE}>Male</option>
+                                    <option value={PlayerGender.FEMALE}>Female</option>
+                                  </select>
+                                </div>
+                                <div className="space-y-1">
+                                  <p className="text-[9px] font-black uppercase tracking-wider text-gray-400">
+                                    Preference
+                                  </p>
+                                  <select
+                                    value={player.partnerPreference}
+                                    onChange={async (e) => {
+                                      const nextPreference = e.target.value as PartnerPreference;
+                                      setOpenPreferenceEditorFor(null);
+                                      await handleUpdatePreferences(player.id, {
+                                        partnerPreference: nextPreference,
+                                      });
+                                    }}
+                                    disabled={savingPreferences[player.id]}
+                                    className="h-8 w-full bg-white border border-gray-200 rounded-lg px-2 text-[10px] font-black uppercase tracking-wide text-gray-700 focus:outline-none focus:border-blue-400 disabled:opacity-60"
+                                  >
+                                    <option value={PartnerPreference.OPEN}>Open</option>
+                                    <option value={PartnerPreference.FEMALE_FLEX}>Female Flex</option>
+                                  </select>
+                                </div>
+                                {savingPreferences[player.id] && (
+                                  <p className="text-[9px] font-black uppercase tracking-wider text-gray-400">
+                                    Saving...
+                                  </p>
+                                )}
+                                <div className="flex justify-end">
+                                  <button
+                                    type="button"
+                                    onClick={() => setOpenPreferenceEditorFor(null)}
+                                    className="text-[9px] font-black uppercase tracking-widest text-gray-500"
+                                  >
+                                    Close
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+                          </div>
                         </td>
                         <td className="px-4 py-4 text-xs font-bold text-gray-700 align-middle text-center">
                           <span
@@ -651,19 +791,6 @@ export default function CommunityAdminPage() {
                           >
                             {player.role}
                           </span>
-                        </td>
-                        <td className="px-4 py-4 align-middle text-center">
-                          <select
-                            value={player.gender}
-                            onChange={(e) =>
-                              handleUpdateGender(player.id, e.target.value as PlayerGender)
-                            }
-                            disabled={savingGender[player.id]}
-                            className="px-2 py-1 text-xs font-bold border rounded bg-gray-50 focus:bg-white focus:outline-none focus:border-blue-500 disabled:opacity-60"
-                          >
-                            <option value={PlayerGender.MALE}>Male</option>
-                            <option value={PlayerGender.FEMALE}>Female</option>
-                          </select>
                         </td>
                         <td className="px-4 py-4 text-center text-sm font-medium align-middle">
                           <div className="flex justify-center gap-3">
@@ -679,7 +806,7 @@ export default function CommunityAdminPage() {
                     ))}
                   {players.length === 0 && (
                     <tr>
-                      <td colSpan={7} className="px-6 py-8 text-center text-gray-500 italic">
+                      <td colSpan={6} className="px-6 py-8 text-center text-gray-500 italic">
                         No players in the community yet.
                       </td>
                     </tr>
