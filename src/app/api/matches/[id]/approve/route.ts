@@ -8,6 +8,8 @@ import { MatchStatus, SessionType } from "@/types/enums";
 export const dynamic = "force-dynamic";
 
 const K_FACTOR = 32;
+const SINGLE_GUEST_MULTIPLIER = 0.75;
+const MULTI_GUEST_MULTIPLIER = 0.5;
 
 function calculateEloChange(winnerElo: number, loserElo: number, winnerScore: number, loserScore: number): number {
   const expectedWinner = 1 / (1 + Math.pow(10, (loserElo - winnerElo) / 400));
@@ -20,6 +22,18 @@ function calculateEloChange(winnerElo: number, loserElo: number, winnerScore: nu
   const marginMultiplier = 1 + (scoreDiff - 2) * 0.05;
   
   return Math.round(K_FACTOR * (1 - expectedWinner) * marginMultiplier);
+}
+
+function getGuestImpactMultiplier(guestCount: number): number {
+  if (guestCount <= 0) return 1;
+  if (guestCount === 1) return SINGLE_GUEST_MULTIPLIER;
+  return MULTI_GUEST_MULTIPLIER;
+}
+
+function applyGuestMultiplierToDelta(delta: number, multiplier: number): number {
+  if (delta === 0 || multiplier === 1) return delta;
+  const magnitude = Math.max(1, Math.round(Math.abs(delta) * multiplier));
+  return delta > 0 ? magnitude : -magnitude;
 }
 
 export async function POST(
@@ -112,6 +126,21 @@ export async function POST(
       match.session.type === SessionType.POINTS ? (winnerTeam === 2 ? 3 : 0) : team2Points;
 
     const playerIds = [match.team1User1Id, match.team1User2Id, match.team2User1Id, match.team2User2Id];
+    const sessionPlayerRows = await prisma.sessionPlayer.findMany({
+      where: {
+        sessionId: match.sessionId,
+        userId: { in: playerIds },
+      },
+      select: {
+        userId: true,
+        isGuest: true,
+      },
+    });
+    const isGuestByUserId = new Map<string, boolean>(
+      sessionPlayerRows.map((player) => [player.userId, player.isGuest])
+    );
+    const guestCount = playerIds.filter((userId) => isGuestByUserId.get(userId) === true).length;
+    const guestImpactMultiplier = getGuestImpactMultiplier(guestCount);
     const communityEloByUserId =
       match.session.communityId
         ? await getCommunityEloByUserId(match.session.communityId, playerIds)
@@ -138,6 +167,9 @@ export async function POST(
       team2EloChange = delta;
     }
 
+    const persistedTeam1EloChange = applyGuestMultiplierToDelta(team1EloChange, guestImpactMultiplier);
+    const persistedTeam2EloChange = applyGuestMultiplierToDelta(team2EloChange, guestImpactMultiplier);
+
     // Transaction: update match, points, ELO, clear court
     try {
       const result = await prisma.$transaction(async (tx) => {
@@ -148,8 +180,8 @@ export async function POST(
             team1Score: finalTeam1Score,
             team2Score: finalTeam2Score,
             winnerTeam,
-            team1EloChange: team1EloChange,
-            team2EloChange: team2EloChange,
+            team1EloChange: persistedTeam1EloChange,
+            team2EloChange: persistedTeam2EloChange,
             status: MatchStatus.COMPLETED,
             completedAt: now,
           },
@@ -209,15 +241,13 @@ export async function POST(
           data: { lastPartnerId: match.team2User1Id },
         });
 
-        // Update ELO for all 4 players
+        // Update persistent ELO for core players only (guests are session-scoped).
         if (match.session.communityId) {
           const team1Ids = [match.team1User1Id, match.team1User2Id];
           const team2Ids = [match.team2User1Id, match.team2User2Id];
 
-          const team1CommunityMemberIds = team1Ids.filter((userId) => communityEloByUserId.has(userId));
-          const team2CommunityMemberIds = team2Ids.filter((userId) => communityEloByUserId.has(userId));
-          const team1GuestIds = team1Ids.filter((userId) => !communityEloByUserId.has(userId));
-          const team2GuestIds = team2Ids.filter((userId) => !communityEloByUserId.has(userId));
+          const team1CommunityMemberIds = team1Ids.filter((userId) => isGuestByUserId.get(userId) !== true);
+          const team2CommunityMemberIds = team2Ids.filter((userId) => isGuestByUserId.get(userId) !== true);
 
           if (team1CommunityMemberIds.length > 0) {
             await tx.communityMember.updateMany({
@@ -225,7 +255,7 @@ export async function POST(
                 communityId: match.session.communityId,
                 userId: { in: team1CommunityMemberIds },
               },
-              data: { elo: { increment: team1EloChange } },
+              data: { elo: { increment: persistedTeam1EloChange } },
             });
           }
           if (team2CommunityMemberIds.length > 0) {
@@ -234,40 +264,29 @@ export async function POST(
                 communityId: match.session.communityId,
                 userId: { in: team2CommunityMemberIds },
               },
-              data: { elo: { increment: team2EloChange } },
-            });
-          }
-
-          // Guests are session-scoped, but we still update their user ELO to keep in-session balancing sensible.
-          if (team1GuestIds.length > 0) {
-            await tx.user.updateMany({
-              where: { id: { in: team1GuestIds } },
-              data: { elo: { increment: team1EloChange } },
-            });
-          }
-          if (team2GuestIds.length > 0) {
-            await tx.user.updateMany({
-              where: { id: { in: team2GuestIds } },
-              data: { elo: { increment: team2EloChange } },
+              data: { elo: { increment: persistedTeam2EloChange } },
             });
           }
         } else {
-          await tx.user.update({
-            where: { id: match.team1User1Id },
-            data: { elo: { increment: team1EloChange } },
-          });
-          await tx.user.update({
-            where: { id: match.team1User2Id },
-            data: { elo: { increment: team1EloChange } },
-          });
-          await tx.user.update({
-            where: { id: match.team2User1Id },
-            data: { elo: { increment: team2EloChange } },
-          });
-          await tx.user.update({
-            where: { id: match.team2User2Id },
-            data: { elo: { increment: team2EloChange } },
-          });
+          const team1CoreIds = [match.team1User1Id, match.team1User2Id].filter(
+            (userId) => isGuestByUserId.get(userId) !== true
+          );
+          const team2CoreIds = [match.team2User1Id, match.team2User2Id].filter(
+            (userId) => isGuestByUserId.get(userId) !== true
+          );
+
+          if (team1CoreIds.length > 0) {
+            await tx.user.updateMany({
+              where: { id: { in: team1CoreIds } },
+              data: { elo: { increment: persistedTeam1EloChange } },
+            });
+          }
+          if (team2CoreIds.length > 0) {
+            await tx.user.updateMany({
+              where: { id: { in: team2CoreIds } },
+              data: { elo: { increment: persistedTeam2EloChange } },
+            });
+          }
         }
 
         // Clear current match from court

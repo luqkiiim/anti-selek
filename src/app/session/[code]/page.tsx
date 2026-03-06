@@ -86,6 +86,12 @@ interface CurrentUser {
   isAdmin?: boolean;
 }
 
+const GUEST_ELO_PRESETS = [
+  { label: "Beginner", value: 850 },
+  { label: "Average", value: 1000 },
+  { label: "Advanced", value: 1200 },
+] as const;
+
 export default function SessionPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
@@ -104,6 +110,7 @@ export default function SessionPage() {
   const [guestName, setGuestName] = useState("");
   const [guestGender, setGuestGender] = useState<PlayerGender>(PlayerGender.MALE);
   const [guestPreference, setGuestPreference] = useState<PartnerPreference>(PartnerPreference.OPEN);
+  const [guestInitialElo, setGuestInitialElo] = useState<number>(1000);
   const [addingGuest, setAddingGuest] = useState(false);
   const [savingPreferencesFor, setSavingPreferencesFor] = useState<string | null>(null);
   const [openPreferenceEditorFor, setOpenPreferenceEditorFor] = useState<string | null>(null);
@@ -333,6 +340,7 @@ export default function SessionPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name,
+          initialElo: guestInitialElo,
           gender: guestGender,
           partnerPreference: guestPreference,
         }),
@@ -346,6 +354,7 @@ export default function SessionPage() {
       setGuestName("");
       setGuestGender(PlayerGender.MALE);
       setGuestPreference(PartnerPreference.OPEN);
+      setGuestInitialElo(1000);
       fetchSession();
     } catch (err) {
       console.error(err);
@@ -581,6 +590,7 @@ export default function SessionPage() {
                 setGuestName("");
                 setGuestGender(PlayerGender.MALE);
                 setGuestPreference(PartnerPreference.OPEN);
+                setGuestInitialElo(1000);
                 setShowRosterModal(true);
               }}
               className="whitespace-nowrap bg-blue-600 text-white px-4 py-2.5 rounded-xl font-black text-sm uppercase tracking-wider shadow-md active:bg-blue-700 active:scale-95 transition-all"
@@ -986,6 +996,7 @@ export default function SessionPage() {
                   setGuestName("");
                   setGuestGender(PlayerGender.MALE);
                   setGuestPreference(PartnerPreference.OPEN);
+                  setGuestInitialElo(1000);
                 }}
                 className="bg-gray-100 text-gray-400 hover:text-gray-600 w-7 h-7 rounded-full flex items-center justify-center text-lg font-bold"
               >
@@ -998,7 +1009,7 @@ export default function SessionPage() {
               {isAdmin && (
                 <div
                   className={`grid gap-2 ${
-                    isMixicano ? "grid-cols-1 sm:grid-cols-[2fr_1fr_1fr_auto]" : "grid-cols-[1fr_auto]"
+                    isMixicano ? "grid-cols-1 sm:grid-cols-[2fr_1fr_1fr_1fr_auto]" : "grid-cols-[1fr_1fr_auto]"
                   }`}
                 >
                   <input
@@ -1008,6 +1019,17 @@ export default function SessionPage() {
                     onChange={(e) => setGuestName(e.target.value)}
                     className="flex-1 h-9 bg-white border border-gray-200 rounded-lg px-3 text-xs font-bold focus:outline-none focus:border-blue-500 transition-all"
                   />
+                  <select
+                    value={guestInitialElo}
+                    onChange={(e) => setGuestInitialElo(parseInt(e.target.value, 10))}
+                    className="h-9 bg-white border border-gray-200 rounded-lg px-2 text-[10px] font-bold focus:outline-none focus:border-blue-500 transition-all"
+                  >
+                    {GUEST_ELO_PRESETS.map((preset) => (
+                      <option key={preset.label} value={preset.value}>
+                        {preset.label} ({preset.value})
+                      </option>
+                    ))}
+                  </select>
                   {isMixicano && (
                     <>
                       <select
@@ -1085,6 +1107,7 @@ export default function SessionPage() {
                   setGuestName("");
                   setGuestGender(PlayerGender.MALE);
                   setGuestPreference(PartnerPreference.OPEN);
+                  setGuestInitialElo(1000);
                 }}
                 className="bg-gray-900 text-white px-4 py-2 rounded-lg font-black uppercase tracking-widest text-[10px] shadow-sm active:scale-95 transition-all"
               >

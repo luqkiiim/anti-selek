@@ -56,7 +56,14 @@ interface GuestConfig {
   name: string;
   gender: PlayerGender;
   partnerPreference: PartnerPreference;
+  initialElo: number;
 }
+
+const GUEST_ELO_PRESETS = [
+  { label: "Beginner", value: 850 },
+  { label: "Average", value: 1000 },
+  { label: "Advanced", value: 1200 },
+] as const;
 
 export default function CommunityPage() {
   const { status } = useSession();
@@ -79,6 +86,7 @@ export default function CommunityPage() {
   const [guestPreferenceInput, setGuestPreferenceInput] = useState<PartnerPreference>(
     PartnerPreference.OPEN
   );
+  const [guestInitialEloInput, setGuestInitialEloInput] = useState<number>(1000);
   const [guestConfigs, setGuestConfigs] = useState<GuestConfig[]>([]);
 
   const [loading, setLoading] = useState(true);
@@ -129,6 +137,7 @@ export default function CommunityPage() {
     setGuestNameInput("");
     setGuestGenderInput(PlayerGender.MALE);
     setGuestPreferenceInput(PartnerPreference.OPEN);
+    setGuestInitialEloInput(1000);
     setPlayerSearch("");
     setShowPlayersModal(false);
     setShowGuestsModal(false);
@@ -230,6 +239,7 @@ export default function CommunityPage() {
       setGuestNameInput("");
       setGuestGenderInput(PlayerGender.MALE);
       setGuestPreferenceInput(PartnerPreference.OPEN);
+      setGuestInitialEloInput(1000);
       setCourtCount(3);
       router.push(`/session/${data.code}`);
     } catch (err: unknown) {
@@ -280,11 +290,13 @@ export default function CommunityPage() {
         name: trimmed,
         gender: guestGenderInput,
         partnerPreference: guestPreferenceInput,
+        initialElo: guestInitialEloInput,
       },
     ]);
     setGuestNameInput("");
     setGuestGenderInput(PlayerGender.MALE);
     setGuestPreferenceInput(PartnerPreference.OPEN);
+    setGuestInitialEloInput(1000);
   };
 
   const removeGuestName = (nameToRemove: string) => {
@@ -698,8 +710,8 @@ export default function CommunityPage() {
               <div
                 className={`grid gap-2 ${
                   sessionMode === SessionMode.MIXICANO
-                    ? "grid-cols-1 sm:grid-cols-[2fr_1fr_1fr_auto]"
-                    : "grid-cols-[1fr_auto]"
+                    ? "grid-cols-1 sm:grid-cols-[2fr_1fr_1fr_1fr_auto]"
+                    : "grid-cols-[1fr_1fr_auto]"
                 }`}
               >
                 <input
@@ -715,6 +727,17 @@ export default function CommunityPage() {
                   placeholder="Guest name"
                   className="h-9 bg-white border border-gray-200 rounded-lg px-3 text-xs font-bold focus:outline-none focus:border-blue-500 transition-all"
                 />
+                <select
+                  value={guestInitialEloInput}
+                  onChange={(e) => setGuestInitialEloInput(parseInt(e.target.value, 10))}
+                  className="h-9 bg-white border border-gray-200 rounded-lg px-2 text-[10px] font-bold focus:outline-none focus:border-blue-500 transition-all"
+                >
+                  {GUEST_ELO_PRESETS.map((preset) => (
+                    <option key={preset.label} value={preset.value}>
+                      {preset.label} ({preset.value})
+                    </option>
+                  ))}
+                </select>
                 {sessionMode === SessionMode.MIXICANO && (
                   <>
                     <select
@@ -770,6 +793,9 @@ export default function CommunityPage() {
                           {guest.gender === PlayerGender.FEMALE ? "F" : "M"} / {guest.partnerPreference === PartnerPreference.FEMALE_FLEX ? "Flex" : "Open"}
                         </span>
                       )}
+                      <span className="text-[9px] text-gray-500 font-bold uppercase tracking-wider whitespace-nowrap">
+                        ELO {guest.initialElo}
+                      </span>
                     </div>
                     <button
                       type="button"
