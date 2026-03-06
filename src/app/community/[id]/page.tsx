@@ -421,7 +421,7 @@ export default function CommunityPage() {
                 <p className="text-[10px] font-bold text-blue-100 uppercase tracking-wider">
                   {sessionMode === SessionMode.MEXICANO
                     ? "Open doubles rotation. Teams are balanced by current ratings and fairness."
-                    : "Supports mixed/women rules. Female defaults to mixed/women only; set OPEN for women allowed in men&apos;s doubles."}
+                    : "Supports mixed/women rules. Female defaults to mixed/women only; set OPEN for women allowed in men's doubles."}
                 </p>
 
                 <div className="space-y-1">
