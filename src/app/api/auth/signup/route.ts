@@ -45,41 +45,30 @@ export async function POST(request: Request) {
       );
     }
 
-    // Check if email already registered
     const existingByEmail = await prisma.user.findUnique({
       where: { email: normalizedEmail },
     });
 
-    if (existingByEmail) {
+    const passwordHash = await bcrypt.hash(password, 10);
+
+    if (existingByEmail?.isClaimed || existingByEmail?.passwordHash) {
       return NextResponse.json(
         { error: "Email already registered" },
         { status: 400 }
       );
     }
 
-    // Check if there's an unclaimed profile with the same name
-    const existingByName = await prisma.user.findFirst({
-      where: { 
-        name: normalizedName,
-        isClaimed: false
-      },
-    });
-
-    const passwordHash = await bcrypt.hash(password, 10);
-
     let user;
-    if (existingByName) {
-      // Claim the existing profile
+    if (existingByEmail) {
       user = await prisma.user.update({
-        where: { id: existingByName.id },
+        where: { id: existingByEmail.id },
         data: {
-          email: normalizedEmail,
+          name: normalizedName,
           passwordHash,
           isClaimed: true,
         },
       });
     } else {
-      // Create new claimed user
       user = await prisma.user.create({
         data: {
           email: normalizedEmail,

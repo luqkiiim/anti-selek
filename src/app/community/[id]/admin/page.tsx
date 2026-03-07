@@ -4,7 +4,11 @@ import { useCallback, useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { PartnerPreference, PlayerGender } from "@/types/enums";
+import {
+  ClaimRequestStatus,
+  PartnerPreference,
+  PlayerGender,
+} from "@/types/enums";
 
 interface Community {
   id: string;
@@ -28,6 +32,19 @@ interface Player {
   createdAt: string;
 }
 
+interface ClaimRequest {
+  id: string;
+  requesterUserId: string;
+  requesterName: string;
+  requesterEmail: string | null;
+  targetUserId: string;
+  targetName: string;
+  targetEmail: string | null;
+  status: ClaimRequestStatus;
+  note?: string | null;
+  createdAt: string;
+}
+
 export default function CommunityAdminPage() {
   const { status } = useSession();
   const router = useRouter();
@@ -36,6 +53,7 @@ export default function CommunityAdminPage() {
 
   const [community, setCommunity] = useState<Community | null>(null);
   const [players, setPlayers] = useState<Player[]>([]);
+  const [claimRequests, setClaimRequests] = useState<ClaimRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -51,6 +69,7 @@ export default function CommunityAdminPage() {
   const [preferenceEditorDirection, setPreferenceEditorDirection] = useState<"up" | "down">(
     "down"
   );
+  const [reviewingClaimRequestId, setReviewingClaimRequestId] = useState<string | null>(null);
   const [resettingCommunity, setResettingCommunity] = useState(false);
   const [deletingCommunity, setDeletingCommunity] = useState(false);
 
@@ -104,12 +123,22 @@ export default function CommunityAdminPage() {
     }
     setCommunity(currentCommunity);
 
-    const playersRes = await fetch(`/api/communities/${communityId}/members`);
-    const playersData = await safeJson(playersRes);
+    const [playersRes, claimRequestsRes] = await Promise.all([
+      fetch(`/api/communities/${communityId}/members`),
+      fetch(`/api/communities/${communityId}/claim-requests`),
+    ]);
+    const [playersData, claimRequestsData] = await Promise.all([
+      safeJson(playersRes),
+      safeJson(claimRequestsRes),
+    ]);
     if (!playersRes.ok) {
       throw new Error(playersData.error || "Failed to load players");
     }
+    if (!claimRequestsRes.ok) {
+      throw new Error(claimRequestsData.error || "Failed to load claim requests");
+    }
     setPlayers(Array.isArray(playersData) ? playersData : []);
+    setClaimRequests(Array.isArray(claimRequestsData) ? claimRequestsData : []);
   }, [communityId, router]);
 
   useEffect(() => {
@@ -384,6 +413,41 @@ export default function CommunityAdminPage() {
     }
   };
 
+  const handleReviewClaimRequest = async (
+    claimRequest: ClaimRequest,
+    action: "APPROVE" | "REJECT"
+  ) => {
+    setReviewingClaimRequestId(claimRequest.id);
+    setError("");
+    setSuccess("");
+
+    try {
+      const res = await fetch(
+        `/api/communities/${communityId}/claim-requests/${claimRequest.id}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action }),
+        }
+      );
+      const data = await safeJson(res);
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to review claim request");
+      }
+
+      setSuccess(
+        action === "APPROVE"
+          ? `Approved ${claimRequest.requesterName}'s claim for ${claimRequest.targetName}.`
+          : `Rejected ${claimRequest.requesterName}'s claim for ${claimRequest.targetName}.`
+      );
+      await fetchCommunityAndPlayers();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to review claim request");
+    } finally {
+      setReviewingClaimRequestId(null);
+    }
+  };
+
   if (status === "loading" || loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center p-6">
@@ -439,35 +503,116 @@ export default function CommunityAdminPage() {
         )}
 
         <div className="grid grid-cols-1 lg:grid-cols-[320px_minmax(0,1fr)] gap-8 items-start">
-          <div className="bg-white p-6 rounded-3xl shadow-md border border-gray-100 space-y-4">
-            <h3 className="text-sm font-black text-gray-900 uppercase tracking-widest">Create Player Profile</h3>
-            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">
-              Add a player to this community.
-            </p>
-            <form onSubmit={handleAddPlayer} className="space-y-3">
-              <input
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl px-4 py-3 font-bold focus:outline-none focus:border-blue-500 transition-all"
-                placeholder="Player Name"
-                required
-              />
-              <select
-                value={newPlayerGender}
-                onChange={(e) => setNewPlayerGender(e.target.value as PlayerGender)}
-                className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl px-4 py-3 font-bold focus:outline-none focus:border-blue-500 transition-all"
-              >
-                <option value={PlayerGender.MALE}>Male</option>
-                <option value={PlayerGender.FEMALE}>Female</option>
-              </select>
-              <button
-                type="submit"
-                className="w-full bg-blue-600 text-white py-3 rounded-2xl font-black uppercase tracking-widest text-xs active:scale-95 transition-all"
-              >
-                Create Profile
-              </button>
-            </form>
+          <div className="space-y-8">
+            <div className="bg-white p-6 rounded-3xl shadow-md border border-gray-100 space-y-4">
+              <h3 className="text-sm font-black text-gray-900 uppercase tracking-widest">Create Player Profile</h3>
+              <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">
+                Add a player to this community.
+              </p>
+              <form onSubmit={handleAddPlayer} className="space-y-3">
+                <input
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl px-4 py-3 font-bold focus:outline-none focus:border-blue-500 transition-all"
+                  placeholder="Player Name"
+                  required
+                />
+                <select
+                  value={newPlayerGender}
+                  onChange={(e) => setNewPlayerGender(e.target.value as PlayerGender)}
+                  className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl px-4 py-3 font-bold focus:outline-none focus:border-blue-500 transition-all"
+                >
+                  <option value={PlayerGender.MALE}>Male</option>
+                  <option value={PlayerGender.FEMALE}>Female</option>
+                </select>
+                <button
+                  type="submit"
+                  className="w-full bg-blue-600 text-white py-3 rounded-2xl font-black uppercase tracking-widest text-xs active:scale-95 transition-all"
+                >
+                  Create Profile
+                </button>
+              </form>
+            </div>
+
+            <div className="bg-white p-6 rounded-3xl shadow-md border border-gray-100 space-y-4">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <h3 className="text-sm font-black text-gray-900 uppercase tracking-widest">Claim Requests</h3>
+                  <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">
+                    Review member requests to claim placeholder profiles.
+                  </p>
+                </div>
+                <span className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">
+                  {claimRequests.length} pending
+                </span>
+              </div>
+
+              <div className="space-y-3">
+                {claimRequests.length === 0 ? (
+                  <div className="bg-gray-50 border-2 border-dashed border-gray-100 rounded-2xl p-4 text-center">
+                    <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">
+                      No pending claim requests
+                    </p>
+                  </div>
+                ) : (
+                  claimRequests.map((claimRequest) => (
+                    <div
+                      key={claimRequest.id}
+                      className="rounded-2xl border border-gray-100 bg-gray-50 p-4 space-y-3"
+                    >
+                      <div className="space-y-1">
+                        <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">
+                          Requester
+                        </p>
+                        <p className="text-sm font-black text-gray-900">{claimRequest.requesterName}</p>
+                        <p className="text-xs text-gray-500">
+                          {claimRequest.requesterEmail || "No email"}
+                        </p>
+                      </div>
+                      <div className="space-y-1">
+                        <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">
+                          Placeholder
+                        </p>
+                        <p className="text-sm font-black text-gray-900">{claimRequest.targetName}</p>
+                        <p className="text-xs text-gray-500">
+                          {claimRequest.targetEmail || "No email"}
+                        </p>
+                      </div>
+                      {claimRequest.note && (
+                        <div className="rounded-xl bg-white border border-gray-200 px-3 py-2">
+                          <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">
+                            Note
+                          </p>
+                          <p className="text-xs text-gray-600 mt-1">{claimRequest.note}</p>
+                        </div>
+                      )}
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">
+                        Requested {new Date(claimRequest.createdAt).toLocaleDateString()}
+                      </p>
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          type="button"
+                          onClick={() => handleReviewClaimRequest(claimRequest, "APPROVE")}
+                          disabled={reviewingClaimRequestId !== null}
+                          className="w-full bg-blue-600 text-white py-2.5 rounded-xl font-black uppercase tracking-widest text-[10px] disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {reviewingClaimRequestId === claimRequest.id ? "Working..." : "Approve"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleReviewClaimRequest(claimRequest, "REJECT")}
+                          disabled={reviewingClaimRequestId !== null}
+                          className="w-full bg-white border border-red-200 text-red-600 py-2.5 rounded-xl font-black uppercase tracking-widest text-[10px] disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          Reject
+                        </button>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
           </div>
 
           <div className="bg-white rounded-3xl shadow-md border border-gray-100 overflow-hidden">

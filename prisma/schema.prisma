@@ -24,6 +24,9 @@ model User {
   sessionPlayers SessionPlayer[]
   communities    CommunityMember[]
   createdCommunities Community[] @relation("CommunityCreator")
+  claimRequestsMade ClaimRequest[] @relation("ClaimRequester")
+  claimRequestsTargeted ClaimRequest[] @relation("ClaimTarget")
+  reviewedClaimRequests ClaimRequest[] @relation("ClaimReviewer")
 
   // Match relations (team memberships)
   matchesAsTeam1Player1   Match[] @relation("Team1Player1")
@@ -44,6 +47,7 @@ model Community {
   createdBy User @relation("CommunityCreator", fields: [createdById], references: [id], onDelete: Cascade)
   members   CommunityMember[]
   sessions  Session[]
+  claimRequests ClaimRequest[]
 }
 
 model CommunityMember {
@@ -143,4 +147,26 @@ model Match {
   team1User2   User     @relation("Team1Player2", fields: [team1User2Id], references: [id], onDelete: Cascade)
   team2User1   User     @relation("Team2Player1", fields: [team2User1Id], references: [id], onDelete: Cascade)
   team2User2   User     @relation("Team2Player2", fields: [team2User2Id], references: [id], onDelete: Cascade)
+}
+
+model ClaimRequest {
+  id              String   @id @default(cuid())
+  communityId     String
+  requesterUserId String
+  targetUserId    String
+  status          String   @default("PENDING") // PENDING, APPROVED, REJECTED
+  note            String?
+  reviewedById    String?
+  reviewedAt      DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  community   Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  requester   User      @relation("ClaimRequester", fields: [requesterUserId], references: [id], onDelete: Cascade)
+  target      User      @relation("ClaimTarget", fields: [targetUserId], references: [id], onDelete: Cascade)
+  reviewedBy  User?     @relation("ClaimReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+
+  @@index([communityId, status])
+  @@index([requesterUserId, status])
+  @@index([targetUserId, status])
 }

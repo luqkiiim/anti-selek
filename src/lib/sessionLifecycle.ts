@@ -61,18 +61,18 @@ export function collectGuestUserIds(sessionPlayers: SessionGuestPlayerRow[]): st
   );
 }
 
-export async function deleteEphemeralGuestUsers(
+export async function deleteDisposableUnclaimedUsers(
   tx: Prisma.TransactionClient,
-  guestUserIds: string[]
+  userIds: string[]
 ): Promise<number> {
-  const uniqueGuestUserIds = Array.from(new Set(guestUserIds));
-  if (uniqueGuestUserIds.length === 0) {
+  const uniqueUserIds = Array.from(new Set(userIds));
+  if (uniqueUserIds.length === 0) {
     return 0;
   }
 
   const result = await tx.user.deleteMany({
     where: {
-      id: { in: uniqueGuestUserIds },
+      id: { in: uniqueUserIds },
       isClaimed: false,
       email: null,
       communities: { none: {} },
@@ -85,4 +85,11 @@ export async function deleteEphemeralGuestUsers(
   });
 
   return result.count;
+}
+
+export async function deleteEphemeralGuestUsers(
+  tx: Prisma.TransactionClient,
+  guestUserIds: string[]
+): Promise<number> {
+  return deleteDisposableUnclaimedUsers(tx, guestUserIds);
 }

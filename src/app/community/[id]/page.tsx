@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import {
+  ClaimRequestStatus,
   PartnerPreference,
   PlayerGender,
   SessionMode,
@@ -40,6 +41,7 @@ interface CommunityMember {
   elo: number;
   wins: number;
   losses: number;
+  isClaimed: boolean;
   role: "ADMIN" | "MEMBER";
 }
 
@@ -61,6 +63,21 @@ interface GuestConfig {
   initialElo: number;
 }
 
+interface ClaimRequest {
+  id: string;
+  communityId: string;
+  requesterUserId: string;
+  requesterName: string;
+  requesterEmail: string | null;
+  targetUserId: string;
+  targetName: string;
+  targetEmail: string | null;
+  status: ClaimRequestStatus;
+  note?: string | null;
+  createdAt: string;
+  reviewedAt?: string | null;
+}
+
 const GUEST_ELO_PRESETS = [
   { label: "Beginner", value: 850 },
   { label: "Average", value: 1000 },
@@ -77,6 +94,7 @@ export default function CommunityPage() {
   const [community, setCommunity] = useState<Community | null>(null);
   const [communityMembers, setCommunityMembers] = useState<CommunityMember[]>([]);
   const [sessions, setSessions] = useState<Session[]>([]);
+  const [claimRequests, setClaimRequests] = useState<ClaimRequest[]>([]);
 
   const [newSessionName, setNewSessionName] = useState("");
   const [sessionType, setSessionType] = useState<SessionType>(SessionType.POINTS);
@@ -98,7 +116,9 @@ export default function CommunityPage() {
   const [showGuestsModal, setShowGuestsModal] = useState(false);
   const [playerSearch, setPlayerSearch] = useState("");
   const [rollingBackTournamentCode, setRollingBackTournamentCode] = useState<string | null>(null);
+  const [requestingClaimFor, setRequestingClaimFor] = useState<string | null>(null);
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
 
   const safeJson = async (res: Response) => {
     const text = await res.text();
@@ -141,6 +161,68 @@ export default function CommunityPage() {
   const filteredSelectablePlayers = selectablePlayers.filter((member) =>
     member.name.toLowerCase().includes(playerSearch.toLowerCase())
   );
+  const pendingClaimByTargetId = useMemo(
+    () => new Map(claimRequests.map((claimRequest) => [claimRequest.targetUserId, claimRequest])),
+    [claimRequests]
+  );
+  const myPendingClaimRequest = useMemo(
+    () =>
+      claimRequests.find(
+        (claimRequest) =>
+          claimRequest.requesterUserId === user?.id &&
+          claimRequest.status === ClaimRequestStatus.PENDING
+      ) ?? null,
+    [claimRequests, user?.id]
+  );
+
+  const refreshCommunityData = useCallback(
+    async (options?: { includeCommunity?: boolean }) => {
+      if (!communityId) return;
+
+      const requests = [
+        fetch(`/api/communities/${communityId}/members`),
+        fetch(`/api/sessions?communityId=${encodeURIComponent(communityId)}`),
+        fetch(`/api/communities/${communityId}/claim-requests`),
+      ] as const;
+
+      const [membersRes, sessionsRes, claimRequestsRes] = await Promise.all(requests);
+      const [membersData, sessionsData, claimRequestsData] = await Promise.all([
+        safeJson(membersRes),
+        safeJson(sessionsRes),
+        safeJson(claimRequestsRes),
+      ]);
+
+      if (!membersRes.ok) {
+        throw new Error(membersData.error || "Failed to load community members");
+      }
+      if (!sessionsRes.ok) {
+        throw new Error(sessionsData.error || "Failed to load tournaments");
+      }
+      if (!claimRequestsRes.ok) {
+        throw new Error(claimRequestsData.error || "Failed to load claim requests");
+      }
+
+      setCommunityMembers(Array.isArray(membersData) ? membersData : []);
+      setSessions(Array.isArray(sessionsData) ? sessionsData : []);
+      setClaimRequests(Array.isArray(claimRequestsData) ? claimRequestsData : []);
+
+      if (options?.includeCommunity) {
+        const communitiesRes = await fetch("/api/communities");
+        const communitiesData = await safeJson(communitiesRes);
+        if (!communitiesRes.ok) {
+          throw new Error(communitiesData.error || "Failed to load communities");
+        }
+
+        const list = Array.isArray(communitiesData) ? (communitiesData as Community[]) : [];
+        const currentCommunity = list.find((communityItem) => communityItem.id === communityId) || null;
+        if (!currentCommunity) {
+          throw new Error("Community not found or access denied");
+        }
+        setCommunity(currentCommunity);
+      }
+    },
+    [communityId]
+  );
 
   useEffect(() => {
     setSelectedPlayerIds([]);
@@ -166,6 +248,7 @@ export default function CommunityPage() {
       try {
         setLoading(true);
         setError("");
+        setSuccess("");
 
         const meRes = await fetch("/api/user/me");
         const meData = await safeJson(meRes);
@@ -174,40 +257,14 @@ export default function CommunityPage() {
         }
         setUser(meData.user as User);
 
-        const communitiesRes = await fetch("/api/communities");
-        const communitiesData = await safeJson(communitiesRes);
-        if (!communitiesRes.ok) {
-          throw new Error(communitiesData.error || "Failed to load communities");
-        }
-        const list = Array.isArray(communitiesData) ? (communitiesData as Community[]) : [];
-        const currentCommunity = list.find((c) => c.id === communityId) || null;
-        if (!currentCommunity) {
-          throw new Error("Community not found or access denied");
-        }
-        setCommunity(currentCommunity);
-
-        const [membersRes, sessionsRes] = await Promise.all([
-          fetch(`/api/communities/${communityId}/members`),
-          fetch(`/api/sessions?communityId=${encodeURIComponent(communityId)}`),
-        ]);
-        const [membersData, sessionsData] = await Promise.all([safeJson(membersRes), safeJson(sessionsRes)]);
-
-        if (!membersRes.ok) {
-          throw new Error(membersData.error || "Failed to load community members");
-        }
-        if (!sessionsRes.ok) {
-          throw new Error(sessionsData.error || "Failed to load tournaments");
-        }
-
-        setCommunityMembers(Array.isArray(membersData) ? membersData : []);
-        setSessions(Array.isArray(sessionsData) ? sessionsData : []);
+        await refreshCommunityData({ includeCommunity: true });
       } catch (err: unknown) {
         setError(err instanceof Error ? err.message : "Failed to load community");
       } finally {
         setLoading(false);
       }
     })();
-  }, [status, router, communityId]);
+  }, [status, router, communityId, refreshCommunityData]);
 
   const createSession = async () => {
     if (!newSessionName.trim() || !communityId) return;
@@ -224,6 +281,7 @@ export default function CommunityPage() {
 
     setCreatingSession(true);
     setError("");
+    setSuccess("");
     try {
       const res = await fetch("/api/sessions", {
         method: "POST",
@@ -262,6 +320,7 @@ export default function CommunityPage() {
 
   const joinTournament = async (code: string) => {
     setError("");
+    setSuccess("");
     try {
       const res = await fetch(`/api/sessions/${code}/join`, { method: "POST" });
       const data = await safeJson(res);
@@ -285,6 +344,7 @@ export default function CommunityPage() {
 
     setRollingBackTournamentCode(tournament.code);
     setError("");
+    setSuccess("");
     try {
       const rollbackRes = await fetch(`/api/sessions/${tournament.code}/rollback`, {
         method: "POST",
@@ -295,37 +355,40 @@ export default function CommunityPage() {
         return;
       }
 
-      const [membersRes, sessionsRes, communitiesRes] = await Promise.all([
-        fetch(`/api/communities/${communityId}/members`),
-        fetch(`/api/sessions?communityId=${encodeURIComponent(communityId)}`),
-        fetch("/api/communities"),
-      ]);
-      const [membersData, sessionsData] = await Promise.all([
-        safeJson(membersRes),
-        safeJson(sessionsRes),
-      ]);
-      const communitiesData = await safeJson(communitiesRes);
-
-      if (!membersRes.ok) {
-        throw new Error(membersData.error || "Failed to refresh community members");
-      }
-      if (!sessionsRes.ok) {
-        throw new Error(sessionsData.error || "Failed to refresh tournaments");
-      }
-      if (!communitiesRes.ok) {
-        throw new Error(communitiesData.error || "Failed to refresh communities");
-      }
-
-      setCommunityMembers(Array.isArray(membersData) ? membersData : []);
-      setSessions(Array.isArray(sessionsData) ? sessionsData : []);
-      if (Array.isArray(communitiesData)) {
-        const refreshedCommunity = (communitiesData as Community[]).find((c) => c.id === communityId) || null;
-        setCommunity(refreshedCommunity);
-      }
+      await refreshCommunityData({ includeCommunity: true });
+      setSuccess(`Rolled back "${tournament.name}".`);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Failed to rollback tournament");
     } finally {
       setRollingBackTournamentCode(null);
+    }
+  };
+
+  const requestClaim = async (player: CommunityMember) => {
+    if (!communityId) return;
+
+    setRequestingClaimFor(player.id);
+    setError("");
+    setSuccess("");
+    try {
+      const res = await fetch(`/api/communities/${communityId}/claim-requests`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          targetUserId: player.id,
+        }),
+      });
+      const data = await safeJson(res);
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to request claim");
+      }
+
+      await refreshCommunityData();
+      setSuccess(`Claim request sent for ${player.name}. A community admin must approve it.`);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to request claim");
+    } finally {
+      setRequestingClaimFor(null);
     }
   };
 
@@ -418,6 +481,12 @@ export default function CommunityPage() {
       </div>
 
       <div className="max-w-6xl mx-auto px-6 pt-8 space-y-8">
+        {success && (
+          <div className="bg-green-100 border border-green-300 text-green-700 px-4 py-3 rounded-2xl text-sm font-semibold">
+            {success}
+          </div>
+        )}
+
         {canManageCommunity && showHostPanel && (
           <>
             <div className="bg-blue-600 p-6 rounded-3xl shadow-xl shadow-blue-100 space-y-5 text-white">
@@ -551,27 +620,68 @@ export default function CommunityPage() {
                 </div>
               ) : (
                 leaderboard.map((player, index) => (
-                  <div
-                    key={player.id}
-                    className="bg-gray-50 border border-gray-100 rounded-2xl px-4 py-3 flex items-center justify-between"
-                  >
-                    <div className="flex items-center gap-3">
-                      <span className="text-[10px] font-black uppercase tracking-widest text-blue-600 w-6">
+                  <div key={player.id} className="bg-gray-50 border border-gray-100 rounded-2xl px-4 py-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <span className="text-[10px] font-black uppercase tracking-widest text-blue-600 w-6 shrink-0">
                         #{index + 1}
-                      </span>
-                      <div>
-                        <Link href={`/profile/${player.id}?communityId=${communityId}`} className="text-sm font-black text-gray-900 hover:text-blue-600 hover:underline">
-                          {player.name}
-                        </Link>
-                        <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">{player.role}</p>
+                        </span>
+                        <div className="min-w-0">
+                          <Link href={`/profile/${player.id}?communityId=${communityId}`} className="text-sm font-black text-gray-900 hover:text-blue-600 hover:underline">
+                            {player.name}
+                          </Link>
+                          <div className="flex flex-wrap items-center gap-2 mt-1">
+                            <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">{player.role}</p>
+                            {!player.isClaimed && (
+                              <span className="px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-800 text-[9px] font-black uppercase tracking-widest">
+                                Unclaimed
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="shrink-0 text-right">
+                        <p className="text-sm font-black text-gray-900">{player.elo}</p>
+                        <p className="text-[10px] font-black uppercase tracking-wider whitespace-nowrap">
+                          <span className="text-green-600">W {player.wins}</span>
+                          <span className="text-gray-300"> / </span>
+                          <span className="text-red-600">L {player.losses}</span>
+                        </p>
                       </div>
                     </div>
-                    <p className="text-[10px] font-black uppercase tracking-wider whitespace-nowrap">
-                      <span className="text-green-600">W {player.wins}</span>
-                      <span className="text-gray-300"> / </span>
-                      <span className="text-red-600">L {player.losses}</span>
-                    </p>
-                    <p className="text-sm font-black text-gray-900 text-right">{player.elo}</p>
+
+                    {!player.isClaimed && player.email === null && player.id !== user?.id && (
+                      <div className="mt-3 flex items-center justify-between gap-3 border-t border-gray-200 pt-3">
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-gray-500">
+                          {pendingClaimByTargetId.get(player.id)?.requesterUserId === user?.id
+                            ? "Claim request submitted"
+                            : pendingClaimByTargetId.has(player.id)
+                              ? "Awaiting admin review"
+                              : "Request ownership of this placeholder"}
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => requestClaim(player)}
+                          disabled={
+                            requestingClaimFor !== null ||
+                            pendingClaimByTargetId.has(player.id) ||
+                            (!!myPendingClaimRequest &&
+                              myPendingClaimRequest.targetUserId !== player.id)
+                          }
+                          className="px-3 py-2 rounded-xl bg-gray-900 text-white text-[10px] font-black uppercase tracking-widest disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {pendingClaimByTargetId.get(player.id)?.requesterUserId === user?.id
+                            ? "Requested"
+                            : pendingClaimByTargetId.has(player.id)
+                              ? "Pending"
+                              : myPendingClaimRequest
+                                ? "Pending Elsewhere"
+                                : requestingClaimFor === player.id
+                                  ? "Sending..."
+                                  : "Request Claim"}
+                        </button>
+                      </div>
+                    )}
                   </div>
                 ))
               )}

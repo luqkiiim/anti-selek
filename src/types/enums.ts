@@ -31,3 +31,9 @@ export enum PartnerPreference {
   OPEN = "OPEN",
   FEMALE_FLEX = "FEMALE_FLEX",
 }
+
+export enum ClaimRequestStatus {
+  PENDING = "PENDING",
+  APPROVED = "APPROVED",
+  REJECTED = "REJECTED",
+}

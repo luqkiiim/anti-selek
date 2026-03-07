@@ -60,7 +60,7 @@ export default function SignupPage() {
 
         <div className="p-8">
           <p className="text-sm text-gray-600 text-center mb-6">
-            If an admin already created your profile, use the <strong>exact same name</strong> to claim it.
+            Sign up with your own email. If a community already has your placeholder profile, join it and request a claim from the community page.
           </p>
 
           {error && (

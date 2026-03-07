@@ -239,9 +239,13 @@ export async function POST(
         userWasCreated = true;
       }
     } else {
-      const existingUnclaimed = await prisma.user.findFirst({
-        where: { name: normalizedName, isClaimed: false },
-        orderBy: { createdAt: "asc" },
+      user = await prisma.user.create({
+        data: {
+          name: normalizedName,
+          email: null,
+          passwordHash: null,
+          isClaimed: false,
+        },
         select: {
           id: true,
           name: true,
@@ -253,30 +257,7 @@ export async function POST(
           createdAt: true,
         },
       });
-
-      if (existingUnclaimed) {
-        user = existingUnclaimed;
-      } else {
-        user = await prisma.user.create({
-          data: {
-            name: normalizedName,
-            email: null,
-            passwordHash: null,
-            isClaimed: false,
-          },
-          select: {
-            id: true,
-            name: true,
-            email: true,
-            gender: true,
-            partnerPreference: true,
-            isActive: true,
-            isClaimed: true,
-            createdAt: true,
-          },
-        });
-        userWasCreated = true;
-      }
+      userWasCreated = true;
     }
 
     const requestedGender =
