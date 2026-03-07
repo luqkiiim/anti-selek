@@ -483,6 +483,8 @@ export async function POST(
               ...bestSelection,
               partition: alternativePartition.partition,
               score: alternativePartition.score,
+              exactPartitionPenalty:
+                alternativePartition.exactPartitionPenalty,
             };
           } else {
             return NextResponse.json(

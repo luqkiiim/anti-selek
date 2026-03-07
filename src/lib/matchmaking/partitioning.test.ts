@@ -55,7 +55,7 @@ describe("partitioning", () => {
     });
   });
 
-  it("adds a large penalty for recently repeated exact partitions", () => {
+  it("keeps the better-balanced partition even when it was seen recently", () => {
     const playersById = new Map<string, PartitionCandidate>([
       ["A", { userId: "A", elo: 1500, lastPartnerId: null, gender: "MALE", partnerPreference: "OPEN" }],
       ["B", { userId: "B", elo: 1300, lastPartnerId: null, gender: "MALE", partnerPreference: "OPEN" }],
@@ -96,7 +96,40 @@ describe("partitioning", () => {
     expect(freshButImbalanced!.teamEloGap).toBe(190);
     expect(balancedRepeat!.exactPartitionPenalty).toBeGreaterThan(0);
     expect(freshButImbalanced!.exactPartitionPenalty).toBe(0);
-    expect(balancedRepeat!.totalScore).toBeGreaterThan(freshButImbalanced!.totalScore);
+    expect(balancedRepeat!.totalScore).toBeLessThan(
+      freshButImbalanced!.totalScore
+    );
+  });
+
+  it("prefers a non-repeated partition when the Elo gap difference is within tolerance", () => {
+    const playersById = new Map<string, PartitionCandidate>([
+      ["A", { userId: "A", elo: 1410, lastPartnerId: null, gender: "MALE", partnerPreference: "OPEN" }],
+      ["B", { userId: "B", elo: 1390, lastPartnerId: null, gender: "MALE", partnerPreference: "OPEN" }],
+      ["C", { userId: "C", elo: 1400, lastPartnerId: null, gender: "MALE", partnerPreference: "OPEN" }],
+      ["D", { userId: "D", elo: 1400, lastPartnerId: null, gender: "MALE", partnerPreference: "OPEN" }],
+    ]);
+    const rotationHistory = buildRotationHistory([
+      {
+        team1User1Id: "A",
+        team1User2Id: "B",
+        team2User1Id: "C",
+        team2User2Id: "D",
+      },
+    ]);
+
+    const evaluation = evaluateBestPartition(
+      ["A", "B", "C", "D"],
+      playersById,
+      SessionMode.MEXICANO,
+      rotationHistory
+    );
+
+    expect(evaluation?.partition).not.toEqual({
+      team1: ["A", "B"],
+      team2: ["C", "D"],
+    });
+    expect(evaluation?.score).toBe(10);
+    expect(evaluation?.exactPartitionPenalty).toBe(0);
   });
 
   it("does not penalize repeat partners when the opposing team changes", () => {

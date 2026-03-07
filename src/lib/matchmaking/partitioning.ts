@@ -9,6 +9,7 @@ const RECENT_HISTORY_LIMIT = 24;
 const RECENT_HISTORY_DECAY = 0.85;
 const EXACT_PARTITION_HISTORY_LIMIT = 8;
 const EXACT_PARTITION_REPEAT_PENALTY = 4;
+const EXACT_PARTITION_BALANCE_TOLERANCE = 10;
 
 export interface DoublesPartition {
   team1: [string, string];
@@ -42,6 +43,7 @@ export interface RotationHistory {
 export interface PartitionEvaluation {
   partition: DoublesPartition;
   score: number;
+  exactPartitionPenalty: number;
 }
 
 export interface PartitionScoreDetails {
@@ -62,6 +64,7 @@ export interface FallbackQuartetSelection {
   partition: DoublesPartition;
   fairnessScore: number;
   score: number;
+  exactPartitionPenalty: number;
 }
 
 export interface FairnessWindowQuartetOptions {
@@ -100,6 +103,27 @@ function incrementCounter(map: Map<string, number>, key: string, weight = 1) {
 
 function normalizeScore(rawScore: number, normalizer: number) {
   return Math.min(rawScore / normalizer, 3);
+}
+
+function comparePartitionScoreDetails(
+  left: Pick<PartitionScoreDetails, "teamEloGap" | "exactPartitionPenalty">,
+  right: Pick<PartitionScoreDetails, "teamEloGap" | "exactPartitionPenalty">
+) {
+  const gapDifference = left.teamEloGap - right.teamEloGap;
+
+  if (Math.abs(gapDifference) > EXACT_PARTITION_BALANCE_TOLERANCE) {
+    return gapDifference;
+  }
+
+  if (left.exactPartitionPenalty !== right.exactPartitionPenalty) {
+    return left.exactPartitionPenalty - right.exactPartitionPenalty;
+  }
+
+  if (gapDifference !== 0) {
+    return gapDifference;
+  }
+
+  return 0;
 }
 
 function getChronologicalMatches(matches: MatchHistoryEntry[]) {
@@ -326,7 +350,7 @@ export function scorePartitionDetailed(
     EXACT_PARTITION_REPEAT_PENALTY;
 
   return {
-    totalScore: balanceScore + exactPartitionPenalty,
+    totalScore: balanceScore,
     teamEloGap,
     balanceScore,
     exactPartitionPenalty,
@@ -356,7 +380,7 @@ export function evaluateBestPartition(
 ): PartitionEvaluation | null {
   const partitions = getDoublesPartitions(candidateIds);
   let bestPartition: DoublesPartition | null = null;
-  let bestScore = Infinity;
+  let bestScore: PartitionScoreDetails | null = null;
 
   for (const partition of partitions) {
     if (
@@ -374,14 +398,18 @@ export function evaluateBestPartition(
     );
     if (score === null) continue;
 
-    if (score.totalScore < bestScore) {
-      bestScore = score.totalScore;
+    if (!bestScore || comparePartitionScoreDetails(score, bestScore) < 0) {
+      bestScore = score;
       bestPartition = partition;
     }
   }
 
-  return bestPartition && bestScore < Infinity
-    ? { partition: bestPartition, score: bestScore }
+  return bestPartition && bestScore
+    ? {
+        partition: bestPartition,
+        score: bestScore.teamEloGap,
+        exactPartitionPenalty: bestScore.exactPartitionPenalty,
+      }
     : null;
 }
 
@@ -471,13 +499,18 @@ export function findBestQuartetInFairnessWindow<T extends { userId: string }>(
             !bestSelection ||
             evaluation.score < bestSelection.score ||
             (evaluation.score === bestSelection.score &&
-              fairnessScore < bestSelection.fairnessScore)
+              (evaluation.exactPartitionPenalty <
+                bestSelection.exactPartitionPenalty ||
+                (evaluation.exactPartitionPenalty ===
+                  bestSelection.exactPartitionPenalty &&
+                  fairnessScore < bestSelection.fairnessScore)))
           ) {
             bestSelection = {
               ids,
               partition: evaluation.partition,
               fairnessScore,
               score: evaluation.score,
+              exactPartitionPenalty: evaluation.exactPartitionPenalty,
             };
           }
         }
@@ -539,13 +572,17 @@ export function findBestFallbackQuartet<T extends { userId: string }>(
             !bestSelection ||
             fairnessScore < bestSelection.fairnessScore ||
             (fairnessScore === bestSelection.fairnessScore &&
-              evaluation.score < bestSelection.score)
+              (evaluation.score < bestSelection.score ||
+                (evaluation.score === bestSelection.score &&
+                  evaluation.exactPartitionPenalty <
+                    bestSelection.exactPartitionPenalty)))
           ) {
             bestSelection = {
               ids,
               partition: evaluation.partition,
               fairnessScore,
               score: evaluation.score,
+              exactPartitionPenalty: evaluation.exactPartitionPenalty,
             };
           }
         }
