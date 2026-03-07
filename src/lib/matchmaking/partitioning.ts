@@ -78,6 +78,7 @@ export interface FairnessWindowQuartetOptions {
   lowestCohortUserIds?: Set<string>;
   maxLowestCohortPlayers?: number;
   maxCandidates?: number;
+  excludedQuartetKey?: string;
 }
 
 function pairKey(playerA: string, playerB: string) {
@@ -86,6 +87,19 @@ function pairKey(playerA: string, playerB: string) {
 
 function podKey(playerIds: string[]) {
   return [...playerIds].sort().join("|");
+}
+
+export function getQuartetKey(playerIds: string[]) {
+  return [...playerIds].sort().join("|");
+}
+
+export function getPartitionKey(partition: DoublesPartition) {
+  return [
+    pairKey(partition.team1[0], partition.team1[1]),
+    pairKey(partition.team2[0], partition.team2[1]),
+  ]
+    .sort()
+    .join("||");
 }
 
 function incrementCounter(map: Map<string, number>, key: string, weight = 1) {
@@ -371,13 +385,23 @@ export function evaluateBestPartition(
   candidateIds: string[],
   playersById: Map<string, PartitionCandidate>,
   sessionMode: SessionMode,
-  rotationHistory: RotationHistory
+  rotationHistory: RotationHistory,
+  options?: {
+    excludedPartitionKey?: string;
+  }
 ): PartitionEvaluation | null {
   const partitions = getDoublesPartitions(candidateIds);
   let bestPartition: DoublesPartition | null = null;
   let bestScore = Infinity;
 
   for (const partition of partitions) {
+    if (
+      options?.excludedPartitionKey &&
+      getPartitionKey(partition) === options.excludedPartitionKey
+    ) {
+      continue;
+    }
+
     const score = scorePartitionDetailed(
       partition,
       playersById,
@@ -408,6 +432,7 @@ export function findBestQuartetInFairnessWindow<T extends { userId: string }>(
     lowestCohortUserIds,
     maxLowestCohortPlayers,
     maxCandidates = 8,
+    excludedQuartetKey,
   }: FairnessWindowQuartetOptions
 ): FallbackQuartetSelection | null {
   const fallbackPool = rankedCandidates.slice(
@@ -449,6 +474,11 @@ export function findBestQuartetInFairnessWindow<T extends { userId: string }>(
             fallbackPool[k].userId,
             fallbackPool[l].userId,
           ];
+
+          if (excludedQuartetKey && getQuartetKey(ids) === excludedQuartetKey) {
+            continue;
+          }
+
           const fairnessScore = ids.reduce(
             (sum, id) => sum + (rankByUserId.get(id) ?? fallbackPool.length),
             0
@@ -499,7 +529,8 @@ export function findBestFallbackQuartet<T extends { userId: string }>(
   playersById: Map<string, PartitionCandidate>,
   sessionMode: SessionMode,
   rotationHistory: RotationHistory,
-  maxCandidates = 12
+  maxCandidates = 12,
+  excludedQuartetKey?: string
 ): FallbackQuartetSelection | null {
   const fallbackPool = rankedCandidates.slice(
     0,
@@ -521,6 +552,11 @@ export function findBestFallbackQuartet<T extends { userId: string }>(
             fallbackPool[k].userId,
             fallbackPool[l].userId,
           ];
+
+          if (excludedQuartetKey && getQuartetKey(ids) === excludedQuartetKey) {
+            continue;
+          }
+
           const evaluation = evaluateBestPartition(
             ids,
             playersById,

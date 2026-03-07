@@ -86,6 +86,19 @@ interface CurrentUser {
   isAdmin?: boolean;
 }
 
+type ManualMatchSlot =
+  | "team1User1Id"
+  | "team1User2Id"
+  | "team2User1Id"
+  | "team2User2Id";
+
+interface ManualMatchFormState {
+  team1User1Id: string;
+  team1User2Id: string;
+  team2User1Id: string;
+  team2User2Id: string;
+}
+
 const GUEST_ELO_PRESETS = [
   { label: "Beginner", value: 850 },
   { label: "Average", value: 1000 },
@@ -125,6 +138,14 @@ export default function SessionPage() {
   const [submittingMatchId, setSubmittingMatchId] = useState<string | null>(null);
   const [reopeningMatchId, setReopeningMatchId] = useState<string | null>(null);
   const [undoingCourtId, setUndoingCourtId] = useState<string | null>(null);
+  const [manualCourtId, setManualCourtId] = useState<string | null>(null);
+  const [creatingManualMatch, setCreatingManualMatch] = useState(false);
+  const [manualMatchForm, setManualMatchForm] = useState<ManualMatchFormState>({
+    team1User1Id: "",
+    team1User2Id: "",
+    team2User1Id: "",
+    team2User2Id: "",
+  });
 
   const togglePreferenceEditor = (userId: string, triggerEl: HTMLElement) => {
     setOpenPreferenceEditor((prev) => {
@@ -363,6 +384,74 @@ export default function SessionPage() {
     }
   };
 
+  const openManualMatchModal = (courtId: string) => {
+    setManualCourtId(courtId);
+    setManualMatchForm({
+      team1User1Id: "",
+      team1User2Id: "",
+      team2User1Id: "",
+      team2User2Id: "",
+    });
+    setError("");
+  };
+
+  const closeManualMatchModal = () => {
+    setManualCourtId(null);
+    setCreatingManualMatch(false);
+    setManualMatchForm({
+      team1User1Id: "",
+      team1User2Id: "",
+      team2User1Id: "",
+      team2User2Id: "",
+    });
+  };
+
+  const updateManualMatchSlot = (slot: ManualMatchSlot, value: string) => {
+    setManualMatchForm((prev) => ({
+      ...prev,
+      [slot]: value,
+    }));
+  };
+
+  const createManualMatch = async () => {
+    if (!manualCourtId) return;
+
+    const { team1User1Id, team1User2Id, team2User1Id, team2User2Id } = manualMatchForm;
+    if (!team1User1Id || !team1User2Id || !team2User1Id || !team2User2Id) {
+      setError("Choose all 4 players before creating a manual match");
+      return;
+    }
+
+    setCreatingManualMatch(true);
+    setError("");
+    try {
+      const res = await fetch(`/api/sessions/${code}/generate-match`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          courtId: manualCourtId,
+          manualTeams: {
+            team1: [team1User1Id, team1User2Id],
+            team2: [team2User1Id, team2User2Id],
+          },
+        }),
+      });
+      const data = await safeJson(res);
+      if (!res.ok) {
+        setError(data.error || "Failed to create manual match");
+        return;
+      }
+
+      closeManualMatchModal();
+      fetchSession();
+    } catch (err) {
+      console.error(err);
+      setError("Network error creating manual match");
+    } finally {
+      setCreatingManualMatch(false);
+    }
+  };
+
   const addGuestToSession = async () => {
     const name = guestName.trim();
     if (!name) return;
@@ -585,6 +674,24 @@ export default function SessionPage() {
   const isAdmin = !!sessionData.viewerCanManage || !!user?.isAdmin || !!session?.user?.isAdmin;
   const currentUserId = session?.user?.id || "";
   const isMixicano = sessionData.mode === SessionMode.MIXICANO;
+  const busySessionPlayerIds = new Set<string>();
+  sessionData.courts.forEach((court) => {
+    if (!court.currentMatch) return;
+    busySessionPlayerIds.add(court.currentMatch.team1User1.id);
+    busySessionPlayerIds.add(court.currentMatch.team1User2.id);
+    busySessionPlayerIds.add(court.currentMatch.team2User1.id);
+    busySessionPlayerIds.add(court.currentMatch.team2User2.id);
+  });
+  const manualMatchPlayerOptions = sessionData.players
+    .filter((player) => !player.isPaused && !busySessionPlayerIds.has(player.userId))
+    .slice()
+    .sort((a, b) => a.user.name.localeCompare(b.user.name));
+  const selectedManualPlayerIds = new Set(
+    Object.values(manualMatchForm).filter((value) => value.length > 0)
+  );
+  const activeManualCourt = manualCourtId
+    ? sessionData.courts.find((court) => court.id === manualCourtId) ?? null
+    : null;
 
   // Helper to calculate player stats for the session
   const calculatePlayerSessionStats = (userId: string) => {
@@ -723,12 +830,20 @@ export default function SessionPage() {
                     <h2 className="text-sm font-black text-gray-500 uppercase tracking-widest">Court {court.courtNumber}</h2>
                     <div className="flex gap-2">
                       {sessionData.status === SessionStatus.ACTIVE && !court.currentMatch && isAdmin && (
-                        <button
-                          onClick={() => generateMatch(court.id)}
-                          className="text-[10px] bg-blue-600 text-white px-2.5 py-1.5 rounded-lg font-black uppercase tracking-wider active:scale-95 transition-all"
-                        >
-                          New Match
-                        </button>
+                        <>
+                          <button
+                            onClick={() => generateMatch(court.id)}
+                            className="text-[10px] bg-blue-600 text-white px-2.5 py-1.5 rounded-lg font-black uppercase tracking-wider active:scale-95 transition-all"
+                          >
+                            New Match
+                          </button>
+                          <button
+                            onClick={() => openManualMatchModal(court.id)}
+                            className="text-[10px] bg-gray-900 text-white px-2.5 py-1.5 rounded-lg font-black uppercase tracking-wider active:scale-95 transition-all"
+                          >
+                            Manual
+                          </button>
+                        </>
                       )}
                       {currentMatch && currentMatch.status === MatchStatus.IN_PROGRESS && isAdmin && (
                         <button
@@ -1271,6 +1386,124 @@ export default function SessionPage() {
                 className="bg-gray-900 text-white px-4 py-2 rounded-lg font-black uppercase tracking-widest text-[10px] shadow-sm active:scale-95 transition-all"
               >
                 Done
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {manualCourtId && (
+        <div className="fixed inset-0 bg-gray-900/70 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4 z-50">
+          <div className="bg-white rounded-t-3xl sm:rounded-2xl shadow-2xl max-w-lg w-full max-h-[92vh] flex flex-col animate-in slide-in-from-bottom duration-300">
+            <div className="px-4 py-3 border-b flex justify-between items-center">
+              <div>
+                <h2 className="text-base font-black text-gray-900">Manual Match</h2>
+                <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-0.5">
+                  {activeManualCourt ? `Court ${activeManualCourt.courtNumber}` : "Select Teams"}
+                </p>
+              </div>
+              <button
+                onClick={closeManualMatchModal}
+                className="bg-gray-100 text-gray-400 hover:text-gray-600 w-7 h-7 rounded-full flex items-center justify-center text-lg font-bold"
+              >
+                &times;
+              </button>
+            </div>
+
+            <div className="p-4 space-y-4 overflow-y-auto">
+              <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4 space-y-3">
+                <p className="text-[10px] font-black uppercase tracking-widest text-blue-600">
+                  Team 1
+                </p>
+                {(["team1User1Id", "team1User2Id"] as ManualMatchSlot[]).map((slot, index) => (
+                  <select
+                    key={slot}
+                    value={manualMatchForm[slot]}
+                    onChange={(e) => updateManualMatchSlot(slot, e.target.value)}
+                    className="w-full h-11 bg-white border border-gray-200 rounded-xl px-3 text-sm font-bold focus:outline-none focus:border-blue-500 transition-all"
+                  >
+                    <option value="">Choose Player {index + 1}</option>
+                    {manualMatchPlayerOptions.map((player) => {
+                      const isTakenElsewhere =
+                        selectedManualPlayerIds.has(player.userId) &&
+                        manualMatchForm[slot] !== player.userId;
+                      return (
+                        <option
+                          key={player.userId}
+                          value={player.userId}
+                          disabled={isTakenElsewhere}
+                        >
+                          {player.user.name} ({player.user.elo})
+                        </option>
+                      );
+                    })}
+                  </select>
+                ))}
+              </div>
+
+              <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4 space-y-3">
+                <p className="text-[10px] font-black uppercase tracking-widest text-blue-700">
+                  Team 2
+                </p>
+                {(["team2User1Id", "team2User2Id"] as ManualMatchSlot[]).map((slot, index) => (
+                  <select
+                    key={slot}
+                    value={manualMatchForm[slot]}
+                    onChange={(e) => updateManualMatchSlot(slot, e.target.value)}
+                    className="w-full h-11 bg-white border border-gray-200 rounded-xl px-3 text-sm font-bold focus:outline-none focus:border-blue-500 transition-all"
+                  >
+                    <option value="">Choose Player {index + 1}</option>
+                    {manualMatchPlayerOptions.map((player) => {
+                      const isTakenElsewhere =
+                        selectedManualPlayerIds.has(player.userId) &&
+                        manualMatchForm[slot] !== player.userId;
+                      return (
+                        <option
+                          key={player.userId}
+                          value={player.userId}
+                          disabled={isTakenElsewhere}
+                        >
+                          {player.user.name} ({player.user.elo})
+                        </option>
+                      );
+                    })}
+                  </select>
+                ))}
+              </div>
+
+              <div className="rounded-2xl border border-gray-100 bg-blue-50 px-4 py-3">
+                <p className="text-[10px] font-black uppercase tracking-widest text-blue-700">
+                  Note
+                </p>
+                <p className="text-xs text-blue-900 mt-1">
+                  This bypasses automatic balancing for this one match only. Matchmaking state still updates normally when the result is approved.
+                </p>
+              </div>
+
+              {manualMatchPlayerOptions.length < 4 && (
+                <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3">
+                  <p className="text-xs font-bold text-amber-800">
+                    At least 4 available, unpaused players are required to create a manual match.
+                  </p>
+                </div>
+              )}
+            </div>
+
+            <div className="p-4 border-t bg-white sm:rounded-b-2xl flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={closeManualMatchModal}
+                className="px-4 py-2 rounded-xl border border-gray-200 text-gray-600 text-[10px] font-black uppercase tracking-widest"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={createManualMatch}
+                disabled={creatingManualMatch || manualMatchPlayerOptions.length < 4}
+                className="px-4 py-2 rounded-xl bg-gray-900 text-white text-[10px] font-black uppercase tracking-widest disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {creatingManualMatch ? "Creating..." : "Create Match"}
               </button>
             </div>
           </div>

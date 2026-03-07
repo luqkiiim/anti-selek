@@ -4,9 +4,18 @@ import { prisma } from "@/lib/prisma";
 import { getCommunityEloByUserId } from "@/lib/communityElo";
 import { rankPlayersByFairness } from "@/lib/matchmaking/fairness";
 import {
+  getManualMatchPlayerIds,
+  hasDuplicateManualMatchPlayers,
+  isValidManualMatchPartition,
+  type ManualMatchTeams,
+} from "@/lib/matchmaking/manualMatch";
+import {
   buildRotationHistory,
+  evaluateBestPartition,
   findBestQuartetInFairnessWindow,
   findBestFallbackQuartet,
+  getPartitionKey,
+  getQuartetKey,
   PartitionCandidate,
 } from "@/lib/matchmaking/partitioning";
 import { selectMatchPlayers } from "@/lib/matchmaking/selectPlayers";
@@ -38,10 +47,12 @@ export async function POST(
       courtId,
       forceReshuffle = false,
       undoCurrentMatch = false,
+      manualTeams,
     } = body as {
       courtId?: string;
       forceReshuffle?: boolean;
       undoCurrentMatch?: boolean;
+      manualTeams?: unknown;
     };
 
     if (!courtId) {
@@ -50,6 +61,12 @@ export async function POST(
     if (forceReshuffle && undoCurrentMatch) {
       return NextResponse.json(
         { error: "Choose either reshuffle or undo, not both." },
+        { status: 400 }
+      );
+    }
+    if (manualTeams && (forceReshuffle || undoCurrentMatch)) {
+      return NextResponse.json(
+        { error: "Manual match creation cannot be combined with reshuffle or undo." },
         { status: 400 }
       );
     }
@@ -92,6 +109,28 @@ export async function POST(
     if (!targetCourt) {
       return NextResponse.json({ error: "Court not found in this session" }, { status: 404 });
     }
+
+    const reshuffleSource =
+      forceReshuffle && targetCourt.currentMatch
+        ? {
+            ids: [
+              targetCourt.currentMatch.team1User1Id,
+              targetCourt.currentMatch.team1User2Id,
+              targetCourt.currentMatch.team2User1Id,
+              targetCourt.currentMatch.team2User2Id,
+            ] as [string, string, string, string],
+            partition: {
+              team1: [
+                targetCourt.currentMatch.team1User1Id,
+                targetCourt.currentMatch.team1User2Id,
+              ] as [string, string],
+              team2: [
+                targetCourt.currentMatch.team2User1Id,
+                targetCourt.currentMatch.team2User2Id,
+              ] as [string, string],
+            },
+          }
+        : null;
 
     // 2. Handle Undo: Remove existing match and return players to pool.
     if (undoCurrentMatch) {
@@ -141,26 +180,6 @@ export async function POST(
     // 4. Identify busy players (those on court)
     const busyPlayerIds = getBusyPlayerIds(sessionData.matches);
 
-    // 5. Select Available Players
-    const availableCandidates = sessionData.players
-      .filter(p => !busyPlayerIds.has(p.userId) && !p.isPaused)
-      .map(p => ({
-        userId: p.userId,
-        matchesPlayed: p.matchesPlayed,
-        availableSince: p.availableSince,
-        joinedAt: p.joinedAt,
-        inactiveSeconds: p.inactiveSeconds,
-      }));
-
-    const rankedCandidates = rankPlayersByFairness(availableCandidates);
-    const selected = selectMatchPlayers(availableCandidates, { rankedCandidates });
-
-    if (!selected) {
-      return NextResponse.json({ error: `Not enough players available (need 4, have ${availableCandidates.length})` }, { status: 400 });
-    }
-
-    let selectedIds = selected.map((p) => p.userId);
-
     const communityEloByUserId =
       sessionData.communityId && sessionData.players.length > 0
         ? await getCommunityEloByUserId(
@@ -196,6 +215,174 @@ export async function POST(
           return timeA - timeB;
         })
     );
+
+    const createMatch = async (
+      selectedIds: string[],
+      partition: ManualMatchTeams
+    ) =>
+      prisma.$transaction(async (tx) => {
+        const concurrentBusyMatches = await tx.match.findMany({
+          where: {
+            sessionId: sessionData.id,
+            status: {
+              in: [
+                MatchStatus.PENDING,
+                MatchStatus.IN_PROGRESS,
+                MatchStatus.PENDING_APPROVAL,
+              ],
+            },
+            OR: [
+              { team1User1Id: { in: selectedIds } },
+              { team1User2Id: { in: selectedIds } },
+              { team2User1Id: { in: selectedIds } },
+              { team2User2Id: { in: selectedIds } },
+            ],
+          },
+        });
+
+        if (concurrentBusyMatches.length > 0) {
+          throw new Error("PLAYERS_BUSY");
+        }
+
+        const match = await tx.match.create({
+          data: {
+            sessionId: sessionData.id,
+            courtId,
+            status: MatchStatus.IN_PROGRESS,
+            team1User1Id: partition.team1[0],
+            team1User2Id: partition.team1[1],
+            team2User1Id: partition.team2[0],
+            team2User2Id: partition.team2[1],
+          },
+          include: {
+            team1User1: { select: { id: true, name: true } },
+            team1User2: { select: { id: true, name: true } },
+            team2User1: { select: { id: true, name: true } },
+            team2User2: { select: { id: true, name: true } },
+          },
+        });
+
+        const updatedCourt = await tx.court.updateMany({
+          where: { id: courtId, currentMatchId: null },
+          data: { currentMatchId: match.id },
+        });
+
+        if (updatedCourt.count === 0) {
+          throw new Error("COURT_BUSY");
+        }
+
+        return match;
+      });
+
+    if (manualTeams) {
+      if (targetCourt.currentMatch) {
+        return NextResponse.json(
+          { error: "This court already has a match. Undo it first to create a manual match." },
+          { status: 409 }
+        );
+      }
+
+      const parsedTeams = (() => {
+        if (typeof manualTeams !== "object" || manualTeams === null) return null;
+        const candidate = manualTeams as {
+          team1?: unknown;
+          team2?: unknown;
+        };
+        if (
+          !Array.isArray(candidate.team1) ||
+          !Array.isArray(candidate.team2) ||
+          candidate.team1.length !== 2 ||
+          candidate.team2.length !== 2 ||
+          candidate.team1.some((id) => typeof id !== "string") ||
+          candidate.team2.some((id) => typeof id !== "string")
+        ) {
+          return null;
+        }
+
+        return {
+          team1: [candidate.team1[0], candidate.team1[1]],
+          team2: [candidate.team2[0], candidate.team2[1]],
+        } as ManualMatchTeams;
+      })();
+
+      if (!parsedTeams) {
+        return NextResponse.json({ error: "Invalid manual team selection." }, { status: 400 });
+      }
+
+      if (hasDuplicateManualMatchPlayers(parsedTeams)) {
+        return NextResponse.json(
+          { error: "Manual matches require 4 different players." },
+          { status: 400 }
+        );
+      }
+
+      const selectedIds = getManualMatchPlayerIds(parsedTeams);
+      const selectedPlayers = selectedIds.map((id) => sessionData.players.find((player) => player.userId === id));
+
+      if (selectedPlayers.some((player) => !player)) {
+        return NextResponse.json(
+          { error: "Every manual match player must already be in this session." },
+          { status: 400 }
+        );
+      }
+
+      if (selectedPlayers.some((player) => player?.isPaused)) {
+        return NextResponse.json(
+          { error: "Paused players cannot be added to a manual match." },
+          { status: 400 }
+        );
+      }
+
+      const busyManualIds = selectedIds.filter((id) => busyPlayerIds.has(id));
+      if (busyManualIds.length > 0) {
+        return NextResponse.json(
+          { error: "One or more selected players are already busy on another court." },
+          { status: 409 }
+        );
+      }
+
+      if (
+        !isValidManualMatchPartition(
+          parsedTeams,
+          playersById,
+          sessionData.mode as SessionMode,
+          rotationHistory
+        )
+      ) {
+        return NextResponse.json(
+          {
+            error:
+              sessionData.mode === SessionMode.MIXICANO
+                ? "That manual pairing is invalid for current MIXICANO preferences."
+                : "Invalid manual pairing.",
+          },
+          { status: 400 }
+        );
+      }
+
+      const createdMatch = await createMatch(selectedIds, parsedTeams);
+      return NextResponse.json(createdMatch);
+    }
+
+    // 5. Select Available Players
+    const availableCandidates = sessionData.players
+      .filter(p => !busyPlayerIds.has(p.userId) && !p.isPaused)
+      .map(p => ({
+        userId: p.userId,
+        matchesPlayed: p.matchesPlayed,
+        availableSince: p.availableSince,
+        joinedAt: p.joinedAt,
+        inactiveSeconds: p.inactiveSeconds,
+      }));
+
+    const rankedCandidates = rankPlayersByFairness(availableCandidates);
+    const selected = selectMatchPlayers(availableCandidates, { rankedCandidates });
+
+    if (!selected) {
+      return NextResponse.json({ error: `Not enough players available (need 4, have ${availableCandidates.length})` }, { status: 400 });
+    }
+
+    let selectedIds = selected.map((p) => p.userId);
     const actualCounts = rankedCandidates.map((candidate) => candidate.matchesPlayed);
     const minActual = Math.min(...actualCounts);
     const maxActual = Math.max(...actualCounts);
@@ -252,60 +439,84 @@ export async function POST(
       );
     }
 
+    if (reshuffleSource) {
+      const previousQuartetKey = getQuartetKey(reshuffleSource.ids);
+      const previousPartitionKey = getPartitionKey(reshuffleSource.partition);
+      const selectedQuartetKey = getQuartetKey(bestSelection.ids);
+      const selectedPartitionKey = getPartitionKey(bestSelection.partition);
+
+      if (
+        selectedQuartetKey === previousQuartetKey &&
+        selectedPartitionKey === previousPartitionKey
+      ) {
+        const alternativePartition = evaluateBestPartition(
+          bestSelection.ids,
+          playersById,
+          sessionData.mode as SessionMode,
+          rotationHistory,
+          {
+            excludedPartitionKey: previousPartitionKey,
+          }
+        );
+
+        if (alternativePartition) {
+          bestSelection = {
+            ...bestSelection,
+            partition: alternativePartition.partition,
+            score: alternativePartition.score,
+          };
+        } else {
+          let alternativeQuartet = findBestQuartetInFairnessWindow(
+            rankedCandidates,
+            playersById,
+            sessionData.mode as SessionMode,
+            rotationHistory,
+            {
+              baselineIds: selectedIds as [string, string, string, string],
+              fairnessSlack: FAIRNESS_WINDOW_SLACK,
+              lowestCohortUserIds,
+              maxLowestCohortPlayers,
+              maxCandidates:
+                sessionData.mode === SessionMode.MIXICANO
+                  ? MIXICANO_SEARCH_WINDOW
+                  : BALANCED_SEARCH_WINDOW,
+              excludedQuartetKey: previousQuartetKey,
+            }
+          );
+
+          if (!alternativeQuartet) {
+            alternativeQuartet = findBestFallbackQuartet(
+              rankedCandidates,
+              playersById,
+              sessionData.mode as SessionMode,
+              rotationHistory,
+              sessionData.mode === SessionMode.MIXICANO
+                ? MIXICANO_SEARCH_WINDOW
+                : BALANCED_SEARCH_WINDOW,
+              previousQuartetKey
+            );
+          }
+
+          if (!alternativeQuartet) {
+            return NextResponse.json(
+              {
+                error:
+                  "No alternative reshuffle was available. Undo this match if you want the same players returned to the pool.",
+              },
+              { status: 409 }
+            );
+          }
+
+          bestSelection = alternativeQuartet;
+        }
+      }
+    }
+
     selectedIds = [...bestSelection.ids];
     const bestPartition = bestSelection.partition;
 
     // 8. Create Match
-    const newMatch = await prisma.$transaction(async (tx) => {
-      // 8a. RE-CHECK: Ensure selected players didn't become busy since we last checked
-      const concurrentBusyMatches = await tx.match.findMany({
-        where: {
-          sessionId: sessionData.id,
-          status: { in: [MatchStatus.PENDING, MatchStatus.IN_PROGRESS, MatchStatus.PENDING_APPROVAL] },
-          OR: [
-            { team1User1Id: { in: selectedIds } },
-            { team1User2Id: { in: selectedIds } },
-            { team2User1Id: { in: selectedIds } },
-            { team2User2Id: { in: selectedIds } },
-          ],
-        },
-      });
-
-      if (concurrentBusyMatches.length > 0) {
-        throw new Error("PLAYERS_BUSY");
-      }
-
-      // 8b. Create the match
-      const match = await tx.match.create({
-        data: {
-          sessionId: sessionData.id,
-          courtId,
-          status: MatchStatus.IN_PROGRESS,
-          team1User1Id: bestPartition.team1[0],
-          team1User2Id: bestPartition.team1[1],
-          team2User1Id: bestPartition.team2[0],
-          team2User2Id: bestPartition.team2[1],
-        },
-        include: {
-          team1User1: { select: { id: true, name: true } },
-          team1User2: { select: { id: true, name: true } },
-          team2User1: { select: { id: true, name: true } },
-          team2User2: { select: { id: true, name: true } },
-        },
-      });
-
-      // 8c. RE-CHECK: Ensure court is still free using atomic updateMany
-      const updatedCourt = await tx.court.updateMany({
-        where: { id: courtId, currentMatchId: null },
-        data: { currentMatchId: match.id },
-      });
-
-      if (updatedCourt.count === 0) {
-        throw new Error("COURT_BUSY");
-      }
-
-      return match;
-    });
+    const newMatch = await createMatch(selectedIds, bestPartition);
 
     return NextResponse.json(newMatch);
   } catch (error: unknown) {

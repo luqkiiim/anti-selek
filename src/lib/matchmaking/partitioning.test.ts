@@ -6,6 +6,8 @@ import {
   buildRotationHistory,
   evaluateBestPartition,
   findBestQuartetInFairnessWindow,
+  findBestFallbackQuartet,
+  getPartitionKey,
   scorePartitionDetailed,
   scorePartition,
   type PartitionCandidate,
@@ -229,5 +231,54 @@ describe("partitioning", () => {
 
     expect(selection).not.toBeNull();
     expect(selection!.ids.filter((id) => id.startsWith("L")).length).toBeLessThanOrEqual(1);
+  });
+
+  it("can exclude the previous pairing when reshuffling the same quartet", () => {
+    const playersById = createPlayers(["A", "B", "C", "D"]);
+    const rotationHistory = buildRotationHistory([]);
+
+    const originalPartition = {
+      team1: ["A", "B"] as [string, string],
+      team2: ["C", "D"] as [string, string],
+    };
+
+    const evaluation = evaluateBestPartition(
+      ["A", "B", "C", "D"],
+      playersById,
+      SessionMode.MEXICANO,
+      rotationHistory,
+      {
+        excludedPartitionKey: getPartitionKey(originalPartition),
+      }
+    );
+
+    expect(evaluation).not.toBeNull();
+    expect(getPartitionKey(evaluation!.partition)).not.toBe(
+      getPartitionKey(originalPartition)
+    );
+  });
+
+  it("can exclude the previous quartet when searching for a reshuffle fallback", () => {
+    const rankedCandidates = [
+      { userId: "A" },
+      { userId: "B" },
+      { userId: "C" },
+      { userId: "D" },
+      { userId: "E" },
+      { userId: "F" },
+    ];
+    const playersById = createPlayers(["A", "B", "C", "D", "E", "F"]);
+
+    const selection = findBestFallbackQuartet(
+      rankedCandidates,
+      playersById,
+      SessionMode.MEXICANO,
+      buildRotationHistory([]),
+      6,
+      "A|B|C|D"
+    );
+
+    expect(selection).not.toBeNull();
+    expect(selection!.ids.sort()).not.toEqual(["A", "B", "C", "D"]);
   });
 });
