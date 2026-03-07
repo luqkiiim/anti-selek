@@ -997,26 +997,32 @@ export default function SessionPage() {
               </span>
             </div>
             
-            <div className="overflow-x-auto">
-              <table className="min-w-[760px] w-full">
+            <div className="overflow-x-auto overscroll-x-contain">
+              <table
+                className={`w-full ${
+                  sessionData.type === SessionType.POINTS
+                    ? "min-w-[520px] sm:min-w-[760px]"
+                    : "min-w-[440px] sm:min-w-[640px]"
+                }`}
+              >
                 <thead className="bg-gray-50/50 border-b border-gray-100">
                   <tr>
-                    <th className="w-10 px-2 py-3 text-left text-[10px] font-black text-gray-400 uppercase tracking-widest">#</th>
-                    <th className="px-2 py-3 text-left text-[10px] font-black text-gray-400 uppercase tracking-widest">Player</th>
+                    <th className="w-8 sm:w-10 px-1.5 sm:px-2 py-3 text-left text-[9px] sm:text-[10px] font-black text-gray-400 uppercase tracking-widest">#</th>
+                    <th className="px-1.5 sm:px-2 py-3 text-left text-[9px] sm:text-[10px] font-black text-gray-400 uppercase tracking-widest">Player</th>
                     {sessionData.type === SessionType.POINTS ? (
                       <>
-                        <th className="w-24 px-4 py-3 text-center text-[10px] font-black text-gray-400 uppercase tracking-widest">Pts</th>
-                        <th className="w-24 px-4 py-3 text-center text-[10px] font-black text-gray-400 uppercase tracking-widest">Diff</th>
-                        <th className="w-24 px-4 py-3 text-center text-[10px] font-black text-gray-400 uppercase tracking-widest">MP</th>
-                        <th className="w-24 px-4 py-3 text-center text-[10px] font-black text-gray-400 uppercase tracking-widest">W/L</th>
+                        <th className="w-14 sm:w-24 px-2 sm:px-4 py-3 text-center text-[9px] sm:text-[10px] font-black text-gray-400 uppercase tracking-widest">Pts</th>
+                        <th className="w-14 sm:w-24 px-2 sm:px-4 py-3 text-center text-[9px] sm:text-[10px] font-black text-gray-400 uppercase tracking-widest">Diff</th>
+                        <th className="w-12 sm:w-24 px-2 sm:px-4 py-3 text-center text-[9px] sm:text-[10px] font-black text-gray-400 uppercase tracking-widest">MP</th>
+                        <th className="w-14 sm:w-24 px-2 sm:px-4 py-3 text-center text-[9px] sm:text-[10px] font-black text-gray-400 uppercase tracking-widest">W/L</th>
                       </>
                     ) : (
                       <>
-                        <th className="px-4 py-3 text-right text-[10px] font-black text-gray-400 uppercase tracking-widest">
+                        <th className="w-16 sm:w-24 px-2 sm:px-4 py-3 text-right text-[9px] sm:text-[10px] font-black text-gray-400 uppercase tracking-widest">
                           {SessionType.ELO}
                         </th>
-                        <th className="px-4 py-3 text-center text-[10px] font-black text-gray-400 uppercase tracking-widest">MP</th>
-                        <th className="px-4 py-3 text-center text-[10px] font-black text-gray-400 uppercase tracking-widest">W/L</th>
+                        <th className="w-12 sm:w-24 px-2 sm:px-4 py-3 text-center text-[9px] sm:text-[10px] font-black text-gray-400 uppercase tracking-widest">MP</th>
+                        <th className="w-14 sm:w-24 px-2 sm:px-4 py-3 text-center text-[9px] sm:text-[10px] font-black text-gray-400 uppercase tracking-widest">W/L</th>
                       </>
                     )}
                   </tr>
@@ -1038,8 +1044,8 @@ export default function SessionPage() {
 
                       return (
                         <tr key={player.userId} className={`active:bg-gray-50 transition-colors ${player.isPaused ? 'opacity-40 grayscale' : ''}`}>
-                          <td className="w-10 px-2 py-4 whitespace-nowrap">
-                            <span className={`w-6 h-6 rounded-lg flex items-center justify-center text-[10px] font-black ${
+                          <td className="w-8 sm:w-10 px-1.5 sm:px-2 py-3 sm:py-4 whitespace-nowrap">
+                            <span className={`w-5 h-5 sm:w-6 sm:h-6 rounded-lg flex items-center justify-center text-[9px] sm:text-[10px] font-black ${
                               idx === 0
                                 ? "bg-amber-100 text-amber-700 border border-amber-300"
                                 : idx === 1
@@ -1051,7 +1057,7 @@ export default function SessionPage() {
                               {idx + 1}
                             </span>
                           </td>
-                          <td className="px-2 py-4 min-w-[140px]">
+                          <td className="px-1.5 sm:px-2 py-3 sm:py-4 min-w-[124px] sm:min-w-[140px]">
                             <div className="flex flex-col gap-1.5">
                               <div className="flex items-center gap-1.5 flex-wrap">
                                 <Link
@@ -1060,19 +1066,19 @@ export default function SessionPage() {
                                       ? `/profile/${player.user.id}?communityId=${sessionData.communityId}`
                                       : `/profile/${player.user.id}`
                                   }
-                                  className="font-bold text-gray-900 text-sm hover:text-blue-600 leading-tight"
+                                  className="font-bold text-gray-900 text-xs sm:text-sm hover:text-blue-600 leading-tight break-words"
                                 >
                                   {player.user.name}
                                 </Link>
                                 {isMe && (
-                                  <span className="h-6 px-2 rounded-full text-[9px] font-black uppercase tracking-wide bg-blue-100 text-blue-700 border border-blue-200 inline-flex items-center">
+                                  <span className="h-5 sm:h-6 px-1.5 sm:px-2 rounded-full text-[8px] sm:text-[9px] font-black uppercase tracking-wide bg-blue-100 text-blue-700 border border-blue-200 inline-flex items-center">
                                     Me
                                   </span>
                                 )}
                               </div>
                               <div className="flex items-center gap-1.5 flex-wrap relative">
                                 {sessionData.type !== SessionType.ELO && (
-                                  <span className="text-[9px] font-bold text-gray-400 uppercase">
+                                  <span className="hidden sm:inline text-[9px] font-bold text-gray-400 uppercase">
                                     ELO {player.user.elo}
                                   </span>
                                 )}
@@ -1082,7 +1088,7 @@ export default function SessionPage() {
                                       e.preventDefault();
                                       togglePausePlayer(player.userId, player.isPaused);
                                     }}
-                                    className={`h-6 px-2 rounded-full text-[9px] font-black uppercase tracking-wide border inline-flex items-center shrink-0 ${
+                                    className={`h-5 sm:h-6 px-1.5 sm:px-2 rounded-full text-[8px] sm:text-[9px] font-black uppercase tracking-wide border inline-flex items-center shrink-0 ${
                                       player.isPaused
                                         ? "bg-rose-100 text-rose-700 border-rose-200"
                                         : "bg-gray-100 text-gray-600 border-gray-200"
@@ -1097,18 +1103,18 @@ export default function SessionPage() {
                                     onClick={(e) =>
                                       togglePreferenceEditor(player.userId, e.currentTarget)
                                     }
-                                    className="h-6 px-2 rounded-full text-[9px] font-black uppercase tracking-wide border inline-flex items-center bg-blue-100 text-blue-700 border-blue-200"
+                                    className="h-5 sm:h-6 px-1.5 sm:px-2 rounded-full text-[8px] sm:text-[9px] font-black uppercase tracking-wide border inline-flex items-center bg-blue-100 text-blue-700 border-blue-200"
                                     >
                                       Edit
                                     </button>
                                 )}
                                 {player.isGuest && (
-                                  <span className="h-6 px-2 rounded-full text-[9px] font-black uppercase tracking-wide bg-gray-100 text-gray-600 border border-gray-200 inline-flex items-center">
+                                  <span className="h-5 sm:h-6 px-1.5 sm:px-2 rounded-full text-[8px] sm:text-[9px] font-black uppercase tracking-wide bg-gray-100 text-gray-600 border border-gray-200 inline-flex items-center">
                                     Guest
                                   </span>
                                 )}
                                 {savingPreferencesFor === player.userId && (
-                                  <span className="text-[9px] font-black text-gray-400 uppercase tracking-wider">
+                                  <span className="text-[8px] sm:text-[9px] font-black text-gray-400 uppercase tracking-wider">
                                     Saving...
                                   </span>
                                 )}
@@ -1193,19 +1199,19 @@ export default function SessionPage() {
                           </td>
                           {sessionData.type === SessionType.POINTS ? (
                             <>
-                              <td className="w-24 px-4 py-4 whitespace-nowrap text-center">
-                                <span className="text-base font-black text-blue-700">{player.sessionPoints}</span>
+                              <td className="w-14 sm:w-24 px-2 sm:px-4 py-3 sm:py-4 whitespace-nowrap text-center">
+                                <span className="text-sm sm:text-base font-black text-blue-700">{player.sessionPoints}</span>
                               </td>
-                              <td className="w-24 px-4 py-4 whitespace-nowrap text-center">
-                                <span className={`text-sm font-medium ${pointDiff >= 0 ? "text-green-600" : "text-red-500"}`}>
+                              <td className="w-14 sm:w-24 px-2 sm:px-4 py-3 sm:py-4 whitespace-nowrap text-center">
+                                <span className={`text-xs sm:text-sm font-medium ${pointDiff >= 0 ? "text-green-600" : "text-red-500"}`}>
                                   {pointDiff > 0 ? `+${pointDiff}` : pointDiff}
                                 </span>
                               </td>
-                              <td className="w-24 px-4 py-4 whitespace-nowrap text-center">
-                                <span className="text-xs font-bold text-gray-600">{stats.played}</span>
+                              <td className="w-12 sm:w-24 px-2 sm:px-4 py-3 sm:py-4 whitespace-nowrap text-center">
+                                <span className="text-[11px] sm:text-xs font-bold text-gray-600">{stats.played}</span>
                               </td>
-                              <td className="w-24 px-4 py-4 whitespace-nowrap text-center">
-                                <div className="text-[10px] font-black tracking-tighter">
+                              <td className="w-14 sm:w-24 px-2 sm:px-4 py-3 sm:py-4 whitespace-nowrap text-center">
+                                <div className="text-[9px] sm:text-[10px] font-black tracking-tighter">
                                   <span className="text-green-600">{stats.wins}</span>
                                   <span className="mx-0.5 text-gray-200">/</span>
                                   <span className="text-red-500">{stats.losses}</span>
@@ -1214,14 +1220,14 @@ export default function SessionPage() {
                             </>
                           ) : (
                             <>
-                              <td className="px-4 py-4 whitespace-nowrap text-right">
-                                <span className="text-base font-black text-blue-700">{player.user.elo}</span>
+                              <td className="w-16 sm:w-24 px-2 sm:px-4 py-3 sm:py-4 whitespace-nowrap text-right">
+                                <span className="text-sm sm:text-base font-black text-blue-700">{player.user.elo}</span>
                               </td>
-                              <td className="px-4 py-4 whitespace-nowrap text-center">
-                                <span className="text-xs font-bold text-gray-600">{stats.played}</span>
+                              <td className="w-12 sm:w-24 px-2 sm:px-4 py-3 sm:py-4 whitespace-nowrap text-center">
+                                <span className="text-[11px] sm:text-xs font-bold text-gray-600">{stats.played}</span>
                               </td>
-                              <td className="px-4 py-4 whitespace-nowrap text-center">
-                                <div className="text-[10px] font-black tracking-tighter">
+                              <td className="w-14 sm:w-24 px-2 sm:px-4 py-3 sm:py-4 whitespace-nowrap text-center">
+                                <div className="text-[9px] sm:text-[10px] font-black tracking-tighter">
                                   <span className="text-green-600">{stats.wins}</span>
                                   <span className="mx-0.5 text-gray-200">/</span>
                                   <span className="text-red-500">{stats.losses}</span>
