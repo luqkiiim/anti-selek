@@ -2,77 +2,25 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getCommunityEloByUserId } from "@/lib/communityElo";
+import { rankPlayersByFairness } from "@/lib/matchmaking/fairness";
+import {
+  buildRotationHistory,
+  findBestQuartetInFairnessWindow,
+  findBestFallbackQuartet,
+  PartitionCandidate,
+} from "@/lib/matchmaking/partitioning";
 import { selectMatchPlayers } from "@/lib/matchmaking/selectPlayers";
 import { getBusyPlayerIds } from "@/lib/matchmaking/busyFilter";
 import {
   MatchStatus,
-  PartnerPreference,
-  PlayerGender,
   SessionMode,
   SessionStatus,
 } from "@/types/enums";
 
 export const dynamic = "force-dynamic";
-const REPEAT_PARTNER_PENALTY = 15;
-
-// Helper: get all possible doubles partitions for exactly 4 players
-function getDoublesPartitions(players: string[]): { team1: [string, string]; team2: [string, string] }[] {
-  if (players.length < 4) return [];
-  const [a, b, c, d] = players;
-  return [
-    { team1: [a, b], team2: [c, d] },
-    { team1: [a, c], team2: [b, d] },
-    { team1: [a, d], team2: [b, c] },
-  ];
-}
-
-type MixicanoMatchType = "MENS" | "MIXED" | "WOMENS" | "HYBRID";
-
-function inferMixicanoMatchType(
-  team1: [{ gender: string }, { gender: string }],
-  team2: [{ gender: string }, { gender: string }]
-): MixicanoMatchType {
-  const femaleCountFor = (team: [{ gender: string }, { gender: string }]) =>
-    team.filter((player) => player.gender === PlayerGender.FEMALE).length;
-
-  const team1FemaleCount = femaleCountFor(team1);
-  const team2FemaleCount = femaleCountFor(team2);
-
-  if (team1FemaleCount === 2 && team2FemaleCount === 2) return "WOMENS";
-  if (team1FemaleCount === 1 && team2FemaleCount === 1) return "MIXED";
-  if (team1FemaleCount === 0 && team2FemaleCount === 0) return "MENS";
-  return "HYBRID";
-}
-
-function isValidMixicanoPartition(
-  team1: [{ gender: string; partnerPreference: string }, { gender: string; partnerPreference: string }],
-  team2: [{ gender: string; partnerPreference: string }, { gender: string; partnerPreference: string }]
-) {
-  const players = [...team1, ...team2];
-
-  // MIXICANO only works with concrete binary gender for now.
-  const hasInvalidGender = players.some(
-    (player) =>
-      ![PlayerGender.MALE, PlayerGender.FEMALE].includes(player.gender as PlayerGender)
-  );
-  if (hasInvalidGender) return false;
-
-  const matchType = inferMixicanoMatchType(team1, team2);
-
-  // By default, female players are restricted to mixed/women's doubles.
-  // Female players tagged OPEN can also appear in men's doubles.
-  const violatesFemaleRestriction = players.some((player) => {
-    const gender = player.gender as PlayerGender;
-    const preference = player.partnerPreference as PartnerPreference;
-    return (
-      gender === PlayerGender.FEMALE &&
-      preference === PartnerPreference.FEMALE_FLEX &&
-      !["MIXED", "WOMENS"].includes(matchType)
-    );
-  });
-
-  return !violatesFemaleRestriction;
-}
+const BALANCED_SEARCH_WINDOW = 8;
+const MIXICANO_SEARCH_WINDOW = 12;
+const FAIRNESS_WINDOW_SLACK = 2;
 
 export async function POST(
   request: Request,
@@ -204,7 +152,8 @@ export async function POST(
         inactiveSeconds: p.inactiveSeconds,
       }));
 
-    const selected = selectMatchPlayers(availableCandidates);
+    const rankedCandidates = rankPlayersByFairness(availableCandidates);
+    const selected = selectMatchPlayers(availableCandidates, { rankedCandidates });
 
     if (!selected) {
       return NextResponse.json({ error: `Not enough players available (need 4, have ${availableCandidates.length})` }, { status: 400 });
@@ -223,129 +172,88 @@ export async function POST(
     const getPlayerElo = (player: (typeof sessionData.players)[number]) =>
       communityEloByUserId.get(player.userId) ?? player.user.elo;
 
-    const playersById = new Map(sessionData.players.map((player) => [player.userId, player]));
+    const playersById = new Map<string, PartitionCandidate>(
+      sessionData.players.map((player) => [
+        player.userId,
+        {
+          userId: player.userId,
+          elo: getPlayerElo(player),
+          lastPartnerId: player.lastPartnerId,
+          gender: player.gender,
+          partnerPreference: player.partnerPreference,
+        },
+      ])
+    );
+    const rotationHistory = buildRotationHistory(
+      sessionData.matches
+        .filter((match) => match.status === MatchStatus.COMPLETED)
+        .sort((matchA, matchB) => {
+          const timeA =
+            matchA.completedAt?.getTime() ?? matchA.createdAt.getTime();
+          const timeB =
+            matchB.completedAt?.getTime() ?? matchB.createdAt.getTime();
 
-    const evaluateBestPartition = (candidateIds: string[]) => {
-      const partitions = getDoublesPartitions(candidateIds);
-      let bestPartition: { team1: [string, string]; team2: [string, string] } | null = null;
-      let bestScore = Infinity;
+          return timeA - timeB;
+        })
+    );
+    const actualCounts = rankedCandidates.map((candidate) => candidate.matchesPlayed);
+    const minActual = Math.min(...actualCounts);
+    const maxActual = Math.max(...actualCounts);
+    const lowestCohortUserIds =
+      maxActual > minActual
+        ? new Set(
+            rankedCandidates
+              .filter((candidate) => candidate.matchesPlayed === minActual)
+              .map((candidate) => candidate.userId)
+          )
+        : undefined;
+    const maxLowestCohortPlayers =
+      lowestCohortUserIds && lowestCohortUserIds.size > 0
+        ? selectedIds.filter((id) => lowestCohortUserIds.has(id)).length
+        : undefined;
 
-      for (const partition of partitions) {
-        const p1 = playersById.get(partition.team1[0]);
-        const p2 = playersById.get(partition.team1[1]);
-        const p3 = playersById.get(partition.team2[0]);
-        const p4 = playersById.get(partition.team2[1]);
-        if (!p1 || !p2 || !p3 || !p4) continue;
-
-        if (sessionData.mode === SessionMode.MIXICANO) {
-          const isValid = isValidMixicanoPartition(
-            [
-              { gender: p1.gender, partnerPreference: p1.partnerPreference },
-              { gender: p2.gender, partnerPreference: p2.partnerPreference },
-            ],
-            [
-              { gender: p3.gender, partnerPreference: p3.partnerPreference },
-              { gender: p4.gender, partnerPreference: p4.partnerPreference },
-            ]
-          );
-          if (!isValid) continue;
-        }
-
-        const team1AvgElo = (getPlayerElo(p1) + getPlayerElo(p2)) / 2;
-        const team2AvgElo = (getPlayerElo(p3) + getPlayerElo(p4)) / 2;
-        let balanceScore = Math.abs(team1AvgElo - team2AvgElo);
-
-        if (p1.lastPartnerId === p2.userId || p2.lastPartnerId === p1.userId) {
-          balanceScore += REPEAT_PARTNER_PENALTY;
-        }
-        if (p3.lastPartnerId === p4.userId || p4.lastPartnerId === p3.userId) {
-          balanceScore += REPEAT_PARTNER_PENALTY;
-        }
-
-        if (balanceScore < bestScore) {
-          bestScore = balanceScore;
-          bestPartition = partition;
-        }
+    let bestSelection = findBestQuartetInFairnessWindow(
+      rankedCandidates,
+      playersById,
+      sessionData.mode as SessionMode,
+      rotationHistory,
+      {
+        baselineIds: selectedIds as [string, string, string, string],
+        fairnessSlack: FAIRNESS_WINDOW_SLACK,
+        lowestCohortUserIds,
+        maxLowestCohortPlayers,
+        maxCandidates:
+          sessionData.mode === SessionMode.MIXICANO
+            ? MIXICANO_SEARCH_WINDOW
+            : BALANCED_SEARCH_WINDOW,
       }
+    );
 
-      return bestPartition && bestScore < Infinity
-        ? { partition: bestPartition, score: bestScore }
-        : null;
-    };
-
-    let bestEvaluation = evaluateBestPartition(selectedIds);
-
-    // If top-4 fairness pick cannot satisfy MIXICANO constraints,
-    // search the top pool for the fairest valid quartet.
-    if (!bestEvaluation && sessionData.mode === SessionMode.MIXICANO) {
-      const rankedCandidates = [...availableCandidates].sort((a, b) => {
-        if (a.matchesPlayed !== b.matchesPlayed) return a.matchesPlayed - b.matchesPlayed;
-        const availableGap = a.availableSince.getTime() - b.availableSince.getTime();
-        if (availableGap !== 0) return availableGap;
-        return a.joinedAt.getTime() - b.joinedAt.getTime();
-      });
-
-      const fallbackPool = rankedCandidates.slice(0, Math.min(12, rankedCandidates.length));
-      const rankByUserId = new Map(fallbackPool.map((candidate, index) => [candidate.userId, index]));
-
-      let fallback:
-        | {
-            ids: [string, string, string, string];
-            partition: { team1: [string, string]; team2: [string, string] };
-            fairnessScore: number;
-            score: number;
-          }
-        | null = null;
-
-      for (let i = 0; i < fallbackPool.length - 3; i++) {
-        for (let j = i + 1; j < fallbackPool.length - 2; j++) {
-          for (let k = j + 1; k < fallbackPool.length - 1; k++) {
-            for (let l = k + 1; l < fallbackPool.length; l++) {
-              const ids: [string, string, string, string] = [
-                fallbackPool[i].userId,
-                fallbackPool[j].userId,
-                fallbackPool[k].userId,
-                fallbackPool[l].userId,
-              ];
-              const evaluation = evaluateBestPartition(ids);
-              if (!evaluation) continue;
-
-              const fairnessScore = ids.reduce(
-                (sum, id) => sum + (rankByUserId.get(id) ?? fallbackPool.length),
-                0
-              );
-
-              if (
-                !fallback ||
-                fairnessScore < fallback.fairnessScore ||
-                (fairnessScore === fallback.fairnessScore && evaluation.score < fallback.score)
-              ) {
-                fallback = {
-                  ids,
-                  partition: evaluation.partition,
-                  fairnessScore,
-                  score: evaluation.score,
-                };
-              }
-            }
-          }
-        }
-      }
+    // If the fairness window cannot satisfy MIXICANO constraints,
+    // broaden the search to the fairest valid quartet in the larger pool.
+    if (!bestSelection && sessionData.mode === SessionMode.MIXICANO) {
+      const fallback = findBestFallbackQuartet(
+        rankedCandidates,
+        playersById,
+        sessionData.mode as SessionMode,
+        rotationHistory,
+        MIXICANO_SEARCH_WINDOW
+      );
 
       if (fallback) {
-        selectedIds = [...fallback.ids];
-        bestEvaluation = { partition: fallback.partition, score: fallback.score };
+        bestSelection = fallback;
       }
     }
 
-    if (!bestEvaluation) {
+    if (!bestSelection) {
       return NextResponse.json(
         { error: "No valid pairing found for current MIXICANO preferences. Try changing player preferences." },
         { status: 400 }
       );
     }
 
-    const bestPartition = bestEvaluation.partition;
+    selectedIds = [...bestSelection.ids];
+    const bestPartition = bestSelection.partition;
 
     // 8. Create Match
     const newMatch = await prisma.$transaction(async (tx) => {
