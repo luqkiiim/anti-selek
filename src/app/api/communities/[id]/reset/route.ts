@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import {
+  collectGuestUserIds,
+  deleteEphemeralGuestUsers,
+} from "@/lib/sessionLifecycle";
 
 export const dynamic = "force-dynamic";
 
@@ -37,21 +41,28 @@ export async function POST(
       return NextResponse.json({ error: "Invalid confirmation text" }, { status: 400 });
     }
 
-    const [sessionRows, memberRows] = await Promise.all([
-      prisma.session.findMany({
+    await prisma.$transaction(async (tx) => {
+      const sessionRows = await tx.session.findMany({
         where: { communityId: id },
         select: { id: true },
-      }),
-      prisma.communityMember.findMany({
-        where: { communityId: id },
-        select: { userId: true },
-      }),
-    ]);
+      });
+      const sessionIds = sessionRows.map((row) => row.id);
+      const guestUserIds =
+        sessionIds.length === 0
+          ? []
+          : collectGuestUserIds(
+              await tx.sessionPlayer.findMany({
+                where: {
+                  sessionId: { in: sessionIds },
+                  isGuest: true,
+                },
+                select: {
+                  userId: true,
+                  isGuest: true,
+                },
+              })
+            );
 
-    const sessionIds = sessionRows.map((s) => s.id);
-    const memberIds = Array.from(new Set(memberRows.map((m) => m.userId)));
-
-    await prisma.$transaction(async (tx) => {
       if (sessionIds.length > 0) {
         await tx.court.updateMany({
           where: { sessionId: { in: sessionIds } },
@@ -68,12 +79,12 @@ export async function POST(
         });
       }
 
-      if (memberIds.length > 0) {
-        await tx.communityMember.updateMany({
-          where: { communityId: id },
-          data: { elo: 1000 },
-        });
-      }
+      await deleteEphemeralGuestUsers(tx, guestUserIds);
+
+      await tx.communityMember.updateMany({
+        where: { communityId: id },
+        data: { elo: 1000 },
+      });
     });
 
     return NextResponse.json({ success: true });

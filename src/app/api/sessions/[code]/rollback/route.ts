@@ -1,7 +1,11 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { computeRollbackEloDeltas } from "@/lib/sessionLifecycle";
+import {
+  collectGuestUserIds,
+  computeRollbackEloDeltas,
+  deleteEphemeralGuestUsers,
+} from "@/lib/sessionLifecycle";
 import { MatchStatus, SessionStatus } from "@/types/enums";
 
 export const dynamic = "force-dynamic";
@@ -98,9 +102,7 @@ export async function POST(
       const isGuestByUserId = new Map<string, boolean>(
         sessionPlayers.map((row) => [row.userId, row.isGuest])
       );
-      const guestUserIds = sessionPlayers
-        .filter((row) => row.isGuest)
-        .map((row) => row.userId);
+      const guestUserIds = collectGuestUserIds(sessionPlayers);
 
       const completedMatches = await tx.match.findMany({
         where: {
@@ -158,21 +160,7 @@ export async function POST(
         where: { id: freshTarget.id },
       });
 
-      if (guestUserIds.length > 0) {
-        await tx.user.deleteMany({
-          where: {
-            id: { in: guestUserIds },
-            isClaimed: false,
-            email: null,
-            communities: { none: {} },
-            sessionPlayers: { none: {} },
-            matchesAsTeam1Player1: { none: {} },
-            matchesAsTeam1Player2: { none: {} },
-            matchesAsTeam2Player1: { none: {} },
-            matchesAsTeam2Player2: { none: {} },
-          },
-        });
-      }
+      await deleteEphemeralGuestUsers(tx, guestUserIds);
 
       return {
         sessionCode: freshTarget.code,

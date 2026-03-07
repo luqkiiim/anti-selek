@@ -1,3 +1,5 @@
+import type { Prisma } from "@prisma/client";
+
 export interface CompletedMatchEloChange {
   team1User1Id: string;
   team1User2Id: string;
@@ -5,6 +7,11 @@ export interface CompletedMatchEloChange {
   team2User2Id: string;
   team1EloChange: number | null;
   team2EloChange: number | null;
+}
+
+export interface SessionGuestPlayerRow {
+  userId: string;
+  isGuest: boolean;
 }
 
 function applyDelta(map: Map<string, number>, userId: string, delta: number) {
@@ -42,4 +49,40 @@ export function computeRollbackEloDeltas(
   }
 
   return deltas;
+}
+
+export function collectGuestUserIds(sessionPlayers: SessionGuestPlayerRow[]): string[] {
+  return Array.from(
+    new Set(
+      sessionPlayers
+        .filter((player) => player.isGuest)
+        .map((player) => player.userId)
+    )
+  );
+}
+
+export async function deleteEphemeralGuestUsers(
+  tx: Prisma.TransactionClient,
+  guestUserIds: string[]
+): Promise<number> {
+  const uniqueGuestUserIds = Array.from(new Set(guestUserIds));
+  if (uniqueGuestUserIds.length === 0) {
+    return 0;
+  }
+
+  const result = await tx.user.deleteMany({
+    where: {
+      id: { in: uniqueGuestUserIds },
+      isClaimed: false,
+      email: null,
+      communities: { none: {} },
+      sessionPlayers: { none: {} },
+      matchesAsTeam1Player1: { none: {} },
+      matchesAsTeam1Player2: { none: {} },
+      matchesAsTeam2Player1: { none: {} },
+      matchesAsTeam2Player2: { none: {} },
+    },
+  });
+
+  return result.count;
 }

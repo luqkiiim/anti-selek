@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { computeRollbackEloDeltas, type CompletedMatchEloChange } from "./sessionLifecycle";
+import {
+  collectGuestUserIds,
+  computeRollbackEloDeltas,
+  type CompletedMatchEloChange,
+} from "./sessionLifecycle";
 
 describe("session lifecycle rollback", () => {
   it("reverses completed-match Elo deltas for core players and ignores guests", () => {
@@ -61,5 +65,16 @@ describe("session lifecycle rollback", () => {
     const deltas = computeRollbackEloDeltas(matches, new Map());
 
     expect(deltas.size).toBe(0);
+  });
+
+  it("collects unique guest user IDs and ignores core players", () => {
+    const guestUserIds = collectGuestUserIds([
+      { userId: "A", isGuest: false },
+      { userId: "GUEST_X", isGuest: true },
+      { userId: "GUEST_Y", isGuest: true },
+      { userId: "GUEST_X", isGuest: true },
+    ]);
+
+    expect(guestUserIds).toEqual(["GUEST_X", "GUEST_Y"]);
   });
 });

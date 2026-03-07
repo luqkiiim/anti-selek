@@ -2,12 +2,12 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getCommunityEloByUserId, withCommunityElo } from "@/lib/communityElo";
-import { SessionStatus } from "@/types/enums";
+import { MatchStatus, SessionStatus } from "@/types/enums";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(
-  request: Request,
+  _request: Request,
   { params }: { params: Promise<{ code: string }> }
 ) {
   try {
@@ -17,7 +17,14 @@ export async function POST(
     }
 
     const { code } = await params;
-    const sessionData = await prisma.session.findUnique({ where: { code } });
+    const sessionData = await prisma.session.findUnique({
+      where: { code },
+      select: {
+        id: true,
+        communityId: true,
+        endedAt: true,
+      },
+    });
 
     if (!sessionData) {
       return NextResponse.json({ error: "Session not found" }, { status: 404 });
@@ -40,15 +47,36 @@ export async function POST(
       return NextResponse.json({ error: "Admin only" }, { status: 403 });
     }
 
-    const updated = await prisma.session.update({
-      where: { code },
-      data: { status: SessionStatus.COMPLETED, endedAt: new Date() },
-      include: {
-        courts: { include: { currentMatch: true } },
-        players: {
-          include: { user: { select: { id: true, name: true, elo: true } } },
+    const endedAt = sessionData.endedAt ?? new Date();
+    const updated = await prisma.$transaction(async (tx) => {
+      await tx.court.updateMany({
+        where: { sessionId: sessionData.id },
+        data: { currentMatchId: null },
+      });
+
+      await tx.match.deleteMany({
+        where: {
+          sessionId: sessionData.id,
+          status: {
+            in: [
+              MatchStatus.PENDING,
+              MatchStatus.IN_PROGRESS,
+              MatchStatus.PENDING_APPROVAL,
+            ],
+          },
         },
-      },
+      });
+
+      return tx.session.update({
+        where: { code },
+        data: { status: SessionStatus.COMPLETED, endedAt },
+        include: {
+          courts: { include: { currentMatch: true } },
+          players: {
+            include: { user: { select: { id: true, name: true, elo: true } } },
+          },
+        },
+      });
     });
 
     const players =
