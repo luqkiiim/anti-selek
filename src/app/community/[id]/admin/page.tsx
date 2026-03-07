@@ -551,9 +551,6 @@ export default function CommunityAdminPage() {
                             Unclaimed
                           </span>
                         )}
-                        <span className="px-2 h-7 inline-flex items-center justify-center whitespace-nowrap text-xs leading-none font-semibold rounded-full bg-gray-100 text-gray-700 border border-gray-200">
-                          {getGenderPillLabel(player)}
-                        </span>
                       </div>
 
                       <div className="flex items-center justify-between gap-3 relative">
