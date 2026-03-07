@@ -648,14 +648,9 @@ export default function CommunityPage() {
                           <Link href={`/profile/${player.id}?communityId=${communityId}`} className="text-sm font-black text-gray-900 hover:text-blue-600 hover:underline">
                             {player.name}
                           </Link>
-                          <div className="flex flex-wrap items-center gap-2 mt-1">
-                            <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">{player.role}</p>
-                            {!player.isClaimed && (
-                              <span className="px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-800 text-[9px] font-black uppercase tracking-widest">
-                                Unclaimed
-                              </span>
-                            )}
-                          </div>
+                          <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider mt-1">
+                            {player.role}
+                          </p>
                         </div>
                       </div>
                       <div className="shrink-0 text-right">
@@ -671,7 +666,9 @@ export default function CommunityPage() {
                     {!player.isClaimed && player.email === null && player.id !== user?.id && (() => {
                       const isNameMatch = !!user && doClaimNamesMatch(user.name, player.name);
                       const existingRequest = pendingClaimByTargetId.get(player.id);
-                      const canShowClaimControls = isNameMatch || existingRequest?.requesterUserId === user?.id;
+                      const canShowClaimControls =
+                        existingRequest?.requesterUserId === user?.id ||
+                        (isNameMatch && currentUserClaimEligibility.canRequest);
 
                       if (!canShowClaimControls) {
                         return null;
