@@ -5,6 +5,10 @@ import { useSession } from "next-auth/react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import {
+  doClaimNamesMatch,
+  getClaimRequesterEligibility,
+} from "@/lib/communityClaimRules";
+import {
   ClaimRequestStatus,
   PartnerPreference,
   PlayerGender,
@@ -161,6 +165,20 @@ export default function CommunityPage() {
   const filteredSelectablePlayers = selectablePlayers.filter((member) =>
     member.name.toLowerCase().includes(playerSearch.toLowerCase())
   );
+  const currentUserCommunityMember =
+    communityMembers.find((member) => member.id === user?.id) ?? null;
+  const currentUserHasCommunitySessionHistory = useMemo(
+    () =>
+      sessions.some((sessionItem) =>
+        sessionItem.players.some((playerItem) => playerItem.user.id === user?.id)
+      ),
+    [sessions, user?.id]
+  );
+  const currentUserClaimEligibility = getClaimRequesterEligibility({
+    isClaimed: currentUserCommunityMember?.isClaimed ?? false,
+    communityElo: currentUserCommunityMember?.elo ?? 1000,
+    hasCommunitySessionHistory: currentUserHasCommunitySessionHistory,
+  });
   const pendingClaimByTargetId = useMemo(
     () => new Map(claimRequests.map((claimRequest) => [claimRequest.targetUserId, claimRequest])),
     [claimRequests]
@@ -650,38 +668,56 @@ export default function CommunityPage() {
                       </div>
                     </div>
 
-                    {!player.isClaimed && player.email === null && player.id !== user?.id && (
-                      <div className="mt-3 flex items-center justify-between gap-3 border-t border-gray-200 pt-3">
-                        <p className="text-[10px] font-bold uppercase tracking-wider text-gray-500">
-                          {pendingClaimByTargetId.get(player.id)?.requesterUserId === user?.id
-                            ? "Claim request submitted"
-                            : pendingClaimByTargetId.has(player.id)
-                              ? "Awaiting admin review"
-                              : "Request ownership of this placeholder"}
-                        </p>
-                        <button
-                          type="button"
-                          onClick={() => requestClaim(player)}
-                          disabled={
-                            requestingClaimFor !== null ||
-                            pendingClaimByTargetId.has(player.id) ||
-                            (!!myPendingClaimRequest &&
-                              myPendingClaimRequest.targetUserId !== player.id)
-                          }
-                          className="px-3 py-2 rounded-xl bg-gray-900 text-white text-[10px] font-black uppercase tracking-widest disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          {pendingClaimByTargetId.get(player.id)?.requesterUserId === user?.id
-                            ? "Requested"
-                            : pendingClaimByTargetId.has(player.id)
-                              ? "Pending"
-                              : myPendingClaimRequest
-                                ? "Pending Elsewhere"
-                                : requestingClaimFor === player.id
-                                  ? "Sending..."
-                                  : "Request Claim"}
-                        </button>
-                      </div>
-                    )}
+                    {!player.isClaimed && player.email === null && player.id !== user?.id && (() => {
+                      const isNameMatch = !!user && doClaimNamesMatch(user.name, player.name);
+                      const existingRequest = pendingClaimByTargetId.get(player.id);
+                      const canShowClaimControls = isNameMatch || existingRequest?.requesterUserId === user?.id;
+
+                      if (!canShowClaimControls) {
+                        return null;
+                      }
+
+                      const buttonDisabled =
+                        requestingClaimFor !== null ||
+                        pendingClaimByTargetId.has(player.id) ||
+                        (!!myPendingClaimRequest && myPendingClaimRequest.targetUserId !== player.id) ||
+                        !currentUserClaimEligibility.canRequest;
+
+                      const statusText =
+                        existingRequest?.requesterUserId === user?.id
+                          ? "Claim request submitted"
+                          : existingRequest
+                            ? "Awaiting admin review"
+                            : currentUserClaimEligibility.reason ??
+                              "Request ownership of this placeholder";
+
+                      const buttonLabel =
+                        existingRequest?.requesterUserId === user?.id
+                          ? "Requested"
+                          : existingRequest
+                            ? "Pending"
+                            : myPendingClaimRequest
+                              ? "Pending Elsewhere"
+                              : requestingClaimFor === player.id
+                                ? "Sending..."
+                                : "Request Claim";
+
+                      return (
+                        <div className="mt-3 flex items-center justify-between gap-3 border-t border-gray-200 pt-3">
+                          <p className="text-[10px] font-bold uppercase tracking-wider text-gray-500">
+                            {statusText}
+                          </p>
+                          <button
+                            type="button"
+                            onClick={() => requestClaim(player)}
+                            disabled={buttonDisabled}
+                            className="px-3 py-2 rounded-xl bg-gray-900 text-white text-[10px] font-black uppercase tracking-widest disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            {buttonLabel}
+                          </button>
+                        </div>
+                      );
+                    })()}
                   </div>
                 ))
               )}

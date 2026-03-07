@@ -45,6 +45,26 @@ export async function PATCH(
     }
 
     if (action === "APPROVE") {
+      const existingRequest = await prisma.claimRequest.findUnique({
+        where: { id: requestId },
+        select: {
+          id: true,
+          communityId: true,
+          requesterUserId: true,
+        },
+      });
+
+      if (!existingRequest || existingRequest.communityId !== communityId) {
+        return NextResponse.json({ error: "Claim request not found" }, { status: 404 });
+      }
+
+      if (existingRequest.requesterUserId === session.user.id) {
+        return NextResponse.json(
+          { error: "You cannot approve your own claim request" },
+          { status: 403 }
+        );
+      }
+
       const approved = await prisma.$transaction((tx) =>
         approveCommunityClaimRequest(tx, {
           communityId,

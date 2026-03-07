@@ -46,7 +46,7 @@ interface ClaimRequest {
 }
 
 export default function CommunityAdminPage() {
-  const { status } = useSession();
+  const { data: session, status } = useSession();
   const router = useRouter();
   const params = useParams<{ id: string }>();
   const communityId = typeof params.id === "string" ? params.id : "";
@@ -590,11 +590,19 @@ export default function CommunityAdminPage() {
                       <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">
                         Requested {new Date(claimRequest.createdAt).toLocaleDateString()}
                       </p>
+                      {claimRequest.requesterUserId === session?.user?.id && (
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-amber-600">
+                          Another admin must approve this request
+                        </p>
+                      )}
                       <div className="grid grid-cols-2 gap-2">
                         <button
                           type="button"
                           onClick={() => handleReviewClaimRequest(claimRequest, "APPROVE")}
-                          disabled={reviewingClaimRequestId !== null}
+                          disabled={
+                            reviewingClaimRequestId !== null ||
+                            claimRequest.requesterUserId === session?.user?.id
+                          }
                           className="w-full bg-blue-600 text-white py-2.5 rounded-xl font-black uppercase tracking-widest text-[10px] disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                           {reviewingClaimRequestId === claimRequest.id ? "Working..." : "Approve"}

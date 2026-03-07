@@ -2,6 +2,10 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { isClaimableCommunityPlaceholder } from "@/lib/communityClaims";
+import {
+  doClaimNamesMatch,
+  getClaimRequesterEligibility,
+} from "@/lib/communityClaimRules";
 import { ClaimRequestStatus } from "@/types/enums";
 
 export const dynamic = "force-dynamic";
@@ -118,7 +122,10 @@ export async function POST(
           userId: session.user.id,
         },
       },
-      select: { userId: true },
+      select: {
+        userId: true,
+        elo: true,
+      },
     });
 
     if (!requesterMembership) {
@@ -155,12 +162,19 @@ export async function POST(
     }
 
     const createdRequest = await prisma.$transaction(async (tx) => {
-      const [requester, targetMembership, existingRequesterRequest, existingTargetRequest] =
+      const [
+        requester,
+        targetMembership,
+        existingRequesterRequest,
+        existingTargetRequest,
+        existingCommunityHistory,
+      ] =
         await Promise.all([
           tx.user.findUnique({
             where: { id: session.user.id },
             select: {
               id: true,
+              name: true,
               isClaimed: true,
             },
           }),
@@ -198,10 +212,29 @@ export async function POST(
             },
             select: { id: true },
           }),
+          tx.sessionPlayer.findFirst({
+            where: {
+              userId: session.user.id,
+              session: {
+                communityId,
+              },
+            },
+            select: { id: true },
+          }),
         ]);
 
-      if (!requester?.isClaimed) {
-        throw new Error("Only claimed accounts can request a profile merge");
+      if (!requester) {
+        throw new Error("Requester account not found");
+      }
+
+      const requesterEligibility = getClaimRequesterEligibility({
+        isClaimed: requester.isClaimed,
+        communityElo: requesterMembership.elo,
+        hasCommunitySessionHistory: !!existingCommunityHistory,
+      });
+
+      if (!requesterEligibility.canRequest) {
+        throw new Error(requesterEligibility.reason ?? "Claim request is not allowed");
       }
 
       if (!targetMembership) {
@@ -210,6 +243,10 @@ export async function POST(
 
       if (!isClaimableCommunityPlaceholder(targetMembership.user)) {
         throw new Error("Only unclaimed placeholder profiles without email can be claimed");
+      }
+
+      if (!doClaimNamesMatch(requester.name, targetMembership.user.name)) {
+        throw new Error("You can only request placeholders that match your account name");
       }
 
       if (existingRequesterRequest) {
@@ -249,18 +286,16 @@ export async function POST(
     return NextResponse.json(toClaimRequestResponse(createdRequest), { status: 201 });
   } catch (error) {
     if (error instanceof Error) {
-      const status =
-        error.message === "Target profile not found in this community"
-          ? 404
-          : error.message.includes("claim")
-            ? 409
-            : 400;
-      if (
-        error.message === "Only claimed accounts can request a profile merge" ||
-        error.message === "Only unclaimed placeholder profiles without email can be claimed"
-      ) {
-        return NextResponse.json({ error: error.message }, { status: 400 });
-      }
+      const status = (() => {
+        if (error.message === "Target profile not found in this community") return 404;
+        if (
+          error.message === "You already have a pending claim request in this community" ||
+          error.message === "This profile already has a pending claim request"
+        ) {
+          return 409;
+        }
+        return 400;
+      })();
       return NextResponse.json({ error: error.message }, { status });
     }
 
