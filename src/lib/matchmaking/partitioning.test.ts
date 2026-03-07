@@ -5,9 +5,11 @@ import { SessionMode } from "../../types/enums";
 import {
   buildRotationHistory,
   evaluateBestPartition,
+  findAlternativeQuartetForReshuffle,
   findBestQuartetInFairnessWindow,
   findBestFallbackQuartet,
   getPartitionKey,
+  getQuartetKey,
   scorePartitionDetailed,
   scorePartition,
   type PartitionCandidate,
@@ -29,7 +31,7 @@ function createPlayers(ids: string[]): Map<string, PartitionCandidate> {
 }
 
 describe("partitioning", () => {
-  it("avoids repeating the exact same opponent layout when alternatives are equal", () => {
+  it("avoids repeating the exact same team-vs-team partition when an equal-balance alternative exists", () => {
     const playersById = createPlayers(["A", "B", "C", "D"]);
     const rotationHistory = buildRotationHistory([
       {
@@ -53,7 +55,7 @@ describe("partitioning", () => {
     });
   });
 
-  it("weights balance ahead of mild recent-history variety penalties", () => {
+  it("adds a large penalty for recently repeated exact partitions", () => {
     const playersById = new Map<string, PartitionCandidate>([
       ["A", { userId: "A", elo: 1500, lastPartnerId: null, gender: "MALE", partnerPreference: "OPEN" }],
       ["B", { userId: "B", elo: 1300, lastPartnerId: null, gender: "MALE", partnerPreference: "OPEN" }],
@@ -92,10 +94,12 @@ describe("partitioning", () => {
     expect(freshButImbalanced).not.toBeNull();
     expect(balancedRepeat!.teamEloGap).toBe(0);
     expect(freshButImbalanced!.teamEloGap).toBe(190);
-    expect(balancedRepeat!.totalScore).toBeLessThan(freshButImbalanced!.totalScore);
+    expect(balancedRepeat!.exactPartitionPenalty).toBeGreaterThan(0);
+    expect(freshButImbalanced!.exactPartitionPenalty).toBe(0);
+    expect(balancedRepeat!.totalScore).toBeGreaterThan(freshButImbalanced!.totalScore);
   });
 
-  it("adds extra rotation cost for a previously seen quartet", () => {
+  it("does not penalize repeat partners when the opposing team changes", () => {
     const playersById = createPlayers(["A", "B", "C", "D", "E", "F"]);
     const rotationHistory = buildRotationHistory([
       {
@@ -106,16 +110,7 @@ describe("partitioning", () => {
       },
     ]);
 
-    const repeatedQuartetScore = scorePartition(
-      {
-        team1: ["A", "B"],
-        team2: ["E", "F"],
-      },
-      playersById,
-      SessionMode.MEXICANO,
-      rotationHistory
-    );
-    const freshQuartetScore = scorePartition(
+    const samePartnersDifferentOpponentsScore = scorePartition(
       {
         team1: ["A", "B"],
         team2: ["C", "D"],
@@ -124,32 +119,53 @@ describe("partitioning", () => {
       SessionMode.MEXICANO,
       rotationHistory
     );
+    const freshPartnershipScore = scorePartition(
+      {
+        team1: ["A", "C"],
+        team2: ["B", "D"],
+      },
+      playersById,
+      SessionMode.MEXICANO,
+      rotationHistory
+    );
 
     expect(rotationHistory.podCounts.get("A|B|E|F")).toBe(1);
-    expect(repeatedQuartetScore).not.toBeNull();
-    expect(freshQuartetScore).not.toBeNull();
-    expect(repeatedQuartetScore!).toBeGreaterThan(freshQuartetScore!);
+    expect(samePartnersDifferentOpponentsScore).not.toBeNull();
+    expect(freshPartnershipScore).not.toBeNull();
+    expect(samePartnersDifferentOpponentsScore!).toBe(
+      freshPartnershipScore!
+    );
   });
 
-  it("limits variety penalties to recent history instead of the whole session", () => {
-    const staleMatch = {
+  it("only looks back 8 completed matches for exact partition penalties", () => {
+    const staleExactMatch = {
       team1User1Id: "A",
       team1User2Id: "B",
       team2User1Id: "C",
       team2User2Id: "D",
       completedAt: new Date("2026-03-01T00:00:00Z"),
     };
-    const recentMatches = Array.from({ length: 24 }, (_, index) => ({
+    const recentMatches = Array.from({ length: 8 }, (_, index) => ({
       team1User1Id: `R${index}_1`,
       team1User2Id: `R${index}_2`,
       team2User1Id: `R${index}_3`,
       team2User2Id: `R${index}_4`,
-      completedAt: new Date(`2026-03-0${2 + Math.floor(index / 4)}T0${index % 10}:00:00Z`),
+      completedAt: new Date(`2026-03-0${2 + index}T00:00:00Z`),
     }));
 
-    const rotationHistory = buildRotationHistory([staleMatch, ...recentMatches]);
+    const rotationHistory = buildRotationHistory([staleExactMatch, ...recentMatches]);
+    const score = scorePartitionDetailed(
+      {
+        team1: ["A", "B"],
+        team2: ["C", "D"],
+      },
+      createPlayers(["A", "B", "C", "D"]),
+      SessionMode.MEXICANO,
+      rotationHistory
+    );
 
-    expect(rotationHistory.podCounts.has("A|B|C|D")).toBe(false);
+    expect(rotationHistory.exactPartitionCounts.has("A|B||C|D")).toBe(false);
+    expect(score?.exactPartitionPenalty).toBe(0);
   });
 
   it("can replace part of the baseline quartet when a nearby fairness window produces a much better balance", () => {
@@ -280,5 +296,32 @@ describe("partitioning", () => {
 
     expect(selection).not.toBeNull();
     expect(selection!.ids.sort()).not.toEqual(["A", "B", "C", "D"]);
+  });
+
+  it("prefers a different quartet on reshuffle even when most of the same players remain", () => {
+    const rankedCandidates = [
+      { userId: "A" },
+      { userId: "B" },
+      { userId: "C" },
+      { userId: "D" },
+      { userId: "E" },
+    ];
+    const playersById = createPlayers(["A", "B", "C", "D", "E"]);
+
+    const selection = findAlternativeQuartetForReshuffle(
+      rankedCandidates,
+      playersById,
+      SessionMode.MEXICANO,
+      buildRotationHistory([]),
+      {
+        baselineIds: ["A", "B", "C", "D"],
+        fairnessSlack: 4,
+        maxCandidates: 5,
+        excludedQuartetKey: "A|B|C|D",
+      }
+    );
+
+    expect(selection).not.toBeNull();
+    expect(getQuartetKey(selection!.ids)).toBe("A|B|C|E");
   });
 });

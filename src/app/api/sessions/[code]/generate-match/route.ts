@@ -12,6 +12,7 @@ import {
 import {
   buildRotationHistory,
   evaluateBestPartition,
+  findAlternativeQuartetForReshuffle,
   findBestQuartetInFairnessWindow,
   findBestFallbackQuartet,
   getPartitionKey,
@@ -445,59 +446,45 @@ export async function POST(
       const selectedQuartetKey = getQuartetKey(bestSelection.ids);
       const selectedPartitionKey = getPartitionKey(bestSelection.partition);
 
-      if (
-        selectedQuartetKey === previousQuartetKey &&
-        selectedPartitionKey === previousPartitionKey
-      ) {
-        const alternativePartition = evaluateBestPartition(
-          bestSelection.ids,
+      if (selectedQuartetKey === previousQuartetKey) {
+        const alternativeQuartet = findAlternativeQuartetForReshuffle(
+          rankedCandidates,
           playersById,
           sessionData.mode as SessionMode,
           rotationHistory,
           {
-            excludedPartitionKey: previousPartitionKey,
+            baselineIds: selectedIds as [string, string, string, string],
+            fairnessSlack: FAIRNESS_WINDOW_SLACK,
+            lowestCohortUserIds,
+            maxLowestCohortPlayers,
+            maxCandidates:
+              sessionData.mode === SessionMode.MIXICANO
+                ? MIXICANO_SEARCH_WINDOW
+                : BALANCED_SEARCH_WINDOW,
+            excludedQuartetKey: previousQuartetKey,
           }
         );
 
-        if (alternativePartition) {
-          bestSelection = {
-            ...bestSelection,
-            partition: alternativePartition.partition,
-            score: alternativePartition.score,
-          };
-        } else {
-          let alternativeQuartet = findBestQuartetInFairnessWindow(
-            rankedCandidates,
+        if (alternativeQuartet) {
+          bestSelection = alternativeQuartet;
+        } else if (selectedPartitionKey === previousPartitionKey) {
+          const alternativePartition = evaluateBestPartition(
+            bestSelection.ids,
             playersById,
             sessionData.mode as SessionMode,
             rotationHistory,
             {
-              baselineIds: selectedIds as [string, string, string, string],
-              fairnessSlack: FAIRNESS_WINDOW_SLACK,
-              lowestCohortUserIds,
-              maxLowestCohortPlayers,
-              maxCandidates:
-                sessionData.mode === SessionMode.MIXICANO
-                  ? MIXICANO_SEARCH_WINDOW
-                  : BALANCED_SEARCH_WINDOW,
-              excludedQuartetKey: previousQuartetKey,
+              excludedPartitionKey: previousPartitionKey,
             }
           );
 
-          if (!alternativeQuartet) {
-            alternativeQuartet = findBestFallbackQuartet(
-              rankedCandidates,
-              playersById,
-              sessionData.mode as SessionMode,
-              rotationHistory,
-              sessionData.mode === SessionMode.MIXICANO
-                ? MIXICANO_SEARCH_WINDOW
-                : BALANCED_SEARCH_WINDOW,
-              previousQuartetKey
-            );
-          }
-
-          if (!alternativeQuartet) {
+          if (alternativePartition) {
+            bestSelection = {
+              ...bestSelection,
+              partition: alternativePartition.partition,
+              score: alternativePartition.score,
+            };
+          } else {
             return NextResponse.json(
               {
                 error:
@@ -506,8 +493,6 @@ export async function POST(
               { status: 409 }
             );
           }
-
-          bestSelection = alternativeQuartet;
         }
       }
     }

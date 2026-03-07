@@ -4,16 +4,11 @@ import {
   SessionMode,
 } from "../../types/enums";
 
-const BALANCE_WEIGHT = 0.6;
-const VARIETY_WEIGHT = 0.4;
-const IMMEDIATE_REPEAT_PARTNER_PENALTY = 1.25;
-const PARTNER_HISTORY_WEIGHT = 1.35;
-const OPPONENT_HISTORY_WEIGHT = 0.25;
-const POD_HISTORY_WEIGHT = 0.9;
 const BALANCE_GAP_NORMALIZER = 150;
-const VARIETY_SCORE_NORMALIZER = 4;
 const RECENT_HISTORY_LIMIT = 24;
 const RECENT_HISTORY_DECAY = 0.85;
+const EXACT_PARTITION_HISTORY_LIMIT = 8;
+const EXACT_PARTITION_REPEAT_PENALTY = 4;
 
 export interface DoublesPartition {
   team1: [string, string];
@@ -41,6 +36,7 @@ export interface RotationHistory {
   partnerCounts: Map<string, number>;
   opponentCounts: Map<string, number>;
   podCounts: Map<string, number>;
+  exactPartitionCounts: Map<string, number>;
 }
 
 export interface PartitionEvaluation {
@@ -52,11 +48,7 @@ export interface PartitionScoreDetails {
   totalScore: number;
   teamEloGap: number;
   balanceScore: number;
-  recentPartnerScore: number;
-  recentOpponentScore: number;
-  recentPodScore: number;
-  varietyScore: number;
-  immediateRepeatPartnerPenalty: number;
+  exactPartitionPenalty: number;
 }
 
 export interface PartitionRepeatStats {
@@ -192,7 +184,12 @@ export function buildRotationHistory(
   const partnerCounts = new Map<string, number>();
   const opponentCounts = new Map<string, number>();
   const podCounts = new Map<string, number>();
-  const recentMatches = getChronologicalMatches(matches).slice(-RECENT_HISTORY_LIMIT);
+  const exactPartitionCounts = new Map<string, number>();
+  const chronologicalMatches = getChronologicalMatches(matches);
+  const recentMatches = chronologicalMatches.slice(-RECENT_HISTORY_LIMIT);
+  const recentExactPartitionMatches = chronologicalMatches.slice(
+    -EXACT_PARTITION_HISTORY_LIMIT
+  );
 
   for (const [index, match] of recentMatches.entries()) {
     const recencyWeight = Math.pow(
@@ -218,7 +215,22 @@ export function buildRotationHistory(
     incrementCounter(podCounts, podKey([...team1, ...team2]), recencyWeight);
   }
 
-  return { partnerCounts, opponentCounts, podCounts };
+  for (const [index, match] of recentExactPartitionMatches.entries()) {
+    const recencyWeight = Math.pow(
+      RECENT_HISTORY_DECAY,
+      recentExactPartitionMatches.length - index - 1
+    );
+    incrementCounter(
+      exactPartitionCounts,
+      getPartitionKey({
+        team1: [match.team1User1Id, match.team1User2Id],
+        team2: [match.team2User1Id, match.team2User2Id],
+      }),
+      recencyWeight
+    );
+  }
+
+  return { partnerCounts, opponentCounts, podCounts, exactPartitionCounts };
 }
 
 export function getPartitionRepeatStats(
@@ -309,63 +321,15 @@ export function scorePartitionDetailed(
   const team2AvgElo = (player3.elo + player4.elo) / 2;
   const teamEloGap = Math.abs(team1AvgElo - team2AvgElo);
   const balanceScore = normalizeScore(teamEloGap, BALANCE_GAP_NORMALIZER);
-  const recentPartnerScore =
-    (rotationHistory.partnerCounts.get(pairKey(player1.userId, player2.userId)) ??
-      0) +
-    (rotationHistory.partnerCounts.get(pairKey(player3.userId, player4.userId)) ??
-      0);
-
-  const opponentPairs: [string, string][] = [
-    [player1.userId, player3.userId],
-    [player1.userId, player4.userId],
-    [player2.userId, player3.userId],
-    [player2.userId, player4.userId],
-  ];
-  const recentOpponentScore = opponentPairs.reduce(
-    (total, [opponentA, opponentB]) =>
-      total + (rotationHistory.opponentCounts.get(pairKey(opponentA, opponentB)) ?? 0),
-    0
-  );
-  const recentPodScore =
-    rotationHistory.podCounts.get(
-      podKey([
-        player1.userId,
-        player2.userId,
-        player3.userId,
-        player4.userId,
-      ])
-    ) ?? 0;
-  const weightedVarietyScore =
-    recentPartnerScore * PARTNER_HISTORY_WEIGHT +
-    recentOpponentScore * OPPONENT_HISTORY_WEIGHT +
-    recentPodScore * POD_HISTORY_WEIGHT;
-  const varietyScore = normalizeScore(
-    weightedVarietyScore,
-    VARIETY_SCORE_NORMALIZER
-  );
-  const immediateRepeatPartnerPenalty =
-    (Number(
-      player1.lastPartnerId === player2.userId ||
-        player2.lastPartnerId === player1.userId
-    ) +
-      Number(
-        player3.lastPartnerId === player4.userId ||
-          player4.lastPartnerId === player3.userId
-      )) *
-    IMMEDIATE_REPEAT_PARTNER_PENALTY;
+  const exactPartitionPenalty =
+    (rotationHistory.exactPartitionCounts.get(getPartitionKey(partition)) ?? 0) *
+    EXACT_PARTITION_REPEAT_PENALTY;
 
   return {
-    totalScore:
-      BALANCE_WEIGHT * balanceScore +
-      VARIETY_WEIGHT * varietyScore +
-      immediateRepeatPartnerPenalty,
+    totalScore: balanceScore + exactPartitionPenalty,
     teamEloGap,
     balanceScore,
-    recentPartnerScore,
-    recentOpponentScore,
-    recentPodScore,
-    varietyScore,
-    immediateRepeatPartnerPenalty,
+    exactPartitionPenalty,
   };
 }
 
@@ -590,4 +554,35 @@ export function findBestFallbackQuartet<T extends { userId: string }>(
   }
 
   return bestSelection;
+}
+
+export function findAlternativeQuartetForReshuffle<
+  T extends { userId: string },
+>(
+  rankedCandidates: T[],
+  playersById: Map<string, PartitionCandidate>,
+  sessionMode: SessionMode,
+  rotationHistory: RotationHistory,
+  options: FairnessWindowQuartetOptions
+): FallbackQuartetSelection | null {
+  const fairnessWindowSelection = findBestQuartetInFairnessWindow(
+    rankedCandidates,
+    playersById,
+    sessionMode,
+    rotationHistory,
+    options
+  );
+
+  if (fairnessWindowSelection) {
+    return fairnessWindowSelection;
+  }
+
+  return findBestFallbackQuartet(
+    rankedCandidates,
+    playersById,
+    sessionMode,
+    rotationHistory,
+    options.maxCandidates,
+    options.excludedQuartetKey
+  );
 }

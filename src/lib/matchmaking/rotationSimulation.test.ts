@@ -371,7 +371,7 @@ describe("rotation simulation", () => {
     ).toBe(true);
   });
 
-  it("keeps rotation tight for 13 players across 2 courts", () => {
+  it("keeps Elo gaps tight for 13 players across 2 courts", () => {
     const result = runSimulation({
       playerElos: buildDescendingElos(13),
       rounds: 90,
@@ -381,12 +381,9 @@ describe("rotation simulation", () => {
     expect(result.spread).toBeLessThanOrEqual(2);
     expect(result.avgTeamEloGap).toBeLessThanOrEqual(25);
     expect(result.p90TeamEloGap).toBeLessThanOrEqual(75);
-    expect(result.repeatPartnerRate).toBeLessThanOrEqual(0.45);
-    expect(result.repeatOpponentRate).toBeLessThanOrEqual(0.75);
-    expect(result.repeatPodRate).toBeLessThanOrEqual(0.1);
   });
 
-  it("keeps rotation tight for 24 players across 3 courts", () => {
+  it("keeps Elo gaps tight for 24 players across 3 courts", () => {
     const result = runSimulation({
       playerElos: buildDescendingElos(24),
       rounds: 120,
@@ -396,8 +393,5 @@ describe("rotation simulation", () => {
     expect(result.spread).toBeLessThanOrEqual(2);
     expect(result.avgTeamEloGap).toBeLessThanOrEqual(65);
     expect(result.p90TeamEloGap).toBeLessThanOrEqual(250);
-    expect(result.repeatPartnerRate).toBeLessThanOrEqual(0.3);
-    expect(result.repeatOpponentRate).toBeLessThanOrEqual(0.5);
-    expect(result.repeatPodRate).toBeLessThanOrEqual(0.12);
   });
 });
