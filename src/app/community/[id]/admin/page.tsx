@@ -64,6 +64,7 @@ export default function CommunityAdminPage() {
   const [savingName, setSavingName] = useState<Record<string, boolean>>({});
   const [editingElo, setEditingElo] = useState<Record<string, string>>({});
   const [savingElo, setSavingElo] = useState<Record<string, boolean>>({});
+  const [savingRole, setSavingRole] = useState<Record<string, boolean>>({});
   const [savingPreferences, setSavingPreferences] = useState<Record<string, boolean>>({});
   const [openPreferenceEditorFor, setOpenPreferenceEditorFor] = useState<string | null>(null);
   const [preferenceEditorDirection, setPreferenceEditorDirection] = useState<"up" | "down">(
@@ -299,6 +300,35 @@ export default function CommunityAdminPage() {
     }
   };
 
+  const handlePromotePlayer = async (id: string, playerName: string) => {
+    if (!confirm(`Promote ${playerName} to admin?`)) {
+      return;
+    }
+
+    setSavingRole((prev) => ({ ...prev, [id]: true }));
+    setError("");
+    setSuccess("");
+
+    try {
+      const res = await fetch(`/api/communities/${communityId}/members/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ role: "ADMIN" }),
+      });
+      const data = await safeJson(res);
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to promote player");
+      }
+
+      setSuccess(`${playerName} promoted to admin.`);
+      await fetchCommunityAndPlayers();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to promote player");
+    } finally {
+      setSavingRole((prev) => ({ ...prev, [id]: false }));
+    }
+  };
+
   const handleUpdatePreferences = async (
     id: string,
     updates: { gender?: PlayerGender; partnerPreference?: PartnerPreference }
@@ -446,6 +476,42 @@ export default function CommunityAdminPage() {
     } finally {
       setReviewingClaimRequestId(null);
     }
+  };
+
+  const renderRolePill = (player: Player) => {
+    const baseClassName =
+      "px-2 inline-flex text-xs leading-5 font-semibold rounded-full border transition-colors";
+
+    if (player.role === "ADMIN") {
+      return (
+        <span className={`${baseClassName} bg-[#ede9fe] text-[#5b21b6] border-[#ddd6fe]`}>
+          {player.role}
+        </span>
+      );
+    }
+
+    if (!player.isClaimed) {
+      return (
+        <span
+          className={`${baseClassName} bg-[#dbeafe] text-[#1e40af] border-[#bfdbfe]`}
+          title="Only claimed members can be promoted to admin."
+        >
+          {player.role}
+        </span>
+      );
+    }
+
+    return (
+      <button
+        type="button"
+        onClick={() => handlePromotePlayer(player.id, player.name)}
+        disabled={savingRole[player.id]}
+        title="Promote to admin"
+        className={`${baseClassName} bg-[#dbeafe] text-[#1e40af] border-[#bfdbfe] hover:bg-[#bfdbfe] disabled:opacity-60 disabled:cursor-not-allowed`}
+      >
+        {savingRole[player.id] ? "Promoting..." : player.role}
+      </button>
+    );
   };
 
   if (status === "loading" || loading) {
@@ -686,15 +752,7 @@ export default function CommunityAdminPage() {
                       </div>
 
                       <div className="flex flex-wrap items-center gap-2">
-                        <span
-                          className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full border ${
-                            player.role === "ADMIN"
-                              ? "bg-[#ede9fe] text-[#5b21b6] border-[#ddd6fe]"
-                              : "bg-[#dbeafe] text-[#1e40af] border-[#bfdbfe]"
-                          }`}
-                        >
-                          {player.role}
-                        </span>
+                        {renderRolePill(player)}
                         {player.isClaimed ? (
                           <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800">
                             Claimed
@@ -968,15 +1026,7 @@ export default function CommunityAdminPage() {
                           </div>
                         </td>
                         <td className="px-4 py-4 text-xs font-bold text-gray-700 align-middle text-center">
-                          <span
-                            className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full border ${
-                              player.role === "ADMIN"
-                                ? "bg-[#ede9fe] text-[#5b21b6] border-[#ddd6fe]"
-                                : "bg-[#dbeafe] text-[#1e40af] border-[#bfdbfe]"
-                            }`}
-                          >
-                            {player.role}
-                          </span>
+                          {renderRolePill(player)}
                         </td>
                         <td className="px-4 py-4 text-center text-sm font-medium align-middle">
                           <div className="flex justify-center gap-3">

@@ -62,13 +62,14 @@ export async function PATCH(
       return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
     }
 
-    const { name, email, elo, isActive, gender, partnerPreference } = body as {
+    const { name, email, elo, isActive, gender, partnerPreference, role } = body as {
       name?: unknown;
       email?: unknown;
       elo?: unknown;
       isActive?: unknown;
       gender?: unknown;
       partnerPreference?: unknown;
+      role?: unknown;
     };
 
     if (name !== undefined && (typeof name !== "string" || name.trim().length === 0)) {
@@ -108,8 +109,25 @@ export async function PATCH(
     ) {
       return NextResponse.json({ error: "Invalid partner preference" }, { status: 400 });
     }
+    if (role !== undefined && role !== "ADMIN") {
+      return NextResponse.json({ error: "Invalid role update" }, { status: 400 });
+    }
 
     const normalizedEmail = typeof email === "string" ? email.trim().toLowerCase() : email;
+    const shouldPromoteToAdmin = role === "ADMIN" && membership.role !== "ADMIN";
+
+    if (shouldPromoteToAdmin) {
+      const targetUser = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { isClaimed: true },
+      });
+      if (!targetUser?.isClaimed) {
+        return NextResponse.json(
+          { error: "Only claimed members can be promoted to admin" },
+          { status: 400 }
+        );
+      }
+    }
 
     if (typeof normalizedEmail === "string" && normalizedEmail.length > 0) {
       const existing = await prisma.user.findUnique({
@@ -155,7 +173,7 @@ export async function PATCH(
     });
 
     const updatedMembership =
-      typeof elo === "number"
+      typeof elo === "number" || shouldPromoteToAdmin
         ? await prisma.communityMember.update({
             where: {
               communityId_userId: {
@@ -163,7 +181,10 @@ export async function PATCH(
                 userId,
               },
             },
-            data: { elo },
+            data: {
+              ...(typeof elo === "number" ? { elo } : {}),
+              ...(shouldPromoteToAdmin ? { role: "ADMIN" } : {}),
+            },
             select: { role: true, elo: true },
           })
         : await prisma.communityMember.findUnique({
