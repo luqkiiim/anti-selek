@@ -4,14 +4,12 @@ import { SessionMode, SessionType } from "../../types/enums";
 import { rankPlayersByFairness } from "./fairness";
 import {
   buildRotationHistory,
-  findBestFallbackQuartet,
-  findBestQuartetInFairnessWindow,
   getPartitionRepeatStats,
   scorePartitionDetailed,
   type MatchHistoryEntry,
   type PartitionCandidate,
 } from "./partitioning";
-import { selectMatchPlayers } from "./selectPlayers";
+import { findBestAutoMatchSelection } from "./autoMatch";
 
 type SimPlayer = PartitionCandidate & {
   matchesPlayed: number;
@@ -40,9 +38,6 @@ function percentile(values: number[], ratio: number) {
   return sorted[index];
 }
 
-const BALANCED_SEARCH_WINDOW = 8;
-const MIXICANO_SEARCH_WINDOW = 12;
-const FAIRNESS_WINDOW_SLACK = 2;
 const MATCH_DURATION_MS = 10 * 60 * 1000;
 
 function buildDescendingElos(count: number, start = 1700, step = 50) {
@@ -69,26 +64,6 @@ function chooseMatch(
       randomFn: () => 0,
     }
   );
-
-  const selected = selectMatchPlayers(
-    players.map((player) => ({
-      userId: player.userId,
-      matchesPlayed: player.matchesPlayed,
-      availableSince: player.availableSince,
-      joinedAt: player.joinedAt,
-      inactiveSeconds: player.inactiveSeconds,
-    })),
-    { rankedCandidates }
-  );
-
-  if (!selected) return null;
-
-  const initialIds = selected.map((player) => player.userId) as [
-    string,
-    string,
-    string,
-    string,
-  ];
   const playersById = new Map<string, PartitionCandidate>(
     players.map((player) => [
       player.userId,
@@ -103,50 +78,13 @@ function chooseMatch(
     ])
   );
   const rotationHistory = buildRotationHistory(completedMatches);
-  const actualCounts = rankedCandidates.map((candidate) => candidate.matchesPlayed);
-  const minActual = Math.min(...actualCounts);
-  const maxActual = Math.max(...actualCounts);
-  const lowestCohortUserIds =
-    maxActual > minActual
-      ? new Set(
-          rankedCandidates
-            .filter((candidate) => candidate.matchesPlayed === minActual)
-            .map((candidate) => candidate.userId)
-        )
-      : undefined;
-  const maxLowestCohortPlayers =
-    lowestCohortUserIds && lowestCohortUserIds.size > 0
-      ? initialIds.filter((id) => lowestCohortUserIds.has(id)).length
-      : undefined;
-
-  let selection = findBestQuartetInFairnessWindow(
+  const selection = findBestAutoMatchSelection(
     rankedCandidates,
     playersById,
     sessionMode,
     sessionType,
-    rotationHistory,
-    {
-      baselineIds: initialIds,
-      fairnessSlack: FAIRNESS_WINDOW_SLACK,
-      lowestCohortUserIds,
-      maxLowestCohortPlayers,
-      maxCandidates:
-        sessionMode === SessionMode.MIXICANO
-          ? MIXICANO_SEARCH_WINDOW
-          : BALANCED_SEARCH_WINDOW,
-    }
+    rotationHistory
   );
-
-  if (!selection && sessionMode === SessionMode.MIXICANO) {
-    selection = findBestFallbackQuartet(
-      rankedCandidates,
-      playersById,
-      sessionMode,
-      sessionType,
-      rotationHistory,
-      MIXICANO_SEARCH_WINDOW
-    );
-  }
 
   if (!selection) {
     throw new Error("No valid match selection found in simulation");

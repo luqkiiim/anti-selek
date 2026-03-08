@@ -600,7 +600,11 @@ export function findBestFallbackQuartet<T extends { userId: string }>(
   sessionType: SessionType,
   rotationHistory: RotationHistory,
   maxCandidates = 12,
-  excludedQuartetKey?: string
+  options?: {
+    excludedQuartetKey?: string;
+    lowestCohortUserIds?: Set<string>;
+    maxLowestCohortPlayers?: number;
+  }
 ): FallbackQuartetSelection | null {
   const fallbackPool = rankedCandidates.slice(
     0,
@@ -623,7 +627,19 @@ export function findBestFallbackQuartet<T extends { userId: string }>(
             fallbackPool[l].userId,
           ];
 
-          if (excludedQuartetKey && getQuartetKey(ids) === excludedQuartetKey) {
+          if (
+            options?.excludedQuartetKey &&
+            getQuartetKey(ids) === options.excludedQuartetKey
+          ) {
+            continue;
+          }
+
+          if (
+            options?.lowestCohortUserIds &&
+            typeof options.maxLowestCohortPlayers === "number" &&
+            ids.filter((id) => options.lowestCohortUserIds?.has(id)).length >
+              options.maxLowestCohortPlayers
+          ) {
             continue;
           }
 
@@ -660,9 +676,9 @@ export function findBestFallbackQuartet<T extends { userId: string }>(
 
           if (
             !bestSelection ||
-            fairnessScore < bestSelection.fairnessScore ||
-            (fairnessScore === bestSelection.fairnessScore &&
-              evaluationComparison < 0)
+            evaluationComparison < 0 ||
+            (evaluationComparison === 0 &&
+              fairnessScore < bestSelection.fairnessScore)
           ) {
             bestSelection = {
               ids,
@@ -711,6 +727,10 @@ export function findAlternativeQuartetForReshuffle<
     sessionType,
     rotationHistory,
     options.maxCandidates,
-    options.excludedQuartetKey
+    {
+      excludedQuartetKey: options.excludedQuartetKey,
+      lowestCohortUserIds: options.lowestCohortUserIds,
+      maxLowestCohortPlayers: options.maxLowestCohortPlayers,
+    }
   );
 }

@@ -12,14 +12,11 @@ import {
 import {
   buildRotationHistory,
   evaluateBestPartition,
-  findAlternativeQuartetForReshuffle,
-  findBestQuartetInFairnessWindow,
-  findBestFallbackQuartet,
   getPartitionKey,
   getQuartetKey,
   PartitionCandidate,
 } from "@/lib/matchmaking/partitioning";
-import { selectMatchPlayers } from "@/lib/matchmaking/selectPlayers";
+import { findBestAutoMatchSelection } from "@/lib/matchmaking/autoMatch";
 import { getBusyPlayerIds } from "@/lib/matchmaking/busyFilter";
 import {
   MatchStatus,
@@ -29,9 +26,6 @@ import {
 } from "@/types/enums";
 
 export const dynamic = "force-dynamic";
-const BALANCED_SEARCH_WINDOW = 8;
-const MIXICANO_SEARCH_WINDOW = 12;
-const FAIRNESS_WINDOW_SLACK = 2;
 
 export async function POST(
   request: Request,
@@ -405,63 +399,18 @@ export async function POST(
       }));
 
     const rankedCandidates = rankPlayersByFairness(availableCandidates);
-    const selected = selectMatchPlayers(availableCandidates, { rankedCandidates });
 
-    if (!selected) {
+    if (rankedCandidates.length < 4) {
       return NextResponse.json({ error: `Not enough players available (need 4, have ${availableCandidates.length})` }, { status: 400 });
     }
 
-    let selectedIds = selected.map((p) => p.userId);
-    const actualCounts = rankedCandidates.map((candidate) => candidate.matchesPlayed);
-    const minActual = Math.min(...actualCounts);
-    const maxActual = Math.max(...actualCounts);
-    const lowestCohortUserIds =
-      maxActual > minActual
-        ? new Set(
-            rankedCandidates
-              .filter((candidate) => candidate.matchesPlayed === minActual)
-              .map((candidate) => candidate.userId)
-          )
-        : undefined;
-    const maxLowestCohortPlayers =
-      lowestCohortUserIds && lowestCohortUserIds.size > 0
-        ? selectedIds.filter((id) => lowestCohortUserIds.has(id)).length
-        : undefined;
-
-    let bestSelection = findBestQuartetInFairnessWindow(
+    let bestSelection = findBestAutoMatchSelection(
       rankedCandidates,
       playersById,
       sessionData.mode as SessionMode,
       sessionData.type as SessionType,
-      rotationHistory,
-      {
-        baselineIds: selectedIds as [string, string, string, string],
-        fairnessSlack: FAIRNESS_WINDOW_SLACK,
-        lowestCohortUserIds,
-        maxLowestCohortPlayers,
-        maxCandidates:
-          sessionData.mode === SessionMode.MIXICANO
-            ? MIXICANO_SEARCH_WINDOW
-            : BALANCED_SEARCH_WINDOW,
-      }
+      rotationHistory
     );
-
-    // If the fairness window cannot satisfy MIXICANO constraints,
-    // broaden the search to the fairest valid quartet in the larger pool.
-    if (!bestSelection && sessionData.mode === SessionMode.MIXICANO) {
-      const fallback = findBestFallbackQuartet(
-        rankedCandidates,
-        playersById,
-        sessionData.mode as SessionMode,
-        sessionData.type as SessionType,
-        rotationHistory,
-        MIXICANO_SEARCH_WINDOW
-      );
-
-      if (fallback) {
-        bestSelection = fallback;
-      }
-    }
 
     if (!bestSelection) {
       return NextResponse.json(
@@ -471,27 +420,19 @@ export async function POST(
     }
 
     if (reshuffleSource) {
-      const previousQuartetKey = getQuartetKey(reshuffleSource.ids);
-      const previousPartitionKey = getPartitionKey(reshuffleSource.partition);
-      const selectedQuartetKey = getQuartetKey(bestSelection.ids);
-      const selectedPartitionKey = getPartitionKey(bestSelection.partition);
+        const previousQuartetKey = getQuartetKey(reshuffleSource.ids);
+        const previousPartitionKey = getPartitionKey(reshuffleSource.partition);
+        const selectedQuartetKey = getQuartetKey(bestSelection.ids);
+        const selectedPartitionKey = getPartitionKey(bestSelection.partition);
 
       if (selectedQuartetKey === previousQuartetKey) {
-        const alternativeQuartet = findAlternativeQuartetForReshuffle(
+        const alternativeQuartet = findBestAutoMatchSelection(
           rankedCandidates,
           playersById,
           sessionData.mode as SessionMode,
           sessionData.type as SessionType,
           rotationHistory,
           {
-            baselineIds: selectedIds as [string, string, string, string],
-            fairnessSlack: FAIRNESS_WINDOW_SLACK,
-            lowestCohortUserIds,
-            maxLowestCohortPlayers,
-            maxCandidates:
-              sessionData.mode === SessionMode.MIXICANO
-                ? MIXICANO_SEARCH_WINDOW
-                : BALANCED_SEARCH_WINDOW,
             excludedQuartetKey: previousQuartetKey,
           }
         );
@@ -531,7 +472,7 @@ export async function POST(
       }
     }
 
-    selectedIds = [...bestSelection.ids];
+    const selectedIds = [...bestSelection.ids];
     const bestPartition = bestSelection.partition;
 
     // 8. Create Match

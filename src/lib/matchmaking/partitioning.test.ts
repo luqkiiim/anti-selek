@@ -336,7 +336,7 @@ describe("partitioning", () => {
       SessionType.ELO,
       buildRotationHistory([]),
       6,
-      "A|B|C|D"
+      { excludedQuartetKey: "A|B|C|D" }
     );
 
     expect(selection).not.toBeNull();
