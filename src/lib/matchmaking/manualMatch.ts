@@ -1,4 +1,4 @@
-import { SessionMode } from "../../types/enums";
+import { SessionMode, SessionType } from "../../types/enums";
 import {
   scorePartitionDetailed,
   type DoublesPartition,
@@ -29,10 +29,17 @@ export function isValidManualMatchPartition(
   teams: ManualMatchTeams,
   playersById: Map<string, PartitionCandidate>,
   sessionMode: SessionMode,
+  sessionType: SessionType,
   rotationHistory: RotationHistory
 ): boolean {
   return (
-    scorePartitionDetailed(teams, playersById, sessionMode, rotationHistory) !==
+    scorePartitionDetailed(
+      teams,
+      playersById,
+      sessionMode,
+      sessionType,
+      rotationHistory
+    ) !==
     null
   );
 }

@@ -25,6 +25,7 @@ import {
   MatchStatus,
   SessionMode,
   SessionStatus,
+  SessionType,
 } from "@/types/enums";
 
 export const dynamic = "force-dynamic";
@@ -191,13 +192,39 @@ export async function POST(
 
     const getPlayerElo = (player: (typeof sessionData.players)[number]) =>
       communityEloByUserId.get(player.userId) ?? player.user.elo;
+    const pointDiffByUserId = new Map<string, number>();
+
+    for (const match of sessionData.matches) {
+      if (
+        match.status !== MatchStatus.COMPLETED ||
+        typeof match.team1Score !== "number" ||
+        typeof match.team2Score !== "number"
+      ) {
+        continue;
+      }
+
+      const team1Diff = match.team1Score - match.team2Score;
+      const team2Diff = match.team2Score - match.team1Score;
+
+      for (const userId of [match.team1User1Id, match.team1User2Id]) {
+        pointDiffByUserId.set(userId, (pointDiffByUserId.get(userId) ?? 0) + team1Diff);
+      }
+
+      for (const userId of [match.team2User1Id, match.team2User2Id]) {
+        pointDiffByUserId.set(userId, (pointDiffByUserId.get(userId) ?? 0) + team2Diff);
+      }
+    }
 
     const playersById = new Map<string, PartitionCandidate>(
       sessionData.players.map((player) => [
         player.userId,
         {
           userId: player.userId,
-          elo: getPlayerElo(player),
+          elo:
+            sessionData.type === SessionType.POINTS
+              ? player.sessionPoints
+              : getPlayerElo(player),
+          pointDiff: pointDiffByUserId.get(player.userId) ?? 0,
           lastPartnerId: player.lastPartnerId,
           gender: player.gender,
           partnerPreference: player.partnerPreference,
@@ -347,6 +374,7 @@ export async function POST(
           parsedTeams,
           playersById,
           sessionData.mode as SessionMode,
+          sessionData.type as SessionType,
           rotationHistory
         )
       ) {
@@ -404,6 +432,7 @@ export async function POST(
       rankedCandidates,
       playersById,
       sessionData.mode as SessionMode,
+      sessionData.type as SessionType,
       rotationHistory,
       {
         baselineIds: selectedIds as [string, string, string, string],
@@ -424,6 +453,7 @@ export async function POST(
         rankedCandidates,
         playersById,
         sessionData.mode as SessionMode,
+        sessionData.type as SessionType,
         rotationHistory,
         MIXICANO_SEARCH_WINDOW
       );
@@ -451,6 +481,7 @@ export async function POST(
           rankedCandidates,
           playersById,
           sessionData.mode as SessionMode,
+          sessionData.type as SessionType,
           rotationHistory,
           {
             baselineIds: selectedIds as [string, string, string, string],
@@ -472,6 +503,7 @@ export async function POST(
             bestSelection.ids,
             playersById,
             sessionData.mode as SessionMode,
+            sessionData.type as SessionType,
             rotationHistory,
             {
               excludedPartitionKey: previousPartitionKey,

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { SessionMode } from "../../types/enums";
+import { SessionMode, SessionType } from "../../types/enums";
 
 import {
   buildRotationHistory,
@@ -22,6 +22,7 @@ function createPlayers(ids: string[]): Map<string, PartitionCandidate> {
       {
         userId: id,
         elo: 1000,
+        pointDiff: 0,
         lastPartnerId: null,
         gender: "MALE",
         partnerPreference: "OPEN",
@@ -46,6 +47,7 @@ describe("partitioning", () => {
       ["A", "B", "C", "D"],
       playersById,
       SessionMode.MEXICANO,
+      SessionType.ELO,
       rotationHistory
     );
 
@@ -57,10 +59,10 @@ describe("partitioning", () => {
 
   it("keeps the better-balanced partition even when it was seen recently", () => {
     const playersById = new Map<string, PartitionCandidate>([
-      ["A", { userId: "A", elo: 1500, lastPartnerId: null, gender: "MALE", partnerPreference: "OPEN" }],
-      ["B", { userId: "B", elo: 1300, lastPartnerId: null, gender: "MALE", partnerPreference: "OPEN" }],
-      ["C", { userId: "C", elo: 1490, lastPartnerId: null, gender: "MALE", partnerPreference: "OPEN" }],
-      ["D", { userId: "D", elo: 1310, lastPartnerId: null, gender: "MALE", partnerPreference: "OPEN" }],
+      ["A", { userId: "A", elo: 1500, pointDiff: 0, lastPartnerId: null, gender: "MALE", partnerPreference: "OPEN" }],
+      ["B", { userId: "B", elo: 1300, pointDiff: 0, lastPartnerId: null, gender: "MALE", partnerPreference: "OPEN" }],
+      ["C", { userId: "C", elo: 1490, pointDiff: 0, lastPartnerId: null, gender: "MALE", partnerPreference: "OPEN" }],
+      ["D", { userId: "D", elo: 1310, pointDiff: 0, lastPartnerId: null, gender: "MALE", partnerPreference: "OPEN" }],
     ]);
     const rotationHistory = buildRotationHistory([
       {
@@ -78,6 +80,7 @@ describe("partitioning", () => {
       },
       playersById,
       SessionMode.MEXICANO,
+      SessionType.ELO,
       rotationHistory
     );
     const freshButImbalanced = scorePartitionDetailed(
@@ -87,13 +90,14 @@ describe("partitioning", () => {
       },
       playersById,
       SessionMode.MEXICANO,
+      SessionType.ELO,
       rotationHistory
     );
 
     expect(balancedRepeat).not.toBeNull();
     expect(freshButImbalanced).not.toBeNull();
-    expect(balancedRepeat!.teamEloGap).toBe(0);
-    expect(freshButImbalanced!.teamEloGap).toBe(190);
+    expect(balancedRepeat!.teamBalanceGap).toBe(0);
+    expect(freshButImbalanced!.teamBalanceGap).toBe(190);
     expect(balancedRepeat!.exactPartitionPenalty).toBeGreaterThan(0);
     expect(freshButImbalanced!.exactPartitionPenalty).toBe(0);
     expect(balancedRepeat!.totalScore).toBeLessThan(
@@ -103,10 +107,10 @@ describe("partitioning", () => {
 
   it("prefers a non-repeated partition when the Elo gap difference is within tolerance", () => {
     const playersById = new Map<string, PartitionCandidate>([
-      ["A", { userId: "A", elo: 1410, lastPartnerId: null, gender: "MALE", partnerPreference: "OPEN" }],
-      ["B", { userId: "B", elo: 1390, lastPartnerId: null, gender: "MALE", partnerPreference: "OPEN" }],
-      ["C", { userId: "C", elo: 1400, lastPartnerId: null, gender: "MALE", partnerPreference: "OPEN" }],
-      ["D", { userId: "D", elo: 1400, lastPartnerId: null, gender: "MALE", partnerPreference: "OPEN" }],
+      ["A", { userId: "A", elo: 1410, pointDiff: 0, lastPartnerId: null, gender: "MALE", partnerPreference: "OPEN" }],
+      ["B", { userId: "B", elo: 1390, pointDiff: 0, lastPartnerId: null, gender: "MALE", partnerPreference: "OPEN" }],
+      ["C", { userId: "C", elo: 1400, pointDiff: 0, lastPartnerId: null, gender: "MALE", partnerPreference: "OPEN" }],
+      ["D", { userId: "D", elo: 1400, pointDiff: 0, lastPartnerId: null, gender: "MALE", partnerPreference: "OPEN" }],
     ]);
     const rotationHistory = buildRotationHistory([
       {
@@ -121,6 +125,7 @@ describe("partitioning", () => {
       ["A", "B", "C", "D"],
       playersById,
       SessionMode.MEXICANO,
+      SessionType.ELO,
       rotationHistory
     );
 
@@ -150,6 +155,7 @@ describe("partitioning", () => {
       },
       playersById,
       SessionMode.MEXICANO,
+      SessionType.ELO,
       rotationHistory
     );
     const freshPartnershipScore = scorePartition(
@@ -159,6 +165,7 @@ describe("partitioning", () => {
       },
       playersById,
       SessionMode.MEXICANO,
+      SessionType.ELO,
       rotationHistory
     );
 
@@ -194,6 +201,7 @@ describe("partitioning", () => {
       },
       createPlayers(["A", "B", "C", "D"]),
       SessionMode.MEXICANO,
+      SessionType.ELO,
       rotationHistory
     );
 
@@ -213,20 +221,21 @@ describe("partitioning", () => {
       { userId: "H" },
     ];
     const playersById = new Map<string, PartitionCandidate>([
-      ["A", { userId: "A", elo: 1500, lastPartnerId: null, gender: "MALE", partnerPreference: "OPEN" }],
-      ["B", { userId: "B", elo: 1490, lastPartnerId: null, gender: "MALE", partnerPreference: "OPEN" }],
-      ["C", { userId: "C", elo: 1480, lastPartnerId: null, gender: "MALE", partnerPreference: "OPEN" }],
-      ["D", { userId: "D", elo: 1000, lastPartnerId: null, gender: "MALE", partnerPreference: "OPEN" }],
-      ["E", { userId: "E", elo: 1010, lastPartnerId: null, gender: "MALE", partnerPreference: "OPEN" }],
-      ["F", { userId: "F", elo: 990, lastPartnerId: null, gender: "MALE", partnerPreference: "OPEN" }],
-      ["G", { userId: "G", elo: 980, lastPartnerId: null, gender: "MALE", partnerPreference: "OPEN" }],
-      ["H", { userId: "H", elo: 970, lastPartnerId: null, gender: "MALE", partnerPreference: "OPEN" }],
+      ["A", { userId: "A", elo: 1500, pointDiff: 0, lastPartnerId: null, gender: "MALE", partnerPreference: "OPEN" }],
+      ["B", { userId: "B", elo: 1490, pointDiff: 0, lastPartnerId: null, gender: "MALE", partnerPreference: "OPEN" }],
+      ["C", { userId: "C", elo: 1480, pointDiff: 0, lastPartnerId: null, gender: "MALE", partnerPreference: "OPEN" }],
+      ["D", { userId: "D", elo: 1000, pointDiff: 0, lastPartnerId: null, gender: "MALE", partnerPreference: "OPEN" }],
+      ["E", { userId: "E", elo: 1010, pointDiff: 0, lastPartnerId: null, gender: "MALE", partnerPreference: "OPEN" }],
+      ["F", { userId: "F", elo: 990, pointDiff: 0, lastPartnerId: null, gender: "MALE", partnerPreference: "OPEN" }],
+      ["G", { userId: "G", elo: 980, pointDiff: 0, lastPartnerId: null, gender: "MALE", partnerPreference: "OPEN" }],
+      ["H", { userId: "H", elo: 970, pointDiff: 0, lastPartnerId: null, gender: "MALE", partnerPreference: "OPEN" }],
     ]);
 
     const selection = findBestQuartetInFairnessWindow(
       rankedCandidates,
       playersById,
       SessionMode.MEXICANO,
+      SessionType.ELO,
       buildRotationHistory([]),
       {
         baselineIds: ["A", "B", "C", "D"],
@@ -254,20 +263,21 @@ describe("partitioning", () => {
       { userId: "O4" },
     ];
     const playersById = new Map<string, PartitionCandidate>([
-      ["L1", { userId: "L1", elo: 1000, lastPartnerId: null, gender: "MALE", partnerPreference: "OPEN" }],
-      ["L2", { userId: "L2", elo: 1000, lastPartnerId: null, gender: "MALE", partnerPreference: "OPEN" }],
-      ["L3", { userId: "L3", elo: 1000, lastPartnerId: null, gender: "MALE", partnerPreference: "OPEN" }],
-      ["L4", { userId: "L4", elo: 1000, lastPartnerId: null, gender: "MALE", partnerPreference: "OPEN" }],
-      ["O1", { userId: "O1", elo: 1500, lastPartnerId: null, gender: "MALE", partnerPreference: "OPEN" }],
-      ["O2", { userId: "O2", elo: 1490, lastPartnerId: null, gender: "MALE", partnerPreference: "OPEN" }],
-      ["O3", { userId: "O3", elo: 1480, lastPartnerId: null, gender: "MALE", partnerPreference: "OPEN" }],
-      ["O4", { userId: "O4", elo: 1470, lastPartnerId: null, gender: "MALE", partnerPreference: "OPEN" }],
+      ["L1", { userId: "L1", elo: 1000, pointDiff: 0, lastPartnerId: null, gender: "MALE", partnerPreference: "OPEN" }],
+      ["L2", { userId: "L2", elo: 1000, pointDiff: 0, lastPartnerId: null, gender: "MALE", partnerPreference: "OPEN" }],
+      ["L3", { userId: "L3", elo: 1000, pointDiff: 0, lastPartnerId: null, gender: "MALE", partnerPreference: "OPEN" }],
+      ["L4", { userId: "L4", elo: 1000, pointDiff: 0, lastPartnerId: null, gender: "MALE", partnerPreference: "OPEN" }],
+      ["O1", { userId: "O1", elo: 1500, pointDiff: 0, lastPartnerId: null, gender: "MALE", partnerPreference: "OPEN" }],
+      ["O2", { userId: "O2", elo: 1490, pointDiff: 0, lastPartnerId: null, gender: "MALE", partnerPreference: "OPEN" }],
+      ["O3", { userId: "O3", elo: 1480, pointDiff: 0, lastPartnerId: null, gender: "MALE", partnerPreference: "OPEN" }],
+      ["O4", { userId: "O4", elo: 1470, pointDiff: 0, lastPartnerId: null, gender: "MALE", partnerPreference: "OPEN" }],
     ]);
 
     const selection = findBestQuartetInFairnessWindow(
       rankedCandidates,
       playersById,
       SessionMode.MEXICANO,
+      SessionType.ELO,
       buildRotationHistory([]),
       {
         baselineIds: ["L1", "O1", "O2", "O3"],
@@ -295,6 +305,7 @@ describe("partitioning", () => {
       ["A", "B", "C", "D"],
       playersById,
       SessionMode.MEXICANO,
+      SessionType.ELO,
       rotationHistory,
       {
         excludedPartitionKey: getPartitionKey(originalPartition),
@@ -322,6 +333,7 @@ describe("partitioning", () => {
       rankedCandidates,
       playersById,
       SessionMode.MEXICANO,
+      SessionType.ELO,
       buildRotationHistory([]),
       6,
       "A|B|C|D"
@@ -345,6 +357,7 @@ describe("partitioning", () => {
       rankedCandidates,
       playersById,
       SessionMode.MEXICANO,
+      SessionType.ELO,
       buildRotationHistory([]),
       {
         baselineIds: ["A", "B", "C", "D"],
@@ -356,5 +369,29 @@ describe("partitioning", () => {
 
     expect(selection).not.toBeNull();
     expect(getQuartetKey(selection!.ids)).toBe("A|B|C|E");
+  });
+
+  it("uses point difference as a tie-breaker in points sessions", () => {
+    const playersById = new Map<string, PartitionCandidate>([
+      ["A", { userId: "A", elo: 6, pointDiff: 12, lastPartnerId: null, gender: "MALE", partnerPreference: "OPEN" }],
+      ["B", { userId: "B", elo: 6, pointDiff: 10, lastPartnerId: null, gender: "MALE", partnerPreference: "OPEN" }],
+      ["C", { userId: "C", elo: 6, pointDiff: -11, lastPartnerId: null, gender: "MALE", partnerPreference: "OPEN" }],
+      ["D", { userId: "D", elo: 6, pointDiff: -9, lastPartnerId: null, gender: "MALE", partnerPreference: "OPEN" }],
+    ]);
+
+    const evaluation = evaluateBestPartition(
+      ["A", "B", "C", "D"],
+      playersById,
+      SessionMode.MEXICANO,
+      SessionType.POINTS,
+      buildRotationHistory([])
+    );
+
+    expect(evaluation?.partition).toEqual({
+      team1: ["A", "C"],
+      team2: ["B", "D"],
+    });
+    expect(evaluation?.score).toBe(0);
+    expect(evaluation?.pointDiffGap).toBe(0);
   });
 });

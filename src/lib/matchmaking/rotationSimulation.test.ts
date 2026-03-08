@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { SessionMode } from "../../types/enums";
+import { SessionMode, SessionType } from "../../types/enums";
 import { rankPlayersByFairness } from "./fairness";
 import {
   buildRotationHistory,
@@ -53,7 +53,8 @@ function chooseMatch(
   players: SimPlayer[],
   completedMatches: MatchHistoryEntry[],
   now: number,
-  sessionMode: SessionMode
+  sessionMode: SessionMode,
+  sessionType: SessionType
 ) {
   const rankedCandidates = rankPlayersByFairness(
     players.map((player) => ({
@@ -94,6 +95,7 @@ function chooseMatch(
       {
         userId: player.userId,
         elo: player.elo,
+        pointDiff: player.pointDiff,
         lastPartnerId: player.lastPartnerId,
         gender: player.gender,
         partnerPreference: player.partnerPreference,
@@ -121,6 +123,7 @@ function chooseMatch(
     rankedCandidates,
     playersById,
     sessionMode,
+    sessionType,
     rotationHistory,
     {
       baselineIds: initialIds,
@@ -139,6 +142,7 @@ function chooseMatch(
       rankedCandidates,
       playersById,
       sessionMode,
+      sessionType,
       rotationHistory,
       MIXICANO_SEARCH_WINDOW
     );
@@ -152,6 +156,7 @@ function chooseMatch(
     selection.partition,
     playersById,
     sessionMode,
+    sessionType,
     rotationHistory
   );
   if (!scoreDetails) {
@@ -172,6 +177,7 @@ function runSimulation({
   sessionMode = SessionMode.MEXICANO,
   pauseWindows = [],
   snapshotRounds = [],
+  sessionType = SessionType.ELO,
 }: {
   playerElos: number[];
   rounds: number;
@@ -179,6 +185,7 @@ function runSimulation({
   sessionMode?: SessionMode;
   pauseWindows?: PauseWindow[];
   snapshotRounds?: number[];
+  sessionType?: SessionType;
 }) {
   const sessionStart = new Date("2026-03-07T00:00:00Z");
   let now = sessionStart.getTime();
@@ -186,6 +193,7 @@ function runSimulation({
   const players: SimPlayer[] = playerElos.map((elo, index) => ({
     userId: `P${index + 1}`,
     elo,
+    pointDiff: 0,
     lastPartnerId: null,
     gender: "MALE",
     partnerPreference: "OPEN",
@@ -198,7 +206,7 @@ function runSimulation({
   }));
   const completedMatches: MatchHistoryEntry[] = [];
   const snapshots: Record<number, Record<string, number>> = {};
-  const teamEloGaps: number[] = [];
+  const teamBalanceGaps: number[] = [];
   let repeatedPartnerTeams = 0;
   let repeatedOpponentPairs = 0;
   let repeatedPods = 0;
@@ -246,13 +254,14 @@ function runSimulation({
         availablePlayers,
         completedMatches,
         now,
-        sessionMode
+        sessionMode,
+        sessionType
       );
 
       if (!selection) break;
 
       selection.ids.forEach((id) => busyIds.add(id));
-      teamEloGaps.push(selection.scoreDetails.teamEloGap);
+      teamBalanceGaps.push(selection.scoreDetails.teamBalanceGap);
       repeatedPartnerTeams += selection.repeatStats.repeatedPartnerTeams;
       repeatedOpponentPairs += selection.repeatStats.repeatedOpponentPairs;
       repeatedPods += Number(selection.repeatStats.repeatedPod);
@@ -303,8 +312,8 @@ function runSimulation({
     max: sortedCounts[sortedCounts.length - 1],
     spread: sortedCounts[sortedCounts.length - 1] - sortedCounts[0],
     avgTeamEloGap:
-      teamEloGaps.reduce((sum, gap) => sum + gap, 0) / Math.max(teamEloGaps.length, 1),
-    p90TeamEloGap: percentile(teamEloGaps, 0.9),
+      teamBalanceGaps.reduce((sum, gap) => sum + gap, 0) / Math.max(teamBalanceGaps.length, 1),
+    p90TeamEloGap: percentile(teamBalanceGaps, 0.9),
     repeatPartnerRate: repeatedPartnerTeams / Math.max(totalTeams, 1),
     repeatOpponentRate: repeatedOpponentPairs / Math.max(totalOpponentPairs, 1),
     repeatPodRate: repeatedPods / Math.max(totalMatches, 1),

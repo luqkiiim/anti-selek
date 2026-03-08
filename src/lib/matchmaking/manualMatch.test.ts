@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { SessionMode } from "../../types/enums";
+import { SessionMode, SessionType } from "../../types/enums";
 import { buildRotationHistory, type PartitionCandidate } from "./partitioning";
 import {
   getManualMatchPlayerIds,
@@ -15,6 +15,7 @@ function createPlayers(entries: Array<[string, string, string]>) {
       {
         userId,
         elo: 1000,
+        pointDiff: 0,
         lastPartnerId: null,
         gender,
         partnerPreference,
@@ -65,6 +66,7 @@ describe("manual match helpers", () => {
         },
         playersById,
         SessionMode.MIXICANO,
+        SessionType.ELO,
         buildRotationHistory([])
       )
     ).toBe(false);
@@ -77,6 +79,7 @@ describe("manual match helpers", () => {
         },
         playersById,
         SessionMode.MIXICANO,
+        SessionType.ELO,
         buildRotationHistory([])
       )
     ).toBe(true);

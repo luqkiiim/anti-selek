@@ -132,8 +132,14 @@ export async function GET(
       sessionPoints: p.sessionPoints,
       elo: getPlayerElo(p.userId, p.user.elo),
       matchesPlayed: matchCounts[p.userId] || 0,
+      pointDiff: pointDiffByUserId[p.userId] || 0,
     }))
-    .sort((a, b) => b.elo - a.elo);
+    .sort((a, b) =>
+      b.sessionPoints - a.sessionPoints ||
+      b.pointDiff - a.pointDiff ||
+      b.elo - a.elo ||
+      a.name.localeCompare(b.name)
+    );
 
   return NextResponse.json({
     sessionPointsLeaderboard,

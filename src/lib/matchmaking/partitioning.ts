@@ -2,14 +2,17 @@ import {
   PartnerPreference,
   PlayerGender,
   SessionMode,
+  SessionType,
 } from "../../types/enums";
 
-const BALANCE_GAP_NORMALIZER = 150;
+const ELO_BALANCE_GAP_NORMALIZER = 150;
+const POINTS_BALANCE_GAP_NORMALIZER = 3;
 const RECENT_HISTORY_LIMIT = 24;
 const RECENT_HISTORY_DECAY = 0.85;
 const EXACT_PARTITION_HISTORY_LIMIT = 8;
 const EXACT_PARTITION_REPEAT_PENALTY = 4;
-const EXACT_PARTITION_BALANCE_TOLERANCE = 10;
+const ELO_EXACT_PARTITION_BALANCE_TOLERANCE = 10;
+const POINTS_EXACT_PARTITION_BALANCE_TOLERANCE = 1.5;
 
 export interface DoublesPartition {
   team1: [string, string];
@@ -27,7 +30,11 @@ export interface MatchHistoryEntry {
 
 export interface PartitionCandidate {
   userId: string;
+  // Matchmaking balance input:
+  // - ELO sessions: persistent Elo
+  // - POINTS sessions: current session points
   elo: number;
+  pointDiff: number;
   lastPartnerId: string | null;
   gender: string;
   partnerPreference: string;
@@ -43,12 +50,14 @@ export interface RotationHistory {
 export interface PartitionEvaluation {
   partition: DoublesPartition;
   score: number;
+  pointDiffGap: number;
   exactPartitionPenalty: number;
 }
 
 export interface PartitionScoreDetails {
   totalScore: number;
-  teamEloGap: number;
+  teamBalanceGap: number;
+  pointDiffGap: number;
   balanceScore: number;
   exactPartitionPenalty: number;
 }
@@ -64,6 +73,7 @@ export interface FallbackQuartetSelection {
   partition: DoublesPartition;
   fairnessScore: number;
   score: number;
+  pointDiffGap: number;
   exactPartitionPenalty: number;
 }
 
@@ -105,14 +115,40 @@ function normalizeScore(rawScore: number, normalizer: number) {
   return Math.min(rawScore / normalizer, 3);
 }
 
-function comparePartitionScoreDetails(
-  left: Pick<PartitionScoreDetails, "teamEloGap" | "exactPartitionPenalty">,
-  right: Pick<PartitionScoreDetails, "teamEloGap" | "exactPartitionPenalty">
-) {
-  const gapDifference = left.teamEloGap - right.teamEloGap;
+function getBalanceGapNormalizer(sessionType: SessionType) {
+  return sessionType === SessionType.POINTS
+    ? POINTS_BALANCE_GAP_NORMALIZER
+    : ELO_BALANCE_GAP_NORMALIZER;
+}
 
-  if (Math.abs(gapDifference) > EXACT_PARTITION_BALANCE_TOLERANCE) {
+function getExactPartitionBalanceTolerance(sessionType: SessionType) {
+  return sessionType === SessionType.POINTS
+    ? POINTS_EXACT_PARTITION_BALANCE_TOLERANCE
+    : ELO_EXACT_PARTITION_BALANCE_TOLERANCE;
+}
+
+function comparePartitionScoreDetails(
+  left: Pick<
+    PartitionScoreDetails,
+    "teamBalanceGap" | "pointDiffGap" | "exactPartitionPenalty"
+  >,
+  right: Pick<
+    PartitionScoreDetails,
+    "teamBalanceGap" | "pointDiffGap" | "exactPartitionPenalty"
+  >,
+  sessionType: SessionType
+) {
+  const gapDifference = left.teamBalanceGap - right.teamBalanceGap;
+
+  if (Math.abs(gapDifference) > getExactPartitionBalanceTolerance(sessionType)) {
     return gapDifference;
+  }
+
+  if (
+    sessionType === SessionType.POINTS &&
+    left.pointDiffGap !== right.pointDiffGap
+  ) {
+    return left.pointDiffGap - right.pointDiffGap;
   }
 
   if (left.exactPartitionPenalty !== right.exactPartitionPenalty) {
@@ -305,6 +341,7 @@ export function scorePartitionDetailed(
   partition: DoublesPartition,
   playersById: Map<string, PartitionCandidate>,
   sessionMode: SessionMode,
+  sessionType: SessionType,
   rotationHistory: RotationHistory
 ): PartitionScoreDetails | null {
   const player1 = playersById.get(partition.team1[0]);
@@ -343,15 +380,22 @@ export function scorePartitionDetailed(
 
   const team1AvgElo = (player1.elo + player2.elo) / 2;
   const team2AvgElo = (player3.elo + player4.elo) / 2;
-  const teamEloGap = Math.abs(team1AvgElo - team2AvgElo);
-  const balanceScore = normalizeScore(teamEloGap, BALANCE_GAP_NORMALIZER);
+  const teamBalanceGap = Math.abs(team1AvgElo - team2AvgElo);
+  const team1AvgPointDiff = (player1.pointDiff + player2.pointDiff) / 2;
+  const team2AvgPointDiff = (player3.pointDiff + player4.pointDiff) / 2;
+  const pointDiffGap = Math.abs(team1AvgPointDiff - team2AvgPointDiff);
+  const balanceScore = normalizeScore(
+    teamBalanceGap,
+    getBalanceGapNormalizer(sessionType)
+  );
   const exactPartitionPenalty =
     (rotationHistory.exactPartitionCounts.get(getPartitionKey(partition)) ?? 0) *
     EXACT_PARTITION_REPEAT_PENALTY;
 
   return {
     totalScore: balanceScore,
-    teamEloGap,
+    teamBalanceGap,
+    pointDiffGap,
     balanceScore,
     exactPartitionPenalty,
   };
@@ -361,10 +405,17 @@ export function scorePartition(
   partition: DoublesPartition,
   playersById: Map<string, PartitionCandidate>,
   sessionMode: SessionMode,
+  sessionType: SessionType,
   rotationHistory: RotationHistory
 ): number | null {
   return (
-    scorePartitionDetailed(partition, playersById, sessionMode, rotationHistory)
+    scorePartitionDetailed(
+      partition,
+      playersById,
+      sessionMode,
+      sessionType,
+      rotationHistory
+    )
       ?.totalScore ?? null
   );
 }
@@ -373,6 +424,7 @@ export function evaluateBestPartition(
   candidateIds: string[],
   playersById: Map<string, PartitionCandidate>,
   sessionMode: SessionMode,
+  sessionType: SessionType,
   rotationHistory: RotationHistory,
   options?: {
     excludedPartitionKey?: string;
@@ -394,11 +446,15 @@ export function evaluateBestPartition(
       partition,
       playersById,
       sessionMode,
+      sessionType,
       rotationHistory
     );
     if (score === null) continue;
 
-    if (!bestScore || comparePartitionScoreDetails(score, bestScore) < 0) {
+    if (
+      !bestScore ||
+      comparePartitionScoreDetails(score, bestScore, sessionType) < 0
+    ) {
       bestScore = score;
       bestPartition = partition;
     }
@@ -407,7 +463,8 @@ export function evaluateBestPartition(
   return bestPartition && bestScore
     ? {
         partition: bestPartition,
-        score: bestScore.teamEloGap,
+        score: bestScore.teamBalanceGap,
+        pointDiffGap: bestScore.pointDiffGap,
         exactPartitionPenalty: bestScore.exactPartitionPenalty,
       }
     : null;
@@ -417,6 +474,7 @@ export function findBestQuartetInFairnessWindow<T extends { userId: string }>(
   rankedCandidates: T[],
   playersById: Map<string, PartitionCandidate>,
   sessionMode: SessionMode,
+  sessionType: SessionType,
   rotationHistory: RotationHistory,
   {
     baselineIds,
@@ -491,25 +549,39 @@ export function findBestQuartetInFairnessWindow<T extends { userId: string }>(
             ids,
             playersById,
             sessionMode,
+            sessionType,
             rotationHistory
           );
           if (!evaluation) continue;
 
+          const evaluationComparison = bestSelection
+            ? comparePartitionScoreDetails(
+                {
+                  teamBalanceGap: evaluation.score,
+                  pointDiffGap: evaluation.pointDiffGap,
+                  exactPartitionPenalty: evaluation.exactPartitionPenalty,
+                },
+                {
+                  teamBalanceGap: bestSelection.score,
+                  pointDiffGap: bestSelection.pointDiffGap,
+                  exactPartitionPenalty: bestSelection.exactPartitionPenalty,
+                },
+                sessionType
+              )
+            : -1;
+
           if (
             !bestSelection ||
-            evaluation.score < bestSelection.score ||
-            (evaluation.score === bestSelection.score &&
-              (evaluation.exactPartitionPenalty <
-                bestSelection.exactPartitionPenalty ||
-                (evaluation.exactPartitionPenalty ===
-                  bestSelection.exactPartitionPenalty &&
-                  fairnessScore < bestSelection.fairnessScore)))
+            evaluationComparison < 0 ||
+            (evaluationComparison === 0 &&
+              fairnessScore < bestSelection.fairnessScore)
           ) {
             bestSelection = {
               ids,
               partition: evaluation.partition,
               fairnessScore,
               score: evaluation.score,
+              pointDiffGap: evaluation.pointDiffGap,
               exactPartitionPenalty: evaluation.exactPartitionPenalty,
             };
           }
@@ -525,6 +597,7 @@ export function findBestFallbackQuartet<T extends { userId: string }>(
   rankedCandidates: T[],
   playersById: Map<string, PartitionCandidate>,
   sessionMode: SessionMode,
+  sessionType: SessionType,
   rotationHistory: RotationHistory,
   maxCandidates = 12,
   excludedQuartetKey?: string
@@ -558,6 +631,7 @@ export function findBestFallbackQuartet<T extends { userId: string }>(
             ids,
             playersById,
             sessionMode,
+            sessionType,
             rotationHistory
           );
 
@@ -568,20 +642,34 @@ export function findBestFallbackQuartet<T extends { userId: string }>(
             0
           );
 
+          const evaluationComparison = bestSelection
+            ? comparePartitionScoreDetails(
+                {
+                  teamBalanceGap: evaluation.score,
+                  pointDiffGap: evaluation.pointDiffGap,
+                  exactPartitionPenalty: evaluation.exactPartitionPenalty,
+                },
+                {
+                  teamBalanceGap: bestSelection.score,
+                  pointDiffGap: bestSelection.pointDiffGap,
+                  exactPartitionPenalty: bestSelection.exactPartitionPenalty,
+                },
+                sessionType
+              )
+            : -1;
+
           if (
             !bestSelection ||
             fairnessScore < bestSelection.fairnessScore ||
             (fairnessScore === bestSelection.fairnessScore &&
-              (evaluation.score < bestSelection.score ||
-                (evaluation.score === bestSelection.score &&
-                  evaluation.exactPartitionPenalty <
-                    bestSelection.exactPartitionPenalty)))
+              evaluationComparison < 0)
           ) {
             bestSelection = {
               ids,
               partition: evaluation.partition,
               fairnessScore,
               score: evaluation.score,
+              pointDiffGap: evaluation.pointDiffGap,
               exactPartitionPenalty: evaluation.exactPartitionPenalty,
             };
           }
@@ -599,6 +687,7 @@ export function findAlternativeQuartetForReshuffle<
   rankedCandidates: T[],
   playersById: Map<string, PartitionCandidate>,
   sessionMode: SessionMode,
+  sessionType: SessionType,
   rotationHistory: RotationHistory,
   options: FairnessWindowQuartetOptions
 ): FallbackQuartetSelection | null {
@@ -606,6 +695,7 @@ export function findAlternativeQuartetForReshuffle<
     rankedCandidates,
     playersById,
     sessionMode,
+    sessionType,
     rotationHistory,
     options
   );
@@ -618,6 +708,7 @@ export function findAlternativeQuartetForReshuffle<
     rankedCandidates,
     playersById,
     sessionMode,
+    sessionType,
     rotationHistory,
     options.maxCandidates,
     options.excludedQuartetKey

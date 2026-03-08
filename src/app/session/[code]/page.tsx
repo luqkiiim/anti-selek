@@ -1017,10 +1017,10 @@ export default function SessionPage() {
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
             <div className={`${sessionData.type === SessionType.ELO ? 'bg-blue-700' : 'bg-blue-600'} px-5 py-4 flex justify-between items-center transition-colors`}>
               <h2 className="text-sm font-black text-white uppercase tracking-widest">
-                {sessionData.type === SessionType.ELO ? 'ELO Rankings' : 'Live Standings'}
+                Live Standings
               </h2>
               <span className="text-[10px] font-bold text-white/70 uppercase tracking-widest">
-                {sessionData.type === SessionType.ELO ? 'Dynamic Ratings' : 'Point Totals'}
+                {sessionData.type === SessionType.ELO ? 'Points + Ratings' : 'Point Totals'}
               </span>
             </div>
             
@@ -1029,7 +1029,7 @@ export default function SessionPage() {
                 className={`w-max sm:w-full table-fixed sm:table-auto ${
                   sessionData.type === SessionType.POINTS
                     ? "min-w-[448px] sm:min-w-[760px]"
-                    : "min-w-[360px] sm:min-w-[640px]"
+                    : "min-w-[448px] sm:min-w-[760px]"
                 }`}
               >
                 <thead className="bg-gray-50/50 border-b border-gray-100">
@@ -1048,6 +1048,7 @@ export default function SessionPage() {
                       </>
                     ) : (
                       <>
+                        <th className="w-11 sm:w-24 px-1 sm:px-4 py-3 text-center text-[8px] sm:text-[10px] font-black text-gray-400 uppercase tracking-wide sm:tracking-widest">Pts</th>
                         <th className="w-14 sm:w-24 px-1 sm:px-4 py-3 text-right text-[8px] sm:text-[10px] font-black text-gray-400 uppercase tracking-wide sm:tracking-widest">
                           {SessionType.ELO}
                         </th>
@@ -1059,9 +1060,13 @@ export default function SessionPage() {
                 </thead>
                 <tbody className="divide-y divide-gray-200">
                   {sessionData.players
+                    .slice()
                     .sort((a, b) => 
                       sessionData.type === SessionType.ELO 
-                        ? b.user.elo - a.user.elo 
+                        ? b.sessionPoints - a.sessionPoints ||
+                          calculatePlayerPointDiff(b.userId) - calculatePlayerPointDiff(a.userId) ||
+                          b.user.elo - a.user.elo ||
+                          a.user.name.localeCompare(b.user.name)
                         : b.sessionPoints - a.sessionPoints ||
                           calculatePlayerPointDiff(b.userId) - calculatePlayerPointDiff(a.userId) ||
                           a.user.name.localeCompare(b.user.name)
@@ -1274,6 +1279,9 @@ export default function SessionPage() {
                             </>
                           ) : (
                             <>
+                              <td className="w-11 sm:w-24 px-1 sm:px-4 py-3 sm:py-4 whitespace-nowrap text-center">
+                                <span className="text-[13px] sm:text-base font-black text-blue-700">{player.sessionPoints}</span>
+                              </td>
                               <td className="w-14 sm:w-24 px-1 sm:px-4 py-3 sm:py-4 whitespace-nowrap text-right">
                                 <span className="text-[13px] sm:text-base font-black text-blue-700">{player.user.elo}</span>
                               </td>
