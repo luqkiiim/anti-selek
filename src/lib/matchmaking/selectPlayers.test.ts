@@ -209,6 +209,33 @@ describe("selectMatchPlayers (Match Rate Logic)", () => {
     expect(othersInSelection.length).toBe(2);
   });
 
+  it("should not treat a normal underplayed cohort as a rejoin bubble", () => {
+    const t0 = Date.now();
+
+    const lowCohort: PlayerCandidate[] = Array.from({ length: 4 }, (_, i) => ({
+      userId: `low_${i}`,
+      matchesPlayed: 8,
+      joinedAt: new Date(t0 - 200 * 60 * 1000),
+      inactiveSeconds: 0,
+      availableSince: new Date(t0 - 100 * 60 * 1000),
+    }));
+
+    const others: PlayerCandidate[] = Array.from({ length: 6 }, (_, i) => ({
+      userId: `other_${i}`,
+      matchesPlayed: 9,
+      joinedAt: new Date(t0 - 200 * 60 * 1000),
+      inactiveSeconds: 0,
+      availableSince: new Date(t0 - 10 * 60 * 1000),
+    }));
+
+    const selected = selectMatchPlayers([...lowCohort, ...others]);
+    const selectedIds = selected!.map((player) => player.userId);
+
+    lowCohort.forEach((player) => {
+      expect(selectedIds).toContain(player.userId);
+    });
+  });
+
   it("should prioritize by availableSince when rates are equal", () => {
     const t0 = Date.now();
     
