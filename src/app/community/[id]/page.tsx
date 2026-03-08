@@ -544,8 +544,8 @@ export default function CommunityPage() {
                 </div>
                 <p className="text-[10px] font-bold text-blue-100 uppercase tracking-wider">
                   {sessionType === SessionType.POINTS
-                    ? "Win = 3 points. Rankings by points, then point difference."
-                    : "Ratings update each approved match. Rankings shown by live ELO."}
+                    ? "Play for points. Standings decide the winner."
+                    : "Play rating-balanced matches. Ratings update after each result."}
                 </p>
 
                 <div className="grid grid-cols-2 gap-2">
@@ -572,8 +572,8 @@ export default function CommunityPage() {
                 </div>
                 <p className="text-[10px] font-bold text-blue-100 uppercase tracking-wider">
                   {sessionMode === SessionMode.MEXICANO
-                    ? "Open doubles rotation. Teams are balanced by current ratings and fairness."
-                    : "Supports mixed/women rules. Female defaults to mixed/women only; set OPEN for women allowed in men's doubles."}
+                    ? "Open doubles rotation."
+                    : "Mixed doubles rules enabled."}
                 </p>
 
                 <div className="space-y-1">
