@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
+import { FlashMessage, HeroCard, StatCard } from "@/components/ui/chrome";
 import {
   MatchStatus,
   PartnerPreference,
@@ -692,8 +693,11 @@ export default function SessionPage() {
 
   if (status === "loading" || !sessionData) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      <div className="app-page flex items-center justify-center px-6">
+        <div className="app-panel flex flex-col items-center gap-4 px-8 py-8">
+          <div className="h-12 w-12 animate-spin rounded-full border-4 border-blue-600 border-t-transparent"></div>
+          <p className="app-eyebrow">Loading session</p>
+        </div>
       </div>
     );
   }
@@ -763,20 +767,34 @@ export default function SessionPage() {
   const playersNotInSession = communityPlayers
     .filter(cp => !sessionData.players.some(sp => sp.userId === cp.id))
     .filter(cp => cp.name.toLowerCase().includes(rosterSearch.toLowerCase()));
+  const activeMatchesCount = sessionData.courts.filter((court) => court.currentMatch !== null).length;
+  const pausedPlayersCount = sessionData.players.filter((player) => player.isPaused).length;
+  const guestPlayersCount = sessionData.players.filter((player) => player.isGuest).length;
+  const sortedPlayers = sessionData.players
+    .slice()
+    .sort((a, b) =>
+      sessionData.type === SessionType.ELO
+        ? b.sessionPoints - a.sessionPoints ||
+          calculatePlayerPointDiff(b.userId) - calculatePlayerPointDiff(a.userId) ||
+          b.user.elo - a.user.elo ||
+          a.user.name.localeCompare(b.user.name)
+        : b.sessionPoints - a.sessionPoints ||
+          calculatePlayerPointDiff(b.userId) - calculatePlayerPointDiff(a.userId) ||
+          a.user.name.localeCompare(b.user.name)
+    );
 
   return (
-    <div className="min-h-screen bg-white flex flex-col">
-      {/* Mobile-Friendly Header */}
-      <nav className="bg-white/95 backdrop-blur shadow-sm sticky top-0 z-30 border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 py-3 flex flex-wrap gap-3 justify-between items-center">
+    <div className="app-page">
+      <nav className="app-topbar">
+        <div className="app-topbar-inner max-w-7xl flex flex-wrap gap-3">
           <div className="flex flex-col">
-            <h1 className="text-lg font-black text-gray-900 leading-tight truncate max-w-[160px] sm:max-w-[260px] md:max-w-[360px]">
+            <h1 className="text-lg font-semibold text-gray-900 leading-tight truncate max-w-[180px] sm:max-w-[280px] md:max-w-[420px]">
               {sessionData.name}
             </h1>
             <div className="flex items-center gap-2">
-              <span className="text-[10px] font-black bg-blue-100 text-blue-700 border border-blue-200 px-2 py-0.5 rounded uppercase tracking-wider">{sessionData.code}</span>
-              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{sessionData.status}</span>
-              <span className="text-[10px] font-bold text-gray-500 bg-gray-100 border border-gray-200 px-2 py-0.5 rounded uppercase tracking-wider">
+              <span className="app-chip app-chip-accent app-mono">{sessionData.code}</span>
+              <span className="app-chip app-chip-neutral">{sessionData.status}</span>
+              <span className="app-chip app-chip-neutral">
                 {sessionData.mode}
               </span>
             </div>
@@ -785,28 +803,43 @@ export default function SessionPage() {
             onClick={() =>
               router.push(sessionData.communityId ? `/community/${sessionData.communityId}` : "/")
             }
-            className="bg-gray-100 text-gray-600 px-3 py-1.5 rounded-lg text-sm font-bold active:scale-95 transition-transform"
+            className="app-button-secondary px-4 py-2"
           >
             Back
           </button>
         </div>
       </nav>
 
-      <main className="max-w-7xl mx-auto px-4 py-4 w-full flex-1">
-        {error && (
-          <div className="bg-red-500 text-white px-4 py-3 rounded-xl mb-4 flex justify-between items-center shadow-lg">
-            <span className="text-sm font-bold">{error}</span>
-            <button onClick={() => setError("")} className="font-bold text-xl ml-2 leading-none">&times;</button>
-          </div>
-        )}
+      <main className="app-shell max-w-7xl space-y-6">
+        <HeroCard
+          eyebrow="Live session"
+          title={sessionData.name}
+          description="Manage courts, keep the player pool moving, and review standings from a single session board designed for court-side use."
+          meta={
+            <>
+              <span className="app-chip app-chip-accent app-mono">{sessionData.code}</span>
+              <span className="app-chip app-chip-neutral">{sessionData.type}</span>
+              <span className="app-chip app-chip-neutral">{sessionData.mode}</span>
+            </>
+          }
+        />
+
+        {error ? <FlashMessage tone="error">{error}</FlashMessage> : null}
+
+        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <StatCard label="Players" value={sessionData.players.length} detail={`${guestPlayersCount} guests`} accent />
+          <StatCard label="Active courts" value={activeMatchesCount} detail={`${sessionData.courts.length} total courts`} />
+          <StatCard label="Paused" value={pausedPlayersCount} detail={pausedPlayersCount > 0 ? "Temporarily out of rotation" : "Everyone ready"} />
+          <StatCard label="Status" value={sessionData.status} detail={sessionData.type === SessionType.ELO ? "Ratings enabled" : "Points race"} />
+        </section>
 
         {/* Admin Quick Actions */}
         {isAdmin && (
-          <div className="flex overflow-x-auto gap-2 pb-4 scrollbar-hide no-scrollbar">
+          <div className="app-panel flex flex-wrap gap-3 p-4">
             {sessionData.status === SessionStatus.WAITING && (
               <button
                 onClick={startSession}
-                className="whitespace-nowrap bg-green-600 text-white px-4 py-2.5 rounded-xl font-black text-sm uppercase tracking-wider shadow-md active:bg-green-700 active:scale-95 transition-all"
+                className="app-button-primary"
               >
                 Start Session
               </button>
@@ -820,14 +853,14 @@ export default function SessionPage() {
                 setGuestInitialElo(1000);
                 setShowRosterModal(true);
               }}
-              className="whitespace-nowrap bg-blue-600 text-white px-4 py-2.5 rounded-xl font-black text-sm uppercase tracking-wider shadow-md active:bg-blue-700 active:scale-95 transition-all"
+              className="app-button-secondary"
             >
               Add Players
             </button>
             {sessionData.status === SessionStatus.ACTIVE && (
               <button
                 onClick={endSession}
-                className="whitespace-nowrap bg-red-600 text-white px-4 py-2.5 rounded-xl font-black text-sm uppercase tracking-wider shadow-md active:bg-red-700 active:scale-95 transition-all"
+                className="app-button-danger"
               >
                 End Session
               </button>
@@ -1012,26 +1045,126 @@ export default function SessionPage() {
             })}
         </div>
 
-        {/* Combined Mobile Leaderboard / Standings */}
         <div className="space-y-6">
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+          <div className="app-panel overflow-hidden">
             <div className={`${sessionData.type === SessionType.ELO ? 'bg-blue-700' : 'bg-blue-600'} px-5 py-4 flex justify-between items-center transition-colors`}>
               <h2 className="text-sm font-black text-white uppercase tracking-widest">
                 Live Standings
               </h2>
               <span className="text-[10px] font-bold text-white/70 uppercase tracking-widest">
-                {sessionData.type === SessionType.ELO ? 'Points + Ratings' : 'Point Totals'}
+                {sessionData.type === SessionType.ELO ? "Points + Ratings" : "Point Totals"}
               </span>
             </div>
-            
-            <div className="overflow-x-auto overscroll-x-contain">
-              <table
-                className={`w-max sm:w-full table-fixed sm:table-auto ${
-                  sessionData.type === SessionType.POINTS
-                    ? "min-w-[448px] sm:min-w-[760px]"
-                    : "min-w-[448px] sm:min-w-[760px]"
-                }`}
-              >
+
+            <div className="space-y-3 p-4 md:hidden">
+              {sortedPlayers.map((player, idx) => {
+                const stats = calculatePlayerSessionStats(player.userId);
+                const isMe = player.userId === currentUserId;
+                const canToggle = isAdmin || isMe;
+                const pointDiff = calculatePlayerPointDiff(player.userId);
+
+                return (
+                  <article
+                    key={player.userId}
+                    className={`app-subcard p-4 ${player.isPaused ? "opacity-55" : ""}`}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className={`app-chip ${
+                            idx === 0
+                              ? "app-chip-warning"
+                              : idx === 1
+                                ? "app-chip-neutral"
+                                : idx === 2
+                                  ? "app-chip-danger"
+                                  : "app-chip-neutral"
+                          }`}>
+                            #{idx + 1}
+                          </span>
+                          <Link
+                            href={
+                              sessionData.communityId && !player.isGuest
+                                ? `/profile/${player.user.id}?communityId=${sessionData.communityId}`
+                                : `/profile/${player.user.id}`
+                            }
+                            className="truncate text-base font-semibold text-gray-900 hover:text-blue-600"
+                          >
+                            {player.user.name}
+                          </Link>
+                          {isMe ? <span className="app-chip app-chip-accent">Me</span> : null}
+                          {player.isGuest ? <span className="app-chip app-chip-neutral">Guest</span> : null}
+                        </div>
+                        <p className="mt-2 text-sm text-gray-600">
+                          {sessionData.type === SessionType.ELO ? `ELO ${player.user.elo}` : `Point diff ${pointDiff > 0 ? `+${pointDiff}` : pointDiff}`}
+                        </p>
+                      </div>
+
+                      <div className="flex flex-wrap justify-end gap-2">
+                        {canToggle ? (
+                          <button
+                            onClick={(e) => {
+                              e.preventDefault();
+                              togglePausePlayer(player.userId, player.isPaused);
+                            }}
+                            className={`app-chip ${player.isPaused ? "app-chip-danger" : "app-chip-neutral"}`}
+                          >
+                            {player.isPaused ? "Resume" : "Pause"}
+                          </button>
+                        ) : null}
+                        {isAdmin ? (
+                          <button
+                            type="button"
+                            onClick={(e) => togglePreferenceEditor(player.userId, e.currentTarget)}
+                            className="app-chip app-chip-accent"
+                          >
+                            Edit
+                          </button>
+                        ) : null}
+                      </div>
+                    </div>
+
+                    <div className="mt-4 grid grid-cols-2 gap-3">
+                      <div className="app-panel-muted p-3">
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">Points</p>
+                        <p className="mt-2 text-lg font-semibold text-gray-900">{player.sessionPoints}</p>
+                      </div>
+                      <div className="app-panel-muted p-3">
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">
+                          {sessionData.type === SessionType.ELO ? "ELO" : "Diff"}
+                        </p>
+                        <p className="mt-2 text-lg font-semibold text-gray-900">
+                          {sessionData.type === SessionType.ELO
+                            ? player.user.elo
+                            : pointDiff > 0
+                              ? `+${pointDiff}`
+                              : pointDiff}
+                        </p>
+                      </div>
+                      <div className="app-panel-muted p-3">
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">Matches</p>
+                        <p className="mt-2 text-lg font-semibold text-gray-900">{stats.played}</p>
+                      </div>
+                      <div className="app-panel-muted p-3">
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">W/L</p>
+                        <p className="mt-2 text-lg font-semibold text-gray-900">
+                          <span className="text-green-600">{stats.wins}</span>
+                          <span className="text-gray-400"> / </span>
+                          <span className="text-red-500">{stats.losses}</span>
+                        </p>
+                      </div>
+                    </div>
+
+                    {savingPreferencesFor === player.userId ? (
+                      <p className="mt-3 text-xs font-semibold uppercase tracking-[0.18em] text-gray-500">Saving...</p>
+                    ) : null}
+                  </article>
+                );
+              })}
+            </div>
+
+            <div className="hidden overflow-x-auto overscroll-x-contain md:block">
+              <table className="min-w-[760px] w-full table-auto">
                 <thead className="bg-gray-50/50 border-b border-gray-100">
                   <tr>
                     <th className="w-8 sm:w-10 px-1.5 sm:px-2 py-3 text-left text-[9px] sm:text-[10px] font-black text-gray-400 uppercase tracking-widest">#</th>
@@ -1059,19 +1192,7 @@ export default function SessionPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
-                  {sessionData.players
-                    .slice()
-                    .sort((a, b) => 
-                      sessionData.type === SessionType.ELO 
-                        ? b.sessionPoints - a.sessionPoints ||
-                          calculatePlayerPointDiff(b.userId) - calculatePlayerPointDiff(a.userId) ||
-                          b.user.elo - a.user.elo ||
-                          a.user.name.localeCompare(b.user.name)
-                        : b.sessionPoints - a.sessionPoints ||
-                          calculatePlayerPointDiff(b.userId) - calculatePlayerPointDiff(a.userId) ||
-                          a.user.name.localeCompare(b.user.name)
-                    )
-                    .map((player, idx) => {
+                  {sortedPlayers.map((player, idx) => {
                       const stats = calculatePlayerSessionStats(player.userId);
                       const isMe = player.userId === currentUserId;
                       const canToggle = isAdmin || isMe;

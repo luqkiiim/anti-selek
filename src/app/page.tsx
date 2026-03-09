@@ -1,9 +1,18 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { useSession, signOut } from "next-auth/react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { signOut, useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
+
+import {
+  EmptyState,
+  FlashMessage,
+  HeroCard,
+  ModalFrame,
+  SectionCard,
+  StatCard,
+} from "@/components/ui/chrome";
 
 interface Community {
   id: string;
@@ -42,7 +51,10 @@ export default function Home() {
   const fetchCommunities = useCallback(async () => {
     const res = await fetch("/api/communities");
     const data = await safeJson(res);
-    if (!res.ok) throw new Error(data.error || "Failed to load communities");
+    if (!res.ok) {
+      throw new Error(data.error || "Failed to load communities");
+    }
+
     setCommunities(Array.isArray(data) ? (data as Community[]) : []);
   }, [safeJson]);
 
@@ -68,6 +80,7 @@ export default function Home() {
 
   const createCommunity = async () => {
     if (!newCommunityName.trim()) return;
+
     setCreatingCommunity(true);
     setError("");
     try {
@@ -89,6 +102,7 @@ export default function Home() {
       setNewCommunityPassword("");
       setIsCreateCommunityOpen(false);
       await fetchCommunities();
+
       if (data?.id) {
         router.push(`/community/${data.id}`);
       }
@@ -101,6 +115,7 @@ export default function Home() {
 
   const joinCommunity = async () => {
     if (!joinCommunityName.trim()) return;
+
     setJoiningCommunity(true);
     setError("");
     try {
@@ -122,6 +137,7 @@ export default function Home() {
       setJoinCommunityPassword("");
       setIsJoinCommunityOpen(false);
       await fetchCommunities();
+
       if (data?.id) {
         router.push(`/community/${data.id}`);
       }
@@ -132,185 +148,215 @@ export default function Home() {
     }
   };
 
+  const dashboardStats = useMemo(() => {
+    const adminCount = communities.filter((community) => community.role === "ADMIN").length;
+    const totalMembers = communities.reduce((sum, community) => sum + community.membersCount, 0);
+    const totalSessions = communities.reduce((sum, community) => sum + community.sessionsCount, 0);
+
+    return { adminCount, totalMembers, totalSessions };
+  }, [communities]);
+
   if (status === "loading" || loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-6">
-        <div className="flex flex-col items-center gap-4">
-          <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-          <p className="text-gray-500 font-bold uppercase tracking-widest text-xs">Loading Arena...</p>
+      <div className="app-page flex items-center justify-center px-6">
+        <div className="app-panel flex flex-col items-center gap-4 px-8 py-8">
+          <div className="h-12 w-12 animate-spin rounded-full border-4 border-blue-600 border-t-transparent" />
+          <p className="app-eyebrow">Loading dashboard</p>
         </div>
       </div>
     );
   }
 
   return (
-    <main className="min-h-screen bg-gray-50 pb-20">
-      <div className="bg-white border-b border-gray-100 px-6 py-4 flex justify-between items-center sticky top-0 z-10 shadow-sm">
-        <div className="flex items-center gap-3">
-          <div className="bg-blue-600 text-white p-2 rounded-xl shadow-blue-200 shadow-lg">
-            <span className="text-xl">A</span>
-          </div>
-          <div>
-            <h1 className="text-lg font-black text-gray-900 tracking-tight leading-none">ANTI-SELEK</h1>
-            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Community Tournaments</p>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-4">
-          <button
-            onClick={() => signOut()}
-            className="text-xs font-black text-red-500 uppercase tracking-wider active:scale-95 transition-all"
-          >
-            Logout
-          </button>
-        </div>
-      </div>
-
-      <div className="max-w-2xl mx-auto px-6 pt-8 space-y-8">
-        <div className="bg-white p-6 rounded-3xl shadow-md border border-gray-100 space-y-4">
-          <div className="flex items-center justify-between gap-3">
-            <h3 className="text-sm font-black text-gray-900 uppercase tracking-widest">Communities</h3>
-            <div className="flex items-center gap-2">
+    <main className="app-page">
+      <div className="app-shell-narrow space-y-6">
+        <HeroCard
+          eyebrow="Dashboard"
+          title="Anti-Selek"
+          description="Manage badminton communities, launch tournaments quickly, and jump straight back into the sessions you already belong to."
+          meta={<span className="app-chip app-chip-neutral">Community tournaments</span>}
+          actions={
+            <>
               <button
+                type="button"
                 onClick={() => {
                   setError("");
                   setIsJoinCommunityOpen(true);
                 }}
-                className="bg-gray-900 text-white px-3 py-2 rounded-xl font-black uppercase text-[10px] active:scale-95 transition-all shadow-lg"
+                className="app-button-secondary"
               >
-                Join
+                Join Community
               </button>
               <button
+                type="button"
                 onClick={() => {
                   setError("");
                   setIsCreateCommunityOpen(true);
                 }}
-                className="bg-blue-600 text-white px-3 py-2 rounded-xl font-black uppercase text-[10px] active:scale-95 transition-all shadow-lg"
+                className="app-button-primary"
               >
-                Create
+                Create Community
               </button>
-            </div>
-          </div>
+              <button type="button" onClick={() => signOut()} className="app-button-dark">
+                Logout
+              </button>
+            </>
+          }
+        />
 
-          <div className="space-y-2">
-            {!communities.length ? (
-              <div className="bg-gray-50 border-2 border-dashed border-gray-100 rounded-2xl p-4 text-center">
-                <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">No communities yet</p>
-              </div>
-            ) : (
-              communities.map((c) => (
+        {error ? <FlashMessage tone="error">{error}</FlashMessage> : null}
+
+        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <StatCard label="Communities" value={communities.length} detail="Joined groups in your dashboard" accent />
+          <StatCard label="Admin access" value={dashboardStats.adminCount} detail="Communities you can manage" />
+          <StatCard label="Tracked members" value={dashboardStats.totalMembers} detail="Combined members across communities" />
+          <StatCard label="Tournament history" value={dashboardStats.totalSessions} detail="Sessions created so far" />
+        </section>
+
+        <SectionCard
+          eyebrow="Your spaces"
+          title="Communities"
+          description="Open a community to view its leaderboard, host a new tournament, or continue one that is already running."
+          action={<span className="app-chip app-chip-neutral">{communities.length} listed</span>}
+        >
+          {communities.length === 0 ? (
+            <EmptyState
+              title="No communities yet"
+              detail="Create your first group or join an existing one with its community name and password."
+            />
+          ) : (
+            <div className="grid gap-4">
+              {communities.map((community) => (
                 <Link
-                  key={c.id}
-                  href={`/community/${c.id}`}
-                  className="block rounded-2xl p-4 border-2 border-gray-100 bg-gray-50 transition-all hover:border-blue-500 hover:bg-blue-50"
+                  key={community.id}
+                  href={`/community/${community.id}`}
+                  className="app-subcard block p-4 transition hover:-translate-y-0.5 hover:border-blue-300 hover:bg-blue-50"
                 >
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="text-sm font-black text-gray-900">{c.name}</p>
-                      <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">
-                        {c.membersCount} Members - {c.sessionsCount} Tournaments
+                  <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h3 className="text-lg font-semibold text-gray-900">{community.name}</h3>
+                        <span className={`app-chip ${community.role === "ADMIN" ? "app-chip-accent" : "app-chip-neutral"}`}>
+                          {community.role}
+                        </span>
+                        {community.isPasswordProtected ? (
+                          <span className="app-chip app-chip-warning">Protected</span>
+                        ) : null}
+                      </div>
+                      <p className="mt-2 text-sm text-gray-600">
+                        {community.membersCount} members, {community.sessionsCount} tournaments.
                       </p>
                     </div>
-                    <div className="text-right">
-                      <p className="text-[10px] font-black uppercase tracking-wider text-blue-600">{c.role}</p>
-                      {c.isPasswordProtected && (
-                        <p className="text-[9px] font-bold uppercase tracking-wider text-gray-400">Protected</p>
-                      )}
+
+                    <div className="grid shrink-0 grid-cols-2 gap-3 sm:min-w-[12rem]">
+                      <div className="app-panel-muted px-3 py-3">
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">Members</p>
+                        <p className="mt-2 text-lg font-semibold text-gray-900">{community.membersCount}</p>
+                      </div>
+                      <div className="app-panel-muted px-3 py-3">
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">Tournaments</p>
+                        <p className="mt-2 text-lg font-semibold text-gray-900">{community.sessionsCount}</p>
+                      </div>
                     </div>
                   </div>
                 </Link>
-              ))
-            )}
-          </div>
-        </div>
+              ))}
+            </div>
+          )}
+        </SectionCard>
       </div>
 
-      {isCreateCommunityOpen && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center p-6">
-          <div className="absolute inset-0 bg-black/40" onClick={() => setIsCreateCommunityOpen(false)}></div>
-          <div className="relative w-full max-w-lg bg-white rounded-3xl shadow-2xl border border-gray-100 p-6 space-y-3">
-            <h3 className="text-sm font-black text-gray-900 uppercase tracking-widest">Create Community</h3>
-            <input
-              type="text"
-              value={newCommunityName}
-              onChange={(e) => setNewCommunityName(e.target.value)}
-              placeholder="Unique Community Name"
-              className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl px-4 py-3 font-bold focus:outline-none focus:border-blue-500 transition-all"
-            />
-            <input
-              type="password"
-              value={newCommunityPassword}
-              onChange={(e) => setNewCommunityPassword(e.target.value)}
-              placeholder="Optional Password"
-              className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl px-4 py-3 font-bold focus:outline-none focus:border-blue-500 transition-all"
-            />
-            <div className="flex gap-2">
-              <button
-                onClick={() => setIsCreateCommunityOpen(false)}
-                className="flex-1 bg-gray-100 text-gray-700 px-4 py-3 rounded-2xl font-black uppercase text-xs active:scale-95 transition-all"
-              >
+      {isCreateCommunityOpen ? (
+        <ModalFrame
+          title="Create community"
+          subtitle="Set up a new club space with an optional password."
+          onClose={() => setIsCreateCommunityOpen(false)}
+          footer={
+            <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+              <button type="button" onClick={() => setIsCreateCommunityOpen(false)} className="app-button-secondary">
                 Cancel
               </button>
               <button
+                type="button"
                 onClick={createCommunity}
                 disabled={creatingCommunity || !newCommunityName.trim()}
-                className="flex-1 bg-blue-600 text-white px-4 py-3 rounded-2xl font-black uppercase text-xs active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                className="app-button-primary"
               >
                 {creatingCommunity ? "Creating..." : "Create"}
               </button>
             </div>
+          }
+        >
+          <div className="space-y-4 px-4 py-4 sm:px-5">
+            <label className="block space-y-2 text-sm font-medium text-gray-900">
+              <span>Community name</span>
+              <input
+                type="text"
+                value={newCommunityName}
+                onChange={(e) => setNewCommunityName(e.target.value)}
+                placeholder="Unique community name"
+                className="field"
+              />
+            </label>
+            <label className="block space-y-2 text-sm font-medium text-gray-900">
+              <span>Password</span>
+              <input
+                type="password"
+                value={newCommunityPassword}
+                onChange={(e) => setNewCommunityPassword(e.target.value)}
+                placeholder="Optional"
+                className="field"
+              />
+            </label>
           </div>
-        </div>
-      )}
+        </ModalFrame>
+      ) : null}
 
-      {isJoinCommunityOpen && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center p-6">
-          <div className="absolute inset-0 bg-black/40" onClick={() => setIsJoinCommunityOpen(false)}></div>
-          <div className="relative w-full max-w-lg bg-white rounded-3xl shadow-2xl border border-gray-100 p-6 space-y-3">
-            <h3 className="text-sm font-black text-gray-900 uppercase tracking-widest">Join Community</h3>
-            <input
-              type="text"
-              value={joinCommunityName}
-              onChange={(e) => setJoinCommunityName(e.target.value)}
-              placeholder="Community Name"
-              className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl px-4 py-3 font-bold focus:outline-none focus:border-blue-500 transition-all"
-            />
-            <input
-              type="password"
-              value={joinCommunityPassword}
-              onChange={(e) => setJoinCommunityPassword(e.target.value)}
-              placeholder="Password (if required)"
-              className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl px-4 py-3 font-bold focus:outline-none focus:border-blue-500 transition-all"
-            />
-            <div className="flex gap-2">
-              <button
-                onClick={() => setIsJoinCommunityOpen(false)}
-                className="flex-1 bg-gray-100 text-gray-700 px-4 py-3 rounded-2xl font-black uppercase text-xs active:scale-95 transition-all"
-              >
+      {isJoinCommunityOpen ? (
+        <ModalFrame
+          title="Join community"
+          subtitle="Enter the community name and password if the group is protected."
+          onClose={() => setIsJoinCommunityOpen(false)}
+          footer={
+            <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+              <button type="button" onClick={() => setIsJoinCommunityOpen(false)} className="app-button-secondary">
                 Cancel
               </button>
               <button
+                type="button"
                 onClick={joinCommunity}
                 disabled={joiningCommunity || !joinCommunityName.trim()}
-                className="flex-1 bg-gray-900 text-white px-4 py-3 rounded-2xl font-black uppercase text-xs active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                className="app-button-dark"
               >
                 {joiningCommunity ? "Joining..." : "Join"}
               </button>
             </div>
+          }
+        >
+          <div className="space-y-4 px-4 py-4 sm:px-5">
+            <label className="block space-y-2 text-sm font-medium text-gray-900">
+              <span>Community name</span>
+              <input
+                type="text"
+                value={joinCommunityName}
+                onChange={(e) => setJoinCommunityName(e.target.value)}
+                placeholder="Community name"
+                className="field"
+              />
+            </label>
+            <label className="block space-y-2 text-sm font-medium text-gray-900">
+              <span>Password</span>
+              <input
+                type="password"
+                value={joinCommunityPassword}
+                onChange={(e) => setJoinCommunityPassword(e.target.value)}
+                placeholder="If required"
+                className="field"
+              />
+            </label>
           </div>
-        </div>
-      )}
-
-      {error && (
-        <div className="fixed bottom-6 left-6 right-6 z-50">
-          <div className="bg-red-600 text-white px-6 py-4 rounded-2xl shadow-2xl flex justify-between items-center">
-            <p className="text-xs font-black uppercase tracking-wide">{error}</p>
-            <button onClick={() => setError("")} className="font-black">
-              x
-            </button>
-          </div>
-        </div>
-      )}
+        </ModalFrame>
+      ) : null}
     </main>
   );
 }

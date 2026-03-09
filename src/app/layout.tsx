@@ -1,16 +1,17 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { IBM_Plex_Mono, Space_Grotesk } from "next/font/google";
 import "./globals.css";
 import { Providers } from "@/components/Providers";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const headingFont = Space_Grotesk({
+  variable: "--font-heading",
   subsets: ["latin"],
 });
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
+const monoFont = IBM_Plex_Mono({
+  variable: "--font-mono",
   subsets: ["latin"],
+  weight: ["400", "500"],
 });
 
 export const metadata: Metadata = {
@@ -25,10 +26,13 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-      >
-        <Providers>{children}</Providers>
+      <body className={`${headingFont.variable} ${monoFont.variable} antialiased`}>
+        <div className="relative min-h-screen overflow-x-hidden">
+          <div className="pointer-events-none absolute inset-x-0 top-0 h-80 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.9),_transparent_60%)]" />
+          <div className="pointer-events-none absolute left-[-8rem] top-20 h-56 w-56 rounded-full bg-[rgba(77,139,91,0.12)] blur-3xl" />
+          <div className="pointer-events-none absolute right-[-7rem] top-28 h-64 w-64 rounded-full bg-[rgba(232,143,116,0.18)] blur-3xl" />
+          <Providers>{children}</Providers>
+        </div>
       </body>
     </html>
   );

@@ -1,8 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
 import { useSession } from "next-auth/react";
-import { useRouter, useParams, useSearchParams } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
+
+import { EmptyState, FlashMessage, HeroCard, SectionCard, StatCard } from "@/components/ui/chrome";
 
 interface UserStats {
   user: {
@@ -55,10 +58,14 @@ export default function ProfilePage() {
   useEffect(() => {
     const fetchData = async () => {
       if (!id) return;
+
       try {
         const query = communityId ? `?communityId=${encodeURIComponent(communityId)}` : "";
         const res = await fetch(`/api/users/${id}/stats${query}`);
-        if (!res.ok) throw new Error("Failed to load profile");
+        if (!res.ok) {
+          throw new Error("Failed to load profile");
+        }
+
         const json = await res.json();
         setData(json);
       } catch (err) {
@@ -74,143 +81,134 @@ export default function ProfilePage() {
     }
   }, [id, session, communityId]);
 
+  const pointDifferential = useMemo(() => {
+    if (!data) return 0;
+    return data.stats.pointsScored - data.stats.pointsConceded;
+  }, [data]);
+
   if (status === "loading" || loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        Loading...
+      <div className="app-page flex items-center justify-center px-6">
+        <div className="app-panel px-8 py-8">
+          <p className="app-eyebrow">Loading profile</p>
+        </div>
       </div>
     );
   }
 
   if (error || !data) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <p className="text-red-500 mb-4">{error || "Profile not found"}</p>
-          <button
-            onClick={() => router.back()}
-            className="text-blue-600 hover:underline"
-          >
-            Go Back
-          </button>
+      <main className="app-page">
+        <div className="app-shell-narrow">
+          <FlashMessage tone="error">
+            {error || "Profile not found"}
+          </FlashMessage>
+          <div className="mt-6">
+            <button type="button" onClick={() => router.back()} className="app-button-secondary">
+              Go back
+            </button>
+          </div>
         </div>
-      </div>
+      </main>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-100">
-      <nav className="bg-white shadow mb-6">
-        <div className="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
-          <h1 className="text-xl font-bold text-gray-900">Player Profile</h1>
-          <button
-            onClick={() => router.back()}
-            className="text-sm text-blue-600 hover:underline"
-          >
-            Back
-          </button>
-        </div>
-      </nav>
+    <main className="app-page">
+      <div className="app-shell space-y-6">
+        <HeroCard
+          eyebrow="Player profile"
+          title={data.user.name}
+          description={`Joined ${new Date(data.user.createdAt).toLocaleDateString()}. Review lifetime performance, tournament history, and ${data.context?.communityId ? "community" : "overall"} ELO at a glance.`}
+          backHref={communityId ? `/community/${communityId}` : "/"}
+          backLabel="Back"
+          meta={
+            <span className="app-chip app-chip-warning">
+              {data.context?.communityId ? "Community ELO" : "Overall ELO"} {data.user.elo}
+            </span>
+          }
+          actions={
+            communityId ? (
+              <Link href={`/community/${communityId}`} className="app-button-secondary">
+                Open community
+              </Link>
+            ) : undefined
+          }
+        />
 
-      <main className="max-w-7xl mx-auto px-4 pb-8">
-        {/* Profile Header */}
-        <div className="bg-white rounded-lg shadow p-6 mb-6">
-          <div className="flex flex-col lg:flex-row items-center gap-6">
-            <div className="w-24 h-24 bg-blue-100 rounded-full flex items-center justify-center text-3xl font-bold text-blue-600">
-              {data.user.name.charAt(0).toUpperCase()}
-            </div>
-            <div className="text-center lg:text-left">
-              <h2 className="text-2xl font-bold text-gray-900">{data.user.name}</h2>
-              <p className="text-gray-500 text-sm">Joined {new Date(data.user.createdAt).toLocaleDateString()}</p>
-              <div className="mt-2 inline-block bg-purple-100 text-purple-800 text-sm font-bold px-3 py-1 rounded-full">
-                {data.context?.communityId ? "Community ELO" : "ELO"}: {data.user.elo}
-              </div>
-            </div>
-          </div>
-        </div>
+        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <StatCard label="Matches" value={data.stats.totalMatches} detail="All recorded doubles results" accent />
+          <StatCard label="Win rate" value={`${data.stats.winRate}%`} detail={`${data.stats.wins} wins and ${data.stats.losses} losses`} />
+          <StatCard label="Points scored" value={data.stats.pointsScored} detail={`${data.stats.pointsConceded} conceded`} />
+          <StatCard
+            label="Point differential"
+            value={pointDifferential > 0 ? `+${pointDifferential}` : pointDifferential}
+            detail={pointDifferential >= 0 ? "Positive match margin" : "Room to recover"}
+          />
+        </section>
 
-        {/* Stats Grid */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-          <div className="bg-white p-4 rounded-lg shadow text-center">
-            <p className="text-gray-500 text-sm uppercase tracking-wide">Matches</p>
-            <p className="text-2xl font-bold text-gray-900">{data.stats.totalMatches}</p>
-          </div>
-          <div className="bg-white p-4 rounded-lg shadow text-center">
-            <p className="text-gray-500 text-sm uppercase tracking-wide">Win Rate</p>
-            <p className="text-2xl font-bold text-green-600">{data.stats.winRate}%</p>
-          </div>
-          <div className="bg-white p-4 rounded-lg shadow text-center">
-            <p className="text-gray-500 text-sm uppercase tracking-wide">Wins</p>
-            <p className="text-2xl font-bold text-blue-600">{data.stats.wins}</p>
-          </div>
-          <div className="bg-white p-4 rounded-lg shadow text-center">
-            <p className="text-gray-500 text-sm uppercase tracking-wide">Points Scored</p>
-            <p className="text-2xl font-bold text-gray-700">{data.stats.pointsScored}</p>
-          </div>
-        </div>
-
-        {/* Match History */}
-        <div className="bg-white rounded-lg shadow overflow-hidden">
-          <div className="px-6 py-4 border-b">
-            <h3 className="text-lg font-bold text-gray-900">Match History</h3>
-          </div>
+        <SectionCard
+          eyebrow="History"
+          title="Match timeline"
+          description="Every recorded result for this player, including partner pairings and ELO movement when applicable."
+          action={<span className="app-chip app-chip-neutral">{data.matchHistory.length} matches</span>}
+        >
           {data.matchHistory.length === 0 ? (
-            <div className="p-8 text-center text-gray-500 italic">
-              No matches played yet.
-            </div>
+            <EmptyState title="No matches played yet" detail="Once a tournament result is approved, it will appear here." />
           ) : (
-            <div className="divide-y divide-gray-100">
+            <div className="space-y-3">
               {data.matchHistory.map((match) => (
-                <div key={match.id} className="p-4 hover:bg-gray-50 transition-colors">
-                  <div className="flex flex-col xl:flex-row justify-between items-center gap-4">
-                    
-                    {/* Date & Session */}
-                    <div className="text-center xl:text-left w-full xl:w-1/4">
-                      <p className="font-bold text-gray-900">{match.sessionName}</p>
-                      <p className="text-xs text-gray-500">
-                        {new Date(match.date).toLocaleDateString()} - {new Date(match.date).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                <article key={match.id} className="app-subcard p-4 sm:p-5">
+                  <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                    <div className="space-y-1">
+                      <p className="text-lg font-semibold text-gray-900">{match.sessionName}</p>
+                      <p className="text-sm text-gray-600">
+                        {new Date(match.date).toLocaleDateString()} at{" "}
+                        {new Date(match.date).toLocaleTimeString([], {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
                       </p>
                     </div>
 
-                    {/* Result Badge */}
-                    <div className="flex flex-col items-center gap-1">
-                      <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${
-                        match.result === "WIN" 
-                          ? "bg-green-100 text-green-800" 
-                          : "bg-red-100 text-red-800"
-                      }`}>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className={`app-chip ${match.result === "WIN" ? "app-chip-success" : "app-chip-danger"}`}>
                         {match.result}
                       </span>
-                      {typeof match.eloChange === "number" && (
-                        <span className={`text-[10px] font-black uppercase tracking-tighter ${
-                          match.eloChange >= 0 ? "text-green-600" : "text-red-600"
-                        }`}>
-                          {match.eloChange >= 0 ? "+" : ""}{match.eloChange} ELO
+                      {typeof match.eloChange === "number" ? (
+                        <span className={`app-chip ${match.eloChange >= 0 ? "app-chip-success" : "app-chip-danger"}`}>
+                          {match.eloChange >= 0 ? "+" : ""}
+                          {match.eloChange} ELO
                         </span>
-                      )}
+                      ) : null}
                     </div>
-
-                    {/* Match Details */}
-                    <div className="flex items-center justify-center gap-4 w-full xl:w-1/3">
-                      <div className="text-right flex-1">
-                        <p className="text-sm font-medium text-gray-900">{data.user.name} & {match.partner.name}</p>
-                      </div>
-                      <div className="bg-gray-100 px-3 py-1 rounded font-mono font-bold text-gray-800">
-                        {match.score}
-                      </div>
-                      <div className="text-left flex-1">
-                        <p className="text-sm text-gray-600">vs {match.opponents.map(o => o.name).join(" & ")}</p>
-                      </div>
-                    </div>
-
                   </div>
-                </div>
+
+                  <div className="mt-4 grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] lg:items-center">
+                    <div className="app-panel-muted p-3">
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">Team</p>
+                      <p className="mt-2 text-sm font-semibold text-gray-900">
+                        {data.user.name} &amp; {match.partner.name}
+                      </p>
+                    </div>
+
+                    <div className="mx-auto rounded-full bg-gray-100 px-4 py-2 text-sm font-semibold text-gray-900">
+                      {match.score}
+                    </div>
+
+                    <div className="app-panel-muted p-3">
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">Opponents</p>
+                      <p className="mt-2 text-sm font-semibold text-gray-900">
+                        {match.opponents.map((opponent) => opponent.name).join(" & ")}
+                      </p>
+                    </div>
+                  </div>
+                </article>
               ))}
             </div>
           )}
-        </div>
-      </main>
-    </div>
+        </SectionCard>
+      </div>
+    </main>
   );
 }
-

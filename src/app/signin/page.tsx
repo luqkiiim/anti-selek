@@ -1,9 +1,11 @@
 "use client";
 
-import { Suspense, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
+import { Suspense, useState } from "react";
 import { signIn } from "next-auth/react";
+import { useRouter, useSearchParams } from "next/navigation";
+
+import { FlashMessage } from "@/components/ui/chrome";
 
 function SigninForm() {
   const [email, setEmail] = useState("");
@@ -28,10 +30,11 @@ function SigninForm() {
 
       if (result?.error) {
         setError("Invalid email or password");
-      } else {
-        router.push("/");
-        router.refresh();
+        return;
       }
+
+      router.push("/");
+      router.refresh();
     } catch {
       setError("Something went wrong");
     } finally {
@@ -40,77 +43,98 @@ function SigninForm() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-4 py-10 bg-white">
-      <div className="max-w-lg w-full bg-white rounded-3xl shadow-xl border border-gray-200 overflow-hidden">
-        <div className="px-8 py-6 bg-blue-600 text-white">
-          <p className="text-[10px] font-black uppercase tracking-[0.22em]">Court Heat</p>
-          <h1 className="text-2xl font-black mt-1">Sign In</h1>
-          <p className="text-xs text-blue-100 mt-1">Continue to your tournament dashboard.</p>
-        </div>
+    <main className="app-page flex items-center justify-center px-4 py-10">
+      <div className="w-full max-w-5xl">
+        <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
+          <section className="app-panel relative overflow-hidden px-6 py-8 sm:px-8">
+            <div className="pointer-events-none absolute inset-y-0 right-[-6rem] top-[-2rem] w-56 rounded-full bg-[radial-gradient(circle,_rgba(77,139,91,0.14),_transparent_65%)] blur-2xl" />
+            <div className="relative">
+              <p className="app-eyebrow">Court control</p>
+              <h1 className="mt-3 app-title text-gray-900">Sign in to your badminton dashboard.</h1>
+              <p className="mt-4 max-w-xl text-sm text-gray-600 sm:text-base">
+                Jump back into community leaderboards, active courts, and tournament management without losing your place.
+              </p>
 
-        <div className="p-8">
-
-          {registered && (
-            <div className="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded-2xl mb-4 text-sm font-semibold">
-              Account created. Please sign in.
+              <div className="mt-8 grid gap-3 sm:grid-cols-3">
+                <div className="app-panel-muted p-4">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">Quick return</p>
+                  <p className="mt-2 text-sm font-semibold text-gray-900">Resume active sessions in a couple of taps.</p>
+                </div>
+                <div className="app-panel-muted p-4">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">Clear standings</p>
+                  <p className="mt-2 text-sm font-semibold text-gray-900">Check points, ELO, and match history from one place.</p>
+                </div>
+                <div className="app-panel-muted p-4">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">Mobile ready</p>
+                  <p className="mt-2 text-sm font-semibold text-gray-900">Comfortable controls for court-side use.</p>
+                </div>
+              </div>
             </div>
-          )}
+          </section>
 
-          {error && (
-            <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-2xl mb-4 text-sm font-semibold">
-              {error}
-            </div>
-          )}
+          <section className="app-panel px-6 py-8 sm:px-8">
+            <p className="app-eyebrow">Account access</p>
+            <h2 className="mt-3 text-2xl font-semibold text-gray-900">Welcome back</h2>
+            <p className="mt-2 text-sm text-gray-600">Continue with the email and password tied to your player account.</p>
 
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label className="block text-xs font-black uppercase tracking-wider text-gray-600">Email</label>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="mt-1 block w-full px-3 py-2.5 border border-gray-300 rounded-xl shadow-sm bg-gray-50 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                required
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-black uppercase tracking-wider text-gray-600">Password</label>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="mt-1 block w-full px-3 py-2.5 border border-gray-300 rounded-xl shadow-sm bg-gray-50 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                required
-              />
+            <div className="mt-6 space-y-4">
+              {registered ? <FlashMessage tone="success">Account created. Please sign in.</FlashMessage> : null}
+              {error ? <FlashMessage tone="error">{error}</FlashMessage> : null}
             </div>
 
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full bg-blue-600 text-white py-2.5 px-4 rounded-xl hover:bg-blue-700 disabled:opacity-50 font-black uppercase tracking-wider text-sm"
-            >
-              {loading ? "Signing in..." : "Sign In"}
-            </button>
-          </form>
+            <form onSubmit={handleSubmit} className="mt-6 space-y-4">
+              <label className="block space-y-2 text-sm font-medium text-gray-900">
+                <span>Email</span>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="field"
+                  required
+                />
+              </label>
 
-          <p className="mt-4 text-center text-sm text-gray-600">
-            Don&apos;t have an account?{" "}
-            <Link href="/signup" className="text-blue-600 font-bold hover:underline">
-              Sign Up
-            </Link>
-          </p>
+              <label className="block space-y-2 text-sm font-medium text-gray-900">
+                <span>Password</span>
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="field"
+                  required
+                />
+              </label>
+
+              <button type="submit" disabled={loading} className="app-button-primary w-full">
+                {loading ? "Signing in..." : "Sign in"}
+              </button>
+            </form>
+
+            <p className="mt-6 text-sm text-gray-600">
+              Don&apos;t have an account?{" "}
+              <Link href="/signup" className="font-semibold text-blue-600 hover:underline">
+                Sign up
+              </Link>
+            </p>
+          </section>
         </div>
       </div>
-    </div>
+    </main>
   );
 }
 
 export default function SigninPage() {
   return (
-    <Suspense fallback={<div className="min-h-screen flex items-center justify-center font-bold text-xl text-gray-600">Loading Sign In...</div>}>
+    <Suspense
+      fallback={
+        <div className="app-page flex items-center justify-center px-6">
+          <div className="app-panel px-8 py-8">
+            <p className="app-eyebrow">Loading sign in</p>
+          </div>
+        </div>
+      }
+    >
       <SigninForm />
     </Suspense>
   );
 }
-

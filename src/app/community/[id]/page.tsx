@@ -5,6 +5,11 @@ import { useSession } from "next-auth/react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import {
+  FlashMessage,
+  HeroCard,
+  StatCard,
+} from "@/components/ui/chrome";
+import {
   doClaimNamesMatch,
   getClaimRequesterEligibility,
 } from "@/lib/communityClaimRules";
@@ -451,31 +456,35 @@ export default function CommunityPage() {
 
   if (status === "loading" || loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-6">
-        <div className="flex flex-col items-center gap-4">
-          <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-          <p className="text-gray-500 font-bold uppercase tracking-widest text-xs">Loading Community...</p>
+      <div className="app-page flex items-center justify-center px-6">
+        <div className="app-panel flex flex-col items-center gap-4 px-8 py-8">
+          <div className="h-12 w-12 animate-spin rounded-full border-4 border-blue-600 border-t-transparent"></div>
+          <p className="app-eyebrow">Loading community</p>
         </div>
       </div>
     );
   }
 
+  const claimedMembers = communityMembers.filter((member) => member.isClaimed).length;
+  const selectedEntrants = selectedPlayerIds.length + guestConfigs.length;
+
   return (
-    <main className="min-h-screen bg-gray-50 pb-20">
-      <div className="bg-white border-b border-gray-100 px-6 py-4 flex justify-between items-center sticky top-0 z-10 shadow-sm">
-        <div className="flex items-center gap-3">
+    <main className="app-page">
+      <div className="app-topbar">
+        <div className="app-topbar-inner">
+          <div className="flex items-center gap-3">
           <Link
             href="/"
-            className="text-[10px] font-black text-gray-500 uppercase tracking-widest border border-gray-200 rounded-xl px-3 py-2 hover:text-blue-600 hover:border-blue-300 transition-colors"
+            className="app-button-secondary px-4 py-2"
           >
             Back
           </Link>
           <div>
-            <h1 className="text-lg font-black text-gray-900 tracking-tight leading-none">
+            <h1 className="text-lg font-semibold text-gray-900 tracking-tight leading-none">
               {community?.name || "Community"}
             </h1>
-            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">
-              {community?.membersCount || 0} Members - {community?.sessionsCount || 0} Tournaments
+            <p className="text-[11px] text-gray-500">
+              {community?.membersCount || 0} members, {community?.sessionsCount || 0} tournaments
             </p>
           </div>
         </div>
@@ -484,26 +493,44 @@ export default function CommunityPage() {
           <div className="flex items-center gap-2">
             <button
               onClick={() => setShowHostPanel((prev) => !prev)}
-              className="bg-blue-600 text-white px-4 py-2 rounded-xl font-black uppercase text-[10px] active:scale-95 transition-all shadow-lg"
+              className="app-button-primary"
             >
               {showHostPanel ? "Hide Host" : "Host Tournament"}
             </button>
             <Link
               href={`/community/${communityId}/admin`}
-              className="bg-gray-900 text-white px-4 py-2 rounded-xl font-black uppercase text-[10px] active:scale-95 transition-all shadow-lg"
+              className="app-button-dark"
             >
               Admin
             </Link>
           </div>
         )}
+        </div>
       </div>
 
-      <div className="max-w-6xl mx-auto px-6 pt-8 space-y-8">
-        {success && (
-          <div className="bg-green-100 border border-green-300 text-green-700 px-4 py-3 rounded-2xl text-sm font-semibold">
-            {success}
-          </div>
-        )}
+      <div className="app-shell space-y-8">
+        <HeroCard
+          eyebrow="Community hub"
+          title={community?.name || "Community"}
+          description="Use the leaderboard as your source of truth, open the host desk when you are ready to create a session, and keep active or recent tournaments within one calm dashboard."
+          meta={
+            <>
+              <span className={`app-chip ${community?.role === "ADMIN" ? "app-chip-accent" : "app-chip-neutral"}`}>
+                {community?.role || "MEMBER"}
+              </span>
+              {community?.isPasswordProtected ? <span className="app-chip app-chip-warning">Protected</span> : null}
+            </>
+          }
+        />
+
+        {success ? <FlashMessage tone="success">{success}</FlashMessage> : null}
+
+        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <StatCard label="Members" value={community?.membersCount || 0} detail={`${claimedMembers} claimed`} accent />
+          <StatCard label="Live tournaments" value={activeTournaments.length} detail={activeTournaments.length > 0 ? "Ready to open now" : "No active courts"} />
+          <StatCard label="Claim requests" value={claimRequests.length} detail={claimRequests.length > 0 ? "Awaiting admin review" : "Nothing pending"} />
+          <StatCard label="Host setup" value={selectedEntrants} detail={selectedEntrants > 0 ? "Entrants preselected" : "Choose players or guests"} />
+        </section>
 
         {canManageCommunity && showHostPanel && (
           <>
