@@ -1056,115 +1056,14 @@ export default function SessionPage() {
               </span>
             </div>
 
-            <div className="space-y-3 p-4 md:hidden">
-              {sortedPlayers.map((player, idx) => {
-                const stats = calculatePlayerSessionStats(player.userId);
-                const isMe = player.userId === currentUserId;
-                const canToggle = isAdmin || isMe;
-                const pointDiff = calculatePlayerPointDiff(player.userId);
-
-                return (
-                  <article
-                    key={player.userId}
-                    className={`app-subcard p-4 ${player.isPaused ? "opacity-55" : ""}`}
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className={`app-chip ${
-                            idx === 0
-                              ? "app-chip-warning"
-                              : idx === 1
-                                ? "app-chip-neutral"
-                                : idx === 2
-                                  ? "app-chip-danger"
-                                  : "app-chip-neutral"
-                          }`}>
-                            #{idx + 1}
-                          </span>
-                          <Link
-                            href={
-                              sessionData.communityId && !player.isGuest
-                                ? `/profile/${player.user.id}?communityId=${sessionData.communityId}`
-                                : `/profile/${player.user.id}`
-                            }
-                            className="truncate text-base font-semibold text-gray-900 hover:text-blue-600"
-                          >
-                            {player.user.name}
-                          </Link>
-                          {isMe ? <span className="app-chip app-chip-accent">Me</span> : null}
-                          {player.isGuest ? <span className="app-chip app-chip-neutral">Guest</span> : null}
-                        </div>
-                        <p className="mt-2 text-sm text-gray-600">
-                          {sessionData.type === SessionType.ELO ? `ELO ${player.user.elo}` : `Point diff ${pointDiff > 0 ? `+${pointDiff}` : pointDiff}`}
-                        </p>
-                      </div>
-
-                      <div className="flex flex-wrap justify-end gap-2">
-                        {canToggle ? (
-                          <button
-                            onClick={(e) => {
-                              e.preventDefault();
-                              togglePausePlayer(player.userId, player.isPaused);
-                            }}
-                            className={`app-chip ${player.isPaused ? "app-chip-danger" : "app-chip-neutral"}`}
-                          >
-                            {player.isPaused ? "Resume" : "Pause"}
-                          </button>
-                        ) : null}
-                        {isAdmin ? (
-                          <button
-                            type="button"
-                            onClick={(e) => togglePreferenceEditor(player.userId, e.currentTarget)}
-                            className="app-chip app-chip-accent"
-                          >
-                            Edit
-                          </button>
-                        ) : null}
-                      </div>
-                    </div>
-
-                    <div className="mt-4 grid grid-cols-2 gap-3">
-                      <div className="app-panel-muted p-3">
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">Points</p>
-                        <p className="mt-2 text-lg font-semibold text-gray-900">{player.sessionPoints}</p>
-                      </div>
-                      <div className="app-panel-muted p-3">
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">
-                          {sessionData.type === SessionType.ELO ? "ELO" : "Diff"}
-                        </p>
-                        <p className="mt-2 text-lg font-semibold text-gray-900">
-                          {sessionData.type === SessionType.ELO
-                            ? player.user.elo
-                            : pointDiff > 0
-                              ? `+${pointDiff}`
-                              : pointDiff}
-                        </p>
-                      </div>
-                      <div className="app-panel-muted p-3">
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">Matches</p>
-                        <p className="mt-2 text-lg font-semibold text-gray-900">{stats.played}</p>
-                      </div>
-                      <div className="app-panel-muted p-3">
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">W/L</p>
-                        <p className="mt-2 text-lg font-semibold text-gray-900">
-                          <span className="text-green-600">{stats.wins}</span>
-                          <span className="text-gray-400"> / </span>
-                          <span className="text-red-500">{stats.losses}</span>
-                        </p>
-                      </div>
-                    </div>
-
-                    {savingPreferencesFor === player.userId ? (
-                      <p className="mt-3 text-xs font-semibold uppercase tracking-[0.18em] text-gray-500">Saving...</p>
-                    ) : null}
-                  </article>
-                );
-              })}
-            </div>
-
-            <div className="hidden overflow-x-auto overscroll-x-contain md:block">
-              <table className="min-w-[760px] w-full table-auto">
+            <div className="overflow-x-auto overscroll-x-contain">
+              <table
+                className={`w-max sm:w-full table-fixed sm:table-auto ${
+                  sessionData.type === SessionType.POINTS
+                    ? "min-w-[448px] sm:min-w-[760px]"
+                    : "min-w-[448px] sm:min-w-[760px]"
+                }`}
+              >
                 <thead className="bg-gray-50/50 border-b border-gray-100">
                   <tr>
                     <th className="w-8 sm:w-10 px-1.5 sm:px-2 py-3 text-left text-[9px] sm:text-[10px] font-black text-gray-400 uppercase tracking-widest">#</th>
@@ -1200,7 +1099,7 @@ export default function SessionPage() {
 
                       return (
                         <tr key={player.userId} className={`active:bg-gray-50 transition-colors ${player.isPaused ? 'opacity-40 grayscale' : ''}`}>
-                          <td className="w-8 sm:w-10 px-1.5 sm:px-2 py-3 sm:py-4 whitespace-nowrap">
+                          <td className="w-8 sm:w-10 px-1.5 sm:px-2 py-2.5 sm:py-3 whitespace-nowrap">
                             <span className={`w-5 h-5 sm:w-6 sm:h-6 rounded-lg flex items-center justify-center text-[9px] sm:text-[10px] font-black ${
                               idx === 0
                                 ? "bg-amber-100 text-amber-700 border border-amber-300"
@@ -1213,7 +1112,7 @@ export default function SessionPage() {
                               {idx + 1}
                             </span>
                           </td>
-                          <td className="w-[112px] sm:w-auto px-1 sm:px-2 py-3 sm:py-4 min-w-[112px] sm:min-w-[140px] align-top">
+                          <td className="w-[112px] sm:w-auto px-1 sm:px-2 py-2.5 sm:py-3 min-w-[112px] sm:min-w-[140px] align-top">
                             <div className="flex flex-col gap-1.5">
                               <div className="flex items-center gap-1.5 flex-wrap">
                                 <Link
@@ -1227,7 +1126,7 @@ export default function SessionPage() {
                                   {player.user.name}
                                 </Link>
                                 {isMe && (
-                                  <span className="h-5 sm:h-6 px-1 sm:px-2 rounded-full text-[7px] sm:text-[9px] font-black uppercase tracking-[0.08em] sm:tracking-wide bg-blue-100 text-blue-700 border border-blue-200 inline-flex items-center">
+                                  <span className="h-4.5 sm:h-6 px-1 sm:px-2 rounded-full text-[7px] sm:text-[9px] font-black uppercase tracking-[0.08em] sm:tracking-wide bg-blue-100 text-blue-700 border border-blue-200 inline-flex items-center">
                                     Me
                                   </span>
                                 )}
@@ -1244,7 +1143,7 @@ export default function SessionPage() {
                                       e.preventDefault();
                                       togglePausePlayer(player.userId, player.isPaused);
                                     }}
-                                    className={`h-5 sm:h-6 px-1 sm:px-2 rounded-full text-[7px] sm:text-[9px] font-black uppercase tracking-[0.08em] sm:tracking-wide border inline-flex items-center shrink-0 ${
+                                    className={`h-4.5 sm:h-6 px-1 sm:px-2 rounded-full text-[7px] sm:text-[9px] font-black uppercase tracking-[0.08em] sm:tracking-wide border inline-flex items-center shrink-0 ${
                                       player.isPaused
                                         ? "bg-rose-100 text-rose-700 border-rose-200"
                                         : "bg-gray-100 text-gray-600 border-gray-200"
@@ -1259,13 +1158,13 @@ export default function SessionPage() {
                                     onClick={(e) =>
                                       togglePreferenceEditor(player.userId, e.currentTarget)
                                     }
-                                    className="h-5 sm:h-6 px-1 sm:px-2 rounded-full text-[7px] sm:text-[9px] font-black uppercase tracking-[0.08em] sm:tracking-wide border inline-flex items-center bg-blue-100 text-blue-700 border-blue-200"
+                                    className="h-4.5 sm:h-6 px-1 sm:px-2 rounded-full text-[7px] sm:text-[9px] font-black uppercase tracking-[0.08em] sm:tracking-wide border inline-flex items-center bg-blue-100 text-blue-700 border-blue-200"
                                     >
                                       Edit
                                     </button>
                                 )}
                                 {player.isGuest && (
-                                  <span className="h-5 sm:h-6 px-1 sm:px-2 rounded-full text-[7px] sm:text-[9px] font-black uppercase tracking-[0.08em] sm:tracking-wide bg-gray-100 text-gray-600 border border-gray-200 inline-flex items-center">
+                                  <span className="h-4.5 sm:h-6 px-1 sm:px-2 rounded-full text-[7px] sm:text-[9px] font-black uppercase tracking-[0.08em] sm:tracking-wide bg-gray-100 text-gray-600 border border-gray-200 inline-flex items-center">
                                     Guest
                                   </span>
                                 )}
@@ -1379,18 +1278,18 @@ export default function SessionPage() {
                           </td>
                           {sessionData.type === SessionType.POINTS ? (
                             <>
-                              <td className="w-11 sm:w-24 px-1 sm:px-4 py-3 sm:py-4 whitespace-nowrap text-center">
+                              <td className="w-11 sm:w-24 px-1 sm:px-4 py-2.5 sm:py-3 whitespace-nowrap text-center">
                                 <span className="text-[13px] sm:text-base font-black text-blue-700">{player.sessionPoints}</span>
                               </td>
-                              <td className="w-12 sm:w-24 px-1 sm:px-4 py-3 sm:py-4 whitespace-nowrap text-center">
+                              <td className="w-12 sm:w-24 px-1 sm:px-4 py-2.5 sm:py-3 whitespace-nowrap text-center">
                                 <span className={`text-[11px] sm:text-sm font-medium ${pointDiff >= 0 ? "text-green-600" : "text-red-500"}`}>
                                   {pointDiff > 0 ? `+${pointDiff}` : pointDiff}
                                 </span>
                               </td>
-                              <td className="w-10 sm:w-24 px-1 sm:px-4 py-3 sm:py-4 whitespace-nowrap text-center">
+                              <td className="w-10 sm:w-24 px-1 sm:px-4 py-2.5 sm:py-3 whitespace-nowrap text-center">
                                 <span className="text-[10px] sm:text-xs font-bold text-gray-600">{stats.played}</span>
                               </td>
-                              <td className="w-11 sm:w-24 px-1 sm:px-4 py-3 sm:py-4 whitespace-nowrap text-center">
+                              <td className="w-11 sm:w-24 px-1 sm:px-4 py-2.5 sm:py-3 whitespace-nowrap text-center">
                                 <div className="text-[8px] sm:text-[10px] font-black tracking-tighter">
                                   <span className="text-green-600">{stats.wins}</span>
                                   <span className="mx-0.5 text-gray-200">/</span>
@@ -1400,16 +1299,16 @@ export default function SessionPage() {
                             </>
                           ) : (
                             <>
-                              <td className="w-11 sm:w-24 px-1 sm:px-4 py-3 sm:py-4 whitespace-nowrap text-center">
+                              <td className="w-11 sm:w-24 px-1 sm:px-4 py-2.5 sm:py-3 whitespace-nowrap text-center">
                                 <span className="text-[13px] sm:text-base font-black text-blue-700">{player.sessionPoints}</span>
                               </td>
-                              <td className="w-14 sm:w-24 px-1 sm:px-4 py-3 sm:py-4 whitespace-nowrap text-right">
+                              <td className="w-14 sm:w-24 px-1 sm:px-4 py-2.5 sm:py-3 whitespace-nowrap text-right">
                                 <span className="text-[13px] sm:text-base font-black text-blue-700">{player.user.elo}</span>
                               </td>
-                              <td className="w-10 sm:w-24 px-1 sm:px-4 py-3 sm:py-4 whitespace-nowrap text-center">
+                              <td className="w-10 sm:w-24 px-1 sm:px-4 py-2.5 sm:py-3 whitespace-nowrap text-center">
                                 <span className="text-[10px] sm:text-xs font-bold text-gray-600">{stats.played}</span>
                               </td>
-                              <td className="w-11 sm:w-24 px-1 sm:px-4 py-3 sm:py-4 whitespace-nowrap text-center">
+                              <td className="w-11 sm:w-24 px-1 sm:px-4 py-2.5 sm:py-3 whitespace-nowrap text-center">
                                 <div className="text-[8px] sm:text-[10px] font-black tracking-tighter">
                                   <span className="text-green-600">{stats.wins}</span>
                                   <span className="mx-0.5 text-gray-200">/</span>
