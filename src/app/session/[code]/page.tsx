@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
+import { createPortal } from "react-dom";
 import { FlashMessage, HeroCard, StatCard } from "@/components/ui/chrome";
 import {
   MatchStatus,
@@ -787,6 +788,9 @@ export default function SessionPage() {
           calculatePlayerPointDiff(b.userId) - calculatePlayerPointDiff(a.userId) ||
           a.user.name.localeCompare(b.user.name)
     );
+  const activePreferencePlayer = openPreferenceEditor
+    ? sessionData.players.find((player) => player.userId === openPreferenceEditor.userId) ?? null
+    : null;
 
   return (
     <div className="app-page">
@@ -1178,103 +1182,6 @@ export default function SessionPage() {
                                     Saving...
                                   </span>
                                 )}
-                                {openPreferenceEditor?.userId === player.userId &&
-                                  isAdmin && (
-                                  <div
-                                    className="fixed z-40 bg-white border border-gray-200 rounded-xl shadow-lg p-2.5 w-44 space-y-2"
-                                    style={{
-                                      left: openPreferenceEditor.left,
-                                      top: openPreferenceEditor.top,
-                                    }}
-                                  >
-                                    {isMixicano ? (
-                                      <>
-                                        <div className="space-y-1">
-                                          <p className="text-[9px] font-black uppercase tracking-wider text-gray-400">
-                                            Gender
-                                          </p>
-                                          <select
-                                            value={player.gender}
-                                            onChange={async (e) => {
-                                              const nextGender = e.target.value as PlayerGender;
-                                              setOpenPreferenceEditor(null);
-                                              const nextPreference =
-                                                nextGender === PlayerGender.MALE
-                                                  ? PartnerPreference.OPEN
-                                                  : PartnerPreference.FEMALE_FLEX;
-                                              await updatePlayerPreference(
-                                                player.userId,
-                                                nextGender,
-                                                nextPreference
-                                              );
-                                            }}
-                                            className="h-8 w-full bg-white border border-gray-200 rounded-lg px-2 text-[10px] font-black uppercase tracking-wide text-gray-700 focus:outline-none focus:border-blue-400"
-                                          >
-                                            <option value={PlayerGender.MALE}>Male</option>
-                                            <option value={PlayerGender.FEMALE}>Female</option>
-                                          </select>
-                                        </div>
-                                        <div className="space-y-1">
-                                          <p className="text-[9px] font-black uppercase tracking-wider text-gray-400">
-                                            Open Tag
-                                          </p>
-                                          {player.gender === PlayerGender.FEMALE ? (
-                                            <select
-                                              value={player.partnerPreference}
-                                              onChange={async (e) => {
-                                                const nextPreference = e.target.value as PartnerPreference;
-                                                setOpenPreferenceEditor(null);
-                                                await updatePlayerPreference(
-                                                  player.userId,
-                                                  player.gender,
-                                                  nextPreference
-                                                );
-                                              }}
-                                              className="h-8 w-full bg-white border border-gray-200 rounded-lg px-2 text-[10px] font-black uppercase tracking-wide text-gray-700 focus:outline-none focus:border-blue-400"
-                                            >
-                                              <option value={PartnerPreference.FEMALE_FLEX}>Default</option>
-                                              <option value={PartnerPreference.OPEN}>Open Tag</option>
-                                            </select>
-                                          ) : (
-                                            <p className="text-[10px] font-black uppercase tracking-wide text-gray-500 px-1 py-2">
-                                              Not Needed
-                                            </p>
-                                          )}
-                                        </div>
-                                      </>
-                                    ) : (
-                                      <p className="text-[9px] font-black uppercase tracking-wider text-gray-400 px-0.5">
-                                        Player Actions
-                                      </p>
-                                    )}
-                                    <div className="pt-1 border-t border-gray-100">
-                                      <button
-                                        type="button"
-                                        onClick={() =>
-                                          removePlayerFromSession(
-                                            player.userId,
-                                            player.user.name
-                                          )
-                                        }
-                                        disabled={removingPlayerId === player.userId}
-                                        className="h-8 w-full rounded-lg bg-rose-50 text-rose-700 border border-rose-200 text-[10px] font-black uppercase tracking-wide disabled:opacity-50"
-                                      >
-                                        {removingPlayerId === player.userId
-                                          ? "Removing..."
-                                          : "Remove Player"}
-                                      </button>
-                                    </div>
-                                    <div className="flex justify-end">
-                                      <button
-                                        type="button"
-                                        onClick={() => setOpenPreferenceEditor(null)}
-                                        className="text-[9px] font-black uppercase tracking-widest text-gray-500"
-                                      >
-                                        Close
-                                      </button>
-                                    </div>
-                                  </div>
-                                )}
                               </div>
                             </div>
                           </td>
@@ -1328,6 +1235,106 @@ export default function SessionPage() {
           </div>
         </div>
       </main>
+
+      {openPreferenceEditor && activePreferencePlayer && isAdmin && typeof document !== "undefined"
+        ? createPortal(
+            <div
+              className="fixed z-[80] w-44 space-y-2 rounded-xl border border-gray-200 bg-white p-2.5 shadow-2xl"
+              style={{
+                left: openPreferenceEditor.left,
+                top: openPreferenceEditor.top,
+              }}
+            >
+              {isMixicano ? (
+                <>
+                  <div className="space-y-1">
+                    <p className="text-[9px] font-black uppercase tracking-wider text-gray-400">
+                      Gender
+                    </p>
+                    <select
+                      value={activePreferencePlayer.gender}
+                      onChange={async (e) => {
+                        const nextGender = e.target.value as PlayerGender;
+                        setOpenPreferenceEditor(null);
+                        const nextPreference =
+                          nextGender === PlayerGender.MALE
+                            ? PartnerPreference.OPEN
+                            : PartnerPreference.FEMALE_FLEX;
+                        await updatePlayerPreference(
+                          activePreferencePlayer.userId,
+                          nextGender,
+                          nextPreference
+                        );
+                      }}
+                      className="h-8 w-full rounded-lg border border-gray-200 bg-white px-2 text-[10px] font-black uppercase tracking-wide text-gray-700 focus:outline-none focus:border-blue-400"
+                    >
+                      <option value={PlayerGender.MALE}>Male</option>
+                      <option value={PlayerGender.FEMALE}>Female</option>
+                    </select>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-[9px] font-black uppercase tracking-wider text-gray-400">
+                      Open Tag
+                    </p>
+                    {activePreferencePlayer.gender === PlayerGender.FEMALE ? (
+                      <select
+                        value={activePreferencePlayer.partnerPreference}
+                        onChange={async (e) => {
+                          const nextPreference = e.target.value as PartnerPreference;
+                          setOpenPreferenceEditor(null);
+                          await updatePlayerPreference(
+                            activePreferencePlayer.userId,
+                            activePreferencePlayer.gender,
+                            nextPreference
+                          );
+                        }}
+                        className="h-8 w-full rounded-lg border border-gray-200 bg-white px-2 text-[10px] font-black uppercase tracking-wide text-gray-700 focus:outline-none focus:border-blue-400"
+                      >
+                        <option value={PartnerPreference.FEMALE_FLEX}>Default</option>
+                        <option value={PartnerPreference.OPEN}>Open Tag</option>
+                      </select>
+                    ) : (
+                      <p className="px-1 py-2 text-[10px] font-black uppercase tracking-wide text-gray-500">
+                        Not Needed
+                      </p>
+                    )}
+                  </div>
+                </>
+              ) : (
+                <p className="px-0.5 text-[9px] font-black uppercase tracking-wider text-gray-400">
+                  Player Actions
+                </p>
+              )}
+              <div className="border-t border-gray-100 pt-1">
+                <button
+                  type="button"
+                  onClick={() =>
+                    removePlayerFromSession(
+                      activePreferencePlayer.userId,
+                      activePreferencePlayer.user.name
+                    )
+                  }
+                  disabled={removingPlayerId === activePreferencePlayer.userId}
+                  className="h-8 w-full rounded-lg border border-rose-200 bg-rose-50 text-[10px] font-black uppercase tracking-wide text-rose-700 disabled:opacity-50"
+                >
+                  {removingPlayerId === activePreferencePlayer.userId
+                    ? "Removing..."
+                    : "Remove Player"}
+                </button>
+              </div>
+              <div className="flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => setOpenPreferenceEditor(null)}
+                  className="text-[9px] font-black uppercase tracking-widest text-gray-500"
+                >
+                  Close
+                </button>
+              </div>
+            </div>,
+            document.body
+          )
+        : null}
 
       {/* Mobile-Friendly Roster Modal */}
       {showRosterModal && (
