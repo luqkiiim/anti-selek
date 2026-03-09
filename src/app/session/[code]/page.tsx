@@ -132,7 +132,6 @@ export default function SessionPage() {
     userId: string;
     top: number;
     left: number;
-    openUp: boolean;
   } | null>(null);
 
   // Track scores per match locally
@@ -156,17 +155,23 @@ export default function SessionPage() {
       const rect = triggerEl.getBoundingClientRect();
       const panelWidth = 176; // matches w-44
       const panelHeight =
-        sessionData?.mode === SessionMode.MIXICANO ? 300 : 150;
+        sessionData?.mode === SessionMode.MIXICANO ? 220 : 124;
       const margin = 8;
-      const openUp = window.innerHeight - rect.bottom < panelHeight;
+      const openUp = window.innerHeight - rect.bottom < panelHeight + margin;
 
       const left = Math.min(
-        Math.max(margin, rect.left),
+        Math.max(margin, rect.right - panelWidth),
         Math.max(margin, window.innerWidth - panelWidth - margin)
       );
-      const top = openUp ? rect.top - margin : rect.bottom + margin;
+      const preferredTop = openUp
+        ? rect.top - panelHeight - margin
+        : rect.bottom + margin;
+      const top = Math.min(
+        Math.max(margin, preferredTop),
+        Math.max(margin, window.innerHeight - panelHeight - margin)
+      );
 
-      return { userId, top, left, openUp };
+      return { userId, top, left };
     });
   };
 
@@ -1180,9 +1185,6 @@ export default function SessionPage() {
                                     style={{
                                       left: openPreferenceEditor.left,
                                       top: openPreferenceEditor.top,
-                                      transform: openPreferenceEditor.openUp
-                                        ? "translateY(-100%)"
-                                        : "translateY(0)",
                                     }}
                                   >
                                     {isMixicano ? (
