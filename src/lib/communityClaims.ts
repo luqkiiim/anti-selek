@@ -116,7 +116,6 @@ export async function approveCommunityClaimRequest(
       where: { communityId },
       select: {
         id: true,
-        code: true,
         name: true,
       },
     }),
@@ -151,7 +150,6 @@ export async function approveCommunityClaimRequest(
       select: {
         session: {
           select: {
-            code: true,
             name: true,
           },
         },
@@ -160,7 +158,7 @@ export async function approveCommunityClaimRequest(
 
     if (conflictingSessionPlayer) {
       throw new CommunityClaimError(
-        `Requester already has tournament history in ${conflictingSessionPlayer.session.name} (${conflictingSessionPlayer.session.code}). Manual merge required.`,
+        `Requester already has tournament history in ${conflictingSessionPlayer.session.name}. Manual merge required.`,
         409
       );
     }

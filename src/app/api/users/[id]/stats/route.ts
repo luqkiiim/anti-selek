@@ -85,7 +85,7 @@ export async function GET(
       team1User2: { select: { id: true, name: true } },
       team2User1: { select: { id: true, name: true } },
       team2User2: { select: { id: true, name: true } },
-      session: { select: { name: true, code: true } },
+      session: { select: { name: true } },
     },
   });
 

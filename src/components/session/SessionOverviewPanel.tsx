@@ -4,7 +4,6 @@ import { HeroCard, StatCard } from "@/components/ui/chrome";
 
 interface SessionOverviewPanelProps {
   sessionName: string;
-  sessionCode: string;
   sessionTypeLabel: string;
   sessionModeLabel: string;
   playersCount: number;
@@ -24,7 +23,6 @@ interface SessionOverviewPanelProps {
 
 export function SessionOverviewPanel({
   sessionName,
-  sessionCode,
   sessionTypeLabel,
   sessionModeLabel,
   playersCount,
@@ -49,7 +47,6 @@ export function SessionOverviewPanel({
         description="Manage courts, keep the player pool moving, and review standings from a single session board designed for court-side use."
         meta={
           <>
-            <span className="app-chip app-chip-accent app-mono">{sessionCode}</span>
             <span className="app-chip app-chip-neutral">{sessionTypeLabel}</span>
             <span className="app-chip app-chip-neutral">{sessionModeLabel}</span>
           </>

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { randomUUID } from "crypto";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getCommunityEloByUserId, withCommunityElo } from "@/lib/communityElo";
@@ -14,10 +15,6 @@ import {
 export const dynamic = "force-dynamic";
 
 const mixedModeLabel = getSessionModeLabel(SessionMode.MIXICANO);
-
-function generateCode(): string {
-  return Math.random().toString(36).substring(2, 8).toUpperCase();
-}
 
 function defaultPartnerPreferenceForGender(gender: PlayerGender): PartnerPreference {
   return gender === PlayerGender.FEMALE ? PartnerPreference.FEMALE_FLEX : PartnerPreference.OPEN;
@@ -86,15 +83,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Only community admins can create tournaments" }, { status: 403 });
     }
 
-    // Create session with unique code
-    let code = generateCode();
-    let attempts = 0;
-    while (attempts < 10) {
-      const existing = await prisma.session.findUnique({ where: { code } });
-      if (!existing) break;
-      code = generateCode();
-      attempts++;
-    }
+    const sessionId = randomUUID();
 
     // Ensure unique player IDs and include creator
     const requestedPlayerIds = Array.isArray(playerIds)
@@ -291,7 +280,8 @@ export async function POST(request: Request) {
     const newSession = await prisma.$transaction(async (tx) => {
       const createdSession = await tx.session.create({
         data: {
-          code,
+          id: sessionId,
+          code: sessionId,
           communityId,
           name: name.trim(),
           type,

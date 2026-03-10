@@ -831,7 +831,6 @@ export default function SessionPage() {
               {sessionData.name}
             </h1>
             <div className="flex items-center gap-2">
-              <span className="app-chip app-chip-accent app-mono">{sessionData.code}</span>
               <span className="app-chip app-chip-neutral">{sessionData.status}</span>
               <span className="app-chip app-chip-neutral">{sessionModeLabel}</span>
             </div>
@@ -850,7 +849,6 @@ export default function SessionPage() {
       <main className="app-shell max-w-7xl space-y-6">
         <SessionOverviewPanel
           sessionName={sessionData.name}
-          sessionCode={sessionData.code}
           sessionTypeLabel={sessionTypeLabel}
           sessionModeLabel={sessionModeLabel}
           playersCount={sessionData.players.length}
