@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { FlashMessage, HeroCard, StatCard } from "@/components/ui/chrome";
+import { FlashMessage, HeroCard, ModalFrame, StatCard } from "@/components/ui/chrome";
 import { CommunitySettingsPanel } from "@/components/community-admin/CommunitySettingsPanel";
 import { CreatePlayerProfilePanel } from "@/components/community-admin/CreatePlayerProfilePanel";
 import { ClaimRequestsPanel } from "@/components/community-admin/ClaimRequestsPanel";
@@ -80,6 +80,11 @@ export default function CommunityAdminPage() {
   const [reviewingClaimRequestId, setReviewingClaimRequestId] = useState<string | null>(null);
   const [resettingCommunity, setResettingCommunity] = useState(false);
   const [deletingCommunity, setDeletingCommunity] = useState(false);
+  const [passwordResetTarget, setPasswordResetTarget] = useState<Player | null>(null);
+  const [passwordResetValue, setPasswordResetValue] = useState("");
+  const [passwordResetConfirm, setPasswordResetConfirm] = useState("");
+  const [passwordResetError, setPasswordResetError] = useState("");
+  const [savingPasswordReset, setSavingPasswordReset] = useState(false);
 
   const getGenderPillLabel = (player: Player) => {
     if (player.gender === PlayerGender.FEMALE) {
@@ -109,6 +114,23 @@ export default function CommunityAdminPage() {
     } catch {
       return { error: "Invalid server response" };
     }
+  };
+
+  const openPasswordResetModal = (player: Player) => {
+    setPasswordResetTarget(player);
+    setPasswordResetValue("");
+    setPasswordResetConfirm("");
+    setPasswordResetError("");
+    setError("");
+    setSuccess("");
+  };
+
+  const closePasswordResetModal = () => {
+    setPasswordResetTarget(null);
+    setPasswordResetValue("");
+    setPasswordResetConfirm("");
+    setPasswordResetError("");
+    setSavingPasswordReset(false);
   };
 
   const fetchCommunityAndPlayers = useCallback(async () => {
@@ -311,6 +333,50 @@ export default function CommunityAdminPage() {
       await fetchCommunityAndPlayers();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Failed to remove player");
+    }
+  };
+
+  const handleResetPlayerPassword = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!passwordResetTarget) return;
+
+    setError("");
+    setSuccess("");
+    setPasswordResetError("");
+
+    if (passwordResetValue.trim().length < 8) {
+      setPasswordResetError("Password must be at least 8 characters.");
+      return;
+    }
+
+    if (passwordResetValue !== passwordResetConfirm) {
+      setPasswordResetError("Passwords do not match.");
+      return;
+    }
+
+    setSavingPasswordReset(true);
+
+    try {
+      const res = await fetch(
+        `/api/communities/${communityId}/members/${passwordResetTarget.id}/password`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ password: passwordResetValue }),
+        }
+      );
+      const data = await safeJson(res);
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to reset password");
+      }
+
+      setSuccess(
+        `Password reset for ${passwordResetTarget.name}. Share the new password with them directly.`
+      );
+      closePasswordResetModal();
+    } catch (err: unknown) {
+      setPasswordResetError(err instanceof Error ? err.message : "Failed to reset password");
+      setSavingPasswordReset(false);
     }
   };
 
@@ -847,12 +913,23 @@ export default function CommunityAdminPage() {
                       </div>
 
                       <div className="pt-1">
-                        <button
-                          onClick={() => handleRemovePlayer(player.id, player.name)}
-                          className="w-full text-center text-red-600 border border-red-200 bg-red-50 hover:bg-red-100 py-2 rounded-xl text-xs font-black uppercase"
-                        >
-                          Remove
-                        </button>
+                        <div className="flex flex-col gap-2">
+                          {player.isClaimed && player.email ? (
+                            <button
+                              type="button"
+                              onClick={() => openPasswordResetModal(player)}
+                              className="w-full text-center text-blue-700 border border-blue-200 bg-blue-50 hover:bg-blue-100 py-2 rounded-xl text-xs font-black uppercase"
+                            >
+                              Reset password
+                            </button>
+                          ) : null}
+                          <button
+                            onClick={() => handleRemovePlayer(player.id, player.name)}
+                            className="w-full text-center text-red-600 border border-red-200 bg-red-50 hover:bg-red-100 py-2 rounded-xl text-xs font-black uppercase"
+                          >
+                            Remove
+                          </button>
+                        </div>
                       </div>
                     </div>
                   ))
@@ -1023,7 +1100,16 @@ export default function CommunityAdminPage() {
                           {renderRolePill(player)}
                         </td>
                         <td className="px-4 py-4 text-center text-sm font-medium align-middle">
-                          <div className="flex justify-center gap-3">
+                          <div className="flex flex-wrap justify-center gap-2">
+                            {player.isClaimed && player.email ? (
+                              <button
+                                type="button"
+                                onClick={() => openPasswordResetModal(player)}
+                                className="inline-flex items-center px-2.5 py-1 rounded-full text-blue-700 border border-blue-200 bg-blue-50 hover:bg-blue-100 text-xs font-bold uppercase"
+                              >
+                                Reset password
+                              </button>
+                            ) : null}
                             <button
                               onClick={() => handleRemovePlayer(player.id, player.name)}
                               className="inline-flex items-center px-2.5 py-1 rounded-full text-red-600 border border-red-200 bg-red-50 hover:bg-red-100 text-xs font-bold uppercase"
@@ -1047,6 +1133,80 @@ export default function CommunityAdminPage() {
           </div>
         </div>
       </div>
+
+      {passwordResetTarget ? (
+        <ModalFrame
+          title="Reset member password"
+          subtitle="Set a new sign-in password here, then share it with the player manually."
+          onClose={closePasswordResetModal}
+          footer={
+            <div className="flex flex-wrap justify-end gap-3">
+              <button
+                type="button"
+                onClick={closePasswordResetModal}
+                className="app-button-secondary px-4 py-2"
+                disabled={savingPasswordReset}
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                form="reset-member-password-form"
+                className="app-button-primary px-4 py-2"
+                disabled={savingPasswordReset}
+              >
+                {savingPasswordReset ? "Saving..." : "Save password"}
+              </button>
+            </div>
+          }
+        >
+          <form
+            id="reset-member-password-form"
+            onSubmit={handleResetPlayerPassword}
+            className="space-y-4 px-4 py-4 sm:px-5"
+          >
+            <div className="app-panel-muted space-y-1 p-4">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">
+                Member
+              </p>
+              <p className="text-sm font-semibold text-gray-900">{passwordResetTarget.name}</p>
+              <p className="text-sm text-gray-600">{passwordResetTarget.email}</p>
+            </div>
+
+            {passwordResetError ? <FlashMessage tone="error">{passwordResetError}</FlashMessage> : null}
+
+            <label className="block space-y-2 text-sm font-medium text-gray-900">
+              <span>New password</span>
+              <input
+                type="password"
+                value={passwordResetValue}
+                onChange={(e) => setPasswordResetValue(e.target.value)}
+                className="field"
+                minLength={8}
+                autoComplete="new-password"
+                required
+              />
+            </label>
+
+            <label className="block space-y-2 text-sm font-medium text-gray-900">
+              <span>Confirm password</span>
+              <input
+                type="password"
+                value={passwordResetConfirm}
+                onChange={(e) => setPasswordResetConfirm(e.target.value)}
+                className="field"
+                minLength={8}
+                autoComplete="new-password"
+                required
+              />
+            </label>
+
+            <p className="text-sm text-gray-600">
+              This replaces the player&apos;s existing sign-in password immediately.
+            </p>
+          </form>
+        </ModalFrame>
+      ) : null}
 
       {error && (
         <div className="fixed bottom-6 left-6 right-6 z-50">
