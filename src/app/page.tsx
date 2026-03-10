@@ -24,7 +24,7 @@ interface Community {
 }
 
 export default function Home() {
-  const { status } = useSession();
+  const { data: session, status } = useSession();
   const router = useRouter();
 
   const [communities, setCommunities] = useState<Community[]>([]);
@@ -170,6 +170,24 @@ export default function Home() {
   return (
     <main className="app-page">
       <div className="app-shell-narrow space-y-6">
+        <div className="flex justify-end">
+          <div className="app-panel-soft flex items-center gap-3 px-4 py-3">
+            {session?.user?.name ? (
+              <div className="text-right">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-gray-500">
+                  Account
+                </p>
+                <p className="mt-1 text-sm font-semibold text-gray-900">
+                  {session.user.name}
+                </p>
+              </div>
+            ) : null}
+            <button type="button" onClick={() => signOut()} className="app-button-secondary px-4 py-2">
+              Logout
+            </button>
+          </div>
+        </div>
+
         <HeroCard
           eyebrow="Dashboard"
           title="Anti-Selek"
@@ -196,9 +214,6 @@ export default function Home() {
                 className="app-button-primary"
               >
                 Create Community
-              </button>
-              <button type="button" onClick={() => signOut()} className="app-button-dark">
-                Logout
               </button>
             </>
           }

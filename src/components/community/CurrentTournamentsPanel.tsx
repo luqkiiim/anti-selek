@@ -45,7 +45,7 @@ export function CurrentTournamentsPanel({
               <Link
                 key={tournament.id}
                 href={`/session/${tournament.code}`}
-                className="block rounded-2xl border border-gray-100 bg-gray-50 p-4 transition hover:-translate-y-0.5 hover:border-blue-200 hover:bg-blue-50/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 focus-visible:ring-offset-2"
+                className="block rounded-2xl border border-gray-100 bg-gray-50 p-4 transition hover:-translate-y-0.5 hover:border-blue-300 hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 focus-visible:ring-offset-2"
               >
                 <div className="mb-2 flex items-start justify-between gap-3">
                   <h4 className="font-black text-gray-900">{tournament.name}</h4>
@@ -60,7 +60,7 @@ export function CurrentTournamentsPanel({
             ) : (
               <div
                 key={tournament.id}
-                className="block rounded-2xl border border-gray-100 bg-gray-50 p-4 transition hover:-translate-y-0.5 hover:border-blue-200 hover:bg-blue-50/60"
+                className="block rounded-2xl border border-gray-100 bg-gray-50 p-4 transition hover:-translate-y-0.5 hover:border-blue-300 hover:bg-blue-50"
               >
                 <div className="mb-2 flex items-start justify-between">
                   <h4 className="font-black text-gray-900">{tournament.name}</h4>
