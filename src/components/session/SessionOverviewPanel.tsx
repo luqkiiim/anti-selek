@@ -62,17 +62,14 @@ export function SessionOverviewPanel({
         <StatCard
           label="Active courts"
           value={activeMatchesCount}
-          detail={`${courtCount} total courts`}
         />
         <StatCard
           label="Paused"
           value={pausedPlayersCount}
-          detail={pausedPlayersCount > 0 ? "Temporarily out of rotation" : "Everyone ready"}
         />
         <StatCard
           label="Status"
           value={sessionStatus}
-          detail={isRatingsSession ? "Points standings with rating updates" : "Points race"}
         />
       </section>
 
