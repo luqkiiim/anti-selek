@@ -116,7 +116,7 @@ export function HeroCard({
   backLabel = "Back",
   meta,
 }: {
-  eyebrow: string;
+  eyebrow?: string;
   title: ReactNode;
   description?: ReactNode;
   actions?: ReactNode;
@@ -136,7 +136,7 @@ export function HeroCard({
                 {backLabel}
               </Link>
             ) : null}
-            <p className="app-eyebrow">{eyebrow}</p>
+            {eyebrow ? <p className="app-eyebrow">{eyebrow}</p> : null}
             {meta}
           </div>
           <div>

@@ -115,16 +115,17 @@ export default function ProfilePage() {
     <main className="app-page">
       <div className="app-shell space-y-6">
         <HeroCard
-          eyebrow="Player profile"
           title={data.user.name}
-          description={`Joined ${new Date(data.user.createdAt).toLocaleDateString()}.`}
-          backHref={communityId ? `/community/${communityId}` : "/"}
-          backLabel="Back"
-          meta={
-            <span className="app-chip app-chip-warning">
-              {data.context?.communityId ? "Community Rating" : "Overall Rating"} {data.user.elo}
+          description={
+            <span className="inline-flex flex-wrap items-center gap-2">
+              <span>Joined {new Date(data.user.createdAt).toLocaleDateString()}.</span>
+              <span className="app-chip app-chip-warning">
+                {data.context?.communityId ? "Community Rating" : "Overall Rating"} {data.user.elo}
+              </span>
             </span>
           }
+          backHref={communityId ? `/community/${communityId}` : "/"}
+          backLabel="Back"
         />
 
         <section className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
