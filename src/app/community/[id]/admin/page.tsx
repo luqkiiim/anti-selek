@@ -761,7 +761,7 @@ export default function CommunityAdminPage() {
               ) : (
                 players
                   .slice()
-                  .sort((a, b) => b.elo - a.elo || a.name.localeCompare(b.name))
+                  .sort((a, b) => a.name.localeCompare(b.name))
                   .map((player) => (
                     <div key={player.id} className="rounded-2xl border border-gray-100 bg-gray-50 p-4 space-y-3">
                       <div className="flex items-start justify-between gap-3">
@@ -951,7 +951,7 @@ export default function CommunityAdminPage() {
                 <tbody className="bg-white divide-y divide-gray-100">
                   {players
                     .slice()
-                    .sort((a, b) => b.elo - a.elo || a.name.localeCompare(b.name))
+                    .sort((a, b) => a.name.localeCompare(b.name))
                     .map((player) => (
                       <tr key={player.id} className="hover:bg-gray-50 transition-colors">
                         <td className="px-4 py-4 align-middle">
