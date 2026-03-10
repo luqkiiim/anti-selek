@@ -1,6 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type KeyboardEvent,
+  type MouseEvent,
+} from "react";
 import { useSession } from "next-auth/react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
@@ -466,6 +473,35 @@ export default function CommunityPage() {
   }
 
   const claimedMembers = communityMembers.filter((member) => member.isClaimed).length;
+  const shouldIgnoreLeaderboardCardNavigation = (target: EventTarget | null) =>
+    target instanceof HTMLElement &&
+    !!target.closest("button, a, select, input, option");
+  const openCommunityPlayerProfile = (playerId: string) => {
+    router.push(`/profile/${playerId}?communityId=${communityId}`);
+  };
+  const handleLeaderboardCardClick = (
+    event: MouseEvent<HTMLDivElement>,
+    playerId: string
+  ) => {
+    if (shouldIgnoreLeaderboardCardNavigation(event.target)) {
+      return;
+    }
+
+    openCommunityPlayerProfile(playerId);
+  };
+  const handleLeaderboardCardKeyDown = (
+    event: KeyboardEvent<HTMLDivElement>,
+    playerId: string
+  ) => {
+    if (shouldIgnoreLeaderboardCardNavigation(event.target)) {
+      return;
+    }
+
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      openCommunityPlayerProfile(playerId);
+    }
+  };
   const selectedEntrants = selectedPlayerIds.length + guestConfigs.length;
 
   return (
@@ -665,7 +701,14 @@ export default function CommunityPage() {
                 </div>
               ) : (
                 leaderboard.map((player, index) => (
-                  <div key={player.id} className="bg-gray-50 border border-gray-100 rounded-2xl px-4 py-3">
+                  <div
+                    key={player.id}
+                    role="link"
+                    tabIndex={0}
+                    onClick={(event) => handleLeaderboardCardClick(event, player.id)}
+                    onKeyDown={(event) => handleLeaderboardCardKeyDown(event, player.id)}
+                    className="cursor-pointer rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3 transition-colors hover:border-blue-200 hover:bg-blue-50/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 focus-visible:ring-offset-2"
+                  >
                     <div className="flex items-center justify-between gap-3">
                       <div className="flex items-center gap-3 min-w-0">
                         <span className="text-[10px] font-black uppercase tracking-widest text-blue-600 w-6 shrink-0">
