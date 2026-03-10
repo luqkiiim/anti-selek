@@ -179,37 +179,44 @@ export default function Home() {
           </div>
         </div>
 
-        <HeroCard
-          eyebrow="Dashboard"
-          title="Anti-Selek"
-          description="Manage badminton communities, launch tournaments quickly, and jump straight back into the sessions you already belong to."
-          meta={<span className="app-chip app-chip-neutral">Community tournaments</span>}
-        />
-
-        <div className="flex justify-center">
-          <div className="flex flex-wrap justify-center gap-3">
-            <button
-              type="button"
-              onClick={() => {
-                setError("");
-                setIsJoinCommunityOpen(true);
-              }}
-              className="app-button-secondary"
-            >
-              Join Community
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setError("");
-                setIsCreateCommunityOpen(true);
-              }}
-              className="app-button-primary"
-            >
-              Create Community
-            </button>
+        <section className="app-panel relative overflow-hidden px-5 py-6 sm:px-6">
+          <div className="pointer-events-none absolute inset-y-0 right-[-5rem] top-[-2rem] w-64 rounded-full bg-[radial-gradient(circle,_rgba(22,119,242,0.16),_transparent_65%)] blur-2xl" />
+          <div className="pointer-events-none absolute bottom-[-4rem] left-[-2rem] h-40 w-40 rounded-full bg-[radial-gradient(circle,_rgba(25,154,97,0.12),_transparent_68%)] blur-2xl" />
+          <div className="relative space-y-6 text-center">
+            <div className="flex flex-wrap items-center justify-center gap-3">
+              <p className="app-eyebrow">Dashboard</p>
+              <span className="app-chip app-chip-neutral">Community tournaments</span>
+            </div>
+            <div className="space-y-3">
+              <h1 className="app-title text-gray-900">Anti-Selek</h1>
+              <p className="mx-auto max-w-3xl text-sm text-gray-600 sm:text-base">
+                Manage badminton communities, launch tournaments quickly, and jump straight back into the sessions you already belong to.
+              </p>
+            </div>
+            <div className="flex flex-wrap justify-center gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setError("");
+                  setIsJoinCommunityOpen(true);
+                }}
+                className="app-button-secondary"
+              >
+                Join Community
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setError("");
+                  setIsCreateCommunityOpen(true);
+                }}
+                className="app-button-primary"
+              >
+                Create Community
+              </button>
+            </div>
           </div>
-        </div>
+        </section>
 
         {error ? <FlashMessage tone="error">{error}</FlashMessage> : null}
 
