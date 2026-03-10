@@ -832,7 +832,6 @@ export default function SessionPage() {
             </h1>
             <div className="flex items-center gap-2">
               <span className="app-chip app-chip-neutral">{sessionData.status}</span>
-              <span className="app-chip app-chip-neutral">{sessionModeLabel}</span>
             </div>
           </div>
           <button
