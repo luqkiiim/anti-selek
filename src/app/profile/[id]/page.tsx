@@ -184,7 +184,7 @@ export default function ProfilePage() {
                     </div>
                   </div>
 
-                  <div className="mt-4 grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] lg:items-center">
+                  <div className="mt-4 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 sm:gap-3">
                     <div className="app-panel-muted p-3">
                       <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">Team</p>
                       <p className="mt-2 text-sm font-semibold text-gray-900">
@@ -192,7 +192,7 @@ export default function ProfilePage() {
                       </p>
                     </div>
 
-                    <div className="mx-auto rounded-full bg-gray-100 px-4 py-2 text-sm font-semibold text-gray-900">
+                    <div className="mx-auto rounded-full bg-gray-100 px-3 py-2 text-center text-xs font-semibold text-gray-900 sm:px-4 sm:text-sm">
                       {match.score}
                     </div>
 
