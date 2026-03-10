@@ -873,14 +873,8 @@ export default function CommunityPage() {
                             {tournament.players.length} Players - {tournament.type} -{" "}
                             {new Date(tournament.createdAt).toLocaleDateString()}
                           </p>
-                          <div className="flex items-center gap-2 shrink-0">
-                            <Link
-                              href={`/session/${tournament.code}`}
-                              className="text-[10px] bg-gray-900 text-white px-3 py-1.5 rounded-lg font-black uppercase tracking-wider"
-                            >
-                              Open
-                            </Link>
-                            {canRollbackLatest && (
+                          {canRollbackLatest ? (
+                            <div className="shrink-0">
                               <button
                                 type="button"
                                 onClick={() => rollbackTournament(tournament)}
@@ -891,8 +885,8 @@ export default function CommunityPage() {
                                   ? "Rolling Back..."
                                   : "Rollback"}
                               </button>
-                            )}
-                          </div>
+                            </div>
+                          ) : null}
                         </div>
                       </div>
                     );
