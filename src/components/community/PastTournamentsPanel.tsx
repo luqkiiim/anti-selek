@@ -57,7 +57,7 @@ export function PastTournamentsPanel({
                 tabIndex={0}
                 onClick={(event) => onCardClick(event, tournament.code)}
                 onKeyDown={(event) => onCardKeyDown(event, tournament.code)}
-                className="cursor-pointer rounded-2xl border border-gray-100 bg-gray-50 p-4 transition-colors hover:border-blue-200 hover:bg-blue-50/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 focus-visible:ring-offset-2"
+                className="cursor-pointer rounded-2xl border border-gray-100 bg-gray-50 p-4 transition hover:-translate-y-0.5 hover:border-blue-200 hover:bg-blue-50/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 focus-visible:ring-offset-2"
               >
                 <div className="mb-2 flex items-start justify-between">
                   <h4 className="font-black text-gray-900">{tournament.name}</h4>
