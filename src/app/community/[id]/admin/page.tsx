@@ -801,9 +801,107 @@ export default function CommunityAdminPage() {
                               )}
                           </div>
                           <p className="text-xs text-gray-500 truncate">{player.email || "No email"}</p>
-                          <Link href={`/profile/${player.id}?communityId=${communityId}`} className="text-[11px] text-blue-600 hover:underline">
-                            View profile
-                          </Link>
+                          <div className="flex items-start gap-3">
+                            <Link
+                              href={`/profile/${player.id}?communityId=${communityId}`}
+                              className="pt-1 text-[11px] text-blue-600 hover:underline"
+                            >
+                              View profile
+                            </Link>
+                            <div className="ml-auto flex flex-wrap items-center justify-end gap-2 relative">
+                              {renderRolePill(player)}
+                              {renderClaimPill(player)}
+                              <div className="relative">
+                                <button
+                                  type="button"
+                                  onClick={(e) => togglePreferenceEditor(player.id, e.currentTarget)}
+                                  className="px-2 h-7 inline-flex items-center justify-center whitespace-nowrap text-xs leading-none font-semibold rounded-full bg-gray-100 text-gray-700 border border-gray-200 hover:bg-gray-200 transition-colors"
+                                >
+                                  {getGenderPillLabel(player)}
+                                </button>
+                                {openPreferenceEditorFor === player.id && (
+                                  <div
+                                    className={`absolute right-0 z-20 bg-white border border-gray-200 rounded-xl shadow-lg p-2.5 w-44 space-y-2 ${
+                                      preferenceEditorDirection === "up"
+                                        ? "bottom-full mb-2"
+                                        : "top-full mt-2"
+                                    }`}
+                                  >
+                                    <div className="space-y-1">
+                                      <p className="text-[9px] font-black uppercase tracking-wider text-gray-400">
+                                        Gender
+                                      </p>
+                                      <select
+                                        value={player.gender}
+                                        onChange={async (e) => {
+                                          const nextGender = e.target.value as PlayerGender;
+                                          setOpenPreferenceEditorFor(null);
+                                          const nextPreference =
+                                            nextGender === PlayerGender.MALE
+                                              ? PartnerPreference.OPEN
+                                              : PartnerPreference.FEMALE_FLEX;
+                                          await handleUpdatePreferences(player.id, {
+                                            gender: nextGender,
+                                            partnerPreference: nextPreference,
+                                          });
+                                        }}
+                                        disabled={savingPreferences[player.id]}
+                                        className="h-8 w-full bg-white border border-gray-200 rounded-lg px-2 text-[10px] font-black uppercase tracking-wide text-gray-700 focus:outline-none focus:border-blue-400 disabled:opacity-60"
+                                      >
+                                        <option value={PlayerGender.MALE}>Male</option>
+                                        <option value={PlayerGender.FEMALE}>Female</option>
+                                      </select>
+                                    </div>
+                                    <div className="space-y-1">
+                                      <p className="text-[9px] font-black uppercase tracking-wider text-gray-400">
+                                        Open Tag
+                                      </p>
+                                      {player.gender === PlayerGender.FEMALE ? (
+                                        <select
+                                          value={player.partnerPreference}
+                                          onChange={async (e) => {
+                                            const nextPreference = e.target.value as PartnerPreference;
+                                            setOpenPreferenceEditorFor(null);
+                                            await handleUpdatePreferences(player.id, {
+                                              partnerPreference: nextPreference,
+                                            });
+                                          }}
+                                          disabled={savingPreferences[player.id]}
+                                          className="h-8 w-full bg-white border border-gray-200 rounded-lg px-2 text-[10px] font-black uppercase tracking-wide text-gray-700 focus:outline-none focus:border-blue-400 disabled:opacity-60"
+                                        >
+                                          <option value={PartnerPreference.FEMALE_FLEX}>Default</option>
+                                          <option value={PartnerPreference.OPEN}>Open Tag</option>
+                                        </select>
+                                      ) : (
+                                        <p className="text-[10px] font-black uppercase tracking-wide text-gray-500 px-1 py-2">
+                                          Not Needed
+                                        </p>
+                                      )}
+                                    </div>
+                                    {savingPreferences[player.id] && (
+                                      <p className="text-[9px] font-black uppercase tracking-wider text-gray-400">
+                                        Saving...
+                                      </p>
+                                    )}
+                                    <div className="flex justify-end">
+                                      <button
+                                        type="button"
+                                        onClick={() => setOpenPreferenceEditorFor(null)}
+                                        className="text-[9px] font-black uppercase tracking-widest text-gray-500"
+                                      >
+                                        Close
+                                      </button>
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                              {savingPreferences[player.id] ? (
+                                <span className="text-[9px] font-black uppercase tracking-widest text-gray-400">
+                                  Saving...
+                                </span>
+                              ) : null}
+                            </div>
+                          </div>
                         </div>
                         <div className="shrink-0 space-y-2 text-right">
                           <div className="flex items-center justify-end gap-2">
@@ -825,100 +923,6 @@ export default function CommunityAdminPage() {
                           </div>
                           <p className="text-xs font-black text-gray-700">Rating {player.elo}</p>
                         </div>
-                      </div>
-
-                      <div className="flex flex-wrap items-center gap-2 relative">
-                        {renderRolePill(player)}
-                        {renderClaimPill(player)}
-                        <div className="relative">
-                          <button
-                            type="button"
-                            onClick={(e) => togglePreferenceEditor(player.id, e.currentTarget)}
-                            className="px-2 h-7 inline-flex items-center justify-center whitespace-nowrap text-xs leading-none font-semibold rounded-full bg-gray-100 text-gray-700 border border-gray-200 hover:bg-gray-200 transition-colors"
-                          >
-                            {getGenderPillLabel(player)}
-                          </button>
-                          {openPreferenceEditorFor === player.id && (
-                            <div
-                              className={`absolute right-0 z-20 bg-white border border-gray-200 rounded-xl shadow-lg p-2.5 w-44 space-y-2 ${
-                                preferenceEditorDirection === "up"
-                                  ? "bottom-full mb-2"
-                                  : "top-full mt-2"
-                              }`}
-                            >
-                              <div className="space-y-1">
-                                <p className="text-[9px] font-black uppercase tracking-wider text-gray-400">
-                                  Gender
-                                </p>
-                                <select
-                                  value={player.gender}
-                                  onChange={async (e) => {
-                                    const nextGender = e.target.value as PlayerGender;
-                                    setOpenPreferenceEditorFor(null);
-                                    const nextPreference =
-                                      nextGender === PlayerGender.MALE
-                                        ? PartnerPreference.OPEN
-                                        : PartnerPreference.FEMALE_FLEX;
-                                    await handleUpdatePreferences(player.id, {
-                                      gender: nextGender,
-                                      partnerPreference: nextPreference,
-                                    });
-                                  }}
-                                  disabled={savingPreferences[player.id]}
-                                  className="h-8 w-full bg-white border border-gray-200 rounded-lg px-2 text-[10px] font-black uppercase tracking-wide text-gray-700 focus:outline-none focus:border-blue-400 disabled:opacity-60"
-                                >
-                                  <option value={PlayerGender.MALE}>Male</option>
-                                  <option value={PlayerGender.FEMALE}>Female</option>
-                                </select>
-                              </div>
-                              <div className="space-y-1">
-                                <p className="text-[9px] font-black uppercase tracking-wider text-gray-400">
-                                  Open Tag
-                                </p>
-                                {player.gender === PlayerGender.FEMALE ? (
-                                  <select
-                                    value={player.partnerPreference}
-                                    onChange={async (e) => {
-                                      const nextPreference = e.target.value as PartnerPreference;
-                                      setOpenPreferenceEditorFor(null);
-                                      await handleUpdatePreferences(player.id, {
-                                        partnerPreference: nextPreference,
-                                      });
-                                    }}
-                                    disabled={savingPreferences[player.id]}
-                                    className="h-8 w-full bg-white border border-gray-200 rounded-lg px-2 text-[10px] font-black uppercase tracking-wide text-gray-700 focus:outline-none focus:border-blue-400 disabled:opacity-60"
-                                  >
-                                    <option value={PartnerPreference.FEMALE_FLEX}>Default</option>
-                                    <option value={PartnerPreference.OPEN}>Open Tag</option>
-                                  </select>
-                                ) : (
-                                  <p className="text-[10px] font-black uppercase tracking-wide text-gray-500 px-1 py-2">
-                                    Not Needed
-                                  </p>
-                                )}
-                              </div>
-                              {savingPreferences[player.id] && (
-                                <p className="text-[9px] font-black uppercase tracking-wider text-gray-400">
-                                  Saving...
-                                </p>
-                              )}
-                              <div className="flex justify-end">
-                                <button
-                                  type="button"
-                                  onClick={() => setOpenPreferenceEditorFor(null)}
-                                  className="text-[9px] font-black uppercase tracking-widest text-gray-500"
-                                >
-                                  Close
-                                </button>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                        {savingPreferences[player.id] ? (
-                          <span className="text-[9px] font-black uppercase tracking-widest text-gray-400">
-                            Saving...
-                          </span>
-                        ) : null}
                       </div>
 
                       <div className="pt-1">
