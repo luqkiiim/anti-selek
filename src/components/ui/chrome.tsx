@@ -112,6 +112,7 @@ export function HeroCard({
   title,
   description,
   actions,
+  actionsPosition = "side",
   backHref,
   backLabel = "Back",
   meta,
@@ -120,11 +121,14 @@ export function HeroCard({
   title?: ReactNode;
   description?: ReactNode;
   actions?: ReactNode;
+  actionsPosition?: "side" | "below";
   backHref?: string;
   backLabel?: string;
   meta?: ReactNode;
 }) {
   const hasHeadingContent = Boolean(title) || Boolean(description);
+  const showActionsBelow = actionsPosition === "below" && !!actions;
+  const showActionsSide = actionsPosition === "side" && !!actions;
 
   return (
     <section className="app-panel relative overflow-hidden px-5 py-6 sm:px-6">
@@ -149,8 +153,9 @@ export function HeroCard({
               ) : null}
             </div>
           ) : null}
+          {showActionsBelow ? actions : null}
         </div>
-        {actions ? <div className="flex flex-wrap gap-3">{actions}</div> : null}
+        {showActionsSide ? <div className="flex flex-wrap gap-3">{actions}</div> : null}
       </div>
     </section>
   );

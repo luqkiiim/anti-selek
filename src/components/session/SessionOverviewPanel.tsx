@@ -9,10 +9,8 @@ interface SessionOverviewPanelProps {
   guestPlayersCount: number;
   activeMatchesCount: number;
   completedMatchesCount: number;
-  courtCount: number;
   pausedPlayersCount: number;
   sessionStatus: string;
-  isAdmin: boolean;
   canStartSession: boolean;
   canEndSession: boolean;
   canOpenRoster: boolean;
@@ -29,10 +27,8 @@ export function SessionOverviewPanel({
   guestPlayersCount,
   activeMatchesCount,
   completedMatchesCount,
-  courtCount,
   pausedPlayersCount,
   sessionStatus,
-  isAdmin,
   canStartSession,
   canEndSession,
   canOpenRoster,
@@ -47,11 +43,40 @@ export function SessionOverviewPanel({
     <>
       <HeroCard
         eyebrow={isCompleted ? "Completed session" : "Live session"}
+        actionsPosition="below"
         meta={
           <>
             <span className="app-chip app-chip-neutral">{sessionTypeLabel}</span>
             <span className="app-chip app-chip-neutral">{sessionModeLabel}</span>
           </>
+        }
+        actions={
+          <div className="flex flex-col gap-3 pt-1 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+            <div className="flex flex-wrap gap-3">
+              {canStartSession ? (
+                <button type="button" onClick={onStartSession} className="app-button-primary">
+                  Start Session
+                </button>
+              ) : null}
+              {canEndSession ? (
+                <button type="button" onClick={onEndSession} className="app-button-danger">
+                  End Session
+                </button>
+              ) : null}
+              {canOpenRoster ? (
+                <button type="button" onClick={onOpenRoster} className="app-button-secondary">
+                  Add Players
+                </button>
+              ) : null}
+            </div>
+            <button
+              type="button"
+              onClick={onOpenMatchHistory}
+              className="app-button-secondary sm:ml-auto"
+            >
+              Match History
+            </button>
+          </div>
         }
       />
 
@@ -75,27 +100,6 @@ export function SessionOverviewPanel({
           value={sessionStatus}
         />
       </section>
-
-      <div className="app-panel flex flex-wrap gap-3 p-4">
-        <button type="button" onClick={onOpenMatchHistory} className="app-button-secondary">
-          Match History
-        </button>
-        {canStartSession ? (
-          <button type="button" onClick={onStartSession} className="app-button-primary">
-            Start Session
-          </button>
-        ) : null}
-        {isAdmin && canOpenRoster ? (
-          <button type="button" onClick={onOpenRoster} className="app-button-secondary">
-            Add Players
-          </button>
-        ) : null}
-        {canEndSession ? (
-          <button type="button" onClick={onEndSession} className="app-button-danger">
-            End Session
-          </button>
-        ) : null}
-      </div>
     </>
   );
 }

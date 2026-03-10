@@ -855,13 +855,11 @@ export default function SessionPage() {
           guestPlayersCount={guestPlayersCount}
           activeMatchesCount={activeMatchesCount}
           completedMatchesCount={completedMatchesCount}
-          courtCount={sessionData.courts.length}
           pausedPlayersCount={pausedPlayersCount}
           sessionStatus={sessionData.status}
-          isAdmin={isAdmin}
           canStartSession={sessionData.status === SessionStatus.WAITING}
           canEndSession={sessionData.status === SessionStatus.ACTIVE}
-          canOpenRoster={!isCompletedSession}
+          canOpenRoster={isAdmin && !isCompletedSession}
           onStartSession={startSession}
           onOpenRoster={openRosterModal}
           onEndSession={endSession}
