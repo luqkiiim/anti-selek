@@ -85,8 +85,8 @@ export function HostTournamentPanel({
         </div>
         <p className="text-[10px] font-bold text-blue-100 uppercase tracking-wider">
           {sessionType === SessionType.POINTS
-            ? "Play for points. Standings decide the winner."
-            : "Pair matches by rating. Ratings still update, but standings use points plus diff."}
+            ? "Points based matchmaking"
+            : "Ratings based matchmaking"}
         </p>
 
         <div className="grid grid-cols-2 gap-2">
