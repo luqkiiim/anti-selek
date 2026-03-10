@@ -827,23 +827,25 @@ export default function SessionPage() {
   return (
     <div className="app-page">
       <nav className="app-topbar">
-        <div className="app-topbar-inner max-w-7xl flex flex-wrap gap-3">
-          <div className="flex flex-col">
-            <h1 className="text-lg font-semibold text-gray-900 leading-tight truncate max-w-[180px] sm:max-w-[280px] md:max-w-[420px]">
-              {sessionData.name}
-            </h1>
-            <div className="flex items-center gap-2">
-              <span className="app-chip app-chip-neutral">{sessionData.status}</span>
+        <div className="app-topbar-inner max-w-7xl">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() =>
+                router.push(sessionData.communityId ? `/community/${sessionData.communityId}` : "/")
+              }
+              className="app-button-secondary px-4 py-2"
+            >
+              Back
+            </button>
+            <div className="flex flex-col">
+              <h1 className="text-lg font-semibold text-gray-900 leading-tight truncate max-w-[180px] sm:max-w-[280px] md:max-w-[420px]">
+                {sessionData.name}
+              </h1>
+              <div className="flex items-center gap-2">
+                <span className="app-chip app-chip-neutral">{sessionData.status}</span>
+              </div>
             </div>
           </div>
-          <button
-            onClick={() =>
-              router.push(sessionData.communityId ? `/community/${sessionData.communityId}` : "/")
-            }
-            className="app-button-secondary px-4 py-2"
-          >
-            Back
-          </button>
         </div>
       </nav>
 
