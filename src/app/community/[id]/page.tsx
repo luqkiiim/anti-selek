@@ -473,7 +473,7 @@ export default function CommunityPage() {
   }
 
   const claimedMembers = communityMembers.filter((member) => member.isClaimed).length;
-  const shouldIgnoreLeaderboardCardNavigation = (target: EventTarget | null) =>
+  const shouldIgnoreCardNavigation = (target: EventTarget | null) =>
     target instanceof HTMLElement &&
     !!target.closest("button, a, select, input, option");
   const openCommunityPlayerProfile = (playerId: string) => {
@@ -483,7 +483,7 @@ export default function CommunityPage() {
     event: MouseEvent<HTMLDivElement>,
     playerId: string
   ) => {
-    if (shouldIgnoreLeaderboardCardNavigation(event.target)) {
+    if (shouldIgnoreCardNavigation(event.target)) {
       return;
     }
 
@@ -493,13 +493,39 @@ export default function CommunityPage() {
     event: KeyboardEvent<HTMLDivElement>,
     playerId: string
   ) => {
-    if (shouldIgnoreLeaderboardCardNavigation(event.target)) {
+    if (shouldIgnoreCardNavigation(event.target)) {
       return;
     }
 
     if (event.key === "Enter" || event.key === " ") {
       event.preventDefault();
       openCommunityPlayerProfile(playerId);
+    }
+  };
+  const openTournament = (code: string) => {
+    router.push(`/session/${code}`);
+  };
+  const handlePastTournamentCardClick = (
+    event: MouseEvent<HTMLDivElement>,
+    code: string
+  ) => {
+    if (shouldIgnoreCardNavigation(event.target)) {
+      return;
+    }
+
+    openTournament(code);
+  };
+  const handlePastTournamentCardKeyDown = (
+    event: KeyboardEvent<HTMLDivElement>,
+    code: string
+  ) => {
+    if (shouldIgnoreCardNavigation(event.target)) {
+      return;
+    }
+
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      openTournament(code);
     }
   };
   const selectedEntrants = selectedPlayerIds.length + guestConfigs.length;
@@ -860,7 +886,11 @@ export default function CommunityPage() {
                     return (
                       <div
                         key={tournament.id}
-                        className="bg-gray-50 p-4 rounded-2xl border border-gray-100"
+                        role="link"
+                        tabIndex={0}
+                        onClick={(event) => handlePastTournamentCardClick(event, tournament.code)}
+                        onKeyDown={(event) => handlePastTournamentCardKeyDown(event, tournament.code)}
+                        className="cursor-pointer rounded-2xl border border-gray-100 bg-gray-50 p-4 transition-colors hover:border-blue-200 hover:bg-blue-50/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 focus-visible:ring-offset-2"
                       >
                         <div className="flex justify-between items-start mb-2">
                           <h4 className="font-black text-gray-900">{tournament.name}</h4>
