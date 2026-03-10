@@ -4,9 +4,13 @@ import { useCallback, useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { FlashMessage, HeroCard, ModalFrame, StatCard } from "@/components/ui/chrome";
+import {
+  EmptyState,
+  FlashMessage,
+  ModalFrame,
+  SectionCard,
+} from "@/components/ui/chrome";
 import { CommunitySettingsPanel } from "@/components/community-admin/CommunitySettingsPanel";
-import { CreatePlayerProfilePanel } from "@/components/community-admin/CreatePlayerProfilePanel";
 import { ClaimRequestsPanel } from "@/components/community-admin/ClaimRequestsPanel";
 import {
   ClaimRequestStatus,
@@ -65,54 +69,33 @@ export default function CommunityAdminPage() {
   const [communityNameInput, setCommunityNameInput] = useState("");
   const [communityPasswordInput, setCommunityPasswordInput] = useState("");
   const [savingCommunitySettings, setSavingCommunitySettings] = useState(false);
+
+  const [activeSection, setActiveSection] = useState<"players" | "claims" | "settings">(
+    "players"
+  );
+  const [playerSearch, setPlayerSearch] = useState("");
+
+  const [isCreatePlayerOpen, setIsCreatePlayerOpen] = useState(false);
   const [name, setName] = useState("");
   const [newPlayerGender, setNewPlayerGender] = useState<PlayerGender>(PlayerGender.MALE);
-  const [editingName, setEditingName] = useState<Record<string, string>>({});
-  const [savingName, setSavingName] = useState<Record<string, boolean>>({});
-  const [editingElo, setEditingElo] = useState<Record<string, string>>({});
-  const [savingElo, setSavingElo] = useState<Record<string, boolean>>({});
-  const [savingRole, setSavingRole] = useState<Record<string, boolean>>({});
-  const [savingPreferences, setSavingPreferences] = useState<Record<string, boolean>>({});
-  const [openPreferenceEditorFor, setOpenPreferenceEditorFor] = useState<string | null>(null);
-  const [openPlayerActionMenuFor, setOpenPlayerActionMenuFor] = useState<string | null>(null);
-  const [preferenceEditorDirection, setPreferenceEditorDirection] = useState<"up" | "down">(
-    "down"
-  );
+
+  const [editingPlayerId, setEditingPlayerId] = useState<string | null>(null);
+  const [editorName, setEditorName] = useState("");
+  const [editorRating, setEditorRating] = useState("");
+  const [savingName, setSavingName] = useState(false);
+  const [savingRating, setSavingRating] = useState(false);
+  const [savingRole, setSavingRole] = useState(false);
+  const [savingPreferences, setSavingPreferences] = useState(false);
+
   const [reviewingClaimRequestId, setReviewingClaimRequestId] = useState<string | null>(null);
   const [resettingCommunity, setResettingCommunity] = useState(false);
   const [deletingCommunity, setDeletingCommunity] = useState(false);
+
   const [passwordResetTarget, setPasswordResetTarget] = useState<Player | null>(null);
   const [passwordResetValue, setPasswordResetValue] = useState("");
   const [passwordResetConfirm, setPasswordResetConfirm] = useState("");
   const [passwordResetError, setPasswordResetError] = useState("");
   const [savingPasswordReset, setSavingPasswordReset] = useState(false);
-
-  const getGenderPillLabel = (player: Player) => {
-    if (player.gender === PlayerGender.FEMALE) {
-      return player.partnerPreference === PartnerPreference.OPEN
-        ? "Female/Open"
-        : "Female";
-    }
-    return "Male";
-  };
-
-  const togglePreferenceEditor = (playerId: string, triggerEl: HTMLElement) => {
-    if (openPreferenceEditorFor === playerId) {
-      setOpenPreferenceEditorFor(null);
-      return;
-    }
-    setOpenPlayerActionMenuFor(null);
-    const rect = triggerEl.getBoundingClientRect();
-    const estimatedPopoverHeight = 220;
-    const spaceBelow = window.innerHeight - rect.bottom;
-    setPreferenceEditorDirection(spaceBelow < estimatedPopoverHeight ? "up" : "down");
-    setOpenPreferenceEditorFor(playerId);
-  };
-
-  const togglePlayerActionMenu = (playerId: string) => {
-    setOpenPreferenceEditorFor(null);
-    setOpenPlayerActionMenuFor((current) => (current === playerId ? null : playerId));
-  };
 
   const safeJson = async (res: Response) => {
     const text = await res.text();
@@ -123,22 +106,13 @@ export default function CommunityAdminPage() {
     }
   };
 
-  const openPasswordResetModal = (player: Player) => {
-    setOpenPlayerActionMenuFor(null);
-    setPasswordResetTarget(player);
-    setPasswordResetValue("");
-    setPasswordResetConfirm("");
-    setPasswordResetError("");
-    setError("");
-    setSuccess("");
-  };
-
-  const closePasswordResetModal = () => {
-    setPasswordResetTarget(null);
-    setPasswordResetValue("");
-    setPasswordResetConfirm("");
-    setPasswordResetError("");
-    setSavingPasswordReset(false);
+  const getGenderPillLabel = (player: Player) => {
+    if (player.gender === PlayerGender.FEMALE) {
+      return player.partnerPreference === PartnerPreference.OPEN
+        ? "Female/Open"
+        : "Female";
+    }
+    return "Male";
   };
 
   const fetchCommunityAndPlayers = useCallback(async () => {
@@ -151,7 +125,7 @@ export default function CommunityAdminPage() {
     }
 
     const list = Array.isArray(communitiesData) ? (communitiesData as Community[]) : [];
-    const currentCommunity = list.find((c) => c.id === communityId) || null;
+    const currentCommunity = list.find((item) => item.id === communityId) || null;
     if (!currentCommunity) {
       throw new Error("Community not found or access denied");
     }
@@ -169,12 +143,14 @@ export default function CommunityAdminPage() {
       safeJson(playersRes),
       safeJson(claimRequestsRes),
     ]);
+
     if (!playersRes.ok) {
       throw new Error(playersData.error || "Failed to load players");
     }
     if (!claimRequestsRes.ok) {
       throw new Error(claimRequestsData.error || "Failed to load claim requests");
     }
+
     setPlayers(Array.isArray(playersData) ? playersData : []);
     setClaimRequests(Array.isArray(claimRequestsData) ? claimRequestsData : []);
   }, [communityId, router]);
@@ -205,9 +181,44 @@ export default function CommunityAdminPage() {
         setLoading(false);
       }
     })();
-  }, [status, router, communityId, fetchCommunityAndPlayers]);
+  }, [communityId, fetchCommunityAndPlayers, router, status]);
 
-  const handleAddPlayer = async (e: React.FormEvent) => {
+  const openPlayerEditor = (player: Player) => {
+    setEditingPlayerId(player.id);
+    setEditorName(player.name);
+    setEditorRating(String(player.elo));
+    setError("");
+    setSuccess("");
+  };
+
+  const closePlayerEditor = () => {
+    setEditingPlayerId(null);
+    setEditorName("");
+    setEditorRating("");
+    setSavingName(false);
+    setSavingRating(false);
+    setSavingRole(false);
+    setSavingPreferences(false);
+  };
+
+  const openPasswordResetModal = (player: Player) => {
+    setPasswordResetTarget(player);
+    setPasswordResetValue("");
+    setPasswordResetConfirm("");
+    setPasswordResetError("");
+    setError("");
+    setSuccess("");
+  };
+
+  const closePasswordResetModal = () => {
+    setPasswordResetTarget(null);
+    setPasswordResetValue("");
+    setPasswordResetConfirm("");
+    setPasswordResetError("");
+    setSavingPasswordReset(false);
+  };
+
+  const handleAddPlayer = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setError("");
     setSuccess("");
@@ -230,40 +241,26 @@ export default function CommunityAdminPage() {
       setSuccess(`Player profile for "${name}" added to community.`);
       setName("");
       setNewPlayerGender(PlayerGender.MALE);
+      setIsCreatePlayerOpen(false);
       await fetchCommunityAndPlayers();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Failed to add player");
     }
   };
 
-  const handleEloChange = (id: string, value: string) => {
-    setEditingElo((prev) => ({ ...prev, [id]: value }));
-  };
-
-  const handleNameChange = (id: string, value: string) => {
-    setEditingName((prev) => ({ ...prev, [id]: value }));
-  };
-
-  const handleUpdateName = async (id: string, currentName: string) => {
-    const nextNameRaw = editingName[id];
-    if (nextNameRaw === undefined) return;
-
-    const nextName = nextNameRaw.trim();
-    if (!nextName || nextName === currentName) {
-      setEditingName((prev) => {
-        const next = { ...prev };
-        delete next[id];
-        return next;
-      });
+  const handleSavePlayerName = async (player: Player) => {
+    const nextName = editorName.trim();
+    if (!nextName || nextName === player.name) {
+      setEditorName(player.name);
       return;
     }
 
-    setSavingName((prev) => ({ ...prev, [id]: true }));
+    setSavingName(true);
     setError("");
     setSuccess("");
 
     try {
-      const res = await fetch(`/api/communities/${communityId}/members/${id}`, {
+      const res = await fetch(`/api/communities/${communityId}/members/${player.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: nextName }),
@@ -274,62 +271,55 @@ export default function CommunityAdminPage() {
       }
 
       setSuccess(`Player name updated to "${nextName}".`);
-      setEditingName((prev) => {
-        const next = { ...prev };
-        delete next[id];
-        return next;
-      });
+      setEditorName(nextName);
       await fetchCommunityAndPlayers();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Failed to update player name");
     } finally {
-      setSavingName((prev) => ({ ...prev, [id]: false }));
+      setSavingName(false);
     }
   };
 
-  const handleUpdateElo = async (id: string, playerName: string) => {
-    const newElo = editingElo[id];
-    if (!newElo || isNaN(parseInt(newElo, 10))) return;
+  const handleSavePlayerRating = async (player: Player) => {
+    const nextRating = parseInt(editorRating, 10);
+    if (Number.isNaN(nextRating)) return;
+    if (nextRating === player.elo) return;
 
-    setSavingElo((prev) => ({ ...prev, [id]: true }));
+    setSavingRating(true);
     setError("");
     setSuccess("");
 
     try {
-      const res = await fetch(`/api/communities/${communityId}/members/${id}`, {
+      const res = await fetch(`/api/communities/${communityId}/members/${player.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ elo: parseInt(newElo, 10) }),
+        body: JSON.stringify({ elo: nextRating }),
       });
       const data = await safeJson(res);
       if (!res.ok) {
         throw new Error(data.error || "Failed to update rating");
       }
 
-      setSuccess(`${playerName}'s rating updated to ${newElo}.`);
-      setEditingElo((prev) => {
-        const next = { ...prev };
-        delete next[id];
-        return next;
-      });
+      setSuccess(`${player.name}'s rating updated to ${nextRating}.`);
+      setEditorRating(String(nextRating));
       await fetchCommunityAndPlayers();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Failed to update rating");
     } finally {
-      setSavingElo((prev) => ({ ...prev, [id]: false }));
+      setSavingRating(false);
     }
   };
 
-  const handleRemovePlayer = async (id: string, playerName: string) => {
-    if (!confirm(`Remove ${playerName} from this community?`)) {
-      return;
+  const handleRemovePlayer = async (player: Player) => {
+    if (!confirm(`Remove ${player.name} from this community?`)) {
+      return false;
     }
 
     setError("");
     setSuccess("");
 
     try {
-      const res = await fetch(`/api/communities/${communityId}/members/${id}`, {
+      const res = await fetch(`/api/communities/${communityId}/members/${player.id}`, {
         method: "DELETE",
       });
       const data = await safeJson(res);
@@ -337,10 +327,13 @@ export default function CommunityAdminPage() {
         throw new Error(data.error || "Failed to remove player");
       }
 
-      setSuccess(`${playerName} removed from community.`);
+      setSuccess(`${player.name} removed from community.`);
+      closePlayerEditor();
       await fetchCommunityAndPlayers();
+      return true;
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Failed to remove player");
+      return false;
     }
   };
 
@@ -388,17 +381,17 @@ export default function CommunityAdminPage() {
     }
   };
 
-  const handlePromotePlayer = async (id: string, playerName: string) => {
-    if (!confirm(`Promote ${playerName} to admin?`)) {
+  const handlePromotePlayer = async (player: Player) => {
+    if (!confirm(`Promote ${player.name} to admin?`)) {
       return;
     }
 
-    setSavingRole((prev) => ({ ...prev, [id]: true }));
+    setSavingRole(true);
     setError("");
     setSuccess("");
 
     try {
-      const res = await fetch(`/api/communities/${communityId}/members/${id}`, {
+      const res = await fetch(`/api/communities/${communityId}/members/${player.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ role: "ADMIN" }),
@@ -408,26 +401,27 @@ export default function CommunityAdminPage() {
         throw new Error(data.error || "Failed to promote player");
       }
 
-      setSuccess(`${playerName} promoted to admin.`);
+      setSuccess(`${player.name} promoted to admin.`);
       await fetchCommunityAndPlayers();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Failed to promote player");
     } finally {
-      setSavingRole((prev) => ({ ...prev, [id]: false }));
+      setSavingRole(false);
     }
   };
 
   const handleUpdatePreferences = async (
-    id: string,
+    player: Player,
     updates: { gender?: PlayerGender; partnerPreference?: PartnerPreference }
   ) => {
     if (updates.gender === undefined && updates.partnerPreference === undefined) return;
-    setSavingPreferences((prev) => ({ ...prev, [id]: true }));
+
+    setSavingPreferences(true);
     setError("");
     setSuccess("");
 
     try {
-      const res = await fetch(`/api/communities/${communityId}/members/${id}`, {
+      const res = await fetch(`/api/communities/${communityId}/members/${player.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(updates),
@@ -438,27 +432,27 @@ export default function CommunityAdminPage() {
       }
 
       setPlayers((prev) =>
-        prev.map((player) =>
-          player.id === id
+        prev.map((item) =>
+          item.id === player.id
             ? {
-                ...player,
+                ...item,
                 gender:
                   typeof data.gender === "string"
                     ? (data.gender as PlayerGender)
-                    : player.gender,
+                    : item.gender,
                 partnerPreference:
                   typeof data.partnerPreference === "string"
                     ? (data.partnerPreference as PartnerPreference)
-                    : player.partnerPreference,
+                    : item.partnerPreference,
               }
-            : player
+            : item
         )
       );
       setSuccess("Player preferences updated.");
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Failed to update player preferences");
     } finally {
-      setSavingPreferences((prev) => ({ ...prev, [id]: false }));
+      setSavingPreferences(false);
     }
   };
 
@@ -526,12 +520,8 @@ export default function CommunityAdminPage() {
 
     try {
       const body: { name?: string; password?: string } = {};
-      if (hasNameChange) {
-        body.name = trimmedName;
-      }
-      if (hasPasswordChange) {
-        body.password = nextPassword;
-      }
+      if (hasNameChange) body.name = trimmedName;
+      if (hasPasswordChange) body.password = nextPassword;
 
       const res = await fetch(`/api/communities/${communityId}`, {
         method: "PATCH",
@@ -624,55 +614,44 @@ export default function CommunityAdminPage() {
 
   const renderRolePill = (player: Player) => {
     const baseClassName =
-      "px-2 inline-flex text-xs leading-5 font-semibold rounded-full border transition-colors";
+      "inline-flex items-center rounded-full border px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.16em]";
 
     if (player.role === "ADMIN") {
       return (
-        <span className={`${baseClassName} bg-[#ede9fe] text-[#5b21b6] border-[#ddd6fe]`}>
-          {player.role}
-        </span>
-      );
-    }
-
-    if (!player.isClaimed) {
-      return (
-        <span
-          className={`${baseClassName} bg-[#dbeafe] text-[#1e40af] border-[#bfdbfe]`}
-          title="Only claimed members can be promoted to admin."
-        >
+        <span className={`${baseClassName} border-[#ddd6fe] bg-[#ede9fe] text-[#5b21b6]`}>
           {player.role}
         </span>
       );
     }
 
     return (
-      <button
-        type="button"
-        onClick={() => handlePromotePlayer(player.id, player.name)}
-        disabled={savingRole[player.id]}
-        title="Promote to admin"
-        className={`${baseClassName} bg-[#dbeafe] text-[#1e40af] border-[#bfdbfe] hover:bg-[#bfdbfe] disabled:opacity-60 disabled:cursor-not-allowed`}
-      >
-        {savingRole[player.id] ? "Promoting..." : player.role}
-      </button>
+      <span className={`${baseClassName} border-[#bfdbfe] bg-[#dbeafe] text-[#1e40af]`}>
+        {player.role}
+      </span>
     );
   };
 
   const renderClaimPill = (player: Player) => {
     if (player.isClaimed) {
       return (
-        <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800">
+        <span className="inline-flex items-center rounded-full border border-blue-200 bg-blue-100 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-blue-800">
           Claimed
         </span>
       );
     }
 
     return (
-      <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-yellow-100 text-yellow-800">
+      <span className="inline-flex items-center rounded-full border border-amber-200 bg-amber-100 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-amber-800">
         Unclaimed
       </span>
     );
   };
+
+  const renderGenderPill = (player: Player) => (
+    <span className="inline-flex items-center rounded-full border border-gray-200 bg-gray-100 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-gray-700">
+      {getGenderPillLabel(player)}
+    </span>
+  );
 
   if (status === "loading" || loading) {
     return (
@@ -687,66 +666,261 @@ export default function CommunityAdminPage() {
 
   const claimedPlayers = players.filter((player) => player.isClaimed).length;
   const adminPlayers = players.filter((player) => player.role === "ADMIN").length;
+  const searchQuery = playerSearch.trim().toLowerCase();
+  const filteredPlayers = players
+    .slice()
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .filter((player) => {
+      if (!searchQuery) return true;
+      return (
+        player.name.toLowerCase().includes(searchQuery) ||
+        player.email?.toLowerCase().includes(searchQuery) ||
+        getGenderPillLabel(player).toLowerCase().includes(searchQuery)
+      );
+    });
+  const editingPlayer = editingPlayerId
+    ? players.find((player) => player.id === editingPlayerId) ?? null
+    : null;
 
   return (
     <main className="app-page">
       <div className="app-topbar">
         <div className="app-topbar-inner">
           <div className="flex items-center gap-3">
-          <Link
-            href={`/community/${communityId}`}
-            className="app-button-secondary px-4 py-2"
-          >
-            Back
-          </Link>
-          <div>
-            <h1 className="text-lg font-semibold text-gray-900 tracking-tight leading-none">
-              {community?.name || "Community"}
-            </h1>
-            <p className="text-[11px] text-gray-500">Community admin</p>
+            <Link href={`/community/${communityId}`} className="app-button-secondary px-4 py-2">
+              Back
+            </Link>
+            <div>
+              <h1 className="text-lg font-semibold text-gray-900 tracking-tight leading-none">
+                {community?.name || "Community"}
+              </h1>
+              <p className="text-[11px] text-gray-500">Community admin</p>
+            </div>
           </div>
-        </div>
 
-        <div className="flex items-center gap-2">
-          <button
-            onClick={handleResetCommunity}
-            disabled={resettingCommunity || deletingCommunity}
-            className="app-button-dark"
-          >
-            {resettingCommunity ? "Resetting..." : "Reset"}
-          </button>
-          <button
-            onClick={handleDeleteCommunity}
-            disabled={deletingCommunity || resettingCommunity}
-            className="app-button-danger"
-          >
-            {deletingCommunity ? "Deleting..." : "Delete"}
-          </button>
-        </div>
+          <div className="flex items-center gap-2">
+            <span className="app-chip app-chip-danger">Admin only</span>
+            <span
+              className={`app-chip ${
+                community?.isPasswordProtected ? "app-chip-warning" : "app-chip-neutral"
+              }`}
+            >
+              {community?.isPasswordProtected ? "Protected" : "Open"}
+            </span>
+          </div>
         </div>
       </div>
 
       <div className="app-shell space-y-8">
-        <HeroCard
-          eyebrow="Admin panel"
-          title={community?.name || "Community"}
-          description="Manage member records, approve claims, update player preferences, and keep the community roster clean without changing tournament logic."
-          backHref={`/community/${communityId}`}
-          backLabel="Community"
-          meta={<span className="app-chip app-chip-danger">Admin only</span>}
-        />
-
-        {success ? <FlashMessage tone="success">{success}</FlashMessage> : null}
-
-        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <StatCard label="Players" value={players.length} detail="Profiles in this community" accent />
-          <StatCard label="Claimed" value={claimedPlayers} detail={`${players.length - claimedPlayers} placeholders`} />
-          <StatCard label="Claim requests" value={claimRequests.length} detail={claimRequests.length > 0 ? "Needs review" : "No pending reviews"} />
-          <StatCard label="Admins" value={adminPlayers} detail="Accounts with community access" />
+        <section className="app-panel relative overflow-hidden px-5 py-6 sm:px-6">
+          <div className="pointer-events-none absolute inset-y-0 right-[-5rem] top-[-2rem] w-64 rounded-full bg-[radial-gradient(circle,_rgba(22,119,242,0.16),_transparent_65%)] blur-2xl" />
+          <div className="pointer-events-none absolute bottom-[-4rem] left-[-2rem] h-40 w-40 rounded-full bg-[radial-gradient(circle,_rgba(25,154,97,0.12),_transparent_68%)] blur-2xl" />
+          <div className="relative flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
+            <div className="max-w-3xl space-y-3">
+              <p className="app-eyebrow">Admin workspace</p>
+              <h2 className="text-2xl font-semibold text-gray-900 sm:text-3xl">
+                Keep the roster clean and the community ready for tournaments.
+              </h2>
+              <p className="text-sm text-gray-600 sm:text-base">
+                Players, claim reviews, and community settings now live in focused sections
+                instead of one long admin screen.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <span className="app-chip app-chip-accent">{players.length} players</span>
+              <span className="app-chip app-chip-neutral">{claimedPlayers} claimed</span>
+              <span className="app-chip app-chip-neutral">{adminPlayers} admins</span>
+              <span
+                className={`app-chip ${
+                  claimRequests.length > 0 ? "app-chip-warning" : "app-chip-success"
+                }`}
+              >
+                {claimRequests.length} claim requests
+              </span>
+            </div>
+          </div>
         </section>
 
-        <div className="grid grid-cols-1 lg:grid-cols-[320px_minmax(0,1fr)] gap-8 items-start">
-          <div className="space-y-8">
+        {error ? <FlashMessage tone="error">{error}</FlashMessage> : null}
+        {success ? <FlashMessage tone="success">{success}</FlashMessage> : null}
+
+        <section className="app-panel-soft p-2">
+          <div className="grid gap-2 sm:grid-cols-3">
+            {[
+              { key: "players", label: "Players", detail: `${players.length} total` },
+              { key: "claims", label: "Claims", detail: `${claimRequests.length} pending` },
+              { key: "settings", label: "Settings", detail: "Community controls" },
+            ].map((tab) => {
+              const isActive = activeSection === tab.key;
+              return (
+                <button
+                  key={tab.key}
+                  type="button"
+                  onClick={() =>
+                    setActiveSection(tab.key as "players" | "claims" | "settings")
+                  }
+                  className={`rounded-2xl px-4 py-3 text-left transition ${
+                    isActive
+                      ? "bg-white shadow-sm ring-1 ring-blue-100"
+                      : "bg-transparent text-gray-600 hover:bg-white/70"
+                  }`}
+                >
+                  <p className="text-sm font-semibold text-gray-900">{tab.label}</p>
+                  <p className="mt-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">
+                    {tab.detail}
+                  </p>
+                </button>
+              );
+            })}
+          </div>
+        </section>
+
+        {activeSection === "players" ? (
+          <SectionCard
+            eyebrow="Roster"
+            title="Community players"
+            description="A compact roster for quick review. Open a player when you need to edit details or admin access."
+            action={
+              <button
+                type="button"
+                onClick={() => {
+                  setName("");
+                  setNewPlayerGender(PlayerGender.MALE);
+                  setIsCreatePlayerOpen(true);
+                }}
+                className="app-button-primary px-4 py-2"
+              >
+                Add player
+              </button>
+            }
+          >
+            <div className="mb-5 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+              <label className="block w-full lg:max-w-sm">
+                <span className="sr-only">Search players</span>
+                <input
+                  type="search"
+                  value={playerSearch}
+                  onChange={(e) => setPlayerSearch(e.target.value)}
+                  className="field"
+                  placeholder="Search players by name or email"
+                />
+              </label>
+              <div className="flex flex-wrap gap-2">
+                <span className="app-chip app-chip-neutral">{filteredPlayers.length} shown</span>
+                <span className="app-chip app-chip-neutral">
+                  {players.length - claimedPlayers} placeholders
+                </span>
+              </div>
+            </div>
+
+            {filteredPlayers.length === 0 ? (
+              <EmptyState
+                title={
+                  players.length === 0
+                    ? "No players in the community yet."
+                    : "No players match that search."
+                }
+                detail={
+                  players.length === 0
+                    ? "Create the first player profile to start building the community roster."
+                    : "Try another name or clear the search to see the full roster."
+                }
+                action={
+                  players.length === 0 ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setName("");
+                        setNewPlayerGender(PlayerGender.MALE);
+                        setIsCreatePlayerOpen(true);
+                      }}
+                      className="app-button-primary px-4 py-2"
+                    >
+                      Create first player
+                    </button>
+                  ) : undefined
+                }
+              />
+            ) : (
+              <div className="space-y-3">
+                {filteredPlayers.map((player) => {
+                  const initials = player.name
+                    .split(/\s+/)
+                    .filter(Boolean)
+                    .slice(0, 2)
+                    .map((part) => part[0]?.toUpperCase())
+                    .join("");
+
+                  return (
+                    <div
+                      key={player.id}
+                      className="rounded-[28px] border border-gray-100 bg-[linear-gradient(160deg,rgba(255,255,255,0.96),rgba(244,248,252,0.92))] px-4 py-4 shadow-sm transition hover:-translate-y-[1px] hover:border-blue-200 hover:shadow-md sm:px-5"
+                    >
+                      <div className="flex flex-col gap-4 lg:grid lg:grid-cols-[minmax(0,1.8fr)_120px_minmax(0,1.3fr)_auto] lg:items-center">
+                        <div className="min-w-0 flex items-center gap-3">
+                          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[linear-gradient(135deg,rgba(22,119,242,0.16),rgba(25,154,97,0.14))] text-sm font-black text-blue-700">
+                            {initials || player.name.slice(0, 1).toUpperCase()}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="truncate text-base font-semibold text-gray-900">
+                              {player.name}
+                            </p>
+                            <p className="truncate text-sm text-gray-600">
+                              {player.email || "No email on file"}
+                            </p>
+                            <Link
+                              href={`/profile/${player.id}?communityId=${communityId}`}
+                              className="mt-1 inline-flex text-[11px] font-semibold uppercase tracking-[0.16em] text-blue-600 hover:text-blue-700"
+                            >
+                              View profile
+                            </Link>
+                          </div>
+                        </div>
+
+                        <div className="rounded-2xl border border-gray-100 bg-white/85 px-3 py-2 lg:text-center">
+                          <p className="text-[10px] font-black uppercase tracking-[0.18em] text-gray-500">
+                            Rating
+                          </p>
+                          <p className="mt-1 text-lg font-semibold leading-none text-gray-900">
+                            {player.elo}
+                          </p>
+                        </div>
+
+                        <div className="flex flex-wrap gap-2 lg:justify-end">
+                          {renderRolePill(player)}
+                          {renderClaimPill(player)}
+                          {renderGenderPill(player)}
+                        </div>
+
+                        <div className="flex items-center justify-end">
+                          <button
+                            type="button"
+                            onClick={() => openPlayerEditor(player)}
+                            className="app-button-secondary px-4 py-2"
+                          >
+                            Edit
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </SectionCard>
+        ) : null}
+
+        {activeSection === "claims" ? (
+          <ClaimRequestsPanel
+            claimRequests={claimRequests}
+            reviewingClaimRequestId={reviewingClaimRequestId}
+            currentUserId={session?.user?.id}
+            onReviewClaimRequest={handleReviewClaimRequest}
+          />
+        ) : null}
+
+        {activeSection === "settings" ? (
+          <div className="grid gap-6 xl:grid-cols-[minmax(0,1.25fr)_minmax(0,0.9fr)]">
             <CommunitySettingsPanel
               communityName={communityNameInput}
               onCommunityNameChange={setCommunityNameInput}
@@ -757,408 +931,296 @@ export default function CommunityAdminPage() {
               saving={savingCommunitySettings}
             />
 
-            <CreatePlayerProfilePanel
-              name={name}
-              onNameChange={setName}
-              newPlayerGender={newPlayerGender}
-              onNewPlayerGenderChange={setNewPlayerGender}
-              onSubmit={handleAddPlayer}
-            />
+            <section className="app-panel p-6">
+              <div className="space-y-2">
+                <p className="app-eyebrow">Danger zone</p>
+                <h3 className="text-xl font-semibold text-gray-900">Reset or delete community</h3>
+                <p className="text-sm text-gray-600">
+                  Reset clears tournament history and ratings. Delete removes the whole community permanently.
+                </p>
+              </div>
 
-            <ClaimRequestsPanel
-              claimRequests={claimRequests}
-              reviewingClaimRequestId={reviewingClaimRequestId}
-              currentUserId={session?.user?.id}
-              onReviewClaimRequest={handleReviewClaimRequest}
-            />
+              <div className="mt-6 space-y-4">
+                <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4">
+                  <p className="text-sm font-semibold text-gray-900">Reset tournaments and ratings</p>
+                  <p className="mt-1 text-sm text-gray-600">
+                    Deletes all tournaments in this community and returns member ratings to 1000.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={handleResetCommunity}
+                    disabled={resettingCommunity || deletingCommunity}
+                    className="app-button-dark mt-4 px-4 py-2"
+                  >
+                    {resettingCommunity ? "Resetting..." : "Reset community"}
+                  </button>
+                </div>
+
+                <div className="rounded-2xl border border-red-100 bg-red-50/70 p-4">
+                  <p className="text-sm font-semibold text-gray-900">Delete this community</p>
+                  <p className="mt-1 text-sm text-gray-600">
+                    Permanently removes this community and all related data.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={handleDeleteCommunity}
+                    disabled={deletingCommunity || resettingCommunity}
+                    className="app-button-danger mt-4 px-4 py-2"
+                  >
+                    {deletingCommunity ? "Deleting..." : "Delete community"}
+                  </button>
+                </div>
+              </div>
+            </section>
           </div>
-
-          <div className="bg-white rounded-3xl shadow-md border border-gray-100 overflow-hidden">
-            <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center">
-              <h3 className="text-sm font-black text-gray-900 uppercase tracking-widest">Community Players</h3>
-              <span className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">{players.length} total</span>
-            </div>
-
-            <div className="xl:hidden p-4 space-y-3">
-              {players.length === 0 ? (
-                <div className="px-4 py-8 text-center text-gray-500 italic">No players in the community yet.</div>
-              ) : (
-                players
-                  .slice()
-                  .sort((a, b) => a.name.localeCompare(b.name))
-                  .map((player) => (
-                    <div key={player.id} className="rounded-2xl border border-gray-100 bg-gray-50 p-4">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0 flex-1 space-y-2">
-                          <div className="flex items-center gap-2">
-                            <input
-                              type="text"
-                              className="w-full px-2 py-1 text-sm font-bold border rounded bg-white focus:outline-none focus:border-blue-500"
-                              value={editingName[player.id] !== undefined ? editingName[player.id] : player.name}
-                              onChange={(e) => handleNameChange(player.id, e.target.value)}
-                            />
-                            {editingName[player.id] !== undefined &&
-                              editingName[player.id].trim() !== player.name && (
-                                <button
-                                  onClick={() => handleUpdateName(player.id, player.name)}
-                                  disabled={savingName[player.id]}
-                                  className="text-[10px] bg-blue-600 text-white px-2 py-1 rounded font-black uppercase tracking-tighter hover:bg-blue-700 disabled:opacity-50"
-                                >
-                                  {savingName[player.id] ? "..." : "Save"}
-                                </button>
-                              )}
-                          </div>
-                          <p className="text-xs text-gray-500 truncate">{player.email || "No email"}</p>
-                          <div className="flex items-start gap-3">
-                            <Link
-                              href={`/profile/${player.id}?communityId=${communityId}`}
-                              className="pt-1 text-[11px] text-blue-600 hover:underline"
-                            >
-                              View profile
-                            </Link>
-                            <div className="ml-auto flex flex-wrap items-center justify-end gap-2 relative">
-                              {renderRolePill(player)}
-                              {renderClaimPill(player)}
-                              <div className="relative">
-                                <button
-                                  type="button"
-                                  onClick={(e) => togglePreferenceEditor(player.id, e.currentTarget)}
-                                  className="px-2 h-7 inline-flex items-center justify-center whitespace-nowrap text-xs leading-none font-semibold rounded-full bg-gray-100 text-gray-700 border border-gray-200 hover:bg-gray-200 transition-colors"
-                                >
-                                  {getGenderPillLabel(player)}
-                                </button>
-                                {openPreferenceEditorFor === player.id && (
-                                  <div
-                                    className={`absolute right-0 z-20 bg-white border border-gray-200 rounded-xl shadow-lg p-2.5 w-44 space-y-2 ${
-                                      preferenceEditorDirection === "up"
-                                        ? "bottom-full mb-2"
-                                        : "top-full mt-2"
-                                    }`}
-                                  >
-                                    <div className="space-y-1">
-                                      <p className="text-[9px] font-black uppercase tracking-wider text-gray-400">
-                                        Gender
-                                      </p>
-                                      <select
-                                        value={player.gender}
-                                        onChange={async (e) => {
-                                          const nextGender = e.target.value as PlayerGender;
-                                          setOpenPreferenceEditorFor(null);
-                                          const nextPreference =
-                                            nextGender === PlayerGender.MALE
-                                              ? PartnerPreference.OPEN
-                                              : PartnerPreference.FEMALE_FLEX;
-                                          await handleUpdatePreferences(player.id, {
-                                            gender: nextGender,
-                                            partnerPreference: nextPreference,
-                                          });
-                                        }}
-                                        disabled={savingPreferences[player.id]}
-                                        className="h-8 w-full bg-white border border-gray-200 rounded-lg px-2 text-[10px] font-black uppercase tracking-wide text-gray-700 focus:outline-none focus:border-blue-400 disabled:opacity-60"
-                                      >
-                                        <option value={PlayerGender.MALE}>Male</option>
-                                        <option value={PlayerGender.FEMALE}>Female</option>
-                                      </select>
-                                    </div>
-                                    <div className="space-y-1">
-                                      <p className="text-[9px] font-black uppercase tracking-wider text-gray-400">
-                                        Open Tag
-                                      </p>
-                                      {player.gender === PlayerGender.FEMALE ? (
-                                        <select
-                                          value={player.partnerPreference}
-                                          onChange={async (e) => {
-                                            const nextPreference = e.target.value as PartnerPreference;
-                                            setOpenPreferenceEditorFor(null);
-                                            await handleUpdatePreferences(player.id, {
-                                              partnerPreference: nextPreference,
-                                            });
-                                          }}
-                                          disabled={savingPreferences[player.id]}
-                                          className="h-8 w-full bg-white border border-gray-200 rounded-lg px-2 text-[10px] font-black uppercase tracking-wide text-gray-700 focus:outline-none focus:border-blue-400 disabled:opacity-60"
-                                        >
-                                          <option value={PartnerPreference.FEMALE_FLEX}>Default</option>
-                                          <option value={PartnerPreference.OPEN}>Open Tag</option>
-                                        </select>
-                                      ) : (
-                                        <p className="text-[10px] font-black uppercase tracking-wide text-gray-500 px-1 py-2">
-                                          Not Needed
-                                        </p>
-                                      )}
-                                    </div>
-                                    {savingPreferences[player.id] && (
-                                      <p className="text-[9px] font-black uppercase tracking-wider text-gray-400">
-                                        Saving...
-                                      </p>
-                                    )}
-                                    <div className="flex justify-end">
-                                      <button
-                                        type="button"
-                                        onClick={() => setOpenPreferenceEditorFor(null)}
-                                        className="text-[9px] font-black uppercase tracking-widest text-gray-500"
-                                      >
-                                        Close
-                                      </button>
-                                    </div>
-                                  </div>
-                                )}
-                              </div>
-                              {savingPreferences[player.id] ? (
-                                <span className="text-[9px] font-black uppercase tracking-widest text-gray-400">
-                                  Saving...
-                                </span>
-                              ) : null}
-                            </div>
-                          </div>
-                        </div>
-                        <div className="shrink-0 space-y-1 text-right">
-                          <div className="relative flex justify-end">
-                            <button
-                              type="button"
-                              onClick={() => togglePlayerActionMenu(player.id)}
-                              className="h-8 rounded-full border border-gray-200 bg-white px-2.5 text-[10px] font-black uppercase tracking-widest text-gray-500 hover:border-gray-300 hover:bg-gray-100"
-                            >
-                              More
-                            </button>
-                            {openPlayerActionMenuFor === player.id ? (
-                              <div className="absolute right-0 top-full z-20 mt-2 w-40 space-y-1 rounded-2xl border border-gray-200 bg-white p-2 shadow-lg">
-                                {player.isClaimed && player.email ? (
-                                  <button
-                                    type="button"
-                                    onClick={() => openPasswordResetModal(player)}
-                                    className="flex w-full items-center justify-start rounded-xl px-3 py-2 text-left text-[11px] font-black uppercase tracking-wide text-blue-700 hover:bg-blue-50"
-                                  >
-                                    Reset password
-                                  </button>
-                                ) : null}
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setOpenPlayerActionMenuFor(null);
-                                    void handleRemovePlayer(player.id, player.name);
-                                  }}
-                                  className="flex w-full items-center justify-start rounded-xl px-3 py-2 text-left text-[11px] font-black uppercase tracking-wide text-red-600 hover:bg-red-50"
-                                >
-                                  Remove
-                                </button>
-                              </div>
-                            ) : null}
-                          </div>
-                          <div className="flex items-center justify-end gap-2">
-                            <input
-                              type="number"
-                              className="w-20 px-2 py-1 text-xs font-bold border rounded bg-white focus:outline-none focus:border-blue-500"
-                              value={editingElo[player.id] !== undefined ? editingElo[player.id] : player.elo}
-                              onChange={(e) => handleEloChange(player.id, e.target.value)}
-                            />
-                            {editingElo[player.id] !== undefined && (
-                              <button
-                                onClick={() => handleUpdateElo(player.id, player.name)}
-                                disabled={savingElo[player.id]}
-                                className="text-[10px] bg-blue-600 text-white px-2 py-1 rounded font-black uppercase tracking-tighter hover:bg-blue-700 disabled:opacity-50"
-                              >
-                                {savingElo[player.id] ? "..." : "Save"}
-                              </button>
-                            )}
-                          </div>
-                          <p className="text-xs font-black text-gray-700">Rating {player.elo}</p>
-                        </div>
-                      </div>
-                    </div>
-                  ))
-              )}
-            </div>
-
-            <div className="hidden xl:block">
-              <table className="w-full table-auto divide-y divide-gray-100">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-4 py-3 text-left text-[10px] font-black text-gray-500 uppercase tracking-widest">Player</th>
-                    <th className="px-4 py-3 text-left text-[10px] font-black text-gray-500 uppercase tracking-widest">Rating</th>
-                    <th className="px-4 py-3 text-center text-[10px] font-black text-gray-500 uppercase tracking-widest whitespace-nowrap">Status</th>
-                    <th className="px-4 py-3 text-center text-[10px] font-black text-gray-500 uppercase tracking-widest whitespace-nowrap">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-100">
-                  {players
-                    .slice()
-                    .sort((a, b) => a.name.localeCompare(b.name))
-                    .map((player) => (
-                      <tr key={player.id} className="hover:bg-gray-50 transition-colors">
-                        <td className="px-4 py-4 align-middle">
-                          <div className="space-y-1">
-                            <div className="flex items-center gap-2">
-                              <input
-                                type="text"
-                                className="w-full max-w-[200px] px-2 py-1 text-sm font-bold border rounded bg-gray-50 focus:bg-white focus:outline-none focus:border-blue-500"
-                                value={editingName[player.id] !== undefined ? editingName[player.id] : player.name}
-                                onChange={(e) => handleNameChange(player.id, e.target.value)}
-                              />
-                              {editingName[player.id] !== undefined &&
-                                editingName[player.id].trim() !== player.name && (
-                                  <button
-                                    onClick={() => handleUpdateName(player.id, player.name)}
-                                    disabled={savingName[player.id]}
-                                    className="text-[10px] bg-blue-600 text-white px-2 py-1 rounded font-black uppercase tracking-tighter hover:bg-blue-700 disabled:opacity-50"
-                                  >
-                                    {savingName[player.id] ? "..." : "Save"}
-                                  </button>
-                                )}
-                            </div>
-                            <div className="text-xs text-gray-500 truncate">{player.email || "No email"}</div>
-                            <Link href={`/profile/${player.id}?communityId=${communityId}`} className="text-[11px] text-blue-600 hover:underline">
-                              View profile
-                            </Link>
-                          </div>
-                        </td>
-                        <td className="px-4 py-4 text-sm text-gray-500 align-middle">
-                          <div className="flex items-center gap-2">
-                            <input
-                              type="number"
-                              className="w-16 px-2 py-1 text-xs font-bold border rounded bg-gray-50 focus:bg-white focus:outline-none focus:border-blue-500"
-                              value={editingElo[player.id] !== undefined ? editingElo[player.id] : player.elo}
-                              onChange={(e) => handleEloChange(player.id, e.target.value)}
-                            />
-                            {editingElo[player.id] !== undefined && (
-                              <button
-                                onClick={() => handleUpdateElo(player.id, player.name)}
-                                disabled={savingElo[player.id]}
-                                className="text-[10px] bg-blue-600 text-white px-2 py-1 rounded font-black uppercase tracking-tighter hover:bg-blue-700 disabled:opacity-50"
-                              >
-                                {savingElo[player.id] ? "..." : "Save"}
-                              </button>
-                            )}
-                          </div>
-                        </td>
-                        <td className="px-4 py-4 align-middle text-center">
-                          <div className="relative flex flex-wrap items-center justify-center gap-2">
-                            {renderRolePill(player)}
-                            {renderClaimPill(player)}
-                            <div className="relative inline-flex items-center">
-                              <button
-                                type="button"
-                                onClick={(e) => togglePreferenceEditor(player.id, e.currentTarget)}
-                                className="px-2 h-7 inline-flex items-center justify-center whitespace-nowrap text-xs leading-none font-semibold rounded-full bg-gray-100 text-gray-700 border border-gray-200 hover:bg-gray-200 transition-colors"
-                              >
-                                {getGenderPillLabel(player)}
-                              </button>
-                              {openPreferenceEditorFor === player.id && (
-                                <div
-                                  className={`absolute right-0 z-20 bg-white border border-gray-200 rounded-xl shadow-lg p-2.5 w-44 space-y-2 text-left ${
-                                    preferenceEditorDirection === "up"
-                                      ? "bottom-full mb-2"
-                                      : "top-full mt-2"
-                                  }`}
-                                >
-                                  <div className="space-y-1">
-                                    <p className="text-[9px] font-black uppercase tracking-wider text-gray-400">
-                                      Gender
-                                    </p>
-                                    <select
-                                      value={player.gender}
-                                      onChange={async (e) => {
-                                        const nextGender = e.target.value as PlayerGender;
-                                        setOpenPreferenceEditorFor(null);
-                                        const nextPreference =
-                                          nextGender === PlayerGender.MALE
-                                            ? PartnerPreference.OPEN
-                                            : PartnerPreference.FEMALE_FLEX;
-                                        await handleUpdatePreferences(player.id, {
-                                          gender: nextGender,
-                                          partnerPreference: nextPreference,
-                                        });
-                                      }}
-                                      disabled={savingPreferences[player.id]}
-                                      className="h-8 w-full bg-white border border-gray-200 rounded-lg px-2 text-[10px] font-black uppercase tracking-wide text-gray-700 focus:outline-none focus:border-blue-400 disabled:opacity-60"
-                                    >
-                                      <option value={PlayerGender.MALE}>Male</option>
-                                      <option value={PlayerGender.FEMALE}>Female</option>
-                                    </select>
-                                  </div>
-                                  <div className="space-y-1">
-                                    <p className="text-[9px] font-black uppercase tracking-wider text-gray-400">
-                                      Open Tag
-                                    </p>
-                                    {player.gender === PlayerGender.FEMALE ? (
-                                      <select
-                                        value={player.partnerPreference}
-                                        onChange={async (e) => {
-                                          const nextPreference = e.target.value as PartnerPreference;
-                                          setOpenPreferenceEditorFor(null);
-                                          await handleUpdatePreferences(player.id, {
-                                            partnerPreference: nextPreference,
-                                          });
-                                        }}
-                                        disabled={savingPreferences[player.id]}
-                                        className="h-8 w-full bg-white border border-gray-200 rounded-lg px-2 text-[10px] font-black uppercase tracking-wide text-gray-700 focus:outline-none focus:border-blue-400 disabled:opacity-60"
-                                      >
-                                        <option value={PartnerPreference.FEMALE_FLEX}>Default</option>
-                                        <option value={PartnerPreference.OPEN}>Open Tag</option>
-                                      </select>
-                                    ) : (
-                                      <p className="text-[10px] font-black uppercase tracking-wide text-gray-500 px-1 py-2">
-                                        Not Needed
-                                      </p>
-                                    )}
-                                  </div>
-                                  {savingPreferences[player.id] && (
-                                    <p className="text-[9px] font-black uppercase tracking-wider text-gray-400">
-                                      Saving...
-                                    </p>
-                                  )}
-                                  <div className="flex justify-end">
-                                    <button
-                                      type="button"
-                                      onClick={() => setOpenPreferenceEditorFor(null)}
-                                      className="text-[9px] font-black uppercase tracking-widest text-gray-500"
-                                    >
-                                      Close
-                                    </button>
-                                  </div>
-                                </div>
-                              )}
-                            </div>
-                            {savingPreferences[player.id] ? (
-                              <span className="text-[9px] font-black uppercase tracking-widest text-gray-400">
-                                Saving...
-                              </span>
-                            ) : null}
-                          </div>
-                        </td>
-                        <td className="px-4 py-4 text-center text-sm font-medium align-middle">
-                          <div className="flex flex-wrap justify-center gap-2">
-                            {player.isClaimed && player.email ? (
-                              <button
-                                type="button"
-                                onClick={() => openPasswordResetModal(player)}
-                                className="inline-flex items-center px-2.5 py-1 rounded-full text-blue-700 border border-blue-200 bg-blue-50 hover:bg-blue-100 text-xs font-bold uppercase"
-                              >
-                                Reset password
-                              </button>
-                            ) : null}
-                            <button
-                              onClick={() => handleRemovePlayer(player.id, player.name)}
-                              className="inline-flex items-center px-2.5 py-1 rounded-full text-red-600 border border-red-200 bg-red-50 hover:bg-red-100 text-xs font-bold uppercase"
-                            >
-                              Remove
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  {players.length === 0 && (
-                    <tr>
-                      <td colSpan={4} className="px-6 py-8 text-center text-gray-500 italic">
-                        No players in the community yet.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
+        ) : null}
       </div>
+
+      {isCreatePlayerOpen ? (
+        <ModalFrame
+          title="Create player profile"
+          subtitle="Add a new member or placeholder profile to this community."
+          onClose={() => setIsCreatePlayerOpen(false)}
+          footer={
+            <div className="flex flex-wrap justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setIsCreatePlayerOpen(false)}
+                className="app-button-secondary px-4 py-2"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                form="create-player-form"
+                className="app-button-primary px-4 py-2"
+              >
+                Create profile
+              </button>
+            </div>
+          }
+        >
+          <form
+            id="create-player-form"
+            onSubmit={handleAddPlayer}
+            className="space-y-4 px-4 py-4 sm:px-5"
+          >
+            <label className="block space-y-2 text-sm font-medium text-gray-900">
+              <span>Player name</span>
+              <input
+                type="text"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                className="field"
+                placeholder="Player name"
+                required
+              />
+            </label>
+
+            <label className="block space-y-2 text-sm font-medium text-gray-900">
+              <span>Gender</span>
+              <select
+                value={newPlayerGender}
+                onChange={(e) => setNewPlayerGender(e.target.value as PlayerGender)}
+                className="field"
+              >
+                <option value={PlayerGender.MALE}>Male</option>
+                <option value={PlayerGender.FEMALE}>Female</option>
+              </select>
+            </label>
+          </form>
+        </ModalFrame>
+      ) : null}
+
+      {editingPlayer ? (
+        <ModalFrame
+          title={editingPlayer.name}
+          subtitle="Edit player details without turning the roster into a wall of forms."
+          onClose={closePlayerEditor}
+          footer={
+            <div className="flex flex-wrap justify-between gap-3">
+              <button
+                type="button"
+                onClick={() => void handleRemovePlayer(editingPlayer)}
+                className="app-button-danger px-4 py-2"
+              >
+                Remove player
+              </button>
+              <button
+                type="button"
+                onClick={closePlayerEditor}
+                className="app-button-secondary px-4 py-2"
+              >
+                Close
+              </button>
+            </div>
+          }
+        >
+          <div className="space-y-5 px-4 py-4 sm:px-5">
+            <div className="app-panel-muted space-y-3 p-4">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">
+                    Current profile
+                  </p>
+                  <p className="mt-1 text-lg font-semibold text-gray-900">{editingPlayer.name}</p>
+                  <p className="text-sm text-gray-600">
+                    {editingPlayer.email || "No email on file"}
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {renderRolePill(editingPlayer)}
+                  {renderClaimPill(editingPlayer)}
+                  {renderGenderPill(editingPlayer)}
+                </div>
+              </div>
+              <Link
+                href={`/profile/${editingPlayer.id}?communityId=${communityId}`}
+                className="app-button-secondary inline-flex px-4 py-2"
+              >
+                View profile
+              </Link>
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="app-panel-muted space-y-3 p-4">
+                <label className="block space-y-2 text-sm font-medium text-gray-900">
+                  <span>Name</span>
+                  <input
+                    type="text"
+                    value={editorName}
+                    onChange={(e) => setEditorName(e.target.value)}
+                    className="field"
+                  />
+                </label>
+                <button
+                  type="button"
+                  onClick={() => void handleSavePlayerName(editingPlayer)}
+                  disabled={savingName || editorName.trim() === editingPlayer.name}
+                  className="app-button-primary px-4 py-2"
+                >
+                  {savingName ? "Saving..." : "Save name"}
+                </button>
+              </div>
+
+              <div className="app-panel-muted space-y-3 p-4">
+                <label className="block space-y-2 text-sm font-medium text-gray-900">
+                  <span>Rating</span>
+                  <input
+                    type="number"
+                    value={editorRating}
+                    onChange={(e) => setEditorRating(e.target.value)}
+                    className="field"
+                  />
+                </label>
+                <button
+                  type="button"
+                  onClick={() => void handleSavePlayerRating(editingPlayer)}
+                  disabled={savingRating || editorRating === `${editingPlayer.elo}`}
+                  className="app-button-primary px-4 py-2"
+                >
+                  {savingRating ? "Saving..." : "Save rating"}
+                </button>
+              </div>
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="app-panel-muted space-y-3 p-4">
+                <label className="block space-y-2 text-sm font-medium text-gray-900">
+                  <span>Gender</span>
+                  <select
+                    value={editingPlayer.gender}
+                    onChange={async (e) => {
+                      const nextGender = e.target.value as PlayerGender;
+                      const nextPreference =
+                        nextGender === PlayerGender.MALE
+                          ? PartnerPreference.OPEN
+                          : PartnerPreference.FEMALE_FLEX;
+                      await handleUpdatePreferences(editingPlayer, {
+                        gender: nextGender,
+                        partnerPreference: nextPreference,
+                      });
+                    }}
+                    disabled={savingPreferences}
+                    className="field"
+                  >
+                    <option value={PlayerGender.MALE}>Male</option>
+                    <option value={PlayerGender.FEMALE}>Female</option>
+                  </select>
+                </label>
+
+                <label className="block space-y-2 text-sm font-medium text-gray-900">
+                  <span>Open tag</span>
+                  {editingPlayer.gender === PlayerGender.FEMALE ? (
+                    <select
+                      value={editingPlayer.partnerPreference}
+                      onChange={async (e) => {
+                        const nextPreference = e.target.value as PartnerPreference;
+                        await handleUpdatePreferences(editingPlayer, {
+                          partnerPreference: nextPreference,
+                        });
+                      }}
+                      disabled={savingPreferences}
+                      className="field"
+                    >
+                      <option value={PartnerPreference.FEMALE_FLEX}>Default</option>
+                      <option value={PartnerPreference.OPEN}>Open Tag</option>
+                    </select>
+                  ) : (
+                    <div className="field flex items-center text-sm text-gray-500">Not needed</div>
+                  )}
+                </label>
+
+                {savingPreferences ? (
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">
+                    Saving preferences...
+                  </p>
+                ) : null}
+              </div>
+
+              <div className="app-panel-muted space-y-4 p-4">
+                <div>
+                  <p className="text-sm font-semibold text-gray-900">Admin access</p>
+                  <p className="mt-1 text-sm text-gray-600">
+                    Promote claimed members to admin when they need community control.
+                  </p>
+                </div>
+
+                {editingPlayer.role === "ADMIN" ? (
+                  <p className="text-sm text-gray-600">This player already has admin access.</p>
+                ) : editingPlayer.isClaimed ? (
+                  <button
+                    type="button"
+                    onClick={() => void handlePromotePlayer(editingPlayer)}
+                    disabled={savingRole}
+                    className="app-button-secondary px-4 py-2"
+                  >
+                    {savingRole ? "Promoting..." : "Promote to admin"}
+                  </button>
+                ) : (
+                  <p className="text-sm text-gray-600">
+                    Only claimed members can be promoted to admin.
+                  </p>
+                )}
+
+                {editingPlayer.isClaimed && editingPlayer.email ? (
+                  <button
+                    type="button"
+                    onClick={() => openPasswordResetModal(editingPlayer)}
+                    className="app-button-secondary px-4 py-2"
+                  >
+                    Reset password
+                  </button>
+                ) : (
+                  <p className="text-sm text-gray-600">
+                    Password resets are only available for claimed members with an email.
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+        </ModalFrame>
+      ) : null}
 
       {passwordResetTarget ? (
         <ModalFrame
@@ -1199,7 +1261,9 @@ export default function CommunityAdminPage() {
               <p className="text-sm text-gray-600">{passwordResetTarget.email}</p>
             </div>
 
-            {passwordResetError ? <FlashMessage tone="error">{passwordResetError}</FlashMessage> : null}
+            {passwordResetError ? (
+              <FlashMessage tone="error">{passwordResetError}</FlashMessage>
+            ) : null}
 
             <label className="block space-y-2 text-sm font-medium text-gray-900">
               <span>New password</span>
@@ -1233,17 +1297,6 @@ export default function CommunityAdminPage() {
           </form>
         </ModalFrame>
       ) : null}
-
-      {error && (
-        <div className="fixed bottom-6 left-6 right-6 z-50">
-          <div className="bg-red-600 text-white px-6 py-4 rounded-2xl shadow-2xl flex justify-between items-center">
-            <p className="text-xs font-black uppercase tracking-wide">{error}</p>
-            <button onClick={() => setError("")} className="font-black">
-              x
-            </button>
-          </div>
-        </div>
-      )}
     </main>
   );
 }
