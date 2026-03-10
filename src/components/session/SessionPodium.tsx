@@ -16,25 +16,22 @@ interface SessionPodiumProps {
 
 const RANK_STYLES: Record<
   number,
-  { block: string; rank: string; height: string; name: string }
+  { block: string; rank: string; height: string }
 > = {
   1: {
     block: "border-amber-200 bg-[linear-gradient(180deg,rgba(255,247,214,0.98),rgba(255,236,179,0.94))]",
     rank: "bg-amber-100 text-amber-700 border-amber-300",
     height: "h-40 sm:h-44",
-    name: "text-xl sm:text-2xl",
   },
   2: {
     block: "border-slate-200 bg-[linear-gradient(180deg,rgba(241,245,249,0.98),rgba(226,232,240,0.96))]",
     rank: "bg-slate-100 text-slate-700 border-slate-300",
     height: "h-32 sm:h-36",
-    name: "text-base sm:text-xl",
   },
   3: {
     block: "border-orange-200 bg-[linear-gradient(180deg,rgba(255,237,213,0.98),rgba(254,215,170,0.94))]",
     rank: "bg-orange-100 text-orange-700 border-orange-300",
     height: "h-24 sm:h-28",
-    name: "text-sm sm:text-lg",
   },
 };
 
@@ -66,7 +63,7 @@ export function SessionPodium({ players, pointDiffByUserId }: SessionPodiumProps
           return (
             <article key={player.userId} className="flex flex-col items-center justify-end text-center">
               <div className="mb-3 min-h-[3.75rem] space-y-1">
-                <p className={`font-semibold leading-tight text-gray-900 ${styles.name}`}>
+                <p className="text-xl font-semibold leading-tight text-gray-900 sm:text-2xl md:text-3xl">
                   {player.user.name}
                 </p>
                 {player.isGuest ? (
