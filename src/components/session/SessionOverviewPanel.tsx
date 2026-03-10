@@ -44,7 +44,6 @@ export function SessionOverviewPanel({
       <HeroCard
         eyebrow="Live session"
         title={sessionName}
-        description="Manage courts, keep the player pool moving, and review standings from a single session board designed for court-side use."
         meta={
           <>
             <span className="app-chip app-chip-neutral">{sessionTypeLabel}</span>
@@ -53,7 +52,7 @@ export function SessionOverviewPanel({
         }
       />
 
-      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <section className="grid grid-cols-2 gap-3 xl:grid-cols-4">
         <StatCard
           label="Players"
           value={playersCount}
