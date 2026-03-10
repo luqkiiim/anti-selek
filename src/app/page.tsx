@@ -223,7 +223,6 @@ export default function Home() {
         <SectionCard
           eyebrow="Your spaces"
           title="Communities"
-          description="Open a community to view its leaderboard, host a new tournament, or continue one that is already running."
           action={<span className="app-chip app-chip-neutral">{communities.length} listed</span>}
         >
           {communities.length === 0 ? (

@@ -576,7 +576,6 @@ export default function CommunityPage() {
         <HeroCard
           eyebrow="Community hub"
           title={community?.name || "Community"}
-          description="Use the leaderboard as your source of truth, open the host desk when you are ready to create a session, and keep active or recent tournaments within one calm dashboard."
           meta={
             <>
               <span className={`app-chip ${community?.role === "ADMIN" ? "app-chip-accent" : "app-chip-neutral"}`}>

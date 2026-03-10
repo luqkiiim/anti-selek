@@ -119,7 +119,7 @@ export default function ProfilePage() {
         <HeroCard
           eyebrow="Player profile"
           title={data.user.name}
-          description={`Joined ${new Date(data.user.createdAt).toLocaleDateString()}. Review lifetime performance, tournament history, and ${data.context?.communityId ? "community" : "overall"} rating at a glance.`}
+          description={`Joined ${new Date(data.user.createdAt).toLocaleDateString()}.`}
           backHref={communityId ? `/community/${communityId}` : "/"}
           backLabel="Back"
           meta={
@@ -137,20 +137,18 @@ export default function ProfilePage() {
         />
 
         <section className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
-          <StatCard label="Matches" value={data.stats.totalMatches} detail="All recorded doubles results" accent />
-          <StatCard label="Win rate" value={`${data.stats.winRate}%`} detail={`${data.stats.wins} wins and ${data.stats.losses} losses`} />
-          <StatCard label="Points scored" value={data.stats.pointsScored} detail={`${data.stats.pointsConceded} conceded`} />
+          <StatCard label="Matches" value={data.stats.totalMatches} accent />
+          <StatCard label="Win rate" value={`${data.stats.winRate}%`} />
+          <StatCard label="Points scored" value={data.stats.pointsScored} />
           <StatCard
             label="Point differential"
             value={pointDifferential > 0 ? `+${pointDifferential}` : pointDifferential}
-            detail={pointDifferential >= 0 ? "Positive match margin" : "Room to recover"}
           />
         </section>
 
         <SectionCard
           eyebrow="History"
           title="Match timeline"
-          description="Every recorded result for this player, including partner pairings and rating movement when applicable."
           action={<span className="app-chip app-chip-neutral">{data.matchHistory.length} matches</span>}
         >
           {data.matchHistory.length === 0 ? (
