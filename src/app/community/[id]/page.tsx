@@ -803,34 +803,48 @@ export default function CommunityPage() {
                   activeTournaments.map((tournament) => {
                     const isParticipant = tournament.players.some((p) => p.user.id === user?.id);
                     return (
-                      <div key={tournament.id} className="block bg-gray-50 p-4 rounded-2xl border border-gray-100">
-                        <div className="flex justify-between items-start mb-2">
-                          <h4 className="font-black text-gray-900">{tournament.name}</h4>
-                          <span className="text-[10px] font-black text-blue-600 bg-blue-50 px-2 py-1 rounded-lg uppercase tracking-widest">
-                            {tournament.status}
-                          </span>
-                        </div>
-                        <div className="flex justify-between items-center">
-                          <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">
-                            {tournament.players.length} Players - {tournament.type}
-                          </p>
-                          {isParticipant ? (
-                            <Link
-                              href={`/session/${tournament.code}`}
-                              className="text-[10px] bg-blue-600 text-white px-3 py-1.5 rounded-lg font-black uppercase tracking-wider"
-                            >
-                              Open
-                            </Link>
-                          ) : (
+                      isParticipant ? (
+                        <Link
+                          key={tournament.id}
+                          href={`/session/${tournament.code}`}
+                          className="block rounded-2xl border border-gray-100 bg-gray-50 p-4 transition-colors hover:border-blue-200 hover:bg-blue-50/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 focus-visible:ring-offset-2"
+                        >
+                          <div className="mb-2 flex items-start justify-between gap-3">
+                            <h4 className="font-black text-gray-900">{tournament.name}</h4>
+                            <span className="text-[10px] font-black text-blue-600 bg-blue-50 px-2 py-1 rounded-lg uppercase tracking-widest">
+                              {tournament.status}
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between gap-3">
+                            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">
+                              {tournament.players.length} Players - {tournament.type}
+                            </p>
+                            <span className="text-[10px] font-black uppercase tracking-widest text-blue-600">
+                              Open Tournament
+                            </span>
+                          </div>
+                        </Link>
+                      ) : (
+                        <div key={tournament.id} className="block bg-gray-50 p-4 rounded-2xl border border-gray-100">
+                          <div className="flex justify-between items-start mb-2">
+                            <h4 className="font-black text-gray-900">{tournament.name}</h4>
+                            <span className="text-[10px] font-black text-blue-600 bg-blue-50 px-2 py-1 rounded-lg uppercase tracking-widest">
+                              {tournament.status}
+                            </span>
+                          </div>
+                          <div className="flex justify-between items-center">
+                            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">
+                              {tournament.players.length} Players - {tournament.type}
+                            </p>
                             <button
                               onClick={() => joinTournament(tournament.code)}
                               className="text-[10px] bg-gray-900 text-white px-3 py-1.5 rounded-lg font-black uppercase tracking-wider"
                             >
                               Join
                             </button>
-                          )}
+                          </div>
                         </div>
-                      </div>
+                      )
                     );
                   })
                 )}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback, type KeyboardEvent, type MouseEvent } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
@@ -795,35 +795,6 @@ export default function SessionPage() {
     sessionData.communityId && !player.isGuest
       ? `/profile/${player.user.id}?communityId=${sessionData.communityId}`
       : `/profile/${player.user.id}`;
-  const shouldIgnoreLeaderboardNavigation = (target: EventTarget | null) =>
-    target instanceof HTMLElement &&
-    !!target.closest("button, a, select, input, option");
-  const openSessionPlayerProfile = (player: Player) => {
-    router.push(getSessionPlayerProfileHref(player));
-  };
-  const handleSessionRowClick = (
-    event: MouseEvent<HTMLTableRowElement>,
-    player: Player
-  ) => {
-    if (shouldIgnoreLeaderboardNavigation(event.target)) {
-      return;
-    }
-
-    openSessionPlayerProfile(player);
-  };
-  const handleSessionRowKeyDown = (
-    event: KeyboardEvent<HTMLTableRowElement>,
-    player: Player
-  ) => {
-    if (shouldIgnoreLeaderboardNavigation(event.target)) {
-      return;
-    }
-
-    if (event.key === "Enter" || event.key === " ") {
-      event.preventDefault();
-      openSessionPlayerProfile(player);
-    }
-  };
 
   return (
     <div className="app-page">
@@ -1140,14 +1111,7 @@ export default function SessionPage() {
                       const pointDiff = calculatePlayerPointDiff(player.userId);
 
                       return (
-                        <tr
-                          key={player.userId}
-                          role="link"
-                          tabIndex={0}
-                          onClick={(event) => handleSessionRowClick(event, player)}
-                          onKeyDown={(event) => handleSessionRowKeyDown(event, player)}
-                          className={`cursor-pointer active:bg-gray-50 hover:bg-blue-50/40 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 focus-visible:ring-offset-2 ${player.isPaused ? 'opacity-40 grayscale' : ''}`}
-                        >
+                        <tr key={player.userId} className={`active:bg-gray-50 transition-colors ${player.isPaused ? 'opacity-40 grayscale' : ''}`}>
                           <td className="w-8 sm:w-10 px-1.5 sm:px-2 py-2.5 sm:py-3 whitespace-nowrap">
                             <span className={`w-5 h-5 sm:w-6 sm:h-6 rounded-lg flex items-center justify-center text-[9px] sm:text-[10px] font-black ${
                               idx === 0
