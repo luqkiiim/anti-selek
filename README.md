@@ -1,18 +1,24 @@
-# Tournament App (Badminton Mexicano)
+# Anti-Selek
 
-Community-based badminton tournament app with live court management, score approval, and matchmaking fairness controls.
+Community-based badminton tournament web app for running live sessions, managing courts, and tracking community ratings.
 
 ## Highlights
 
-- Email/password authentication (NextAuth credentials)
-- Community-scoped administration (no global player admin workflow)
-- Community-scoped ELO (`CommunityMember.elo`)
-- Tournament/session lifecycle with 6-character code
-- Configurable court count per tournament (not fixed to 3)
-- Pause/resume players during active tournaments
-- Admin late-join support (add players into active tournament)
-- Match score submission + admin approval flow
-- Matchmaking fairness with wait-time + match-rate balancing and anti-bubble controls
+- Email/password authentication with NextAuth credentials
+- Dashboard for creating, joining, and opening badminton communities
+- Community leaderboard, player profiles, and claim-request flow for placeholder profiles
+- Host tournaments with configurable court count, selected members, and guests
+- Two session formats:
+  - `Points`: matchmaking uses current session performance
+  - `Ratings`: matchmaking uses persistent player rating
+- Two session modes:
+  - `Open`
+  - `Mixed`
+- Live court management with score submission and approval
+- Pause/resume players during active sessions
+- Late join support for admins during active sessions
+- Rollback for the latest completed tournament in a community
+- Matchmaking fairness controls for wait time, match rate, repeat partners, and player clustering
 
 ## Tech Stack
 
@@ -21,9 +27,10 @@ Community-based badminton tournament app with live court management, score appro
 - TypeScript
 - Tailwind CSS v4
 - Prisma `5.22.0`
-- SQLite (local) + LibSQL/Turso adapter (runtime cloud mode)
-- NextAuth v5 beta (credentials)
-- Vitest (matchmaking unit tests)
+- SQLite for local development
+- LibSQL/Turso adapter for runtime cloud mode
+- NextAuth v5 beta
+- Vitest
 
 ## Environment
 
@@ -36,10 +43,10 @@ DATABASE_URL="file:C:/path/to/project/prisma/dev.db"
 # Auth
 AUTH_SECRET="replace-with-a-strong-secret"
 
-# Admin allowlist (comma-separated emails)
+# Optional platform admin allowlist (comma-separated emails)
 ADMIN_EMAILS="you@example.com"
 
-# Cloud runtime database (optional but required for Vercel+Turso)
+# Cloud runtime database
 TURSO_DATABASE_URL="libsql://..."
 TURSO_AUTH_TOKEN="..."
 ```
@@ -72,86 +79,105 @@ Open `http://localhost:3000`.
 - `npm run build` - production build
 - `npm run start` - production server
 - `npm run lint` - ESLint
-- `npm run test` - Vitest
+- `npm run test` - Vitest using thread pool mode
 
 ## Verification Commands
 
-- Lint:
-
-```bash
-npm run lint
-```
-
-- Build:
-
 ```bash
 npm run build
-```
-
-- Tests (Windows/iCloud environments may require thread pool mode):
-
-```bash
 npx vitest run --pool=threads
 ```
 
-## Community Workflow
+## Core Workflow
 
-1. Sign up.
-2. Create or join a community.
-3. Community admin can:
-   - Add/remove members
-   - Edit member name and community ELO
-   - Create tournament and choose courts + participants
-   - Start/end tournament
-   - Generate/reshuffle matches
-   - Approve/override scores
-   - Reset the community (destructive and scoped)
+1. Sign up or sign in.
+2. Create a community or join an existing one.
+3. Open a community dashboard to:
+   - review the leaderboard
+   - host a tournament
+   - join an active tournament
+   - reopen a past tournament by clicking its card
+4. Community admins can:
+   - add or remove member profiles
+   - edit member names and ratings
+   - approve or reject claim requests
+   - create, start, and end tournaments
+   - generate, reshuffle, or manually assign matches
+   - add players or guests into active sessions
+   - rollback the latest completed tournament
+   - reset or delete the community
 
-## Scoring and ELO Rules
+## Session Formats and Rules
 
-- Score validity: `21+` win-by-2 or `30-29` cap
-- Session points: each player gets their team score
-- ELO:
-  - Base rating: `1000`
-  - K-factor: `32`
-  - Team ELO uses team average
-  - Margin multiplier applied in approval flow
-  - Same delta applied to both teammates
-- For community tournaments, ELO updates are applied to `CommunityMember.elo`
+### Match score validity
+
+- Scores must be valid badminton scores: `21+` win by 2, or `30-29`
+
+### Standings
+
+- Session standings use:
+  - `+3` points for a win
+  - `0` points for a loss
+  - point difference as the next tie-breaker
+  - player name as the final tie-breaker
+
+### Format behavior
+
+- `Points` format:
+  - matchmaking uses current session performance
+  - standings use session points and point difference
+- `Ratings` format:
+  - matchmaking uses persistent player rating
+  - standings still use session points and point difference
+
+### Rating updates
+
+- Ratings update after approved matches
+- Base rating is `1000`
+- K-factor is `32`
+- Team rating uses the average of both teammates
+- Margin of victory affects the rating delta
+- Both teammates receive the same rating delta
+- Guest participation reduces rating impact through a multiplier
+- In communities, persistent ratings are stored on `CommunityMember.elo`
+
+Note: user-facing copy says `rating` or `Ratings`, but some internal code and database fields still use `elo`.
 
 ## Matchmaking Summary
 
 Player selection priority:
 
-1. Lower match-rate (matches per active time)
-2. Longer waiting time (`availableSince`)
+1. Lower match rate
+2. Longer waiting time
 3. Random tie-breaker
 
 Additional constraints:
 
-- Busy players excluded (active/pending matches)
-- Paused players excluded
-- Anti-bubble logic to avoid repeated clustering of lowest-cohort players
-- Team partitioning minimizes ELO gap and penalizes repeat partners
+- Busy players are excluded
+- Paused players are excluded
+- Anti-bubble logic reduces repeated clustering of the same low-cohort players
+- Team partitioning tries to minimize balance gaps and penalize repeat partners
+- Mixed sessions respect gender and partner-preference rules
 
-## Data Model (High Level)
+## Data Model
 
-- `User`: account identity/profile
-- `Community`: scoped group
-- `CommunityMember`: role + community-specific ELO
-- `Session`: tournament instance in a community
-- `SessionPlayer`: per-session points + matchmaking state
+- `User`: base account identity
+- `Community`: scoped badminton group
+- `CommunityMember`: community role plus community-specific rating
+- `Session`: tournament instance inside a community
+- `SessionPlayer`: per-session standings points and matchmaking state
 - `Court`: court slot and current match pointer
-- `Match`: teams, scores, status, ELO deltas
+- `Match`: teams, scores, approval state, and rating deltas
 
-## Deployment Notes (Vercel + Turso)
+## Deployment Notes
 
-- Set `AUTH_SECRET`, `ADMIN_EMAILS`, `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN` in Vercel.
-- App runtime uses Turso when `TURSO_DATABASE_URL` + `TURSO_AUTH_TOKEN` are present.
-- Prisma datasource is SQLite, so `prisma migrate deploy` targets `DATABASE_URL` file DB.
-- For Turso schema updates, apply SQL migrations directly to Turso (via Turso CLI or LibSQL client).
+- Set `AUTH_SECRET`, `ADMIN_EMAILS`, `TURSO_DATABASE_URL`, and `TURSO_AUTH_TOKEN` in production
+- The app uses Turso when the Turso environment variables are present
+- Prisma migrations still target the local SQLite datasource from `DATABASE_URL`
+- For Turso schema updates, apply SQL migrations to Turso separately
 
 ## Safety Notes
 
-- Community reset deletes tournaments/sessions/matches for that community and resets that community’s member ELOs.
-- Admin actions are permission-checked against community membership role.
+- Community reset is destructive: it deletes that community's tournaments and related session data, and resets member ratings
+- Tournament rollback is intended for the latest completed tournament only
+- Admin actions are permission-checked against community role or platform admin status
