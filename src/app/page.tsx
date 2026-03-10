@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { signOut, useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 
@@ -11,7 +11,6 @@ import {
   HeroCard,
   ModalFrame,
   SectionCard,
-  StatCard,
 } from "@/components/ui/chrome";
 
 interface Community {
@@ -148,14 +147,6 @@ export default function Home() {
     }
   };
 
-  const dashboardStats = useMemo(() => {
-    const adminCount = communities.filter((community) => community.role === "ADMIN").length;
-    const totalMembers = communities.reduce((sum, community) => sum + community.membersCount, 0);
-    const totalSessions = communities.reduce((sum, community) => sum + community.sessionsCount, 0);
-
-    return { adminCount, totalMembers, totalSessions };
-  }, [communities]);
-
   if (status === "loading" || loading) {
     return (
       <div className="app-page flex items-center justify-center px-6">
@@ -193,40 +184,34 @@ export default function Home() {
           title="Anti-Selek"
           description="Manage badminton communities, launch tournaments quickly, and jump straight back into the sessions you already belong to."
           meta={<span className="app-chip app-chip-neutral">Community tournaments</span>}
-          actions={
-            <>
-              <button
-                type="button"
-                onClick={() => {
-                  setError("");
-                  setIsJoinCommunityOpen(true);
-                }}
-                className="app-button-secondary"
-              >
-                Join Community
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setError("");
-                  setIsCreateCommunityOpen(true);
-                }}
-                className="app-button-primary"
-              >
-                Create Community
-              </button>
-            </>
-          }
         />
 
-        {error ? <FlashMessage tone="error">{error}</FlashMessage> : null}
+        <div className="flex justify-center">
+          <div className="flex flex-wrap justify-center gap-3">
+            <button
+              type="button"
+              onClick={() => {
+                setError("");
+                setIsJoinCommunityOpen(true);
+              }}
+              className="app-button-secondary"
+            >
+              Join Community
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setError("");
+                setIsCreateCommunityOpen(true);
+              }}
+              className="app-button-primary"
+            >
+              Create Community
+            </button>
+          </div>
+        </div>
 
-        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <StatCard label="Communities" value={communities.length} detail="Joined groups in your dashboard" accent />
-          <StatCard label="Admin access" value={dashboardStats.adminCount} detail="Communities you can manage" />
-          <StatCard label="Tracked members" value={dashboardStats.totalMembers} detail="Combined members across communities" />
-          <StatCard label="Tournament history" value={dashboardStats.totalSessions} detail="Sessions created so far" />
-        </section>
+        {error ? <FlashMessage tone="error">{error}</FlashMessage> : null}
 
         <SectionCard
           eyebrow="Your spaces"
