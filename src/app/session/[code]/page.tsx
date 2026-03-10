@@ -849,7 +849,6 @@ export default function SessionPage() {
 
       <main className="app-shell max-w-7xl space-y-6">
         <SessionOverviewPanel
-          sessionName={sessionData.name}
           sessionTypeLabel={sessionTypeLabel}
           sessionModeLabel={sessionModeLabel}
           playersCount={sessionData.players.length}

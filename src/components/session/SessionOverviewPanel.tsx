@@ -3,7 +3,6 @@
 import { HeroCard, StatCard } from "@/components/ui/chrome";
 
 interface SessionOverviewPanelProps {
-  sessionName: string;
   sessionTypeLabel: string;
   sessionModeLabel: string;
   playersCount: number;
@@ -24,7 +23,6 @@ interface SessionOverviewPanelProps {
 }
 
 export function SessionOverviewPanel({
-  sessionName,
   sessionTypeLabel,
   sessionModeLabel,
   playersCount,
@@ -49,7 +47,6 @@ export function SessionOverviewPanel({
     <>
       <HeroCard
         eyebrow={isCompleted ? "Completed session" : "Live session"}
-        title={sessionName}
         meta={
           <>
             <span className="app-chip app-chip-neutral">{sessionTypeLabel}</span>

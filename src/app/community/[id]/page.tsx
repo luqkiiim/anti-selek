@@ -575,7 +575,6 @@ export default function CommunityPage() {
       <div className="app-shell space-y-8">
         <HeroCard
           eyebrow="Community hub"
-          title={community?.name || "Community"}
           meta={
             <>
               <span className={`app-chip ${community?.role === "ADMIN" ? "app-chip-accent" : "app-chip-neutral"}`}>

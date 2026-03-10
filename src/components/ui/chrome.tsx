@@ -117,13 +117,15 @@ export function HeroCard({
   meta,
 }: {
   eyebrow?: string;
-  title: ReactNode;
+  title?: ReactNode;
   description?: ReactNode;
   actions?: ReactNode;
   backHref?: string;
   backLabel?: string;
   meta?: ReactNode;
 }) {
+  const hasHeadingContent = Boolean(title) || Boolean(description);
+
   return (
     <section className="app-panel relative overflow-hidden px-5 py-6 sm:px-6">
       <div className="pointer-events-none absolute inset-y-0 right-[-5rem] top-[-2rem] w-64 rounded-full bg-[radial-gradient(circle,_rgba(22,119,242,0.16),_transparent_65%)] blur-2xl" />
@@ -139,10 +141,14 @@ export function HeroCard({
             {eyebrow ? <p className="app-eyebrow">{eyebrow}</p> : null}
             {meta}
           </div>
-          <div>
-            <h1 className="app-title text-gray-900">{title}</h1>
-            {description ? <p className="mt-3 max-w-3xl text-sm text-gray-600 sm:text-base">{description}</p> : null}
-          </div>
+          {hasHeadingContent ? (
+            <div>
+              {title ? <h1 className="app-title text-gray-900">{title}</h1> : null}
+              {description ? (
+                <p className="mt-3 max-w-3xl text-sm text-gray-600 sm:text-base">{description}</p>
+              ) : null}
+            </div>
+          ) : null}
         </div>
         {actions ? <div className="flex flex-wrap gap-3">{actions}</div> : null}
       </div>
