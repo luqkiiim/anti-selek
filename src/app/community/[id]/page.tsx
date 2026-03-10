@@ -20,6 +20,7 @@ import {
   doClaimNamesMatch,
   getClaimRequesterEligibility,
 } from "@/lib/communityClaimRules";
+import { getSessionModeLabel } from "@/lib/sessionModeLabels";
 import {
   ClaimRequestStatus,
   PartnerPreference,
@@ -105,6 +106,8 @@ export default function CommunityPage() {
   const router = useRouter();
   const params = useParams<{ id: string }>();
   const communityId = typeof params.id === "string" ? params.id : "";
+  const openModeLabel = getSessionModeLabel(SessionMode.MEXICANO);
+  const mixedModeLabel = getSessionModeLabel(SessionMode.MIXICANO);
 
   const [user, setUser] = useState<User | null>(null);
   const [community, setCommunity] = useState<Community | null>(null);
@@ -304,7 +307,7 @@ export default function CommunityPage() {
         (guest) => ![PlayerGender.MALE, PlayerGender.FEMALE].includes(guest.gender)
       );
       if (invalidGuest) {
-        setError(`MIXICANO requires MALE/FEMALE gender for guest ${invalidGuest.name}`);
+        setError(`${mixedModeLabel} requires MALE/FEMALE gender for guest ${invalidGuest.name}`);
         return;
       }
     }
@@ -435,7 +438,7 @@ export default function CommunityPage() {
       sessionMode === SessionMode.MIXICANO &&
       ![PlayerGender.MALE, PlayerGender.FEMALE].includes(guestGenderInput)
     ) {
-      setError("Choose MALE/FEMALE for guest before adding in MIXICANO");
+      setError(`Choose MALE/FEMALE for guest before adding in ${mixedModeLabel}`);
       return;
     }
     if (guestConfigs.some((guest) => guest.name.toLowerCase() === trimmed.toLowerCase())) {
@@ -634,7 +637,7 @@ export default function CommunityPage() {
                 <p className="text-[10px] font-bold text-blue-100 uppercase tracking-wider">
                   {sessionType === SessionType.POINTS
                     ? "Play for points. Standings decide the winner."
-                    : "Play rating-balanced matches. Ratings update after each result."}
+                    : "Pair matches by Elo. Ratings still update, but standings use points plus diff."}
                 </p>
 
                 <div className="grid grid-cols-2 gap-2">
@@ -646,7 +649,7 @@ export default function CommunityPage() {
                         : "bg-blue-500/30 text-white"
                     }`}
                   >
-                    Mexicano
+                    {openModeLabel}
                   </button>
                   <button
                     onClick={() => setSessionMode(SessionMode.MIXICANO)}
@@ -656,7 +659,7 @@ export default function CommunityPage() {
                         : "bg-blue-500/30 text-white"
                     }`}
                   >
-                    Mixicano
+                    {mixedModeLabel}
                   </button>
                 </div>
                 <p className="text-[10px] font-bold text-blue-100 uppercase tracking-wider">

@@ -6,6 +6,8 @@ import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
 import { createPortal } from "react-dom";
 import { FlashMessage, HeroCard, StatCard } from "@/components/ui/chrome";
+import { getSessionModeLabel } from "@/lib/sessionModeLabels";
+import { compareSessionStandings } from "@/lib/sessionStandings";
 import {
   MatchStatus,
   PartnerPreference,
@@ -493,7 +495,9 @@ export default function SessionPage() {
       sessionData?.mode === SessionMode.MIXICANO &&
       ![PlayerGender.MALE, PlayerGender.FEMALE].includes(guestGender)
     ) {
-      setError("MIXICANO requires selecting MALE/FEMALE for guests");
+      setError(
+        `${getSessionModeLabel(SessionMode.MIXICANO)} requires selecting MALE/FEMALE for guests`
+      );
       return;
     }
 
@@ -776,21 +780,32 @@ export default function SessionPage() {
   const activeMatchesCount = sessionData.courts.filter((court) => court.currentMatch !== null).length;
   const pausedPlayersCount = sessionData.players.filter((player) => player.isPaused).length;
   const guestPlayersCount = sessionData.players.filter((player) => player.isGuest).length;
+  const pointDiffByUserId = new Map(
+    sessionData.players.map((player) => [
+      player.userId,
+      calculatePlayerPointDiff(player.userId),
+    ])
+  );
   const sortedPlayers = sessionData.players
     .slice()
     .sort((a, b) =>
-      sessionData.type === SessionType.ELO
-        ? b.sessionPoints - a.sessionPoints ||
-          calculatePlayerPointDiff(b.userId) - calculatePlayerPointDiff(a.userId) ||
-          b.user.elo - a.user.elo ||
-          a.user.name.localeCompare(b.user.name)
-        : b.sessionPoints - a.sessionPoints ||
-          calculatePlayerPointDiff(b.userId) - calculatePlayerPointDiff(a.userId) ||
-          a.user.name.localeCompare(b.user.name)
+      compareSessionStandings(
+        {
+          name: a.user.name,
+          pointDiff: pointDiffByUserId.get(a.userId) ?? 0,
+          sessionPoints: a.sessionPoints,
+        },
+        {
+          name: b.user.name,
+          pointDiff: pointDiffByUserId.get(b.userId) ?? 0,
+          sessionPoints: b.sessionPoints,
+        }
+      )
     );
   const activePreferencePlayer = openPreferenceEditor
     ? sessionData.players.find((player) => player.userId === openPreferenceEditor.userId) ?? null
     : null;
+  const sessionModeLabel = getSessionModeLabel(sessionData.mode);
   const getSessionPlayerProfileHref = (player: Player) =>
     sessionData.communityId && !player.isGuest
       ? `/profile/${player.user.id}?communityId=${sessionData.communityId}`
@@ -807,9 +822,7 @@ export default function SessionPage() {
             <div className="flex items-center gap-2">
               <span className="app-chip app-chip-accent app-mono">{sessionData.code}</span>
               <span className="app-chip app-chip-neutral">{sessionData.status}</span>
-              <span className="app-chip app-chip-neutral">
-                {sessionData.mode}
-              </span>
+              <span className="app-chip app-chip-neutral">{sessionModeLabel}</span>
             </div>
           </div>
           <button
@@ -832,7 +845,7 @@ export default function SessionPage() {
             <>
               <span className="app-chip app-chip-accent app-mono">{sessionData.code}</span>
               <span className="app-chip app-chip-neutral">{sessionData.type}</span>
-              <span className="app-chip app-chip-neutral">{sessionData.mode}</span>
+              <span className="app-chip app-chip-neutral">{sessionModeLabel}</span>
             </>
           }
         />
@@ -843,7 +856,15 @@ export default function SessionPage() {
           <StatCard label="Players" value={sessionData.players.length} detail={`${guestPlayersCount} guests`} accent />
           <StatCard label="Active courts" value={activeMatchesCount} detail={`${sessionData.courts.length} total courts`} />
           <StatCard label="Paused" value={pausedPlayersCount} detail={pausedPlayersCount > 0 ? "Temporarily out of rotation" : "Everyone ready"} />
-          <StatCard label="Status" value={sessionData.status} detail={sessionData.type === SessionType.ELO ? "Ratings enabled" : "Points race"} />
+          <StatCard
+            label="Status"
+            value={sessionData.status}
+            detail={
+              sessionData.type === SessionType.ELO
+                ? "Points standings with Elo updates"
+                : "Points race"
+            }
+          />
         </section>
 
         {/* Admin Quick Actions */}
@@ -1065,7 +1086,9 @@ export default function SessionPage() {
                 Live Standings
               </h2>
               <span className="text-[10px] font-bold text-white/70 uppercase tracking-widest">
-                {sessionData.type === SessionType.ELO ? "Points + Ratings" : "Point Totals"}
+                {sessionData.type === SessionType.ELO
+                  ? "Point Standings + Elo Updates"
+                  : "Point Totals"}
               </span>
             </div>
 
@@ -1081,26 +1104,13 @@ export default function SessionPage() {
                   <tr>
                     <th className="w-8 sm:w-10 px-1.5 sm:px-2 py-3 text-left text-[9px] sm:text-[10px] font-black text-gray-400 uppercase tracking-widest">#</th>
                     <th className="w-[112px] sm:w-auto px-1 sm:px-2 py-3 text-left text-[9px] sm:text-[10px] font-black text-gray-400 uppercase tracking-wide sm:tracking-widest">Player</th>
-                    {sessionData.type === SessionType.POINTS ? (
-                      <>
-                        <th className="w-11 sm:w-24 px-1 sm:px-4 py-3 text-center text-[8px] sm:text-[10px] font-black text-gray-400 uppercase tracking-wide sm:tracking-widest">Pts</th>
-                        <th className="w-12 sm:w-24 px-1 sm:px-4 py-3 text-center text-[8px] sm:text-[10px] font-black text-gray-400 uppercase tracking-wide sm:tracking-widest">
-                          <span className="sm:hidden">+/-</span>
-                          <span className="hidden sm:inline">Diff</span>
-                        </th>
-                        <th className="w-10 sm:w-24 px-1 sm:px-4 py-3 text-center text-[8px] sm:text-[10px] font-black text-gray-400 uppercase tracking-wide sm:tracking-widest">MP</th>
-                        <th className="w-11 sm:w-24 px-1 sm:px-4 py-3 text-center text-[8px] sm:text-[10px] font-black text-gray-400 uppercase tracking-wide sm:tracking-widest">W/L</th>
-                      </>
-                    ) : (
-                      <>
-                        <th className="w-11 sm:w-24 px-1 sm:px-4 py-3 text-center text-[8px] sm:text-[10px] font-black text-gray-400 uppercase tracking-wide sm:tracking-widest">Pts</th>
-                        <th className="w-14 sm:w-24 px-1 sm:px-4 py-3 text-right text-[8px] sm:text-[10px] font-black text-gray-400 uppercase tracking-wide sm:tracking-widest">
-                          {SessionType.ELO}
-                        </th>
-                        <th className="w-10 sm:w-24 px-1 sm:px-4 py-3 text-center text-[8px] sm:text-[10px] font-black text-gray-400 uppercase tracking-wide sm:tracking-widest">MP</th>
-                        <th className="w-11 sm:w-24 px-1 sm:px-4 py-3 text-center text-[8px] sm:text-[10px] font-black text-gray-400 uppercase tracking-wide sm:tracking-widest">W/L</th>
-                      </>
-                    )}
+                    <th className="w-11 sm:w-24 px-1 sm:px-4 py-3 text-center text-[8px] sm:text-[10px] font-black text-gray-400 uppercase tracking-wide sm:tracking-widest">Pts</th>
+                    <th className="w-12 sm:w-24 px-1 sm:px-4 py-3 text-center text-[8px] sm:text-[10px] font-black text-gray-400 uppercase tracking-wide sm:tracking-widest">
+                      <span className="sm:hidden">+/-</span>
+                      <span className="hidden sm:inline">Diff</span>
+                    </th>
+                    <th className="w-10 sm:w-24 px-1 sm:px-4 py-3 text-center text-[8px] sm:text-[10px] font-black text-gray-400 uppercase tracking-wide sm:tracking-widest">MP</th>
+                    <th className="w-11 sm:w-24 px-1 sm:px-4 py-3 text-center text-[8px] sm:text-[10px] font-black text-gray-400 uppercase tracking-wide sm:tracking-widest">W/L</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
@@ -1108,7 +1118,7 @@ export default function SessionPage() {
                       const stats = calculatePlayerSessionStats(player.userId);
                       const isMe = player.userId === currentUserId;
                       const canToggle = isAdmin || isMe;
-                      const pointDiff = calculatePlayerPointDiff(player.userId);
+                      const pointDiff = pointDiffByUserId.get(player.userId) ?? 0;
 
                       return (
                         <tr key={player.userId} className={`active:bg-gray-50 transition-colors ${player.isPaused ? 'opacity-40 grayscale' : ''}`}>
@@ -1141,11 +1151,9 @@ export default function SessionPage() {
                                 )}
                               </div>
                               <div className="flex items-center gap-1 flex-wrap relative">
-                                {sessionData.type !== SessionType.ELO && (
-                                  <span className="hidden sm:inline text-[9px] font-bold text-gray-400 uppercase">
-                                    ELO {player.user.elo}
-                                  </span>
-                                )}
+                                <span className="hidden sm:inline text-[9px] font-bold text-gray-400 uppercase">
+                                  ELO {player.user.elo}
+                                </span>
                                 {canToggle && (
                                   <button
                                     onClick={(e) => {
@@ -1185,47 +1193,24 @@ export default function SessionPage() {
                               </div>
                             </div>
                           </td>
-                          {sessionData.type === SessionType.POINTS ? (
-                            <>
-                              <td className="w-11 sm:w-24 px-1 sm:px-4 py-2.5 sm:py-3 whitespace-nowrap text-center">
-                                <span className="text-[13px] sm:text-base font-black text-blue-700">{player.sessionPoints}</span>
-                              </td>
-                              <td className="w-12 sm:w-24 px-1 sm:px-4 py-2.5 sm:py-3 whitespace-nowrap text-center">
-                                <span className={`text-[11px] sm:text-sm font-medium ${pointDiff >= 0 ? "text-green-600" : "text-red-500"}`}>
-                                  {pointDiff > 0 ? `+${pointDiff}` : pointDiff}
-                                </span>
-                              </td>
-                              <td className="w-10 sm:w-24 px-1 sm:px-4 py-2.5 sm:py-3 whitespace-nowrap text-center">
-                                <span className="text-[10px] sm:text-xs font-bold text-gray-600">{stats.played}</span>
-                              </td>
-                              <td className="w-11 sm:w-24 px-1 sm:px-4 py-2.5 sm:py-3 whitespace-nowrap text-center">
-                                <div className="text-[8px] sm:text-[10px] font-black tracking-tighter">
-                                  <span className="text-green-600">{stats.wins}</span>
-                                  <span className="mx-0.5 text-gray-200">/</span>
-                                  <span className="text-red-500">{stats.losses}</span>
-                                </div>
-                              </td>
-                            </>
-                          ) : (
-                            <>
-                              <td className="w-11 sm:w-24 px-1 sm:px-4 py-2.5 sm:py-3 whitespace-nowrap text-center">
-                                <span className="text-[13px] sm:text-base font-black text-blue-700">{player.sessionPoints}</span>
-                              </td>
-                              <td className="w-14 sm:w-24 px-1 sm:px-4 py-2.5 sm:py-3 whitespace-nowrap text-right">
-                                <span className="text-[13px] sm:text-base font-black text-blue-700">{player.user.elo}</span>
-                              </td>
-                              <td className="w-10 sm:w-24 px-1 sm:px-4 py-2.5 sm:py-3 whitespace-nowrap text-center">
-                                <span className="text-[10px] sm:text-xs font-bold text-gray-600">{stats.played}</span>
-                              </td>
-                              <td className="w-11 sm:w-24 px-1 sm:px-4 py-2.5 sm:py-3 whitespace-nowrap text-center">
-                                <div className="text-[8px] sm:text-[10px] font-black tracking-tighter">
-                                  <span className="text-green-600">{stats.wins}</span>
-                                  <span className="mx-0.5 text-gray-200">/</span>
-                                  <span className="text-red-500">{stats.losses}</span>
-                                </div>
-                              </td>
-                            </>
-                          )}
+                          <td className="w-11 sm:w-24 px-1 sm:px-4 py-2.5 sm:py-3 whitespace-nowrap text-center">
+                            <span className="text-[13px] sm:text-base font-black text-blue-700">{player.sessionPoints}</span>
+                          </td>
+                          <td className="w-12 sm:w-24 px-1 sm:px-4 py-2.5 sm:py-3 whitespace-nowrap text-center">
+                            <span className={`text-[11px] sm:text-sm font-medium ${pointDiff >= 0 ? "text-green-600" : "text-red-500"}`}>
+                              {pointDiff > 0 ? `+${pointDiff}` : pointDiff}
+                            </span>
+                          </td>
+                          <td className="w-10 sm:w-24 px-1 sm:px-4 py-2.5 sm:py-3 whitespace-nowrap text-center">
+                            <span className="text-[10px] sm:text-xs font-bold text-gray-600">{stats.played}</span>
+                          </td>
+                          <td className="w-11 sm:w-24 px-1 sm:px-4 py-2.5 sm:py-3 whitespace-nowrap text-center">
+                            <div className="text-[8px] sm:text-[10px] font-black tracking-tighter">
+                              <span className="text-green-600">{stats.wins}</span>
+                              <span className="mx-0.5 text-gray-200">/</span>
+                              <span className="text-red-500">{stats.losses}</span>
+                            </div>
+                          </td>
                         </tr>
                       );
                     })}

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { getSessionModeLabel } from "@/lib/sessionModeLabels";
 import {
   PartnerPreference,
   PlayerGender,
@@ -9,6 +10,8 @@ import {
 } from "@/types/enums";
 
 export const dynamic = "force-dynamic";
+
+const mixedModeLabel = getSessionModeLabel(SessionMode.MIXICANO);
 
 export async function POST(
   request: Request,
@@ -77,7 +80,7 @@ export async function POST(
       ![PlayerGender.MALE, PlayerGender.FEMALE].includes(normalizedGender)
     ) {
       return NextResponse.json(
-        { error: "MIXICANO requires guest gender (MALE/FEMALE)" },
+        { error: `${mixedModeLabel} requires guest gender (MALE/FEMALE)` },
         { status: 400 }
       );
     }

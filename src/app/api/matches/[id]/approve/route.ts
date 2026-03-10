@@ -3,7 +3,8 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getCommunityEloByUserId } from "@/lib/communityElo";
 import { isValidBadmintonScore } from "@/lib/matchRules";
-import { MatchStatus, SessionType } from "@/types/enums";
+import { getStandingPointsForTeam } from "@/lib/sessionStandings";
+import { MatchStatus } from "@/types/enums";
 
 export const dynamic = "force-dynamic";
 
@@ -120,10 +121,8 @@ export async function POST(
     const team2Points = finalTeam2Score;
     const winnerTeam = team1Points > team2Points ? 1 : 2;
     const now = new Date();
-    const team1StandingPoints =
-      match.session.type === SessionType.POINTS ? (winnerTeam === 1 ? 3 : 0) : team1Points;
-    const team2StandingPoints =
-      match.session.type === SessionType.POINTS ? (winnerTeam === 2 ? 3 : 0) : team2Points;
+    const team1StandingPoints = getStandingPointsForTeam(winnerTeam, 1);
+    const team2StandingPoints = getStandingPointsForTeam(winnerTeam, 2);
 
     const playerIds = [match.team1User1Id, match.team1User2Id, match.team2User1Id, match.team2User2Id];
     const sessionPlayerRows = await prisma.sessionPlayer.findMany({

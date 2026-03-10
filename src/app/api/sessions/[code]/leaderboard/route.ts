@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getCommunityEloByUserId } from "@/lib/communityElo";
+import { compareSessionStandings } from "@/lib/sessionStandings";
 import { MatchStatus } from "@/types/enums";
 
 export const dynamic = "force-dynamic";
@@ -106,8 +107,7 @@ export async function GET(
   const getPlayerElo = (userId: string, fallbackElo: number) =>
     communityEloByUserId.get(userId) ?? fallbackElo;
 
-  // Session points leaderboard
-  const sessionPointsLeaderboard = sessionData.players
+  const leaderboardEntries = sessionData.players
     .map((p) => ({
       userId: p.userId,
       name: p.user.name,
@@ -116,30 +116,15 @@ export async function GET(
       elo: getPlayerElo(p.userId, p.user.elo),
       matchesPlayed: matchCounts[p.userId] || 0,
       pointDiff: pointDiffByUserId[p.userId] || 0,
-    }))
-    .sort((a, b) =>
-      b.sessionPoints - a.sessionPoints ||
-      b.pointDiff - a.pointDiff ||
-      a.name.localeCompare(b.name)
-    );
+    }));
 
-  // ELO leaderboard
-  const eloLeaderboard = sessionData.players
-    .map((p) => ({
-      userId: p.userId,
-      name: p.user.name,
-      isGuest: p.isGuest,
-      sessionPoints: p.sessionPoints,
-      elo: getPlayerElo(p.userId, p.user.elo),
-      matchesPlayed: matchCounts[p.userId] || 0,
-      pointDiff: pointDiffByUserId[p.userId] || 0,
-    }))
-    .sort((a, b) =>
-      b.sessionPoints - a.sessionPoints ||
-      b.pointDiff - a.pointDiff ||
-      b.elo - a.elo ||
-      a.name.localeCompare(b.name)
-    );
+  const sessionPointsLeaderboard = leaderboardEntries
+    .slice()
+    .sort(compareSessionStandings);
+
+  const eloLeaderboard = leaderboardEntries
+    .slice()
+    .sort(compareSessionStandings);
 
   return NextResponse.json({
     sessionPointsLeaderboard,

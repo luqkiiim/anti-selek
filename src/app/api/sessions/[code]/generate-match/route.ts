@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getCommunityEloByUserId } from "@/lib/communityElo";
 import { rankPlayersByFairness } from "@/lib/matchmaking/fairness";
+import { getSessionModeLabel } from "@/lib/sessionModeLabels";
 import {
   getManualMatchPlayerIds,
   hasDuplicateManualMatchPlayers,
@@ -26,6 +27,8 @@ import {
 } from "@/types/enums";
 
 export const dynamic = "force-dynamic";
+
+const mixedModeLabel = getSessionModeLabel(SessionMode.MIXICANO);
 
 export async function POST(
   request: Request,
@@ -376,7 +379,7 @@ export async function POST(
           {
             error:
               sessionData.mode === SessionMode.MIXICANO
-                ? "That manual pairing is invalid for current MIXICANO preferences."
+                ? `That manual pairing is invalid for current ${mixedModeLabel} preferences.`
                 : "Invalid manual pairing.",
           },
           { status: 400 }
@@ -414,7 +417,7 @@ export async function POST(
 
     if (!bestSelection) {
       return NextResponse.json(
-        { error: "No valid pairing found for current MIXICANO preferences. Try changing player preferences." },
+        { error: `No valid pairing found for current ${mixedModeLabel} preferences. Try changing player preferences.` },
         { status: 400 }
       );
     }

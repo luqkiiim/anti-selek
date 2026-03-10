@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getCommunityEloByUserId, withCommunityElo } from "@/lib/communityElo";
+import { getSessionModeLabel } from "@/lib/sessionModeLabels";
 import {
   PartnerPreference,
   PlayerGender,
@@ -11,6 +12,8 @@ import {
 } from "@/types/enums";
 
 export const dynamic = "force-dynamic";
+
+const mixedModeLabel = getSessionModeLabel(SessionMode.MIXICANO);
 
 function generateCode(): string {
   return Math.random().toString(36).substring(2, 8).toUpperCase();
@@ -278,7 +281,7 @@ export async function POST(request: Request) {
       );
       if (invalidGuest) {
         return NextResponse.json(
-          { error: `MIXICANO requires guest gender for ${invalidGuest.name}` },
+          { error: `${mixedModeLabel} requires guest gender for ${invalidGuest.name}` },
           { status: 400 }
         );
       }
@@ -379,7 +382,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ ...newSession, players });
   } catch (error) {
     const message = error instanceof Error ? error.message : "";
-    if (message.startsWith("MIXICANO requires")) {
+    if (
+      message.startsWith("MIXICANO requires") ||
+      message.startsWith(`${mixedModeLabel} requires`)
+    ) {
       return NextResponse.json({ error: message }, { status: 400 });
     }
     console.error("Session creation error details:", error);
