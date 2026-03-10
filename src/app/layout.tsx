@@ -16,7 +16,7 @@ const monoFont = IBM_Plex_Mono({
 
 export const metadata: Metadata = {
   title: "Anti-Selek",
-  description: "Schedule matches, track scores, and maintain ELO ratings",
+  description: "Schedule matches, track scores, and maintain player ratings",
   applicationName: "Anti-Selek",
   appleWebApp: {
     capable: true,

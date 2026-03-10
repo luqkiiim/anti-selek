@@ -72,7 +72,7 @@ export default function SignupPage() {
                 <div className="app-panel-muted p-4">
                   <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">What stays intact</p>
                   <p className="mt-2 text-sm font-semibold text-gray-900">
-                    Your session history, ELO, and tournament stats remain tied to the claimed community profile.
+                    Your session history, ratings, and tournament stats remain tied to the claimed community profile.
                   </p>
                 </div>
               </div>

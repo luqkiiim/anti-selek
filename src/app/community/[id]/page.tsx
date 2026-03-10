@@ -20,7 +20,7 @@ import {
   doClaimNamesMatch,
   getClaimRequesterEligibility,
 } from "@/lib/communityClaimRules";
-import { getSessionModeLabel } from "@/lib/sessionModeLabels";
+import { getSessionModeLabel, getSessionTypeLabel } from "@/lib/sessionModeLabels";
 import {
   ClaimRequestStatus,
   PartnerPreference,
@@ -371,7 +371,7 @@ export default function CommunityPage() {
     if (!canManageCommunity) return;
 
     const confirmed = confirm(
-      `Rollback and delete "${tournament.name}"?\n\nThis will reverse Elo changes from this tournament and cannot be undone.`
+      `Rollback and delete "${tournament.name}"?\n\nThis will reverse rating changes from this tournament and cannot be undone.`
     );
     if (!confirmed) return;
 
@@ -601,7 +601,7 @@ export default function CommunityPage() {
           <>
             <div className="relative overflow-hidden rounded-3xl border border-blue-200/70 bg-[linear-gradient(145deg,#0d3f88,#1677f2)] p-6 shadow-xl shadow-blue-100 space-y-5 text-white">
               <div>
-                <h3 className="text-sm font-black uppercase tracking-widest mb-1">Host Tournament</h3>
+                <h3 className="mb-1 text-sm font-black uppercase tracking-widest !text-white">Host Tournament</h3>
                 <p className="text-[10px] text-blue-100 font-bold uppercase tracking-wider">
                   Create a tournament for players in this community.
                 </p>
@@ -631,13 +631,13 @@ export default function CommunityPage() {
                       sessionType === SessionType.ELO ? "bg-white text-blue-600 shadow-md" : "bg-blue-500/30 text-white"
                     }`}
                   >
-                    ELO Format
+                    Ratings Format
                   </button>
                 </div>
                 <p className="text-[10px] font-bold text-blue-100 uppercase tracking-wider">
                   {sessionType === SessionType.POINTS
                     ? "Play for points. Standings decide the winner."
-                    : "Pair matches by Elo. Ratings still update, but standings use points plus diff."}
+                    : "Pair matches by rating. Ratings still update, but standings use points plus diff."}
                 </p>
 
                 <div className="grid grid-cols-2 gap-2">
@@ -845,7 +845,7 @@ export default function CommunityPage() {
                             </span>
                           </div>
                           <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">
-                            {tournament.players.length} Players - {tournament.type}
+                            {tournament.players.length} Players - {getSessionTypeLabel(tournament.type)}
                           </p>
                         </Link>
                       ) : (
@@ -858,7 +858,7 @@ export default function CommunityPage() {
                           </div>
                           <div className="flex justify-between items-center">
                             <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">
-                              {tournament.players.length} Players - {tournament.type}
+                              {tournament.players.length} Players - {getSessionTypeLabel(tournament.type)}
                             </p>
                             <button
                               onClick={() => joinTournament(tournament.code)}
@@ -903,7 +903,7 @@ export default function CommunityPage() {
                         </div>
                         <div className="flex justify-between items-center gap-2">
                           <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">
-                            {tournament.players.length} Players - {tournament.type} -{" "}
+                            {tournament.players.length} Players - {getSessionTypeLabel(tournament.type)} -{" "}
                             {new Date(tournament.createdAt).toLocaleDateString()}
                           </p>
                           {canRollbackLatest ? (
@@ -999,7 +999,7 @@ export default function CommunityPage() {
                       <div className="flex items-center gap-2 min-w-0">
                         <p className="font-black text-sm text-gray-900 truncate">{player.name}</p>
                         <span className="text-[9px] text-gray-500 font-bold uppercase tracking-wider whitespace-nowrap">
-                          ELO {player.elo}
+                          Rating {player.elo}
                         </span>
                       </div>
                       <span
@@ -1159,7 +1159,7 @@ export default function CommunityPage() {
                         </span>
                       )}
                       <span className="text-[9px] text-gray-500 font-bold uppercase tracking-wider whitespace-nowrap">
-                        ELO {guest.initialElo}
+                        Rating {guest.initialElo}
                       </span>
                     </div>
                     <button

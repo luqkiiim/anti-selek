@@ -137,7 +137,7 @@ export async function approveCommunityClaimRequest(
 
   if (requesterMembership.elo !== 1000) {
     throw new CommunityClaimError(
-      "Requester already has community Elo changes. Manual merge required.",
+      "Requester already has community rating changes. Manual merge required.",
       409
     );
   }

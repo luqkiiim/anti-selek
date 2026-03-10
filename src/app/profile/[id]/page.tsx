@@ -119,12 +119,12 @@ export default function ProfilePage() {
         <HeroCard
           eyebrow="Player profile"
           title={data.user.name}
-          description={`Joined ${new Date(data.user.createdAt).toLocaleDateString()}. Review lifetime performance, tournament history, and ${data.context?.communityId ? "community" : "overall"} ELO at a glance.`}
+          description={`Joined ${new Date(data.user.createdAt).toLocaleDateString()}. Review lifetime performance, tournament history, and ${data.context?.communityId ? "community" : "overall"} rating at a glance.`}
           backHref={communityId ? `/community/${communityId}` : "/"}
           backLabel="Back"
           meta={
             <span className="app-chip app-chip-warning">
-              {data.context?.communityId ? "Community ELO" : "Overall ELO"} {data.user.elo}
+              {data.context?.communityId ? "Community Rating" : "Overall Rating"} {data.user.elo}
             </span>
           }
           actions={
@@ -150,7 +150,7 @@ export default function ProfilePage() {
         <SectionCard
           eyebrow="History"
           title="Match timeline"
-          description="Every recorded result for this player, including partner pairings and ELO movement when applicable."
+          description="Every recorded result for this player, including partner pairings and rating movement when applicable."
           action={<span className="app-chip app-chip-neutral">{data.matchHistory.length} matches</span>}
         >
           {data.matchHistory.length === 0 ? (
@@ -178,7 +178,7 @@ export default function ProfilePage() {
                       {typeof match.eloChange === "number" ? (
                         <span className={`app-chip ${match.eloChange >= 0 ? "app-chip-success" : "app-chip-danger"}`}>
                           {match.eloChange >= 0 ? "+" : ""}
-                          {match.eloChange} ELO
+                          {match.eloChange} Rating
                         </span>
                       ) : null}
                     </div>

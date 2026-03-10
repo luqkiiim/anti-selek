@@ -41,7 +41,7 @@ export async function POST(
     let guestElo = 1000;
     if (typeof initialElo === "number") {
       if (!Number.isInteger(initialElo) || initialElo < 0 || initialElo > 5000) {
-        return NextResponse.json({ error: "Invalid guest ELO" }, { status: 400 });
+        return NextResponse.json({ error: "Invalid guest rating" }, { status: 400 });
       }
       guestElo = initialElo;
     }

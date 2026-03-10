@@ -6,7 +6,7 @@ import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
 import { createPortal } from "react-dom";
 import { FlashMessage, HeroCard, StatCard } from "@/components/ui/chrome";
-import { getSessionModeLabel } from "@/lib/sessionModeLabels";
+import { getSessionModeLabel, getSessionTypeLabel } from "@/lib/sessionModeLabels";
 import { compareSessionStandings } from "@/lib/sessionStandings";
 import {
   MatchStatus,
@@ -806,6 +806,7 @@ export default function SessionPage() {
     ? sessionData.players.find((player) => player.userId === openPreferenceEditor.userId) ?? null
     : null;
   const sessionModeLabel = getSessionModeLabel(sessionData.mode);
+  const sessionTypeLabel = getSessionTypeLabel(sessionData.type);
   const getSessionPlayerProfileHref = (player: Player) =>
     sessionData.communityId && !player.isGuest
       ? `/profile/${player.user.id}?communityId=${sessionData.communityId}`
@@ -844,7 +845,7 @@ export default function SessionPage() {
           meta={
             <>
               <span className="app-chip app-chip-accent app-mono">{sessionData.code}</span>
-              <span className="app-chip app-chip-neutral">{sessionData.type}</span>
+              <span className="app-chip app-chip-neutral">{sessionTypeLabel}</span>
               <span className="app-chip app-chip-neutral">{sessionModeLabel}</span>
             </>
           }
@@ -861,7 +862,7 @@ export default function SessionPage() {
             value={sessionData.status}
             detail={
               sessionData.type === SessionType.ELO
-                ? "Points standings with Elo updates"
+                ? "Points standings with rating updates"
                 : "Points race"
             }
           />
@@ -1087,7 +1088,7 @@ export default function SessionPage() {
               </h2>
               <span className="text-[10px] font-bold text-white/70 uppercase tracking-widest">
                 {sessionData.type === SessionType.ELO
-                  ? "Point Standings + Elo Updates"
+                  ? "Point Standings + Rating Updates"
                   : "Point Totals"}
               </span>
             </div>
@@ -1152,7 +1153,7 @@ export default function SessionPage() {
                               </div>
                               <div className="flex items-center gap-1 flex-wrap relative">
                                 <span className="hidden sm:inline text-[9px] font-bold text-gray-400 uppercase">
-                                  ELO {player.user.elo}
+                                  Rating {player.user.elo}
                                 </span>
                                 {canToggle && (
                                   <button
@@ -1439,7 +1440,7 @@ export default function SessionPage() {
                       <div className="flex items-center gap-2 min-w-0">
                         <p className="font-black text-sm text-gray-900 truncate">{player.name}</p>
                         <span className="text-[9px] text-gray-500 font-bold uppercase tracking-wider whitespace-nowrap">
-                          ELO {player.elo}
+                          Rating {player.elo}
                         </span>
                       </div>
                       <button

@@ -260,10 +260,10 @@ export default function CommunityAdminPage() {
       });
       const data = await safeJson(res);
       if (!res.ok) {
-        throw new Error(data.error || "Failed to update ELO");
+        throw new Error(data.error || "Failed to update rating");
       }
 
-      setSuccess(`${playerName}'s ELO updated to ${newElo}.`);
+      setSuccess(`${playerName}'s rating updated to ${newElo}.`);
       setEditingElo((prev) => {
         const next = { ...prev };
         delete next[id];
@@ -271,7 +271,7 @@ export default function CommunityAdminPage() {
       });
       await fetchCommunityAndPlayers();
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Failed to update ELO");
+      setError(err instanceof Error ? err.message : "Failed to update rating");
     } finally {
       setSavingElo((prev) => ({ ...prev, [id]: false }));
     }
@@ -377,7 +377,7 @@ export default function CommunityAdminPage() {
 
   const handleResetCommunity = async () => {
     const confirmation = prompt(
-      "This will DELETE ALL TOURNAMENTS in this community and reset member ELO to 1000. Type 'RESET' to confirm:"
+      "This will DELETE ALL TOURNAMENTS in this community and reset member ratings to 1000. Type 'RESET' to confirm:"
     );
     if (confirmation !== "RESET") {
       if (confirmation !== null) {
@@ -765,7 +765,7 @@ export default function CommunityAdminPage() {
                               </button>
                             )}
                           </div>
-                          <p className="text-xs font-black text-gray-700">ELO {player.elo}</p>
+                          <p className="text-xs font-black text-gray-700">Rating {player.elo}</p>
                         </div>
                       </div>
 
@@ -888,7 +888,7 @@ export default function CommunityAdminPage() {
                 <thead className="bg-gray-50">
                   <tr>
                     <th className="px-4 py-3 text-left text-[10px] font-black text-gray-500 uppercase tracking-widest">Player</th>
-                    <th className="px-4 py-3 text-left text-[10px] font-black text-gray-500 uppercase tracking-widest">ELO</th>
+                    <th className="px-4 py-3 text-left text-[10px] font-black text-gray-500 uppercase tracking-widest">Rating</th>
                     <th className="px-4 py-3 text-center text-[10px] font-black text-gray-500 uppercase tracking-widest whitespace-nowrap">Claimed</th>
                     <th className="px-4 py-3 text-center text-[10px] font-black text-gray-500 uppercase tracking-widest whitespace-nowrap">Gender</th>
                     <th className="px-4 py-3 text-center text-[10px] font-black text-gray-500 uppercase tracking-widest whitespace-nowrap">Role</th>

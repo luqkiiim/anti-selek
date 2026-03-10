@@ -30,7 +30,7 @@ export function getClaimRequesterEligibility(
   if (input.communityElo !== 1000) {
     return {
       canRequest: false,
-      reason: "This account already has community Elo history. Manual merge required.",
+      reason: "This account already has community rating history. Manual merge required.",
     };
   }
 

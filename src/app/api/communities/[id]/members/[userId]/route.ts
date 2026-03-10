@@ -86,7 +86,7 @@ export async function PATCH(
       elo !== undefined &&
       (typeof elo !== "number" || !Number.isInteger(elo) || elo < 0 || elo > 5000)
     ) {
-      return NextResponse.json({ error: "Invalid ELO" }, { status: 400 });
+      return NextResponse.json({ error: "Invalid rating" }, { status: 400 });
     }
     if (isActive !== undefined && typeof isActive !== "boolean") {
       return NextResponse.json({ error: "Invalid isActive value" }, { status: 400 });

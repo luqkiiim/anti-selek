@@ -25,7 +25,7 @@ describe("community claim rules", () => {
     });
   });
 
-  it("blocks accounts with community Elo history", () => {
+  it("blocks accounts with community rating history", () => {
     expect(
       getClaimRequesterEligibility({
         isClaimed: true,
@@ -34,7 +34,7 @@ describe("community claim rules", () => {
       })
     ).toEqual({
       canRequest: false,
-      reason: "This account already has community Elo history. Manual merge required.",
+      reason: "This account already has community rating history. Manual merge required.",
     });
   });
 
