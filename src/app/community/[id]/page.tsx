@@ -14,7 +14,6 @@ import Link from "next/link";
 import {
   FlashMessage,
   HeroCard,
-  StatCard,
 } from "@/components/ui/chrome";
 import { HostTournamentPanel } from "@/components/community/HostTournamentPanel";
 import { CurrentTournamentsPanel } from "@/components/community/CurrentTournamentsPanel";
@@ -478,7 +477,6 @@ export default function CommunityPage() {
     );
   }
 
-  const claimedMembers = communityMembers.filter((member) => member.isClaimed).length;
   const shouldIgnoreCardNavigation = (target: EventTarget | null) =>
     target instanceof HTMLElement &&
     !!target.closest("button, a, select, input, option");
@@ -534,8 +532,6 @@ export default function CommunityPage() {
       openTournament(code);
     }
   };
-  const selectedEntrants = selectedPlayerIds.length + guestConfigs.length;
-
   return (
     <main className="app-page">
       <div className="app-topbar">
@@ -593,12 +589,11 @@ export default function CommunityPage() {
 
         {success ? <FlashMessage tone="success">{success}</FlashMessage> : null}
 
-        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <StatCard label="Members" value={community?.membersCount || 0} detail={`${claimedMembers} claimed`} accent />
-          <StatCard label="Live tournaments" value={activeTournaments.length} detail={activeTournaments.length > 0 ? "Ready to open now" : "No active courts"} />
-          <StatCard label="Claim requests" value={claimRequests.length} detail={claimRequests.length > 0 ? "Awaiting admin review" : "Nothing pending"} />
-          <StatCard label="Host setup" value={selectedEntrants} detail={selectedEntrants > 0 ? "Entrants preselected" : "Choose players or guests"} />
-        </section>
+        <CurrentTournamentsPanel
+          tournaments={activeTournaments}
+          currentUserId={user?.id}
+          onJoinTournament={joinTournament}
+        />
 
         {canManageCommunity && showHostPanel && (
           <>
@@ -723,24 +718,15 @@ export default function CommunityPage() {
             </div>
           </div>
 
-          <div className="space-y-8">
-            <CurrentTournamentsPanel
-              tournaments={activeTournaments}
-              currentUserId={user?.id}
-              onJoinTournament={joinTournament}
-            />
-
-            <PastTournamentsPanel
-              tournaments={pastTournaments}
-              canManageCommunity={canManageCommunity}
-              latestPastTournamentId={latestPastTournamentId}
-              rollingBackTournamentCode={rollingBackTournamentCode}
-              onCardClick={handlePastTournamentCardClick}
-              onCardKeyDown={handlePastTournamentCardKeyDown}
-              onRollbackTournament={rollbackTournament}
-            />
-
-          </div>
+          <PastTournamentsPanel
+            tournaments={pastTournaments}
+            canManageCommunity={canManageCommunity}
+            latestPastTournamentId={latestPastTournamentId}
+            rollingBackTournamentCode={rollingBackTournamentCode}
+            onCardClick={handlePastTournamentCardClick}
+            onCardKeyDown={handlePastTournamentCardKeyDown}
+            onRollbackTournament={rollbackTournament}
+          />
         </div>
       </div>
 
