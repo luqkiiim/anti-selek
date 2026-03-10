@@ -136,7 +136,7 @@ export default function ProfilePage() {
           }
         />
 
-        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <section className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
           <StatCard label="Matches" value={data.stats.totalMatches} detail="All recorded doubles results" accent />
           <StatCard label="Win rate" value={`${data.stats.winRate}%`} detail={`${data.stats.wins} wins and ${data.stats.losses} losses`} />
           <StatCard label="Points scored" value={data.stats.pointsScored} detail={`${data.stats.pointsConceded} conceded`} />
