@@ -328,8 +328,7 @@ export default function SessionPage() {
     try {
       const res = await fetch(`/api/sessions/${code}/end`, { method: "POST" });
       if (res.ok) {
-        const destination = sessionData?.communityId ? `/community/${sessionData.communityId}` : "/";
-        router.push(destination);
+        fetchSession();
       } else {
         const data = await safeJson(res);
         setError(data.error || "Failed to end session");
