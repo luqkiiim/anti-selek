@@ -1,6 +1,4 @@
 "use client";
-
-import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
@@ -126,13 +124,6 @@ export default function ProfilePage() {
             <span className="app-chip app-chip-warning">
               {data.context?.communityId ? "Community Rating" : "Overall Rating"} {data.user.elo}
             </span>
-          }
-          actions={
-            communityId ? (
-              <Link href={`/community/${communityId}`} className="app-button-secondary">
-                Open community
-              </Link>
-            ) : undefined
           }
         />
 
