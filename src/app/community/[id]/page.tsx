@@ -815,14 +815,9 @@ export default function CommunityPage() {
                               {tournament.status}
                             </span>
                           </div>
-                          <div className="flex items-center justify-between gap-3">
-                            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">
-                              {tournament.players.length} Players - {tournament.type}
-                            </p>
-                            <span className="text-[10px] font-black uppercase tracking-widest text-blue-600">
-                              Open Tournament
-                            </span>
-                          </div>
+                          <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">
+                            {tournament.players.length} Players - {tournament.type}
+                          </p>
                         </Link>
                       ) : (
                         <div key={tournament.id} className="block bg-gray-50 p-4 rounded-2xl border border-gray-100">
