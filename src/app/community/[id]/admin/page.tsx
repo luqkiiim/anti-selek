@@ -5,6 +5,7 @@ import { useSession } from "next-auth/react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { FlashMessage, HeroCard, StatCard } from "@/components/ui/chrome";
+import { CommunitySettingsPanel } from "@/components/community-admin/CommunitySettingsPanel";
 import { CreatePlayerProfilePanel } from "@/components/community-admin/CreatePlayerProfilePanel";
 import { ClaimRequestsPanel } from "@/components/community-admin/ClaimRequestsPanel";
 import {
@@ -61,6 +62,9 @@ export default function CommunityAdminPage() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
+  const [communityNameInput, setCommunityNameInput] = useState("");
+  const [communityPasswordInput, setCommunityPasswordInput] = useState("");
+  const [savingCommunitySettings, setSavingCommunitySettings] = useState(false);
   const [name, setName] = useState("");
   const [newPlayerGender, setNewPlayerGender] = useState<PlayerGender>(PlayerGender.MALE);
   const [editingName, setEditingName] = useState<Record<string, string>>({});
@@ -144,6 +148,13 @@ export default function CommunityAdminPage() {
     setPlayers(Array.isArray(playersData) ? playersData : []);
     setClaimRequests(Array.isArray(claimRequestsData) ? claimRequestsData : []);
   }, [communityId, router]);
+
+  useEffect(() => {
+    if (!community) return;
+    setCommunityNameInput((prev) =>
+      prev.trim().length === 0 || prev === community.name ? community.name : prev
+    );
+  }, [community]);
 
   useEffect(() => {
     if (status === "unauthenticated") {
@@ -412,6 +423,62 @@ export default function CommunityAdminPage() {
     }
   };
 
+  const handleUpdateCommunitySettings = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!community) return;
+
+    const trimmedName = communityNameInput.trim();
+    const nextPassword = communityPasswordInput;
+    const hasNameChange = trimmedName.length > 0 && trimmedName !== community.name;
+    const hasPasswordChange = nextPassword.length > 0;
+
+    setError("");
+    setSuccess("");
+
+    if (trimmedName.length < 3) {
+      setError("Community name must be at least 3 characters.");
+      return;
+    }
+    if (hasPasswordChange && nextPassword.length < 4) {
+      setError("Password must be at least 4 characters.");
+      return;
+    }
+    if (!hasNameChange && !hasPasswordChange) {
+      setSuccess("No changes to save.");
+      return;
+    }
+
+    setSavingCommunitySettings(true);
+
+    try {
+      const body: { name?: string; password?: string } = {};
+      if (hasNameChange) {
+        body.name = trimmedName;
+      }
+      if (hasPasswordChange) {
+        body.password = nextPassword;
+      }
+
+      const res = await fetch(`/api/communities/${communityId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const data = await safeJson(res);
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to update community");
+      }
+
+      setCommunityPasswordInput("");
+      setSuccess("Community settings updated.");
+      await fetchCommunityAndPlayers();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to update community");
+    } finally {
+      setSavingCommunitySettings(false);
+    }
+  };
+
   const handleDeleteCommunity = async () => {
     const confirmation = prompt(
       "This will permanently DELETE this community and all related data. Type 'DELETE' to confirm:"
@@ -590,6 +657,16 @@ export default function CommunityAdminPage() {
 
         <div className="grid grid-cols-1 lg:grid-cols-[320px_minmax(0,1fr)] gap-8 items-start">
           <div className="space-y-8">
+            <CommunitySettingsPanel
+              communityName={communityNameInput}
+              onCommunityNameChange={setCommunityNameInput}
+              communityPassword={communityPasswordInput}
+              onCommunityPasswordChange={setCommunityPasswordInput}
+              isPasswordProtected={community?.isPasswordProtected ?? false}
+              onSubmit={handleUpdateCommunitySettings}
+              saving={savingCommunitySettings}
+            />
+
             <CreatePlayerProfilePanel
               name={name}
               onNameChange={setName}
