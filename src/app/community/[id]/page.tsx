@@ -16,11 +16,14 @@ import {
   HeroCard,
   StatCard,
 } from "@/components/ui/chrome";
+import { HostTournamentPanel } from "@/components/community/HostTournamentPanel";
+import { CurrentTournamentsPanel } from "@/components/community/CurrentTournamentsPanel";
+import { PastTournamentsPanel } from "@/components/community/PastTournamentsPanel";
 import {
   doClaimNamesMatch,
   getClaimRequesterEligibility,
 } from "@/lib/communityClaimRules";
-import { getSessionModeLabel, getSessionTypeLabel } from "@/lib/sessionModeLabels";
+import { getSessionModeLabel } from "@/lib/sessionModeLabels";
 import {
   ClaimRequestStatus,
   PartnerPreference,
@@ -599,124 +602,24 @@ export default function CommunityPage() {
 
         {canManageCommunity && showHostPanel && (
           <>
-            <div className="relative overflow-hidden rounded-3xl border border-blue-200/70 bg-[linear-gradient(145deg,#0d3f88,#1677f2)] p-6 shadow-xl shadow-blue-100 space-y-5 text-white">
-              <div>
-                <h3 className="mb-1 text-sm font-black uppercase tracking-widest !text-white">Host Tournament</h3>
-                <p className="text-[10px] text-blue-100 font-bold uppercase tracking-wider">
-                  Create a tournament for players in this community.
-                </p>
-              </div>
-
-              <div className="space-y-3">
-                <input
-                  type="text"
-                  value={newSessionName}
-                  onChange={(e) => setNewSessionName(e.target.value)}
-                  placeholder="Tournament Name"
-                  className="w-full bg-blue-500/50 border-2 border-blue-400/30 rounded-2xl px-4 py-3 placeholder:text-blue-200 font-bold focus:outline-none focus:border-white transition-all"
-                />
-
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    onClick={() => setSessionType(SessionType.POINTS)}
-                    className={`py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
-                      sessionType === SessionType.POINTS ? "bg-white text-blue-600 shadow-md" : "bg-blue-500/30 text-white"
-                    }`}
-                  >
-                    Points Format
-                  </button>
-                  <button
-                    onClick={() => setSessionType(SessionType.ELO)}
-                    className={`py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
-                      sessionType === SessionType.ELO ? "bg-white text-blue-600 shadow-md" : "bg-blue-500/30 text-white"
-                    }`}
-                  >
-                    Ratings Format
-                  </button>
-                </div>
-                <p className="text-[10px] font-bold text-blue-100 uppercase tracking-wider">
-                  {sessionType === SessionType.POINTS
-                    ? "Play for points. Standings decide the winner."
-                    : "Pair matches by rating. Ratings still update, but standings use points plus diff."}
-                </p>
-
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    onClick={() => setSessionMode(SessionMode.MEXICANO)}
-                    className={`py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
-                      sessionMode === SessionMode.MEXICANO
-                        ? "bg-white text-blue-600 shadow-md"
-                        : "bg-blue-500/30 text-white"
-                    }`}
-                  >
-                    {openModeLabel}
-                  </button>
-                  <button
-                    onClick={() => setSessionMode(SessionMode.MIXICANO)}
-                    className={`py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
-                      sessionMode === SessionMode.MIXICANO
-                        ? "bg-white text-blue-600 shadow-md"
-                        : "bg-blue-500/30 text-white"
-                    }`}
-                  >
-                    {mixedModeLabel}
-                  </button>
-                </div>
-                <p className="text-[10px] font-bold text-blue-100 uppercase tracking-wider">
-                  {sessionMode === SessionMode.MEXICANO
-                    ? "Open doubles rotation."
-                    : "Mixed doubles rules enabled."}
-                </p>
-
-                <div className="space-y-1">
-                  <p className="text-[10px] font-black uppercase tracking-widest text-blue-100">Courts Available</p>
-                  <select
-                    value={courtCount}
-                    onChange={(e) => setCourtCount(parseInt(e.target.value, 10))}
-                    className="w-full bg-blue-500/50 border-2 border-blue-400/30 rounded-2xl px-4 py-3 font-bold focus:outline-none focus:border-white transition-all"
-                  >
-                    {Array.from({ length: 10 }, (_, i) => i + 1).map((count) => (
-                      <option key={count} value={count} className="text-gray-900">
-                        {count} Court{count > 1 ? "s" : ""}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                  <div className="bg-blue-700/30 border border-white/20 rounded-xl px-3 py-3 space-y-2">
-                    <p className="text-[10px] font-black uppercase tracking-widest text-blue-100">Players</p>
-                    <p className="text-xs font-bold">{selectedPlayerIds.length} selected</p>
-                    <button
-                      type="button"
-                      onClick={() => setShowPlayersModal(true)}
-                      className="w-full bg-white text-blue-600 px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest"
-                    >
-                      Add Players
-                    </button>
-                  </div>
-                  <div className="bg-blue-700/30 border border-white/20 rounded-xl px-3 py-3 space-y-2">
-                    <p className="text-[10px] font-black uppercase tracking-widest text-blue-100">Guests</p>
-                    <p className="text-xs font-bold">{guestConfigs.length} pre-added</p>
-                    <button
-                      type="button"
-                      onClick={() => setShowGuestsModal(true)}
-                      className="w-full bg-white text-blue-600 px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest"
-                    >
-                      Add Guests
-                    </button>
-                  </div>
-                </div>
-
-                <button
-                  onClick={createSession}
-                  disabled={creatingSession || !newSessionName.trim()}
-                  className="w-full bg-white text-blue-600 py-4 rounded-2xl font-black uppercase tracking-widest text-xs active:scale-95 transition-all shadow-lg mt-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {creatingSession ? "Creating..." : "Create Tournament"}
-                </button>
-              </div>
-            </div>
+            <HostTournamentPanel
+              newSessionName={newSessionName}
+              onNewSessionNameChange={setNewSessionName}
+              sessionType={sessionType}
+              onSessionTypeChange={setSessionType}
+              sessionMode={sessionMode}
+              onSessionModeChange={setSessionMode}
+              openModeLabel={openModeLabel}
+              mixedModeLabel={mixedModeLabel}
+              courtCount={courtCount}
+              onCourtCountChange={setCourtCount}
+              selectedPlayerCount={selectedPlayerIds.length}
+              guestCount={guestConfigs.length}
+              onOpenPlayers={() => setShowPlayersModal(true)}
+              onOpenGuests={() => setShowGuestsModal(true)}
+              onCreateSession={createSession}
+              creatingSession={creatingSession}
+            />
           </>
         )}
 
@@ -821,112 +724,21 @@ export default function CommunityPage() {
           </div>
 
           <div className="space-y-8">
-            <div className="bg-white p-6 rounded-3xl shadow-md border border-gray-100 space-y-4">
-              <h3 className="text-sm font-black text-gray-900 uppercase tracking-widest">Current Tournaments</h3>
-              <div className="space-y-3">
-                {activeTournaments.length === 0 ? (
-                  <div className="bg-gray-50 border-2 border-dashed border-gray-100 rounded-2xl p-4 text-center">
-                    <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">No active tournaments</p>
-                  </div>
-                ) : (
-                  activeTournaments.map((tournament) => {
-                    const isParticipant = tournament.players.some((p) => p.user.id === user?.id);
-                    return (
-                      isParticipant ? (
-                        <Link
-                          key={tournament.id}
-                          href={`/session/${tournament.code}`}
-                          className="block rounded-2xl border border-gray-100 bg-gray-50 p-4 transition-colors hover:border-blue-200 hover:bg-blue-50/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 focus-visible:ring-offset-2"
-                        >
-                          <div className="mb-2 flex items-start justify-between gap-3">
-                            <h4 className="font-black text-gray-900">{tournament.name}</h4>
-                            <span className="text-[10px] font-black text-blue-600 bg-blue-50 px-2 py-1 rounded-lg uppercase tracking-widest">
-                              {tournament.status}
-                            </span>
-                          </div>
-                          <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">
-                            {tournament.players.length} Players - {getSessionTypeLabel(tournament.type)}
-                          </p>
-                        </Link>
-                      ) : (
-                        <div key={tournament.id} className="block bg-gray-50 p-4 rounded-2xl border border-gray-100">
-                          <div className="flex justify-between items-start mb-2">
-                            <h4 className="font-black text-gray-900">{tournament.name}</h4>
-                            <span className="text-[10px] font-black text-blue-600 bg-blue-50 px-2 py-1 rounded-lg uppercase tracking-widest">
-                              {tournament.status}
-                            </span>
-                          </div>
-                          <div className="flex justify-between items-center">
-                            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">
-                              {tournament.players.length} Players - {getSessionTypeLabel(tournament.type)}
-                            </p>
-                            <button
-                              onClick={() => joinTournament(tournament.code)}
-                              className="text-[10px] bg-gray-900 text-white px-3 py-1.5 rounded-lg font-black uppercase tracking-wider"
-                            >
-                              Join
-                            </button>
-                          </div>
-                        </div>
-                      )
-                    );
-                  })
-                )}
-              </div>
-            </div>
+            <CurrentTournamentsPanel
+              tournaments={activeTournaments}
+              currentUserId={user?.id}
+              onJoinTournament={joinTournament}
+            />
 
-            <div className="bg-white p-6 rounded-3xl shadow-md border border-gray-100 space-y-4 pb-10">
-              <h3 className="text-sm font-black text-gray-900 uppercase tracking-widest">Past Tournaments</h3>
-              <div className="space-y-3">
-                {pastTournaments.length === 0 ? (
-                  <div className="bg-gray-50 border-2 border-dashed border-gray-100 rounded-2xl p-4 text-center">
-                    <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">No past tournaments</p>
-                  </div>
-                ) : (
-                  pastTournaments.map((tournament) => {
-                    const canRollbackLatest =
-                      canManageCommunity && tournament.id === latestPastTournamentId;
-                    return (
-                      <div
-                        key={tournament.id}
-                        role="link"
-                        tabIndex={0}
-                        onClick={(event) => handlePastTournamentCardClick(event, tournament.code)}
-                        onKeyDown={(event) => handlePastTournamentCardKeyDown(event, tournament.code)}
-                        className="cursor-pointer rounded-2xl border border-gray-100 bg-gray-50 p-4 transition-colors hover:border-blue-200 hover:bg-blue-50/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 focus-visible:ring-offset-2"
-                      >
-                        <div className="flex justify-between items-start mb-2">
-                          <h4 className="font-black text-gray-900">{tournament.name}</h4>
-                          <span className="text-[10px] font-black text-gray-600 bg-gray-200 px-2 py-1 rounded-lg uppercase tracking-widest">
-                            {tournament.status}
-                          </span>
-                        </div>
-                        <div className="flex justify-between items-center gap-2">
-                          <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">
-                            {tournament.players.length} Players - {getSessionTypeLabel(tournament.type)} -{" "}
-                            {new Date(tournament.createdAt).toLocaleDateString()}
-                          </p>
-                          {canRollbackLatest ? (
-                            <div className="shrink-0">
-                              <button
-                                type="button"
-                                onClick={() => rollbackTournament(tournament)}
-                                disabled={rollingBackTournamentCode !== null}
-                                className="text-[10px] bg-red-600 text-white px-3 py-1.5 rounded-lg font-black uppercase tracking-wider disabled:opacity-50 disabled:cursor-not-allowed"
-                              >
-                                {rollingBackTournamentCode === tournament.code
-                                  ? "Rolling Back..."
-                                  : "Rollback"}
-                              </button>
-                            </div>
-                          ) : null}
-                        </div>
-                      </div>
-                    );
-                  })
-                )}
-              </div>
-            </div>
+            <PastTournamentsPanel
+              tournaments={pastTournaments}
+              canManageCommunity={canManageCommunity}
+              latestPastTournamentId={latestPastTournamentId}
+              rollingBackTournamentCode={rollingBackTournamentCode}
+              onCardClick={handlePastTournamentCardClick}
+              onCardKeyDown={handlePastTournamentCardKeyDown}
+              onRollbackTournament={rollbackTournament}
+            />
 
           </div>
         </div>

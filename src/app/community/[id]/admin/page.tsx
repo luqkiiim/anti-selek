@@ -5,6 +5,8 @@ import { useSession } from "next-auth/react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { FlashMessage, HeroCard, StatCard } from "@/components/ui/chrome";
+import { CreatePlayerProfilePanel } from "@/components/community-admin/CreatePlayerProfilePanel";
+import { ClaimRequestsPanel } from "@/components/community-admin/ClaimRequestsPanel";
 import {
   ClaimRequestStatus,
   PartnerPreference,
@@ -588,123 +590,20 @@ export default function CommunityAdminPage() {
 
         <div className="grid grid-cols-1 lg:grid-cols-[320px_minmax(0,1fr)] gap-8 items-start">
           <div className="space-y-8">
-            <div className="bg-white p-6 rounded-3xl shadow-md border border-gray-100 space-y-4">
-              <h3 className="text-sm font-black text-gray-900 uppercase tracking-widest">Create Player Profile</h3>
-              <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">
-                Add a player to this community.
-              </p>
-              <form onSubmit={handleAddPlayer} className="space-y-3">
-                <input
-                  type="text"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl px-4 py-3 font-bold focus:outline-none focus:border-blue-500 transition-all"
-                  placeholder="Player Name"
-                  required
-                />
-                <select
-                  value={newPlayerGender}
-                  onChange={(e) => setNewPlayerGender(e.target.value as PlayerGender)}
-                  className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl px-4 py-3 font-bold focus:outline-none focus:border-blue-500 transition-all"
-                >
-                  <option value={PlayerGender.MALE}>Male</option>
-                  <option value={PlayerGender.FEMALE}>Female</option>
-                </select>
-                <button
-                  type="submit"
-                  className="w-full bg-blue-600 text-white py-3 rounded-2xl font-black uppercase tracking-widest text-xs active:scale-95 transition-all"
-                >
-                  Create Profile
-                </button>
-              </form>
-            </div>
+            <CreatePlayerProfilePanel
+              name={name}
+              onNameChange={setName}
+              newPlayerGender={newPlayerGender}
+              onNewPlayerGenderChange={setNewPlayerGender}
+              onSubmit={handleAddPlayer}
+            />
 
-            <div className="bg-white p-6 rounded-3xl shadow-md border border-gray-100 space-y-4">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <h3 className="text-sm font-black text-gray-900 uppercase tracking-widest">Claim Requests</h3>
-                  <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">
-                    Review member requests to claim placeholder profiles.
-                  </p>
-                </div>
-                <span className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">
-                  {claimRequests.length} pending
-                </span>
-              </div>
-
-              <div className="space-y-3">
-                {claimRequests.length === 0 ? (
-                  <div className="bg-gray-50 border-2 border-dashed border-gray-100 rounded-2xl p-4 text-center">
-                    <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">
-                      No pending claim requests
-                    </p>
-                  </div>
-                ) : (
-                  claimRequests.map((claimRequest) => (
-                    <div
-                      key={claimRequest.id}
-                      className="rounded-2xl border border-gray-100 bg-gray-50 p-4 space-y-3"
-                    >
-                      <div className="space-y-1">
-                        <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">
-                          Requester
-                        </p>
-                        <p className="text-sm font-black text-gray-900">{claimRequest.requesterName}</p>
-                        <p className="text-xs text-gray-500">
-                          {claimRequest.requesterEmail || "No email"}
-                        </p>
-                      </div>
-                      <div className="space-y-1">
-                        <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">
-                          Placeholder
-                        </p>
-                        <p className="text-sm font-black text-gray-900">{claimRequest.targetName}</p>
-                        <p className="text-xs text-gray-500">
-                          {claimRequest.targetEmail || "No email"}
-                        </p>
-                      </div>
-                      {claimRequest.note && (
-                        <div className="rounded-xl bg-white border border-gray-200 px-3 py-2">
-                          <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">
-                            Note
-                          </p>
-                          <p className="text-xs text-gray-600 mt-1">{claimRequest.note}</p>
-                        </div>
-                      )}
-                      <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">
-                        Requested {new Date(claimRequest.createdAt).toLocaleDateString()}
-                      </p>
-                      {claimRequest.requesterUserId === session?.user?.id && (
-                        <p className="text-[10px] font-bold uppercase tracking-wider text-amber-600">
-                          Another admin must approve this request
-                        </p>
-                      )}
-                      <div className="grid grid-cols-2 gap-2">
-                        <button
-                          type="button"
-                          onClick={() => handleReviewClaimRequest(claimRequest, "APPROVE")}
-                          disabled={
-                            reviewingClaimRequestId !== null ||
-                            claimRequest.requesterUserId === session?.user?.id
-                          }
-                          className="w-full bg-blue-600 text-white py-2.5 rounded-xl font-black uppercase tracking-widest text-[10px] disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          {reviewingClaimRequestId === claimRequest.id ? "Working..." : "Approve"}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleReviewClaimRequest(claimRequest, "REJECT")}
-                          disabled={reviewingClaimRequestId !== null}
-                          className="w-full bg-white border border-red-200 text-red-600 py-2.5 rounded-xl font-black uppercase tracking-widest text-[10px] disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          Reject
-                        </button>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
+            <ClaimRequestsPanel
+              claimRequests={claimRequests}
+              reviewingClaimRequestId={reviewingClaimRequestId}
+              currentUserId={session?.user?.id}
+              onReviewClaimRequest={handleReviewClaimRequest}
+            />
           </div>
 
           <div className="bg-white rounded-3xl shadow-md border border-gray-100 overflow-hidden">

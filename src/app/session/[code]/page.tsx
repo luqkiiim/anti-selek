@@ -5,7 +5,9 @@ import { useSession } from "next-auth/react";
 import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
 import { createPortal } from "react-dom";
-import { FlashMessage, HeroCard, StatCard } from "@/components/ui/chrome";
+import { FlashMessage } from "@/components/ui/chrome";
+import { SessionOverviewPanel } from "@/components/session/SessionOverviewPanel";
+import { LiveStandingsTable } from "@/components/session/LiveStandingsTable";
 import { getSessionModeLabel, getSessionTypeLabel } from "@/lib/sessionModeLabels";
 import { compareSessionStandings } from "@/lib/sessionStandings";
 import {
@@ -811,6 +813,14 @@ export default function SessionPage() {
     sessionData.communityId && !player.isGuest
       ? `/profile/${player.user.id}?communityId=${sessionData.communityId}`
       : `/profile/${player.user.id}`;
+  const openRosterModal = () => {
+    fetchCommunityPlayers();
+    setGuestName("");
+    setGuestGender(PlayerGender.MALE);
+    setGuestPreference(PartnerPreference.OPEN);
+    setGuestInitialElo(1000);
+    setShowRosterModal(true);
+  };
 
   return (
     <div className="app-page">
@@ -838,70 +848,27 @@ export default function SessionPage() {
       </nav>
 
       <main className="app-shell max-w-7xl space-y-6">
-        <HeroCard
-          eyebrow="Live session"
-          title={sessionData.name}
-          description="Manage courts, keep the player pool moving, and review standings from a single session board designed for court-side use."
-          meta={
-            <>
-              <span className="app-chip app-chip-accent app-mono">{sessionData.code}</span>
-              <span className="app-chip app-chip-neutral">{sessionTypeLabel}</span>
-              <span className="app-chip app-chip-neutral">{sessionModeLabel}</span>
-            </>
-          }
+        <SessionOverviewPanel
+          sessionName={sessionData.name}
+          sessionCode={sessionData.code}
+          sessionTypeLabel={sessionTypeLabel}
+          sessionModeLabel={sessionModeLabel}
+          playersCount={sessionData.players.length}
+          guestPlayersCount={guestPlayersCount}
+          activeMatchesCount={activeMatchesCount}
+          courtCount={sessionData.courts.length}
+          pausedPlayersCount={pausedPlayersCount}
+          sessionStatus={sessionData.status}
+          isRatingsSession={sessionData.type === SessionType.ELO}
+          isAdmin={isAdmin}
+          canStartSession={sessionData.status === SessionStatus.WAITING}
+          canEndSession={sessionData.status === SessionStatus.ACTIVE}
+          onStartSession={startSession}
+          onOpenRoster={openRosterModal}
+          onEndSession={endSession}
         />
 
         {error ? <FlashMessage tone="error">{error}</FlashMessage> : null}
-
-        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <StatCard label="Players" value={sessionData.players.length} detail={`${guestPlayersCount} guests`} accent />
-          <StatCard label="Active courts" value={activeMatchesCount} detail={`${sessionData.courts.length} total courts`} />
-          <StatCard label="Paused" value={pausedPlayersCount} detail={pausedPlayersCount > 0 ? "Temporarily out of rotation" : "Everyone ready"} />
-          <StatCard
-            label="Status"
-            value={sessionData.status}
-            detail={
-              sessionData.type === SessionType.ELO
-                ? "Points standings with rating updates"
-                : "Points race"
-            }
-          />
-        </section>
-
-        {/* Admin Quick Actions */}
-        {isAdmin && (
-          <div className="app-panel flex flex-wrap gap-3 p-4">
-            {sessionData.status === SessionStatus.WAITING && (
-              <button
-                onClick={startSession}
-                className="app-button-primary"
-              >
-                Start Session
-              </button>
-            )}
-            <button
-              onClick={() => {
-                fetchCommunityPlayers();
-                setGuestName("");
-                setGuestGender(PlayerGender.MALE);
-                setGuestPreference(PartnerPreference.OPEN);
-                setGuestInitialElo(1000);
-                setShowRosterModal(true);
-              }}
-              className="app-button-secondary"
-            >
-              Add Players
-            </button>
-            {sessionData.status === SessionStatus.ACTIVE && (
-              <button
-                onClick={endSession}
-                className="app-button-danger"
-              >
-                End Session
-              </button>
-            )}
-          </div>
-        )}
 
         {/* Courts Grid - Up to 3 columns on tablet/desktop */}
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 mb-8">
@@ -1081,144 +1048,18 @@ export default function SessionPage() {
         </div>
 
         <div className="space-y-6">
-          <div className="app-panel overflow-hidden">
-            <div className={`${sessionData.type === SessionType.ELO ? 'bg-blue-700' : 'bg-blue-600'} px-5 py-4 flex justify-between items-center transition-colors`}>
-              <h2 className="text-sm font-black text-white uppercase tracking-widest">
-                Live Standings
-              </h2>
-              <span className="text-[10px] font-bold text-white/70 uppercase tracking-widest">
-                {sessionData.type === SessionType.ELO
-                  ? "Point Standings + Rating Updates"
-                  : "Point Totals"}
-              </span>
-            </div>
-
-            <div className="overflow-x-auto overscroll-x-contain">
-              <table
-                className={`w-max sm:w-full table-fixed sm:table-auto ${
-                  sessionData.type === SessionType.POINTS
-                    ? "min-w-[448px] sm:min-w-[760px]"
-                    : "min-w-[448px] sm:min-w-[760px]"
-                }`}
-              >
-                <thead className="bg-gray-50/50 border-b border-gray-100">
-                  <tr>
-                    <th className="w-8 sm:w-10 px-1.5 sm:px-2 py-3 text-left text-[9px] sm:text-[10px] font-black text-gray-400 uppercase tracking-widest">#</th>
-                    <th className="w-[112px] sm:w-auto px-1 sm:px-2 py-3 text-left text-[9px] sm:text-[10px] font-black text-gray-400 uppercase tracking-wide sm:tracking-widest">Player</th>
-                    <th className="w-11 sm:w-24 px-1 sm:px-4 py-3 text-center text-[8px] sm:text-[10px] font-black text-gray-400 uppercase tracking-wide sm:tracking-widest">Pts</th>
-                    <th className="w-12 sm:w-24 px-1 sm:px-4 py-3 text-center text-[8px] sm:text-[10px] font-black text-gray-400 uppercase tracking-wide sm:tracking-widest">
-                      <span className="sm:hidden">+/-</span>
-                      <span className="hidden sm:inline">Diff</span>
-                    </th>
-                    <th className="w-10 sm:w-24 px-1 sm:px-4 py-3 text-center text-[8px] sm:text-[10px] font-black text-gray-400 uppercase tracking-wide sm:tracking-widest">MP</th>
-                    <th className="w-11 sm:w-24 px-1 sm:px-4 py-3 text-center text-[8px] sm:text-[10px] font-black text-gray-400 uppercase tracking-wide sm:tracking-widest">W/L</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-200">
-                  {sortedPlayers.map((player, idx) => {
-                      const stats = calculatePlayerSessionStats(player.userId);
-                      const isMe = player.userId === currentUserId;
-                      const canToggle = isAdmin || isMe;
-                      const pointDiff = pointDiffByUserId.get(player.userId) ?? 0;
-
-                      return (
-                        <tr key={player.userId} className={`active:bg-gray-50 transition-colors ${player.isPaused ? 'opacity-40 grayscale' : ''}`}>
-                          <td className="w-8 sm:w-10 px-1.5 sm:px-2 py-2.5 sm:py-3 whitespace-nowrap">
-                            <span className={`w-5 h-5 sm:w-6 sm:h-6 rounded-lg flex items-center justify-center text-[9px] sm:text-[10px] font-black ${
-                              idx === 0
-                                ? "bg-amber-100 text-amber-700 border border-amber-300"
-                                : idx === 1
-                                  ? "bg-slate-100 text-slate-700 border border-slate-300"
-                                  : idx === 2
-                                    ? "bg-orange-100 text-orange-700 border border-orange-300"
-                                    : "bg-white text-gray-500 border border-gray-300"
-                            }`}>
-                              {idx + 1}
-                            </span>
-                          </td>
-                          <td className="w-[112px] sm:w-auto px-1 sm:px-2 py-2.5 sm:py-3 min-w-[112px] sm:min-w-[140px] align-top">
-                            <div className="flex flex-col gap-1.5">
-                              <div className="flex items-center gap-1.5 flex-wrap">
-                                <Link
-                                  href={getSessionPlayerProfileHref(player)}
-                                  className="block max-w-[92px] sm:max-w-none truncate sm:whitespace-normal font-bold text-gray-900 text-[11px] sm:text-sm hover:text-blue-600 leading-tight"
-                                >
-                                  {player.user.name}
-                                </Link>
-                                {isMe && (
-                                  <span className="h-4.5 sm:h-6 px-1 sm:px-2 rounded-full text-[7px] sm:text-[9px] font-black uppercase tracking-[0.08em] sm:tracking-wide bg-blue-100 text-blue-700 border border-blue-200 inline-flex items-center">
-                                    Me
-                                  </span>
-                                )}
-                              </div>
-                              <div className="flex items-center gap-1 flex-wrap relative">
-                                <span className="hidden sm:inline text-[9px] font-bold text-gray-400 uppercase">
-                                  Rating {player.user.elo}
-                                </span>
-                                {canToggle && (
-                                  <button
-                                    onClick={(e) => {
-                                      e.preventDefault();
-                                      togglePausePlayer(player.userId, player.isPaused);
-                                    }}
-                                    className={`h-4.5 sm:h-6 px-1 sm:px-2 rounded-full text-[7px] sm:text-[9px] font-black uppercase tracking-[0.08em] sm:tracking-wide border inline-flex items-center shrink-0 ${
-                                      player.isPaused
-                                        ? "bg-rose-100 text-rose-700 border-rose-200"
-                                        : "bg-gray-100 text-gray-600 border-gray-200"
-                                    }`}
-                                  >
-                                    {player.isPaused ? "Resume" : "Pause"}
-                                  </button>
-                                )}
-                                {isAdmin && (
-                                  <button
-                                    type="button"
-                                    onClick={(e) =>
-                                      togglePreferenceEditor(player.userId, e.currentTarget)
-                                    }
-                                    className="h-4.5 sm:h-6 px-1 sm:px-2 rounded-full text-[7px] sm:text-[9px] font-black uppercase tracking-[0.08em] sm:tracking-wide border inline-flex items-center bg-blue-100 text-blue-700 border-blue-200"
-                                    >
-                                      Edit
-                                    </button>
-                                )}
-                                {player.isGuest && (
-                                  <span className="h-4.5 sm:h-6 px-1 sm:px-2 rounded-full text-[7px] sm:text-[9px] font-black uppercase tracking-[0.08em] sm:tracking-wide bg-gray-100 text-gray-600 border border-gray-200 inline-flex items-center">
-                                    Guest
-                                  </span>
-                                )}
-                                {savingPreferencesFor === player.userId && (
-                                  <span className="text-[8px] sm:text-[9px] font-black text-gray-400 uppercase tracking-wider">
-                                    Saving...
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-                          </td>
-                          <td className="w-11 sm:w-24 px-1 sm:px-4 py-2.5 sm:py-3 whitespace-nowrap text-center">
-                            <span className="text-[13px] sm:text-base font-black text-blue-700">{player.sessionPoints}</span>
-                          </td>
-                          <td className="w-12 sm:w-24 px-1 sm:px-4 py-2.5 sm:py-3 whitespace-nowrap text-center">
-                            <span className={`text-[11px] sm:text-sm font-medium ${pointDiff >= 0 ? "text-green-600" : "text-red-500"}`}>
-                              {pointDiff > 0 ? `+${pointDiff}` : pointDiff}
-                            </span>
-                          </td>
-                          <td className="w-10 sm:w-24 px-1 sm:px-4 py-2.5 sm:py-3 whitespace-nowrap text-center">
-                            <span className="text-[10px] sm:text-xs font-bold text-gray-600">{stats.played}</span>
-                          </td>
-                          <td className="w-11 sm:w-24 px-1 sm:px-4 py-2.5 sm:py-3 whitespace-nowrap text-center">
-                            <div className="text-[8px] sm:text-[10px] font-black tracking-tighter">
-                              <span className="text-green-600">{stats.wins}</span>
-                              <span className="mx-0.5 text-gray-200">/</span>
-                              <span className="text-red-500">{stats.losses}</span>
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                </tbody>
-              </table>
-            </div>
-          </div>
+          <LiveStandingsTable
+            sessionType={sessionData.type}
+            players={sortedPlayers}
+            currentUserId={currentUserId}
+            isAdmin={isAdmin}
+            pointDiffByUserId={pointDiffByUserId}
+            savingPreferencesFor={savingPreferencesFor}
+            getPlayerProfileHref={getSessionPlayerProfileHref}
+            calculatePlayerSessionStats={calculatePlayerSessionStats}
+            onTogglePause={togglePausePlayer}
+            onTogglePreferenceEditor={togglePreferenceEditor}
+          />
         </div>
       </main>
 
