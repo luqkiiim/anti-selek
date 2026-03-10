@@ -599,7 +599,7 @@ export default function CommunityPage() {
 
         {canManageCommunity && showHostPanel && (
           <>
-            <div className="bg-blue-600 p-6 rounded-3xl shadow-xl shadow-blue-100 space-y-5 text-white">
+            <div className="relative overflow-hidden rounded-3xl border border-blue-200/70 bg-[linear-gradient(145deg,#0d3f88,#1677f2)] p-6 shadow-xl shadow-blue-100 space-y-5 text-white">
               <div>
                 <h3 className="text-sm font-black uppercase tracking-widest mb-1">Host Tournament</h3>
                 <p className="text-[10px] text-blue-100 font-bold uppercase tracking-wider">

@@ -54,7 +54,7 @@ export default function SignupPage() {
       <div className="w-full max-w-5xl">
         <div className="grid gap-6 lg:grid-cols-[1.05fr_0.95fr]">
           <section className="app-panel relative overflow-hidden px-6 py-8 sm:px-8">
-            <div className="pointer-events-none absolute left-[-4rem] top-16 h-44 w-44 rounded-full bg-[rgba(232,143,116,0.14)] blur-3xl" />
+            <div className="pointer-events-none absolute left-[-4rem] top-16 h-44 w-44 rounded-full bg-[rgba(25,154,97,0.14)] blur-3xl" />
             <div className="relative">
               <p className="app-eyebrow">Player setup</p>
               <h1 className="mt-3 app-title text-gray-900">Create a player account that can claim your community profile.</h1>

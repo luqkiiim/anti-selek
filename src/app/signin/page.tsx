@@ -47,7 +47,7 @@ function SigninForm() {
       <div className="w-full max-w-5xl">
         <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
           <section className="app-panel relative overflow-hidden px-6 py-8 sm:px-8">
-            <div className="pointer-events-none absolute inset-y-0 right-[-6rem] top-[-2rem] w-56 rounded-full bg-[radial-gradient(circle,_rgba(77,139,91,0.14),_transparent_65%)] blur-2xl" />
+            <div className="pointer-events-none absolute inset-y-0 right-[-6rem] top-[-2rem] w-56 rounded-full bg-[radial-gradient(circle,_rgba(22,119,242,0.16),_transparent_65%)] blur-2xl" />
             <div className="relative">
               <p className="app-eyebrow">Court control</p>
               <h1 className="mt-3 app-title text-gray-900">Sign in to your badminton dashboard.</h1>
