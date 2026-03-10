@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { PartnerPreference, PlayerGender, SessionType } from "@/types/enums";
+import { PartnerPreference, PlayerGender, SessionStatus, SessionType } from "@/types/enums";
 
 interface Player {
   userId: string;
@@ -25,6 +25,7 @@ interface PlayerStats {
 
 interface LiveStandingsTableProps {
   sessionType: string;
+  sessionStatus: string;
   players: Player[];
   currentUserId: string;
   isAdmin: boolean;
@@ -38,6 +39,7 @@ interface LiveStandingsTableProps {
 
 export function LiveStandingsTable({
   sessionType,
+  sessionStatus,
   players,
   currentUserId,
   isAdmin,
@@ -49,6 +51,7 @@ export function LiveStandingsTable({
   onTogglePreferenceEditor,
 }: LiveStandingsTableProps) {
   const isRatingsSession = sessionType === SessionType.ELO;
+  const isCompleted = sessionStatus === SessionStatus.COMPLETED;
 
   return (
     <div className="app-panel overflow-hidden">
@@ -58,10 +61,14 @@ export function LiveStandingsTable({
         }`}
       >
         <h2 className="text-sm font-black text-white uppercase tracking-widest">
-          Live Standings
+          {isCompleted ? "Final Standings" : "Live Standings"}
         </h2>
         <span className="text-[10px] font-bold text-white/70 uppercase tracking-widest">
-          {isRatingsSession ? "Point Standings + Rating Updates" : "Point Totals"}
+          {isCompleted
+            ? "Session results"
+            : isRatingsSession
+              ? "Point Standings + Rating Updates"
+              : "Point Totals"}
         </span>
       </div>
 
@@ -94,7 +101,7 @@ export function LiveStandingsTable({
             {players.map((player, idx) => {
               const stats = calculatePlayerSessionStats(player.userId);
               const isMe = player.userId === currentUserId;
-              const canToggle = isAdmin || isMe;
+              const canToggle = !isCompleted && (isAdmin || isMe);
               const pointDiff = pointDiffByUserId.get(player.userId) ?? 0;
 
               return (
@@ -154,7 +161,7 @@ export function LiveStandingsTable({
                             {player.isPaused ? "Resume" : "Pause"}
                           </button>
                         ) : null}
-                        {isAdmin ? (
+                        {!isCompleted && isAdmin ? (
                           <button
                             type="button"
                             onClick={(e) => onTogglePreferenceEditor(player.userId, e.currentTarget)}

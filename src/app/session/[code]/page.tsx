@@ -8,6 +8,7 @@ import { createPortal } from "react-dom";
 import { FlashMessage } from "@/components/ui/chrome";
 import { SessionOverviewPanel } from "@/components/session/SessionOverviewPanel";
 import { LiveStandingsTable } from "@/components/session/LiveStandingsTable";
+import { SessionPodium } from "@/components/session/SessionPodium";
 import { getSessionModeLabel, getSessionTypeLabel } from "@/lib/sessionModeLabels";
 import { compareSessionStandings } from "@/lib/sessionStandings";
 import {
@@ -780,8 +781,10 @@ export default function SessionPage() {
     .filter(cp => !sessionData.players.some(sp => sp.userId === cp.id))
     .filter(cp => cp.name.toLowerCase().includes(rosterSearch.toLowerCase()));
   const activeMatchesCount = sessionData.courts.filter((court) => court.currentMatch !== null).length;
+  const completedMatchesCount = sessionData.matches?.length ?? 0;
   const pausedPlayersCount = sessionData.players.filter((player) => player.isPaused).length;
   const guestPlayersCount = sessionData.players.filter((player) => player.isGuest).length;
+  const isCompletedSession = sessionData.status === SessionStatus.COMPLETED;
   const pointDiffByUserId = new Map(
     sessionData.players.map((player) => [
       player.userId,
@@ -853,25 +856,31 @@ export default function SessionPage() {
           playersCount={sessionData.players.length}
           guestPlayersCount={guestPlayersCount}
           activeMatchesCount={activeMatchesCount}
+          completedMatchesCount={completedMatchesCount}
           courtCount={sessionData.courts.length}
           pausedPlayersCount={pausedPlayersCount}
           sessionStatus={sessionData.status}
-          isRatingsSession={sessionData.type === SessionType.ELO}
           isAdmin={isAdmin}
           canStartSession={sessionData.status === SessionStatus.WAITING}
           canEndSession={sessionData.status === SessionStatus.ACTIVE}
+          canOpenRoster={!isCompletedSession}
           onStartSession={startSession}
           onOpenRoster={openRosterModal}
           onEndSession={endSession}
+          onOpenMatchHistory={() => router.push(`/session/${code}/history`)}
         />
 
         {error ? <FlashMessage tone="error">{error}</FlashMessage> : null}
 
-        {/* Courts Grid - Up to 3 columns on tablet/desktop */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 mb-8">
-          {sessionData.courts
-            .sort((a, b) => a.courtNumber - b.courtNumber)
-            .map((court) => {
+        {isCompletedSession ? (
+          <SessionPodium players={sortedPlayers} pointDiffByUserId={pointDiffByUserId} />
+        ) : null}
+
+        {!isCompletedSession ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 mb-8">
+            {sessionData.courts
+              .sort((a, b) => a.courtNumber - b.courtNumber)
+              .map((court) => {
               const currentMatch = court.currentMatch;
               const isParticipant = currentMatch && [
                 currentMatch.team1User1.id,
@@ -1042,11 +1051,13 @@ export default function SessionPage() {
                 </div>
               );
             })}
-        </div>
+          </div>
+        ) : null}
 
         <div className="space-y-6">
           <LiveStandingsTable
             sessionType={sessionData.type}
+            sessionStatus={sessionData.status}
             players={sortedPlayers}
             currentUserId={currentUserId}
             isAdmin={isAdmin}
@@ -1060,7 +1071,11 @@ export default function SessionPage() {
         </div>
       </main>
 
-      {openPreferenceEditor && activePreferencePlayer && isAdmin && typeof document !== "undefined"
+      {openPreferenceEditor &&
+      activePreferencePlayer &&
+      isAdmin &&
+      !isCompletedSession &&
+      typeof document !== "undefined"
         ? createPortal(
             <div
               className="fixed z-[80] w-44 space-y-2 rounded-xl border border-gray-200 bg-white p-2.5 shadow-2xl"

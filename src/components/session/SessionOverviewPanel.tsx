@@ -9,16 +9,18 @@ interface SessionOverviewPanelProps {
   playersCount: number;
   guestPlayersCount: number;
   activeMatchesCount: number;
+  completedMatchesCount: number;
   courtCount: number;
   pausedPlayersCount: number;
   sessionStatus: string;
-  isRatingsSession: boolean;
   isAdmin: boolean;
   canStartSession: boolean;
   canEndSession: boolean;
+  canOpenRoster: boolean;
   onStartSession: () => void;
   onOpenRoster: () => void;
   onEndSession: () => void;
+  onOpenMatchHistory: () => void;
 }
 
 export function SessionOverviewPanel({
@@ -28,21 +30,25 @@ export function SessionOverviewPanel({
   playersCount,
   guestPlayersCount,
   activeMatchesCount,
+  completedMatchesCount,
   courtCount,
   pausedPlayersCount,
   sessionStatus,
-  isRatingsSession,
   isAdmin,
   canStartSession,
   canEndSession,
+  canOpenRoster,
   onStartSession,
   onOpenRoster,
   onEndSession,
+  onOpenMatchHistory,
 }: SessionOverviewPanelProps) {
+  const isCompleted = sessionStatus === "COMPLETED";
+
   return (
     <>
       <HeroCard
-        eyebrow="Live session"
+        eyebrow={isCompleted ? "Completed session" : "Live session"}
         title={sessionName}
         meta={
           <>
@@ -60,8 +66,8 @@ export function SessionOverviewPanel({
           accent
         />
         <StatCard
-          label="Active courts"
-          value={activeMatchesCount}
+          label={isCompleted ? "Matches" : "Active courts"}
+          value={isCompleted ? completedMatchesCount : activeMatchesCount}
         />
         <StatCard
           label="Paused"
@@ -73,23 +79,26 @@ export function SessionOverviewPanel({
         />
       </section>
 
-      {isAdmin ? (
-        <div className="app-panel flex flex-wrap gap-3 p-4">
-          {canStartSession ? (
-            <button type="button" onClick={onStartSession} className="app-button-primary">
-              Start Session
-            </button>
-          ) : null}
+      <div className="app-panel flex flex-wrap gap-3 p-4">
+        <button type="button" onClick={onOpenMatchHistory} className="app-button-secondary">
+          Match History
+        </button>
+        {canStartSession ? (
+          <button type="button" onClick={onStartSession} className="app-button-primary">
+            Start Session
+          </button>
+        ) : null}
+        {isAdmin && canOpenRoster ? (
           <button type="button" onClick={onOpenRoster} className="app-button-secondary">
             Add Players
           </button>
-          {canEndSession ? (
-            <button type="button" onClick={onEndSession} className="app-button-danger">
-              End Session
-            </button>
-          ) : null}
-        </div>
-      ) : null}
+        ) : null}
+        {canEndSession ? (
+          <button type="button" onClick={onEndSession} className="app-button-danger">
+            End Session
+          </button>
+        ) : null}
+      </div>
     </>
   );
 }
