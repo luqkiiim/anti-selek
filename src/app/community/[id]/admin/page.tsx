@@ -74,6 +74,7 @@ export default function CommunityAdminPage() {
   const [savingRole, setSavingRole] = useState<Record<string, boolean>>({});
   const [savingPreferences, setSavingPreferences] = useState<Record<string, boolean>>({});
   const [openPreferenceEditorFor, setOpenPreferenceEditorFor] = useState<string | null>(null);
+  const [openPlayerActionMenuFor, setOpenPlayerActionMenuFor] = useState<string | null>(null);
   const [preferenceEditorDirection, setPreferenceEditorDirection] = useState<"up" | "down">(
     "down"
   );
@@ -100,11 +101,17 @@ export default function CommunityAdminPage() {
       setOpenPreferenceEditorFor(null);
       return;
     }
+    setOpenPlayerActionMenuFor(null);
     const rect = triggerEl.getBoundingClientRect();
     const estimatedPopoverHeight = 220;
     const spaceBelow = window.innerHeight - rect.bottom;
     setPreferenceEditorDirection(spaceBelow < estimatedPopoverHeight ? "up" : "down");
     setOpenPreferenceEditorFor(playerId);
+  };
+
+  const togglePlayerActionMenu = (playerId: string) => {
+    setOpenPreferenceEditorFor(null);
+    setOpenPlayerActionMenuFor((current) => (current === playerId ? null : playerId));
   };
 
   const safeJson = async (res: Response) => {
@@ -117,6 +124,7 @@ export default function CommunityAdminPage() {
   };
 
   const openPasswordResetModal = (player: Player) => {
+    setOpenPlayerActionMenuFor(null);
     setPasswordResetTarget(player);
     setPasswordResetValue("");
     setPasswordResetConfirm("");
@@ -779,7 +787,7 @@ export default function CommunityAdminPage() {
                   .slice()
                   .sort((a, b) => a.name.localeCompare(b.name))
                   .map((player) => (
-                    <div key={player.id} className="rounded-2xl border border-gray-100 bg-gray-50 p-4 space-y-3">
+                    <div key={player.id} className="rounded-2xl border border-gray-100 bg-gray-50 p-4">
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0 flex-1 space-y-2">
                           <div className="flex items-center gap-2">
@@ -903,7 +911,39 @@ export default function CommunityAdminPage() {
                             </div>
                           </div>
                         </div>
-                        <div className="shrink-0 space-y-2 text-right">
+                        <div className="shrink-0 space-y-1 text-right">
+                          <div className="relative flex justify-end">
+                            <button
+                              type="button"
+                              onClick={() => togglePlayerActionMenu(player.id)}
+                              className="h-8 rounded-full border border-gray-200 bg-white px-2.5 text-[10px] font-black uppercase tracking-widest text-gray-500 hover:border-gray-300 hover:bg-gray-100"
+                            >
+                              More
+                            </button>
+                            {openPlayerActionMenuFor === player.id ? (
+                              <div className="absolute right-0 top-full z-20 mt-2 w-40 space-y-1 rounded-2xl border border-gray-200 bg-white p-2 shadow-lg">
+                                {player.isClaimed && player.email ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => openPasswordResetModal(player)}
+                                    className="flex w-full items-center justify-start rounded-xl px-3 py-2 text-left text-[11px] font-black uppercase tracking-wide text-blue-700 hover:bg-blue-50"
+                                  >
+                                    Reset password
+                                  </button>
+                                ) : null}
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setOpenPlayerActionMenuFor(null);
+                                    void handleRemovePlayer(player.id, player.name);
+                                  }}
+                                  className="flex w-full items-center justify-start rounded-xl px-3 py-2 text-left text-[11px] font-black uppercase tracking-wide text-red-600 hover:bg-red-50"
+                                >
+                                  Remove
+                                </button>
+                              </div>
+                            ) : null}
+                          </div>
                           <div className="flex items-center justify-end gap-2">
                             <input
                               type="number"
@@ -922,26 +962,6 @@ export default function CommunityAdminPage() {
                             )}
                           </div>
                           <p className="text-xs font-black text-gray-700">Rating {player.elo}</p>
-                        </div>
-                      </div>
-
-                      <div className="pt-1">
-                        <div className="flex flex-col gap-2">
-                          {player.isClaimed && player.email ? (
-                            <button
-                              type="button"
-                              onClick={() => openPasswordResetModal(player)}
-                              className="w-full text-center text-blue-700 border border-blue-200 bg-blue-50 hover:bg-blue-100 py-2 rounded-xl text-xs font-black uppercase"
-                            >
-                              Reset password
-                            </button>
-                          ) : null}
-                          <button
-                            onClick={() => handleRemovePlayer(player.id, player.name)}
-                            className="w-full text-center text-red-600 border border-red-200 bg-red-50 hover:bg-red-100 py-2 rounded-xl text-xs font-black uppercase"
-                          >
-                            Remove
-                          </button>
                         </div>
                       </div>
                     </div>
