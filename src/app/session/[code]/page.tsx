@@ -5,7 +5,7 @@ import { useSession } from "next-auth/react";
 import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
 import { createPortal } from "react-dom";
-import { FlashMessage } from "@/components/ui/chrome";
+import { FlashMessage, SectionCard } from "@/components/ui/chrome";
 import { SessionOverviewPanel } from "@/components/session/SessionOverviewPanel";
 import { LiveStandingsTable } from "@/components/session/LiveStandingsTable";
 import { SessionPodium } from "@/components/session/SessionPodium";
@@ -780,6 +780,7 @@ export default function SessionPage() {
     .filter(cp => !sessionData.players.some(sp => sp.userId === cp.id))
     .filter(cp => cp.name.toLowerCase().includes(rosterSearch.toLowerCase()));
   const activeMatchesCount = sessionData.courts.filter((court) => court.currentMatch !== null).length;
+  const readyCourtsCount = sessionData.courts.length - activeMatchesCount;
   const completedMatchesCount = sessionData.matches?.length ?? 0;
   const pausedPlayersCount = sessionData.players.filter((player) => player.isPaused).length;
   const guestPlayersCount = sessionData.players.filter((player) => player.isGuest).length;
@@ -870,203 +871,253 @@ export default function SessionPage() {
 
         {error ? <FlashMessage tone="error">{error}</FlashMessage> : null}
 
+        {!isCompletedSession ? (
+          <SectionCard
+            title={sessionData.status === SessionStatus.ACTIVE ? "Live Courts" : "Courts"}
+            action={
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="app-chip app-chip-info">{activeMatchesCount} in use</span>
+                <span className="app-chip app-chip-neutral">{readyCourtsCount} ready</span>
+              </div>
+            }
+          >
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3">
+              {sessionData.courts
+                .sort((a, b) => a.courtNumber - b.courtNumber)
+                .map((court) => {
+                  const currentMatch = court.currentMatch;
+                  const isParticipant =
+                    currentMatch &&
+                    [
+                      currentMatch.team1User1.id,
+                      currentMatch.team1User2.id,
+                      currentMatch.team2User1.id,
+                      currentMatch.team2User2.id,
+                    ].includes(currentUserId);
+
+                  const canEdit =
+                    currentMatch?.status === MatchStatus.IN_PROGRESS && (isAdmin || isParticipant);
+                  const scores = currentMatch
+                    ? matchScores[currentMatch.id] || { team1: "", team2: "" }
+                    : { team1: "", team2: "" };
+
+                  return (
+                    <div
+                      key={court.id}
+                      className="flex min-w-0 flex-col overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm"
+                    >
+                      <div className="flex items-center justify-between border-b border-gray-100 bg-gray-50/80 px-3 py-2.5">
+                        <h2 className="text-sm font-black uppercase tracking-widest text-gray-500">
+                          Court {court.courtNumber}
+                        </h2>
+                        <div className="flex gap-2">
+                          {sessionData.status === SessionStatus.ACTIVE && !court.currentMatch && isAdmin ? (
+                            <>
+                              <button
+                                onClick={() => generateMatch(court.id)}
+                                className="rounded-lg bg-blue-600 px-2.5 py-1.5 text-[10px] font-black uppercase tracking-wider text-white transition-all active:scale-95"
+                              >
+                                New Match
+                              </button>
+                              <button
+                                onClick={() => openManualMatchModal(court.id)}
+                                className="rounded-lg bg-gray-900 px-2.5 py-1.5 text-[10px] font-black uppercase tracking-wider text-white transition-all active:scale-95"
+                              >
+                                Manual
+                              </button>
+                            </>
+                          ) : null}
+                          {currentMatch && currentMatch.status === MatchStatus.IN_PROGRESS && isAdmin ? (
+                            <button
+                              onClick={() => reshuffleMatch(court.id)}
+                              className="flex items-center gap-1 rounded-lg bg-gray-100 px-2.5 py-1.5 text-[10px] font-black uppercase tracking-wider text-gray-600 transition-all active:scale-95"
+                              title="Pick different players"
+                            >
+                              Reshuffle
+                            </button>
+                          ) : null}
+                          {currentMatch && currentMatch.status === MatchStatus.IN_PROGRESS && isAdmin ? (
+                            <button
+                              onClick={() => undoMatchSelection(court.id)}
+                              disabled={undoingCourtId === court.id}
+                              className="flex items-center gap-1 rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-1.5 text-[10px] font-black uppercase tracking-wider text-rose-700 transition-all active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
+                              title="Put selected players back in pool"
+                            >
+                              {undoingCourtId === court.id ? "Undoing..." : "Undo"}
+                            </button>
+                          ) : null}
+                        </div>
+                      </div>
+
+                      <div className="flex flex-1 flex-col justify-center p-3">
+                        {currentMatch ? (
+                          <div className="space-y-3">
+                            <div
+                              className={`rounded-xl border-2 p-3 transition-all ${
+                                currentMatch.status === MatchStatus.PENDING_APPROVAL
+                                  ? "border-gray-100 bg-gray-50"
+                                  : "border-blue-100 bg-blue-50/50"
+                              }`}
+                            >
+                              <div className="flex items-center justify-between gap-3">
+                                <div className="min-w-0 flex-1">
+                                  <p className="mb-0.5 text-[10px] font-black uppercase tracking-widest text-blue-600">
+                                    Team 1
+                                  </p>
+                                  <p className="truncate text-sm font-bold leading-tight text-gray-900">
+                                    {currentMatch.team1User1.name}
+                                    <br />
+                                    {currentMatch.team1User2.name}
+                                  </p>
+                                </div>
+                                {canEdit ? (
+                                  <input
+                                    type="number"
+                                    inputMode="numeric"
+                                    value={scores.team1}
+                                    onChange={(e) =>
+                                      handleScoreChange(currentMatch.id, "team1", e.target.value)
+                                    }
+                                    className="h-12 w-14 rounded-xl border-2 border-blue-200 bg-white text-center text-xl font-black focus:border-blue-500 focus:outline-none"
+                                    placeholder="0"
+                                  />
+                                ) : currentMatch.status === MatchStatus.PENDING_APPROVAL ? (
+                                  <div className="pr-2 text-2xl font-black text-gray-900">
+                                    {currentMatch.team1Score}
+                                  </div>
+                                ) : null}
+                              </div>
+                            </div>
+
+                            <div className="relative flex items-center justify-center py-1">
+                              <div className="h-px flex-1 bg-gray-100" />
+                              <span className="mx-3 text-[10px] font-black uppercase italic text-gray-300">
+                                VS
+                              </span>
+                              <div className="h-px flex-1 bg-gray-100" />
+                            </div>
+
+                            <div
+                              className={`rounded-xl border-2 p-3 transition-all ${
+                                currentMatch.status === MatchStatus.PENDING_APPROVAL
+                                  ? "border-gray-100 bg-gray-50"
+                                  : "border-blue-200 bg-blue-50"
+                              }`}
+                            >
+                              <div className="flex items-center justify-between gap-3">
+                                <div className="min-w-0 flex-1">
+                                  <p className="mb-0.5 text-[10px] font-black uppercase tracking-widest text-blue-700">
+                                    Team 2
+                                  </p>
+                                  <p className="truncate text-sm font-bold leading-tight text-gray-900">
+                                    {currentMatch.team2User1.name}
+                                    <br />
+                                    {currentMatch.team2User2.name}
+                                  </p>
+                                </div>
+                                {canEdit ? (
+                                  <input
+                                    type="number"
+                                    inputMode="numeric"
+                                    value={scores.team2}
+                                    onChange={(e) =>
+                                      handleScoreChange(currentMatch.id, "team2", e.target.value)
+                                    }
+                                    className="h-12 w-14 rounded-xl border-2 border-blue-200 bg-white text-center text-xl font-black focus:border-blue-500 focus:outline-none"
+                                    placeholder="0"
+                                  />
+                                ) : currentMatch.status === MatchStatus.PENDING_APPROVAL ? (
+                                  <div className="pr-2 text-2xl font-black text-gray-900">
+                                    {currentMatch.team2Score}
+                                  </div>
+                                ) : null}
+                              </div>
+                            </div>
+
+                            {canEdit ? (
+                              <div className="pt-2">
+                                <button
+                                  onClick={() => submitScore(currentMatch.id)}
+                                  disabled={
+                                    submittingMatchId === currentMatch.id || !scores.team1 || !scores.team2
+                                  }
+                                  className="w-full rounded-xl bg-gray-900 py-3 text-sm font-black uppercase text-white shadow-md transition-all active:scale-95 active:bg-gray-800 disabled:opacity-50"
+                                >
+                                  {submittingMatchId === currentMatch.id ? "Saving..." : "Submit Score"}
+                                </button>
+                              </div>
+                            ) : null}
+
+                            {currentMatch.status === MatchStatus.PENDING_APPROVAL ? (
+                              <div className="space-y-2 pt-2">
+                                {isAdmin ? (
+                                  <div className="grid grid-cols-2 gap-2">
+                                    <button
+                                      onClick={() => approveScore(currentMatch.id)}
+                                      className="w-full rounded-xl bg-blue-600 py-3 text-sm font-black uppercase text-white shadow-md transition-all active:scale-95 active:bg-blue-700"
+                                    >
+                                      Approve Results
+                                    </button>
+                                    <button
+                                      onClick={() => reopenScoreForEdit(currentMatch.id)}
+                                      disabled={reopeningMatchId === currentMatch.id}
+                                      className="w-full rounded-xl border border-gray-200 bg-gray-100 py-3 text-sm font-black uppercase text-gray-700 transition-all active:scale-95 active:bg-gray-200 disabled:cursor-not-allowed disabled:opacity-50"
+                                    >
+                                      {reopeningMatchId === currentMatch.id ? "Opening..." : "Back To Edit"}
+                                    </button>
+                                  </div>
+                                ) : null}
+                                <div className="rounded-lg border border-orange-100 bg-orange-50 py-2 text-center text-[10px] font-black uppercase tracking-widest text-orange-700">
+                                  Awaiting Approval
+                                </div>
+                              </div>
+                            ) : null}
+
+                            {currentMatch.status === MatchStatus.IN_PROGRESS && !canEdit ? (
+                              <div className="py-2 text-center">
+                                <span className="inline-flex items-center rounded-full bg-blue-100 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-blue-800">
+                                  Match Active
+                                </span>
+                              </div>
+                            ) : null}
+                          </div>
+                        ) : (
+                          <div className="px-4 py-10 text-center">
+                            <div className="mb-2 text-xs font-black tracking-[0.35em] opacity-40">
+                              COURT
+                            </div>
+                            <p className="text-xs font-bold uppercase tracking-widest text-gray-400">
+                              {sessionData.status === SessionStatus.ACTIVE
+                                ? "Next match soon"
+                                : "Court Inactive"}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+            </div>
+          </SectionCard>
+        ) : null}
+
         {isCompletedSession ? (
           <SessionPodium players={sortedPlayers} pointDiffByUserId={pointDiffByUserId} />
         ) : null}
 
-        {!isCompletedSession ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 mb-8">
-            {sessionData.courts
-              .sort((a, b) => a.courtNumber - b.courtNumber)
-              .map((court) => {
-              const currentMatch = court.currentMatch;
-              const isParticipant = currentMatch && [
-                currentMatch.team1User1.id,
-                currentMatch.team1User2.id,
-                currentMatch.team2User1.id,
-                currentMatch.team2User2.id
-              ].includes(currentUserId);
-              
-              const canEdit = currentMatch?.status === MatchStatus.IN_PROGRESS && (isAdmin || isParticipant);
-              const scores = currentMatch ? (matchScores[currentMatch.id] || { team1: "", team2: "" }) : { team1: "", team2: "" };
-
-              return (
-                <div key={court.id} className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden flex flex-col min-w-0">
-                  <div className="bg-gray-50/80 px-3 py-2.5 border-b border-gray-100 flex justify-between items-center">
-                    <h2 className="text-sm font-black text-gray-500 uppercase tracking-widest">Court {court.courtNumber}</h2>
-                    <div className="flex gap-2">
-                      {sessionData.status === SessionStatus.ACTIVE && !court.currentMatch && isAdmin && (
-                        <>
-                          <button
-                            onClick={() => generateMatch(court.id)}
-                            className="text-[10px] bg-blue-600 text-white px-2.5 py-1.5 rounded-lg font-black uppercase tracking-wider active:scale-95 transition-all"
-                          >
-                            New Match
-                          </button>
-                          <button
-                            onClick={() => openManualMatchModal(court.id)}
-                            className="text-[10px] bg-gray-900 text-white px-2.5 py-1.5 rounded-lg font-black uppercase tracking-wider active:scale-95 transition-all"
-                          >
-                            Manual
-                          </button>
-                        </>
-                      )}
-                      {currentMatch && currentMatch.status === MatchStatus.IN_PROGRESS && isAdmin && (
-                        <button
-                          onClick={() => reshuffleMatch(court.id)}
-                          className="text-[10px] bg-gray-100 text-gray-600 px-2.5 py-1.5 rounded-lg font-black uppercase tracking-wider active:scale-95 transition-all flex items-center gap-1"
-                          title="Pick different players"
-                        >
-                          Reshuffle
-                        </button>
-                      )}
-                      {currentMatch && currentMatch.status === MatchStatus.IN_PROGRESS && isAdmin && (
-                        <button
-                          onClick={() => undoMatchSelection(court.id)}
-                          disabled={undoingCourtId === court.id}
-                          className="text-[10px] bg-rose-50 text-rose-700 border border-rose-200 px-2.5 py-1.5 rounded-lg font-black uppercase tracking-wider active:scale-95 transition-all flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
-                          title="Put selected players back in pool"
-                        >
-                          {undoingCourtId === court.id ? "Undoing..." : "Undo"}
-                        </button>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="p-3 flex-1 flex flex-col justify-center">
-                    {currentMatch ? (
-                      <div className="space-y-3">
-                        {/* Team 1 Card */}
-                        <div className={`p-3 rounded-xl border-2 transition-all ${currentMatch.status === MatchStatus.PENDING_APPROVAL ? 'bg-gray-50 border-gray-100' : 'bg-blue-50/50 border-blue-100'}`}>
-                          <div className="flex justify-between items-center gap-3">
-                            <div className="flex-1 min-w-0">
-                              <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest mb-0.5">Team 1</p>
-                              <p className="font-bold text-gray-900 truncate text-sm leading-tight">
-                                {currentMatch.team1User1.name}<br/>{currentMatch.team1User2.name}
-                              </p>
-                            </div>
-                            {canEdit ? (
-                              <input
-                                type="number"
-                                inputMode="numeric"
-                                value={scores.team1}
-                                onChange={(e) => handleScoreChange(currentMatch.id, 'team1', e.target.value)}
-                                className="w-14 h-12 border-2 border-blue-200 rounded-xl text-center font-black text-xl focus:outline-none focus:border-blue-500 bg-white"
-                                placeholder="0"
-                              />
-                            ) : currentMatch.status === MatchStatus.PENDING_APPROVAL && (
-                              <div className="text-2xl font-black text-gray-900 pr-2">{currentMatch.team1Score}</div>
-                            )}
-                          </div>
-                        </div>
-
-                        {/* VS Divider */}
-                        <div className="relative flex items-center justify-center py-1">
-                          <div className="h-px bg-gray-100 flex-1"></div>
-                          <span className="mx-3 text-[10px] font-black text-gray-300 italic uppercase">VS</span>
-                          <div className="h-px bg-gray-100 flex-1"></div>
-                        </div>
-
-                        {/* Team 2 Card */}
-                        <div className={`p-3 rounded-xl border-2 transition-all ${currentMatch.status === MatchStatus.PENDING_APPROVAL ? 'bg-gray-50 border-gray-100' : 'bg-blue-50 border-blue-200'}`}>
-                          <div className="flex justify-between items-center gap-3">
-                            <div className="flex-1 min-w-0">
-                              <p className="text-[10px] font-black text-blue-700 uppercase tracking-widest mb-0.5">Team 2</p>
-                              <p className="font-bold text-gray-900 truncate text-sm leading-tight">
-                                {currentMatch.team2User1.name}<br/>{currentMatch.team2User2.name}
-                              </p>
-                            </div>
-                            {canEdit ? (
-                              <input
-                                type="number"
-                                inputMode="numeric"
-                                value={scores.team2}
-                                onChange={(e) => handleScoreChange(currentMatch.id, 'team2', e.target.value)}
-                                className="w-14 h-12 border-2 border-blue-200 rounded-xl text-center font-black text-xl focus:outline-none focus:border-blue-500 bg-white"
-                                placeholder="0"
-                              />
-                            ) : currentMatch.status === MatchStatus.PENDING_APPROVAL && (
-                              <div className="text-2xl font-black text-gray-900 pr-2">{currentMatch.team2Score}</div>
-                            )}
-                          </div>
-                        </div>
-
-                        {/* Action Buttons */}
-                        {canEdit && (
-                          <div className="pt-2">
-                            <button
-                              onClick={() => submitScore(currentMatch.id)}
-                              disabled={submittingMatchId === currentMatch.id || !scores.team1 || !scores.team2}
-                              className="w-full bg-gray-900 text-white py-3 rounded-xl font-black uppercase text-sm shadow-md active:bg-gray-800 active:scale-95 disabled:opacity-50 transition-all"
-                            >
-                              {submittingMatchId === currentMatch.id ? "Saving..." : "Submit Score"}
-                            </button>
-                          </div>
-                        )}
-
-                        {currentMatch.status === MatchStatus.PENDING_APPROVAL && (
-                          <div className="pt-2 space-y-2">
-                            {isAdmin && (
-                              <div className="grid grid-cols-2 gap-2">
-                                <button
-                                  onClick={() => approveScore(currentMatch.id)}
-                                  className="w-full bg-blue-600 text-white py-3 rounded-xl font-black uppercase text-sm shadow-md active:bg-blue-700 active:scale-95 transition-all"
-                                >
-                                  Approve Results
-                                </button>
-                                <button
-                                  onClick={() => reopenScoreForEdit(currentMatch.id)}
-                                  disabled={reopeningMatchId === currentMatch.id}
-                                  className="w-full bg-gray-100 text-gray-700 border border-gray-200 py-3 rounded-xl font-black uppercase text-sm active:bg-gray-200 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                                >
-                                  {reopeningMatchId === currentMatch.id ? "Opening..." : "Back To Edit"}
-                                </button>
-                              </div>
-                            )}
-                            <div className="bg-orange-50 text-orange-700 text-[10px] font-black py-2 rounded-lg text-center uppercase tracking-widest border border-orange-100">
-                              Awaiting Approval
-                            </div>
-                          </div>
-                        )}
-                        
-                        {currentMatch.status === MatchStatus.IN_PROGRESS && !canEdit && (
-                          <div className="py-2 text-center">
-                            <span className="inline-flex items-center px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest bg-blue-100 text-blue-800">
-                              Match Active
-                            </span>
-                          </div>
-                        )}
-                      </div>
-                    ) : (
-                      <div className="text-center py-10 px-4">
-                        <div className="text-xs mb-2 opacity-40 font-black tracking-[0.35em]">COURT</div>
-                        <p className="text-xs text-gray-400 font-bold uppercase tracking-widest">
-                          {sessionData.status === SessionStatus.ACTIVE ? "Next match soon" : "Court Inactive"}
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        ) : null}
-
-        <div className="space-y-6">
-          <LiveStandingsTable
-            sessionType={sessionData.type}
-            sessionStatus={sessionData.status}
-            players={sortedPlayers}
-            currentUserId={currentUserId}
-            isAdmin={isAdmin}
-            pointDiffByUserId={pointDiffByUserId}
-            savingPreferencesFor={savingPreferencesFor}
-            getPlayerProfileHref={getSessionPlayerProfileHref}
-            calculatePlayerSessionStats={calculatePlayerSessionStats}
-            onTogglePause={togglePausePlayer}
-            onTogglePreferenceEditor={togglePreferenceEditor}
-          />
-        </div>
+        <LiveStandingsTable
+          sessionType={sessionData.type}
+          sessionStatus={sessionData.status}
+          players={sortedPlayers}
+          currentUserId={currentUserId}
+          isAdmin={isAdmin}
+          pointDiffByUserId={pointDiffByUserId}
+          savingPreferencesFor={savingPreferencesFor}
+          getPlayerProfileHref={getSessionPlayerProfileHref}
+          calculatePlayerSessionStats={calculatePlayerSessionStats}
+          onTogglePause={togglePausePlayer}
+          onTogglePreferenceEditor={togglePreferenceEditor}
+        />
       </main>
 
       {openPreferenceEditor &&
