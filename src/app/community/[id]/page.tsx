@@ -22,7 +22,7 @@ import {
   doClaimNamesMatch,
   getClaimRequesterEligibility,
 } from "@/lib/communityClaimRules";
-import { getSessionModeLabel } from "@/lib/sessionModeLabels";
+import { getSessionModeLabel, getSessionTypeLabel } from "@/lib/sessionModeLabels";
 import {
   ClaimRequestStatus,
   PartnerPreference,
@@ -132,6 +132,9 @@ export default function CommunityPage() {
 
   const [loading, setLoading] = useState(true);
   const [creatingSession, setCreatingSession] = useState(false);
+  const [activeSection, setActiveSection] = useState<"overview" | "tournaments" | "leaderboard">(
+    "overview"
+  );
   const [showHostPanel, setShowHostPanel] = useState(false);
   const [showPlayersModal, setShowPlayersModal] = useState(false);
   const [showGuestsModal, setShowGuestsModal] = useState(false);
@@ -176,6 +179,8 @@ export default function CommunityPage() {
     [sessions]
   );
   const latestPastTournamentId = pastTournaments[0]?.id ?? null;
+  const latestPastTournament = pastTournaments[0] ?? null;
+  const leaderboardPreview = leaderboard.slice(0, 5);
 
   const canManageCommunity = (!!community && community.role === "ADMIN") || !!user?.isAdmin;
   const selectablePlayers = communityMembers.filter((member) => member.id !== user?.id);
@@ -532,6 +537,121 @@ export default function CommunityPage() {
       openTournament(code);
     }
   };
+
+  const switchSection = (section: "overview" | "tournaments" | "leaderboard") => {
+    setActiveSection(section);
+    if (section !== "overview") {
+      setShowHostPanel(false);
+    }
+  };
+
+  const handleHostButtonClick = () => {
+    setActiveSection("overview");
+    setShowHostPanel((prev) => !prev);
+  };
+
+  const renderLeaderboardCard = (
+    player: CommunityMember,
+    index: number,
+    options?: { showClaimControls?: boolean }
+  ) => {
+    const showClaimControls = options?.showClaimControls ?? true;
+
+    return (
+      <div
+        key={player.id}
+        role="link"
+        tabIndex={0}
+        onClick={(event) => handleLeaderboardCardClick(event, player.id)}
+        onKeyDown={(event) => handleLeaderboardCardKeyDown(event, player.id)}
+        className="cursor-pointer rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3 transition hover:-translate-y-0.5 hover:border-blue-300 hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 focus-visible:ring-offset-2"
+      >
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-3">
+            <span className="w-6 shrink-0 text-[10px] font-black uppercase tracking-widest text-blue-600">
+              #{index + 1}
+            </span>
+            <div className="min-w-0">
+              <Link
+                href={`/profile/${player.id}?communityId=${communityId}`}
+                className="text-sm font-black text-gray-900 hover:text-blue-600 hover:underline"
+              >
+                {player.name}
+              </Link>
+              <p className="mt-1 text-[10px] font-bold uppercase tracking-wider text-gray-500">
+                {player.role}
+              </p>
+            </div>
+          </div>
+          <div className="shrink-0 text-right">
+            <p className="text-sm font-black text-gray-900">{player.elo}</p>
+            <p className="whitespace-nowrap text-[10px] font-black uppercase tracking-wider">
+              <span className="text-green-600">W {player.wins}</span>
+              <span className="text-gray-300"> / </span>
+              <span className="text-red-600">L {player.losses}</span>
+            </p>
+          </div>
+        </div>
+
+        {showClaimControls &&
+        !player.isClaimed &&
+        player.email === null &&
+        player.id !== user?.id &&
+        (() => {
+          const isNameMatch = !!user && doClaimNamesMatch(user.name, player.name);
+          const existingRequest = pendingClaimByTargetId.get(player.id);
+          const canShowClaimControls =
+            existingRequest?.requesterUserId === user?.id ||
+            (isNameMatch && currentUserClaimEligibility.canRequest);
+
+          if (!canShowClaimControls) {
+            return null;
+          }
+
+          const buttonDisabled =
+            requestingClaimFor !== null ||
+            pendingClaimByTargetId.has(player.id) ||
+            (!!myPendingClaimRequest && myPendingClaimRequest.targetUserId !== player.id) ||
+            !currentUserClaimEligibility.canRequest;
+
+          const statusText =
+            existingRequest?.requesterUserId === user?.id
+              ? "Claim request submitted"
+              : existingRequest
+                ? "Awaiting admin review"
+                : currentUserClaimEligibility.reason ?? "Request ownership of this placeholder";
+
+          const buttonLabel =
+            existingRequest?.requesterUserId === user?.id
+              ? "Requested"
+              : existingRequest
+                ? "Pending"
+                : myPendingClaimRequest
+                  ? "Pending Elsewhere"
+                  : requestingClaimFor === player.id
+                    ? "Sending..."
+                    : "Request Claim";
+
+          return (
+            <div className="mt-3 flex items-center justify-between gap-3 border-t border-gray-200 pt-3">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-gray-500">
+                {statusText}
+              </p>
+              <button
+                type="button"
+                onClick={() => requestClaim(player)}
+                disabled={buttonDisabled}
+                className="rounded-xl bg-gray-900 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-white disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {buttonLabel}
+              </button>
+            </div>
+          );
+        })()}
+      </div>
+    );
+  };
+
   return (
     <main className="app-page">
       <div className="app-topbar">
@@ -556,10 +676,10 @@ export default function CommunityPage() {
         {canManageCommunity && (
           <div className="flex items-center gap-2">
             <button
-              onClick={() => setShowHostPanel((prev) => !prev)}
+              onClick={handleHostButtonClick}
               className="app-button-primary"
             >
-              {showHostPanel ? "Hide Host" : "Host Tournament"}
+              {activeSection === "overview" && showHostPanel ? "Hide Host" : "Host Tournament"}
             </button>
             <Link
               href={`/community/${communityId}/admin`}
@@ -587,145 +707,238 @@ export default function CommunityPage() {
 
         {success ? <FlashMessage tone="success">{success}</FlashMessage> : null}
 
-        <CurrentTournamentsPanel
-          tournaments={activeTournaments}
-          currentUserId={user?.id}
-          onJoinTournament={joinTournament}
-        />
+        <section className="app-panel-soft p-2">
+          <div className="grid gap-2 sm:grid-cols-3">
+            {[
+              { key: "overview", label: "Overview", detail: "Live snapshot" },
+              { key: "tournaments", label: "Tournaments", detail: `${sessions.length} total` },
+              { key: "leaderboard", label: "Leaderboard", detail: `${leaderboard.length} players` },
+            ].map((tab) => {
+              const isActive = activeSection === tab.key;
+              return (
+                <button
+                  key={tab.key}
+                  type="button"
+                  onClick={() =>
+                    switchSection(
+                      tab.key as "overview" | "tournaments" | "leaderboard"
+                    )
+                  }
+                  className={`rounded-2xl px-4 py-3 text-left transition ${
+                    isActive
+                      ? "bg-white shadow-sm ring-1 ring-blue-100"
+                      : "bg-transparent text-gray-600 hover:bg-white/70"
+                  }`}
+                >
+                  <p className="text-sm font-semibold text-gray-900">{tab.label}</p>
+                  <p className="mt-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">
+                    {tab.detail}
+                  </p>
+                </button>
+              );
+            })}
+          </div>
+        </section>
 
-        {canManageCommunity && showHostPanel && (
+        {activeSection === "overview" ? (
           <>
-            <HostTournamentPanel
-              newSessionName={newSessionName}
-              onNewSessionNameChange={setNewSessionName}
-              sessionType={sessionType}
-              onSessionTypeChange={setSessionType}
-              sessionMode={sessionMode}
-              onSessionModeChange={setSessionMode}
-              openModeLabel={openModeLabel}
-              mixedModeLabel={mixedModeLabel}
-              courtCount={courtCount}
-              onCourtCountChange={setCourtCount}
-              selectedPlayerCount={selectedPlayerIds.length}
-              guestCount={guestConfigs.length}
-              onOpenPlayers={() => setShowPlayersModal(true)}
-              onOpenGuests={() => setShowGuestsModal(true)}
-              onCreateSession={createSession}
-              creatingSession={creatingSession}
+            <CurrentTournamentsPanel
+              tournaments={activeTournaments}
+              currentUserId={user?.id}
+              onJoinTournament={joinTournament}
             />
-          </>
-        )}
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
+            {canManageCommunity ? (
+              showHostPanel ? (
+                <HostTournamentPanel
+                  newSessionName={newSessionName}
+                  onNewSessionNameChange={setNewSessionName}
+                  sessionType={sessionType}
+                  onSessionTypeChange={setSessionType}
+                  sessionMode={sessionMode}
+                  onSessionModeChange={setSessionMode}
+                  openModeLabel={openModeLabel}
+                  mixedModeLabel={mixedModeLabel}
+                  courtCount={courtCount}
+                  onCourtCountChange={setCourtCount}
+                  selectedPlayerCount={selectedPlayerIds.length}
+                  guestCount={guestConfigs.length}
+                  onOpenPlayers={() => setShowPlayersModal(true)}
+                  onOpenGuests={() => setShowGuestsModal(true)}
+                  onCreateSession={createSession}
+                  creatingSession={creatingSession}
+                />
+              ) : (
+                <div className="rounded-3xl border border-gray-100 bg-white p-6 shadow-md">
+                  <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                    <div className="space-y-2">
+                      <p className="text-[10px] font-black uppercase tracking-widest text-blue-600">
+                        Host Desk
+                      </p>
+                      <h3 className="text-xl font-semibold text-gray-900">
+                        Ready to run the next tournament?
+                      </h3>
+                      <p className="max-w-2xl text-sm text-gray-600">
+                        Pick the format, choose players and guests, then launch the next session
+                        from one focused setup panel.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setShowHostPanel(true)}
+                      className="app-button-primary px-4 py-2"
+                    >
+                      Open Host Setup
+                    </button>
+                  </div>
+                </div>
+              )
+            ) : null}
+
+            <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
+              <div className="bg-white p-6 rounded-3xl shadow-md border border-gray-100 space-y-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <h3 className="text-sm font-black text-gray-900 uppercase tracking-widest">
+                      Leaderboard Snapshot
+                    </h3>
+                    <p className="mt-1 text-[10px] font-bold uppercase tracking-wider text-gray-400">
+                      Top performers right now
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => switchSection("leaderboard")}
+                    className="app-button-secondary px-4 py-2"
+                  >
+                    Full Leaderboard
+                  </button>
+                </div>
+                <div className="space-y-2">
+                  {leaderboardPreview.length === 0 ? (
+                    <div className="bg-gray-50 border-2 border-dashed border-gray-100 rounded-2xl p-4 text-center">
+                      <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">
+                        No players yet
+                      </p>
+                    </div>
+                  ) : (
+                    leaderboardPreview.map((player, index) =>
+                      renderLeaderboardCard(player, index, { showClaimControls: false })
+                    )
+                  )}
+                </div>
+              </div>
+
+              <div className="bg-white p-6 rounded-3xl shadow-md border border-gray-100 space-y-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <h3 className="text-sm font-black text-gray-900 uppercase tracking-widest">
+                      Recent Tournament
+                    </h3>
+                    <p className="mt-1 text-[10px] font-bold uppercase tracking-wider text-gray-400">
+                      Latest completed result
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => switchSection("tournaments")}
+                    className="app-button-secondary px-4 py-2"
+                  >
+                    Tournament History
+                  </button>
+                </div>
+                {latestPastTournament ? (
+                  <div
+                    role="link"
+                    tabIndex={0}
+                    onClick={(event) => handlePastTournamentCardClick(event, latestPastTournament.code)}
+                    onKeyDown={(event) =>
+                      handlePastTournamentCardKeyDown(event, latestPastTournament.code)
+                    }
+                    className="cursor-pointer rounded-2xl border border-gray-100 bg-gray-50 p-5 transition hover:-translate-y-0.5 hover:border-blue-300 hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 focus-visible:ring-offset-2"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <h4 className="text-lg font-semibold text-gray-900">
+                          {latestPastTournament.name}
+                        </h4>
+                        <p className="mt-2 text-[10px] font-bold uppercase tracking-wider text-gray-500">
+                          {latestPastTournament.players.length} Players -{" "}
+                          {getSessionTypeLabel(latestPastTournament.type)}
+                        </p>
+                      </div>
+                      <span className="rounded-lg bg-gray-200 px-2 py-1 text-[10px] font-black uppercase tracking-widest text-gray-600">
+                        {latestPastTournament.status}
+                      </span>
+                    </div>
+                    <div className="mt-5 flex items-center justify-between gap-3 border-t border-gray-200 pt-4">
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-gray-500">
+                        {new Date(
+                          latestPastTournament.endedAt ?? latestPastTournament.createdAt
+                        ).toLocaleDateString()}
+                      </p>
+                      <span className="text-[10px] font-black uppercase tracking-widest text-blue-600">
+                        Open Results
+                      </span>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="bg-gray-50 border-2 border-dashed border-gray-100 rounded-2xl p-6 text-center">
+                    <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">
+                      No completed tournaments yet
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </>
+        ) : null}
+
+        {activeSection === "tournaments" ? (
+          <div className="space-y-8">
+            <CurrentTournamentsPanel
+              tournaments={activeTournaments}
+              currentUserId={user?.id}
+              onJoinTournament={joinTournament}
+            />
+            <PastTournamentsPanel
+              tournaments={pastTournaments}
+              canManageCommunity={canManageCommunity}
+              latestPastTournamentId={latestPastTournamentId}
+              rollingBackTournamentCode={rollingBackTournamentCode}
+              onCardClick={handlePastTournamentCardClick}
+              onCardKeyDown={handlePastTournamentCardKeyDown}
+              onRollbackTournament={rollbackTournament}
+            />
+          </div>
+        ) : null}
+
+        {activeSection === "leaderboard" ? (
           <div className="bg-white p-6 rounded-3xl shadow-md border border-gray-100 space-y-4">
-            <h3 className="text-sm font-black text-gray-900 uppercase tracking-widest">Leaderboard</h3>
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <h3 className="text-sm font-black text-gray-900 uppercase tracking-widest">
+                  Leaderboard
+                </h3>
+                <p className="mt-1 text-[10px] font-bold uppercase tracking-wider text-gray-400">
+                  Full community rankings
+                </p>
+              </div>
+              <span className="app-chip app-chip-neutral">{leaderboard.length} players</span>
+            </div>
             <div className="space-y-2">
               {leaderboard.length === 0 ? (
                 <div className="bg-gray-50 border-2 border-dashed border-gray-100 rounded-2xl p-4 text-center">
-                  <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">No players yet</p>
+                  <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">
+                    No players yet
+                  </p>
                 </div>
               ) : (
-                leaderboard.map((player, index) => (
-                  <div
-                    key={player.id}
-                    role="link"
-                    tabIndex={0}
-                    onClick={(event) => handleLeaderboardCardClick(event, player.id)}
-                    onKeyDown={(event) => handleLeaderboardCardKeyDown(event, player.id)}
-                    className="cursor-pointer rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3 transition hover:-translate-y-0.5 hover:border-blue-300 hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 focus-visible:ring-offset-2"
-                  >
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="flex items-center gap-3 min-w-0">
-                        <span className="text-[10px] font-black uppercase tracking-widest text-blue-600 w-6 shrink-0">
-                        #{index + 1}
-                        </span>
-                        <div className="min-w-0">
-                          <Link href={`/profile/${player.id}?communityId=${communityId}`} className="text-sm font-black text-gray-900 hover:text-blue-600 hover:underline">
-                            {player.name}
-                          </Link>
-                          <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider mt-1">
-                            {player.role}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="shrink-0 text-right">
-                        <p className="text-sm font-black text-gray-900">{player.elo}</p>
-                        <p className="text-[10px] font-black uppercase tracking-wider whitespace-nowrap">
-                          <span className="text-green-600">W {player.wins}</span>
-                          <span className="text-gray-300"> / </span>
-                          <span className="text-red-600">L {player.losses}</span>
-                        </p>
-                      </div>
-                    </div>
-
-                    {!player.isClaimed && player.email === null && player.id !== user?.id && (() => {
-                      const isNameMatch = !!user && doClaimNamesMatch(user.name, player.name);
-                      const existingRequest = pendingClaimByTargetId.get(player.id);
-                      const canShowClaimControls =
-                        existingRequest?.requesterUserId === user?.id ||
-                        (isNameMatch && currentUserClaimEligibility.canRequest);
-
-                      if (!canShowClaimControls) {
-                        return null;
-                      }
-
-                      const buttonDisabled =
-                        requestingClaimFor !== null ||
-                        pendingClaimByTargetId.has(player.id) ||
-                        (!!myPendingClaimRequest && myPendingClaimRequest.targetUserId !== player.id) ||
-                        !currentUserClaimEligibility.canRequest;
-
-                      const statusText =
-                        existingRequest?.requesterUserId === user?.id
-                          ? "Claim request submitted"
-                          : existingRequest
-                            ? "Awaiting admin review"
-                            : currentUserClaimEligibility.reason ??
-                              "Request ownership of this placeholder";
-
-                      const buttonLabel =
-                        existingRequest?.requesterUserId === user?.id
-                          ? "Requested"
-                          : existingRequest
-                            ? "Pending"
-                            : myPendingClaimRequest
-                              ? "Pending Elsewhere"
-                              : requestingClaimFor === player.id
-                                ? "Sending..."
-                                : "Request Claim";
-
-                      return (
-                        <div className="mt-3 flex items-center justify-between gap-3 border-t border-gray-200 pt-3">
-                          <p className="text-[10px] font-bold uppercase tracking-wider text-gray-500">
-                            {statusText}
-                          </p>
-                          <button
-                            type="button"
-                            onClick={() => requestClaim(player)}
-                            disabled={buttonDisabled}
-                            className="px-3 py-2 rounded-xl bg-gray-900 text-white text-[10px] font-black uppercase tracking-widest disabled:opacity-50 disabled:cursor-not-allowed"
-                          >
-                            {buttonLabel}
-                          </button>
-                        </div>
-                      );
-                    })()}
-                  </div>
-                ))
+                leaderboard.map((player, index) => renderLeaderboardCard(player, index))
               )}
             </div>
           </div>
-
-          <PastTournamentsPanel
-            tournaments={pastTournaments}
-            canManageCommunity={canManageCommunity}
-            latestPastTournamentId={latestPastTournamentId}
-            rollingBackTournamentCode={rollingBackTournamentCode}
-            onCardClick={handlePastTournamentCardClick}
-            onCardKeyDown={handlePastTournamentCardKeyDown}
-            onRollbackTournament={rollbackTournament}
-          />
-        </div>
+        ) : null}
       </div>
 
       {showPlayersModal && (
