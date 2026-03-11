@@ -67,6 +67,7 @@ export async function POST(
         team1EloChange: null,
         team2EloChange: null,
         completedAt: null,
+        scoreSubmittedByUserId: null,
       },
     });
 

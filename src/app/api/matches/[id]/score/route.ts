@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
+import { finalizeMatchResult } from "@/lib/matchCompletion";
+import { shouldRequireOpponentApproval } from "@/lib/matchApprovalRules";
 import { prisma } from "@/lib/prisma";
 import { isValidBadmintonScore } from "@/lib/matchRules";
 import { MatchStatus } from "@/types/enums";
@@ -31,16 +33,31 @@ export async function POST(
       where: { id },
       select: {
         id: true,
+        sessionId: true,
+        courtId: true,
         status: true,
         session: {
           select: {
             communityId: true,
+            type: true,
           },
         },
         team1User1Id: true,
         team1User2Id: true,
         team2User1Id: true,
         team2User2Id: true,
+        team1User1: {
+          select: { id: true, name: true, elo: true, isClaimed: true },
+        },
+        team1User2: {
+          select: { id: true, name: true, elo: true, isClaimed: true },
+        },
+        team2User1: {
+          select: { id: true, name: true, elo: true, isClaimed: true },
+        },
+        team2User2: {
+          select: { id: true, name: true, elo: true, isClaimed: true },
+        },
       },
     });
 
@@ -62,7 +79,7 @@ export async function POST(
       isCommunityAdmin = membership?.role === "ADMIN";
     }
 
-    const isAdmin = isCommunityAdmin;
+    const isAdmin = !!session.user.isAdmin || isCommunityAdmin;
     const isParticipant = [
       match.team1User1Id,
       match.team1User2Id,
@@ -85,8 +102,41 @@ export async function POST(
     }
 
     const winnerTeam = team1Score > team2Score ? 1 : 2;
+    const claimedByUserId = new Map<string, boolean>([
+      [match.team1User1.id, match.team1User1.isClaimed],
+      [match.team1User2.id, match.team1User2.isClaimed],
+      [match.team2User1.id, match.team2User1.isClaimed],
+      [match.team2User2.id, match.team2User2.isClaimed],
+    ]);
+    const requiresApproval = shouldRequireOpponentApproval({
+      match,
+      submitterUserId: session.user.id,
+      submitterIsAdmin: isAdmin,
+      claimedByUserId,
+    });
 
-    // Update match with pending approval status using atomic updateMany
+    if (!requiresApproval) {
+      try {
+        const updated = await finalizeMatchResult({
+          match,
+          expectedStatus: MatchStatus.IN_PROGRESS,
+          finalTeam1Score: team1Score,
+          finalTeam2Score: team2Score,
+          scoreSubmittedByUserId: session.user.id,
+        });
+        return NextResponse.json(updated);
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : "";
+        if (message === "ALREADY_PROCESSED") {
+          return NextResponse.json(
+            { error: "Match already completed or updated." },
+            { status: 409 }
+          );
+        }
+        throw error;
+      }
+    }
+
     const updatedResult = await prisma.match.updateMany({
       where: { id, status: MatchStatus.IN_PROGRESS },
       data: {
@@ -95,6 +145,7 @@ export async function POST(
         winnerTeam,
         status: MatchStatus.PENDING_APPROVAL,
         completedAt: new Date(),
+        scoreSubmittedByUserId: session.user.id,
       },
     });
 

@@ -122,6 +122,7 @@ model Match {
   sessionId    String
   courtId      String
   status       String   @default("PENDING") // PENDING, IN_PROGRESS, COMPLETED, PENDING_APPROVAL
+  scoreSubmittedByUserId String?
 
   // Team 1
   team1User1Id String

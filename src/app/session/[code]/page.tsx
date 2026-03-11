@@ -9,6 +9,7 @@ import { FlashMessage, SectionCard } from "@/components/ui/chrome";
 import { SessionOverviewPanel } from "@/components/session/SessionOverviewPanel";
 import { LiveStandingsTable } from "@/components/session/LiveStandingsTable";
 import { SessionPodium } from "@/components/session/SessionPodium";
+import { canApprovePendingSubmission } from "@/lib/matchApprovalRules";
 import { getSessionModeLabel, getSessionTypeLabel } from "@/lib/sessionModeLabels";
 import { compareSessionStandings } from "@/lib/sessionStandings";
 import {
@@ -37,6 +38,7 @@ interface Player {
 interface Match {
   id: string;
   status: string;
+  scoreSubmittedByUserId?: string | null;
   team1User1: { id: string; name: string };
   team1User2: { id: string; name: string };
   team2User1: { id: string; name: string };
@@ -91,6 +93,7 @@ interface SessionData {
 interface CurrentUser {
   id: string;
   isAdmin?: boolean;
+  isClaimed?: boolean;
 }
 
 type ManualMatchSlot =
@@ -715,6 +718,7 @@ export default function SessionPage() {
   }
 
   const isAdmin = !!sessionData.viewerCanManage || !!user?.isAdmin || !!session?.user?.isAdmin;
+  const isClaimedUser = user?.isClaimed === true;
   const currentUserId = session?.user?.id || "";
   const isMixicano = sessionData.mode === SessionMode.MIXICANO;
   const busySessionPlayerIds = new Set<string>();
@@ -897,6 +901,22 @@ export default function SessionPage() {
 
                   const canEdit =
                     currentMatch?.status === MatchStatus.IN_PROGRESS && (isAdmin || isParticipant);
+                  const canConfirmPending =
+                    currentMatch?.status === MatchStatus.PENDING_APPROVAL &&
+                    (currentMatch.scoreSubmittedByUserId
+                      ? canApprovePendingSubmission({
+                          match: {
+                            team1User1Id: currentMatch.team1User1.id,
+                            team1User2Id: currentMatch.team1User2.id,
+                            team2User1Id: currentMatch.team2User1.id,
+                            team2User2Id: currentMatch.team2User2.id,
+                          },
+                          approverUserId: currentUserId,
+                          approverIsAdmin: isAdmin,
+                          approverIsClaimed: isClaimedUser,
+                          scoreSubmittedByUserId: currentMatch.scoreSubmittedByUserId,
+                        })
+                      : isAdmin || isParticipant);
                   const scores = currentMatch
                     ? matchScores[currentMatch.id] || { team1: "", team2: "" }
                     : { team1: "", team2: "" };
@@ -1050,25 +1070,29 @@ export default function SessionPage() {
 
                             {currentMatch.status === MatchStatus.PENDING_APPROVAL ? (
                               <div className="space-y-2 pt-2">
-                                {isAdmin ? (
-                                  <div className="grid grid-cols-2 gap-2">
-                                    <button
-                                      onClick={() => approveScore(currentMatch.id)}
-                                      className="w-full rounded-xl bg-blue-600 py-3 text-sm font-black uppercase text-white shadow-md transition-all active:scale-95 active:bg-blue-700"
-                                    >
-                                      Approve Results
-                                    </button>
-                                    <button
-                                      onClick={() => reopenScoreForEdit(currentMatch.id)}
-                                      disabled={reopeningMatchId === currentMatch.id}
-                                      className="w-full rounded-xl border border-gray-200 bg-gray-100 py-3 text-sm font-black uppercase text-gray-700 transition-all active:scale-95 active:bg-gray-200 disabled:cursor-not-allowed disabled:opacity-50"
-                                    >
-                                      {reopeningMatchId === currentMatch.id ? "Opening..." : "Back To Edit"}
-                                    </button>
+                                {canConfirmPending || isAdmin ? (
+                                  <div className={`grid gap-2 ${isAdmin ? "grid-cols-2" : "grid-cols-1"}`}>
+                                    {canConfirmPending ? (
+                                      <button
+                                        onClick={() => approveScore(currentMatch.id)}
+                                        className="w-full rounded-xl bg-blue-600 py-3 text-sm font-black uppercase text-white shadow-md transition-all active:scale-95 active:bg-blue-700"
+                                      >
+                                        Confirm Results
+                                      </button>
+                                    ) : null}
+                                    {isAdmin ? (
+                                      <button
+                                        onClick={() => reopenScoreForEdit(currentMatch.id)}
+                                        disabled={reopeningMatchId === currentMatch.id}
+                                        className="w-full rounded-xl border border-gray-200 bg-gray-100 py-3 text-sm font-black uppercase text-gray-700 transition-all active:scale-95 active:bg-gray-200 disabled:cursor-not-allowed disabled:opacity-50"
+                                      >
+                                        {reopeningMatchId === currentMatch.id ? "Opening..." : "Back To Edit"}
+                                      </button>
+                                    ) : null}
                                   </div>
                                 ) : null}
                                 <div className="rounded-lg border border-orange-100 bg-orange-50 py-2 text-center text-[10px] font-black uppercase tracking-widest text-orange-700">
-                                  Awaiting Approval
+                                  Awaiting Confirmation
                                 </div>
                               </div>
                             ) : null}

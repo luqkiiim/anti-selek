@@ -23,7 +23,13 @@ export async function GET(
       courts: {
         include: {
           currentMatch: {
-            include: {
+            select: {
+              id: true,
+              status: true,
+              team1Score: true,
+              team2Score: true,
+              completedAt: true,
+              scoreSubmittedByUserId: true,
               team1User1: { select: { id: true, name: true } },
               team1User2: { select: { id: true, name: true } },
               team2User1: { select: { id: true, name: true } },

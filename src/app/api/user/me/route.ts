@@ -18,6 +18,7 @@ export async function GET() {
       id: true,
       email: true,
       name: true,
+      isClaimed: true,
       gender: true,
       partnerPreference: true,
       elo: true,
