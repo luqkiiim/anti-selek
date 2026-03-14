@@ -148,6 +148,7 @@ export default function SessionPage() {
   const [submittingMatchId, setSubmittingMatchId] = useState<string | null>(null);
   const [reopeningMatchId, setReopeningMatchId] = useState<string | null>(null);
   const [undoingCourtId, setUndoingCourtId] = useState<string | null>(null);
+  const [creatingOpenMatches, setCreatingOpenMatches] = useState(false);
   const [manualCourtId, setManualCourtId] = useState<string | null>(null);
   const [creatingManualMatch, setCreatingManualMatch] = useState(false);
   const [manualMatchForm, setManualMatchForm] = useState<ManualMatchFormState>({
@@ -406,22 +407,30 @@ export default function SessionPage() {
     }
   };
 
-  const generateMatch = async (courtId: string) => {
+  const createMatchesForCourts = async (courtIds: string[]) => {
+    if (courtIds.length === 0) return;
+
+    setCreatingOpenMatches(true);
+    setError("");
     try {
       const res = await fetch(`/api/sessions/${code}/generate-match`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ courtId }),
+        body: JSON.stringify(
+          courtIds.length === 1 ? { courtId: courtIds[0] } : { courtIds }
+        ),
       });
       if (res.ok) {
         fetchSession();
       } else {
         const data = await safeJson(res);
-        setError(data.error || "Failed to generate match");
+        setError(data.error || "Failed to create matches");
       }
     } catch (err) {
       console.error(err);
-      setError("Network error generating match");
+      setError("Network error creating matches");
+    } finally {
+      setCreatingOpenMatches(false);
     }
   };
 
@@ -785,6 +794,20 @@ export default function SessionPage() {
     .filter(cp => cp.name.toLowerCase().includes(rosterSearch.toLowerCase()));
   const activeMatchesCount = sessionData.courts.filter((court) => court.currentMatch !== null).length;
   const readyCourtsCount = sessionData.courts.length - activeMatchesCount;
+  const openCourts = sessionData.courts
+    .filter((court) => !court.currentMatch)
+    .slice()
+    .sort((a, b) => a.courtNumber - b.courtNumber);
+  const availableAutoMatchPlayersCount = sessionData.players.filter(
+    (player) => !player.isPaused && !busySessionPlayerIds.has(player.userId)
+  ).length;
+  const creatableOpenCourtCount = Math.min(
+    openCourts.length,
+    Math.floor(availableAutoMatchPlayersCount / 4)
+  );
+  const creatableOpenCourtIds = openCourts
+    .slice(0, creatableOpenCourtCount)
+    .map((court) => court.id);
   const completedMatchesCount = sessionData.matches?.length ?? 0;
   const pausedPlayersCount = sessionData.players.filter((player) => player.isPaused).length;
   const guestPlayersCount = sessionData.players.filter((player) => player.isGuest).length;
@@ -879,9 +902,27 @@ export default function SessionPage() {
           <SectionCard
             title={sessionData.status === SessionStatus.ACTIVE ? "Live Courts" : "Courts"}
             action={
-              <div className="flex flex-wrap items-center gap-2">
+              <div className="flex flex-wrap items-center justify-end gap-2">
                 <span className="app-chip app-chip-info">{activeMatchesCount} in use</span>
                 <span className="app-chip app-chip-neutral">{readyCourtsCount} ready</span>
+                {sessionData.status === SessionStatus.ACTIVE &&
+                isAdmin &&
+                creatableOpenCourtCount > 0 ? (
+                  <button
+                    type="button"
+                    onClick={() => createMatchesForCourts(creatableOpenCourtIds)}
+                    disabled={creatingOpenMatches}
+                    className="app-button-primary"
+                  >
+                    {creatingOpenMatches
+                      ? creatableOpenCourtCount === 1
+                        ? "Creating..."
+                        : `Creating ${creatableOpenCourtCount}...`
+                      : creatableOpenCourtCount === 1
+                        ? "Create Match"
+                        : `Create ${creatableOpenCourtCount} Matches`}
+                  </button>
+                ) : null}
               </div>
             }
           >
@@ -932,20 +973,12 @@ export default function SessionPage() {
                         </h2>
                         <div className="flex gap-2">
                           {sessionData.status === SessionStatus.ACTIVE && !court.currentMatch && isAdmin ? (
-                            <>
-                              <button
-                                onClick={() => generateMatch(court.id)}
-                                className="rounded-lg bg-blue-600 px-2.5 py-1.5 text-[10px] font-black uppercase tracking-wider text-white transition-all active:scale-95"
-                              >
-                                New Match
-                              </button>
-                              <button
-                                onClick={() => openManualMatchModal(court.id)}
-                                className="rounded-lg bg-gray-900 px-2.5 py-1.5 text-[10px] font-black uppercase tracking-wider text-white transition-all active:scale-95"
-                              >
-                                Manual
-                              </button>
-                            </>
+                            <button
+                              onClick={() => openManualMatchModal(court.id)}
+                              className="rounded-lg bg-gray-900 px-2.5 py-1.5 text-[10px] font-black uppercase tracking-wider text-white transition-all active:scale-95"
+                            >
+                              Manual
+                            </button>
                           ) : null}
                           {currentMatch && currentMatch.status === MatchStatus.IN_PROGRESS && isAdmin ? (
                             <button
