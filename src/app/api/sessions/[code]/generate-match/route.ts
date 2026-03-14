@@ -135,6 +135,7 @@ export async function POST(
     const targetCourtById = new Map(targetCourts.map((court) => [court.id, court]));
     const orderedTargetCourts = requestedCourtIds.map((id) => targetCourtById.get(id)!);
     const targetCourt = orderedTargetCourts[0];
+    const freedCourtIds = new Set<string>();
 
     const reshuffleSource =
       forceReshuffle && targetCourt.currentMatch
@@ -201,6 +202,7 @@ export async function POST(
 
       // Keep busy-player computation in sync with deleted reshuffle match.
       sessionData.matches = sessionData.matches.filter((m) => m.id !== targetCourt.currentMatch!.id);
+      freedCourtIds.add(targetCourt.id);
     }
 
     // 4. Identify busy players (those on court)
@@ -440,7 +442,7 @@ export async function POST(
     }
 
     const requestedOpenCourts = orderedTargetCourts.filter(
-      (court) => !court.currentMatch
+      (court) => freedCourtIds.has(court.id) || !court.currentMatch
     );
 
     if (requestedOpenCourts.length !== orderedTargetCourts.length) {
