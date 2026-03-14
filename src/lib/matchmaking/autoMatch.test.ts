@@ -70,7 +70,7 @@ describe("findBestAutoMatchSelection", () => {
     expect(selection?.score).toBe(40);
   });
 
-  it("widens to the <=2 band when it meaningfully improves Elo balance", () => {
+  it("keeps the fairness quartet locked when it already has a valid partition", () => {
     const rankedCandidates = createRankedCandidates([
       { id: "A", matchesPlayed: 0 },
       { id: "B", matchesPlayed: 0 },
@@ -97,12 +97,12 @@ describe("findBestAutoMatchSelection", () => {
     );
 
     expect(selection).not.toBeNull();
-    expect(selection?.band).toBe("gap2");
-    expect(selection?.ids).not.toEqual(["A", "B", "C", "D"]);
-    expect(selection?.score).toBe(0);
+    expect(selection?.band).toBe("gap1");
+    expect(selection?.ids).toEqual(["A", "B", "C", "D"]);
+    expect(selection?.score).toBe(50);
   });
 
-  it("uses a smaller widening threshold in points sessions", () => {
+  it("does not replace the fairness quartet in points sessions just for a cleaner balance", () => {
     const rankedCandidates = createRankedCandidates([
       { id: "A", matchesPlayed: 0 },
       { id: "B", matchesPlayed: 0 },
@@ -127,8 +127,84 @@ describe("findBestAutoMatchSelection", () => {
     );
 
     expect(selection).not.toBeNull();
-    expect(selection?.band).toBe("gap2");
-    expect(selection?.ids).not.toEqual(["A", "B", "C", "D"]);
-    expect(selection?.score).toBe(0);
+    expect(selection?.band).toBe("gap1");
+    expect(selection?.ids).toEqual(["A", "B", "C", "D"]);
+    expect(selection?.score).toBe(2);
+  });
+
+  it("widens only when the fairness quartet cannot produce a valid mixed partition", () => {
+    const now = new Date("2026-03-09T00:00:00Z").getTime();
+    const rankedCandidates = [
+      {
+        userId: "A",
+        matchesPlayed: 0,
+        availableSince: new Date(now - 1000),
+        joinedAt: new Date(now - 60 * 60 * 1000),
+        inactiveSeconds: 0,
+        _rate: 0,
+        _availableSinceTs: now - 1000,
+        _random: 0,
+      },
+      {
+        userId: "B",
+        matchesPlayed: 0,
+        availableSince: new Date(now - 2000),
+        joinedAt: new Date(now - 60 * 60 * 1000),
+        inactiveSeconds: 0,
+        _rate: 0,
+        _availableSinceTs: now - 2000,
+        _random: 0,
+      },
+      {
+        userId: "C",
+        matchesPlayed: 1,
+        availableSince: new Date(now - 3000),
+        joinedAt: new Date(now - 60 * 60 * 1000),
+        inactiveSeconds: 0,
+        _rate: 1,
+        _availableSinceTs: now - 3000,
+        _random: 0,
+      },
+      {
+        userId: "D",
+        matchesPlayed: 1,
+        availableSince: new Date(now - 4000),
+        joinedAt: new Date(now - 60 * 60 * 1000),
+        inactiveSeconds: 0,
+        _rate: 1,
+        _availableSinceTs: now - 4000,
+        _random: 0,
+      },
+      {
+        userId: "E",
+        matchesPlayed: 1,
+        availableSince: new Date(now - 5000),
+        joinedAt: new Date(now - 60 * 60 * 1000),
+        inactiveSeconds: 0,
+        _rate: 1,
+        _availableSinceTs: now - 5000,
+        _random: 0,
+      },
+    ];
+    const playersById = new Map<string, PartitionCandidate>([
+      ["A", { userId: "A", elo: 1200, pointDiff: 0, lastPartnerId: null, gender: "FEMALE", partnerPreference: "FEMALE_FLEX" }],
+      ["B", { userId: "B", elo: 1190, pointDiff: 0, lastPartnerId: null, gender: "MALE", partnerPreference: "OPEN" }],
+      ["C", { userId: "C", elo: 1180, pointDiff: 0, lastPartnerId: null, gender: "MALE", partnerPreference: "OPEN" }],
+      ["D", { userId: "D", elo: 1170, pointDiff: 0, lastPartnerId: null, gender: "MALE", partnerPreference: "OPEN" }],
+      ["E", { userId: "E", elo: 1160, pointDiff: 0, lastPartnerId: null, gender: "FEMALE", partnerPreference: "FEMALE_FLEX" }],
+    ]);
+
+    const selection = findBestAutoMatchSelection(
+      rankedCandidates,
+      playersById,
+      SessionMode.MIXICANO,
+      SessionType.ELO,
+      buildRotationHistory([])
+    );
+
+    expect(selection).not.toBeNull();
+    expect(selection?.band).toBe("gap1");
+    expect(selection?.ids).toContain("A");
+    expect(selection?.ids).toContain("E");
   });
 });

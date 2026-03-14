@@ -82,6 +82,7 @@ export interface FairnessWindowQuartetOptions {
   fairnessSlack: number;
   lowestCohortUserIds?: Set<string>;
   maxLowestCohortPlayers?: number;
+  matchesPlayedQuota?: Map<number, number>;
   maxCandidates?: number;
   excludedQuartetKey?: string;
 }
@@ -481,6 +482,7 @@ export function findBestQuartetInFairnessWindow<T extends { userId: string }>(
     fairnessSlack,
     lowestCohortUserIds,
     maxLowestCohortPlayers,
+    matchesPlayedQuota,
     maxCandidates = 8,
     excludedQuartetKey,
   }: FairnessWindowQuartetOptions
@@ -513,6 +515,18 @@ export function findBestQuartetInFairnessWindow<T extends { userId: string }>(
   const maxFairnessScore = baselineFairnessScore + fairnessSlack;
 
   let bestSelection: FallbackQuartetSelection | null = null;
+  const matchesPlayedByUserId = new Map(
+    fallbackPool
+      .map((candidate) => [
+        candidate.userId,
+        (candidate as T & { matchesPlayed?: number }).matchesPlayed,
+      ])
+      .filter(
+        (
+          entry
+        ): entry is [string, number] => typeof entry[1] === "number"
+      )
+  );
 
   for (let i = 0; i < fallbackPool.length - 3; i++) {
     for (let j = i + 1; j < fallbackPool.length - 2; j++) {
@@ -535,6 +549,33 @@ export function findBestQuartetInFairnessWindow<T extends { userId: string }>(
           );
 
           if (fairnessScore > maxFairnessScore) continue;
+
+          if (matchesPlayedQuota) {
+            const quartetQuota = new Map<number, number>();
+
+            for (const id of ids) {
+              const matchesPlayed = matchesPlayedByUserId.get(id);
+
+              if (typeof matchesPlayed !== "number") {
+                quartetQuota.clear();
+                break;
+              }
+
+              quartetQuota.set(
+                matchesPlayed,
+                (quartetQuota.get(matchesPlayed) ?? 0) + 1
+              );
+            }
+
+            if (
+              quartetQuota.size !== matchesPlayedQuota.size ||
+              [...matchesPlayedQuota.entries()].some(
+                ([matchesPlayed, count]) => quartetQuota.get(matchesPlayed) !== count
+              )
+            ) {
+              continue;
+            }
+          }
 
           if (
             lowestCohortUserIds &&

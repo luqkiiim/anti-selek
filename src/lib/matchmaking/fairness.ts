@@ -37,6 +37,9 @@ export function rankPlayersByFairness<T extends FairnessCandidate>(
       };
     })
     .sort((a, b) => {
+      if (a.matchesPlayed !== b.matchesPlayed) {
+        return a.matchesPlayed - b.matchesPlayed;
+      }
       if (a._rate !== b._rate) return a._rate - b._rate;
       if (a._availableSinceTs !== b._availableSinceTs) {
         return a._availableSinceTs - b._availableSinceTs;

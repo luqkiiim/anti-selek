@@ -24,6 +24,40 @@ describe("selectMatchPlayers (Match Rate Logic)", () => {
     expect(selected).toHaveLength(4);
   });
 
+  it("should prioritize fewer matches played before a lower match rate", () => {
+    const t0 = Date.now();
+
+    const underplayed: PlayerCandidate = {
+      userId: "underplayed",
+      matchesPlayed: 2,
+      joinedAt: new Date(t0 - 10 * 60 * 1000),
+      inactiveSeconds: 0,
+      availableSince: new Date(t0 - 30 * 1000),
+    };
+
+    const lowerRateButOverplayed: PlayerCandidate = {
+      userId: "overplayed",
+      matchesPlayed: 3,
+      joinedAt: new Date(t0 - 4 * 60 * 60 * 1000),
+      inactiveSeconds: 0,
+      availableSince: new Date(t0 - 40 * 1000),
+    };
+
+    const extras: PlayerCandidate[] = Array.from({ length: 3 }, (_, i) => ({
+      userId: `extra_${i}`,
+      matchesPlayed: 2,
+      joinedAt: new Date(t0 - 2 * 60 * 60 * 1000),
+      inactiveSeconds: 0,
+      availableSince: new Date(t0 - (60 + i) * 1000),
+    }));
+
+    const selected = selectMatchPlayers([underplayed, lowerRateButOverplayed, ...extras]);
+    const selectedIds = selected!.map((player) => player.userId);
+
+    expect(selectedIds).toContain("underplayed");
+    expect(selectedIds).not.toContain("overplayed");
+  });
+
   it("should NOT prioritize late joiners for 'catch up' if their rate is higher", () => {
     const t0 = Date.now(); // This is now the mocked 'now'
     

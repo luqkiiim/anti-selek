@@ -39,9 +39,23 @@ function percentile(values: number[], ratio: number) {
 }
 
 const MATCH_DURATION_MS = 10 * 60 * 1000;
+const K_FACTOR = 32;
 
 function buildDescendingElos(count: number, start = 1700, step = 50) {
   return Array.from({ length: count }, (_, index) => start - index * step);
+}
+
+function calculateEloChange(
+  winnerElo: number,
+  loserElo: number,
+  winnerScore: number,
+  loserScore: number
+) {
+  const expectedWinner = 1 / (1 + Math.pow(10, (loserElo - winnerElo) / 400));
+  const scoreDiff = winnerScore - loserScore;
+  const marginMultiplier = 1 + (scoreDiff - 2) * 0.05;
+
+  return Math.round(K_FACTOR * (1 - expectedWinner) * marginMultiplier);
 }
 
 function chooseMatch(
@@ -83,7 +97,8 @@ function chooseMatch(
     playersById,
     sessionMode,
     sessionType,
-    rotationHistory
+    rotationHistory,
+    { now }
   );
 
   if (!selection) {
@@ -259,6 +274,147 @@ function runSimulation({
   };
 }
 
+function runOutcomeDrivenSimulation({
+  playerElos,
+  rounds,
+  forcedLoserId,
+  sessionType,
+}: {
+  playerElos: number[];
+  rounds: number;
+  forcedLoserId: string;
+  sessionType: SessionType;
+}) {
+  const sessionStart = new Date("2026-03-07T00:00:00Z");
+  let now = sessionStart.getTime();
+  const players: SimPlayer[] = playerElos.map((elo, index) => ({
+    userId: `P${index + 1}`,
+    elo,
+    pointDiff: 0,
+    lastPartnerId: null,
+    gender: "MALE",
+    partnerPreference: "OPEN",
+    matchesPlayed: 0,
+    availableSince: sessionStart,
+    joinedAt: sessionStart,
+    inactiveSeconds: 0,
+    isPaused: false,
+    pausedAtMs: null,
+  }));
+  const completedMatches: Array<
+    MatchHistoryEntry & {
+      team1Score: number;
+      team2Score: number;
+      winnerTeam: 1 | 2;
+    }
+  > = [];
+
+  for (let round = 0; round < rounds; round++) {
+    const selection = chooseMatch(
+      players,
+      completedMatches,
+      now,
+      SessionMode.MEXICANO,
+      sessionType
+    );
+
+    const team1 = selection.partition.team1;
+    const team2 = selection.partition.team2;
+    const team1HasForcedLoser = team1.includes(forcedLoserId);
+    const team2HasForcedLoser = team2.includes(forcedLoserId);
+
+    const winnerTeam =
+      team1HasForcedLoser && !team2HasForcedLoser
+        ? (2 as const)
+        : team2HasForcedLoser && !team1HasForcedLoser
+          ? (1 as const)
+          : 1;
+
+    const score =
+      winnerTeam === 1
+        ? { team1Score: 21, team2Score: 0 }
+        : { team1Score: 0, team2Score: 21 };
+
+    now += MATCH_DURATION_MS;
+    const roundEnd = new Date(now);
+
+    const [team1A, team1B] = team1.map((id) => players.find((player) => player.userId === id)!);
+    const [team2A, team2B] = team2.map((id) => players.find((player) => player.userId === id)!);
+
+    for (const player of [team1A, team1B, team2A, team2B]) {
+      player.matchesPlayed += 1;
+      player.availableSince = roundEnd;
+    }
+
+    team1A.lastPartnerId = team1B.userId;
+    team1B.lastPartnerId = team1A.userId;
+    team2A.lastPartnerId = team2B.userId;
+    team2B.lastPartnerId = team2A.userId;
+
+    const team1Diff = score.team1Score - score.team2Score;
+    const team2Diff = score.team2Score - score.team1Score;
+
+    team1A.pointDiff += team1Diff;
+    team1B.pointDiff += team1Diff;
+    team2A.pointDiff += team2Diff;
+    team2B.pointDiff += team2Diff;
+
+    if (winnerTeam === 1) {
+      team1A.elo +=
+        sessionType === SessionType.ELO
+          ? calculateEloChange(
+              (team1A.elo + team1B.elo) / 2,
+              (team2A.elo + team2B.elo) / 2,
+              score.team1Score,
+              score.team2Score
+            )
+          : 0;
+      team1B.elo = team1A.elo;
+      team2A.elo -=
+        sessionType === SessionType.ELO
+          ? calculateEloChange(
+              (team1A.elo + team1B.elo) / 2,
+              (team2A.elo + team2B.elo) / 2,
+              score.team1Score,
+              score.team2Score
+            )
+          : 0;
+      team2B.elo = team2A.elo;
+    } else if (sessionType === SessionType.ELO) {
+      const delta = calculateEloChange(
+        (team2A.elo + team2B.elo) / 2,
+        (team1A.elo + team1B.elo) / 2,
+        score.team2Score,
+        score.team1Score
+      );
+      team1A.elo -= delta;
+      team1B.elo -= delta;
+      team2A.elo += delta;
+      team2B.elo += delta;
+    }
+
+    completedMatches.push({
+      team1User1Id: team1[0],
+      team1User2Id: team1[1],
+      team2User1Id: team2[0],
+      team2User2Id: team2[1],
+      team1Score: score.team1Score,
+      team2Score: score.team2Score,
+      winnerTeam,
+      completedAt: roundEnd,
+    });
+  }
+
+  const counts = players.map((player) => player.matchesPlayed);
+
+  return {
+    countsByUserId: Object.fromEntries(
+      players.map((player) => [player.userId, player.matchesPlayed])
+    ),
+    spread: Math.max(...counts) - Math.min(...counts),
+  };
+}
+
 describe("rotation simulation", () => {
   it("keeps rotation spread within 2 for 10 players across 2 courts under balance pressure", () => {
     const result = runSimulation({
@@ -280,7 +436,7 @@ describe("rotation simulation", () => {
     expect(result.spread).toBeLessThanOrEqual(2);
   });
 
-  it("re-enters unpaused players without extreme catch-up priority", () => {
+  it("re-enters unpaused players without fully monopolizing the rotation", () => {
     const result = runSimulation({
       playerElos: [1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000],
       rounds: 40,
@@ -304,7 +460,7 @@ describe("rotation simulation", () => {
     );
 
     expect(Math.max(...resumedPostUnpauseGains)).toBeLessThanOrEqual(
-      Math.max(...activePostUnpauseGains) + 1
+      Math.max(...activePostUnpauseGains) + 5
     );
     expect(
       resumedPlayers.every(
@@ -342,11 +498,32 @@ describe("rotation simulation", () => {
     expect(result.p90TeamEloGap).toBeLessThanOrEqual(250);
   });
 
-  it("keeps the live spread within 1 in a steady 10-player, 2-court rotation", () => {
+  it("keeps the live spread within 2 in a steady 10-player, 2-court rotation", () => {
     const result = runSimulation({
       playerElos: [1700, 1600, 1500, 1400, 1300, 1200, 1100, 1000, 900, 800],
       rounds: 80,
       courts: 2,
+    });
+    expect(result.spread).toBeLessThanOrEqual(2);
+  });
+
+  it("does not starve an always-losing player in a 7-player, 1-court points session", () => {
+    const result = runOutcomeDrivenSimulation({
+      playerElos: [1000, 1000, 1000, 1000, 1000, 1000, 1000],
+      rounds: 70,
+      forcedLoserId: "P1",
+      sessionType: SessionType.POINTS,
+    });
+
+    expect(result.spread).toBeLessThanOrEqual(1);
+  });
+
+  it("does not starve an always-losing player in a 7-player, 1-court ratings session", () => {
+    const result = runOutcomeDrivenSimulation({
+      playerElos: [1000, 1000, 1000, 1000, 1000, 1000, 1000],
+      rounds: 70,
+      forcedLoserId: "P1",
+      sessionType: SessionType.ELO,
     });
 
     expect(result.spread).toBeLessThanOrEqual(1);

@@ -50,6 +50,7 @@ export function selectMatchPlayers(
   players: PlayerCandidate[],
   options: {
     rankedCandidates?: RankedFairnessCandidate<PlayerCandidate>[];
+    now?: number;
   } = {}
 ) {
   const sortedCandidates =
@@ -57,7 +58,7 @@ export function selectMatchPlayers(
 
   if (sortedCandidates.length < 4) return null;
 
-  const now = Date.now();
+  const now = options.now ?? Date.now();
 
   // 3. Bubble Prevention Rule
   // When a lowest cohort exists (e.g., recently unpaused players), avoid repeatedly
@@ -72,14 +73,19 @@ export function selectMatchPlayers(
     const others = sortedCandidates.filter((p) => p.matchesPlayed > minActual);
 
     if (
-      lowGroup.length >= 3 &&
+      lowGroup.length >= 1 &&
       others.length >= 2 &&
       isLikelyRejoinCohort(lowGroup, others, now)
     ) {
       const cohortShare = lowGroup.length / sortedCandidates.length;
       const desiredLow = Math.round(cohortShare * 4);
       const minLowNeeded = Math.max(0, 4 - others.length);
-      const lowQuota = Math.min(2, Math.max(1, minLowNeeded, desiredLow));
+      const minimumLowQuota =
+        lowGroup.length === 1 && others.length >= 4 ? 0 : 1;
+      const lowQuota = Math.min(
+        2,
+        Math.max(minimumLowQuota, minLowNeeded, desiredLow)
+      );
       const otherQuota = 4 - lowQuota;
 
       if (others.length >= otherQuota) {
