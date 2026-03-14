@@ -185,7 +185,7 @@ describe("selectMatchPlayers (Match Rate Logic)", () => {
     expect(selectedIds).not.toContain("B");
   });
 
-  it("should prevent a mini-bubble for a small rejoin cohort", () => {
+  it("should let an underplayed returner cohort re-enter through normal fairness ordering", () => {
     const t0 = Date.now();
     
     // 4 rejoiners with 0 matches
@@ -208,15 +208,13 @@ describe("selectMatchPlayers (Match Rate Logic)", () => {
 
     const selected = selectMatchPlayers([...lowCohort, ...others]);
     
-    // In a 4/16 cohort split, select only 1 low player to avoid low-low bubbling.
-    const lowInSelection = selected!.filter(p => p.userId.startsWith("low_"));
-    expect(lowInSelection.length).toBe(1);
-    
-    const othersInSelection = selected!.filter(p => p.userId.startsWith("other_"));
-    expect(othersInSelection.length).toBe(3);
+    const selectedIds = selected!.map((player) => player.userId);
+    lowCohort.forEach((player) => {
+      expect(selectedIds).toContain(player.userId);
+    });
   });
 
-  it("should still select 2 from lowest cohort when others are scarce", () => {
+  it("should still pick the most underplayed players when others are scarce", () => {
     const t0 = Date.now();
 
     const lowCohort: PlayerCandidate[] = Array.from({ length: 4 }, (_, i) => ({
@@ -236,14 +234,14 @@ describe("selectMatchPlayers (Match Rate Logic)", () => {
     }));
 
     const selected = selectMatchPlayers([...lowCohort, ...others]);
-    const lowInSelection = selected!.filter((p) => p.userId.startsWith("low_"));
-    const othersInSelection = selected!.filter((p) => p.userId.startsWith("other_"));
+    const selectedIds = selected!.map((player) => player.userId);
 
-    expect(lowInSelection.length).toBe(2);
-    expect(othersInSelection.length).toBe(2);
+    lowCohort.forEach((player) => {
+      expect(selectedIds).toContain(player.userId);
+    });
   });
 
-  it("should not treat a normal underplayed cohort as a rejoin bubble", () => {
+  it("should prefer the entire lowest match-count cohort before moving up", () => {
     const t0 = Date.now();
 
     const lowCohort: PlayerCandidate[] = Array.from({ length: 4 }, (_, i) => ({
