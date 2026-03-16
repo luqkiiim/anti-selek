@@ -82,6 +82,71 @@ test("admin can create and undo a manual match on an open court", async ({
   await expect(page.getByRole("button", { name: "Manual" })).toBeVisible();
 });
 
+test("admin can add a community player into an active session", async ({
+  page,
+}) => {
+  await signInAsAdmin(page);
+  const sessionCode = await createStartedHostSession(page, {
+    sessionName: "E2E Late Join Session",
+    selectedPlayerNames: ["Host Player 1", "Host Player 2", "Host Player 3"],
+  });
+
+  await page.getByRole("button", { name: "Add Players" }).click();
+  const rosterModal = page
+    .locator("div.fixed.inset-0")
+    .filter({ has: page.getByPlaceholder("Search players...") });
+  await expect(rosterModal.getByRole("heading", { name: "Add Players" })).toBeVisible();
+  await rosterModal.getByPlaceholder("Search players...").fill("Host Player 4");
+  await expect(rosterModal.getByText("Host Player 4")).toBeVisible();
+  await rosterModal.locator("button.bg-blue-600").click();
+
+  await expect
+    .poll(async () => {
+      const snapshot = await readSessionSnapshot(page, sessionCode);
+      return {
+        totalPlayers: snapshot.players.length,
+        addedPlayerPresent: snapshot.players.some(
+          (player) => player.user.name === "Host Player 4" && !player.isGuest
+        ),
+      };
+    })
+    .toEqual({
+      totalPlayers: 5,
+      addedPlayerPresent: true,
+    });
+});
+
+test("admin can add a guest into an active session", async ({ page }) => {
+  await signInAsAdmin(page);
+  const sessionCode = await createStartedHostSession(page, {
+    sessionName: "E2E Guest Join Session",
+    selectedPlayerNames: ["Host Player 1", "Host Player 2", "Host Player 3"],
+  });
+
+  await page.getByRole("button", { name: "Add Players" }).click();
+  const rosterModal = page
+    .locator("div.fixed.inset-0")
+    .filter({ has: page.getByPlaceholder("Guest name...") });
+  await expect(rosterModal.getByRole("heading", { name: "Add Players" })).toBeVisible();
+  await rosterModal.getByPlaceholder("Guest name...").fill("Late Guest");
+  await rosterModal.getByRole("button", { name: "Add" }).first().click();
+
+  await expect
+    .poll(async () => {
+      const snapshot = await readSessionSnapshot(page, sessionCode);
+      return {
+        totalPlayers: snapshot.players.length,
+        guestPresent: snapshot.players.some(
+          (player) => player.user.name === "Late Guest" && player.isGuest
+        ),
+      };
+    })
+    .toEqual({
+      totalPlayers: 5,
+      guestPresent: true,
+    });
+});
+
 test("admin can submit and approve a pending score", async ({ page }) => {
   await signInAsAdmin(page);
   await page.goto(`/session/${scoreSessionCode}`);

@@ -12,6 +12,10 @@ export const scoreSessionCode = "session-score-e2e";
 interface SessionPlayerSnapshot {
   userId: string;
   sessionPoints: number;
+  isGuest: boolean;
+  user: {
+    name: string;
+  };
 }
 
 interface SessionMatchSnapshot {
@@ -46,9 +50,11 @@ export async function createStartedHostSession(
   {
     sessionName,
     courtCount = 1,
+    selectedPlayerNames,
   }: {
     sessionName: string;
     courtCount?: number;
+    selectedPlayerNames?: string[];
   }
 ) {
   await page.goto(`/community/${hostCommunityId}`);
@@ -61,10 +67,23 @@ export async function createStartedHostSession(
   await page.locator("select").selectOption(String(courtCount));
 
   await page.getByRole("button", { name: "Add Players" }).click();
-  await expect(page.getByRole("heading", { name: "Add Players" })).toBeVisible();
-  await page.getByRole("button", { name: "Select All" }).click();
-  await expect(page.getByRole("button", { name: "Deselect All" })).toBeVisible();
-  await page.getByRole("button", { name: "Done" }).click();
+  const playersModal = page
+    .locator("div.fixed.inset-0")
+    .filter({ has: page.getByRole("heading", { name: "Add Players" }) });
+  await expect(playersModal.getByRole("heading", { name: "Add Players" })).toBeVisible();
+
+  if (selectedPlayerNames && selectedPlayerNames.length > 0) {
+    for (const playerName of selectedPlayerNames) {
+      await playersModal
+        .getByRole("button", { name: new RegExp(`^${escapeRegex(playerName)}\\s`) })
+        .click();
+    }
+  } else {
+    await playersModal.getByRole("button", { name: "Select All" }).click();
+    await expect(playersModal.getByRole("button", { name: "Deselect All" })).toBeVisible();
+  }
+
+  await playersModal.getByRole("button", { name: "Done" }).click();
 
   await page.getByRole("button", { name: "Create Tournament" }).click();
   await expect(page).toHaveURL(/\/session\/.+/);
@@ -107,4 +126,8 @@ export async function readCurrentMatchSignature(page: Page, code: string) {
     currentMatch.team2User1.name,
     currentMatch.team2User2.name,
   ].join("|");
+}
+
+function escapeRegex(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
