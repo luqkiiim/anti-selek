@@ -76,6 +76,7 @@ Open `http://localhost:3000`.
 ## Scripts
 
 - `npm run dev` - dev server
+- `npm run db:migrate:turso` - apply pending SQL migrations to Turso
 - `npm run build` - production build
 - `npm run start` - production server
 - `npm run lint` - ESLint
@@ -174,7 +175,9 @@ Additional constraints:
 - Set `AUTH_SECRET`, `ADMIN_EMAILS`, `TURSO_DATABASE_URL`, and `TURSO_AUTH_TOKEN` in production
 - The app uses Turso when the Turso environment variables are present
 - Prisma migrations still target the local SQLite datasource from `DATABASE_URL`
-- For Turso schema updates, apply SQL migrations to Turso separately
+- For Turso schema updates, SQL migrations are applied to Turso separately
+- `npm run build` auto-applies pending Turso SQL migrations only on Vercel builds
+- You can also apply them manually with `npm run db:migrate:turso`
 
 ## Safety Notes
 

@@ -4,7 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "node scripts/apply-turso-migrations.mjs && next build",
+    "db:migrate:turso": "node scripts/apply-turso-migrations.mjs --force",
     "start": "next start",
     "lint": "eslint",
     "test": "vitest run --pool=threads src",
