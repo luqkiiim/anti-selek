@@ -1,0 +1,146 @@
+"use client";
+
+import { useState } from "react";
+import { applyGeneratedMatches, applyUndoneCourtMatch } from "./sessionDataMutations";
+import { postGenerateMatchAction } from "./sessionCourtActionApi";
+import type {
+  CourtActionDraft,
+  UseSessionMatchActionsDependencies,
+} from "./sessionMatchActionTypes";
+
+export function useSessionCourtConfirmActions({
+  code,
+  sessionData,
+  safeJson,
+  patchSessionData,
+  scheduleSessionRefresh,
+  setError,
+}: UseSessionMatchActionsDependencies) {
+  const [reshufflingCourtId, setReshufflingCourtId] = useState<string | null>(
+    null
+  );
+  const [undoingCourtId, setUndoingCourtId] = useState<string | null>(null);
+  const [courtActionDraft, setCourtActionDraft] =
+    useState<CourtActionDraft | null>(null);
+
+  const openCourtActionDraft = (
+    courtId: string,
+    action: CourtActionDraft["action"]
+  ) => {
+    const court = sessionData?.courts.find((candidate) => candidate.id === courtId);
+    if (!court?.currentMatch) return;
+
+    setError("");
+    setCourtActionDraft({
+      action,
+      courtId,
+      courtNumber: court.courtNumber,
+      team1Names: [
+        court.currentMatch.team1User1.name,
+        court.currentMatch.team1User2.name,
+      ],
+      team2Names: [
+        court.currentMatch.team2User1.name,
+        court.currentMatch.team2User2.name,
+      ],
+    });
+  };
+
+  const closeCourtActionDraft = () => {
+    if (
+      courtActionDraft?.action === "undo" &&
+      undoingCourtId === courtActionDraft.courtId
+    ) {
+      return;
+    }
+
+    if (
+      courtActionDraft?.action === "reshuffle" &&
+      reshufflingCourtId === courtActionDraft.courtId
+    ) {
+      return;
+    }
+
+    setCourtActionDraft(null);
+  };
+
+  const reshuffleMatch = (courtId: string) => {
+    openCourtActionDraft(courtId, "reshuffle");
+  };
+
+  const undoMatchSelection = (courtId: string) => {
+    openCourtActionDraft(courtId, "undo");
+  };
+
+  const confirmCourtAction = async () => {
+    if (!courtActionDraft) return;
+
+    if (courtActionDraft.action === "reshuffle") {
+      setReshufflingCourtId(courtActionDraft.courtId);
+      setError("");
+      try {
+        const { res, data } = await postGenerateMatchAction({
+          code,
+          safeJson,
+          body: {
+            courtId: courtActionDraft.courtId,
+            forceReshuffle: true,
+          },
+        });
+
+        if (res.ok) {
+          patchSessionData((current) => applyGeneratedMatches(current, [data]));
+          setCourtActionDraft(null);
+          scheduleSessionRefresh();
+        } else {
+          setError(data.error || "Failed to reshuffle match");
+        }
+      } catch (err) {
+        console.error(err);
+        setError("Network error reshuffling match");
+      } finally {
+        setReshufflingCourtId(null);
+      }
+
+      return;
+    }
+
+    setUndoingCourtId(courtActionDraft.courtId);
+    setError("");
+    try {
+      const { res, data } = await postGenerateMatchAction({
+        code,
+        safeJson,
+        body: {
+          courtId: courtActionDraft.courtId,
+          undoCurrentMatch: true,
+        },
+      });
+
+      if (res.ok) {
+        patchSessionData((current) =>
+          applyUndoneCourtMatch(current, courtActionDraft.courtId)
+        );
+        setCourtActionDraft(null);
+        scheduleSessionRefresh();
+      } else {
+        setError(data.error || "Failed to undo match");
+      }
+    } catch (err) {
+      console.error(err);
+      setError("Network error undoing match");
+    } finally {
+      setUndoingCourtId(null);
+    }
+  };
+
+  return {
+    reshufflingCourtId,
+    undoingCourtId,
+    courtActionDraft,
+    closeCourtActionDraft,
+    reshuffleMatch,
+    undoMatchSelection,
+    confirmCourtAction,
+  };
+}
