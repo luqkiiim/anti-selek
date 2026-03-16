@@ -12,6 +12,7 @@ import { SessionRosterModal } from "@/components/session/SessionRosterModal";
 import { LiveStandingsTable } from "@/components/session/LiveStandingsTable";
 import { SessionPodium } from "@/components/session/SessionPodium";
 import { ScoreSubmissionModal } from "@/components/session/ScoreSubmissionModal";
+import { SessionActionConfirmModal } from "@/components/session/SessionActionConfirmModal";
 import type {
   CommunityUser,
   CurrentUser,
@@ -52,6 +53,12 @@ export default function SessionPage() {
   const [addingGuest, setAddingGuest] = useState(false);
   const [savingPreferencesFor, setSavingPreferencesFor] = useState<string | null>(null);
   const [removingPlayerId, setRemovingPlayerId] = useState<string | null>(null);
+  const [endingSession, setEndingSession] = useState(false);
+  const [showEndSessionConfirm, setShowEndSessionConfirm] = useState(false);
+  const [removePlayerDraft, setRemovePlayerDraft] = useState<{
+    userId: string;
+    playerName: string;
+  } | null>(null);
   const [openPreferenceEditor, setOpenPreferenceEditor] =
     useState<PreferenceEditorState | null>(null);
 
@@ -253,21 +260,47 @@ export default function SessionPage() {
     }
   };
 
+  const openEndSessionConfirm = () => {
+    setError("");
+    setShowEndSessionConfirm(true);
+  };
+
+  const closeEndSessionConfirm = () => {
+    if (endingSession) return;
+    setShowEndSessionConfirm(false);
+  };
+
   const endSession = async () => {
-    if (!confirm("End this session now? This will close all courts and finalize standings.")) {
-      return;
-    }
+    setEndingSession(true);
+    setError("");
     try {
       const res = await fetch(`/api/sessions/${code}/end`, { method: "POST" });
       if (res.ok) {
-        fetchSession();
+        setShowEndSessionConfirm(false);
+        await fetchSession();
       } else {
         const data = await safeJson(res);
         setError(data.error || "Failed to end session");
       }
     } catch (err) {
       console.error(err);
+      setError("Failed to end session");
+    } finally {
+      setEndingSession(false);
     }
+  };
+
+  const requestRemovePlayerFromSession = (userId: string, playerName: string) => {
+    setOpenPreferenceEditor(null);
+    setError("");
+    setRemovePlayerDraft({ userId, playerName });
+  };
+
+  const closeRemovePlayerConfirm = () => {
+    if (removePlayerDraft && removingPlayerId === removePlayerDraft.userId) {
+      return;
+    }
+    setRemovePlayerDraft(null);
   };
 
   const togglePausePlayer = async (userId: string, currentPaused: boolean) => {
@@ -288,15 +321,12 @@ export default function SessionPage() {
     }
   };
 
-  const removePlayerFromSession = async (userId: string, playerName: string) => {
-    if (!confirm(`Remove ${playerName} from this session?`)) {
-      return;
-    }
+  const removePlayerFromSession = async () => {
+    if (!removePlayerDraft) return;
 
-    setRemovingPlayerId(userId);
-    setOpenPreferenceEditor(null);
+    setRemovingPlayerId(removePlayerDraft.userId);
     try {
-      const res = await fetch(`/api/sessions/${code}/players/${userId}`, {
+      const res = await fetch(`/api/sessions/${code}/players/${removePlayerDraft.userId}`, {
         method: "DELETE",
       });
       const data = await safeJson(res);
@@ -304,7 +334,8 @@ export default function SessionPage() {
         setError(data.error || "Failed to remove player");
         return;
       }
-      fetchSession();
+      setRemovePlayerDraft(null);
+      await fetchSession();
     } catch (err) {
       console.error(err);
       setError("Failed to remove player");
@@ -604,7 +635,7 @@ export default function SessionPage() {
           canOpenRoster={isAdmin && !isCompletedSession}
           onStartSession={startSession}
           onOpenRoster={openRosterModal}
-          onEndSession={endSession}
+          onEndSession={openEndSessionConfirm}
           onOpenMatchHistory={() => router.push(`/session/${code}/history`)}
         />
 
@@ -668,6 +699,56 @@ export default function SessionPage() {
         />
       ) : null}
 
+      {showEndSessionConfirm ? (
+        <SessionActionConfirmModal
+          title="End session?"
+          subtitle="This will close the live session and lock in the final standings."
+          details={
+            <div className="app-panel-muted space-y-2 p-4">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">
+                Session summary
+              </p>
+              <p className="text-sm font-semibold text-gray-900">
+                {activeMatchesCount} active courts
+              </p>
+              <p className="text-sm text-gray-600">
+                {completedMatchesCount} recorded matches will remain in history.
+              </p>
+            </div>
+          }
+          confirmLabel="Confirm End Session"
+          cancelLabel="Keep Session Live"
+          isSubmitting={endingSession}
+          onClose={closeEndSessionConfirm}
+          onConfirm={() => void endSession()}
+        />
+      ) : null}
+
+      {removePlayerDraft ? (
+        <SessionActionConfirmModal
+          title="Remove player?"
+          subtitle="This will remove the player from the current session roster."
+          details={
+            <div className="app-panel-muted space-y-2 p-4">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">
+                Player
+              </p>
+              <p className="text-sm font-semibold text-gray-900">
+                {removePlayerDraft.playerName}
+              </p>
+              <p className="text-sm text-gray-600">
+                If this player already has protected match history, the server may block removal.
+              </p>
+            </div>
+          }
+          confirmLabel="Confirm Remove Player"
+          cancelLabel="Keep Player"
+          isSubmitting={removingPlayerId === removePlayerDraft.userId}
+          onClose={closeRemovePlayerConfirm}
+          onConfirm={() => void removePlayerFromSession()}
+        />
+      ) : null}
+
       <SessionPreferenceEditorPortal
         openPreferenceEditor={openPreferenceEditor}
         activePreferencePlayer={activePreferencePlayer}
@@ -677,7 +758,7 @@ export default function SessionPage() {
         removingPlayerId={removingPlayerId}
         onClose={() => setOpenPreferenceEditor(null)}
         onUpdatePreference={updatePlayerPreference}
-        onRemovePlayer={removePlayerFromSession}
+        onRemovePlayer={requestRemovePlayerFromSession}
       />
 
       <SessionRosterModal

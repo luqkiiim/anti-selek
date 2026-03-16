@@ -1,7 +1,9 @@
 import path from "node:path";
 
 export const e2eBaseURL = process.env.E2E_BASE_URL ?? "http://127.0.0.1:3005";
-export const e2eDatabaseFile = path.join(process.cwd(), "prisma", "e2e.db");
+const e2eDatabasePath =
+  process.env.E2E_DATABASE_FILE ?? path.join("prisma", "e2e.db");
+export const e2eDatabaseFile = path.resolve(process.cwd(), e2eDatabasePath);
 export const e2eDatabaseUrl = `file:${e2eDatabaseFile.replace(/\\/g, "/")}`;
 
 const rawEnv = {

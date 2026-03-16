@@ -277,6 +277,46 @@ test("admin can add a guest into an active session", async ({ page }) => {
     });
 });
 
+test("admin can confirm removing a player from an active session", async ({
+  page,
+}) => {
+  await signInAsAdmin(page);
+  const sessionCode = await createStartedHostSession(page, {
+    sessionName: "E2E Remove Player Session",
+    selectedPlayerNames: ["Host Player 1", "Host Player 2", "Host Player 3"],
+  });
+
+  const playerRow = page
+    .locator("tr")
+    .filter({ has: page.getByRole("link", { name: "Host Player 3" }) });
+  await playerRow.getByRole("button", { name: "Edit" }).click();
+  const removePlayerButton = page.getByRole("button", { name: "Remove Player" });
+  await expect(removePlayerButton).toBeVisible();
+  await removePlayerButton.click({ force: true });
+
+  const removePlayerModal = page
+    .locator(".app-modal-frame")
+    .filter({ has: page.getByRole("heading", { name: "Remove player?" }) });
+  await expect(removePlayerModal.getByRole("heading", { name: "Remove player?" })).toBeVisible();
+  await expect(removePlayerModal.getByText("Host Player 3")).toBeVisible();
+  await removePlayerModal.getByRole("button", { name: "Confirm Remove Player" }).click();
+
+  await expect
+    .poll(async () => {
+      const snapshot = await readSessionSnapshot(page, sessionCode);
+      return {
+        totalPlayers: snapshot.players.length,
+        playerStillPresent: snapshot.players.some(
+          (player) => player.user.name === "Host Player 3"
+        ),
+      };
+    })
+    .toEqual({
+      totalPlayers: 3,
+      playerStillPresent: false,
+    });
+});
+
 test("admin can end and rollback the latest completed tournament", async ({
   page,
 }) => {
@@ -310,10 +350,9 @@ test("admin can end and rollback the latest completed tournament", async ({
     })
     .toBe(true);
 
-  page.once("dialog", async (dialog) => {
-    await dialog.accept();
-  });
   await page.getByRole("button", { name: "End Session" }).click();
+  await expect(page.getByRole("heading", { name: "End session?" })).toBeVisible();
+  await page.getByRole("button", { name: "Confirm End Session" }).click();
   await expect(page.getByRole("heading", { name: "Final Standings" })).toBeVisible();
   await expect(page.getByText("Completed session")).toBeVisible();
 
