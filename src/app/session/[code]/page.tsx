@@ -18,11 +18,18 @@ import type {
   CurrentUser,
   Player,
   PreferenceEditorState,
-  SessionData,
 } from "@/components/session/sessionTypes";
 import { getSessionModeLabel, getSessionTypeLabel } from "@/lib/sessionModeLabels";
 import { compareSessionStandings } from "@/lib/sessionStandings";
 import { useSessionMatchActions } from "./useSessionMatchActions";
+import { useSessionData } from "./useSessionData";
+import {
+  applyGuestAdded,
+  applyPlayerPaused,
+  applyPlayerPreferenceUpdate,
+  applyPlayerRemoval,
+  mergeSessionSnapshot,
+} from "./sessionDataMutations";
 import {
   MatchStatus,
   PartnerPreference,
@@ -37,7 +44,6 @@ export default function SessionPage() {
   const params = useParams();
   const code = params?.code as string;
 
-  const [sessionData, setSessionData] = useState<SessionData | null>(null);
   const [user, setUser] = useState<CurrentUser | null>(null);
   const [error, setError] = useState("");
   
@@ -111,22 +117,6 @@ export default function SessionPage() {
     }
   }, []);
 
-  const fetchSession = useCallback(async () => {
-    if (!code) return;
-    try {
-      const res = await fetch(`/api/sessions/${code}`);
-      const data = await safeJson(res);
-      if (!res.ok) {
-        setError(data.error || "Failed to load session");
-        return;
-      }
-      setSessionData(data);
-    } catch (err) {
-      console.error(err);
-      setError("Failed to load session");
-    }
-  }, [code, safeJson]);
-
   const fetchUser = useCallback(async () => {
     try {
       const res = await fetch("/api/user/me");
@@ -140,6 +130,17 @@ export default function SessionPage() {
       console.error(err);
     }
   }, [safeJson]);
+
+  const {
+    sessionData,
+    patchSessionData,
+    scheduleSessionRefresh,
+  } = useSessionData({
+    code,
+    enabled: !!session?.user?.id,
+    safeJson,
+    setError,
+  });
 
   const {
     matchScores,
@@ -168,7 +169,8 @@ export default function SessionPage() {
     code,
     sessionData,
     safeJson,
-    fetchSession,
+    patchSessionData,
+    scheduleSessionRefresh,
     setError,
   });
 
@@ -239,18 +241,17 @@ export default function SessionPage() {
 
   useEffect(() => {
     if (session?.user?.id && code) {
-      fetchUser();
-      fetchSession();
-      const interval = setInterval(fetchSession, 3000);
-      return () => clearInterval(interval);
+      void fetchUser();
     }
-  }, [session, code, fetchSession, fetchUser]);
+  }, [session, code, fetchUser]);
 
   const startSession = async () => {
     try {
       const res = await fetch(`/api/sessions/${code}/start`, { method: "POST" });
       if (res.ok) {
-        fetchSession();
+        const data = await safeJson(res);
+        patchSessionData((current) => mergeSessionSnapshot(current, data));
+        scheduleSessionRefresh();
       } else {
         const data = await safeJson(res);
         setError(data.error || "Failed to start session");
@@ -276,8 +277,10 @@ export default function SessionPage() {
     try {
       const res = await fetch(`/api/sessions/${code}/end`, { method: "POST" });
       if (res.ok) {
+        const data = await safeJson(res);
         setShowEndSessionConfirm(false);
-        await fetchSession();
+        patchSessionData((current) => mergeSessionSnapshot(current, data));
+        scheduleSessionRefresh();
       } else {
         const data = await safeJson(res);
         setError(data.error || "Failed to end session");
@@ -311,7 +314,10 @@ export default function SessionPage() {
         body: JSON.stringify({ userId, isPaused: !currentPaused }),
       });
       if (res.ok) {
-        fetchSession();
+        patchSessionData((current) =>
+          applyPlayerPaused(current, userId, !currentPaused)
+        );
+        scheduleSessionRefresh();
       } else {
         const data = await safeJson(res);
         setError(data.error || "Failed to update player status");
@@ -335,7 +341,10 @@ export default function SessionPage() {
         return;
       }
       setRemovePlayerDraft(null);
-      await fetchSession();
+      patchSessionData((current) =>
+        applyPlayerRemoval(current, removePlayerDraft.userId)
+      );
+      scheduleSessionRefresh();
     } catch (err) {
       console.error(err);
       setError("Failed to remove player");
@@ -354,7 +363,9 @@ export default function SessionPage() {
       });
 
       if (adminRes.ok) {
-        fetchSession();
+        const data = await safeJson(adminRes);
+        patchSessionData((current) => mergeSessionSnapshot(current, data));
+        scheduleSessionRefresh();
       } else {
         const data = await safeJson(adminRes);
         setError(data.error || "Failed to add player");
@@ -403,7 +414,8 @@ export default function SessionPage() {
       setGuestGender(PlayerGender.MALE);
       setGuestPreference(PartnerPreference.OPEN);
       setGuestInitialElo(1000);
-      fetchSession();
+      patchSessionData((current) => applyGuestAdded(current, data));
+      scheduleSessionRefresh();
     } catch (err) {
       console.error(err);
       setError("Failed to add guest");
@@ -433,7 +445,8 @@ export default function SessionPage() {
         setError(data.error || "Failed to update preference");
         return;
       }
-      fetchSession();
+      patchSessionData((current) => applyPlayerPreferenceUpdate(current, data));
+      scheduleSessionRefresh();
     } catch (err) {
       console.error(err);
       setError("Failed to update preference");

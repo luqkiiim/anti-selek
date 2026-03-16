@@ -1,6 +1,13 @@
 "use client";
 
 import { useState } from "react";
+import {
+  applyGeneratedMatches,
+  applyScoreApproval,
+  applyScoreReopen,
+  applyScoreSubmission,
+  applyUndoneCourtMatch,
+} from "./sessionDataMutations";
 import type {
   ManualMatchFormState,
   ManualMatchSlot,
@@ -9,12 +16,14 @@ import type {
   ScoreSubmissionDraft,
   SessionData,
 } from "@/components/session/sessionTypes";
+import { MatchStatus } from "@/types/enums";
 
 interface UseSessionMatchActionsArgs {
   code: string;
   sessionData: SessionData | null;
   safeJson: (res: Response) => Promise<any>;
-  fetchSession: () => Promise<void> | void;
+  patchSessionData: (updater: (current: SessionData) => SessionData) => void;
+  scheduleSessionRefresh: (delay?: number) => void;
   setError: (message: string) => void;
 }
 
@@ -31,7 +40,8 @@ export function useSessionMatchActions({
   code,
   sessionData,
   safeJson,
-  fetchSession,
+  patchSessionData,
+  scheduleSessionRefresh,
   setError,
 }: UseSessionMatchActionsArgs) {
   const [matchScores, setMatchScores] = useState<MatchScores>(emptyMatchScores);
@@ -46,10 +56,6 @@ export function useSessionMatchActions({
   const [manualMatchForm, setManualMatchForm] =
     useState<ManualMatchFormState>(emptyManualMatchForm);
 
-  const refreshSession = async () => {
-    await Promise.resolve(fetchSession());
-  };
-
   const createMatchesForCourts = async (courtIds: string[]) => {
     if (courtIds.length === 0) return;
 
@@ -63,10 +69,12 @@ export function useSessionMatchActions({
           courtIds.length === 1 ? { courtId: courtIds[0] } : { courtIds }
         ),
       });
+      const data = await safeJson(res);
       if (res.ok) {
-        await refreshSession();
+        const matches = Array.isArray(data.matches) ? data.matches : [data];
+        patchSessionData((current) => applyGeneratedMatches(current, matches));
+        scheduleSessionRefresh();
       } else {
-        const data = await safeJson(res);
         setError(data.error || "Failed to create matches");
       }
     } catch (err) {
@@ -127,7 +135,8 @@ export function useSessionMatchActions({
       }
 
       closeManualMatchModal();
-      await refreshSession();
+      patchSessionData((current) => applyGeneratedMatches(current, [data]));
+      scheduleSessionRefresh();
     } catch (err) {
       console.error(err);
       setError("Network error creating manual match");
@@ -150,10 +159,11 @@ export function useSessionMatchActions({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ courtId, forceReshuffle: true }),
       });
+      const data = await safeJson(res);
       if (res.ok) {
-        await refreshSession();
+        patchSessionData((current) => applyGeneratedMatches(current, [data]));
+        scheduleSessionRefresh();
       } else {
-        const data = await safeJson(res);
         setError(data.error || "Failed to reshuffle match");
       }
     } catch (err) {
@@ -178,10 +188,11 @@ export function useSessionMatchActions({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ courtId, undoCurrentMatch: true }),
       });
+      const data = await safeJson(res);
       if (res.ok) {
-        await refreshSession();
+        patchSessionData((current) => applyUndoneCourtMatch(current, courtId));
+        scheduleSessionRefresh();
       } else {
-        const data = await safeJson(res);
         setError(data.error || "Failed to undo match");
       }
     } catch (err) {
@@ -246,6 +257,7 @@ export function useSessionMatchActions({
           team2Score: draft.team2Score,
         }),
       });
+      const data = await safeJson(res);
       if (res.ok) {
         setMatchScores((prev) => {
           const nextScores = { ...prev };
@@ -253,9 +265,13 @@ export function useSessionMatchActions({
           return nextScores;
         });
         setScoreSubmissionDraft(null);
-        await refreshSession();
+        patchSessionData((current) =>
+          data.status === MatchStatus.COMPLETED
+            ? applyScoreApproval(current, data)
+            : applyScoreSubmission(current, data)
+        );
+        scheduleSessionRefresh();
       } else {
-        const data = await safeJson(res);
         setError(data.error || "Failed to submit score");
         setScoreSubmissionDraft(null);
       }
@@ -282,10 +298,11 @@ export function useSessionMatchActions({
           team2Score: overrideTeam2,
         }),
       });
+      const data = await safeJson(res);
       if (res.ok) {
-        await refreshSession();
+        patchSessionData((current) => applyScoreApproval(current, data));
+        scheduleSessionRefresh();
       } else {
-        const data = await safeJson(res);
         setError(data.error || "Failed to approve score");
       }
     } catch (err) {
@@ -300,15 +317,16 @@ export function useSessionMatchActions({
       const res = await fetch(`/api/matches/${matchId}/reopen`, {
         method: "POST",
       });
+      const data = await safeJson(res);
       if (res.ok) {
         setMatchScores((prev) => {
           const nextScores = { ...prev };
           delete nextScores[matchId];
           return nextScores;
         });
-        await refreshSession();
+        patchSessionData((current) => applyScoreReopen(current, data));
+        scheduleSessionRefresh();
       } else {
-        const data = await safeJson(res);
         setError(data.error || "Failed to reopen score entry");
       }
     } catch (err) {
