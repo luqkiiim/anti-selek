@@ -2,11 +2,16 @@ import { expect, test } from "@playwright/test";
 
 import {
   adminUserId,
+  createManualMatchWithPlayers,
   createStartedHostSession,
+  hostCommunityId,
+  readCommunityMembersSnapshot,
+  readCommunitySessionsSnapshot,
   readCurrentMatchSignature,
   readSessionSnapshot,
   scoreSessionCode,
   signInAsAdmin,
+  submitAndApproveVisibleMatch,
 } from "./helpers";
 
 test("admin can host a tournament and reshuffle the first live court", async ({
@@ -46,22 +51,12 @@ test("admin can create and undo a manual match on an open court", async ({
     sessionName: "E2E Manual Session",
   });
 
-  await expect(page.getByRole("button", { name: "Manual" })).toBeVisible();
-  await page.getByRole("button", { name: "Manual" }).click();
-
-  const manualModal = page
-    .locator("div.fixed.inset-0")
-    .filter({ has: page.getByRole("heading", { name: "Manual Match" }) });
-  await expect(manualModal.getByRole("heading", { name: "Manual Match" })).toBeVisible();
-
-  const selects = manualModal.locator("select");
-  await selects.nth(0).selectOption({ label: "Admin E2E (1000)" });
-  await selects.nth(1).selectOption({ label: "Host Player 1 (1000)" });
-  await selects.nth(2).selectOption({ label: "Host Player 2 (1000)" });
-  await selects.nth(3).selectOption({ label: "Host Player 3 (1000)" });
-  await manualModal.getByRole("button", { name: "Create Match" }).click();
-
-  await expect(manualModal).toHaveCount(0);
+  await createManualMatchWithPlayers(page, [
+    "Admin E2E (1000)",
+    "Host Player 1 (1000)",
+    "Host Player 2 (1000)",
+    "Host Player 3 (1000)",
+  ]);
   await expect
     .poll(() => readCurrentMatchSignature(page, sessionCode), {
       message: "expected the manual lineup to appear on the court",
@@ -147,24 +142,86 @@ test("admin can add a guest into an active session", async ({ page }) => {
     });
 });
 
+test("admin can end and rollback the latest completed tournament", async ({
+  page,
+}) => {
+  await signInAsAdmin(page);
+  const sessionName = "E2E Rollback Session";
+  const sessionCode = await createStartedHostSession(page, {
+    sessionName,
+  });
+
+  await createManualMatchWithPlayers(page, [
+    "Admin E2E (1000)",
+    "Host Player 1 (1000)",
+    "Host Player 2 (1000)",
+    "Host Player 3 (1000)",
+  ]);
+  await expect
+    .poll(() => readCurrentMatchSignature(page, sessionCode), {
+      message: "expected a live match before submitting a result",
+    })
+    .not.toBe("");
+
+  await submitAndApproveVisibleMatch(page, {
+    team1Score: 21,
+    team2Score: 18,
+  });
+
+  await expect
+    .poll(async () => {
+      const snapshot = await readCommunityMembersSnapshot(page, hostCommunityId);
+      return snapshot.some((member) => member.elo !== 1000);
+    })
+    .toBe(true);
+
+  page.once("dialog", async (dialog) => {
+    await dialog.accept();
+  });
+  await page.getByRole("button", { name: "End Session" }).click();
+  await expect(page.getByRole("heading", { name: "Final Standings" })).toBeVisible();
+  await expect(page.getByText("Completed session")).toBeVisible();
+
+  await page.getByRole("button", { name: "Back" }).click();
+  await expect(page).toHaveURL(new RegExp(`/community/${hostCommunityId}$`));
+  await page.getByRole("button", { name: "Tournaments" }).click();
+  await expect(page.getByText(sessionName)).toBeVisible();
+
+  page.once("dialog", async (dialog) => {
+    await dialog.accept();
+  });
+  await page.getByRole("button", { name: "Rollback" }).click();
+
+  await expect(page.getByText(`Rolled back "${sessionName}".`)).toBeVisible();
+  await expect(page.getByText("No past tournaments")).toBeVisible();
+
+  await expect
+    .poll(async () => {
+      const [members, sessions] = await Promise.all([
+        readCommunityMembersSnapshot(page, hostCommunityId),
+        readCommunitySessionsSnapshot(page, hostCommunityId),
+      ]);
+
+      return {
+        allRatingsReset: members.every((member) => member.elo === 1000),
+        sessionRemoved: !sessions.some((session) => session.code === sessionCode),
+      };
+    })
+    .toEqual({
+      allRatingsReset: true,
+      sessionRemoved: true,
+    });
+});
+
 test("admin can submit and approve a pending score", async ({ page }) => {
   await signInAsAdmin(page);
   await page.goto(`/session/${scoreSessionCode}`);
 
   await expect(page.getByText("Court 1")).toBeVisible();
-
-  const scoreInputs = page.locator('input[type="number"]');
-  await expect(scoreInputs).toHaveCount(2);
-  await scoreInputs.nth(0).fill("21");
-  await scoreInputs.nth(1).fill("18");
-  await page.getByRole("button", { name: "Submit Score" }).click();
-
-  await expect(
-    page.getByRole("heading", { name: "Confirm score submission" })
-  ).toBeVisible();
-  await page.getByRole("button", { name: "Confirm Submission" }).click();
-  await expect(page.getByText("Awaiting Confirmation")).toBeVisible();
-  await page.getByRole("button", { name: "Confirm Results" }).click();
+  await submitAndApproveVisibleMatch(page, {
+    team1Score: 21,
+    team2Score: 18,
+  });
 
   await expect
     .poll(async () => {

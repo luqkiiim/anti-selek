@@ -22,6 +22,18 @@ interface SessionMatchSnapshot {
   status: string;
 }
 
+interface CommunityMemberSnapshot {
+  id: string;
+  name: string;
+  elo: number;
+}
+
+interface CommunitySessionSnapshot {
+  code: string;
+  name: string;
+  status: string;
+}
+
 interface SessionCourtSnapshot {
   currentMatch: null | {
     team1User1: { name: string };
@@ -36,6 +48,9 @@ export interface SessionSnapshot {
   matches?: SessionMatchSnapshot[];
   courts: SessionCourtSnapshot[];
 }
+
+export type CommunityMembersSnapshot = CommunityMemberSnapshot[];
+export type CommunitySessionsSnapshot = CommunitySessionSnapshot[];
 
 export async function signInAsAdmin(page: Page) {
   await page.goto("/signin");
@@ -111,6 +126,32 @@ export async function readSessionSnapshot(
   }, code);
 }
 
+export async function readCommunityMembersSnapshot(
+  page: Page,
+  communityId: string
+): Promise<CommunityMembersSnapshot> {
+  return page.evaluate(async (targetCommunityId) => {
+    const res = await fetch(`/api/communities/${targetCommunityId}/members`);
+    if (!res.ok) {
+      throw new Error(`Failed to load community members ${targetCommunityId}: ${res.status}`);
+    }
+    return res.json();
+  }, communityId);
+}
+
+export async function readCommunitySessionsSnapshot(
+  page: Page,
+  communityId: string
+): Promise<CommunitySessionsSnapshot> {
+  return page.evaluate(async (targetCommunityId) => {
+    const res = await fetch(`/api/sessions?communityId=${encodeURIComponent(targetCommunityId)}`);
+    if (!res.ok) {
+      throw new Error(`Failed to load community sessions ${targetCommunityId}: ${res.status}`);
+    }
+    return res.json();
+  }, communityId);
+}
+
 export async function readCurrentMatchSignature(page: Page, code: string) {
   const snapshot = await readSessionSnapshot(page, code);
   const currentMatch = snapshot.courts.find((court) => court.currentMatch)?.currentMatch;
@@ -126,6 +167,51 @@ export async function readCurrentMatchSignature(page: Page, code: string) {
     currentMatch.team2User1.name,
     currentMatch.team2User2.name,
   ].join("|");
+}
+
+export async function submitAndApproveVisibleMatch(
+  page: Page,
+  {
+    team1Score,
+    team2Score,
+  }: {
+    team1Score: number;
+    team2Score: number;
+  }
+) {
+  const scoreInputs = page.locator('input[type="number"]');
+  await expect(scoreInputs).toHaveCount(2);
+  await scoreInputs.nth(0).fill(String(team1Score));
+  await scoreInputs.nth(1).fill(String(team2Score));
+  await page.getByRole("button", { name: "Submit Score" }).click();
+
+  await expect(
+    page.getByRole("heading", { name: "Confirm score submission" })
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Confirm Submission" }).click();
+  await expect(page.getByText("Awaiting Confirmation")).toBeVisible();
+  await page.getByRole("button", { name: "Confirm Results" }).click();
+}
+
+export async function createManualMatchWithPlayers(
+  page: Page,
+  playerLabels: [string, string, string, string]
+) {
+  await expect(page.getByRole("button", { name: "Manual" })).toBeVisible();
+  await page.getByRole("button", { name: "Manual" }).click();
+
+  const manualModal = page
+    .locator("div.fixed.inset-0")
+    .filter({ has: page.getByRole("heading", { name: "Manual Match" }) });
+  await expect(manualModal.getByRole("heading", { name: "Manual Match" })).toBeVisible();
+
+  const selects = manualModal.locator("select");
+  for (const [index, label] of playerLabels.entries()) {
+    await selects.nth(index).selectOption({ label });
+  }
+
+  await manualModal.getByRole("button", { name: "Create Match" }).click();
+  await expect(manualModal).toHaveCount(0);
 }
 
 function escapeRegex(value: string) {
