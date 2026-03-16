@@ -105,6 +105,7 @@ model SessionPlayer {
 
   // Persisted matchmaking state
   matchesPlayed  Int      @default(0)
+  matchmakingMatchesCredit Int @default(0)
   availableSince DateTime @default(now())
   lastPlayedAt   DateTime?
   pausedAt       DateTime?

@@ -45,6 +45,7 @@ import {
   ensureEnoughPlayers,
   GenerateMatchError,
   getRequestedOpenCourts,
+  getRankedCandidates,
   parseGenerateMatchRequest,
   parseManualTeams,
   selectBatchMatches,
@@ -66,6 +67,7 @@ function createSessionPlayer(
     elo?: number;
     lastPartnerId?: string | null;
     matchesPlayed?: number;
+    matchmakingMatchesCredit?: number;
     joinedAt?: Date;
     availableSince?: Date;
     inactiveSeconds?: number;
@@ -80,6 +82,7 @@ function createSessionPlayer(
     partnerPreference: options.partnerPreference ?? PartnerPreference.OPEN,
     lastPartnerId: options.lastPartnerId ?? null,
     matchesPlayed: options.matchesPlayed ?? 0,
+    matchmakingMatchesCredit: options.matchmakingMatchesCredit ?? 0,
     joinedAt: options.joinedAt ?? new Date("2026-01-01T00:00:00Z"),
     availableSince: options.availableSince ?? new Date("2026-01-01T00:00:00Z"),
     inactiveSeconds: options.inactiveSeconds ?? 0,
@@ -418,6 +421,48 @@ describe("generate match service", () => {
           400,
           "Not enough players available (need 8, have 7)"
         )
+      );
+    });
+  });
+
+  describe("getRankedCandidates", () => {
+    it("uses matchmaking credit when ranking resumed players", () => {
+      const now = new Date("2026-01-01T00:00:00Z");
+      const players = [
+        createSessionPlayer("resumed", {
+          matchesPlayed: 0,
+          matchmakingMatchesCredit: 5,
+          availableSince: now,
+        }),
+        createSessionPlayer("A", {
+          matchesPlayed: 5,
+          availableSince: new Date("2025-12-31T23:50:00Z"),
+        }),
+        createSessionPlayer("B", {
+          matchesPlayed: 5,
+          availableSince: new Date("2025-12-31T23:49:00Z"),
+        }),
+        createSessionPlayer("C", {
+          matchesPlayed: 5,
+          availableSince: new Date("2025-12-31T23:48:00Z"),
+        }),
+        createSessionPlayer("D", {
+          matchesPlayed: 5,
+          availableSince: new Date("2025-12-31T23:47:00Z"),
+        }),
+      ];
+
+      const { availableCandidates, rankedCandidates } = getRankedCandidates(
+        createSessionData({ players }),
+        new Set()
+      );
+
+      expect(
+        availableCandidates.find((candidate) => candidate.userId === "resumed")
+          ?.matchesPlayed
+      ).toBe(5);
+      expect(rankedCandidates.slice(0, 4).map((candidate) => candidate.userId)).not.toContain(
+        "resumed"
       );
     });
   });

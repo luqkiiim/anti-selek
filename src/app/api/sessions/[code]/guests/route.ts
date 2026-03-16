@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
+import { calculateNoCatchUpMatchmakingCredit } from "@/lib/matchmaking/matchmakingCredit";
 import { prisma } from "@/lib/prisma";
 import { getSessionModeLabel } from "@/lib/sessionModeLabels";
 import {
@@ -115,6 +116,26 @@ export async function POST(
     }
 
     const guestName = name.trim();
+    const activePlayers =
+      sessionData.status === SessionStatus.ACTIVE
+        ? await prisma.sessionPlayer.findMany({
+            where: {
+              sessionId: sessionData.id,
+              isPaused: false,
+            },
+            select: {
+              matchesPlayed: true,
+              matchmakingMatchesCredit: true,
+            },
+          })
+        : [];
+    const matchmakingMatchesCredit =
+      sessionData.status === SessionStatus.ACTIVE
+        ? calculateNoCatchUpMatchmakingCredit({
+            player: { matchesPlayed: 0, matchmakingMatchesCredit: 0 },
+            activePlayers,
+          })
+        : 0;
 
     const createdGuest = await prisma.$transaction(async (tx) => {
       const user = await tx.user.create({
@@ -144,6 +165,7 @@ export async function POST(
           gender: user.gender,
           partnerPreference: user.partnerPreference,
           sessionPoints: 0,
+          matchmakingMatchesCredit,
           joinedAt: new Date(),
           availableSince: new Date(),
         },

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
+import { calculateNoCatchUpMatchmakingCredit } from "@/lib/matchmaking/matchmakingCredit";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
@@ -59,7 +60,12 @@ export async function POST(
           userId,
         },
       },
-      select: { pausedAt: true, inactiveSeconds: true },
+      select: {
+        pausedAt: true,
+        inactiveSeconds: true,
+        matchesPlayed: true,
+        matchmakingMatchesCredit: true,
+      },
     });
 
     if (!existingPlayer) {
@@ -67,10 +73,29 @@ export async function POST(
     }
 
     let inactiveSecondsToIncrement = 0;
+    let nextMatchmakingMatchesCredit =
+      existingPlayer.matchmakingMatchesCredit;
     if (!isPaused && existingPlayer.pausedAt) {
       // Transitioning from Paused to Unpaused
       const durationMs = Date.now() - existingPlayer.pausedAt.getTime();
       inactiveSecondsToIncrement = Math.floor(durationMs / 1000);
+
+      const activePlayers = await prisma.sessionPlayer.findMany({
+        where: {
+          sessionId: sessionData.id,
+          userId: { not: userId },
+          isPaused: false,
+        },
+        select: {
+          matchesPlayed: true,
+          matchmakingMatchesCredit: true,
+        },
+      });
+
+      nextMatchmakingMatchesCredit = calculateNoCatchUpMatchmakingCredit({
+        player: existingPlayer,
+        activePlayers,
+      });
     }
 
     const updated = await prisma.sessionPlayer.update({
@@ -85,6 +110,7 @@ export async function POST(
         pausedAt: isPaused ? new Date() : null,
         availableSince: isPaused ? undefined : new Date(), 
         inactiveSeconds: { increment: inactiveSecondsToIncrement },
+        matchmakingMatchesCredit: nextMatchmakingMatchesCredit,
       },
     });
 

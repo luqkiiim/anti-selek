@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
+import { calculateNoCatchUpMatchmakingCredit } from "@/lib/matchmaking/matchmakingCredit";
 import { prisma } from "@/lib/prisma";
 import { getCommunityEloByUserId, withCommunityElo } from "@/lib/communityElo";
 import { PartnerPreference, PlayerGender, SessionMode, SessionStatus } from "@/types/enums";
@@ -138,6 +139,18 @@ export async function POST(
           ? defaultPartnerPreferenceForGender(sessionGender)
           : ((userProfile.partnerPreference as PartnerPreference | undefined) ??
             defaultPartnerPreferenceForGender(sessionGender));
+    const matchmakingMatchesCredit =
+      sessionData.status === SessionStatus.ACTIVE
+        ? calculateNoCatchUpMatchmakingCredit({
+            player: { matchesPlayed: 0, matchmakingMatchesCredit: 0 },
+            activePlayers: sessionData.players
+              .filter((player) => !player.isPaused)
+              .map((player) => ({
+                matchesPlayed: player.matchesPlayed,
+                matchmakingMatchesCredit: player.matchmakingMatchesCredit,
+              })),
+          })
+        : 0;
 
     const updatedSession = await prisma.session.update({
       where: { id: sessionData.id },
@@ -149,6 +162,7 @@ export async function POST(
             gender: sessionGender,
             partnerPreference: sessionPartnerPreference,
             sessionPoints: 0,
+            matchmakingMatchesCredit,
             joinedAt: new Date(),
             availableSince: new Date(),
           },

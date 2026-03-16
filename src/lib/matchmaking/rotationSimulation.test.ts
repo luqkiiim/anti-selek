@@ -3,6 +3,10 @@ import { describe, expect, it } from "vitest";
 import { SessionMode, SessionType } from "../../types/enums";
 import { rankPlayersByFairness } from "./fairness";
 import {
+  calculateNoCatchUpMatchmakingCredit,
+  getEffectiveMatchesPlayed,
+} from "./matchmakingCredit";
+import {
   buildRotationHistory,
   getPartitionRepeatStats,
   scorePartitionDetailed,
@@ -13,6 +17,7 @@ import { findBestAutoMatchSelection } from "./autoMatch";
 
 type SimPlayer = PartitionCandidate & {
   matchesPlayed: number;
+  matchmakingMatchesCredit: number;
   availableSince: Date;
   joinedAt: Date;
   inactiveSeconds: number;
@@ -68,7 +73,7 @@ function chooseMatch(
   const rankedCandidates = rankPlayersByFairness(
     players.map((player) => ({
       userId: player.userId,
-      matchesPlayed: player.matchesPlayed,
+      matchesPlayed: getEffectiveMatchesPlayed(player),
       availableSince: player.availableSince,
       joinedAt: player.joinedAt,
       inactiveSeconds: player.inactiveSeconds,
@@ -151,6 +156,7 @@ function runSimulation({
     gender: "MALE",
     partnerPreference: "OPEN",
     matchesPlayed: 0,
+    matchmakingMatchesCredit: 0,
     availableSince: sessionStart,
     joinedAt: sessionStart,
     inactiveSeconds: 0,
@@ -187,6 +193,12 @@ function runSimulation({
         player.inactiveSeconds += Math.floor((now - (player.pausedAtMs ?? now)) / 1000);
         player.pausedAtMs = null;
         player.availableSince = new Date(now);
+        player.matchmakingMatchesCredit = calculateNoCatchUpMatchmakingCredit({
+          player,
+          activePlayers: players.filter(
+            (candidate) => candidate.userId !== player.userId && !candidate.isPaused
+          ),
+        });
       }
     }
 
@@ -295,6 +307,7 @@ function runOutcomeDrivenSimulation({
     gender: "MALE",
     partnerPreference: "OPEN",
     matchesPlayed: 0,
+    matchmakingMatchesCredit: 0,
     availableSince: sessionStart,
     joinedAt: sessionStart,
     inactiveSeconds: 0,
@@ -468,8 +481,40 @@ describe("rotation simulation", () => {
             (sum, activeUserId) => sum + result.countsByUserId[activeUserId],
             0
           ) / alwaysActivePlayers.length
-      )
+        )
     ).toBe(true);
+  });
+
+  it("keeps a resumed player from getting catch-up priority after a long pause in a 7-player, 1-court rotation", () => {
+    const result = runSimulation({
+      playerElos: [1000, 1000, 1000, 1000, 1000, 1000, 1000],
+      rounds: 24,
+      courts: 1,
+      pauseWindows: [{ userId: "P1", startRound: 0, endRound: 8 }],
+      snapshotRounds: [8, 12, 16, 20],
+    });
+
+    const getGapToAverage = (round: number) => {
+      const counts = result.snapshots[round];
+      const resumedMatches = counts.P1;
+      const activeAverage =
+        (counts.P2 + counts.P3 + counts.P4 + counts.P5 + counts.P6 + counts.P7) /
+        6;
+
+      return activeAverage - resumedMatches;
+    };
+
+    const gapAtResume = getGapToAverage(8);
+    const gapAfter4Rounds = getGapToAverage(12);
+    const gapAfter8Rounds = getGapToAverage(16);
+    const gapAfter12Rounds = getGapToAverage(20);
+
+    expect(gapAtResume).toBeGreaterThanOrEqual(5);
+    expect(gapAtResume).toBeLessThanOrEqual(6);
+    expect(gapAfter4Rounds).toBeGreaterThanOrEqual(4);
+    expect(gapAfter8Rounds).toBeGreaterThanOrEqual(4);
+    expect(gapAfter12Rounds).toBeGreaterThanOrEqual(4);
+    expect(result.spread).toBeGreaterThanOrEqual(4);
   });
 
   it("keeps Elo gaps tight for 13 players across 2 courts", () => {
