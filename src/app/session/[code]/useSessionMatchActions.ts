@@ -27,6 +27,14 @@ interface UseSessionMatchActionsArgs {
   setError: (message: string) => void;
 }
 
+interface CourtActionDraft {
+  action: "reshuffle" | "undo";
+  courtId: string;
+  courtNumber: number;
+  team1Names: [string, string];
+  team2Names: [string, string];
+}
+
 const emptyManualMatchForm = (): ManualMatchFormState => ({
   team1User1Id: "",
   team1User2Id: "",
@@ -49,7 +57,10 @@ export function useSessionMatchActions({
   const [scoreSubmissionDraft, setScoreSubmissionDraft] =
     useState<ScoreSubmissionDraft | null>(null);
   const [reopeningMatchId, setReopeningMatchId] = useState<string | null>(null);
+  const [reshufflingCourtId, setReshufflingCourtId] = useState<string | null>(null);
   const [undoingCourtId, setUndoingCourtId] = useState<string | null>(null);
+  const [courtActionDraft, setCourtActionDraft] =
+    useState<CourtActionDraft | null>(null);
   const [creatingOpenMatches, setCreatingOpenMatches] = useState(false);
   const [manualCourtId, setManualCourtId] = useState<string | null>(null);
   const [creatingManualMatch, setCreatingManualMatch] = useState(false);
@@ -145,52 +156,105 @@ export function useSessionMatchActions({
     }
   };
 
-  const reshuffleMatch = async (courtId: string) => {
-    if (
-      !confirm(
-        "Are you sure you want to reshuffle? This will delete the current match and pick new players."
-      )
-    ) {
-      return;
-    }
-    try {
-      const res = await fetch(`/api/sessions/${code}/generate-match`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ courtId, forceReshuffle: true }),
-      });
-      const data = await safeJson(res);
-      if (res.ok) {
-        patchSessionData((current) => applyGeneratedMatches(current, [data]));
-        scheduleSessionRefresh();
-      } else {
-        setError(data.error || "Failed to reshuffle match");
-      }
-    } catch (err) {
-      console.error(err);
-      setError("Network error reshuffling match");
-    }
+  const openCourtActionDraft = (
+    courtId: string,
+    action: CourtActionDraft["action"]
+  ) => {
+    const court = sessionData?.courts.find((candidate) => candidate.id === courtId);
+    if (!court?.currentMatch) return;
+
+    setError("");
+    setCourtActionDraft({
+      action,
+      courtId,
+      courtNumber: court.courtNumber,
+      team1Names: [
+        court.currentMatch.team1User1.name,
+        court.currentMatch.team1User2.name,
+      ],
+      team2Names: [
+        court.currentMatch.team2User1.name,
+        court.currentMatch.team2User2.name,
+      ],
+    });
   };
 
-  const undoMatchSelection = async (courtId: string) => {
+  const closeCourtActionDraft = () => {
     if (
-      !confirm(
-        "Undo this match selection? The 4 selected players will return to the pool."
-      )
+      courtActionDraft?.action === "undo" &&
+      undoingCourtId === courtActionDraft.courtId
     ) {
       return;
     }
-    setUndoingCourtId(courtId);
+
+    if (
+      courtActionDraft?.action === "reshuffle" &&
+      reshufflingCourtId === courtActionDraft.courtId
+    ) {
+      return;
+    }
+
+    setCourtActionDraft(null);
+  };
+
+  const reshuffleMatch = (courtId: string) => {
+    openCourtActionDraft(courtId, "reshuffle");
+  };
+
+  const undoMatchSelection = (courtId: string) => {
+    openCourtActionDraft(courtId, "undo");
+  };
+
+  const confirmCourtAction = async () => {
+    if (!courtActionDraft) return;
+
+    if (courtActionDraft.action === "reshuffle") {
+      setReshufflingCourtId(courtActionDraft.courtId);
+      setError("");
+      try {
+        const res = await fetch(`/api/sessions/${code}/generate-match`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            courtId: courtActionDraft.courtId,
+            forceReshuffle: true,
+          }),
+        });
+        const data = await safeJson(res);
+        if (res.ok) {
+          patchSessionData((current) => applyGeneratedMatches(current, [data]));
+          setCourtActionDraft(null);
+          scheduleSessionRefresh();
+        } else {
+          setError(data.error || "Failed to reshuffle match");
+        }
+      } catch (err) {
+        console.error(err);
+        setError("Network error reshuffling match");
+      } finally {
+        setReshufflingCourtId(null);
+      }
+
+      return;
+    }
+
+    setUndoingCourtId(courtActionDraft.courtId);
     setError("");
     try {
       const res = await fetch(`/api/sessions/${code}/generate-match`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ courtId, undoCurrentMatch: true }),
+        body: JSON.stringify({
+          courtId: courtActionDraft.courtId,
+          undoCurrentMatch: true,
+        }),
       });
       const data = await safeJson(res);
       if (res.ok) {
-        patchSessionData((current) => applyUndoneCourtMatch(current, courtId));
+        patchSessionData((current) =>
+          applyUndoneCourtMatch(current, courtActionDraft.courtId)
+        );
+        setCourtActionDraft(null);
         scheduleSessionRefresh();
       } else {
         setError(data.error || "Failed to undo match");
@@ -342,7 +406,9 @@ export function useSessionMatchActions({
     submittingMatchId,
     scoreSubmissionDraft,
     reopeningMatchId,
+    reshufflingCourtId,
     undoingCourtId,
+    courtActionDraft,
     creatingOpenMatches,
     manualCourtId,
     creatingManualMatch,
@@ -354,6 +420,8 @@ export function useSessionMatchActions({
     createManualMatch,
     reshuffleMatch,
     undoMatchSelection,
+    closeCourtActionDraft,
+    confirmCourtAction,
     handleScoreChange,
     openScoreSubmissionDraft,
     closeScoreSubmissionDraft,

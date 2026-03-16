@@ -16,6 +16,7 @@ interface LiveCourtsPanelProps {
   creatableOpenCourtCount: number;
   creatableOpenCourtIds: string[];
   creatingOpenMatches: boolean;
+  reshufflingCourtId: string | null;
   undoingCourtId: string | null;
   reopeningMatchId: string | null;
   submittingMatchId: string | null;
@@ -45,6 +46,7 @@ export function LiveCourtsPanel({
   creatableOpenCourtCount,
   creatableOpenCourtIds,
   creatingOpenMatches,
+  reshufflingCourtId,
   undoingCourtId,
   reopeningMatchId,
   submittingMatchId,
@@ -149,10 +151,11 @@ export function LiveCourtsPanel({
                     isAdmin ? (
                       <button
                         onClick={() => onReshuffleMatch(court.id)}
-                        className="flex items-center gap-1 rounded-lg bg-gray-100 px-2.5 py-1.5 text-[10px] font-black uppercase tracking-wider text-gray-600 transition-all active:scale-95"
+                        disabled={reshufflingCourtId === court.id}
+                        className="flex items-center gap-1 rounded-lg bg-gray-100 px-2.5 py-1.5 text-[10px] font-black uppercase tracking-wider text-gray-600 transition-all active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
                         title="Pick different players"
                       >
-                        Reshuffle
+                        {reshufflingCourtId === court.id ? "Reshuffling..." : "Reshuffle"}
                       </button>
                     ) : null}
                     {currentMatch &&

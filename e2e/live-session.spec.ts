@@ -33,10 +33,12 @@ test("admin can host a tournament and reshuffle the first live court", async ({
     .not.toBe("");
 
   const firstLineup = await readCurrentMatchSignature(page, sessionCode);
-  page.once("dialog", async (dialog) => {
-    await dialog.accept();
-  });
   await page.getByRole("button", { name: "Reshuffle" }).click();
+  const reshuffleModal = page
+    .locator(".app-modal-frame")
+    .filter({ has: page.getByRole("heading", { name: "Reshuffle match?" }) });
+  await expect(reshuffleModal.getByRole("heading", { name: "Reshuffle match?" })).toBeVisible();
+  await reshuffleModal.getByRole("button", { name: "Confirm Reshuffle" }).click();
 
   await expect
     .poll(() => readCurrentMatchSignature(page, sessionCode), {
@@ -65,10 +67,12 @@ test("admin can create and undo a manual match on an open court", async ({
     })
     .toBe("Admin E2E|Host Player 1|vs|Host Player 2|Host Player 3");
 
-  page.once("dialog", async (dialog) => {
-    await dialog.accept();
-  });
   await page.getByRole("button", { name: "Undo" }).click();
+  const undoModal = page
+    .locator(".app-modal-frame")
+    .filter({ has: page.getByRole("heading", { name: "Undo match selection?" }) });
+  await expect(undoModal.getByRole("heading", { name: "Undo match selection?" })).toBeVisible();
+  await undoModal.getByRole("button", { name: "Confirm Undo" }).click();
 
   await expect
     .poll(async () => {
@@ -189,10 +193,12 @@ test("admin can create and reshuffle valid Mixicano pairings", async ({
 
   const firstLineup = await readCurrentMatchSignature(page, sessionCode);
   expect(firstLineup).not.toBe("");
-  page.once("dialog", async (dialog) => {
-    await dialog.accept();
-  });
   await page.getByRole("button", { name: "Reshuffle" }).click();
+  const reshuffleModal = page
+    .locator(".app-modal-frame")
+    .filter({ has: page.getByRole("heading", { name: "Reshuffle match?" }) });
+  await expect(reshuffleModal.getByRole("heading", { name: "Reshuffle match?" })).toBeVisible();
+  await reshuffleModal.getByRole("button", { name: "Confirm Reshuffle" }).click();
 
   await expect
     .poll(async () => {

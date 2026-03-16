@@ -147,7 +147,9 @@ export default function SessionPage() {
     submittingMatchId,
     scoreSubmissionDraft,
     reopeningMatchId,
+    reshufflingCourtId,
     undoingCourtId,
+    courtActionDraft,
     creatingOpenMatches,
     manualCourtId,
     creatingManualMatch,
@@ -159,6 +161,8 @@ export default function SessionPage() {
     createManualMatch,
     reshuffleMatch,
     undoMatchSelection,
+    closeCourtActionDraft,
+    confirmCourtAction,
     handleScoreChange,
     openScoreSubmissionDraft,
     closeScoreSubmissionDraft,
@@ -666,6 +670,7 @@ export default function SessionPage() {
             creatableOpenCourtCount={creatableOpenCourtCount}
             creatableOpenCourtIds={creatableOpenCourtIds}
             creatingOpenMatches={creatingOpenMatches}
+            reshufflingCourtId={reshufflingCourtId}
             undoingCourtId={undoingCourtId}
             reopeningMatchId={reopeningMatchId}
             submittingMatchId={submittingMatchId}
@@ -709,6 +714,52 @@ export default function SessionPage() {
           isSubmitting={submittingMatchId === scoreSubmissionDraft.matchId}
           onClose={closeScoreSubmissionDraft}
           onConfirm={() => void submitScore(scoreSubmissionDraft)}
+        />
+      ) : null}
+
+      {courtActionDraft ? (
+        <SessionActionConfirmModal
+          title={
+            courtActionDraft.action === "reshuffle"
+              ? "Reshuffle match?"
+              : "Undo match selection?"
+          }
+          subtitle={
+            courtActionDraft.action === "reshuffle"
+              ? `This will replace the current lineup on Court ${courtActionDraft.courtNumber} with a new one.`
+              : `This will clear Court ${courtActionDraft.courtNumber} and return these players to the pool.`
+          }
+          details={
+            <div className="space-y-4">
+              <div className="app-panel-muted space-y-2 p-4">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">
+                  Court {courtActionDraft.courtNumber}
+                </p>
+                <p className="text-sm font-semibold text-gray-900">
+                  {courtActionDraft.team1Names[0]} &amp; {courtActionDraft.team1Names[1]}
+                </p>
+                <p className="text-xs font-black uppercase tracking-[0.25em] text-gray-400">
+                  vs
+                </p>
+                <p className="text-sm font-semibold text-gray-900">
+                  {courtActionDraft.team2Names[0]} &amp; {courtActionDraft.team2Names[1]}
+                </p>
+              </div>
+            </div>
+          }
+          confirmLabel={
+            courtActionDraft.action === "reshuffle"
+              ? "Confirm Reshuffle"
+              : "Confirm Undo"
+          }
+          cancelLabel="Keep Match"
+          isSubmitting={
+            courtActionDraft.action === "reshuffle"
+              ? reshufflingCourtId === courtActionDraft.courtId
+              : undoingCourtId === courtActionDraft.courtId
+          }
+          onClose={closeCourtActionDraft}
+          onConfirm={() => void confirmCourtAction()}
         />
       ) : null}
 
