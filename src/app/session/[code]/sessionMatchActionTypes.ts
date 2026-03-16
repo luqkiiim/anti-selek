@@ -1,0 +1,20 @@
+"use client";
+
+import type { SessionData } from "@/components/session/sessionTypes";
+
+export interface UseSessionMatchActionsDependencies {
+  code: string;
+  sessionData: SessionData | null;
+  safeJson: (res: Response) => Promise<any>;
+  patchSessionData: (updater: (current: SessionData) => SessionData) => void;
+  scheduleSessionRefresh: (delay?: number) => void;
+  setError: (message: string) => void;
+}
+
+export interface CourtActionDraft {
+  action: "reshuffle" | "undo";
+  courtId: string;
+  courtNumber: number;
+  team1Names: [string, string];
+  team2Names: [string, string];
+}
