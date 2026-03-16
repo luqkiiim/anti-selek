@@ -168,4 +168,45 @@ describe("findBestBatchAutoMatchSelection", () => {
       selectedIds.every((id) => rankedCandidates.slice(0, 12).some((candidate) => candidate.userId === id))
     ).toBe(true);
   });
+
+  it("splits a repeated same-court pair across courts when an equal-quality alternative exists", () => {
+    const rankedCandidates = createRankedCandidates(
+      Array.from({ length: 12 }, (_, index) => ({
+        id: `P${index + 1}`,
+        matchesPlayed: 5,
+      }))
+    );
+    const playersById = createPlayers(
+      Array.from({ length: 12 }, (_, index) => ({
+        id: `P${index + 1}`,
+        rating: 1000,
+      }))
+    );
+    const rotationHistory = buildRotationHistory([
+      {
+        team1User1Id: "P1",
+        team1User2Id: "P2",
+        team2User1Id: "P3",
+        team2User2Id: "P4",
+      },
+    ]);
+
+    const batchSelection = findBestBatchAutoMatchSelection(
+      rankedCandidates,
+      playersById,
+      SessionMode.MEXICANO,
+      SessionType.ELO,
+      rotationHistory,
+      3
+    );
+
+    expect(batchSelection).not.toBeNull();
+
+    const sharedCourt = batchSelection!.selections.find(
+      (selection) =>
+        selection.ids.includes("P1") && selection.ids.includes("P2")
+    );
+
+    expect(sharedCourt).toBeUndefined();
+  });
 });

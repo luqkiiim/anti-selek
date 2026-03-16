@@ -11,6 +11,10 @@ const RECENT_HISTORY_LIMIT = 24;
 const RECENT_HISTORY_DECAY = 0.85;
 const EXACT_PARTITION_HISTORY_LIMIT = 8;
 const EXACT_PARTITION_REPEAT_PENALTY = 4;
+const COURTMATE_REPEAT_PENALTY = 1;
+const PARTNER_REPEAT_PENALTY = 2;
+const OPPONENT_REPEAT_PENALTY = 1;
+const POD_REPEAT_PENALTY = 3;
 const ELO_EXACT_PARTITION_BALANCE_TOLERANCE = 10;
 const POINTS_EXACT_PARTITION_BALANCE_TOLERANCE = 1.5;
 
@@ -41,6 +45,7 @@ export interface PartitionCandidate {
 }
 
 export interface RotationHistory {
+  courtmateCounts: Map<string, number>;
   partnerCounts: Map<string, number>;
   opponentCounts: Map<string, number>;
   podCounts: Map<string, number>;
@@ -51,6 +56,7 @@ export interface PartitionEvaluation {
   partition: DoublesPartition;
   score: number;
   pointDiffGap: number;
+  rotationPenalty: number;
   exactPartitionPenalty: number;
 }
 
@@ -59,6 +65,11 @@ export interface PartitionScoreDetails {
   teamBalanceGap: number;
   pointDiffGap: number;
   balanceScore: number;
+  courtmateRepeatPenalty: number;
+  partnerRepeatPenalty: number;
+  opponentRepeatPenalty: number;
+  podRepeatPenalty: number;
+  rotationPenalty: number;
   exactPartitionPenalty: number;
 }
 
@@ -72,8 +83,10 @@ export interface FallbackQuartetSelection {
   ids: [string, string, string, string];
   partition: DoublesPartition;
   fairnessScore: number;
+  randomScore: number;
   score: number;
   pointDiffGap: number;
+  rotationPenalty: number;
   exactPartitionPenalty: number;
 }
 
@@ -116,6 +129,95 @@ function normalizeScore(rawScore: number, normalizer: number) {
   return Math.min(rawScore / normalizer, 3);
 }
 
+function getPartnerRepeatPenalty(
+  partition: DoublesPartition,
+  rotationHistory: RotationHistory
+) {
+  return (
+    ((rotationHistory.partnerCounts.get(
+      pairKey(partition.team1[0], partition.team1[1])
+    ) ?? 0) +
+      (rotationHistory.partnerCounts.get(
+        pairKey(partition.team2[0], partition.team2[1])
+      ) ?? 0)) *
+    PARTNER_REPEAT_PENALTY
+  );
+}
+
+function getCourtmateRepeatPenalty(
+  partition: DoublesPartition,
+  rotationHistory: RotationHistory
+) {
+  const courtPairs: [string, string][] = [
+    [partition.team1[0], partition.team1[1]],
+    [partition.team2[0], partition.team2[1]],
+    [partition.team1[0], partition.team2[0]],
+    [partition.team1[0], partition.team2[1]],
+    [partition.team1[1], partition.team2[0]],
+    [partition.team1[1], partition.team2[1]],
+  ];
+
+  return (
+    courtPairs.reduce(
+      (total, [playerA, playerB]) =>
+        total + (rotationHistory.courtmateCounts.get(pairKey(playerA, playerB)) ?? 0),
+      0
+    ) * COURTMATE_REPEAT_PENALTY
+  );
+}
+
+function getOpponentRepeatPenalty(
+  partition: DoublesPartition,
+  rotationHistory: RotationHistory
+) {
+  const opponentPairs: [string, string][] = [
+    [partition.team1[0], partition.team2[0]],
+    [partition.team1[0], partition.team2[1]],
+    [partition.team1[1], partition.team2[0]],
+    [partition.team1[1], partition.team2[1]],
+  ];
+
+  return (
+    opponentPairs.reduce(
+      (total, [playerA, playerB]) =>
+        total + (rotationHistory.opponentCounts.get(pairKey(playerA, playerB)) ?? 0),
+      0
+    ) * OPPONENT_REPEAT_PENALTY
+  );
+}
+
+function getPodRepeatPenalty(
+  partition: DoublesPartition,
+  rotationHistory: RotationHistory
+) {
+  return (
+    (rotationHistory.podCounts.get(
+      podKey([
+        partition.team1[0],
+        partition.team1[1],
+        partition.team2[0],
+        partition.team2[1],
+      ])
+    ) ?? 0) * POD_REPEAT_PENALTY
+  );
+}
+
+function getQuartetRandomScore<T extends { userId: string }>(
+  candidates: T[],
+  ids: [string, string, string, string]
+) {
+  const randomByUserId = new Map(
+    candidates.map((candidate) => [
+      candidate.userId,
+      typeof (candidate as T & { _random?: number })._random === "number"
+        ? (candidate as T & { _random: number })._random
+        : 0,
+    ])
+  );
+
+  return ids.reduce((sum, id) => sum + (randomByUserId.get(id) ?? 0), 0);
+}
+
 function getBalanceGapNormalizer(sessionType: SessionType) {
   return sessionType === SessionType.POINTS
     ? POINTS_BALANCE_GAP_NORMALIZER
@@ -131,11 +233,11 @@ function getExactPartitionBalanceTolerance(sessionType: SessionType) {
 function comparePartitionScoreDetails(
   left: Pick<
     PartitionScoreDetails,
-    "teamBalanceGap" | "pointDiffGap" | "exactPartitionPenalty"
+    "teamBalanceGap" | "pointDiffGap" | "rotationPenalty" | "exactPartitionPenalty"
   >,
   right: Pick<
     PartitionScoreDetails,
-    "teamBalanceGap" | "pointDiffGap" | "exactPartitionPenalty"
+    "teamBalanceGap" | "pointDiffGap" | "rotationPenalty" | "exactPartitionPenalty"
   >,
   sessionType: SessionType
 ) {
@@ -150,6 +252,10 @@ function comparePartitionScoreDetails(
     left.pointDiffGap !== right.pointDiffGap
   ) {
     return left.pointDiffGap - right.pointDiffGap;
+  }
+
+  if (left.rotationPenalty !== right.rotationPenalty) {
+    return left.rotationPenalty - right.rotationPenalty;
   }
 
   if (left.exactPartitionPenalty !== right.exactPartitionPenalty) {
@@ -242,6 +348,7 @@ export function getDoublesPartitions(playerIds: string[]): DoublesPartition[] {
 export function buildRotationHistory(
   matches: MatchHistoryEntry[]
 ): RotationHistory {
+  const courtmateCounts = new Map<string, number>();
   const partnerCounts = new Map<string, number>();
   const opponentCounts = new Map<string, number>();
   const podCounts = new Map<string, number>();
@@ -259,6 +366,17 @@ export function buildRotationHistory(
     );
     const team1 = [match.team1User1Id, match.team1User2Id] as const;
     const team2 = [match.team2User1Id, match.team2User2Id] as const;
+    const podPlayers = [...team1, ...team2];
+
+    for (let left = 0; left < podPlayers.length - 1; left++) {
+      for (let right = left + 1; right < podPlayers.length; right++) {
+        incrementCounter(
+          courtmateCounts,
+          pairKey(podPlayers[left], podPlayers[right]),
+          recencyWeight
+        );
+      }
+    }
 
     incrementCounter(partnerCounts, pairKey(team1[0], team1[1]), recencyWeight);
     incrementCounter(partnerCounts, pairKey(team2[0], team2[1]), recencyWeight);
@@ -273,7 +391,7 @@ export function buildRotationHistory(
       }
     }
 
-    incrementCounter(podCounts, podKey([...team1, ...team2]), recencyWeight);
+    incrementCounter(podCounts, podKey(podPlayers), recencyWeight);
   }
 
   for (const [index, match] of recentExactPartitionMatches.entries()) {
@@ -291,7 +409,13 @@ export function buildRotationHistory(
     );
   }
 
-  return { partnerCounts, opponentCounts, podCounts, exactPartitionCounts };
+  return {
+    courtmateCounts,
+    partnerCounts,
+    opponentCounts,
+    podCounts,
+    exactPartitionCounts,
+  };
 }
 
 export function getPartitionRepeatStats(
@@ -389,6 +513,21 @@ export function scorePartitionDetailed(
     teamBalanceGap,
     getBalanceGapNormalizer(sessionType)
   );
+  const courtmateRepeatPenalty = getCourtmateRepeatPenalty(
+    partition,
+    rotationHistory
+  );
+  const partnerRepeatPenalty = getPartnerRepeatPenalty(partition, rotationHistory);
+  const opponentRepeatPenalty = getOpponentRepeatPenalty(
+    partition,
+    rotationHistory
+  );
+  const podRepeatPenalty = getPodRepeatPenalty(partition, rotationHistory);
+  const rotationPenalty =
+    courtmateRepeatPenalty +
+    partnerRepeatPenalty +
+    opponentRepeatPenalty +
+    podRepeatPenalty;
   const exactPartitionPenalty =
     (rotationHistory.exactPartitionCounts.get(getPartitionKey(partition)) ?? 0) *
     EXACT_PARTITION_REPEAT_PENALTY;
@@ -398,6 +537,11 @@ export function scorePartitionDetailed(
     teamBalanceGap,
     pointDiffGap,
     balanceScore,
+    courtmateRepeatPenalty,
+    partnerRepeatPenalty,
+    opponentRepeatPenalty,
+    podRepeatPenalty,
+    rotationPenalty,
     exactPartitionPenalty,
   };
 }
@@ -466,6 +610,7 @@ export function evaluateBestPartition(
         partition: bestPartition,
         score: bestScore.teamBalanceGap,
         pointDiffGap: bestScore.pointDiffGap,
+        rotationPenalty: bestScore.rotationPenalty,
         exactPartitionPenalty: bestScore.exactPartitionPenalty,
       }
     : null;
@@ -547,6 +692,7 @@ export function findBestQuartetInFairnessWindow<T extends { userId: string }>(
             (sum, id) => sum + (rankByUserId.get(id) ?? fallbackPool.length),
             0
           );
+          const randomScore = getQuartetRandomScore(fallbackPool, ids);
 
           if (fairnessScore > maxFairnessScore) continue;
 
@@ -600,11 +746,13 @@ export function findBestQuartetInFairnessWindow<T extends { userId: string }>(
                 {
                   teamBalanceGap: evaluation.score,
                   pointDiffGap: evaluation.pointDiffGap,
+                  rotationPenalty: evaluation.rotationPenalty,
                   exactPartitionPenalty: evaluation.exactPartitionPenalty,
                 },
                 {
                   teamBalanceGap: bestSelection.score,
                   pointDiffGap: bestSelection.pointDiffGap,
+                  rotationPenalty: bestSelection.rotationPenalty,
                   exactPartitionPenalty: bestSelection.exactPartitionPenalty,
                 },
                 sessionType
@@ -615,14 +763,18 @@ export function findBestQuartetInFairnessWindow<T extends { userId: string }>(
             !bestSelection ||
             evaluationComparison < 0 ||
             (evaluationComparison === 0 &&
-              fairnessScore < bestSelection.fairnessScore)
+              (fairnessScore < bestSelection.fairnessScore ||
+                (fairnessScore === bestSelection.fairnessScore &&
+                  randomScore < bestSelection.randomScore)))
           ) {
             bestSelection = {
               ids,
               partition: evaluation.partition,
               fairnessScore,
+              randomScore,
               score: evaluation.score,
               pointDiffGap: evaluation.pointDiffGap,
+              rotationPenalty: evaluation.rotationPenalty,
               exactPartitionPenalty: evaluation.exactPartitionPenalty,
             };
           }
@@ -698,17 +850,20 @@ export function findBestFallbackQuartet<T extends { userId: string }>(
             (sum, id) => sum + (rankByUserId.get(id) ?? fallbackPool.length),
             0
           );
+          const randomScore = getQuartetRandomScore(fallbackPool, ids);
 
           const evaluationComparison = bestSelection
             ? comparePartitionScoreDetails(
                 {
                   teamBalanceGap: evaluation.score,
                   pointDiffGap: evaluation.pointDiffGap,
+                  rotationPenalty: evaluation.rotationPenalty,
                   exactPartitionPenalty: evaluation.exactPartitionPenalty,
                 },
                 {
                   teamBalanceGap: bestSelection.score,
                   pointDiffGap: bestSelection.pointDiffGap,
+                  rotationPenalty: bestSelection.rotationPenalty,
                   exactPartitionPenalty: bestSelection.exactPartitionPenalty,
                 },
                 sessionType
@@ -719,14 +874,18 @@ export function findBestFallbackQuartet<T extends { userId: string }>(
             !bestSelection ||
             evaluationComparison < 0 ||
             (evaluationComparison === 0 &&
-              fairnessScore < bestSelection.fairnessScore)
+              (fairnessScore < bestSelection.fairnessScore ||
+                (fairnessScore === bestSelection.fairnessScore &&
+                  randomScore < bestSelection.randomScore)))
           ) {
             bestSelection = {
               ids,
               partition: evaluation.partition,
               fairnessScore,
+              randomScore,
               score: evaluation.score,
               pointDiffGap: evaluation.pointDiffGap,
+              rotationPenalty: evaluation.rotationPenalty,
               exactPartitionPenalty: evaluation.exactPartitionPenalty,
             };
           }

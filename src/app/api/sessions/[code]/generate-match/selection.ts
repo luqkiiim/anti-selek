@@ -231,6 +231,8 @@ export function selectSingleCourtMatch({
     ...bestSelection,
     partition: alternativePartition.partition,
     score: alternativePartition.score,
+    pointDiffGap: alternativePartition.pointDiffGap,
+    rotationPenalty: alternativePartition.rotationPenalty,
     exactPartitionPenalty: alternativePartition.exactPartitionPenalty,
   };
 }

@@ -58,6 +58,17 @@ function getFairnessScore(
   );
 }
 
+function getRandomScore(
+  rankedCandidates: RankedAutoMatchCandidate[],
+  ids: [string, string, string, string]
+) {
+  const randomByUserId = new Map(
+    rankedCandidates.map((candidate) => [candidate.userId, candidate._random])
+  );
+
+  return ids.reduce((sum, id) => sum + (randomByUserId.get(id) ?? 0), 0);
+}
+
 function getSelectionGuardrails(
   rankedCandidates: RankedAutoMatchCandidate[],
   baselineIds: [string, string, string, string]
@@ -132,8 +143,10 @@ function buildLockedQuartetSelection(
     ids: baselineIds,
     partition: evaluation.partition,
     fairnessScore: getFairnessScore(rankedCandidates, baselineIds),
+    randomScore: getRandomScore(rankedCandidates, baselineIds),
     score: evaluation.score,
     pointDiffGap: evaluation.pointDiffGap,
+    rotationPenalty: evaluation.rotationPenalty,
     exactPartitionPenalty: evaluation.exactPartitionPenalty,
   };
 }

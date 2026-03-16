@@ -19,8 +19,10 @@ interface BatchSummary {
   totalTeamBalanceGap: number;
   maxPointDiffGap: number;
   totalPointDiffGap: number;
+  totalRotationPenalty: number;
   totalExactPartitionPenalty: number;
   totalFairnessScore: number;
+  totalRandomScore: number;
 }
 
 interface EvaluatedQuartet extends FallbackQuartetSelection {
@@ -73,6 +75,17 @@ function getFairnessScore(
   );
 }
 
+function getRandomScore(
+  rankedCandidates: RankedBatchCandidate[],
+  ids: [string, string, string, string]
+) {
+  const randomByUserId = new Map(
+    rankedCandidates.map((candidate) => [candidate.userId, candidate._random])
+  );
+
+  return ids.reduce((sum, id) => sum + (randomByUserId.get(id) ?? 0), 0);
+}
+
 function buildMatchesPlayedQuota(values: number[]) {
   const quota = new Map<number, number>();
 
@@ -112,17 +125,22 @@ function summarizeBatch(selections: FallbackQuartetSelection[]): BatchSummary {
       totalTeamBalanceGap: summary.totalTeamBalanceGap + selection.score,
       maxPointDiffGap: Math.max(summary.maxPointDiffGap, selection.pointDiffGap),
       totalPointDiffGap: summary.totalPointDiffGap + selection.pointDiffGap,
+      totalRotationPenalty:
+        summary.totalRotationPenalty + selection.rotationPenalty,
       totalExactPartitionPenalty:
         summary.totalExactPartitionPenalty + selection.exactPartitionPenalty,
       totalFairnessScore: summary.totalFairnessScore + selection.fairnessScore,
+      totalRandomScore: summary.totalRandomScore + selection.randomScore,
     }),
     {
       maxTeamBalanceGap: 0,
       totalTeamBalanceGap: 0,
       maxPointDiffGap: 0,
       totalPointDiffGap: 0,
+      totalRotationPenalty: 0,
       totalExactPartitionPenalty: 0,
       totalFairnessScore: 0,
+      totalRandomScore: 0,
     }
   );
 }
@@ -150,12 +168,20 @@ function compareBatchSummaries(
     }
   }
 
+  if (left.totalRotationPenalty !== right.totalRotationPenalty) {
+    return left.totalRotationPenalty - right.totalRotationPenalty;
+  }
+
   if (left.totalExactPartitionPenalty !== right.totalExactPartitionPenalty) {
     return left.totalExactPartitionPenalty - right.totalExactPartitionPenalty;
   }
 
   if (left.totalFairnessScore !== right.totalFairnessScore) {
     return left.totalFairnessScore - right.totalFairnessScore;
+  }
+
+  if (left.totalRandomScore !== right.totalRandomScore) {
+    return left.totalRandomScore - right.totalRandomScore;
   }
 
   return 0;
@@ -208,8 +234,10 @@ function buildQuartetCandidates(
             ids,
             partition: evaluation.partition,
             fairnessScore: getFairnessScore(rankedCandidates, ids),
+            randomScore: getRandomScore(rankedCandidates, ids),
             score: evaluation.score,
             pointDiffGap: evaluation.pointDiffGap,
+            rotationPenalty: evaluation.rotationPenalty,
             exactPartitionPenalty: evaluation.exactPartitionPenalty,
             quartetQuota: buildMatchesPlayedQuota(quartetQuotaValues),
             userIds: new Set(ids),
@@ -230,7 +258,11 @@ function buildQuartetCandidates(
       return summaryComparison;
     }
 
-    return left.fairnessScore - right.fairnessScore;
+    if (left.fairnessScore !== right.fairnessScore) {
+      return left.fairnessScore - right.fairnessScore;
+    }
+
+    return left.randomScore - right.randomScore;
   });
 }
 
@@ -320,8 +352,10 @@ function searchBatchCandidatePool(
           ids: quartet.ids,
           partition: quartet.partition,
           fairnessScore: quartet.fairnessScore,
+          randomScore: quartet.randomScore,
           score: quartet.score,
           pointDiffGap: quartet.pointDiffGap,
+          rotationPenalty: quartet.rotationPenalty,
           exactPartitionPenalty: quartet.exactPartitionPenalty,
         }));
         const nextSummary = summarizeBatch(nextSelections);

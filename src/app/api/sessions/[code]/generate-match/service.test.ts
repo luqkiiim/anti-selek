@@ -149,6 +149,7 @@ function createSelection(
     partition,
     score: 0,
     pointDiffGap: 0,
+    rotationPenalty: 0,
     exactPartitionPenalty: 0,
   };
 }
@@ -546,6 +547,7 @@ describe("generate match service", () => {
         partition: { team1: ["A", "C"], team2: ["B", "D"] },
         score: 1,
         pointDiffGap: 0,
+        rotationPenalty: 0,
         exactPartitionPenalty: 0,
       });
 
@@ -564,6 +566,8 @@ describe("generate match service", () => {
         ...initial,
         partition: { team1: ["A", "C"], team2: ["B", "D"] },
         score: 1,
+        pointDiffGap: 0,
+        rotationPenalty: 0,
         exactPartitionPenalty: 0,
       });
     });
