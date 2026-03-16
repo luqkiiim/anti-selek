@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   calculateNoCatchUpMatchmakingCredit,
+  getEffectiveActiveTimeBonusMs,
   getEffectiveMatchesPlayed,
 } from "./matchmakingCredit";
 
@@ -12,6 +13,15 @@ describe("matchmaking credit", () => {
         matchmakingMatchesCredit: 5,
       })
     ).toBe(8);
+  });
+
+  it("grants virtual active time alongside matchmaking credit", () => {
+    expect(
+      getEffectiveActiveTimeBonusMs({
+        matchesPlayed: 3,
+        matchmakingMatchesCredit: 5,
+      })
+    ).toBe(5 * 10 * 60 * 1000);
   });
 
   it("keeps the current credit when there is no active pool to compare against", () => {

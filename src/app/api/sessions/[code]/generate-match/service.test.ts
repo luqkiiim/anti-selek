@@ -427,7 +427,7 @@ describe("generate match service", () => {
   });
 
   describe("getRankedCandidates", () => {
-    it("uses matchmaking credit when ranking resumed players", () => {
+    it("uses matchmaking credit and virtual active time when ranking resumed players", () => {
       const now = new Date("2026-01-01T00:00:00Z");
       const players = [
         createSessionPlayer("resumed", {
@@ -462,9 +462,7 @@ describe("generate match service", () => {
         availableCandidates.find((candidate) => candidate.userId === "resumed")
           ?.matchesPlayed
       ).toBe(5);
-      expect(rankedCandidates.slice(0, 4).map((candidate) => candidate.userId)).not.toContain(
-        "resumed"
-      );
+      expect(rankedCandidates[0]?.userId).toBe("resumed");
     });
   });
 

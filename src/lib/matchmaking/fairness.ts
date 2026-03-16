@@ -4,6 +4,7 @@ export interface FairnessCandidate {
   availableSince: Date;
   joinedAt: Date;
   inactiveSeconds: number;
+  activeMsBonus?: number;
 }
 
 export type RankedFairnessCandidate<T extends FairnessCandidate = FairnessCandidate> = T & {
@@ -26,7 +27,10 @@ export function rankPlayersByFairness<T extends FairnessCandidate>(
     .map((player) => {
       const activeMs = Math.max(
         1000,
-        now - player.joinedAt.getTime() - player.inactiveSeconds * 1000
+        now -
+          player.joinedAt.getTime() -
+          player.inactiveSeconds * 1000 +
+          (player.activeMsBonus ?? 0)
       );
 
       return {

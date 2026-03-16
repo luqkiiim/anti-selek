@@ -4,6 +4,7 @@ import { SessionMode, SessionType } from "../../types/enums";
 import { rankPlayersByFairness } from "./fairness";
 import {
   calculateNoCatchUpMatchmakingCredit,
+  getEffectiveActiveTimeBonusMs,
   getEffectiveMatchesPlayed,
 } from "./matchmakingCredit";
 import {
@@ -77,6 +78,7 @@ function chooseMatch(
       availableSince: player.availableSince,
       joinedAt: player.joinedAt,
       inactiveSeconds: player.inactiveSeconds,
+      activeMsBonus: getEffectiveActiveTimeBonusMs(player),
     })),
     {
       now,

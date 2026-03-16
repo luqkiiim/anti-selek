@@ -3,8 +3,17 @@ export interface MatchmakingCreditPlayer {
   matchmakingMatchesCredit?: number | null;
 }
 
+const ESTIMATED_MATCH_DURATION_MS_FOR_CREDIT = 10 * 60 * 1000;
+
 export function getEffectiveMatchesPlayed(player: MatchmakingCreditPlayer) {
   return player.matchesPlayed + Math.max(0, player.matchmakingMatchesCredit ?? 0);
+}
+
+export function getEffectiveActiveTimeBonusMs(player: MatchmakingCreditPlayer) {
+  return (
+    Math.max(0, player.matchmakingMatchesCredit ?? 0) *
+    ESTIMATED_MATCH_DURATION_MS_FOR_CREDIT
+  );
 }
 
 export function calculateNoCatchUpMatchmakingCredit({

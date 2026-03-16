@@ -3,7 +3,10 @@ import { findBestAutoMatchSelection } from "@/lib/matchmaking/autoMatch";
 import { findBestBatchAutoMatchSelection } from "@/lib/matchmaking/batchAutoMatch";
 import { getBusyPlayerIds } from "@/lib/matchmaking/busyFilter";
 import { rankPlayersByFairness } from "@/lib/matchmaking/fairness";
-import { getEffectiveMatchesPlayed } from "@/lib/matchmaking/matchmakingCredit";
+import {
+  getEffectiveActiveTimeBonusMs,
+  getEffectiveMatchesPlayed,
+} from "@/lib/matchmaking/matchmakingCredit";
 import {
   buildRotationHistory,
   evaluateBestPartition,
@@ -128,6 +131,7 @@ export function getRankedCandidates(
       availableSince: player.availableSince,
       joinedAt: player.joinedAt,
       inactiveSeconds: player.inactiveSeconds,
+      activeMsBonus: getEffectiveActiveTimeBonusMs(player),
     }));
 
   return {
