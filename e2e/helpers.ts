@@ -41,6 +41,44 @@ export async function signInAsAdmin(page: Page) {
   await expect(page).toHaveURL(/\/$/);
 }
 
+export async function createStartedHostSession(
+  page: Page,
+  {
+    sessionName,
+    courtCount = 1,
+  }: {
+    sessionName: string;
+    courtCount?: number;
+  }
+) {
+  await page.goto(`/community/${hostCommunityId}`);
+  await expect(
+    page.getByRole("heading", { name: "E2E Host Club" })
+  ).toBeVisible();
+
+  await page.getByRole("button", { name: "Host Tournament" }).click();
+  await page.getByPlaceholder("Tournament Name").fill(sessionName);
+  await page.locator("select").selectOption(String(courtCount));
+
+  await page.getByRole("button", { name: "Add Players" }).click();
+  await expect(page.getByRole("heading", { name: "Add Players" })).toBeVisible();
+  await page.getByRole("button", { name: "Select All" }).click();
+  await expect(page.getByRole("button", { name: "Deselect All" })).toBeVisible();
+  await page.getByRole("button", { name: "Done" }).click();
+
+  await page.getByRole("button", { name: "Create Tournament" }).click();
+  await expect(page).toHaveURL(/\/session\/.+/);
+  await expect(page.getByRole("button", { name: "Start Session" })).toBeVisible();
+  await page.getByRole("button", { name: "Start Session" }).click();
+
+  const sessionCode = page.url().split("/").pop();
+  if (!sessionCode) {
+    throw new Error("Failed to capture created session code");
+  }
+
+  return sessionCode;
+}
+
 export async function readSessionSnapshot(
   page: Page,
   code: string
