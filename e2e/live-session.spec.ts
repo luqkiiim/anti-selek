@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { SessionMode } from "../src/types/enums";
 
 import {
   adminUserId,
@@ -75,6 +76,43 @@ test("admin can create and undo a manual match on an open court", async ({
     })
     .toBe(0);
   await expect(page.getByRole("button", { name: "Manual" })).toBeVisible();
+});
+
+test("admin cannot create an invalid Mixicano manual pairing", async ({
+  page,
+}) => {
+  await signInAsAdmin(page);
+  const sessionCode = await createStartedHostSession(page, {
+    sessionName: "E2E Mixed Invalid Manual",
+    sessionMode: SessionMode.MIXICANO,
+  });
+
+  await expect(page.getByRole("button", { name: "Manual" })).toBeVisible();
+  await page.getByRole("button", { name: "Manual" }).click();
+
+  const manualModal = page
+    .locator("div.fixed.inset-0")
+    .filter({ has: page.getByRole("heading", { name: "Manual Match" }) });
+  await expect(manualModal.getByRole("heading", { name: "Manual Match" })).toBeVisible();
+
+  const selects = manualModal.locator("select");
+  await selects.nth(0).selectOption({ label: "Host Player 2 (1000)" });
+  await selects.nth(1).selectOption({ label: "Host Player 4 (1000)" });
+  await selects.nth(2).selectOption({ label: "Admin E2E (1000)" });
+  await selects.nth(3).selectOption({ label: "Host Player 1 (1000)" });
+  await manualModal.getByRole("button", { name: "Create Match" }).click();
+
+  await expect(
+    page.getByText("That manual pairing is invalid for current Mixed preferences.")
+  ).toBeVisible();
+  await expect(manualModal).toBeVisible();
+
+  await expect
+    .poll(async () => {
+      const snapshot = await readSessionSnapshot(page, sessionCode);
+      return snapshot.courts.filter((court) => court.currentMatch).length;
+    })
+    .toBe(0);
 });
 
 test("admin can add a community player into an active session", async ({

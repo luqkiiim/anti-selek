@@ -1,4 +1,5 @@
 import { expect, type Page } from "@playwright/test";
+import { SessionMode, SessionType } from "../src/types/enums";
 
 export const adminCredentials = {
   email: "admin-e2e@example.com",
@@ -66,10 +67,14 @@ export async function createStartedHostSession(
     sessionName,
     courtCount = 1,
     selectedPlayerNames,
+    sessionType = SessionType.POINTS,
+    sessionMode = SessionMode.MEXICANO,
   }: {
     sessionName: string;
     courtCount?: number;
     selectedPlayerNames?: string[];
+    sessionType?: SessionType;
+    sessionMode?: SessionMode;
   }
 ) {
   await page.goto(`/community/${hostCommunityId}`);
@@ -79,6 +84,18 @@ export async function createStartedHostSession(
 
   await page.getByRole("button", { name: "Host Tournament" }).click();
   await page.getByPlaceholder("Tournament Name").fill(sessionName);
+  await page
+    .getByRole("button", {
+      name: sessionType === SessionType.ELO ? "Ratings Format" : "Points Format",
+      exact: true,
+    })
+    .click();
+  await page
+    .getByRole("button", {
+      name: sessionMode === SessionMode.MIXICANO ? "Mixed" : "Open",
+      exact: true,
+    })
+    .click();
   await page.locator("select").selectOption(String(courtCount));
 
   await page.getByRole("button", { name: "Add Players" }).click();
