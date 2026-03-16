@@ -6,6 +6,7 @@ import {
   createManualMatchWithPlayers,
   createStartedHostSession,
   hostCommunityId,
+  readCurrentMatchMixicanoShape,
   readCommunityMembersSnapshot,
   readCommunitySessionsSnapshot,
   readCurrentMatchSignature,
@@ -113,6 +114,102 @@ test("admin cannot create an invalid Mixicano manual pairing", async ({
       return snapshot.courts.filter((court) => court.currentMatch).length;
     })
     .toBe(0);
+});
+
+test("mixed sessions reject guests without explicit gender via the guest API", async ({
+  page,
+}) => {
+  await signInAsAdmin(page);
+  const sessionCode = await createStartedHostSession(page, {
+    sessionName: "E2E Mixed Guest Validation",
+    sessionMode: SessionMode.MIXICANO,
+    selectedPlayerNames: ["Host Player 1"],
+  });
+
+  const guestResponse = await page.evaluate(async (targetSessionCode) => {
+    const res = await fetch(`/api/sessions/${targetSessionCode}/guests`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "Invalid Mixed Guest",
+        gender: "UNSPECIFIED",
+      }),
+    });
+
+    return {
+      status: res.status,
+      body: await res.json(),
+    };
+  }, sessionCode);
+
+  expect(guestResponse).toEqual({
+    status: 400,
+    body: {
+      error: "Mixed requires guest gender (MALE/FEMALE)",
+    },
+  });
+
+  await expect
+    .poll(async () => {
+      const snapshot = await readSessionSnapshot(page, sessionCode);
+      return snapshot.players.some((player) => player.user.name === "Invalid Mixed Guest");
+    })
+    .toBe(false);
+});
+
+test("admin can create and reshuffle valid Mixicano pairings", async ({
+  page,
+}) => {
+  await signInAsAdmin(page);
+  const sessionCode = await createStartedHostSession(page, {
+    sessionName: "E2E Mixed Auto Session",
+    sessionMode: SessionMode.MIXICANO,
+    selectedPlayerNames: ["Host Player 1", "Host Player 2", "Host Player 4"],
+  });
+
+  await expect(page.getByRole("button", { name: "Create Match" })).toBeVisible();
+  await page.getByRole("button", { name: "Create Match" }).click();
+
+  await expect
+    .poll(async () => {
+      const shape = await readCurrentMatchMixicanoShape(page, sessionCode);
+      return {
+        hasMatch: !!shape,
+        team1FemaleCount: shape?.team1FemaleCount ?? -1,
+        team2FemaleCount: shape?.team2FemaleCount ?? -1,
+      };
+    }, {
+      message: "expected a valid mixed pairing to appear on court",
+    })
+    .toEqual({
+      hasMatch: true,
+      team1FemaleCount: 1,
+      team2FemaleCount: 1,
+    });
+
+  const firstLineup = await readCurrentMatchSignature(page, sessionCode);
+  expect(firstLineup).not.toBe("");
+  page.once("dialog", async (dialog) => {
+    await dialog.accept();
+  });
+  await page.getByRole("button", { name: "Reshuffle" }).click();
+
+  await expect
+    .poll(async () => {
+      const shape = await readCurrentMatchMixicanoShape(page, sessionCode);
+      return {
+        changed: !!shape && shape.signature !== firstLineup,
+        team1FemaleCount: shape?.team1FemaleCount ?? -1,
+        team2FemaleCount: shape?.team2FemaleCount ?? -1,
+      };
+    }, {
+      message: "expected reshuffle to keep the mixed pairing valid",
+    })
+    .toEqual({
+      changed: true,
+      team1FemaleCount: 1,
+      team2FemaleCount: 1,
+    });
 });
 
 test("admin can add a community player into an active session", async ({

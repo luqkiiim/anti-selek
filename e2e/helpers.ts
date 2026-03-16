@@ -1,5 +1,5 @@
 import { expect, type Page } from "@playwright/test";
-import { SessionMode, SessionType } from "../src/types/enums";
+import { PlayerGender, SessionMode, SessionType } from "../src/types/enums";
 
 export const adminCredentials = {
   email: "admin-e2e@example.com",
@@ -14,6 +14,7 @@ interface SessionPlayerSnapshot {
   userId: string;
   sessionPoints: number;
   isGuest: boolean;
+  gender: PlayerGender;
   user: {
     name: string;
   };
@@ -37,10 +38,10 @@ interface CommunitySessionSnapshot {
 
 interface SessionCourtSnapshot {
   currentMatch: null | {
-    team1User1: { name: string };
-    team1User2: { name: string };
-    team2User1: { name: string };
-    team2User2: { name: string };
+    team1User1: { id: string; name: string };
+    team1User2: { id: string; name: string };
+    team2User1: { id: string; name: string };
+    team2User2: { id: string; name: string };
   };
 }
 
@@ -184,6 +185,35 @@ export async function readCurrentMatchSignature(page: Page, code: string) {
     currentMatch.team2User1.name,
     currentMatch.team2User2.name,
   ].join("|");
+}
+
+export async function readCurrentMatchMixicanoShape(page: Page, code: string) {
+  const snapshot = await readSessionSnapshot(page, code);
+  const currentMatch = snapshot.courts.find((court) => court.currentMatch)?.currentMatch;
+
+  if (!currentMatch) {
+    return null;
+  }
+
+  const genderByUserId = new Map(
+    snapshot.players.map((player) => [player.userId, player.gender])
+  );
+  const team1Ids = [currentMatch.team1User1.id, currentMatch.team1User2.id] as const;
+  const team2Ids = [currentMatch.team2User1.id, currentMatch.team2User2.id] as const;
+  const countFemales = (ids: readonly string[]) =>
+    ids.filter((id) => genderByUserId.get(id) === PlayerGender.FEMALE).length;
+
+  return {
+    signature: [
+      currentMatch.team1User1.name,
+      currentMatch.team1User2.name,
+      "vs",
+      currentMatch.team2User1.name,
+      currentMatch.team2User2.name,
+    ].join("|"),
+    team1FemaleCount: countFemales(team1Ids),
+    team2FemaleCount: countFemales(team2Ids),
+  };
 }
 
 export async function submitAndApproveVisibleMatch(
