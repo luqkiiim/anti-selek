@@ -9,6 +9,7 @@ import { FlashMessage, SectionCard } from "@/components/ui/chrome";
 import { SessionOverviewPanel } from "@/components/session/SessionOverviewPanel";
 import { LiveStandingsTable } from "@/components/session/LiveStandingsTable";
 import { SessionPodium } from "@/components/session/SessionPodium";
+import { ScoreSubmissionModal } from "@/components/session/ScoreSubmissionModal";
 import { canApprovePendingSubmission } from "@/lib/matchApprovalRules";
 import { getSessionModeLabel, getSessionTypeLabel } from "@/lib/sessionModeLabels";
 import { compareSessionStandings } from "@/lib/sessionStandings";
@@ -109,6 +110,14 @@ interface ManualMatchFormState {
   team2User2Id: string;
 }
 
+interface ScoreSubmissionDraft {
+  matchId: string;
+  team1Names: [string, string];
+  team2Names: [string, string];
+  team1Score: number;
+  team2Score: number;
+}
+
 const GUEST_ELO_PRESETS = [
   { label: "Beginner", value: 850 },
   { label: "Average", value: 1000 },
@@ -146,6 +155,7 @@ export default function SessionPage() {
   // Track scores per match locally
   const [matchScores, setMatchScores] = useState<Record<string, { team1: string; team2: string }>>({});
   const [submittingMatchId, setSubmittingMatchId] = useState<string | null>(null);
+  const [scoreSubmissionDraft, setScoreSubmissionDraft] = useState<ScoreSubmissionDraft | null>(null);
   const [reopeningMatchId, setReopeningMatchId] = useState<string | null>(null);
   const [undoingCourtId, setUndoingCourtId] = useState<string | null>(null);
   const [creatingOpenMatches, setCreatingOpenMatches] = useState(false);
@@ -602,37 +612,54 @@ export default function SessionPage() {
     }));
   };
 
-  const submitScore = async (matchId: string) => {
-    const scores = matchScores[matchId];
+  const openScoreSubmissionDraft = (match: Match) => {
+    const scores = matchScores[match.id];
     if (!scores || !scores.team1 || !scores.team2) return;
-    
-    setSubmittingMatchId(matchId);
+
+    const team1Score = parseInt(scores.team1, 10);
+    const team2Score = parseInt(scores.team2, 10);
+    if (Number.isNaN(team1Score) || Number.isNaN(team2Score)) return;
+
+    setScoreSubmissionDraft({
+      matchId: match.id,
+      team1Names: [match.team1User1.name, match.team1User2.name],
+      team2Names: [match.team2User1.name, match.team2User2.name],
+      team1Score,
+      team2Score,
+    });
+  };
+
+  const submitScore = async (draft: ScoreSubmissionDraft) => {
+    setSubmittingMatchId(draft.matchId);
     setError("");
-    
+
     try {
-      const res = await fetch(`/api/matches/${matchId}/score`, {
+      const res = await fetch(`/api/matches/${draft.matchId}/score`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          team1Score: parseInt(scores.team1),
-          team2Score: parseInt(scores.team2),
+          team1Score: draft.team1Score,
+          team2Score: draft.team2Score,
         }),
       });
       if (res.ok) {
         // Clear local scores for this match
         setMatchScores(prev => {
           const newScores = { ...prev };
-          delete newScores[matchId];
+          delete newScores[draft.matchId];
           return newScores;
         });
+        setScoreSubmissionDraft(null);
         fetchSession();
       } else {
         const data = await safeJson(res);
         setError(data.error || "Failed to submit score");
+        setScoreSubmissionDraft(null);
       }
     } catch (err) {
       console.error(err);
       setError("Network error submitting score");
+      setScoreSubmissionDraft(null);
     } finally {
       setSubmittingMatchId(null);
     }
@@ -1090,7 +1117,7 @@ export default function SessionPage() {
                             {canEdit ? (
                               <div className="pt-2">
                                 <button
-                                  onClick={() => submitScore(currentMatch.id)}
+                                  onClick={() => openScoreSubmissionDraft(currentMatch)}
                                   disabled={
                                     submittingMatchId === currentMatch.id || !scores.team1 || !scores.team2
                                   }
@@ -1176,6 +1203,21 @@ export default function SessionPage() {
           onTogglePreferenceEditor={togglePreferenceEditor}
         />
       </main>
+
+      {scoreSubmissionDraft ? (
+        <ScoreSubmissionModal
+          team1Names={scoreSubmissionDraft.team1Names}
+          team2Names={scoreSubmissionDraft.team2Names}
+          team1Score={scoreSubmissionDraft.team1Score}
+          team2Score={scoreSubmissionDraft.team2Score}
+          isSubmitting={submittingMatchId === scoreSubmissionDraft.matchId}
+          onClose={() => {
+            if (submittingMatchId === scoreSubmissionDraft.matchId) return;
+            setScoreSubmissionDraft(null);
+          }}
+          onConfirm={() => void submitScore(scoreSubmissionDraft)}
+        />
+      ) : null}
 
       {openPreferenceEditor &&
       activePreferencePlayer &&
