@@ -1,7 +1,9 @@
 "use client";
 
 import Link from "next/link";
+import { getSessionTypeLabel } from "@/lib/sessionModeLabels";
 import { FlashMessage, HeroCard } from "@/components/ui/chrome";
+import { CommunityActionConfirmModal } from "@/components/community/CommunityActionConfirmModal";
 import { CommunityGuestsModal } from "@/components/community/CommunityGuestsModal";
 import { CommunityLeaderboardPanel } from "@/components/community/CommunityLeaderboardPanel";
 import { CommunityPlayersModal } from "@/components/community/CommunityPlayersModal";
@@ -68,6 +70,7 @@ export default function CommunityPage() {
     playerSearch,
     setPlayerSearch,
     rollingBackTournamentCode,
+    pendingRollbackTournament,
     requestingClaimFor,
     error,
     setError,
@@ -86,7 +89,9 @@ export default function CommunityPage() {
     myPendingClaimRequest,
     createSession,
     joinTournament,
-    rollbackTournament,
+    requestRollbackTournament,
+    closeRollbackModal,
+    confirmRollbackTournament,
     requestClaim,
     togglePlayerSelection,
     toggleAllPlayers,
@@ -303,7 +308,7 @@ export default function CommunityPage() {
               latestPastTournamentId={latestPastTournamentId}
               rollingBackTournamentCode={rollingBackTournamentCode}
               onOpenTournament={openTournament}
-              onRollbackTournament={rollbackTournament}
+              onRollbackTournament={requestRollbackTournament}
             />
           </div>
         ) : null}
@@ -360,6 +365,33 @@ export default function CommunityPage() {
         onRemoveGuest={removeGuestName}
         onClose={closeGuestsModal}
       />
+
+      {pendingRollbackTournament ? (
+        <CommunityActionConfirmModal
+          title="Rollback tournament?"
+          subtitle="This will delete the completed tournament and reverse its rating changes."
+          details={
+            <div className="app-panel-muted space-y-2 p-4">
+              <p className="text-sm font-semibold text-gray-900">
+                {pendingRollbackTournament.name}
+              </p>
+              <p className="text-sm text-gray-600">
+                {pendingRollbackTournament.players.length} players,{" "}
+                {getSessionTypeLabel(pendingRollbackTournament.type)}
+              </p>
+              <p className="text-sm text-gray-600">
+                This action cannot be undone.
+              </p>
+            </div>
+          }
+          confirmLabel="Confirm Rollback"
+          isSubmitting={rollingBackTournamentCode !== null}
+          onClose={closeRollbackModal}
+          onConfirm={() => {
+            void confirmRollbackTournament();
+          }}
+        />
+      ) : null}
 
       {error ? (
         <div className="fixed bottom-6 left-6 right-6 z-50">

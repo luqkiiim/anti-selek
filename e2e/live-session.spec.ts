@@ -367,10 +367,11 @@ test("admin can end and rollback the latest completed tournament", async ({
   await page.getByRole("button", { name: "Tournaments" }).click();
   await expect(page.getByText(sessionName)).toBeVisible();
 
-  page.once("dialog", async (dialog) => {
-    await dialog.accept();
-  });
   await page.getByRole("button", { name: "Rollback" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Rollback tournament?" })
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Confirm Rollback" }).click();
 
   await expect(page.getByText(`Rolled back "${sessionName}".`)).toBeVisible();
   await expect(page.getByText("No past tournaments")).toBeVisible();
