@@ -19,6 +19,7 @@ interface CommunityPlayerEditorModalProps {
   savingRating: boolean;
   savingRole: boolean;
   savingPreferences: boolean;
+  removingPlayer: boolean;
   onEditorNameChange: (value: string) => void;
   onEditorRatingChange: (value: string) => void;
   onClose: () => void;
@@ -29,7 +30,7 @@ interface CommunityPlayerEditorModalProps {
     player: CommunityAdminPlayer,
     updates: { gender?: PlayerGender; partnerPreference?: PartnerPreference }
   ) => Promise<void>;
-  onPromotePlayer: (player: CommunityAdminPlayer) => Promise<void>;
+  onPromotePlayer: (player: CommunityAdminPlayer) => void;
   onOpenPasswordReset: (player: CommunityAdminPlayer) => void;
 }
 
@@ -42,6 +43,7 @@ export function CommunityPlayerEditorModal({
   savingRating,
   savingRole,
   savingPreferences,
+  removingPlayer,
   onEditorNameChange,
   onEditorRatingChange,
   onClose,
@@ -64,9 +66,10 @@ export function CommunityPlayerEditorModal({
           <button
             type="button"
             onClick={() => onRemovePlayer(player)}
+            disabled={removingPlayer}
             className="app-button-danger px-4 py-2"
           >
-            Remove player
+            {removingPlayer ? "Removing..." : "Remove player"}
           </button>
           <button
             type="button"
@@ -223,7 +226,7 @@ export function CommunityPlayerEditorModal({
             ) : player.isClaimed ? (
               <button
                 type="button"
-                onClick={() => void onPromotePlayer(player)}
+                onClick={() => onPromotePlayer(player)}
                 disabled={savingRole}
                 className="app-button-secondary px-4 py-2"
               >

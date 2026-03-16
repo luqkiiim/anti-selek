@@ -9,9 +9,16 @@ import { e2eDatabaseFile, e2eEnv } from "./env";
 
 const adminUserId = "user-admin-e2e";
 const hostCommunityId = "community-host-e2e";
+const adminControlsCommunityId = "community-admin-controls-e2e";
+const claimCommunityId = "community-claim-e2e";
 const scoreCommunityId = "community-score-e2e";
 const scoreSessionId = "session-score-e2e";
 const scoreCourtId = "court-score-e2e";
+const adminControlResetUserId = "user-admin-control-reset-e2e";
+const adminControlRemoveUserId = "user-admin-control-remove-e2e";
+const adminControlPromoteUserId = "user-admin-control-promote-e2e";
+const claimRequesterId = "user-claim-requester-e2e";
+const claimPlaceholderId = "user-claim-placeholder-e2e";
 
 const hostPlayerIds = [
   "user-host-1-e2e",
@@ -73,6 +80,51 @@ async function seedDatabase() {
           gender: index % 2 === 0 ? "MALE" : "FEMALE",
           partnerPreference: index % 2 === 0 ? "OPEN" : "FEMALE_FLEX",
         })),
+        {
+          id: claimRequesterId,
+          email: "claim-requester@example.com",
+          name: "CLAIM Candidate",
+          passwordHash,
+          isClaimed: true,
+          gender: "FEMALE",
+          partnerPreference: "FEMALE_FLEX",
+        },
+        {
+          id: claimPlaceholderId,
+          email: null,
+          name: "Claim Candidate",
+          passwordHash: null,
+          isClaimed: false,
+          gender: "FEMALE",
+          partnerPreference: "FEMALE_FLEX",
+        },
+        {
+          id: adminControlResetUserId,
+          email: "admin-control-reset@example.com",
+          name: "Admin Control Reset",
+          passwordHash,
+          isClaimed: true,
+          gender: "MALE",
+          partnerPreference: "OPEN",
+        },
+        {
+          id: adminControlRemoveUserId,
+          email: "admin-control-remove@example.com",
+          name: "Admin Control Remove",
+          passwordHash,
+          isClaimed: true,
+          gender: "FEMALE",
+          partnerPreference: "FEMALE_FLEX",
+        },
+        {
+          id: adminControlPromoteUserId,
+          email: "admin-control-promote@example.com",
+          name: "Admin Control Promote",
+          passwordHash,
+          isClaimed: true,
+          gender: "MALE",
+          partnerPreference: "OPEN",
+        },
       ],
     });
 
@@ -86,6 +138,16 @@ async function seedDatabase() {
         {
           id: scoreCommunityId,
           name: "E2E Score Club",
+          createdById: adminUserId,
+        },
+        {
+          id: claimCommunityId,
+          name: "E2E Claim Club",
+          createdById: adminUserId,
+        },
+        {
+          id: adminControlsCommunityId,
+          name: "E2E Admin Controls Club",
           createdById: adminUserId,
         },
       ],
@@ -113,6 +175,41 @@ async function seedDatabase() {
           userId,
           role: "MEMBER",
         })),
+        {
+          communityId: claimCommunityId,
+          userId: adminUserId,
+          role: "ADMIN",
+        },
+        {
+          communityId: claimCommunityId,
+          userId: claimRequesterId,
+          role: "MEMBER",
+        },
+        {
+          communityId: claimCommunityId,
+          userId: claimPlaceholderId,
+          role: "MEMBER",
+        },
+        {
+          communityId: adminControlsCommunityId,
+          userId: adminUserId,
+          role: "ADMIN",
+        },
+        {
+          communityId: adminControlsCommunityId,
+          userId: adminControlResetUserId,
+          role: "MEMBER",
+        },
+        {
+          communityId: adminControlsCommunityId,
+          userId: adminControlRemoveUserId,
+          role: "MEMBER",
+        },
+        {
+          communityId: adminControlsCommunityId,
+          userId: adminControlPromoteUserId,
+          role: "MEMBER",
+        },
       ],
     });
 

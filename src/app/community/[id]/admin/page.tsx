@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { FlashMessage } from "@/components/ui/chrome";
 import { ClaimRequestsPanel } from "@/components/community-admin/ClaimRequestsPanel";
+import { CommunityAdminActionConfirmModal } from "@/components/community-admin/CommunityAdminActionConfirmModal";
 import { CommunityDangerZonePanel } from "@/components/community-admin/CommunityDangerZonePanel";
 import { CommunityPasswordResetModal } from "@/components/community-admin/CommunityPasswordResetModal";
 import { CommunityPlayerEditorModal } from "@/components/community-admin/CommunityPlayerEditorModal";
@@ -33,6 +34,92 @@ const tabs: Array<{
     detail: () => "Community controls",
   },
 ];
+
+function getPlayerActionDialogCopy(action: {
+  kind: "remove" | "promote";
+  player: { name: string; email: string | null };
+}) {
+  if (action.kind === "remove") {
+    return {
+      title: `Remove ${action.player.name}?`,
+      subtitle: "This takes the player out of the community roster.",
+      confirmLabel: "Remove Player",
+      confirmTone: "danger" as const,
+      details: (
+        <div className="app-panel-muted space-y-2 p-4">
+          <p className="text-sm font-semibold text-gray-900">
+            {action.player.name}
+          </p>
+          <p className="text-sm text-gray-600">
+            {action.player.email || "No email on file"}
+          </p>
+          <p className="text-sm text-gray-600">
+            They will no longer appear in this community unless added again.
+          </p>
+        </div>
+      ),
+    };
+  }
+
+  return {
+    title: `Promote ${action.player.name}?`,
+    subtitle: "This gives the player admin access for the whole community.",
+    confirmLabel: "Promote to Admin",
+    confirmTone: "primary" as const,
+    details: (
+      <div className="app-panel-muted space-y-2 p-4">
+        <p className="text-sm font-semibold text-gray-900">
+          {action.player.name}
+        </p>
+        <p className="text-sm text-gray-600">
+          {action.player.email || "No email on file"}
+        </p>
+        <p className="text-sm text-gray-600">
+          Admins can manage players, review claims, and change community settings.
+        </p>
+      </div>
+    ),
+  };
+}
+
+function getCommunityActionDialogCopy(
+  action: { kind: "reset" | "delete" },
+  communityName: string
+) {
+  if (action.kind === "reset") {
+    return {
+      title: "Reset community history?",
+      subtitle:
+        "This deletes all tournaments in the community and resets every member rating to 1000.",
+      confirmLabel: "Reset Community",
+      confirmationKeyword: "RESET",
+      details: (
+        <div className="app-panel-muted space-y-2 p-4">
+          <p className="text-sm font-semibold text-gray-900">{communityName}</p>
+          <p className="text-sm text-gray-600">
+            Tournament history will be removed for this community. This cannot be undone.
+          </p>
+        </div>
+      ),
+    };
+  }
+
+  return {
+    title: "Delete community permanently?",
+    subtitle:
+      "This removes the community, its members, and all related tournament data.",
+    confirmLabel: "Delete Community",
+    confirmationKeyword: "DELETE",
+    details: (
+      <div className="app-panel-muted space-y-2 p-4">
+        <p className="text-sm font-semibold text-gray-900">{communityName}</p>
+        <p className="text-sm text-gray-600">
+          This community cannot be recovered after deletion.
+        </p>
+      </div>
+    ),
+  };
+}
 
 export default function CommunityAdminPage() {
   const {
@@ -68,6 +155,7 @@ export default function CommunityAdminPage() {
     savingRating,
     savingRole,
     savingPreferences,
+    removingPlayer,
     reviewingClaimRequestId,
     resettingCommunity,
     deletingCommunity,
@@ -81,6 +169,14 @@ export default function CommunityAdminPage() {
     claimedPlayersCount,
     adminPlayersCount,
     filteredPlayers,
+    pendingPlayerAction,
+    closePendingPlayerAction,
+    confirmPendingPlayerAction,
+    pendingCommunityAction,
+    communityActionConfirmationValue,
+    setCommunityActionConfirmationValue,
+    closePendingCommunityAction,
+    confirmPendingCommunityAction,
     openCreatePlayerModal,
     closeCreatePlayerModal,
     openPlayerEditor,
@@ -99,6 +195,16 @@ export default function CommunityAdminPage() {
     handleDeleteCommunity,
     handleReviewClaimRequest,
   } = useCommunityAdminPage();
+
+  const pendingPlayerActionDialog = pendingPlayerAction
+    ? getPlayerActionDialogCopy(pendingPlayerAction)
+    : null;
+  const pendingCommunityActionDialog = pendingCommunityAction
+    ? getCommunityActionDialogCopy(
+        pendingCommunityAction,
+        community?.name || "Community"
+      )
+    : null;
 
   if (status === "loading" || loading) {
     return (
@@ -279,6 +385,7 @@ export default function CommunityAdminPage() {
         savingRating={savingRating}
         savingRole={savingRole}
         savingPreferences={savingPreferences}
+        removingPlayer={removingPlayer}
         onEditorNameChange={setEditorName}
         onEditorRatingChange={setEditorRating}
         onClose={closePlayerEditor}
@@ -301,6 +408,45 @@ export default function CommunityAdminPage() {
         onClose={closePasswordResetModal}
         onSubmit={handleResetPlayerPassword}
       />
+
+      {pendingPlayerAction && pendingPlayerActionDialog ? (
+        <CommunityAdminActionConfirmModal
+          title={pendingPlayerActionDialog.title}
+          subtitle={pendingPlayerActionDialog.subtitle}
+          details={pendingPlayerActionDialog.details}
+          confirmLabel={pendingPlayerActionDialog.confirmLabel}
+          confirmTone={pendingPlayerActionDialog.confirmTone}
+          isSubmitting={
+            pendingPlayerAction.kind === "remove" ? removingPlayer : savingRole
+          }
+          onClose={closePendingPlayerAction}
+          onConfirm={() => {
+            void confirmPendingPlayerAction();
+          }}
+        />
+      ) : null}
+
+      {pendingCommunityAction && pendingCommunityActionDialog ? (
+        <CommunityAdminActionConfirmModal
+          title={pendingCommunityActionDialog.title}
+          subtitle={pendingCommunityActionDialog.subtitle}
+          details={pendingCommunityActionDialog.details}
+          confirmLabel={pendingCommunityActionDialog.confirmLabel}
+          confirmationKeyword={pendingCommunityActionDialog.confirmationKeyword}
+          confirmationValue={communityActionConfirmationValue}
+          onConfirmationValueChange={setCommunityActionConfirmationValue}
+          confirmationInputLabel={`Type ${pendingCommunityActionDialog.confirmationKeyword} to continue`}
+          isSubmitting={
+            pendingCommunityAction.kind === "reset"
+              ? resettingCommunity
+              : deletingCommunity
+          }
+          onClose={closePendingCommunityAction}
+          onConfirm={() => {
+            void confirmPendingCommunityAction();
+          }}
+        />
+      ) : null}
     </main>
   );
 }

@@ -6,8 +6,17 @@ export const adminCredentials = {
   password: "Password123!",
 };
 
+export const claimRequesterCredentials = {
+  email: "claim-requester@example.com",
+  password: "Password123!",
+};
+
 export const adminUserId = "user-admin-e2e";
 export const hostCommunityId = "community-host-e2e";
+export const adminControlsCommunityId = "community-admin-controls-e2e";
+export const claimCommunityId = "community-claim-e2e";
+export const claimRequesterUserId = "user-claim-requester-e2e";
+export const claimPlaceholderUserId = "user-claim-placeholder-e2e";
 export const scoreSessionCode = "session-score-e2e";
 
 interface SessionPlayerSnapshot {
@@ -36,6 +45,15 @@ interface CommunitySessionSnapshot {
   status: string;
 }
 
+interface CommunityClaimRequestSnapshot {
+  id: string;
+  requesterUserId: string;
+  requesterName: string;
+  targetUserId: string;
+  targetName: string;
+  status: string;
+}
+
 interface SessionCourtSnapshot {
   currentMatch: null | {
     team1User1: { id: string; name: string };
@@ -53,13 +71,30 @@ export interface SessionSnapshot {
 
 export type CommunityMembersSnapshot = CommunityMemberSnapshot[];
 export type CommunitySessionsSnapshot = CommunitySessionSnapshot[];
+export type CommunityClaimRequestsSnapshot = CommunityClaimRequestSnapshot[];
 
-export async function signInAsAdmin(page: Page) {
+export function getHostPlayerCredentials(index: number) {
+  return {
+    email: `host-player-${index}@example.com`,
+    password: "Password123!",
+  };
+}
+
+export async function signIn(page: Page, credentials: { email: string; password: string }) {
+  await page.context().clearCookies();
   await page.goto("/signin");
-  await page.getByLabel("Email").fill(adminCredentials.email);
-  await page.getByLabel("Password").fill(adminCredentials.password);
+  await page.getByLabel("Email").fill(credentials.email);
+  await page.getByLabel("Password").fill(credentials.password);
   await page.getByRole("button", { name: "Sign in" }).click();
   await expect(page).toHaveURL(/\/$/);
+}
+
+export async function signInAsAdmin(page: Page) {
+  await signIn(page, adminCredentials);
+}
+
+export async function signInAsClaimRequester(page: Page) {
+  await signIn(page, claimRequesterCredentials);
 }
 
 export async function createStartedHostSession(
@@ -168,6 +203,49 @@ export async function readCommunitySessionsSnapshot(
     }
     return res.json();
   }, communityId);
+}
+
+export async function readCommunityClaimRequestsSnapshot(
+  page: Page,
+  communityId: string
+): Promise<CommunityClaimRequestsSnapshot> {
+  return page.evaluate(async (targetCommunityId) => {
+    const res = await fetch(`/api/communities/${targetCommunityId}/claim-requests`);
+    if (!res.ok) {
+      throw new Error(`Failed to load claim requests ${targetCommunityId}: ${res.status}`);
+    }
+    return res.json();
+  }, communityId);
+}
+
+export async function createClaimRequest(
+  page: Page,
+  {
+    communityId,
+    targetUserId,
+  }: {
+    communityId: string;
+    targetUserId: string;
+  }
+) {
+  return page.evaluate(
+    async ({ targetCommunityId, targetUserId: requestedTargetUserId }) => {
+      const res = await fetch(`/api/communities/${targetCommunityId}/claim-requests`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          targetUserId: requestedTargetUserId,
+        }),
+      });
+      const text = await res.text();
+      return {
+        ok: res.ok,
+        status: res.status,
+        body: text ? JSON.parse(text) : {},
+      };
+    },
+    { targetCommunityId: communityId, targetUserId }
+  );
 }
 
 export async function readCurrentMatchSignature(page: Page, code: string) {
