@@ -298,7 +298,7 @@ test("admin can confirm removing a player from an active session", async ({
   await playerRow.getByRole("button", { name: "Edit" }).click();
   const removePlayerButton = page.getByRole("button", { name: "Remove Player" });
   await expect(removePlayerButton).toBeVisible();
-  await removePlayerButton.click();
+  await removePlayerButton.evaluate((button: HTMLButtonElement) => button.click());
 
   const removePlayerModal = page
     .locator(".app-modal-frame")

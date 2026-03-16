@@ -1,0 +1,85 @@
+"use client";
+
+import type { FormEvent } from "react";
+import { ModalFrame } from "@/components/ui/chrome";
+import { PlayerGender } from "@/types/enums";
+
+interface CreateCommunityPlayerModalProps {
+  open: boolean;
+  name: string;
+  newPlayerGender: PlayerGender;
+  onNameChange: (value: string) => void;
+  onNewPlayerGenderChange: (value: PlayerGender) => void;
+  onClose: () => void;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+}
+
+export function CreateCommunityPlayerModal({
+  open,
+  name,
+  newPlayerGender,
+  onNameChange,
+  onNewPlayerGenderChange,
+  onClose,
+  onSubmit,
+}: CreateCommunityPlayerModalProps) {
+  if (!open) return null;
+
+  return (
+    <ModalFrame
+      title="Create player profile"
+      subtitle="Add a new member or placeholder profile to this community."
+      onClose={onClose}
+      footer={
+        <div className="flex flex-wrap justify-end gap-3">
+          <button
+            type="button"
+            onClick={onClose}
+            className="app-button-secondary px-4 py-2"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            form="create-player-form"
+            className="app-button-primary px-4 py-2"
+          >
+            Create profile
+          </button>
+        </div>
+      }
+    >
+      <form
+        id="create-player-form"
+        onSubmit={onSubmit}
+        className="space-y-4 px-4 py-4 sm:px-5"
+      >
+        <label className="block space-y-2 text-sm font-medium text-gray-900">
+          <span>Player name</span>
+          <input
+            type="text"
+            value={name}
+            onChange={(event) => onNameChange(event.target.value)}
+            className="field"
+            placeholder="Player name"
+            required
+          />
+        </label>
+
+        <label className="block space-y-2 text-sm font-medium text-gray-900">
+          <span>Gender</span>
+          <select
+            value={newPlayerGender}
+            onChange={(event) =>
+              onNewPlayerGenderChange(event.target.value as PlayerGender)
+            }
+            className="field"
+          >
+            <option value={PlayerGender.MALE}>Male</option>
+            <option value={PlayerGender.FEMALE}>Female</option>
+          </select>
+        </label>
+      </form>
+    </ModalFrame>
+  );
+}

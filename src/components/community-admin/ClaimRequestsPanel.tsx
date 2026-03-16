@@ -1,26 +1,13 @@
 "use client";
 
-import { ClaimRequestStatus } from "@/types/enums";
-
-interface ClaimRequest {
-  id: string;
-  requesterUserId: string;
-  requesterName: string;
-  requesterEmail: string | null;
-  targetUserId: string;
-  targetName: string;
-  targetEmail: string | null;
-  status: ClaimRequestStatus;
-  note?: string | null;
-  createdAt: string;
-}
+import type { CommunityAdminClaimRequest } from "./communityAdminTypes";
 
 interface ClaimRequestsPanelProps {
-  claimRequests: ClaimRequest[];
+  claimRequests: CommunityAdminClaimRequest[];
   reviewingClaimRequestId: string | null;
   currentUserId?: string | null;
   onReviewClaimRequest: (
-    claimRequest: ClaimRequest,
+    claimRequest: CommunityAdminClaimRequest,
     decision: "APPROVE" | "REJECT"
   ) => void;
 }
