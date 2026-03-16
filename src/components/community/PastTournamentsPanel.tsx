@@ -1,6 +1,5 @@
 "use client";
 
-import type { KeyboardEvent, MouseEvent } from "react";
 import { getSessionTypeLabel } from "@/lib/sessionModeLabels";
 
 interface Tournament {
@@ -19,9 +18,15 @@ interface PastTournamentsPanelProps {
   canManageCommunity: boolean;
   latestPastTournamentId: string | null;
   rollingBackTournamentCode: string | null;
-  onCardClick: (event: MouseEvent<HTMLDivElement>, code: string) => void;
-  onCardKeyDown: (event: KeyboardEvent<HTMLDivElement>, code: string) => void;
+  onOpenTournament: (code: string) => void;
   onRollbackTournament: (tournament: Tournament) => void;
+}
+
+function shouldIgnoreCardNavigation(target: EventTarget | null) {
+  return (
+    target instanceof HTMLElement &&
+    !!target.closest("button, a, select, input, option")
+  );
 }
 
 export function PastTournamentsPanel({
@@ -29,8 +34,7 @@ export function PastTournamentsPanel({
   canManageCommunity,
   latestPastTournamentId,
   rollingBackTournamentCode,
-  onCardClick,
-  onCardKeyDown,
+  onOpenTournament,
   onRollbackTournament,
 }: PastTournamentsPanelProps) {
   return (
@@ -55,8 +59,22 @@ export function PastTournamentsPanel({
                 key={tournament.id}
                 role="link"
                 tabIndex={0}
-                onClick={(event) => onCardClick(event, tournament.code)}
-                onKeyDown={(event) => onCardKeyDown(event, tournament.code)}
+                onClick={(event) => {
+                  if (shouldIgnoreCardNavigation(event.target)) {
+                    return;
+                  }
+                  onOpenTournament(tournament.code);
+                }}
+                onKeyDown={(event) => {
+                  if (shouldIgnoreCardNavigation(event.target)) {
+                    return;
+                  }
+
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    onOpenTournament(tournament.code);
+                  }
+                }}
                 className="cursor-pointer rounded-2xl border border-gray-100 bg-gray-50 p-4 transition hover:-translate-y-0.5 hover:border-blue-300 hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 focus-visible:ring-offset-2"
               >
                 <div className="mb-2 flex items-start justify-between">
