@@ -1,0 +1,141 @@
+"use client";
+
+import { createPortal } from "react-dom";
+import { PartnerPreference, PlayerGender } from "@/types/enums";
+import type { Player, PreferenceEditorState } from "./sessionTypes";
+
+interface SessionPreferenceEditorPortalProps {
+  openPreferenceEditor: PreferenceEditorState | null;
+  activePreferencePlayer: Player | null;
+  isAdmin: boolean;
+  isCompletedSession: boolean;
+  isMixicano: boolean;
+  removingPlayerId: string | null;
+  onClose: () => void;
+  onUpdatePreference: (
+    userId: string,
+    nextGender: PlayerGender,
+    nextPreference: PartnerPreference
+  ) => Promise<void>;
+  onRemovePlayer: (userId: string, playerName: string) => void;
+}
+
+export function SessionPreferenceEditorPortal({
+  openPreferenceEditor,
+  activePreferencePlayer,
+  isAdmin,
+  isCompletedSession,
+  isMixicano,
+  removingPlayerId,
+  onClose,
+  onUpdatePreference,
+  onRemovePlayer,
+}: SessionPreferenceEditorPortalProps) {
+  if (
+    !openPreferenceEditor ||
+    !activePreferencePlayer ||
+    !isAdmin ||
+    isCompletedSession ||
+    typeof document === "undefined"
+  ) {
+    return null;
+  }
+
+  return createPortal(
+    <div
+      className="fixed z-[80] w-44 space-y-2 rounded-xl border border-gray-200 bg-white p-2.5 shadow-2xl"
+      style={{
+        left: openPreferenceEditor.left,
+        top: openPreferenceEditor.top,
+      }}
+    >
+      {isMixicano ? (
+        <>
+          <div className="space-y-1">
+            <p className="text-[9px] font-black uppercase tracking-wider text-gray-400">
+              Gender
+            </p>
+            <select
+              value={activePreferencePlayer.gender}
+              onChange={async (e) => {
+                const nextGender = e.target.value as PlayerGender;
+                onClose();
+                const nextPreference =
+                  nextGender === PlayerGender.MALE
+                    ? PartnerPreference.OPEN
+                    : PartnerPreference.FEMALE_FLEX;
+                await onUpdatePreference(
+                  activePreferencePlayer.userId,
+                  nextGender,
+                  nextPreference
+                );
+              }}
+              className="h-8 w-full rounded-lg border border-gray-200 bg-white px-2 text-[10px] font-black uppercase tracking-wide text-gray-700 focus:border-blue-400 focus:outline-none"
+            >
+              <option value={PlayerGender.MALE}>Male</option>
+              <option value={PlayerGender.FEMALE}>Female</option>
+            </select>
+          </div>
+          <div className="space-y-1">
+            <p className="text-[9px] font-black uppercase tracking-wider text-gray-400">
+              Open Tag
+            </p>
+            {activePreferencePlayer.gender === PlayerGender.FEMALE ? (
+              <select
+                value={activePreferencePlayer.partnerPreference}
+                onChange={async (e) => {
+                  const nextPreference = e.target.value as PartnerPreference;
+                  onClose();
+                  await onUpdatePreference(
+                    activePreferencePlayer.userId,
+                    activePreferencePlayer.gender,
+                    nextPreference
+                  );
+                }}
+                className="h-8 w-full rounded-lg border border-gray-200 bg-white px-2 text-[10px] font-black uppercase tracking-wide text-gray-700 focus:border-blue-400 focus:outline-none"
+              >
+                <option value={PartnerPreference.FEMALE_FLEX}>Default</option>
+                <option value={PartnerPreference.OPEN}>Open Tag</option>
+              </select>
+            ) : (
+              <p className="px-1 py-2 text-[10px] font-black uppercase tracking-wide text-gray-500">
+                Not Needed
+              </p>
+            )}
+          </div>
+        </>
+      ) : (
+        <p className="px-0.5 text-[9px] font-black uppercase tracking-wider text-gray-400">
+          Player Actions
+        </p>
+      )}
+      <div className="border-t border-gray-100 pt-1">
+        <button
+          type="button"
+          onClick={() =>
+            onRemovePlayer(
+              activePreferencePlayer.userId,
+              activePreferencePlayer.user.name
+            )
+          }
+          disabled={removingPlayerId === activePreferencePlayer.userId}
+          className="h-8 w-full rounded-lg border border-rose-200 bg-rose-50 text-[10px] font-black uppercase tracking-wide text-rose-700 disabled:opacity-50"
+        >
+          {removingPlayerId === activePreferencePlayer.userId
+            ? "Removing..."
+            : "Remove Player"}
+        </button>
+      </div>
+      <div className="flex justify-end">
+        <button
+          type="button"
+          onClick={onClose}
+          className="text-[9px] font-black uppercase tracking-widest text-gray-500"
+        >
+          Close
+        </button>
+      </div>
+    </div>,
+    document.body
+  );
+}

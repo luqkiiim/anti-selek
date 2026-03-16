@@ -3,126 +3,32 @@
 import { useEffect, useState, useCallback } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter, useParams } from "next/navigation";
-import Link from "next/link";
-import { createPortal } from "react-dom";
-import { FlashMessage, SectionCard } from "@/components/ui/chrome";
+import { FlashMessage } from "@/components/ui/chrome";
+import { LiveCourtsPanel } from "@/components/session/LiveCourtsPanel";
+import { ManualMatchModal } from "@/components/session/ManualMatchModal";
 import { SessionOverviewPanel } from "@/components/session/SessionOverviewPanel";
+import { SessionPreferenceEditorPortal } from "@/components/session/SessionPreferenceEditorPortal";
+import { SessionRosterModal } from "@/components/session/SessionRosterModal";
 import { LiveStandingsTable } from "@/components/session/LiveStandingsTable";
 import { SessionPodium } from "@/components/session/SessionPodium";
 import { ScoreSubmissionModal } from "@/components/session/ScoreSubmissionModal";
-import { canApprovePendingSubmission } from "@/lib/matchApprovalRules";
+import type {
+  CommunityUser,
+  CurrentUser,
+  Player,
+  PreferenceEditorState,
+  SessionData,
+} from "@/components/session/sessionTypes";
 import { getSessionModeLabel, getSessionTypeLabel } from "@/lib/sessionModeLabels";
 import { compareSessionStandings } from "@/lib/sessionStandings";
+import { useSessionMatchActions } from "./useSessionMatchActions";
 import {
   MatchStatus,
   PartnerPreference,
   PlayerGender,
   SessionMode,
   SessionStatus,
-  SessionType,
 } from "@/types/enums";
-
-interface Player {
-  userId: string;
-  sessionPoints: number;
-  isPaused: boolean;
-  isGuest: boolean;
-  gender: PlayerGender;
-  partnerPreference: PartnerPreference;
-  user: {
-    id: string;
-    name: string;
-    elo: number;
-  };
-}
-
-interface Match {
-  id: string;
-  status: string;
-  scoreSubmittedByUserId?: string | null;
-  team1User1: { id: string; name: string };
-  team1User2: { id: string; name: string };
-  team2User1: { id: string; name: string };
-  team2User2: { id: string; name: string };
-  team1Score?: number;
-  team2Score?: number;
-  completedAt?: string;
-}
-
-interface CompletedMatchInfo {
-  id: string;
-  team1User1Id: string;
-  team1User2Id: string;
-  team2User1Id: string;
-  team2User2Id: string;
-  team1Score?: number;
-  team2Score?: number;
-  winnerTeam: number;
-  status: string;
-  completedAt?: string;
-}
-
-interface Court {
-  id: string;
-  courtNumber: number;
-  currentMatch: Match | null;
-}
-
-interface CommunityUser {
-  id: string;
-  name: string;
-  elo: number;
-  gender: PlayerGender;
-  partnerPreference: PartnerPreference;
-}
-
-interface SessionData {
-  id: string;
-  code: string;
-  communityId?: string | null;
-  name: string;
-  type: string;
-  mode: SessionMode;
-  status: string;
-  viewerCanManage?: boolean;
-  viewerCommunityRole?: string | null;
-  courts: Court[];
-  players: Player[];
-  matches?: CompletedMatchInfo[];
-}
-
-interface CurrentUser {
-  id: string;
-  isAdmin?: boolean;
-  isClaimed?: boolean;
-}
-
-type ManualMatchSlot =
-  | "team1User1Id"
-  | "team1User2Id"
-  | "team2User1Id"
-  | "team2User2Id";
-
-interface ManualMatchFormState {
-  team1User1Id: string;
-  team1User2Id: string;
-  team2User1Id: string;
-  team2User2Id: string;
-}
-
-interface ScoreSubmissionDraft {
-  matchId: string;
-  team1Names: [string, string];
-  team2Names: [string, string];
-  team1Score: number;
-  team2Score: number;
-}
-
-const GUEST_ELO_PRESETS = [
-  { label: "Beginner", value: 850 },
-  { label: "Average", value: 1000 },
-  { label: "Advanced", value: 1200 },
-] as const;
 
 export default function SessionPage() {
   const { data: session, status } = useSession();
@@ -146,27 +52,8 @@ export default function SessionPage() {
   const [addingGuest, setAddingGuest] = useState(false);
   const [savingPreferencesFor, setSavingPreferencesFor] = useState<string | null>(null);
   const [removingPlayerId, setRemovingPlayerId] = useState<string | null>(null);
-  const [openPreferenceEditor, setOpenPreferenceEditor] = useState<{
-    userId: string;
-    top: number;
-    left: number;
-  } | null>(null);
-
-  // Track scores per match locally
-  const [matchScores, setMatchScores] = useState<Record<string, { team1: string; team2: string }>>({});
-  const [submittingMatchId, setSubmittingMatchId] = useState<string | null>(null);
-  const [scoreSubmissionDraft, setScoreSubmissionDraft] = useState<ScoreSubmissionDraft | null>(null);
-  const [reopeningMatchId, setReopeningMatchId] = useState<string | null>(null);
-  const [undoingCourtId, setUndoingCourtId] = useState<string | null>(null);
-  const [creatingOpenMatches, setCreatingOpenMatches] = useState(false);
-  const [manualCourtId, setManualCourtId] = useState<string | null>(null);
-  const [creatingManualMatch, setCreatingManualMatch] = useState(false);
-  const [manualMatchForm, setManualMatchForm] = useState<ManualMatchFormState>({
-    team1User1Id: "",
-    team1User2Id: "",
-    team2User1Id: "",
-    team2User2Id: "",
-  });
+  const [openPreferenceEditor, setOpenPreferenceEditor] =
+    useState<PreferenceEditorState | null>(null);
 
   const togglePreferenceEditor = (userId: string, triggerEl: HTMLElement) => {
     setOpenPreferenceEditor((prev) => {
@@ -246,6 +133,37 @@ export default function SessionPage() {
       console.error(err);
     }
   }, [safeJson]);
+
+  const {
+    matchScores,
+    submittingMatchId,
+    scoreSubmissionDraft,
+    reopeningMatchId,
+    undoingCourtId,
+    creatingOpenMatches,
+    manualCourtId,
+    creatingManualMatch,
+    manualMatchForm,
+    createMatchesForCourts,
+    openManualMatchModal,
+    closeManualMatchModal,
+    updateManualMatchSlot,
+    createManualMatch,
+    reshuffleMatch,
+    undoMatchSelection,
+    handleScoreChange,
+    openScoreSubmissionDraft,
+    closeScoreSubmissionDraft,
+    submitScore,
+    approveScore,
+    reopenScoreForEdit,
+  } = useSessionMatchActions({
+    code,
+    sessionData,
+    safeJson,
+    fetchSession,
+    setError,
+  });
 
   const fetchCommunityPlayers = async () => {
     if (!sessionData?.communityId) return;
@@ -417,101 +335,6 @@ export default function SessionPage() {
     }
   };
 
-  const createMatchesForCourts = async (courtIds: string[]) => {
-    if (courtIds.length === 0) return;
-
-    setCreatingOpenMatches(true);
-    setError("");
-    try {
-      const res = await fetch(`/api/sessions/${code}/generate-match`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(
-          courtIds.length === 1 ? { courtId: courtIds[0] } : { courtIds }
-        ),
-      });
-      if (res.ok) {
-        fetchSession();
-      } else {
-        const data = await safeJson(res);
-        setError(data.error || "Failed to create matches");
-      }
-    } catch (err) {
-      console.error(err);
-      setError("Network error creating matches");
-    } finally {
-      setCreatingOpenMatches(false);
-    }
-  };
-
-  const openManualMatchModal = (courtId: string) => {
-    setManualCourtId(courtId);
-    setManualMatchForm({
-      team1User1Id: "",
-      team1User2Id: "",
-      team2User1Id: "",
-      team2User2Id: "",
-    });
-    setError("");
-  };
-
-  const closeManualMatchModal = () => {
-    setManualCourtId(null);
-    setCreatingManualMatch(false);
-    setManualMatchForm({
-      team1User1Id: "",
-      team1User2Id: "",
-      team2User1Id: "",
-      team2User2Id: "",
-    });
-  };
-
-  const updateManualMatchSlot = (slot: ManualMatchSlot, value: string) => {
-    setManualMatchForm((prev) => ({
-      ...prev,
-      [slot]: value,
-    }));
-  };
-
-  const createManualMatch = async () => {
-    if (!manualCourtId) return;
-
-    const { team1User1Id, team1User2Id, team2User1Id, team2User2Id } = manualMatchForm;
-    if (!team1User1Id || !team1User2Id || !team2User1Id || !team2User2Id) {
-      setError("Choose all 4 players before creating a manual match");
-      return;
-    }
-
-    setCreatingManualMatch(true);
-    setError("");
-    try {
-      const res = await fetch(`/api/sessions/${code}/generate-match`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          courtId: manualCourtId,
-          manualTeams: {
-            team1: [team1User1Id, team1User2Id],
-            team2: [team2User1Id, team2User2Id],
-          },
-        }),
-      });
-      const data = await safeJson(res);
-      if (!res.ok) {
-        setError(data.error || "Failed to create manual match");
-        return;
-      }
-
-      closeManualMatchModal();
-      fetchSession();
-    } catch (err) {
-      console.error(err);
-      setError("Network error creating manual match");
-    } finally {
-      setCreatingManualMatch(false);
-    }
-  };
-
   const addGuestToSession = async () => {
     const name = guestName.trim();
     if (!name) return;
@@ -555,160 +378,6 @@ export default function SessionPage() {
       setError("Failed to add guest");
     } finally {
       setAddingGuest(false);
-    }
-  };
-
-  const reshuffleMatch = async (courtId: string) => {
-    if (!confirm("Are you sure you want to reshuffle? This will delete the current match and pick new players.")) return;
-    try {
-      const res = await fetch(`/api/sessions/${code}/generate-match`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ courtId, forceReshuffle: true }),
-      });
-      if (res.ok) {
-        fetchSession();
-      } else {
-        const data = await safeJson(res);
-        setError(data.error || "Failed to reshuffle match");
-      }
-    } catch (err) {
-      console.error(err);
-      setError("Network error reshuffling match");
-    }
-  };
-
-  const undoMatchSelection = async (courtId: string) => {
-    if (!confirm("Undo this match selection? The 4 selected players will return to the pool.")) return;
-    setUndoingCourtId(courtId);
-    setError("");
-    try {
-      const res = await fetch(`/api/sessions/${code}/generate-match`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ courtId, undoCurrentMatch: true }),
-      });
-      if (res.ok) {
-        fetchSession();
-      } else {
-        const data = await safeJson(res);
-        setError(data.error || "Failed to undo match");
-      }
-    } catch (err) {
-      console.error(err);
-      setError("Network error undoing match");
-    } finally {
-      setUndoingCourtId(null);
-    }
-  };
-
-  const handleScoreChange = (matchId: string, team: 'team1' | 'team2', value: string) => {
-    setMatchScores(prev => ({
-      ...prev,
-      [matchId]: {
-        ...(prev[matchId] || { team1: "", team2: "" }),
-        [team]: value
-      }
-    }));
-  };
-
-  const openScoreSubmissionDraft = (match: Match) => {
-    const scores = matchScores[match.id];
-    if (!scores || !scores.team1 || !scores.team2) return;
-
-    const team1Score = parseInt(scores.team1, 10);
-    const team2Score = parseInt(scores.team2, 10);
-    if (Number.isNaN(team1Score) || Number.isNaN(team2Score)) return;
-
-    setScoreSubmissionDraft({
-      matchId: match.id,
-      team1Names: [match.team1User1.name, match.team1User2.name],
-      team2Names: [match.team2User1.name, match.team2User2.name],
-      team1Score,
-      team2Score,
-    });
-  };
-
-  const submitScore = async (draft: ScoreSubmissionDraft) => {
-    setSubmittingMatchId(draft.matchId);
-    setError("");
-
-    try {
-      const res = await fetch(`/api/matches/${draft.matchId}/score`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          team1Score: draft.team1Score,
-          team2Score: draft.team2Score,
-        }),
-      });
-      if (res.ok) {
-        // Clear local scores for this match
-        setMatchScores(prev => {
-          const newScores = { ...prev };
-          delete newScores[draft.matchId];
-          return newScores;
-        });
-        setScoreSubmissionDraft(null);
-        fetchSession();
-      } else {
-        const data = await safeJson(res);
-        setError(data.error || "Failed to submit score");
-        setScoreSubmissionDraft(null);
-      }
-    } catch (err) {
-      console.error(err);
-      setError("Network error submitting score");
-      setScoreSubmissionDraft(null);
-    } finally {
-      setSubmittingMatchId(null);
-    }
-  };
-
-  const approveScore = async (matchId: string, overrideTeam1?: number, overrideTeam2?: number) => {
-    try {
-      const res = await fetch(`/api/matches/${matchId}/approve`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          team1Score: overrideTeam1,
-          team2Score: overrideTeam2,
-        }),
-      });
-      if (res.ok) {
-        fetchSession();
-      } else {
-        const data = await safeJson(res);
-        setError(data.error || "Failed to approve score");
-      }
-    } catch (err) {
-      console.error(err);
-    }
-  };
-
-  const reopenScoreForEdit = async (matchId: string) => {
-    setReopeningMatchId(matchId);
-    setError("");
-    try {
-      const res = await fetch(`/api/matches/${matchId}/reopen`, {
-        method: "POST",
-      });
-      if (res.ok) {
-        setMatchScores((prev) => {
-          const next = { ...prev };
-          delete next[matchId];
-          return next;
-        });
-        fetchSession();
-      } else {
-        const data = await safeJson(res);
-        setError(data.error || "Failed to reopen score entry");
-      }
-    } catch (err) {
-      console.error(err);
-      setError("Network error reopening score entry");
-    } finally {
-      setReopeningMatchId(null);
     }
   };
 
@@ -870,12 +539,28 @@ export default function SessionPage() {
     sessionData.communityId && !player.isGuest
       ? `/profile/${player.user.id}?communityId=${sessionData.communityId}`
       : `/profile/${player.user.id}`;
-  const openRosterModal = () => {
-    fetchCommunityPlayers();
+  const resetRosterInputs = () => {
+    setRosterSearch("");
     setGuestName("");
     setGuestGender(PlayerGender.MALE);
     setGuestPreference(PartnerPreference.OPEN);
     setGuestInitialElo(1000);
+  };
+  const closeRosterModal = () => {
+    resetRosterInputs();
+    setShowRosterModal(false);
+  };
+  const handleGuestGenderChange = (nextGender: PlayerGender) => {
+    setGuestGender(nextGender);
+    setGuestPreference(
+      nextGender === PlayerGender.FEMALE
+        ? PartnerPreference.FEMALE_FLEX
+        : PartnerPreference.OPEN
+    );
+  };
+  const openRosterModal = () => {
+    fetchCommunityPlayers();
+    resetRosterInputs();
     setShowRosterModal(true);
   };
 
@@ -926,263 +611,30 @@ export default function SessionPage() {
         {error ? <FlashMessage tone="error">{error}</FlashMessage> : null}
 
         {!isCompletedSession ? (
-          <SectionCard
-            title={sessionData.status === SessionStatus.ACTIVE ? "Live Courts" : "Courts"}
-            action={
-              <div className="flex flex-wrap items-center justify-end gap-2">
-                <span className="app-chip app-chip-info">{activeMatchesCount} in use</span>
-                <span className="app-chip app-chip-neutral">{readyCourtsCount} ready</span>
-                {sessionData.status === SessionStatus.ACTIVE &&
-                isAdmin &&
-                creatableOpenCourtCount > 0 ? (
-                  <button
-                    type="button"
-                    onClick={() => createMatchesForCourts(creatableOpenCourtIds)}
-                    disabled={creatingOpenMatches}
-                    className="app-button-primary"
-                  >
-                    {creatingOpenMatches
-                      ? creatableOpenCourtCount === 1
-                        ? "Creating..."
-                        : `Creating ${creatableOpenCourtCount}...`
-                      : creatableOpenCourtCount === 1
-                        ? "Create Match"
-                        : `Create ${creatableOpenCourtCount} Matches`}
-                  </button>
-                ) : null}
-              </div>
-            }
-          >
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3">
-              {sessionData.courts
-                .sort((a, b) => a.courtNumber - b.courtNumber)
-                .map((court) => {
-                  const currentMatch = court.currentMatch;
-                  const isParticipant =
-                    currentMatch &&
-                    [
-                      currentMatch.team1User1.id,
-                      currentMatch.team1User2.id,
-                      currentMatch.team2User1.id,
-                      currentMatch.team2User2.id,
-                    ].includes(currentUserId);
-
-                  const canEdit =
-                    currentMatch?.status === MatchStatus.IN_PROGRESS && (isAdmin || isParticipant);
-                  const canConfirmPending =
-                    currentMatch?.status === MatchStatus.PENDING_APPROVAL &&
-                    (currentMatch.scoreSubmittedByUserId
-                      ? canApprovePendingSubmission({
-                          match: {
-                            team1User1Id: currentMatch.team1User1.id,
-                            team1User2Id: currentMatch.team1User2.id,
-                            team2User1Id: currentMatch.team2User1.id,
-                            team2User2Id: currentMatch.team2User2.id,
-                          },
-                          approverUserId: currentUserId,
-                          approverIsAdmin: isAdmin,
-                          approverIsClaimed: isClaimedUser,
-                          scoreSubmittedByUserId: currentMatch.scoreSubmittedByUserId,
-                        })
-                      : isAdmin || isParticipant);
-                  const scores = currentMatch
-                    ? matchScores[currentMatch.id] || { team1: "", team2: "" }
-                    : { team1: "", team2: "" };
-
-                  return (
-                    <div
-                      key={court.id}
-                      className="flex min-w-0 flex-col overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm"
-                    >
-                      <div className="flex items-center justify-between border-b border-gray-100 bg-gray-50/80 px-3 py-2.5">
-                        <h2 className="text-sm font-black uppercase tracking-widest text-gray-500">
-                          Court {court.courtNumber}
-                        </h2>
-                        <div className="flex gap-2">
-                          {sessionData.status === SessionStatus.ACTIVE && !court.currentMatch && isAdmin ? (
-                            <button
-                              onClick={() => openManualMatchModal(court.id)}
-                              className="rounded-lg bg-gray-900 px-2.5 py-1.5 text-[10px] font-black uppercase tracking-wider text-white transition-all active:scale-95"
-                            >
-                              Manual
-                            </button>
-                          ) : null}
-                          {currentMatch && currentMatch.status === MatchStatus.IN_PROGRESS && isAdmin ? (
-                            <button
-                              onClick={() => reshuffleMatch(court.id)}
-                              className="flex items-center gap-1 rounded-lg bg-gray-100 px-2.5 py-1.5 text-[10px] font-black uppercase tracking-wider text-gray-600 transition-all active:scale-95"
-                              title="Pick different players"
-                            >
-                              Reshuffle
-                            </button>
-                          ) : null}
-                          {currentMatch && currentMatch.status === MatchStatus.IN_PROGRESS && isAdmin ? (
-                            <button
-                              onClick={() => undoMatchSelection(court.id)}
-                              disabled={undoingCourtId === court.id}
-                              className="flex items-center gap-1 rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-1.5 text-[10px] font-black uppercase tracking-wider text-rose-700 transition-all active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
-                              title="Put selected players back in pool"
-                            >
-                              {undoingCourtId === court.id ? "Undoing..." : "Undo"}
-                            </button>
-                          ) : null}
-                        </div>
-                      </div>
-
-                      <div className="flex flex-1 flex-col justify-center p-3">
-                        {currentMatch ? (
-                          <div className="space-y-3">
-                            <div
-                              className={`rounded-xl border-2 p-3 transition-all ${
-                                currentMatch.status === MatchStatus.PENDING_APPROVAL
-                                  ? "border-gray-100 bg-gray-50"
-                                  : "border-blue-100 bg-blue-50/50"
-                              }`}
-                            >
-                              <div className="flex items-center justify-between gap-3">
-                                <div className="min-w-0 flex-1">
-                                  <p className="mb-0.5 text-[10px] font-black uppercase tracking-widest text-blue-600">
-                                    Team 1
-                                  </p>
-                                  <p className="truncate text-sm font-bold leading-tight text-gray-900">
-                                    {currentMatch.team1User1.name}
-                                    <br />
-                                    {currentMatch.team1User2.name}
-                                  </p>
-                                </div>
-                                {canEdit ? (
-                                  <input
-                                    type="number"
-                                    inputMode="numeric"
-                                    value={scores.team1}
-                                    onChange={(e) =>
-                                      handleScoreChange(currentMatch.id, "team1", e.target.value)
-                                    }
-                                    className="h-12 w-14 rounded-xl border-2 border-blue-200 bg-white text-center text-xl font-black focus:border-blue-500 focus:outline-none"
-                                    placeholder="0"
-                                  />
-                                ) : currentMatch.status === MatchStatus.PENDING_APPROVAL ? (
-                                  <div className="pr-2 text-2xl font-black text-gray-900">
-                                    {currentMatch.team1Score}
-                                  </div>
-                                ) : null}
-                              </div>
-                            </div>
-
-                            <div className="relative flex items-center justify-center py-1">
-                              <div className="h-px flex-1 bg-gray-100" />
-                              <span className="mx-3 text-[10px] font-black uppercase italic text-gray-300">
-                                VS
-                              </span>
-                              <div className="h-px flex-1 bg-gray-100" />
-                            </div>
-
-                            <div
-                              className={`rounded-xl border-2 p-3 transition-all ${
-                                currentMatch.status === MatchStatus.PENDING_APPROVAL
-                                  ? "border-gray-100 bg-gray-50"
-                                  : "border-blue-200 bg-blue-50"
-                              }`}
-                            >
-                              <div className="flex items-center justify-between gap-3">
-                                <div className="min-w-0 flex-1">
-                                  <p className="mb-0.5 text-[10px] font-black uppercase tracking-widest text-blue-700">
-                                    Team 2
-                                  </p>
-                                  <p className="truncate text-sm font-bold leading-tight text-gray-900">
-                                    {currentMatch.team2User1.name}
-                                    <br />
-                                    {currentMatch.team2User2.name}
-                                  </p>
-                                </div>
-                                {canEdit ? (
-                                  <input
-                                    type="number"
-                                    inputMode="numeric"
-                                    value={scores.team2}
-                                    onChange={(e) =>
-                                      handleScoreChange(currentMatch.id, "team2", e.target.value)
-                                    }
-                                    className="h-12 w-14 rounded-xl border-2 border-blue-200 bg-white text-center text-xl font-black focus:border-blue-500 focus:outline-none"
-                                    placeholder="0"
-                                  />
-                                ) : currentMatch.status === MatchStatus.PENDING_APPROVAL ? (
-                                  <div className="pr-2 text-2xl font-black text-gray-900">
-                                    {currentMatch.team2Score}
-                                  </div>
-                                ) : null}
-                              </div>
-                            </div>
-
-                            {canEdit ? (
-                              <div className="pt-2">
-                                <button
-                                  onClick={() => openScoreSubmissionDraft(currentMatch)}
-                                  disabled={
-                                    submittingMatchId === currentMatch.id || !scores.team1 || !scores.team2
-                                  }
-                                  className="w-full rounded-xl bg-gray-900 py-3 text-sm font-black uppercase text-white shadow-md transition-all active:scale-95 active:bg-gray-800 disabled:opacity-50"
-                                >
-                                  {submittingMatchId === currentMatch.id ? "Saving..." : "Submit Score"}
-                                </button>
-                              </div>
-                            ) : null}
-
-                            {currentMatch.status === MatchStatus.PENDING_APPROVAL ? (
-                              <div className="space-y-2 pt-2">
-                                {canConfirmPending || isAdmin ? (
-                                  <div className={`grid gap-2 ${isAdmin ? "grid-cols-2" : "grid-cols-1"}`}>
-                                    {canConfirmPending ? (
-                                      <button
-                                        onClick={() => approveScore(currentMatch.id)}
-                                        className="w-full rounded-xl bg-blue-600 py-3 text-sm font-black uppercase text-white shadow-md transition-all active:scale-95 active:bg-blue-700"
-                                      >
-                                        Confirm Results
-                                      </button>
-                                    ) : null}
-                                    {isAdmin ? (
-                                      <button
-                                        onClick={() => reopenScoreForEdit(currentMatch.id)}
-                                        disabled={reopeningMatchId === currentMatch.id}
-                                        className="w-full rounded-xl border border-gray-200 bg-gray-100 py-3 text-sm font-black uppercase text-gray-700 transition-all active:scale-95 active:bg-gray-200 disabled:cursor-not-allowed disabled:opacity-50"
-                                      >
-                                        {reopeningMatchId === currentMatch.id ? "Opening..." : "Back To Edit"}
-                                      </button>
-                                    ) : null}
-                                  </div>
-                                ) : null}
-                                <div className="rounded-lg border border-orange-100 bg-orange-50 py-2 text-center text-[10px] font-black uppercase tracking-widest text-orange-700">
-                                  Awaiting Confirmation
-                                </div>
-                              </div>
-                            ) : null}
-
-                            {currentMatch.status === MatchStatus.IN_PROGRESS && !canEdit ? (
-                              <div className="py-2 text-center">
-                                <span className="inline-flex items-center rounded-full bg-blue-100 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-blue-800">
-                                  Match Active
-                                </span>
-                              </div>
-                            ) : null}
-                          </div>
-                        ) : (
-                          <div className="px-4 py-10 text-center">
-                            <div className="mb-2 text-xs font-black tracking-[0.35em] opacity-40">
-                              COURT
-                            </div>
-                            <p className="text-xs font-bold uppercase tracking-widest text-gray-400">
-                              {sessionData.status === SessionStatus.ACTIVE
-                                ? "Next match soon"
-                                : "Court Inactive"}
-                            </p>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-            </div>
-          </SectionCard>
+          <LiveCourtsPanel
+            sessionStatus={sessionData.status}
+            courts={sessionData.courts}
+            currentUserId={currentUserId}
+            isAdmin={isAdmin}
+            isClaimedUser={isClaimedUser}
+            activeMatchesCount={activeMatchesCount}
+            readyCourtsCount={readyCourtsCount}
+            creatableOpenCourtCount={creatableOpenCourtCount}
+            creatableOpenCourtIds={creatableOpenCourtIds}
+            creatingOpenMatches={creatingOpenMatches}
+            undoingCourtId={undoingCourtId}
+            reopeningMatchId={reopeningMatchId}
+            submittingMatchId={submittingMatchId}
+            matchScores={matchScores}
+            onCreateMatchesForCourts={createMatchesForCourts}
+            onOpenManualMatchModal={openManualMatchModal}
+            onReshuffleMatch={reshuffleMatch}
+            onUndoMatchSelection={undoMatchSelection}
+            onHandleScoreChange={handleScoreChange}
+            onOpenScoreSubmissionDraft={openScoreSubmissionDraft}
+            onApproveScore={approveScore}
+            onReopenScoreForEdit={reopenScoreForEdit}
+          />
         ) : null}
 
         {isCompletedSession ? (
@@ -1211,388 +663,56 @@ export default function SessionPage() {
           team1Score={scoreSubmissionDraft.team1Score}
           team2Score={scoreSubmissionDraft.team2Score}
           isSubmitting={submittingMatchId === scoreSubmissionDraft.matchId}
-          onClose={() => {
-            if (submittingMatchId === scoreSubmissionDraft.matchId) return;
-            setScoreSubmissionDraft(null);
-          }}
+          onClose={closeScoreSubmissionDraft}
           onConfirm={() => void submitScore(scoreSubmissionDraft)}
         />
       ) : null}
 
-      {openPreferenceEditor &&
-      activePreferencePlayer &&
-      isAdmin &&
-      !isCompletedSession &&
-      typeof document !== "undefined"
-        ? createPortal(
-            <div
-              className="fixed z-[80] w-44 space-y-2 rounded-xl border border-gray-200 bg-white p-2.5 shadow-2xl"
-              style={{
-                left: openPreferenceEditor.left,
-                top: openPreferenceEditor.top,
-              }}
-            >
-              {isMixicano ? (
-                <>
-                  <div className="space-y-1">
-                    <p className="text-[9px] font-black uppercase tracking-wider text-gray-400">
-                      Gender
-                    </p>
-                    <select
-                      value={activePreferencePlayer.gender}
-                      onChange={async (e) => {
-                        const nextGender = e.target.value as PlayerGender;
-                        setOpenPreferenceEditor(null);
-                        const nextPreference =
-                          nextGender === PlayerGender.MALE
-                            ? PartnerPreference.OPEN
-                            : PartnerPreference.FEMALE_FLEX;
-                        await updatePlayerPreference(
-                          activePreferencePlayer.userId,
-                          nextGender,
-                          nextPreference
-                        );
-                      }}
-                      className="h-8 w-full rounded-lg border border-gray-200 bg-white px-2 text-[10px] font-black uppercase tracking-wide text-gray-700 focus:outline-none focus:border-blue-400"
-                    >
-                      <option value={PlayerGender.MALE}>Male</option>
-                      <option value={PlayerGender.FEMALE}>Female</option>
-                    </select>
-                  </div>
-                  <div className="space-y-1">
-                    <p className="text-[9px] font-black uppercase tracking-wider text-gray-400">
-                      Open Tag
-                    </p>
-                    {activePreferencePlayer.gender === PlayerGender.FEMALE ? (
-                      <select
-                        value={activePreferencePlayer.partnerPreference}
-                        onChange={async (e) => {
-                          const nextPreference = e.target.value as PartnerPreference;
-                          setOpenPreferenceEditor(null);
-                          await updatePlayerPreference(
-                            activePreferencePlayer.userId,
-                            activePreferencePlayer.gender,
-                            nextPreference
-                          );
-                        }}
-                        className="h-8 w-full rounded-lg border border-gray-200 bg-white px-2 text-[10px] font-black uppercase tracking-wide text-gray-700 focus:outline-none focus:border-blue-400"
-                      >
-                        <option value={PartnerPreference.FEMALE_FLEX}>Default</option>
-                        <option value={PartnerPreference.OPEN}>Open Tag</option>
-                      </select>
-                    ) : (
-                      <p className="px-1 py-2 text-[10px] font-black uppercase tracking-wide text-gray-500">
-                        Not Needed
-                      </p>
-                    )}
-                  </div>
-                </>
-              ) : (
-                <p className="px-0.5 text-[9px] font-black uppercase tracking-wider text-gray-400">
-                  Player Actions
-                </p>
-              )}
-              <div className="border-t border-gray-100 pt-1">
-                <button
-                  type="button"
-                  onClick={() =>
-                    removePlayerFromSession(
-                      activePreferencePlayer.userId,
-                      activePreferencePlayer.user.name
-                    )
-                  }
-                  disabled={removingPlayerId === activePreferencePlayer.userId}
-                  className="h-8 w-full rounded-lg border border-rose-200 bg-rose-50 text-[10px] font-black uppercase tracking-wide text-rose-700 disabled:opacity-50"
-                >
-                  {removingPlayerId === activePreferencePlayer.userId
-                    ? "Removing..."
-                    : "Remove Player"}
-                </button>
-              </div>
-              <div className="flex justify-end">
-                <button
-                  type="button"
-                  onClick={() => setOpenPreferenceEditor(null)}
-                  className="text-[9px] font-black uppercase tracking-widest text-gray-500"
-                >
-                  Close
-                </button>
-              </div>
-            </div>,
-            document.body
-          )
-        : null}
+      <SessionPreferenceEditorPortal
+        openPreferenceEditor={openPreferenceEditor}
+        activePreferencePlayer={activePreferencePlayer}
+        isAdmin={isAdmin}
+        isCompletedSession={isCompletedSession}
+        isMixicano={isMixicano}
+        removingPlayerId={removingPlayerId}
+        onClose={() => setOpenPreferenceEditor(null)}
+        onUpdatePreference={updatePlayerPreference}
+        onRemovePlayer={removePlayerFromSession}
+      />
 
-      {/* Mobile-Friendly Roster Modal */}
-      {showRosterModal && (
-        <div className="fixed inset-0 bg-gray-900/70 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4 z-50">
-          <div className="bg-white rounded-t-3xl sm:rounded-2xl shadow-2xl max-w-lg w-full max-h-[92vh] flex flex-col animate-in slide-in-from-bottom duration-300">
-            <div className="px-4 py-3 border-b flex justify-between items-center">
-              <div>
-                <h2 className="text-base font-black text-gray-900">Add Players</h2>
-              </div>
-              <button 
-                onClick={() => {
-                  setShowRosterModal(false);
-                  setRosterSearch("");
-                  setGuestName("");
-                  setGuestGender(PlayerGender.MALE);
-                  setGuestPreference(PartnerPreference.OPEN);
-                  setGuestInitialElo(1000);
-                }}
-                className="bg-gray-100 text-gray-400 hover:text-gray-600 w-7 h-7 rounded-full flex items-center justify-center text-lg font-bold"
-              >
-                &times;
-              </button>
-            </div>
-            
-            {/* Search Bar */}
-            <div className="px-3 py-2 border-b bg-gray-50/50 space-y-2">
-              {isAdmin && (
-                <div
-                  className={`grid gap-2 ${
-                    isMixicano
-                      ? "grid-cols-1 sm:grid-cols-2 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto]"
-                      : "grid-cols-1 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]"
-                  }`}
-                >
-                  <input
-                    type="text"
-                    placeholder="Guest name..."
-                    value={guestName}
-                    onChange={(e) => setGuestName(e.target.value)}
-                    className="flex-1 h-9 bg-white border border-gray-200 rounded-lg px-3 text-xs font-bold focus:outline-none focus:border-blue-500 transition-all"
-                  />
-                  <select
-                    value={guestInitialElo}
-                    onChange={(e) => setGuestInitialElo(parseInt(e.target.value, 10))}
-                    className="h-9 bg-white border border-gray-200 rounded-lg px-2 text-[10px] font-bold focus:outline-none focus:border-blue-500 transition-all"
-                  >
-                    {GUEST_ELO_PRESETS.map((preset) => (
-                      <option key={preset.label} value={preset.value}>
-                        {preset.label} ({preset.value})
-                      </option>
-                    ))}
-                  </select>
-                  {isMixicano && (
-                    <>
-                      <select
-                        value={guestGender}
-                        onChange={(e) => {
-                          const nextGender = e.target.value as PlayerGender;
-                          setGuestGender(nextGender);
-                          setGuestPreference(
-                            nextGender === PlayerGender.FEMALE
-                              ? PartnerPreference.FEMALE_FLEX
-                              : PartnerPreference.OPEN
-                          );
-                        }}
-                        className="h-9 bg-white border border-gray-200 rounded-lg px-2 text-[10px] font-bold focus:outline-none focus:border-blue-500 transition-all"
-                      >
-                        <option value={PlayerGender.MALE}>Male</option>
-                        <option value={PlayerGender.FEMALE}>Female</option>
-                      </select>
-                      <select
-                        value={guestPreference}
-                        onChange={(e) => setGuestPreference(e.target.value as PartnerPreference)}
-                        className="h-9 bg-white border border-gray-200 rounded-lg px-2 text-[10px] font-bold focus:outline-none focus:border-blue-500 transition-all"
-                      >
-                        {guestGender === PlayerGender.FEMALE ? (
-                          <>
-                            <option value={PartnerPreference.FEMALE_FLEX}>Default</option>
-                            <option value={PartnerPreference.OPEN}>Open Tag</option>
-                          </>
-                        ) : (
-                          <option value={PartnerPreference.OPEN}>Open</option>
-                        )}
-                      </select>
-                    </>
-                  )}
-                  <button
-                    onClick={addGuestToSession}
-                    disabled={addingGuest || !guestName.trim()}
-                    className="h-9 bg-gray-900 text-white px-3 rounded-lg text-[10px] font-black uppercase tracking-wider disabled:opacity-50 disabled:cursor-not-allowed w-full sm:w-auto"
-                  >
-                    {addingGuest ? "Adding..." : "Add"}
-                  </button>
-                </div>
-              )}
-              <input
-                type="text"
-                placeholder="Search players..."
-                value={rosterSearch}
-                onChange={(e) => setRosterSearch(e.target.value)}
-                className="w-full h-9 bg-white border border-gray-200 rounded-lg px-3 text-xs font-bold focus:outline-none focus:border-blue-500 transition-all"
-              />
-            </div>
-            
-            <div className="flex-1 overflow-y-auto p-2.5 space-y-1.5">
-              {playersNotInSession.length === 0 ? (
-                <div className="text-center py-12 text-gray-400 italic text-sm">
-                  Everyone is already playing!
-                </div>
-              ) : (
-                playersNotInSession.map((player) => {
-                  return (
-                    <div
-                      key={player.id}
-                      className="flex justify-between items-center px-3 py-2 bg-gray-50 rounded-xl border border-gray-100 active:bg-gray-100 transition-colors"
-                    >
-                      <div className="flex items-center gap-2 min-w-0">
-                        <p className="font-black text-sm text-gray-900 truncate">{player.name}</p>
-                        <span className="text-[9px] text-gray-500 font-bold uppercase tracking-wider whitespace-nowrap">
-                          Rating {player.elo}
-                        </span>
-                      </div>
-                      <button
-                        onClick={() => addPlayerToSession(player.id)}
-                        disabled={addingPlayerId === player.id}
-                        className="bg-blue-600 text-white px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider shadow-sm active:scale-95 disabled:opacity-50 transition-all"
-                      >
-                        {addingPlayerId === player.id ? "..." : "Add"}
-                      </button>
-                    </div>
-                  );
-                })
-              )}
-            </div>
-            
-            <div className="p-3 bg-white border-t sm:rounded-b-2xl flex justify-end">
-              <button
-                onClick={() => {
-                  setShowRosterModal(false);
-                  setRosterSearch("");
-                  setGuestName("");
-                  setGuestGender(PlayerGender.MALE);
-                  setGuestPreference(PartnerPreference.OPEN);
-                  setGuestInitialElo(1000);
-                }}
-                className="bg-gray-900 text-white px-4 py-2 rounded-lg font-black uppercase tracking-widest text-[10px] shadow-sm active:scale-95 transition-all"
-              >
-                Done
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <SessionRosterModal
+        open={showRosterModal}
+        isAdmin={isAdmin}
+        isMixicano={isMixicano}
+        rosterSearch={rosterSearch}
+        guestName={guestName}
+        guestGender={guestGender}
+        guestPreference={guestPreference}
+        guestInitialElo={guestInitialElo}
+        addingGuest={addingGuest}
+        addingPlayerId={addingPlayerId}
+        playersNotInSession={playersNotInSession}
+        onClose={closeRosterModal}
+        onRosterSearchChange={setRosterSearch}
+        onGuestNameChange={setGuestName}
+        onGuestGenderChange={handleGuestGenderChange}
+        onGuestPreferenceChange={setGuestPreference}
+        onGuestInitialEloChange={setGuestInitialElo}
+        onAddGuest={addGuestToSession}
+        onAddPlayer={addPlayerToSession}
+      />
 
-      {manualCourtId && (
-        <div className="fixed inset-0 bg-gray-900/70 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4 z-50">
-          <div className="bg-white rounded-t-3xl sm:rounded-2xl shadow-2xl max-w-lg w-full max-h-[92vh] flex flex-col animate-in slide-in-from-bottom duration-300">
-            <div className="px-4 py-3 border-b flex justify-between items-center">
-              <div>
-                <h2 className="text-base font-black text-gray-900">Manual Match</h2>
-                <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-0.5">
-                  {activeManualCourt ? `Court ${activeManualCourt.courtNumber}` : "Select Teams"}
-                </p>
-              </div>
-              <button
-                onClick={closeManualMatchModal}
-                className="bg-gray-100 text-gray-400 hover:text-gray-600 w-7 h-7 rounded-full flex items-center justify-center text-lg font-bold"
-              >
-                &times;
-              </button>
-            </div>
-
-            <div className="p-4 space-y-4 overflow-y-auto">
-              <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4 space-y-3">
-                <p className="text-[10px] font-black uppercase tracking-widest text-blue-600">
-                  Team 1
-                </p>
-                {(["team1User1Id", "team1User2Id"] as ManualMatchSlot[]).map((slot, index) => (
-                  <select
-                    key={slot}
-                    value={manualMatchForm[slot]}
-                    onChange={(e) => updateManualMatchSlot(slot, e.target.value)}
-                    className="w-full h-11 bg-white border border-gray-200 rounded-xl px-3 text-sm font-bold focus:outline-none focus:border-blue-500 transition-all"
-                  >
-                    <option value="">Choose Player {index + 1}</option>
-                    {manualMatchPlayerOptions.map((player) => {
-                      const isTakenElsewhere =
-                        selectedManualPlayerIds.has(player.userId) &&
-                        manualMatchForm[slot] !== player.userId;
-                      return (
-                        <option
-                          key={player.userId}
-                          value={player.userId}
-                          disabled={isTakenElsewhere}
-                        >
-                          {player.user.name} ({player.user.elo})
-                        </option>
-                      );
-                    })}
-                  </select>
-                ))}
-              </div>
-
-              <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4 space-y-3">
-                <p className="text-[10px] font-black uppercase tracking-widest text-blue-700">
-                  Team 2
-                </p>
-                {(["team2User1Id", "team2User2Id"] as ManualMatchSlot[]).map((slot, index) => (
-                  <select
-                    key={slot}
-                    value={manualMatchForm[slot]}
-                    onChange={(e) => updateManualMatchSlot(slot, e.target.value)}
-                    className="w-full h-11 bg-white border border-gray-200 rounded-xl px-3 text-sm font-bold focus:outline-none focus:border-blue-500 transition-all"
-                  >
-                    <option value="">Choose Player {index + 1}</option>
-                    {manualMatchPlayerOptions.map((player) => {
-                      const isTakenElsewhere =
-                        selectedManualPlayerIds.has(player.userId) &&
-                        manualMatchForm[slot] !== player.userId;
-                      return (
-                        <option
-                          key={player.userId}
-                          value={player.userId}
-                          disabled={isTakenElsewhere}
-                        >
-                          {player.user.name} ({player.user.elo})
-                        </option>
-                      );
-                    })}
-                  </select>
-                ))}
-              </div>
-
-              <div className="rounded-2xl border border-gray-100 bg-blue-50 px-4 py-3">
-                <p className="text-[10px] font-black uppercase tracking-widest text-blue-700">
-                  Note
-                </p>
-                <p className="text-xs text-blue-900 mt-1">
-                  This bypasses automatic balancing for this one match only. Matchmaking state still updates normally when the result is approved.
-                </p>
-              </div>
-
-              {manualMatchPlayerOptions.length < 4 && (
-                <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3">
-                  <p className="text-xs font-bold text-amber-800">
-                    At least 4 available, unpaused players are required to create a manual match.
-                  </p>
-                </div>
-              )}
-            </div>
-
-            <div className="p-4 border-t bg-white sm:rounded-b-2xl flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={closeManualMatchModal}
-                className="px-4 py-2 rounded-xl border border-gray-200 text-gray-600 text-[10px] font-black uppercase tracking-widest"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={createManualMatch}
-                disabled={creatingManualMatch || manualMatchPlayerOptions.length < 4}
-                className="px-4 py-2 rounded-xl bg-gray-900 text-white text-[10px] font-black uppercase tracking-widest disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {creatingManualMatch ? "Creating..." : "Create Match"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ManualMatchModal
+        open={manualCourtId !== null}
+        court={activeManualCourt}
+        manualMatchForm={manualMatchForm}
+        manualMatchPlayerOptions={manualMatchPlayerOptions}
+        selectedManualPlayerIds={selectedManualPlayerIds}
+        creatingManualMatch={creatingManualMatch}
+        onClose={closeManualMatchModal}
+        onUpdateSlot={updateManualMatchSlot}
+        onCreateMatch={createManualMatch}
+      />
     </div>
   );
 }
