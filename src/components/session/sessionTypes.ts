@@ -62,7 +62,6 @@ export interface SessionData {
   type: string;
   mode: SessionMode;
   status: string;
-  matchmakerVersion?: "v1" | "v2" | null;
   viewerCanManage?: boolean;
   viewerCommunityRole?: string | null;
   courts: Court[];

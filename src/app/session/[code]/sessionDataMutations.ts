@@ -38,7 +38,6 @@ interface MatchPayload {
 
 interface SessionSnapshotLike {
   status?: string;
-  matchmakerVersion?: SessionData["matchmakerVersion"];
   courts?: Array<{
     id: string;
     courtNumber: number;
@@ -245,8 +244,6 @@ export function mergeSessionSnapshot(
         })
       : current.courts,
     matches: snapshot.matches ?? current.matches,
-    matchmakerVersion:
-      snapshot.matchmakerVersion ?? current.matchmakerVersion,
     viewerCanManage: current.viewerCanManage,
     viewerCommunityRole: current.viewerCommunityRole,
   };

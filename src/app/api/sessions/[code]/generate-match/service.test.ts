@@ -15,14 +15,6 @@ vi.mock("@/lib/communityElo", () => ({
   getCommunityEloByUserId: vi.fn(),
 }));
 
-vi.mock("@/lib/matchmaking/autoMatch", () => ({
-  findBestAutoMatchSelection: vi.fn(),
-}));
-
-vi.mock("@/lib/matchmaking/batchAutoMatch", () => ({
-  findBestBatchAutoMatchSelection: vi.fn(),
-}));
-
 vi.mock("@/lib/matchmaking/v2", async () => {
   const actual = await vi.importActual<typeof import("@/lib/matchmaking/v2")>(
     "@/lib/matchmaking/v2"
@@ -46,8 +38,6 @@ vi.mock("@/lib/matchmaking/partitioning", async () => {
   };
 });
 
-import { findBestAutoMatchSelection } from "@/lib/matchmaking/autoMatch";
-import { findBestBatchAutoMatchSelection } from "@/lib/matchmaking/batchAutoMatch";
 import {
   findBestAutoMatchSelectionV2,
   findBestBatchAutoMatchSelectionV2,
@@ -60,7 +50,6 @@ import {
 import {
   ensureEnoughPlayers,
   GenerateMatchError,
-  getMatchmakerVersion,
   getRequestedOpenCourts,
   getRankedCandidates,
   parseGenerateMatchRequest,
@@ -174,7 +163,6 @@ function createSelection(
 describe("generate match service", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    delete process.env.MATCHMAKER_VERSION;
   });
 
   describe("parseGenerateMatchRequest", () => {
@@ -445,54 +433,7 @@ describe("generate match service", () => {
   });
 
   describe("getRankedCandidates", () => {
-    it("defaults to v2", () => {
-      expect(getMatchmakerVersion()).toBe("v2");
-    });
-
-    it("uses matchmaking credit and virtual active time when ranking resumed players in v1", () => {
-      process.env.MATCHMAKER_VERSION = "v1";
-      const now = new Date("2026-01-01T00:00:00Z");
-      const players = [
-        createSessionPlayer("resumed", {
-          matchesPlayed: 0,
-          matchmakingMatchesCredit: 5,
-          availableSince: now,
-        }),
-        createSessionPlayer("A", {
-          matchesPlayed: 5,
-          availableSince: new Date("2025-12-31T23:50:00Z"),
-        }),
-        createSessionPlayer("B", {
-          matchesPlayed: 5,
-          availableSince: new Date("2025-12-31T23:49:00Z"),
-        }),
-        createSessionPlayer("C", {
-          matchesPlayed: 5,
-          availableSince: new Date("2025-12-31T23:48:00Z"),
-        }),
-        createSessionPlayer("D", {
-          matchesPlayed: 5,
-          availableSince: new Date("2025-12-31T23:47:00Z"),
-        }),
-      ];
-
-      const { availableCandidates, rankedCandidates, matchmakerVersion } =
-        getRankedCandidates(createSessionData({ players }), new Set());
-
-      expect(matchmakerVersion).toBe("v1");
-      expect(
-        rankedCandidates.find((candidate) => candidate.userId === "resumed")
-          ?.matchesPlayed
-      ).toBe(5);
-      expect(rankedCandidates[0]?.userId).toBe("resumed");
-      expect(
-        availableCandidates.find((candidate) => candidate.userId === "resumed")
-          ?.matchesPlayed
-      ).toBe(0);
-    });
-
-    it("uses rotation-load ranking in v2", () => {
-      process.env.MATCHMAKER_VERSION = "v2";
+    it("uses rotation-load ranking", () => {
       const now = new Date("2026-01-01T00:00:00Z");
       const players = [
         createSessionPlayer("resumed", {
@@ -510,10 +451,9 @@ describe("generate match service", () => {
         }),
       ];
 
-      const { availableCandidates, rankedCandidates, matchmakerVersion } =
+      const { availableCandidates, rankedCandidates } =
         getRankedCandidates(createSessionData({ players }), new Set());
 
-      expect(matchmakerVersion).toBe("v2");
       expect(
         availableCandidates.find((candidate) => candidate.userId === "resumed")
           ?.matchmakingMatchesCredit
@@ -526,12 +466,11 @@ describe("generate match service", () => {
 
   describe("selectSingleCourtMatch", () => {
     it("throws when no valid pairing exists", () => {
-      vi.mocked(findBestAutoMatchSelection).mockReturnValueOnce(null);
+      vi.mocked(findBestAutoMatchSelectionV2).mockReturnValueOnce(null);
 
       expect(() =>
         selectSingleCourtMatch({
-          matchmakerVersion: "v1",
-          rankedCandidates: [] as ReturnType<typeof import("@/lib/matchmaking/fairness").rankPlayersByFairness>,
+          rankedCandidates: [] as ReturnType<typeof import("@/lib/matchmaking/v2").rankPlayersByRotationLoad>,
           playersById: new Map(),
           sessionData: createSessionData(),
           rotationHistory: buildRotationHistory([]),
@@ -550,33 +489,12 @@ describe("generate match service", () => {
         team1: ["A", "B"],
         team2: ["C", "D"],
       });
-      vi.mocked(findBestAutoMatchSelection).mockReturnValueOnce(selection as any);
-
-      expect(
-        selectSingleCourtMatch({
-          matchmakerVersion: "v1",
-          rankedCandidates: [] as ReturnType<typeof import("@/lib/matchmaking/fairness").rankPlayersByFairness>,
-          playersById: new Map(),
-          sessionData: createSessionData(),
-          rotationHistory: buildRotationHistory([]),
-          reshuffleSource: null,
-        })
-      ).toEqual(selection);
-      expect(findBestAutoMatchSelection).toHaveBeenCalledTimes(1);
-    });
-
-    it("uses the v2 selector when configured", () => {
-      const selection = createSelection(["A", "B", "C", "D"], {
-        team1: ["A", "C"],
-        team2: ["B", "D"],
-      });
       vi.mocked(findBestAutoMatchSelectionV2).mockReturnValueOnce(
         selection as any
       );
 
       expect(
         selectSingleCourtMatch({
-          matchmakerVersion: "v2",
           rankedCandidates: [] as ReturnType<typeof import("@/lib/matchmaking/v2").rankPlayersByRotationLoad>,
           playersById: new Map(),
           sessionData: createSessionData(),
@@ -585,7 +503,6 @@ describe("generate match service", () => {
         })
       ).toEqual(selection);
       expect(findBestAutoMatchSelectionV2).toHaveBeenCalledTimes(1);
-      expect(findBestAutoMatchSelection).not.toHaveBeenCalled();
     });
 
     it("falls back to an alternative quartet when reshuffle repeats the same players", () => {
@@ -597,14 +514,13 @@ describe("generate match service", () => {
         team1: ["A", "E"],
         team2: ["B", "F"],
       });
-      vi.mocked(findBestAutoMatchSelection)
+      vi.mocked(findBestAutoMatchSelectionV2)
         .mockReturnValueOnce(initial as any)
         .mockReturnValueOnce(alternative as any);
 
       expect(
         selectSingleCourtMatch({
-          matchmakerVersion: "v1",
-          rankedCandidates: [] as ReturnType<typeof import("@/lib/matchmaking/fairness").rankPlayersByFairness>,
+          rankedCandidates: [] as ReturnType<typeof import("@/lib/matchmaking/v2").rankPlayersByRotationLoad>,
           playersById: new Map(),
           sessionData: createSessionData(),
           rotationHistory: buildRotationHistory([]),
@@ -614,7 +530,7 @@ describe("generate match service", () => {
           },
         })
       ).toEqual(alternative);
-      expect(findBestAutoMatchSelection).toHaveBeenCalledTimes(2);
+      expect(findBestAutoMatchSelectionV2).toHaveBeenCalledTimes(2);
     });
 
     it("falls back to an alternative partition when only the quartet repeats", () => {
@@ -622,7 +538,7 @@ describe("generate match service", () => {
         team1: ["A", "B"],
         team2: ["C", "D"],
       });
-      vi.mocked(findBestAutoMatchSelection)
+      vi.mocked(findBestAutoMatchSelectionV2)
         .mockReturnValueOnce(initial as any)
         .mockReturnValueOnce(null);
       vi.mocked(evaluateBestPartition).mockReturnValueOnce({
@@ -635,8 +551,7 @@ describe("generate match service", () => {
 
       expect(
         selectSingleCourtMatch({
-          matchmakerVersion: "v1",
-          rankedCandidates: [] as ReturnType<typeof import("@/lib/matchmaking/fairness").rankPlayersByFairness>,
+          rankedCandidates: [] as ReturnType<typeof import("@/lib/matchmaking/v2").rankPlayersByRotationLoad>,
           playersById: new Map(),
           sessionData: createSessionData(),
           rotationHistory: buildRotationHistory([]),
@@ -660,15 +575,14 @@ describe("generate match service", () => {
         team1: ["A", "B"],
         team2: ["C", "D"],
       });
-      vi.mocked(findBestAutoMatchSelection)
+      vi.mocked(findBestAutoMatchSelectionV2)
         .mockReturnValueOnce(initial as any)
         .mockReturnValueOnce(null);
       vi.mocked(evaluateBestPartition).mockReturnValueOnce(null);
 
       expect(() =>
         selectSingleCourtMatch({
-          matchmakerVersion: "v1",
-          rankedCandidates: [] as ReturnType<typeof import("@/lib/matchmaking/fairness").rankPlayersByFairness>,
+          rankedCandidates: [] as ReturnType<typeof import("@/lib/matchmaking/v2").rankPlayersByRotationLoad>,
           playersById: new Map(),
           sessionData: createSessionData(),
           rotationHistory: buildRotationHistory([]),
@@ -696,38 +610,12 @@ describe("generate match service", () => {
           }),
         ],
       };
-      vi.mocked(findBestBatchAutoMatchSelection).mockReturnValueOnce(
-        batchSelection as any
-      );
-
-      expect(
-        selectBatchMatches({
-          matchmakerVersion: "v1",
-          rankedCandidates: [] as ReturnType<typeof import("@/lib/matchmaking/fairness").rankPlayersByFairness>,
-          playersById: new Map(),
-          sessionData: createSessionData(),
-          rotationHistory: buildRotationHistory([]),
-          requestedMatchCount: 1,
-        })
-      ).toEqual(batchSelection);
-    });
-
-    it("uses the v2 batch selector when configured", () => {
-      const batchSelection = {
-        selections: [
-          createSelection(["A", "B", "C", "D"], {
-            team1: ["A", "D"],
-            team2: ["B", "C"],
-          }),
-        ],
-      };
       vi.mocked(findBestBatchAutoMatchSelectionV2).mockReturnValueOnce(
         batchSelection as any
       );
 
       expect(
         selectBatchMatches({
-          matchmakerVersion: "v2",
           rankedCandidates: [] as ReturnType<typeof import("@/lib/matchmaking/v2").rankPlayersByRotationLoad>,
           playersById: new Map(),
           sessionData: createSessionData(),
@@ -736,16 +624,14 @@ describe("generate match service", () => {
         })
       ).toEqual(batchSelection);
       expect(findBestBatchAutoMatchSelectionV2).toHaveBeenCalledTimes(1);
-      expect(findBestBatchAutoMatchSelection).not.toHaveBeenCalled();
     });
 
     it("throws when no valid batch selection exists", () => {
-      vi.mocked(findBestBatchAutoMatchSelection).mockReturnValueOnce(null);
+      vi.mocked(findBestBatchAutoMatchSelectionV2).mockReturnValueOnce(null);
 
       expect(() =>
         selectBatchMatches({
-          matchmakerVersion: "v1",
-          rankedCandidates: [] as ReturnType<typeof import("@/lib/matchmaking/fairness").rankPlayersByFairness>,
+          rankedCandidates: [] as ReturnType<typeof import("@/lib/matchmaking/v2").rankPlayersByRotationLoad>,
           playersById: new Map(),
           sessionData: createSessionData(),
           rotationHistory: buildRotationHistory([]),

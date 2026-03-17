@@ -18,7 +18,7 @@ Community-based badminton tournament web app for running live sessions, managing
 - Pause/resume players during active sessions
 - Late join support for admins during active sessions
 - Rollback for the latest completed tournament in a community
-- Matchmaking fairness controls for wait time, match rate, repeat partners, and player clustering
+- Matchmaking fairness controls for rotation load, wait time, repeat partners, and player clustering
 
 ## Tech Stack
 
@@ -49,11 +49,6 @@ ADMIN_EMAILS="you@example.com"
 # Cloud runtime database
 TURSO_DATABASE_URL="libsql://..."
 TURSO_AUTH_TOKEN="..."
-
-# Optional server-side matchmaking engine toggle
-# Defaults to v2 if unset.
-# Set to v1 to fall back to the previous production matcher.
-MATCHMAKER_VERSION="v2"
 ```
 
 ## Local Setup
@@ -153,7 +148,7 @@ Note: user-facing copy says `rating` or `Ratings`, but some internal code and da
 
 Player selection priority:
 
-1. Lower match rate
+1. Lower rotation load
 2. Longer waiting time
 3. Random tie-breaker
 

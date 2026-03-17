@@ -1,13 +1,6 @@
 import { getCommunityEloByUserId } from "@/lib/communityElo";
 import { getSessionModeLabel } from "@/lib/sessionModeLabels";
-import { findBestAutoMatchSelection } from "@/lib/matchmaking/autoMatch";
-import { findBestBatchAutoMatchSelection } from "@/lib/matchmaking/batchAutoMatch";
 import { getBusyPlayerIds } from "@/lib/matchmaking/busyFilter";
-import { rankPlayersByFairness } from "@/lib/matchmaking/fairness";
-import {
-  getEffectiveActiveTimeBonusMs,
-  getEffectiveMatchesPlayed,
-} from "@/lib/matchmaking/matchmakingCredit";
 import {
   buildRotationHistory,
   evaluateBestPartition,
@@ -28,30 +21,19 @@ import {
   type ReshuffleSource,
 } from "./shared";
 
-export type MatchmakerVersion = "v1" | "v2";
-
 type AvailableCandidate = {
   userId: string;
   matchesPlayed: number;
   matchmakingMatchesCredit: number;
   availableSince: Date;
-  joinedAt: Date;
-  inactiveSeconds: number;
-  activeMsBonus: number;
 };
 
-type RankedCandidates =
-  | ReturnType<typeof rankPlayersByFairness>
-  | ReturnType<typeof rankPlayersByRotationLoad>;
+type RankedCandidates = ReturnType<typeof rankPlayersByRotationLoad>;
 
 export interface MatchmakingState {
   busyPlayerIds: Set<string>;
   playersById: Map<string, PartitionCandidate>;
   rotationHistory: ReturnType<typeof buildRotationHistory>;
-}
-
-export function getMatchmakerVersion(): MatchmakerVersion {
-  return process.env.MATCHMAKER_VERSION?.toLowerCase() === "v1" ? "v1" : "v2";
 }
 
 export async function buildMatchmakingState(
@@ -148,7 +130,6 @@ export function getRankedCandidates(
   sessionData: GenerateMatchSession,
   busyPlayerIds: Set<string>
 ) {
-  const matchmakerVersion = getMatchmakerVersion();
   const availableCandidates: AvailableCandidate[] = sessionData.players
     .filter((player) => !busyPlayerIds.has(player.userId) && !player.isPaused)
     .map((player) => ({
@@ -159,27 +140,11 @@ export function getRankedCandidates(
         player.matchmakingMatchesCredit ?? 0
       ),
       availableSince: player.availableSince,
-      joinedAt: player.joinedAt,
-      inactiveSeconds: player.inactiveSeconds,
-      activeMsBonus: getEffectiveActiveTimeBonusMs(player),
     }));
 
   return {
     availableCandidates,
-    matchmakerVersion,
-    rankedCandidates:
-      matchmakerVersion === "v2"
-        ? rankPlayersByRotationLoad(availableCandidates)
-        : rankPlayersByFairness(
-            availableCandidates.map((candidate) => ({
-              userId: candidate.userId,
-              matchesPlayed: getEffectiveMatchesPlayed(candidate),
-              availableSince: candidate.availableSince,
-              joinedAt: candidate.joinedAt,
-              inactiveSeconds: candidate.inactiveSeconds,
-              activeMsBonus: candidate.activeMsBonus,
-            }))
-          ),
+    rankedCandidates: rankPlayersByRotationLoad(availableCandidates),
   };
 }
 
@@ -197,35 +162,24 @@ export function ensureEnoughPlayers(
 }
 
 export function selectSingleCourtMatch({
-  matchmakerVersion,
   rankedCandidates,
   playersById,
   sessionData,
   rotationHistory,
   reshuffleSource,
 }: {
-  matchmakerVersion: MatchmakerVersion;
   rankedCandidates: RankedCandidates;
   playersById: Map<string, PartitionCandidate>;
   sessionData: GenerateMatchSession;
   rotationHistory: ReturnType<typeof buildRotationHistory>;
   reshuffleSource: ReshuffleSource | null;
 }) {
-  let bestSelection =
-    matchmakerVersion === "v2"
-      ? findBestAutoMatchSelectionV2(
-          rankedCandidates as ReturnType<typeof rankPlayersByRotationLoad>,
-          { playersById, rotationHistory },
-          sessionData.mode as SessionMode,
-          sessionData.type as SessionType
-        )
-      : findBestAutoMatchSelection(
-          rankedCandidates as ReturnType<typeof rankPlayersByFairness>,
-          playersById,
-          sessionData.mode as SessionMode,
-          sessionData.type as SessionType,
-          rotationHistory
-        );
+  const bestSelection = findBestAutoMatchSelectionV2(
+    rankedCandidates,
+    { playersById, rotationHistory },
+    sessionData.mode as SessionMode,
+    sessionData.type as SessionType
+  );
 
   if (!bestSelection) {
     throw new GenerateMatchError(
@@ -249,27 +203,15 @@ export function selectSingleCourtMatch({
     return bestSelection;
   }
 
-  const alternativeQuartet =
-    matchmakerVersion === "v2"
-      ? findBestAutoMatchSelectionV2(
-          rankedCandidates as ReturnType<typeof rankPlayersByRotationLoad>,
-          { playersById, rotationHistory },
-          sessionData.mode as SessionMode,
-          sessionData.type as SessionType,
-          {
-            excludedQuartetKey: previousQuartetKey,
-          }
-        )
-      : findBestAutoMatchSelection(
-          rankedCandidates as ReturnType<typeof rankPlayersByFairness>,
-          playersById,
-          sessionData.mode as SessionMode,
-          sessionData.type as SessionType,
-          rotationHistory,
-          {
-            excludedQuartetKey: previousQuartetKey,
-          }
-        );
+  const alternativeQuartet = findBestAutoMatchSelectionV2(
+    rankedCandidates,
+    { playersById, rotationHistory },
+    sessionData.mode as SessionMode,
+    sessionData.type as SessionType,
+    {
+      excludedQuartetKey: previousQuartetKey,
+    }
+  );
 
   if (alternativeQuartet) {
     return alternativeQuartet;
@@ -308,37 +250,25 @@ export function selectSingleCourtMatch({
 }
 
 export function selectBatchMatches({
-  matchmakerVersion,
   rankedCandidates,
   playersById,
   sessionData,
   rotationHistory,
   requestedMatchCount,
 }: {
-  matchmakerVersion: MatchmakerVersion;
   rankedCandidates: RankedCandidates;
   playersById: Map<string, PartitionCandidate>;
   sessionData: GenerateMatchSession;
   rotationHistory: ReturnType<typeof buildRotationHistory>;
   requestedMatchCount: number;
 }) {
-  const batchSelection =
-    matchmakerVersion === "v2"
-      ? findBestBatchAutoMatchSelectionV2(
-          rankedCandidates as ReturnType<typeof rankPlayersByRotationLoad>,
-          { playersById, rotationHistory },
-          sessionData.mode as SessionMode,
-          sessionData.type as SessionType,
-          requestedMatchCount
-        )
-      : findBestBatchAutoMatchSelection(
-          rankedCandidates as ReturnType<typeof rankPlayersByFairness>,
-          playersById,
-          sessionData.mode as SessionMode,
-          sessionData.type as SessionType,
-          rotationHistory,
-          requestedMatchCount
-        );
+  const batchSelection = findBestBatchAutoMatchSelectionV2(
+    rankedCandidates,
+    { playersById, rotationHistory },
+    sessionData.mode as SessionMode,
+    sessionData.type as SessionType,
+    requestedMatchCount
+  );
 
   if (!batchSelection) {
     throw new GenerateMatchError(

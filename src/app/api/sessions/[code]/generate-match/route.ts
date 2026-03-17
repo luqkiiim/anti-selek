@@ -90,11 +90,10 @@ export async function POST(
       freedCourtIds
     );
     const requestedMatchCount = requestedOpenCourts.length;
-    const { availableCandidates, rankedCandidates, matchmakerVersion } =
-      getRankedCandidates(
+    const { availableCandidates, rankedCandidates } = getRankedCandidates(
       sessionData,
       busyPlayerIds
-      );
+    );
 
     ensureEnoughPlayers(
       availableCandidates.length,
@@ -104,7 +103,6 @@ export async function POST(
 
     if (requestedMatchCount === 1) {
       const bestSelection = selectSingleCourtMatch({
-        matchmakerVersion,
         rankedCandidates,
         playersById,
         sessionData,
@@ -120,14 +118,10 @@ export async function POST(
         },
       ]);
 
-      return NextResponse.json({
-        ...newMatch,
-        matchmakerVersion,
-      });
+      return NextResponse.json(newMatch);
     }
 
     const batchSelection = selectBatchMatches({
-      matchmakerVersion,
       rankedCandidates,
       playersById,
       sessionData,
@@ -147,10 +141,7 @@ export async function POST(
       })
     );
 
-    return NextResponse.json({
-      matchmakerVersion,
-      matches: newMatches,
-    });
+    return NextResponse.json({ matches: newMatches });
   } catch (error: unknown) {
     if (error instanceof GenerateMatchError) {
       return NextResponse.json(

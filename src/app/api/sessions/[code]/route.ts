@@ -3,7 +3,6 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getCommunityEloByUserId, withCommunityElo } from "@/lib/communityElo";
 import { MatchStatus } from "@/types/enums";
-import { getMatchmakerVersion } from "./generate-match/selection";
 
 export const dynamic = "force-dynamic";
 
@@ -109,7 +108,6 @@ export async function GET(
   return NextResponse.json({
     ...sessionData,
     players,
-    matchmakerVersion: getMatchmakerVersion(),
     viewerCommunityRole: communityRole,
     viewerCanManage: session.user.isAdmin || communityRole === "ADMIN",
   });

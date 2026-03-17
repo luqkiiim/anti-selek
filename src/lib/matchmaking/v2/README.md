@@ -1,9 +1,6 @@
 # Matchmaking v2
 
-`v2` is a clean-room replacement for the current matcher.
-
-It exists beside `v1` so the app can keep using the current engine while we
-validate a simpler model.
+`v2` is the current live matcher.
 
 ## Goals
 
@@ -47,4 +44,4 @@ validate a simpler model.
 - Batch selection for multiple open courts
 - Simulation-oriented tests for pause / resume behavior
 
-`v2` is not wired into production routes yet.
+`v2` is the only matcher wired into production routes.
