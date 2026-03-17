@@ -1,11 +1,11 @@
 # Matchmaking v3
 
-`v3` is a spec-only redesign of the matcher. It is not wired into production.
+`v3` is the live matcher used by session match generation.
 
 ## Purpose
 
 Build a cleaner matcher from explicit product rules instead of layering more
-heuristics onto the current live engine.
+heuristics onto the previous engine.
 
 ## Agreed priorities
 
@@ -94,10 +94,9 @@ The following ideas are intentionally reserved for a future separate mode:
 - Strong preference for quartet coherence by skill band
 - Strong anti-pod spreading rules for re-entry groups
 
-## Open questions
+## Current notes
 
-- How strong should the exact-rematch penalty be relative to balance?
-- How much recent history should the rematch penalty remember?
-- What exact search method should power the batch solver:
-  branch-and-bound, beam search, or CP-SAT?
-- How should the matcher expose debug reasoning during development?
+- The matcher is now wired into the live generate-match route.
+- Debug-oriented simulator and focused `v3` tests live alongside the engine.
+- Future work should tune behavior from real session snapshots rather than
+  reintroducing versioned route switching.

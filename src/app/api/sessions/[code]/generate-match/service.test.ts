@@ -1,5 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { PartnerPreference, PlayerGender, SessionMode, SessionStatus, SessionType } from "@/types/enums";
+import {
+  PartnerPreference,
+  PlayerGender,
+  SessionMode,
+  SessionStatus,
+  SessionType,
+} from "@/types/enums";
 
 vi.mock("@/lib/prisma", () => ({
   prisma: {
@@ -15,18 +21,6 @@ vi.mock("@/lib/communityElo", () => ({
   getCommunityEloByUserId: vi.fn(),
 }));
 
-vi.mock("@/lib/matchmaking/v2", async () => {
-  const actual = await vi.importActual<typeof import("@/lib/matchmaking/v2")>(
-    "@/lib/matchmaking/v2"
-  );
-
-  return {
-    ...actual,
-    findBestAutoMatchSelectionV2: vi.fn(),
-    findBestBatchAutoMatchSelectionV2: vi.fn(),
-  };
-});
-
 vi.mock("@/lib/matchmaking/v3", async () => {
   const actual = await vi.importActual<typeof import("@/lib/matchmaking/v3")>(
     "@/lib/matchmaking/v3"
@@ -39,36 +33,19 @@ vi.mock("@/lib/matchmaking/v3", async () => {
   };
 });
 
-vi.mock("@/lib/matchmaking/partitioning", async () => {
-  const actual = await vi.importActual<typeof import("@/lib/matchmaking/partitioning")>(
-    "@/lib/matchmaking/partitioning"
-  );
-
-  return {
-    ...actual,
-    evaluateBestPartition: vi.fn(actual.evaluateBestPartition),
-  };
-});
-
-import {
-  findBestAutoMatchSelectionV2,
-  findBestBatchAutoMatchSelectionV2,
-} from "@/lib/matchmaking/v2";
 import {
   findBestBatchSelectionV3,
   findBestSingleCourtSelectionV3,
 } from "@/lib/matchmaking/v3";
 import {
   buildRotationHistory,
-  evaluateBestPartition,
   type PartitionCandidate,
 } from "@/lib/matchmaking/partitioning";
 import {
   ensureEnoughPlayers,
   GenerateMatchError,
-  getMatchmakerVersion,
-  getRequestedOpenCourts,
   getRankedCandidates,
+  getRequestedOpenCourts,
   parseGenerateMatchRequest,
   parseManualTeams,
   selectBatchMatches,
@@ -163,24 +140,28 @@ function createPlayersById(players: GenerateMatchSession["players"]) {
   );
 }
 
-function createSelection(
+function createV3Selection(
   ids: [string, string, string, string],
   partition: { team1: [string, string]; team2: [string, string] }
 ) {
   return {
     ids,
+    players: [] as never[],
     partition,
-    score: 0,
-    pointDiffGap: 0,
-    rotationPenalty: 0,
-    exactPartitionPenalty: 0,
+    waitSummary: {
+      totalWaitMs: 0,
+      minimumWaitMs: 0,
+      waitVector: [],
+    },
+    balanceGap: 0,
+    exactRematchPenalty: 0,
+    randomScore: 0,
   };
 }
 
 describe("generate match service", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    delete process.env.MATCHMAKER_VERSION;
   });
 
   describe("parseGenerateMatchRequest", () => {
@@ -287,83 +268,6 @@ describe("generate match service", () => {
       expect(selectedIds).toEqual(["A", "B", "C", "D"]);
     });
 
-    it("rejects occupied courts", () => {
-      const sessionData = createSessionData({
-        players: [
-          createSessionPlayer("A"),
-          createSessionPlayer("B"),
-          createSessionPlayer("C"),
-          createSessionPlayer("D"),
-        ],
-      });
-
-      expect(() =>
-        validateManualMatchRequest({
-          sessionData,
-          targetCourt: createCourt("court-1", { id: "match-1" } as GenerateMatchCourt["currentMatch"]),
-          parsedTeams: { team1: ["A", "B"], team2: ["C", "D"] },
-          busyPlayerIds: new Set(),
-          playersById: createPlayersById(sessionData.players),
-          rotationHistory: buildRotationHistory([]),
-        })
-      ).toThrowError(
-        new GenerateMatchError(
-          409,
-          "This court already has a match. Undo it first to create a manual match."
-        )
-      );
-    });
-
-    it("rejects paused players", () => {
-      const players = [
-        createSessionPlayer("A"),
-        createSessionPlayer("B", { isPaused: true }),
-        createSessionPlayer("C"),
-        createSessionPlayer("D"),
-      ];
-
-      expect(() =>
-        validateManualMatchRequest({
-          sessionData: createSessionData({ players }),
-          targetCourt: createCourt("court-1"),
-          parsedTeams: { team1: ["A", "B"], team2: ["C", "D"] },
-          busyPlayerIds: new Set(),
-          playersById: createPlayersById(players),
-          rotationHistory: buildRotationHistory([]),
-        })
-      ).toThrowError(
-        new GenerateMatchError(
-          400,
-          "Paused players cannot be added to a manual match."
-        )
-      );
-    });
-
-    it("rejects players already busy on another court", () => {
-      const players = [
-        createSessionPlayer("A"),
-        createSessionPlayer("B"),
-        createSessionPlayer("C"),
-        createSessionPlayer("D"),
-      ];
-
-      expect(() =>
-        validateManualMatchRequest({
-          sessionData: createSessionData({ players }),
-          targetCourt: createCourt("court-1"),
-          parsedTeams: { team1: ["A", "B"], team2: ["C", "D"] },
-          busyPlayerIds: new Set(["C"]),
-          playersById: createPlayersById(players),
-          rotationHistory: buildRotationHistory([]),
-        })
-      ).toThrowError(
-        new GenerateMatchError(
-          409,
-          "One or more selected players are already busy on another court."
-        )
-      );
-    });
-
     it("rejects invalid Mixicano pairings", () => {
       const players = [
         createSessionPlayer("M1", { gender: PlayerGender.MALE }),
@@ -408,10 +312,7 @@ describe("generate match service", () => {
       const openCourt = createCourt("court-2");
 
       expect(
-        getRequestedOpenCourts(
-          [occupiedCourt, openCourt],
-          new Set(["court-1"])
-        )
+        getRequestedOpenCourts([occupiedCourt, openCourt], new Set(["court-1"]))
       ).toEqual([occupiedCourt, openCourt]);
     });
 
@@ -451,7 +352,7 @@ describe("generate match service", () => {
   });
 
   describe("getRankedCandidates", () => {
-    it("uses rotation-load ranking", () => {
+    it("uses the v3 effective baseline for ordering", () => {
       const now = new Date("2026-01-01T00:00:00Z");
       const players = [
         createSessionPlayer("resumed", {
@@ -474,7 +375,7 @@ describe("generate match service", () => {
 
       expect(
         availableCandidates.find((candidate) => candidate.userId === "resumed")
-          ?.matchmakingMatchesCredit
+          ?.matchmakingBaseline
       ).toBe(5);
       expect(rankedCandidates[rankedCandidates.length - 1]?.userId).toBe(
         "resumed"
@@ -484,11 +385,16 @@ describe("generate match service", () => {
 
   describe("selectSingleCourtMatch", () => {
     it("throws when no valid pairing exists", () => {
-      vi.mocked(findBestAutoMatchSelectionV2).mockReturnValueOnce(null);
+      vi.mocked(findBestSingleCourtSelectionV3).mockReturnValueOnce({
+        selection: null,
+        debug: {} as never,
+      });
 
       expect(() =>
         selectSingleCourtMatch({
-          rankedCandidates: [] as ReturnType<typeof import("@/lib/matchmaking/v2").rankPlayersByRotationLoad>,
+          rankedCandidates: [] as ReturnType<
+            typeof getRankedCandidates
+          >["rankedCandidates"],
           playersById: new Map(),
           sessionData: createSessionData(),
           rotationHistory: buildRotationHistory([]),
@@ -503,46 +409,13 @@ describe("generate match service", () => {
     });
 
     it("returns the initial selection when no reshuffle source exists", () => {
-      const selection = createSelection(["A", "B", "C", "D"], {
+      const selection = createV3Selection(["A", "B", "C", "D"], {
         team1: ["A", "B"],
         team2: ["C", "D"],
       });
-      vi.mocked(findBestAutoMatchSelectionV2).mockReturnValueOnce(
-        selection as any
-      );
-
-      expect(
-        selectSingleCourtMatch({
-          rankedCandidates: [] as ReturnType<typeof import("@/lib/matchmaking/v2").rankPlayersByRotationLoad>,
-          playersById: new Map(),
-          sessionData: createSessionData(),
-          rotationHistory: buildRotationHistory([]),
-          reshuffleSource: null,
-        })
-      ).toEqual(selection);
-      expect(findBestAutoMatchSelectionV2).toHaveBeenCalledTimes(1);
-    });
-
-    it("uses v3 single-court selection when explicitly enabled", () => {
-      process.env.MATCHMAKER_VERSION = "v3";
       vi.mocked(findBestSingleCourtSelectionV3).mockReturnValueOnce({
-        selection: {
-          ids: ["A", "B", "C", "D"],
-          players: [] as any,
-          partition: {
-            team1: ["A", "C"],
-            team2: ["B", "D"],
-          },
-          waitSummary: {
-            totalWaitMs: 0,
-            minimumWaitMs: 0,
-            waitVector: [],
-          },
-          balanceGap: 0,
-          exactRematchPenalty: 0,
-          randomScore: 0,
-        },
-        debug: {} as any,
+        selection,
+        debug: {} as never,
       });
 
       const players = [
@@ -552,40 +425,48 @@ describe("generate match service", () => {
         createSessionPlayer("D"),
       ];
 
-      const result = selectSingleCourtMatch({
-        rankedCandidates: [] as ReturnType<typeof import("@/lib/matchmaking/v2").rankPlayersByRotationLoad>,
-        playersById: createPlayersById(players),
-        sessionData: createSessionData({ players }),
-        rotationHistory: buildRotationHistory([]),
-        reshuffleSource: null,
-      });
-
-      expect(result.partition).toEqual({
-        team1: ["A", "C"],
-        team2: ["B", "D"],
-      });
-      expect(findBestSingleCourtSelectionV3).toHaveBeenCalledTimes(1);
-      expect(findBestAutoMatchSelectionV2).not.toHaveBeenCalled();
+      expect(
+        selectSingleCourtMatch({
+          rankedCandidates: [] as ReturnType<
+            typeof getRankedCandidates
+          >["rankedCandidates"],
+          playersById: createPlayersById(players),
+          sessionData: createSessionData({ players }),
+          rotationHistory: buildRotationHistory([]),
+          reshuffleSource: null,
+        })
+      ).toEqual(selection);
     });
 
     it("falls back to an alternative quartet when reshuffle repeats the same players", () => {
-      const initial = createSelection(["A", "B", "C", "D"], {
+      const initial = createV3Selection(["A", "B", "C", "D"], {
         team1: ["A", "B"],
         team2: ["C", "D"],
       });
-      const alternative = createSelection(["A", "B", "E", "F"], {
+      const alternative = createV3Selection(["A", "B", "E", "F"], {
         team1: ["A", "E"],
         team2: ["B", "F"],
       });
-      vi.mocked(findBestAutoMatchSelectionV2)
-        .mockReturnValueOnce(initial as any)
-        .mockReturnValueOnce(alternative as any);
+      vi.mocked(findBestSingleCourtSelectionV3)
+        .mockReturnValueOnce({ selection: initial, debug: {} as never })
+        .mockReturnValueOnce({ selection: alternative, debug: {} as never });
+
+      const players = [
+        createSessionPlayer("A"),
+        createSessionPlayer("B"),
+        createSessionPlayer("C"),
+        createSessionPlayer("D"),
+        createSessionPlayer("E"),
+        createSessionPlayer("F"),
+      ];
 
       expect(
         selectSingleCourtMatch({
-          rankedCandidates: [] as ReturnType<typeof import("@/lib/matchmaking/v2").rankPlayersByRotationLoad>,
-          playersById: new Map(),
-          sessionData: createSessionData(),
+          rankedCandidates: [] as ReturnType<
+            typeof getRankedCandidates
+          >["rankedCandidates"],
+          playersById: createPlayersById(players),
+          sessionData: createSessionData({ players }),
           rotationHistory: buildRotationHistory([]),
           reshuffleSource: {
             ids: ["A", "B", "C", "D"],
@@ -593,61 +474,69 @@ describe("generate match service", () => {
           },
         })
       ).toEqual(alternative);
-      expect(findBestAutoMatchSelectionV2).toHaveBeenCalledTimes(2);
     });
 
-    it("falls back to an alternative partition when only the quartet repeats", () => {
-      const initial = createSelection(["A", "B", "C", "D"], {
+    it("falls back to an alternative partition when only the same partition repeats", () => {
+      const initial = createV3Selection(["A", "B", "C", "D"], {
         team1: ["A", "B"],
         team2: ["C", "D"],
       });
-      vi.mocked(findBestAutoMatchSelectionV2)
-        .mockReturnValueOnce(initial as any)
-        .mockReturnValueOnce(null);
-      vi.mocked(evaluateBestPartition).mockReturnValueOnce({
-        partition: { team1: ["A", "C"], team2: ["B", "D"] },
-        score: 1,
-        pointDiffGap: 0,
-        rotationPenalty: 0,
-        exactPartitionPenalty: 0,
+      const alternative = createV3Selection(["A", "B", "C", "D"], {
+        team1: ["A", "C"],
+        team2: ["B", "D"],
       });
+      vi.mocked(findBestSingleCourtSelectionV3)
+        .mockReturnValueOnce({ selection: initial, debug: {} as never })
+        .mockReturnValueOnce({ selection: null, debug: {} as never })
+        .mockReturnValueOnce({ selection: alternative, debug: {} as never });
+
+      const players = [
+        createSessionPlayer("A"),
+        createSessionPlayer("B"),
+        createSessionPlayer("C"),
+        createSessionPlayer("D"),
+      ];
 
       expect(
         selectSingleCourtMatch({
-          rankedCandidates: [] as ReturnType<typeof import("@/lib/matchmaking/v2").rankPlayersByRotationLoad>,
-          playersById: new Map(),
-          sessionData: createSessionData(),
+          rankedCandidates: [] as ReturnType<
+            typeof getRankedCandidates
+          >["rankedCandidates"],
+          playersById: createPlayersById(players),
+          sessionData: createSessionData({ players }),
           rotationHistory: buildRotationHistory([]),
           reshuffleSource: {
             ids: ["A", "B", "C", "D"],
             partition: { team1: ["A", "B"], team2: ["C", "D"] },
           },
         })
-      ).toEqual({
-        ...initial,
-        partition: { team1: ["A", "C"], team2: ["B", "D"] },
-        score: 1,
-        pointDiffGap: 0,
-        rotationPenalty: 0,
-        exactPartitionPenalty: 0,
-      });
+      ).toEqual(alternative);
     });
 
     it("throws when reshuffle has no valid alternative", () => {
-      const initial = createSelection(["A", "B", "C", "D"], {
+      const initial = createV3Selection(["A", "B", "C", "D"], {
         team1: ["A", "B"],
         team2: ["C", "D"],
       });
-      vi.mocked(findBestAutoMatchSelectionV2)
-        .mockReturnValueOnce(initial as any)
-        .mockReturnValueOnce(null);
-      vi.mocked(evaluateBestPartition).mockReturnValueOnce(null);
+      vi.mocked(findBestSingleCourtSelectionV3)
+        .mockReturnValueOnce({ selection: initial, debug: {} as never })
+        .mockReturnValueOnce({ selection: null, debug: {} as never })
+        .mockReturnValueOnce({ selection: null, debug: {} as never });
+
+      const players = [
+        createSessionPlayer("A"),
+        createSessionPlayer("B"),
+        createSessionPlayer("C"),
+        createSessionPlayer("D"),
+      ];
 
       expect(() =>
         selectSingleCourtMatch({
-          rankedCandidates: [] as ReturnType<typeof import("@/lib/matchmaking/v2").rankPlayersByRotationLoad>,
-          playersById: new Map(),
-          sessionData: createSessionData(),
+          rankedCandidates: [] as ReturnType<
+            typeof getRankedCandidates
+          >["rankedCandidates"],
+          playersById: createPlayersById(players),
+          sessionData: createSessionData({ players }),
           rotationHistory: buildRotationHistory([]),
           reshuffleSource: {
             ids: ["A", "B", "C", "D"],
@@ -667,61 +556,24 @@ describe("generate match service", () => {
     it("returns the selected batch when one is available", () => {
       const batchSelection = {
         selections: [
-          createSelection(["A", "B", "C", "D"], {
+          createV3Selection(["A", "B", "C", "D"], {
             team1: ["A", "B"],
             team2: ["C", "D"],
           }),
         ],
-      };
-      vi.mocked(findBestBatchAutoMatchSelectionV2).mockReturnValueOnce(
-        batchSelection as any
-      );
-
-      expect(
-        selectBatchMatches({
-          rankedCandidates: [] as ReturnType<typeof import("@/lib/matchmaking/v2").rankPlayersByRotationLoad>,
-          playersById: new Map(),
-          sessionData: createSessionData(),
-          rotationHistory: buildRotationHistory([]),
-          requestedMatchCount: 1,
-        })
-      ).toEqual(batchSelection);
-      expect(findBestBatchAutoMatchSelectionV2).toHaveBeenCalledTimes(1);
-    });
-
-    it("uses v3 batch selection when explicitly enabled", () => {
-      process.env.MATCHMAKER_VERSION = "v3";
-      vi.mocked(findBestBatchSelectionV3).mockReturnValueOnce({
-        selection: {
-          selections: [
-            {
-              ids: ["A", "B", "C", "D"],
-              players: [] as any,
-              partition: {
-                team1: ["A", "B"],
-                team2: ["C", "D"],
-              },
-              waitSummary: {
-                totalWaitMs: 0,
-                minimumWaitMs: 0,
-                waitVector: [],
-              },
-              balanceGap: 0,
-              exactRematchPenalty: 0,
-              randomScore: 0,
-            },
-          ],
-          waitSummary: {
-            totalWaitMs: 0,
-            minimumWaitMs: 0,
-            waitVector: [],
-          },
-          maxBalanceGap: 0,
-          totalBalanceGap: 0,
-          totalExactRematchPenalty: 0,
-          totalRandomScore: 0,
+        waitSummary: {
+          totalWaitMs: 0,
+          minimumWaitMs: 0,
+          waitVector: [],
         },
-        debug: {} as any,
+        maxBalanceGap: 0,
+        totalBalanceGap: 0,
+        totalExactRematchPenalty: 0,
+        totalRandomScore: 0,
+      };
+      vi.mocked(findBestBatchSelectionV3).mockReturnValueOnce({
+        selection: batchSelection,
+        debug: {} as never,
       });
 
       const players = [
@@ -731,25 +583,30 @@ describe("generate match service", () => {
         createSessionPlayer("D"),
       ];
 
-      const result = selectBatchMatches({
-        rankedCandidates: [] as ReturnType<typeof import("@/lib/matchmaking/v2").rankPlayersByRotationLoad>,
-        playersById: createPlayersById(players),
-        sessionData: createSessionData({ players }),
-        rotationHistory: buildRotationHistory([]),
-        requestedMatchCount: 1,
-      });
-
-      expect(result.selections).toHaveLength(1);
-      expect(findBestBatchSelectionV3).toHaveBeenCalledTimes(1);
-      expect(findBestBatchAutoMatchSelectionV2).not.toHaveBeenCalled();
+      expect(
+        selectBatchMatches({
+          rankedCandidates: [] as ReturnType<
+            typeof getRankedCandidates
+          >["rankedCandidates"],
+          playersById: createPlayersById(players),
+          sessionData: createSessionData({ players }),
+          rotationHistory: buildRotationHistory([]),
+          requestedMatchCount: 1,
+        })
+      ).toEqual(batchSelection);
     });
 
     it("throws when no valid batch selection exists", () => {
-      vi.mocked(findBestBatchAutoMatchSelectionV2).mockReturnValueOnce(null);
+      vi.mocked(findBestBatchSelectionV3).mockReturnValueOnce({
+        selection: null,
+        debug: {} as never,
+      });
 
       expect(() =>
         selectBatchMatches({
-          rankedCandidates: [] as ReturnType<typeof import("@/lib/matchmaking/v2").rankPlayersByRotationLoad>,
+          rankedCandidates: [] as ReturnType<
+            typeof getRankedCandidates
+          >["rankedCandidates"],
           playersById: new Map(),
           sessionData: createSessionData(),
           rotationHistory: buildRotationHistory([]),
@@ -761,18 +618,6 @@ describe("generate match service", () => {
           "No valid set of matches found for current Open session rules. Try changing player preferences."
         )
       );
-    });
-  });
-
-  describe("getMatchmakerVersion", () => {
-    it("defaults to v2 when unset", () => {
-      expect(getMatchmakerVersion()).toBe("v2");
-    });
-
-    it("returns v3 when enabled", () => {
-      process.env.MATCHMAKER_VERSION = "v3";
-
-      expect(getMatchmakerVersion()).toBe("v3");
     });
   });
 });

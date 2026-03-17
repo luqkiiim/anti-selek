@@ -3,19 +3,13 @@ import { getSessionModeLabel } from "@/lib/sessionModeLabels";
 import { getBusyPlayerIds } from "@/lib/matchmaking/busyFilter";
 import {
   buildRotationHistory,
-  evaluateBestPartition,
-  getPartitionKey,
-  getQuartetKey,
   type PartitionCandidate,
 } from "@/lib/matchmaking/partitioning";
 import {
-  findBestAutoMatchSelectionV2,
-  findBestBatchAutoMatchSelectionV2,
-  rankPlayersByRotationLoad,
-} from "@/lib/matchmaking/v2";
-import {
+  buildActivePlayers,
   findBestBatchSelectionV3,
   findBestSingleCourtSelectionV3,
+  type MatchmakerV3Player,
 } from "@/lib/matchmaking/v3";
 import { getExactPartitionKey } from "@/lib/matchmaking/v3/rematch";
 import { MatchStatus, SessionMode, SessionType } from "@/types/enums";
@@ -30,20 +24,19 @@ type AvailableCandidate = {
   userId: string;
   matchesPlayed: number;
   matchmakingMatchesCredit: number;
+  matchmakingBaseline: number;
   availableSince: Date;
+  strength: number;
+  isBusy: false;
+  isPaused: false;
 };
 
-type RankedCandidates = ReturnType<typeof rankPlayersByRotationLoad>;
-type MatchmakerVersion = "v2" | "v3";
+type RankedCandidates = ReturnType<typeof buildActivePlayers<AvailableCandidate>>;
 
 export interface MatchmakingState {
   busyPlayerIds: Set<string>;
   playersById: Map<string, PartitionCandidate>;
   rotationHistory: ReturnType<typeof buildRotationHistory>;
-}
-
-export function getMatchmakerVersion(): MatchmakerVersion {
-  return process.env.MATCHMAKER_VERSION === "v3" ? "v3" : "v2";
 }
 
 function getV3QuartetKey(ids: readonly string[]) {
@@ -64,7 +57,7 @@ function buildV3Players(
   sessionData: GenerateMatchSession,
   playersById: Map<string, PartitionCandidate>,
   rankedCandidates: RankedCandidates
-) {
+): MatchmakerV3Player[] {
   const availableUserIds = new Set(
     rankedCandidates.map((candidate) => candidate.userId)
   );
@@ -191,12 +184,19 @@ export function getRankedCandidates(
         0,
         player.matchmakingMatchesCredit ?? 0
       ),
+      matchmakingBaseline:
+        player.matchesPlayed + Math.max(0, player.matchmakingMatchesCredit ?? 0),
       availableSince: player.availableSince,
+      strength: 0,
+      isBusy: false,
+      isPaused: false,
     }));
 
   return {
     availableCandidates,
-    rankedCandidates: rankPlayersByRotationLoad(availableCandidates),
+    rankedCandidates: buildActivePlayers(availableCandidates, {
+      randomFn: () => 0,
+    }),
   };
 }
 
@@ -217,7 +217,6 @@ export function selectSingleCourtMatch({
   rankedCandidates,
   playersById,
   sessionData,
-  rotationHistory,
   reshuffleSource,
 }: {
   rankedCandidates: RankedCandidates;
@@ -226,79 +225,15 @@ export function selectSingleCourtMatch({
   rotationHistory: ReturnType<typeof buildRotationHistory>;
   reshuffleSource: ReshuffleSource | null;
 }) {
-  if (getMatchmakerVersion() === "v3") {
-    const v3Players = buildV3Players(sessionData, playersById, rankedCandidates);
-    const completedMatches = buildCompletedMatches(sessionData);
-    const initialResult = findBestSingleCourtSelectionV3(v3Players, {
-      sessionMode: sessionData.mode as SessionMode,
-      sessionType: sessionData.type as SessionType,
-      completedMatches,
-    });
+  const v3Players = buildV3Players(sessionData, playersById, rankedCandidates);
+  const completedMatches = buildCompletedMatches(sessionData);
+  const initialResult = findBestSingleCourtSelectionV3(v3Players, {
+    sessionMode: sessionData.mode as SessionMode,
+    sessionType: sessionData.type as SessionType,
+    completedMatches,
+  });
 
-    if (!initialResult.selection) {
-      throw new GenerateMatchError(
-        400,
-        `No valid pairing found for current ${getSessionModeLabel(
-          sessionData.mode
-        )} session rules. Try changing player preferences.`
-      );
-    }
-
-    if (!reshuffleSource) {
-      return initialResult.selection;
-    }
-
-    const previousQuartetKey = getV3QuartetKey(reshuffleSource.ids);
-    const previousPartitionKey = getExactPartitionKey(reshuffleSource.partition);
-    const selectedQuartetKey = getV3QuartetKey(initialResult.selection.ids);
-    const selectedPartitionKey = getExactPartitionKey(
-      initialResult.selection.partition
-    );
-
-    if (selectedQuartetKey !== previousQuartetKey) {
-      return initialResult.selection;
-    }
-
-    const alternativeQuartet = findBestSingleCourtSelectionV3(v3Players, {
-      sessionMode: sessionData.mode as SessionMode,
-      sessionType: sessionData.type as SessionType,
-      completedMatches,
-      excludedQuartetKey: previousQuartetKey,
-    });
-
-    if (alternativeQuartet.selection) {
-      return alternativeQuartet.selection;
-    }
-
-    if (selectedPartitionKey !== previousPartitionKey) {
-      return initialResult.selection;
-    }
-
-    const alternativePartition = findBestSingleCourtSelectionV3(v3Players, {
-      sessionMode: sessionData.mode as SessionMode,
-      sessionType: sessionData.type as SessionType,
-      completedMatches,
-      excludedPartitionKey: previousPartitionKey,
-    });
-
-    if (!alternativePartition.selection) {
-      throw new GenerateMatchError(
-        409,
-        "No alternative reshuffle was available. Undo this match if you want the same players returned to the pool."
-      );
-    }
-
-    return alternativePartition.selection;
-  }
-
-  const bestSelection = findBestAutoMatchSelectionV2(
-    rankedCandidates,
-    { playersById, rotationHistory },
-    sessionData.mode as SessionMode,
-    sessionData.type as SessionType
-  );
-
-  if (!bestSelection) {
+  if (!initialResult.selection) {
     throw new GenerateMatchError(
       400,
       `No valid pairing found for current ${getSessionModeLabel(
@@ -308,69 +243,56 @@ export function selectSingleCourtMatch({
   }
 
   if (!reshuffleSource) {
-    return bestSelection;
+    return initialResult.selection;
   }
 
-  const previousQuartetKey = getQuartetKey(reshuffleSource.ids);
-  const previousPartitionKey = getPartitionKey(reshuffleSource.partition);
-  const selectedQuartetKey = getQuartetKey(bestSelection.ids);
-  const selectedPartitionKey = getPartitionKey(bestSelection.partition);
-
-  if (selectedQuartetKey !== previousQuartetKey) {
-    return bestSelection;
-  }
-
-  const alternativeQuartet = findBestAutoMatchSelectionV2(
-    rankedCandidates,
-    { playersById, rotationHistory },
-    sessionData.mode as SessionMode,
-    sessionData.type as SessionType,
-    {
-      excludedQuartetKey: previousQuartetKey,
-    }
+  const previousQuartetKey = getV3QuartetKey(reshuffleSource.ids);
+  const previousPartitionKey = getExactPartitionKey(reshuffleSource.partition);
+  const selectedQuartetKey = getV3QuartetKey(initialResult.selection.ids);
+  const selectedPartitionKey = getExactPartitionKey(
+    initialResult.selection.partition
   );
 
-  if (alternativeQuartet) {
-    return alternativeQuartet;
+  if (selectedQuartetKey !== previousQuartetKey) {
+    return initialResult.selection;
+  }
+
+  const alternativeQuartet = findBestSingleCourtSelectionV3(v3Players, {
+    sessionMode: sessionData.mode as SessionMode,
+    sessionType: sessionData.type as SessionType,
+    completedMatches,
+    excludedQuartetKey: previousQuartetKey,
+  });
+
+  if (alternativeQuartet.selection) {
+    return alternativeQuartet.selection;
   }
 
   if (selectedPartitionKey !== previousPartitionKey) {
-    return bestSelection;
+    return initialResult.selection;
   }
 
-  const alternativePartition = evaluateBestPartition(
-    bestSelection.ids,
-    playersById,
-    sessionData.mode as SessionMode,
-    sessionData.type as SessionType,
-    rotationHistory,
-    {
-      excludedPartitionKey: previousPartitionKey,
-    }
-  );
+  const alternativePartition = findBestSingleCourtSelectionV3(v3Players, {
+    sessionMode: sessionData.mode as SessionMode,
+    sessionType: sessionData.type as SessionType,
+    completedMatches,
+    excludedPartitionKey: previousPartitionKey,
+  });
 
-  if (!alternativePartition) {
+  if (!alternativePartition.selection) {
     throw new GenerateMatchError(
       409,
       "No alternative reshuffle was available. Undo this match if you want the same players returned to the pool."
     );
   }
 
-  return {
-    ...bestSelection,
-    partition: alternativePartition.partition,
-    score: alternativePartition.score,
-    pointDiffGap: alternativePartition.pointDiffGap,
-    rotationPenalty: alternativePartition.rotationPenalty,
-    exactPartitionPenalty: alternativePartition.exactPartitionPenalty,
-  };
+  return alternativePartition.selection;
 }
 
 export function selectBatchMatches({
   rankedCandidates,
   playersById,
   sessionData,
-  rotationHistory,
   requestedMatchCount,
 }: {
   rankedCandidates: RankedCandidates;
@@ -379,38 +301,17 @@ export function selectBatchMatches({
   rotationHistory: ReturnType<typeof buildRotationHistory>;
   requestedMatchCount: number;
 }) {
-  if (getMatchmakerVersion() === "v3") {
-    const result = findBestBatchSelectionV3(
-      buildV3Players(sessionData, playersById, rankedCandidates),
-      {
-        courtCount: requestedMatchCount,
-        sessionMode: sessionData.mode as SessionMode,
-        sessionType: sessionData.type as SessionType,
-        completedMatches: buildCompletedMatches(sessionData),
-      }
-    );
-
-    if (!result.selection) {
-      throw new GenerateMatchError(
-        400,
-        `No valid set of matches found for current ${getSessionModeLabel(
-          sessionData.mode
-        )} session rules. Try changing player preferences.`
-      );
+  const result = findBestBatchSelectionV3(
+    buildV3Players(sessionData, playersById, rankedCandidates),
+    {
+      courtCount: requestedMatchCount,
+      sessionMode: sessionData.mode as SessionMode,
+      sessionType: sessionData.type as SessionType,
+      completedMatches: buildCompletedMatches(sessionData),
     }
-
-    return result.selection;
-  }
-
-  const batchSelection = findBestBatchAutoMatchSelectionV2(
-    rankedCandidates,
-    { playersById, rotationHistory },
-    sessionData.mode as SessionMode,
-    sessionData.type as SessionType,
-    requestedMatchCount
   );
 
-  if (!batchSelection) {
+  if (!result.selection) {
     throw new GenerateMatchError(
       400,
       `No valid set of matches found for current ${getSessionModeLabel(
@@ -419,5 +320,5 @@ export function selectBatchMatches({
     );
   }
 
-  return batchSelection;
+  return result.selection;
 }

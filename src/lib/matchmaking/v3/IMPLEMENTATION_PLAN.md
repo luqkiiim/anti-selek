@@ -1,11 +1,12 @@
 # Matchmaking v3 Implementation Plan
 
-This document translates the `v3` spec into an implementation sequence.
+This document translates the `v3` spec into the implementation sequence that
+built the current live matcher.
 
 ## Goal
 
 Build `v3` as a pure library engine first, validate it in tests and simulation,
-then wire it into the session generate-match route later.
+then wire it into the session generate-match route.
 
 ## Scope Of First Milestone
 
@@ -231,8 +232,8 @@ This should stay out of the live UI in milestone 1.
 
 ### Comparison tests
 
-Add simulator comparisons against agreed product scenarios, not against `v2`
-output equality.
+Add simulator comparisons against agreed product scenarios, not against the
+previous matcher output.
 
 The acceptance criteria should come from the spec, not from legacy behavior.
 
@@ -241,9 +242,8 @@ The acceptance criteria should come from the spec, not from legacy behavior.
 1. Build the pure library engine only
 2. Add tests and scenario harness
 3. Review debug output against real examples
-4. Add side-by-side route integration behind a temporary internal switch
-5. Compare `v2` and `v3` on real session snapshots
-6. Switch production only after behavior is accepted
+4. Review behavior on real session snapshots
+5. Keep tuning from live scenarios and regression cases
 
 ## First Build Task
 

@@ -18,7 +18,7 @@ Community-based badminton tournament web app for running live sessions, managing
 - Pause/resume players during active sessions
 - Late join support for admins during active sessions
 - Rollback for the latest completed tournament in a community
-- Matchmaking fairness controls for rotation load, wait time, repeat partners, and player clustering
+- Matchmaking fairness controls for rotation load, wait time, and exact rematch avoidance
 
 ## Tech Stack
 
@@ -150,14 +150,16 @@ Player selection priority:
 
 1. Lower rotation load
 2. Longer waiting time
-3. Random tie-breaker
+3. Team-vs-team balance
+4. Exact rematch avoidance
+5. Controlled randomness among near-equal options
 
 Additional constraints:
 
 - Busy players are excluded
 - Paused players are excluded
-- Anti-bubble logic reduces repeated clustering of the same low-cohort players
-- Team partitioning tries to minimize balance gaps and penalize repeat partners
+- Late joiners and resumed players re-enter at the current fair baseline without catch-up
+- Exact repeated partitions are heavily penalized using recent completed-match history
 - Mixed sessions respect gender and partner-preference rules
 
 ## Data Model

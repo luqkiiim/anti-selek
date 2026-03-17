@@ -1,13 +1,12 @@
 # Matchmaking v3 Spec
 
-This document defines the target behavior for the `v3` matcher before any
-implementation work starts.
+This document defines the intended behavior of the live `v3` matcher.
 
 ## Status
 
-- Spec only
-- Not wired into production
-- No behavior in the live app should depend on this document yet
+- Live matcher reference
+- Wired into session match generation
+- Used as the behavior target for ongoing tuning and regression tests
 
 ## Goals
 
@@ -359,4 +358,5 @@ Initial debug output should be structured data, not UI.
 
 - Exact branch-and-bound pruning strategy
 - Exact data shape for debug output objects
-- Exact route integration plan after the pure engine is validated
+- What additional real-session scenarios should be added to the validation
+  harness
