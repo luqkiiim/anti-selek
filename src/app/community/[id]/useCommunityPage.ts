@@ -58,8 +58,12 @@ export function useCommunityPage() {
   const leaderboardPreview = leaderboard.slice(0, 5);
   const canManageCommunity =
     (!!data.community && data.community.role === "ADMIN") || !!data.user?.isAdmin;
-  const selectablePlayers = data.communityMembers.filter(
-    (member) => member.id !== data.user?.id
+  const selectablePlayers = useMemo(
+    () =>
+      data.communityMembers
+        .filter((member) => member.id !== data.user?.id)
+        .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" })),
+    [data.communityMembers, data.user?.id]
   );
   const currentUserCommunityMember =
     data.communityMembers.find((member) => member.id === data.user?.id) ?? null;
@@ -104,8 +108,12 @@ export function useCommunityPage() {
     setSuccess: data.setSuccess,
   });
 
-  const filteredSelectablePlayers = selectablePlayers.filter((member) =>
-    member.name.toLowerCase().includes(hostSetup.playerSearch.toLowerCase())
+  const filteredSelectablePlayers = useMemo(
+    () =>
+      selectablePlayers.filter((member) =>
+        member.name.toLowerCase().includes(hostSetup.playerSearch.toLowerCase())
+      ),
+    [hostSetup.playerSearch, selectablePlayers]
   );
 
   const actions = useCommunityPageActions({
