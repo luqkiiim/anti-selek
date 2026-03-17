@@ -27,6 +27,18 @@ vi.mock("@/lib/matchmaking/v2", async () => {
   };
 });
 
+vi.mock("@/lib/matchmaking/v3", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/matchmaking/v3")>(
+    "@/lib/matchmaking/v3"
+  );
+
+  return {
+    ...actual,
+    findBestSingleCourtSelectionV3: vi.fn(),
+    findBestBatchSelectionV3: vi.fn(),
+  };
+});
+
 vi.mock("@/lib/matchmaking/partitioning", async () => {
   const actual = await vi.importActual<typeof import("@/lib/matchmaking/partitioning")>(
     "@/lib/matchmaking/partitioning"
@@ -43,6 +55,10 @@ import {
   findBestBatchAutoMatchSelectionV2,
 } from "@/lib/matchmaking/v2";
 import {
+  findBestBatchSelectionV3,
+  findBestSingleCourtSelectionV3,
+} from "@/lib/matchmaking/v3";
+import {
   buildRotationHistory,
   evaluateBestPartition,
   type PartitionCandidate,
@@ -50,6 +66,7 @@ import {
 import {
   ensureEnoughPlayers,
   GenerateMatchError,
+  getMatchmakerVersion,
   getRequestedOpenCourts,
   getRankedCandidates,
   parseGenerateMatchRequest,
@@ -163,6 +180,7 @@ function createSelection(
 describe("generate match service", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    delete process.env.MATCHMAKER_VERSION;
   });
 
   describe("parseGenerateMatchRequest", () => {
@@ -505,6 +523,51 @@ describe("generate match service", () => {
       expect(findBestAutoMatchSelectionV2).toHaveBeenCalledTimes(1);
     });
 
+    it("uses v3 single-court selection when explicitly enabled", () => {
+      process.env.MATCHMAKER_VERSION = "v3";
+      vi.mocked(findBestSingleCourtSelectionV3).mockReturnValueOnce({
+        selection: {
+          ids: ["A", "B", "C", "D"],
+          players: [] as any,
+          partition: {
+            team1: ["A", "C"],
+            team2: ["B", "D"],
+          },
+          waitSummary: {
+            totalWaitMs: 0,
+            minimumWaitMs: 0,
+            waitVector: [],
+          },
+          balanceGap: 0,
+          exactRematchPenalty: 0,
+          randomScore: 0,
+        },
+        debug: {} as any,
+      });
+
+      const players = [
+        createSessionPlayer("A"),
+        createSessionPlayer("B"),
+        createSessionPlayer("C"),
+        createSessionPlayer("D"),
+      ];
+
+      const result = selectSingleCourtMatch({
+        rankedCandidates: [] as ReturnType<typeof import("@/lib/matchmaking/v2").rankPlayersByRotationLoad>,
+        playersById: createPlayersById(players),
+        sessionData: createSessionData({ players }),
+        rotationHistory: buildRotationHistory([]),
+        reshuffleSource: null,
+      });
+
+      expect(result.partition).toEqual({
+        team1: ["A", "C"],
+        team2: ["B", "D"],
+      });
+      expect(findBestSingleCourtSelectionV3).toHaveBeenCalledTimes(1);
+      expect(findBestAutoMatchSelectionV2).not.toHaveBeenCalled();
+    });
+
     it("falls back to an alternative quartet when reshuffle repeats the same players", () => {
       const initial = createSelection(["A", "B", "C", "D"], {
         team1: ["A", "B"],
@@ -626,6 +689,61 @@ describe("generate match service", () => {
       expect(findBestBatchAutoMatchSelectionV2).toHaveBeenCalledTimes(1);
     });
 
+    it("uses v3 batch selection when explicitly enabled", () => {
+      process.env.MATCHMAKER_VERSION = "v3";
+      vi.mocked(findBestBatchSelectionV3).mockReturnValueOnce({
+        selection: {
+          selections: [
+            {
+              ids: ["A", "B", "C", "D"],
+              players: [] as any,
+              partition: {
+                team1: ["A", "B"],
+                team2: ["C", "D"],
+              },
+              waitSummary: {
+                totalWaitMs: 0,
+                minimumWaitMs: 0,
+                waitVector: [],
+              },
+              balanceGap: 0,
+              exactRematchPenalty: 0,
+              randomScore: 0,
+            },
+          ],
+          waitSummary: {
+            totalWaitMs: 0,
+            minimumWaitMs: 0,
+            waitVector: [],
+          },
+          maxBalanceGap: 0,
+          totalBalanceGap: 0,
+          totalExactRematchPenalty: 0,
+          totalRandomScore: 0,
+        },
+        debug: {} as any,
+      });
+
+      const players = [
+        createSessionPlayer("A"),
+        createSessionPlayer("B"),
+        createSessionPlayer("C"),
+        createSessionPlayer("D"),
+      ];
+
+      const result = selectBatchMatches({
+        rankedCandidates: [] as ReturnType<typeof import("@/lib/matchmaking/v2").rankPlayersByRotationLoad>,
+        playersById: createPlayersById(players),
+        sessionData: createSessionData({ players }),
+        rotationHistory: buildRotationHistory([]),
+        requestedMatchCount: 1,
+      });
+
+      expect(result.selections).toHaveLength(1);
+      expect(findBestBatchSelectionV3).toHaveBeenCalledTimes(1);
+      expect(findBestBatchAutoMatchSelectionV2).not.toHaveBeenCalled();
+    });
+
     it("throws when no valid batch selection exists", () => {
       vi.mocked(findBestBatchAutoMatchSelectionV2).mockReturnValueOnce(null);
 
@@ -643,6 +761,18 @@ describe("generate match service", () => {
           "No valid set of matches found for current Open session rules. Try changing player preferences."
         )
       );
+    });
+  });
+
+  describe("getMatchmakerVersion", () => {
+    it("defaults to v2 when unset", () => {
+      expect(getMatchmakerVersion()).toBe("v2");
+    });
+
+    it("returns v3 when enabled", () => {
+      process.env.MATCHMAKER_VERSION = "v3";
+
+      expect(getMatchmakerVersion()).toBe("v3");
     });
   });
 });

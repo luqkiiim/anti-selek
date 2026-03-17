@@ -1,0 +1,318 @@
+import { SessionMode, SessionType } from "../../../types/enums";
+import { evaluateBalancedPartitions } from "./balance";
+import { buildCandidatePool } from "./candidatePool";
+import { DEFAULT_MATCH_DURATION_MS } from "./fairness";
+import {
+  buildExactRematchHistory,
+  getExactRematchPenalty,
+} from "./rematch";
+import {
+  buildWaitSummary,
+  compareBatchSelections,
+  compareSingleCourtSelections,
+  getQuartetRandomScore,
+} from "./scoring";
+
+import type {
+  ActiveMatchmakerV3Player,
+  MatchmakerV3Player,
+  V3BatchDebug,
+  V3BatchResult,
+  V3BatchSelection,
+  V3SingleCourtSelection,
+} from "./types";
+
+function buildCombinations<T>(items: T[], size: number): T[][] {
+  if (size === 0) {
+    return [[]];
+  }
+
+  if (items.length < size) {
+    return [];
+  }
+
+  if (items.length === size) {
+    return [[...items]];
+  }
+
+  const combinations: T[][] = [];
+
+  for (let index = 0; index <= items.length - size; index++) {
+    const head = items[index];
+    const tails = buildCombinations(items.slice(index + 1), size - 1);
+
+    for (const tail of tails) {
+      combinations.push([head, ...tail]);
+    }
+  }
+
+  return combinations;
+}
+
+function toQuartet<T>(players: T[]): [T, T, T, T] | null {
+  if (players.length !== 4) {
+    return null;
+  }
+
+  return [players[0], players[1], players[2], players[3]];
+}
+
+function summarizeBatch<T extends ActiveMatchmakerV3Player>(
+  selections: V3SingleCourtSelection<T>[]
+): V3BatchSelection<T> {
+  const flattenedPlayers = selections.flatMap((selection) => selection.players);
+
+  return {
+    selections,
+    waitSummary: buildWaitSummary(flattenedPlayers),
+    maxBalanceGap: Math.max(
+      ...selections.map((selection) => selection.balanceGap)
+    ),
+    totalBalanceGap: selections.reduce(
+      (sum, selection) => sum + selection.balanceGap,
+      0
+    ),
+    totalExactRematchPenalty: selections.reduce(
+      (sum, selection) => sum + selection.exactRematchPenalty,
+      0
+    ),
+    totalRandomScore: selections.reduce(
+      (sum, selection) => sum + selection.randomScore,
+      0
+    ),
+  };
+}
+
+function buildQuartetSelections<T extends MatchmakerV3Player>(
+  candidatePlayers: ActiveMatchmakerV3Player<T>[],
+  {
+    sessionMode,
+    completedMatches,
+  }: {
+    sessionMode: SessionMode;
+    completedMatches: Array<{
+      team1: [string, string];
+      team2: [string, string];
+      completedAt?: Date | null;
+    }>;
+  }
+) {
+  const quartets = buildCombinations(candidatePlayers, 4);
+  const playersById = new Map(
+    candidatePlayers.map((player) => [player.userId, player])
+  );
+  const rematchHistory = buildExactRematchHistory(completedMatches);
+  const selections: V3SingleCourtSelection<ActiveMatchmakerV3Player<T>>[] = [];
+
+  for (const group of quartets) {
+    const quartetPlayers = toQuartet(group);
+    if (!quartetPlayers) {
+      continue;
+    }
+
+    const ids = quartetPlayers.map((player) => player.userId) as [
+      string,
+      string,
+      string,
+      string,
+    ];
+    const waitSummary = buildWaitSummary(quartetPlayers);
+    const randomScore = getQuartetRandomScore(quartetPlayers);
+
+    for (const evaluation of evaluateBalancedPartitions(
+      ids,
+      playersById,
+      sessionMode
+    )) {
+      selections.push({
+        ids,
+        players: quartetPlayers,
+        partition: evaluation.partition,
+        waitSummary,
+        balanceGap: evaluation.balanceGap,
+        exactRematchPenalty: getExactRematchPenalty(
+          evaluation.partition,
+          rematchHistory
+        ),
+        randomScore,
+      });
+    }
+  }
+
+  return selections;
+}
+
+export function findBestBatchSelectionV3<T extends MatchmakerV3Player>(
+  players: T[],
+  {
+    courtCount,
+    sessionMode,
+    sessionType,
+    completedMatches = [],
+    now = Date.now(),
+    matchDurationMs = DEFAULT_MATCH_DURATION_MS,
+    randomFn = Math.random,
+  }: {
+    courtCount: number;
+    sessionMode: SessionMode;
+    sessionType: SessionType;
+    completedMatches?: Array<{
+      team1: [string, string];
+      team2: [string, string];
+      completedAt?: Date | null;
+    }>;
+    now?: number;
+    matchDurationMs?: number;
+    randomFn?: () => number;
+  }
+): V3BatchResult<ActiveMatchmakerV3Player<T>> {
+  const requiredPlayerCount = courtCount * 4;
+  const candidatePool = buildCandidatePool(players, {
+    requiredPlayerCount,
+    now,
+    matchDurationMs,
+    randomFn,
+  });
+  const debug: V3BatchDebug = {
+    eligiblePlayerIds: candidatePool.activePlayers.map((player) => player.userId),
+    lowestBand: candidatePool.lowestBand,
+    includedBandValues: candidatePool.includedBandValues,
+    widened: candidatePool.widened,
+    lockedPlayerIds: candidatePool.lockedPlayers.map((player) => player.userId),
+    tieZonePlayerIds:
+      candidatePool.tieZone?.players.map((player) => player.userId) ?? [],
+    candidatePlayerIds: candidatePool.candidatePlayers.map((player) => player.userId),
+    quartetCount: 0,
+    validQuartetCount: 0,
+    exploredBranches: 0,
+    prunedBranches: 0,
+    chosenQuartets: [],
+    chosenMaxBalanceGap: null,
+    chosenTotalBalanceGap: null,
+    chosenTotalExactRematchPenalty: null,
+  };
+
+  if (
+    courtCount <= 0 ||
+    candidatePool.insufficientPlayers ||
+    candidatePool.candidatePlayers.length < requiredPlayerCount
+  ) {
+    return {
+      selection: null,
+      debug,
+    };
+  }
+
+  const quartetSelections = buildQuartetSelections(candidatePool.candidatePlayers, {
+    sessionMode,
+    completedMatches,
+  }).sort((left, right) =>
+    compareSingleCourtSelections(left, right, sessionType)
+  );
+
+  debug.quartetCount = buildCombinations(candidatePool.candidatePlayers, 4).length;
+  debug.validQuartetCount = quartetSelections.length;
+
+  if (quartetSelections.length < courtCount) {
+    return {
+      selection: null,
+      debug,
+    };
+  }
+
+  const orderedCandidateIds = candidatePool.candidatePlayers.map(
+    (player) => player.userId
+  );
+  const lockedIds = new Set(candidatePool.lockedPlayers.map((player) => player.userId));
+  const candidateIds = new Set(orderedCandidateIds);
+  const quartetsByUserId = new Map(
+    orderedCandidateIds.map((userId) => [userId, [] as typeof quartetSelections])
+  );
+
+  for (const quartet of quartetSelections) {
+    for (const userId of quartet.ids) {
+      quartetsByUserId.get(userId)?.push(quartet);
+    }
+  }
+
+  let bestSelection: V3BatchSelection<ActiveMatchmakerV3Player<T>> | null =
+    null;
+
+  const backtrack = (
+    chosen: V3SingleCourtSelection<ActiveMatchmakerV3Player<T>>[],
+    usedIds: Set<string>
+  ) => {
+    debug.exploredBranches += 1;
+
+    const remainingCourts = courtCount - chosen.length;
+    if (remainingCourts === 0) {
+      if (lockedIds.size > 0 && [...lockedIds].some((id) => !usedIds.has(id))) {
+        return;
+      }
+
+      const batchSelection = summarizeBatch(chosen);
+      if (
+        !bestSelection ||
+        compareBatchSelections(batchSelection, bestSelection, sessionType) < 0
+      ) {
+        bestSelection = batchSelection;
+      }
+
+      return;
+    }
+
+    const remainingAvailablePlayers = [...candidateIds].filter(
+      (id) => !usedIds.has(id)
+    );
+
+    if (remainingAvailablePlayers.length < remainingCourts * 4) {
+      debug.prunedBranches += 1;
+      return;
+    }
+
+    const remainingLockedPlayers = [...lockedIds].filter((id) => !usedIds.has(id));
+    if (remainingLockedPlayers.length > remainingCourts * 4) {
+      debug.prunedBranches += 1;
+      return;
+    }
+
+    const anchorId =
+      orderedCandidateIds.find((id) => lockedIds.has(id) && !usedIds.has(id)) ??
+      orderedCandidateIds.find((id) => !usedIds.has(id));
+
+    if (!anchorId) {
+      debug.prunedBranches += 1;
+      return;
+    }
+
+    for (const quartet of quartetsByUserId.get(anchorId) ?? []) {
+      if (quartet.ids.some((id) => usedIds.has(id))) {
+        continue;
+      }
+
+      const nextUsedIds = new Set(usedIds);
+      quartet.ids.forEach((id) => nextUsedIds.add(id));
+      backtrack([...chosen, quartet], nextUsedIds);
+    }
+  };
+
+  backtrack([], new Set<string>());
+
+  const finalSelection =
+    bestSelection as V3BatchSelection<ActiveMatchmakerV3Player<T>> | null;
+
+  if (finalSelection !== null) {
+    debug.chosenQuartets = finalSelection.selections.map(
+      (selection) => selection.ids
+    );
+    debug.chosenMaxBalanceGap = finalSelection.maxBalanceGap;
+    debug.chosenTotalBalanceGap = finalSelection.totalBalanceGap;
+    debug.chosenTotalExactRematchPenalty =
+      finalSelection.totalExactRematchPenalty;
+  }
+
+  return {
+    selection: finalSelection,
+    debug,
+  };
+}

@@ -1,0 +1,103 @@
+# Matchmaking v3
+
+`v3` is a spec-only redesign of the matcher. It is not wired into production.
+
+## Purpose
+
+Build a cleaner matcher from explicit product rules instead of layering more
+heuristics onto the current live engine.
+
+## Agreed priorities
+
+1. Fairness of court time
+2. Balanced match strength
+3. Exact rematch avoidance
+4. Small controlled randomness among near-equal options
+
+## Core rules
+
+1. Hard constraints come first.
+   - Busy players are excluded.
+   - Paused players are excluded while paused.
+   - Mixed-mode validity is enforced before scoring.
+
+2. Fairness is strict on match-count bands.
+   - Fewer matches played matters more than waiting time.
+   - If the current lowest eligible match-count band can fill the full batch,
+     do not widen to the next band just for prettier balance.
+   - This is intended to avoid easy 2-match gaps in the active rotation.
+
+3. Waiting time is the secondary fairness signal.
+   - Waiting time starts when the player becomes available.
+   - Late joiners start waiting time from the moment they join.
+   - Resumed players start waiting time from the moment they unpause.
+   - Near-equal waiting times are treated as tied within roughly one match
+     duration.
+
+4. Late joiners and resumed players re-enter neutrally.
+   - No catch-up.
+   - No penalty.
+   - Their matchmaking baseline should be the current lowest eligible
+     match-count band.
+   - After re-entry, the gap is allowed to drift naturally, but the matcher
+     must not actively force catch-up.
+
+5. Balance is team-vs-team balance only.
+   - `Ratings` sessions use rating / Elo for strength balance.
+   - `Points` sessions use current session performance for strength balance.
+   - Very mixed quartets are acceptable if the two teams are balanced.
+
+6. Variety is intentionally narrow.
+   - Heavily penalize exact repeated partitions.
+   - Recent history matters, with decay.
+   - Repeated pods, teammates, and opponents are not primary penalties by
+     themselves in the default mode.
+
+7. Batch selection must be global.
+   - When multiple courts are open, choose the best batch across all open
+     courts together.
+   - Do not fill courts greedily one by one.
+
+8. Reshuffle should rerun normal selection.
+   - Do not preserve the same 4 players by default.
+   - Some of the previous 4 may still be selected again if the normal matcher
+     chooses them.
+
+## Decision order
+
+Inside the allowed fairness pool:
+
+1. Waiting time
+2. Team-vs-team balance
+3. Exact rematch avoidance
+4. Small randomness among near-equal options
+
+Global rule ordering:
+
+1. Fairness beats balance
+2. Balance beats exact rematch avoidance
+3. Exact rematch avoidance beats randomness
+
+## Design intent
+
+- The matcher should feel fair first.
+- It should not create catch-up pressure for late joiners or resumed players.
+- It should not become rigid from tiny waiting-time differences.
+- It should allow multiple good answers when several options are effectively
+  tied.
+
+## Not part of the default matcher
+
+The following ideas are intentionally reserved for a future separate mode:
+
+- Ladder / Swiss-style strength clustering
+- Strong preference for quartet coherence by skill band
+- Strong anti-pod spreading rules for re-entry groups
+
+## Open questions
+
+- How strong should the exact-rematch penalty be relative to balance?
+- How much recent history should the rematch penalty remember?
+- What exact search method should power the batch solver:
+  branch-and-bound, beam search, or CP-SAT?
+- How should the matcher expose debug reasoning during development?

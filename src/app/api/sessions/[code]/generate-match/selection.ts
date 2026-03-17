@@ -13,6 +13,11 @@ import {
   findBestBatchAutoMatchSelectionV2,
   rankPlayersByRotationLoad,
 } from "@/lib/matchmaking/v2";
+import {
+  findBestBatchSelectionV3,
+  findBestSingleCourtSelectionV3,
+} from "@/lib/matchmaking/v3";
+import { getExactPartitionKey } from "@/lib/matchmaking/v3/rematch";
 import { MatchStatus, SessionMode, SessionType } from "@/types/enums";
 import {
   GenerateMatchError,
@@ -29,11 +34,58 @@ type AvailableCandidate = {
 };
 
 type RankedCandidates = ReturnType<typeof rankPlayersByRotationLoad>;
+type MatchmakerVersion = "v2" | "v3";
 
 export interface MatchmakingState {
   busyPlayerIds: Set<string>;
   playersById: Map<string, PartitionCandidate>;
   rotationHistory: ReturnType<typeof buildRotationHistory>;
+}
+
+export function getMatchmakerVersion(): MatchmakerVersion {
+  return process.env.MATCHMAKER_VERSION === "v3" ? "v3" : "v2";
+}
+
+function getV3QuartetKey(ids: readonly string[]) {
+  return [...ids].sort().join("|");
+}
+
+function buildCompletedMatches(sessionData: GenerateMatchSession) {
+  return sessionData.matches
+    .filter((match) => match.status === MatchStatus.COMPLETED)
+    .map((match) => ({
+      team1: [match.team1User1Id, match.team1User2Id] as [string, string],
+      team2: [match.team2User1Id, match.team2User2Id] as [string, string],
+      completedAt: match.completedAt ?? null,
+    }));
+}
+
+function buildV3Players(
+  sessionData: GenerateMatchSession,
+  playersById: Map<string, PartitionCandidate>,
+  rankedCandidates: RankedCandidates
+) {
+  const availableUserIds = new Set(
+    rankedCandidates.map((candidate) => candidate.userId)
+  );
+
+  return sessionData.players.map((player) => ({
+    userId: player.userId,
+    matchesPlayed: player.matchesPlayed,
+    matchmakingBaseline:
+      player.matchesPlayed + Math.max(0, player.matchmakingMatchesCredit ?? 0),
+    availableSince: player.availableSince,
+    strength:
+      playersById.get(player.userId)?.elo ??
+      (sessionData.type === SessionType.POINTS
+        ? player.sessionPoints
+        : player.user.elo),
+    isBusy: !player.isPaused && !availableUserIds.has(player.userId),
+    isPaused: player.isPaused,
+    gender: player.gender,
+    partnerPreference: player.partnerPreference,
+    lastPartnerId: player.lastPartnerId,
+  }));
 }
 
 export async function buildMatchmakingState(
@@ -174,6 +226,71 @@ export function selectSingleCourtMatch({
   rotationHistory: ReturnType<typeof buildRotationHistory>;
   reshuffleSource: ReshuffleSource | null;
 }) {
+  if (getMatchmakerVersion() === "v3") {
+    const v3Players = buildV3Players(sessionData, playersById, rankedCandidates);
+    const completedMatches = buildCompletedMatches(sessionData);
+    const initialResult = findBestSingleCourtSelectionV3(v3Players, {
+      sessionMode: sessionData.mode as SessionMode,
+      sessionType: sessionData.type as SessionType,
+      completedMatches,
+    });
+
+    if (!initialResult.selection) {
+      throw new GenerateMatchError(
+        400,
+        `No valid pairing found for current ${getSessionModeLabel(
+          sessionData.mode
+        )} session rules. Try changing player preferences.`
+      );
+    }
+
+    if (!reshuffleSource) {
+      return initialResult.selection;
+    }
+
+    const previousQuartetKey = getV3QuartetKey(reshuffleSource.ids);
+    const previousPartitionKey = getExactPartitionKey(reshuffleSource.partition);
+    const selectedQuartetKey = getV3QuartetKey(initialResult.selection.ids);
+    const selectedPartitionKey = getExactPartitionKey(
+      initialResult.selection.partition
+    );
+
+    if (selectedQuartetKey !== previousQuartetKey) {
+      return initialResult.selection;
+    }
+
+    const alternativeQuartet = findBestSingleCourtSelectionV3(v3Players, {
+      sessionMode: sessionData.mode as SessionMode,
+      sessionType: sessionData.type as SessionType,
+      completedMatches,
+      excludedQuartetKey: previousQuartetKey,
+    });
+
+    if (alternativeQuartet.selection) {
+      return alternativeQuartet.selection;
+    }
+
+    if (selectedPartitionKey !== previousPartitionKey) {
+      return initialResult.selection;
+    }
+
+    const alternativePartition = findBestSingleCourtSelectionV3(v3Players, {
+      sessionMode: sessionData.mode as SessionMode,
+      sessionType: sessionData.type as SessionType,
+      completedMatches,
+      excludedPartitionKey: previousPartitionKey,
+    });
+
+    if (!alternativePartition.selection) {
+      throw new GenerateMatchError(
+        409,
+        "No alternative reshuffle was available. Undo this match if you want the same players returned to the pool."
+      );
+    }
+
+    return alternativePartition.selection;
+  }
+
   const bestSelection = findBestAutoMatchSelectionV2(
     rankedCandidates,
     { playersById, rotationHistory },
@@ -262,6 +379,29 @@ export function selectBatchMatches({
   rotationHistory: ReturnType<typeof buildRotationHistory>;
   requestedMatchCount: number;
 }) {
+  if (getMatchmakerVersion() === "v3") {
+    const result = findBestBatchSelectionV3(
+      buildV3Players(sessionData, playersById, rankedCandidates),
+      {
+        courtCount: requestedMatchCount,
+        sessionMode: sessionData.mode as SessionMode,
+        sessionType: sessionData.type as SessionType,
+        completedMatches: buildCompletedMatches(sessionData),
+      }
+    );
+
+    if (!result.selection) {
+      throw new GenerateMatchError(
+        400,
+        `No valid set of matches found for current ${getSessionModeLabel(
+          sessionData.mode
+        )} session rules. Try changing player preferences.`
+      );
+    }
+
+    return result.selection;
+  }
+
   const batchSelection = findBestBatchAutoMatchSelectionV2(
     rankedCandidates,
     { playersById, rotationHistory },

@@ -20,6 +20,7 @@ export {
 export {
   buildMatchmakingState,
   ensureEnoughPlayers,
+  getMatchmakerVersion,
   getRankedCandidates,
   getRequestedOpenCourts,
   selectBatchMatches,
