@@ -149,6 +149,8 @@ export function findBestSingleCourtSelectionLadder<
         waitSummary,
         groupingSummary,
         balanceGap: evaluation.balanceGap,
+        pointDiffGap: evaluation.pointDiffGap,
+        strengthGap: evaluation.strengthGap,
         randomScore,
       };
 

@@ -84,6 +84,20 @@ function summarizeBatch<T extends ActiveMatchmakerLadderPlayer>(
       (sum, selection) => sum + selection.balanceGap,
       0
     ),
+    maxPointDiffBalanceGap: Math.max(
+      ...selections.map((selection) => selection.pointDiffGap)
+    ),
+    totalPointDiffBalanceGap: selections.reduce(
+      (sum, selection) => sum + selection.pointDiffGap,
+      0
+    ),
+    maxStrengthGap: Math.max(
+      ...selections.map((selection) => selection.strengthGap)
+    ),
+    totalStrengthGap: selections.reduce(
+      (sum, selection) => sum + selection.strengthGap,
+      0
+    ),
     totalRandomScore: selections.reduce(
       (sum, selection) => sum + selection.randomScore,
       0
@@ -127,6 +141,8 @@ function buildQuartetSelections<T extends MatchmakerLadderPlayer>(
       waitSummary: buildWaitSummary(quartetPlayers),
       groupingSummary: buildLadderGroupingSummary(quartetPlayers),
       balanceGap: bestPartition.balanceGap,
+      pointDiffGap: bestPartition.pointDiffGap,
+      strengthGap: bestPartition.strengthGap,
       randomScore: getQuartetRandomScore(quartetPlayers),
     });
   }
@@ -249,6 +265,10 @@ export function findBestBatchSelectionLadder<T extends MatchmakerLadderPlayer>(
     chosenTotalPointDiffGap: null,
     chosenMaxBalanceGap: null,
     chosenTotalBalanceGap: null,
+    chosenMaxPointDiffBalanceGap: null,
+    chosenTotalPointDiffBalanceGap: null,
+    chosenMaxStrengthGap: null,
+    chosenTotalStrengthGap: null,
   };
 
   if (
@@ -389,6 +409,11 @@ export function findBestBatchSelectionLadder<T extends MatchmakerLadderPlayer>(
     debug.chosenTotalPointDiffGap = finalSelection.totalPointDiffGap;
     debug.chosenMaxBalanceGap = finalSelection.maxBalanceGap;
     debug.chosenTotalBalanceGap = finalSelection.totalBalanceGap;
+    debug.chosenMaxPointDiffBalanceGap = finalSelection.maxPointDiffBalanceGap;
+    debug.chosenTotalPointDiffBalanceGap =
+      finalSelection.totalPointDiffBalanceGap;
+    debug.chosenMaxStrengthGap = finalSelection.maxStrengthGap;
+    debug.chosenTotalStrengthGap = finalSelection.totalStrengthGap;
   }
 
   return {

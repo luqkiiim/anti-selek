@@ -79,6 +79,8 @@ export interface LadderDoublesPartition {
 export interface LadderBalancedPartition {
   partition: LadderDoublesPartition;
   balanceGap: number;
+  pointDiffGap: number;
+  strengthGap: number;
 }
 
 export interface LadderGroupingSummary {
@@ -103,6 +105,8 @@ export interface LadderSingleCourtSelection<
   waitSummary: LadderWaitSummary;
   groupingSummary: LadderGroupingSummary;
   balanceGap: number;
+  pointDiffGap: number;
+  strengthGap: number;
   randomScore: number;
 }
 
@@ -138,6 +142,10 @@ export interface LadderBatchSelection<
   totalPointDiffGap: number;
   maxBalanceGap: number;
   totalBalanceGap: number;
+  maxPointDiffBalanceGap: number;
+  totalPointDiffBalanceGap: number;
+  maxStrengthGap: number;
+  totalStrengthGap: number;
   totalRandomScore: number;
 }
 
@@ -159,6 +167,10 @@ export interface LadderBatchDebug {
   chosenTotalPointDiffGap: number | null;
   chosenMaxBalanceGap: number | null;
   chosenTotalBalanceGap: number | null;
+  chosenMaxPointDiffBalanceGap: number | null;
+  chosenTotalPointDiffBalanceGap: number | null;
+  chosenMaxStrengthGap: number | null;
+  chosenTotalStrengthGap: number | null;
 }
 
 export interface LadderBatchResult<

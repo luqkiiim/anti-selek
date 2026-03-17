@@ -27,40 +27,61 @@ function createPlayer(
 }
 
 describe("ladder balance", () => {
-  it("balances ladder teams by point difference first", () => {
+  it("balances ladder teams by ladder score first", () => {
     const playersById = new Map(
       [
-        createPlayer("A", { pointDiff: 16 }),
-        createPlayer("B", { pointDiff: 16 }),
-        createPlayer("C", { pointDiff: 13 }),
-        createPlayer("D", { pointDiff: 13 }),
+        createPlayer("A", { ladderScore: 1, pointDiff: 20 }),
+        createPlayer("B", { ladderScore: 1, pointDiff: 10 }),
+        createPlayer("C", { ladderScore: 0, pointDiff: 8 }),
+        createPlayer("D", { ladderScore: 0, pointDiff: 2 }),
       ].map((player) => [player.userId, player])
     );
 
     expect(
       findBestBalancedPartition(["A", "B", "C", "D"], playersById, SessionMode.MEXICANO)
-    ).toEqual({
+    ).toMatchObject({
       partition: {
-        team1: ["A", "C"],
-        team2: ["B", "D"],
+        team1: ["A", "D"],
+        team2: ["B", "C"],
       },
       balanceGap: 0,
     });
   });
 
-  it("uses rating as a tiebreaker when point-diff balance is tied", () => {
+  it("uses point diff as a tiebreaker when ladder balance is tied", () => {
     const playersById = new Map(
       [
-        createPlayer("A", { pointDiff: 16, strength: 1200 }),
-        createPlayer("B", { pointDiff: 16, strength: 1180 }),
-        createPlayer("C", { pointDiff: 13, strength: 1030 }),
-        createPlayer("D", { pointDiff: 13, strength: 1010 }),
+        createPlayer("A", { ladderScore: 1, pointDiff: 16, strength: 1200 }),
+        createPlayer("B", { ladderScore: 1, pointDiff: 16, strength: 1180 }),
+        createPlayer("C", { ladderScore: 0, pointDiff: 13, strength: 1030 }),
+        createPlayer("D", { ladderScore: 0, pointDiff: 13, strength: 1010 }),
       ].map((player) => [player.userId, player])
     );
 
     expect(
       findBestBalancedPartition(["A", "B", "C", "D"], playersById, SessionMode.MEXICANO)
-    ).toEqual({
+    ).toMatchObject({
+      partition: {
+        team1: ["A", "D"],
+        team2: ["B", "C"],
+      },
+      balanceGap: 0,
+    });
+  });
+
+  it("uses rating as a tiebreaker when ladder and point-diff balance are tied", () => {
+    const playersById = new Map(
+      [
+        createPlayer("A", { ladderScore: 1, pointDiff: 10, strength: 1200 }),
+        createPlayer("B", { ladderScore: 1, pointDiff: 10, strength: 1180 }),
+        createPlayer("C", { ladderScore: 0, pointDiff: 4, strength: 1030 }),
+        createPlayer("D", { ladderScore: 0, pointDiff: 4, strength: 1010 }),
+      ].map((player) => [player.userId, player])
+    );
+
+    expect(
+      findBestBalancedPartition(["A", "B", "C", "D"], playersById, SessionMode.MEXICANO)
+    ).toMatchObject({
       partition: {
         team1: ["A", "D"],
         team2: ["B", "C"],

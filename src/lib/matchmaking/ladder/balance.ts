@@ -11,6 +11,7 @@ import type {
 } from "./types";
 
 type LadderBalancedPartitionEvaluation = LadderBalancedPartition & {
+  pointDiffGap: number;
   strengthGap: number;
 };
 
@@ -101,6 +102,24 @@ export function isValidPartitionForMode<
 }
 
 export function getPartitionBalanceGap<
+  T extends Pick<MatchmakerLadderPlayer, "ladderScore">,
+>(partition: LadderDoublesPartition, playersById: Map<string, T>) {
+  const player1 = playersById.get(partition.team1[0]);
+  const player2 = playersById.get(partition.team1[1]);
+  const player3 = playersById.get(partition.team2[0]);
+  const player4 = playersById.get(partition.team2[1]);
+
+  if (!player1 || !player2 || !player3 || !player4) {
+    return null;
+  }
+
+  const team1LadderTotal = player1.ladderScore + player2.ladderScore;
+  const team2LadderTotal = player3.ladderScore + player4.ladderScore;
+
+  return Math.abs(team1LadderTotal - team2LadderTotal);
+}
+
+function getPartitionStrengthGap<
   T extends Pick<MatchmakerLadderPlayer, "strength">,
 >(partition: LadderDoublesPartition, playersById: Map<string, T>) {
   const player1 = playersById.get(partition.team1[0]);
@@ -148,15 +167,21 @@ export function evaluateBalancedPartitions<T extends MatchmakerLadderPlayer>(
       continue;
     }
 
-    const balanceGap = getPartitionPointDiffGap(partition, playersById);
-    const strengthGap = getPartitionBalanceGap(partition, playersById);
-    if (balanceGap === null || strengthGap === null) {
+    const balanceGap = getPartitionBalanceGap(partition, playersById);
+    const pointDiffGap = getPartitionPointDiffGap(partition, playersById);
+    const strengthGap = getPartitionStrengthGap(partition, playersById);
+    if (
+      balanceGap === null ||
+      pointDiffGap === null ||
+      strengthGap === null
+    ) {
       continue;
     }
 
     evaluations.push({
       partition,
       balanceGap,
+      pointDiffGap,
       strengthGap,
     });
   }
@@ -176,6 +201,7 @@ export function findBestBalancedPartition<T extends MatchmakerLadderPlayer>(
   ).sort(
     (left, right) =>
       left.balanceGap - right.balanceGap ||
+      left.pointDiffGap - right.pointDiffGap ||
       left.strengthGap - right.strengthGap
   )[0];
 
@@ -186,5 +212,7 @@ export function findBestBalancedPartition<T extends MatchmakerLadderPlayer>(
   return {
     partition: bestEvaluation.partition,
     balanceGap: bestEvaluation.balanceGap,
+    pointDiffGap: bestEvaluation.pointDiffGap,
+    strengthGap: bestEvaluation.strengthGap,
   };
 }

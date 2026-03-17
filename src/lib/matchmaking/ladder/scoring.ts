@@ -78,6 +78,14 @@ export function compareSingleCourtSelections<
     return left.balanceGap - right.balanceGap;
   }
 
+  if (left.pointDiffGap !== right.pointDiffGap) {
+    return left.pointDiffGap - right.pointDiffGap;
+  }
+
+  if (left.strengthGap !== right.strengthGap) {
+    return left.strengthGap - right.strengthGap;
+  }
+
   return left.randomScore - right.randomScore;
 }
 
@@ -108,6 +116,22 @@ export function compareBatchSelections<T extends ActiveMatchmakerLadderPlayer>(
 
   if (left.totalBalanceGap !== right.totalBalanceGap) {
     return left.totalBalanceGap - right.totalBalanceGap;
+  }
+
+  if (left.maxPointDiffBalanceGap !== right.maxPointDiffBalanceGap) {
+    return left.maxPointDiffBalanceGap - right.maxPointDiffBalanceGap;
+  }
+
+  if (left.totalPointDiffBalanceGap !== right.totalPointDiffBalanceGap) {
+    return left.totalPointDiffBalanceGap - right.totalPointDiffBalanceGap;
+  }
+
+  if (left.maxStrengthGap !== right.maxStrengthGap) {
+    return left.maxStrengthGap - right.maxStrengthGap;
+  }
+
+  if (left.totalStrengthGap !== right.totalStrengthGap) {
+    return left.totalStrengthGap - right.totalStrengthGap;
   }
 
   return left.totalRandomScore - right.totalRandomScore;
