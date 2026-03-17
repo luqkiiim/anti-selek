@@ -10,6 +10,10 @@ import type {
   MatchmakerLadderPlayer,
 } from "./types";
 
+type LadderBalancedPartitionEvaluation = LadderBalancedPartition & {
+  strengthGap: number;
+};
+
 function inferMixedMatchType(
   team1: [{ gender?: string }, { gender?: string }],
   team2: [{ gender?: string }, { gender?: string }]
@@ -114,26 +118,46 @@ export function getPartitionBalanceGap<
   return Math.abs(team1AverageStrength - team2AverageStrength);
 }
 
+function getPartitionPointDiffGap<
+  T extends Pick<MatchmakerLadderPlayer, "pointDiff">,
+>(partition: LadderDoublesPartition, playersById: Map<string, T>) {
+  const player1 = playersById.get(partition.team1[0]);
+  const player2 = playersById.get(partition.team1[1]);
+  const player3 = playersById.get(partition.team2[0]);
+  const player4 = playersById.get(partition.team2[1]);
+
+  if (!player1 || !player2 || !player3 || !player4) {
+    return null;
+  }
+
+  const team1AveragePointDiff = (player1.pointDiff + player2.pointDiff) / 2;
+  const team2AveragePointDiff = (player3.pointDiff + player4.pointDiff) / 2;
+
+  return Math.abs(team1AveragePointDiff - team2AveragePointDiff);
+}
+
 export function evaluateBalancedPartitions<T extends MatchmakerLadderPlayer>(
   playerIds: [string, string, string, string],
   playersById: Map<string, T>,
   sessionMode: SessionMode
-): LadderBalancedPartition[] {
-  const evaluations: LadderBalancedPartition[] = [];
+): LadderBalancedPartitionEvaluation[] {
+  const evaluations: LadderBalancedPartitionEvaluation[] = [];
 
   for (const partition of getDoublesPartitions(playerIds)) {
     if (!isValidPartitionForMode(partition, playersById, sessionMode)) {
       continue;
     }
 
-    const balanceGap = getPartitionBalanceGap(partition, playersById);
-    if (balanceGap === null) {
+    const balanceGap = getPartitionPointDiffGap(partition, playersById);
+    const strengthGap = getPartitionBalanceGap(partition, playersById);
+    if (balanceGap === null || strengthGap === null) {
       continue;
     }
 
     evaluations.push({
       partition,
       balanceGap,
+      strengthGap,
     });
   }
 
@@ -145,7 +169,22 @@ export function findBestBalancedPartition<T extends MatchmakerLadderPlayer>(
   playersById: Map<string, T>,
   sessionMode: SessionMode
 ) {
-  return evaluateBalancedPartitions(playerIds, playersById, sessionMode).sort(
-    (left, right) => left.balanceGap - right.balanceGap
-  )[0] ?? null;
+  const bestEvaluation = evaluateBalancedPartitions(
+    playerIds,
+    playersById,
+    sessionMode
+  ).sort(
+    (left, right) =>
+      left.balanceGap - right.balanceGap ||
+      left.strengthGap - right.strengthGap
+  )[0];
+
+  if (!bestEvaluation) {
+    return null;
+  }
+
+  return {
+    partition: bestEvaluation.partition,
+    balanceGap: bestEvaluation.balanceGap,
+  };
 }

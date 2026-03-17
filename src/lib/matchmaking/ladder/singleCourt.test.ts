@@ -119,8 +119,8 @@ describe("ladder single-court selection", () => {
     });
 
     expect(result.selection?.partition).toEqual({
-      team1: ["M1", "F1"],
-      team2: ["M2", "F2"],
+      team1: ["M1", "F2"],
+      team2: ["M2", "F1"],
     });
   });
 });

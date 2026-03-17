@@ -27,13 +27,34 @@ function createPlayer(
 }
 
 describe("ladder balance", () => {
-  it("finds the best team-vs-team balanced partition", () => {
+  it("balances ladder teams by point difference first", () => {
     const playersById = new Map(
       [
-        createPlayer("A", { strength: 1200 }),
-        createPlayer("B", { strength: 1180 }),
-        createPlayer("C", { strength: 1030 }),
-        createPlayer("D", { strength: 1010 }),
+        createPlayer("A", { pointDiff: 16 }),
+        createPlayer("B", { pointDiff: 16 }),
+        createPlayer("C", { pointDiff: 13 }),
+        createPlayer("D", { pointDiff: 13 }),
+      ].map((player) => [player.userId, player])
+    );
+
+    expect(
+      findBestBalancedPartition(["A", "B", "C", "D"], playersById, SessionMode.MEXICANO)
+    ).toEqual({
+      partition: {
+        team1: ["A", "C"],
+        team2: ["B", "D"],
+      },
+      balanceGap: 0,
+    });
+  });
+
+  it("uses rating as a tiebreaker when point-diff balance is tied", () => {
+    const playersById = new Map(
+      [
+        createPlayer("A", { pointDiff: 16, strength: 1200 }),
+        createPlayer("B", { pointDiff: 16, strength: 1180 }),
+        createPlayer("C", { pointDiff: 13, strength: 1030 }),
+        createPlayer("D", { pointDiff: 13, strength: 1010 }),
       ].map((player) => [player.userId, player])
     );
 
