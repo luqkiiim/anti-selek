@@ -120,7 +120,10 @@ export async function POST(
         },
       ]);
 
-      return NextResponse.json(newMatch);
+      return NextResponse.json({
+        ...newMatch,
+        matchmakerVersion,
+      });
     }
 
     const batchSelection = selectBatchMatches({
@@ -144,7 +147,10 @@ export async function POST(
       })
     );
 
-    return NextResponse.json({ matches: newMatches });
+    return NextResponse.json({
+      matchmakerVersion,
+      matches: newMatches,
+    });
   } catch (error: unknown) {
     if (error instanceof GenerateMatchError) {
       return NextResponse.json(

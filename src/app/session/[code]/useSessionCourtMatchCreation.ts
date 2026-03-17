@@ -44,7 +44,11 @@ export function useSessionCourtMatchCreation({
 
       if (res.ok) {
         const matches = Array.isArray(data.matches) ? data.matches : [data];
-        patchSessionData((current) => applyGeneratedMatches(current, matches));
+        patchSessionData((current) => ({
+          ...applyGeneratedMatches(current, matches),
+          matchmakerVersion:
+            data.matchmakerVersion ?? current.matchmakerVersion ?? null,
+        }));
         scheduleSessionRefresh();
       } else {
         setError(data.error || "Failed to create matches");

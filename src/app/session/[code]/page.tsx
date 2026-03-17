@@ -255,6 +255,11 @@ export default function SessionPage() {
                 <span className="app-chip app-chip-neutral">
                   {sessionData.status}
                 </span>
+                {isAdmin && sessionData.matchmakerVersion ? (
+                  <span className="app-chip app-chip-neutral">
+                    Matcher {sessionData.matchmakerVersion.toUpperCase()}
+                  </span>
+                ) : null}
               </div>
             </div>
           </div>
