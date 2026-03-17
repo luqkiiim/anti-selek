@@ -51,6 +51,7 @@ export function LiveStandingsTable({
   onTogglePreferenceEditor,
 }: LiveStandingsTableProps) {
   const isRatingsSession = sessionType === SessionType.ELO;
+  const isLadderSession = sessionType === SessionType.LADDER;
   const isCompleted = sessionStatus === SessionStatus.COMPLETED;
 
   return (
@@ -61,12 +62,18 @@ export function LiveStandingsTable({
         }`}
       >
         <h2 className="text-sm font-black text-white uppercase tracking-widest">
-          {isCompleted ? "Final Standings" : "Live Standings"}
+          {isCompleted
+            ? "Final Standings"
+            : isLadderSession
+              ? "Ladder Standings"
+              : "Live Standings"}
         </h2>
         <span className="text-[10px] font-bold text-white/70 uppercase tracking-widest">
           {isCompleted
             ? "Session results"
-            : isRatingsSession
+            : isLadderSession
+              ? "Win/Loss + Point Diff"
+              : isRatingsSession
               ? "Point Standings + Rating Updates"
               : "Point Totals"}
         </span>
@@ -83,7 +90,7 @@ export function LiveStandingsTable({
                 Player
               </th>
               <th className="w-11 sm:w-24 px-1 sm:px-4 py-3 text-center text-[8px] sm:text-[10px] font-black text-gray-400 uppercase tracking-wide sm:tracking-widest">
-                Pts
+                {isLadderSession ? "Ldr" : "Pts"}
               </th>
               <th className="w-12 sm:w-24 px-1 sm:px-4 py-3 text-center text-[8px] sm:text-[10px] font-black text-gray-400 uppercase tracking-wide sm:tracking-widest">
                 <span className="sm:hidden">+/-</span>
@@ -103,6 +110,7 @@ export function LiveStandingsTable({
               const isMe = player.userId === currentUserId;
               const canToggle = !isCompleted && (isAdmin || isMe);
               const pointDiff = pointDiffByUserId.get(player.userId) ?? 0;
+              const ladderScore = stats.wins - stats.losses;
 
               return (
                 <tr
@@ -185,7 +193,11 @@ export function LiveStandingsTable({
                   </td>
                   <td className="w-11 sm:w-24 px-1 sm:px-4 py-2.5 sm:py-3 whitespace-nowrap text-center">
                     <span className="text-[13px] sm:text-base font-black text-blue-700">
-                      {player.sessionPoints}
+                      {isLadderSession
+                        ? ladderScore > 0
+                          ? `+${ladderScore}`
+                          : ladderScore
+                        : player.sessionPoints}
                     </span>
                   </td>
                   <td className="w-12 sm:w-24 px-1 sm:px-4 py-2.5 sm:py-3 whitespace-nowrap text-center">

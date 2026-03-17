@@ -1,6 +1,10 @@
 "use client";
 
-import { compareSessionStandings } from "@/lib/sessionStandings";
+import { deriveLadderRecordsByEntryTime } from "@/lib/matchmaking/ladder";
+import {
+  compareLadderStandings,
+  compareSessionStandings,
+} from "@/lib/sessionStandings";
 import { getSessionModeLabel, getSessionTypeLabel } from "@/lib/sessionModeLabels";
 import type {
   CommunityUser,
@@ -9,7 +13,12 @@ import type {
   PreferenceEditorState,
   SessionData,
 } from "@/components/session/sessionTypes";
-import { MatchStatus, SessionMode, SessionStatus } from "@/types/enums";
+import {
+  MatchStatus,
+  SessionMode,
+  SessionStatus,
+  SessionType,
+} from "@/types/enums";
 
 interface PlayerSessionStats {
   played: number;
@@ -78,6 +87,42 @@ function buildPlayerPerformanceMaps(sessionData: SessionData) {
     playerStatsByUserId.set(player.userId, { ...EMPTY_PLAYER_STATS });
     pointDiffByUserId.set(player.userId, 0);
   });
+
+  if (sessionData.type === SessionType.LADDER) {
+    const ladderRecordByUserId = deriveLadderRecordsByEntryTime(
+      new Map(
+        sessionData.players.map((player) => [
+          player.userId,
+          player.ladderEntryAt ? new Date(player.ladderEntryAt) : null,
+        ])
+      ),
+      (sessionData.matches ?? []).map((match) => ({
+        team1: [match.team1User1Id, match.team1User2Id] as [string, string],
+        team2: [match.team2User1Id, match.team2User2Id] as [string, string],
+        team1Score: match.team1Score,
+        team2Score: match.team2Score,
+        status: match.status,
+        completedAt: match.completedAt ? new Date(match.completedAt) : null,
+      }))
+    );
+
+    sessionData.players.forEach((player) => {
+      const record = ladderRecordByUserId.get(player.userId);
+      if (!record) return;
+
+      playerStatsByUserId.set(player.userId, {
+        played: record.wins + record.losses,
+        wins: record.wins,
+        losses: record.losses,
+      });
+      pointDiffByUserId.set(player.userId, record.pointDiff);
+    });
+
+    return {
+      playerStatsByUserId,
+      pointDiffByUserId,
+    };
+  }
 
   (sessionData.matches ?? []).forEach((match) => {
     const team1Ids = [match.team1User1Id, match.team1User2Id];
@@ -203,18 +248,33 @@ export function buildSessionViewModel({
     buildPlayerPerformanceMaps(sessionData);
 
   const sortedPlayers = sessionData.players.slice().sort((a, b) =>
-    compareSessionStandings(
-      {
-        name: a.user.name,
-        pointDiff: pointDiffByUserId.get(a.userId) ?? 0,
-        sessionPoints: a.sessionPoints,
-      },
-      {
-        name: b.user.name,
-        pointDiff: pointDiffByUserId.get(b.userId) ?? 0,
-        sessionPoints: b.sessionPoints,
-      }
-    )
+    sessionData.type === SessionType.LADDER
+      ? compareLadderStandings(
+          {
+            name: a.user.name,
+            wins: playerStatsByUserId.get(a.userId)?.wins ?? 0,
+            losses: playerStatsByUserId.get(a.userId)?.losses ?? 0,
+            pointDiff: pointDiffByUserId.get(a.userId) ?? 0,
+          },
+          {
+            name: b.user.name,
+            wins: playerStatsByUserId.get(b.userId)?.wins ?? 0,
+            losses: playerStatsByUserId.get(b.userId)?.losses ?? 0,
+            pointDiff: pointDiffByUserId.get(b.userId) ?? 0,
+          }
+        )
+      : compareSessionStandings(
+          {
+            name: a.user.name,
+            pointDiff: pointDiffByUserId.get(a.userId) ?? 0,
+            sessionPoints: a.sessionPoints,
+          },
+          {
+            name: b.user.name,
+            pointDiff: pointDiffByUserId.get(b.userId) ?? 0,
+            sessionPoints: b.sessionPoints,
+          }
+        )
   );
 
   const activePreferencePlayer = openPreferenceEditor

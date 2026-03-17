@@ -1,5 +1,7 @@
 "use client";
 
+import { SessionType } from "@/types/enums";
+
 interface PodiumPlayer {
   userId: string;
   sessionPoints: number;
@@ -10,8 +12,17 @@ interface PodiumPlayer {
 }
 
 interface SessionPodiumProps {
+  sessionType: string;
   players: PodiumPlayer[];
   pointDiffByUserId: Map<string, number>;
+  playerStatsByUserId: Map<
+    string,
+    {
+      played: number;
+      wins: number;
+      losses: number;
+    }
+  >;
 }
 
 const RANK_STYLES: Record<
@@ -35,8 +46,14 @@ const RANK_STYLES: Record<
   },
 };
 
-export function SessionPodium({ players, pointDiffByUserId }: SessionPodiumProps) {
+export function SessionPodium({
+  sessionType,
+  players,
+  pointDiffByUserId,
+  playerStatsByUserId,
+}: SessionPodiumProps) {
   const topThree = players.slice(0, 3);
+  const isLadderSession = sessionType === SessionType.LADDER;
 
   if (topThree.length === 0) {
     return null;
@@ -58,6 +75,11 @@ export function SessionPodium({ players, pointDiffByUserId }: SessionPodiumProps
         {orderedPlayers.map((player) => {
           const rank = players.findIndex((entry) => entry.userId === player.userId) + 1;
           const pointDiff = pointDiffByUserId.get(player.userId) ?? 0;
+          const stats = playerStatsByUserId.get(player.userId) ?? {
+            played: 0,
+            wins: 0,
+            losses: 0,
+          };
           const styles = RANK_STYLES[rank] ?? RANK_STYLES[3];
 
           return (
@@ -84,10 +106,12 @@ export function SessionPodium({ players, pointDiffByUserId }: SessionPodiumProps
 
                 <div className="mt-3 space-y-1">
                   <p className="text-2xl font-semibold leading-none text-gray-900 sm:text-3xl">
-                    {player.sessionPoints}
+                    {isLadderSession
+                      ? `${stats.wins}-${stats.losses}`
+                      : player.sessionPoints}
                   </p>
                   <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500">
-                    Points
+                    {isLadderSession ? "Record" : "Points"}
                   </p>
                 </div>
 

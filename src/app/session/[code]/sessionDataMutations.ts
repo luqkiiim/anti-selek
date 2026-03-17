@@ -7,6 +7,7 @@ import type {
   Player,
   SessionData,
 } from "@/components/session/sessionTypes";
+import { SessionType } from "@/types/enums";
 
 type LiveMatch = NonNullable<SessionData["courts"][number]["currentMatch"]>;
 
@@ -52,6 +53,7 @@ interface GuestPayload {
   name: string;
   elo: number;
   isGuest: boolean;
+  ladderEntryAt?: string;
   gender: Player["gender"];
   partnerPreference: Player["partnerPreference"];
 }
@@ -155,6 +157,7 @@ function upsertHistoryMatch(
 }
 
 function updatePlayersForCompletedMatch(
+  sessionType: SessionData["type"],
   players: SessionData["players"],
   payload: MatchPayload
 ) {
@@ -183,12 +186,15 @@ function updatePlayersForCompletedMatch(
 
   const team1StandingPoints = getStandingPointsForTeam(payload.winnerTeam, 1);
   const team2StandingPoints = getStandingPointsForTeam(payload.winnerTeam, 2);
+  const awardsStandingPoints = sessionType !== SessionType.LADDER;
 
   return players.map((player) => {
     if (team1Ids.has(player.userId)) {
       return {
         ...player,
-        sessionPoints: player.sessionPoints + team1StandingPoints,
+        sessionPoints: awardsStandingPoints
+          ? player.sessionPoints + team1StandingPoints
+          : player.sessionPoints,
         user: {
           ...player.user,
           elo: player.isGuest ? player.user.elo : player.user.elo + payload.team1EloChange!,
@@ -199,7 +205,9 @@ function updatePlayersForCompletedMatch(
     if (team2Ids.has(player.userId)) {
       return {
         ...player,
-        sessionPoints: player.sessionPoints + team2StandingPoints,
+        sessionPoints: awardsStandingPoints
+          ? player.sessionPoints + team2StandingPoints
+          : player.sessionPoints,
         user: {
           ...player.user,
           elo: player.isGuest ? player.user.elo : player.user.elo + payload.team2EloChange!,
@@ -337,7 +345,7 @@ export function applyScoreApproval(
   return {
     ...current,
     courts,
-    players: updatePlayersForCompletedMatch(current.players, payload),
+    players: updatePlayersForCompletedMatch(current.type, current.players, payload),
     matches: historyMatch ? upsertHistoryMatch(current.matches, historyMatch) : current.matches,
   };
 }
@@ -376,6 +384,7 @@ export function applyGuestAdded(current: SessionData, guest: GuestPayload) {
       {
         userId: guest.id,
         sessionPoints: 0,
+        ladderEntryAt: guest.ladderEntryAt,
         isPaused: false,
         isGuest: guest.isGuest,
         gender: guest.gender,
@@ -400,12 +409,19 @@ export function applyPlayerRemoval(current: SessionData, userId: string) {
 export function applyPlayerPaused(
   current: SessionData,
   userId: string,
-  isPaused: boolean
+  isPaused: boolean,
+  ladderEntryAt?: string
 ) {
   return {
     ...current,
     players: current.players.map((player) =>
-      player.userId === userId ? { ...player, isPaused } : player
+      player.userId === userId
+        ? {
+            ...player,
+            isPaused,
+            ladderEntryAt: ladderEntryAt ?? player.ladderEntryAt,
+          }
+        : player
     ),
   };
 }

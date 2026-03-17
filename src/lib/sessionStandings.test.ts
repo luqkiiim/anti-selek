@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  compareLadderStandings,
   compareSessionStandings,
   getStandingPointsForTeam,
 } from "./sessionStandings";
@@ -21,6 +22,24 @@ describe("sessionStandings", () => {
     ];
 
     const sorted = rows.slice().sort(compareSessionStandings);
+
+    expect(sorted.map((row) => row.name)).toEqual([
+      "Chris",
+      "Adam",
+      "Bella",
+      "Zara",
+    ]);
+  });
+
+  it("sorts ladder standings by record, then point difference, then name", () => {
+    const rows = [
+      { name: "Zara", wins: 2, losses: 1, pointDiff: 7 },
+      { name: "Adam", wins: 2, losses: 1, pointDiff: 9 },
+      { name: "Bella", wins: 2, losses: 1, pointDiff: 9 },
+      { name: "Chris", wins: 3, losses: 1, pointDiff: 4 },
+    ];
+
+    const sorted = rows.slice().sort(compareLadderStandings);
 
     expect(sorted.map((row) => row.name)).toEqual([
       "Chris",

@@ -59,7 +59,7 @@ export function HostTournamentPanel({
           className="w-full bg-blue-500/50 border-2 border-blue-400/30 rounded-2xl px-4 py-3 placeholder:text-blue-200 font-bold focus:outline-none focus:border-white transition-all"
         />
 
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-3 gap-2">
           <button
             type="button"
             onClick={() => onSessionTypeChange(SessionType.POINTS)}
@@ -82,11 +82,24 @@ export function HostTournamentPanel({
           >
             Ratings Format
           </button>
+          <button
+            type="button"
+            onClick={() => onSessionTypeChange(SessionType.LADDER)}
+            className={`py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
+              sessionType === SessionType.LADDER
+                ? "bg-white text-blue-600 shadow-md"
+                : "bg-blue-500/30 text-white"
+            }`}
+          >
+            Ladder Format
+          </button>
         </div>
         <p className="text-[10px] font-bold text-blue-100 uppercase tracking-wider">
           {sessionType === SessionType.POINTS
             ? "Points based matchmaking"
-            : "Ratings based matchmaking"}
+            : sessionType === SessionType.ELO
+              ? "Ratings based matchmaking"
+              : "Winners tend to play winners, losers tend to play losers"}
         </p>
 
         <div className="grid grid-cols-2 gap-2">

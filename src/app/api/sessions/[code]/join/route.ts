@@ -164,6 +164,7 @@ export async function POST(
             sessionPoints: 0,
             matchmakingMatchesCredit,
             joinedAt: new Date(),
+            ladderEntryAt: new Date(),
             availableSince: new Date(),
           },
         },

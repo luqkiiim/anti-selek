@@ -1,6 +1,7 @@
 export enum SessionType {
   POINTS = "POINTS",
   ELO = "ELO",
+  LADDER = "LADDER",
 }
 
 export enum SessionMode {

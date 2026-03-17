@@ -312,8 +312,10 @@ export default function SessionPage() {
 
         {sessionView.isCompletedSession ? (
           <SessionPodium
+            sessionType={sessionData.type}
             players={sessionView.sortedPlayers}
             pointDiffByUserId={sessionView.pointDiffByUserId}
+            playerStatsByUserId={sessionView.playerStatsByUserId}
           />
         ) : null}
 

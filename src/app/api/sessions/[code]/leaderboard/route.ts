@@ -2,8 +2,12 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getCommunityEloByUserId } from "@/lib/communityElo";
-import { compareSessionStandings } from "@/lib/sessionStandings";
-import { MatchStatus } from "@/types/enums";
+import { deriveLadderRecordsByEntryTime } from "@/lib/matchmaking/ladder";
+import {
+  compareLadderStandings,
+  compareSessionStandings,
+} from "@/lib/sessionStandings";
+import { MatchStatus, SessionType } from "@/types/enums";
 
 export const dynamic = "force-dynamic";
 
@@ -116,6 +120,7 @@ export async function GET(
       elo: getPlayerElo(p.userId, p.user.elo),
       matchesPlayed: matchCounts[p.userId] || 0,
       pointDiff: pointDiffByUserId[p.userId] || 0,
+      ladderEntryAt: p.ladderEntryAt,
     }));
 
   const sessionPointsLeaderboard = leaderboardEntries
@@ -126,8 +131,45 @@ export async function GET(
     .slice()
     .sort(compareSessionStandings);
 
+  const ladderRecordByUserId = deriveLadderRecordsByEntryTime(
+    new Map(
+      sessionData.players.map((player) => [
+        player.userId,
+        player.ladderEntryAt ?? null,
+      ])
+    ),
+    sessionData.matches.map((match) => ({
+      team1: [match.team1User1Id, match.team1User2Id] as [string, string],
+      team2: [match.team2User1Id, match.team2User2Id] as [string, string],
+      team1Score: match.team1Score,
+      team2Score: match.team2Score,
+      status: match.status,
+    }))
+  );
+  const ladderLeaderboard = leaderboardEntries
+    .map((entry) => {
+      const record = ladderRecordByUserId.get(entry.userId) ?? {
+        wins: 0,
+        losses: 0,
+        pointDiff: 0,
+      };
+
+      return {
+        ...entry,
+        wins: record.wins,
+        losses: record.losses,
+        pointDiff: record.pointDiff,
+      };
+    })
+    .sort(compareLadderStandings);
+
   return NextResponse.json({
     sessionPointsLeaderboard,
     eloLeaderboard,
+    ladderLeaderboard,
+    currentLeaderboard:
+      sessionData.type === SessionType.LADDER
+        ? ladderLeaderboard
+        : sessionPointsLeaderboard,
   });
 }

@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { PartnerPreference, PlayerGender, SessionMode } from "@/types/enums";
+import {
+  PartnerPreference,
+  PlayerGender,
+  SessionMode,
+  SessionType,
+} from "@/types/enums";
 import type { SessionData } from "@/components/session/sessionTypes";
 import {
   applyGeneratedMatches,
@@ -17,7 +22,7 @@ function createSessionData(): SessionData {
     code: "session-1",
     communityId: "community-1",
     name: "Test Session",
-    type: "POINTS",
+    type: SessionType.POINTS,
     mode: SessionMode.MEXICANO,
     status: "ACTIVE",
     viewerCanManage: true,
@@ -247,6 +252,7 @@ describe("sessionDataMutations", () => {
       name: "Guest 1",
       elo: 950,
       isGuest: true,
+      ladderEntryAt: "2026-03-18T00:00:00.000Z",
       gender: PlayerGender.MALE,
       partnerPreference: PartnerPreference.OPEN,
     });
@@ -255,5 +261,57 @@ describe("sessionDataMutations", () => {
 
     expect(withGuest.players.some((player) => player.userId === "guest-1")).toBe(true);
     expect(withoutGuest.players.some((player) => player.userId === "guest-1")).toBe(false);
+  });
+
+  it("does not award session points when approving a ladder match", () => {
+    const ladderSession = {
+      ...createSessionData(),
+      type: SessionType.LADDER,
+    };
+    const updated = applyScoreApproval(
+      applyScoreSubmission(
+        applyGeneratedMatches(ladderSession, [
+          {
+            id: "match-1",
+            courtId: "court-1",
+            status: "IN_PROGRESS",
+            team1User1: { id: "p1", name: "Player 1" },
+            team1User2: { id: "p2", name: "Player 2" },
+            team2User1: { id: "p3", name: "Player 3" },
+            team2User2: { id: "p4", name: "Player 4" },
+          },
+        ]),
+        {
+          id: "match-1",
+          status: "PENDING_APPROVAL",
+          winnerTeam: 1,
+          team1Score: 21,
+          team2Score: 18,
+          completedAt: "2026-03-16T10:00:00.000Z",
+          team1User1: { id: "p1", name: "Player 1" },
+          team1User2: { id: "p2", name: "Player 2" },
+          team2User1: { id: "p3", name: "Player 3" },
+          team2User2: { id: "p4", name: "Player 4" },
+        }
+      ),
+      {
+        id: "match-1",
+        status: "COMPLETED",
+        winnerTeam: 1,
+        team1Score: 21,
+        team2Score: 18,
+        team1EloChange: 10,
+        team2EloChange: -10,
+        completedAt: "2026-03-16T10:00:00.000Z",
+        team1User1Id: "p1",
+        team1User2Id: "p2",
+        team2User1Id: "p3",
+        team2User2Id: "p4",
+      }
+    );
+
+    expect(updated.players.find((player) => player.userId === "p1")?.sessionPoints).toBe(0);
+    expect(updated.players.find((player) => player.userId === "p3")?.sessionPoints).toBe(0);
+    expect(updated.players.find((player) => player.userId === "p1")?.user.elo).toBe(1010);
   });
 });

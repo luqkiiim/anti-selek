@@ -126,4 +126,24 @@ describe("parseCreateSessionRequest", () => {
       })
     ).toThrowError(new SessionRouteError("Invalid session mode", 400));
   });
+
+  it("accepts ladder as a valid session type", () => {
+    const parsed = parseCreateSessionRequest({
+      name: "Ladder Night",
+      communityId: "community-1",
+      type: SessionType.LADDER,
+    });
+
+    expect(parsed.type).toBe(SessionType.LADDER);
+  });
+
+  it("rejects invalid session types", () => {
+    expect(() =>
+      parseCreateSessionRequest({
+        name: "Session",
+        communityId: "community-1",
+        type: "BAD_TYPE",
+      })
+    ).toThrowError(new SessionRouteError("Invalid session type", 400));
+  });
 });

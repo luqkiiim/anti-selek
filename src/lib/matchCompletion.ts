@@ -2,7 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { getCommunityEloByUserId } from "@/lib/communityElo";
 import { isValidBadmintonScore } from "@/lib/matchRules";
 import { getStandingPointsForTeam } from "@/lib/sessionStandings";
-import { MatchStatus } from "@/types/enums";
+import { MatchStatus, SessionType } from "@/types/enums";
 
 const K_FACTOR = 32;
 const SINGLE_GUEST_MULTIPLIER = 0.75;
@@ -82,6 +82,7 @@ export async function finalizeMatchResult({
   const now = new Date();
   const team1StandingPoints = getStandingPointsForTeam(winnerTeam, 1);
   const team2StandingPoints = getStandingPointsForTeam(winnerTeam, 2);
+  const awardsStandingPoints = match.session.type !== SessionType.LADDER;
 
   const playerIds = [
     match.team1User1Id,
@@ -173,7 +174,9 @@ export async function finalizeMatchResult({
           userId: { in: [match.team1User1Id, match.team1User2Id] },
         },
         data: {
-          sessionPoints: { increment: team1StandingPoints },
+          ...(awardsStandingPoints
+            ? { sessionPoints: { increment: team1StandingPoints } }
+            : {}),
           matchesPlayed: { increment: 1 },
           lastPlayedAt: now,
           availableSince: now,
@@ -186,7 +189,9 @@ export async function finalizeMatchResult({
           userId: { in: [match.team2User1Id, match.team2User2Id] },
         },
         data: {
-          sessionPoints: { increment: team2StandingPoints },
+          ...(awardsStandingPoints
+            ? { sessionPoints: { increment: team2StandingPoints } }
+            : {}),
           matchesPlayed: { increment: 1 },
           lastPlayedAt: now,
           availableSince: now,

@@ -2,6 +2,12 @@ import { getCommunityEloByUserId } from "@/lib/communityElo";
 import { getSessionModeLabel } from "@/lib/sessionModeLabels";
 import { getBusyPlayerIds } from "@/lib/matchmaking/busyFilter";
 import {
+  deriveLadderRecordsByEntryTime,
+  findBestBatchSelectionLadder,
+  findBestSingleCourtSelectionLadder,
+  type MatchmakerLadderPlayer,
+} from "@/lib/matchmaking/ladder";
+import {
   buildRotationHistory,
   type PartitionCandidate,
 } from "@/lib/matchmaking/partitioning";
@@ -49,6 +55,9 @@ function buildCompletedMatches(sessionData: GenerateMatchSession) {
     .map((match) => ({
       team1: [match.team1User1Id, match.team1User2Id] as [string, string],
       team2: [match.team2User1Id, match.team2User2Id] as [string, string],
+      team1Score: match.team1Score,
+      team2Score: match.team2Score,
+      status: match.status,
       completedAt: match.completedAt ?? null,
     }));
 }
@@ -79,6 +88,54 @@ function buildV3Players(
     partnerPreference: player.partnerPreference,
     lastPartnerId: player.lastPartnerId,
   }));
+}
+
+function buildLadderPlayers(
+  sessionData: GenerateMatchSession,
+  playersById: Map<string, PartitionCandidate>,
+  rankedCandidates: RankedCandidates
+): MatchmakerLadderPlayer[] {
+  const availableUserIds = new Set(
+    rankedCandidates.map((candidate) => candidate.userId)
+  );
+  const ladderEntryAtByUserId = new Map(
+    sessionData.players.map((player) => [
+      player.userId,
+      player.ladderEntryAt ?? player.joinedAt ?? null,
+    ])
+  );
+  const ladderRecordByUserId = deriveLadderRecordsByEntryTime(
+    ladderEntryAtByUserId,
+    buildCompletedMatches(sessionData)
+  );
+
+  return sessionData.players.map((player) => {
+    const record = ladderRecordByUserId.get(player.userId) ?? {
+      wins: 0,
+      losses: 0,
+      pointDiff: 0,
+      ladderScore: 0,
+    };
+
+    return {
+      userId: player.userId,
+      matchesPlayed: player.matchesPlayed,
+      matchmakingBaseline:
+        player.matchesPlayed + Math.max(0, player.matchmakingMatchesCredit ?? 0),
+      availableSince: player.availableSince,
+      strength:
+        playersById.get(player.userId)?.elo ?? player.user.elo,
+      wins: record.wins,
+      losses: record.losses,
+      pointDiff: record.pointDiff,
+      ladderScore: record.ladderScore,
+      isBusy: !player.isPaused && !availableUserIds.has(player.userId),
+      isPaused: player.isPaused,
+      gender: player.gender,
+      partnerPreference: player.partnerPreference,
+      lastPartnerId: player.lastPartnerId,
+    };
+  });
 }
 
 export async function buildMatchmakingState(
@@ -225,13 +282,23 @@ export function selectSingleCourtMatch({
   rotationHistory: ReturnType<typeof buildRotationHistory>;
   reshuffleSource: ReshuffleSource | null;
 }) {
-  const v3Players = buildV3Players(sessionData, playersById, rankedCandidates);
   const completedMatches = buildCompletedMatches(sessionData);
-  const initialResult = findBestSingleCourtSelectionV3(v3Players, {
-    sessionMode: sessionData.mode as SessionMode,
-    sessionType: sessionData.type as SessionType,
-    completedMatches,
-  });
+  const isLadderSession = sessionData.type === SessionType.LADDER;
+  const initialResult = isLadderSession
+    ? findBestSingleCourtSelectionLadder(
+        buildLadderPlayers(sessionData, playersById, rankedCandidates),
+        {
+          sessionMode: sessionData.mode as SessionMode,
+        }
+      )
+    : findBestSingleCourtSelectionV3(
+        buildV3Players(sessionData, playersById, rankedCandidates),
+        {
+          sessionMode: sessionData.mode as SessionMode,
+          sessionType: sessionData.type as SessionType,
+          completedMatches,
+        }
+      );
 
   if (!initialResult.selection) {
     throw new GenerateMatchError(
@@ -246,6 +313,11 @@ export function selectSingleCourtMatch({
     return initialResult.selection;
   }
 
+  if (isLadderSession) {
+    return initialResult.selection;
+  }
+
+  const v3Players = buildV3Players(sessionData, playersById, rankedCandidates);
   const previousQuartetKey = getV3QuartetKey(reshuffleSource.ids);
   const previousPartitionKey = getExactPartitionKey(reshuffleSource.partition);
   const selectedQuartetKey = getV3QuartetKey(initialResult.selection.ids);
@@ -301,15 +373,24 @@ export function selectBatchMatches({
   rotationHistory: ReturnType<typeof buildRotationHistory>;
   requestedMatchCount: number;
 }) {
-  const result = findBestBatchSelectionV3(
-    buildV3Players(sessionData, playersById, rankedCandidates),
-    {
-      courtCount: requestedMatchCount,
-      sessionMode: sessionData.mode as SessionMode,
-      sessionType: sessionData.type as SessionType,
-      completedMatches: buildCompletedMatches(sessionData),
-    }
-  );
+  const result =
+    sessionData.type === SessionType.LADDER
+      ? findBestBatchSelectionLadder(
+          buildLadderPlayers(sessionData, playersById, rankedCandidates),
+          {
+            courtCount: requestedMatchCount,
+            sessionMode: sessionData.mode as SessionMode,
+          }
+        )
+      : findBestBatchSelectionV3(
+          buildV3Players(sessionData, playersById, rankedCandidates),
+          {
+            courtCount: requestedMatchCount,
+            sessionMode: sessionData.mode as SessionMode,
+            sessionType: sessionData.type as SessionType,
+            completedMatches: buildCompletedMatches(sessionData),
+          }
+        );
 
   if (!result.selection) {
     throw new GenerateMatchError(

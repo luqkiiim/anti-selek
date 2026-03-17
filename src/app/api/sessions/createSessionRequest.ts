@@ -194,6 +194,13 @@ export function parseCreateSessionRequest(
   if (![SessionMode.MEXICANO, SessionMode.MIXICANO].includes(mode as SessionMode)) {
     throw new SessionRouteError("Invalid session mode", 400);
   }
+  if (
+    ![SessionType.POINTS, SessionType.ELO, SessionType.LADDER].includes(
+      type as SessionType
+    )
+  ) {
+    throw new SessionRouteError("Invalid session type", 400);
+  }
 
   const requestedPlayerIds = Array.isArray(playerIds)
     ? playerIds.filter((id): id is string => typeof id === "string")
@@ -210,4 +217,3 @@ export function parseCreateSessionRequest(
     normalizedGuests: normalizeGuests(guestNames, guestConfigs, mode as SessionMode),
   };
 }
-

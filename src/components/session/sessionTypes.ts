@@ -3,6 +3,7 @@ import { PartnerPreference, PlayerGender, SessionMode } from "@/types/enums";
 export interface Player {
   userId: string;
   sessionPoints: number;
+  ladderEntryAt?: string;
   isPaused: boolean;
   isGuest: boolean;
   gender: PlayerGender;

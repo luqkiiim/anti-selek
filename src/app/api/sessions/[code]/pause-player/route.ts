@@ -27,7 +27,7 @@ export async function POST(
 
     const sessionData = await prisma.session.findUnique({
       where: { code },
-      select: { id: true, communityId: true },
+      select: { id: true, communityId: true, type: true },
     });
 
     if (!sessionData) {
@@ -109,6 +109,7 @@ export async function POST(
         isPaused,
         pausedAt: isPaused ? new Date() : null,
         availableSince: isPaused ? undefined : new Date(), 
+        ladderEntryAt: isPaused ? undefined : new Date(),
         inactiveSeconds: { increment: inactiveSecondsToIncrement },
         matchmakingMatchesCredit: nextMatchmakingMatchesCredit,
       },

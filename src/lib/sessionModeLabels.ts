@@ -17,6 +17,8 @@ export function getSessionTypeLabel(type: SessionType | string): string {
       return "Points";
     case SessionType.ELO:
       return "Ratings";
+    case SessionType.LADDER:
+      return "Ladder";
     default:
       return type;
   }

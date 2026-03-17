@@ -167,6 +167,7 @@ export async function POST(
           sessionPoints: 0,
           matchmakingMatchesCredit,
           joinedAt: new Date(),
+          ladderEntryAt: new Date(),
           availableSince: new Date(),
         },
       });
@@ -181,6 +182,7 @@ export async function POST(
       isGuest: true,
       gender: createdGuest.gender,
       partnerPreference: createdGuest.partnerPreference,
+      ladderEntryAt: new Date().toISOString(),
     });
   } catch (error) {
     console.error("Create guest error:", error);

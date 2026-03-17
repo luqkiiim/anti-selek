@@ -225,8 +225,14 @@ export function useSessionPlayerManagement({
         body: JSON.stringify({ userId, isPaused: !currentPaused }),
       });
       if (res.ok) {
+        const data = await safeJson(res);
         patchSessionData((current) =>
-          applyPlayerPaused(current, userId, !currentPaused)
+          applyPlayerPaused(
+            current,
+            userId,
+            !currentPaused,
+            typeof data.ladderEntryAt === "string" ? data.ladderEntryAt : undefined
+          )
         );
         scheduleSessionRefresh();
       } else {

@@ -110,6 +110,7 @@ model SessionPlayer {
   lastPlayedAt   DateTime?
   pausedAt       DateTime?
   joinedAt       DateTime @default(now())
+  ladderEntryAt  DateTime @default(now())
   inactiveSeconds Int      @default(0)
 
   session     Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
