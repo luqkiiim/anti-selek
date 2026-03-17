@@ -20,9 +20,11 @@ export {
 export {
   buildMatchmakingState,
   ensureEnoughPlayers,
+  getMatchmakerVersion,
   getRankedCandidates,
   getRequestedOpenCourts,
   selectBatchMatches,
   selectSingleCourtMatch,
+  type MatchmakerVersion,
   type MatchmakingState,
 } from "./selection";

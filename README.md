@@ -49,6 +49,11 @@ ADMIN_EMAILS="you@example.com"
 # Cloud runtime database
 TURSO_DATABASE_URL="libsql://..."
 TURSO_AUTH_TOKEN="..."
+
+# Optional server-side matchmaking engine toggle
+# Defaults to v2 if unset.
+# Set to v1 to fall back to the previous production matcher.
+MATCHMAKER_VERSION="v2"
 ```
 
 ## Local Setup

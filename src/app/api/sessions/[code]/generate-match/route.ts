@@ -90,10 +90,11 @@ export async function POST(
       freedCourtIds
     );
     const requestedMatchCount = requestedOpenCourts.length;
-    const { availableCandidates, rankedCandidates } = getRankedCandidates(
+    const { availableCandidates, rankedCandidates, matchmakerVersion } =
+      getRankedCandidates(
       sessionData,
       busyPlayerIds
-    );
+      );
 
     ensureEnoughPlayers(
       availableCandidates.length,
@@ -103,6 +104,7 @@ export async function POST(
 
     if (requestedMatchCount === 1) {
       const bestSelection = selectSingleCourtMatch({
+        matchmakerVersion,
         rankedCandidates,
         playersById,
         sessionData,
@@ -122,6 +124,7 @@ export async function POST(
     }
 
     const batchSelection = selectBatchMatches({
+      matchmakerVersion,
       rankedCandidates,
       playersById,
       sessionData,
