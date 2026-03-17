@@ -11,6 +11,7 @@ import type {
 
 const NORMAL_EXTRA_CANDIDATES = [4, 8];
 const MIXICANO_EXTRA_CANDIDATES = [8, 12];
+const BATCH_SEARCH_LIMITS = [240, 480];
 const MAX_BATCH_QUARTETS = 240;
 
 interface BatchSummary {
@@ -131,7 +132,7 @@ function buildQuartetCandidates<T extends RankedRotationLoadCandidate>(
 
   return selections.sort((left, right) =>
     compareSelectionsV2(left, right, sessionType)
-  ).slice(0, MAX_BATCH_QUARTETS);
+  );
 }
 
 export function findBestBatchAutoMatchSelectionV2<
@@ -161,47 +162,62 @@ export function findBestBatchAutoMatchSelectionV2<
       sessionType,
       poolSize
     );
-    let bestSelections: V2Selection[] | null = null;
-    let bestSummary: BatchSummary | null = null;
+    const searchQuartets = (
+      limitedQuartets: V2Selection[]
+    ): V2Selection[] | null => {
+      let bestSelections: V2Selection[] | null = null;
+      let bestSummary: BatchSummary | null = null;
 
-    const backtrack = (
-      startIndex: number,
-      chosen: V2Selection[],
-      usedIds: Set<string>
-    ) => {
-      if (chosen.length === matchCount) {
-        const summary = summarizeBatch(chosen);
+      const backtrack = (
+        startIndex: number,
+        chosen: V2Selection[],
+        usedIds: Set<string>
+      ) => {
+        if (chosen.length === matchCount) {
+          const summary = summarizeBatch(chosen);
 
-        if (
-          !bestSummary ||
-          compareBatchSummaries(summary, bestSummary, sessionType) < 0
-        ) {
-          bestSelections = chosen;
-          bestSummary = summary;
+          if (
+            !bestSummary ||
+            compareBatchSummaries(summary, bestSummary, sessionType) < 0
+          ) {
+            bestSelections = chosen;
+            bestSummary = summary;
+          }
+
+          return;
         }
 
-        return;
-      }
+        for (let index = startIndex; index < limitedQuartets.length; index++) {
+          const quartet = limitedQuartets[index];
 
-      for (let index = startIndex; index < quartets.length; index++) {
-        const quartet = quartets[index];
+          if (quartet.ids.some((id) => usedIds.has(id))) {
+            continue;
+          }
 
-        if (quartet.ids.some((id) => usedIds.has(id))) {
-          continue;
+          const nextUsedIds = new Set(usedIds);
+          quartet.ids.forEach((id) => nextUsedIds.add(id));
+          backtrack(index + 1, [...chosen, quartet], nextUsedIds);
         }
+      };
 
-        const nextUsedIds = new Set(usedIds);
-        quartet.ids.forEach((id) => nextUsedIds.add(id));
-        backtrack(index + 1, [...chosen, quartet], nextUsedIds);
-      }
+      backtrack(0, [], new Set<string>());
+
+      return bestSelections;
     };
 
-    backtrack(0, [], new Set<string>());
+    const searchLimits = [
+      ...BATCH_SEARCH_LIMITS,
+      quartets.length,
+    ].filter((limit, index, limits) => limits.indexOf(limit) === index);
 
-    if (bestSelections) {
-      return {
-        selections: bestSelections,
-      };
+    for (const limit of searchLimits) {
+      const bestSelections = searchQuartets(quartets.slice(0, limit));
+
+      if (bestSelections) {
+        return {
+          selections: bestSelections,
+        };
+      }
     }
   }
 

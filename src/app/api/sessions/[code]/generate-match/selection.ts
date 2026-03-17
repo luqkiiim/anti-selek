@@ -1,4 +1,5 @@
 import { getCommunityEloByUserId } from "@/lib/communityElo";
+import { getSessionModeLabel } from "@/lib/sessionModeLabels";
 import { findBestAutoMatchSelection } from "@/lib/matchmaking/autoMatch";
 import { findBestBatchAutoMatchSelection } from "@/lib/matchmaking/batchAutoMatch";
 import { getBusyPlayerIds } from "@/lib/matchmaking/busyFilter";
@@ -25,7 +26,6 @@ import {
   type GenerateMatchCourt,
   type GenerateMatchSession,
   type ReshuffleSource,
-  mixedModeLabel,
 } from "./shared";
 
 export type MatchmakerVersion = "v1" | "v2";
@@ -230,7 +230,9 @@ export function selectSingleCourtMatch({
   if (!bestSelection) {
     throw new GenerateMatchError(
       400,
-      `No valid pairing found for current ${mixedModeLabel} preferences. Try changing player preferences.`
+      `No valid pairing found for current ${getSessionModeLabel(
+        sessionData.mode
+      )} session rules. Try changing player preferences.`
     );
   }
 
@@ -341,7 +343,9 @@ export function selectBatchMatches({
   if (!batchSelection) {
     throw new GenerateMatchError(
       400,
-      `No valid set of matches found for current ${mixedModeLabel} preferences. Try changing player preferences.`
+      `No valid set of matches found for current ${getSessionModeLabel(
+        sessionData.mode
+      )} session rules. Try changing player preferences.`
     );
   }
 

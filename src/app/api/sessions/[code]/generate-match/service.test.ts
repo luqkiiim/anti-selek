@@ -540,7 +540,7 @@ describe("generate match service", () => {
       ).toThrowError(
         new GenerateMatchError(
           400,
-          "No valid pairing found for current Mixed preferences. Try changing player preferences."
+          "No valid pairing found for current Open session rules. Try changing player preferences."
         )
       );
     });
@@ -754,7 +754,7 @@ describe("generate match service", () => {
       ).toThrowError(
         new GenerateMatchError(
           400,
-          "No valid set of matches found for current Mixed preferences. Try changing player preferences."
+          "No valid set of matches found for current Open session rules. Try changing player preferences."
         )
       );
     });
