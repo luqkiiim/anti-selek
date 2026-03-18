@@ -96,10 +96,10 @@ export function HostTournamentPanel({
         </div>
         <p className="text-[10px] font-bold text-blue-100 uppercase tracking-wider">
           {sessionType === SessionType.POINTS
-            ? "Points based matchmaking"
+            ? "Points based balancing"
             : sessionType === SessionType.ELO
-              ? "Ratings based matchmaking"
-              : "Winners tend to play winners, losers tend to play losers"}
+              ? "Ratings based balancing"
+              : "Skill based matchmaking"}
         </p>
 
         <div className="grid grid-cols-2 gap-2">
