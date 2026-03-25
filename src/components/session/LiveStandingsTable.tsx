@@ -86,7 +86,6 @@ export function LiveStandingsTable({
   const isRatingsSession = sessionType === SessionType.ELO;
   const isLadderSession = sessionType === SessionType.LADDER;
   const isCompleted = sessionStatus === SessionStatus.COMPLETED;
-  const showActionsColumn = !isCompleted;
 
   return (
     <div className="app-panel overflow-hidden">
@@ -105,32 +104,39 @@ export function LiveStandingsTable({
       </div>
 
       <div className="overflow-x-auto overscroll-x-contain">
-        <table className="min-w-[840px] w-full table-auto">
+        <table className="w-full table-fixed">
           <thead className="border-b border-gray-100 bg-gray-50/60">
             <tr>
-              <th className="px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">
+              <th className="w-9 px-2 py-2 text-left text-[10px] font-semibold uppercase tracking-[0.18em] text-gray-500 sm:w-11 sm:px-3 sm:text-[11px]">
                 #
               </th>
-              <th className="px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">
+              <th className="w-[44%] px-2 py-2 text-left text-[10px] font-semibold uppercase tracking-[0.18em] text-gray-500 sm:w-auto sm:px-3 sm:text-[11px]">
                 Player
               </th>
-              <th className="px-3 py-2.5 text-center text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">
-                {isLadderSession ? "Ladder" : "Points"}
+              <th className="w-11 px-1.5 py-2 text-center text-[10px] font-semibold uppercase tracking-[0.18em] text-gray-500 sm:w-16 sm:px-3 sm:text-[11px]">
+                {isLadderSession ? (
+                  <>
+                    <span className="sm:hidden">Ld</span>
+                    <span className="hidden sm:inline">Ladder</span>
+                  </>
+                ) : (
+                  <>
+                    <span className="sm:hidden">Pts</span>
+                    <span className="hidden sm:inline">Points</span>
+                  </>
+                )}
               </th>
-              <th className="px-3 py-2.5 text-center text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">
-                Diff
+              <th className="w-11 px-1.5 py-2 text-center text-[10px] font-semibold uppercase tracking-[0.18em] text-gray-500 sm:w-16 sm:px-3 sm:text-[11px]">
+                <span className="sm:hidden">Df</span>
+                <span className="hidden sm:inline">Diff</span>
               </th>
-              <th className="px-3 py-2.5 text-center text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">
-                Matches
+              <th className="w-11 px-1.5 py-2 text-center text-[10px] font-semibold uppercase tracking-[0.18em] text-gray-500 sm:w-16 sm:px-3 sm:text-[11px]">
+                <span className="sm:hidden">M</span>
+                <span className="hidden sm:inline">Matches</span>
               </th>
-              <th className="px-3 py-2.5 text-center text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">
+              <th className="w-12 px-1.5 py-2 text-center text-[10px] font-semibold uppercase tracking-[0.18em] text-gray-500 sm:w-16 sm:px-3 sm:text-[11px]">
                 W / L
               </th>
-              {showActionsColumn ? (
-                <th className="px-3 py-2.5 text-right text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">
-                  Actions
-                </th>
-              ) : null}
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-200">
@@ -148,104 +154,109 @@ export function LiveStandingsTable({
                     isMe ? "bg-blue-50/45" : "hover:bg-gray-50/75"
                   } ${player.isPaused ? "opacity-60" : ""}`}
                 >
-                  <td className="whitespace-nowrap px-3 py-2 align-middle">
+                  <td className="whitespace-nowrap px-2 py-2 align-middle sm:px-3">
                     <span
-                      className={`flex h-6 w-6 items-center justify-center rounded-lg border text-[11px] font-semibold ${getRankBadgeClass(
+                      className={`flex h-5 w-5 items-center justify-center rounded-lg border text-[10px] font-semibold sm:h-6 sm:w-6 sm:text-[11px] ${getRankBadgeClass(
                         idx + 1
                       )}`}
                     >
                       {idx + 1}
                     </span>
                   </td>
-                  <td className="min-w-[15rem] px-3 py-2 align-middle">
+                  <td className="px-2 py-2 align-middle sm:px-3">
                     <div className="space-y-1">
-                      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 leading-tight">
+                      <div className="flex min-w-0 flex-wrap items-center gap-1.5 leading-tight sm:gap-2">
                         <Link
                           href={getPlayerProfileHref(player)}
-                          className="text-sm font-semibold leading-tight text-gray-900 hover:text-blue-600"
+                          title={player.user.name}
+                          className="min-w-0 max-w-full truncate text-[13px] font-semibold leading-tight text-gray-900 hover:text-blue-600 sm:text-sm"
                         >
                           {player.user.name}
                         </Link>
                         {isMe ? (
-                          <span className="rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[9px] font-medium uppercase tracking-wide text-blue-700">
+                          <span className="rounded-full border border-blue-200 bg-blue-50 px-1.5 py-0.5 text-[8px] font-medium uppercase tracking-wide text-blue-700 sm:px-2 sm:text-[9px]">
                             Me
                           </span>
                         ) : null}
                         {player.isPaused ? (
-                          <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[9px] font-medium uppercase tracking-wide text-amber-800">
+                          <span className="rounded-full border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[8px] font-medium uppercase tracking-wide text-amber-800 sm:px-2 sm:text-[9px]">
                             Paused
                           </span>
                         ) : null}
                         {player.isGuest ? (
-                          <span className="rounded-full border border-gray-200 bg-gray-100 px-2 py-0.5 text-[9px] font-medium uppercase tracking-wide text-gray-700">
+                          <span className="rounded-full border border-gray-200 bg-gray-100 px-1.5 py-0.5 text-[8px] font-medium uppercase tracking-wide text-gray-700 sm:px-2 sm:text-[9px]">
                             Guest
                           </span>
                         ) : null}
                       </div>
 
-                      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] leading-tight text-gray-600">
-                        <span>Rating {player.user.elo}</span>
-                        {savingPreferencesFor === player.userId ? (
-                          <span className="font-medium text-blue-700">
-                            Saving...
-                          </span>
-                        ) : null}
-                      </div>
+                      {canToggle || (!isCompleted && isAdmin) || savingPreferencesFor === player.userId ? (
+                        <div className="flex flex-wrap items-center gap-1.5 text-[10px] leading-none sm:gap-2">
+                          {canToggle ? (
+                            <button
+                              type="button"
+                              onClick={() => onTogglePause(player.userId, player.isPaused)}
+                              className={`rounded-full border px-2 py-1 text-[9px] font-medium uppercase tracking-wide transition sm:px-2.5 sm:text-[10px] ${
+                                player.isPaused
+                                  ? "border-amber-200 bg-amber-50 text-amber-800"
+                                  : "border-gray-200 bg-white text-gray-700"
+                              }`}
+                            >
+                              {player.isPaused ? "Resume" : "Pause"}
+                            </button>
+                          ) : null}
+
+                          {!isCompleted && isAdmin ? (
+                            <button
+                              type="button"
+                              onClick={(event) =>
+                                onTogglePreferenceEditor(player.userId, event.currentTarget)
+                              }
+                              className="rounded-full border border-blue-200 bg-blue-50 px-2 py-1 text-[9px] font-medium uppercase tracking-wide text-blue-700 transition sm:px-2.5 sm:text-[10px]"
+                            >
+                              <span className="sm:hidden">Pf</span>
+                              <span className="hidden sm:inline">Prefs</span>
+                            </button>
+                          ) : null}
+
+                          {savingPreferencesFor === player.userId ? (
+                            <span className="text-[9px] font-medium uppercase tracking-wide text-blue-700 sm:text-[10px]">
+                              Saving
+                            </span>
+                          ) : null}
+                        </div>
+                      ) : null}
+
+                      {savingPreferencesFor === player.userId &&
+                      !(canToggle || (!isCompleted && isAdmin)) ? (
+                        <div className="text-[9px] font-medium uppercase tracking-wide text-blue-700 sm:text-[10px]">
+                          Saving
+                        </div>
+                      ) : null}
                     </div>
                   </td>
-                  <td className="whitespace-nowrap px-3 py-2 text-center align-middle">
-                    <span className="text-base font-semibold text-blue-700">
+                  <td className="whitespace-nowrap px-1.5 py-2 text-center align-middle sm:px-3">
+                    <span className="text-sm font-semibold text-blue-700 sm:text-base">
                       {standingValue}
                     </span>
                   </td>
-                  <td className="whitespace-nowrap px-3 py-2 text-center align-middle">
+                  <td className="whitespace-nowrap px-1.5 py-2 text-center align-middle sm:px-3">
                     <span
-                      className={`text-sm font-medium ${
+                      className={`text-[12px] font-medium sm:text-sm ${
                         pointDiff >= 0 ? "text-green-600" : "text-red-500"
                       }`}
                     >
                       {formatPointDiff(pointDiff)}
                     </span>
                   </td>
-                  <td className="whitespace-nowrap px-3 py-2 text-center align-middle text-sm font-medium text-gray-700">
+                  <td className="whitespace-nowrap px-1.5 py-2 text-center align-middle text-[12px] font-medium text-gray-700 sm:px-3 sm:text-sm">
                     {stats.played}
                   </td>
-                  <td className="whitespace-nowrap px-3 py-2 text-center align-middle text-sm font-medium text-gray-700">
+                  <td className="whitespace-nowrap px-1.5 py-2 text-center align-middle text-[12px] font-medium text-gray-700 sm:px-3 sm:text-sm">
                     <span className="text-green-600">{stats.wins}</span>
-                    <span className="mx-1 text-gray-300">/</span>
+                    <span className="mx-0.5 text-gray-300 sm:mx-1">/</span>
                     <span className="text-red-500">{stats.losses}</span>
                   </td>
-                  {showActionsColumn ? (
-                    <td className="whitespace-nowrap px-3 py-2 text-right align-middle">
-                      <div className="flex items-center justify-end gap-1.5">
-                        {canToggle ? (
-                          <button
-                            type="button"
-                            onClick={() => onTogglePause(player.userId, player.isPaused)}
-                            className={`rounded-full border px-2.5 py-1 text-[10px] font-medium leading-none transition ${
-                              player.isPaused
-                                ? "border-amber-200 bg-amber-50 text-amber-800"
-                                : "border-gray-200 bg-white text-gray-700"
-                            }`}
-                          >
-                            {player.isPaused ? "Resume" : "Pause"}
-                          </button>
-                        ) : null}
-
-                        {isAdmin ? (
-                          <button
-                            type="button"
-                            onClick={(event) =>
-                              onTogglePreferenceEditor(player.userId, event.currentTarget)
-                            }
-                            className="rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-[10px] font-medium leading-none text-blue-700 transition"
-                          >
-                            Prefs
-                          </button>
-                        ) : null}
-                      </div>
-                    </td>
-                  ) : null}
                 </tr>
               );
             })}
