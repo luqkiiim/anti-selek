@@ -24,59 +24,64 @@ interface LiveMatchCardProps {
   onReopenScoreForEdit: (matchId: string) => void;
 }
 
-interface TeamScorePanelProps {
-  label: string;
-  labelClassName: string;
+interface TeamNamesProps {
   playerOneName: string;
   playerTwoName: string;
-  panelClassName: string;
+  align?: "left" | "right";
+}
+
+function TeamNames({
+  playerOneName,
+  playerTwoName,
+  align = "left",
+}: TeamNamesProps) {
+  return (
+    <div className={`min-w-0 ${align === "right" ? "text-right" : "text-left"}`}>
+      <p className="truncate text-[13px] font-semibold leading-tight text-gray-900 sm:text-sm">
+        {playerOneName}
+      </p>
+      <p className="truncate text-[13px] font-semibold leading-tight text-gray-900 sm:text-sm">
+        {playerTwoName}
+      </p>
+    </div>
+  );
+}
+
+interface ScoreSlotProps {
   canEdit: boolean;
   scoreValue: string;
   pendingScore?: number;
   onScoreChange: (value: string) => void;
 }
 
-function TeamScorePanel({
-  label,
-  labelClassName,
-  playerOneName,
-  playerTwoName,
-  panelClassName,
+function ScoreSlot({
   canEdit,
   scoreValue,
   pendingScore,
   onScoreChange,
-}: TeamScorePanelProps) {
+}: ScoreSlotProps) {
+  if (canEdit) {
+    return (
+      <input
+        type="number"
+        inputMode="numeric"
+        value={scoreValue}
+        onChange={(event) => onScoreChange(event.target.value)}
+        className="h-10 w-10 rounded-lg border border-blue-200 bg-white text-center text-lg font-black tabular-nums text-gray-900 focus:border-blue-500 focus:outline-none sm:h-11 sm:w-11 sm:text-xl"
+        placeholder="0"
+      />
+    );
+  }
+
   return (
-    <div className={`rounded-xl border-2 p-3 transition-all ${panelClassName}`}>
-      <div className="flex items-center justify-between gap-3">
-        <div className="min-w-0 flex-1">
-          <p
-            className={`mb-0.5 text-[10px] font-black uppercase tracking-widest ${labelClassName}`}
-          >
-            {label}
-          </p>
-          <p className="truncate text-sm font-bold leading-tight text-gray-900">
-            {playerOneName}
-            <br />
-            {playerTwoName}
-          </p>
-        </div>
-        {canEdit ? (
-          <input
-            type="number"
-            inputMode="numeric"
-            value={scoreValue}
-            onChange={(event) => onScoreChange(event.target.value)}
-            className="h-12 w-14 rounded-xl border-2 border-blue-200 bg-white text-center text-xl font-black focus:border-blue-500 focus:outline-none"
-            placeholder="0"
-          />
-        ) : typeof pendingScore === "number" ? (
-          <div className="pr-2 text-2xl font-black text-gray-900">
-            {pendingScore}
-          </div>
-        ) : null}
-      </div>
+    <div
+      className={`flex h-10 w-10 items-center justify-center rounded-lg border bg-white text-lg font-black tabular-nums sm:h-11 sm:w-11 sm:text-xl ${
+        typeof pendingScore === "number"
+          ? "border-gray-200 text-gray-900"
+          : "border-gray-100 text-gray-300"
+      }`}
+    >
+      {typeof pendingScore === "number" ? pendingScore : "-"}
     </div>
   );
 }
@@ -122,42 +127,38 @@ export function LiveMatchCard({
   const isPendingApproval = match.status === MatchStatus.PENDING_APPROVAL;
 
   return (
-    <div className="space-y-3">
-      <TeamScorePanel
-        label="Team 1"
-        labelClassName="text-blue-600"
-        playerOneName={match.team1User1.name}
-        playerTwoName={match.team1User2.name}
-        panelClassName={
-          isPendingApproval ? "border-gray-100 bg-gray-50" : "border-blue-100 bg-blue-50/50"
-        }
-        canEdit={canEdit}
-        scoreValue={scores.team1}
-        pendingScore={isPendingApproval ? match.team1Score : undefined}
-        onScoreChange={(value) => onHandleScoreChange(match.id, "team1", value)}
-      />
-
-      <div className="relative flex items-center justify-center py-1">
-        <div className="h-px flex-1 bg-gray-100" />
-        <span className="mx-3 text-[10px] font-black uppercase italic text-gray-300">
-          VS
-        </span>
-        <div className="h-px flex-1 bg-gray-100" />
+    <div className="space-y-2.5">
+      <div
+        className={`rounded-xl border p-2.5 transition-all ${
+          isPendingApproval
+            ? "border-orange-200 bg-orange-50/60"
+            : "border-blue-100 bg-blue-50/40"
+        }`}
+      >
+        <div className="grid grid-cols-[minmax(0,1fr)_2.5rem_2.5rem_minmax(0,1fr)] items-center gap-2 sm:grid-cols-[minmax(0,1fr)_2.75rem_2.75rem_minmax(0,1fr)] sm:gap-3">
+          <TeamNames
+            playerOneName={match.team1User1.name}
+            playerTwoName={match.team1User2.name}
+          />
+          <ScoreSlot
+            canEdit={canEdit}
+            scoreValue={scores.team1}
+            pendingScore={isPendingApproval ? match.team1Score : undefined}
+            onScoreChange={(value) => onHandleScoreChange(match.id, "team1", value)}
+          />
+          <ScoreSlot
+            canEdit={canEdit}
+            scoreValue={scores.team2}
+            pendingScore={isPendingApproval ? match.team2Score : undefined}
+            onScoreChange={(value) => onHandleScoreChange(match.id, "team2", value)}
+          />
+          <TeamNames
+            playerOneName={match.team2User1.name}
+            playerTwoName={match.team2User2.name}
+            align="right"
+          />
+        </div>
       </div>
-
-      <TeamScorePanel
-        label="Team 2"
-        labelClassName="text-blue-700"
-        playerOneName={match.team2User1.name}
-        playerTwoName={match.team2User2.name}
-        panelClassName={
-          isPendingApproval ? "border-gray-100 bg-gray-50" : "border-blue-200 bg-blue-50"
-        }
-        canEdit={canEdit}
-        scoreValue={scores.team2}
-        pendingScore={isPendingApproval ? match.team2Score : undefined}
-        onScoreChange={(value) => onHandleScoreChange(match.id, "team2", value)}
-      />
 
       {canEdit ? (
         <ScoreEntryControls
