@@ -122,16 +122,6 @@ export default function CommunityPage() {
   const communityName = community?.name || "Community";
   const membersCount = community?.membersCount || 0;
   const sessionsCount = community?.sessionsCount || 0;
-  const activeTournamentCount = activeTournaments.length;
-  const completedTournamentCount = pastTournaments.length;
-  const heroDescription =
-    activeSection === "leaderboard"
-      ? `${membersCount} members are ranked here. Review the live ladder, open player profiles, and handle claim requests from one place.`
-      : activeSection === "tournaments"
-        ? `${activeTournamentCount} live and ${completedTournamentCount} completed tournaments are available to open right away.`
-        : canManageCommunity
-          ? `${membersCount} members, ${activeTournamentCount} live tournaments, and ${sessionsCount} total sessions. Open the host desk when you are ready to run the next one.`
-          : `${membersCount} members, ${activeTournamentCount} live tournaments, and ${sessionsCount} total sessions. Jump into a live session or check the latest standings below.`;
 
   return (
     <main className="app-page">
@@ -139,7 +129,6 @@ export default function CommunityPage() {
         <HeroCard
           backHref="/"
           title={communityName}
-          description={heroDescription}
           actionsPosition="below"
           eyebrow="Community hub"
           meta={
@@ -252,15 +241,11 @@ export default function CommunityPage() {
               ) : (
                 <div className="rounded-3xl border border-gray-100 bg-white p-6 shadow-md">
                   <div className="flex flex-col gap-5">
-                    <div className="space-y-2">
+                    <div>
                       <p className="app-eyebrow">Host draft</p>
                       <h3 className="text-xl font-semibold text-gray-900">
-                        The next tournament setup is one tap away
+                        Current setup
                       </h3>
-                      <p className="max-w-2xl text-sm text-gray-600">
-                        Your current draft stays compact here until you reopen
-                        the host desk from the hero above.
-                      </p>
                     </div>
 
                     <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">

@@ -24,12 +24,10 @@ interface HostTournamentPanelProps {
 
 function SetupOptionCard({
   label,
-  detail,
   selected,
   onClick,
 }: {
   label: string;
-  detail: string;
   selected: boolean;
   onClick: () => void;
 }) {
@@ -44,7 +42,6 @@ function SetupOptionCard({
       }`}
     >
       <p className="text-sm font-semibold text-gray-900">{label}</p>
-      <p className="mt-2 text-sm text-gray-600">{detail}</p>
     </button>
   );
 }
@@ -52,12 +49,10 @@ function SetupOptionCard({
 function SetupStep({
   step,
   title,
-  description,
   children,
 }: {
   step: string;
   title: string;
-  description: string;
   children: ReactNode;
 }) {
   return (
@@ -66,7 +61,6 @@ function SetupStep({
         <p className="app-eyebrow">{step}</p>
         <div>
           <h4 className="text-lg font-semibold text-gray-900">{title}</h4>
-          <p className="mt-2 text-sm text-gray-600">{description}</p>
         </div>
       </div>
       {children}
@@ -96,17 +90,14 @@ export function HostTournamentPanel({
     {
       value: SessionType.POINTS,
       label: "Points format",
-      detail: "Balance players around current session performance.",
     },
     {
       value: SessionType.ELO,
       label: "Ratings format",
-      detail: "Use persistent player ratings as the balancing baseline.",
     },
     {
       value: SessionType.LADDER,
       label: "Ladder format",
-      detail: "Run a skill-driven ladder with win-loss emphasis.",
     },
   ] as const;
 
@@ -114,12 +105,10 @@ export function HostTournamentPanel({
     {
       value: SessionMode.MEXICANO,
       label: openModeLabel,
-      detail: "Open doubles rotation with no mixed-rule enforcement.",
     },
     {
       value: SessionMode.MIXICANO,
       label: mixedModeLabel,
-      detail: "Apply mixed doubles rules during player selection.",
     },
   ] as const;
 
@@ -133,15 +122,11 @@ export function HostTournamentPanel({
   return (
     <section className="app-panel p-5 sm:p-6">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-        <div className="max-w-3xl space-y-2">
+        <div className="max-w-3xl">
           <p className="app-eyebrow">Host desk</p>
           <h3 className="text-xl font-semibold text-gray-900 sm:text-2xl">
             Build the next tournament in three quick steps
           </h3>
-          <p className="text-sm text-gray-600 sm:text-base">
-            Start with the session details, lock in the roster, then launch
-            once the setup looks right.
-          </p>
         </div>
 
         <div className="flex flex-wrap gap-2">
@@ -159,7 +144,6 @@ export function HostTournamentPanel({
           <SetupStep
             step="Step 1"
             title="Session details"
-            description="Name the tournament, choose the format, and decide how many courts you want to open."
           >
             <div className="space-y-4">
               <label className="block space-y-2 text-sm font-medium text-gray-900">
@@ -180,7 +164,6 @@ export function HostTournamentPanel({
                     <SetupOptionCard
                       key={option.value}
                       label={option.label}
-                      detail={option.detail}
                       selected={sessionType === option.value}
                       onClick={() => onSessionTypeChange(option.value)}
                     />
@@ -195,7 +178,6 @@ export function HostTournamentPanel({
                     <SetupOptionCard
                       key={option.value}
                       label={option.label}
-                      detail={option.detail}
                       selected={sessionMode === option.value}
                       onClick={() => onSessionModeChange(option.value)}
                     />
@@ -227,7 +209,6 @@ export function HostTournamentPanel({
           <SetupStep
             step="Step 2"
             title="Roster"
-            description="Choose community players and add any guests before the tournament opens."
           >
             <div className="grid gap-3 md:grid-cols-2">
               <div className="app-panel-muted p-4">
@@ -236,10 +217,6 @@ export function HostTournamentPanel({
                 </p>
                 <p className="mt-2 text-3xl font-semibold leading-none text-gray-900">
                   {selectedPlayerCount}
-                </p>
-                <p className="mt-2 text-sm text-gray-600">
-                  Select the community members who should be eligible for this
-                  tournament.
                 </p>
                 <button
                   type="button"
@@ -256,10 +233,6 @@ export function HostTournamentPanel({
                 </p>
                 <p className="mt-2 text-3xl font-semibold leading-none text-gray-900">
                   {guestCount}
-                </p>
-                <p className="mt-2 text-sm text-gray-600">
-                  Add guest players ahead of time so their ratings and mode rules
-                  are ready.
                 </p>
                 <button
                   type="button"
@@ -278,10 +251,6 @@ export function HostTournamentPanel({
           <h4 className="mt-2 text-lg font-semibold text-gray-900">
             Review and launch
           </h4>
-          <p className="mt-2 text-sm text-gray-600">
-            Double-check the setup below, then create the tournament when the
-            desk is ready.
-          </p>
 
           <div className="mt-5 space-y-3">
             <div className="app-subcard px-4 py-3">
@@ -351,11 +320,6 @@ export function HostTournamentPanel({
           >
             {creatingSession ? "Creating..." : "Create Tournament"}
           </button>
-
-          <p className="mt-3 text-sm text-gray-600">
-            You can still add or remove players after creation from the session
-            screen if you need to adjust late arrivals.
-          </p>
         </aside>
       </div>
     </section>

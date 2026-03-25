@@ -64,11 +64,6 @@ export function LiveCourtsPanel({
     <SectionCard
       eyebrow={sessionStatus === SessionStatus.ACTIVE ? "Court board" : "Court layout"}
       title={sessionStatus === SessionStatus.ACTIVE ? "Live Courts" : "Courts"}
-      description={
-        sessionStatus === SessionStatus.ACTIVE
-          ? "Score entry, reshuffles, and approvals stay next to each active court."
-          : "Courts will populate with live lineups once the session starts."
-      }
       action={
         <div className="flex flex-wrap items-center justify-end gap-2">
           <span className="app-chip app-chip-accent">{activeMatchesCount} in use</span>
