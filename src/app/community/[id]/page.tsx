@@ -119,48 +119,28 @@ export default function CommunityPage() {
     );
   }
 
+  const communityName = community?.name || "Community";
+  const membersCount = community?.membersCount || 0;
+  const sessionsCount = community?.sessionsCount || 0;
+  const activeTournamentCount = activeTournaments.length;
+  const completedTournamentCount = pastTournaments.length;
+  const heroDescription =
+    activeSection === "leaderboard"
+      ? `${membersCount} members are ranked here. Review the live ladder, open player profiles, and handle claim requests from one place.`
+      : activeSection === "tournaments"
+        ? `${activeTournamentCount} live and ${completedTournamentCount} completed tournaments are available to open right away.`
+        : canManageCommunity
+          ? `${membersCount} members, ${activeTournamentCount} live tournaments, and ${sessionsCount} total sessions. Open the host desk when you are ready to run the next one.`
+          : `${membersCount} members, ${activeTournamentCount} live tournaments, and ${sessionsCount} total sessions. Jump into a live session or check the latest standings below.`;
+
   return (
     <main className="app-page">
-      <div className="app-topbar">
-        <div className="app-topbar-inner">
-          <div className="flex items-center gap-3">
-            <Link href="/" className="app-button-secondary px-4 py-2">
-              Back
-            </Link>
-            <div>
-              <h1 className="text-lg font-semibold text-gray-900 tracking-tight leading-none">
-                {community?.name || "Community"}
-              </h1>
-              <p className="text-[11px] text-gray-500">
-                {community?.membersCount || 0} members,{" "}
-                {community?.sessionsCount || 0} tournaments
-              </p>
-            </div>
-          </div>
-
-          {canManageCommunity ? (
-            <div className="flex items-center gap-2">
-              <button
-                onClick={handleHostButtonClick}
-                className="app-button-primary"
-              >
-                {activeSection === "overview" && showHostPanel
-                  ? "Hide Host"
-                  : "Host Tournament"}
-              </button>
-              <Link
-                href={`/community/${communityId}/admin`}
-                className="app-button-dark"
-              >
-                Admin
-              </Link>
-            </div>
-          ) : null}
-        </div>
-      </div>
-
       <div className="app-shell space-y-8">
         <HeroCard
+          backHref="/"
+          title={communityName}
+          description={heroDescription}
+          actionsPosition="below"
           eyebrow="Community hub"
           meta={
             <>
@@ -173,10 +153,39 @@ export default function CommunityPage() {
               >
                 {community?.role || "MEMBER"}
               </span>
+              <span className="app-chip app-chip-neutral">
+                {membersCount} members
+              </span>
+              <span className="app-chip app-chip-neutral">
+                {sessionsCount} tournaments
+              </span>
               {community?.isPasswordProtected ? (
                 <span className="app-chip app-chip-warning">Protected</span>
-              ) : null}
+              ) : (
+                <span className="app-chip app-chip-success">Open access</span>
+              )}
             </>
+          }
+          actions={
+            canManageCommunity ? (
+              <>
+                <button
+                  type="button"
+                  onClick={handleHostButtonClick}
+                  className="app-button-primary"
+                >
+                  {activeSection === "overview" && showHostPanel
+                    ? "Hide Host Setup"
+                    : "Open Host Setup"}
+                </button>
+                <Link
+                  href={`/community/${communityId}/admin`}
+                  className="app-button-dark"
+                >
+                  Admin Workspace
+                </Link>
+              </>
+            ) : null
           }
         />
 
@@ -242,26 +251,54 @@ export default function CommunityPage() {
                 />
               ) : (
                 <div className="rounded-3xl border border-gray-100 bg-white p-6 shadow-md">
-                  <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                  <div className="flex flex-col gap-5">
                     <div className="space-y-2">
-                      <p className="text-[10px] font-black uppercase tracking-widest text-blue-600">
-                        Host Desk
-                      </p>
+                      <p className="app-eyebrow">Host draft</p>
                       <h3 className="text-xl font-semibold text-gray-900">
-                        Ready to run the next tournament?
+                        The next tournament setup is one tap away
                       </h3>
                       <p className="max-w-2xl text-sm text-gray-600">
-                        Pick the format, choose players and guests, then launch
-                        the next session from one focused setup panel.
+                        Your current draft stays compact here until you reopen
+                        the host desk from the hero above.
                       </p>
                     </div>
-                    <button
-                      type="button"
-                      onClick={handleHostButtonClick}
-                      className="app-button-primary px-4 py-2"
-                    >
-                      Open Host Setup
-                    </button>
+
+                    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                      <div className="app-panel-muted px-4 py-4">
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-gray-500">
+                          Format
+                        </p>
+                        <p className="mt-2 text-base font-semibold text-gray-900">
+                          {getSessionTypeLabel(sessionType)}
+                        </p>
+                      </div>
+                      <div className="app-panel-muted px-4 py-4">
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-gray-500">
+                          Mode
+                        </p>
+                        <p className="mt-2 text-base font-semibold text-gray-900">
+                          {sessionMode === "MIXICANO"
+                            ? mixedModeLabel
+                            : openModeLabel}
+                        </p>
+                      </div>
+                      <div className="app-panel-muted px-4 py-4">
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-gray-500">
+                          Courts
+                        </p>
+                        <p className="mt-2 text-base font-semibold text-gray-900">
+                          {courtCount} Court{courtCount > 1 ? "s" : ""}
+                        </p>
+                      </div>
+                      <div className="app-panel-muted px-4 py-4">
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-gray-500">
+                          Roster
+                        </p>
+                        <p className="mt-2 text-base font-semibold text-gray-900">
+                          {selectedPlayerIds.length} players, {guestConfigs.length} guests
+                        </p>
+                      </div>
+                    </div>
                   </div>
                 </div>
               )

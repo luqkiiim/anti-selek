@@ -234,7 +234,7 @@ export default function SessionPage() {
     <div className="app-page">
       <nav className="app-topbar">
         <div className="app-topbar-inner max-w-7xl">
-          <div className="flex items-center gap-3">
+          <div className="min-w-0 flex items-center gap-3">
             <button
               onClick={() =>
                 router.push(
@@ -247,11 +247,11 @@ export default function SessionPage() {
             >
               Back
             </button>
-            <div className="flex flex-col">
-              <h1 className="max-w-[180px] truncate text-lg font-semibold leading-tight text-gray-900 sm:max-w-[280px] md:max-w-[420px]">
+            <div className="min-w-0 flex flex-col">
+              <h1 className="truncate text-lg font-semibold leading-tight text-gray-900 sm:text-xl">
                 {sessionData.name}
               </h1>
-              <div className="flex items-center gap-2">
+              <div className="mt-1 flex flex-wrap items-center gap-2">
                 <span className="app-chip app-chip-neutral">
                   {sessionData.status}
                 </span>

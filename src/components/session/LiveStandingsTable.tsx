@@ -1,7 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { PartnerPreference, PlayerGender, SessionStatus, SessionType } from "@/types/enums";
+import {
+  PartnerPreference,
+  PlayerGender,
+  SessionStatus,
+  SessionType,
+} from "@/types/enums";
 
 interface Player {
   userId: string;
@@ -37,6 +42,39 @@ interface LiveStandingsTableProps {
   onTogglePreferenceEditor: (userId: string, triggerEl: HTMLElement) => void;
 }
 
+function getStandingValue(
+  isLadderSession: boolean,
+  player: Player,
+  stats: PlayerStats
+) {
+  if (isLadderSession) {
+    const ladderScore = stats.wins - stats.losses;
+    return ladderScore > 0 ? `+${ladderScore}` : `${ladderScore}`;
+  }
+
+  return `${player.sessionPoints}`;
+}
+
+function formatPointDiff(pointDiff: number) {
+  return pointDiff > 0 ? `+${pointDiff}` : `${pointDiff}`;
+}
+
+function getRankBadgeClass(rank: number) {
+  if (rank === 1) {
+    return "border-amber-300 bg-amber-100 text-amber-700";
+  }
+
+  if (rank === 2) {
+    return "border-slate-300 bg-slate-100 text-slate-700";
+  }
+
+  if (rank === 3) {
+    return "border-orange-300 bg-orange-100 text-orange-700";
+  }
+
+  return "border-gray-300 bg-white text-gray-500";
+}
+
 export function LiveStandingsTable({
   sessionType,
   sessionStatus,
@@ -53,173 +91,316 @@ export function LiveStandingsTable({
   const isRatingsSession = sessionType === SessionType.ELO;
   const isLadderSession = sessionType === SessionType.LADDER;
   const isCompleted = sessionStatus === SessionStatus.COMPLETED;
+  const primaryValueLabel = isLadderSession ? "Record" : "Points";
 
   return (
     <div className="app-panel overflow-hidden">
       <div
-        className={`px-5 py-4 flex items-center justify-between transition-colors ${
+        className={`flex flex-col gap-2 px-5 py-4 transition-colors sm:flex-row sm:items-center sm:justify-between ${
           isRatingsSession ? "bg-blue-700" : "bg-blue-600"
         }`}
       >
-        <h2 className="text-sm font-black text-white uppercase tracking-widest">
+        <h2 className="text-sm font-semibold uppercase tracking-[0.18em] text-white">
           {isCompleted
             ? "Final Standings"
             : isLadderSession
               ? "Ladder Standings"
               : "Live Standings"}
         </h2>
-        <span className="text-[10px] font-bold text-white/70 uppercase tracking-widest">
+        <span className="text-xs font-medium uppercase tracking-[0.16em] text-white/80">
           {isCompleted
             ? "Session results"
             : isLadderSession
-              ? "Win/Loss + Point Diff"
+              ? "Record, point diff, and player status"
               : isRatingsSession
-              ? "Point Standings + Rating Updates"
-              : "Point Totals"}
+                ? "Points, diff, and rating context"
+                : "Points, diff, and player status"}
         </span>
       </div>
 
-      <div className="overflow-x-auto overscroll-x-contain">
-        <table className="w-max min-w-[448px] table-fixed sm:w-full sm:min-w-[760px] sm:table-auto">
-          <thead className="bg-gray-50/50 border-b border-gray-100">
+      <div className="space-y-3 p-3 sm:hidden">
+        {players.map((player, idx) => {
+          const stats = calculatePlayerSessionStats(player.userId);
+          const isMe = player.userId === currentUserId;
+          const canToggle = !isCompleted && (isAdmin || isMe);
+          const canEditPreferences = !isCompleted && isAdmin;
+          const pointDiff = pointDiffByUserId.get(player.userId) ?? 0;
+          const standingValue = getStandingValue(isLadderSession, player, stats);
+
+          return (
+            <article
+              key={player.userId}
+              className={`rounded-[1.4rem] border p-4 shadow-sm transition ${
+                isMe
+                  ? "border-blue-200 bg-blue-50/40"
+                  : "border-gray-100 bg-white"
+              } ${player.isPaused ? "opacity-75" : ""}`}
+            >
+              <div className="flex items-start gap-3">
+                <span
+                  className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border text-sm font-semibold ${getRankBadgeClass(
+                    idx + 1
+                  )}`}
+                >
+                  {idx + 1}
+                </span>
+
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <Link
+                        href={getPlayerProfileHref(player)}
+                        className="block truncate text-base font-semibold text-gray-900 hover:text-blue-600"
+                      >
+                        {player.user.name}
+                      </Link>
+                      <p className="mt-1 text-sm text-gray-600">
+                        Rating {player.user.elo}
+                      </p>
+                    </div>
+
+                    <div className="shrink-0 text-right">
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-gray-500">
+                        {primaryValueLabel}
+                      </p>
+                      <p className="mt-1 text-2xl font-semibold leading-none text-blue-700">
+                        {standingValue}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {isMe ? (
+                      <span className="app-chip app-chip-accent">Me</span>
+                    ) : null}
+                    {player.isPaused ? (
+                      <span className="app-chip app-chip-warning">Paused</span>
+                    ) : null}
+                    {player.isGuest ? (
+                      <span className="app-chip app-chip-neutral">Guest</span>
+                    ) : null}
+                    {savingPreferencesFor === player.userId ? (
+                      <span className="app-chip app-chip-neutral">
+                        Saving...
+                      </span>
+                    ) : null}
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-4 grid grid-cols-3 gap-2">
+                <div className="app-panel-muted px-3 py-3">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-gray-500">
+                    Diff
+                  </p>
+                  <p
+                    className={`mt-2 text-lg font-semibold leading-none ${
+                      pointDiff >= 0 ? "text-green-600" : "text-red-500"
+                    }`}
+                  >
+                    {formatPointDiff(pointDiff)}
+                  </p>
+                </div>
+
+                <div className="app-panel-muted px-3 py-3">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-gray-500">
+                    Matches
+                  </p>
+                  <p className="mt-2 text-lg font-semibold leading-none text-gray-900">
+                    {stats.played}
+                  </p>
+                </div>
+
+                <div className="app-panel-muted px-3 py-3">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-gray-500">
+                    W / L
+                  </p>
+                  <p className="mt-2 text-lg font-semibold leading-none text-gray-900">
+                    {stats.wins}-{stats.losses}
+                  </p>
+                </div>
+              </div>
+
+              {canToggle || canEditPreferences ? (
+                <div className="mt-4 flex flex-wrap gap-2">
+                  {canToggle ? (
+                    <button
+                      type="button"
+                      onClick={() => onTogglePause(player.userId, player.isPaused)}
+                      className={`inline-flex min-h-10 items-center justify-center rounded-full border px-4 text-sm font-semibold transition ${
+                        player.isPaused
+                          ? "border-amber-200 bg-amber-50 text-amber-800"
+                          : "border-gray-200 bg-white text-gray-700"
+                      }`}
+                    >
+                      {player.isPaused ? "Resume player" : "Pause player"}
+                    </button>
+                  ) : null}
+
+                  {canEditPreferences ? (
+                    <button
+                      type="button"
+                      onClick={(event) =>
+                        onTogglePreferenceEditor(player.userId, event.currentTarget)
+                      }
+                      className="inline-flex min-h-10 items-center justify-center rounded-full border border-blue-200 bg-blue-50 px-4 text-sm font-semibold text-blue-700 transition"
+                    >
+                      Edit preferences
+                    </button>
+                  ) : null}
+                </div>
+              ) : null}
+            </article>
+          );
+        })}
+      </div>
+
+      <div className="hidden overflow-x-auto overscroll-x-contain sm:block">
+        <table className="min-w-full table-auto">
+          <thead className="border-b border-gray-100 bg-gray-50/60">
             <tr>
-              <th className="w-8 sm:w-10 px-1.5 sm:px-2 py-3 text-left text-[9px] sm:text-[10px] font-black text-gray-400 uppercase tracking-widest">
+              <th className="px-3 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.18em] text-gray-500">
                 #
               </th>
-              <th className="w-[112px] sm:w-auto px-1 sm:px-2 py-3 text-left text-[9px] sm:text-[10px] font-black text-gray-400 uppercase tracking-wide sm:tracking-widest">
+              <th className="px-3 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.18em] text-gray-500">
                 Player
               </th>
-              <th className="w-11 sm:w-24 px-1 sm:px-4 py-3 text-center text-[8px] sm:text-[10px] font-black text-gray-400 uppercase tracking-wide sm:tracking-widest">
-                {isLadderSession ? "Ldr" : "Pts"}
+              <th className="px-3 py-3 text-center text-[10px] font-semibold uppercase tracking-[0.18em] text-gray-500">
+                {isLadderSession ? "Ladder" : "Points"}
               </th>
-              <th className="w-12 sm:w-24 px-1 sm:px-4 py-3 text-center text-[8px] sm:text-[10px] font-black text-gray-400 uppercase tracking-wide sm:tracking-widest">
-                <span className="sm:hidden">+/-</span>
-                <span className="hidden sm:inline">Diff</span>
+              <th className="px-3 py-3 text-center text-[10px] font-semibold uppercase tracking-[0.18em] text-gray-500">
+                Diff
               </th>
-              <th className="w-10 sm:w-24 px-1 sm:px-4 py-3 text-center text-[8px] sm:text-[10px] font-black text-gray-400 uppercase tracking-wide sm:tracking-widest">
-                MP
+              <th className="px-3 py-3 text-center text-[10px] font-semibold uppercase tracking-[0.18em] text-gray-500">
+                Matches
               </th>
-              <th className="w-11 sm:w-24 px-1 sm:px-4 py-3 text-center text-[8px] sm:text-[10px] font-black text-gray-400 uppercase tracking-wide sm:tracking-widest">
-                W/L
+              <th className="px-3 py-3 text-center text-[10px] font-semibold uppercase tracking-[0.18em] text-gray-500">
+                W / L
               </th>
             </tr>
           </thead>
+
           <tbody className="divide-y divide-gray-200">
             {players.map((player, idx) => {
               const stats = calculatePlayerSessionStats(player.userId);
               const isMe = player.userId === currentUserId;
               const canToggle = !isCompleted && (isAdmin || isMe);
               const pointDiff = pointDiffByUserId.get(player.userId) ?? 0;
-              const ladderScore = stats.wins - stats.losses;
+              const standingValue = getStandingValue(isLadderSession, player, stats);
 
               return (
                 <tr
                   key={player.userId}
-                  className={`active:bg-gray-50 transition-colors ${
-                    player.isPaused ? "opacity-40 grayscale" : ""
-                  }`}
+                  className={`transition-colors ${
+                    isMe ? "bg-blue-50/45" : "hover:bg-gray-50/75"
+                  } ${player.isPaused ? "opacity-60" : ""}`}
                 >
-                  <td className="w-8 sm:w-10 px-1.5 sm:px-2 py-2.5 sm:py-3 whitespace-nowrap">
+                  <td className="whitespace-nowrap px-3 py-3">
                     <span
-                      className={`w-5 h-5 sm:w-6 sm:h-6 rounded-lg flex items-center justify-center text-[9px] sm:text-[10px] font-black ${
-                        idx === 0
-                          ? "bg-amber-100 text-amber-700 border border-amber-300"
-                          : idx === 1
-                            ? "bg-slate-100 text-slate-700 border border-slate-300"
-                            : idx === 2
-                              ? "bg-orange-100 text-orange-700 border border-orange-300"
-                              : "bg-white text-gray-500 border border-gray-300"
-                      }`}
+                      className={`flex h-7 w-7 items-center justify-center rounded-xl border text-xs font-semibold ${getRankBadgeClass(
+                        idx + 1
+                      )}`}
                     >
                       {idx + 1}
                     </span>
                   </td>
-                  <td className="w-[112px] sm:w-auto px-1 sm:px-2 py-2.5 sm:py-3 min-w-[112px] sm:min-w-[140px] align-top">
-                    <div className="flex flex-col gap-1.5">
-                      <div className="flex items-center gap-1.5 flex-wrap">
+
+                  <td className="min-w-[17rem] px-3 py-3 align-top">
+                    <div className="flex flex-col gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
                         <Link
                           href={getPlayerProfileHref(player)}
-                          className="block max-w-[92px] truncate font-bold text-gray-900 text-[11px] leading-tight hover:text-blue-600 sm:max-w-none sm:text-sm sm:whitespace-normal"
+                          className="text-sm font-semibold text-gray-900 hover:text-blue-600"
                         >
                           {player.user.name}
                         </Link>
                         {isMe ? (
-                          <span className="h-4.5 sm:h-6 px-1 sm:px-2 rounded-full text-[7px] sm:text-[9px] font-black uppercase tracking-[0.08em] sm:tracking-wide bg-blue-100 text-blue-700 border border-blue-200 inline-flex items-center">
+                          <span className="rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-[10px] font-medium text-blue-700">
                             Me
                           </span>
                         ) : null}
-                      </div>
-                      <div className="flex items-center gap-1 flex-wrap relative">
-                        <span className="hidden sm:inline text-[9px] font-bold text-gray-400 uppercase">
-                          Rating {player.user.elo}
-                        </span>
-                        {canToggle ? (
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.preventDefault();
-                              onTogglePause(player.userId, player.isPaused);
-                            }}
-                            className={`h-4.5 sm:h-6 px-1 sm:px-2 rounded-full text-[7px] sm:text-[9px] font-black uppercase tracking-[0.08em] sm:tracking-wide border inline-flex items-center shrink-0 ${
-                              player.isPaused
-                                ? "bg-rose-100 text-rose-700 border-rose-200"
-                                : "bg-gray-100 text-gray-600 border-gray-200"
-                            }`}
-                          >
-                            {player.isPaused ? "Resume" : "Pause"}
-                          </button>
-                        ) : null}
-                        {!isCompleted && isAdmin ? (
-                          <button
-                            type="button"
-                            onClick={(e) => onTogglePreferenceEditor(player.userId, e.currentTarget)}
-                            className="h-4.5 sm:h-6 px-1 sm:px-2 rounded-full text-[7px] sm:text-[9px] font-black uppercase tracking-[0.08em] sm:tracking-wide border inline-flex items-center bg-blue-100 text-blue-700 border-blue-200"
-                          >
-                            Edit
-                          </button>
+                        {player.isPaused ? (
+                          <span className="rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[10px] font-medium text-amber-800">
+                            Paused
+                          </span>
                         ) : null}
                         {player.isGuest ? (
-                          <span className="h-4.5 sm:h-6 px-1 sm:px-2 rounded-full text-[7px] sm:text-[9px] font-black uppercase tracking-[0.08em] sm:tracking-wide bg-gray-100 text-gray-600 border border-gray-200 inline-flex items-center">
+                          <span className="rounded-full border border-gray-200 bg-gray-100 px-2.5 py-1 text-[10px] font-medium text-gray-700">
                             Guest
                           </span>
                         ) : null}
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-2 text-xs text-gray-600">
+                        <span>Rating {player.user.elo}</span>
                         {savingPreferencesFor === player.userId ? (
-                          <span className="text-[8px] sm:text-[9px] font-black text-gray-400 uppercase tracking-wider">
+                          <span className="font-medium text-blue-700">
                             Saving...
                           </span>
                         ) : null}
                       </div>
+
+                      {canToggle || (!isCompleted && isAdmin) ? (
+                        <div className="flex flex-wrap gap-2">
+                          {canToggle ? (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                onTogglePause(player.userId, player.isPaused)
+                              }
+                              className={`rounded-full border px-3 py-1.5 text-[11px] font-medium transition ${
+                                player.isPaused
+                                  ? "border-amber-200 bg-amber-50 text-amber-800"
+                                  : "border-gray-200 bg-white text-gray-700"
+                              }`}
+                            >
+                              {player.isPaused ? "Resume" : "Pause"}
+                            </button>
+                          ) : null}
+
+                          {!isCompleted && isAdmin ? (
+                            <button
+                              type="button"
+                              onClick={(event) =>
+                                onTogglePreferenceEditor(
+                                  player.userId,
+                                  event.currentTarget
+                                )
+                              }
+                              className="rounded-full border border-blue-200 bg-blue-50 px-3 py-1.5 text-[11px] font-medium text-blue-700 transition"
+                            >
+                              Edit preferences
+                            </button>
+                          ) : null}
+                        </div>
+                      ) : null}
                     </div>
                   </td>
-                  <td className="w-11 sm:w-24 px-1 sm:px-4 py-2.5 sm:py-3 whitespace-nowrap text-center">
-                    <span className="text-[13px] sm:text-base font-black text-blue-700">
-                      {isLadderSession
-                        ? ladderScore > 0
-                          ? `+${ladderScore}`
-                          : ladderScore
-                        : player.sessionPoints}
+
+                  <td className="whitespace-nowrap px-3 py-3 text-center">
+                    <span className="text-base font-semibold text-blue-700">
+                      {standingValue}
                     </span>
                   </td>
-                  <td className="w-12 sm:w-24 px-1 sm:px-4 py-2.5 sm:py-3 whitespace-nowrap text-center">
+
+                  <td className="whitespace-nowrap px-3 py-3 text-center">
                     <span
-                      className={`text-[11px] sm:text-sm font-medium ${
+                      className={`text-sm font-medium ${
                         pointDiff >= 0 ? "text-green-600" : "text-red-500"
                       }`}
                     >
-                      {pointDiff > 0 ? `+${pointDiff}` : pointDiff}
+                      {formatPointDiff(pointDiff)}
                     </span>
                   </td>
-                  <td className="w-10 sm:w-24 px-1 sm:px-4 py-2.5 sm:py-3 whitespace-nowrap text-center">
-                    <span className="text-[10px] sm:text-xs font-bold text-gray-600">
-                      {stats.played}
-                    </span>
+
+                  <td className="whitespace-nowrap px-3 py-3 text-center text-sm font-medium text-gray-700">
+                    {stats.played}
                   </td>
-                  <td className="w-11 sm:w-24 px-1 sm:px-4 py-2.5 sm:py-3 whitespace-nowrap text-center">
-                    <div className="text-[8px] sm:text-[10px] font-black tracking-tighter">
-                      <span className="text-green-600">{stats.wins}</span>
-                      <span className="mx-0.5 text-gray-200">/</span>
-                      <span className="text-red-500">{stats.losses}</span>
-                    </div>
+
+                  <td className="whitespace-nowrap px-3 py-3 text-center text-sm font-medium text-gray-700">
+                    <span className="text-green-600">{stats.wins}</span>
+                    <span className="mx-1 text-gray-300">/</span>
+                    <span className="text-red-500">{stats.losses}</span>
                   </td>
                 </tr>
               );
