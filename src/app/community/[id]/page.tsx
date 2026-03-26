@@ -191,7 +191,6 @@ export default function CommunityPage() {
         <HeroCard
           backHref="/"
           title={communityName}
-          description={isHostMode ? "Host setup" : undefined}
           actionsPosition="below"
           eyebrow={isHostMode ? "Host desk" : "Community hub"}
           meta={
