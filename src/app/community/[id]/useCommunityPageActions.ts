@@ -29,7 +29,9 @@ export function useCommunityPageActions({
 }) {
   const [activeSection, setActiveSection] =
     useState<CommunityPageSection>("overview");
-  const [showHostPanel, setShowHostPanel] = useState(false);
+  const [lastNonHostSection, setLastNonHostSection] = useState<
+    Exclude<CommunityPageSection, "host">
+  >("overview");
   const [rollingBackTournamentCode, setRollingBackTournamentCode] = useState<
     string | null
   >(null);
@@ -133,14 +135,23 @@ export function useCommunityPageActions({
 
   const switchSection = (section: CommunityPageSection) => {
     setActiveSection(section);
-    if (section !== "overview") {
-      setShowHostPanel(false);
+    if (section !== "host") {
+      setLastNonHostSection(section);
     }
   };
 
+  const exitHostMode = () => {
+    setActiveSection(lastNonHostSection);
+  };
+
   const handleHostButtonClick = () => {
-    setActiveSection("overview");
-    setShowHostPanel((prev) => !prev);
+    if (!canManageCommunity) return;
+    if (activeSection === "host") {
+      exitHostMode();
+      return;
+    }
+    setLastNonHostSection(activeSection);
+    setActiveSection("host");
   };
 
   const openCommunityPlayerProfile = (playerId: string) => {
@@ -153,7 +164,7 @@ export function useCommunityPageActions({
 
   return {
     activeSection,
-    showHostPanel,
+    lastNonHostSection,
     rollingBackTournamentCode,
     pendingRollbackTournament,
     requestingClaimFor,
@@ -163,6 +174,7 @@ export function useCommunityPageActions({
     confirmRollbackTournament,
     requestClaim,
     switchSection,
+    exitHostMode,
     handleHostButtonClick,
     openCommunityPlayerProfile,
     openTournament,

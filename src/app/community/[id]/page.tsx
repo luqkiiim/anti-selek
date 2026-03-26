@@ -14,8 +14,8 @@ import { PastTournamentsPanel } from "@/components/community/PastTournamentsPane
 import type { CommunityPageSection } from "@/components/community/communityTypes";
 import { useCommunityPage } from "./useCommunityPage";
 
-const sectionTabs: Array<{
-  key: CommunityPageSection;
+const baseSectionTabs: Array<{
+  key: Exclude<CommunityPageSection, "host">;
   label: string;
   detail: (counts: { sessions: number; leaderboard: number }) => string;
 }> = [
@@ -35,6 +35,12 @@ const sectionTabs: Array<{
     detail: ({ leaderboard }) => `${leaderboard} players`,
   },
 ];
+
+const sectionLabels: Record<Exclude<CommunityPageSection, "host">, string> = {
+  overview: "Overview",
+  tournaments: "Tournaments",
+  leaderboard: "Leaderboard",
+};
 
 export default function CommunityPage() {
   const {
@@ -64,7 +70,7 @@ export default function CommunityPage() {
     loading,
     creatingSession,
     activeSection,
-    showHostPanel,
+    lastNonHostSection,
     showPlayersModal,
     showGuestsModal,
     playerSearch,
@@ -103,6 +109,7 @@ export default function CommunityPage() {
     openGuestsModal,
     closeGuestsModal,
     switchSection,
+    exitHostMode,
     handleHostButtonClick,
     openCommunityPlayerProfile,
     openTournament,
@@ -122,6 +129,164 @@ export default function CommunityPage() {
   const communityName = community?.name || "Community";
   const membersCount = community?.membersCount || 0;
   const sessionsCount = community?.sessionsCount || 0;
+  const liveTournamentsCount = activeTournaments.length;
+  const isHostMode = activeSection === "host";
+  const hostReturnLabel = sectionLabels[lastNonHostSection];
+  const communityDescription = isHostMode
+    ? "Host mode is active. The page is trimmed to the setup flow so you can build and launch the next tournament without overview distractions."
+    : `${membersCount} members, ${liveTournamentsCount} live tournament${
+        liveTournamentsCount === 1 ? "" : "s"
+      }, and ${sessionsCount} total tournaments.`;
+  const sectionTabs = canManageCommunity
+    ? [
+        baseSectionTabs[0],
+        {
+          key: "host" as const,
+          label: "Host",
+          detail: () => "Setup desk",
+        },
+        ...baseSectionTabs.slice(1),
+      ]
+    : baseSectionTabs;
+  const hostSetupPanel = canManageCommunity ? (
+    <HostTournamentPanel
+      newSessionName={newSessionName}
+      onNewSessionNameChange={setNewSessionName}
+      sessionType={sessionType}
+      onSessionTypeChange={setSessionType}
+      sessionMode={sessionMode}
+      onSessionModeChange={setSessionMode}
+      openModeLabel={openModeLabel}
+      mixedModeLabel={mixedModeLabel}
+      courtCount={courtCount}
+      onCourtCountChange={setCourtCount}
+      selectedPlayerCount={selectedPlayerIds.length}
+      guestCount={guestConfigs.length}
+      onOpenPlayers={openPlayersModal}
+      onOpenGuests={openGuestsModal}
+      onCreateSession={createSession}
+      onExitHostMode={exitHostMode}
+      exitHostModeLabel={`Back to ${hostReturnLabel}`}
+      creatingSession={creatingSession}
+    />
+  ) : null;
+  const hostSetupSummary = canManageCommunity ? (
+    <div className="rounded-3xl border border-gray-100 bg-white p-6 shadow-md">
+      <div className="flex flex-col gap-5">
+        <div>
+          <p className="app-eyebrow">Host draft</p>
+          <h3 className="text-xl font-semibold text-gray-900">
+            Current setup
+          </h3>
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="app-panel-muted px-4 py-4">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-gray-500">
+              Format
+            </p>
+            <p className="mt-2 text-base font-semibold text-gray-900">
+              {getSessionTypeLabel(sessionType)}
+            </p>
+          </div>
+          <div className="app-panel-muted px-4 py-4">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-gray-500">
+              Mode
+            </p>
+            <p className="mt-2 text-base font-semibold text-gray-900">
+              {sessionMode === "MIXICANO" ? mixedModeLabel : openModeLabel}
+            </p>
+          </div>
+          <div className="app-panel-muted px-4 py-4">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-gray-500">
+              Courts
+            </p>
+            <p className="mt-2 text-base font-semibold text-gray-900">
+              {courtCount} Court{courtCount > 1 ? "s" : ""}
+            </p>
+          </div>
+          <div className="app-panel-muted px-4 py-4">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-gray-500">
+              Roster
+            </p>
+            <p className="mt-2 text-base font-semibold text-gray-900">
+              {selectedPlayerIds.length} players, {guestConfigs.length} guests
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  ) : null;
+  const overviewSupportPanels = (
+    <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
+      <CommunityLeaderboardPanel
+        title="Leaderboard Snapshot"
+        subtitle="Top performers right now"
+        players={leaderboardPreview}
+        communityId={communityId}
+        action={
+          <button
+            type="button"
+            onClick={() => switchSection("leaderboard")}
+            className="app-button-secondary px-4 py-2"
+          >
+            Full Leaderboard
+          </button>
+        }
+        showClaimControls={false}
+        onOpenPlayerProfile={openCommunityPlayerProfile}
+      />
+
+      <CommunityRecentTournamentPanel
+        latestPastTournament={latestPastTournament}
+        onOpenTournaments={() => switchSection("tournaments")}
+        onOpenTournament={openTournament}
+      />
+    </div>
+  );
+  const hostModeContext = (
+    <section className="app-panel-soft p-4 sm:p-5">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+        <div className="space-y-2">
+          <p className="app-eyebrow">Host focus</p>
+          <div>
+            <h3 className="text-lg font-semibold text-gray-900">
+              Setup is the only primary task on this screen
+            </h3>
+            <p className="mt-2 text-sm text-gray-600">
+              Live tournaments and community snapshots are tucked away while
+              you build the next tournament. Exit host mode to return to{" "}
+              {hostReturnLabel}.
+            </p>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="app-chip app-chip-neutral">
+            {liveTournamentsCount} live tournament
+            {liveTournamentsCount === 1 ? "" : "s"}
+          </span>
+          <span className="app-chip app-chip-neutral">
+            {leaderboard.length} leaderboard entries
+          </span>
+          <button
+            type="button"
+            onClick={exitHostMode}
+            className="app-button-dark px-4 py-2"
+          >
+            Back to {hostReturnLabel}
+          </button>
+          <button
+            type="button"
+            onClick={() => switchSection("tournaments")}
+            className="app-button-secondary px-4 py-2"
+          >
+            View Tournaments
+          </button>
+        </div>
+      </div>
+    </section>
+  );
 
   return (
     <main className="app-page">
@@ -129,10 +294,14 @@ export default function CommunityPage() {
         <HeroCard
           backHref="/"
           title={communityName}
+          description={communityDescription}
           actionsPosition="below"
-          eyebrow="Community hub"
+          eyebrow={isHostMode ? "Host desk" : "Community hub"}
           meta={
             <>
+              {isHostMode ? (
+                <span className="app-chip app-chip-accent">Host mode</span>
+              ) : null}
               <span
                 className={`app-chip ${
                   community?.role === "ADMIN"
@@ -163,9 +332,7 @@ export default function CommunityPage() {
                   onClick={handleHostButtonClick}
                   className="app-button-primary"
                 >
-                  {activeSection === "overview" && showHostPanel
-                    ? "Hide Host Setup"
-                    : "Open Host Setup"}
+                  {isHostMode ? "Exit Host Setup" : "Open Host Setup"}
                 </button>
                 <Link
                   href={`/community/${communityId}/admin`}
@@ -181,7 +348,11 @@ export default function CommunityPage() {
         {success ? <FlashMessage tone="success">{success}</FlashMessage> : null}
 
         <section className="app-panel-soft p-2">
-          <div className="grid gap-2 sm:grid-cols-3">
+          <div
+            className={`grid gap-2 ${
+              canManageCommunity ? "sm:grid-cols-4" : "sm:grid-cols-3"
+            }`}
+          >
             {sectionTabs.map((tab) => {
               const isActive = activeSection === tab.key;
               return (
@@ -218,102 +389,15 @@ export default function CommunityPage() {
               onJoinTournament={joinTournament}
             />
 
-            {canManageCommunity ? (
-              showHostPanel ? (
-                <HostTournamentPanel
-                  newSessionName={newSessionName}
-                  onNewSessionNameChange={setNewSessionName}
-                  sessionType={sessionType}
-                  onSessionTypeChange={setSessionType}
-                  sessionMode={sessionMode}
-                  onSessionModeChange={setSessionMode}
-                  openModeLabel={openModeLabel}
-                  mixedModeLabel={mixedModeLabel}
-                  courtCount={courtCount}
-                  onCourtCountChange={setCourtCount}
-                  selectedPlayerCount={selectedPlayerIds.length}
-                  guestCount={guestConfigs.length}
-                  onOpenPlayers={openPlayersModal}
-                  onOpenGuests={openGuestsModal}
-                  onCreateSession={createSession}
-                  creatingSession={creatingSession}
-                />
-              ) : (
-                <div className="rounded-3xl border border-gray-100 bg-white p-6 shadow-md">
-                  <div className="flex flex-col gap-5">
-                    <div>
-                      <p className="app-eyebrow">Host draft</p>
-                      <h3 className="text-xl font-semibold text-gray-900">
-                        Current setup
-                      </h3>
-                    </div>
+            {hostSetupSummary}
+            {overviewSupportPanels}
+          </>
+        ) : null}
 
-                    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                      <div className="app-panel-muted px-4 py-4">
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-gray-500">
-                          Format
-                        </p>
-                        <p className="mt-2 text-base font-semibold text-gray-900">
-                          {getSessionTypeLabel(sessionType)}
-                        </p>
-                      </div>
-                      <div className="app-panel-muted px-4 py-4">
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-gray-500">
-                          Mode
-                        </p>
-                        <p className="mt-2 text-base font-semibold text-gray-900">
-                          {sessionMode === "MIXICANO"
-                            ? mixedModeLabel
-                            : openModeLabel}
-                        </p>
-                      </div>
-                      <div className="app-panel-muted px-4 py-4">
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-gray-500">
-                          Courts
-                        </p>
-                        <p className="mt-2 text-base font-semibold text-gray-900">
-                          {courtCount} Court{courtCount > 1 ? "s" : ""}
-                        </p>
-                      </div>
-                      <div className="app-panel-muted px-4 py-4">
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-gray-500">
-                          Roster
-                        </p>
-                        <p className="mt-2 text-base font-semibold text-gray-900">
-                          {selectedPlayerIds.length} players, {guestConfigs.length} guests
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )
-            ) : null}
-
-            <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
-              <CommunityLeaderboardPanel
-                title="Leaderboard Snapshot"
-                subtitle="Top performers right now"
-                players={leaderboardPreview}
-                communityId={communityId}
-                action={
-                  <button
-                    type="button"
-                    onClick={() => switchSection("leaderboard")}
-                    className="app-button-secondary px-4 py-2"
-                  >
-                    Full Leaderboard
-                  </button>
-                }
-                showClaimControls={false}
-                onOpenPlayerProfile={openCommunityPlayerProfile}
-              />
-
-              <CommunityRecentTournamentPanel
-                latestPastTournament={latestPastTournament}
-                onOpenTournaments={() => switchSection("tournaments")}
-                onOpenTournament={openTournament}
-              />
-            </div>
+        {activeSection === "host" ? (
+          <>
+            {hostModeContext}
+            {hostSetupPanel}
           </>
         ) : null}
 

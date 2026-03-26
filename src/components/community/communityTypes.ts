@@ -3,8 +3,6 @@ import {
   ClaimRequestStatus,
   PartnerPreference,
   PlayerGender,
-  SessionMode,
-  SessionType,
 } from "@/types/enums";
 
 export interface CommunityPageUser {
@@ -82,5 +80,6 @@ export interface CommunityLeaderboardClaimState {
 
 export type CommunityPageSection =
   | "overview"
+  | "host"
   | "tournaments"
   | "leaderboard";
