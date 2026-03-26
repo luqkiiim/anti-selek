@@ -229,36 +229,37 @@ export default function SessionPage() {
       setEndingSession(false);
     }
   };
-
-  if (status === "loading" || !sessionData) {
-    return (
-      <div className="app-page flex items-center justify-center px-6">
-        <div className="app-panel flex flex-col items-center gap-4 px-8 py-8">
-          <div className="h-12 w-12 animate-spin rounded-full border-4 border-blue-600 border-t-transparent"></div>
-          <p className="app-eyebrow">Loading session</p>
-        </div>
-      </div>
-    );
-  }
-
   const isAdmin =
-    !!sessionData.viewerCanManage || !!user?.isAdmin || !!session?.user?.isAdmin;
+    !!sessionData?.viewerCanManage || !!user?.isAdmin || !!session?.user?.isAdmin;
   const isClaimedUser = user?.isClaimed === true;
   const currentUserId = session?.user?.id || "";
-  const sessionView = buildSessionViewModel({
-    sessionData,
+  const sessionView = useMemo(() => {
+    if (!sessionData) {
+      return null;
+    }
+
+    return buildSessionViewModel({
+      sessionData,
+      communityPlayers,
+      rosterSearch,
+      manualMatchForm,
+      manualCourtId,
+      openPreferenceEditor,
+    });
+  }, [
     communityPlayers,
-    rosterSearch,
-    manualMatchForm,
     manualCourtId,
+    manualMatchForm,
     openPreferenceEditor,
-  });
+    rosterSearch,
+    sessionData,
+  ]);
   const mobileSections = useMemo(
     () =>
-      sessionView.isCompletedSession
+      sessionView?.isCompletedSession
         ? COMPLETED_MOBILE_SECTIONS
         : LIVE_MOBILE_SECTIONS,
-    [sessionView.isCompletedSession]
+    [sessionView?.isCompletedSession]
   );
   const activeMobileSection = mobileSections.some(
     (section) => section.id === mobileSection
@@ -309,6 +310,11 @@ export default function SessionPage() {
   }, [activeMobileSection, scrollMobilePagerToSection]);
 
   useEffect(() => {
+    if (!sessionView) {
+      previousCompletedSessionRef.current = false;
+      return;
+    }
+
     const wasCompleted = previousCompletedSessionRef.current;
 
     if (sessionView.isCompletedSession) {
@@ -322,7 +328,7 @@ export default function SessionPage() {
     previousCompletedSessionRef.current = sessionView.isCompletedSession;
   }, [
     activeMobileSection,
-    sessionView.isCompletedSession,
+    sessionView?.isCompletedSession,
     updateMobileSection,
   ]);
 
@@ -351,6 +357,17 @@ export default function SessionPage() {
       setMobileSection(nextSection);
     }
   }, [activeMobileSection, mobileSections]);
+
+  if (status === "loading" || !sessionData || !sessionView) {
+    return (
+      <div className="app-page flex items-center justify-center px-6">
+        <div className="app-panel flex flex-col items-center gap-4 px-8 py-8">
+          <div className="h-12 w-12 animate-spin rounded-full border-4 border-blue-600 border-t-transparent"></div>
+          <p className="app-eyebrow">Loading session</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="app-page">
