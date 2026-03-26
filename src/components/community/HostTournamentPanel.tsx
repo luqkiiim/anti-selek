@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
+import { ModalFrame } from "@/components/ui/chrome";
 import { SessionMode, SessionType } from "@/types/enums";
 
 interface HostTournamentPanelProps {
@@ -24,6 +25,39 @@ interface HostTournamentPanelProps {
   creatingSession: boolean;
 }
 
+const SESSION_TYPE_INFO: Record<
+  SessionType,
+  {
+    title: string;
+    lines: string[];
+  }
+> = {
+  [SessionType.POINTS]: {
+    title: "Points",
+    lines: [
+      "Balances by current session points.",
+      "Everyone starts at 0.",
+      "Best for groups still finding their level.",
+    ],
+  },
+  [SessionType.ELO]: {
+    title: "Ratings",
+    lines: [
+      "Balances by established community ratings.",
+      "Best when ratings are already reliable.",
+      "Best with established community members.",
+    ],
+  },
+  [SessionType.LADDER]: {
+    title: "Ladder",
+    lines: [
+      "Groups by current session performance.",
+      "Similar-performing players face each other more often.",
+      "Best for competitive sessions.",
+    ],
+  },
+};
+
 function SegmentedOption({
   label,
   selected,
@@ -45,6 +79,32 @@ function SegmentedOption({
     >
       {label}
     </button>
+  );
+}
+
+function FormatOption({
+  label,
+  selected,
+  onSelect,
+  onInfo,
+}: {
+  label: string;
+  selected: boolean;
+  onSelect: () => void;
+  onInfo: () => void;
+}) {
+  return (
+    <div className="flex items-center gap-1.5">
+      <SegmentedOption label={label} selected={selected} onClick={onSelect} />
+      <button
+        type="button"
+        onClick={onInfo}
+        aria-label={`About ${label} format`}
+        className="flex h-9 w-9 items-center justify-center rounded-full border border-gray-200 bg-white text-xs font-semibold text-gray-600 transition hover:border-blue-200 hover:text-blue-700"
+      >
+        i
+      </button>
+    </div>
   );
 }
 
@@ -99,6 +159,9 @@ export function HostTournamentPanel({
   creatingSession,
 }: HostTournamentPanelProps) {
   const panelRef = useRef<HTMLElement | null>(null);
+  const [infoSessionType, setInfoSessionType] = useState<SessionType | null>(
+    null
+  );
   const canCreateSession = Boolean(newSessionName.trim()) && !creatingSession;
 
   useEffect(() => {
@@ -143,20 +206,23 @@ export function HostTournamentPanel({
           <div className="space-y-1.5">
             <p className="text-sm font-medium text-gray-900">Format</p>
             <div className="flex flex-wrap gap-2">
-              <SegmentedOption
+              <FormatOption
                 label="Points"
                 selected={sessionType === SessionType.POINTS}
-                onClick={() => onSessionTypeChange(SessionType.POINTS)}
+                onSelect={() => onSessionTypeChange(SessionType.POINTS)}
+                onInfo={() => setInfoSessionType(SessionType.POINTS)}
               />
-              <SegmentedOption
+              <FormatOption
                 label="Ratings"
                 selected={sessionType === SessionType.ELO}
-                onClick={() => onSessionTypeChange(SessionType.ELO)}
+                onSelect={() => onSessionTypeChange(SessionType.ELO)}
+                onInfo={() => setInfoSessionType(SessionType.ELO)}
               />
-              <SegmentedOption
+              <FormatOption
                 label="Ladder"
                 selected={sessionType === SessionType.LADDER}
-                onClick={() => onSessionTypeChange(SessionType.LADDER)}
+                onSelect={() => onSessionTypeChange(SessionType.LADDER)}
+                onInfo={() => setInfoSessionType(SessionType.LADDER)}
               />
             </div>
           </div>
@@ -223,6 +289,32 @@ export function HostTournamentPanel({
           {creatingSession ? "Creating..." : "Create Tournament"}
         </button>
       </div>
+
+      {infoSessionType ? (
+        <ModalFrame
+          title={SESSION_TYPE_INFO[infoSessionType].title}
+          onClose={() => setInfoSessionType(null)}
+          footer={
+            <button
+              type="button"
+              onClick={() => setInfoSessionType(null)}
+              className="app-button-primary w-full"
+            >
+              Done
+            </button>
+          }
+        >
+          <div className="px-4 py-4 sm:px-5">
+            <ul className="space-y-2">
+              {SESSION_TYPE_INFO[infoSessionType].lines.map((line) => (
+                <li key={line} className="text-sm font-medium text-gray-700">
+                  {line}
+                </li>
+              ))}
+            </ul>
+          </div>
+        </ModalFrame>
+      ) : null}
     </section>
   );
 }
