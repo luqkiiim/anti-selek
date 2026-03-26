@@ -106,7 +106,7 @@ export function CommunityPlayersModal({
           )}
         </div>
 
-        <div className="p-3 bg-white border-t sm:rounded-b-2xl flex justify-end">
+        <div className="border-t bg-white px-3 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] sm:rounded-b-2xl flex justify-end">
           <button
             onClick={onClose}
             className="bg-gray-900 text-white px-4 py-2 rounded-lg font-black uppercase tracking-widest text-[10px] shadow-sm active:scale-95 transition-all"
