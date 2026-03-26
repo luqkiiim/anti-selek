@@ -60,7 +60,6 @@ export default function SessionPage() {
   const code = params?.code as string;
 
   const mobilePagerRef = useRef<HTMLDivElement | null>(null);
-  const previousCompletedSessionRef = useRef(false);
   const previousSessionStatusRef = useRef<string | null>(null);
   const pendingPagerScrollBehaviorRef = useRef<ScrollBehavior>("auto");
   const pagerSnapTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -424,30 +423,6 @@ export default function SessionPage() {
     pendingPagerScrollBehaviorRef.current = "auto";
     scrollMobilePagerToSection(activeMobileSection, behavior);
   }, [activeMobileSection, scrollMobilePagerToSection]);
-
-  useEffect(() => {
-    if (!sessionView) {
-      previousCompletedSessionRef.current = false;
-      return;
-    }
-
-    const wasCompleted = previousCompletedSessionRef.current;
-
-    if (sessionView.isCompletedSession) {
-      if (!wasCompleted || activeMobileSection !== "results") {
-        updateMobileSection("results", "auto");
-      }
-    } else if (wasCompleted || activeMobileSection === "results") {
-      updateMobileSection(preferredMobileSection, "auto");
-    }
-
-    previousCompletedSessionRef.current = sessionView.isCompletedSession;
-  }, [
-    activeMobileSection,
-    preferredMobileSection,
-    sessionView?.isCompletedSession,
-    updateMobileSection,
-  ]);
 
   useEffect(() => {
     const handleResize = () => {
