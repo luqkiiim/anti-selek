@@ -1,6 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useSession } from "next-auth/react";
 import { useParams, useRouter } from "next/navigation";
 import { FlashMessage } from "@/components/ui/chrome";
@@ -54,6 +61,7 @@ export default function SessionPage() {
 
   const mobilePagerRef = useRef<HTMLDivElement | null>(null);
   const previousCompletedSessionRef = useRef(false);
+  const previousSessionStatusRef = useRef<string | null>(null);
   const pendingPagerScrollBehaviorRef = useRef<ScrollBehavior>("auto");
   const pagerSnapTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [user, setUser] = useState<CurrentUser | null>(null);
@@ -61,7 +69,7 @@ export default function SessionPage() {
   const [endingSession, setEndingSession] = useState(false);
   const [showEndSessionConfirm, setShowEndSessionConfirm] = useState(false);
   const [mobileSection, setMobileSection] =
-    useState<SessionMobileSection>("courts");
+    useState<SessionMobileSection>("session");
 
   const safeJson = useCallback(async (res: Response) => {
     const text = await res.text();
@@ -263,6 +271,17 @@ export default function SessionPage() {
         : LIVE_MOBILE_SECTIONS,
     [sessionView?.isCompletedSession]
   );
+  const preferredMobileSection = useMemo<SessionMobileSection>(() => {
+    if (!sessionData || !sessionView) {
+      return "session";
+    }
+
+    if (sessionView.isCompletedSession) {
+      return "results";
+    }
+
+    return sessionData.status === SessionStatus.ACTIVE ? "courts" : "session";
+  }, [sessionData, sessionView]);
   const activeMobileSection = mobileSections.some(
     (section) => section.id === mobileSection
   )
@@ -278,6 +297,30 @@ export default function SessionPage() {
         (section) => section.id === sectionId
       );
       if (sectionIndex < 0) return;
+
+      if (container.clientWidth <= 0) {
+        requestAnimationFrame(() => {
+          const retryContainer = mobilePagerRef.current;
+          if (!retryContainer || retryContainer.clientWidth <= 0) return;
+
+          const retryIndex = mobileSections.findIndex(
+            (section) => section.id === sectionId
+          );
+          if (retryIndex < 0) return;
+
+          const retryLeft = retryIndex * retryContainer.clientWidth;
+          if (typeof retryContainer.scrollTo === "function") {
+            retryContainer.scrollTo({
+              left: retryLeft,
+              behavior,
+            });
+            return;
+          }
+
+          retryContainer.scrollLeft = retryLeft;
+        });
+        return;
+      }
 
       const nextLeft = sectionIndex * container.clientWidth;
       if (Math.abs(container.scrollLeft - nextLeft) < 4) {
@@ -305,6 +348,34 @@ export default function SessionPage() {
     []
   );
 
+  useLayoutEffect(() => {
+    if (!sessionData || !sessionView) {
+      previousSessionStatusRef.current = null;
+      return;
+    }
+
+    const previousStatus = previousSessionStatusRef.current;
+    const isInitialEntry = previousStatus === null;
+    const becameCompleted =
+      previousStatus !== SessionStatus.COMPLETED && sessionView.isCompletedSession;
+    const becameActive =
+      previousStatus === SessionStatus.WAITING &&
+      sessionData.status === SessionStatus.ACTIVE;
+
+    if (isInitialEntry || becameCompleted || becameActive) {
+      pendingPagerScrollBehaviorRef.current = "auto";
+      setMobileSection(preferredMobileSection);
+      scrollMobilePagerToSection(preferredMobileSection, "auto");
+    }
+
+    previousSessionStatusRef.current = sessionData.status;
+  }, [
+    preferredMobileSection,
+    scrollMobilePagerToSection,
+    sessionData,
+    sessionView,
+  ]);
+
   useEffect(() => {
     const behavior = pendingPagerScrollBehaviorRef.current;
     pendingPagerScrollBehaviorRef.current = "auto";
@@ -324,12 +395,13 @@ export default function SessionPage() {
         updateMobileSection("results", "auto");
       }
     } else if (wasCompleted || activeMobileSection === "results") {
-      updateMobileSection("courts", "auto");
+      updateMobileSection(preferredMobileSection, "auto");
     }
 
     previousCompletedSessionRef.current = sessionView.isCompletedSession;
   }, [
     activeMobileSection,
+    preferredMobileSection,
     sessionView?.isCompletedSession,
     updateMobileSection,
   ]);
