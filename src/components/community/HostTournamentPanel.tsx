@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ModalFrame } from "@/components/ui/chrome";
 import { SessionMode, SessionType } from "@/types/enums";
 
 interface HostTournamentPanelProps {
@@ -28,12 +27,12 @@ interface HostTournamentPanelProps {
 const SESSION_TYPE_INFO: Record<
   SessionType,
   {
-    title: string;
+    label: string;
     lines: string[];
   }
 > = {
   [SessionType.POINTS]: {
-    title: "Points",
+    label: "Points",
     lines: [
       "Balances by current session points.",
       "Everyone starts at 0.",
@@ -41,7 +40,7 @@ const SESSION_TYPE_INFO: Record<
     ],
   },
   [SessionType.ELO]: {
-    title: "Ratings",
+    label: "Ratings",
     lines: [
       "Balances by established community ratings.",
       "Best when ratings are already reliable.",
@@ -49,7 +48,7 @@ const SESSION_TYPE_INFO: Record<
     ],
   },
   [SessionType.LADDER]: {
-    title: "Ladder",
+    label: "Ladder",
     lines: [
       "Groups by current session performance.",
       "Similar-performing players face each other more often.",
@@ -57,6 +56,66 @@ const SESSION_TYPE_INFO: Record<
     ],
   },
 };
+
+function FormatCard({
+  sessionType,
+  selected,
+  infoOpen,
+  onSelect,
+  onToggleInfo,
+}: {
+  sessionType: SessionType;
+  selected: boolean;
+  infoOpen: boolean;
+  onSelect: () => void;
+  onToggleInfo: () => void;
+}) {
+  const info = SESSION_TYPE_INFO[sessionType];
+
+  return (
+    <div className="relative" data-format-info-root="true">
+      <button
+        type="button"
+        onClick={onSelect}
+        className={`w-full rounded-2xl border px-3 py-3 pr-10 text-left transition ${
+          selected
+            ? "border-blue-300 bg-blue-50 text-blue-700 shadow-sm"
+            : "border-gray-200 bg-white text-gray-800 hover:border-blue-200 hover:bg-blue-50/40"
+        }`}
+      >
+        <span className="block text-sm font-semibold">{info.label}</span>
+      </button>
+
+      <button
+        type="button"
+        onClick={(event) => {
+          event.stopPropagation();
+          onToggleInfo();
+        }}
+        aria-label={`About ${info.label} format`}
+        aria-expanded={infoOpen}
+        className="absolute right-2 top-2 flex h-5 w-5 items-center justify-center rounded-full border border-gray-200 bg-white text-[10px] font-semibold text-gray-500 shadow-sm transition hover:border-blue-200 hover:text-blue-700"
+      >
+        i
+      </button>
+
+      {infoOpen ? (
+        <div className="absolute left-0 top-full z-20 mt-2 w-full max-w-full">
+          <div className="relative rounded-2xl border border-gray-200 bg-white px-3 py-3 shadow-[0_18px_40px_-22px_rgba(15,23,42,0.4)]">
+            <div className="absolute left-4 top-0 h-3 w-3 -translate-y-1/2 rotate-45 border-l border-t border-gray-200 bg-white" />
+            <div className="space-y-1.5">
+              {info.lines.map((line) => (
+                <p key={line} className="text-sm leading-5 text-gray-700">
+                  {line}
+                </p>
+              ))}
+            </div>
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
 
 function SegmentedOption({
   label,
@@ -79,32 +138,6 @@ function SegmentedOption({
     >
       {label}
     </button>
-  );
-}
-
-function FormatOption({
-  label,
-  selected,
-  onSelect,
-  onInfo,
-}: {
-  label: string;
-  selected: boolean;
-  onSelect: () => void;
-  onInfo: () => void;
-}) {
-  return (
-    <div className="flex items-center gap-1.5">
-      <SegmentedOption label={label} selected={selected} onClick={onSelect} />
-      <button
-        type="button"
-        onClick={onInfo}
-        aria-label={`About ${label} format`}
-        className="flex h-9 w-9 items-center justify-center rounded-full border border-gray-200 bg-white text-xs font-semibold text-gray-600 transition hover:border-blue-200 hover:text-blue-700"
-      >
-        i
-      </button>
-    </div>
   );
 }
 
@@ -159,6 +192,7 @@ export function HostTournamentPanel({
   creatingSession,
 }: HostTournamentPanelProps) {
   const panelRef = useRef<HTMLElement | null>(null);
+  const formatInfoAreaRef = useRef<HTMLDivElement | null>(null);
   const [infoSessionType, setInfoSessionType] = useState<SessionType | null>(
     null
   );
@@ -168,6 +202,21 @@ export function HostTournamentPanel({
     panelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
     panelRef.current?.focus();
   }, []);
+
+  useEffect(() => {
+    if (!infoSessionType) return;
+
+    const handlePointerDown = (event: PointerEvent) => {
+      if (!(event.target instanceof Node)) return;
+      if (formatInfoAreaRef.current?.contains(event.target)) return;
+      setInfoSessionType(null);
+    };
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+    };
+  }, [infoSessionType]);
 
   return (
     <section
@@ -203,27 +252,24 @@ export function HostTournamentPanel({
         </label>
 
         <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_120px]">
-          <div className="space-y-1.5">
+          <div ref={formatInfoAreaRef} className="space-y-1.5">
             <p className="text-sm font-medium text-gray-900">Format</p>
-            <div className="flex flex-wrap gap-2">
-              <FormatOption
-                label="Points"
-                selected={sessionType === SessionType.POINTS}
-                onSelect={() => onSessionTypeChange(SessionType.POINTS)}
-                onInfo={() => setInfoSessionType(SessionType.POINTS)}
-              />
-              <FormatOption
-                label="Ratings"
-                selected={sessionType === SessionType.ELO}
-                onSelect={() => onSessionTypeChange(SessionType.ELO)}
-                onInfo={() => setInfoSessionType(SessionType.ELO)}
-              />
-              <FormatOption
-                label="Ladder"
-                selected={sessionType === SessionType.LADDER}
-                onSelect={() => onSessionTypeChange(SessionType.LADDER)}
-                onInfo={() => setInfoSessionType(SessionType.LADDER)}
-              />
+            <div className="grid gap-2">
+              {(Object.values(SessionType) as SessionType[]).map((type) => (
+                <FormatCard
+                  key={type}
+                  sessionType={type}
+                  selected={sessionType === type}
+                  infoOpen={infoSessionType === type}
+                  onSelect={() => {
+                    setInfoSessionType(null);
+                    onSessionTypeChange(type);
+                  }}
+                  onToggleInfo={() =>
+                    setInfoSessionType((prev) => (prev === type ? null : type))
+                  }
+                />
+              ))}
             </div>
           </div>
 
@@ -289,32 +335,6 @@ export function HostTournamentPanel({
           {creatingSession ? "Creating..." : "Create Tournament"}
         </button>
       </div>
-
-      {infoSessionType ? (
-        <ModalFrame
-          title={SESSION_TYPE_INFO[infoSessionType].title}
-          onClose={() => setInfoSessionType(null)}
-          footer={
-            <button
-              type="button"
-              onClick={() => setInfoSessionType(null)}
-              className="app-button-primary w-full"
-            >
-              Done
-            </button>
-          }
-        >
-          <div className="px-4 py-4 sm:px-5">
-            <ul className="space-y-2">
-              {SESSION_TYPE_INFO[infoSessionType].lines.map((line) => (
-                <li key={line} className="text-sm font-medium text-gray-700">
-                  {line}
-                </li>
-              ))}
-            </ul>
-          </div>
-        </ModalFrame>
-      ) : null}
     </section>
   );
 }
