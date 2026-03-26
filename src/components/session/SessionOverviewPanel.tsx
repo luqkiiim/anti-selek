@@ -44,6 +44,17 @@ export function SessionOverviewPanel({
     : isWaiting
       ? "app-chip-warning"
       : "app-chip-accent";
+  const statusCardValue = isCompleted ? (
+    <span className="text-lg font-semibold leading-tight tracking-tight sm:text-2xl">
+      Completed
+    </span>
+  ) : isWaiting ? (
+    "Waiting"
+  ) : sessionStatus === SessionStatus.ACTIVE ? (
+    "Active"
+  ) : (
+    sessionStatus
+  );
 
   return (
     <section className="app-panel p-5 sm:p-6">
@@ -99,7 +110,7 @@ export function SessionOverviewPanel({
         />
         <StatCard
           label="Status"
-          value={sessionStatus}
+          value={statusCardValue}
         />
       </div>
     </section>
