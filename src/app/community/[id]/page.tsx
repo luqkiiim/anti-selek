@@ -160,53 +160,6 @@ export default function CommunityPage() {
       creatingSession={creatingSession}
     />
   ) : null;
-  const hostSetupSummary = canManageCommunity ? (
-    <div className="rounded-3xl border border-gray-100 bg-white p-6 shadow-md">
-      <div className="flex flex-col gap-5">
-        <div>
-          <p className="app-eyebrow">Host draft</p>
-          <h3 className="text-xl font-semibold text-gray-900">
-            Current setup
-          </h3>
-        </div>
-
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <div className="app-panel-muted px-4 py-4">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-gray-500">
-              Format
-            </p>
-            <p className="mt-2 text-base font-semibold text-gray-900">
-              {getSessionTypeLabel(sessionType)}
-            </p>
-          </div>
-          <div className="app-panel-muted px-4 py-4">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-gray-500">
-              Mode
-            </p>
-            <p className="mt-2 text-base font-semibold text-gray-900">
-              {sessionMode === "MIXICANO" ? mixedModeLabel : openModeLabel}
-            </p>
-          </div>
-          <div className="app-panel-muted px-4 py-4">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-gray-500">
-              Courts
-            </p>
-            <p className="mt-2 text-base font-semibold text-gray-900">
-              {courtCount} Court{courtCount > 1 ? "s" : ""}
-            </p>
-          </div>
-          <div className="app-panel-muted px-4 py-4">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-gray-500">
-              Roster
-            </p>
-            <p className="mt-2 text-base font-semibold text-gray-900">
-              {selectedPlayerIds.length} players, {guestConfigs.length} guests
-            </p>
-          </div>
-        </div>
-      </div>
-    </div>
-  ) : null;
   const overviewSupportPanels = (
     <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
       <CommunityLeaderboardPanel
@@ -336,7 +289,6 @@ export default function CommunityPage() {
               onJoinTournament={joinTournament}
             />
 
-            {hostSetupSummary}
             {overviewSupportPanels}
           </>
         ) : null}
