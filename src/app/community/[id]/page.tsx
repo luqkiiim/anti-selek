@@ -189,25 +189,33 @@ export default function CommunityPage() {
     <main className="app-page">
       <div className="app-shell space-y-8">
         <HeroCard
-          backHref="/"
           title={communityName}
           actionsPosition="below"
-          eyebrow={isHostMode ? "Host desk" : "Community hub"}
           meta={
-            <>
-              {canManageCommunity ? (
-                <Link
-                  href={`/community/${communityId}/admin`}
-                  className="app-chip app-chip-accent transition hover:opacity-90"
-                >
-                  {communityRoleLabel}
+            <div className="grid w-full grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3">
+              <div className="justify-self-start">
+                <Link href="/" className="app-button-secondary px-4 py-2">
+                  Back
                 </Link>
-              ) : (
-                <span className="app-chip app-chip-neutral">
-                  {communityRoleLabel}
-                </span>
-              )}
-            </>
+              </div>
+              <p className="app-eyebrow justify-self-center text-center">
+                Community hub
+              </p>
+              <div className="justify-self-end">
+                {canManageCommunity ? (
+                  <Link
+                    href={`/community/${communityId}/admin`}
+                    className="app-chip app-chip-accent transition hover:opacity-90"
+                  >
+                    {communityRoleLabel}
+                  </Link>
+                ) : (
+                  <span className="app-chip app-chip-neutral">
+                    {communityRoleLabel}
+                  </span>
+                )}
+              </div>
+            </div>
           }
           actions={
             canManageCommunity ? (
