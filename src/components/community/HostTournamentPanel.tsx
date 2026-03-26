@@ -209,17 +209,11 @@ export function HostTournamentPanel({
   exitHostModeLabel,
   creatingSession,
 }: HostTournamentPanelProps) {
-  const panelRef = useRef<HTMLElement | null>(null);
   const formatInfoAreaRef = useRef<HTMLDivElement | null>(null);
   const [infoSessionType, setInfoSessionType] = useState<SessionType | null>(
     null
   );
   const canCreateSession = Boolean(newSessionName.trim()) && !creatingSession;
-
-  useEffect(() => {
-    panelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-    panelRef.current?.focus();
-  }, []);
 
   useEffect(() => {
     if (!infoSessionType) return;
@@ -237,11 +231,7 @@ export function HostTournamentPanel({
   }, [infoSessionType]);
 
   return (
-    <section
-      ref={panelRef}
-      tabIndex={-1}
-      className="app-panel scroll-mt-24 p-3 outline-none sm:p-4"
-    >
+    <section className="app-panel p-3 sm:p-4">
       <div className="flex items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-2">
           <span className="app-chip app-chip-accent">Host</span>

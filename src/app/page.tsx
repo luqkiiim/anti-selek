@@ -151,10 +151,6 @@ export default function Home() {
                           </span>
                         ) : null}
                       </div>
-                      <p className="mt-2 text-sm text-gray-600">
-                        {community.membersCount} members,{" "}
-                        {community.sessionsCount} tournaments.
-                      </p>
                     </div>
 
                     <div className="grid shrink-0 grid-cols-2 gap-3 sm:min-w-[12rem]">
