@@ -25,6 +25,7 @@ export function useSessionCourtMatchCreation({
   setError,
 }: UseSessionMatchActionsDependencies) {
   const [creatingOpenMatches, setCreatingOpenMatches] = useState(false);
+  const [creatingOpenCourtCount, setCreatingOpenCourtCount] = useState(0);
   const [manualCourtId, setManualCourtId] = useState<string | null>(null);
   const [creatingManualMatch, setCreatingManualMatch] = useState(false);
   const [manualMatchForm, setManualMatchForm] =
@@ -34,6 +35,7 @@ export function useSessionCourtMatchCreation({
     if (courtIds.length === 0) return;
 
     setCreatingOpenMatches(true);
+    setCreatingOpenCourtCount(courtIds.length);
     setError("");
     try {
       const { res, data } = await postGenerateMatchAction({
@@ -54,6 +56,7 @@ export function useSessionCourtMatchCreation({
       setError("Network error creating matches");
     } finally {
       setCreatingOpenMatches(false);
+      setCreatingOpenCourtCount(0);
     }
   };
 
@@ -119,6 +122,7 @@ export function useSessionCourtMatchCreation({
 
   return {
     creatingOpenMatches,
+    creatingOpenCourtCount,
     manualCourtId,
     creatingManualMatch,
     manualMatchForm,

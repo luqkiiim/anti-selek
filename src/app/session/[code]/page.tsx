@@ -104,6 +104,7 @@ export default function SessionPage() {
     undoingCourtId,
     courtActionDraft,
     creatingOpenMatches,
+    creatingOpenCourtCount,
     manualCourtId,
     creatingManualMatch,
     manualMatchForm,
@@ -476,6 +477,7 @@ export default function SessionPage() {
                   creatableOpenCourtCount={sessionView.creatableOpenCourtCount}
                   creatableOpenCourtIds={sessionView.creatableOpenCourtIds}
                   creatingOpenMatches={creatingOpenMatches}
+                  creatingOpenCourtCount={creatingOpenCourtCount}
                   reshufflingCourtId={reshufflingCourtId}
                   undoingCourtId={undoingCourtId}
                   reopeningMatchId={reopeningMatchId}

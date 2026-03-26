@@ -17,6 +17,7 @@ interface LiveCourtsPanelProps {
   creatableOpenCourtCount: number;
   creatableOpenCourtIds: string[];
   creatingOpenMatches: boolean;
+  creatingOpenCourtCount: number;
   reshufflingCourtId: string | null;
   undoingCourtId: string | null;
   reopeningMatchId: string | null;
@@ -50,6 +51,7 @@ export function LiveCourtsPanel({
   creatableOpenCourtCount,
   creatableOpenCourtIds,
   creatingOpenMatches,
+  creatingOpenCourtCount,
   reshufflingCourtId,
   undoingCourtId,
   reopeningMatchId,
@@ -69,6 +71,12 @@ export function LiveCourtsPanel({
   const showCreateMatchesAction =
     sessionStatus === SessionStatus.ACTIVE && isAdmin;
   const canCreateMatches = creatableOpenCourtCount > 0 && !creatingOpenMatches;
+  const optimisticCreatingCount = creatingOpenMatches ? creatingOpenCourtCount : 0;
+  const displayedActiveMatchesCount = activeMatchesCount + optimisticCreatingCount;
+  const displayedReadyCourtsCount = Math.max(
+    0,
+    readyCourtsCount - optimisticCreatingCount
+  );
 
   return (
     <SectionCard
@@ -77,8 +85,8 @@ export function LiveCourtsPanel({
       action={
         <div className="flex w-full min-w-0 items-center justify-between gap-2 sm:w-auto sm:flex-wrap sm:justify-end">
           <div className="flex min-w-0 flex-wrap items-center gap-2">
-            <span className="app-chip app-chip-accent">{activeMatchesCount} in use</span>
-            <span className="app-chip app-chip-neutral">{readyCourtsCount} ready</span>
+            <span className="app-chip app-chip-accent">{displayedActiveMatchesCount} in use</span>
+            <span className="app-chip app-chip-neutral">{displayedReadyCourtsCount} ready</span>
           </div>
           {showCreateMatchesAction ? (
             <button
