@@ -125,7 +125,7 @@ export default function SessionHistoryPage() {
           title={data.session.name}
           description={`${data.matches.length} recorded matches`}
           backHref={`/session/${data.session.code}`}
-          backLabel="Session"
+          backLabel="Back"
           meta={
             <>
               <span className="app-chip app-chip-neutral">{data.session.status}</span>
