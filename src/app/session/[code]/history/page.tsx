@@ -152,12 +152,11 @@ export default function SessionHistoryPage() {
                 return (
                   <article key={match.id} className="app-subcard p-4 sm:p-5">
                     <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                      <div className="space-y-1">
+                      <div className="flex items-center justify-between gap-3">
                         <p className="text-lg font-semibold text-gray-900">
                           Court {match.court.courtNumber}
                         </p>
                         <p className="text-sm text-gray-600">
-                          {new Date(matchTimestamp).toLocaleDateString()} at{" "}
                           {new Date(matchTimestamp).toLocaleTimeString([], {
                             hour: "2-digit",
                             minute: "2-digit",
