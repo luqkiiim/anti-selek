@@ -83,8 +83,8 @@ export function LiveCourtsPanel({
       eyebrow={sessionStatus === SessionStatus.ACTIVE ? "Court board" : "Court layout"}
       title={sessionStatus === SessionStatus.ACTIVE ? "Live Courts" : "Courts"}
       action={
-        <div className="flex w-full min-w-0 items-center justify-between gap-2 sm:w-auto sm:flex-wrap sm:justify-end">
-          <div className="flex min-w-0 flex-wrap items-center gap-2">
+        <div className="flex w-full min-w-0 items-start justify-between gap-3 sm:w-auto sm:justify-end">
+          <div className="flex min-w-0 flex-col items-start gap-2">
             <span className="app-chip app-chip-accent">{displayedActiveMatchesCount} in use</span>
             <span className="app-chip app-chip-neutral">{displayedReadyCourtsCount} ready</span>
           </div>
