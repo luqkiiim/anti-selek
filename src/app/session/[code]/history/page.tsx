@@ -165,15 +165,11 @@ export default function SessionHistoryPage() {
                         </p>
                       </div>
 
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span
-                          className={`app-chip ${
-                            isPendingApproval ? "app-chip-warning" : "app-chip-success"
-                          }`}
-                        >
-                          {isPendingApproval ? "Awaiting approval" : "Completed"}
-                        </span>
-                      </div>
+                      {isPendingApproval ? (
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="app-chip app-chip-warning">Awaiting approval</span>
+                        </div>
+                      ) : null}
                     </div>
 
                     <div className="mt-4 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 sm:gap-3">
