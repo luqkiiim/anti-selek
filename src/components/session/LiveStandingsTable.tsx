@@ -113,7 +113,7 @@ export function LiveStandingsTable({
               <th className="w-[44%] px-2 py-2 text-left text-[10px] font-semibold uppercase tracking-[0.18em] text-gray-500 sm:w-auto sm:px-3 sm:text-[11px]">
                 Player
               </th>
-              <th className="w-11 px-1.5 py-2 text-center text-[10px] font-semibold uppercase tracking-[0.18em] text-gray-500 sm:w-16 sm:px-3 sm:text-[11px]">
+              <th className="w-11 px-1.5 py-2 text-center text-[10px] font-semibold uppercase tracking-[0.18em] text-gray-500 sm:w-[5.25rem] sm:border-l sm:border-gray-100 sm:px-4 sm:text-[11px]">
                 {isLadderSession ? (
                   <>
                     <span className="sm:hidden">Ld</span>
@@ -126,15 +126,14 @@ export function LiveStandingsTable({
                   </>
                 )}
               </th>
-              <th className="w-11 px-1.5 py-2 text-center text-[10px] font-semibold uppercase tracking-[0.18em] text-gray-500 sm:w-16 sm:px-3 sm:text-[11px]">
+              <th className="w-11 px-1.5 py-2 text-center text-[10px] font-semibold uppercase tracking-[0.18em] text-gray-500 sm:w-[4.75rem] sm:border-l sm:border-gray-100 sm:px-4 sm:text-[11px]">
                 <span className="sm:hidden">Df</span>
                 <span className="hidden sm:inline">Diff</span>
               </th>
-              <th className="w-11 px-1.5 py-2 text-center text-[10px] font-semibold uppercase tracking-[0.18em] text-gray-500 sm:w-16 sm:px-3 sm:text-[11px]">
-                <span className="sm:hidden">M</span>
-                <span className="hidden sm:inline">Matches</span>
+              <th className="w-11 px-1.5 py-2 text-center text-[10px] font-semibold uppercase tracking-[0.18em] text-gray-500 sm:w-[4.5rem] sm:border-l sm:border-gray-100 sm:px-4 sm:text-[11px]">
+                MP
               </th>
-              <th className="w-12 px-1.5 py-2 text-center text-[10px] font-semibold uppercase tracking-[0.18em] text-gray-500 sm:w-16 sm:px-3 sm:text-[11px]">
+              <th className="w-12 px-1.5 py-2 text-center text-[10px] font-semibold uppercase tracking-[0.18em] text-gray-500 sm:w-[5rem] sm:border-l sm:border-gray-100 sm:px-4 sm:text-[11px]">
                 W / L
               </th>
             </tr>
@@ -235,24 +234,24 @@ export function LiveStandingsTable({
                       ) : null}
                     </div>
                   </td>
-                  <td className="whitespace-nowrap px-1.5 py-2 text-center align-middle sm:px-3">
-                    <span className="text-sm font-semibold text-blue-700 sm:text-base">
+                  <td className="whitespace-nowrap px-1.5 py-2 text-center align-middle sm:w-[5.25rem] sm:border-l sm:border-gray-100 sm:px-4">
+                    <span className="text-sm font-semibold tabular-nums text-blue-700 sm:text-base">
                       {standingValue}
                     </span>
                   </td>
-                  <td className="whitespace-nowrap px-1.5 py-2 text-center align-middle sm:px-3">
+                  <td className="whitespace-nowrap px-1.5 py-2 text-center align-middle sm:w-[4.75rem] sm:border-l sm:border-gray-100 sm:px-4">
                     <span
-                      className={`text-[12px] font-medium sm:text-sm ${
+                      className={`text-[12px] font-medium tabular-nums sm:text-sm ${
                         pointDiff >= 0 ? "text-green-600" : "text-red-500"
                       }`}
                     >
                       {formatPointDiff(pointDiff)}
                     </span>
                   </td>
-                  <td className="whitespace-nowrap px-1.5 py-2 text-center align-middle text-[12px] font-medium text-gray-700 sm:px-3 sm:text-sm">
+                  <td className="whitespace-nowrap px-1.5 py-2 text-center align-middle text-[12px] font-medium tabular-nums text-gray-700 sm:w-[4.5rem] sm:border-l sm:border-gray-100 sm:px-4 sm:text-sm">
                     {stats.played}
                   </td>
-                  <td className="whitespace-nowrap px-1.5 py-2 text-center align-middle text-[12px] font-medium text-gray-700 sm:px-3 sm:text-sm">
+                  <td className="whitespace-nowrap px-1.5 py-2 text-center align-middle text-[12px] font-medium tabular-nums text-gray-700 sm:w-[5rem] sm:border-l sm:border-gray-100 sm:px-4 sm:text-sm">
                     <span className="text-green-600">{stats.wins}</span>
                     <span className="mx-0.5 text-gray-300 sm:mx-1">/</span>
                     <span className="text-red-500">{stats.losses}</span>
