@@ -36,12 +36,6 @@ const baseSectionTabs: Array<{
   },
 ];
 
-const sectionLabels: Record<Exclude<CommunityPageSection, "host">, string> = {
-  overview: "Overview",
-  tournaments: "Tournaments",
-  leaderboard: "Leaderboard",
-};
-
 export default function CommunityPage() {
   const {
     status,
@@ -70,7 +64,6 @@ export default function CommunityPage() {
     loading,
     creatingSession,
     activeSection,
-    lastNonHostSection,
     showPlayersModal,
     showGuestsModal,
     playerSearch,
@@ -131,12 +124,9 @@ export default function CommunityPage() {
   const sessionsCount = community?.sessionsCount || 0;
   const liveTournamentsCount = activeTournaments.length;
   const isHostMode = activeSection === "host";
-  const hostReturnLabel = sectionLabels[lastNonHostSection];
-  const communityDescription = isHostMode
-    ? "Host mode is active. The page is trimmed to the setup flow so you can build and launch the next tournament without overview distractions."
-    : `${membersCount} members, ${liveTournamentsCount} live tournament${
-        liveTournamentsCount === 1 ? "" : "s"
-      }, and ${sessionsCount} total tournaments.`;
+  const communityDescription = `${membersCount} members, ${liveTournamentsCount} live tournament${
+    liveTournamentsCount === 1 ? "" : "s"
+  }, and ${sessionsCount} total tournaments.`;
   const sectionTabs = canManageCommunity
     ? [
         baseSectionTabs[0],
@@ -166,7 +156,7 @@ export default function CommunityPage() {
       onOpenGuests={openGuestsModal}
       onCreateSession={createSession}
       onExitHostMode={exitHostMode}
-      exitHostModeLabel={`Back to ${hostReturnLabel}`}
+      exitHostModeLabel="Back"
       creatingSession={creatingSession}
     />
   ) : null;
@@ -243,49 +233,6 @@ export default function CommunityPage() {
         onOpenTournament={openTournament}
       />
     </div>
-  );
-  const hostModeContext = (
-    <section className="app-panel-soft p-4 sm:p-5">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-        <div className="space-y-2">
-          <p className="app-eyebrow">Host focus</p>
-          <div>
-            <h3 className="text-lg font-semibold text-gray-900">
-              Setup is the only primary task on this screen
-            </h3>
-            <p className="mt-2 text-sm text-gray-600">
-              Live tournaments and community snapshots are tucked away while
-              you build the next tournament. Exit host mode to return to{" "}
-              {hostReturnLabel}.
-            </p>
-          </div>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="app-chip app-chip-neutral">
-            {liveTournamentsCount} live tournament
-            {liveTournamentsCount === 1 ? "" : "s"}
-          </span>
-          <span className="app-chip app-chip-neutral">
-            {leaderboard.length} leaderboard entries
-          </span>
-          <button
-            type="button"
-            onClick={exitHostMode}
-            className="app-button-dark px-4 py-2"
-          >
-            Back to {hostReturnLabel}
-          </button>
-          <button
-            type="button"
-            onClick={() => switchSection("tournaments")}
-            className="app-button-secondary px-4 py-2"
-          >
-            View Tournaments
-          </button>
-        </div>
-      </div>
-    </section>
   );
 
   return (
@@ -395,10 +342,7 @@ export default function CommunityPage() {
         ) : null}
 
         {activeSection === "host" ? (
-          <>
-            {hostModeContext}
-            {hostSetupPanel}
-          </>
+          hostSetupPanel
         ) : null}
 
         {activeSection === "tournaments" ? (

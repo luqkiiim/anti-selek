@@ -354,7 +354,7 @@ async function captureScreens() {
       .first()
       .click();
     await desktopPage
-      .getByRole("heading", { name: "Build the next tournament in three quick steps" })
+      .getByRole("button", { name: "Create Tournament" })
       .waitFor();
     await desktopPage.screenshot({
       path: path.join(screenshotDir, "community-host-setup-desktop.png"),
@@ -383,7 +383,7 @@ async function captureScreens() {
       .first()
       .click();
     await mobilePage
-      .getByRole("heading", { name: "Build the next tournament in three quick steps" })
+      .getByRole("button", { name: "Create Tournament" })
       .waitFor();
     await mobilePage.screenshot({
       path: path.join(screenshotDir, "community-host-setup-mobile.png"),
