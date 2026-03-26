@@ -64,6 +64,9 @@ export default function SessionPage() {
   const previousSessionStatusRef = useRef<string | null>(null);
   const pendingPagerScrollBehaviorRef = useRef<ScrollBehavior>("auto");
   const pagerSnapTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const programmaticPagerTargetRef = useRef<SessionMobileSection | null>(null);
+  const programmaticPagerReleaseTimeoutRef =
+    useRef<ReturnType<typeof setTimeout> | null>(null);
   const [user, setUser] = useState<CurrentUser | null>(null);
   const [error, setError] = useState("");
   const [endingSession, setEndingSession] = useState(false);
@@ -288,10 +291,42 @@ export default function SessionPage() {
     ? mobileSection
     : mobileSections[0]?.id ?? "session";
 
+  const clearProgrammaticPagerSync = useCallback(() => {
+    if (programmaticPagerReleaseTimeoutRef.current) {
+      clearTimeout(programmaticPagerReleaseTimeoutRef.current);
+      programmaticPagerReleaseTimeoutRef.current = null;
+    }
+
+    programmaticPagerTargetRef.current = null;
+  }, []);
+
+  const markProgrammaticPagerSync = useCallback(
+    (sectionId: SessionMobileSection, behavior: ScrollBehavior) => {
+      if (programmaticPagerReleaseTimeoutRef.current) {
+        clearTimeout(programmaticPagerReleaseTimeoutRef.current);
+      }
+
+      programmaticPagerTargetRef.current = sectionId;
+      programmaticPagerReleaseTimeoutRef.current = setTimeout(() => {
+        if (programmaticPagerTargetRef.current === sectionId) {
+          programmaticPagerTargetRef.current = null;
+        }
+
+        programmaticPagerReleaseTimeoutRef.current = null;
+      }, behavior === "smooth" ? 280 : 80);
+    },
+    []
+  );
+
   const scrollMobilePagerToSection = useCallback(
     (sectionId: SessionMobileSection, behavior: ScrollBehavior = "auto") => {
       const container = mobilePagerRef.current;
       if (!container) return;
+
+      if (pagerSnapTimeoutRef.current) {
+        clearTimeout(pagerSnapTimeoutRef.current);
+        pagerSnapTimeoutRef.current = null;
+      }
 
       const sectionIndex = mobileSections.findIndex(
         (section) => section.id === sectionId
@@ -309,6 +344,12 @@ export default function SessionPage() {
           if (retryIndex < 0) return;
 
           const retryLeft = retryIndex * retryContainer.clientWidth;
+          if (Math.abs(retryContainer.scrollLeft - retryLeft) < 4) {
+            clearProgrammaticPagerSync();
+            return;
+          }
+
+          markProgrammaticPagerSync(sectionId, behavior);
           if (typeof retryContainer.scrollTo === "function") {
             retryContainer.scrollTo({
               left: retryLeft,
@@ -324,9 +365,11 @@ export default function SessionPage() {
 
       const nextLeft = sectionIndex * container.clientWidth;
       if (Math.abs(container.scrollLeft - nextLeft) < 4) {
+        clearProgrammaticPagerSync();
         return;
       }
 
+      markProgrammaticPagerSync(sectionId, behavior);
       if (typeof container.scrollTo === "function") {
         container.scrollTo({
           left: nextLeft,
@@ -337,7 +380,7 @@ export default function SessionPage() {
 
       container.scrollLeft = nextLeft;
     },
-    [mobileSections]
+    [clearProgrammaticPagerSync, markProgrammaticPagerSync, mobileSections]
   );
 
   const updateMobileSection = useCallback(
@@ -422,12 +465,29 @@ export default function SessionPage() {
       if (pagerSnapTimeoutRef.current) {
         clearTimeout(pagerSnapTimeoutRef.current);
       }
+
+      clearProgrammaticPagerSync();
     };
-  }, []);
+  }, [clearProgrammaticPagerSync]);
 
   const handleMobilePagerScroll = useCallback(() => {
     const container = mobilePagerRef.current;
     if (!container) return;
+
+    const programmaticTarget = programmaticPagerTargetRef.current;
+    if (programmaticTarget) {
+      const targetIndex = mobileSections.findIndex(
+        (section) => section.id === programmaticTarget
+      );
+      if (targetIndex >= 0) {
+        const targetLeft = targetIndex * Math.max(container.clientWidth, 1);
+        if (Math.abs(container.scrollLeft - targetLeft) > 4) {
+          return;
+        }
+      }
+
+      clearProgrammaticPagerSync();
+    }
 
     if (pagerSnapTimeoutRef.current) {
       clearTimeout(pagerSnapTimeoutRef.current);
@@ -453,7 +513,12 @@ export default function SessionPage() {
         scrollMobilePagerToSection(settledSection, "smooth");
       }
     }, 90);
-  }, [activeMobileSection, mobileSections, scrollMobilePagerToSection]);
+  }, [
+    activeMobileSection,
+    clearProgrammaticPagerSync,
+    mobileSections,
+    scrollMobilePagerToSection,
+  ]);
 
   if (status === "loading" || !sessionData || !sessionView) {
     return (
@@ -508,7 +573,7 @@ export default function SessionPage() {
         <div
           ref={mobilePagerRef}
           onScroll={handleMobilePagerScroll}
-          className="app-swipe-track -mx-1 overflow-x-auto overscroll-x-contain scroll-smooth sm:mx-0 sm:overflow-visible"
+          className="app-swipe-track -mx-1 overflow-x-auto overscroll-x-contain sm:mx-0 sm:overflow-visible"
         >
           <div className="flex snap-x snap-mandatory sm:block sm:space-y-6">
             <section className="w-full shrink-0 snap-center sm:w-auto sm:shrink sm:snap-none">
