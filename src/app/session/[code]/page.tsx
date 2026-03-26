@@ -281,10 +281,15 @@ export default function SessionPage() {
         return;
       }
 
-      container.scrollTo({
-        left: nextLeft,
-        behavior,
-      });
+      if (typeof container.scrollTo === "function") {
+        container.scrollTo({
+          left: nextLeft,
+          behavior,
+        });
+        return;
+      }
+
+      container.scrollLeft = nextLeft;
     },
     [mobileSections]
   );
