@@ -55,6 +55,7 @@ export default function SessionPage() {
   const mobilePagerRef = useRef<HTMLDivElement | null>(null);
   const previousCompletedSessionRef = useRef(false);
   const pendingPagerScrollBehaviorRef = useRef<ScrollBehavior>("auto");
+  const pagerSnapTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [user, setUser] = useState<CurrentUser | null>(null);
   const [error, setError] = useState("");
   const [endingSession, setEndingSession] = useState(false);
@@ -343,9 +344,21 @@ export default function SessionPage() {
     };
   }, [activeMobileSection, scrollMobilePagerToSection]);
 
+  useEffect(() => {
+    return () => {
+      if (pagerSnapTimeoutRef.current) {
+        clearTimeout(pagerSnapTimeoutRef.current);
+      }
+    };
+  }, []);
+
   const handleMobilePagerScroll = useCallback(() => {
     const container = mobilePagerRef.current;
     if (!container) return;
+
+    if (pagerSnapTimeoutRef.current) {
+      clearTimeout(pagerSnapTimeoutRef.current);
+    }
 
     const sectionIndex = Math.round(
       container.scrollLeft / Math.max(container.clientWidth, 1)
@@ -356,7 +369,18 @@ export default function SessionPage() {
       pendingPagerScrollBehaviorRef.current = "auto";
       setMobileSection(nextSection);
     }
-  }, [activeMobileSection, mobileSections]);
+
+    pagerSnapTimeoutRef.current = setTimeout(() => {
+      const settledIndex = Math.round(
+        container.scrollLeft / Math.max(container.clientWidth, 1)
+      );
+      const settledSection = mobileSections[settledIndex]?.id;
+
+      if (settledSection) {
+        scrollMobilePagerToSection(settledSection, "smooth");
+      }
+    }, 90);
+  }, [activeMobileSection, mobileSections, scrollMobilePagerToSection]);
 
   if (status === "loading" || !sessionData || !sessionView) {
     return (
@@ -413,7 +437,7 @@ export default function SessionPage() {
           onScroll={handleMobilePagerScroll}
           className="app-swipe-track -mx-1 overflow-x-auto overscroll-x-contain scroll-smooth sm:mx-0 sm:overflow-visible"
         >
-          <div className="flex snap-x snap-mandatory gap-4 sm:block sm:space-y-6">
+          <div className="flex snap-x snap-mandatory sm:block sm:space-y-6">
             <section className="w-full shrink-0 snap-center sm:w-auto sm:shrink sm:snap-none">
               <SessionOverviewPanel
                 sessionTypeLabel={sessionView.sessionTypeLabel}
