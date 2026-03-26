@@ -120,13 +120,7 @@ export default function CommunityPage() {
   }
 
   const communityName = community?.name || "Community";
-  const membersCount = community?.membersCount || 0;
-  const sessionsCount = community?.sessionsCount || 0;
-  const liveTournamentsCount = activeTournaments.length;
   const isHostMode = activeSection === "host";
-  const communityDescription = `${membersCount} members, ${liveTournamentsCount} live tournament${
-    liveTournamentsCount === 1 ? "" : "s"
-  }, and ${sessionsCount} total tournaments.`;
   const sectionTabs = canManageCommunity
     ? [
         baseSectionTabs[0],
@@ -194,7 +188,7 @@ export default function CommunityPage() {
         <HeroCard
           backHref="/"
           title={communityName}
-          description={communityDescription}
+          description={isHostMode ? "Host setup" : undefined}
           actionsPosition="below"
           eyebrow={isHostMode ? "Host desk" : "Community hub"}
           meta={
@@ -210,12 +204,6 @@ export default function CommunityPage() {
                 }`}
               >
                 {community?.role || "MEMBER"}
-              </span>
-              <span className="app-chip app-chip-neutral">
-                {membersCount} members
-              </span>
-              <span className="app-chip app-chip-neutral">
-                {sessionsCount} tournaments
               </span>
               {community?.isPasswordProtected ? (
                 <span className="app-chip app-chip-warning">Protected</span>
@@ -236,7 +224,7 @@ export default function CommunityPage() {
                 </button>
                 <Link
                   href={`/community/${communityId}/admin`}
-                  className="app-button-dark"
+                  className="app-button-secondary"
                 >
                   Admin Workspace
                 </Link>
