@@ -65,6 +65,9 @@ export default function SessionPage() {
   const programmaticPagerTargetRef = useRef<SessionMobileSection | null>(null);
   const programmaticPagerReleaseTimeoutRef =
     useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pagerTouchStartXRef = useRef<number | null>(null);
+  const pagerTouchStartIndexRef = useRef<number | null>(null);
+  const pagerIsDraggingRef = useRef(false);
   const [user, setUser] = useState<CurrentUser | null>(null);
   const [error, setError] = useState("");
   const [endingSession, setEndingSession] = useState(false);
@@ -389,6 +392,41 @@ export default function SessionPage() {
     [scrollMobilePagerToSection]
   );
 
+  const settleMobilePagerFromSwipe = useCallback(
+    (endX: number | null) => {
+      const container = mobilePagerRef.current;
+      const startX = pagerTouchStartXRef.current;
+      const startIndex = pagerTouchStartIndexRef.current;
+
+      pagerIsDraggingRef.current = false;
+      pagerTouchStartXRef.current = null;
+      pagerTouchStartIndexRef.current = null;
+
+      if (!container || startX === null || startIndex === null) {
+        return;
+      }
+
+      const swipeDelta = endX === null ? 0 : startX - endX;
+      const swipeThreshold = Math.max(container.clientWidth * 0.16, 32);
+      let targetIndex = startIndex;
+
+      if (Math.abs(swipeDelta) >= swipeThreshold) {
+        targetIndex = Math.min(
+          mobileSections.length - 1,
+          Math.max(0, startIndex + (swipeDelta > 0 ? 1 : -1))
+        );
+      }
+
+      const targetSection = mobileSections[targetIndex]?.id;
+      if (!targetSection) {
+        return;
+      }
+
+      updateMobileSection(targetSection, "smooth");
+    },
+    [mobileSections, updateMobileSection]
+  );
+
   useLayoutEffect(() => {
     if (!sessionData || !sessionView) {
       previousSessionStatusRef.current = null;
@@ -456,6 +494,10 @@ export default function SessionPage() {
       clearProgrammaticPagerSync();
     }
 
+    if (pagerIsDraggingRef.current) {
+      return;
+    }
+
     if (pagerSnapTimeoutRef.current) {
       clearTimeout(pagerSnapTimeoutRef.current);
     }
@@ -475,6 +517,41 @@ export default function SessionPage() {
     clearProgrammaticPagerSync,
     mobileSections,
   ]);
+
+  const handleMobilePagerTouchStart = useCallback(
+    (event: React.TouchEvent<HTMLDivElement>) => {
+      const container = mobilePagerRef.current;
+      const touch = event.touches[0];
+      if (!container || !touch) {
+        return;
+      }
+
+      clearProgrammaticPagerSync();
+      if (pagerSnapTimeoutRef.current) {
+        clearTimeout(pagerSnapTimeoutRef.current);
+        pagerSnapTimeoutRef.current = null;
+      }
+
+      pagerIsDraggingRef.current = true;
+      pagerTouchStartXRef.current = touch.clientX;
+      pagerTouchStartIndexRef.current = Math.round(
+        container.scrollLeft / Math.max(container.clientWidth, 1)
+      );
+    },
+    [clearProgrammaticPagerSync]
+  );
+
+  const handleMobilePagerTouchEnd = useCallback(
+    (event: React.TouchEvent<HTMLDivElement>) => {
+      const touch = event.changedTouches[0];
+      settleMobilePagerFromSwipe(touch ? touch.clientX : null);
+    },
+    [settleMobilePagerFromSwipe]
+  );
+
+  const handleMobilePagerTouchCancel = useCallback(() => {
+    settleMobilePagerFromSwipe(null);
+  }, [settleMobilePagerFromSwipe]);
 
   if (status === "loading" || !sessionData || !sessionView) {
     return (
@@ -529,6 +606,9 @@ export default function SessionPage() {
         <div
           ref={mobilePagerRef}
           onScroll={handleMobilePagerScroll}
+          onTouchStart={handleMobilePagerTouchStart}
+          onTouchEnd={handleMobilePagerTouchEnd}
+          onTouchCancel={handleMobilePagerTouchCancel}
           className="app-swipe-track -mx-1 overflow-x-auto overscroll-x-contain sm:mx-0 sm:overflow-visible"
         >
           <div className="flex snap-x snap-mandatory sm:block sm:space-y-6">
