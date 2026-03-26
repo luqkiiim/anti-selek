@@ -66,30 +66,28 @@ export function LiveCourtsPanel({
   onApproveScore,
   onReopenScoreForEdit,
 }: LiveCourtsPanelProps) {
+  const showCreateMatchesAction =
+    sessionStatus === SessionStatus.ACTIVE && isAdmin;
+  const canCreateMatches = creatableOpenCourtCount > 0 && !creatingOpenMatches;
+
   return (
     <SectionCard
       eyebrow={sessionStatus === SessionStatus.ACTIVE ? "Court board" : "Court layout"}
       title={sessionStatus === SessionStatus.ACTIVE ? "Live Courts" : "Courts"}
       action={
-        <div className="flex flex-wrap items-center justify-end gap-2">
-          <span className="app-chip app-chip-accent">{activeMatchesCount} in use</span>
-          <span className="app-chip app-chip-neutral">{readyCourtsCount} ready</span>
-          {sessionStatus === SessionStatus.ACTIVE &&
-          isAdmin &&
-          creatableOpenCourtCount > 0 ? (
+        <div className="flex w-full min-w-0 items-center justify-between gap-2 sm:w-auto sm:flex-wrap sm:justify-end">
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
+            <span className="app-chip app-chip-accent">{activeMatchesCount} in use</span>
+            <span className="app-chip app-chip-neutral">{readyCourtsCount} ready</span>
+          </div>
+          {showCreateMatchesAction ? (
             <button
               type="button"
               onClick={() => onCreateMatchesForCourts(creatableOpenCourtIds)}
-              disabled={creatingOpenMatches}
-              className="app-button-primary"
+              disabled={!canCreateMatches}
+              className="app-button-primary shrink-0 whitespace-nowrap px-4 py-2.5"
             >
-              {creatingOpenMatches
-                ? creatableOpenCourtCount === 1
-                  ? "Creating..."
-                  : `Creating ${creatableOpenCourtCount}...`
-                : creatableOpenCourtCount === 1
-                  ? "Create Match"
-                  : `Create ${creatableOpenCourtCount} Matches`}
+              {creatingOpenMatches ? "Creating..." : "Create Matches"}
             </button>
           ) : null}
         </div>
