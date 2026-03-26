@@ -11,6 +11,7 @@ interface LiveCourtsPanelProps {
   currentUserId: string;
   isAdmin: boolean;
   isClaimedUser: boolean;
+  confirmingScoreMatchId: string | null;
   activeMatchesCount: number;
   readyCourtsCount: number;
   creatableOpenCourtCount: number;
@@ -30,7 +31,9 @@ interface LiveCourtsPanelProps {
     team: "team1" | "team2",
     value: string
   ) => void;
-  onOpenScoreSubmissionDraft: (match: Match) => void;
+  onRequestScoreSubmitConfirmation: (matchId: string) => void;
+  onCancelScoreSubmitConfirmation: (matchId: string) => void;
+  onSubmitScore: (matchId: string) => void;
   onApproveScore: (matchId: string) => void;
   onReopenScoreForEdit: (matchId: string) => void;
 }
@@ -41,6 +44,7 @@ export function LiveCourtsPanel({
   currentUserId,
   isAdmin,
   isClaimedUser,
+  confirmingScoreMatchId,
   activeMatchesCount,
   readyCourtsCount,
   creatableOpenCourtCount,
@@ -56,7 +60,9 @@ export function LiveCourtsPanel({
   onReshuffleMatch,
   onUndoMatchSelection,
   onHandleScoreChange,
-  onOpenScoreSubmissionDraft,
+  onRequestScoreSubmitConfirmation,
+  onCancelScoreSubmitConfirmation,
+  onSubmitScore,
   onApproveScore,
   onReopenScoreForEdit,
 }: LiveCourtsPanelProps) {
@@ -101,6 +107,7 @@ export function LiveCourtsPanel({
               currentUserId={currentUserId}
               isAdmin={isAdmin}
               isClaimedUser={isClaimedUser}
+              confirmingScoreMatchId={confirmingScoreMatchId}
               reshufflingCourtId={reshufflingCourtId}
               undoingCourtId={undoingCourtId}
               reopeningMatchId={reopeningMatchId}
@@ -110,7 +117,9 @@ export function LiveCourtsPanel({
               onReshuffleMatch={onReshuffleMatch}
               onUndoMatchSelection={onUndoMatchSelection}
               onHandleScoreChange={onHandleScoreChange}
-              onOpenScoreSubmissionDraft={onOpenScoreSubmissionDraft}
+              onRequestScoreSubmitConfirmation={onRequestScoreSubmitConfirmation}
+              onCancelScoreSubmitConfirmation={onCancelScoreSubmitConfirmation}
+              onSubmitScore={onSubmitScore}
               onApproveScore={onApproveScore}
               onReopenScoreForEdit={onReopenScoreForEdit}
             />

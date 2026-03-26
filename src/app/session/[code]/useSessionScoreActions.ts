@@ -7,9 +7,7 @@ import {
   applyScoreSubmission,
 } from "./sessionDataMutations";
 import type {
-  Match,
   MatchScores,
-  ScoreSubmissionDraft,
 } from "@/components/session/sessionTypes";
 import { MatchStatus } from "@/types/enums";
 import type { UseSessionMatchActionsDependencies } from "./sessionMatchActionTypes";
@@ -27,9 +25,21 @@ export function useSessionScoreActions({
   const [submittingMatchId, setSubmittingMatchId] = useState<string | null>(
     null
   );
-  const [scoreSubmissionDraft, setScoreSubmissionDraft] =
-    useState<ScoreSubmissionDraft | null>(null);
+  const [confirmingScoreMatchId, setConfirmingScoreMatchId] = useState<
+    string | null
+  >(null);
   const [reopeningMatchId, setReopeningMatchId] = useState<string | null>(null);
+
+  const getParsedScores = (matchId: string) => {
+    const scores = matchScores[matchId];
+    if (!scores || !scores.team1 || !scores.team2) return null;
+
+    const team1Score = Number.parseInt(scores.team1, 10);
+    const team2Score = Number.parseInt(scores.team2, 10);
+    if (Number.isNaN(team1Score) || Number.isNaN(team2Score)) return null;
+
+    return { team1Score, team2Score };
+  };
 
   const handleScoreChange = (
     matchId: string,
@@ -43,56 +53,45 @@ export function useSessionScoreActions({
         [team]: value,
       },
     }));
+    setConfirmingScoreMatchId((prev) => (prev === matchId ? null : prev));
   };
 
-  const openScoreSubmissionDraft = (match: Match) => {
-    const scores = matchScores[match.id];
-    if (!scores || !scores.team1 || !scores.team2) return;
-
-    const team1Score = parseInt(scores.team1, 10);
-    const team2Score = parseInt(scores.team2, 10);
-    if (Number.isNaN(team1Score) || Number.isNaN(team2Score)) return;
-
-    setScoreSubmissionDraft({
-      matchId: match.id,
-      team1Names: [match.team1User1.name, match.team1User2.name],
-      team2Names: [match.team2User1.name, match.team2User2.name],
-      team1Score,
-      team2Score,
-    });
+  const requestScoreSubmitConfirmation = (matchId: string) => {
+    if (!getParsedScores(matchId)) return;
+    setConfirmingScoreMatchId(matchId);
   };
 
-  const closeScoreSubmissionDraft = () => {
-    if (
-      scoreSubmissionDraft &&
-      submittingMatchId === scoreSubmissionDraft.matchId
-    ) {
+  const cancelScoreSubmitConfirmation = (matchId: string) => {
+    if (submittingMatchId === matchId) {
       return;
     }
-    setScoreSubmissionDraft(null);
+    setConfirmingScoreMatchId((prev) => (prev === matchId ? null : prev));
   };
 
-  const submitScore = async (draft: ScoreSubmissionDraft) => {
-    setSubmittingMatchId(draft.matchId);
+  const submitScore = async (matchId: string) => {
+    const parsedScores = getParsedScores(matchId);
+    if (!parsedScores) return;
+
+    setSubmittingMatchId(matchId);
     setError("");
 
     try {
-      const res = await fetch(`/api/matches/${draft.matchId}/score`, {
+      const res = await fetch(`/api/matches/${matchId}/score`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          team1Score: draft.team1Score,
-          team2Score: draft.team2Score,
+          team1Score: parsedScores.team1Score,
+          team2Score: parsedScores.team2Score,
         }),
       });
       const data = await safeJson(res);
       if (res.ok) {
         setMatchScores((prev) => {
           const nextScores = { ...prev };
-          delete nextScores[draft.matchId];
+          delete nextScores[matchId];
           return nextScores;
         });
-        setScoreSubmissionDraft(null);
+        setConfirmingScoreMatchId((prev) => (prev === matchId ? null : prev));
         patchSessionData((current) =>
           data.status === MatchStatus.COMPLETED
             ? applyScoreApproval(current, data)
@@ -101,12 +100,10 @@ export function useSessionScoreActions({
         scheduleSessionRefresh();
       } else {
         setError(data.error || "Failed to submit score");
-        setScoreSubmissionDraft(null);
       }
     } catch (err) {
       console.error(err);
       setError("Network error submitting score");
-      setScoreSubmissionDraft(null);
     } finally {
       setSubmittingMatchId(null);
     }
@@ -168,11 +165,11 @@ export function useSessionScoreActions({
   return {
     matchScores,
     submittingMatchId,
-    scoreSubmissionDraft,
+    confirmingScoreMatchId,
     reopeningMatchId,
     handleScoreChange,
-    openScoreSubmissionDraft,
-    closeScoreSubmissionDraft,
+    requestScoreSubmitConfirmation,
+    cancelScoreSubmitConfirmation,
     submitScore,
     approveScore,
     reopenScoreForEdit,

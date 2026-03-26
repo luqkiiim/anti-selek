@@ -10,6 +10,7 @@ interface LiveCourtCardProps {
   currentUserId: string;
   isAdmin: boolean;
   isClaimedUser: boolean;
+  confirmingScoreMatchId: string | null;
   reshufflingCourtId: string | null;
   undoingCourtId: string | null;
   reopeningMatchId: string | null;
@@ -23,7 +24,9 @@ interface LiveCourtCardProps {
     team: "team1" | "team2",
     value: string
   ) => void;
-  onOpenScoreSubmissionDraft: (match: Match) => void;
+  onRequestScoreSubmitConfirmation: (matchId: string) => void;
+  onCancelScoreSubmitConfirmation: (matchId: string) => void;
+  onSubmitScore: (matchId: string) => void;
   onApproveScore: (matchId: string) => void;
   onReopenScoreForEdit: (matchId: string) => void;
 }
@@ -34,6 +37,7 @@ export function LiveCourtCard({
   currentUserId,
   isAdmin,
   isClaimedUser,
+  confirmingScoreMatchId,
   reshufflingCourtId,
   undoingCourtId,
   reopeningMatchId,
@@ -43,7 +47,9 @@ export function LiveCourtCard({
   onReshuffleMatch,
   onUndoMatchSelection,
   onHandleScoreChange,
-  onOpenScoreSubmissionDraft,
+  onRequestScoreSubmitConfirmation,
+  onCancelScoreSubmitConfirmation,
+  onSubmitScore,
   onApproveScore,
   onReopenScoreForEdit,
 }: LiveCourtCardProps) {
@@ -99,11 +105,14 @@ export function LiveCourtCard({
             currentUserId={currentUserId}
             isAdmin={isAdmin}
             isClaimedUser={isClaimedUser}
+            confirmingScoreMatchId={confirmingScoreMatchId}
             reopeningMatchId={reopeningMatchId}
             submittingMatchId={submittingMatchId}
             matchScores={matchScores}
             onHandleScoreChange={onHandleScoreChange}
-            onOpenScoreSubmissionDraft={onOpenScoreSubmissionDraft}
+            onRequestScoreSubmitConfirmation={onRequestScoreSubmitConfirmation}
+            onCancelScoreSubmitConfirmation={onCancelScoreSubmitConfirmation}
+            onSubmitScore={onSubmitScore}
             onApproveScore={onApproveScore}
             onReopenScoreForEdit={onReopenScoreForEdit}
           />

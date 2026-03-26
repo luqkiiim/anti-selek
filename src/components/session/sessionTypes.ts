@@ -89,14 +89,6 @@ export interface ManualMatchFormState {
   team2User2Id: string;
 }
 
-export interface ScoreSubmissionDraft {
-  matchId: string;
-  team1Names: [string, string];
-  team2Names: [string, string];
-  team1Score: number;
-  team2Score: number;
-}
-
 export interface PreferenceEditorState {
   userId: string;
   top: number;

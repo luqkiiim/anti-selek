@@ -11,6 +11,7 @@ interface LiveMatchCardProps {
   currentUserId: string;
   isAdmin: boolean;
   isClaimedUser: boolean;
+  confirmingScoreMatchId: string | null;
   reopeningMatchId: string | null;
   submittingMatchId: string | null;
   matchScores: MatchScores;
@@ -19,7 +20,9 @@ interface LiveMatchCardProps {
     team: "team1" | "team2",
     value: string
   ) => void;
-  onOpenScoreSubmissionDraft: (match: Match) => void;
+  onRequestScoreSubmitConfirmation: (matchId: string) => void;
+  onCancelScoreSubmitConfirmation: (matchId: string) => void;
+  onSubmitScore: (matchId: string) => void;
   onApproveScore: (matchId: string) => void;
   onReopenScoreForEdit: (matchId: string) => void;
 }
@@ -50,6 +53,7 @@ function TeamNames({
 interface ScoreSlotProps {
   canEdit: boolean;
   scoreValue: string;
+  readonlyScore?: string | number;
   pendingScore?: number;
   onScoreChange: (value: string) => void;
 }
@@ -57,6 +61,7 @@ interface ScoreSlotProps {
 function ScoreSlot({
   canEdit,
   scoreValue,
+  readonlyScore,
   pendingScore,
   onScoreChange,
 }: ScoreSlotProps) {
@@ -73,15 +78,19 @@ function ScoreSlot({
     );
   }
 
+  const displayScore =
+    readonlyScore ??
+    (typeof pendingScore === "number" ? pendingScore.toString() : null);
+
   return (
     <div
       className={`flex h-10 w-10 items-center justify-center rounded-lg border bg-white text-lg font-black tabular-nums sm:h-11 sm:w-11 sm:text-xl ${
-        typeof pendingScore === "number"
+        displayScore !== null
           ? "border-gray-200 text-gray-900"
           : "border-gray-100 text-gray-300"
       }`}
     >
-      {typeof pendingScore === "number" ? pendingScore : "-"}
+      {displayScore ?? "-"}
     </div>
   );
 }
@@ -91,11 +100,14 @@ export function LiveMatchCard({
   currentUserId,
   isAdmin,
   isClaimedUser,
+  confirmingScoreMatchId,
   reopeningMatchId,
   submittingMatchId,
   matchScores,
   onHandleScoreChange,
-  onOpenScoreSubmissionDraft,
+  onRequestScoreSubmitConfirmation,
+  onCancelScoreSubmitConfirmation,
+  onSubmitScore,
   onApproveScore,
   onReopenScoreForEdit,
 }: LiveMatchCardProps) {
@@ -125,6 +137,8 @@ export function LiveMatchCard({
       : isAdmin || isParticipant);
   const scores = matchScores[match.id] || { team1: "", team2: "" };
   const isPendingApproval = match.status === MatchStatus.PENDING_APPROVAL;
+  const isConfirmingSubmission = confirmingScoreMatchId === match.id;
+  const canEditScores = canEdit && !isConfirmingSubmission;
 
   return (
     <div className="space-y-2.5">
@@ -141,14 +155,16 @@ export function LiveMatchCard({
             playerTwoName={match.team1User2.name}
           />
           <ScoreSlot
-            canEdit={canEdit}
+            canEdit={canEditScores}
             scoreValue={scores.team1}
+            readonlyScore={isConfirmingSubmission ? scores.team1 : undefined}
             pendingScore={isPendingApproval ? match.team1Score : undefined}
             onScoreChange={(value) => onHandleScoreChange(match.id, "team1", value)}
           />
           <ScoreSlot
-            canEdit={canEdit}
+            canEdit={canEditScores}
             scoreValue={scores.team2}
+            readonlyScore={isConfirmingSubmission ? scores.team2 : undefined}
             pendingScore={isPendingApproval ? match.team2Score : undefined}
             onScoreChange={(value) => onHandleScoreChange(match.id, "team2", value)}
           />
@@ -163,8 +179,11 @@ export function LiveMatchCard({
       {canEdit ? (
         <ScoreEntryControls
           canSubmit={!!scores.team1 && !!scores.team2}
+          isConfirming={isConfirmingSubmission}
           isSubmitting={submittingMatchId === match.id}
-          onSubmit={() => onOpenScoreSubmissionDraft(match)}
+          onSubmit={() => onRequestScoreSubmitConfirmation(match.id)}
+          onConfirm={() => onSubmitScore(match.id)}
+          onEdit={() => onCancelScoreSubmitConfirmation(match.id)}
         />
       ) : null}
 

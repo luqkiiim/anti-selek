@@ -7,7 +7,6 @@ import { FlashMessage } from "@/components/ui/chrome";
 import { LiveCourtsPanel } from "@/components/session/LiveCourtsPanel";
 import { LiveStandingsTable } from "@/components/session/LiveStandingsTable";
 import { ManualMatchModal } from "@/components/session/ManualMatchModal";
-import { ScoreSubmissionModal } from "@/components/session/ScoreSubmissionModal";
 import { SessionActionConfirmModal } from "@/components/session/SessionActionConfirmModal";
 import { SessionOverviewPanel } from "@/components/session/SessionOverviewPanel";
 import { SessionPodium } from "@/components/session/SessionPodium";
@@ -73,7 +72,7 @@ export default function SessionPage() {
   const {
     matchScores,
     submittingMatchId,
-    scoreSubmissionDraft,
+    confirmingScoreMatchId,
     reopeningMatchId,
     reshufflingCourtId,
     undoingCourtId,
@@ -92,8 +91,8 @@ export default function SessionPage() {
     closeCourtActionDraft,
     confirmCourtAction,
     handleScoreChange,
-    openScoreSubmissionDraft,
-    closeScoreSubmissionDraft,
+    requestScoreSubmitConfirmation,
+    cancelScoreSubmitConfirmation,
     submitScore,
     approveScore,
     reopenScoreForEdit,
@@ -289,6 +288,7 @@ export default function SessionPage() {
             currentUserId={currentUserId}
             isAdmin={isAdmin}
             isClaimedUser={isClaimedUser}
+            confirmingScoreMatchId={confirmingScoreMatchId}
             activeMatchesCount={sessionView.activeMatchesCount}
             readyCourtsCount={sessionView.readyCourtsCount}
             creatableOpenCourtCount={sessionView.creatableOpenCourtCount}
@@ -304,7 +304,9 @@ export default function SessionPage() {
             onReshuffleMatch={reshuffleMatch}
             onUndoMatchSelection={undoMatchSelection}
             onHandleScoreChange={handleScoreChange}
-            onOpenScoreSubmissionDraft={openScoreSubmissionDraft}
+            onRequestScoreSubmitConfirmation={requestScoreSubmitConfirmation}
+            onCancelScoreSubmitConfirmation={cancelScoreSubmitConfirmation}
+            onSubmitScore={submitScore}
             onApproveScore={approveScore}
             onReopenScoreForEdit={reopenScoreForEdit}
           />
@@ -336,18 +338,6 @@ export default function SessionPage() {
           onTogglePreferenceEditor={togglePreferenceEditor}
         />
       </main>
-
-      {scoreSubmissionDraft ? (
-        <ScoreSubmissionModal
-          team1Names={scoreSubmissionDraft.team1Names}
-          team2Names={scoreSubmissionDraft.team2Names}
-          team1Score={scoreSubmissionDraft.team1Score}
-          team2Score={scoreSubmissionDraft.team2Score}
-          isSubmitting={submittingMatchId === scoreSubmissionDraft.matchId}
-          onClose={closeScoreSubmissionDraft}
-          onConfirm={() => void submitScore(scoreSubmissionDraft)}
-        />
-      ) : null}
 
       {courtActionDraft ? (
         <SessionActionConfirmModal
