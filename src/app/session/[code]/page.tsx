@@ -541,6 +541,37 @@ export default function SessionPage() {
     [clearProgrammaticPagerSync]
   );
 
+  const handleMobilePagerTouchMove = useCallback(
+    (event: React.TouchEvent<HTMLDivElement>) => {
+      const container = mobilePagerRef.current;
+      const touch = event.touches[0];
+      const startX = pagerTouchStartXRef.current;
+      const startIndex = pagerTouchStartIndexRef.current;
+
+      if (!container || !touch || startX === null || startIndex === null) {
+        return;
+      }
+
+      const deltaX = touch.clientX - startX;
+      const isAtFirstSection = startIndex === 0;
+      const isAtLastSection = startIndex === mobileSections.length - 1;
+      const isPushingPastFirst = isAtFirstSection && deltaX > 0;
+      const isPushingPastLast = isAtLastSection && deltaX < 0;
+
+      if (!isPushingPastFirst && !isPushingPastLast) {
+        return;
+      }
+
+      event.preventDefault();
+
+      const lockedLeft = startIndex * container.clientWidth;
+      if (Math.abs(container.scrollLeft - lockedLeft) > 1) {
+        container.scrollLeft = lockedLeft;
+      }
+    },
+    [mobileSections.length]
+  );
+
   const handleMobilePagerTouchEnd = useCallback(
     (event: React.TouchEvent<HTMLDivElement>) => {
       const touch = event.changedTouches[0];
@@ -607,9 +638,10 @@ export default function SessionPage() {
           ref={mobilePagerRef}
           onScroll={handleMobilePagerScroll}
           onTouchStart={handleMobilePagerTouchStart}
+          onTouchMove={handleMobilePagerTouchMove}
           onTouchEnd={handleMobilePagerTouchEnd}
           onTouchCancel={handleMobilePagerTouchCancel}
-          className="app-swipe-track -mx-1 overflow-x-auto overscroll-x-contain sm:mx-0 sm:overflow-visible"
+          className="app-swipe-track -mx-1 overflow-x-auto overscroll-x-none sm:mx-0 sm:overflow-visible"
         >
           <div className="flex snap-x snap-mandatory sm:block sm:space-y-6">
             <section className="w-full shrink-0 snap-center sm:w-auto sm:shrink sm:snap-none">
