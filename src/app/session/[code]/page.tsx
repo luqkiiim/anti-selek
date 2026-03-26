@@ -250,11 +250,6 @@ export default function SessionPage() {
               <h1 className="truncate text-lg font-semibold leading-tight text-gray-900 sm:text-xl">
                 {sessionData.name}
               </h1>
-              <div className="mt-1 flex flex-wrap items-center gap-2">
-                <span className="app-chip app-chip-neutral">
-                  {sessionData.status}
-                </span>
-              </div>
             </div>
           </div>
         </div>
