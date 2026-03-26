@@ -121,6 +121,9 @@ export default function CommunityPage() {
 
   const communityName = community?.name || "Community";
   const isHostMode = activeSection === "host";
+  const communityRoleLabel = canManageCommunity
+    ? "ADMIN"
+    : community?.role || "MEMBER";
   const sectionTabs = canManageCommunity
     ? [
         baseSectionTabs[0],
@@ -193,42 +196,29 @@ export default function CommunityPage() {
           eyebrow={isHostMode ? "Host desk" : "Community hub"}
           meta={
             <>
-              {isHostMode ? (
-                <span className="app-chip app-chip-accent">Host mode</span>
-              ) : null}
-              <span
-                className={`app-chip ${
-                  community?.role === "ADMIN"
-                    ? "app-chip-accent"
-                    : "app-chip-neutral"
-                }`}
-              >
-                {community?.role || "MEMBER"}
-              </span>
-              {community?.isPasswordProtected ? (
-                <span className="app-chip app-chip-warning">Protected</span>
+              {canManageCommunity ? (
+                <Link
+                  href={`/community/${communityId}/admin`}
+                  className="app-chip app-chip-accent transition hover:opacity-90"
+                >
+                  {communityRoleLabel}
+                </Link>
               ) : (
-                <span className="app-chip app-chip-success">Open access</span>
+                <span className="app-chip app-chip-neutral">
+                  {communityRoleLabel}
+                </span>
               )}
             </>
           }
           actions={
             canManageCommunity ? (
-              <>
-                <button
-                  type="button"
-                  onClick={handleHostButtonClick}
-                  className="app-button-primary"
-                >
-                  {isHostMode ? "Exit Host Setup" : "Open Host Setup"}
-                </button>
-                <Link
-                  href={`/community/${communityId}/admin`}
-                  className="app-button-secondary"
-                >
-                  Admin Workspace
-                </Link>
-              </>
+              <button
+                type="button"
+                onClick={handleHostButtonClick}
+                className="app-button-primary"
+              >
+                {isHostMode ? "Exit Host Setup" : "Open Host Setup"}
+              </button>
             ) : null
           }
         />
