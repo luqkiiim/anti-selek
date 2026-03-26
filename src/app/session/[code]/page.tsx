@@ -1,10 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useParams, useRouter } from "next/navigation";
 import { FlashMessage } from "@/components/ui/chrome";
 import { LiveCourtsPanel } from "@/components/session/LiveCourtsPanel";
+import { SessionMobileSectionNav } from "@/components/session/SessionMobileSectionNav";
 import { LiveStandingsTable } from "@/components/session/LiveStandingsTable";
 import { ManualMatchModal } from "@/components/session/ManualMatchModal";
 import { SessionActionConfirmModal } from "@/components/session/SessionActionConfirmModal";
@@ -26,16 +27,40 @@ const EMPTY_PLAYER_SESSION_STATS = {
   losses: 0,
 };
 
+type SessionMobileSection = "session" | "courts" | "standings" | "results";
+
+const LIVE_MOBILE_SECTIONS: Array<{
+  id: SessionMobileSection;
+  label: string;
+}> = [
+  { id: "session", label: "Session" },
+  { id: "courts", label: "Courts" },
+  { id: "standings", label: "Standings" },
+];
+
+const COMPLETED_MOBILE_SECTIONS: Array<{
+  id: SessionMobileSection;
+  label: string;
+}> = [
+  { id: "session", label: "Session" },
+  { id: "results", label: "Results" },
+];
+
 export default function SessionPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
   const params = useParams();
   const code = params?.code as string;
 
+  const mobilePagerRef = useRef<HTMLDivElement | null>(null);
+  const previousCompletedSessionRef = useRef(false);
+  const pendingPagerScrollBehaviorRef = useRef<ScrollBehavior>("auto");
   const [user, setUser] = useState<CurrentUser | null>(null);
   const [error, setError] = useState("");
   const [endingSession, setEndingSession] = useState(false);
   const [showEndSessionConfirm, setShowEndSessionConfirm] = useState(false);
+  const [mobileSection, setMobileSection] =
+    useState<SessionMobileSection>("courts");
 
   const safeJson = useCallback(async (res: Response) => {
     const text = await res.text();
@@ -228,6 +253,99 @@ export default function SessionPage() {
     manualCourtId,
     openPreferenceEditor,
   });
+  const mobileSections = useMemo(
+    () =>
+      sessionView.isCompletedSession
+        ? COMPLETED_MOBILE_SECTIONS
+        : LIVE_MOBILE_SECTIONS,
+    [sessionView.isCompletedSession]
+  );
+  const activeMobileSection = mobileSections.some(
+    (section) => section.id === mobileSection
+  )
+    ? mobileSection
+    : mobileSections[0]?.id ?? "session";
+
+  const scrollMobilePagerToSection = useCallback(
+    (sectionId: SessionMobileSection, behavior: ScrollBehavior = "auto") => {
+      const container = mobilePagerRef.current;
+      if (!container) return;
+
+      const sectionIndex = mobileSections.findIndex(
+        (section) => section.id === sectionId
+      );
+      if (sectionIndex < 0) return;
+
+      const nextLeft = sectionIndex * container.clientWidth;
+      if (Math.abs(container.scrollLeft - nextLeft) < 4) {
+        return;
+      }
+
+      container.scrollTo({
+        left: nextLeft,
+        behavior,
+      });
+    },
+    [mobileSections]
+  );
+
+  const updateMobileSection = useCallback(
+    (sectionId: SessionMobileSection, behavior: ScrollBehavior = "smooth") => {
+      pendingPagerScrollBehaviorRef.current = behavior;
+      setMobileSection(sectionId);
+    },
+    []
+  );
+
+  useEffect(() => {
+    const behavior = pendingPagerScrollBehaviorRef.current;
+    pendingPagerScrollBehaviorRef.current = "auto";
+    scrollMobilePagerToSection(activeMobileSection, behavior);
+  }, [activeMobileSection, scrollMobilePagerToSection]);
+
+  useEffect(() => {
+    const wasCompleted = previousCompletedSessionRef.current;
+
+    if (sessionView.isCompletedSession) {
+      if (!wasCompleted || activeMobileSection !== "results") {
+        updateMobileSection("results", "auto");
+      }
+    } else if (wasCompleted || activeMobileSection === "results") {
+      updateMobileSection("courts", "auto");
+    }
+
+    previousCompletedSessionRef.current = sessionView.isCompletedSession;
+  }, [
+    activeMobileSection,
+    sessionView.isCompletedSession,
+    updateMobileSection,
+  ]);
+
+  useEffect(() => {
+    const handleResize = () => {
+      scrollMobilePagerToSection(activeMobileSection, "auto");
+    };
+
+    window.addEventListener("resize", handleResize);
+    return () => {
+      window.removeEventListener("resize", handleResize);
+    };
+  }, [activeMobileSection, scrollMobilePagerToSection]);
+
+  const handleMobilePagerScroll = useCallback(() => {
+    const container = mobilePagerRef.current;
+    if (!container) return;
+
+    const sectionIndex = Math.round(
+      container.scrollLeft / Math.max(container.clientWidth, 1)
+    );
+    const nextSection = mobileSections[sectionIndex]?.id;
+
+    if (nextSection && nextSection !== activeMobileSection) {
+      pendingPagerScrollBehaviorRef.current = "auto";
+      setMobileSection(nextSection);
+    }
+  }, [activeMobileSection, mobileSections]);
 
   return (
     <div className="app-page">
@@ -255,83 +373,117 @@ export default function SessionPage() {
         </div>
       </nav>
 
-      <main className="app-shell max-w-7xl space-y-6">
-        <SessionOverviewPanel
-          sessionTypeLabel={sessionView.sessionTypeLabel}
-          sessionModeLabel={sessionView.sessionModeLabel}
-          playersCount={sessionData.players.length}
-          guestPlayersCount={sessionView.guestPlayersCount}
-          activeMatchesCount={sessionView.activeMatchesCount}
-          completedMatchesCount={sessionView.completedMatchesCount}
-          pausedPlayersCount={sessionView.pausedPlayersCount}
-          sessionStatus={sessionData.status}
-          canStartSession={isAdmin && sessionData.status === SessionStatus.WAITING}
-          canEndSession={isAdmin && sessionData.status === SessionStatus.ACTIVE}
-          canOpenRoster={isAdmin && !sessionView.isCompletedSession}
-          onStartSession={startSession}
-          onOpenRoster={openRosterModal}
-          onEndSession={openEndSessionConfirm}
-          onOpenMatchHistory={() => router.push(`/session/${code}/history`)}
-        />
+      <main className="app-shell max-w-7xl space-y-4 sm:space-y-6">
+        <div className="sticky top-[4.75rem] z-20 sm:hidden">
+          <SessionMobileSectionNav
+            sections={mobileSections}
+            activeSection={activeMobileSection}
+            onSelect={(sectionId) =>
+              updateMobileSection(sectionId as SessionMobileSection)
+            }
+          />
+        </div>
 
         {error ? <FlashMessage tone="error">{error}</FlashMessage> : null}
 
-        {!sessionView.isCompletedSession ? (
-          <LiveCourtsPanel
-            sessionStatus={sessionData.status}
-            courts={sessionData.courts}
-            currentUserId={currentUserId}
-            isAdmin={isAdmin}
-            isClaimedUser={isClaimedUser}
-            confirmingScoreMatchId={confirmingScoreMatchId}
-            activeMatchesCount={sessionView.activeMatchesCount}
-            readyCourtsCount={sessionView.readyCourtsCount}
-            creatableOpenCourtCount={sessionView.creatableOpenCourtCount}
-            creatableOpenCourtIds={sessionView.creatableOpenCourtIds}
-            creatingOpenMatches={creatingOpenMatches}
-            reshufflingCourtId={reshufflingCourtId}
-            undoingCourtId={undoingCourtId}
-            reopeningMatchId={reopeningMatchId}
-            submittingMatchId={submittingMatchId}
-            matchScores={matchScores}
-            onCreateMatchesForCourts={createMatchesForCourts}
-            onOpenManualMatchModal={openManualMatchModal}
-            onReshuffleMatch={reshuffleMatch}
-            onUndoMatchSelection={undoMatchSelection}
-            onHandleScoreChange={handleScoreChange}
-            onRequestScoreSubmitConfirmation={requestScoreSubmitConfirmation}
-            onCancelScoreSubmitConfirmation={cancelScoreSubmitConfirmation}
-            onSubmitScore={submitScore}
-            onApproveScore={approveScore}
-            onReopenScoreForEdit={reopenScoreForEdit}
-          />
-        ) : null}
+        <div
+          ref={mobilePagerRef}
+          onScroll={handleMobilePagerScroll}
+          className="app-swipe-track -mx-1 overflow-x-auto overscroll-x-contain scroll-smooth sm:mx-0 sm:overflow-visible"
+        >
+          <div className="flex snap-x snap-mandatory gap-4 sm:block sm:space-y-6">
+            <section className="w-full shrink-0 snap-center sm:w-auto sm:shrink sm:snap-none">
+              <SessionOverviewPanel
+                sessionTypeLabel={sessionView.sessionTypeLabel}
+                sessionModeLabel={sessionView.sessionModeLabel}
+                playersCount={sessionData.players.length}
+                guestPlayersCount={sessionView.guestPlayersCount}
+                activeMatchesCount={sessionView.activeMatchesCount}
+                completedMatchesCount={sessionView.completedMatchesCount}
+                pausedPlayersCount={sessionView.pausedPlayersCount}
+                sessionStatus={sessionData.status}
+                canStartSession={
+                  isAdmin && sessionData.status === SessionStatus.WAITING
+                }
+                canEndSession={
+                  isAdmin && sessionData.status === SessionStatus.ACTIVE
+                }
+                canOpenRoster={isAdmin && !sessionView.isCompletedSession}
+                onStartSession={startSession}
+                onOpenRoster={openRosterModal}
+                onEndSession={openEndSessionConfirm}
+                onOpenMatchHistory={() => router.push(`/session/${code}/history`)}
+              />
+            </section>
 
-        {sessionView.isCompletedSession ? (
-          <SessionPodium
-            sessionType={sessionData.type}
-            players={sessionView.sortedPlayers}
-            pointDiffByUserId={sessionView.pointDiffByUserId}
-            playerStatsByUserId={sessionView.playerStatsByUserId}
-          />
-        ) : null}
+            {!sessionView.isCompletedSession ? (
+              <section className="w-full shrink-0 snap-center sm:w-auto sm:shrink sm:snap-none">
+                <LiveCourtsPanel
+                  sessionStatus={sessionData.status}
+                  courts={sessionData.courts}
+                  currentUserId={currentUserId}
+                  isAdmin={isAdmin}
+                  isClaimedUser={isClaimedUser}
+                  confirmingScoreMatchId={confirmingScoreMatchId}
+                  activeMatchesCount={sessionView.activeMatchesCount}
+                  readyCourtsCount={sessionView.readyCourtsCount}
+                  creatableOpenCourtCount={sessionView.creatableOpenCourtCount}
+                  creatableOpenCourtIds={sessionView.creatableOpenCourtIds}
+                  creatingOpenMatches={creatingOpenMatches}
+                  reshufflingCourtId={reshufflingCourtId}
+                  undoingCourtId={undoingCourtId}
+                  reopeningMatchId={reopeningMatchId}
+                  submittingMatchId={submittingMatchId}
+                  matchScores={matchScores}
+                  onCreateMatchesForCourts={createMatchesForCourts}
+                  onOpenManualMatchModal={openManualMatchModal}
+                  onReshuffleMatch={reshuffleMatch}
+                  onUndoMatchSelection={undoMatchSelection}
+                  onHandleScoreChange={handleScoreChange}
+                  onRequestScoreSubmitConfirmation={
+                    requestScoreSubmitConfirmation
+                  }
+                  onCancelScoreSubmitConfirmation={
+                    cancelScoreSubmitConfirmation
+                  }
+                  onSubmitScore={submitScore}
+                  onApproveScore={approveScore}
+                  onReopenScoreForEdit={reopenScoreForEdit}
+                />
+              </section>
+            ) : null}
 
-        <LiveStandingsTable
-          sessionType={sessionData.type}
-          sessionStatus={sessionData.status}
-          players={sessionView.sortedPlayers}
-          currentUserId={currentUserId}
-          isAdmin={isAdmin}
-          pointDiffByUserId={sessionView.pointDiffByUserId}
-          savingPreferencesFor={savingPreferencesFor}
-          getPlayerProfileHref={sessionView.getPlayerProfileHref}
-          calculatePlayerSessionStats={(userId) =>
-            sessionView.playerStatsByUserId.get(userId) ??
-            EMPTY_PLAYER_SESSION_STATS
-          }
-          onTogglePause={togglePausePlayer}
-          onTogglePreferenceEditor={togglePreferenceEditor}
-        />
+            <section className="w-full shrink-0 snap-center sm:w-auto sm:shrink sm:snap-none">
+              <div className="space-y-6">
+                {sessionView.isCompletedSession ? (
+                  <SessionPodium
+                    sessionType={sessionData.type}
+                    players={sessionView.sortedPlayers}
+                    pointDiffByUserId={sessionView.pointDiffByUserId}
+                    playerStatsByUserId={sessionView.playerStatsByUserId}
+                  />
+                ) : null}
+
+                <LiveStandingsTable
+                  sessionType={sessionData.type}
+                  sessionStatus={sessionData.status}
+                  players={sessionView.sortedPlayers}
+                  currentUserId={currentUserId}
+                  isAdmin={isAdmin}
+                  pointDiffByUserId={sessionView.pointDiffByUserId}
+                  savingPreferencesFor={savingPreferencesFor}
+                  getPlayerProfileHref={sessionView.getPlayerProfileHref}
+                  calculatePlayerSessionStats={(userId) =>
+                    sessionView.playerStatsByUserId.get(userId) ??
+                    EMPTY_PLAYER_SESSION_STATS
+                  }
+                  onTogglePause={togglePausePlayer}
+                  onTogglePreferenceEditor={togglePreferenceEditor}
+                />
+              </div>
+            </section>
+          </div>
+        </div>
       </main>
 
       {courtActionDraft ? (

@@ -409,6 +409,14 @@ h4 {
   box-shadow: 0 20px 48px rgba(7, 20, 35, 0.22);
 }
 
+.app-swipe-track {
+  scrollbar-width: none;
+}
+
+.app-swipe-track::-webkit-scrollbar {
+  display: none;
+}
+
 @media (min-width: 640px) {
   .app-shell,
   .app-shell-narrow {
