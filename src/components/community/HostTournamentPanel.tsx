@@ -71,19 +71,33 @@ function FormatCard({
   onToggleInfo: () => void;
 }) {
   const info = SESSION_TYPE_INFO[sessionType];
+  const bubblePositionClass =
+    sessionType === SessionType.LADDER
+      ? "right-0"
+      : sessionType === SessionType.ELO
+        ? "left-1/2 -translate-x-1/2"
+        : "left-0";
+  const bubbleArrowClass =
+    sessionType === SessionType.LADDER
+      ? "right-4"
+      : sessionType === SessionType.ELO
+        ? "left-1/2 -translate-x-1/2"
+        : "left-4";
 
   return (
     <div className="relative" data-format-info-root="true">
       <button
         type="button"
         onClick={onSelect}
-        className={`w-full rounded-2xl border px-3 py-3 pr-10 text-left transition ${
+        className={`w-full rounded-2xl border px-2.5 py-2.5 pr-7 text-left transition ${
           selected
             ? "border-blue-300 bg-blue-50 text-blue-700 shadow-sm"
             : "border-gray-200 bg-white text-gray-800 hover:border-blue-200 hover:bg-blue-50/40"
         }`}
       >
-        <span className="block text-sm font-semibold">{info.label}</span>
+        <span className="block text-[13px] font-semibold leading-tight">
+          {info.label}
+        </span>
       </button>
 
       <button
@@ -94,18 +108,22 @@ function FormatCard({
         }}
         aria-label={`About ${info.label} format`}
         aria-expanded={infoOpen}
-        className="absolute right-2 top-2 flex h-5 w-5 items-center justify-center rounded-full border border-gray-200 bg-white text-[10px] font-semibold text-gray-500 shadow-sm transition hover:border-blue-200 hover:text-blue-700"
+        className="absolute right-1.5 top-1.5 flex h-[18px] w-[18px] items-center justify-center rounded-full border border-gray-200 bg-white text-[9px] font-semibold text-gray-500 shadow-sm transition hover:border-blue-200 hover:text-blue-700"
       >
         i
       </button>
 
       {infoOpen ? (
-        <div className="absolute left-0 top-full z-20 mt-2 w-full max-w-full">
-          <div className="relative rounded-2xl border border-gray-200 bg-white px-3 py-3 shadow-[0_18px_40px_-22px_rgba(15,23,42,0.4)]">
-            <div className="absolute left-4 top-0 h-3 w-3 -translate-y-1/2 rotate-45 border-l border-t border-gray-200 bg-white" />
+        <div
+          className={`absolute top-full z-20 mt-2 w-[min(15rem,calc(100vw-2rem))] max-w-[15rem] ${bubblePositionClass}`}
+        >
+          <div className="relative rounded-2xl border border-gray-900 bg-gray-950 px-3 py-3 shadow-[0_18px_40px_-22px_rgba(15,23,42,0.55)]">
+            <div
+              className={`absolute top-0 h-3 w-3 -translate-y-1/2 rotate-45 border-l border-t border-gray-900 bg-gray-950 ${bubbleArrowClass}`}
+            />
             <div className="space-y-1.5">
               {info.lines.map((line) => (
-                <p key={line} className="text-sm leading-5 text-gray-700">
+                <p key={line} className="text-sm leading-5 text-white">
                   {line}
                 </p>
               ))}
@@ -254,7 +272,7 @@ export function HostTournamentPanel({
         <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_120px]">
           <div ref={formatInfoAreaRef} className="space-y-1.5">
             <p className="text-sm font-medium text-gray-900">Format</p>
-            <div className="grid gap-2">
+            <div className="grid grid-cols-3 gap-2">
               {(Object.values(SessionType) as SessionType[]).map((type) => (
                 <FormatCard
                   key={type}
