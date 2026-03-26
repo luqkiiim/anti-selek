@@ -177,10 +177,7 @@ export default function SessionHistoryPage() {
                           match.winnerTeam === 1 ? "ring-1 ring-green-200" : ""
                         }`}
                       >
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">
-                          Team 1
-                        </p>
-                        <p className="mt-2 text-sm font-semibold text-gray-900">
+                        <p className="text-sm font-semibold text-gray-900">
                           <Link href={getProfileHref(match.team1User1.id)} className="hover:text-blue-600 hover:underline">
                             {match.team1User1.name}
                           </Link>
@@ -202,10 +199,7 @@ export default function SessionHistoryPage() {
                           match.winnerTeam === 2 ? "ring-1 ring-green-200" : ""
                         }`}
                       >
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">
-                          Team 2
-                        </p>
-                        <p className="mt-2 text-sm font-semibold text-gray-900">
+                        <p className="text-sm font-semibold text-gray-900">
                           <Link href={getProfileHref(match.team2User1.id)} className="hover:text-blue-600 hover:underline">
                             {match.team2User1.name}
                           </Link>
