@@ -61,7 +61,6 @@ export default function SessionPage() {
 
   const mobilePagerRef = useRef<HTMLDivElement | null>(null);
   const previousSessionStatusRef = useRef<string | null>(null);
-  const pendingPagerScrollBehaviorRef = useRef<ScrollBehavior>("auto");
   const pagerSnapTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const programmaticPagerTargetRef = useRef<SessionMobileSection | null>(null);
   const programmaticPagerReleaseTimeoutRef =
@@ -384,10 +383,10 @@ export default function SessionPage() {
 
   const updateMobileSection = useCallback(
     (sectionId: SessionMobileSection, behavior: ScrollBehavior = "smooth") => {
-      pendingPagerScrollBehaviorRef.current = behavior;
       setMobileSection(sectionId);
+      scrollMobilePagerToSection(sectionId, behavior);
     },
-    []
+    [scrollMobilePagerToSection]
   );
 
   useLayoutEffect(() => {
@@ -405,7 +404,6 @@ export default function SessionPage() {
       sessionData.status === SessionStatus.ACTIVE;
 
     if (isInitialEntry || becameCompleted || becameActive) {
-      pendingPagerScrollBehaviorRef.current = "auto";
       setMobileSection(preferredMobileSection);
       scrollMobilePagerToSection(preferredMobileSection, "auto");
     }
@@ -417,12 +415,6 @@ export default function SessionPage() {
     sessionData,
     sessionView,
   ]);
-
-  useEffect(() => {
-    const behavior = pendingPagerScrollBehaviorRef.current;
-    pendingPagerScrollBehaviorRef.current = "auto";
-    scrollMobilePagerToSection(activeMobileSection, behavior);
-  }, [activeMobileSection, scrollMobilePagerToSection]);
 
   useEffect(() => {
     const handleResize = () => {
@@ -468,31 +460,20 @@ export default function SessionPage() {
       clearTimeout(pagerSnapTimeoutRef.current);
     }
 
-    const sectionIndex = Math.round(
-      container.scrollLeft / Math.max(container.clientWidth, 1)
-    );
-    const nextSection = mobileSections[sectionIndex]?.id;
-
-    if (nextSection && nextSection !== activeMobileSection) {
-      pendingPagerScrollBehaviorRef.current = "auto";
-      setMobileSection(nextSection);
-    }
-
     pagerSnapTimeoutRef.current = setTimeout(() => {
       const settledIndex = Math.round(
         container.scrollLeft / Math.max(container.clientWidth, 1)
       );
       const settledSection = mobileSections[settledIndex]?.id;
 
-      if (settledSection) {
-        scrollMobilePagerToSection(settledSection, "smooth");
+      if (settledSection && settledSection !== activeMobileSection) {
+        setMobileSection(settledSection);
       }
-    }, 90);
+    }, 120);
   }, [
     activeMobileSection,
     clearProgrammaticPagerSync,
     mobileSections,
-    scrollMobilePagerToSection,
   ]);
 
   if (status === "loading" || !sessionData || !sessionView) {
