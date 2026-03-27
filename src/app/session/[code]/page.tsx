@@ -622,7 +622,7 @@ export default function SessionPage() {
       </nav>
 
       <main className="app-shell max-w-7xl space-y-4 sm:space-y-6">
-        <div className="sticky top-[4.75rem] z-20 sm:hidden">
+        <div className="sticky top-[4.75rem] z-20 xl:hidden">
           <SessionMobileSectionNav
             sections={mobileSections}
             activeSection={activeMobileSection}
@@ -641,10 +641,10 @@ export default function SessionPage() {
           onTouchMove={handleMobilePagerTouchMove}
           onTouchEnd={handleMobilePagerTouchEnd}
           onTouchCancel={handleMobilePagerTouchCancel}
-          className="app-swipe-track -mx-1 overflow-x-auto overscroll-x-none sm:mx-0 sm:overflow-visible"
+          className="app-swipe-track -mx-1 overflow-x-auto overscroll-x-none xl:mx-0 xl:overflow-visible"
         >
-          <div className="flex snap-x snap-mandatory sm:block sm:space-y-6">
-            <section className="w-full shrink-0 snap-center sm:w-auto sm:shrink sm:snap-none">
+          <div className="flex snap-x snap-mandatory xl:block xl:space-y-6">
+            <section className="w-full shrink-0 snap-center xl:w-auto xl:shrink xl:snap-none">
               <SessionOverviewPanel
                 sessionTypeLabel={sessionView.sessionTypeLabel}
                 sessionModeLabel={sessionView.sessionModeLabel}
@@ -669,7 +669,7 @@ export default function SessionPage() {
             </section>
 
             {!sessionView.isCompletedSession ? (
-              <section className="w-full shrink-0 snap-center sm:w-auto sm:shrink sm:snap-none">
+              <section className="w-full shrink-0 snap-center xl:w-auto xl:shrink xl:snap-none">
                 <LiveCourtsPanel
                   sessionStatus={sessionData.status}
                   courts={sessionData.courts}
@@ -706,7 +706,7 @@ export default function SessionPage() {
               </section>
             ) : null}
 
-            <section className="w-full shrink-0 snap-center sm:w-auto sm:shrink sm:snap-none">
+            <section className="w-full shrink-0 snap-center xl:w-auto xl:shrink xl:snap-none">
               <div className="space-y-6">
                 {sessionView.isCompletedSession ? (
                   <SessionPodium
