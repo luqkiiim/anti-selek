@@ -20,11 +20,13 @@ export function buildCandidatePool<T extends MatchmakerLadderPlayer>(
     now = Date.now(),
     matchDurationMs = DEFAULT_MATCH_DURATION_MS,
     randomFn = Math.random,
+    useWaitingTimeTieZone = true,
   }: {
     requiredPlayerCount: number;
     now?: number;
     matchDurationMs?: number;
     randomFn?: () => number;
+    useWaitingTimeTieZone?: boolean;
   }
 ): LadderCandidatePool<ActiveMatchmakerLadderPlayer<T>> {
   const activePlayers = buildActivePlayers(players, { now, randomFn });
@@ -70,10 +72,15 @@ export function buildCandidatePool<T extends MatchmakerLadderPlayer>(
 
     selectionBand = band;
     requiredSelectableCount = requiredPlayerCount - lockedPlayers.length;
-    tieZone = buildWaitingTimeTieZone(band.players, requiredSelectableCount, {
-      matchDurationMs,
-    });
-    selectablePlayers = tieZone?.players ?? band.players;
+    if (useWaitingTimeTieZone) {
+      tieZone = buildWaitingTimeTieZone(band.players, requiredSelectableCount, {
+        matchDurationMs,
+      });
+      selectablePlayers = tieZone?.players ?? band.players;
+    } else {
+      tieZone = null;
+      selectablePlayers = band.players;
+    }
     break;
   }
 

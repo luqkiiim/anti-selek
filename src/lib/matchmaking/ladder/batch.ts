@@ -19,7 +19,8 @@ import type {
   MatchmakerLadderPlayer,
 } from "./types";
 
-const MAX_BATCH_EXTRA_CANDIDATES = 2;
+const MAX_BATCH_EXTRA_CANDIDATES = 8;
+const MAX_BATCH_CANDIDATE_PLAYERS = 20;
 const MAX_BATCH_SEARCH_BRANCHES = 20000;
 const MAX_BATCH_SEARCH_MS = 750;
 
@@ -154,9 +155,9 @@ function limitBatchCandidatePlayers<T extends MatchmakerLadderPlayer>(
   candidatePool: ReturnType<typeof buildCandidatePool<T>>,
   requiredPlayerCount: number
 ) {
-  const maxCandidateCount = Math.max(
-    requiredPlayerCount,
-    requiredPlayerCount + MAX_BATCH_EXTRA_CANDIDATES
+  const maxCandidateCount = Math.min(
+    MAX_BATCH_CANDIDATE_PLAYERS,
+    Math.max(requiredPlayerCount, requiredPlayerCount + MAX_BATCH_EXTRA_CANDIDATES)
   );
 
   if (candidatePool.candidatePlayers.length <= maxCandidateCount) {
@@ -168,9 +169,48 @@ function limitBatchCandidatePlayers<T extends MatchmakerLadderPlayer>(
     maxCandidateCount - candidatePool.lockedPlayers.length
   );
 
+  const distributedSelectablePlayers = [...candidatePool.selectablePlayers].sort(
+    (left, right) =>
+      left.ladderScore - right.ladderScore ||
+      left.pointDiff - right.pointDiff ||
+      left.strength - right.strength ||
+      left.rank - right.rank
+  );
+  const limitedSelectablePlayers: ActiveMatchmakerLadderPlayer<T>[] = [];
+  const usedIndices = new Set<number>();
+
+  for (let selectionIndex = 0; selectionIndex < selectableLimit; selectionIndex++) {
+    const targetIndex =
+      selectableLimit <= 1
+        ? 0
+        : Math.round(
+            (selectionIndex * (distributedSelectablePlayers.length - 1)) /
+              (selectableLimit - 1)
+          );
+
+    let nextIndex = targetIndex;
+    while (
+      usedIndices.has(nextIndex) &&
+      nextIndex < distributedSelectablePlayers.length - 1
+    ) {
+      nextIndex += 1;
+    }
+
+    while (usedIndices.has(nextIndex) && nextIndex > 0) {
+      nextIndex -= 1;
+    }
+
+    if (usedIndices.has(nextIndex)) {
+      break;
+    }
+
+    usedIndices.add(nextIndex);
+    limitedSelectablePlayers.push(distributedSelectablePlayers[nextIndex]);
+  }
+
   return [
     ...candidatePool.lockedPlayers,
-    ...candidatePool.selectablePlayers.slice(0, selectableLimit),
+    ...limitedSelectablePlayers,
   ];
 }
 
@@ -245,6 +285,7 @@ export function findBestBatchSelectionLadder<T extends MatchmakerLadderPlayer>(
     now,
     matchDurationMs,
     randomFn,
+    useWaitingTimeTieZone: false,
   });
   const debug: LadderBatchDebug = {
     eligiblePlayerIds: candidatePool.activePlayers.map((player) => player.userId),

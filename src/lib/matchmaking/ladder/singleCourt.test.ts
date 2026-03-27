@@ -63,6 +63,62 @@ describe("ladder single-court selection", () => {
     expect(result.selection?.ids).toEqual(["A", "B", "C", "D"]);
   });
 
+  it("does not let longer wait time override a cleaner ladder grouping inside one fairness band", () => {
+    const players = [
+      createPlayer("A", {
+        matchesPlayed: 5,
+        wins: 1,
+        losses: 1,
+        pointDiff: 4,
+        availableSince: new Date("2026-03-18T00:55:00Z"),
+      }),
+      createPlayer("B", {
+        matchesPlayed: 5,
+        wins: 1,
+        losses: 1,
+        pointDiff: 3,
+        availableSince: new Date("2026-03-18T00:55:00Z"),
+      }),
+      createPlayer("C", {
+        matchesPlayed: 5,
+        wins: 1,
+        losses: 1,
+        pointDiff: 2,
+        availableSince: new Date("2026-03-18T00:55:00Z"),
+      }),
+      createPlayer("D", {
+        matchesPlayed: 5,
+        wins: 1,
+        losses: 1,
+        pointDiff: 1,
+        availableSince: new Date("2026-03-18T00:55:00Z"),
+      }),
+      createPlayer("E", {
+        matchesPlayed: 5,
+        wins: 3,
+        losses: 1,
+        pointDiff: 11,
+        availableSince: new Date("2026-03-18T00:00:00Z"),
+      }),
+      createPlayer("F", {
+        matchesPlayed: 5,
+        wins: 0,
+        losses: 2,
+        pointDiff: -9,
+        availableSince: new Date("2026-03-18T00:00:00Z"),
+      }),
+    ];
+
+    const result = findBestSingleCourtSelectionLadder(players, {
+      sessionMode: SessionMode.MEXICANO,
+      now: new Date("2026-03-18T01:00:00Z").getTime(),
+      randomFn: () => 0,
+    });
+
+    expect(result.selection?.ids).toEqual(["A", "B", "C", "D"]);
+    expect(result.selection?.groupingSummary.maxLadderGap).toBe(0);
+  });
+
   it("returns no selection when fewer than four active players are available", () => {
     const players = [
       createPlayer("A"),

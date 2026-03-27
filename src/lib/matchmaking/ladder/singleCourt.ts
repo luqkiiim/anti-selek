@@ -73,6 +73,7 @@ export function findBestSingleCourtSelectionLadder<
     now,
     matchDurationMs,
     randomFn,
+    useWaitingTimeTieZone: false,
   });
   const debug: LadderSingleCourtDebug = {
     eligiblePlayerIds: candidatePool.activePlayers.map((player) => player.userId),

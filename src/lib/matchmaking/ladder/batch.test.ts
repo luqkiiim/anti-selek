@@ -76,6 +76,95 @@ describe("ladder batch selection", () => {
     ]);
   });
 
+  it("keeps full top and bottom ladder clusters together even when one low player finished recently", () => {
+    const now = new Date("2026-03-18T01:00:00Z").getTime();
+    const players = [
+      createPlayer("P1", {
+        matchesPlayed: 5,
+        wins: 2,
+        losses: 0,
+        pointDiff: 12,
+        availableSince: new Date("2026-03-18T00:35:00Z"),
+      }),
+      createPlayer("P2", {
+        matchesPlayed: 5,
+        wins: 2,
+        losses: 0,
+        pointDiff: 10,
+        availableSince: new Date("2026-03-18T00:35:00Z"),
+      }),
+      createPlayer("P3", {
+        matchesPlayed: 5,
+        wins: 2,
+        losses: 0,
+        pointDiff: 8,
+        availableSince: new Date("2026-03-18T00:35:00Z"),
+      }),
+      createPlayer("P4", {
+        matchesPlayed: 5,
+        wins: 2,
+        losses: 0,
+        pointDiff: 6,
+        availableSince: new Date("2026-03-18T00:35:00Z"),
+      }),
+      ...Array.from({ length: 10 }, (_, index) =>
+        createPlayer(`Z${index + 1}`, {
+          matchesPlayed: 5,
+          wins: 1,
+          losses: 1,
+          pointDiff: 4 - index,
+          availableSince: new Date("2026-03-18T00:40:00Z"),
+        })
+      ),
+      createPlayer("N1", {
+        matchesPlayed: 5,
+        wins: 0,
+        losses: 2,
+        pointDiff: -6,
+        availableSince: new Date("2026-03-18T00:35:00Z"),
+      }),
+      createPlayer("N2", {
+        matchesPlayed: 5,
+        wins: 0,
+        losses: 2,
+        pointDiff: -8,
+        availableSince: new Date("2026-03-18T00:35:00Z"),
+      }),
+      createPlayer("N3", {
+        matchesPlayed: 5,
+        wins: 0,
+        losses: 2,
+        pointDiff: -10,
+        availableSince: new Date("2026-03-18T00:35:00Z"),
+      }),
+      createPlayer("N4", {
+        matchesPlayed: 5,
+        wins: 0,
+        losses: 2,
+        pointDiff: -12,
+        availableSince: new Date("2026-03-18T00:58:00Z"),
+      }),
+    ];
+
+    const result = findBestBatchSelectionLadder(players, {
+      courtCount: 3,
+      sessionMode: SessionMode.MEXICANO,
+      now,
+      randomFn: () => 0,
+    });
+
+    const quartets =
+      result.selection?.selections.map((selection) =>
+        [...selection.players]
+          .map((player) => player.ladderScore)
+          .sort((left, right) => left - right)
+      ) ?? [];
+
+    expect(quartets).toContainEqual([-2, -2, -2, -2]);
+    expect(quartets).toContainEqual([0, 0, 0, 0]);
+    expect(quartets).toContainEqual([2, 2, 2, 2]);
+  });
+
   it("returns no batch when not enough active players are available", () => {
     const players = [
       createPlayer("A"),
