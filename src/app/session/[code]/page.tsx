@@ -20,9 +20,13 @@ import { SessionOverviewPanel } from "@/components/session/SessionOverviewPanel"
 import { SessionPodium } from "@/components/session/SessionPodium";
 import { SessionPreferenceEditorPortal } from "@/components/session/SessionPreferenceEditorPortal";
 import { SessionRosterModal } from "@/components/session/SessionRosterModal";
+import { SessionSettingsModal } from "@/components/session/SessionSettingsModal";
 import type { CurrentUser } from "@/components/session/sessionTypes";
 import { SessionStatus } from "@/types/enums";
-import { mergeSessionSnapshot } from "./sessionDataMutations";
+import {
+  applyCourtLabelUpdates,
+  mergeSessionSnapshot,
+} from "./sessionDataMutations";
 import { buildSessionViewModel } from "./sessionViewModel";
 import { useSessionData } from "./useSessionData";
 import { useSessionMatchActions } from "./useSessionMatchActions";
@@ -72,6 +76,11 @@ export default function SessionPage() {
   const [error, setError] = useState("");
   const [endingSession, setEndingSession] = useState(false);
   const [showEndSessionConfirm, setShowEndSessionConfirm] = useState(false);
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [courtLabelDrafts, setCourtLabelDrafts] = useState<
+    Record<string, string>
+  >({});
+  const [savingCourtLabels, setSavingCourtLabels] = useState(false);
   const [mobileSection, setMobileSection] =
     useState<SessionMobileSection>("session");
 
@@ -213,6 +222,7 @@ export default function SessionPage() {
 
   const openEndSessionConfirm = () => {
     setError("");
+    setShowSettingsModal(false);
     setShowEndSessionConfirm(true);
   };
 
@@ -247,6 +257,14 @@ export default function SessionPage() {
     !!sessionData?.viewerCanManage || !!user?.isAdmin || !!session?.user?.isAdmin;
   const isClaimedUser = user?.isClaimed === true;
   const currentUserId = session?.user?.id || "";
+  const canOpenSettings = isAdmin && sessionData?.status !== SessionStatus.COMPLETED;
+
+  useEffect(() => {
+    if (!canOpenSettings) {
+      setShowSettingsModal(false);
+    }
+  }, [canOpenSettings]);
+
   const sessionView = useMemo(() => {
     if (!sessionData) {
       return null;
@@ -291,6 +309,100 @@ export default function SessionPage() {
   )
     ? mobileSection
     : mobileSections[0]?.id ?? "session";
+  const hasCourtLabelChanges = useMemo(() => {
+    if (!sessionData) {
+      return false;
+    }
+
+    return sessionData.courts.some(
+      (court) =>
+        (courtLabelDrafts[court.id] ?? "").trim() !== (court.label ?? "").trim()
+    );
+  }, [courtLabelDrafts, sessionData]);
+
+  const openSettingsModal = useCallback(() => {
+    if (!sessionData || !canOpenSettings) {
+      return;
+    }
+
+    setError("");
+    setCourtLabelDrafts(
+      Object.fromEntries(
+        sessionData.courts.map((court) => [court.id, court.label ?? ""])
+      )
+    );
+    setShowSettingsModal(true);
+  }, [canOpenSettings, sessionData]);
+
+  const closeSettingsModal = useCallback(() => {
+    if (savingCourtLabels) {
+      return;
+    }
+
+    setShowSettingsModal(false);
+  }, [savingCourtLabels]);
+
+  const openRosterFromSettings = useCallback(() => {
+    setShowSettingsModal(false);
+    openRosterModal();
+  }, [openRosterModal]);
+
+  const handleCourtLabelChange = useCallback(
+    (courtId: string, value: string) => {
+      setCourtLabelDrafts((current) => ({
+        ...current,
+        [courtId]: value,
+      }));
+    },
+    []
+  );
+
+  const saveCourtLabels = useCallback(async () => {
+    if (!sessionData || !hasCourtLabelChanges) {
+      return;
+    }
+
+    setSavingCourtLabels(true);
+    setError("");
+
+    try {
+      const res = await fetch(`/api/sessions/${code}/courts/labels`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          courts: sessionData.courts.map((court) => ({
+            courtId: court.id,
+            label: courtLabelDrafts[court.id] ?? "",
+          })),
+        }),
+      });
+      const data = await safeJson(res);
+
+      if (!res.ok) {
+        setError(data.error || "Failed to update court labels");
+        return;
+      }
+
+      patchSessionData((current) =>
+        applyCourtLabelUpdates(current, data.courts ?? [])
+      );
+      setShowSettingsModal(false);
+      scheduleSessionRefresh();
+    } catch (err) {
+      console.error(err);
+      setError("Failed to update court labels");
+    } finally {
+      setSavingCourtLabels(false);
+    }
+  }, [
+    code,
+    courtLabelDrafts,
+    hasCourtLabelChanges,
+    patchSessionData,
+    safeJson,
+    scheduleSessionRefresh,
+    sessionData,
+  ]);
 
   const clearProgrammaticPagerSync = useCallback(() => {
     if (programmaticPagerReleaseTimeoutRef.current) {
@@ -657,13 +769,9 @@ export default function SessionPage() {
                 canStartSession={
                   isAdmin && sessionData.status === SessionStatus.WAITING
                 }
-                canEndSession={
-                  isAdmin && sessionData.status === SessionStatus.ACTIVE
-                }
-                canOpenRoster={isAdmin && !sessionView.isCompletedSession}
+                canOpenSettings={Boolean(canOpenSettings)}
                 onStartSession={startSession}
-                onOpenRoster={openRosterModal}
-                onEndSession={openEndSessionConfirm}
+                onOpenSettings={openSettingsModal}
                 onOpenMatchHistory={() => router.push(`/session/${code}/history`)}
               />
             </section>
@@ -739,6 +847,21 @@ export default function SessionPage() {
         </div>
       </main>
 
+      <SessionSettingsModal
+        open={showSettingsModal}
+        courts={sessionData.courts}
+        canOpenRoster={isAdmin && !sessionView.isCompletedSession}
+        canEndSession={isAdmin && sessionData.status === SessionStatus.ACTIVE}
+        courtLabelDrafts={courtLabelDrafts}
+        hasCourtLabelChanges={hasCourtLabelChanges}
+        savingCourtLabels={savingCourtLabels}
+        onClose={closeSettingsModal}
+        onOpenRoster={openRosterFromSettings}
+        onEndSession={openEndSessionConfirm}
+        onCourtLabelChange={handleCourtLabelChange}
+        onSaveCourtLabels={() => void saveCourtLabels()}
+      />
+
       {courtActionDraft ? (
         <SessionActionConfirmModal
           title={
@@ -748,14 +871,14 @@ export default function SessionPage() {
           }
           subtitle={
             courtActionDraft.action === "reshuffle"
-              ? `This will replace the current lineup on Court ${courtActionDraft.courtNumber} with a new one.`
-              : `This will clear Court ${courtActionDraft.courtNumber} and return these players to the pool.`
+              ? `This will replace the current lineup on ${courtActionDraft.courtLabel} with a new one.`
+              : `This will clear ${courtActionDraft.courtLabel} and return these players to the pool.`
           }
           details={
             <div className="space-y-4">
               <div className="app-panel-muted space-y-2 p-4">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">
-                  Court {courtActionDraft.courtNumber}
+                  {courtActionDraft.courtLabel}
                 </p>
                 <p className="text-sm font-semibold text-gray-900">
                   {courtActionDraft.team1Names[0]} &amp;{" "}

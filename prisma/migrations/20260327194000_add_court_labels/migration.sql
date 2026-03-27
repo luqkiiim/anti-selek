@@ -1,0 +1,1 @@
+ALTER TABLE "Court" ADD COLUMN "label" TEXT;

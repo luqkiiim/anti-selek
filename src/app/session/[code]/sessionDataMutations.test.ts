@@ -9,6 +9,7 @@ import type { SessionData } from "@/components/session/sessionTypes";
 import {
   applyGeneratedMatches,
   applyGuestAdded,
+  applyCourtLabelUpdates,
   applyPlayerRemoval,
   applyScoreApproval,
   applyScoreReopen,
@@ -120,6 +121,27 @@ describe("sessionDataMutations", () => {
 
     expect(updated.courts[0].currentMatch?.id).toBe("match-1");
     expect(updated.courts[0].currentMatch?.team1User1.name).toBe("Player 1");
+  });
+
+  it("updates court labels without dropping the current match", () => {
+    const withMatch = applyGeneratedMatches(createSessionData(), [
+      {
+        id: "match-1",
+        courtId: "court-1",
+        status: "IN_PROGRESS",
+        team1User1: { id: "p1", name: "Player 1" },
+        team1User2: { id: "p2", name: "Player 2" },
+        team2User1: { id: "p3", name: "Player 3" },
+        team2User2: { id: "p4", name: "Player 4" },
+      },
+    ]);
+
+    const updated = applyCourtLabelUpdates(withMatch, [
+      { id: "court-1", label: "Center Court" },
+    ]);
+
+    expect(updated.courts[0].label).toBe("Center Court");
+    expect(updated.courts[0].currentMatch?.id).toBe("match-1");
   });
 
   it("reflects pending score submission on the live court and in match history", () => {

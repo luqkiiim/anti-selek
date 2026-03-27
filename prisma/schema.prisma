@@ -85,6 +85,7 @@ model Court {
   id            String   @id @default(cuid())
   sessionId     String
   courtNumber   Int      // 1, 2, or 3
+  label         String?
   currentMatchId String? @unique
 
   session      Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)

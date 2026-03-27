@@ -44,6 +44,7 @@ export interface CompletedMatchInfo {
 export interface Court {
   id: string;
   courtNumber: number;
+  label?: string | null;
   currentMatch: Match | null;
 }
 

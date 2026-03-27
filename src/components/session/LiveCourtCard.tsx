@@ -1,5 +1,6 @@
 "use client";
 
+import { getCourtDisplayLabel } from "@/lib/courtLabels";
 import { MatchStatus, SessionStatus } from "@/types/enums";
 import type { Court, Match, MatchScores } from "./sessionTypes";
 import { LiveMatchCard } from "./LiveMatchCard";
@@ -61,7 +62,7 @@ export function LiveCourtCard({
     <div className="flex min-w-0 flex-col overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
       <div className="flex items-center justify-between border-b border-gray-100 bg-gray-50/80 px-3 py-2.5">
         <h2 className="text-sm font-black uppercase tracking-widest text-gray-500">
-          Court {court.courtNumber}
+          {getCourtDisplayLabel(court)}
         </h2>
         <div className="flex gap-2">
           {sessionStatus === SessionStatus.ACTIVE && !currentMatch && isAdmin ? (

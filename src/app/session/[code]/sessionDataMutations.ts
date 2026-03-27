@@ -42,6 +42,7 @@ interface SessionSnapshotLike {
   courts?: Array<{
     id: string;
     courtNumber: number;
+    label?: string | null;
     currentMatch: MatchPayload | null;
   }>;
   players?: SessionData["players"];
@@ -292,6 +293,27 @@ export function applyUndoneCourtMatch(
     ...current,
     courts: current.courts.map((court) =>
       court.id === courtId ? { ...court, currentMatch: null } : court
+    ),
+  };
+}
+
+export function applyCourtLabelUpdates(
+  current: SessionData,
+  courtLabels: Array<{ id: string; label?: string | null }>
+) {
+  const labelByCourtId = new Map(
+    courtLabels.map((court) => [court.id, court.label ?? null])
+  );
+
+  return {
+    ...current,
+    courts: current.courts.map((court) =>
+      labelByCourtId.has(court.id)
+        ? {
+            ...court,
+            label: labelByCourtId.get(court.id) ?? null,
+          }
+        : court
     ),
   };
 }

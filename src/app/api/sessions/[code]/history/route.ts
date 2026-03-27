@@ -54,6 +54,7 @@ export async function GET(
           court: {
             select: {
               courtNumber: true,
+              label: true,
             },
           },
           team1User1: { select: { id: true, name: true } },

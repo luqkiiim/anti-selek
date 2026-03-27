@@ -1,5 +1,6 @@
 "use client";
 
+import { getCourtDisplayLabel } from "@/lib/courtLabels";
 import type {
   Court,
   ManualMatchFormState,
@@ -42,7 +43,7 @@ export function ManualMatchModal({
           <div>
             <h2 className="text-base font-black text-gray-900">Manual Match</h2>
             <p className="mt-0.5 text-[10px] font-bold uppercase tracking-widest text-gray-400">
-              {court ? `Court ${court.courtNumber}` : "Select Teams"}
+              {court ? getCourtDisplayLabel(court) : "Select Teams"}
             </p>
           </div>
           <button

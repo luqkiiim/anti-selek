@@ -15,6 +15,7 @@ export interface CourtActionDraft {
   action: "reshuffle" | "undo";
   courtId: string;
   courtNumber: number;
+  courtLabel: string;
   team1Names: [string, string];
   team2Names: [string, string];
 }

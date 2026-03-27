@@ -1,5 +1,6 @@
 "use client";
 
+import { getCourtDisplayLabel } from "@/lib/courtLabels";
 import { useState } from "react";
 import { applyGeneratedMatches, applyUndoneCourtMatch } from "./sessionDataMutations";
 import { postGenerateMatchAction } from "./sessionCourtActionApi";
@@ -35,6 +36,7 @@ export function useSessionCourtConfirmActions({
       action,
       courtId,
       courtNumber: court.courtNumber,
+      courtLabel: getCourtDisplayLabel(court),
       team1Names: [
         court.currentMatch.team1User1.name,
         court.currentMatch.team1User2.name,

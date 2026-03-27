@@ -6,6 +6,7 @@ import { useSession } from "next-auth/react";
 import { useParams, useRouter } from "next/navigation";
 
 import { EmptyState, FlashMessage, HeroCard, SectionCard } from "@/components/ui/chrome";
+import { getCourtDisplayLabel } from "@/lib/courtLabels";
 import { getSessionModeLabel, getSessionTypeLabel } from "@/lib/sessionModeLabels";
 import { MatchStatus } from "@/types/enums";
 
@@ -21,6 +22,7 @@ interface HistoryMatch {
   team2EloChange?: number | null;
   court: {
     courtNumber: number;
+    label?: string | null;
   };
   team1User1: { id: string; name: string };
   team1User2: { id: string; name: string };
@@ -154,7 +156,7 @@ export default function SessionHistoryPage() {
                     <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                       <div className="flex items-center justify-between gap-3">
                         <p className="text-lg font-semibold text-gray-900">
-                          Court {match.court.courtNumber}
+                          {getCourtDisplayLabel(match.court)}
                         </p>
                         <p className="text-sm text-gray-600">
                           {new Date(matchTimestamp).toLocaleTimeString([], {
