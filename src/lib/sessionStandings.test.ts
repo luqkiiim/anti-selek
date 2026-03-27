@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  compareCompetitiveStandings,
   compareLadderStandings,
   compareSessionStandings,
   getStandingPointsForTeam,
@@ -40,6 +41,24 @@ describe("sessionStandings", () => {
     ];
 
     const sorted = rows.slice().sort(compareLadderStandings);
+
+    expect(sorted.map((row) => row.name)).toEqual([
+      "Chris",
+      "Adam",
+      "Bella",
+      "Zara",
+    ]);
+  });
+
+  it("sorts competitive standings by score, then point difference, then name", () => {
+    const rows = [
+      { name: "Zara", score: 6, pointDiff: 7 },
+      { name: "Adam", score: 6, pointDiff: 9 },
+      { name: "Bella", score: 6, pointDiff: 9 },
+      { name: "Chris", score: 9, pointDiff: 4 },
+    ];
+
+    const sorted = rows.slice().sort(compareCompetitiveStandings);
 
     expect(sorted.map((row) => row.name)).toEqual([
       "Chris",

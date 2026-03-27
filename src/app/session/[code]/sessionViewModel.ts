@@ -1,8 +1,11 @@
 "use client";
 
-import { deriveLadderRecordsByEntryTime } from "@/lib/matchmaking/ladder";
 import {
-  compareLadderStandings,
+  deriveLadderRecordsByEntryTime,
+  deriveRaceRecordsByEntryTime,
+} from "@/lib/matchmaking/ladder";
+import {
+  compareCompetitiveStandings,
   compareSessionStandings,
 } from "@/lib/sessionStandings";
 import { getSessionModeLabel, getSessionTypeLabel } from "@/lib/sessionModeLabels";
@@ -88,23 +91,28 @@ function buildPlayerPerformanceMaps(sessionData: SessionData) {
     pointDiffByUserId.set(player.userId, 0);
   });
 
-  if (sessionData.type === SessionType.LADDER) {
-    const ladderRecordByUserId = deriveLadderRecordsByEntryTime(
-      new Map(
-        sessionData.players.map((player) => [
-          player.userId,
-          player.ladderEntryAt ? new Date(player.ladderEntryAt) : null,
-        ])
-      ),
-      (sessionData.matches ?? []).map((match) => ({
-        team1: [match.team1User1Id, match.team1User2Id] as [string, string],
-        team2: [match.team2User1Id, match.team2User2Id] as [string, string],
-        team1Score: match.team1Score,
-        team2Score: match.team2Score,
-        status: match.status,
-        completedAt: match.completedAt ? new Date(match.completedAt) : null,
-      }))
+  if (
+    sessionData.type === SessionType.LADDER ||
+    sessionData.type === SessionType.RACE
+  ) {
+    const entryMap = new Map(
+      sessionData.players.map((player) => [
+        player.userId,
+        player.ladderEntryAt ? new Date(player.ladderEntryAt) : null,
+      ])
     );
+    const historyMatches = (sessionData.matches ?? []).map((match) => ({
+      team1: [match.team1User1Id, match.team1User2Id] as [string, string],
+      team2: [match.team2User1Id, match.team2User2Id] as [string, string],
+      team1Score: match.team1Score,
+      team2Score: match.team2Score,
+      status: match.status,
+      completedAt: match.completedAt ? new Date(match.completedAt) : null,
+    }));
+    const ladderRecordByUserId =
+      sessionData.type === SessionType.RACE
+        ? deriveRaceRecordsByEntryTime(entryMap, historyMatches)
+        : deriveLadderRecordsByEntryTime(entryMap, historyMatches);
 
     sessionData.players.forEach((player) => {
       const record = ladderRecordByUserId.get(player.userId);
@@ -248,18 +256,25 @@ export function buildSessionViewModel({
     buildPlayerPerformanceMaps(sessionData);
 
   const sortedPlayers = sessionData.players.slice().sort((a, b) =>
-    sessionData.type === SessionType.LADDER
-      ? compareLadderStandings(
+    sessionData.type === SessionType.LADDER ||
+    sessionData.type === SessionType.RACE
+      ? compareCompetitiveStandings(
           {
             name: a.user.name,
-            wins: playerStatsByUserId.get(a.userId)?.wins ?? 0,
-            losses: playerStatsByUserId.get(a.userId)?.losses ?? 0,
+            score:
+              sessionData.type === SessionType.RACE
+                ? (playerStatsByUserId.get(a.userId)?.wins ?? 0) * 3
+                : (playerStatsByUserId.get(a.userId)?.wins ?? 0) -
+                  (playerStatsByUserId.get(a.userId)?.losses ?? 0),
             pointDiff: pointDiffByUserId.get(a.userId) ?? 0,
           },
           {
             name: b.user.name,
-            wins: playerStatsByUserId.get(b.userId)?.wins ?? 0,
-            losses: playerStatsByUserId.get(b.userId)?.losses ?? 0,
+            score:
+              sessionData.type === SessionType.RACE
+                ? (playerStatsByUserId.get(b.userId)?.wins ?? 0) * 3
+                : (playerStatsByUserId.get(b.userId)?.wins ?? 0) -
+                  (playerStatsByUserId.get(b.userId)?.losses ?? 0),
             pointDiff: pointDiffByUserId.get(b.userId) ?? 0,
           }
         )

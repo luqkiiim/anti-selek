@@ -15,6 +15,12 @@ export function getLadderScore(
   return record.wins - record.losses;
 }
 
+export function getRaceScore(
+  record: Pick<LadderRecord, "wins">
+): number {
+  return record.wins * 3;
+}
+
 function ensureRecord(
   records: Map<string, LadderRecord>,
   userId: string
@@ -29,10 +35,11 @@ function ensureRecord(
   return created;
 }
 
-export function deriveLadderRecords(
+function deriveRecords(
   playerIds: Iterable<string>,
-  matches: LadderHistoryMatch[]
-): Map<string, LadderRecord> {
+  matches: LadderHistoryMatch[],
+  getScore: (record: LadderRecord) => number
+) {
   const records = new Map<string, LadderRecord>();
 
   for (const playerId of playerIds) {
@@ -61,7 +68,7 @@ export function deriveLadderRecords(
       record.pointDiff += team1Diff;
       if (team1Won) record.wins += 1;
       if (team2Won) record.losses += 1;
-      record.ladderScore = getLadderScore(record);
+      record.ladderScore = getScore(record);
     }
 
     for (const userId of match.team2) {
@@ -69,17 +76,18 @@ export function deriveLadderRecords(
       record.pointDiff += team2Diff;
       if (team2Won) record.wins += 1;
       if (team1Won) record.losses += 1;
-      record.ladderScore = getLadderScore(record);
+      record.ladderScore = getScore(record);
     }
   }
 
   return records;
 }
 
-export function deriveLadderRecordsByEntryTime(
+function deriveRecordsByEntryTime(
   playerEntryAtById: Map<string, Date | null | undefined>,
-  matches: LadderHistoryMatch[]
-): Map<string, LadderRecord> {
+  matches: LadderHistoryMatch[],
+  getScore: (record: LadderRecord) => number
+) {
   const records = new Map<string, LadderRecord>();
 
   for (const playerId of playerEntryAtById.keys()) {
@@ -114,7 +122,7 @@ export function deriveLadderRecordsByEntryTime(
       record.pointDiff += team1Diff;
       if (team1Won) record.wins += 1;
       if (team2Won) record.losses += 1;
-      record.ladderScore = getLadderScore(record);
+      record.ladderScore = getScore(record);
     }
 
     for (const userId of match.team2) {
@@ -127,9 +135,37 @@ export function deriveLadderRecordsByEntryTime(
       record.pointDiff += team2Diff;
       if (team2Won) record.wins += 1;
       if (team1Won) record.losses += 1;
-      record.ladderScore = getLadderScore(record);
+      record.ladderScore = getScore(record);
     }
   }
 
   return records;
+}
+
+export function deriveLadderRecords(
+  playerIds: Iterable<string>,
+  matches: LadderHistoryMatch[]
+): Map<string, LadderRecord> {
+  return deriveRecords(playerIds, matches, getLadderScore);
+}
+
+export function deriveRaceRecords(
+  playerIds: Iterable<string>,
+  matches: LadderHistoryMatch[]
+): Map<string, LadderRecord> {
+  return deriveRecords(playerIds, matches, getRaceScore);
+}
+
+export function deriveLadderRecordsByEntryTime(
+  playerEntryAtById: Map<string, Date | null | undefined>,
+  matches: LadderHistoryMatch[]
+): Map<string, LadderRecord> {
+  return deriveRecordsByEntryTime(playerEntryAtById, matches, getLadderScore);
+}
+
+export function deriveRaceRecordsByEntryTime(
+  playerEntryAtById: Map<string, Date | null | undefined>,
+  matches: LadderHistoryMatch[]
+): Map<string, LadderRecord> {
+  return deriveRecordsByEntryTime(playerEntryAtById, matches, getRaceScore);
 }

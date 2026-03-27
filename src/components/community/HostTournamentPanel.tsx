@@ -55,6 +55,14 @@ const SESSION_TYPE_INFO: Record<
       "Best for competitive sessions.",
     ],
   },
+  [SessionType.RACE]: {
+    label: "Race",
+    lines: [
+      "Groups by accumulated session race points.",
+      "Wins add 3. Losses do not remove points.",
+      "Best for competitive sessions with a climb.",
+    ],
+  },
 };
 
 function FormatCard({
@@ -72,17 +80,13 @@ function FormatCard({
 }) {
   const info = SESSION_TYPE_INFO[sessionType];
   const bubblePositionClass =
-    sessionType === SessionType.LADDER
-      ? "right-0"
-      : sessionType === SessionType.ELO
-        ? "left-1/2 -translate-x-1/2"
-        : "left-0";
+    sessionType === SessionType.ELO || sessionType === SessionType.RACE
+      ? "right-0 sm:left-1/2 sm:right-auto sm:-translate-x-1/2"
+      : "left-0 sm:left-1/2 sm:-translate-x-1/2";
   const bubbleArrowClass =
-    sessionType === SessionType.LADDER
-      ? "right-4"
-      : sessionType === SessionType.ELO
-        ? "left-1/2 -translate-x-1/2"
-        : "left-4";
+    sessionType === SessionType.ELO || sessionType === SessionType.RACE
+      ? "right-4 sm:left-1/2 sm:right-auto sm:-translate-x-1/2"
+      : "left-4 sm:left-1/2 sm:-translate-x-1/2";
 
   return (
     <div className="relative" data-format-info-root="true">
@@ -262,7 +266,7 @@ export function HostTournamentPanel({
         <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_120px]">
           <div ref={formatInfoAreaRef} className="space-y-1.5">
             <p className="text-sm font-medium text-gray-900">Format</p>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
               {(Object.values(SessionType) as SessionType[]).map((type) => (
                 <FormatCard
                   key={type}

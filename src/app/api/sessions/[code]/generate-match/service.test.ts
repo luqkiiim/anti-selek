@@ -502,6 +502,54 @@ describe("generate match service", () => {
       expect(findBestSingleCourtSelectionV3).not.toHaveBeenCalled();
     });
 
+    it("uses the ladder selector for race sessions", () => {
+      const selection = {
+        ids: ["A", "B", "C", "D"] as [string, string, string, string],
+        players: [] as never[],
+        partition: { team1: ["A", "B"], team2: ["C", "D"] },
+        waitSummary: {
+          totalWaitMs: 0,
+          minimumWaitMs: 0,
+          waitVector: [],
+        },
+        groupingSummary: {
+          maxLadderGap: 0,
+          totalLadderGap: 0,
+          pointDiffSpread: 0,
+          totalPointDiffGap: 0,
+        },
+        balanceGap: 0,
+        randomScore: 0,
+      };
+      vi.mocked(findBestSingleCourtSelectionLadder).mockReturnValueOnce({
+        selection,
+        debug: {} as never,
+      });
+
+      const players = [
+        createSessionPlayer("A"),
+        createSessionPlayer("B"),
+        createSessionPlayer("C"),
+        createSessionPlayer("D"),
+      ];
+
+      expect(
+        selectSingleCourtMatch({
+          rankedCandidates: [] as ReturnType<
+            typeof getRankedCandidates
+          >["rankedCandidates"],
+          playersById: createPlayersById(players),
+          sessionData: createSessionData({
+            type: SessionType.RACE,
+            players,
+          }),
+          rotationHistory: buildRotationHistory([]),
+          reshuffleSource: null,
+        })
+      ).toEqual(selection);
+      expect(findBestSingleCourtSelectionV3).not.toHaveBeenCalled();
+    });
+
     it("falls back to an alternative quartet when reshuffle repeats the same players", () => {
       const initial = createV3Selection(["A", "B", "C", "D"], {
         team1: ["A", "B"],
@@ -714,6 +762,69 @@ describe("generate match service", () => {
           playersById: createPlayersById(players),
           sessionData: createSessionData({
             type: SessionType.LADDER,
+            players,
+          }),
+          rotationHistory: buildRotationHistory([]),
+          requestedMatchCount: 1,
+        })
+      ).toEqual(batchSelection);
+      expect(findBestBatchSelectionV3).not.toHaveBeenCalled();
+    });
+
+    it("uses the ladder batch selector for race sessions", () => {
+      const batchSelection = {
+        selections: [
+          {
+            ids: ["A", "B", "C", "D"] as [string, string, string, string],
+            players: [] as never[],
+            partition: { team1: ["A", "B"], team2: ["C", "D"] },
+            waitSummary: {
+              totalWaitMs: 0,
+              minimumWaitMs: 0,
+              waitVector: [],
+            },
+            groupingSummary: {
+              maxLadderGap: 0,
+              totalLadderGap: 0,
+              pointDiffSpread: 0,
+              totalPointDiffGap: 0,
+            },
+            balanceGap: 0,
+            randomScore: 0,
+          },
+        ],
+        waitSummary: {
+          totalWaitMs: 0,
+          minimumWaitMs: 0,
+          waitVector: [],
+        },
+        maxLadderGap: 0,
+        totalLadderGap: 0,
+        totalPointDiffGap: 0,
+        maxBalanceGap: 0,
+        totalBalanceGap: 0,
+        totalRandomScore: 0,
+      };
+      vi.mocked(findBestBatchSelectionLadder).mockReturnValueOnce({
+        selection: batchSelection,
+        debug: {} as never,
+      });
+
+      const players = [
+        createSessionPlayer("A"),
+        createSessionPlayer("B"),
+        createSessionPlayer("C"),
+        createSessionPlayer("D"),
+      ];
+
+      expect(
+        selectBatchMatches({
+          rankedCandidates: [] as ReturnType<
+            typeof getRankedCandidates
+          >["rankedCandidates"],
+          playersById: createPlayersById(players),
+          sessionData: createSessionData({
+            type: SessionType.RACE,
             players,
           }),
           rotationHistory: buildRotationHistory([]),

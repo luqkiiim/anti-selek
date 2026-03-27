@@ -186,7 +186,8 @@ function updatePlayersForCompletedMatch(
 
   const team1StandingPoints = getStandingPointsForTeam(payload.winnerTeam, 1);
   const team2StandingPoints = getStandingPointsForTeam(payload.winnerTeam, 2);
-  const awardsStandingPoints = sessionType !== SessionType.LADDER;
+  const awardsStandingPoints =
+    sessionType !== SessionType.LADDER && sessionType !== SessionType.RACE;
 
   return players.map((player) => {
     if (team1Ids.has(player.userId)) {

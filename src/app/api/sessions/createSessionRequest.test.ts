@@ -127,7 +127,7 @@ describe("parseCreateSessionRequest", () => {
     ).toThrowError(new SessionRouteError("Invalid session mode", 400));
   });
 
-  it("accepts ladder as a valid session type", () => {
+  it("accepts ladder and race as valid session types", () => {
     const parsed = parseCreateSessionRequest({
       name: "Ladder Night",
       communityId: "community-1",
@@ -135,6 +135,14 @@ describe("parseCreateSessionRequest", () => {
     });
 
     expect(parsed.type).toBe(SessionType.LADDER);
+
+    const raceParsed = parseCreateSessionRequest({
+      name: "Race Night",
+      communityId: "community-1",
+      type: SessionType.RACE,
+    });
+
+    expect(raceParsed.type).toBe(SessionType.RACE);
   });
 
   it("rejects invalid session types", () => {

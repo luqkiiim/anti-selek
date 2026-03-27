@@ -195,7 +195,12 @@ export function parseCreateSessionRequest(
     throw new SessionRouteError("Invalid session mode", 400);
   }
   if (
-    ![SessionType.POINTS, SessionType.ELO, SessionType.LADDER].includes(
+    ![
+      SessionType.POINTS,
+      SessionType.ELO,
+      SessionType.LADDER,
+      SessionType.RACE,
+    ].includes(
       type as SessionType
     )
   ) {

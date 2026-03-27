@@ -3,6 +3,7 @@ import { getSessionModeLabel } from "@/lib/sessionModeLabels";
 import { getBusyPlayerIds } from "@/lib/matchmaking/busyFilter";
 import {
   deriveLadderRecordsByEntryTime,
+  deriveRaceRecordsByEntryTime,
   findBestBatchSelectionLadder,
   findBestSingleCourtSelectionLadder,
   type MatchmakerLadderPlayer,
@@ -104,10 +105,16 @@ function buildLadderPlayers(
       player.ladderEntryAt ?? player.joinedAt ?? null,
     ])
   );
-  const ladderRecordByUserId = deriveLadderRecordsByEntryTime(
-    ladderEntryAtByUserId,
-    buildCompletedMatches(sessionData)
-  );
+  const ladderRecordByUserId =
+    sessionData.type === SessionType.RACE
+      ? deriveRaceRecordsByEntryTime(
+          ladderEntryAtByUserId,
+          buildCompletedMatches(sessionData)
+        )
+      : deriveLadderRecordsByEntryTime(
+          ladderEntryAtByUserId,
+          buildCompletedMatches(sessionData)
+        );
 
   return sessionData.players.map((player) => {
     const record = ladderRecordByUserId.get(player.userId) ?? {
@@ -283,8 +290,10 @@ export function selectSingleCourtMatch({
   reshuffleSource: ReshuffleSource | null;
 }) {
   const completedMatches = buildCompletedMatches(sessionData);
-  const isLadderSession = sessionData.type === SessionType.LADDER;
-  const initialResult = isLadderSession
+  const usesCompetitiveGrouping =
+    sessionData.type === SessionType.LADDER ||
+    sessionData.type === SessionType.RACE;
+  const initialResult = usesCompetitiveGrouping
     ? findBestSingleCourtSelectionLadder(
         buildLadderPlayers(sessionData, playersById, rankedCandidates),
         {
@@ -313,7 +322,7 @@ export function selectSingleCourtMatch({
     return initialResult.selection;
   }
 
-  if (isLadderSession) {
+  if (usesCompetitiveGrouping) {
     return initialResult.selection;
   }
 
@@ -374,7 +383,8 @@ export function selectBatchMatches({
   requestedMatchCount: number;
 }) {
   const result =
-    sessionData.type === SessionType.LADDER
+    sessionData.type === SessionType.LADDER ||
+    sessionData.type === SessionType.RACE
       ? findBestBatchSelectionLadder(
           buildLadderPlayers(sessionData, playersById, rankedCandidates),
           {

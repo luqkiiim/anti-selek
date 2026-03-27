@@ -19,6 +19,8 @@ export function getSessionTypeLabel(type: SessionType | string): string {
       return "Ratings";
     case SessionType.LADDER:
       return "Ladder";
+    case SessionType.RACE:
+      return "Race";
     default:
       return type;
   }

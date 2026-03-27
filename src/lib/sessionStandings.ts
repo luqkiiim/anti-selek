@@ -11,6 +11,12 @@ export interface LadderStandingEntry {
   pointDiff: number;
 }
 
+export interface CompetitiveStandingEntry {
+  name: string;
+  score: number;
+  pointDiff: number;
+}
+
 export function compareSessionStandings(
   a: SessionStandingEntry,
   b: SessionStandingEntry
@@ -33,6 +39,13 @@ export function compareLadderStandings(
     b.pointDiff - a.pointDiff ||
     a.name.localeCompare(b.name)
   );
+}
+
+export function compareCompetitiveStandings(
+  a: CompetitiveStandingEntry,
+  b: CompetitiveStandingEntry
+): number {
+  return b.score - a.score || b.pointDiff - a.pointDiff || a.name.localeCompare(b.name);
 }
 
 export function getStandingPointsForTeam(

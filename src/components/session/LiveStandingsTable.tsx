@@ -38,13 +38,17 @@ interface LiveStandingsTableProps {
 }
 
 function getStandingValue(
-  isLadderSession: boolean,
+  sessionType: string,
   player: Player,
   stats: PlayerStats
 ) {
-  if (isLadderSession) {
+  if (sessionType === SessionType.LADDER) {
     const ladderScore = stats.wins - stats.losses;
     return ladderScore > 0 ? `+${ladderScore}` : `${ladderScore}`;
+  }
+
+  if (sessionType === SessionType.RACE) {
+    return `${stats.wins * 3}`;
   }
 
   return `${player.sessionPoints}`;
@@ -85,6 +89,7 @@ export function LiveStandingsTable({
 }: LiveStandingsTableProps) {
   const isRatingsSession = sessionType === SessionType.ELO;
   const isLadderSession = sessionType === SessionType.LADDER;
+  const isRaceSession = sessionType === SessionType.RACE;
   const isCompleted = sessionStatus === SessionStatus.COMPLETED;
 
   return (
@@ -99,6 +104,8 @@ export function LiveStandingsTable({
             ? "Final Standings"
             : isLadderSession
               ? "Ladder Standings"
+              : isRaceSession
+                ? "Race Standings"
               : "Live Standings"}
         </h2>
       </div>
@@ -118,6 +125,11 @@ export function LiveStandingsTable({
                   <>
                     <span className="sm:hidden">Ld</span>
                     <span className="hidden sm:inline">Ladder</span>
+                  </>
+                ) : isRaceSession ? (
+                  <>
+                    <span className="sm:hidden">Pts</span>
+                    <span className="hidden sm:inline">Points</span>
                   </>
                 ) : (
                   <>
@@ -144,7 +156,7 @@ export function LiveStandingsTable({
               const isMe = player.userId === currentUserId;
               const canToggle = !isCompleted && (isAdmin || isMe);
               const pointDiff = pointDiffByUserId.get(player.userId) ?? 0;
-              const standingValue = getStandingValue(isLadderSession, player, stats);
+              const standingValue = getStandingValue(sessionType, player, stats);
 
               return (
                 <tr

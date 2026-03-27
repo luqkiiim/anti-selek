@@ -2,9 +2,12 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getCommunityEloByUserId } from "@/lib/communityElo";
-import { deriveLadderRecordsByEntryTime } from "@/lib/matchmaking/ladder";
 import {
-  compareLadderStandings,
+  deriveLadderRecordsByEntryTime,
+  deriveRaceRecordsByEntryTime,
+} from "@/lib/matchmaking/ladder";
+import {
+  compareCompetitiveStandings,
   compareSessionStandings,
 } from "@/lib/sessionStandings";
 import { MatchStatus, SessionType } from "@/types/enums";
@@ -47,6 +50,7 @@ export async function GET(
           team1Score: true,
           team2Score: true,
           status: true,
+          completedAt: true,
         }
       }
     },
@@ -144,32 +148,65 @@ export async function GET(
       team1Score: match.team1Score,
       team2Score: match.team2Score,
       status: match.status,
+      completedAt: match.completedAt,
     }))
   );
   const ladderLeaderboard = leaderboardEntries
     .map((entry) => {
       const record = ladderRecordByUserId.get(entry.userId) ?? {
-        wins: 0,
-        losses: 0,
+        ladderScore: 0,
         pointDiff: 0,
       };
 
       return {
         ...entry,
-        wins: record.wins,
-        losses: record.losses,
+        score: record.ladderScore,
         pointDiff: record.pointDiff,
       };
     })
-    .sort(compareLadderStandings);
+    .sort(compareCompetitiveStandings);
+
+  const raceRecordByUserId = deriveRaceRecordsByEntryTime(
+    new Map(
+      sessionData.players.map((player) => [
+        player.userId,
+        player.ladderEntryAt ?? null,
+      ])
+    ),
+    sessionData.matches.map((match) => ({
+      team1: [match.team1User1Id, match.team1User2Id] as [string, string],
+      team2: [match.team2User1Id, match.team2User2Id] as [string, string],
+      team1Score: match.team1Score,
+      team2Score: match.team2Score,
+      status: match.status,
+      completedAt: match.completedAt,
+    }))
+  );
+  const raceLeaderboard = leaderboardEntries
+    .map((entry) => {
+      const record = raceRecordByUserId.get(entry.userId) ?? {
+        ladderScore: 0,
+        pointDiff: 0,
+      };
+
+      return {
+        ...entry,
+        score: record.ladderScore,
+        pointDiff: record.pointDiff,
+      };
+    })
+    .sort(compareCompetitiveStandings);
 
   return NextResponse.json({
     sessionPointsLeaderboard,
     eloLeaderboard,
     ladderLeaderboard,
+    raceLeaderboard,
     currentLeaderboard:
       sessionData.type === SessionType.LADDER
         ? ladderLeaderboard
+        : sessionData.type === SessionType.RACE
+          ? raceLeaderboard
         : sessionPointsLeaderboard,
   });
 }

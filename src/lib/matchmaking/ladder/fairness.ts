@@ -27,7 +27,10 @@ export function buildActivePlayers<T extends MatchmakerLadderPlayer>(
     .filter((player) => !player.isPaused && !player.isBusy)
     .map((player) => ({
       ...player,
-      ladderScore: player.wins - player.losses,
+      ladderScore:
+        typeof player.ladderScore === "number"
+          ? player.ladderScore
+          : player.wins - player.losses,
       effectiveMatchCount: getEffectiveMatchCount(player),
       waitMs: Math.max(0, now - player.availableSince.getTime()),
       randomScore: randomFn(),

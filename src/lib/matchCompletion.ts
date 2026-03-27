@@ -82,7 +82,9 @@ export async function finalizeMatchResult({
   const now = new Date();
   const team1StandingPoints = getStandingPointsForTeam(winnerTeam, 1);
   const team2StandingPoints = getStandingPointsForTeam(winnerTeam, 2);
-  const awardsStandingPoints = match.session.type !== SessionType.LADDER;
+  const awardsStandingPoints =
+    match.session.type !== SessionType.LADDER &&
+    match.session.type !== SessionType.RACE;
 
   const playerIds = [
     match.team1User1Id,

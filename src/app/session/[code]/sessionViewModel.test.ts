@@ -327,4 +327,70 @@ describe("buildSessionViewModel", () => {
       "Dan",
     ]);
   });
+
+  it("sorts race standings by cumulative three-point wins and ignores matches before re-entry", () => {
+    const players = [
+      createPlayer("u1", "Alice"),
+      createPlayer("u2", "Ben"),
+      createPlayer("u3", "Cara", {
+        ladderEntryAt: "2026-03-16T01:30:00.000Z",
+      }),
+      createPlayer("u4", "Dan"),
+    ];
+
+    const sessionData = createSessionData({
+      type: SessionType.RACE,
+      mode: SessionMode.MEXICANO,
+      players,
+      matches: [
+        {
+          id: "match-1",
+          team1User1Id: "u1",
+          team1User2Id: "u2",
+          team2User1Id: "u3",
+          team2User2Id: "u4",
+          team1Score: 21,
+          team2Score: 18,
+          winnerTeam: 1,
+          status: MatchStatus.COMPLETED,
+          completedAt: "2026-03-16T01:00:00.000Z",
+        },
+        {
+          id: "match-2",
+          team1User1Id: "u1",
+          team1User2Id: "u4",
+          team2User1Id: "u2",
+          team2User2Id: "u3",
+          team1Score: 19,
+          team2Score: 21,
+          winnerTeam: 2,
+          status: MatchStatus.COMPLETED,
+          completedAt: "2026-03-16T02:00:00.000Z",
+        },
+      ],
+    });
+
+    const viewModel = buildSessionViewModel({
+      sessionData,
+      communityPlayers: [],
+      rosterSearch: "",
+      manualMatchForm: emptyManualMatchForm,
+      manualCourtId: null,
+      openPreferenceEditor: null,
+    });
+
+    expect(viewModel.sessionTypeLabel).toBe("Race");
+    expect(viewModel.playerStatsByUserId.get("u3")).toEqual({
+      played: 1,
+      wins: 1,
+      losses: 0,
+    });
+    expect(viewModel.pointDiffByUserId.get("u3")).toBe(2);
+    expect(viewModel.sortedPlayers.map((player) => player.user.name)).toEqual([
+      "Ben",
+      "Cara",
+      "Alice",
+      "Dan",
+    ]);
+  });
 });
