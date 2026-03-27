@@ -114,6 +114,7 @@ export function HeroCard({
   actions,
   actionsPosition = "side",
   backHref,
+  onBack,
   backLabel = "Back",
   meta,
 }: {
@@ -123,6 +124,7 @@ export function HeroCard({
   actions?: ReactNode;
   actionsPosition?: "side" | "below";
   backHref?: string;
+  onBack?: () => void;
   backLabel?: string;
   meta?: ReactNode;
 }) {
@@ -137,7 +139,11 @@ export function HeroCard({
       <div className="relative flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
         <div className="space-y-4">
           <div className="flex flex-wrap items-center gap-3">
-            {backHref ? (
+            {onBack ? (
+              <button type="button" onClick={onBack} className="app-button-secondary px-4 py-2">
+                {backLabel}
+              </button>
+            ) : backHref ? (
               <Link href={backHref} className="app-button-secondary px-4 py-2">
                 {backLabel}
               </Link>

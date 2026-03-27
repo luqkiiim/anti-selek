@@ -83,6 +83,16 @@ export default function ProfilePage() {
     if (!data) return 0;
     return data.stats.pointsScored - data.stats.pointsConceded;
   }, [data]);
+  const fallbackBackHref = communityId ? `/community/${communityId}` : "/";
+
+  const handleBack = () => {
+    if (typeof window !== "undefined" && window.history.length > 1) {
+      router.back();
+      return;
+    }
+
+    router.push(fallbackBackHref);
+  };
 
   if (status === "loading" || loading) {
     return (
@@ -124,7 +134,7 @@ export default function ProfilePage() {
               </span>
             </span>
           }
-          backHref={communityId ? `/community/${communityId}` : "/"}
+          onBack={handleBack}
           backLabel="Back"
         />
 
