@@ -99,9 +99,9 @@ export async function createSessionForUser({
     select: { userId: true },
   });
   const memberSet = new Set(memberRows.map((member) => member.userId));
-  const uniquePlayerIds = Array.from(
-    new Set([...input.requestedPlayerIds, requesterId])
-  ).filter((id) => memberSet.has(id));
+  const uniquePlayerIds = Array.from(new Set(input.requestedPlayerIds)).filter(
+    (id) => memberSet.has(id)
+  );
 
   if (uniquePlayerIds.length + input.normalizedGuests.length < 2) {
     throw new SessionRouteError(

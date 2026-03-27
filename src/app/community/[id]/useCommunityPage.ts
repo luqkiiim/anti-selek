@@ -61,9 +61,8 @@ export function useCommunityPage() {
   const selectablePlayers = useMemo(
     () =>
       data.communityMembers
-        .filter((member) => member.id !== data.user?.id)
         .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" })),
-    [data.communityMembers, data.user?.id]
+    [data.communityMembers]
   );
   const currentUserCommunityMember =
     data.communityMembers.find((member) => member.id === data.user?.id) ?? null;
