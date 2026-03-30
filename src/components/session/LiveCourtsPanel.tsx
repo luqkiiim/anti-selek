@@ -70,6 +70,7 @@ export function LiveCourtsPanel({
 }: LiveCourtsPanelProps) {
   const showCreateMatchesAction =
     sessionStatus === SessionStatus.ACTIVE && isAdmin;
+  const showCourtCountPills = courts.length >= 5;
   const canCreateMatches = creatableOpenCourtCount > 0 && !creatingOpenMatches;
   const optimisticCreatingCount = creatingOpenMatches ? creatingOpenCourtCount : 0;
   const displayedActiveMatchesCount = activeMatchesCount + optimisticCreatingCount;
@@ -84,10 +85,16 @@ export function LiveCourtsPanel({
       title={sessionStatus === SessionStatus.ACTIVE ? "Live Courts" : "Courts"}
       action={
         <div className="flex w-full min-w-0 items-start justify-between gap-3 sm:w-auto sm:justify-end">
-          <div className="flex min-w-0 flex-col items-start gap-2">
-            <span className="app-chip app-chip-accent">{displayedActiveMatchesCount} in use</span>
-            <span className="app-chip app-chip-neutral">{displayedReadyCourtsCount} ready</span>
-          </div>
+          {showCourtCountPills ? (
+            <div className="flex min-w-0 flex-col items-start gap-2">
+              <span className="app-chip app-chip-accent">
+                {displayedActiveMatchesCount} in use
+              </span>
+              <span className="app-chip app-chip-neutral">
+                {displayedReadyCourtsCount} ready
+              </span>
+            </div>
+          ) : null}
           {showCreateMatchesAction ? (
             <button
               type="button"
