@@ -102,20 +102,20 @@ export function QueuedMatchCard({
             </div>
           </div>
 
-          {nextReadyCourtLabel ? (
-            <div className="pt-2">
-              <button
-                type="button"
-                onClick={onAssignQueuedMatch}
-                disabled={queueActionDisabled}
-                className="w-full rounded-xl bg-gray-900 py-3 text-sm font-black uppercase text-white shadow-md transition-all active:scale-95 active:bg-gray-800 disabled:opacity-50"
-              >
-                {assigningQueuedMatch
-                  ? "Assigning..."
-                  : `Assign to ${nextReadyCourtLabel}`}
-              </button>
-            </div>
-          ) : null}
+          <div className="pt-2">
+            <button
+              type="button"
+              onClick={nextReadyCourtLabel ? onAssignQueuedMatch : undefined}
+              disabled={queueActionDisabled || !nextReadyCourtLabel}
+              className="w-full rounded-xl bg-gray-900 py-3 text-sm font-black uppercase text-white shadow-md transition-all active:scale-95 active:bg-gray-800 disabled:opacity-50"
+            >
+              {assigningQueuedMatch
+                ? "Assigning..."
+                : nextReadyCourtLabel
+                  ? `Assign to ${nextReadyCourtLabel}`
+                  : "Waiting for Court"}
+            </button>
+          </div>
         </div>
       </div>
     </div>
