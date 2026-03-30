@@ -49,6 +49,10 @@ export async function POST(
 
     const endedAt = sessionData.endedAt ?? new Date();
     const updated = await prisma.$transaction(async (tx) => {
+      await tx.queuedMatch.deleteMany({
+        where: { sessionId: sessionData.id },
+      });
+
       await tx.court.updateMany({
         where: { sessionId: sessionData.id },
         data: { currentMatchId: null },
@@ -90,7 +94,7 @@ export async function POST(
           )
         : updated.players;
 
-    return NextResponse.json({ ...updated, players });
+    return NextResponse.json({ ...updated, players, queuedMatch: null });
   } catch (error) {
     console.error("End session error:", error);
     return NextResponse.json({ error: "Failed to end session" }, { status: 500 });

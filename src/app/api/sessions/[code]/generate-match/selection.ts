@@ -1,5 +1,6 @@
 import { getCommunityEloByUserId } from "@/lib/communityElo";
 import { getSessionModeLabel } from "@/lib/sessionModeLabels";
+import { getQueuedMatchUserIds } from "@/lib/sessionQueue";
 import { getBusyPlayerIds } from "@/lib/matchmaking/busyFilter";
 import {
   deriveLadderRecordsByEntryTime,
@@ -146,9 +147,15 @@ function buildLadderPlayers(
 }
 
 export async function buildMatchmakingState(
-  sessionData: GenerateMatchSession
+  sessionData: GenerateMatchSession,
+  options?: { reserveQueuedPlayers?: boolean }
 ): Promise<MatchmakingState> {
   const busyPlayerIds = getBusyPlayerIds(sessionData.matches);
+  if (options?.reserveQueuedPlayers !== false) {
+    for (const userId of getQueuedMatchUserIds(sessionData.queuedMatch)) {
+      busyPlayerIds.add(userId);
+    }
+  }
   const communityEloByUserId =
     sessionData.communityId && sessionData.players.length > 0
       ? await getCommunityEloByUserId(

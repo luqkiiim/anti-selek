@@ -1,10 +1,12 @@
 "use client";
 
 import { getStandingPointsForTeam } from "@/lib/sessionStandings";
+import { hasQueuedMatchUser } from "@/lib/sessionQueue";
 import type {
   CompletedMatchInfo,
   Match,
   Player,
+  QueuedMatch,
   SessionData,
 } from "@/components/session/sessionTypes";
 import { SessionType } from "@/types/enums";
@@ -47,6 +49,7 @@ interface SessionSnapshotLike {
   }>;
   players?: SessionData["players"];
   matches?: SessionData["matches"];
+  queuedMatch?: QueuedMatch | null;
 }
 
 interface GuestPayload {
@@ -140,6 +143,24 @@ function buildCompletedMatchInfo(
       typeof payload.winnerTeam === "number" ? payload.winnerTeam : 0,
     status: payload.status,
     completedAt: normalizeOptionalDate(payload.completedAt),
+  };
+}
+
+function buildQueuedMatch(
+  sessionData: SessionData,
+  queuedMatch: QueuedMatch | null | undefined
+) {
+  if (!queuedMatch) {
+    return null;
+  }
+
+  return {
+    id: queuedMatch.id,
+    createdAt: normalizeOptionalDate(queuedMatch.createdAt),
+    team1User1: queuedMatch.team1User1,
+    team1User2: queuedMatch.team1User2,
+    team2User1: queuedMatch.team2User1,
+    team2User2: queuedMatch.team2User2,
   };
 }
 
@@ -254,6 +275,10 @@ export function mergeSessionSnapshot(
         })
       : current.courts,
     matches: snapshot.matches ?? current.matches,
+    queuedMatch:
+      snapshot.queuedMatch !== undefined
+        ? buildQueuedMatch(matchContext, snapshot.queuedMatch)
+        : current.queuedMatch,
     viewerCanManage: current.viewerCanManage,
     viewerCommunityRole: current.viewerCommunityRole,
   };
@@ -282,6 +307,16 @@ export function applyGeneratedMatches(
         currentMatch: buildLiveMatch(current, nextMatch, court.currentMatch) ?? court.currentMatch,
       };
     }),
+  };
+}
+
+export function applyQueuedMatch(
+  current: SessionData,
+  queuedMatch: QueuedMatch | null
+) {
+  return {
+    ...current,
+    queuedMatch: buildQueuedMatch(current, queuedMatch),
   };
 }
 
@@ -426,6 +461,9 @@ export function applyPlayerRemoval(current: SessionData, userId: string) {
   return {
     ...current,
     players: current.players.filter((player) => player.userId !== userId),
+    queuedMatch: hasQueuedMatchUser(current.queuedMatch, userId)
+      ? null
+      : current.queuedMatch,
   };
 }
 
@@ -446,6 +484,10 @@ export function applyPlayerPaused(
           }
         : player
     ),
+    queuedMatch:
+      isPaused && hasQueuedMatchUser(current.queuedMatch, userId)
+        ? null
+        : current.queuedMatch,
   };
 }
 

@@ -1,8 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { applyGeneratedMatches } from "./sessionDataMutations";
-import { postGenerateMatchAction } from "./sessionCourtActionApi";
+import { applyGeneratedMatches, applyQueuedMatch } from "./sessionDataMutations";
+import {
+  deleteSessionAction,
+  postGenerateMatchAction,
+  postSessionAction,
+} from "./sessionCourtActionApi";
 import type {
   ManualMatchFormState,
   ManualMatchSlot,
@@ -26,6 +30,9 @@ export function useSessionCourtMatchCreation({
 }: UseSessionMatchActionsDependencies) {
   const [creatingOpenMatches, setCreatingOpenMatches] = useState(false);
   const [creatingOpenCourtCount, setCreatingOpenCourtCount] = useState(0);
+  const [creatingQueuedMatch, setCreatingQueuedMatch] = useState(false);
+  const [clearingQueuedMatch, setClearingQueuedMatch] = useState(false);
+  const [assigningQueuedMatch, setAssigningQueuedMatch] = useState(false);
   const [manualCourtId, setManualCourtId] = useState<string | null>(null);
   const [creatingManualMatch, setCreatingManualMatch] = useState(false);
   const [manualMatchForm, setManualMatchForm] =
@@ -120,13 +127,99 @@ export function useSessionCourtMatchCreation({
     }
   };
 
+  const queueNextMatch = async () => {
+    if (!sessionData) return;
+
+    setCreatingQueuedMatch(true);
+    setError("");
+    try {
+      const { res, data } = await postSessionAction(
+        `/api/sessions/${code}/queue-match`,
+        { safeJson }
+      );
+
+      if (!res.ok) {
+        setError(data.error || "Failed to queue next match");
+        return;
+      }
+
+      patchSessionData((current) => applyQueuedMatch(current, data.queuedMatch ?? null));
+      scheduleSessionRefresh();
+    } catch (err) {
+      console.error(err);
+      setError("Network error queueing next match");
+    } finally {
+      setCreatingQueuedMatch(false);
+    }
+  };
+
+  const clearQueuedMatch = async () => {
+    if (!sessionData?.queuedMatch) return;
+
+    setClearingQueuedMatch(true);
+    setError("");
+    try {
+      const { res, data } = await deleteSessionAction(
+        `/api/sessions/${code}/queue-match`,
+        { safeJson }
+      );
+
+      if (!res.ok) {
+        setError(data.error || "Failed to clear queued match");
+        return;
+      }
+
+      patchSessionData((current) => applyQueuedMatch(current, null));
+      scheduleSessionRefresh();
+    } catch (err) {
+      console.error(err);
+      setError("Network error clearing queued match");
+    } finally {
+      setClearingQueuedMatch(false);
+    }
+  };
+
+  const assignQueuedMatch = async () => {
+    if (!sessionData?.queuedMatch) return;
+
+    setAssigningQueuedMatch(true);
+    setError("");
+    try {
+      const { res, data } = await postSessionAction(
+        `/api/sessions/${code}/queue-match/assign`,
+        { safeJson }
+      );
+
+      if (!res.ok) {
+        setError(data.error || "Failed to assign queued match");
+        return;
+      }
+
+      patchSessionData((current) =>
+        applyQueuedMatch(applyGeneratedMatches(current, [data]), null)
+      );
+      scheduleSessionRefresh();
+    } catch (err) {
+      console.error(err);
+      setError("Network error assigning queued match");
+    } finally {
+      setAssigningQueuedMatch(false);
+    }
+  };
+
   return {
     creatingOpenMatches,
     creatingOpenCourtCount,
+    creatingQueuedMatch,
+    clearingQueuedMatch,
+    assigningQueuedMatch,
     manualCourtId,
     creatingManualMatch,
     manualMatchForm,
     createMatchesForCourts,
+    queueNextMatch,
+    clearQueuedMatch,
+    assignQueuedMatch,
     openManualMatchModal,
     closeManualMatchModal,
     updateManualMatchSlot,

@@ -2,12 +2,14 @@
 
 import { SectionCard } from "@/components/ui/chrome";
 import { SessionStatus } from "@/types/enums";
-import type { Court, Match, MatchScores } from "./sessionTypes";
+import type { Court, Match, MatchScores, QueuedMatch } from "./sessionTypes";
 import { LiveCourtCard } from "./LiveCourtCard";
+import { QueuedMatchCard } from "./QueuedMatchCard";
 
 interface LiveCourtsPanelProps {
   sessionStatus: string;
   courts: Court[];
+  queuedMatch: QueuedMatch | null;
   currentUserId: string;
   isAdmin: boolean;
   isClaimedUser: boolean;
@@ -18,12 +20,20 @@ interface LiveCourtsPanelProps {
   creatableOpenCourtIds: string[];
   creatingOpenMatches: boolean;
   creatingOpenCourtCount: number;
+  canQueueNextMatch: boolean;
+  creatingQueuedMatch: boolean;
+  clearingQueuedMatch: boolean;
+  assigningQueuedMatch: boolean;
+  nextReadyCourtLabel: string | null;
   reshufflingCourtId: string | null;
   undoingCourtId: string | null;
   reopeningMatchId: string | null;
   submittingMatchId: string | null;
   matchScores: MatchScores;
   onCreateMatchesForCourts: (courtIds: string[]) => void;
+  onQueueNextMatch: () => void;
+  onClearQueuedMatch: () => void;
+  onAssignQueuedMatch: () => void;
   onOpenManualMatchModal: (courtId: string) => void;
   onReshuffleMatch: (courtId: string) => void;
   onUndoMatchSelection: (courtId: string) => void;
@@ -42,6 +52,7 @@ interface LiveCourtsPanelProps {
 export function LiveCourtsPanel({
   sessionStatus,
   courts,
+  queuedMatch,
   currentUserId,
   isAdmin,
   isClaimedUser,
@@ -52,12 +63,20 @@ export function LiveCourtsPanel({
   creatableOpenCourtIds,
   creatingOpenMatches,
   creatingOpenCourtCount,
+  canQueueNextMatch,
+  creatingQueuedMatch,
+  clearingQueuedMatch,
+  assigningQueuedMatch,
+  nextReadyCourtLabel,
   reshufflingCourtId,
   undoingCourtId,
   reopeningMatchId,
   submittingMatchId,
   matchScores,
   onCreateMatchesForCourts,
+  onQueueNextMatch,
+  onClearQueuedMatch,
+  onAssignQueuedMatch,
   onOpenManualMatchModal,
   onReshuffleMatch,
   onUndoMatchSelection,
@@ -69,7 +88,15 @@ export function LiveCourtsPanel({
   onReopenScoreForEdit,
 }: LiveCourtsPanelProps) {
   const showCreateMatchesAction =
-    sessionStatus === SessionStatus.ACTIVE && isAdmin;
+    sessionStatus === SessionStatus.ACTIVE &&
+    isAdmin &&
+    !queuedMatch &&
+    !canQueueNextMatch;
+  const showQueueAction =
+    sessionStatus === SessionStatus.ACTIVE &&
+    isAdmin &&
+    !queuedMatch &&
+    canQueueNextMatch;
   const showCourtCountPills = courts.length >= 5;
   const canCreateMatches = creatableOpenCourtCount > 0 && !creatingOpenMatches;
   const optimisticCreatingCount = creatingOpenMatches ? creatingOpenCourtCount : 0;
@@ -104,9 +131,32 @@ export function LiveCourtsPanel({
               {creatingOpenMatches ? "Creating..." : "Create Matches"}
             </button>
           ) : null}
+          {showQueueAction ? (
+            <button
+              type="button"
+              onClick={onQueueNextMatch}
+              disabled={creatingQueuedMatch}
+              className="app-button-primary shrink-0 whitespace-nowrap px-4 py-2.5"
+            >
+              {creatingQueuedMatch ? "Queueing..." : "Queue Next Match"}
+            </button>
+          ) : null}
         </div>
       }
     >
+      {queuedMatch ? (
+        <div className="mb-4">
+          <QueuedMatchCard
+            queuedMatch={queuedMatch}
+            nextReadyCourtLabel={nextReadyCourtLabel}
+            assigningQueuedMatch={assigningQueuedMatch}
+            clearingQueuedMatch={clearingQueuedMatch}
+            onAssignQueuedMatch={onAssignQueuedMatch}
+            onClearQueuedMatch={onClearQueuedMatch}
+          />
+        </div>
+      ) : null}
+
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:gap-4 xl:grid-cols-3">
         {courts
           .slice()

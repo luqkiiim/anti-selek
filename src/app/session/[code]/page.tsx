@@ -126,10 +126,16 @@ export default function SessionPage() {
     courtActionDraft,
     creatingOpenMatches,
     creatingOpenCourtCount,
+    creatingQueuedMatch,
+    clearingQueuedMatch,
+    assigningQueuedMatch,
     manualCourtId,
     creatingManualMatch,
     manualMatchForm,
     createMatchesForCourts,
+    queueNextMatch,
+    clearQueuedMatch,
+    assignQueuedMatch,
     openManualMatchModal,
     closeManualMatchModal,
     updateManualMatchSlot,
@@ -785,6 +791,7 @@ export default function SessionPage() {
                 <LiveCourtsPanel
                   sessionStatus={sessionData.status}
                   courts={sessionData.courts}
+                  queuedMatch={sessionView.queuedMatch}
                   currentUserId={currentUserId}
                   isAdmin={isAdmin}
                   isClaimedUser={isClaimedUser}
@@ -795,12 +802,20 @@ export default function SessionPage() {
                   creatableOpenCourtIds={sessionView.creatableOpenCourtIds}
                   creatingOpenMatches={creatingOpenMatches}
                   creatingOpenCourtCount={creatingOpenCourtCount}
+                  canQueueNextMatch={sessionView.canQueueNextMatch}
+                  creatingQueuedMatch={creatingQueuedMatch}
+                  clearingQueuedMatch={clearingQueuedMatch}
+                  assigningQueuedMatch={assigningQueuedMatch}
+                  nextReadyCourtLabel={sessionView.nextReadyCourtLabel}
                   reshufflingCourtId={reshufflingCourtId}
                   undoingCourtId={undoingCourtId}
                   reopeningMatchId={reopeningMatchId}
                   submittingMatchId={submittingMatchId}
                   matchScores={matchScores}
                   onCreateMatchesForCourts={createMatchesForCourts}
+                  onQueueNextMatch={queueNextMatch}
+                  onClearQueuedMatch={clearQueuedMatch}
+                  onAssignQueuedMatch={assignQueuedMatch}
                   onOpenManualMatchModal={openManualMatchModal}
                   onReshuffleMatch={reshuffleMatch}
                   onUndoMatchSelection={undoMatchSelection}

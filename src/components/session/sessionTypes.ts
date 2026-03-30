@@ -28,6 +28,15 @@ export interface Match {
   completedAt?: string;
 }
 
+export interface QueuedMatch {
+  id: string;
+  createdAt?: string;
+  team1User1: { id: string; name: string };
+  team1User2: { id: string; name: string };
+  team2User1: { id: string; name: string };
+  team2User2: { id: string; name: string };
+}
+
 export interface CompletedMatchInfo {
   id: string;
   team1User1Id: string;
@@ -69,6 +78,7 @@ export interface SessionData {
   courts: Court[];
   players: Player[];
   matches?: CompletedMatchInfo[];
+  queuedMatch?: QueuedMatch | null;
 }
 
 export interface CurrentUser {

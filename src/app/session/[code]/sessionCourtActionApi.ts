@@ -22,3 +22,36 @@ export async function postGenerateMatchAction({
     data: await safeJson(res),
   };
 }
+
+interface SessionActionRequestOptions {
+  code: string;
+  safeJson: UseSessionMatchActionsDependencies["safeJson"];
+}
+
+export async function postSessionAction(
+  url: string,
+  { safeJson }: Pick<SessionActionRequestOptions, "safeJson">
+) {
+  const res = await fetch(url, {
+    method: "POST",
+  });
+
+  return {
+    res,
+    data: await safeJson(res),
+  };
+}
+
+export async function deleteSessionAction(
+  url: string,
+  { safeJson }: Pick<SessionActionRequestOptions, "safeJson">
+) {
+  const res = await fetch(url, {
+    method: "DELETE",
+  });
+
+  return {
+    res,
+    data: await safeJson(res),
+  };
+}

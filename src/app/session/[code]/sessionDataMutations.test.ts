@@ -7,9 +7,11 @@ import {
 } from "@/types/enums";
 import type { SessionData } from "@/components/session/sessionTypes";
 import {
+  applyQueuedMatch,
   applyGeneratedMatches,
   applyGuestAdded,
   applyCourtLabelUpdates,
+  applyPlayerPaused,
   applyPlayerRemoval,
   applyScoreApproval,
   applyScoreReopen,
@@ -283,6 +285,59 @@ describe("sessionDataMutations", () => {
 
     expect(withGuest.players.some((player) => player.userId === "guest-1")).toBe(true);
     expect(withoutGuest.players.some((player) => player.userId === "guest-1")).toBe(false);
+  });
+
+  it("applies a queued next match without disturbing live courts", () => {
+    const updated = applyQueuedMatch(createSessionData(), {
+      id: "queue-1",
+      createdAt: "2026-03-30T10:00:00.000Z",
+      team1User1: { id: "p1", name: "Player 1" },
+      team1User2: { id: "p2", name: "Player 2" },
+      team2User1: { id: "p3", name: "Player 3" },
+      team2User2: { id: "p4", name: "Player 4" },
+    });
+
+    expect(updated.queuedMatch?.id).toBe("queue-1");
+    expect(updated.courts[0].currentMatch).toBeNull();
+  });
+
+  it("keeps the queued next match when other matches are generated", () => {
+    const withQueue = applyQueuedMatch(createSessionData(), {
+      id: "queue-1",
+      team1User1: { id: "p1", name: "Player 1" },
+      team1User2: { id: "p2", name: "Player 2" },
+      team2User1: { id: "p3", name: "Player 3" },
+      team2User2: { id: "p4", name: "Player 4" },
+    });
+
+    const updated = applyGeneratedMatches(withQueue, [
+      {
+        id: "match-1",
+        courtId: "court-1",
+        status: "IN_PROGRESS",
+        team1User1: { id: "p1", name: "Player 1" },
+        team1User2: { id: "p2", name: "Player 2" },
+        team2User1: { id: "p3", name: "Player 3" },
+        team2User2: { id: "p4", name: "Player 4" },
+      },
+    ]);
+
+    expect(updated.queuedMatch?.id).toBe("queue-1");
+    expect(updated.courts[0].currentMatch?.id).toBe("match-1");
+  });
+
+  it("clears the queued next match when a reserved player is paused", () => {
+    const withQueue = applyQueuedMatch(createSessionData(), {
+      id: "queue-1",
+      team1User1: { id: "p1", name: "Player 1" },
+      team1User2: { id: "p2", name: "Player 2" },
+      team2User1: { id: "p3", name: "Player 3" },
+      team2User2: { id: "p4", name: "Player 4" },
+    });
+
+    const updated = applyPlayerPaused(withQueue, "p1", true);
+
+    expect(updated.queuedMatch).toBeNull();
   });
 
   it("does not award session points when approving a ladder match", () => {

@@ -79,6 +79,7 @@ model Session {
   players SessionPlayer[]
   courts  Court[]
   matches Match[]
+  queuedMatch QueuedMatch?
 }
 
 model Court {
@@ -151,6 +152,18 @@ model Match {
   team1User2   User     @relation("Team1Player2", fields: [team1User2Id], references: [id], onDelete: Cascade)
   team2User1   User     @relation("Team2Player1", fields: [team2User1Id], references: [id], onDelete: Cascade)
   team2User2   User     @relation("Team2Player2", fields: [team2User2Id], references: [id], onDelete: Cascade)
+}
+
+model QueuedMatch {
+  id           String   @id @default(cuid())
+  sessionId     String   @unique
+  team1User1Id  String
+  team1User2Id  String
+  team2User1Id  String
+  team2User2Id  String
+  createdAt     DateTime @default(now())
+
+  session Session @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 }
 
 model ClaimRequest {

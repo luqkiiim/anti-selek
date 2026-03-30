@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getCommunityEloByUserId, withCommunityElo } from "@/lib/communityElo";
 import { MatchStatus } from "@/types/enums";
+import { getQueuedMatchUserIds } from "@/lib/sessionQueue";
 
 export const dynamic = "force-dynamic";
 
@@ -67,6 +68,7 @@ export async function GET(
           completedAt: true,
         },
       },
+      queuedMatch: true,
     },
   });
 
@@ -105,9 +107,37 @@ export async function GET(
         )
       : sessionData.players;
 
+  const queuedMatch = sessionData.queuedMatch
+    ? (() => {
+        const playerById = new Map(
+          players.map((player) => [player.userId, player.user])
+        );
+        const [team1User1Id, team1User2Id, team2User1Id, team2User2Id] =
+          getQueuedMatchUserIds(sessionData.queuedMatch);
+        const team1User1 = playerById.get(team1User1Id);
+        const team1User2 = playerById.get(team1User2Id);
+        const team2User1 = playerById.get(team2User1Id);
+        const team2User2 = playerById.get(team2User2Id);
+
+        if (!team1User1 || !team1User2 || !team2User1 || !team2User2) {
+          return null;
+        }
+
+        return {
+          id: sessionData.queuedMatch.id,
+          createdAt: sessionData.queuedMatch.createdAt,
+          team1User1,
+          team1User2,
+          team2User1,
+          team2User2,
+        };
+      })()
+    : null;
+
   return NextResponse.json({
     ...sessionData,
     players,
+    queuedMatch,
     viewerCommunityRole: communityRole,
     viewerCanManage: session.user.isAdmin || communityRole === "ADMIN",
   });

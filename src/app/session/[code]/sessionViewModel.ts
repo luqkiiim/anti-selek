@@ -4,6 +4,8 @@ import {
   deriveLadderRecordsByEntryTime,
   deriveRaceRecordsByEntryTime,
 } from "@/lib/matchmaking/ladder";
+import { getCourtDisplayLabel } from "@/lib/courtLabels";
+import { getQueuedMatchUserIds } from "@/lib/sessionQueue";
 import {
   compareCompetitiveStandings,
   compareSessionStandings,
@@ -14,6 +16,7 @@ import type {
   ManualMatchFormState,
   Player,
   PreferenceEditorState,
+  QueuedMatch,
   SessionData,
 } from "@/components/session/sessionTypes";
 import {
@@ -52,6 +55,10 @@ export interface SessionViewModel {
   completedMatchesCount: number;
   pausedPlayersCount: number;
   guestPlayersCount: number;
+  waitingPlayersCount: number;
+  canQueueNextMatch: boolean;
+  queuedMatch: QueuedMatch | null;
+  nextReadyCourtLabel: string | null;
   pointDiffByUserId: Map<string, number>;
   playerStatsByUserId: Map<string, PlayerSessionStats>;
   sortedPlayers: Player[];
@@ -77,6 +84,10 @@ function buildBusySessionPlayerIds(sessionData: SessionData) {
     busySessionPlayerIds.add(court.currentMatch.team1User2.id);
     busySessionPlayerIds.add(court.currentMatch.team2User1.id);
     busySessionPlayerIds.add(court.currentMatch.team2User2.id);
+  });
+
+  getQueuedMatchUserIds(sessionData.queuedMatch).forEach((userId) => {
+    busySessionPlayerIds.add(userId);
   });
 
   return busySessionPlayerIds;
@@ -237,6 +248,7 @@ export function buildSessionViewModel({
   const availableAutoMatchPlayersCount = sessionData.players.filter(
     (player) => !player.isPaused && !busySessionPlayerIds.has(player.userId)
   ).length;
+  const waitingPlayersCount = availableAutoMatchPlayersCount;
   const creatableOpenCourtCount = Math.min(
     openCourts.length,
     Math.floor(availableAutoMatchPlayersCount / 4)
@@ -251,6 +263,7 @@ export function buildSessionViewModel({
   const guestPlayersCount = sessionData.players.filter(
     (player) => player.isGuest
   ).length;
+  const nextReadyCourt = openCourts[0] ?? null;
 
   const { playerStatsByUserId, pointDiffByUserId } =
     buildPlayerPerformanceMaps(sessionData);
@@ -312,6 +325,17 @@ export function buildSessionViewModel({
     completedMatchesCount,
     pausedPlayersCount,
     guestPlayersCount,
+    waitingPlayersCount,
+    canQueueNextMatch:
+      sessionData.status === SessionStatus.ACTIVE &&
+      !isCompletedSession &&
+      readyCourtsCount === 0 &&
+      !sessionData.queuedMatch &&
+      waitingPlayersCount >= 4,
+    queuedMatch: sessionData.queuedMatch ?? null,
+    nextReadyCourtLabel: nextReadyCourt
+      ? getCourtDisplayLabel(nextReadyCourt)
+      : null,
     pointDiffByUserId,
     playerStatsByUserId,
     sortedPlayers,

@@ -29,6 +29,7 @@ export async function loadSessionRecord(code: string) {
         include: { user: { select: { id: true, name: true, elo: true } } },
       },
       matches: true,
+      queuedMatch: true,
     },
   });
 }

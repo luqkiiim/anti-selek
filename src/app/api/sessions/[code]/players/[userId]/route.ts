@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { hasQueuedMatchUser } from "@/lib/sessionQueue";
 import { deleteEphemeralGuestUsers } from "@/lib/sessionLifecycle";
 import { MatchStatus, SessionStatus } from "@/types/enums";
 
@@ -130,6 +131,10 @@ export async function DELETE(
     }
 
     const result = await prisma.$transaction(async (tx) => {
+      const queuedMatch = await tx.queuedMatch.findUnique({
+        where: { sessionId: sessionData.id },
+      });
+
       await tx.sessionPlayer.delete({
         where: {
           sessionId_userId: {
@@ -142,6 +147,12 @@ export async function DELETE(
       const deletedGuestUsers = existingPlayer.isGuest
         ? await deleteEphemeralGuestUsers(tx, [userId])
         : 0;
+
+      if (hasQueuedMatchUser(queuedMatch, userId)) {
+        await tx.queuedMatch.delete({
+          where: { sessionId: sessionData.id },
+        });
+      }
 
       return {
         removedUserId: userId,

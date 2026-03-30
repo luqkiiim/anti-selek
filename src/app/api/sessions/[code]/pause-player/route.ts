@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { calculateNoCatchUpMatchmakingCredit } from "@/lib/matchmaking/matchmakingCredit";
 import { prisma } from "@/lib/prisma";
+import { hasQueuedMatchUser } from "@/lib/sessionQueue";
 
 export const dynamic = "force-dynamic";
 
@@ -98,21 +99,37 @@ export async function POST(
       });
     }
 
-    const updated = await prisma.sessionPlayer.update({
-      where: {
-        sessionId_userId: {
-          sessionId: sessionData.id,
-          userId,
+    const updated = await prisma.$transaction(async (tx) => {
+      const nextPlayer = await tx.sessionPlayer.update({
+        where: {
+          sessionId_userId: {
+            sessionId: sessionData.id,
+            userId,
+          },
         },
-      },
-      data: { 
-        isPaused,
-        pausedAt: isPaused ? new Date() : null,
-        availableSince: isPaused ? undefined : new Date(), 
-        ladderEntryAt: isPaused ? undefined : new Date(),
-        inactiveSeconds: { increment: inactiveSecondsToIncrement },
-        matchmakingMatchesCredit: nextMatchmakingMatchesCredit,
-      },
+        data: {
+          isPaused,
+          pausedAt: isPaused ? new Date() : null,
+          availableSince: isPaused ? undefined : new Date(),
+          ladderEntryAt: isPaused ? undefined : new Date(),
+          inactiveSeconds: { increment: inactiveSecondsToIncrement },
+          matchmakingMatchesCredit: nextMatchmakingMatchesCredit,
+        },
+      });
+
+      if (isPaused) {
+        const queuedMatch = await tx.queuedMatch.findUnique({
+          where: { sessionId: sessionData.id },
+        });
+
+        if (hasQueuedMatchUser(queuedMatch, userId)) {
+          await tx.queuedMatch.delete({
+            where: { sessionId: sessionData.id },
+          });
+        }
+      }
+
+      return nextPlayer;
     });
 
     return NextResponse.json(updated);
