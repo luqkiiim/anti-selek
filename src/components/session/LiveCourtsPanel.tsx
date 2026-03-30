@@ -144,19 +144,6 @@ export function LiveCourtsPanel({
         </div>
       }
     >
-      {queuedMatch ? (
-        <div className="mb-4">
-          <QueuedMatchCard
-            queuedMatch={queuedMatch}
-            nextReadyCourtLabel={nextReadyCourtLabel}
-            assigningQueuedMatch={assigningQueuedMatch}
-            clearingQueuedMatch={clearingQueuedMatch}
-            onAssignQueuedMatch={onAssignQueuedMatch}
-            onClearQueuedMatch={onClearQueuedMatch}
-          />
-        </div>
-      ) : null}
-
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:gap-4 xl:grid-cols-3">
         {courts
           .slice()
@@ -187,6 +174,19 @@ export function LiveCourtsPanel({
             />
           ))}
       </div>
+
+      {queuedMatch ? (
+        <div className="mt-4">
+          <QueuedMatchCard
+            queuedMatch={queuedMatch}
+            nextReadyCourtLabel={nextReadyCourtLabel}
+            assigningQueuedMatch={assigningQueuedMatch}
+            clearingQueuedMatch={clearingQueuedMatch}
+            onAssignQueuedMatch={onAssignQueuedMatch}
+            onClearQueuedMatch={onClearQueuedMatch}
+          />
+        </div>
+      ) : null}
     </SectionCard>
   );
 }
