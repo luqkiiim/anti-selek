@@ -18,6 +18,7 @@ import { ManualMatchModal } from "@/components/session/ManualMatchModal";
 import { SessionActionConfirmModal } from "@/components/session/SessionActionConfirmModal";
 import { SessionOverviewPanel } from "@/components/session/SessionOverviewPanel";
 import { SessionPodium } from "@/components/session/SessionPodium";
+import { SessionPlayersModal } from "@/components/session/SessionPlayersModal";
 import { SessionPreferenceEditorPortal } from "@/components/session/SessionPreferenceEditorPortal";
 import { SessionRosterModal } from "@/components/session/SessionRosterModal";
 import { SessionSettingsModal } from "@/components/session/SessionSettingsModal";
@@ -76,6 +77,7 @@ export default function SessionPage() {
   const [error, setError] = useState("");
   const [endingSession, setEndingSession] = useState(false);
   const [showEndSessionConfirm, setShowEndSessionConfirm] = useState(false);
+  const [showPlayersModal, setShowPlayersModal] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [courtLabelDrafts, setCourtLabelDrafts] = useState<
     Record<string, string>
@@ -273,6 +275,7 @@ export default function SessionPage() {
     !!sessionData?.viewerCanManage || !!user?.isAdmin || !!session?.user?.isAdmin;
   const isClaimedUser = user?.isClaimed === true;
   const currentUserId = session?.user?.id || "";
+  const canOpenPlayerManager = isAdmin && sessionData?.status !== SessionStatus.COMPLETED;
   const canOpenSettings = isAdmin && sessionData?.status !== SessionStatus.COMPLETED;
 
   useEffect(() => {
@@ -280,6 +283,12 @@ export default function SessionPage() {
       setShowSettingsModal(false);
     }
   }, [canOpenSettings]);
+
+  useEffect(() => {
+    if (!canOpenPlayerManager) {
+      setShowPlayersModal(false);
+    }
+  }, [canOpenPlayerManager]);
 
   const sessionView = useMemo(() => {
     if (!sessionData) {
@@ -779,8 +788,10 @@ export default function SessionPage() {
                 canStartSession={
                   isAdmin && sessionData.status === SessionStatus.WAITING
                 }
+                canOpenPlayerManager={Boolean(canOpenPlayerManager)}
                 canOpenSettings={Boolean(canOpenSettings)}
                 onStartSession={startSession}
+                onOpenPlayerManager={() => setShowPlayersModal(true)}
                 onOpenSettings={openSettingsModal}
                 onOpenMatchHistory={() => router.push(`/session/${code}/history`)}
               />
@@ -879,6 +890,14 @@ export default function SessionPage() {
         onEndSession={openEndSessionConfirm}
         onCourtLabelChange={handleCourtLabelChange}
         onSaveCourtLabels={() => void saveCourtLabels()}
+      />
+
+      <SessionPlayersModal
+        open={showPlayersModal}
+        players={sessionData.players}
+        currentUserId={currentUserId}
+        onClose={() => setShowPlayersModal(false)}
+        onTogglePause={togglePausePlayer}
       />
 
       {courtActionDraft ? (

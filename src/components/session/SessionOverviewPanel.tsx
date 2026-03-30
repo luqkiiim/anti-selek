@@ -13,8 +13,10 @@ interface SessionOverviewPanelProps {
   pausedPlayersCount: number;
   sessionStatus: string;
   canStartSession: boolean;
+  canOpenPlayerManager: boolean;
   canOpenSettings: boolean;
   onStartSession: () => void;
+  onOpenPlayerManager: () => void;
   onOpenSettings: () => void;
   onOpenMatchHistory: () => void;
 }
@@ -28,8 +30,10 @@ export function SessionOverviewPanel({
   pausedPlayersCount,
   sessionStatus,
   canStartSession,
+  canOpenPlayerManager,
   canOpenSettings,
   onStartSession,
+  onOpenPlayerManager,
   onOpenSettings,
   onOpenMatchHistory,
 }: SessionOverviewPanelProps) {
@@ -72,6 +76,15 @@ export function SessionOverviewPanel({
           {canStartSession ? (
             <button type="button" onClick={onStartSession} className="app-button-primary">
               Start Session
+            </button>
+          ) : null}
+          {canOpenPlayerManager ? (
+            <button
+              type="button"
+              onClick={onOpenPlayerManager}
+              className="app-button-secondary"
+            >
+              Players
             </button>
           ) : null}
           {canOpenSettings ? (
