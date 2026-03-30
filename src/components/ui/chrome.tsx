@@ -64,22 +64,30 @@ export function SectionCard({
   className,
 }: {
   eyebrow?: string;
-  title: string;
+  title?: ReactNode;
   description?: ReactNode;
   action?: ReactNode;
   children: ReactNode;
   className?: string;
 }) {
+  const hasHeaderContent = Boolean(eyebrow) || Boolean(title) || Boolean(description);
+
   return (
     <section className={cx("app-panel p-5 sm:p-6", className)}>
       <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
-        <div className="space-y-2">
-          {eyebrow ? <p className="app-eyebrow">{eyebrow}</p> : null}
-          <div>
-            <h2 className="text-xl font-semibold text-gray-900 sm:text-2xl">{title}</h2>
-            {description ? <p className="mt-2 text-sm text-gray-600">{description}</p> : null}
+        {hasHeaderContent ? (
+          <div className="space-y-2">
+            {eyebrow ? <p className="app-eyebrow">{eyebrow}</p> : null}
+            {title || description ? (
+              <div>
+                {title ? <h2 className="text-xl font-semibold text-gray-900 sm:text-2xl">{title}</h2> : null}
+                {description ? <p className="mt-2 text-sm text-gray-600">{description}</p> : null}
+              </div>
+            ) : null}
           </div>
-        </div>
+        ) : (
+          <div />
+        )}
         {action}
       </div>
       {children}
