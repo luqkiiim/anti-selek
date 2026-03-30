@@ -91,19 +91,6 @@ export function QueuedMatchCard({
               : "Reserved for the next free court"}
           </p>
 
-          {nextReadyCourtLabel ? (
-            <button
-              type="button"
-              onClick={onAssignQueuedMatch}
-              disabled={queueActionDisabled}
-              className="w-full rounded-xl bg-gray-900 px-3 py-2.5 text-[11px] font-black uppercase tracking-[0.2em] text-white transition-all active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {assigningQueuedMatch
-                ? "Assigning..."
-                : `Assign to ${nextReadyCourtLabel}`}
-            </button>
-          ) : null}
-
           <div className="rounded-2xl border border-blue-100 bg-blue-50/40 p-3 transition-all md:p-3.5">
             <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2.5 sm:gap-3 md:gap-4 xl:gap-3">
               <TeamNames
@@ -122,6 +109,21 @@ export function QueuedMatchCard({
           </div>
         </div>
       </div>
+
+      {nextReadyCourtLabel ? (
+        <div className="px-3 pb-3 md:px-4 md:pb-4">
+          <button
+            type="button"
+            onClick={onAssignQueuedMatch}
+            disabled={queueActionDisabled}
+            className="w-full rounded-xl bg-gray-900 px-3 py-2.5 text-[11px] font-black uppercase tracking-[0.2em] text-white transition-all active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {assigningQueuedMatch
+              ? "Assigning..."
+              : `Assign to ${nextReadyCourtLabel}`}
+          </button>
+        </div>
+      ) : null}
     </div>
   );
 }
