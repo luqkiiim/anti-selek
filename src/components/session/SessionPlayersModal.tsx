@@ -10,8 +10,10 @@ interface SessionPlayersModalProps {
   open: boolean;
   players: Player[];
   currentUserId: string;
+  canEditPreferences: boolean;
   onClose: () => void;
   onTogglePause: (userId: string, isPaused: boolean) => void;
+  onOpenPreferenceEditor: (userId: string, triggerEl: HTMLElement) => void;
 }
 
 function getPlayerFilterCounts(players: Player[]) {
@@ -27,8 +29,10 @@ export function SessionPlayersModal({
   open,
   players,
   currentUserId,
+  canEditPreferences,
   onClose,
   onTogglePause,
+  onOpenPreferenceEditor,
 }: SessionPlayersModalProps) {
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<PlayerFilter>("all");
@@ -70,7 +74,7 @@ export function SessionPlayersModal({
   return (
     <ModalFrame
       title="Players"
-      subtitle="Search, pause, or unpause players."
+      subtitle="Search, pause, unpause, or edit player preferences."
       onClose={onClose}
       footer={
         <div className="flex justify-end">
@@ -147,17 +151,30 @@ export function SessionPlayersModal({
                   <p className="text-xs text-gray-500">Rating {player.user.elo}</p>
                 </div>
 
-                <button
-                  type="button"
-                  onClick={() => onTogglePause(player.userId, player.isPaused)}
-                  className={`shrink-0 rounded-xl px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.18em] transition ${
-                    player.isPaused
-                      ? "bg-amber-500 text-white"
-                      : "bg-gray-900 text-white"
-                  }`}
-                >
-                  {player.isPaused ? "Unpause" : "Pause"}
-                </button>
+                <div className="flex shrink-0 items-center gap-2">
+                  {canEditPreferences ? (
+                    <button
+                      type="button"
+                      onClick={(event) =>
+                        onOpenPreferenceEditor(player.userId, event.currentTarget)
+                      }
+                      className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-blue-700 transition"
+                    >
+                      Prefs
+                    </button>
+                  ) : null}
+                  <button
+                    type="button"
+                    onClick={() => onTogglePause(player.userId, player.isPaused)}
+                    className={`rounded-xl px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.18em] transition ${
+                      player.isPaused
+                        ? "bg-amber-500 text-white"
+                        : "bg-gray-900 text-white"
+                    }`}
+                  >
+                    {player.isPaused ? "Unpause" : "Pause"}
+                  </button>
+                </div>
               </div>
             ))
           )}

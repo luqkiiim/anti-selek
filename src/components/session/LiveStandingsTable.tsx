@@ -28,13 +28,9 @@ interface LiveStandingsTableProps {
   sessionStatus: string;
   players: Player[];
   currentUserId: string;
-  isAdmin: boolean;
   pointDiffByUserId: Map<string, number>;
-  savingPreferencesFor: string | null;
   getPlayerProfileHref: (player: Player) => string;
   calculatePlayerSessionStats: (userId: string) => PlayerStats;
-  onTogglePause: (userId: string, isPaused: boolean) => void;
-  onTogglePreferenceEditor: (userId: string, triggerEl: HTMLElement) => void;
 }
 
 function getStandingValue(
@@ -79,13 +75,9 @@ export function LiveStandingsTable({
   sessionStatus,
   players,
   currentUserId,
-  isAdmin,
   pointDiffByUserId,
-  savingPreferencesFor,
   getPlayerProfileHref,
   calculatePlayerSessionStats,
-  onTogglePause,
-  onTogglePreferenceEditor,
 }: LiveStandingsTableProps) {
   const isRatingsSession = sessionType === SessionType.ELO;
   const isLadderSession = sessionType === SessionType.LADDER;
@@ -154,7 +146,6 @@ export function LiveStandingsTable({
             {players.map((player, idx) => {
               const stats = calculatePlayerSessionStats(player.userId);
               const isMe = player.userId === currentUserId;
-              const canToggle = !isCompleted && (isAdmin || isMe);
               const pointDiff = pointDiffByUserId.get(player.userId) ?? 0;
               const standingValue = getStandingValue(sessionType, player, stats);
 
@@ -201,49 +192,6 @@ export function LiveStandingsTable({
                         ) : null}
                       </div>
 
-                      {canToggle || (!isCompleted && isAdmin) || savingPreferencesFor === player.userId ? (
-                        <div className="flex flex-wrap items-center gap-1.5 text-[10px] leading-none sm:gap-2">
-                          {canToggle ? (
-                            <button
-                              type="button"
-                              onClick={() => onTogglePause(player.userId, player.isPaused)}
-                              className={`rounded-full border px-2 py-1 text-[9px] font-medium uppercase tracking-wide transition sm:px-2.5 sm:text-[10px] ${
-                                player.isPaused
-                                  ? "border-amber-200 bg-amber-50 text-amber-800"
-                                  : "border-gray-200 bg-white text-gray-700"
-                              }`}
-                            >
-                              {player.isPaused ? "Resume" : "Pause"}
-                            </button>
-                          ) : null}
-
-                          {!isCompleted && isAdmin ? (
-                            <button
-                              type="button"
-                              onClick={(event) =>
-                                onTogglePreferenceEditor(player.userId, event.currentTarget)
-                              }
-                              className="rounded-full border border-blue-200 bg-blue-50 px-2 py-1 text-[9px] font-medium uppercase tracking-wide text-blue-700 transition sm:px-2.5 sm:text-[10px]"
-                            >
-                              <span className="sm:hidden">Pf</span>
-                              <span className="hidden sm:inline">Prefs</span>
-                            </button>
-                          ) : null}
-
-                          {savingPreferencesFor === player.userId ? (
-                            <span className="text-[9px] font-medium uppercase tracking-wide text-blue-700 sm:text-[10px]">
-                              Saving
-                            </span>
-                          ) : null}
-                        </div>
-                      ) : null}
-
-                      {savingPreferencesFor === player.userId &&
-                      !(canToggle || (!isCompleted && isAdmin)) ? (
-                        <div className="text-[9px] font-medium uppercase tracking-wide text-blue-700 sm:text-[10px]">
-                          Saving
-                        </div>
-                      ) : null}
                     </div>
                   </td>
                   <td className="whitespace-nowrap px-1.5 py-2 text-center align-middle sm:w-[5.25rem] sm:px-4">

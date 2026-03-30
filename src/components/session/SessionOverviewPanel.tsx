@@ -78,15 +78,6 @@ export function SessionOverviewPanel({
               Start Session
             </button>
           ) : null}
-          {canOpenPlayerManager ? (
-            <button
-              type="button"
-              onClick={onOpenPlayerManager}
-              className="app-button-secondary"
-            >
-              Players
-            </button>
-          ) : null}
           {canOpenSettings ? (
             <button
               type="button"
@@ -103,6 +94,15 @@ export function SessionOverviewPanel({
           >
             Match History
           </button>
+          {canOpenPlayerManager ? (
+            <button
+              type="button"
+              onClick={onOpenPlayerManager}
+              className="app-button-secondary ml-auto"
+            >
+              Players
+            </button>
+          ) : null}
         </div>
       </div>
 

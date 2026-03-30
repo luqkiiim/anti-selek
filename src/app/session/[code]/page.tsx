@@ -860,16 +860,12 @@ export default function SessionPage() {
                   sessionStatus={sessionData.status}
                   players={sessionView.sortedPlayers}
                   currentUserId={currentUserId}
-                  isAdmin={isAdmin}
                   pointDiffByUserId={sessionView.pointDiffByUserId}
-                  savingPreferencesFor={savingPreferencesFor}
                   getPlayerProfileHref={sessionView.getPlayerProfileHref}
                   calculatePlayerSessionStats={(userId) =>
                     sessionView.playerStatsByUserId.get(userId) ??
                     EMPTY_PLAYER_SESSION_STATS
                   }
-                  onTogglePause={togglePausePlayer}
-                  onTogglePreferenceEditor={togglePreferenceEditor}
                 />
               </div>
             </section>
@@ -896,8 +892,10 @@ export default function SessionPage() {
         open={showPlayersModal}
         players={sessionData.players}
         currentUserId={currentUserId}
+        canEditPreferences={!sessionView.isCompletedSession}
         onClose={() => setShowPlayersModal(false)}
         onTogglePause={togglePausePlayer}
+        onOpenPreferenceEditor={togglePreferenceEditor}
       />
 
       {courtActionDraft ? (
