@@ -97,24 +97,11 @@ export function LiveStandingsTable({
 }: LiveStandingsTableProps) {
   const isLadderSession = sessionType === SessionType.LADDER;
   const isRaceSession = sessionType === SessionType.RACE;
-  const isCompleted = sessionStatus === SessionStatus.COMPLETED;
-  const standingsTitle = isCompleted
-    ? "Final Standings"
-    : isLadderSession
-      ? "Ladder Standings"
-      : isRaceSession
-        ? "Race Standings"
-        : "Live Standings";
 
   return (
     <div className="app-panel overflow-hidden">
       <div className="flex items-center justify-between gap-3 border-b border-gray-100 px-5 py-4">
-        <div className="min-w-0">
-          <p className="app-eyebrow">Standings</p>
-          <h2 className="mt-1 truncate text-base font-semibold text-gray-900 sm:text-lg">
-            {standingsTitle}
-          </h2>
-        </div>
+        <p className="app-section-eyebrow">Standings</p>
         <span className="rounded-full border border-gray-200 bg-gray-50 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-gray-500 sm:text-[11px]">
           {isLadderSession
             ? "Ladder"

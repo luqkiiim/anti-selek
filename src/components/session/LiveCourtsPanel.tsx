@@ -109,6 +109,7 @@ export function LiveCourtsPanel({
   return (
     <SectionCard
       eyebrow={sessionStatus === SessionStatus.ACTIVE ? "Court board" : "Court layout"}
+      eyebrowClassName="app-section-eyebrow"
       action={
         <div className="flex w-full min-w-0 items-start justify-between gap-3 sm:w-auto sm:justify-end">
           {showCourtCountPills ? (

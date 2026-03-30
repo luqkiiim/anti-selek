@@ -57,6 +57,7 @@ export function StatCard({
 
 export function SectionCard({
   eyebrow,
+  eyebrowClassName,
   title,
   description,
   action,
@@ -64,6 +65,7 @@ export function SectionCard({
   className,
 }: {
   eyebrow?: string;
+  eyebrowClassName?: string;
   title?: ReactNode;
   description?: ReactNode;
   action?: ReactNode;
@@ -77,7 +79,7 @@ export function SectionCard({
       <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
         {hasHeaderContent ? (
           <div className="space-y-2">
-            {eyebrow ? <p className="app-eyebrow">{eyebrow}</p> : null}
+            {eyebrow ? <p className={cx("app-eyebrow", eyebrowClassName)}>{eyebrow}</p> : null}
             {title || description ? (
               <div>
                 {title ? <h2 className="text-xl font-semibold text-gray-900 sm:text-2xl">{title}</h2> : null}

@@ -60,7 +60,7 @@ export function SessionOverviewPanel({
     <section className="app-panel p-5 sm:p-6">
       <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
         <div className="flex flex-wrap items-center gap-2.5">
-          <p className="app-eyebrow">
+          <p className="app-section-eyebrow">
             {isCompleted
               ? "Completed session"
               : isWaiting
