@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import {
+  applyGeneratedMatches,
+  applyQueuedMatch,
   applyScoreApproval,
   applyScoreReopen,
   applyScoreSubmission,
@@ -92,11 +94,29 @@ export function useSessionScoreActions({
           return nextScores;
         });
         setConfirmingScoreMatchId((prev) => (prev === matchId ? null : prev));
-        patchSessionData((current) =>
-          data.status === MatchStatus.COMPLETED
-            ? applyScoreApproval(current, data)
-            : applyScoreSubmission(current, data)
-        );
+        patchSessionData((current) => {
+          const nextState =
+            data.status === MatchStatus.COMPLETED
+              ? applyScoreApproval(current, data)
+              : applyScoreSubmission(current, data);
+
+          if (data.status !== MatchStatus.COMPLETED) {
+            return nextState;
+          }
+
+          if (data.autoAssignedMatch) {
+            return applyQueuedMatch(
+              applyGeneratedMatches(nextState, [data.autoAssignedMatch]),
+              null
+            );
+          }
+
+          if (data.queuedMatchCleared) {
+            return applyQueuedMatch(nextState, null);
+          }
+
+          return nextState;
+        });
         scheduleSessionRefresh();
       } else {
         setError(data.error || "Failed to submit score");
@@ -125,7 +145,22 @@ export function useSessionScoreActions({
       });
       const data = await safeJson(res);
       if (res.ok) {
-        patchSessionData((current) => applyScoreApproval(current, data));
+        patchSessionData((current) => {
+          const nextState = applyScoreApproval(current, data);
+
+          if (data.autoAssignedMatch) {
+            return applyQueuedMatch(
+              applyGeneratedMatches(nextState, [data.autoAssignedMatch]),
+              null
+            );
+          }
+
+          if (data.queuedMatchCleared) {
+            return applyQueuedMatch(nextState, null);
+          }
+
+          return nextState;
+        });
         scheduleSessionRefresh();
       } else {
         setError(data.error || "Failed to approve score");

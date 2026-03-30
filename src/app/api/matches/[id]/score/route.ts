@@ -5,6 +5,7 @@ import { shouldRequireOpponentApproval } from "@/lib/matchApprovalRules";
 import { prisma } from "@/lib/prisma";
 import { isValidBadmintonScore } from "@/lib/matchRules";
 import { MatchStatus } from "@/types/enums";
+import { autoAssignQueuedMatch } from "../../_lib/autoAssignQueuedMatch";
 
 export const dynamic = "force-dynamic";
 
@@ -124,7 +125,13 @@ export async function POST(
           finalTeam2Score: team2Score,
           scoreSubmittedByUserId: session.user.id,
         });
-        return NextResponse.json(updated);
+        const { autoAssignedMatch, queuedMatchCleared } =
+          await autoAssignQueuedMatch(match.sessionId);
+        return NextResponse.json({
+          ...updated,
+          autoAssignedMatch,
+          queuedMatchCleared,
+        });
       } catch (error: unknown) {
         const message = error instanceof Error ? error.message : "";
         if (message === "ALREADY_PROCESSED") {

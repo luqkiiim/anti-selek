@@ -5,6 +5,7 @@ import { canApprovePendingSubmission } from "@/lib/matchApprovalRules";
 import { isValidBadmintonScore } from "@/lib/matchRules";
 import { prisma } from "@/lib/prisma";
 import { MatchStatus } from "@/types/enums";
+import { autoAssignQueuedMatch } from "../../_lib/autoAssignQueuedMatch";
 
 export const dynamic = "force-dynamic";
 
@@ -126,7 +127,14 @@ export async function POST(
         finalTeam2Score,
       });
 
-      return NextResponse.json(result);
+      const { autoAssignedMatch, queuedMatchCleared } =
+        await autoAssignQueuedMatch(match.sessionId);
+
+      return NextResponse.json({
+        ...result,
+        autoAssignedMatch,
+        queuedMatchCleared,
+      });
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : "";
       if (message === "ALREADY_PROCESSED") {

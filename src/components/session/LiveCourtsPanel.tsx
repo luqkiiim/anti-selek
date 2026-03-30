@@ -23,9 +23,7 @@ interface LiveCourtsPanelProps {
   canQueueNextMatch: boolean;
   creatingQueuedMatch: boolean;
   clearingQueuedMatch: boolean;
-  assigningQueuedMatch: boolean;
   reshufflingQueuedMatch: boolean;
-  nextReadyCourtLabel: string | null;
   reshufflingCourtId: string | null;
   undoingCourtId: string | null;
   reopeningMatchId: string | null;
@@ -34,7 +32,6 @@ interface LiveCourtsPanelProps {
   onCreateMatchesForCourts: (courtIds: string[]) => void;
   onQueueNextMatch: () => void;
   onClearQueuedMatch: () => void;
-  onAssignQueuedMatch: () => void;
   onReshuffleQueuedMatch: () => void;
   onOpenManualMatchModal: (courtId: string) => void;
   onReshuffleMatch: (courtId: string) => void;
@@ -68,9 +65,7 @@ export function LiveCourtsPanel({
   canQueueNextMatch,
   creatingQueuedMatch,
   clearingQueuedMatch,
-  assigningQueuedMatch,
   reshufflingQueuedMatch,
-  nextReadyCourtLabel,
   reshufflingCourtId,
   undoingCourtId,
   reopeningMatchId,
@@ -79,7 +74,6 @@ export function LiveCourtsPanel({
   onCreateMatchesForCourts,
   onQueueNextMatch,
   onClearQueuedMatch,
-  onAssignQueuedMatch,
   onReshuffleQueuedMatch,
   onOpenManualMatchModal,
   onReshuffleMatch,
@@ -181,11 +175,8 @@ export function LiveCourtsPanel({
         {queuedMatch ? (
           <QueuedMatchCard
             queuedMatch={queuedMatch}
-            nextReadyCourtLabel={nextReadyCourtLabel}
-            assigningQueuedMatch={assigningQueuedMatch}
             clearingQueuedMatch={clearingQueuedMatch}
             reshufflingQueuedMatch={reshufflingQueuedMatch}
-            onAssignQueuedMatch={onAssignQueuedMatch}
             onClearQueuedMatch={onClearQueuedMatch}
             onReshuffleQueuedMatch={onReshuffleQueuedMatch}
           />

@@ -4,11 +4,8 @@ import type { QueuedMatch } from "./sessionTypes";
 
 interface QueuedMatchCardProps {
   queuedMatch: QueuedMatch;
-  nextReadyCourtLabel: string | null;
-  assigningQueuedMatch: boolean;
   clearingQueuedMatch: boolean;
   reshufflingQueuedMatch: boolean;
-  onAssignQueuedMatch: () => void;
   onClearQueuedMatch: () => void;
   onReshuffleQueuedMatch: () => void;
 }
@@ -38,16 +35,12 @@ function TeamNames({
 
 export function QueuedMatchCard({
   queuedMatch,
-  nextReadyCourtLabel,
-  assigningQueuedMatch,
   clearingQueuedMatch,
   reshufflingQueuedMatch,
-  onAssignQueuedMatch,
   onClearQueuedMatch,
   onReshuffleQueuedMatch,
 }: QueuedMatchCardProps) {
-  const queueActionDisabled =
-    assigningQueuedMatch || clearingQueuedMatch || reshufflingQueuedMatch;
+  const queueActionDisabled = clearingQueuedMatch || reshufflingQueuedMatch;
   const leftAction = (
     <button
       type="button"
@@ -105,15 +98,10 @@ export function QueuedMatchCard({
           <div className="pt-2">
             <button
               type="button"
-              onClick={nextReadyCourtLabel ? onAssignQueuedMatch : undefined}
-              disabled={queueActionDisabled || !nextReadyCourtLabel}
+              disabled
               className="w-full rounded-xl bg-gray-900 py-3 text-sm font-black uppercase text-white shadow-md transition-all active:scale-95 active:bg-gray-800 disabled:opacity-50"
             >
-              {assigningQueuedMatch
-                ? "Assigning..."
-                : nextReadyCourtLabel
-                  ? `Assign to ${nextReadyCourtLabel}`
-                  : "Waiting for Court"}
+              Waiting for Court
             </button>
           </div>
         </div>

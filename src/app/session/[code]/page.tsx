@@ -130,7 +130,6 @@ export default function SessionPage() {
     creatingOpenCourtCount,
     creatingQueuedMatch,
     clearingQueuedMatch,
-    assigningQueuedMatch,
     reshufflingQueuedMatch,
     manualCourtId,
     creatingManualMatch,
@@ -138,7 +137,6 @@ export default function SessionPage() {
     createMatchesForCourts,
     queueNextMatch,
     clearQueuedMatch,
-    assignQueuedMatch,
     reshuffleQueuedMatch,
     openManualMatchModal,
     closeManualMatchModal,
@@ -818,9 +816,7 @@ export default function SessionPage() {
                   canQueueNextMatch={sessionView.canQueueNextMatch}
                   creatingQueuedMatch={creatingQueuedMatch}
                   clearingQueuedMatch={clearingQueuedMatch}
-                  assigningQueuedMatch={assigningQueuedMatch}
                   reshufflingQueuedMatch={reshufflingQueuedMatch}
-                  nextReadyCourtLabel={sessionView.nextReadyCourtLabel}
                   reshufflingCourtId={reshufflingCourtId}
                   undoingCourtId={undoingCourtId}
                   reopeningMatchId={reopeningMatchId}
@@ -829,7 +825,6 @@ export default function SessionPage() {
                   onCreateMatchesForCourts={createMatchesForCourts}
                   onQueueNextMatch={queueNextMatch}
                   onClearQueuedMatch={clearQueuedMatch}
-                  onAssignQueuedMatch={assignQueuedMatch}
                   onReshuffleQueuedMatch={reshuffleQueuedMatch}
                   onOpenManualMatchModal={openManualMatchModal}
                   onReshuffleMatch={reshuffleMatch}
