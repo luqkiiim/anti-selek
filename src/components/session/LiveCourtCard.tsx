@@ -60,16 +60,16 @@ export function LiveCourtCard({
 
   return (
     <div className="flex min-w-0 flex-col overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
-      <div className="flex items-center justify-between border-b border-gray-100 bg-gray-50/80 px-3 py-2.5">
-        <h2 className="text-sm font-black uppercase tracking-widest text-gray-500">
-          {getCourtDisplayLabel(court)}
+      <div className="flex items-center justify-between gap-3 border-b border-gray-100 bg-white px-3 py-3 md:px-4 md:py-3.5">
+        <h2 className="inline-flex min-w-0 items-center rounded-full bg-gray-900 px-3 py-1.5 text-sm font-black uppercase tracking-[0.28em] text-white md:px-4 md:py-2 md:text-base">
+          <span className="truncate">{getCourtDisplayLabel(court)}</span>
         </h2>
-        <div className="flex gap-2">
+        <div className="flex shrink-0 gap-1.5 md:gap-2">
           {sessionStatus === SessionStatus.ACTIVE && !currentMatch && isAdmin ? (
             <button
               type="button"
               onClick={() => onOpenManualMatchModal(court.id)}
-              className="rounded-lg bg-gray-900 px-2.5 py-1.5 text-[10px] font-black uppercase tracking-wider text-white transition-all active:scale-95"
+              className="rounded-lg bg-gray-900 px-2.5 py-1.5 text-[10px] font-black uppercase tracking-wider text-white transition-all active:scale-95 md:px-3"
             >
               Manual
             </button>
@@ -79,7 +79,7 @@ export function LiveCourtCard({
               type="button"
               onClick={() => onReshuffleMatch(court.id)}
               disabled={reshufflingCourtId === court.id}
-              className="flex items-center gap-1 rounded-lg bg-gray-100 px-2.5 py-1.5 text-[10px] font-black uppercase tracking-wider text-gray-600 transition-all active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
+              className="flex items-center gap-1 rounded-lg bg-gray-100 px-2.5 py-1.5 text-[10px] font-black uppercase tracking-wider text-gray-600 transition-all active:scale-95 disabled:cursor-not-allowed disabled:opacity-50 md:px-3"
               title="Pick different players"
             >
               {reshufflingCourtId === court.id ? "Reshuffling..." : "Reshuffle"}
@@ -90,7 +90,7 @@ export function LiveCourtCard({
               type="button"
               onClick={() => onUndoMatchSelection(court.id)}
               disabled={undoingCourtId === court.id}
-              className="flex items-center gap-1 rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-1.5 text-[10px] font-black uppercase tracking-wider text-rose-700 transition-all active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
+              className="flex items-center gap-1 rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-1.5 text-[10px] font-black uppercase tracking-wider text-rose-700 transition-all active:scale-95 disabled:cursor-not-allowed disabled:opacity-50 md:px-3"
               title="Put selected players back in pool"
             >
               {undoingCourtId === court.id ? "Undoing..." : "Undo"}
@@ -99,7 +99,7 @@ export function LiveCourtCard({
         </div>
       </div>
 
-      <div className="flex flex-1 flex-col justify-center p-3">
+      <div className="flex flex-1 flex-col justify-center p-3 md:p-4">
         {currentMatch ? (
           <LiveMatchCard
             match={currentMatch}

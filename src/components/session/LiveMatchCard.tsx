@@ -39,11 +39,13 @@ function TeamNames({
   align = "left",
 }: TeamNamesProps) {
   return (
-    <div className={`min-w-0 ${align === "right" ? "text-right" : "text-left"}`}>
-      <p className="truncate text-[13px] font-semibold leading-tight text-gray-900 sm:text-sm">
+    <div
+      className={`min-w-0 space-y-1 ${align === "right" ? "text-right" : "text-left"}`}
+    >
+      <p className="truncate text-[14px] font-bold leading-tight text-gray-900 sm:text-base md:text-[1.15rem] xl:text-base">
         {playerOneName}
       </p>
-      <p className="truncate text-[13px] font-semibold leading-tight text-gray-900 sm:text-sm">
+      <p className="truncate text-[14px] font-bold leading-tight text-gray-900 sm:text-base md:text-[1.15rem] xl:text-base">
         {playerTwoName}
       </p>
     </div>
@@ -141,15 +143,15 @@ export function LiveMatchCard({
   const canEditScores = canEdit && !isConfirmingSubmission;
 
   return (
-    <div className="space-y-2.5">
+    <div className="space-y-3">
       <div
-        className={`rounded-xl border p-2.5 transition-all ${
+        className={`rounded-2xl border p-3 transition-all md:p-3.5 ${
           isPendingApproval
             ? "border-orange-200 bg-orange-50/60"
             : "border-blue-100 bg-blue-50/40"
         }`}
       >
-        <div className="grid grid-cols-[minmax(0,1fr)_2.5rem_2.5rem_minmax(0,1fr)] items-center gap-2 sm:grid-cols-[minmax(0,1fr)_2.75rem_2.75rem_minmax(0,1fr)] sm:gap-3">
+        <div className="grid grid-cols-[minmax(0,1fr)_2.5rem_2.5rem_minmax(0,1fr)] items-center gap-2.5 sm:grid-cols-[minmax(0,1fr)_2.75rem_2.75rem_minmax(0,1fr)] sm:gap-3 md:grid-cols-[minmax(0,1fr)_3rem_3rem_minmax(0,1fr)] md:gap-4 xl:grid-cols-[minmax(0,1fr)_2.75rem_2.75rem_minmax(0,1fr)] xl:gap-3">
           <TeamNames
             playerOneName={match.team1User1.name}
             playerTwoName={match.team1User2.name}
