@@ -85,13 +85,25 @@ export function SessionPlayersModal({
       }
     >
       <div className="space-y-4 px-4 py-4 sm:px-5">
-        <input
-          type="text"
-          value={search}
-          onChange={(event) => setSearch(event.target.value)}
-          placeholder="Search players..."
-          className="field w-full px-3 py-2.5 text-sm"
-        />
+        <div className="relative">
+          <input
+            type="text"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Search players..."
+            className="field w-full px-3 py-2.5 pr-12 text-sm"
+          />
+          {search ? (
+            <button
+              type="button"
+              onClick={() => setSearch("")}
+              className="absolute right-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full bg-gray-100 text-base font-semibold text-gray-500 transition hover:text-gray-700"
+              aria-label="Clear search"
+            >
+              &times;
+            </button>
+          ) : null}
+        </div>
 
         <div className="flex flex-wrap gap-2">
           {(
