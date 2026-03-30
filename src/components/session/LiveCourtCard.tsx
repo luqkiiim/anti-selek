@@ -60,8 +60,8 @@ export function LiveCourtCard({
 
   return (
     <div className="flex min-w-0 flex-col overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
-      <div className="flex items-center justify-between gap-3 border-b border-gray-100 bg-white px-3 py-3 md:px-4 md:py-3.5">
-        <div className="inline-flex min-w-0 items-center rounded-full bg-gray-900 px-3 py-1.5 text-sm font-black uppercase tracking-[0.28em] text-white md:px-4 md:py-2 md:text-base">
+      <div className="relative flex items-center justify-end gap-3 border-b border-gray-100 bg-white px-3 py-3 md:px-4 md:py-3.5">
+        <div className="pointer-events-none absolute left-1/2 inline-flex min-w-0 -translate-x-1/2 items-center rounded-full bg-gray-900 px-4 py-1.5 text-sm font-black uppercase tracking-[0.24em] text-white md:px-5 md:py-2 md:text-lg">
           <span className="truncate">{getCourtDisplayLabel(court)}</span>
         </div>
         <div className="flex shrink-0 gap-1.5 md:gap-2">

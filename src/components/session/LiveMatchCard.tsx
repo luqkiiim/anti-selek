@@ -42,10 +42,10 @@ function TeamNames({
     <div
       className={`min-w-0 space-y-1 ${align === "right" ? "text-right" : "text-left"}`}
     >
-      <p className="truncate text-[14px] font-bold leading-tight text-gray-900 sm:text-base md:text-[1.15rem] xl:text-base">
+      <p className="truncate text-[14px] font-bold leading-tight text-gray-900 sm:text-base md:text-[1.35rem] xl:text-base">
         {playerOneName}
       </p>
-      <p className="truncate text-[14px] font-bold leading-tight text-gray-900 sm:text-base md:text-[1.15rem] xl:text-base">
+      <p className="truncate text-[14px] font-bold leading-tight text-gray-900 sm:text-base md:text-[1.35rem] xl:text-base">
         {playerTwoName}
       </p>
     </div>
@@ -74,7 +74,7 @@ function ScoreSlot({
         inputMode="numeric"
         value={scoreValue}
         onChange={(event) => onScoreChange(event.target.value)}
-        className="h-10 w-10 rounded-lg border border-blue-200 bg-white text-center text-lg font-black tabular-nums text-gray-900 focus:border-blue-500 focus:outline-none sm:h-11 sm:w-11 sm:text-xl"
+        className="h-10 w-10 rounded-lg border border-blue-200 bg-white text-center text-lg font-black tabular-nums text-gray-900 focus:border-blue-500 focus:outline-none sm:h-11 sm:w-11 sm:text-xl md:h-14 md:w-14 md:text-[2rem] xl:h-11 xl:w-11 xl:text-xl"
         placeholder="0"
       />
     );
@@ -86,7 +86,7 @@ function ScoreSlot({
 
   return (
     <div
-      className={`flex h-10 w-10 items-center justify-center rounded-lg border bg-white text-lg font-black tabular-nums sm:h-11 sm:w-11 sm:text-xl ${
+      className={`flex h-10 w-10 items-center justify-center rounded-lg border bg-white text-lg font-black tabular-nums sm:h-11 sm:w-11 sm:text-xl md:h-14 md:w-14 md:text-[2rem] xl:h-11 xl:w-11 xl:text-xl ${
         displayScore !== null
           ? "border-gray-200 text-gray-900"
           : "border-gray-100 text-gray-300"
@@ -151,7 +151,7 @@ export function LiveMatchCard({
             : "border-blue-100 bg-blue-50/40"
         }`}
       >
-        <div className="grid grid-cols-[minmax(0,1fr)_2.5rem_2.5rem_minmax(0,1fr)] items-center gap-2.5 sm:grid-cols-[minmax(0,1fr)_2.75rem_2.75rem_minmax(0,1fr)] sm:gap-3 md:grid-cols-[minmax(0,1fr)_3rem_3rem_minmax(0,1fr)] md:gap-4 xl:grid-cols-[minmax(0,1fr)_2.75rem_2.75rem_minmax(0,1fr)] xl:gap-3">
+        <div className="grid grid-cols-[minmax(0,1fr)_2.5rem_2.5rem_minmax(0,1fr)] items-center gap-2.5 sm:grid-cols-[minmax(0,1fr)_2.75rem_2.75rem_minmax(0,1fr)] sm:gap-3 md:grid-cols-[minmax(0,1fr)_3.5rem_3.5rem_minmax(0,1fr)] md:gap-4 xl:grid-cols-[minmax(0,1fr)_2.75rem_2.75rem_minmax(0,1fr)] xl:gap-3">
           <TeamNames
             playerOneName={match.team1User1.name}
             playerTwoName={match.team1User2.name}
