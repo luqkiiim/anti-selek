@@ -85,12 +85,6 @@ export function QueuedMatchCard({
 
       <div className="flex flex-1 flex-col justify-center p-3 md:p-4">
         <div className="space-y-3">
-          <p className="text-center text-[10px] font-semibold uppercase tracking-[0.18em] text-gray-500">
-            {nextReadyCourtLabel
-              ? `Ready for ${nextReadyCourtLabel}`
-              : "Reserved for the next free court"}
-          </p>
-
           <div className="rounded-2xl border border-blue-100 bg-blue-50/40 p-3 transition-all md:p-3.5">
             <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2.5 sm:gap-3 md:gap-4 xl:gap-3">
               <TeamNames
