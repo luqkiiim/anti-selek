@@ -61,9 +61,9 @@ export function LiveCourtCard({
   return (
     <div className="flex min-w-0 flex-col overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
       <div className="flex items-center justify-between gap-3 border-b border-gray-100 bg-white px-3 py-3 md:px-4 md:py-3.5">
-        <h2 className="inline-flex min-w-0 items-center rounded-full bg-gray-900 px-3 py-1.5 text-sm font-black uppercase tracking-[0.28em] text-white md:px-4 md:py-2 md:text-base">
+        <div className="inline-flex min-w-0 items-center rounded-full bg-gray-900 px-3 py-1.5 text-sm font-black uppercase tracking-[0.28em] text-white md:px-4 md:py-2 md:text-base">
           <span className="truncate">{getCourtDisplayLabel(court)}</span>
-        </h2>
+        </div>
         <div className="flex shrink-0 gap-1.5 md:gap-2">
           {sessionStatus === SessionStatus.ACTIVE && !currentMatch && isAdmin ? (
             <button
