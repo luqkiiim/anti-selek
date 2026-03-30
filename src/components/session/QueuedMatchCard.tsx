@@ -7,8 +7,33 @@ interface QueuedMatchCardProps {
   nextReadyCourtLabel: string | null;
   assigningQueuedMatch: boolean;
   clearingQueuedMatch: boolean;
+  reshufflingQueuedMatch: boolean;
   onAssignQueuedMatch: () => void;
   onClearQueuedMatch: () => void;
+  onReshuffleQueuedMatch: () => void;
+}
+
+function TeamNames({
+  playerOneName,
+  playerTwoName,
+  align = "left",
+}: {
+  playerOneName: string;
+  playerTwoName: string;
+  align?: "left" | "right";
+}) {
+  return (
+    <div
+      className={`min-w-0 space-y-1 ${align === "right" ? "text-right" : "text-left"}`}
+    >
+      <p className="truncate text-[14px] font-bold leading-tight text-gray-900 sm:text-base md:text-[1.35rem] xl:text-base">
+        {playerOneName}
+      </p>
+      <p className="truncate text-[14px] font-bold leading-tight text-gray-900 sm:text-base md:text-[1.35rem] xl:text-base">
+        {playerTwoName}
+      </p>
+    </div>
+  );
 }
 
 export function QueuedMatchCard({
@@ -16,69 +41,74 @@ export function QueuedMatchCard({
   nextReadyCourtLabel,
   assigningQueuedMatch,
   clearingQueuedMatch,
+  reshufflingQueuedMatch,
   onAssignQueuedMatch,
   onClearQueuedMatch,
+  onReshuffleQueuedMatch,
 }: QueuedMatchCardProps) {
+  const queueActionDisabled =
+    assigningQueuedMatch || clearingQueuedMatch || reshufflingQueuedMatch;
+
   return (
-    <div className="app-subcard space-y-4 p-4 sm:p-5">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <p className="text-[11px] font-black uppercase tracking-[0.24em] text-blue-600">
-            Next Up
-          </p>
-          <p className="mt-1 text-sm font-semibold text-gray-900">
-            {nextReadyCourtLabel
-              ? `Ready for ${nextReadyCourtLabel}`
-              : "Reserved for the next free court"}
-          </p>
+    <div className="flex min-w-0 flex-col overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
+      <div className="relative flex items-center justify-end gap-3 border-b border-gray-100 bg-white px-3 py-3 md:px-4 md:py-3.5">
+        <div className="pointer-events-none absolute left-1/2 inline-flex min-w-0 -translate-x-1/2 items-center rounded-full bg-gray-900 px-4 py-1.5 text-sm font-black uppercase tracking-[0.24em] text-white md:px-5 md:py-2 md:text-lg">
+          <span className="truncate">Next Up</span>
         </div>
-        <div className="flex flex-wrap justify-end gap-2">
+        <div className="flex shrink-0 gap-1.5 md:gap-2">
           {nextReadyCourtLabel ? (
             <button
               type="button"
               onClick={onAssignQueuedMatch}
-              disabled={assigningQueuedMatch || clearingQueuedMatch}
-              className="app-button-primary px-4 py-2"
+              disabled={queueActionDisabled}
+              className="rounded-lg bg-gray-900 px-2.5 py-1.5 text-[10px] font-black uppercase tracking-wider text-white transition-all active:scale-95 disabled:cursor-not-allowed disabled:opacity-50 md:px-3"
             >
-              {assigningQueuedMatch
-                ? "Assigning..."
-                : `Assign to ${nextReadyCourtLabel}`}
+              {assigningQueuedMatch ? "Assigning..." : "Assign"}
             </button>
           ) : null}
           <button
             type="button"
-            onClick={onClearQueuedMatch}
-            disabled={clearingQueuedMatch || assigningQueuedMatch}
-            className="app-button-secondary px-4 py-2"
+            onClick={onReshuffleQueuedMatch}
+            disabled={queueActionDisabled}
+            className="flex items-center gap-1 rounded-lg bg-gray-100 px-2.5 py-1.5 text-[10px] font-black uppercase tracking-wider text-gray-600 transition-all active:scale-95 disabled:cursor-not-allowed disabled:opacity-50 md:px-3"
           >
-            {clearingQueuedMatch ? "Clearing..." : "Clear"}
+            {reshufflingQueuedMatch ? "Reshuffling..." : "Reshuffle"}
+          </button>
+          <button
+            type="button"
+            onClick={onClearQueuedMatch}
+            disabled={queueActionDisabled}
+            className="flex items-center gap-1 rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-1.5 text-[10px] font-black uppercase tracking-wider text-rose-700 transition-all active:scale-95 disabled:cursor-not-allowed disabled:opacity-50 md:px-3"
+          >
+            {clearingQueuedMatch ? "Undoing..." : "Undo"}
           </button>
         </div>
       </div>
 
-      <div className="grid gap-3 md:grid-cols-2">
-        <div className="rounded-2xl border border-blue-100 bg-blue-50/60 px-4 py-3">
-          <p className="text-[10px] font-black uppercase tracking-[0.22em] text-blue-700">
-            Team 1
+      <div className="flex flex-1 flex-col justify-center p-3 md:p-4">
+        <div className="space-y-3">
+          <p className="text-center text-[10px] font-semibold uppercase tracking-[0.18em] text-gray-500">
+            {nextReadyCourtLabel
+              ? `Ready for ${nextReadyCourtLabel}`
+              : "Reserved for the next free court"}
           </p>
-          <p className="mt-2 text-base font-semibold leading-tight text-gray-900">
-            {queuedMatch.team1User1.name}
-          </p>
-          <p className="mt-1 text-base font-semibold leading-tight text-gray-900">
-            {queuedMatch.team1User2.name}
-          </p>
-        </div>
 
-        <div className="rounded-2xl border border-blue-100 bg-blue-50/60 px-4 py-3">
-          <p className="text-[10px] font-black uppercase tracking-[0.22em] text-blue-700">
-            Team 2
-          </p>
-          <p className="mt-2 text-base font-semibold leading-tight text-gray-900">
-            {queuedMatch.team2User1.name}
-          </p>
-          <p className="mt-1 text-base font-semibold leading-tight text-gray-900">
-            {queuedMatch.team2User2.name}
-          </p>
+          <div className="rounded-2xl border border-blue-100 bg-blue-50/40 p-3 transition-all md:p-3.5">
+            <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2.5 sm:gap-3 md:gap-4 xl:gap-3">
+              <TeamNames
+                playerOneName={queuedMatch.team1User1.name}
+                playerTwoName={queuedMatch.team1User2.name}
+              />
+              <span className="rounded-full border border-blue-200 bg-white px-2 py-1 text-[10px] font-black uppercase tracking-[0.24em] text-blue-700">
+                Next
+              </span>
+              <TeamNames
+                playerOneName={queuedMatch.team2User1.name}
+                playerTwoName={queuedMatch.team2User2.name}
+                align="right"
+              />
+            </div>
+          </div>
         </div>
       </div>
     </div>

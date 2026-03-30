@@ -33,6 +33,7 @@ export function useSessionCourtMatchCreation({
   const [creatingQueuedMatch, setCreatingQueuedMatch] = useState(false);
   const [clearingQueuedMatch, setClearingQueuedMatch] = useState(false);
   const [assigningQueuedMatch, setAssigningQueuedMatch] = useState(false);
+  const [reshufflingQueuedMatch, setReshufflingQueuedMatch] = useState(false);
   const [manualCourtId, setManualCourtId] = useState<string | null>(null);
   const [creatingManualMatch, setCreatingManualMatch] = useState(false);
   const [manualMatchForm, setManualMatchForm] =
@@ -207,12 +208,55 @@ export function useSessionCourtMatchCreation({
     }
   };
 
+  const reshuffleQueuedMatch = async () => {
+    if (!sessionData?.queuedMatch) return;
+
+    setReshufflingQueuedMatch(true);
+    setError("");
+    try {
+      const { res: clearRes, data: clearData } = await deleteSessionAction(
+        `/api/sessions/${code}/queue-match`,
+        { safeJson }
+      );
+
+      if (!clearRes.ok) {
+        setError(clearData.error || "Failed to reshuffle queued match");
+        return;
+      }
+
+      patchSessionData((current) => applyQueuedMatch(current, null));
+
+      const { res: queueRes, data: queueData } = await postSessionAction(
+        `/api/sessions/${code}/queue-match`,
+        { safeJson }
+      );
+
+      if (!queueRes.ok) {
+        setError(queueData.error || "Failed to reshuffle queued match");
+        scheduleSessionRefresh();
+        return;
+      }
+
+      patchSessionData((current) =>
+        applyQueuedMatch(current, queueData.queuedMatch ?? null)
+      );
+      scheduleSessionRefresh();
+    } catch (err) {
+      console.error(err);
+      setError("Network error reshuffling queued match");
+      scheduleSessionRefresh();
+    } finally {
+      setReshufflingQueuedMatch(false);
+    }
+  };
+
   return {
     creatingOpenMatches,
     creatingOpenCourtCount,
     creatingQueuedMatch,
     clearingQueuedMatch,
     assigningQueuedMatch,
+    reshufflingQueuedMatch,
     manualCourtId,
     creatingManualMatch,
     manualMatchForm,
@@ -220,6 +264,7 @@ export function useSessionCourtMatchCreation({
     queueNextMatch,
     clearQueuedMatch,
     assignQueuedMatch,
+    reshuffleQueuedMatch,
     openManualMatchModal,
     closeManualMatchModal,
     updateManualMatchSlot,

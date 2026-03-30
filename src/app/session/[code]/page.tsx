@@ -131,6 +131,7 @@ export default function SessionPage() {
     creatingQueuedMatch,
     clearingQueuedMatch,
     assigningQueuedMatch,
+    reshufflingQueuedMatch,
     manualCourtId,
     creatingManualMatch,
     manualMatchForm,
@@ -138,6 +139,7 @@ export default function SessionPage() {
     queueNextMatch,
     clearQueuedMatch,
     assignQueuedMatch,
+    reshuffleQueuedMatch,
     openManualMatchModal,
     closeManualMatchModal,
     updateManualMatchSlot,
@@ -817,6 +819,7 @@ export default function SessionPage() {
                   creatingQueuedMatch={creatingQueuedMatch}
                   clearingQueuedMatch={clearingQueuedMatch}
                   assigningQueuedMatch={assigningQueuedMatch}
+                  reshufflingQueuedMatch={reshufflingQueuedMatch}
                   nextReadyCourtLabel={sessionView.nextReadyCourtLabel}
                   reshufflingCourtId={reshufflingCourtId}
                   undoingCourtId={undoingCourtId}
@@ -827,6 +830,7 @@ export default function SessionPage() {
                   onQueueNextMatch={queueNextMatch}
                   onClearQueuedMatch={clearQueuedMatch}
                   onAssignQueuedMatch={assignQueuedMatch}
+                  onReshuffleQueuedMatch={reshuffleQueuedMatch}
                   onOpenManualMatchModal={openManualMatchModal}
                   onReshuffleMatch={reshuffleMatch}
                   onUndoMatchSelection={undoMatchSelection}
