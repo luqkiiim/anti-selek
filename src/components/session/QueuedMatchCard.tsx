@@ -75,7 +75,7 @@ export function QueuedMatchCard({
         <div className="flex min-w-0 justify-start">
           {leftAction}
         </div>
-        <div className="pointer-events-none inline-flex min-w-0 items-center rounded-full bg-gray-900 px-4 py-1.5 text-sm font-black uppercase tracking-[0.24em] text-white md:px-5 md:py-2 md:text-lg">
+        <div className="pointer-events-none inline-flex min-w-0 items-center rounded-full bg-[var(--warning)] px-4 py-1.5 text-sm font-black uppercase tracking-[0.24em] text-white md:px-5 md:py-2 md:text-lg">
           <span className="truncate">Next Up</span>
         </div>
         <div className="flex min-w-0 justify-end">
