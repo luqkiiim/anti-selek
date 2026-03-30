@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import { useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { FlashMessage } from "@/components/ui/chrome";
 import { ClaimRequestsPanel } from "@/components/community-admin/ClaimRequestsPanel";
 import { CommunityAdminActionConfirmModal } from "@/components/community-admin/CommunityAdminActionConfirmModal";
@@ -122,6 +124,7 @@ function getCommunityActionDialogCopy(
 }
 
 export default function CommunityAdminPage() {
+  const router = useRouter();
   const {
     status,
     currentUserId,
@@ -196,6 +199,15 @@ export default function CommunityAdminPage() {
     handleReviewClaimRequest,
   } = useCommunityAdminPage();
 
+  const handleBack = useCallback(() => {
+    if (typeof window !== "undefined" && window.history.length > 1) {
+      router.back();
+      return;
+    }
+
+    router.push(communityId ? `/community/${communityId}` : "/");
+  }, [communityId, router]);
+
   const pendingPlayerActionDialog = pendingPlayerAction
     ? getPlayerActionDialogCopy(pendingPlayerAction)
     : null;
@@ -222,12 +234,13 @@ export default function CommunityAdminPage() {
       <div className="app-topbar">
         <div className="app-topbar-inner">
           <div className="flex items-center gap-3">
-            <Link
-              href={`/community/${communityId}`}
+            <button
+              type="button"
+              onClick={handleBack}
               className="app-button-secondary px-4 py-2"
             >
               Back
-            </Link>
+            </button>
             <div>
               <h1 className="text-lg font-semibold leading-none tracking-tight text-gray-900">
                 {community?.name || "Community"}
