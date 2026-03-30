@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { IBM_Plex_Mono, Space_Grotesk } from "next/font/google";
 import "./globals.css";
 import { Providers } from "@/components/Providers";
@@ -18,11 +18,16 @@ export const metadata: Metadata = {
   title: "Anti-Selek",
   description: "Schedule matches, track scores, and maintain player ratings",
   applicationName: "Anti-Selek",
+  manifest: "/manifest.webmanifest",
   appleWebApp: {
     capable: true,
     title: "Anti-Selek",
     statusBarStyle: "default",
   },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#102236",
 };
 
 export default function RootLayout({
