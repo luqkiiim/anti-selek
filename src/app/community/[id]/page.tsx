@@ -1,6 +1,8 @@
 "use client";
 
+import { useCallback, useEffect } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { getSessionTypeLabel } from "@/lib/sessionModeLabels";
 import { FlashMessage, HeroCard } from "@/components/ui/chrome";
 import { CommunityActionConfirmModal } from "@/components/community/CommunityActionConfirmModal";
@@ -37,6 +39,7 @@ const baseSectionTabs: Array<{
 ];
 
 export default function CommunityPage() {
+  const router = useRouter();
   const {
     status,
     communityId,
@@ -107,6 +110,28 @@ export default function CommunityPage() {
     openCommunityPlayerProfile,
     openTournament,
   } = useCommunityPage();
+
+  const handleBack = useCallback(() => {
+    if (typeof window !== "undefined" && window.history.length > 1) {
+      router.back();
+      return;
+    }
+
+    router.push("/");
+  }, [router]);
+
+  useEffect(() => {
+    router.prefetch("/");
+
+    const sessionCodes = new Set([
+      ...activeTournaments.map((tournament) => tournament.code),
+      ...pastTournaments.slice(0, 6).map((tournament) => tournament.code),
+    ]);
+
+    sessionCodes.forEach((code) => {
+      router.prefetch(`/session/${code}`);
+    });
+  }, [activeTournaments, pastTournaments, router]);
 
   if (status === "loading" || loading) {
     return (
@@ -194,9 +219,13 @@ export default function CommunityPage() {
           meta={
             <div className="grid w-full grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3">
               <div className="justify-self-start">
-                <Link href="/" className="app-button-secondary px-4 py-2">
+                <button
+                  type="button"
+                  onClick={handleBack}
+                  className="app-button-secondary px-4 py-2"
+                >
                   Back
-                </Link>
+                </button>
               </div>
               <p className="app-eyebrow justify-self-center text-center">
                 Community hub

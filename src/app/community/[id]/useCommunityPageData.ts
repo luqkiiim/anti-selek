@@ -8,10 +8,7 @@ import type {
   CommunityPageSession,
   CommunityPageUser,
 } from "@/components/community/communityTypes";
-import {
-  fetchCommunityPageSnapshot,
-  fetchCommunityViewer,
-} from "./communityPageApi";
+import { fetchCommunityPageSnapshot } from "./communityPageApi";
 
 interface CommunityPageRouter {
   push: (href: string) => void;
@@ -39,20 +36,16 @@ export function useCommunityPageData({
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
-  const refreshCommunityData = useCallback(
-    async (options?: { includeCommunity?: boolean }) => {
-      if (!communityId) return;
+  const refreshCommunityData = useCallback(async () => {
+    if (!communityId) return;
 
-      const snapshot = await fetchCommunityPageSnapshot(communityId, options);
-      setCommunityMembers(snapshot.communityMembers);
-      setSessions(snapshot.sessions);
-      setClaimRequests(snapshot.claimRequests);
-      if (snapshot.community) {
-        setCommunity(snapshot.community);
-      }
-    },
-    [communityId]
-  );
+    const snapshot = await fetchCommunityPageSnapshot(communityId);
+    setUser(snapshot.user);
+    setCommunity(snapshot.community);
+    setCommunityMembers(snapshot.communityMembers);
+    setSessions(snapshot.sessions);
+    setClaimRequests(snapshot.claimRequests);
+  }, [communityId]);
 
   useEffect(() => {
     if (status === "unauthenticated") {
@@ -67,8 +60,7 @@ export function useCommunityPageData({
         setLoading(true);
         setError("");
         setSuccess("");
-        setUser(await fetchCommunityViewer());
-        await refreshCommunityData({ includeCommunity: true });
+        await refreshCommunityData();
       } catch (err: unknown) {
         setError(err instanceof Error ? err.message : "Failed to load community");
       } finally {

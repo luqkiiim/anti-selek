@@ -253,6 +253,16 @@ export default function SessionPage() {
       setEndingSession(false);
     }
   };
+
+  const handleBack = useCallback(() => {
+    if (typeof window !== "undefined" && window.history.length > 1) {
+      router.back();
+      return;
+    }
+
+    router.push(sessionData?.communityId ? `/community/${sessionData.communityId}` : "/");
+  }, [router, sessionData?.communityId]);
+
   const isAdmin =
     !!sessionData?.viewerCanManage || !!user?.isAdmin || !!session?.user?.isAdmin;
   const isClaimedUser = user?.isClaimed === true;
@@ -713,13 +723,7 @@ export default function SessionPage() {
         <div className="app-topbar-inner max-w-7xl">
           <div className="min-w-0 flex items-center gap-3">
             <button
-              onClick={() =>
-                router.push(
-                  sessionData.communityId
-                    ? `/community/${sessionData.communityId}`
-                    : "/"
-                )
-              }
+              onClick={handleBack}
               className="app-button-secondary px-4 py-2"
             >
               Back

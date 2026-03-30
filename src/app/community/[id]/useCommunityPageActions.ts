@@ -23,7 +23,7 @@ export function useCommunityPageActions({
   communityId: string;
   canManageCommunity: boolean;
   router: CommunityPageRouter;
-  refreshCommunityData: (options?: { includeCommunity?: boolean }) => Promise<void>;
+  refreshCommunityData: () => Promise<void>;
   setError: Dispatch<SetStateAction<string>>;
   setSuccess: Dispatch<SetStateAction<string>>;
 }) {
@@ -89,7 +89,7 @@ export function useCommunityPageActions({
         return false;
       }
 
-      await refreshCommunityData({ includeCommunity: true });
+      await refreshCommunityData();
       setSuccess(`Rolled back "${tournament.name}".`);
       setPendingRollbackTournament(null);
       return true;
