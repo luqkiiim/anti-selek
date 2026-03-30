@@ -101,23 +101,23 @@ export function QueuedMatchCard({
               />
             </div>
           </div>
+
+          {nextReadyCourtLabel ? (
+            <div className="pt-2">
+              <button
+                type="button"
+                onClick={onAssignQueuedMatch}
+                disabled={queueActionDisabled}
+                className="w-full rounded-xl bg-gray-900 py-3 text-sm font-black uppercase text-white shadow-md transition-all active:scale-95 active:bg-gray-800 disabled:opacity-50"
+              >
+                {assigningQueuedMatch
+                  ? "Assigning..."
+                  : `Assign to ${nextReadyCourtLabel}`}
+              </button>
+            </div>
+          ) : null}
         </div>
       </div>
-
-      {nextReadyCourtLabel ? (
-        <div className="px-3 pb-3 md:px-4 md:pb-4">
-          <button
-            type="button"
-            onClick={onAssignQueuedMatch}
-            disabled={queueActionDisabled}
-            className="w-full rounded-xl bg-gray-900 px-3 py-2.5 text-[11px] font-black uppercase tracking-[0.2em] text-white transition-all active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {assigningQueuedMatch
-              ? "Assigning..."
-              : `Assign to ${nextReadyCourtLabel}`}
-          </button>
-        </div>
-      ) : null}
     </div>
   );
 }
