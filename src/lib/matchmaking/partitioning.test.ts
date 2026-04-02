@@ -394,4 +394,64 @@ describe("partitioning", () => {
     expect(evaluation?.score).toBe(0);
     expect(evaluation?.pointDiffGap).toBe(0);
   });
+
+  it("rejects hybrid Mixicano quartets with three default females and one upper-side female", () => {
+    const playersById = new Map<string, PartitionCandidate>([
+      [
+        "F1",
+        {
+          userId: "F1",
+          elo: 1000,
+          pointDiff: 0,
+          lastPartnerId: null,
+          gender: "FEMALE",
+          partnerPreference: "FEMALE_FLEX",
+        },
+      ],
+      [
+        "F2",
+        {
+          userId: "F2",
+          elo: 1000,
+          pointDiff: 0,
+          lastPartnerId: null,
+          gender: "FEMALE",
+          partnerPreference: "FEMALE_FLEX",
+        },
+      ],
+      [
+        "F3",
+        {
+          userId: "F3",
+          elo: 1000,
+          pointDiff: 0,
+          lastPartnerId: null,
+          gender: "FEMALE",
+          partnerPreference: "FEMALE_FLEX",
+        },
+      ],
+      [
+        "F4",
+        {
+          userId: "F4",
+          elo: 1000,
+          pointDiff: 0,
+          lastPartnerId: null,
+          gender: "FEMALE",
+          partnerPreference: "OPEN",
+          mixedSideOverride: "UPPER",
+        },
+      ],
+    ]);
+
+    const evaluation = evaluateBestPartition(
+      ["F1", "F2", "F3", "F4"],
+      playersById,
+      SessionMode.MIXICANO,
+      SessionType.ELO,
+      buildRotationHistory([])
+    );
+
+    expect(evaluation).toBeNull();
+  });
 });

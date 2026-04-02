@@ -74,7 +74,7 @@ function isValidMixedPartition<
     return false;
   }
 
-  inferMixedMatchType(
+  const matchType = inferMixedMatchType(
     effectiveTeam1 as [
       { effectiveMixedSide?: string | null },
       { effectiveMixedSide?: string | null },
@@ -85,7 +85,7 @@ function isValidMixedPartition<
     ]
   );
 
-  return true;
+  return matchType !== "HYBRID";
 }
 
 export function getDoublesPartitions(

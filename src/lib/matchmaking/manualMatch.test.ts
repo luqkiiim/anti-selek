@@ -74,4 +74,26 @@ describe("manual match helpers", () => {
       )
     ).toBe(true);
   });
+
+  it("rejects hybrid Mixicano structures with one default female and three default males", () => {
+    const playersById = createPlayers([
+      ["F1", "FEMALE", "FEMALE_FLEX"],
+      ["M1", "MALE", "OPEN"],
+      ["M2", "MALE", "OPEN"],
+      ["M3", "MALE", "OPEN"],
+    ]);
+
+    expect(
+      isValidManualMatchPartition(
+        {
+          team1: ["F1", "M1"],
+          team2: ["M2", "M3"],
+        },
+        playersById,
+        SessionMode.MIXICANO,
+        SessionType.ELO,
+        buildRotationHistory([])
+      )
+    ).toBe(false);
+  });
 });

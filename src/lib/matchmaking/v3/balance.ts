@@ -68,7 +68,7 @@ function isValidMixicanoPartition<
     return false;
   }
 
-  inferMixicanoMatchType(
+  const matchType = inferMixicanoMatchType(
     effectiveTeam1 as [
       { effectiveMixedSide?: string | null },
       { effectiveMixedSide?: string | null },
@@ -79,7 +79,7 @@ function isValidMixicanoPartition<
     ]
   );
 
-  return true;
+  return matchType !== "HYBRID";
 }
 
 export function getDoublesPartitions(

@@ -342,8 +342,6 @@ function isValidMixicanoPartition(
     },
   ]
 ) {
-  const players = [...team1, ...team2];
-
   const effectiveTeam1 = team1.map((player) => ({
     effectiveMixedSide: getEffectiveMixedSide({
       gender: player.gender as PlayerGender,
@@ -367,7 +365,7 @@ function isValidMixicanoPartition(
     return false;
   }
 
-  inferMixicanoMatchType(
+  const matchType = inferMixicanoMatchType(
     effectiveTeam1 as [
       { effectiveMixedSide: string },
       { effectiveMixedSide: string },
@@ -378,7 +376,7 @@ function isValidMixicanoPartition(
     ]
   );
 
-  return true;
+  return matchType !== "HYBRID";
 }
 
 function getMixedSideBalanceGap(

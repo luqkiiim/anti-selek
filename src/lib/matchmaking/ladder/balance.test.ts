@@ -123,4 +123,36 @@ describe("ladder balance", () => {
       )
     ).not.toBeNull();
   });
+
+  it("rejects hybrid quartets with three default females and one upper-side female", () => {
+    const playersById = new Map(
+      [
+        createPlayer("F1", {
+          gender: PlayerGender.FEMALE,
+          partnerPreference: PartnerPreference.FEMALE_FLEX,
+        }),
+        createPlayer("F2", {
+          gender: PlayerGender.FEMALE,
+          partnerPreference: PartnerPreference.FEMALE_FLEX,
+        }),
+        createPlayer("F3", {
+          gender: PlayerGender.FEMALE,
+          partnerPreference: PartnerPreference.FEMALE_FLEX,
+        }),
+        createPlayer("F4", {
+          gender: PlayerGender.FEMALE,
+          partnerPreference: PartnerPreference.OPEN,
+          mixedSideOverride: MixedSide.UPPER,
+        }),
+      ].map((player) => [player.userId, player])
+    );
+
+    expect(
+      findBestBalancedPartition(
+        ["F1", "F2", "F3", "F4"],
+        playersById,
+        SessionMode.MIXICANO
+      )
+    ).toBeNull();
+  });
 });

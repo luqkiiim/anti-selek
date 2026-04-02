@@ -83,4 +83,27 @@ describe("matchmaking v3 balance", () => {
       ).length
     ).toBeGreaterThan(0);
   });
+
+  it("rejects hybrid quartets with one default female and three default males", () => {
+    const playersById = new Map<string, MatchmakerV3Player>([
+      [
+        "F1",
+        createPlayer("F1", {
+          gender: "FEMALE",
+          partnerPreference: "FEMALE_FLEX",
+        }),
+      ],
+      ["M1", createPlayer("M1", { gender: "MALE" })],
+      ["M2", createPlayer("M2", { gender: "MALE" })],
+      ["M3", createPlayer("M3", { gender: "MALE" })],
+    ]);
+
+    expect(
+      evaluateBalancedPartitions(
+        ["F1", "M1", "M2", "M3"],
+        playersById,
+        SessionMode.MIXICANO
+      )
+    ).toEqual([]);
+  });
 });
