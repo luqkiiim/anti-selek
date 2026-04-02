@@ -2,8 +2,63 @@
 
 import { useEffect, type ReactNode } from "react";
 
+type ScrollLockSnapshot = {
+  bodyOverflow: string;
+  bodyOverscrollBehavior: string;
+  bodyPaddingRight: string;
+  rootOverflow: string;
+  rootOverscrollBehavior: string;
+};
+
+let activeScrollLocks = 0;
+let previousScrollLockSnapshot: ScrollLockSnapshot | null = null;
+
 function cx(...values: Array<string | false | null | undefined>) {
   return values.filter(Boolean).join(" ");
+}
+
+function lockDocumentScroll() {
+  const body = document.body;
+  const root = document.documentElement;
+  const scrollbarWidth = Math.max(0, window.innerWidth - root.clientWidth);
+
+  if (activeScrollLocks === 0) {
+    previousScrollLockSnapshot = {
+      bodyOverflow: body.style.overflow,
+      bodyOverscrollBehavior: body.style.overscrollBehavior,
+      bodyPaddingRight: body.style.paddingRight,
+      rootOverflow: root.style.overflow,
+      rootOverscrollBehavior: root.style.overscrollBehavior,
+    };
+
+    body.style.overflow = "hidden";
+    body.style.overscrollBehavior = "none";
+    root.style.overflow = "hidden";
+    root.style.overscrollBehavior = "none";
+
+    if (scrollbarWidth > 0) {
+      body.style.paddingRight = `${scrollbarWidth}px`;
+    }
+  }
+
+  activeScrollLocks += 1;
+
+  return () => {
+    activeScrollLocks = Math.max(0, activeScrollLocks - 1);
+
+    if (activeScrollLocks !== 0 || !previousScrollLockSnapshot) {
+      return;
+    }
+
+    body.style.overflow = previousScrollLockSnapshot.bodyOverflow;
+    body.style.overscrollBehavior =
+      previousScrollLockSnapshot.bodyOverscrollBehavior;
+    body.style.paddingRight = previousScrollLockSnapshot.bodyPaddingRight;
+    root.style.overflow = previousScrollLockSnapshot.rootOverflow;
+    root.style.overscrollBehavior =
+      previousScrollLockSnapshot.rootOverscrollBehavior;
+    previousScrollLockSnapshot = null;
+  };
 }
 
 interface ModalFrameProps {
@@ -28,37 +83,7 @@ export function ModalFrame({
   fullscreenUntilDesktop = false,
 }: ModalFrameProps) {
   useEffect(() => {
-    const body = document.body;
-    const root = document.documentElement;
-    const scrollY = window.scrollY;
-    const previousBody = {
-      position: body.style.position,
-      top: body.style.top,
-      left: body.style.left,
-      right: body.style.right,
-      width: body.style.width,
-      overflow: body.style.overflow,
-    };
-    const previousRootOverflow = root.style.overflow;
-
-    body.style.position = "fixed";
-    body.style.top = `-${scrollY}px`;
-    body.style.left = "0";
-    body.style.right = "0";
-    body.style.width = "100%";
-    body.style.overflow = "hidden";
-    root.style.overflow = "hidden";
-
-    return () => {
-      body.style.position = previousBody.position;
-      body.style.top = previousBody.top;
-      body.style.left = previousBody.left;
-      body.style.right = previousBody.right;
-      body.style.width = previousBody.width;
-      body.style.overflow = previousBody.overflow;
-      root.style.overflow = previousRootOverflow;
-      window.scrollTo(0, scrollY);
-    };
+    return lockDocumentScroll();
   }, []);
 
   return (
