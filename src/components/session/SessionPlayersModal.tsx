@@ -13,7 +13,6 @@ interface SessionPlayersModalProps {
   currentUserId: string;
   canEditPreferences: boolean;
   togglingPausePlayerId: string | null;
-  onRequestRenameGuest: (userId: string, currentName: string) => void;
   onClose: () => void;
   onTogglePause: (userId: string, isPaused: boolean) => void;
   onOpenPreferenceEditor: (userId: string, triggerEl: HTMLElement) => void;
@@ -34,7 +33,6 @@ export function SessionPlayersModal({
   currentUserId,
   canEditPreferences,
   togglingPausePlayerId,
-  onRequestRenameGuest,
   onClose,
   onTogglePause,
   onOpenPreferenceEditor,
@@ -162,28 +160,15 @@ export function SessionPlayersModal({
 
                 <div className="flex shrink-0 items-center gap-2">
                   {canEditPreferences ? (
-                    <>
-                      {player.isGuest ? (
-                        <button
-                          type="button"
-                          onClick={() =>
-                            onRequestRenameGuest(player.userId, player.user.name)
-                          }
-                          className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-blue-700 transition"
-                        >
-                          Rename
-                        </button>
-                      ) : null}
-                      <button
-                        type="button"
-                        onClick={(event) =>
-                          onOpenPreferenceEditor(player.userId, event.currentTarget)
-                        }
-                        className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-blue-700 transition"
-                      >
-                        {player.isGuest ? "Edit" : "Prefs"}
-                      </button>
-                    </>
+                    <button
+                      type="button"
+                      onClick={(event) =>
+                        onOpenPreferenceEditor(player.userId, event.currentTarget)
+                      }
+                      className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-blue-700 transition"
+                    >
+                      Edit
+                    </button>
                   ) : null}
                   <button
                     type="button"

@@ -951,7 +951,6 @@ export default function SessionPage() {
         currentUserId={currentUserId}
         canEditPreferences={!sessionView.isCompletedSession}
         togglingPausePlayerId={togglingPausePlayerId}
-        onRequestRenameGuest={openGuestRename}
         onClose={() => setShowPlayersModal(false)}
         onTogglePause={togglePausePlayer}
         onOpenPreferenceEditor={togglePreferenceEditor}
