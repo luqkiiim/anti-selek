@@ -1,6 +1,7 @@
 import type { ClaimRequesterEligibility } from "@/lib/communityClaimRules";
 import {
   ClaimRequestStatus,
+  MixedSide,
   PartnerPreference,
   PlayerGender,
 } from "@/types/enums";
@@ -13,6 +14,7 @@ export interface CommunityPageUser {
   elo: number;
   gender: PlayerGender;
   partnerPreference: PartnerPreference;
+  mixedSideOverride?: MixedSide | null;
 }
 
 export interface CommunityPageCommunity {
@@ -30,6 +32,7 @@ export interface CommunityPageMember {
   email?: string | null;
   gender: PlayerGender;
   partnerPreference: PartnerPreference;
+  mixedSideOverride?: MixedSide | null;
   elo: number;
   wins: number;
   losses: number;
@@ -52,6 +55,7 @@ export interface CommunityGuestConfig {
   name: string;
   gender: PlayerGender;
   partnerPreference: PartnerPreference;
+  mixedSideOverride?: MixedSide | null;
   initialElo: number;
 }
 

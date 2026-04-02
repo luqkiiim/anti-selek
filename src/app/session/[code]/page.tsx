@@ -169,7 +169,7 @@ export default function SessionPage() {
     addingPlayerId,
     guestName,
     guestGender,
-    guestPreference,
+    guestMixedSideOverride,
     guestInitialElo,
     addingGuest,
     savingPreferencesFor,
@@ -182,7 +182,7 @@ export default function SessionPage() {
     openPreferenceEditor,
     setRosterSearch,
     setGuestName,
-    setGuestPreference,
+    setGuestMixedSideOverride,
     setGuestInitialElo,
     setGuestRenameInput,
     setOpenPreferenceEditor,
@@ -1082,7 +1082,7 @@ export default function SessionPage() {
         rosterSearch={rosterSearch}
         guestName={guestName}
         guestGender={guestGender}
-        guestPreference={guestPreference}
+        guestMixedSideOverride={guestMixedSideOverride}
         guestInitialElo={guestInitialElo}
         addingGuest={addingGuest}
         addingPlayerId={addingPlayerId}
@@ -1091,7 +1091,7 @@ export default function SessionPage() {
         onRosterSearchChange={setRosterSearch}
         onGuestNameChange={setGuestName}
         onGuestGenderChange={handleGuestGenderChange}
-        onGuestPreferenceChange={setGuestPreference}
+        onGuestMixedSideOverrideChange={setGuestMixedSideOverride}
         onGuestInitialEloChange={setGuestInitialElo}
         onAddGuest={addGuestToSession}
         onAddPlayer={addPlayerToSession}

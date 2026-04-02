@@ -2,16 +2,17 @@
 
 import type { FormEvent } from "react";
 import { ModalFrame } from "@/components/ui/chrome";
-import { PartnerPreference, PlayerGender } from "@/types/enums";
+import { getMixedSideOverrideOptionForGender } from "@/lib/mixedSide";
+import { MixedSide, PlayerGender } from "@/types/enums";
 
 interface CreateCommunityPlayerModalProps {
   open: boolean;
   name: string;
   newPlayerGender: PlayerGender;
-  newPlayerPreference: PartnerPreference;
+  newPlayerMixedSideOverride: MixedSide | null;
   onNameChange: (value: string) => void;
   onNewPlayerGenderChange: (value: PlayerGender) => void;
-  onNewPlayerPreferenceChange: (value: PartnerPreference) => void;
+  onNewPlayerMixedSideOverrideChange: (value: MixedSide | null) => void;
   onClose: () => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 }
@@ -20,14 +21,16 @@ export function CreateCommunityPlayerModal({
   open,
   name,
   newPlayerGender,
-  newPlayerPreference,
+  newPlayerMixedSideOverride,
   onNameChange,
   onNewPlayerGenderChange,
-  onNewPlayerPreferenceChange,
+  onNewPlayerMixedSideOverrideChange,
   onClose,
   onSubmit,
 }: CreateCommunityPlayerModalProps) {
   if (!open) return null;
+
+  const mixedSideOption = getMixedSideOverrideOptionForGender(newPlayerGender);
 
   return (
     <ModalFrame
@@ -84,20 +87,22 @@ export function CreateCommunityPlayerModal({
           </select>
         </label>
 
-        {newPlayerGender === PlayerGender.FEMALE ? (
+        {mixedSideOption ? (
           <label className="block space-y-2 text-sm font-medium text-gray-900">
-            <span>Open tag</span>
+            <span>Mixed side</span>
             <select
-              value={newPlayerPreference}
+              value={newPlayerMixedSideOverride ?? ""}
               onChange={(event) =>
-                onNewPlayerPreferenceChange(
-                  event.target.value as PartnerPreference
+                onNewPlayerMixedSideOverrideChange(
+                  event.target.value
+                    ? (event.target.value as MixedSide)
+                    : null
                 )
               }
               className="field"
             >
-              <option value={PartnerPreference.FEMALE_FLEX}>Default</option>
-              <option value={PartnerPreference.OPEN}>Open</option>
+              <option value="">Default</option>
+              <option value={mixedSideOption.value}>{mixedSideOption.label}</option>
             </select>
           </label>
         ) : null}

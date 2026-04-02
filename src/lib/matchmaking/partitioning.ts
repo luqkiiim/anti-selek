@@ -4,6 +4,7 @@ import {
   SessionMode,
   SessionType,
 } from "../../types/enums";
+import { getEffectiveMixedSide } from "@/lib/mixedSide";
 
 const ELO_BALANCE_GAP_NORMALIZER = 150;
 const POINTS_BALANCE_GAP_NORMALIZER = 3;
@@ -42,6 +43,7 @@ export interface PartitionCandidate {
   lastPartnerId: string | null;
   gender: string;
   partnerPreference: string;
+  mixedSideOverride?: string | null;
 }
 
 export interface RotationHistory {
@@ -55,6 +57,7 @@ export interface RotationHistory {
 export interface PartitionEvaluation {
   partition: DoublesPartition;
   score: number;
+  mixedSideBalanceGap: number;
   pointDiffGap: number;
   rotationPenalty: number;
   exactPartitionPenalty: number;
@@ -63,6 +66,7 @@ export interface PartitionEvaluation {
 export interface PartitionScoreDetails {
   totalScore: number;
   teamBalanceGap: number;
+  mixedSideBalanceGap: number;
   pointDiffGap: number;
   balanceScore: number;
   courtmateRepeatPenalty: number;
@@ -85,6 +89,7 @@ export interface FallbackQuartetSelection {
   fairnessScore: number;
   randomScore: number;
   score: number;
+  mixedSideBalanceGap: number;
   pointDiffGap: number;
   rotationPenalty: number;
   exactPartitionPenalty: number;
@@ -233,11 +238,19 @@ function getExactPartitionBalanceTolerance(sessionType: SessionType) {
 function comparePartitionScoreDetails(
   left: Pick<
     PartitionScoreDetails,
-    "teamBalanceGap" | "pointDiffGap" | "rotationPenalty" | "exactPartitionPenalty"
+    | "teamBalanceGap"
+    | "mixedSideBalanceGap"
+    | "pointDiffGap"
+    | "rotationPenalty"
+    | "exactPartitionPenalty"
   >,
   right: Pick<
     PartitionScoreDetails,
-    "teamBalanceGap" | "pointDiffGap" | "rotationPenalty" | "exactPartitionPenalty"
+    | "teamBalanceGap"
+    | "mixedSideBalanceGap"
+    | "pointDiffGap"
+    | "rotationPenalty"
+    | "exactPartitionPenalty"
   >,
   sessionType: SessionType
 ) {
@@ -252,6 +265,10 @@ function comparePartitionScoreDetails(
     left.pointDiffGap !== right.pointDiffGap
   ) {
     return left.pointDiffGap - right.pointDiffGap;
+  }
+
+  if (left.mixedSideBalanceGap !== right.mixedSideBalanceGap) {
+    return left.mixedSideBalanceGap - right.mixedSideBalanceGap;
   }
 
   if (left.rotationPenalty !== right.rotationPenalty) {
@@ -283,55 +300,138 @@ function getChronologicalMatches(matches: MatchHistoryEntry[]) {
 type MixicanoMatchType = "MENS" | "MIXED" | "WOMENS" | "HYBRID";
 
 function inferMixicanoMatchType(
-  team1: [{ gender: string }, { gender: string }],
-  team2: [{ gender: string }, { gender: string }]
+  team1: [{ effectiveMixedSide: string }, { effectiveMixedSide: string }],
+  team2: [{ effectiveMixedSide: string }, { effectiveMixedSide: string }]
 ): MixicanoMatchType {
-  const femaleCountFor = (team: [{ gender: string }, { gender: string }]) =>
-    team.filter((player) => player.gender === PlayerGender.FEMALE).length;
+  const lowerCountFor = (
+    team: [{ effectiveMixedSide: string }, { effectiveMixedSide: string }]
+  ) => team.filter((player) => player.effectiveMixedSide === "LOWER").length;
 
-  const team1FemaleCount = femaleCountFor(team1);
-  const team2FemaleCount = femaleCountFor(team2);
+  const team1LowerCount = lowerCountFor(team1);
+  const team2LowerCount = lowerCountFor(team2);
 
-  if (team1FemaleCount === 2 && team2FemaleCount === 2) return "WOMENS";
-  if (team1FemaleCount === 1 && team2FemaleCount === 1) return "MIXED";
-  if (team1FemaleCount === 0 && team2FemaleCount === 0) return "MENS";
+  if (team1LowerCount === 2 && team2LowerCount === 2) return "WOMENS";
+  if (team1LowerCount === 1 && team2LowerCount === 1) return "MIXED";
+  if (team1LowerCount === 0 && team2LowerCount === 0) return "MENS";
   return "HYBRID";
 }
 
 function isValidMixicanoPartition(
   team1: [
-    { gender: string; partnerPreference: string },
-    { gender: string; partnerPreference: string },
+    {
+      gender: string;
+      partnerPreference: string;
+      mixedSideOverride?: string | null;
+    },
+    {
+      gender: string;
+      partnerPreference: string;
+      mixedSideOverride?: string | null;
+    },
   ],
   team2: [
-    { gender: string; partnerPreference: string },
-    { gender: string; partnerPreference: string },
+    {
+      gender: string;
+      partnerPreference: string;
+      mixedSideOverride?: string | null;
+    },
+    {
+      gender: string;
+      partnerPreference: string;
+      mixedSideOverride?: string | null;
+    },
   ]
 ) {
   const players = [...team1, ...team2];
 
-  const hasInvalidGender = players.some(
-    (player) =>
-      ![PlayerGender.MALE, PlayerGender.FEMALE].includes(
-        player.gender as PlayerGender
-      )
+  const effectiveTeam1 = team1.map((player) => ({
+    effectiveMixedSide: getEffectiveMixedSide({
+      gender: player.gender as PlayerGender,
+      mixedSideOverride: player.mixedSideOverride,
+      partnerPreference: player.partnerPreference,
+    }),
+  }));
+  const effectiveTeam2 = team2.map((player) => ({
+    effectiveMixedSide: getEffectiveMixedSide({
+      gender: player.gender as PlayerGender,
+      mixedSideOverride: player.mixedSideOverride,
+      partnerPreference: player.partnerPreference,
+    }),
+  }));
+
+  if (
+    [...effectiveTeam1, ...effectiveTeam2].some(
+      (player) => player.effectiveMixedSide === null
+    )
+  ) {
+    return false;
+  }
+
+  inferMixicanoMatchType(
+    effectiveTeam1 as [
+      { effectiveMixedSide: string },
+      { effectiveMixedSide: string },
+    ],
+    effectiveTeam2 as [
+      { effectiveMixedSide: string },
+      { effectiveMixedSide: string },
+    ]
   );
-  if (hasInvalidGender) return false;
 
-  const matchType = inferMixicanoMatchType(team1, team2);
+  return true;
+}
 
-  const violatesFemaleRestriction = players.some((player) => {
-    const gender = player.gender as PlayerGender;
-    const preference = player.partnerPreference as PartnerPreference;
+function getMixedSideBalanceGap(
+  partition: DoublesPartition,
+  playersById: Map<string, PartitionCandidate>
+) {
+  const player1 = playersById.get(partition.team1[0]);
+  const player2 = playersById.get(partition.team1[1]);
+  const player3 = playersById.get(partition.team2[0]);
+  const player4 = playersById.get(partition.team2[1]);
 
-    return (
-      gender === PlayerGender.FEMALE &&
-      preference === PartnerPreference.FEMALE_FLEX &&
-      !["MIXED", "WOMENS"].includes(matchType)
-    );
-  });
+  if (!player1 || !player2 || !player3 || !player4) {
+    return 0;
+  }
 
-  return !violatesFemaleRestriction;
+  const teams = [
+    [player1, player2],
+    [player3, player4],
+  ] as const;
+  const teamSides = teams.map((team) =>
+    team.map((player) =>
+      getEffectiveMixedSide({
+        gender: player.gender as PlayerGender,
+        mixedSideOverride: player.mixedSideOverride,
+        partnerPreference: player.partnerPreference,
+      })
+    )
+  );
+
+  if (
+    teamSides.some((team) => team.some((side) => side === null)) ||
+    !teamSides.every(
+      (team) =>
+        team.includes("UPPER" as typeof team[number]) &&
+        team.includes("LOWER" as typeof team[number])
+    )
+  ) {
+    return 0;
+  }
+
+  const [team1Upper, team1Lower] =
+    teamSides[0][0] === "UPPER"
+      ? [teams[0][0], teams[0][1]]
+      : [teams[0][1], teams[0][0]];
+  const [team2Upper, team2Lower] =
+    teamSides[1][0] === "UPPER"
+      ? [teams[1][0], teams[1][1]]
+      : [teams[1][1], teams[1][0]];
+
+  return (
+    Math.abs(team1Upper.elo - team2Upper.elo) +
+    Math.abs(team1Lower.elo - team2Lower.elo)
+  );
 }
 
 export function getDoublesPartitions(playerIds: string[]): DoublesPartition[] {
@@ -482,20 +582,24 @@ export function scorePartitionDetailed(
         {
           gender: player1.gender,
           partnerPreference: player1.partnerPreference,
+          mixedSideOverride: player1.mixedSideOverride,
         },
         {
           gender: player2.gender,
           partnerPreference: player2.partnerPreference,
+          mixedSideOverride: player2.mixedSideOverride,
         },
       ],
       [
         {
           gender: player3.gender,
           partnerPreference: player3.partnerPreference,
+          mixedSideOverride: player3.mixedSideOverride,
         },
         {
           gender: player4.gender,
           partnerPreference: player4.partnerPreference,
+          mixedSideOverride: player4.mixedSideOverride,
         },
       ]
     );
@@ -506,6 +610,10 @@ export function scorePartitionDetailed(
   const team1AvgElo = (player1.elo + player2.elo) / 2;
   const team2AvgElo = (player3.elo + player4.elo) / 2;
   const teamBalanceGap = Math.abs(team1AvgElo - team2AvgElo);
+  const mixedSideBalanceGap =
+    sessionMode === SessionMode.MIXICANO
+      ? getMixedSideBalanceGap(partition, playersById)
+      : 0;
   const team1AvgPointDiff = (player1.pointDiff + player2.pointDiff) / 2;
   const team2AvgPointDiff = (player3.pointDiff + player4.pointDiff) / 2;
   const pointDiffGap = Math.abs(team1AvgPointDiff - team2AvgPointDiff);
@@ -535,6 +643,7 @@ export function scorePartitionDetailed(
   return {
     totalScore: balanceScore,
     teamBalanceGap,
+    mixedSideBalanceGap,
     pointDiffGap,
     balanceScore,
     courtmateRepeatPenalty,
@@ -609,6 +718,7 @@ export function evaluateBestPartition(
     ? {
         partition: bestPartition,
         score: bestScore.teamBalanceGap,
+        mixedSideBalanceGap: bestScore.mixedSideBalanceGap,
         pointDiffGap: bestScore.pointDiffGap,
         rotationPenalty: bestScore.rotationPenalty,
         exactPartitionPenalty: bestScore.exactPartitionPenalty,
@@ -745,12 +855,14 @@ export function findBestQuartetInFairnessWindow<T extends { userId: string }>(
             ? comparePartitionScoreDetails(
                 {
                   teamBalanceGap: evaluation.score,
+                  mixedSideBalanceGap: evaluation.mixedSideBalanceGap,
                   pointDiffGap: evaluation.pointDiffGap,
                   rotationPenalty: evaluation.rotationPenalty,
                   exactPartitionPenalty: evaluation.exactPartitionPenalty,
                 },
                 {
                   teamBalanceGap: bestSelection.score,
+                  mixedSideBalanceGap: bestSelection.mixedSideBalanceGap,
                   pointDiffGap: bestSelection.pointDiffGap,
                   rotationPenalty: bestSelection.rotationPenalty,
                   exactPartitionPenalty: bestSelection.exactPartitionPenalty,
@@ -773,6 +885,7 @@ export function findBestQuartetInFairnessWindow<T extends { userId: string }>(
               fairnessScore,
               randomScore,
               score: evaluation.score,
+              mixedSideBalanceGap: evaluation.mixedSideBalanceGap,
               pointDiffGap: evaluation.pointDiffGap,
               rotationPenalty: evaluation.rotationPenalty,
               exactPartitionPenalty: evaluation.exactPartitionPenalty,
@@ -856,12 +969,14 @@ export function findBestFallbackQuartet<T extends { userId: string }>(
             ? comparePartitionScoreDetails(
                 {
                   teamBalanceGap: evaluation.score,
+                  mixedSideBalanceGap: evaluation.mixedSideBalanceGap,
                   pointDiffGap: evaluation.pointDiffGap,
                   rotationPenalty: evaluation.rotationPenalty,
                   exactPartitionPenalty: evaluation.exactPartitionPenalty,
                 },
                 {
                   teamBalanceGap: bestSelection.score,
+                  mixedSideBalanceGap: bestSelection.mixedSideBalanceGap,
                   pointDiffGap: bestSelection.pointDiffGap,
                   rotationPenalty: bestSelection.rotationPenalty,
                   exactPartitionPenalty: bestSelection.exactPartitionPenalty,
@@ -884,6 +999,7 @@ export function findBestFallbackQuartet<T extends { userId: string }>(
               fairnessScore,
               randomScore,
               score: evaluation.score,
+              mixedSideBalanceGap: evaluation.mixedSideBalanceGap,
               pointDiffGap: evaluation.pointDiffGap,
               rotationPenalty: evaluation.rotationPenalty,
               exactPartitionPenalty: evaluation.exactPartitionPenalty,

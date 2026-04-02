@@ -2,7 +2,7 @@
 
 import { useMemo, useState, type Dispatch, type FormEvent, type SetStateAction } from "react";
 import type { CommunityAdminPlayer } from "@/components/community-admin/communityAdminTypes";
-import { PartnerPreference, PlayerGender } from "@/types/enums";
+import { MixedSide, PlayerGender } from "@/types/enums";
 import { safeJson } from "./communityAdminApi";
 
 interface PendingPlayerAction {
@@ -30,8 +30,8 @@ export function useCommunityAdminPlayerActions({
   const [newPlayerGender, setNewPlayerGender] = useState<PlayerGender>(
     PlayerGender.MALE
   );
-  const [newPlayerPreference, setNewPlayerPreference] =
-    useState<PartnerPreference>(PartnerPreference.OPEN);
+  const [newPlayerMixedSideOverride, setNewPlayerMixedSideOverride] =
+    useState<MixedSide | null>(null);
 
   const [editingPlayerId, setEditingPlayerId] = useState<string | null>(null);
   const [editorName, setEditorName] = useState("");
@@ -63,7 +63,7 @@ export function useCommunityAdminPlayerActions({
   const openCreatePlayerModal = () => {
     setName("");
     setNewPlayerGender(PlayerGender.MALE);
-    setNewPlayerPreference(PartnerPreference.OPEN);
+    setNewPlayerMixedSideOverride(null);
     setIsCreatePlayerOpen(true);
   };
 
@@ -118,10 +118,7 @@ export function useCommunityAdminPlayerActions({
         body: JSON.stringify({
           name,
           gender: newPlayerGender,
-          partnerPreference:
-            newPlayerGender === PlayerGender.FEMALE
-              ? newPlayerPreference
-              : PartnerPreference.OPEN,
+          mixedSideOverride: newPlayerMixedSideOverride,
         }),
       });
 
@@ -133,7 +130,7 @@ export function useCommunityAdminPlayerActions({
       setSuccess(`Player profile for "${name}" added to community.`);
       setName("");
       setNewPlayerGender(PlayerGender.MALE);
-      setNewPlayerPreference(PartnerPreference.OPEN);
+      setNewPlayerMixedSideOverride(null);
       setIsCreatePlayerOpen(false);
       await refreshCommunityData();
     } catch (err: unknown) {
@@ -326,11 +323,11 @@ export function useCommunityAdminPlayerActions({
 
   const handleUpdatePreferences = async (
     player: CommunityAdminPlayer,
-    updates: { gender?: PlayerGender; partnerPreference?: PartnerPreference }
+    updates: { gender?: PlayerGender; mixedSideOverride?: MixedSide | null }
   ) => {
     if (
       updates.gender === undefined &&
-      updates.partnerPreference === undefined
+      updates.mixedSideOverride === undefined
     ) {
       return;
     }
@@ -361,8 +358,14 @@ export function useCommunityAdminPlayerActions({
                     : item.gender,
                 partnerPreference:
                   typeof data.partnerPreference === "string"
-                    ? (data.partnerPreference as PartnerPreference)
+                    ? data.partnerPreference
                     : item.partnerPreference,
+                mixedSideOverride:
+                  typeof data.mixedSideOverride === "string"
+                    ? (data.mixedSideOverride as MixedSide)
+                    : data.mixedSideOverride === null
+                      ? null
+                      : item.mixedSideOverride,
               }
             : item
         )
@@ -385,8 +388,8 @@ export function useCommunityAdminPlayerActions({
     setName,
     newPlayerGender,
     setNewPlayerGender,
-    newPlayerPreference,
-    setNewPlayerPreference,
+    newPlayerMixedSideOverride,
+    setNewPlayerMixedSideOverride,
     editingPlayer,
     editorName,
     setEditorName,

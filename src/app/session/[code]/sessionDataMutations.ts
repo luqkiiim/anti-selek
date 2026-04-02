@@ -60,12 +60,14 @@ interface GuestPayload {
   ladderEntryAt?: string;
   gender: Player["gender"];
   partnerPreference: Player["partnerPreference"];
+  mixedSideOverride?: Player["mixedSideOverride"];
 }
 
 interface SessionPlayerPayload {
   userId: string;
   gender: Player["gender"];
   partnerPreference: Player["partnerPreference"];
+  mixedSideOverride?: Player["mixedSideOverride"];
 }
 
 function normalizeOptionalNumber(value: number | null | undefined) {
@@ -447,6 +449,7 @@ export function applyGuestAdded(current: SessionData, guest: GuestPayload) {
         isGuest: guest.isGuest,
         gender: guest.gender,
         partnerPreference: guest.partnerPreference,
+        mixedSideOverride: guest.mixedSideOverride ?? null,
         user: {
           id: guest.id,
           name: guest.name,
@@ -555,6 +558,7 @@ export function applyPlayerPreferenceUpdate(
             ...player,
             gender: payload.gender,
             partnerPreference: payload.partnerPreference,
+            mixedSideOverride: payload.mixedSideOverride ?? null,
           }
         : player
     ),

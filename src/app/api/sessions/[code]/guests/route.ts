@@ -1,14 +1,15 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { calculateNoCatchUpMatchmakingCredit } from "@/lib/matchmaking/matchmakingCredit";
+import {
+  isValidMixedSide,
+  isValidPartnerPreference,
+  isValidPlayerGender,
+  resolveMixedSideState,
+} from "@/lib/mixedSide";
 import { prisma } from "@/lib/prisma";
 import { getSessionModeLabel } from "@/lib/sessionModeLabels";
-import {
-  PartnerPreference,
-  PlayerGender,
-  SessionMode,
-  SessionStatus,
-} from "@/types/enums";
+import { PlayerGender, SessionMode, SessionStatus } from "@/types/enums";
 
 export const dynamic = "force-dynamic";
 
@@ -29,11 +30,13 @@ export async function POST(
       return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
     }
 
-    const { name, initialElo, gender, partnerPreference } = body as {
+    const { name, initialElo, gender, partnerPreference, mixedSideOverride } =
+      body as {
       name?: unknown;
       initialElo?: unknown;
       gender?: unknown;
       partnerPreference?: unknown;
+      mixedSideOverride?: unknown;
     };
     if (typeof name !== "string" || name.trim().length < 2) {
       return NextResponse.json({ error: "Guest name must be at least 2 characters" }, { status: 400 });
@@ -48,21 +51,19 @@ export async function POST(
     }
 
     const normalizedGender =
-      typeof gender === "string" &&
-      [PlayerGender.MALE, PlayerGender.FEMALE, PlayerGender.UNSPECIFIED].includes(
-        gender as PlayerGender
-      )
+      isValidPlayerGender(gender)
         ? (gender as PlayerGender)
         : PlayerGender.MALE;
-    const normalizedPartnerPreference =
-      typeof partnerPreference === "string" &&
-      [PartnerPreference.OPEN, PartnerPreference.FEMALE_FLEX].includes(
-        partnerPreference as PartnerPreference
-      )
-        ? (partnerPreference as PartnerPreference)
-        : normalizedGender === PlayerGender.FEMALE
-          ? PartnerPreference.FEMALE_FLEX
-          : PartnerPreference.OPEN;
+    const normalizedMixedState = resolveMixedSideState({
+      gender: normalizedGender,
+      mixedSideOverride:
+        isValidMixedSide(mixedSideOverride) || mixedSideOverride === null
+          ? mixedSideOverride
+          : undefined,
+      partnerPreference: isValidPartnerPreference(partnerPreference)
+        ? partnerPreference
+        : undefined,
+    });
 
     const { code } = await params;
     const sessionData = await prisma.session.findUnique({
@@ -146,7 +147,8 @@ export async function POST(
           isClaimed: false,
           elo: guestElo,
           gender: normalizedGender,
-          partnerPreference: normalizedPartnerPreference,
+          partnerPreference: normalizedMixedState.partnerPreference,
+          mixedSideOverride: normalizedMixedState.mixedSideOverride,
         },
         select: {
           id: true,
@@ -154,6 +156,7 @@ export async function POST(
           elo: true,
           gender: true,
           partnerPreference: true,
+          mixedSideOverride: true,
         },
       });
 
@@ -164,6 +167,7 @@ export async function POST(
           isGuest: true,
           gender: user.gender,
           partnerPreference: user.partnerPreference,
+          mixedSideOverride: user.mixedSideOverride,
           sessionPoints: 0,
           matchmakingMatchesCredit,
           joinedAt: new Date(),
@@ -182,6 +186,7 @@ export async function POST(
       isGuest: true,
       gender: createdGuest.gender,
       partnerPreference: createdGuest.partnerPreference,
+      mixedSideOverride: createdGuest.mixedSideOverride,
       ladderEntryAt: new Date().toISOString(),
     });
   } catch (error) {

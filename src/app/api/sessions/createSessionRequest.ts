@@ -1,11 +1,19 @@
 import {
+  defaultPartnerPreferenceForGender,
+  getLegacyMixedSideOverride,
+  isValidMixedSide,
+  isValidPartnerPreference,
+  isValidPlayerGender,
+  resolveMixedSideState,
+} from "@/lib/mixedSide";
+import {
+  MixedSide,
   PartnerPreference,
   PlayerGender,
   SessionMode,
   SessionType,
 } from "@/types/enums";
 import {
-  defaultPartnerPreferenceForGender,
   type NormalizedGuestConfig,
   type ParsedCreateSessionRequest,
   type PlayerConfigOverride,
@@ -24,24 +32,6 @@ interface CreateSessionBody {
   courtCount?: unknown;
 }
 
-function isValidPlayerGender(value: unknown): value is PlayerGender {
-  return (
-    typeof value === "string" &&
-    [PlayerGender.MALE, PlayerGender.FEMALE, PlayerGender.UNSPECIFIED].includes(
-      value as PlayerGender
-    )
-  );
-}
-
-function isValidPartnerPreference(value: unknown): value is PartnerPreference {
-  return (
-    typeof value === "string" &&
-    [PartnerPreference.OPEN, PartnerPreference.FEMALE_FLEX].includes(
-      value as PartnerPreference
-    )
-  );
-}
-
 function normalizePlayerConfigMap(playerConfigs: unknown) {
   const playerConfigMap = new Map<string, PlayerConfigOverride>();
   if (!Array.isArray(playerConfigs)) {
@@ -55,6 +45,7 @@ function normalizePlayerConfigMap(playerConfigs: unknown) {
       userId?: unknown;
       gender?: unknown;
       partnerPreference?: unknown;
+      mixedSideOverride?: unknown;
     };
     if (typeof candidate.userId !== "string") continue;
 
@@ -64,6 +55,17 @@ function normalizePlayerConfigMap(playerConfigs: unknown) {
     }
     if (isValidPartnerPreference(candidate.partnerPreference)) {
       normalized.partnerPreference = candidate.partnerPreference;
+    }
+    if (isValidMixedSide(candidate.mixedSideOverride)) {
+      normalized.mixedSideOverride = candidate.mixedSideOverride;
+    } else if (
+      isValidPlayerGender(candidate.gender) &&
+      isValidPartnerPreference(candidate.partnerPreference)
+    ) {
+      normalized.mixedSideOverride = getLegacyMixedSideOverride(
+        candidate.gender,
+        candidate.partnerPreference
+      );
     }
 
     playerConfigMap.set(candidate.userId, normalized);
@@ -85,6 +87,7 @@ function normalizeGuests(
       mode === SessionMode.MIXICANO
         ? PlayerGender.MALE
         : PlayerGender.UNSPECIFIED,
+    mixedSideOverride: MixedSide | null = null,
     partnerPreference: PartnerPreference = defaultPartnerPreferenceForGender(
       gender
     ),
@@ -101,6 +104,7 @@ function normalizeGuests(
       name: trimmed,
       gender,
       partnerPreference,
+      mixedSideOverride,
       initialElo,
     });
   };
@@ -121,6 +125,7 @@ function normalizeGuests(
         name?: unknown;
         gender?: unknown;
         partnerPreference?: unknown;
+        mixedSideOverride?: unknown;
         initialElo?: unknown;
       };
       if (typeof candidate.name !== "string") continue;
@@ -130,11 +135,17 @@ function normalizeGuests(
         : mode === SessionMode.MIXICANO
           ? PlayerGender.MALE
           : PlayerGender.UNSPECIFIED;
-      const partnerPreference = isValidPartnerPreference(
-        candidate.partnerPreference
-      )
-        ? candidate.partnerPreference
-        : defaultPartnerPreferenceForGender(gender);
+      const { mixedSideOverride, partnerPreference } = resolveMixedSideState({
+        gender,
+        mixedSideOverride:
+          isValidMixedSide(candidate.mixedSideOverride) ||
+          candidate.mixedSideOverride === null
+            ? candidate.mixedSideOverride
+            : undefined,
+        partnerPreference: isValidPartnerPreference(candidate.partnerPreference)
+          ? candidate.partnerPreference
+          : undefined,
+      });
       const initialElo =
         typeof candidate.initialElo === "number" &&
         Number.isInteger(candidate.initialElo) &&
@@ -146,6 +157,7 @@ function normalizeGuests(
       upsertGuest(
         candidate.name,
         gender,
+        mixedSideOverride,
         partnerPreference,
         initialElo,
         true

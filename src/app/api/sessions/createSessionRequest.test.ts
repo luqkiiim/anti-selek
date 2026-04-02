@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  MixedSide,
   PartnerPreference,
   PlayerGender,
   SessionMode,
@@ -51,6 +52,7 @@ describe("parseCreateSessionRequest", () => {
     expect(parsed.playerConfigMap.get("user-1")).toEqual({
       gender: PlayerGender.FEMALE,
       partnerPreference: PartnerPreference.FEMALE_FLEX,
+      mixedSideOverride: null,
     });
     expect(parsed.playerConfigMap.get("user-2")).toEqual({});
     expect(parsed.normalizedGuests).toEqual([
@@ -58,18 +60,21 @@ describe("parseCreateSessionRequest", () => {
         name: "Guest A",
         gender: PlayerGender.FEMALE,
         partnerPreference: PartnerPreference.FEMALE_FLEX,
+        mixedSideOverride: null,
         initialElo: 1200,
       },
       {
         name: "Guest B",
         gender: PlayerGender.MALE,
         partnerPreference: PartnerPreference.OPEN,
+        mixedSideOverride: null,
         initialElo: 1000,
       },
       {
         name: "Guest C",
         gender: PlayerGender.MALE,
         partnerPreference: PartnerPreference.OPEN,
+        mixedSideOverride: null,
         initialElo: 1000,
       },
     ]);
@@ -88,6 +93,44 @@ describe("parseCreateSessionRequest", () => {
         name: "Open Guest",
         gender: PlayerGender.UNSPECIFIED,
         partnerPreference: PartnerPreference.OPEN,
+        mixedSideOverride: null,
+        initialElo: 1000,
+      },
+    ]);
+  });
+
+  it("maps legacy female open preferences to an upper-side override", () => {
+    const parsed = parseCreateSessionRequest({
+      name: "Legacy Mix",
+      communityId: "community-1",
+      mode: SessionMode.MIXICANO,
+      playerConfigs: [
+        {
+          userId: "user-1",
+          gender: PlayerGender.FEMALE,
+          partnerPreference: PartnerPreference.OPEN,
+        },
+      ],
+      guestConfigs: [
+        {
+          name: "Guest A",
+          gender: PlayerGender.FEMALE,
+          partnerPreference: PartnerPreference.OPEN,
+        },
+      ],
+    });
+
+    expect(parsed.playerConfigMap.get("user-1")).toEqual({
+      gender: PlayerGender.FEMALE,
+      partnerPreference: PartnerPreference.OPEN,
+      mixedSideOverride: MixedSide.UPPER,
+    });
+    expect(parsed.normalizedGuests).toEqual([
+      {
+        name: "Guest A",
+        gender: PlayerGender.FEMALE,
+        partnerPreference: PartnerPreference.OPEN,
+        mixedSideOverride: MixedSide.UPPER,
         initialElo: 1000,
       },
     ]);

@@ -1,18 +1,27 @@
 "use client";
 
 import type { CommunityAdminPlayer } from "./communityAdminTypes";
-import { PartnerPreference, PlayerGender } from "@/types/enums";
+import { getMixedSideDisplayLabel } from "@/lib/mixedSide";
+import { PlayerGender } from "@/types/enums";
 
 export function getCommunityAdminGenderPillLabel(
   player: CommunityAdminPlayer
 ) {
-  if (player.gender === PlayerGender.FEMALE) {
-    return player.partnerPreference === PartnerPreference.OPEN
-      ? "Female/Open"
-      : "Female";
+  if (player.gender === PlayerGender.FEMALE || player.gender === PlayerGender.MALE) {
+    const mixedSideLabel = getMixedSideDisplayLabel({
+      gender: player.gender,
+      mixedSideOverride: player.mixedSideOverride,
+      partnerPreference: player.partnerPreference,
+    });
+
+    if (mixedSideLabel !== "Default") {
+      return `${player.gender === PlayerGender.FEMALE ? "Female" : "Male"}/${mixedSideLabel === "Upper Side" ? "Upper" : "Lower"}`;
+    }
+
+    return player.gender === PlayerGender.FEMALE ? "Female" : "Male";
   }
 
-  return "Male";
+  return "Player";
 }
 
 export function CommunityAdminRolePill({

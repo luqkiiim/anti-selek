@@ -1,6 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import {
+  isValidMixedSide,
+  isValidPartnerPreference,
+  isValidPlayerGender,
+  resolveMixedSideState,
+} from "@/lib/mixedSide";
 import type {
   CommunityUser,
   PreferenceEditorState,
@@ -16,7 +22,7 @@ import {
   mergeSessionSnapshot,
 } from "./sessionDataMutations";
 import {
-  PartnerPreference,
+  MixedSide,
   PlayerGender,
   SessionMode,
 } from "@/types/enums";
@@ -36,15 +42,15 @@ function parseCommunityPlayers(data: unknown): CommunityUser[] {
     return [];
   }
 
-  return data
-    .map((player) => {
-      if (typeof player !== "object" || player === null) return null;
+  return data.reduce<CommunityUser[]>((players, player) => {
+      if (typeof player !== "object" || player === null) return players;
       const candidate = player as {
         id?: unknown;
         name?: unknown;
         elo?: unknown;
         gender?: unknown;
         partnerPreference?: unknown;
+        mixedSideOverride?: unknown;
       };
 
       if (
@@ -52,35 +58,36 @@ function parseCommunityPlayers(data: unknown): CommunityUser[] {
         typeof candidate.name !== "string" ||
         typeof candidate.elo !== "number"
       ) {
-        return null;
+        return players;
       }
 
       const gender =
-        typeof candidate.gender === "string" &&
-        [PlayerGender.MALE, PlayerGender.FEMALE, PlayerGender.UNSPECIFIED].includes(
-          candidate.gender as PlayerGender
-        )
+        isValidPlayerGender(candidate.gender)
           ? (candidate.gender as PlayerGender)
           : PlayerGender.UNSPECIFIED;
-      const partnerPreference =
-        typeof candidate.partnerPreference === "string" &&
-        [PartnerPreference.OPEN, PartnerPreference.FEMALE_FLEX].includes(
-          candidate.partnerPreference as PartnerPreference
-        )
-          ? (candidate.partnerPreference as PartnerPreference)
-          : gender === PlayerGender.FEMALE
-            ? PartnerPreference.FEMALE_FLEX
-            : PartnerPreference.OPEN;
+      const { partnerPreference, mixedSideOverride } = resolveMixedSideState({
+        gender,
+        mixedSideOverride:
+          isValidMixedSide(candidate.mixedSideOverride) ||
+          candidate.mixedSideOverride === null
+            ? candidate.mixedSideOverride
+            : undefined,
+        partnerPreference: isValidPartnerPreference(candidate.partnerPreference)
+          ? candidate.partnerPreference
+          : undefined,
+      });
 
-      return {
+      players.push({
         id: candidate.id,
         name: candidate.name,
         elo: candidate.elo,
         gender,
         partnerPreference,
-      };
-    })
-    .filter((player): player is CommunityUser => player !== null);
+        mixedSideOverride,
+      });
+
+      return players;
+    }, []);
 }
 
 export function useSessionPlayerManagement({
@@ -97,8 +104,8 @@ export function useSessionPlayerManagement({
   const [addingPlayerId, setAddingPlayerId] = useState<string | null>(null);
   const [guestName, setGuestName] = useState("");
   const [guestGender, setGuestGender] = useState<PlayerGender>(PlayerGender.MALE);
-  const [guestPreference, setGuestPreference] =
-    useState<PartnerPreference>(PartnerPreference.OPEN);
+  const [guestMixedSideOverride, setGuestMixedSideOverride] =
+    useState<MixedSide | null>(null);
   const [guestInitialElo, setGuestInitialElo] = useState<number>(1000);
   const [addingGuest, setAddingGuest] = useState(false);
   const [savingPreferencesFor, setSavingPreferencesFor] = useState<string | null>(null);
@@ -180,7 +187,7 @@ export function useSessionPlayerManagement({
   const resetGuestInputs = () => {
     setGuestName("");
     setGuestGender(PlayerGender.MALE);
-    setGuestPreference(PartnerPreference.OPEN);
+    setGuestMixedSideOverride(null);
     setGuestInitialElo(1000);
   };
 
@@ -202,11 +209,7 @@ export function useSessionPlayerManagement({
 
   const handleGuestGenderChange = (nextGender: PlayerGender) => {
     setGuestGender(nextGender);
-    setGuestPreference(
-      nextGender === PlayerGender.FEMALE
-        ? PartnerPreference.FEMALE_FLEX
-        : PartnerPreference.OPEN
-    );
+    setGuestMixedSideOverride(null);
   };
 
   const requestRemovePlayerFromSession = (
@@ -402,6 +405,10 @@ export function useSessionPlayerManagement({
     setError("");
 
     try {
+      const resolvedMixedState = resolveMixedSideState({
+        gender: guestGender,
+        mixedSideOverride: guestMixedSideOverride,
+      });
       const res = await fetch(`/api/sessions/${code}/guests`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -409,7 +416,8 @@ export function useSessionPlayerManagement({
           name,
           initialElo: guestInitialElo,
           gender: guestGender,
-          partnerPreference: guestPreference,
+          partnerPreference: resolvedMixedState.partnerPreference,
+          mixedSideOverride: resolvedMixedState.mixedSideOverride,
         }),
       });
       const data = await safeJson(res);
@@ -432,7 +440,7 @@ export function useSessionPlayerManagement({
   const updatePlayerPreference = async (
     userId: string,
     nextGender: PlayerGender,
-    nextPreference: PartnerPreference
+    nextMixedSideOverride: MixedSide | null
   ) => {
     setSavingPreferencesFor(userId);
     setError("");
@@ -444,7 +452,7 @@ export function useSessionPlayerManagement({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             gender: nextGender,
-            partnerPreference: nextPreference,
+            mixedSideOverride: nextMixedSideOverride,
           }),
         }
       );
@@ -470,7 +478,7 @@ export function useSessionPlayerManagement({
     addingPlayerId,
     guestName,
     guestGender,
-    guestPreference,
+    guestMixedSideOverride,
     guestInitialElo,
     addingGuest,
     savingPreferencesFor,
@@ -483,7 +491,7 @@ export function useSessionPlayerManagement({
     openPreferenceEditor,
     setRosterSearch,
     setGuestName,
-    setGuestPreference,
+    setGuestMixedSideOverride,
     setGuestInitialElo,
     setGuestRenameInput,
     setOpenPreferenceEditor,

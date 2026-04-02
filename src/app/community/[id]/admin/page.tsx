@@ -13,7 +13,7 @@ import { CommunityPlayersPanel } from "@/components/community-admin/CommunityPla
 import { CommunitySettingsPanel } from "@/components/community-admin/CommunitySettingsPanel";
 import { CreateCommunityPlayerModal } from "@/components/community-admin/CreateCommunityPlayerModal";
 import type { CommunityAdminSection } from "@/components/community-admin/communityAdminTypes";
-import { PartnerPreference, PlayerGender } from "@/types/enums";
+import { PlayerGender } from "@/types/enums";
 import { useCommunityAdminPage } from "./useCommunityAdminPage";
 
 const tabs: Array<{
@@ -150,8 +150,8 @@ export default function CommunityAdminPage() {
     setName,
     newPlayerGender,
     setNewPlayerGender,
-    newPlayerPreference,
-    setNewPlayerPreference,
+    newPlayerMixedSideOverride,
+    setNewPlayerMixedSideOverride,
     editingPlayer,
     editorName,
     setEditorName,
@@ -386,17 +386,13 @@ export default function CommunityAdminPage() {
         open={isCreatePlayerOpen}
         name={name}
         newPlayerGender={newPlayerGender}
-        newPlayerPreference={newPlayerPreference}
+        newPlayerMixedSideOverride={newPlayerMixedSideOverride}
         onNameChange={setName}
         onNewPlayerGenderChange={(value) => {
           setNewPlayerGender(value);
-          setNewPlayerPreference(
-            value === PlayerGender.FEMALE
-              ? PartnerPreference.FEMALE_FLEX
-              : PartnerPreference.OPEN
-          );
+          setNewPlayerMixedSideOverride(null);
         }}
-        onNewPlayerPreferenceChange={setNewPlayerPreference}
+        onNewPlayerMixedSideOverrideChange={setNewPlayerMixedSideOverride}
         onClose={closeCreatePlayerModal}
         onSubmit={handleAddPlayer}
       />

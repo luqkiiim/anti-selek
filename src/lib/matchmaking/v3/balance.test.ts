@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { SessionMode } from "../../../types/enums";
+import { MixedSide, SessionMode } from "../../../types/enums";
 import {
   evaluateBalancedPartitions,
   findBestBalancedPartition,
@@ -44,21 +44,35 @@ describe("matchmaking v3 balance", () => {
         team2: ["C", "D"],
       },
       balanceGap: 0,
+      mixedSideGap: 0,
     });
   });
 
-  it("rejects invalid Mixicano quartets when no valid partition exists", () => {
+  it("allows female upper-side overrides to participate in side-balanced Mixicano quartets", () => {
     const playersById = new Map<string, MatchmakerV3Player>([
       [
         "A",
         createPlayer("A", {
           gender: "FEMALE",
-          partnerPreference: "FEMALE_FLEX",
+          partnerPreference: "OPEN",
+          mixedSideOverride: MixedSide.UPPER,
         }),
       ],
       ["B", createPlayer("B", { gender: "MALE" })],
-      ["C", createPlayer("C", { gender: "MALE" })],
-      ["D", createPlayer("D", { gender: "MALE" })],
+      [
+        "C",
+        createPlayer("C", {
+          gender: "MALE",
+          mixedSideOverride: MixedSide.LOWER,
+        }),
+      ],
+      [
+        "D",
+        createPlayer("D", {
+          gender: "FEMALE",
+          partnerPreference: "FEMALE_FLEX",
+        }),
+      ],
     ]);
 
     expect(
@@ -66,7 +80,7 @@ describe("matchmaking v3 balance", () => {
         ["A", "B", "C", "D"],
         playersById,
         SessionMode.MIXICANO
-      )
-    ).toEqual([]);
+      ).length
+    ).toBeGreaterThan(0);
   });
 });

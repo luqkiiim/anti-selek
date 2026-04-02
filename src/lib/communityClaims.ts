@@ -64,6 +64,7 @@ export async function approveCommunityClaimRequest(
           isClaimed: true,
           gender: true,
           partnerPreference: true,
+          mixedSideOverride: true,
         },
       },
     },
@@ -218,6 +219,7 @@ export async function approveCommunityClaimRequest(
       name: claimRequest.target.name,
       gender: claimRequest.target.gender,
       partnerPreference: claimRequest.target.partnerPreference,
+      mixedSideOverride: claimRequest.target.mixedSideOverride,
     },
   });
 

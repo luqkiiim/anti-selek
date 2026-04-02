@@ -1,7 +1,8 @@
 "use client";
 
 import { createPortal } from "react-dom";
-import { PartnerPreference, PlayerGender } from "@/types/enums";
+import { getMixedSideOverrideOptionForGender } from "@/lib/mixedSide";
+import { MixedSide, PlayerGender } from "@/types/enums";
 import type { Player, PreferenceEditorState } from "./sessionTypes";
 
 interface SessionPreferenceEditorPortalProps {
@@ -16,7 +17,7 @@ interface SessionPreferenceEditorPortalProps {
   onUpdatePreference: (
     userId: string,
     nextGender: PlayerGender,
-    nextPreference: PartnerPreference
+    nextMixedSideOverride: MixedSide | null
   ) => Promise<void>;
   onRequestRenameGuest: (userId: string, currentName: string) => void;
   onRemovePlayer: (userId: string, playerName: string) => void;
@@ -45,6 +46,10 @@ export function SessionPreferenceEditorPortal({
     return null;
   }
 
+  const mixedSideOption = getMixedSideOverrideOptionForGender(
+    activePreferencePlayer.gender
+  );
+
   return createPortal(
     <div
       className="fixed z-[80] w-44 space-y-2 rounded-xl border border-gray-200 bg-white p-2.5 shadow-2xl"
@@ -64,14 +69,10 @@ export function SessionPreferenceEditorPortal({
               onChange={async (e) => {
                 const nextGender = e.target.value as PlayerGender;
                 onClose();
-                const nextPreference =
-                  nextGender === PlayerGender.MALE
-                    ? PartnerPreference.OPEN
-                    : PartnerPreference.FEMALE_FLEX;
                 await onUpdatePreference(
                   activePreferencePlayer.userId,
                   nextGender,
-                  nextPreference
+                  null
                 );
               }}
               className="h-8 w-full rounded-lg border border-gray-200 bg-white px-2 text-[10px] font-black uppercase tracking-wide text-gray-700 focus:border-blue-400 focus:outline-none"
@@ -82,28 +83,27 @@ export function SessionPreferenceEditorPortal({
           </div>
           <div className="space-y-1">
             <p className="text-[9px] font-black uppercase tracking-wider text-gray-400">
-              Open Tag
+              Mixed Side
             </p>
-            {activePreferencePlayer.gender === PlayerGender.FEMALE ? (
+            {mixedSideOption ? (
               <select
-                value={activePreferencePlayer.partnerPreference}
+                value={activePreferencePlayer.mixedSideOverride ?? ""}
                 onChange={async (e) => {
-                  const nextPreference = e.target.value as PartnerPreference;
                   onClose();
                   await onUpdatePreference(
                     activePreferencePlayer.userId,
                     activePreferencePlayer.gender,
-                    nextPreference
+                    e.target.value ? (e.target.value as MixedSide) : null
                   );
                 }}
                 className="h-8 w-full rounded-lg border border-gray-200 bg-white px-2 text-[10px] font-black uppercase tracking-wide text-gray-700 focus:border-blue-400 focus:outline-none"
               >
-                <option value={PartnerPreference.FEMALE_FLEX}>Default</option>
-                <option value={PartnerPreference.OPEN}>Open Tag</option>
+                <option value="">Default</option>
+                <option value={mixedSideOption.value}>{mixedSideOption.label}</option>
               </select>
             ) : (
               <p className="px-1 py-2 text-[10px] font-black uppercase tracking-wide text-gray-500">
-                Not Needed
+                Default
               </p>
             )}
           </div>

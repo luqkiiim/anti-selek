@@ -3,12 +3,16 @@
 import Link from "next/link";
 import { ModalFrame } from "@/components/ui/chrome";
 import {
+  getMixedSideDisplayLabel,
+  getMixedSideOverrideOptionForGender,
+} from "@/lib/mixedSide";
+import {
   CommunityAdminClaimPill,
   CommunityAdminGenderPill,
   CommunityAdminRolePill,
 } from "./communityAdminDisplay";
 import type { CommunityAdminPlayer } from "./communityAdminTypes";
-import { PartnerPreference, PlayerGender } from "@/types/enums";
+import { MixedSide, PlayerGender } from "@/types/enums";
 
 interface CommunityPlayerEditorModalProps {
   player: CommunityAdminPlayer | null;
@@ -28,7 +32,7 @@ interface CommunityPlayerEditorModalProps {
   onSavePlayerRating: (player: CommunityAdminPlayer) => Promise<void>;
   onUpdatePreferences: (
     player: CommunityAdminPlayer,
-    updates: { gender?: PlayerGender; partnerPreference?: PartnerPreference }
+    updates: { gender?: PlayerGender; mixedSideOverride?: MixedSide | null }
   ) => Promise<void>;
   onPromotePlayer: (player: CommunityAdminPlayer) => void;
   onOpenPasswordReset: (player: CommunityAdminPlayer) => void;
@@ -55,6 +59,8 @@ export function CommunityPlayerEditorModal({
   onOpenPasswordReset,
 }: CommunityPlayerEditorModalProps) {
   if (!player) return null;
+
+  const mixedSideOption = getMixedSideOverrideOptionForGender(player.gender);
 
   return (
     <ModalFrame
@@ -159,13 +165,9 @@ export function CommunityPlayerEditorModal({
                 value={player.gender}
                 onChange={async (event) => {
                   const nextGender = event.target.value as PlayerGender;
-                  const nextPreference =
-                    nextGender === PlayerGender.MALE
-                      ? PartnerPreference.OPEN
-                      : PartnerPreference.FEMALE_FLEX;
                   await onUpdatePreferences(player, {
                     gender: nextGender,
-                    partnerPreference: nextPreference,
+                    mixedSideOverride: null,
                   });
                 }}
                 disabled={savingPreferences}
@@ -177,26 +179,30 @@ export function CommunityPlayerEditorModal({
             </label>
 
             <label className="block space-y-2 text-sm font-medium text-gray-900">
-              <span>Open tag</span>
-              {player.gender === PlayerGender.FEMALE ? (
+              <span>Mixed side</span>
+              {mixedSideOption ? (
                 <select
-                  value={player.partnerPreference}
+                  value={player.mixedSideOverride ?? ""}
                   onChange={async (event) => {
-                    const nextPreference =
-                      event.target.value as PartnerPreference;
                     await onUpdatePreferences(player, {
-                      partnerPreference: nextPreference,
+                      mixedSideOverride: event.target.value
+                        ? (event.target.value as MixedSide)
+                        : null,
                     });
                   }}
                   disabled={savingPreferences}
                   className="field"
                 >
-                  <option value={PartnerPreference.FEMALE_FLEX}>Default</option>
-                  <option value={PartnerPreference.OPEN}>Open Tag</option>
+                  <option value="">Default</option>
+                  <option value={mixedSideOption.value}>{mixedSideOption.label}</option>
                 </select>
               ) : (
                 <div className="field flex items-center text-sm text-gray-500">
-                  Not needed
+                  {getMixedSideDisplayLabel({
+                    gender: player.gender,
+                    mixedSideOverride: player.mixedSideOverride,
+                    partnerPreference: player.partnerPreference,
+                  })}
                 </div>
               )}
             </label>

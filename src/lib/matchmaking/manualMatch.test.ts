@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { SessionMode, SessionType } from "../../types/enums";
+import { MixedSide, SessionMode, SessionType } from "../../types/enums";
 import { buildRotationHistory, type PartitionCandidate } from "./partitioning";
 import {
   getManualMatchPlayerIds,
@@ -8,9 +8,11 @@ import {
   type ManualMatchTeams,
 } from "./manualMatch";
 
-function createPlayers(entries: Array<[string, string, string]>) {
+function createPlayers(
+  entries: Array<[string, string, string, (string | null)?]>
+) {
   return new Map<string, PartitionCandidate>(
-    entries.map(([userId, gender, partnerPreference]) => [
+    entries.map(([userId, gender, partnerPreference, mixedSideOverride]) => [
       userId,
       {
         userId,
@@ -19,6 +21,7 @@ function createPlayers(entries: Array<[string, string, string]>) {
         lastPartnerId: null,
         gender,
         partnerPreference,
+        mixedSideOverride: mixedSideOverride ?? null,
       },
     ])
   );
@@ -50,12 +53,12 @@ describe("manual match helpers", () => {
     ).toBe(false);
   });
 
-  it("rejects invalid Mixicano team structures", () => {
+  it("accepts side-balanced Mixicano structures that cross legacy gender lines", () => {
     const playersById = createPlayers([
       ["M1", "MALE", "OPEN"],
-      ["M2", "MALE", "OPEN"],
+      ["M2", "MALE", "OPEN", MixedSide.LOWER],
       ["F1", "FEMALE", "FEMALE_FLEX"],
-      ["F2", "FEMALE", "FEMALE_FLEX"],
+      ["F2", "FEMALE", "OPEN", MixedSide.UPPER],
     ]);
 
     expect(
@@ -63,19 +66,6 @@ describe("manual match helpers", () => {
         {
           team1: ["F1", "F2"],
           team2: ["M1", "M2"],
-        },
-        playersById,
-        SessionMode.MIXICANO,
-        SessionType.ELO,
-        buildRotationHistory([])
-      )
-    ).toBe(false);
-
-    expect(
-      isValidManualMatchPartition(
-        {
-          team1: ["F1", "M1"],
-          team2: ["F2", "M2"],
         },
         playersById,
         SessionMode.MIXICANO,

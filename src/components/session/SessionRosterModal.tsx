@@ -2,7 +2,8 @@
 
 import { PlayerPickerSheet } from "@/components/ui/PlayerPickerSheet";
 import { SearchField } from "@/components/ui/SearchField";
-import { PartnerPreference, PlayerGender } from "@/types/enums";
+import { getMixedSideOverrideOptionForGender } from "@/lib/mixedSide";
+import { MixedSide, PlayerGender } from "@/types/enums";
 import type { CommunityUser } from "./sessionTypes";
 
 const GUEST_ELO_PRESETS = [
@@ -18,7 +19,7 @@ interface SessionRosterModalProps {
   rosterSearch: string;
   guestName: string;
   guestGender: PlayerGender;
-  guestPreference: PartnerPreference;
+  guestMixedSideOverride: MixedSide | null;
   guestInitialElo: number;
   addingGuest: boolean;
   addingPlayerId: string | null;
@@ -27,7 +28,7 @@ interface SessionRosterModalProps {
   onRosterSearchChange: (value: string) => void;
   onGuestNameChange: (value: string) => void;
   onGuestGenderChange: (value: PlayerGender) => void;
-  onGuestPreferenceChange: (value: PartnerPreference) => void;
+  onGuestMixedSideOverrideChange: (value: MixedSide | null) => void;
   onGuestInitialEloChange: (value: number) => void;
   onAddGuest: () => void;
   onAddPlayer: (userId: string) => void;
@@ -40,7 +41,7 @@ export function SessionRosterModal({
   rosterSearch,
   guestName,
   guestGender,
-  guestPreference,
+  guestMixedSideOverride,
   guestInitialElo,
   addingGuest,
   addingPlayerId,
@@ -49,12 +50,14 @@ export function SessionRosterModal({
   onRosterSearchChange,
   onGuestNameChange,
   onGuestGenderChange,
-  onGuestPreferenceChange,
+  onGuestMixedSideOverrideChange,
   onGuestInitialEloChange,
   onAddGuest,
   onAddPlayer,
 }: SessionRosterModalProps) {
   if (!open) return null;
+
+  const mixedSideOption = getMixedSideOverrideOptionForGender(guestGender);
 
   return (
     <PlayerPickerSheet
@@ -121,24 +124,22 @@ export function SessionRosterModal({
                     <option value={PlayerGender.FEMALE}>Female</option>
                   </select>
                   <select
-                    value={guestPreference}
+                    value={guestMixedSideOverride ?? ""}
                     onChange={(event) =>
-                      onGuestPreferenceChange(
-                        event.target.value as PartnerPreference
+                      onGuestMixedSideOverrideChange(
+                        event.target.value
+                          ? (event.target.value as MixedSide)
+                          : null
                       )
                     }
                     className="field px-3 py-2.5 text-sm"
                   >
-                    {guestGender === PlayerGender.FEMALE ? (
-                      <>
-                        <option value={PartnerPreference.FEMALE_FLEX}>
-                          Default
-                        </option>
-                        <option value={PartnerPreference.OPEN}>Open Tag</option>
-                      </>
-                    ) : (
-                      <option value={PartnerPreference.OPEN}>Open</option>
-                    )}
+                    <option value="">Default</option>
+                    {mixedSideOption ? (
+                      <option value={mixedSideOption.value}>
+                        {mixedSideOption.label}
+                      </option>
+                    ) : null}
                   </select>
                 </>
               ) : null}

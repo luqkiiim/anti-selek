@@ -21,6 +21,7 @@ export async function GET() {
       isClaimed: true,
       gender: true,
       partnerPreference: true,
+      mixedSideOverride: true,
       elo: true,
       createdAt: true,
     },

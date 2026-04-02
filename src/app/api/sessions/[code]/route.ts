@@ -48,6 +48,7 @@ export async function GET(
               elo: true,
               gender: true,
               partnerPreference: true,
+              mixedSideOverride: true,
             },
           },
         },

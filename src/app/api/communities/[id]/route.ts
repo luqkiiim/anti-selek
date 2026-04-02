@@ -1,9 +1,14 @@
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { auth } from "@/lib/auth";
+import { getMixedSideDisplayLabel } from "@/lib/mixedSide";
 import { prisma } from "@/lib/prisma";
 import { listSessionsForCommunity } from "@/app/api/sessions/listSessionsService";
-import { ClaimRequestStatus, PartnerPreference, PlayerGender } from "@/types/enums";
+import {
+  ClaimRequestStatus,
+  PartnerPreference,
+  PlayerGender,
+} from "@/types/enums";
 
 function toClaimRequestResponse(request: {
   id: string;
@@ -57,6 +62,7 @@ export async function GET(
           elo: true,
           gender: true,
           partnerPreference: true,
+          mixedSideOverride: true,
         },
       }),
       prisma.communityMember.findUnique({
@@ -110,6 +116,7 @@ export async function GET(
               email: true,
               gender: true,
               partnerPreference: true,
+              mixedSideOverride: true,
               isActive: true,
               isClaimed: true,
               createdAt: true,
@@ -211,6 +218,10 @@ export async function GET(
           typeof viewer.partnerPreference === "string"
             ? (viewer.partnerPreference as PartnerPreference)
             : PartnerPreference.OPEN,
+        mixedSideOverride:
+          typeof viewer.mixedSideOverride === "string"
+            ? viewer.mixedSideOverride
+            : null,
       },
       community: {
         id: community.id,
@@ -231,6 +242,10 @@ export async function GET(
             ? member.user.gender
             : PlayerGender.MALE,
         partnerPreference: member.user.partnerPreference,
+        mixedSideOverride:
+          typeof member.user.mixedSideOverride === "string"
+            ? member.user.mixedSideOverride
+            : null,
         elo: member.elo,
         isActive: member.user.isActive,
         isClaimed: member.user.isClaimed,

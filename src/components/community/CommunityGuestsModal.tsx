@@ -1,7 +1,11 @@
 "use client";
 
 import { PlayerPickerSheet } from "@/components/ui/PlayerPickerSheet";
-import { PartnerPreference, PlayerGender, SessionMode } from "@/types/enums";
+import {
+  getMixedSideDisplayLabel,
+  getMixedSideOverrideOptionForGender,
+} from "@/lib/mixedSide";
+import { MixedSide, PlayerGender, SessionMode } from "@/types/enums";
 import type { CommunityGuestConfig } from "./communityTypes";
 
 interface CommunityGuestsModalProps {
@@ -10,10 +14,10 @@ interface CommunityGuestsModalProps {
   sessionMode: SessionMode;
   guestNameInput: string;
   guestGenderInput: PlayerGender;
-  guestPreferenceInput: PartnerPreference;
+  guestMixedSideOverrideInput: MixedSide | null;
   onGuestNameChange: (value: string) => void;
   onGuestGenderChange: (value: PlayerGender) => void;
-  onGuestPreferenceChange: (value: PartnerPreference) => void;
+  onGuestMixedSideOverrideChange: (value: MixedSide | null) => void;
   onAddGuest: () => void;
   onRemoveGuest: (name: string) => void;
   onClose: () => void;
@@ -25,15 +29,17 @@ export function CommunityGuestsModal({
   sessionMode,
   guestNameInput,
   guestGenderInput,
-  guestPreferenceInput,
+  guestMixedSideOverrideInput,
   onGuestNameChange,
   onGuestGenderChange,
-  onGuestPreferenceChange,
+  onGuestMixedSideOverrideChange,
   onAddGuest,
   onRemoveGuest,
   onClose,
 }: CommunityGuestsModalProps) {
   if (!open) return null;
+
+  const mixedSideOption = getMixedSideOverrideOptionForGender(guestGenderInput);
 
   return (
     <PlayerPickerSheet
@@ -50,7 +56,7 @@ export function CommunityGuestsModal({
 
           <div
             className={`grid gap-2 ${
-              sessionMode === SessionMode.MIXICANO || guestGenderInput === PlayerGender.FEMALE
+              sessionMode === SessionMode.MIXICANO
                 ? "grid-cols-1 sm:grid-cols-2"
                 : "grid-cols-1 sm:grid-cols-[minmax(0,1fr)_minmax(0,11rem)_auto]"
             }`}
@@ -78,18 +84,20 @@ export function CommunityGuestsModal({
               <option value={PlayerGender.MALE}>Male</option>
               <option value={PlayerGender.FEMALE}>Female</option>
             </select>
-            {guestGenderInput === PlayerGender.FEMALE ? (
+            {mixedSideOption ? (
               <select
-                value={guestPreferenceInput}
+                value={guestMixedSideOverrideInput ?? ""}
                 onChange={(event) =>
-                  onGuestPreferenceChange(
-                    event.target.value as PartnerPreference
+                  onGuestMixedSideOverrideChange(
+                    event.target.value
+                      ? (event.target.value as MixedSide)
+                      : null
                   )
                 }
                 className="field px-3 py-2.5 text-sm"
               >
-                <option value={PartnerPreference.FEMALE_FLEX}>Default</option>
-                <option value={PartnerPreference.OPEN}>Open Tag</option>
+                <option value="">Default</option>
+                <option value={mixedSideOption.value}>{mixedSideOption.label}</option>
               </select>
             ) : null}
             <button
@@ -135,11 +143,13 @@ export function CommunityGuestsModal({
                   <span className="rounded-full border border-gray-200 bg-white px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-gray-600">
                     {guest.gender === PlayerGender.FEMALE ? "Female" : "Male"}
                   </span>
-                  {guest.gender === PlayerGender.FEMALE ? (
+                  {guest.mixedSideOverride ? (
                     <span className="rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-blue-700">
-                      {guest.partnerPreference === PartnerPreference.OPEN
-                        ? "Open Tag"
-                        : "Default"}
+                      {getMixedSideDisplayLabel({
+                        gender: guest.gender,
+                        mixedSideOverride: guest.mixedSideOverride,
+                        partnerPreference: guest.partnerPreference,
+                      })}
                     </span>
                   ) : null}
                 </div>

@@ -2,7 +2,13 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
-import { PartnerPreference, PlayerGender } from "@/types/enums";
+import {
+  isValidMixedSide,
+  isValidPartnerPreference,
+  isValidPlayerGender,
+  resolveMixedSideState,
+} from "@/lib/mixedSide";
+import { MixedSide, PlayerGender } from "@/types/enums";
 
 export const dynamic = "force-dynamic";
 
@@ -41,6 +47,7 @@ export async function GET(
             email: true,
             gender: true,
             partnerPreference: true,
+            mixedSideOverride: true,
             isActive: true,
             isClaimed: true,
             createdAt: true,
@@ -100,6 +107,10 @@ export async function GET(
             ? m.user.gender
             : PlayerGender.MALE,
         partnerPreference: m.user.partnerPreference,
+        mixedSideOverride:
+          typeof m.user.mixedSideOverride === "string"
+            ? m.user.mixedSideOverride
+            : null,
         elo: m.elo,
         isActive: m.user.isActive,
         isClaimed: m.user.isClaimed,
@@ -147,12 +158,14 @@ export async function POST(
       return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
     }
 
-    const { name, email, password, gender, partnerPreference } = body as {
+    const { name, email, password, gender, partnerPreference, mixedSideOverride } =
+      body as {
       name?: unknown;
       email?: unknown;
       password?: unknown;
       gender?: unknown;
       partnerPreference?: unknown;
+      mixedSideOverride?: unknown;
     };
     if (typeof name !== "string" || name.trim().length < 2) {
       return NextResponse.json({ error: "Player name must be at least 2 characters" }, { status: 400 });
@@ -163,23 +176,21 @@ export async function POST(
     if (password !== undefined && typeof password !== "string") {
       return NextResponse.json({ error: "Invalid password" }, { status: 400 });
     }
-    if (
-      gender !== undefined &&
-      (typeof gender !== "string" ||
-        ![PlayerGender.MALE, PlayerGender.FEMALE, PlayerGender.UNSPECIFIED].includes(
-          gender as PlayerGender
-        ))
-    ) {
+    if (gender !== undefined && !isValidPlayerGender(gender)) {
       return NextResponse.json({ error: "Invalid gender" }, { status: 400 });
     }
     if (
       partnerPreference !== undefined &&
-      (typeof partnerPreference !== "string" ||
-        ![PartnerPreference.OPEN, PartnerPreference.FEMALE_FLEX].includes(
-          partnerPreference as PartnerPreference
-        ))
+      !isValidPartnerPreference(partnerPreference)
     ) {
       return NextResponse.json({ error: "Invalid partner preference" }, { status: 400 });
+    }
+    if (
+      mixedSideOverride !== undefined &&
+      mixedSideOverride !== null &&
+      !isValidMixedSide(mixedSideOverride)
+    ) {
+      return NextResponse.json({ error: "Invalid mixed side override" }, { status: 400 });
     }
 
     const normalizedName = name.trim();
@@ -194,6 +205,7 @@ export async function POST(
       email: string | null;
       gender: string;
       partnerPreference: string;
+      mixedSideOverride: string | null;
       isActive: boolean;
       isClaimed: boolean;
       createdAt: Date;
@@ -208,6 +220,7 @@ export async function POST(
           email: true,
           gender: true,
           partnerPreference: true,
+          mixedSideOverride: true,
           isActive: true,
           isClaimed: true,
           createdAt: true,
@@ -231,6 +244,7 @@ export async function POST(
             email: true,
             gender: true,
             partnerPreference: true,
+            mixedSideOverride: true,
             isActive: true,
             isClaimed: true,
             createdAt: true,
@@ -252,6 +266,7 @@ export async function POST(
           email: true,
           gender: true,
           partnerPreference: true,
+          mixedSideOverride: true,
           isActive: true,
           isClaimed: true,
           createdAt: true,
@@ -270,23 +285,33 @@ export async function POST(
         ? (user.gender as PlayerGender)
         : PlayerGender.MALE);
 
-    const resolvedPartnerPreference =
-      typeof partnerPreference === "string"
-        ? (partnerPreference as PartnerPreference)
-        : (requestedGender === PlayerGender.FEMALE ||
-            (userWasCreated && resolvedGender === PlayerGender.FEMALE))
-          ? PartnerPreference.FEMALE_FLEX
-          : (user.partnerPreference as PartnerPreference);
+    const resolvedMixedState = resolveMixedSideState({
+      gender: resolvedGender,
+      mixedSideOverride:
+        isValidMixedSide(mixedSideOverride) || mixedSideOverride === null
+          ? mixedSideOverride
+          : requestedGender !== undefined
+            ? null
+            : user.mixedSideOverride,
+      partnerPreference:
+        isValidPartnerPreference(partnerPreference)
+          ? partnerPreference
+          : requestedGender !== undefined || userWasCreated
+            ? undefined
+            : user.partnerPreference,
+    });
 
     if (
       resolvedGender !== user.gender ||
-      resolvedPartnerPreference !== user.partnerPreference
+      resolvedMixedState.partnerPreference !== user.partnerPreference ||
+      resolvedMixedState.mixedSideOverride !== user.mixedSideOverride
     ) {
       await prisma.user.update({
         where: { id: user.id },
         data: {
           gender: resolvedGender,
-          partnerPreference: resolvedPartnerPreference,
+          partnerPreference: resolvedMixedState.partnerPreference,
+          mixedSideOverride: resolvedMixedState.mixedSideOverride,
         },
       });
     }
@@ -315,7 +340,8 @@ export async function POST(
       name: user.name,
       email: user.email,
       gender: resolvedGender,
-      partnerPreference: resolvedPartnerPreference,
+      partnerPreference: resolvedMixedState.partnerPreference,
+      mixedSideOverride: resolvedMixedState.mixedSideOverride,
       elo: membership.elo,
       isActive: user.isActive,
       isClaimed: user.isClaimed,

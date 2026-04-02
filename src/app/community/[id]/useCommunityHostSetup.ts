@@ -5,9 +5,13 @@ import type {
   CommunityGuestConfig,
   CommunityPageMember,
 } from "@/components/community/communityTypes";
+import {
+  getMixedSideOverrideOptionForGender,
+  resolveMixedSideState,
+} from "@/lib/mixedSide";
 import { safeJson } from "./communityPageApi";
 import {
-  PartnerPreference,
+  MixedSide,
   PlayerGender,
   SessionMode,
   SessionType,
@@ -47,8 +51,8 @@ export function useCommunityHostSetup({
   const [guestGenderInput, setGuestGenderInput] = useState<PlayerGender>(
     PlayerGender.MALE
   );
-  const [guestPreferenceInput, setGuestPreferenceInput] =
-    useState<PartnerPreference>(PartnerPreference.OPEN);
+  const [guestMixedSideOverrideInput, setGuestMixedSideOverrideInput] =
+    useState<MixedSide | null>(null);
   const [guestConfigs, setGuestConfigs] = useState<CommunityGuestConfig[]>([]);
   const [creatingSession, setCreatingSession] = useState(false);
   const [showPlayersModal, setShowPlayersModal] = useState(false);
@@ -64,7 +68,7 @@ export function useCommunityHostSetup({
     setGuestConfigs([]);
     setGuestNameInput("");
     setGuestGenderInput(PlayerGender.MALE);
-    setGuestPreferenceInput(PartnerPreference.OPEN);
+    setGuestMixedSideOverrideInput(null);
     setPlayerSearch("");
     setShowPlayersModal(false);
     setShowGuestsModal(false);
@@ -114,7 +118,7 @@ export function useCommunityHostSetup({
       setGuestConfigs([]);
       setGuestNameInput("");
       setGuestGenderInput(PlayerGender.MALE);
-      setGuestPreferenceInput(PartnerPreference.OPEN);
+      setGuestMixedSideOverrideInput(null);
       setCourtCount(3);
       router.push(`/session/${data.code}`);
     } catch (err: unknown) {
@@ -163,18 +167,23 @@ export function useCommunityHostSetup({
       setGuestNameInput("");
       return;
     }
+    const resolvedMixedState = resolveMixedSideState({
+      gender: guestGenderInput,
+      mixedSideOverride: guestMixedSideOverrideInput,
+    });
     setGuestConfigs((prev) => [
       ...prev,
-        {
-          name: trimmed,
-          gender: guestGenderInput,
-          partnerPreference: guestPreferenceInput,
-          initialElo: DEFAULT_GUEST_INITIAL_ELO,
-        },
-      ]);
+      {
+        name: trimmed,
+        gender: guestGenderInput,
+        partnerPreference: resolvedMixedState.partnerPreference,
+        mixedSideOverride: resolvedMixedState.mixedSideOverride,
+        initialElo: DEFAULT_GUEST_INITIAL_ELO,
+      },
+    ]);
     setGuestNameInput("");
     setGuestGenderInput(PlayerGender.MALE);
-    setGuestPreferenceInput(PartnerPreference.OPEN);
+    setGuestMixedSideOverrideInput(null);
   };
 
   const removeGuestName = (nameToRemove: string) => {
@@ -185,11 +194,7 @@ export function useCommunityHostSetup({
 
   const handleGuestGenderChange = (nextGender: PlayerGender) => {
     setGuestGenderInput(nextGender);
-    setGuestPreferenceInput(
-      nextGender === PlayerGender.FEMALE
-        ? PartnerPreference.FEMALE_FLEX
-        : PartnerPreference.OPEN
-    );
+    setGuestMixedSideOverrideInput(null);
   };
 
   const openPlayersModal = () => {
@@ -223,8 +228,8 @@ export function useCommunityHostSetup({
     guestNameInput,
     setGuestNameInput,
     guestGenderInput,
-    guestPreferenceInput,
-    setGuestPreferenceInput,
+    guestMixedSideOverrideInput,
+    setGuestMixedSideOverrideInput,
     guestConfigs,
     creatingSession,
     showPlayersModal,

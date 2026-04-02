@@ -15,6 +15,7 @@ export interface MatchmakerLadderPlayer extends LadderRecord {
   isPaused?: boolean;
   gender?: string;
   partnerPreference?: string;
+  mixedSideOverride?: string | null;
   lastPartnerId?: string | null;
 }
 

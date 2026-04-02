@@ -1,8 +1,14 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
+import {
+  isValidMixedSide,
+  isValidPartnerPreference,
+  isValidPlayerGender,
+  resolveMixedSideState,
+} from "@/lib/mixedSide";
 import { prisma } from "@/lib/prisma";
 import { getSessionModeLabel } from "@/lib/sessionModeLabels";
-import { PartnerPreference, PlayerGender, SessionMode, SessionStatus } from "@/types/enums";
+import { PlayerGender, SessionMode, SessionStatus } from "@/types/enums";
 
 export const dynamic = "force-dynamic";
 
@@ -24,28 +30,27 @@ export async function PATCH(
       return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
     }
 
-    const { gender, partnerPreference } = body as {
+    const { gender, partnerPreference, mixedSideOverride } = body as {
       gender?: unknown;
       partnerPreference?: unknown;
+      mixedSideOverride?: unknown;
     };
 
-    if (
-      gender !== undefined &&
-      (typeof gender !== "string" ||
-        ![PlayerGender.MALE, PlayerGender.FEMALE, PlayerGender.UNSPECIFIED].includes(
-          gender as PlayerGender
-        ))
-    ) {
+    if (gender !== undefined && !isValidPlayerGender(gender)) {
       return NextResponse.json({ error: "Invalid gender" }, { status: 400 });
     }
     if (
       partnerPreference !== undefined &&
-      (typeof partnerPreference !== "string" ||
-        ![PartnerPreference.OPEN, PartnerPreference.FEMALE_FLEX].includes(
-          partnerPreference as PartnerPreference
-        ))
+      !isValidPartnerPreference(partnerPreference)
     ) {
       return NextResponse.json({ error: "Invalid partner preference" }, { status: 400 });
+    }
+    if (
+      mixedSideOverride !== undefined &&
+      mixedSideOverride !== null &&
+      !isValidMixedSide(mixedSideOverride)
+    ) {
+      return NextResponse.json({ error: "Invalid mixed side override" }, { status: 400 });
     }
 
     const sessionData = await prisma.session.findUnique({
@@ -84,7 +89,7 @@ export async function PATCH(
           userId,
         },
       },
-      select: { gender: true, partnerPreference: true },
+      select: { gender: true, partnerPreference: true, mixedSideOverride: true },
     });
     if (!existing) {
       return NextResponse.json({ error: "Player not found in session" }, { status: 404 });
@@ -105,6 +110,21 @@ export async function PATCH(
       );
     }
 
+    const resolvedMixedState = resolveMixedSideState({
+      gender: nextGender,
+      mixedSideOverride:
+        isValidMixedSide(mixedSideOverride) || mixedSideOverride === null
+          ? mixedSideOverride
+          : typeof gender === "string"
+            ? null
+            : existing.mixedSideOverride,
+      partnerPreference: isValidPartnerPreference(partnerPreference)
+        ? partnerPreference
+        : typeof gender === "string"
+          ? undefined
+          : existing.partnerPreference,
+    });
+
     const updated = await prisma.sessionPlayer.update({
       where: {
         sessionId_userId: {
@@ -114,14 +134,8 @@ export async function PATCH(
       },
       data: {
         gender: typeof gender === "string" ? gender : undefined,
-        partnerPreference:
-          typeof partnerPreference === "string"
-            ? partnerPreference
-            : gender === PlayerGender.FEMALE
-              ? PartnerPreference.FEMALE_FLEX
-              : gender === PlayerGender.MALE
-                ? PartnerPreference.OPEN
-              : undefined,
+        partnerPreference: resolvedMixedState.partnerPreference,
+        mixedSideOverride: resolvedMixedState.mixedSideOverride,
       },
       include: {
         user: { select: { id: true, name: true } },

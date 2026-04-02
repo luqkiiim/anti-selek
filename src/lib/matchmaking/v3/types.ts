@@ -8,6 +8,7 @@ export interface MatchmakerV3Player {
   isPaused?: boolean;
   gender?: string;
   partnerPreference?: string;
+  mixedSideOverride?: string | null;
   lastPartnerId?: string | null;
 }
 
@@ -50,6 +51,7 @@ export interface V3DoublesPartition {
 export interface V3BalancedPartition {
   partition: V3DoublesPartition;
   balanceGap: number;
+  mixedSideGap: number;
 }
 
 export interface V3WaitSummary {

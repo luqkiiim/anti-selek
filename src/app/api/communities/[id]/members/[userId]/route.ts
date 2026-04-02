@@ -1,7 +1,13 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { PartnerPreference, PlayerGender } from "@/types/enums";
+import {
+  isValidMixedSide,
+  isValidPartnerPreference,
+  isValidPlayerGender,
+  resolveMixedSideState,
+} from "@/lib/mixedSide";
+import { PlayerGender } from "@/types/enums";
 
 export const dynamic = "force-dynamic";
 
@@ -62,13 +68,23 @@ export async function PATCH(
       return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
     }
 
-    const { name, email, elo, isActive, gender, partnerPreference, role } = body as {
+    const {
+      name,
+      email,
+      elo,
+      isActive,
+      gender,
+      partnerPreference,
+      mixedSideOverride,
+      role,
+    } = body as {
       name?: unknown;
       email?: unknown;
       elo?: unknown;
       isActive?: unknown;
       gender?: unknown;
       partnerPreference?: unknown;
+      mixedSideOverride?: unknown;
       role?: unknown;
     };
 
@@ -91,23 +107,21 @@ export async function PATCH(
     if (isActive !== undefined && typeof isActive !== "boolean") {
       return NextResponse.json({ error: "Invalid isActive value" }, { status: 400 });
     }
-    if (
-      gender !== undefined &&
-      (typeof gender !== "string" ||
-        ![PlayerGender.MALE, PlayerGender.FEMALE, PlayerGender.UNSPECIFIED].includes(
-          gender as PlayerGender
-        ))
-    ) {
+    if (gender !== undefined && !isValidPlayerGender(gender)) {
       return NextResponse.json({ error: "Invalid gender" }, { status: 400 });
     }
     if (
       partnerPreference !== undefined &&
-      (typeof partnerPreference !== "string" ||
-        ![PartnerPreference.OPEN, PartnerPreference.FEMALE_FLEX].includes(
-          partnerPreference as PartnerPreference
-        ))
+      !isValidPartnerPreference(partnerPreference)
     ) {
       return NextResponse.json({ error: "Invalid partner preference" }, { status: 400 });
+    }
+    if (
+      mixedSideOverride !== undefined &&
+      mixedSideOverride !== null &&
+      !isValidMixedSide(mixedSideOverride)
+    ) {
+      return NextResponse.json({ error: "Invalid mixed side override" }, { status: 400 });
     }
     if (role !== undefined && role !== "ADMIN") {
       return NextResponse.json({ error: "Invalid role update" }, { status: 400 });
@@ -139,12 +153,36 @@ export async function PATCH(
       }
     }
 
-    const resolvedPartnerPreference =
-      typeof partnerPreference === "string"
-        ? (partnerPreference as PartnerPreference)
-        : gender === PlayerGender.FEMALE
-          ? PartnerPreference.FEMALE_FLEX
-          : undefined;
+    const currentUser = await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        gender: true,
+        partnerPreference: true,
+        mixedSideOverride: true,
+      },
+    });
+    if (!currentUser) {
+      return NextResponse.json({ error: "Player not found" }, { status: 404 });
+    }
+
+    const nextGender =
+      typeof gender === "string"
+        ? (gender as PlayerGender)
+        : (currentUser.gender as PlayerGender | undefined) ?? PlayerGender.UNSPECIFIED;
+    const resolvedMixedState = resolveMixedSideState({
+      gender: nextGender,
+      mixedSideOverride:
+        isValidMixedSide(mixedSideOverride) || mixedSideOverride === null
+          ? mixedSideOverride
+          : typeof gender === "string"
+            ? null
+            : currentUser.mixedSideOverride,
+      partnerPreference: isValidPartnerPreference(partnerPreference)
+        ? partnerPreference
+        : typeof gender === "string"
+          ? undefined
+          : currentUser.partnerPreference,
+    });
 
     const updatedUser = await prisma.user.update({
       where: { id: userId },
@@ -157,7 +195,8 @@ export async function PATCH(
               : null
             : undefined,
         gender: typeof gender === "string" ? gender : undefined,
-        partnerPreference: resolvedPartnerPreference,
+        partnerPreference: resolvedMixedState.partnerPreference,
+        mixedSideOverride: resolvedMixedState.mixedSideOverride,
         isActive: typeof isActive === "boolean" ? isActive : undefined,
       },
       select: {
@@ -166,6 +205,7 @@ export async function PATCH(
         email: true,
         gender: true,
         partnerPreference: true,
+        mixedSideOverride: true,
         isActive: true,
         isClaimed: true,
         createdAt: true,

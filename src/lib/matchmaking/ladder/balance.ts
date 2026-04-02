@@ -1,8 +1,8 @@
 import {
-  PartnerPreference,
   PlayerGender,
   SessionMode,
 } from "../../../types/enums";
+import { getEffectiveMixedSide } from "@/lib/mixedSide";
 
 import type {
   LadderBalancedPartition,
@@ -13,27 +13,32 @@ import type {
 type LadderBalancedPartitionEvaluation = LadderBalancedPartition & {
   pointDiffGap: number;
   strengthGap: number;
+  mixedSideGap: number;
 };
 
 function inferMixedMatchType(
-  team1: [{ gender?: string }, { gender?: string }],
-  team2: [{ gender?: string }, { gender?: string }]
+  team1: [{ effectiveMixedSide?: string | null }, { effectiveMixedSide?: string | null }],
+  team2: [{ effectiveMixedSide?: string | null }, { effectiveMixedSide?: string | null }]
 ) {
-  const femaleCountFor = (team: [{ gender?: string }, { gender?: string }]) =>
-    team.filter((player) => player.gender === PlayerGender.FEMALE).length;
+  const lowerCountFor = (
+    team: [
+      { effectiveMixedSide?: string | null },
+      { effectiveMixedSide?: string | null },
+    ]
+  ) => team.filter((player) => player.effectiveMixedSide === "LOWER").length;
 
-  const team1FemaleCount = femaleCountFor(team1);
-  const team2FemaleCount = femaleCountFor(team2);
+  const team1LowerCount = lowerCountFor(team1);
+  const team2LowerCount = lowerCountFor(team2);
 
-  if (team1FemaleCount === 2 && team2FemaleCount === 2) {
+  if (team1LowerCount === 2 && team2LowerCount === 2) {
     return "WOMENS";
   }
 
-  if (team1FemaleCount === 1 && team2FemaleCount === 1) {
+  if (team1LowerCount === 1 && team2LowerCount === 1) {
     return "MIXED";
   }
 
-  if (team1FemaleCount === 0 && team2FemaleCount === 0) {
+  if (team1LowerCount === 0 && team2LowerCount === 0) {
     return "MENS";
   }
 
@@ -41,29 +46,46 @@ function inferMixedMatchType(
 }
 
 function isValidMixedPartition<
-  T extends Pick<MatchmakerLadderPlayer, "gender" | "partnerPreference">,
+  T extends Pick<
+    MatchmakerLadderPlayer,
+    "gender" | "partnerPreference" | "mixedSideOverride"
+  >,
 >(team1: [T, T], team2: [T, T]) {
-  const players = [...team1, ...team2];
+  const effectiveTeam1 = team1.map((player) => ({
+    effectiveMixedSide: getEffectiveMixedSide({
+      gender: player.gender as PlayerGender,
+      mixedSideOverride: player.mixedSideOverride,
+      partnerPreference: player.partnerPreference,
+    }),
+  }));
+  const effectiveTeam2 = team2.map((player) => ({
+    effectiveMixedSide: getEffectiveMixedSide({
+      gender: player.gender as PlayerGender,
+      mixedSideOverride: player.mixedSideOverride,
+      partnerPreference: player.partnerPreference,
+    }),
+  }));
 
   if (
-    players.some(
-      (player) =>
-        ![PlayerGender.MALE, PlayerGender.FEMALE].includes(
-          player.gender as PlayerGender
-        )
+    [...effectiveTeam1, ...effectiveTeam2].some(
+      (player) => player.effectiveMixedSide === null
     )
   ) {
     return false;
   }
 
-  const matchType = inferMixedMatchType(team1, team2);
-
-  return !players.some(
-    (player) =>
-      player.gender === PlayerGender.FEMALE &&
-      player.partnerPreference === PartnerPreference.FEMALE_FLEX &&
-      !["MIXED", "WOMENS"].includes(matchType)
+  inferMixedMatchType(
+    effectiveTeam1 as [
+      { effectiveMixedSide?: string | null },
+      { effectiveMixedSide?: string | null },
+    ],
+    effectiveTeam2 as [
+      { effectiveMixedSide?: string | null },
+      { effectiveMixedSide?: string | null },
+    ]
   );
+
+  return true;
 }
 
 export function getDoublesPartitions(
@@ -79,7 +101,10 @@ export function getDoublesPartitions(
 }
 
 export function isValidPartitionForMode<
-  T extends Pick<MatchmakerLadderPlayer, "gender" | "partnerPreference">,
+  T extends Pick<
+    MatchmakerLadderPlayer,
+    "gender" | "partnerPreference" | "mixedSideOverride"
+  >,
 >(
   partition: LadderDoublesPartition,
   playersById: Map<string, T>,
@@ -99,6 +124,61 @@ export function isValidPartitionForMode<
   }
 
   return isValidMixedPartition([player1, player2], [player3, player4]);
+}
+
+function getPartitionMixedSideGap<
+  T extends Pick<
+    MatchmakerLadderPlayer,
+    "strength" | "gender" | "partnerPreference" | "mixedSideOverride"
+  >,
+>(partition: LadderDoublesPartition, playersById: Map<string, T>) {
+  const player1 = playersById.get(partition.team1[0]);
+  const player2 = playersById.get(partition.team1[1]);
+  const player3 = playersById.get(partition.team2[0]);
+  const player4 = playersById.get(partition.team2[1]);
+
+  if (!player1 || !player2 || !player3 || !player4) {
+    return 0;
+  }
+
+  const teams = [
+    [player1, player2],
+    [player3, player4],
+  ] as const;
+  const sides = teams.map((team) =>
+    team.map((player) =>
+      getEffectiveMixedSide({
+        gender: player.gender as PlayerGender,
+        mixedSideOverride: player.mixedSideOverride,
+        partnerPreference: player.partnerPreference,
+      })
+    )
+  );
+
+  if (
+    sides.some((team) => team.some((side) => side === null)) ||
+    !sides.every(
+      (team) =>
+        team.includes("UPPER" as typeof team[number]) &&
+        team.includes("LOWER" as typeof team[number])
+    )
+  ) {
+    return 0;
+  }
+
+  const [team1Upper, team1Lower] =
+    sides[0][0] === "UPPER"
+      ? [teams[0][0], teams[0][1]]
+      : [teams[0][1], teams[0][0]];
+  const [team2Upper, team2Lower] =
+    sides[1][0] === "UPPER"
+      ? [teams[1][0], teams[1][1]]
+      : [teams[1][1], teams[1][0]];
+
+  return (
+    Math.abs(team1Upper.strength - team2Upper.strength) +
+    Math.abs(team1Lower.strength - team2Lower.strength)
+  );
 }
 
 export function getPartitionBalanceGap<
@@ -183,6 +263,10 @@ export function evaluateBalancedPartitions<T extends MatchmakerLadderPlayer>(
       balanceGap,
       pointDiffGap,
       strengthGap,
+      mixedSideGap:
+        sessionMode === SessionMode.MIXICANO
+          ? getPartitionMixedSideGap(partition, playersById)
+          : 0,
     });
   }
 
@@ -202,6 +286,7 @@ export function findBestBalancedPartition<T extends MatchmakerLadderPlayer>(
     (left, right) =>
       left.balanceGap - right.balanceGap ||
       left.pointDiffGap - right.pointDiffGap ||
+      left.mixedSideGap - right.mixedSideGap ||
       left.strengthGap - right.strengthGap
   )[0];
 

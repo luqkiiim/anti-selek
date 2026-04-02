@@ -88,6 +88,7 @@ function buildV3Players(
     isPaused: player.isPaused,
     gender: player.gender,
     partnerPreference: player.partnerPreference,
+    mixedSideOverride: player.mixedSideOverride,
     lastPartnerId: player.lastPartnerId,
   }));
 }
@@ -141,6 +142,7 @@ function buildLadderPlayers(
       isPaused: player.isPaused,
       gender: player.gender,
       partnerPreference: player.partnerPreference,
+      mixedSideOverride: player.mixedSideOverride,
       lastPartnerId: player.lastPartnerId,
     };
   });
@@ -205,6 +207,7 @@ export async function buildMatchmakingState(
         lastPartnerId: player.lastPartnerId,
         gender: player.gender,
         partnerPreference: player.partnerPreference,
+        mixedSideOverride: player.mixedSideOverride,
       },
     ])
   );

@@ -1,14 +1,14 @@
 import { randomUUID } from "crypto";
 import { prisma } from "@/lib/prisma";
 import { getCommunityEloByUserId, withCommunityElo } from "@/lib/communityElo";
+import { resolveMixedSideState } from "@/lib/mixedSide";
 import {
-  PartnerPreference,
+  MixedSide,
   PlayerGender,
   SessionMode,
   SessionStatus,
 } from "@/types/enums";
 import {
-  defaultPartnerPreferenceForGender,
   mixedModeLabel,
   type ParsedCreateSessionRequest,
   SessionRouteError,
@@ -26,6 +26,7 @@ function buildMemberSessionConfigs({
     name: string;
     gender: string;
     partnerPreference: string;
+    mixedSideOverride: string | null;
   }>;
   playerConfigMap: ParsedCreateSessionRequest["playerConfigMap"];
   mode: SessionMode;
@@ -49,18 +50,27 @@ function buildMemberSessionConfigs({
             )
           ? (rawGender as PlayerGender)
           : PlayerGender.UNSPECIFIED;
-    const sessionPartnerPreference =
-      override?.partnerPreference ??
-      (override?.gender === PlayerGender.FEMALE
-        ? defaultPartnerPreferenceForGender(sessionGender)
-        : (selectedUser?.partnerPreference as PartnerPreference | undefined) ??
-          defaultPartnerPreferenceForGender(sessionGender));
+    const resolvedMixedState = resolveMixedSideState({
+      gender: sessionGender,
+      mixedSideOverride:
+        override?.mixedSideOverride !== undefined
+          ? override.mixedSideOverride
+          : override?.gender !== undefined
+            ? null
+            : (selectedUser?.mixedSideOverride as MixedSide | null | undefined),
+      partnerPreference:
+        override?.partnerPreference ??
+        (override?.gender !== undefined
+          ? undefined
+          : selectedUser?.partnerPreference),
+    });
 
     return {
       userId,
       isGuest: false,
       gender: sessionGender,
-      partnerPreference: sessionPartnerPreference,
+      partnerPreference: resolvedMixedState.partnerPreference,
+      mixedSideOverride: resolvedMixedState.mixedSideOverride,
       sessionPoints: 0,
     };
   });
@@ -117,6 +127,7 @@ export async function createSessionForUser({
       name: true,
       gender: true,
       partnerPreference: true,
+      mixedSideOverride: true,
     },
   });
   const memberSessionConfigs = buildMemberSessionConfigs({
@@ -172,8 +183,14 @@ export async function createSessionForUser({
               elo: guest.initialElo,
               gender: guest.gender,
               partnerPreference: guest.partnerPreference,
+              mixedSideOverride: guest.mixedSideOverride,
             },
-            select: { id: true, gender: true, partnerPreference: true },
+            select: {
+              id: true,
+              gender: true,
+              partnerPreference: true,
+              mixedSideOverride: true,
+            },
           })
         )
       );
@@ -185,8 +202,11 @@ export async function createSessionForUser({
           isGuest: true,
           gender: guest.gender,
           partnerPreference:
-            (guest.partnerPreference as PartnerPreference | undefined) ??
+            guest.partnerPreference ??
             input.normalizedGuests[index].partnerPreference,
+          mixedSideOverride:
+            guest.mixedSideOverride ??
+            input.normalizedGuests[index].mixedSideOverride,
           sessionPoints: 0,
           joinedAt: new Date(),
           availableSince: new Date(),
@@ -208,6 +228,7 @@ export async function createSessionForUser({
                 elo: true,
                 gender: true,
                 partnerPreference: true,
+                mixedSideOverride: true,
               },
             },
           },

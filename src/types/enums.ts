@@ -29,6 +29,11 @@ export enum PlayerGender {
   UNSPECIFIED = "UNSPECIFIED",
 }
 
+export enum MixedSide {
+  UPPER = "UPPER",
+  LOWER = "LOWER",
+}
+
 export enum PartnerPreference {
   OPEN = "OPEN",
   FEMALE_FLEX = "FEMALE_FLEX",

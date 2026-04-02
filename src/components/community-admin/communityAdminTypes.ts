@@ -2,6 +2,7 @@
 
 import {
   ClaimRequestStatus,
+  MixedSide,
   PartnerPreference,
   PlayerGender,
 } from "@/types/enums";
@@ -21,6 +22,7 @@ export interface CommunityAdminPlayer {
   email: string | null;
   gender: PlayerGender;
   partnerPreference: PartnerPreference;
+  mixedSideOverride?: MixedSide | null;
   elo: number;
   isActive: boolean;
   isClaimed: boolean;

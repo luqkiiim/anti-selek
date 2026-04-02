@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { PartnerPreference, PlayerGender, SessionMode } from "../../../types/enums";
+import {
+  MixedSide,
+  PartnerPreference,
+  PlayerGender,
+  SessionMode,
+} from "../../../types/enums";
 import { findBestBalancedPartition } from "./balance";
 import type { MatchmakerLadderPlayer } from "./types";
 
@@ -90,13 +95,20 @@ describe("ladder balance", () => {
     });
   });
 
-  it("rejects invalid Mixed quartets when no valid partition exists", () => {
+  it("allows mixed-side overrides to create valid Mixicano partitions", () => {
     const playersById = new Map(
       [
         createPlayer("M1", { gender: PlayerGender.MALE }),
-        createPlayer("M2", { gender: PlayerGender.MALE }),
-        createPlayer("M3", { gender: PlayerGender.MALE }),
+        createPlayer("M2", {
+          gender: PlayerGender.MALE,
+          mixedSideOverride: MixedSide.LOWER,
+        }),
         createPlayer("F1", {
+          gender: PlayerGender.FEMALE,
+          partnerPreference: PartnerPreference.OPEN,
+          mixedSideOverride: MixedSide.UPPER,
+        }),
+        createPlayer("F2", {
           gender: PlayerGender.FEMALE,
           partnerPreference: PartnerPreference.FEMALE_FLEX,
         }),
@@ -105,10 +117,10 @@ describe("ladder balance", () => {
 
     expect(
       findBestBalancedPartition(
-        ["F1", "M1", "M2", "M3"],
+        ["F1", "M1", "M2", "F2"],
         playersById,
         SessionMode.MIXICANO
       )
-    ).toBeNull();
+    ).not.toBeNull();
   });
 });

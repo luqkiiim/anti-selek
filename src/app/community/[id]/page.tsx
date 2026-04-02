@@ -59,8 +59,8 @@ export default function CommunityPage() {
     guestNameInput,
     setGuestNameInput,
     guestGenderInput,
-    guestPreferenceInput,
-    setGuestPreferenceInput,
+    guestMixedSideOverrideInput,
+    setGuestMixedSideOverrideInput,
     guestConfigs,
     loading,
     creatingSession,
@@ -369,10 +369,10 @@ export default function CommunityPage() {
         sessionMode={sessionMode}
         guestNameInput={guestNameInput}
         guestGenderInput={guestGenderInput}
-        guestPreferenceInput={guestPreferenceInput}
+        guestMixedSideOverrideInput={guestMixedSideOverrideInput}
         onGuestNameChange={setGuestNameInput}
         onGuestGenderChange={handleGuestGenderChange}
-        onGuestPreferenceChange={setGuestPreferenceInput}
+        onGuestMixedSideOverrideChange={setGuestMixedSideOverrideInput}
         onAddGuest={addGuestName}
         onRemoveGuest={removeGuestName}
         onClose={closeGuestsModal}

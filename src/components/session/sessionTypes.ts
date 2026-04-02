@@ -1,4 +1,9 @@
-import { PartnerPreference, PlayerGender, SessionMode } from "@/types/enums";
+import {
+  MixedSide,
+  PartnerPreference,
+  PlayerGender,
+  SessionMode,
+} from "@/types/enums";
 
 export interface Player {
   userId: string;
@@ -8,6 +13,7 @@ export interface Player {
   isGuest: boolean;
   gender: PlayerGender;
   partnerPreference: PartnerPreference;
+  mixedSideOverride?: MixedSide | null;
   user: {
     id: string;
     name: string;
@@ -63,6 +69,7 @@ export interface CommunityUser {
   elo: number;
   gender: PlayerGender;
   partnerPreference: PartnerPreference;
+  mixedSideOverride?: MixedSide | null;
 }
 
 export interface SessionData {

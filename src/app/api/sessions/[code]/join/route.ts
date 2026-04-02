@@ -1,15 +1,16 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { calculateNoCatchUpMatchmakingCredit } from "@/lib/matchmaking/matchmakingCredit";
+import {
+  isValidMixedSide,
+  isValidPlayerGender,
+  resolveMixedSideState,
+} from "@/lib/mixedSide";
 import { prisma } from "@/lib/prisma";
 import { getCommunityEloByUserId, withCommunityElo } from "@/lib/communityElo";
-import { PartnerPreference, PlayerGender, SessionMode, SessionStatus } from "@/types/enums";
+import { PlayerGender, SessionMode, SessionStatus } from "@/types/enums";
 
 export const dynamic = "force-dynamic";
-
-function defaultPartnerPreferenceForGender(gender: PlayerGender): PartnerPreference {
-  return gender === PlayerGender.FEMALE ? PartnerPreference.FEMALE_FLEX : PartnerPreference.OPEN;
-}
 
 export async function POST(
   request: Request,
@@ -23,11 +24,17 @@ export async function POST(
 
     const { code } = await params;
     const body = await request.json().catch(() => ({}));
-    const { userId: targetUserId, gender: overrideGender, partnerPreference: overridePreference } =
+    const {
+      userId: targetUserId,
+      gender: overrideGender,
+      partnerPreference: overridePreference,
+      mixedSideOverride: overrideMixedSideOverride,
+    } =
       body as {
         userId?: unknown;
         gender?: unknown;
         partnerPreference?: unknown;
+        mixedSideOverride?: unknown;
       };
 
     // Determine who is joining
@@ -105,6 +112,7 @@ export async function POST(
       select: {
         gender: true,
         partnerPreference: true,
+        mixedSideOverride: true,
       },
     });
     if (!userProfile) {
@@ -112,10 +120,7 @@ export async function POST(
     }
 
     const rawGender =
-      typeof overrideGender === "string" &&
-      [PlayerGender.MALE, PlayerGender.FEMALE, PlayerGender.UNSPECIFIED].includes(
-        overrideGender as PlayerGender
-      )
+      isValidPlayerGender(overrideGender)
         ? (overrideGender as PlayerGender)
         : ((userProfile.gender as PlayerGender | undefined) ?? PlayerGender.UNSPECIFIED);
     const sessionGender =
@@ -125,20 +130,23 @@ export async function POST(
           : PlayerGender.MALE
         : rawGender;
     const hasOverrideGender =
-      typeof overrideGender === "string" &&
-      [PlayerGender.MALE, PlayerGender.FEMALE, PlayerGender.UNSPECIFIED].includes(
-        overrideGender as PlayerGender
-      );
-    const sessionPartnerPreference =
-      typeof overridePreference === "string" &&
-      [PartnerPreference.OPEN, PartnerPreference.FEMALE_FLEX].includes(
-        overridePreference as PartnerPreference
-      )
-        ? (overridePreference as PartnerPreference)
-        : hasOverrideGender && sessionGender === PlayerGender.FEMALE
-          ? defaultPartnerPreferenceForGender(sessionGender)
-          : ((userProfile.partnerPreference as PartnerPreference | undefined) ??
-            defaultPartnerPreferenceForGender(sessionGender));
+      isValidPlayerGender(overrideGender);
+    const resolvedMixedState = resolveMixedSideState({
+      gender: sessionGender,
+      mixedSideOverride:
+        isValidMixedSide(overrideMixedSideOverride) ||
+        overrideMixedSideOverride === null
+          ? overrideMixedSideOverride
+          : hasOverrideGender
+            ? null
+            : userProfile.mixedSideOverride,
+      partnerPreference:
+        typeof overridePreference === "string"
+          ? overridePreference
+          : hasOverrideGender
+            ? undefined
+            : userProfile.partnerPreference,
+    });
     const matchmakingMatchesCredit =
       sessionData.status === SessionStatus.ACTIVE
         ? calculateNoCatchUpMatchmakingCredit({
@@ -160,7 +168,8 @@ export async function POST(
             userId: userIdToJoin,
             isGuest: false,
             gender: sessionGender,
-            partnerPreference: sessionPartnerPreference,
+            partnerPreference: resolvedMixedState.partnerPreference,
+            mixedSideOverride: resolvedMixedState.mixedSideOverride,
             sessionPoints: 0,
             matchmakingMatchesCredit,
             joinedAt: new Date(),
@@ -174,7 +183,14 @@ export async function POST(
         players: {
           include: {
             user: {
-              select: { id: true, name: true, elo: true, gender: true, partnerPreference: true },
+              select: {
+                id: true,
+                name: true,
+                elo: true,
+                gender: true,
+                partnerPreference: true,
+                mixedSideOverride: true,
+              },
             },
           },
         },

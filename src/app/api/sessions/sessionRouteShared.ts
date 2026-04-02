@@ -1,5 +1,10 @@
 import { getSessionModeLabel } from "@/lib/sessionModeLabels";
 import {
+  defaultPartnerPreferenceForGender,
+  getMixedSideOverrideOptionForGender,
+} from "@/lib/mixedSide";
+import {
+  MixedSide,
   PartnerPreference,
   PlayerGender,
   SessionMode,
@@ -19,12 +24,14 @@ export class SessionRouteError extends Error {
 export interface PlayerConfigOverride {
   gender?: PlayerGender;
   partnerPreference?: PartnerPreference;
+  mixedSideOverride?: MixedSide | null;
 }
 
 export interface NormalizedGuestConfig {
   name: string;
   gender: PlayerGender;
   partnerPreference: PartnerPreference;
+  mixedSideOverride: MixedSide | null;
   initialElo: number;
 }
 
@@ -41,11 +48,8 @@ export interface ParsedCreateSessionRequest {
 
 export const mixedModeLabel = getSessionModeLabel(SessionMode.MIXICANO);
 
-export function defaultPartnerPreferenceForGender(
-  gender: PlayerGender
-): PartnerPreference {
-  return gender === PlayerGender.FEMALE
-    ? PartnerPreference.FEMALE_FLEX
-    : PartnerPreference.OPEN;
-}
+export { defaultPartnerPreferenceForGender };
 
+export function getMixedSideOptionLabel(gender: PlayerGender) {
+  return getMixedSideOverrideOptionForGender(gender)?.label ?? null;
+}
