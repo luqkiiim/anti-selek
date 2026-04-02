@@ -1,5 +1,6 @@
 "use client";
 
+import { PlayerPickerSheet } from "@/components/ui/PlayerPickerSheet";
 import { PartnerPreference, PlayerGender, SessionMode } from "@/types/enums";
 import type { CommunityGuestConfig } from "./communityTypes";
 
@@ -45,29 +46,23 @@ export function CommunityGuestsModal({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 bg-gray-900/70 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4 z-50">
-      <div className="bg-white rounded-t-3xl sm:rounded-2xl shadow-2xl max-w-lg w-full max-h-[90vh] flex flex-col animate-in slide-in-from-bottom duration-300">
-        <div className="px-4 py-3 border-b flex justify-between items-center">
-          <div>
-            <h2 className="text-base font-black text-gray-900">Add Guests</h2>
-            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-0.5">
-              {guestConfigs.length} pre-added
-            </p>
+    <PlayerPickerSheet
+      open={open}
+      title="Add Guests"
+      subtitle={`${guestConfigs.length} added`}
+      onClose={onClose}
+      toolbar={
+        <div className="app-subcard space-y-3 p-3 sm:p-4">
+          <div className="flex items-center gap-2">
+            <span className="app-chip app-chip-accent">Guest</span>
+            <p className="text-sm font-semibold text-gray-900">Pre-add guest</p>
           </div>
-          <button
-            onClick={onClose}
-            className="bg-gray-100 text-gray-400 hover:text-gray-600 w-7 h-7 rounded-full flex items-center justify-center text-lg font-bold"
-          >
-            &times;
-          </button>
-        </div>
 
-        <div className="px-3 py-2 border-b bg-gray-50/50 space-y-2">
           <div
             className={`grid gap-2 ${
               sessionMode === SessionMode.MIXICANO
-                ? "grid-cols-1 sm:grid-cols-2 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto]"
-                : "grid-cols-1 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]"
+                ? "grid-cols-1 sm:grid-cols-2"
+                : "grid-cols-1 sm:grid-cols-[minmax(0,1fr)_minmax(0,11rem)_auto]"
             }`}
           >
             <input
@@ -81,14 +76,14 @@ export function CommunityGuestsModal({
                 }
               }}
               placeholder="Guest name"
-              className="h-9 bg-white border border-gray-200 rounded-lg px-3 text-xs font-bold focus:outline-none focus:border-blue-500 transition-all"
+              className="field px-3 py-2.5 text-sm"
             />
             <select
               value={guestInitialEloInput}
               onChange={(event) =>
                 onGuestInitialEloChange(parseInt(event.target.value, 10))
               }
-              className="h-9 bg-white border border-gray-200 rounded-lg px-2 text-[10px] font-bold focus:outline-none focus:border-blue-500 transition-all"
+              className="field px-3 py-2.5 text-sm"
             >
               {GUEST_ELO_PRESETS.map((preset) => (
                 <option key={preset.label} value={preset.value}>
@@ -103,17 +98,10 @@ export function CommunityGuestsModal({
                   onChange={(event) =>
                     onGuestGenderChange(event.target.value as PlayerGender)
                   }
-                  className="h-9 bg-white border border-gray-200 rounded-lg px-2 text-[10px] font-bold focus:outline-none focus:border-blue-500 transition-all"
+                  className="field px-3 py-2.5 text-sm"
                 >
-                  <option value={PlayerGender.MALE} className="text-gray-900">
-                    Male
-                  </option>
-                  <option
-                    value={PlayerGender.FEMALE}
-                    className="text-gray-900"
-                  >
-                    Female
-                  </option>
+                  <option value={PlayerGender.MALE}>Male</option>
+                  <option value={PlayerGender.FEMALE}>Female</option>
                 </select>
                 <select
                   value={guestPreferenceInput}
@@ -122,30 +110,17 @@ export function CommunityGuestsModal({
                       event.target.value as PartnerPreference
                     )
                   }
-                  className="h-9 bg-white border border-gray-200 rounded-lg px-2 text-[10px] font-bold focus:outline-none focus:border-blue-500 transition-all"
+                  className="field px-3 py-2.5 text-sm"
                 >
                   {guestGenderInput === PlayerGender.FEMALE ? (
                     <>
-                      <option
-                        value={PartnerPreference.FEMALE_FLEX}
-                        className="text-gray-900"
-                      >
+                      <option value={PartnerPreference.FEMALE_FLEX}>
                         Default
                       </option>
-                      <option
-                        value={PartnerPreference.OPEN}
-                        className="text-gray-900"
-                      >
-                        Open Tag
-                      </option>
+                      <option value={PartnerPreference.OPEN}>Open Tag</option>
                     </>
                   ) : (
-                    <option
-                      value={PartnerPreference.OPEN}
-                      className="text-gray-900"
-                    >
-                      Open
-                    </option>
+                    <option value={PartnerPreference.OPEN}>Open</option>
                   )}
                 </select>
               </>
@@ -154,30 +129,44 @@ export function CommunityGuestsModal({
               type="button"
               onClick={onAddGuest}
               disabled={!guestNameInput.trim()}
-              className="h-9 bg-gray-900 text-white px-3 rounded-lg text-[10px] font-black uppercase tracking-widest disabled:opacity-50 disabled:cursor-not-allowed w-full sm:w-auto"
+              className="app-button-secondary px-4 py-2.5 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              Add
+              Add Guest
             </button>
           </div>
         </div>
-
-        <div className="flex-1 overflow-y-auto p-2.5 space-y-1.5">
-          {guestConfigs.length === 0 ? (
-            <div className="text-center py-10 text-gray-400 italic text-sm">
-              No guests added yet.
-            </div>
-          ) : (
-            guestConfigs.map((guest) => (
-              <div
-                key={guest.name}
-                className="flex justify-between items-center px-3 py-2 rounded-xl border bg-gray-50 border-gray-100"
-              >
-                <div className="flex items-center gap-2 min-w-0">
-                  <p className="font-black text-sm text-gray-900 truncate">
-                    {guest.name}
-                  </p>
+      }
+      footer={
+        <div className="flex justify-end">
+          <button type="button" onClick={onClose} className="app-button-primary">
+            Done
+          </button>
+        </div>
+      }
+    >
+      {guestConfigs.length === 0 ? (
+        <div className="app-empty px-4 py-10 text-center">
+          <p className="text-sm font-semibold text-gray-900">
+            No guests added yet.
+          </p>
+          <p className="mt-2 text-sm text-gray-500">
+            Add guest placeholders here before creating the tournament.
+          </p>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {guestConfigs.map((guest) => (
+            <div
+              key={guest.name}
+              className="flex items-center justify-between gap-3 rounded-2xl border border-gray-200 bg-gray-50/70 px-3 py-3"
+            >
+              <div className="min-w-0 space-y-1">
+                <p className="truncate text-sm font-semibold text-gray-900">
+                  {guest.name}
+                </p>
+                <div className="flex flex-wrap items-center gap-2">
                   {sessionMode === SessionMode.MIXICANO ? (
-                    <span className="text-[9px] text-gray-500 font-bold uppercase tracking-wider whitespace-nowrap">
+                    <span className="rounded-full border border-gray-200 bg-white px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-gray-600">
                       {guest.gender === PlayerGender.FEMALE
                         ? guest.partnerPreference === PartnerPreference.OPEN
                           ? "F / Open Tag"
@@ -185,31 +174,23 @@ export function CommunityGuestsModal({
                         : "M"}
                     </span>
                   ) : null}
-                  <span className="text-[9px] text-gray-500 font-bold uppercase tracking-wider whitespace-nowrap">
+                  <span className="rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-blue-700">
                     Rating {guest.initialElo}
                   </span>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => onRemoveGuest(guest.name)}
-                  className="text-[10px] text-red-600 font-black uppercase tracking-widest"
-                >
-                  Remove
-                </button>
               </div>
-            ))
-          )}
-        </div>
 
-        <div className="p-3 bg-white border-t sm:rounded-b-2xl flex justify-end">
-          <button
-            onClick={onClose}
-            className="bg-gray-900 text-white px-4 py-2 rounded-lg font-black uppercase tracking-widest text-[10px] shadow-sm active:scale-95 transition-all"
-          >
-            Done
-          </button>
+              <button
+                type="button"
+                onClick={() => onRemoveGuest(guest.name)}
+                className="app-button-danger px-3 py-2 text-[11px]"
+              >
+                Remove
+              </button>
+            </div>
+          ))}
         </div>
-      </div>
-    </div>
+      )}
+    </PlayerPickerSheet>
   );
 }
