@@ -49,6 +49,7 @@ import {
   findBestBatchSelectionV3,
   findBestSingleCourtSelectionV3,
 } from "@/lib/matchmaking/v3";
+import { getCommunityEloByUserId } from "@/lib/communityElo";
 import {
   findBestBatchSelectionLadder,
   findBestSingleCourtSelectionLadder,
@@ -58,6 +59,7 @@ import {
   type PartitionCandidate,
 } from "@/lib/matchmaking/partitioning";
 import {
+  buildMatchmakingState,
   ensureEnoughPlayers,
   GenerateMatchError,
   getRankedCandidates,
@@ -171,6 +173,32 @@ function createV3Selection(
     },
     balanceGap: 0,
     exactRematchPenalty: 0,
+    randomScore: 0,
+  };
+}
+
+function createLadderSelection(
+  ids: [string, string, string, string],
+  partition: { team1: [string, string]; team2: [string, string] }
+) {
+  return {
+    ids,
+    players: [] as never[],
+    partition,
+    waitSummary: {
+      totalWaitMs: 0,
+      minimumWaitMs: 0,
+      waitVector: [],
+    },
+    groupingSummary: {
+      maxLadderGap: 0,
+      totalLadderGap: 0,
+      pointDiffSpread: 0,
+      totalPointDiffGap: 0,
+    },
+    balanceGap: 0,
+    pointDiffGap: 0,
+    strengthGap: 0,
     randomScore: 0,
   };
 }
@@ -399,6 +427,45 @@ describe("generate match service", () => {
     });
   });
 
+  describe("buildMatchmakingState", () => {
+    it("uses community elo only for ratings sessions", async () => {
+      vi.mocked(getCommunityEloByUserId).mockResolvedValue(
+        new Map([
+          ["A", 1440],
+          ["B", 1330],
+        ])
+      );
+
+      const players = [
+        createSessionPlayer("A", { elo: 1100 }),
+        createSessionPlayer("B", { elo: 1080 }),
+      ];
+
+      const eloState = await buildMatchmakingState(
+        createSessionData({ type: SessionType.ELO, players })
+      );
+
+      expect(getCommunityEloByUserId).toHaveBeenCalledTimes(1);
+      expect(eloState.playersById.get("A")?.elo).toBe(1440);
+      expect(eloState.playersById.get("B")?.elo).toBe(1330);
+    });
+
+    it("ignores external elo for race sessions", async () => {
+      const players = [
+        createSessionPlayer("A", { elo: 1600 }),
+        createSessionPlayer("B", { elo: 900 }),
+      ];
+
+      const raceState = await buildMatchmakingState(
+        createSessionData({ type: SessionType.RACE, players })
+      );
+
+      expect(getCommunityEloByUserId).not.toHaveBeenCalled();
+      expect(raceState.playersById.get("A")?.elo).toBe(0);
+      expect(raceState.playersById.get("B")?.elo).toBe(0);
+    });
+  });
+
   describe("selectSingleCourtMatch", () => {
     it("throws when no valid pairing exists", () => {
       vi.mocked(findBestSingleCourtSelectionV3).mockReturnValueOnce({
@@ -455,24 +522,10 @@ describe("generate match service", () => {
     });
 
     it("uses the ladder selector for ladder sessions", () => {
-      const selection = {
-        ids: ["A", "B", "C", "D"] as [string, string, string, string],
-        players: [] as never[],
-        partition: { team1: ["A", "B"], team2: ["C", "D"] },
-        waitSummary: {
-          totalWaitMs: 0,
-          minimumWaitMs: 0,
-          waitVector: [],
-        },
-        groupingSummary: {
-          maxLadderGap: 0,
-          totalLadderGap: 0,
-          pointDiffSpread: 0,
-          totalPointDiffGap: 0,
-        },
-        balanceGap: 0,
-        randomScore: 0,
-      };
+      const selection = createLadderSelection(["A", "B", "C", "D"], {
+        team1: ["A", "B"],
+        team2: ["C", "D"],
+      });
       vi.mocked(findBestSingleCourtSelectionLadder).mockReturnValueOnce({
         selection,
         debug: {} as never,
@@ -503,24 +556,10 @@ describe("generate match service", () => {
     });
 
     it("uses the ladder selector for race sessions", () => {
-      const selection = {
-        ids: ["A", "B", "C", "D"] as [string, string, string, string],
-        players: [] as never[],
-        partition: { team1: ["A", "B"], team2: ["C", "D"] },
-        waitSummary: {
-          totalWaitMs: 0,
-          minimumWaitMs: 0,
-          waitVector: [],
-        },
-        groupingSummary: {
-          maxLadderGap: 0,
-          totalLadderGap: 0,
-          pointDiffSpread: 0,
-          totalPointDiffGap: 0,
-        },
-        balanceGap: 0,
-        randomScore: 0,
-      };
+      const selection = createLadderSelection(["A", "B", "C", "D"], {
+        team1: ["A", "B"],
+        team2: ["C", "D"],
+      });
       vi.mocked(findBestSingleCourtSelectionLadder).mockReturnValueOnce({
         selection,
         debug: {} as never,
@@ -548,6 +587,95 @@ describe("generate match service", () => {
         })
       ).toEqual(selection);
       expect(findBestSingleCourtSelectionV3).not.toHaveBeenCalled();
+    });
+
+    it("reshuffles ladder sessions to an alternative quartet when possible", () => {
+      const initial = createLadderSelection(["A", "B", "C", "D"], {
+        team1: ["A", "B"],
+        team2: ["C", "D"],
+      });
+      const alternative = createLadderSelection(["A", "B", "E", "F"], {
+        team1: ["A", "E"],
+        team2: ["B", "F"],
+      });
+      vi.mocked(findBestSingleCourtSelectionLadder)
+        .mockReturnValueOnce({ selection: initial, debug: {} as never })
+        .mockReturnValueOnce({ selection: alternative, debug: {} as never });
+
+      const players = [
+        createSessionPlayer("A"),
+        createSessionPlayer("B"),
+        createSessionPlayer("C"),
+        createSessionPlayer("D"),
+        createSessionPlayer("E"),
+        createSessionPlayer("F"),
+      ];
+
+      expect(
+        selectSingleCourtMatch({
+          rankedCandidates: [] as ReturnType<
+            typeof getRankedCandidates
+          >["rankedCandidates"],
+          playersById: createPlayersById(players),
+          sessionData: createSessionData({
+            type: SessionType.RACE,
+            players,
+          }),
+          rotationHistory: buildRotationHistory([]),
+          reshuffleSource: {
+            ids: ["A", "B", "C", "D"],
+            partition: { team1: ["A", "B"], team2: ["C", "D"] },
+          },
+        })
+      ).toEqual(alternative);
+      expect(findBestSingleCourtSelectionLadder).toHaveBeenNthCalledWith(
+        2,
+        expect.any(Array),
+        expect.objectContaining({
+          excludedQuartetKey: "A|B|C|D",
+        })
+      );
+    });
+
+    it("throws when competitive reshuffle has no valid alternative", () => {
+      const initial = createLadderSelection(["A", "B", "C", "D"], {
+        team1: ["A", "B"],
+        team2: ["C", "D"],
+      });
+      vi.mocked(findBestSingleCourtSelectionLadder)
+        .mockReturnValueOnce({ selection: initial, debug: {} as never })
+        .mockReturnValueOnce({ selection: null, debug: {} as never })
+        .mockReturnValueOnce({ selection: null, debug: {} as never });
+
+      const players = [
+        createSessionPlayer("A"),
+        createSessionPlayer("B"),
+        createSessionPlayer("C"),
+        createSessionPlayer("D"),
+      ];
+
+      expect(() =>
+        selectSingleCourtMatch({
+          rankedCandidates: [] as ReturnType<
+            typeof getRankedCandidates
+          >["rankedCandidates"],
+          playersById: createPlayersById(players),
+          sessionData: createSessionData({
+            type: SessionType.LADDER,
+            players,
+          }),
+          rotationHistory: buildRotationHistory([]),
+          reshuffleSource: {
+            ids: ["A", "B", "C", "D"],
+            partition: { team1: ["A", "B"], team2: ["C", "D"] },
+          },
+        })
+      ).toThrowError(
+        new GenerateMatchError(
+          409,
+          "No alternative reshuffle was available. Undo this match if you want the same players returned to the pool."
+        )
+      );
     });
 
     it("falls back to an alternative quartet when reshuffle repeats the same players", () => {
@@ -711,24 +839,10 @@ describe("generate match service", () => {
     it("uses the ladder batch selector for ladder sessions", () => {
       const batchSelection = {
         selections: [
-          {
-            ids: ["A", "B", "C", "D"] as [string, string, string, string],
-            players: [] as never[],
-            partition: { team1: ["A", "B"], team2: ["C", "D"] },
-            waitSummary: {
-              totalWaitMs: 0,
-              minimumWaitMs: 0,
-              waitVector: [],
-            },
-            groupingSummary: {
-              maxLadderGap: 0,
-              totalLadderGap: 0,
-              pointDiffSpread: 0,
-              totalPointDiffGap: 0,
-            },
-            balanceGap: 0,
-            randomScore: 0,
-          },
+          createLadderSelection(["A", "B", "C", "D"], {
+            team1: ["A", "B"],
+            team2: ["C", "D"],
+          }),
         ],
         waitSummary: {
           totalWaitMs: 0,

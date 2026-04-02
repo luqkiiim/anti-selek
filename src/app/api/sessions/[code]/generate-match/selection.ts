@@ -51,6 +51,30 @@ function getV3QuartetKey(ids: readonly string[]) {
   return [...ids].sort().join("|");
 }
 
+function getPlayerBalanceInput({
+  sessionType,
+  sessionPoints,
+  communityElo,
+  userElo,
+}: {
+  sessionType: SessionType;
+  sessionPoints: number;
+  communityElo?: number;
+  userElo: number;
+}) {
+  switch (sessionType) {
+    case SessionType.POINTS:
+      return sessionPoints;
+    case SessionType.ELO:
+      return communityElo ?? userElo;
+    case SessionType.LADDER:
+    case SessionType.RACE:
+      return 0;
+    default:
+      return userElo;
+  }
+}
+
 function buildCompletedMatches(sessionData: GenerateMatchSession) {
   return sessionData.matches
     .filter((match) => match.status === MatchStatus.COMPLETED)
@@ -132,8 +156,7 @@ function buildLadderPlayers(
       matchmakingBaseline:
         player.matchesPlayed + Math.max(0, player.matchmakingMatchesCredit ?? 0),
       availableSince: player.availableSince,
-      strength:
-        playersById.get(player.userId)?.elo ?? player.user.elo,
+      strength: playersById.get(player.userId)?.elo ?? 0,
       wins: record.wins,
       losses: record.losses,
       pointDiff: record.pointDiff,
@@ -159,7 +182,9 @@ export async function buildMatchmakingState(
     }
   }
   const communityEloByUserId =
-    sessionData.communityId && sessionData.players.length > 0
+    sessionData.type === SessionType.ELO &&
+    sessionData.communityId &&
+    sessionData.players.length > 0
       ? await getCommunityEloByUserId(
           sessionData.communityId,
           sessionData.players.map((player) => player.userId)
@@ -199,10 +224,12 @@ export async function buildMatchmakingState(
       player.userId,
       {
         userId: player.userId,
-        elo:
-          sessionData.type === SessionType.POINTS
-            ? player.sessionPoints
-            : communityEloByUserId.get(player.userId) ?? player.user.elo,
+        elo: getPlayerBalanceInput({
+          sessionType: sessionData.type as SessionType,
+          sessionPoints: player.sessionPoints,
+          communityElo: communityEloByUserId.get(player.userId),
+          userElo: player.user.elo,
+        }),
         pointDiff: pointDiffByUserId.get(player.userId) ?? 0,
         lastPartnerId: player.lastPartnerId,
         gender: player.gender,
@@ -333,7 +360,54 @@ export function selectSingleCourtMatch({
   }
 
   if (usesCompetitiveGrouping) {
-    return initialResult.selection;
+    const competitivePlayers = buildLadderPlayers(
+      sessionData,
+      playersById,
+      rankedCandidates
+    );
+    const previousQuartetKey = getV3QuartetKey(reshuffleSource.ids);
+    const previousPartitionKey = getExactPartitionKey(reshuffleSource.partition);
+    const selectedQuartetKey = getV3QuartetKey(initialResult.selection.ids);
+    const selectedPartitionKey = getExactPartitionKey(
+      initialResult.selection.partition
+    );
+
+    if (selectedQuartetKey !== previousQuartetKey) {
+      return initialResult.selection;
+    }
+
+    const alternativeQuartet = findBestSingleCourtSelectionLadder(
+      competitivePlayers,
+      {
+        sessionMode: sessionData.mode as SessionMode,
+        excludedQuartetKey: previousQuartetKey,
+      }
+    );
+
+    if (alternativeQuartet.selection) {
+      return alternativeQuartet.selection;
+    }
+
+    if (selectedPartitionKey !== previousPartitionKey) {
+      return initialResult.selection;
+    }
+
+    const alternativePartition = findBestSingleCourtSelectionLadder(
+      competitivePlayers,
+      {
+        sessionMode: sessionData.mode as SessionMode,
+        excludedPartitionKey: previousPartitionKey,
+      }
+    );
+
+    if (!alternativePartition.selection) {
+      throw new GenerateMatchError(
+        409,
+        "No alternative reshuffle was available. Undo this match if you want the same players returned to the pool."
+      );
+    }
+
+    return alternativePartition.selection;
   }
 
   const v3Players = buildV3Players(sessionData, playersById, rankedCandidates);

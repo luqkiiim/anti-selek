@@ -1,4 +1,5 @@
 import { SessionMode } from "../../../types/enums";
+import { getExactPartitionKey } from "../v3/rematch";
 import { evaluateBalancedPartitions } from "./balance";
 import { buildCandidatePool } from "./candidatePool";
 import { DEFAULT_MATCH_DURATION_MS } from "./fairness";
@@ -52,17 +53,25 @@ function toQuartet<T>(players: T[]): [T, T, T, T] | null {
   return [players[0], players[1], players[2], players[3]];
 }
 
+function getQuartetKey(ids: [string, string, string, string]) {
+  return [...ids].sort().join("|");
+}
+
 export function findBestSingleCourtSelectionLadder<
   T extends MatchmakerLadderPlayer,
 >(
   players: T[],
   {
     sessionMode,
+    excludedQuartetKey,
+    excludedPartitionKey,
     now = Date.now(),
     matchDurationMs = DEFAULT_MATCH_DURATION_MS,
     randomFn = Math.random,
   }: {
     sessionMode: SessionMode;
+    excludedQuartetKey?: string;
+    excludedPartitionKey?: string;
     now?: number;
     matchDurationMs?: number;
     randomFn?: () => number;
@@ -130,6 +139,11 @@ export function findBestSingleCourtSelectionLadder<
       string,
       string,
     ];
+
+    if (excludedQuartetKey && getQuartetKey(ids) === excludedQuartetKey) {
+      continue;
+    }
+
     const waitSummary = buildWaitSummary(quartetPlayers);
     const groupingSummary = buildLadderGroupingSummary(quartetPlayers);
     const randomScore = getQuartetRandomScore(quartetPlayers);
@@ -139,6 +153,13 @@ export function findBestSingleCourtSelectionLadder<
       playersById,
       sessionMode
     )) {
+      if (
+        excludedPartitionKey &&
+        getExactPartitionKey(evaluation.partition) === excludedPartitionKey
+      ) {
+        continue;
+      }
+
       debug.validPartitionCount += 1;
 
       const selection: LadderSingleCourtSelection<

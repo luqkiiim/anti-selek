@@ -8,16 +8,19 @@ function createPlayer(
   userId: string,
   overrides: Partial<MatchmakerLadderPlayer> = {}
 ): MatchmakerLadderPlayer {
+  const wins = overrides.wins ?? 0;
+  const losses = overrides.losses ?? 0;
+
   return {
     userId,
     matchesPlayed: 0,
     matchmakingBaseline: 0,
     availableSince: new Date("2026-03-18T00:00:00Z"),
     strength: 1000,
-    wins: 0,
-    losses: 0,
+    wins,
+    losses,
     pointDiff: 0,
-    ladderScore: 0,
+    ladderScore: overrides.ladderScore ?? wins - losses,
     gender: PlayerGender.MALE,
     partnerPreference: PartnerPreference.OPEN,
     isBusy: false,
@@ -29,11 +32,41 @@ function createPlayer(
 describe("ladder single-court selection", () => {
   it("prefers closer ladder-score quartets inside the fair pool", () => {
     const players = [
-      createPlayer("A", { matchesPlayed: 5, wins: 3, losses: 0, pointDiff: 20 }),
-      createPlayer("B", { matchesPlayed: 5, wins: 2, losses: 0, pointDiff: 11 }),
-      createPlayer("C", { matchesPlayed: 5, wins: 2, losses: 1, pointDiff: 5 }),
-      createPlayer("D", { matchesPlayed: 5, wins: 1, losses: 1, pointDiff: 1 }),
-      createPlayer("E", { matchesPlayed: 5, wins: 0, losses: 2, pointDiff: -8 }),
+      createPlayer("A", {
+        matchesPlayed: 5,
+        wins: 3,
+        losses: 0,
+        ladderScore: 3,
+        pointDiff: 20,
+      }),
+      createPlayer("B", {
+        matchesPlayed: 5,
+        wins: 2,
+        losses: 0,
+        ladderScore: 2,
+        pointDiff: 11,
+      }),
+      createPlayer("C", {
+        matchesPlayed: 5,
+        wins: 2,
+        losses: 1,
+        ladderScore: 1,
+        pointDiff: 5,
+      }),
+      createPlayer("D", {
+        matchesPlayed: 5,
+        wins: 1,
+        losses: 1,
+        ladderScore: 0,
+        pointDiff: 1,
+      }),
+      createPlayer("E", {
+        matchesPlayed: 5,
+        wins: 0,
+        losses: 2,
+        ladderScore: -2,
+        pointDiff: -8,
+      }),
     ];
 
     const result = findBestSingleCourtSelectionLadder(players, {

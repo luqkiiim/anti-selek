@@ -38,6 +38,7 @@ export interface PartitionCandidate {
   // Matchmaking balance input:
   // - ELO sessions: persistent Elo
   // - POINTS sessions: current session points
+  // - LADDER/RACE sessions: session-native grouping only (no external Elo)
   elo: number;
   pointDiff: number;
   lastPartnerId: string | null;

@@ -8,16 +8,19 @@ function createPlayer(
   userId: string,
   overrides: Partial<MatchmakerLadderPlayer> = {}
 ): MatchmakerLadderPlayer {
+  const wins = overrides.wins ?? 0;
+  const losses = overrides.losses ?? 0;
+
   return {
     userId,
     matchesPlayed: 0,
     matchmakingBaseline: 0,
     availableSince: new Date("2026-03-18T00:00:00Z"),
     strength: 1000,
-    wins: 0,
-    losses: 0,
+    wins,
+    losses,
     pointDiff: 0,
-    ladderScore: 0,
+    ladderScore: overrides.ladderScore ?? wins - losses,
     isBusy: false,
     isPaused: false,
     gender: "MALE",

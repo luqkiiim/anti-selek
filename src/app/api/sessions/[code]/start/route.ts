@@ -47,9 +47,18 @@ export async function POST(
       return NextResponse.json({ error: "Session already started" }, { status: 400 });
     }
 
+    const startedAt = new Date();
     const updated = await prisma.session.update({
       where: { code },
-      data: { status: SessionStatus.ACTIVE },
+      data: {
+        status: SessionStatus.ACTIVE,
+        players: {
+          updateMany: {
+            where: {},
+            data: { availableSince: startedAt },
+          },
+        },
+      },
       include: {
         courts: { include: { currentMatch: true } },
         players: {
