@@ -491,6 +491,58 @@ export function applyPlayerPaused(
   };
 }
 
+export function applyPlayerNameUpdate(
+  current: SessionData,
+  userId: string,
+  nextName: string
+) {
+  const updateParticipantName = (participant: MatchParticipant) =>
+    participant.id === userId
+      ? {
+          ...participant,
+          name: nextName,
+        }
+      : participant;
+
+  return {
+    ...current,
+    players: current.players.map((player) =>
+      player.userId === userId
+        ? {
+            ...player,
+            user: {
+              ...player.user,
+              name: nextName,
+            },
+          }
+        : player
+    ),
+    courts: current.courts.map((court) =>
+      court.currentMatch
+        ? {
+            ...court,
+            currentMatch: {
+              ...court.currentMatch,
+              team1User1: updateParticipantName(court.currentMatch.team1User1),
+              team1User2: updateParticipantName(court.currentMatch.team1User2),
+              team2User1: updateParticipantName(court.currentMatch.team2User1),
+              team2User2: updateParticipantName(court.currentMatch.team2User2),
+            },
+          }
+        : court
+    ),
+    queuedMatch: current.queuedMatch
+      ? {
+          ...current.queuedMatch,
+          team1User1: updateParticipantName(current.queuedMatch.team1User1),
+          team1User2: updateParticipantName(current.queuedMatch.team1User2),
+          team2User1: updateParticipantName(current.queuedMatch.team2User1),
+          team2User2: updateParticipantName(current.queuedMatch.team2User2),
+        }
+      : current.queuedMatch,
+  };
+}
+
 export function applyPlayerPreferenceUpdate(
   current: SessionData,
   payload: SessionPlayerPayload

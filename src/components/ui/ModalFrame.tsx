@@ -82,7 +82,9 @@ export function ModalFrame({
         </div>
         <div
           className={cx(
-            bodyScroll ? "flex-1 overflow-y-auto" : "flex-1 min-h-0",
+            bodyScroll
+              ? "app-modal-scroll-region"
+              : "flex-1 min-h-0 overflow-hidden",
             bodyClassName
           )}
         >

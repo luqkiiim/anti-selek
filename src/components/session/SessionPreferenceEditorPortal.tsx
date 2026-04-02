@@ -10,6 +10,7 @@ interface SessionPreferenceEditorPortalProps {
   isAdmin: boolean;
   isCompletedSession: boolean;
   isMixicano: boolean;
+  renamingGuestId: string | null;
   removingPlayerId: string | null;
   onClose: () => void;
   onUpdatePreference: (
@@ -17,6 +18,7 @@ interface SessionPreferenceEditorPortalProps {
     nextGender: PlayerGender,
     nextPreference: PartnerPreference
   ) => Promise<void>;
+  onRequestRenameGuest: (userId: string, currentName: string) => void;
   onRemovePlayer: (userId: string, playerName: string) => void;
 }
 
@@ -26,9 +28,11 @@ export function SessionPreferenceEditorPortal({
   isAdmin,
   isCompletedSession,
   isMixicano,
+  renamingGuestId,
   removingPlayerId,
   onClose,
   onUpdatePreference,
+  onRequestRenameGuest,
   onRemovePlayer,
 }: SessionPreferenceEditorPortalProps) {
   if (
@@ -109,6 +113,26 @@ export function SessionPreferenceEditorPortal({
           Player Actions
         </p>
       )}
+      {activePreferencePlayer.isGuest ? (
+        <div className="border-t border-gray-100 pt-1">
+          <button
+            type="button"
+            onClick={() => {
+              onClose();
+              onRequestRenameGuest(
+                activePreferencePlayer.userId,
+                activePreferencePlayer.user.name
+              );
+            }}
+            disabled={renamingGuestId === activePreferencePlayer.userId}
+            className="h-8 w-full rounded-lg border border-blue-200 bg-blue-50 text-[10px] font-black uppercase tracking-wide text-blue-700 disabled:opacity-50"
+          >
+            {renamingGuestId === activePreferencePlayer.userId
+              ? "Opening..."
+              : "Rename Guest"}
+          </button>
+        </div>
+      ) : null}
       <div className="border-t border-gray-100 pt-1">
         <button
           type="button"

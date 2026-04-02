@@ -83,7 +83,7 @@ export function SessionRosterModal({
           />
         </div>
 
-        <div className="mt-4 min-h-0 flex-1 overflow-y-auto pr-1 pb-2">
+        <div className="app-modal-scroll-region mt-4 pr-1 pb-2">
           {playersNotInSession.length === 0 ? (
             <div className="app-empty px-4 py-10 text-center">
               <p className="text-sm font-semibold text-gray-900">
@@ -95,7 +95,7 @@ export function SessionRosterModal({
               {playersNotInSession.map((player) => (
                 <div
                   key={player.id}
-                  className="flex items-center justify-between gap-3 rounded-2xl border border-gray-200 bg-gray-50/70 px-3 py-3 transition"
+                  className="app-touch-pan-y flex items-center justify-between gap-3 rounded-2xl border border-gray-200 bg-gray-50/70 px-3 py-3 transition"
                 >
                   <div className="min-w-0 space-y-1">
                     <p className="truncate text-sm font-semibold text-gray-900">

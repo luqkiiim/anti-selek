@@ -11,6 +11,7 @@ import {
   applyGeneratedMatches,
   applyGuestAdded,
   applyCourtLabelUpdates,
+  applyPlayerNameUpdate,
   applyPlayerPaused,
   applyPlayerRemoval,
   applyUndoneCourtMatch,
@@ -339,6 +340,35 @@ describe("sessionDataMutations", () => {
     const updated = applyPlayerPaused(withQueue, "p1", true);
 
     expect(updated.queuedMatch).toBeNull();
+  });
+
+  it("updates a renamed guest across players, live court, and queue", () => {
+    const withLiveCourt = applyGeneratedMatches(createSessionData(), [
+      {
+        id: "match-1",
+        courtId: "court-1",
+        status: "IN_PROGRESS",
+        team1User1: { id: "p1", name: "Player 1" },
+        team1User2: { id: "p2", name: "Player 2" },
+        team2User1: { id: "p3", name: "Player 3" },
+        team2User2: { id: "p4", name: "Player 4" },
+      },
+    ]);
+    const withQueue = applyQueuedMatch(withLiveCourt, {
+      id: "queue-1",
+      team1User1: { id: "p1", name: "Player 1" },
+      team1User2: { id: "p2", name: "Player 2" },
+      team2User1: { id: "p3", name: "Player 3" },
+      team2User2: { id: "p4", name: "Player 4" },
+    });
+
+    const updated = applyPlayerNameUpdate(withQueue, "p1", "Alice");
+
+    expect(updated.players.find((player) => player.userId === "p1")?.user.name).toBe(
+      "Alice"
+    );
+    expect(updated.courts[0].currentMatch?.team1User1.name).toBe("Alice");
+    expect(updated.queuedMatch?.team1User1.name).toBe("Alice");
   });
 
   it("can promote a queued match into a freed court after undo", () => {

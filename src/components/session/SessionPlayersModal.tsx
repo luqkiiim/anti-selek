@@ -13,6 +13,7 @@ interface SessionPlayersModalProps {
   currentUserId: string;
   canEditPreferences: boolean;
   togglingPausePlayerId: string | null;
+  onRequestRenameGuest: (userId: string, currentName: string) => void;
   onClose: () => void;
   onTogglePause: (userId: string, isPaused: boolean) => void;
   onOpenPreferenceEditor: (userId: string, triggerEl: HTMLElement) => void;
@@ -33,6 +34,7 @@ export function SessionPlayersModal({
   currentUserId,
   canEditPreferences,
   togglingPausePlayerId,
+  onRequestRenameGuest,
   onClose,
   onTogglePause,
   onOpenPreferenceEditor,
@@ -120,7 +122,7 @@ export function SessionPlayersModal({
           </div>
         </div>
 
-        <div className="mt-4 min-h-0 flex-1 overflow-y-auto pr-1 pb-2">
+        <div className="app-modal-scroll-region mt-4 pr-1 pb-2">
           {filteredPlayers.length === 0 ? (
             <div className="rounded-3xl border border-dashed border-gray-200 bg-gray-50/70 px-4 py-10 text-center text-sm text-gray-500">
               No players match this view.
@@ -163,18 +165,34 @@ export function SessionPlayersModal({
 
                     <div className="flex shrink-0 items-center gap-2">
                       {canEditPreferences ? (
-                        <button
-                          type="button"
-                          onClick={(event) =>
-                            onOpenPreferenceEditor(
-                              player.userId,
-                              event.currentTarget
-                            )
-                          }
-                          className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-blue-700 transition"
-                        >
-                          Prefs
-                        </button>
+                        <>
+                          {player.isGuest ? (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                onRequestRenameGuest(
+                                  player.userId,
+                                  player.user.name
+                                )
+                              }
+                              className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-blue-700 transition"
+                            >
+                              Rename
+                            </button>
+                          ) : null}
+                          <button
+                            type="button"
+                            onClick={(event) =>
+                              onOpenPreferenceEditor(
+                                player.userId,
+                                event.currentTarget
+                              )
+                            }
+                            className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-blue-700 transition"
+                          >
+                            {player.isGuest ? "Edit" : "Prefs"}
+                          </button>
+                        </>
                       ) : null}
                       <button
                         type="button"

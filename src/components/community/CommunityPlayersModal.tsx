@@ -81,7 +81,7 @@ export function CommunityPlayersModal({
           </button>
         </div>
 
-        <div className="mt-4 min-h-0 flex-1 overflow-y-auto pr-1 pb-2">
+        <div className="app-modal-scroll-region mt-4 pr-1 pb-2">
           {filteredSelectablePlayers.length === 0 ? (
             <div className="app-empty px-4 py-10 text-center">
               <p className="text-sm font-semibold text-gray-900">
@@ -106,7 +106,7 @@ export function CommunityPlayersModal({
                       onTogglePlayerSelection(player.id);
                       refocusSearchIfAlreadyActive();
                     }}
-                    className={`flex w-full items-center justify-between gap-3 rounded-2xl border px-3 py-3 text-left transition ${
+                    className={`app-touch-pan-y flex w-full items-center justify-between gap-3 rounded-2xl border px-3 py-3 text-left transition ${
                       isSelected
                         ? "border-blue-200 bg-blue-50"
                         : "border-gray-200 bg-gray-50/70 hover:border-blue-200 hover:bg-white"

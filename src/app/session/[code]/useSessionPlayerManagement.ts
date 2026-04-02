@@ -8,6 +8,7 @@ import type {
 } from "@/components/session/sessionTypes";
 import {
   applyGuestAdded,
+  applyPlayerNameUpdate,
   applyPlayerPaused,
   applyPlayerPreferenceUpdate,
   applyPlayerRemoval,
@@ -104,6 +105,12 @@ export function useSessionPlayerManagement({
   const [togglingPausePlayerId, setTogglingPausePlayerId] = useState<string | null>(
     null
   );
+  const [guestRenameDraft, setGuestRenameDraft] = useState<{
+    userId: string;
+    currentName: string;
+  } | null>(null);
+  const [guestRenameInput, setGuestRenameInput] = useState("");
+  const [renamingGuestId, setRenamingGuestId] = useState<string | null>(null);
   const [removingPlayerId, setRemovingPlayerId] = useState<string | null>(null);
   const [removePlayerDraft, setRemovePlayerDraft] = useState<{
     userId: string;
@@ -211,6 +218,22 @@ export function useSessionPlayerManagement({
     setRemovePlayerDraft({ userId, playerName });
   };
 
+  const requestRenameGuest = (userId: string, currentName: string) => {
+    setOpenPreferenceEditor(null);
+    setError("");
+    setGuestRenameDraft({ userId, currentName });
+    setGuestRenameInput(currentName);
+  };
+
+  const closeGuestRenameModal = () => {
+    if (guestRenameDraft && renamingGuestId === guestRenameDraft.userId) {
+      return;
+    }
+
+    setGuestRenameDraft(null);
+    setGuestRenameInput("");
+  };
+
   const closeRemovePlayerConfirm = () => {
     if (removePlayerDraft && removingPlayerId === removePlayerDraft.userId) {
       return;
@@ -262,6 +285,51 @@ export function useSessionPlayerManagement({
 
   const pauseQueuedPlayer = async (userId: string) => {
     await togglePausePlayer(userId, false);
+  };
+
+  const renameGuestInSession = async () => {
+    if (!guestRenameDraft) return;
+
+    const nextName = guestRenameInput.trim();
+    if (nextName.length < 2) {
+      setError("Guest name must be at least 2 characters");
+      return;
+    }
+
+    setRenamingGuestId(guestRenameDraft.userId);
+    setError("");
+
+    try {
+      const res = await fetch(
+        `/api/sessions/${code}/players/${guestRenameDraft.userId}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name: nextName }),
+        }
+      );
+      const data = await safeJson(res);
+      if (!res.ok) {
+        setError(data.error || "Failed to rename guest");
+        return;
+      }
+
+      patchSessionData((current) =>
+        applyPlayerNameUpdate(
+          current,
+          guestRenameDraft.userId,
+          typeof data.name === "string" ? data.name : nextName
+        )
+      );
+      setGuestRenameDraft(null);
+      setGuestRenameInput("");
+      scheduleSessionRefresh();
+    } catch (err) {
+      console.error(err);
+      setError("Failed to rename guest");
+    } finally {
+      setRenamingGuestId(null);
+    }
   };
 
   const removePlayerFromSession = async () => {
@@ -407,6 +475,9 @@ export function useSessionPlayerManagement({
     addingGuest,
     savingPreferencesFor,
     togglingPausePlayerId,
+    guestRenameDraft,
+    guestRenameInput,
+    renamingGuestId,
     removingPlayerId,
     removePlayerDraft,
     openPreferenceEditor,
@@ -414,15 +485,19 @@ export function useSessionPlayerManagement({
     setGuestName,
     setGuestPreference,
     setGuestInitialElo,
+    setGuestRenameInput,
     setOpenPreferenceEditor,
     togglePreferenceEditor,
     openRosterModal,
     closeRosterModal,
+    requestRenameGuest,
+    closeGuestRenameModal,
     handleGuestGenderChange,
     addPlayerToSession,
     addGuestToSession,
     togglePausePlayer,
     pauseQueuedPlayer,
+    renameGuestInSession,
     requestRemovePlayerFromSession,
     closeRemovePlayerConfirm,
     removePlayerFromSession,

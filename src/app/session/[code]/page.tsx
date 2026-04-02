@@ -20,6 +20,7 @@ import { SessionOverviewPanel } from "@/components/session/SessionOverviewPanel"
 import { SessionPodium } from "@/components/session/SessionPodium";
 import { SessionPlayersModal } from "@/components/session/SessionPlayersModal";
 import { SessionPreferenceEditorPortal } from "@/components/session/SessionPreferenceEditorPortal";
+import { SessionGuestRenameModal } from "@/components/session/SessionGuestRenameModal";
 import { SessionRosterModal } from "@/components/session/SessionRosterModal";
 import { SessionSettingsModal } from "@/components/session/SessionSettingsModal";
 import type { CurrentUser } from "@/components/session/sessionTypes";
@@ -173,6 +174,9 @@ export default function SessionPage() {
     addingGuest,
     savingPreferencesFor,
     togglingPausePlayerId,
+    guestRenameDraft,
+    guestRenameInput,
+    renamingGuestId,
     removingPlayerId,
     removePlayerDraft,
     openPreferenceEditor,
@@ -180,15 +184,19 @@ export default function SessionPage() {
     setGuestName,
     setGuestPreference,
     setGuestInitialElo,
+    setGuestRenameInput,
     setOpenPreferenceEditor,
     togglePreferenceEditor,
     openRosterModal,
     closeRosterModal,
+    requestRenameGuest,
+    closeGuestRenameModal,
     handleGuestGenderChange,
     addPlayerToSession,
     addGuestToSession,
     togglePausePlayer,
     pauseQueuedPlayer,
+    renameGuestInSession,
     requestRemovePlayerFromSession,
     closeRemovePlayerConfirm,
     removePlayerFromSession,
@@ -373,6 +381,14 @@ export default function SessionPage() {
     setShowSettingsModal(false);
     openRosterModal();
   }, [openRosterModal]);
+
+  const openGuestRename = useCallback(
+    (userId: string, currentName: string) => {
+      setShowPlayersModal(false);
+      requestRenameGuest(userId, currentName);
+    },
+    [requestRenameGuest]
+  );
 
   const handleCourtLabelChange = useCallback(
     (courtId: string, value: string) => {
@@ -899,6 +915,7 @@ export default function SessionPage() {
         currentUserId={currentUserId}
         canEditPreferences={!sessionView.isCompletedSession}
         togglingPausePlayerId={togglingPausePlayerId}
+        onRequestRenameGuest={openGuestRename}
         onClose={() => setShowPlayersModal(false)}
         onTogglePause={togglePausePlayer}
         onOpenPreferenceEditor={togglePreferenceEditor}
@@ -1010,10 +1027,21 @@ export default function SessionPage() {
         isAdmin={isAdmin}
         isCompletedSession={sessionView.isCompletedSession}
         isMixicano={sessionView.isMixicano}
+        renamingGuestId={renamingGuestId}
         removingPlayerId={removingPlayerId}
         onClose={() => setOpenPreferenceEditor(null)}
         onUpdatePreference={updatePlayerPreference}
+        onRequestRenameGuest={openGuestRename}
         onRemovePlayer={requestRemovePlayerFromSession}
+      />
+
+      <SessionGuestRenameModal
+        open={guestRenameDraft !== null}
+        guestName={guestRenameInput}
+        saving={renamingGuestId !== null}
+        onGuestNameChange={setGuestRenameInput}
+        onClose={closeGuestRenameModal}
+        onSubmit={() => void renameGuestInSession()}
       />
 
       <SessionRosterModal
