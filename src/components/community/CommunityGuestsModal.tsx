@@ -50,7 +50,7 @@ export function CommunityGuestsModal({
 
           <div
             className={`grid gap-2 ${
-              sessionMode === SessionMode.MIXICANO
+              sessionMode === SessionMode.MIXICANO || guestGenderInput === PlayerGender.FEMALE
                 ? "grid-cols-1 sm:grid-cols-2"
                 : "grid-cols-1 sm:grid-cols-[minmax(0,1fr)_minmax(0,11rem)_auto]"
             }`}
@@ -78,29 +78,19 @@ export function CommunityGuestsModal({
               <option value={PlayerGender.MALE}>Male</option>
               <option value={PlayerGender.FEMALE}>Female</option>
             </select>
-            {sessionMode === SessionMode.MIXICANO ? (
-              <>
-                <select
-                  value={guestPreferenceInput}
-                  onChange={(event) =>
-                    onGuestPreferenceChange(
-                      event.target.value as PartnerPreference
-                    )
-                  }
-                  className="field px-3 py-2.5 text-sm"
-                >
-                  {guestGenderInput === PlayerGender.FEMALE ? (
-                    <>
-                      <option value={PartnerPreference.FEMALE_FLEX}>
-                        Default
-                      </option>
-                      <option value={PartnerPreference.OPEN}>Open Tag</option>
-                    </>
-                  ) : (
-                    <option value={PartnerPreference.OPEN}>Open</option>
-                  )}
-                </select>
-              </>
+            {guestGenderInput === PlayerGender.FEMALE ? (
+              <select
+                value={guestPreferenceInput}
+                onChange={(event) =>
+                  onGuestPreferenceChange(
+                    event.target.value as PartnerPreference
+                  )
+                }
+                className="field px-3 py-2.5 text-sm"
+              >
+                <option value={PartnerPreference.FEMALE_FLEX}>Default</option>
+                <option value={PartnerPreference.OPEN}>Open Tag</option>
+              </select>
             ) : null}
             <button
               type="button"
@@ -145,8 +135,7 @@ export function CommunityGuestsModal({
                   <span className="rounded-full border border-gray-200 bg-white px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-gray-600">
                     {guest.gender === PlayerGender.FEMALE ? "Female" : "Male"}
                   </span>
-                  {sessionMode === SessionMode.MIXICANO &&
-                  guest.gender === PlayerGender.FEMALE ? (
+                  {guest.gender === PlayerGender.FEMALE ? (
                     <span className="rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-blue-700">
                       {guest.partnerPreference === PartnerPreference.OPEN
                         ? "Open Tag"
