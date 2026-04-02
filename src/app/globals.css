@@ -380,24 +380,24 @@ h4 {
   inset: 0;
   z-index: 50;
   display: flex;
-  align-items: flex-end;
+  align-items: stretch;
   justify-content: center;
   padding: 0;
   background: rgba(7, 20, 35, 0.46);
   backdrop-filter: blur(10px);
+  overscroll-behavior: contain;
 }
 
 .app-modal-frame {
   display: flex;
-  max-height: 92vh;
-  max-height: min(92vh, 92dvh);
+  height: 100dvh;
+  max-height: 100dvh;
   width: 100%;
-  max-width: 36rem;
   flex-direction: column;
   overflow: hidden;
   border: 1px solid var(--line);
   background: var(--surface-strong);
-  border-radius: 28px 28px 0 0;
+  border-radius: 0;
   box-shadow: 0 24px 72px rgba(7, 20, 35, 0.24);
 }
 
@@ -445,6 +445,9 @@ h4 {
   }
 
   .app-modal-frame {
+    height: auto;
+    max-height: min(92vh, 92dvh);
+    max-width: 36rem;
     border-radius: 28px;
   }
 

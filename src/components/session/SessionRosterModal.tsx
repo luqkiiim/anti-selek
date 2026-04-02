@@ -75,14 +75,51 @@ export function SessionRosterModal({
       }
     >
       <div className="flex h-full min-h-0 flex-col px-4 py-4 sm:px-5">
-        <div className="shrink-0 space-y-4">
+        <div className="shrink-0">
           <SearchField
             value={rosterSearch}
             onChange={onRosterSearchChange}
             placeholder="Search players..."
           />
+        </div>
 
-          {isAdmin ? (
+        <div className="mt-4 min-h-0 flex-1 overflow-y-auto pr-1 pb-2">
+          {playersNotInSession.length === 0 ? (
+            <div className="app-empty px-4 py-10 text-center">
+              <p className="text-sm font-semibold text-gray-900">
+                Everyone is already playing.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {playersNotInSession.map((player) => (
+                <div
+                  key={player.id}
+                  className="flex items-center justify-between gap-3 rounded-2xl border border-gray-200 bg-gray-50/70 px-3 py-3 transition"
+                >
+                  <div className="min-w-0 space-y-1">
+                    <p className="truncate text-sm font-semibold text-gray-900">
+                      {player.name}
+                    </p>
+                    <p className="text-xs text-gray-500">Rating {player.elo}</p>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => onAddPlayer(player.id)}
+                    disabled={addingPlayerId === player.id}
+                    className="app-button-primary px-4 py-2.5 disabled:opacity-50"
+                  >
+                    {addingPlayerId === player.id ? "Adding..." : "Add"}
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {isAdmin ? (
+          <div className="mt-4 shrink-0">
             <div className="app-subcard space-y-3 p-3 sm:p-4">
               <div className="flex items-center gap-2">
                 <span className="app-chip app-chip-accent">Guest</span>
@@ -160,43 +197,8 @@ export function SessionRosterModal({
                 </button>
               </div>
             </div>
-          ) : null}
-        </div>
-
-        <div className="mt-4 min-h-0 flex-1 overflow-y-auto pr-1 pb-2">
-          {playersNotInSession.length === 0 ? (
-            <div className="app-empty px-4 py-10 text-center">
-              <p className="text-sm font-semibold text-gray-900">
-                Everyone is already playing.
-              </p>
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {playersNotInSession.map((player) => (
-                <div
-                  key={player.id}
-                  className="flex items-center justify-between gap-3 rounded-2xl border border-gray-200 bg-gray-50/70 px-3 py-3 transition"
-                >
-                  <div className="min-w-0 space-y-1">
-                    <p className="truncate text-sm font-semibold text-gray-900">
-                      {player.name}
-                    </p>
-                    <p className="text-xs text-gray-500">Rating {player.elo}</p>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={() => onAddPlayer(player.id)}
-                    disabled={addingPlayerId === player.id}
-                    className="app-button-primary px-4 py-2.5 disabled:opacity-50"
-                  >
-                    {addingPlayerId === player.id ? "Adding..." : "Add"}
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+          </div>
+        ) : null}
       </div>
     </ModalFrame>
   );

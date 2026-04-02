@@ -1,6 +1,8 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 
+export { ModalFrame } from "./ModalFrame";
+
 function cx(...values: Array<string | false | null | undefined>) {
   return values.filter(Boolean).join(" ");
 }
@@ -174,59 +176,5 @@ export function HeroCard({
         {showActionsSide ? <div className="flex flex-wrap gap-3">{actions}</div> : null}
       </div>
     </section>
-  );
-}
-
-export function ModalFrame({
-  title,
-  subtitle,
-  onClose,
-  children,
-  footer,
-  bodyScroll = true,
-  bodyClassName,
-}: {
-  title: string;
-  subtitle?: ReactNode;
-  onClose: () => void;
-  children: ReactNode;
-  footer?: ReactNode;
-  bodyScroll?: boolean;
-  bodyClassName?: string;
-}) {
-  return (
-    <div className="app-modal-backdrop">
-      <div className="app-modal-frame">
-        <div className="border-b border-gray-100 px-4 py-4 sm:px-5">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <h2 className="text-lg font-semibold text-gray-900">{title}</h2>
-              {subtitle ? <p className="mt-1 text-sm text-gray-500">{subtitle}</p> : null}
-            </div>
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex h-8 w-8 items-center justify-center rounded-full bg-gray-100 text-lg font-semibold text-gray-500 transition hover:text-gray-700"
-              aria-label="Close"
-            >
-              &times;
-            </button>
-          </div>
-        </div>
-        <div
-          className={cx(
-            bodyScroll ? "flex-1 overflow-y-auto" : "flex-1 min-h-0",
-            bodyClassName
-          )}
-        >
-          {children}
-        </div>
-        {footer ? (
-          <div className="border-t border-gray-100 px-4 pt-4 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:px-5 sm:pb-4">
-            {footer}
-          </div>
-        ) : null}
-      </div>
-    </div>
   );
 }
