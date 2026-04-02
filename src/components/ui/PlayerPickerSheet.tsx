@@ -83,6 +83,7 @@ interface PlayerPickerSheetProps {
   bottomContent?: ReactNode;
   footer?: ReactNode;
   panelClassName?: string;
+  overlayClassName?: string;
 }
 
 export function PlayerPickerSheet({
@@ -95,6 +96,7 @@ export function PlayerPickerSheet({
   bottomContent,
   footer,
   panelClassName,
+  overlayClassName,
 }: PlayerPickerSheetProps) {
   useEffect(() => {
     if (!open) {
@@ -122,7 +124,12 @@ export function PlayerPickerSheet({
   }
 
   return createPortal(
-    <div className="fixed inset-0 z-[80] bg-[rgba(7,20,35,0.52)] backdrop-blur-md">
+    <div
+      className={cx(
+        "fixed inset-0 z-[80] bg-[rgba(7,20,35,0.52)] backdrop-blur-md",
+        overlayClassName
+      )}
+    >
       <div className="flex h-full w-full items-stretch justify-center lg:p-4">
         <section
           role="dialog"

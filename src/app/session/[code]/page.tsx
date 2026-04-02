@@ -385,7 +385,6 @@ export default function SessionPage() {
 
   const openGuestRename = useCallback(
     (userId: string, currentName: string) => {
-      setShowPlayersModal(false);
       requestRenameGuest(userId, currentName);
     },
     [requestRenameGuest]

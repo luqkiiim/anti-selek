@@ -1,6 +1,6 @@
 "use client";
 
-import { ModalFrame } from "@/components/ui/chrome";
+import { PlayerPickerSheet } from "@/components/ui/PlayerPickerSheet";
 
 interface SessionGuestRenameModalProps {
   open: boolean;
@@ -22,10 +22,13 @@ export function SessionGuestRenameModal({
   if (!open) return null;
 
   return (
-    <ModalFrame
+    <PlayerPickerSheet
+      open={open}
       title="Rename guest"
       subtitle="Update the guest name for this live session."
       onClose={onClose}
+      overlayClassName="z-[90]"
+      panelClassName="lg:max-w-[28rem]"
       footer={
         <div className="flex flex-wrap justify-end gap-3">
           <button
@@ -47,19 +50,17 @@ export function SessionGuestRenameModal({
         </div>
       }
     >
-      <div className="space-y-4 px-4 py-4 sm:px-5">
-        <label className="block space-y-2 text-sm font-medium text-gray-900">
-          <span>Guest name</span>
-          <input
-            type="text"
-            value={guestName}
-            onChange={(event) => onGuestNameChange(event.target.value)}
-            className="field"
-            placeholder="Guest name"
-            autoFocus
-          />
-        </label>
-      </div>
-    </ModalFrame>
+      <label className="block space-y-2 text-sm font-medium text-gray-900">
+        <span>Guest name</span>
+        <input
+          type="text"
+          value={guestName}
+          onChange={(event) => onGuestNameChange(event.target.value)}
+          className="field"
+          placeholder="Guest name"
+          autoFocus
+        />
+      </label>
+    </PlayerPickerSheet>
   );
 }
