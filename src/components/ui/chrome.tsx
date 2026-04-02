@@ -183,12 +183,16 @@ export function ModalFrame({
   onClose,
   children,
   footer,
+  bodyScroll = true,
+  bodyClassName,
 }: {
   title: string;
   subtitle?: ReactNode;
   onClose: () => void;
   children: ReactNode;
   footer?: ReactNode;
+  bodyScroll?: boolean;
+  bodyClassName?: string;
 }) {
   return (
     <div className="app-modal-backdrop">
@@ -209,8 +213,19 @@ export function ModalFrame({
             </button>
           </div>
         </div>
-        <div className="flex-1 overflow-y-auto">{children}</div>
-        {footer ? <div className="border-t border-gray-100 px-4 py-4 sm:px-5">{footer}</div> : null}
+        <div
+          className={cx(
+            bodyScroll ? "flex-1 overflow-y-auto" : "flex-1 min-h-0",
+            bodyClassName
+          )}
+        >
+          {children}
+        </div>
+        {footer ? (
+          <div className="border-t border-gray-100 px-4 pt-4 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:px-5 sm:pb-4">
+            {footer}
+          </div>
+        ) : null}
       </div>
     </div>
   );

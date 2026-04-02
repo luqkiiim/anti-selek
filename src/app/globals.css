@@ -390,6 +390,7 @@ h4 {
 .app-modal-frame {
   display: flex;
   max-height: 92vh;
+  max-height: min(92vh, 92dvh);
   width: 100%;
   max-width: 36rem;
   flex-direction: column;

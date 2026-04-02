@@ -1,5 +1,7 @@
 "use client";
 
+import { ModalFrame } from "@/components/ui/chrome";
+import { SearchField } from "@/components/ui/SearchField";
 import type { CommunityPageMember } from "./communityTypes";
 
 interface CommunityPlayersModalProps {
@@ -28,93 +30,87 @@ export function CommunityPlayersModal({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 bg-gray-900/70 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4 z-50">
-      <div className="bg-white rounded-t-3xl sm:rounded-2xl shadow-2xl max-w-lg w-full max-h-[90vh] flex flex-col animate-in slide-in-from-bottom duration-300">
-        <div className="px-4 py-3 border-b flex justify-between items-center">
-          <div>
-            <h2 className="text-base font-black text-gray-900">Add Players</h2>
-            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-0.5">
-              {selectedPlayerIds.length} selected
-            </p>
-          </div>
-          <button
-            onClick={onClose}
-            className="bg-gray-100 text-gray-400 hover:text-gray-600 w-7 h-7 rounded-full flex items-center justify-center text-lg font-bold"
-          >
-            &times;
-          </button>
-        </div>
-
-        <div className="px-3 py-2 border-b bg-gray-50/50 space-y-2">
-          <div className="flex items-center gap-2">
-            <input
-              type="text"
-              placeholder="Search players..."
-              value={playerSearch}
-              onChange={(event) => onPlayerSearchChange(event.target.value)}
-              className="w-full h-9 bg-white border border-gray-200 rounded-lg px-3 text-xs font-bold focus:outline-none focus:border-blue-500 transition-all"
-            />
-            <button
-              type="button"
-              onClick={onToggleAllPlayers}
-              className="h-9 bg-gray-900 text-white px-3 rounded-lg text-[10px] font-black uppercase tracking-widest whitespace-nowrap"
-            >
-              {selectedPlayerIds.length === selectablePlayers.length
-                ? "Deselect All"
-                : "Select All"}
-            </button>
-          </div>
-        </div>
-
-        <div className="flex-1 overflow-y-auto p-2.5 space-y-1.5">
-          {filteredSelectablePlayers.length === 0 ? (
-            <div className="text-center py-10 text-gray-400 italic text-sm">
-              No players found.
-            </div>
-          ) : (
-            filteredSelectablePlayers.map((player) => {
-              const isSelected = selectedPlayerIds.includes(player.id);
-              return (
-                <button
-                  key={player.id}
-                  type="button"
-                  onClick={() => onTogglePlayerSelection(player.id)}
-                  className={`w-full flex justify-between items-center px-3 py-2 rounded-xl border text-left transition-colors ${
-                    isSelected
-                      ? "bg-blue-50 border-blue-200"
-                      : "bg-gray-50 border-gray-100 hover:bg-gray-100"
-                  }`}
-                >
-                  <div className="flex items-center gap-2 min-w-0">
-                    <p className="font-black text-sm text-gray-900 truncate">
-                      {player.name}
-                    </p>
-                    <span className="text-[9px] text-gray-500 font-bold uppercase tracking-wider whitespace-nowrap">
-                      Rating {player.elo}
-                    </span>
-                  </div>
-                  <span
-                    className={`text-[10px] font-black uppercase tracking-widest ${
-                      isSelected ? "text-blue-600" : "text-gray-400"
-                    }`}
-                  >
-                    {isSelected ? "Selected" : "Add"}
-                  </span>
-                </button>
-              );
-            })
-          )}
-        </div>
-
-        <div className="border-t bg-white px-3 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] sm:rounded-b-2xl flex justify-end">
-          <button
-            onClick={onClose}
-            className="bg-gray-900 text-white px-4 py-2 rounded-lg font-black uppercase tracking-widest text-[10px] shadow-sm active:scale-95 transition-all"
-          >
+    <ModalFrame
+      title="Add Players"
+      subtitle={`${selectedPlayerIds.length} selected`}
+      onClose={onClose}
+      bodyScroll={false}
+      footer={
+        <div className="flex justify-end">
+          <button type="button" onClick={onClose} className="app-button-primary">
             Done
           </button>
         </div>
+      }
+    >
+      <div className="flex h-full min-h-0 flex-col px-4 py-4 sm:px-5">
+        <div className="flex shrink-0 flex-col gap-3 sm:flex-row sm:items-center">
+          <SearchField
+            value={playerSearch}
+            onChange={onPlayerSearchChange}
+            placeholder="Search players..."
+            className="flex-1"
+          />
+          <button
+            type="button"
+            onClick={onToggleAllPlayers}
+            className="app-button-secondary px-4 py-2.5"
+          >
+            {selectedPlayerIds.length === selectablePlayers.length
+              ? "Deselect All"
+              : "Select All"}
+          </button>
+        </div>
+
+        <div className="mt-4 min-h-0 flex-1 overflow-y-auto pr-1 pb-2">
+          {filteredSelectablePlayers.length === 0 ? (
+            <div className="app-empty px-4 py-10 text-center">
+              <p className="text-sm font-semibold text-gray-900">
+                No players found.
+              </p>
+              <p className="mt-2 text-sm text-gray-500">
+                Try a different name or clear the search.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {filteredSelectablePlayers.map((player) => {
+                const isSelected = selectedPlayerIds.includes(player.id);
+
+                return (
+                  <button
+                    key={player.id}
+                    type="button"
+                    onClick={() => onTogglePlayerSelection(player.id)}
+                    className={`flex w-full items-center justify-between gap-3 rounded-2xl border px-3 py-3 text-left transition ${
+                      isSelected
+                        ? "border-blue-200 bg-blue-50"
+                        : "border-gray-200 bg-gray-50/70 hover:border-blue-200 hover:bg-white"
+                    }`}
+                  >
+                    <div className="min-w-0 space-y-1">
+                      <p className="truncate text-sm font-semibold text-gray-900">
+                        {player.name}
+                      </p>
+                      <p className="text-xs text-gray-500">Rating {player.elo}</p>
+                    </div>
+
+                    <span
+                      className={`inline-flex shrink-0 rounded-full border px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.18em] ${
+                        isSelected
+                          ? "border-blue-200 bg-blue-50 text-blue-700"
+                          : "border-gray-200 bg-white text-gray-500"
+                      }`}
+                    >
+                      {isSelected ? "Selected" : "Add"}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
       </div>
-    </div>
+    </ModalFrame>
   );
 }
