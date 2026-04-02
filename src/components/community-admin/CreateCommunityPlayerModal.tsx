@@ -2,14 +2,16 @@
 
 import type { FormEvent } from "react";
 import { ModalFrame } from "@/components/ui/chrome";
-import { PlayerGender } from "@/types/enums";
+import { PartnerPreference, PlayerGender } from "@/types/enums";
 
 interface CreateCommunityPlayerModalProps {
   open: boolean;
   name: string;
   newPlayerGender: PlayerGender;
+  newPlayerPreference: PartnerPreference;
   onNameChange: (value: string) => void;
   onNewPlayerGenderChange: (value: PlayerGender) => void;
+  onNewPlayerPreferenceChange: (value: PartnerPreference) => void;
   onClose: () => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 }
@@ -18,8 +20,10 @@ export function CreateCommunityPlayerModal({
   open,
   name,
   newPlayerGender,
+  newPlayerPreference,
   onNameChange,
   onNewPlayerGenderChange,
+  onNewPlayerPreferenceChange,
   onClose,
   onSubmit,
 }: CreateCommunityPlayerModalProps) {
@@ -79,6 +83,24 @@ export function CreateCommunityPlayerModal({
             <option value={PlayerGender.FEMALE}>Female</option>
           </select>
         </label>
+
+        {newPlayerGender === PlayerGender.FEMALE ? (
+          <label className="block space-y-2 text-sm font-medium text-gray-900">
+            <span>Open tag</span>
+            <select
+              value={newPlayerPreference}
+              onChange={(event) =>
+                onNewPlayerPreferenceChange(
+                  event.target.value as PartnerPreference
+                )
+              }
+              className="field"
+            >
+              <option value={PartnerPreference.FEMALE_FLEX}>Default</option>
+              <option value={PartnerPreference.OPEN}>Open</option>
+            </select>
+          </label>
+        ) : null}
       </form>
     </ModalFrame>
   );

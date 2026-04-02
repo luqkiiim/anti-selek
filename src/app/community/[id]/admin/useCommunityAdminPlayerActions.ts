@@ -30,6 +30,8 @@ export function useCommunityAdminPlayerActions({
   const [newPlayerGender, setNewPlayerGender] = useState<PlayerGender>(
     PlayerGender.MALE
   );
+  const [newPlayerPreference, setNewPlayerPreference] =
+    useState<PartnerPreference>(PartnerPreference.OPEN);
 
   const [editingPlayerId, setEditingPlayerId] = useState<string | null>(null);
   const [editorName, setEditorName] = useState("");
@@ -61,6 +63,7 @@ export function useCommunityAdminPlayerActions({
   const openCreatePlayerModal = () => {
     setName("");
     setNewPlayerGender(PlayerGender.MALE);
+    setNewPlayerPreference(PartnerPreference.OPEN);
     setIsCreatePlayerOpen(true);
   };
 
@@ -115,6 +118,10 @@ export function useCommunityAdminPlayerActions({
         body: JSON.stringify({
           name,
           gender: newPlayerGender,
+          partnerPreference:
+            newPlayerGender === PlayerGender.FEMALE
+              ? newPlayerPreference
+              : PartnerPreference.OPEN,
         }),
       });
 
@@ -126,6 +133,7 @@ export function useCommunityAdminPlayerActions({
       setSuccess(`Player profile for "${name}" added to community.`);
       setName("");
       setNewPlayerGender(PlayerGender.MALE);
+      setNewPlayerPreference(PartnerPreference.OPEN);
       setIsCreatePlayerOpen(false);
       await refreshCommunityData();
     } catch (err: unknown) {
@@ -377,6 +385,8 @@ export function useCommunityAdminPlayerActions({
     setName,
     newPlayerGender,
     setNewPlayerGender,
+    newPlayerPreference,
+    setNewPlayerPreference,
     editingPlayer,
     editorName,
     setEditorName,
