@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { getMixedSideOverrideOptionForGender } from "@/lib/mixedSide";
 import { MixedSide, PlayerGender } from "@/types/enums";
@@ -46,12 +47,35 @@ export function SessionPreferenceEditorPortal({
     return null;
   }
 
+  const panelRef = useRef<HTMLDivElement | null>(null);
   const mixedSideOption = getMixedSideOverrideOptionForGender(
     activePreferencePlayer.gender
   );
 
+  useEffect(() => {
+    const handlePointerDown = (event: PointerEvent) => {
+      if (
+        panelRef.current &&
+        event.target instanceof Node &&
+        !panelRef.current.contains(event.target)
+      ) {
+        onClose();
+      }
+    };
+
+    const attachListenerTimeout = window.setTimeout(() => {
+      document.addEventListener("pointerdown", handlePointerDown);
+    }, 0);
+
+    return () => {
+      window.clearTimeout(attachListenerTimeout);
+      document.removeEventListener("pointerdown", handlePointerDown);
+    };
+  }, [onClose]);
+
   return createPortal(
     <div
+      ref={panelRef}
       className="fixed z-[80] w-44 space-y-2 rounded-xl border border-gray-200 bg-white p-2.5 shadow-2xl"
       style={{
         left: openPreferenceEditor.left,
