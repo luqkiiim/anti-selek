@@ -58,6 +58,7 @@ export function CommunityPlayersModal({
       subtitle={`${selectedPlayerIds.length} selected`}
       onClose={onClose}
       bodyScroll={false}
+      fullscreenUntilDesktop
       footer={
         <div className="flex justify-end">
           <button type="button" onClick={onClose} className="app-button-primary">

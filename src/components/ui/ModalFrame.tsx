@@ -14,6 +14,7 @@ interface ModalFrameProps {
   footer?: ReactNode;
   bodyScroll?: boolean;
   bodyClassName?: string;
+  fullscreenUntilDesktop?: boolean;
 }
 
 export function ModalFrame({
@@ -24,6 +25,7 @@ export function ModalFrame({
   footer,
   bodyScroll = true,
   bodyClassName,
+  fullscreenUntilDesktop = false,
 }: ModalFrameProps) {
   useEffect(() => {
     const body = document.body;
@@ -60,8 +62,18 @@ export function ModalFrame({
   }, []);
 
   return (
-    <div className="app-modal-backdrop">
-      <div className="app-modal-frame">
+    <div
+      className={cx(
+        "app-modal-backdrop",
+        fullscreenUntilDesktop && "app-modal-backdrop-fullscreen-tablet"
+      )}
+    >
+      <div
+        className={cx(
+          "app-modal-frame",
+          fullscreenUntilDesktop && "app-modal-frame-fullscreen-tablet"
+        )}
+      >
         <div className="border-b border-gray-100 px-4 py-4 sm:px-5">
           <div className="flex items-start justify-between gap-4">
             <div>

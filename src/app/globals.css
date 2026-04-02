@@ -467,11 +467,37 @@ h4 {
     border-radius: 28px;
   }
 
+  .app-modal-backdrop-fullscreen-tablet {
+    align-items: stretch;
+    padding: 0;
+  }
+
+  .app-modal-frame-fullscreen-tablet {
+    height: 100dvh;
+    max-height: 100dvh;
+    max-width: none;
+    border-radius: 0;
+  }
+
   .app-toast {
     right: 1.5rem;
     bottom: 1.5rem;
     left: auto;
     width: min(28rem, calc(100vw - 3rem));
+  }
+}
+
+@media (min-width: 1024px) {
+  .app-modal-backdrop-fullscreen-tablet {
+    align-items: center;
+    padding: 1rem;
+  }
+
+  .app-modal-frame-fullscreen-tablet {
+    height: auto;
+    max-height: min(92vh, 92dvh);
+    max-width: 36rem;
+    border-radius: 28px;
   }
 }
 

@@ -82,6 +82,7 @@ export function SessionPlayersModal({
       subtitle="Search, pause, unpause, or edit player preferences."
       onClose={onClose}
       bodyScroll={false}
+      fullscreenUntilDesktop
       footer={
         <div className="flex justify-end">
           <button type="button" onClick={onClose} className="app-button-primary">
