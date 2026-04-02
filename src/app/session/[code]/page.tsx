@@ -795,7 +795,9 @@ export default function SessionPage() {
                 onStartSession={startSession}
                 onOpenPlayerManager={() => setShowPlayersModal(true)}
                 onOpenSettings={openSettingsModal}
-                onOpenMatchHistory={() => router.push(`/session/${code}/history`)}
+                onOpenMatchHistory={() =>
+                  router.push(`/session/${code}/history?from=session`)
+                }
               />
             </section>
 

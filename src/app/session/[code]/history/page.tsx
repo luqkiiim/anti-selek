@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 
 import { EmptyState, FlashMessage, HeroCard, SectionCard } from "@/components/ui/chrome";
 import { getCourtDisplayLabel } from "@/lib/courtLabels";
@@ -49,7 +49,9 @@ export default function SessionHistoryPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
   const params = useParams();
+  const searchParams = useSearchParams();
   const code = params?.code as string;
+  const openedFromSession = searchParams.get("from") === "session";
 
   const [data, setData] = useState<SessionHistoryData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -60,6 +62,15 @@ export default function SessionHistoryPage() {
       router.push("/signin");
     }
   }, [status, router]);
+
+  const handleBack = () => {
+    if (openedFromSession && typeof window !== "undefined" && window.history.length > 1) {
+      router.back();
+      return;
+    }
+
+    router.replace(`/session/${code}`);
+  };
 
   useEffect(() => {
     const fetchHistory = async () => {
@@ -103,7 +114,7 @@ export default function SessionHistoryPage() {
         <div className="app-shell-narrow">
           <FlashMessage tone="error">{error || "Match history not found"}</FlashMessage>
           <div className="mt-6">
-            <button type="button" onClick={() => router.back()} className="app-button-secondary">
+            <button type="button" onClick={handleBack} className="app-button-secondary">
               Go back
             </button>
           </div>
@@ -126,7 +137,7 @@ export default function SessionHistoryPage() {
           eyebrow="Match history"
           title={data.session.name}
           description={`${data.matches.length} recorded matches`}
-          backHref={`/session/${data.session.code}`}
+          onBack={handleBack}
           backLabel="Back"
           meta={
             <>
