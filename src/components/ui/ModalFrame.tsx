@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 
 type ScrollLockSnapshot = {
   bodyOverflow: string;
@@ -82,8 +82,108 @@ export function ModalFrame({
   bodyClassName,
   fullscreenUntilDesktop = false,
 }: ModalFrameProps) {
+  const frameRef = useRef<HTMLDivElement | null>(null);
+  const touchStartYRef = useRef<number | null>(null);
+
   useEffect(() => {
     return lockDocumentScroll();
+  }, []);
+
+  useEffect(() => {
+    function getAllowedScrollContainer(target: EventTarget | null) {
+      if (!(target instanceof Element) || !frameRef.current) {
+        return null;
+      }
+
+      const scrollContainer = target.closest(".app-modal-scroll-region");
+
+      if (!(scrollContainer instanceof HTMLElement)) {
+        return null;
+      }
+
+      if (!frameRef.current.contains(scrollContainer)) {
+        return null;
+      }
+
+      return scrollContainer;
+    }
+
+    function handleTouchStart(event: TouchEvent) {
+      if (event.touches.length !== 1) {
+        touchStartYRef.current = null;
+        return;
+      }
+
+      touchStartYRef.current = event.touches[0]?.clientY ?? null;
+    }
+
+    function handleTouchMove(event: TouchEvent) {
+      if (event.touches.length !== 1) {
+        return;
+      }
+
+      const frame = frameRef.current;
+      const target = event.target;
+
+      if (!frame || !(target instanceof Node) || !frame.contains(target)) {
+        event.preventDefault();
+        return;
+      }
+
+      const scrollContainer = getAllowedScrollContainer(target);
+
+      if (!scrollContainer) {
+        event.preventDefault();
+        return;
+      }
+
+      const currentTouchY = event.touches[0]?.clientY ?? 0;
+      const previousTouchY = touchStartYRef.current ?? currentTouchY;
+      const deltaY = currentTouchY - previousTouchY;
+      touchStartYRef.current = currentTouchY;
+
+      if (scrollContainer.scrollHeight <= scrollContainer.clientHeight + 1) {
+        event.preventDefault();
+        return;
+      }
+
+      const atTop = scrollContainer.scrollTop <= 0;
+      const atBottom =
+        scrollContainer.scrollTop + scrollContainer.clientHeight >=
+        scrollContainer.scrollHeight - 1;
+
+      if ((atTop && deltaY > 0) || (atBottom && deltaY < 0)) {
+        event.preventDefault();
+      }
+    }
+
+    function resetTouchTracking() {
+      touchStartYRef.current = null;
+    }
+
+    document.addEventListener("touchstart", handleTouchStart, {
+      passive: true,
+      capture: true,
+    });
+    document.addEventListener("touchmove", handleTouchMove, {
+      passive: false,
+      capture: true,
+    });
+    document.addEventListener("touchend", resetTouchTracking, {
+      passive: true,
+      capture: true,
+    });
+    document.addEventListener("touchcancel", resetTouchTracking, {
+      passive: true,
+      capture: true,
+    });
+
+    return () => {
+      document.removeEventListener("touchstart", handleTouchStart, true);
+      document.removeEventListener("touchmove", handleTouchMove, true);
+      document.removeEventListener("touchend", resetTouchTracking, true);
+      document.removeEventListener("touchcancel", resetTouchTracking, true);
+    };
   }, []);
 
   return (
@@ -94,6 +194,7 @@ export function ModalFrame({
       )}
     >
       <div
+        ref={frameRef}
         className={cx(
           "app-modal-frame",
           fullscreenUntilDesktop && "app-modal-frame-fullscreen-tablet"
