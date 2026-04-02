@@ -1,5 +1,6 @@
 "use client";
 
+import { useRef } from "react";
 import { ModalFrame } from "@/components/ui/chrome";
 import { SearchField } from "@/components/ui/SearchField";
 import type { CommunityPageMember } from "./communityTypes";
@@ -27,7 +28,19 @@ export function CommunityPlayersModal({
   onTogglePlayerSelection,
   onClose,
 }: CommunityPlayersModalProps) {
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
+
   if (!open) return null;
+
+  function refocusSearchIfAlreadyActive() {
+    if (document.activeElement !== searchInputRef.current) {
+      return;
+    }
+
+    requestAnimationFrame(() => {
+      searchInputRef.current?.focus();
+    });
+  }
 
   return (
     <ModalFrame
@@ -50,10 +63,16 @@ export function CommunityPlayersModal({
             onChange={onPlayerSearchChange}
             placeholder="Search players..."
             className="flex-1"
+            inputRef={searchInputRef}
           />
           <button
             type="button"
-            onClick={onToggleAllPlayers}
+            onPointerDown={(event) => event.preventDefault()}
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={() => {
+              onToggleAllPlayers();
+              refocusSearchIfAlreadyActive();
+            }}
             className="app-button-secondary px-4 py-2.5"
           >
             {selectedPlayerIds.length === selectablePlayers.length
@@ -81,7 +100,12 @@ export function CommunityPlayersModal({
                   <button
                     key={player.id}
                     type="button"
-                    onClick={() => onTogglePlayerSelection(player.id)}
+                    onPointerDown={(event) => event.preventDefault()}
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={() => {
+                      onTogglePlayerSelection(player.id);
+                      refocusSearchIfAlreadyActive();
+                    }}
                     className={`flex w-full items-center justify-between gap-3 rounded-2xl border px-3 py-3 text-left transition ${
                       isSelected
                         ? "border-blue-200 bg-blue-50"
