@@ -11,6 +11,7 @@ import {
   applyPlayerPaused,
   applyPlayerPreferenceUpdate,
   applyPlayerRemoval,
+  applyQueuedMatch,
   mergeSessionSnapshot,
 } from "./sessionDataMutations";
 import {
@@ -100,6 +101,9 @@ export function useSessionPlayerManagement({
   const [guestInitialElo, setGuestInitialElo] = useState<number>(1000);
   const [addingGuest, setAddingGuest] = useState(false);
   const [savingPreferencesFor, setSavingPreferencesFor] = useState<string | null>(null);
+  const [togglingPausePlayerId, setTogglingPausePlayerId] = useState<string | null>(
+    null
+  );
   const [removingPlayerId, setRemovingPlayerId] = useState<string | null>(null);
   const [removePlayerDraft, setRemovePlayerDraft] = useState<{
     userId: string;
@@ -218,30 +222,46 @@ export function useSessionPlayerManagement({
     userId: string,
     currentPaused: boolean
   ) => {
+    if (togglingPausePlayerId) return;
+
+    setTogglingPausePlayerId(userId);
+    setError("");
     try {
       const res = await fetch(`/api/sessions/${code}/pause-player`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ userId, isPaused: !currentPaused }),
       });
+      const data = await safeJson(res);
       if (res.ok) {
-        const data = await safeJson(res);
-        patchSessionData((current) =>
-          applyPlayerPaused(
+        patchSessionData((current) => {
+          let updated = applyPlayerPaused(
             current,
             userId,
             !currentPaused,
             typeof data.ladderEntryAt === "string" ? data.ladderEntryAt : undefined
-          )
-        );
+          );
+
+          if (data.queuedMatchAffected) {
+            updated = applyQueuedMatch(updated, data.queuedMatch ?? null);
+          }
+
+          return updated;
+        });
         scheduleSessionRefresh();
       } else {
-        const data = await safeJson(res);
         setError(data.error || "Failed to update player status");
       }
     } catch (err) {
       console.error(err);
+      setError("Failed to update player status");
+    } finally {
+      setTogglingPausePlayerId(null);
     }
+  };
+
+  const pauseQueuedPlayer = async (userId: string) => {
+    await togglePausePlayer(userId, false);
   };
 
   const removePlayerFromSession = async () => {
@@ -386,6 +406,7 @@ export function useSessionPlayerManagement({
     guestInitialElo,
     addingGuest,
     savingPreferencesFor,
+    togglingPausePlayerId,
     removingPlayerId,
     removePlayerDraft,
     openPreferenceEditor,
@@ -401,6 +422,7 @@ export function useSessionPlayerManagement({
     addPlayerToSession,
     addGuestToSession,
     togglePausePlayer,
+    pauseQueuedPlayer,
     requestRemovePlayerFromSession,
     closeRemovePlayerConfirm,
     removePlayerFromSession,

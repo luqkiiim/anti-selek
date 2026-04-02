@@ -13,6 +13,7 @@ import {
   applyCourtLabelUpdates,
   applyPlayerPaused,
   applyPlayerRemoval,
+  applyUndoneCourtMatch,
   applyScoreApproval,
   applyScoreReopen,
   applyScoreSubmission,
@@ -337,6 +338,49 @@ describe("sessionDataMutations", () => {
 
     const updated = applyPlayerPaused(withQueue, "p1", true);
 
+    expect(updated.queuedMatch).toBeNull();
+  });
+
+  it("can promote a queued match into a freed court after undo", () => {
+    const withLiveCourt = applyGeneratedMatches(createSessionData(), [
+      {
+        id: "match-1",
+        courtId: "court-1",
+        status: "IN_PROGRESS",
+        team1User1: { id: "p1", name: "Player 1" },
+        team1User2: { id: "p2", name: "Player 2" },
+        team2User1: { id: "p3", name: "Player 3" },
+        team2User2: { id: "p4", name: "Player 4" },
+      },
+    ]);
+    const withQueue = applyQueuedMatch(withLiveCourt, {
+      id: "queue-1",
+      createdAt: "2026-03-30T10:05:00.000Z",
+      team1User1: { id: "p1", name: "Player 1" },
+      team1User2: { id: "p2", name: "Player 2" },
+      team2User1: { id: "p3", name: "Player 3" },
+      team2User2: { id: "p4", name: "Player 4" },
+    });
+
+    const updated = applyQueuedMatch(
+      applyGeneratedMatches(
+        applyUndoneCourtMatch(withQueue, "court-1"),
+        [
+          {
+            id: "match-2",
+            courtId: "court-1",
+            status: "IN_PROGRESS",
+            team1User1: { id: "p1", name: "Player 1" },
+            team1User2: { id: "p2", name: "Player 2" },
+            team2User1: { id: "p3", name: "Player 3" },
+            team2User2: { id: "p4", name: "Player 4" },
+          },
+        ]
+      ),
+      null
+    );
+
+    expect(updated.courts[0].currentMatch?.id).toBe("match-2");
     expect(updated.queuedMatch).toBeNull();
   });
 

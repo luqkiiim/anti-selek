@@ -1,3 +1,4 @@
+import { autoAssignQueuedMatch } from "@/app/api/matches/_lib/autoAssignQueuedMatch";
 import { prisma } from "@/lib/prisma";
 import { MatchStatus, SessionStatus } from "@/types/enums";
 import {
@@ -125,7 +126,15 @@ export async function undoCurrentCourtMatch(targetCourt: GenerateMatchCourt) {
     }),
   ]);
 
-  return { ok: true, undoneMatchId: targetCourt.currentMatch.id };
+  const { autoAssignedMatch, queuedMatchCleared } =
+    await autoAssignQueuedMatch(targetCourt.sessionId);
+
+  return {
+    ok: true,
+    undoneMatchId: targetCourt.currentMatch.id,
+    autoAssignedMatch,
+    queuedMatchCleared,
+  };
 }
 
 export async function reshuffleCurrentCourtMatch(

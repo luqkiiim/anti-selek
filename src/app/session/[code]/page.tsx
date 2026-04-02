@@ -172,6 +172,7 @@ export default function SessionPage() {
     guestInitialElo,
     addingGuest,
     savingPreferencesFor,
+    togglingPausePlayerId,
     removingPlayerId,
     removePlayerDraft,
     openPreferenceEditor,
@@ -187,6 +188,7 @@ export default function SessionPage() {
     addPlayerToSession,
     addGuestToSession,
     togglePausePlayer,
+    pauseQueuedPlayer,
     requestRemovePlayerFromSession,
     closeRemovePlayerConfirm,
     removePlayerFromSession,
@@ -816,6 +818,7 @@ export default function SessionPage() {
                   canQueueNextMatch={sessionView.canQueueNextMatch}
                   creatingQueuedMatch={creatingQueuedMatch}
                   clearingQueuedMatch={clearingQueuedMatch}
+                  pausingQueuedPlayerId={togglingPausePlayerId}
                   reshufflingQueuedMatch={reshufflingQueuedMatch}
                   reshufflingCourtId={reshufflingCourtId}
                   undoingCourtId={undoingCourtId}
@@ -825,6 +828,7 @@ export default function SessionPage() {
                   onCreateMatchesForCourts={createMatchesForCourts}
                   onQueueNextMatch={queueNextMatch}
                   onClearQueuedMatch={clearQueuedMatch}
+                  onPauseQueuedPlayer={(userId) => void pauseQueuedPlayer(userId)}
                   onReshuffleQueuedMatch={reshuffleQueuedMatch}
                   onOpenManualMatchModal={openManualMatchModal}
                   onReshuffleMatch={reshuffleMatch}
@@ -892,6 +896,7 @@ export default function SessionPage() {
         players={sessionData.players}
         currentUserId={currentUserId}
         canEditPreferences={!sessionView.isCompletedSession}
+        togglingPausePlayerId={togglingPausePlayerId}
         onClose={() => setShowPlayersModal(false)}
         onTogglePause={togglePausePlayer}
         onOpenPreferenceEditor={togglePreferenceEditor}

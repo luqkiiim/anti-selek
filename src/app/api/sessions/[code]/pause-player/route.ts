@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { calculateNoCatchUpMatchmakingCredit } from "@/lib/matchmaking/matchmakingCredit";
 import { prisma } from "@/lib/prisma";
 import { hasQueuedMatchUser } from "@/lib/sessionQueue";
+import { tryRebuildQueuedMatchForCode } from "../queue-match/shared";
 
 export const dynamic = "force-dynamic";
 
@@ -99,7 +100,7 @@ export async function POST(
       });
     }
 
-    const updated = await prisma.$transaction(async (tx) => {
+    const { nextPlayer, queuedMatchAffected } = await prisma.$transaction(async (tx) => {
       const nextPlayer = await tx.sessionPlayer.update({
         where: {
           sessionId_userId: {
@@ -117,6 +118,7 @@ export async function POST(
         },
       });
 
+      let queuedMatchAffected = false;
       if (isPaused) {
         const queuedMatch = await tx.queuedMatch.findUnique({
           where: { sessionId: sessionData.id },
@@ -126,13 +128,22 @@ export async function POST(
           await tx.queuedMatch.delete({
             where: { sessionId: sessionData.id },
           });
+          queuedMatchAffected = true;
         }
       }
 
-      return nextPlayer;
+      return { nextPlayer, queuedMatchAffected };
     });
 
-    return NextResponse.json(updated);
+    const queuedMatch = queuedMatchAffected
+      ? await tryRebuildQueuedMatchForCode(code)
+      : null;
+
+    return NextResponse.json({
+      ...nextPlayer,
+      queuedMatchAffected,
+      queuedMatch,
+    });
   } catch (error) {
     console.error("Pause player error:", error);
     return NextResponse.json({ error: "Failed to update player status" }, { status: 500 });

@@ -2,7 +2,11 @@
 
 import { getCourtDisplayLabel } from "@/lib/courtLabels";
 import { useState } from "react";
-import { applyGeneratedMatches, applyUndoneCourtMatch } from "./sessionDataMutations";
+import {
+  applyGeneratedMatches,
+  applyQueuedMatch,
+  applyUndoneCourtMatch,
+} from "./sessionDataMutations";
 import { postGenerateMatchAction } from "./sessionCourtActionApi";
 import type {
   CourtActionDraft,
@@ -120,9 +124,18 @@ export function useSessionCourtConfirmActions({
       });
 
       if (res.ok) {
-        patchSessionData((current) =>
-          applyUndoneCourtMatch(current, courtActionDraft.courtId)
-        );
+        patchSessionData((current) => {
+          let updated = applyUndoneCourtMatch(current, courtActionDraft.courtId);
+
+          if (data.autoAssignedMatch) {
+            updated = applyGeneratedMatches(updated, [data.autoAssignedMatch]);
+            updated = applyQueuedMatch(updated, null);
+          } else if (data.queuedMatchCleared) {
+            updated = applyQueuedMatch(updated, null);
+          }
+
+          return updated;
+        });
         setCourtActionDraft(null);
         scheduleSessionRefresh();
       } else {

@@ -23,6 +23,7 @@ interface LiveCourtsPanelProps {
   canQueueNextMatch: boolean;
   creatingQueuedMatch: boolean;
   clearingQueuedMatch: boolean;
+  pausingQueuedPlayerId: string | null;
   reshufflingQueuedMatch: boolean;
   reshufflingCourtId: string | null;
   undoingCourtId: string | null;
@@ -32,6 +33,7 @@ interface LiveCourtsPanelProps {
   onCreateMatchesForCourts: (courtIds: string[]) => void;
   onQueueNextMatch: () => void;
   onClearQueuedMatch: () => void;
+  onPauseQueuedPlayer: (userId: string) => void;
   onReshuffleQueuedMatch: () => void;
   onOpenManualMatchModal: (courtId: string) => void;
   onReshuffleMatch: (courtId: string) => void;
@@ -65,6 +67,7 @@ export function LiveCourtsPanel({
   canQueueNextMatch,
   creatingQueuedMatch,
   clearingQueuedMatch,
+  pausingQueuedPlayerId,
   reshufflingQueuedMatch,
   reshufflingCourtId,
   undoingCourtId,
@@ -74,6 +77,7 @@ export function LiveCourtsPanel({
   onCreateMatchesForCourts,
   onQueueNextMatch,
   onClearQueuedMatch,
+  onPauseQueuedPlayer,
   onReshuffleQueuedMatch,
   onOpenManualMatchModal,
   onReshuffleMatch,
@@ -175,9 +179,12 @@ export function LiveCourtsPanel({
         {queuedMatch ? (
           <QueuedMatchCard
             queuedMatch={queuedMatch}
+            canPauseQueuedPlayers={isAdmin}
             clearingQueuedMatch={clearingQueuedMatch}
+            pausingQueuedPlayerId={pausingQueuedPlayerId}
             reshufflingQueuedMatch={reshufflingQueuedMatch}
             onClearQueuedMatch={onClearQueuedMatch}
+            onPauseQueuedPlayer={onPauseQueuedPlayer}
             onReshuffleQueuedMatch={onReshuffleQueuedMatch}
           />
         ) : null}
