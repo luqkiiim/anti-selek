@@ -27,11 +27,28 @@ export function SearchField({
 }: SearchFieldProps) {
   const fallbackInputRef = useRef<HTMLInputElement | null>(null);
   const resolvedInputRef = inputRef ?? fallbackInputRef;
+  const shouldRestoreFocusRef = useRef(false);
 
   function focusInput() {
+    resolvedInputRef.current?.focus();
     requestAnimationFrame(() => {
       resolvedInputRef.current?.focus();
     });
+  }
+
+  function captureFocusIntent() {
+    shouldRestoreFocusRef.current = document.activeElement === resolvedInputRef.current;
+  }
+
+  function restoreFocusIfNeeded() {
+    const shouldRestoreFocus = shouldRestoreFocusRef.current;
+    shouldRestoreFocusRef.current = false;
+
+    if (!shouldRestoreFocus) {
+      return;
+    }
+
+    focusInput();
   }
 
   return (
@@ -48,11 +65,11 @@ export function SearchField({
       {value ? (
         <button
           type="button"
-          onPointerDown={(event) => event.preventDefault()}
-          onMouseDown={(event) => event.preventDefault()}
+          onPointerDownCapture={captureFocusIntent}
+          onMouseDownCapture={captureFocusIntent}
           onClick={() => {
             onChange("");
-            focusInput();
+            restoreFocusIfNeeded();
           }}
           className="absolute right-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full bg-gray-100 text-base font-semibold text-gray-500 transition hover:text-gray-700"
           aria-label="Clear search"

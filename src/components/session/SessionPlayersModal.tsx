@@ -90,7 +90,7 @@ export function SessionPlayersModal({
         </div>
       }
     >
-      <div className="flex h-full min-h-0 flex-col px-4 py-4 sm:px-5">
+      <div className="flex min-h-0 flex-1 flex-col px-4 py-4 sm:px-5">
         <div className="shrink-0 space-y-4">
           <SearchField
             value={search}
@@ -122,7 +122,7 @@ export function SessionPlayersModal({
           </div>
         </div>
 
-        <div className="app-modal-scroll-region mt-4 pr-1 pb-2">
+        <div className="app-modal-scroll-region mt-4 min-h-0 flex-1 pr-1 pb-2">
           {filteredPlayers.length === 0 ? (
             <div className="rounded-3xl border border-dashed border-gray-200 bg-gray-50/70 px-4 py-10 text-center text-sm text-gray-500">
               No players match this view.
@@ -135,7 +135,7 @@ export function SessionPlayersModal({
                 return (
                   <div
                     key={player.userId}
-                    className="flex items-center justify-between gap-3 rounded-2xl border border-gray-200 bg-gray-50/70 px-3 py-3"
+                    className="app-touch-pan-y flex items-center justify-between gap-3 rounded-2xl border border-gray-200 bg-gray-50/70 px-3 py-3"
                   >
                     <div className="min-w-0 space-y-1">
                       <div className="flex min-w-0 flex-wrap items-center gap-1.5">

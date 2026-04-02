@@ -29,14 +29,24 @@ export function CommunityPlayersModal({
   onClose,
 }: CommunityPlayersModalProps) {
   const searchInputRef = useRef<HTMLInputElement | null>(null);
+  const shouldRestoreSearchFocusRef = useRef(false);
 
   if (!open) return null;
 
-  function refocusSearchIfAlreadyActive() {
-    if (document.activeElement !== searchInputRef.current) {
+  function captureSearchFocusIntent() {
+    shouldRestoreSearchFocusRef.current =
+      document.activeElement === searchInputRef.current;
+  }
+
+  function restoreSearchFocusIfNeeded() {
+    const shouldRestoreSearchFocus = shouldRestoreSearchFocusRef.current;
+    shouldRestoreSearchFocusRef.current = false;
+
+    if (!shouldRestoreSearchFocus) {
       return;
     }
 
+    searchInputRef.current?.focus();
     requestAnimationFrame(() => {
       searchInputRef.current?.focus();
     });
@@ -56,7 +66,7 @@ export function CommunityPlayersModal({
         </div>
       }
     >
-      <div className="flex h-full min-h-0 flex-col px-4 py-4 sm:px-5">
+      <div className="flex min-h-0 flex-1 flex-col px-4 py-4 sm:px-5">
         <div className="flex shrink-0 flex-col gap-3 sm:flex-row sm:items-center">
           <SearchField
             value={playerSearch}
@@ -67,11 +77,11 @@ export function CommunityPlayersModal({
           />
           <button
             type="button"
-            onPointerDown={(event) => event.preventDefault()}
-            onMouseDown={(event) => event.preventDefault()}
+            onPointerDownCapture={captureSearchFocusIntent}
+            onMouseDownCapture={captureSearchFocusIntent}
             onClick={() => {
               onToggleAllPlayers();
-              refocusSearchIfAlreadyActive();
+              restoreSearchFocusIfNeeded();
             }}
             className="app-button-secondary px-4 py-2.5"
           >
@@ -81,7 +91,7 @@ export function CommunityPlayersModal({
           </button>
         </div>
 
-        <div className="app-modal-scroll-region mt-4 pr-1 pb-2">
+        <div className="app-modal-scroll-region mt-4 min-h-0 flex-1 pr-1 pb-2">
           {filteredSelectablePlayers.length === 0 ? (
             <div className="app-empty px-4 py-10 text-center">
               <p className="text-sm font-semibold text-gray-900">
@@ -100,11 +110,11 @@ export function CommunityPlayersModal({
                   <button
                     key={player.id}
                     type="button"
-                    onPointerDown={(event) => event.preventDefault()}
-                    onMouseDown={(event) => event.preventDefault()}
+                    onPointerDownCapture={captureSearchFocusIntent}
+                    onMouseDownCapture={captureSearchFocusIntent}
                     onClick={() => {
                       onTogglePlayerSelection(player.id);
-                      refocusSearchIfAlreadyActive();
+                      restoreSearchFocusIfNeeded();
                     }}
                     className={`app-touch-pan-y flex w-full items-center justify-between gap-3 rounded-2xl border px-3 py-3 text-left transition ${
                       isSelected

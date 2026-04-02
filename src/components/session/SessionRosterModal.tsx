@@ -74,7 +74,7 @@ export function SessionRosterModal({
         </div>
       }
     >
-      <div className="flex h-full min-h-0 flex-col px-4 py-4 sm:px-5">
+      <div className="flex min-h-0 flex-1 flex-col px-4 py-4 sm:px-5">
         <div className="shrink-0">
           <SearchField
             value={rosterSearch}
@@ -83,7 +83,7 @@ export function SessionRosterModal({
           />
         </div>
 
-        <div className="app-modal-scroll-region mt-4 pr-1 pb-2">
+        <div className="app-modal-scroll-region mt-4 min-h-0 flex-1 pr-1 pb-2">
           {playersNotInSession.length === 0 ? (
             <div className="app-empty px-4 py-10 text-center">
               <p className="text-sm font-semibold text-gray-900">
