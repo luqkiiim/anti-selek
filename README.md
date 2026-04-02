@@ -8,17 +8,19 @@ Community-based badminton tournament web app for running live sessions, managing
 - Dashboard for creating, joining, and opening badminton communities
 - Community leaderboard, player profiles, and claim-request flow for placeholder profiles
 - Host tournaments with configurable court count, selected members, and guests
-- Two session formats:
+- Four session formats:
   - `Points`: matchmaking uses current session performance
   - `Ratings`: matchmaking uses persistent player rating
+  - `Ladder`: standings use current-session win/loss performance
+  - `Race`: standings use current-session wins converted to race points
 - Two session modes:
   - `Open`
   - `Mixed`
-- Live court management with score submission and approval
+- Live court management with score submission, approval when required, and queued "next up" matches
 - Pause/resume players during active sessions
 - Late join support for admins during active sessions
 - Rollback for the latest completed tournament in a community
-- Matchmaking fairness controls for rotation load, wait time, and exact rematch avoidance
+- Matchmaking fairness controls for rotation load, wait time, grouping strength, and exact rematch avoidance where applicable
 
 ## Tech Stack
 
@@ -31,6 +33,7 @@ Community-based badminton tournament web app for running live sessions, managing
 - LibSQL/Turso adapter for runtime cloud mode
 - NextAuth v5 beta
 - Vitest
+- Playwright
 
 ## Environment
 
@@ -81,6 +84,7 @@ Open `http://localhost:3000`.
 - `npm run start` - production server
 - `npm run lint` - ESLint
 - `npm run test` - Vitest using thread pool mode
+- `npm run test:e2e` - Playwright end-to-end tests
 
 ## Verification Commands
 
@@ -101,10 +105,12 @@ npx vitest run --pool=threads
 4. Community admins can:
    - add or remove member profiles
    - edit member names and ratings
+   - reset member passwords and ratings
    - approve or reject claim requests
    - create, start, and end tournaments
    - generate, reshuffle, or manually assign matches
    - add players or guests into active sessions
+   - queue the next match while all courts are occupied
    - rollback the latest completed tournament
    - reset or delete the community
 
@@ -116,7 +122,7 @@ npx vitest run --pool=threads
 
 ### Standings
 
-- Session standings use:
+- `Points` and `Ratings` standings use:
   - `+3` points for a win
   - `0` points for a loss
   - point difference as the next tie-breaker
@@ -130,10 +136,18 @@ npx vitest run --pool=threads
 - `Ratings` format:
   - matchmaking uses persistent player rating
   - standings still use session points and point difference
+- `Ladder` format:
+  - matchmaking groups players by current session win/loss performance
+  - standings use ladder score (`wins - losses`) and point difference
+  - late joiners only accumulate ladder results from matches completed after they enter
+- `Race` format:
+  - matchmaking groups players by current session race performance
+  - standings use race score (`wins * 3`) and point difference
+  - late joiners only accumulate race results from matches completed after they enter
 
 ### Rating updates
 
-- Ratings update after approved matches
+- Ratings update when results are finalized, including auto-approved results
 - Base rating is `1000`
 - K-factor is `32`
 - Team rating uses the average of both teammates
@@ -146,7 +160,14 @@ Note: user-facing copy says `rating` or `Ratings`, but some internal code and da
 
 ## Matchmaking Summary
 
-Player selection priority:
+Shared constraints:
+
+- Busy players are excluded
+- Paused players are excluded
+- Late joiners and resumed players re-enter at the current fair baseline without catch-up
+- Mixed sessions respect gender and partner-preference rules
+
+`Points` and `Ratings` matchmaking priority:
 
 1. Lower rotation load
 2. Longer waiting time
@@ -154,13 +175,19 @@ Player selection priority:
 4. Exact rematch avoidance
 5. Controlled randomness among near-equal options
 
-Additional constraints:
+- `Ladder` and `Race` matchmaking:
+  - group players by current competitive standing before selecting pairings
+  - still respect availability, pause state, and mixed-session constraints
+  - use point difference as a tie-breaker in standings
+  - do not rely on session standing points
 
-- Busy players are excluded
-- Paused players are excluded
-- Late joiners and resumed players re-enter at the current fair baseline without catch-up
-- Exact repeated partitions are heavily penalized using recent completed-match history
-- Mixed sessions respect gender and partner-preference rules
+- Additional `Points` and `Ratings` constraints:
+  - exact repeated partitions are heavily penalized using recent completed-match history
+
+## Live Session Notes
+
+- Submitted scores may complete immediately or move to opponent approval, depending on who submitted and whether the opposing side has claimed accounts
+- When all courts are occupied, admins can queue the next match; it can be assigned when a court frees up and may auto-assign after a result is finalized
 
 ## Data Model
 
@@ -171,6 +198,8 @@ Additional constraints:
 - `SessionPlayer`: per-session standings points and matchmaking state
 - `Court`: court slot and current match pointer
 - `Match`: teams, scores, approval state, and rating deltas
+- `QueuedMatch`: reserved next-up pairing while all courts are occupied
+- `ClaimRequest`: request to merge a claimed account with a placeholder community profile
 
 ## Deployment Notes
 
