@@ -287,6 +287,7 @@ export default function SessionPage() {
   const currentUserId = session?.user?.id || "";
   const canOpenPlayerManager = isAdmin && sessionData?.status !== SessionStatus.COMPLETED;
   const canOpenSettings = isAdmin && sessionData?.status !== SessionStatus.COMPLETED;
+  const isPlayerPickerOpen = showPlayersModal || showRosterModal;
 
   useEffect(() => {
     if (!canOpenSettings) {
@@ -631,6 +632,10 @@ export default function SessionPage() {
   }, [clearProgrammaticPagerSync]);
 
   const handleMobilePagerScroll = useCallback(() => {
+    if (isPlayerPickerOpen) {
+      return;
+    }
+
     const container = mobilePagerRef.current;
     if (!container) return;
 
@@ -670,11 +675,19 @@ export default function SessionPage() {
   }, [
     activeMobileSection,
     clearProgrammaticPagerSync,
+    isPlayerPickerOpen,
     mobileSections,
   ]);
 
   const handleMobilePagerTouchStart = useCallback(
     (event: React.TouchEvent<HTMLDivElement>) => {
+      if (isPlayerPickerOpen) {
+        pagerIsDraggingRef.current = false;
+        pagerTouchStartXRef.current = null;
+        pagerTouchStartIndexRef.current = null;
+        return;
+      }
+
       const container = mobilePagerRef.current;
       const touch = event.touches[0];
       if (!container || !touch) {
@@ -693,11 +706,16 @@ export default function SessionPage() {
         container.scrollLeft / Math.max(container.clientWidth, 1)
       );
     },
-    [clearProgrammaticPagerSync]
+    [clearProgrammaticPagerSync, isPlayerPickerOpen]
   );
 
   const handleMobilePagerTouchMove = useCallback(
     (event: React.TouchEvent<HTMLDivElement>) => {
+      if (isPlayerPickerOpen) {
+        event.preventDefault();
+        return;
+      }
+
       const container = mobilePagerRef.current;
       const touch = event.touches[0];
       const startX = pagerTouchStartXRef.current;
@@ -724,20 +742,34 @@ export default function SessionPage() {
         container.scrollLeft = lockedLeft;
       }
     },
-    [mobileSections.length]
+    [isPlayerPickerOpen, mobileSections.length]
   );
 
   const handleMobilePagerTouchEnd = useCallback(
     (event: React.TouchEvent<HTMLDivElement>) => {
+      if (isPlayerPickerOpen) {
+        pagerIsDraggingRef.current = false;
+        pagerTouchStartXRef.current = null;
+        pagerTouchStartIndexRef.current = null;
+        return;
+      }
+
       const touch = event.changedTouches[0];
       settleMobilePagerFromSwipe(touch ? touch.clientX : null);
     },
-    [settleMobilePagerFromSwipe]
+    [isPlayerPickerOpen, settleMobilePagerFromSwipe]
   );
 
   const handleMobilePagerTouchCancel = useCallback(() => {
+    if (isPlayerPickerOpen) {
+      pagerIsDraggingRef.current = false;
+      pagerTouchStartXRef.current = null;
+      pagerTouchStartIndexRef.current = null;
+      return;
+    }
+
     settleMobilePagerFromSwipe(null);
-  }, [settleMobilePagerFromSwipe]);
+  }, [isPlayerPickerOpen, settleMobilePagerFromSwipe]);
 
   if (status === "loading" || !sessionData || !sessionView) {
     return (

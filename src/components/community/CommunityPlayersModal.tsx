@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef } from "react";
-import { ModalFrame } from "@/components/ui/chrome";
+import { PlayerPickerSheet } from "@/components/ui/PlayerPickerSheet";
 import { SearchField } from "@/components/ui/SearchField";
 import type { CommunityPageMember } from "./communityTypes";
 
@@ -53,22 +53,13 @@ export function CommunityPlayersModal({
   }
 
   return (
-    <ModalFrame
+    <PlayerPickerSheet
+      open={open}
       title="Add Players"
       subtitle={`${selectedPlayerIds.length} selected`}
       onClose={onClose}
-      bodyScroll={false}
-      fullscreenUntilDesktop
-      footer={
-        <div className="flex justify-end">
-          <button type="button" onClick={onClose} className="app-button-primary">
-            Done
-          </button>
-        </div>
-      }
-    >
-      <div className="flex min-h-0 flex-1 flex-col px-4 py-4 sm:px-5">
-        <div className="flex shrink-0 flex-col gap-3 sm:flex-row sm:items-center">
+      toolbar={
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
           <SearchField
             value={playerSearch}
             onChange={onPlayerSearchChange}
@@ -91,61 +82,64 @@ export function CommunityPlayersModal({
               : "Select All"}
           </button>
         </div>
-
-        <div className="app-modal-scroll-region mt-4 min-h-0 flex-1 pr-1 pb-2">
-          {filteredSelectablePlayers.length === 0 ? (
-            <div className="app-empty px-4 py-10 text-center">
-              <p className="text-sm font-semibold text-gray-900">
-                No players found.
-              </p>
-              <p className="mt-2 text-sm text-gray-500">
-                Try a different name or clear the search.
-              </p>
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {filteredSelectablePlayers.map((player) => {
-                const isSelected = selectedPlayerIds.includes(player.id);
-
-                return (
-                  <button
-                    key={player.id}
-                    type="button"
-                    onPointerDownCapture={captureSearchFocusIntent}
-                    onMouseDownCapture={captureSearchFocusIntent}
-                    onClick={() => {
-                      onTogglePlayerSelection(player.id);
-                      restoreSearchFocusIfNeeded();
-                    }}
-                    className={`app-touch-pan-y flex w-full items-center justify-between gap-3 rounded-2xl border px-3 py-3 text-left transition ${
-                      isSelected
-                        ? "border-blue-200 bg-blue-50"
-                        : "border-gray-200 bg-gray-50/70 hover:border-blue-200 hover:bg-white"
-                    }`}
-                  >
-                    <div className="min-w-0 space-y-1">
-                      <p className="truncate text-sm font-semibold text-gray-900">
-                        {player.name}
-                      </p>
-                      <p className="text-xs text-gray-500">Rating {player.elo}</p>
-                    </div>
-
-                    <span
-                      className={`inline-flex shrink-0 rounded-full border px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.18em] ${
-                        isSelected
-                          ? "border-blue-200 bg-blue-50 text-blue-700"
-                          : "border-gray-200 bg-white text-gray-500"
-                      }`}
-                    >
-                      {isSelected ? "Selected" : "Add"}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          )}
+      }
+      footer={
+        <div className="flex justify-end">
+          <button type="button" onClick={onClose} className="app-button-primary">
+            Done
+          </button>
         </div>
-      </div>
-    </ModalFrame>
+      }
+    >
+      {filteredSelectablePlayers.length === 0 ? (
+        <div className="app-empty px-4 py-10 text-center">
+          <p className="text-sm font-semibold text-gray-900">No players found.</p>
+          <p className="mt-2 text-sm text-gray-500">
+            Try a different name or clear the search.
+          </p>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {filteredSelectablePlayers.map((player) => {
+            const isSelected = selectedPlayerIds.includes(player.id);
+
+            return (
+              <button
+                key={player.id}
+                type="button"
+                onPointerDownCapture={captureSearchFocusIntent}
+                onMouseDownCapture={captureSearchFocusIntent}
+                onClick={() => {
+                  onTogglePlayerSelection(player.id);
+                  restoreSearchFocusIfNeeded();
+                }}
+                className={`app-touch-pan-y flex w-full items-center justify-between gap-3 rounded-2xl border px-3 py-3 text-left transition ${
+                  isSelected
+                    ? "border-blue-200 bg-blue-50"
+                    : "border-gray-200 bg-gray-50/70 hover:border-blue-200 hover:bg-white"
+                }`}
+              >
+                <div className="min-w-0 space-y-1">
+                  <p className="truncate text-sm font-semibold text-gray-900">
+                    {player.name}
+                  </p>
+                  <p className="text-xs text-gray-500">Rating {player.elo}</p>
+                </div>
+
+                <span
+                  className={`inline-flex shrink-0 rounded-full border px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.18em] ${
+                    isSelected
+                      ? "border-blue-200 bg-blue-50 text-blue-700"
+                      : "border-gray-200 bg-white text-gray-500"
+                  }`}
+                >
+                  {isSelected ? "Selected" : "Add"}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </PlayerPickerSheet>
   );
 }
