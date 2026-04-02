@@ -13,6 +13,8 @@ import {
   SessionType,
 } from "@/types/enums";
 
+const DEFAULT_GUEST_INITIAL_ELO = 1000;
+
 interface CommunityPageRouter {
   push: (href: string) => void;
 }
@@ -47,7 +49,6 @@ export function useCommunityHostSetup({
   );
   const [guestPreferenceInput, setGuestPreferenceInput] =
     useState<PartnerPreference>(PartnerPreference.OPEN);
-  const [guestInitialEloInput, setGuestInitialEloInput] = useState<number>(1000);
   const [guestConfigs, setGuestConfigs] = useState<CommunityGuestConfig[]>([]);
   const [creatingSession, setCreatingSession] = useState(false);
   const [showPlayersModal, setShowPlayersModal] = useState(false);
@@ -64,7 +65,6 @@ export function useCommunityHostSetup({
     setGuestNameInput("");
     setGuestGenderInput(PlayerGender.MALE);
     setGuestPreferenceInput(PartnerPreference.OPEN);
-    setGuestInitialEloInput(1000);
     setPlayerSearch("");
     setShowPlayersModal(false);
     setShowGuestsModal(false);
@@ -115,7 +115,6 @@ export function useCommunityHostSetup({
       setGuestNameInput("");
       setGuestGenderInput(PlayerGender.MALE);
       setGuestPreferenceInput(PartnerPreference.OPEN);
-      setGuestInitialEloInput(1000);
       setCourtCount(3);
       router.push(`/session/${data.code}`);
     } catch (err: unknown) {
@@ -166,17 +165,16 @@ export function useCommunityHostSetup({
     }
     setGuestConfigs((prev) => [
       ...prev,
-      {
-        name: trimmed,
-        gender: guestGenderInput,
-        partnerPreference: guestPreferenceInput,
-        initialElo: guestInitialEloInput,
-      },
-    ]);
+        {
+          name: trimmed,
+          gender: guestGenderInput,
+          partnerPreference: guestPreferenceInput,
+          initialElo: DEFAULT_GUEST_INITIAL_ELO,
+        },
+      ]);
     setGuestNameInput("");
     setGuestGenderInput(PlayerGender.MALE);
     setGuestPreferenceInput(PartnerPreference.OPEN);
-    setGuestInitialEloInput(1000);
   };
 
   const removeGuestName = (nameToRemove: string) => {
@@ -227,8 +225,6 @@ export function useCommunityHostSetup({
     guestGenderInput,
     guestPreferenceInput,
     setGuestPreferenceInput,
-    guestInitialEloInput,
-    setGuestInitialEloInput,
     guestConfigs,
     creatingSession,
     showPlayersModal,

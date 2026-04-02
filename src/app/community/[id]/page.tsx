@@ -61,8 +61,6 @@ export default function CommunityPage() {
     guestGenderInput,
     guestPreferenceInput,
     setGuestPreferenceInput,
-    guestInitialEloInput,
-    setGuestInitialEloInput,
     guestConfigs,
     loading,
     creatingSession,
@@ -372,11 +370,9 @@ export default function CommunityPage() {
         guestNameInput={guestNameInput}
         guestGenderInput={guestGenderInput}
         guestPreferenceInput={guestPreferenceInput}
-        guestInitialEloInput={guestInitialEloInput}
         onGuestNameChange={setGuestNameInput}
         onGuestGenderChange={handleGuestGenderChange}
         onGuestPreferenceChange={setGuestPreferenceInput}
-        onGuestInitialEloChange={setGuestInitialEloInput}
         onAddGuest={addGuestName}
         onRemoveGuest={removeGuestName}
         onClose={closeGuestsModal}

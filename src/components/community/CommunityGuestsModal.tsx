@@ -4,12 +4,6 @@ import { PlayerPickerSheet } from "@/components/ui/PlayerPickerSheet";
 import { PartnerPreference, PlayerGender, SessionMode } from "@/types/enums";
 import type { CommunityGuestConfig } from "./communityTypes";
 
-const GUEST_ELO_PRESETS = [
-  { label: "Beginner", value: 850 },
-  { label: "Average", value: 1000 },
-  { label: "Advanced", value: 1200 },
-] as const;
-
 interface CommunityGuestsModalProps {
   open: boolean;
   guestConfigs: CommunityGuestConfig[];
@@ -17,11 +11,9 @@ interface CommunityGuestsModalProps {
   guestNameInput: string;
   guestGenderInput: PlayerGender;
   guestPreferenceInput: PartnerPreference;
-  guestInitialEloInput: number;
   onGuestNameChange: (value: string) => void;
   onGuestGenderChange: (value: PlayerGender) => void;
   onGuestPreferenceChange: (value: PartnerPreference) => void;
-  onGuestInitialEloChange: (value: number) => void;
   onAddGuest: () => void;
   onRemoveGuest: (name: string) => void;
   onClose: () => void;
@@ -34,11 +26,9 @@ export function CommunityGuestsModal({
   guestNameInput,
   guestGenderInput,
   guestPreferenceInput,
-  guestInitialEloInput,
   onGuestNameChange,
   onGuestGenderChange,
   onGuestPreferenceChange,
-  onGuestInitialEloChange,
   onAddGuest,
   onRemoveGuest,
   onClose,
@@ -79,30 +69,17 @@ export function CommunityGuestsModal({
               className="field px-3 py-2.5 text-sm"
             />
             <select
-              value={guestInitialEloInput}
+              value={guestGenderInput}
               onChange={(event) =>
-                onGuestInitialEloChange(parseInt(event.target.value, 10))
+                onGuestGenderChange(event.target.value as PlayerGender)
               }
               className="field px-3 py-2.5 text-sm"
             >
-              {GUEST_ELO_PRESETS.map((preset) => (
-                <option key={preset.label} value={preset.value}>
-                  {preset.label} ({preset.value})
-                </option>
-              ))}
+              <option value={PlayerGender.MALE}>Male</option>
+              <option value={PlayerGender.FEMALE}>Female</option>
             </select>
             {sessionMode === SessionMode.MIXICANO ? (
               <>
-                <select
-                  value={guestGenderInput}
-                  onChange={(event) =>
-                    onGuestGenderChange(event.target.value as PlayerGender)
-                  }
-                  className="field px-3 py-2.5 text-sm"
-                >
-                  <option value={PlayerGender.MALE}>Male</option>
-                  <option value={PlayerGender.FEMALE}>Female</option>
-                </select>
                 <select
                   value={guestPreferenceInput}
                   onChange={(event) =>
@@ -165,18 +142,17 @@ export function CommunityGuestsModal({
                   {guest.name}
                 </p>
                 <div className="flex flex-wrap items-center gap-2">
-                  {sessionMode === SessionMode.MIXICANO ? (
-                    <span className="rounded-full border border-gray-200 bg-white px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-gray-600">
-                      {guest.gender === PlayerGender.FEMALE
-                        ? guest.partnerPreference === PartnerPreference.OPEN
-                          ? "F / Open Tag"
-                          : "F / Default"
-                        : "M"}
+                  <span className="rounded-full border border-gray-200 bg-white px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-gray-600">
+                    {guest.gender === PlayerGender.FEMALE ? "Female" : "Male"}
+                  </span>
+                  {sessionMode === SessionMode.MIXICANO &&
+                  guest.gender === PlayerGender.FEMALE ? (
+                    <span className="rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-blue-700">
+                      {guest.partnerPreference === PartnerPreference.OPEN
+                        ? "Open Tag"
+                        : "Default"}
                     </span>
                   ) : null}
-                  <span className="rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-blue-700">
-                    Rating {guest.initialElo}
-                  </span>
                 </div>
               </div>
 
