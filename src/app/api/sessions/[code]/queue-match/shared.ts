@@ -1,5 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import type { ManualMatchTeams } from "@/lib/matchmaking/manualMatch";
 import {
   buildMatchmakingState,
   ensureEnoughPlayers,
@@ -37,7 +38,7 @@ export function buildQueuedMatchResponse(
   };
 }
 
-export async function createQueuedMatchForSession(sessionData: QueueSessionRecord) {
+async function ensureQueueSlotAvailable(sessionData: QueueSessionRecord) {
   if (sessionData.status !== "ACTIVE") {
     throw new GenerateMatchError(400, "Session not active");
   }
@@ -60,6 +61,36 @@ export async function createQueuedMatchForSession(sessionData: QueueSessionRecor
       "Queue next match is only available when all courts are in use."
     );
   }
+}
+
+async function createQueuedMatchRecord(
+  sessionId: string,
+  partition: ManualMatchTeams
+) {
+  try {
+    return await prisma.queuedMatch.create({
+      data: {
+        sessionId,
+        team1User1Id: partition.team1[0],
+        team1User2Id: partition.team1[1],
+        team2User1Id: partition.team2[0],
+        team2User2Id: partition.team2[1],
+      },
+    });
+  } catch (error) {
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === "P2002"
+    ) {
+      throw new GenerateMatchError(409, "A next match is already queued.");
+    }
+
+    throw error;
+  }
+}
+
+export async function createQueuedMatchForSession(sessionData: QueueSessionRecord) {
+  await ensureQueueSlotAvailable(sessionData);
 
   const { busyPlayerIds, playersById, rotationHistory } =
     await buildMatchmakingState(sessionData);
@@ -78,28 +109,21 @@ export async function createQueuedMatchForSession(sessionData: QueueSessionRecor
     reshuffleSource: null,
   });
 
-  try {
-    const queuedMatch = await prisma.queuedMatch.create({
-      data: {
-        sessionId: sessionData.id,
-        team1User1Id: selection.partition.team1[0],
-        team1User2Id: selection.partition.team1[1],
-        team2User1Id: selection.partition.team2[0],
-        team2User2Id: selection.partition.team2[1],
-      },
-    });
+  const queuedMatch = await createQueuedMatchRecord(
+    sessionData.id,
+    selection.partition
+  );
 
-    return buildQueuedMatchResponse(sessionData, queuedMatch);
-  } catch (error) {
-    if (
-      error instanceof Prisma.PrismaClientKnownRequestError &&
-      error.code === "P2002"
-    ) {
-      throw new GenerateMatchError(409, "A next match is already queued.");
-    }
+  return buildQueuedMatchResponse(sessionData, queuedMatch);
+}
 
-    throw error;
-  }
+export async function createManualQueuedMatchForSession(
+  sessionData: QueueSessionRecord,
+  partition: ManualMatchTeams
+) {
+  await ensureQueueSlotAvailable(sessionData);
+  const queuedMatch = await createQueuedMatchRecord(sessionData.id, partition);
+  return buildQueuedMatchResponse(sessionData, queuedMatch);
 }
 
 export async function tryRebuildQueuedMatchForCode(code: string) {

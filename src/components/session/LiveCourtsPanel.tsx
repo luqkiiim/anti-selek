@@ -22,6 +22,7 @@ interface LiveCourtsPanelProps {
   creatingOpenCourtCount: number;
   canQueueNextMatch: boolean;
   creatingQueuedMatch: boolean;
+  manualQueueOpen: boolean;
   clearingQueuedMatch: boolean;
   pausingQueuedPlayerId: string | null;
   reshufflingQueuedMatch: boolean;
@@ -33,6 +34,7 @@ interface LiveCourtsPanelProps {
   onCreateMatchesForCourts: (courtIds: string[]) => void;
   onQueueNextMatch: () => void;
   onClearQueuedMatch: () => void;
+  onOpenManualQueuedMatchModal: () => void;
   onPauseQueuedPlayer: (userId: string) => void;
   onReshuffleQueuedMatch: () => void;
   onOpenManualMatchModal: (courtId: string) => void;
@@ -66,6 +68,7 @@ export function LiveCourtsPanel({
   creatingOpenCourtCount,
   canQueueNextMatch,
   creatingQueuedMatch,
+  manualQueueOpen,
   clearingQueuedMatch,
   pausingQueuedPlayerId,
   reshufflingQueuedMatch,
@@ -77,6 +80,7 @@ export function LiveCourtsPanel({
   onCreateMatchesForCourts,
   onQueueNextMatch,
   onClearQueuedMatch,
+  onOpenManualQueuedMatchModal,
   onPauseQueuedPlayer,
   onReshuffleQueuedMatch,
   onOpenManualMatchModal,
@@ -99,6 +103,7 @@ export function LiveCourtsPanel({
     isAdmin &&
     !queuedMatch &&
     canQueueNextMatch;
+  const showQueuedMatchSlot = Boolean(queuedMatch) || canQueueNextMatch;
   const showCourtCountPills = courts.length >= 5;
   const canCreateMatches = creatableOpenCourtCount > 0 && !creatingOpenMatches;
   const optimisticCreatingCount = creatingOpenMatches ? creatingOpenCourtCount : 0;
@@ -176,14 +181,18 @@ export function LiveCourtsPanel({
               onReopenScoreForEdit={onReopenScoreForEdit}
             />
           ))}
-        {queuedMatch ? (
+        {showQueuedMatchSlot ? (
           <QueuedMatchCard
             queuedMatch={queuedMatch}
             canPauseQueuedPlayers={isAdmin}
+            canOpenManualQueue={isAdmin && !queuedMatch}
             clearingQueuedMatch={clearingQueuedMatch}
+            creatingQueuedMatch={creatingQueuedMatch}
+            creatingManualQueuedMatch={manualQueueOpen}
             pausingQueuedPlayerId={pausingQueuedPlayerId}
             reshufflingQueuedMatch={reshufflingQueuedMatch}
             onClearQueuedMatch={onClearQueuedMatch}
+            onOpenManualQueuedMatchModal={onOpenManualQueuedMatchModal}
             onPauseQueuedPlayer={onPauseQueuedPlayer}
             onReshuffleQueuedMatch={onReshuffleQueuedMatch}
           />

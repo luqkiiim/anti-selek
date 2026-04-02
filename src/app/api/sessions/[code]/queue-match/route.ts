@@ -5,7 +5,29 @@ import {
   GenerateMatchError,
   loadSessionRecord,
 } from "../generate-match/shared";
-import { createQueuedMatchForSession } from "./shared";
+import { parseManualTeams } from "../generate-match/request";
+import { validateManualMatchRequest } from "../generate-match/manual";
+import { buildMatchmakingState } from "../generate-match/selection";
+import {
+  createManualQueuedMatchForSession,
+  createQueuedMatchForSession,
+} from "./shared";
+
+async function parseQueueMatchBody(request: Request) {
+  const text = await request.text();
+  if (!text) {
+    return {};
+  }
+
+  try {
+    const body = JSON.parse(text) as unknown;
+    return typeof body === "object" && body !== null
+      ? (body as Record<string, unknown>)
+      : {};
+  } catch {
+    throw new GenerateMatchError(400, "Invalid request body");
+  }
+}
 
 async function ensureManagePermission(
   communityId: string | null | undefined,
@@ -36,7 +58,7 @@ async function ensureManagePermission(
 }
 
 export async function POST(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ code: string }> }
 ) {
   try {
@@ -57,6 +79,31 @@ export async function POST(
       session.user.id,
       !!session.user.isAdmin
     );
+
+    const body = await parseQueueMatchBody(request);
+    if (body.manualTeams !== undefined) {
+      const parsedTeams = parseManualTeams(body.manualTeams);
+      const { busyPlayerIds, playersById, rotationHistory } =
+        await buildMatchmakingState(sessionData);
+
+      validateManualMatchRequest({
+        sessionData,
+        targetCourt: { currentMatch: null } as Parameters<
+          typeof validateManualMatchRequest
+        >[0]["targetCourt"],
+        parsedTeams,
+        busyPlayerIds,
+        playersById,
+        rotationHistory,
+      });
+
+      return NextResponse.json({
+        queuedMatch: await createManualQueuedMatchForSession(
+          sessionData,
+          parsedTeams
+        ),
+      });
+    }
 
     return NextResponse.json({
       queuedMatch: await createQueuedMatchForSession(sessionData),

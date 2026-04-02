@@ -11,6 +11,10 @@ import type {
 interface ManualMatchModalProps {
   open: boolean;
   court: Court | null;
+  title?: string;
+  locationLabel?: string;
+  note?: string;
+  submitLabel?: string;
   manualMatchForm: ManualMatchFormState;
   manualMatchPlayerOptions: Player[];
   selectedManualPlayerIds: Set<string>;
@@ -26,6 +30,10 @@ const team2Slots: ManualMatchSlot[] = ["team2User1Id", "team2User2Id"];
 export function ManualMatchModal({
   open,
   court,
+  title = "Manual Match",
+  locationLabel,
+  note = "This bypasses automatic balancing for this one match only. Matchmaking state still updates normally when the result is approved.",
+  submitLabel = "Create Match",
   manualMatchForm,
   manualMatchPlayerOptions,
   selectedManualPlayerIds,
@@ -41,9 +49,10 @@ export function ManualMatchModal({
       <div className="flex max-h-[92vh] w-full max-w-lg animate-in slide-in-from-bottom flex-col rounded-t-3xl bg-white shadow-2xl duration-300 sm:rounded-2xl">
         <div className="flex items-center justify-between border-b px-4 py-3">
           <div>
-            <h2 className="text-base font-black text-gray-900">Manual Match</h2>
+            <h2 className="text-base font-black text-gray-900">{title}</h2>
             <p className="mt-0.5 text-[10px] font-bold uppercase tracking-widest text-gray-400">
-              {court ? getCourtDisplayLabel(court) : "Select Teams"}
+              {locationLabel ??
+                (court ? getCourtDisplayLabel(court) : "Select Teams")}
             </p>
           </div>
           <button
@@ -122,8 +131,7 @@ export function ManualMatchModal({
               Note
             </p>
             <p className="mt-1 text-xs text-blue-900">
-              This bypasses automatic balancing for this one match only. Matchmaking
-              state still updates normally when the result is approved.
+              {note}
             </p>
           </div>
 
@@ -151,7 +159,7 @@ export function ManualMatchModal({
             disabled={creatingManualMatch || manualMatchPlayerOptions.length < 4}
             className="rounded-xl bg-gray-900 px-4 py-2 text-[10px] font-black uppercase tracking-widest text-white disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {creatingManualMatch ? "Creating..." : "Create Match"}
+            {creatingManualMatch ? "Saving..." : submitLabel}
           </button>
         </div>
       </div>

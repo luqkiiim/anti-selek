@@ -35,6 +35,7 @@ export function useSessionCourtMatchCreation({
   const [assigningQueuedMatch, setAssigningQueuedMatch] = useState(false);
   const [reshufflingQueuedMatch, setReshufflingQueuedMatch] = useState(false);
   const [manualCourtId, setManualCourtId] = useState<string | null>(null);
+  const [manualQueueOpen, setManualQueueOpen] = useState(false);
   const [creatingManualMatch, setCreatingManualMatch] = useState(false);
   const [manualMatchForm, setManualMatchForm] =
     useState<ManualMatchFormState>(emptyManualMatchForm);
@@ -69,13 +70,22 @@ export function useSessionCourtMatchCreation({
   };
 
   const openManualMatchModal = (courtId: string) => {
+    setManualQueueOpen(false);
     setManualCourtId(courtId);
+    setManualMatchForm(emptyManualMatchForm());
+    setError("");
+  };
+
+  const openManualQueuedMatchModal = () => {
+    setManualCourtId(null);
+    setManualQueueOpen(true);
     setManualMatchForm(emptyManualMatchForm());
     setError("");
   };
 
   const closeManualMatchModal = () => {
     setManualCourtId(null);
+    setManualQueueOpen(false);
     setCreatingManualMatch(false);
     setManualMatchForm(emptyManualMatchForm());
   };
@@ -123,6 +133,50 @@ export function useSessionCourtMatchCreation({
     } catch (err) {
       console.error(err);
       setError("Network error creating manual match");
+    } finally {
+      setCreatingManualMatch(false);
+    }
+  };
+
+  const createManualQueuedMatch = async () => {
+    if (!manualQueueOpen || !sessionData) return;
+
+    const { team1User1Id, team1User2Id, team2User1Id, team2User2Id } =
+      manualMatchForm;
+    if (!team1User1Id || !team1User2Id || !team2User1Id || !team2User2Id) {
+      setError("Choose all 4 players before queueing a manual match");
+      return;
+    }
+
+    setCreatingManualMatch(true);
+    setError("");
+    try {
+      const { res, data } = await postSessionAction(
+        `/api/sessions/${code}/queue-match`,
+        {
+          safeJson,
+          body: {
+            manualTeams: {
+              team1: [team1User1Id, team1User2Id],
+              team2: [team2User1Id, team2User2Id],
+            },
+          },
+        }
+      );
+
+      if (!res.ok) {
+        setError(data.error || "Failed to queue manual match");
+        return;
+      }
+
+      closeManualMatchModal();
+      patchSessionData((current) =>
+        applyQueuedMatch(current, data.queuedMatch ?? null)
+      );
+      scheduleSessionRefresh();
+    } catch (err) {
+      console.error(err);
+      setError("Network error queueing manual match");
     } finally {
       setCreatingManualMatch(false);
     }
@@ -258,6 +312,7 @@ export function useSessionCourtMatchCreation({
     assigningQueuedMatch,
     reshufflingQueuedMatch,
     manualCourtId,
+    manualQueueOpen,
     creatingManualMatch,
     manualMatchForm,
     createMatchesForCourts,
@@ -266,8 +321,10 @@ export function useSessionCourtMatchCreation({
     assignQueuedMatch,
     reshuffleQueuedMatch,
     openManualMatchModal,
+    openManualQueuedMatchModal,
     closeManualMatchModal,
     updateManualMatchSlot,
     createManualMatch,
+    createManualQueuedMatch,
   };
 }

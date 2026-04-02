@@ -130,6 +130,7 @@ export default function SessionPage() {
     creatingOpenMatches,
     creatingOpenCourtCount,
     creatingQueuedMatch,
+    manualQueueOpen,
     clearingQueuedMatch,
     reshufflingQueuedMatch,
     manualCourtId,
@@ -140,9 +141,11 @@ export default function SessionPage() {
     clearQueuedMatch,
     reshuffleQueuedMatch,
     openManualMatchModal,
+    openManualQueuedMatchModal,
     closeManualMatchModal,
     updateManualMatchSlot,
     createManualMatch,
+    createManualQueuedMatch,
     reshuffleMatch,
     undoMatchSelection,
     closeCourtActionDraft,
@@ -866,6 +869,7 @@ export default function SessionPage() {
                   creatingOpenCourtCount={creatingOpenCourtCount}
                   canQueueNextMatch={sessionView.canQueueNextMatch}
                   creatingQueuedMatch={creatingQueuedMatch}
+                  manualQueueOpen={manualQueueOpen}
                   clearingQueuedMatch={clearingQueuedMatch}
                   pausingQueuedPlayerId={togglingPausePlayerId}
                   reshufflingQueuedMatch={reshufflingQueuedMatch}
@@ -877,6 +881,7 @@ export default function SessionPage() {
                   onCreateMatchesForCourts={createMatchesForCourts}
                   onQueueNextMatch={queueNextMatch}
                   onClearQueuedMatch={clearQueuedMatch}
+                  onOpenManualQueuedMatchModal={openManualQueuedMatchModal}
                   onPauseQueuedPlayer={(userId) => void pauseQueuedPlayer(userId)}
                   onReshuffleQueuedMatch={reshuffleQueuedMatch}
                   onOpenManualMatchModal={openManualMatchModal}
@@ -1098,15 +1103,23 @@ export default function SessionPage() {
       />
 
       <ManualMatchModal
-        open={manualCourtId !== null}
-        court={sessionView.activeManualCourt}
+        open={manualCourtId !== null || manualQueueOpen}
+        court={manualQueueOpen ? null : sessionView.activeManualCourt}
+        title={manualQueueOpen ? "Manual Queue" : undefined}
+        locationLabel={manualQueueOpen ? "Next Up" : undefined}
+        note={
+          manualQueueOpen
+            ? "This sets the exact quartet waiting next. The queued match will still promote automatically when a court opens."
+            : undefined
+        }
+        submitLabel={manualQueueOpen ? "Queue Match" : undefined}
         manualMatchForm={manualMatchForm}
         manualMatchPlayerOptions={sessionView.manualMatchPlayerOptions}
         selectedManualPlayerIds={sessionView.selectedManualPlayerIds}
         creatingManualMatch={creatingManualMatch}
         onClose={closeManualMatchModal}
         onUpdateSlot={updateManualMatchSlot}
-        onCreateMatch={createManualMatch}
+        onCreateMatch={manualQueueOpen ? createManualQueuedMatch : createManualMatch}
       />
     </div>
   );

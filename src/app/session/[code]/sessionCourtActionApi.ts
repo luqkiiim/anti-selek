@@ -26,14 +26,17 @@ export async function postGenerateMatchAction({
 interface SessionActionRequestOptions {
   code: string;
   safeJson: UseSessionMatchActionsDependencies["safeJson"];
+  body?: Record<string, unknown>;
 }
 
 export async function postSessionAction(
   url: string,
-  { safeJson }: Pick<SessionActionRequestOptions, "safeJson">
+  { safeJson, body }: Pick<SessionActionRequestOptions, "safeJson" | "body">
 ) {
   const res = await fetch(url, {
     method: "POST",
+    headers: body ? { "Content-Type": "application/json" } : undefined,
+    body: body ? JSON.stringify(body) : undefined,
   });
 
   return {

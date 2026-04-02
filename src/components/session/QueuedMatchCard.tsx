@@ -4,12 +4,16 @@ import { useEffect, useState } from "react";
 import type { QueuedMatch } from "./sessionTypes";
 
 interface QueuedMatchCardProps {
-  queuedMatch: QueuedMatch;
+  queuedMatch: QueuedMatch | null;
   canPauseQueuedPlayers: boolean;
+  canOpenManualQueue: boolean;
   clearingQueuedMatch: boolean;
+  creatingQueuedMatch: boolean;
+  creatingManualQueuedMatch: boolean;
   pausingQueuedPlayerId: string | null;
   reshufflingQueuedMatch: boolean;
   onClearQueuedMatch: () => void;
+  onOpenManualQueuedMatchModal: () => void;
   onPauseQueuedPlayer: (userId: string) => void;
   onReshuffleQueuedMatch: () => void;
 }
@@ -98,10 +102,14 @@ function TeamPlayers({
 export function QueuedMatchCard({
   queuedMatch,
   canPauseQueuedPlayers,
+  canOpenManualQueue,
   clearingQueuedMatch,
+  creatingQueuedMatch,
+  creatingManualQueuedMatch,
   pausingQueuedPlayerId,
   reshufflingQueuedMatch,
   onClearQueuedMatch,
+  onOpenManualQueuedMatchModal,
   onPauseQueuedPlayer,
   onReshuffleQueuedMatch,
 }: QueuedMatchCardProps) {
@@ -110,6 +118,8 @@ export function QueuedMatchCard({
   );
   const queueActionDisabled =
     clearingQueuedMatch ||
+    creatingQueuedMatch ||
+    creatingManualQueuedMatch ||
     reshufflingQueuedMatch ||
     pausingQueuedPlayerId !== null;
 
@@ -164,7 +174,7 @@ export function QueuedMatchCard({
     onPauseQueuedPlayer(userId);
   };
 
-  const leftAction = (
+  const leftAction = queuedMatch ? (
     <button
       type="button"
       onClick={onReshuffleQueuedMatch}
@@ -173,8 +183,17 @@ export function QueuedMatchCard({
     >
       {reshufflingQueuedMatch ? "Reshuffling..." : "Reshuffle"}
     </button>
-  );
-  const rightAction = (
+  ) : canOpenManualQueue ? (
+    <button
+      type="button"
+      onClick={onOpenManualQueuedMatchModal}
+      disabled={queueActionDisabled}
+      className="rounded-lg bg-gray-900 px-2.5 py-1.5 text-[10px] font-black uppercase tracking-wider text-white transition-all active:scale-95 disabled:cursor-not-allowed disabled:opacity-50 md:px-3"
+    >
+      {creatingManualQueuedMatch ? "Opening..." : "Manual"}
+    </button>
+  ) : null;
+  const rightAction = queuedMatch ? (
     <button
       type="button"
       onClick={onClearQueuedMatch}
@@ -183,7 +202,7 @@ export function QueuedMatchCard({
     >
       {clearingQueuedMatch ? "Undoing..." : "Undo"}
     </button>
-  );
+  ) : null;
 
   return (
     <div className="flex min-w-0 flex-col overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
@@ -200,44 +219,55 @@ export function QueuedMatchCard({
       </div>
 
       <div className="flex flex-1 flex-col justify-center p-3 md:p-4">
-        <div className="space-y-3">
-          <div className="rounded-2xl border border-blue-100 bg-blue-50/40 p-3 transition-all md:p-3.5">
-            <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2.5 sm:gap-3 md:gap-4 xl:gap-3">
-              <TeamPlayers
-                players={[queuedMatch.team1User1, queuedMatch.team1User2]}
-                canPauseQueuedPlayers={canPauseQueuedPlayers}
-                activeActionPlayerId={activeActionPlayerId}
-                pausingQueuedPlayerId={pausingQueuedPlayerId}
-                queueActionDisabled={queueActionDisabled}
-                onTogglePlayerAction={togglePlayerAction}
-                onPauseQueuedPlayer={handlePauseQueuedPlayer}
-              />
-              <span className="rounded-full border border-blue-200 bg-white px-2 py-1 text-[10px] font-black uppercase tracking-[0.24em] text-blue-700">
-                Next
-              </span>
-              <TeamPlayers
-                players={[queuedMatch.team2User1, queuedMatch.team2User2]}
-                align="right"
-                canPauseQueuedPlayers={canPauseQueuedPlayers}
-                activeActionPlayerId={activeActionPlayerId}
-                pausingQueuedPlayerId={pausingQueuedPlayerId}
-                queueActionDisabled={queueActionDisabled}
-                onTogglePlayerAction={togglePlayerAction}
-                onPauseQueuedPlayer={handlePauseQueuedPlayer}
-              />
+        {queuedMatch ? (
+          <div className="space-y-3">
+            <div className="rounded-2xl border border-blue-100 bg-blue-50/40 p-3 transition-all md:p-3.5">
+              <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2.5 sm:gap-3 md:gap-4 xl:gap-3">
+                <TeamPlayers
+                  players={[queuedMatch.team1User1, queuedMatch.team1User2]}
+                  canPauseQueuedPlayers={canPauseQueuedPlayers}
+                  activeActionPlayerId={activeActionPlayerId}
+                  pausingQueuedPlayerId={pausingQueuedPlayerId}
+                  queueActionDisabled={queueActionDisabled}
+                  onTogglePlayerAction={togglePlayerAction}
+                  onPauseQueuedPlayer={handlePauseQueuedPlayer}
+                />
+                <span className="rounded-full border border-blue-200 bg-white px-2 py-1 text-[10px] font-black uppercase tracking-[0.24em] text-blue-700">
+                  Next
+                </span>
+                <TeamPlayers
+                  players={[queuedMatch.team2User1, queuedMatch.team2User2]}
+                  align="right"
+                  canPauseQueuedPlayers={canPauseQueuedPlayers}
+                  activeActionPlayerId={activeActionPlayerId}
+                  pausingQueuedPlayerId={pausingQueuedPlayerId}
+                  queueActionDisabled={queueActionDisabled}
+                  onTogglePlayerAction={togglePlayerAction}
+                  onPauseQueuedPlayer={handlePauseQueuedPlayer}
+                />
+              </div>
+            </div>
+
+            <div className="pt-2">
+              <button
+                type="button"
+                disabled
+                className="w-full rounded-xl bg-gray-900 py-3 text-sm font-black uppercase text-white shadow-md transition-all active:scale-95 active:bg-gray-800 disabled:opacity-50"
+              >
+                Waiting for Court
+              </button>
             </div>
           </div>
-
-          <div className="pt-2">
-            <button
-              type="button"
-              disabled
-              className="w-full rounded-xl bg-gray-900 py-3 text-sm font-black uppercase text-white shadow-md transition-all active:scale-95 active:bg-gray-800 disabled:opacity-50"
-            >
-              Waiting for Court
-            </button>
+        ) : (
+          <div className="px-4 py-10 text-center">
+            <div className="mb-2 text-xs font-black tracking-[0.35em] opacity-40">
+              NEXT UP
+            </div>
+            <p className="text-xs font-bold uppercase tracking-widest text-gray-400">
+              Queue slot ready
+            </p>
           </div>
-        </div>
+        )}
       </div>
     </div>
   );
