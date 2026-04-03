@@ -152,7 +152,7 @@ export async function replaceCurrentCourtMatchAssignment({
     const clearedCourt = await tx.court.updateMany({
       where: {
         id: courtId,
-        currentMatchId: currentMatchId,
+        OR: [{ currentMatchId: currentMatchId }, { currentMatchId: null }],
       },
       data: { currentMatchId: null },
     });
