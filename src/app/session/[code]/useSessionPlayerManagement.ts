@@ -301,10 +301,6 @@ export function useSessionPlayerManagement({
     }
   };
 
-  const pauseQueuedPlayer = async (userId: string) => {
-    await togglePausePlayer(userId, false);
-  };
-
   const renameGuestInSession = async () => {
     if (!guestRenameDraft) return;
 
@@ -527,7 +523,6 @@ export function useSessionPlayerManagement({
     addPlayerToSession,
     addGuestToSession,
     togglePausePlayer,
-    pauseQueuedPlayer,
     renameGuestInSession,
     requestRemovePlayerFromSession,
     closeRemovePlayerConfirm,

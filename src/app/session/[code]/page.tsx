@@ -132,6 +132,7 @@ export default function SessionPage() {
     confirmingScoreMatchId,
     reopeningMatchId,
     reshufflingCourtId,
+    reshufflingCourtPlayerId,
     undoingCourtId,
     courtActionDraft,
     creatingOpenMatches,
@@ -140,22 +141,23 @@ export default function SessionPage() {
     manualQueueOpen,
     clearingQueuedMatch,
     reshufflingQueuedMatch,
+    reshufflingQueuedPlayerId,
     manualCourtId,
     creatingManualMatch,
-    manualIgnorePools,
     manualMatchForm,
     createMatchesForCourts,
     queueNextMatch,
     clearQueuedMatch,
     reshuffleQueuedMatch,
+    reshuffleQueuedMatchWithoutPlayer,
     openManualMatchModal,
     openManualQueuedMatchModal,
     closeManualMatchModal,
-    setManualIgnorePools,
     updateManualMatchSlot,
     createManualMatch,
     createManualQueuedMatch,
     reshuffleMatch,
+    reshuffleMatchWithoutPlayer,
     undoMatchSelection,
     closeCourtActionDraft,
     confirmCourtAction,
@@ -209,7 +211,6 @@ export default function SessionPage() {
     addPlayerToSession,
     addGuestToSession,
     togglePausePlayer,
-    pauseQueuedPlayer,
     renameGuestInSession,
     requestRemovePlayerFromSession,
     closeRemovePlayerConfirm,
@@ -996,9 +997,10 @@ export default function SessionPage() {
                   creatingQueuedMatch={creatingQueuedMatch}
                   manualQueueOpen={manualQueueOpen}
                   clearingQueuedMatch={clearingQueuedMatch}
-                  pausingQueuedPlayerId={togglingPausePlayerId}
+                  reshufflingQueuedPlayerId={reshufflingQueuedPlayerId}
                   reshufflingQueuedMatch={reshufflingQueuedMatch}
                   reshufflingCourtId={reshufflingCourtId}
+                  reshufflingCourtPlayerId={reshufflingCourtPlayerId}
                   undoingCourtId={undoingCourtId}
                   reopeningMatchId={reopeningMatchId}
                   submittingMatchId={submittingMatchId}
@@ -1007,10 +1009,13 @@ export default function SessionPage() {
                   onQueueNextMatch={queueNextMatch}
                   onClearQueuedMatch={clearQueuedMatch}
                   onOpenManualQueuedMatchModal={openManualQueuedMatchModal}
-                  onPauseQueuedPlayer={(userId) => void pauseQueuedPlayer(userId)}
                   onReshuffleQueuedMatch={reshuffleQueuedMatch}
+                  onReshuffleQueuedMatchWithoutPlayer={
+                    reshuffleQueuedMatchWithoutPlayer
+                  }
                   onOpenManualMatchModal={openManualMatchModal}
                   onReshuffleMatch={reshuffleMatch}
+                  onReshuffleMatchWithoutPlayer={reshuffleMatchWithoutPlayer}
                   onUndoMatchSelection={undoMatchSelection}
                   onHandleScoreChange={handleScoreChange}
                   onRequestScoreSubmitConfirmation={
@@ -1340,9 +1345,7 @@ export default function SessionPage() {
         poolsEnabled={sessionData.poolsEnabled}
         poolAName={sessionData.poolAName}
         poolBName={sessionData.poolBName}
-        ignorePools={manualIgnorePools}
         onClose={closeManualMatchModal}
-        onIgnorePoolsChange={setManualIgnorePools}
         onUpdateSlot={updateManualMatchSlot}
         onCreateMatch={manualQueueOpen ? createManualQueuedMatch : createManualMatch}
       />

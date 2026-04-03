@@ -118,6 +118,61 @@ export async function createMatchesForAssignments(
   });
 }
 
+export async function replaceCurrentCourtMatchAssignment({
+  sessionId,
+  courtId,
+  currentMatchId,
+  selectedIds,
+  partition,
+}: {
+  sessionId: string;
+  courtId: string;
+  currentMatchId: string;
+  selectedIds: string[];
+  partition: ManualMatchTeams;
+}) {
+  return prisma.$transaction(async (tx) => {
+    const deletedMatch = await tx.match.deleteMany({
+      where: {
+        id: currentMatchId,
+        sessionId,
+        status: {
+          in: [MatchStatus.PENDING, MatchStatus.IN_PROGRESS],
+        },
+      },
+    });
+
+    if (deletedMatch.count === 0) {
+      throw new GenerateMatchError(
+        409,
+        "This match is no longer available to reshuffle."
+      );
+    }
+
+    const clearedCourt = await tx.court.updateMany({
+      where: {
+        id: courtId,
+        currentMatchId: currentMatchId,
+      },
+      data: { currentMatchId: null },
+    });
+
+    if (clearedCourt.count === 0) {
+      throw new GenerateMatchError(
+        409,
+        "This court already changed. Please refresh and try again."
+      );
+    }
+
+    await assertAssignmentsAvailable(tx, sessionId, [{ selectedIds }]);
+
+    return createMatchAssignment(tx, sessionId, {
+      courtId,
+      partition,
+    });
+  });
+}
+
 export async function createQueuedMatchAssignment({
   sessionId,
   queuedMatchId,

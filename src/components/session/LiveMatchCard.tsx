@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { canApprovePendingSubmission } from "@/lib/matchApprovalRules";
 import { MatchStatus } from "@/types/enums";
 import type { Match, MatchScores } from "./sessionTypes";
@@ -12,9 +13,11 @@ interface LiveMatchCardProps {
   isAdmin: boolean;
   isClaimedUser: boolean;
   confirmingScoreMatchId: string | null;
+  reshufflingCourtPlayerId: string | null;
   reopeningMatchId: string | null;
   submittingMatchId: string | null;
   matchScores: MatchScores;
+  onReshuffleWithoutPlayer: (userId: string) => void;
   onHandleScoreChange: (
     matchId: string,
     team: "team1" | "team2",
@@ -28,26 +31,84 @@ interface LiveMatchCardProps {
 }
 
 interface TeamNamesProps {
-  playerOneName: string;
-  playerTwoName: string;
+  matchId: string;
+  players: [Match["team1User1"], Match["team1User2"]];
   align?: "left" | "right";
+  canReshuffleWithoutPlayer: boolean;
+  activeActionPlayerId: string | null;
+  reshufflingCourtPlayerId: string | null;
+  actionDisabled: boolean;
+  onTogglePlayerAction: (actionKey: string) => void;
+  onReshuffleWithoutPlayer: (userId: string) => void;
 }
 
 function TeamNames({
-  playerOneName,
-  playerTwoName,
+  matchId,
+  players,
   align = "left",
+  canReshuffleWithoutPlayer,
+  activeActionPlayerId,
+  reshufflingCourtPlayerId,
+  actionDisabled,
+  onTogglePlayerAction,
+  onReshuffleWithoutPlayer,
 }: TeamNamesProps) {
+  const textAlignClass = align === "right" ? "text-right" : "text-left";
+  const popoverPositionClass = align === "right" ? "right-0" : "left-0";
+
   return (
-    <div
-      className={`min-w-0 space-y-1 ${align === "right" ? "text-right" : "text-left"}`}
-    >
-      <p className="truncate text-[14px] font-bold leading-tight text-gray-900 sm:text-base md:text-[1.35rem] xl:text-base">
-        {playerOneName}
-      </p>
-      <p className="truncate text-[14px] font-bold leading-tight text-gray-900 sm:text-base md:text-[1.35rem] xl:text-base">
-        {playerTwoName}
-      </p>
+    <div className={`min-w-0 space-y-1 ${textAlignClass}`}>
+      {players.map((player) => {
+        const actionKey = `${matchId}:${player.id}`;
+        const actionOpen = activeActionPlayerId === actionKey;
+        const isReshuffling = reshufflingCourtPlayerId === player.id;
+
+        return (
+          <div
+            key={player.id}
+            className={`relative min-w-0 ${textAlignClass}`}
+            data-live-player-action-root={actionKey}
+          >
+            {canReshuffleWithoutPlayer ? (
+              <button
+                type="button"
+                onClick={() => onTogglePlayerAction(actionKey)}
+                disabled={actionDisabled}
+                aria-expanded={actionOpen}
+                className={`min-w-0 max-w-full truncate text-[14px] font-bold leading-tight text-gray-900 transition hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-50 sm:text-base md:text-[1.35rem] xl:text-base ${textAlignClass}`}
+              >
+                {player.name}
+              </button>
+            ) : (
+              <p className="truncate text-[14px] font-bold leading-tight text-gray-900 sm:text-base md:text-[1.35rem] xl:text-base">
+                {player.name}
+              </p>
+            )}
+
+            {canReshuffleWithoutPlayer && actionOpen ? (
+              <div
+                className={`absolute top-full z-20 mt-2 w-36 max-w-[calc(100vw-3rem)] ${popoverPositionClass}`}
+              >
+                <div className="relative rounded-2xl border border-gray-900 bg-gray-950 p-2 shadow-[0_18px_40px_-22px_rgba(15,23,42,0.55)]">
+                  <div
+                    className={`absolute top-0 h-3 w-3 -translate-y-1/2 rotate-45 border-l border-t border-gray-900 bg-gray-950 ${
+                      align === "right" ? "right-4" : "left-4"
+                    }`}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => onReshuffleWithoutPlayer(player.id)}
+                    disabled={actionDisabled}
+                    className="w-full rounded-xl border border-blue-200/80 bg-blue-50 px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-blue-800 transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {isReshuffling ? "Reshuffling..." : "Reshuffle Without"}
+                  </button>
+                </div>
+              </div>
+            ) : null}
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -103,9 +164,11 @@ export function LiveMatchCard({
   isAdmin,
   isClaimedUser,
   confirmingScoreMatchId,
+  reshufflingCourtPlayerId,
   reopeningMatchId,
   submittingMatchId,
   matchScores,
+  onReshuffleWithoutPlayer,
   onHandleScoreChange,
   onRequestScoreSubmitConfirmation,
   onCancelScoreSubmitConfirmation,
@@ -113,6 +176,9 @@ export function LiveMatchCard({
   onApproveScore,
   onReopenScoreForEdit,
 }: LiveMatchCardProps) {
+  const [activeActionPlayerId, setActiveActionPlayerId] = useState<string | null>(
+    null
+  );
   const isParticipant = [
     match.team1User1.id,
     match.team1User2.id,
@@ -141,6 +207,60 @@ export function LiveMatchCard({
   const isPendingApproval = match.status === MatchStatus.PENDING_APPROVAL;
   const isConfirmingSubmission = confirmingScoreMatchId === match.id;
   const canEditScores = canEdit && !isConfirmingSubmission;
+  const canReshuffleWithoutPlayer =
+    isAdmin && match.status === MatchStatus.IN_PROGRESS;
+  const actionDisabled = reshufflingCourtPlayerId !== null;
+
+  useEffect(() => {
+    if (!activeActionPlayerId) return;
+
+    const handlePointerDown = (event: PointerEvent) => {
+      if (!(event.target instanceof Element)) return;
+      const actionRoot = event.target.closest("[data-live-player-action-root]");
+      if (
+        actionRoot?.getAttribute("data-live-player-action-root") ===
+        activeActionPlayerId
+      ) {
+        return;
+      }
+
+      setActiveActionPlayerId(null);
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setActiveActionPlayerId(null);
+      }
+    };
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [activeActionPlayerId]);
+
+  useEffect(() => {
+    if (!reshufflingCourtPlayerId) {
+      return;
+    }
+
+    setActiveActionPlayerId(`${match.id}:${reshufflingCourtPlayerId}`);
+  }, [match.id, reshufflingCourtPlayerId]);
+
+  const handleTogglePlayerAction = (actionKey: string) => {
+    if (actionDisabled) return;
+    setActiveActionPlayerId((current) =>
+      current === actionKey ? null : actionKey
+    );
+  };
+
+  const handleReshuffleWithoutPlayer = (userId: string) => {
+    setActiveActionPlayerId(`${match.id}:${userId}`);
+    onReshuffleWithoutPlayer(userId);
+  };
 
   return (
     <div className="space-y-3">
@@ -153,8 +273,14 @@ export function LiveMatchCard({
       >
         <div className="grid grid-cols-[minmax(0,1fr)_2.5rem_2.5rem_minmax(0,1fr)] items-center gap-2.5 sm:grid-cols-[minmax(0,1fr)_2.75rem_2.75rem_minmax(0,1fr)] sm:gap-3 md:grid-cols-[minmax(0,1fr)_3.5rem_3.5rem_minmax(0,1fr)] md:gap-4 xl:grid-cols-[minmax(0,1fr)_2.75rem_2.75rem_minmax(0,1fr)] xl:gap-3">
           <TeamNames
-            playerOneName={match.team1User1.name}
-            playerTwoName={match.team1User2.name}
+            matchId={match.id}
+            players={[match.team1User1, match.team1User2]}
+            canReshuffleWithoutPlayer={canReshuffleWithoutPlayer}
+            activeActionPlayerId={activeActionPlayerId}
+            reshufflingCourtPlayerId={reshufflingCourtPlayerId}
+            actionDisabled={actionDisabled}
+            onTogglePlayerAction={handleTogglePlayerAction}
+            onReshuffleWithoutPlayer={handleReshuffleWithoutPlayer}
           />
           <ScoreSlot
             canEdit={canEditScores}
@@ -171,9 +297,15 @@ export function LiveMatchCard({
             onScoreChange={(value) => onHandleScoreChange(match.id, "team2", value)}
           />
           <TeamNames
-            playerOneName={match.team2User1.name}
-            playerTwoName={match.team2User2.name}
+            matchId={match.id}
+            players={[match.team2User1, match.team2User2]}
             align="right"
+            canReshuffleWithoutPlayer={canReshuffleWithoutPlayer}
+            activeActionPlayerId={activeActionPlayerId}
+            reshufflingCourtPlayerId={reshufflingCourtPlayerId}
+            actionDisabled={actionDisabled}
+            onTogglePlayerAction={handleTogglePlayerAction}
+            onReshuffleWithoutPlayer={handleReshuffleWithoutPlayer}
           />
         </div>
       </div>

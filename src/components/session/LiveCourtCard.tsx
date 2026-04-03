@@ -14,12 +14,14 @@ interface LiveCourtCardProps {
   isClaimedUser: boolean;
   confirmingScoreMatchId: string | null;
   reshufflingCourtId: string | null;
+  reshufflingCourtPlayerId: string | null;
   undoingCourtId: string | null;
   reopeningMatchId: string | null;
   submittingMatchId: string | null;
   matchScores: MatchScores;
   onOpenManualMatchModal: (courtId: string) => void;
   onReshuffleMatch: (courtId: string) => void;
+  onReshuffleMatchWithoutPlayer: (courtId: string, userId: string) => void;
   onUndoMatchSelection: (courtId: string) => void;
   onHandleScoreChange: (
     matchId: string,
@@ -42,12 +44,14 @@ export function LiveCourtCard({
   isClaimedUser,
   confirmingScoreMatchId,
   reshufflingCourtId,
+  reshufflingCourtPlayerId,
   undoingCourtId,
   reopeningMatchId,
   submittingMatchId,
   matchScores,
   onOpenManualMatchModal,
   onReshuffleMatch,
+  onReshuffleMatchWithoutPlayer,
   onUndoMatchSelection,
   onHandleScoreChange,
   onRequestScoreSubmitConfirmation,
@@ -57,19 +61,30 @@ export function LiveCourtCard({
   onReopenScoreForEdit,
 }: LiveCourtCardProps) {
   const currentMatch = court.currentMatch;
+  const courtPlayerActionActive =
+    !!currentMatch &&
+    !!reshufflingCourtPlayerId &&
+    [
+      currentMatch.team1User1.id,
+      currentMatch.team1User2.id,
+      currentMatch.team2User1.id,
+      currentMatch.team2User2.id,
+    ].includes(reshufflingCourtPlayerId);
   const canManageLiveCourt =
     !!currentMatch && currentMatch.status === MatchStatus.IN_PROGRESS && isAdmin;
+  const liveCourtActionDisabled =
+    reshufflingCourtId === court.id || courtPlayerActionActive;
   const showManualButton =
     sessionStatus === SessionStatus.ACTIVE && !currentMatch && isAdmin;
   const leftAction = canManageLiveCourt ? (
     <button
       type="button"
       onClick={() => onReshuffleMatch(court.id)}
-      disabled={reshufflingCourtId === court.id}
+      disabled={liveCourtActionDisabled}
       className="flex items-center gap-1 rounded-lg bg-gray-100 px-2.5 py-1.5 text-[10px] font-black uppercase tracking-wider text-gray-600 transition-all active:scale-95 disabled:cursor-not-allowed disabled:opacity-50 md:px-3"
       title="Pick different players"
     >
-      {reshufflingCourtId === court.id ? "Reshuffling..." : "Reshuffle"}
+      {liveCourtActionDisabled ? "Reshuffling..." : "Reshuffle"}
     </button>
   ) : showManualButton ? (
     <button
@@ -84,7 +99,7 @@ export function LiveCourtCard({
     <button
       type="button"
       onClick={() => onUndoMatchSelection(court.id)}
-      disabled={undoingCourtId === court.id}
+      disabled={undoingCourtId === court.id || courtPlayerActionActive}
       className="flex items-center gap-1 rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-1.5 text-[10px] font-black uppercase tracking-wider text-rose-700 transition-all active:scale-95 disabled:cursor-not-allowed disabled:opacity-50 md:px-3"
       title="Put selected players back in pool"
     >
@@ -120,9 +135,13 @@ export function LiveCourtCard({
             isAdmin={isAdmin}
             isClaimedUser={isClaimedUser}
             confirmingScoreMatchId={confirmingScoreMatchId}
+            reshufflingCourtPlayerId={reshufflingCourtPlayerId}
             reopeningMatchId={reopeningMatchId}
             submittingMatchId={submittingMatchId}
             matchScores={matchScores}
+            onReshuffleWithoutPlayer={(userId) =>
+              onReshuffleMatchWithoutPlayer(court.id, userId)
+            }
             onHandleScoreChange={onHandleScoreChange}
             onRequestScoreSubmitConfirmation={onRequestScoreSubmitConfirmation}
             onCancelScoreSubmitConfirmation={onCancelScoreSubmitConfirmation}

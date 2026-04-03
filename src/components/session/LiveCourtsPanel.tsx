@@ -32,9 +32,10 @@ interface LiveCourtsPanelProps {
   creatingQueuedMatch: boolean;
   manualQueueOpen: boolean;
   clearingQueuedMatch: boolean;
-  pausingQueuedPlayerId: string | null;
+  reshufflingQueuedPlayerId: string | null;
   reshufflingQueuedMatch: boolean;
   reshufflingCourtId: string | null;
+  reshufflingCourtPlayerId: string | null;
   undoingCourtId: string | null;
   reopeningMatchId: string | null;
   submittingMatchId: string | null;
@@ -43,10 +44,11 @@ interface LiveCourtsPanelProps {
   onQueueNextMatch: () => void;
   onClearQueuedMatch: () => void;
   onOpenManualQueuedMatchModal: () => void;
-  onPauseQueuedPlayer: (userId: string) => void;
   onReshuffleQueuedMatch: () => void;
+  onReshuffleQueuedMatchWithoutPlayer: (userId: string) => void;
   onOpenManualMatchModal: (courtId: string) => void;
   onReshuffleMatch: (courtId: string) => void;
+  onReshuffleMatchWithoutPlayer: (courtId: string, userId: string) => void;
   onUndoMatchSelection: (courtId: string) => void;
   onHandleScoreChange: (
     matchId: string,
@@ -82,9 +84,10 @@ export function LiveCourtsPanel({
   creatingQueuedMatch,
   manualQueueOpen,
   clearingQueuedMatch,
-  pausingQueuedPlayerId,
+  reshufflingQueuedPlayerId,
   reshufflingQueuedMatch,
   reshufflingCourtId,
+  reshufflingCourtPlayerId,
   undoingCourtId,
   reopeningMatchId,
   submittingMatchId,
@@ -93,10 +96,11 @@ export function LiveCourtsPanel({
   onQueueNextMatch,
   onClearQueuedMatch,
   onOpenManualQueuedMatchModal,
-  onPauseQueuedPlayer,
   onReshuffleQueuedMatch,
+  onReshuffleQueuedMatchWithoutPlayer,
   onOpenManualMatchModal,
   onReshuffleMatch,
+  onReshuffleMatchWithoutPlayer,
   onUndoMatchSelection,
   onHandleScoreChange,
   onRequestScoreSubmitConfirmation,
@@ -225,12 +229,14 @@ export function LiveCourtsPanel({
               isClaimedUser={isClaimedUser}
               confirmingScoreMatchId={confirmingScoreMatchId}
               reshufflingCourtId={reshufflingCourtId}
+              reshufflingCourtPlayerId={reshufflingCourtPlayerId}
               undoingCourtId={undoingCourtId}
               reopeningMatchId={reopeningMatchId}
               submittingMatchId={submittingMatchId}
               matchScores={matchScores}
               onOpenManualMatchModal={onOpenManualMatchModal}
               onReshuffleMatch={onReshuffleMatch}
+              onReshuffleMatchWithoutPlayer={onReshuffleMatchWithoutPlayer}
               onUndoMatchSelection={onUndoMatchSelection}
               onHandleScoreChange={onHandleScoreChange}
               onRequestScoreSubmitConfirmation={onRequestScoreSubmitConfirmation}
@@ -244,17 +250,17 @@ export function LiveCourtsPanel({
           <QueuedMatchCard
             queuedMatch={queuedMatch}
             poolLabel={queuedPoolLabel}
-            canPauseQueuedPlayers={isAdmin}
+            canReshuffleQueuedPlayers={isAdmin}
             canOpenManualQueue={isAdmin && !queuedMatch}
             clearingQueuedMatch={clearingQueuedMatch}
             creatingQueuedMatch={creatingQueuedMatch}
             creatingManualQueuedMatch={manualQueueOpen}
-            pausingQueuedPlayerId={pausingQueuedPlayerId}
+            reshufflingQueuedPlayerId={reshufflingQueuedPlayerId}
             reshufflingQueuedMatch={reshufflingQueuedMatch}
             onClearQueuedMatch={onClearQueuedMatch}
             onOpenManualQueuedMatchModal={onOpenManualQueuedMatchModal}
-            onPauseQueuedPlayer={onPauseQueuedPlayer}
             onReshuffleQueuedMatch={onReshuffleQueuedMatch}
+            onReshuffleQueuedPlayer={onReshuffleQueuedMatchWithoutPlayer}
           />
         ) : null}
       </div>

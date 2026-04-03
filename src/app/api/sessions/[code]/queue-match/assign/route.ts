@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { getCourtDisplayLabel } from "@/lib/courtLabels";
 import { prisma } from "@/lib/prisma";
-import { getBusyPlayerIds } from "@/lib/matchmaking/busyFilter";
 import { SessionPool } from "@/types/enums";
 import { createQueuedMatchAssignment } from "../../generate-match/assignments";
 import {
@@ -89,11 +88,9 @@ export async function POST(
       throw new GenerateMatchError(409, "No free court available for the queued match.");
     }
 
-    const { playersById, rotationHistory } = await buildMatchmakingState(
-      sessionData,
-      { reserveQueuedPlayers: false }
-    );
-    const busyPlayerIds = getBusyPlayerIds(sessionData.matches);
+    const { busyPlayerIds } = await buildMatchmakingState(sessionData, {
+      reserveQueuedPlayers: false,
+    });
     const partition = {
       team1: [
         sessionData.queuedMatch.team1User1Id,
@@ -110,8 +107,6 @@ export async function POST(
       targetCourt,
       parsedTeams: partition,
       busyPlayerIds,
-      playersById,
-      rotationHistory,
     });
 
     const match = await createQueuedMatchAssignment({

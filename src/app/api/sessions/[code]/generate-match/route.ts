@@ -16,7 +16,7 @@ import {
   loadGenerateMatchContext,
   parseGenerateMatchRequest,
   parseManualTeams,
-  reshuffleCurrentCourtMatch,
+  replaceCurrentCourtMatchAssignment,
   selectBatchMatches,
   selectSingleCourtMatch,
   undoCurrentCourtMatch,
@@ -42,7 +42,7 @@ export async function POST(
       forceReshuffle,
       undoCurrentMatch,
       manualTeams,
-      ignorePools,
+      excludedUserId,
     } = parseGenerateMatchRequest(body);
 
     const {
@@ -63,23 +63,14 @@ export async function POST(
       return NextResponse.json(await undoCurrentCourtMatch(targetCourt));
     }
 
-    if (forceReshuffle && targetCourt.currentMatch) {
-      await reshuffleCurrentCourtMatch(sessionData, targetCourt, freedCourtIds);
-    }
-
-    const { busyPlayerIds, playersById, rotationHistory } =
-      await buildMatchmakingState(sessionData);
-
     if (manualTeams) {
+      const { busyPlayerIds } = await buildMatchmakingState(sessionData);
       const parsedTeams = parseManualTeams(manualTeams);
       const selectedIds = validateManualMatchRequest({
         sessionData,
         targetCourt,
         parsedTeams,
         busyPlayerIds,
-        playersById,
-        rotationHistory,
-        ignorePools,
       });
 
       const [createdMatch] = await createMatchesForAssignments(sessionData.id, [
@@ -118,6 +109,85 @@ export async function POST(
 
       return NextResponse.json(createdMatch);
     }
+
+    if (forceReshuffle && targetCourt.currentMatch) {
+      const reshuffleUserIds = [
+        targetCourt.currentMatch.team1User1Id,
+        targetCourt.currentMatch.team1User2Id,
+        targetCourt.currentMatch.team2User1Id,
+        targetCourt.currentMatch.team2User2Id,
+      ];
+
+      if (excludedUserId && !reshuffleUserIds.includes(excludedUserId)) {
+        throw new GenerateMatchError(
+          400,
+          "Selected player is not part of this match."
+        );
+      }
+
+      const reshuffleSessionData = {
+        ...sessionData,
+        matches: sessionData.matches.filter(
+          (match) => match.id !== targetCourt.currentMatch!.id
+        ),
+      };
+      const { busyPlayerIds, playersById, rotationHistory } =
+        await buildMatchmakingState(reshuffleSessionData);
+      const { availableCandidates, rankedCandidates } = getRankedCandidates(
+        reshuffleSessionData,
+        busyPlayerIds
+      );
+      const eligibleAvailableCandidates = excludedUserId
+        ? availableCandidates.filter(
+            (candidate) => candidate.userId !== excludedUserId
+          )
+        : availableCandidates;
+      const eligibleRankedCandidates = excludedUserId
+        ? rankedCandidates.filter(
+            (candidate) => candidate.userId !== excludedUserId
+          )
+        : rankedCandidates;
+
+      ensureEnoughPlayers(
+        eligibleAvailableCandidates.length,
+        eligibleRankedCandidates.length,
+        1
+      );
+
+      const bestSelection = selectSingleCourtMatch({
+        rankedCandidates: eligibleRankedCandidates,
+        playersById,
+        sessionData: reshuffleSessionData,
+        rotationHistory,
+        reshuffleSource,
+      });
+
+      const newMatch = await replaceCurrentCourtMatchAssignment({
+        sessionId: sessionData.id,
+        courtId: targetCourt.id,
+        currentMatchId: targetCourt.currentMatch.id,
+        selectedIds: [...bestSelection.ids],
+        partition: bestSelection.partition,
+      });
+
+      if (sessionData.poolsEnabled && "targetPool" in bestSelection) {
+        const nextPoolState = applyPoolSelectionOutcome(sessionData, bestSelection);
+        await prisma.session.update({
+          where: { id: sessionData.id },
+          data: {
+            poolACourtAssignments: nextPoolState.poolACourtAssignments,
+            poolBCourtAssignments: nextPoolState.poolBCourtAssignments,
+            poolAMissedTurns: nextPoolState.poolAMissedTurns,
+            poolBMissedTurns: nextPoolState.poolBMissedTurns,
+          },
+        });
+      }
+
+      return NextResponse.json(newMatch);
+    }
+
+    const { busyPlayerIds, playersById, rotationHistory } =
+      await buildMatchmakingState(sessionData);
 
     const requestedOpenCourts = getRequestedOpenCourts(
       orderedTargetCourts,

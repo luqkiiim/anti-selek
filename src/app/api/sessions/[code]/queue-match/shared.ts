@@ -7,7 +7,11 @@ import {
   getRankedCandidates,
   selectSingleCourtMatch,
 } from "../generate-match/service";
-import { GenerateMatchError, loadSessionRecord } from "../generate-match/shared";
+import {
+  GenerateMatchError,
+  loadSessionRecord,
+  type ReshuffleSource,
+} from "../generate-match/shared";
 
 type QueueSessionRecord = NonNullable<Awaited<ReturnType<typeof loadSessionRecord>>>;
 type QueueRecord = NonNullable<QueueSessionRecord["queuedMatch"]>;
@@ -92,6 +96,52 @@ async function createQueuedMatchRecord(
   }
 }
 
+async function updateQueuedMatchRecord({
+  queuedMatchId,
+  partition,
+  targetPool,
+}: {
+  queuedMatchId: string;
+  partition: ManualMatchTeams;
+  targetPool?: string | null;
+}) {
+  return prisma.queuedMatch.update({
+    where: { id: queuedMatchId },
+    data: {
+      team1User1Id: partition.team1[0],
+      team1User2Id: partition.team1[1],
+      team2User1Id: partition.team2[0],
+      team2User2Id: partition.team2[1],
+      targetPool: targetPool ?? null,
+    },
+  });
+}
+
+function getQueuedReshuffleSource(sessionData: QueueSessionRecord): ReshuffleSource {
+  if (!sessionData.queuedMatch) {
+    throw new GenerateMatchError(400, "No queued match to reshuffle.");
+  }
+
+  return {
+    ids: [
+      sessionData.queuedMatch.team1User1Id,
+      sessionData.queuedMatch.team1User2Id,
+      sessionData.queuedMatch.team2User1Id,
+      sessionData.queuedMatch.team2User2Id,
+    ],
+    partition: {
+      team1: [
+        sessionData.queuedMatch.team1User1Id,
+        sessionData.queuedMatch.team1User2Id,
+      ],
+      team2: [
+        sessionData.queuedMatch.team2User1Id,
+        sessionData.queuedMatch.team2User2Id,
+      ],
+    },
+  };
+}
+
 export async function createQueuedMatchForSession(sessionData: QueueSessionRecord) {
   await ensureQueueSlotAvailable(sessionData);
 
@@ -117,6 +167,74 @@ export async function createQueuedMatchForSession(sessionData: QueueSessionRecor
     selection.partition,
     "targetPool" in selection ? selection.targetPool : null
   );
+
+  return buildQueuedMatchResponse(sessionData, queuedMatch);
+}
+
+export async function reshuffleQueuedMatchForSession(
+  sessionData: QueueSessionRecord,
+  options?: { excludedUserId?: string }
+) {
+  if (sessionData.status !== "ACTIVE") {
+    throw new GenerateMatchError(400, "Session not active");
+  }
+
+  if (!sessionData.queuedMatch) {
+    throw new GenerateMatchError(400, "No queued match to reshuffle.");
+  }
+
+  const excludedUserId = options?.excludedUserId;
+  const reshuffleUserIds = [
+    sessionData.queuedMatch.team1User1Id,
+    sessionData.queuedMatch.team1User2Id,
+    sessionData.queuedMatch.team2User1Id,
+    sessionData.queuedMatch.team2User2Id,
+  ];
+
+  if (excludedUserId && !reshuffleUserIds.includes(excludedUserId)) {
+    throw new GenerateMatchError(
+      400,
+      "Selected player is not part of the queued match."
+    );
+  }
+
+  const reshuffleSessionData = {
+    ...sessionData,
+    queuedMatch: null,
+  };
+  const { busyPlayerIds, playersById, rotationHistory } =
+    await buildMatchmakingState(reshuffleSessionData, {
+      reserveQueuedPlayers: false,
+    });
+  const { availableCandidates, rankedCandidates } = getRankedCandidates(
+    reshuffleSessionData,
+    busyPlayerIds
+  );
+  const eligibleAvailableCandidates = excludedUserId
+    ? availableCandidates.filter((candidate) => candidate.userId !== excludedUserId)
+    : availableCandidates;
+  const eligibleRankedCandidates = excludedUserId
+    ? rankedCandidates.filter((candidate) => candidate.userId !== excludedUserId)
+    : rankedCandidates;
+
+  ensureEnoughPlayers(
+    eligibleAvailableCandidates.length,
+    eligibleRankedCandidates.length,
+    1
+  );
+
+  const selection = selectSingleCourtMatch({
+    rankedCandidates: eligibleRankedCandidates,
+    playersById,
+    sessionData: reshuffleSessionData,
+    rotationHistory,
+    reshuffleSource: getQueuedReshuffleSource(sessionData),
+  });
+  const queuedMatch = await updateQueuedMatchRecord({
+    queuedMatchId: sessionData.queuedMatch.id,
+    partition: selection.partition,
+    targetPool: "targetPool" in selection ? selection.targetPool : null,
+  });
 
   return buildQueuedMatchResponse(sessionData, queuedMatch);
 }

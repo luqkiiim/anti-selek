@@ -6,7 +6,10 @@ export {
   type ParsedGenerateMatchRequest,
   type ReshuffleSource,
 } from "./shared";
-export { createMatchesForAssignments } from "./assignments";
+export {
+  createMatchesForAssignments,
+  replaceCurrentCourtMatchAssignment,
+} from "./assignments";
 export {
   loadGenerateMatchContext,
   reshuffleCurrentCourtMatch,

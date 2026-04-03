@@ -23,9 +23,7 @@ interface ManualMatchModalProps {
   poolsEnabled: boolean;
   poolAName?: string | null;
   poolBName?: string | null;
-  ignorePools: boolean;
   onClose: () => void;
-  onIgnorePoolsChange: (value: boolean) => void;
   onUpdateSlot: (slot: ManualMatchSlot, value: string) => void;
   onCreateMatch: () => void;
 }
@@ -38,7 +36,7 @@ export function ManualMatchModal({
   court,
   title = "Manual Match",
   locationLabel,
-  note = "This bypasses automatic balancing for this one match only. Matchmaking state still updates normally when the result is approved.",
+  note = "This is an admin override for one match only. Pool and mixed-format restrictions are skipped, but normal safety checks still apply.",
   submitLabel = "Create Match",
   manualMatchForm,
   manualMatchPlayerOptions,
@@ -47,9 +45,7 @@ export function ManualMatchModal({
   poolsEnabled,
   poolAName,
   poolBName,
-  ignorePools,
   onClose,
-  onIgnorePoolsChange,
   onUpdateSlot,
   onCreateMatch,
 }: ManualMatchModalProps) {
@@ -151,19 +147,6 @@ export function ManualMatchModal({
             <p className="mt-1 text-xs text-blue-900">
               {note}
             </p>
-            {poolsEnabled ? (
-              <label className="mt-3 flex items-start gap-2 text-xs text-blue-900">
-                <input
-                  type="checkbox"
-                  checked={ignorePools}
-                  onChange={(event) => onIgnorePoolsChange(event.target.checked)}
-                  className="mt-0.5 h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                />
-                <span>
-                  Ignore pool boundaries for this manual match.
-                </span>
-              </label>
-            ) : null}
           </div>
 
           {manualMatchPlayerOptions.length < 4 ? (

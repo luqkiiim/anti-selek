@@ -25,6 +25,9 @@ export function useSessionCourtConfirmActions({
     null
   );
   const [undoingCourtId, setUndoingCourtId] = useState<string | null>(null);
+  const [reshufflingCourtPlayerId, setReshufflingCourtPlayerId] = useState<
+    string | null
+  >(null);
   const [courtActionDraft, setCourtActionDraft] =
     useState<CourtActionDraft | null>(null);
 
@@ -76,6 +79,34 @@ export function useSessionCourtConfirmActions({
 
   const undoMatchSelection = (courtId: string) => {
     openCourtActionDraft(courtId, "undo");
+  };
+
+  const reshuffleMatchWithoutPlayer = async (courtId: string, userId: string) => {
+    setReshufflingCourtPlayerId(userId);
+    setError("");
+    try {
+      const { res, data } = await postGenerateMatchAction({
+        code,
+        safeJson,
+        body: {
+          courtId,
+          forceReshuffle: true,
+          excludedUserId: userId,
+        },
+      });
+
+      if (res.ok) {
+        patchSessionData((current) => applyGeneratedMatches(current, [data]));
+        scheduleSessionRefresh();
+      } else {
+        setError(data.error || "Failed to reshuffle match");
+      }
+    } catch (err) {
+      console.error(err);
+      setError("Network error reshuffling match");
+    } finally {
+      setReshufflingCourtPlayerId(null);
+    }
   };
 
   const confirmCourtAction = async () => {
@@ -152,9 +183,11 @@ export function useSessionCourtConfirmActions({
   return {
     reshufflingCourtId,
     undoingCourtId,
+    reshufflingCourtPlayerId,
     courtActionDraft,
     closeCourtActionDraft,
     reshuffleMatch,
+    reshuffleMatchWithoutPlayer,
     undoMatchSelection,
     confirmCourtAction,
   };

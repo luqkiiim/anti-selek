@@ -1,21 +1,12 @@
 import {
   getManualMatchPlayerIds,
   hasDuplicateManualMatchPlayers,
-  isValidManualMatchPartition,
   type ManualMatchTeams,
 } from "@/lib/matchmaking/manualMatch";
-import {
-  buildRotationHistory,
-  type PartitionCandidate,
-} from "@/lib/matchmaking/partitioning";
-import { getNormalizedSessionPool } from "@/lib/sessionPools";
-import { SessionPool } from "@/types/enums";
-import { SessionMode, SessionType } from "@/types/enums";
 import {
   GenerateMatchError,
   type GenerateMatchCourt,
   type GenerateMatchSession,
-  mixedModeLabel,
 } from "./shared";
 
 export function validateManualMatchRequest({
@@ -23,17 +14,11 @@ export function validateManualMatchRequest({
   targetCourt,
   parsedTeams,
   busyPlayerIds,
-  playersById,
-  rotationHistory,
-  ignorePools = false,
 }: {
   sessionData: GenerateMatchSession;
   targetCourt: GenerateMatchCourt;
   parsedTeams: ManualMatchTeams;
   busyPlayerIds: Set<string>;
-  playersById: Map<string, PartitionCandidate>;
-  rotationHistory: ReturnType<typeof buildRotationHistory>;
-  ignorePools?: boolean;
 }) {
   if (targetCourt.currentMatch) {
     throw new GenerateMatchError(
@@ -68,43 +53,11 @@ export function validateManualMatchRequest({
     );
   }
 
-  if (sessionData.poolsEnabled && !ignorePools) {
-    const selectedPools = new Set(
-      selectedPlayers.map((player) =>
-        getNormalizedSessionPool(player?.pool ?? SessionPool.A)
-      )
-    );
-
-    if (selectedPools.size > 1) {
-      throw new GenerateMatchError(
-        400,
-        "Manual matches must stay within one pool unless override is enabled."
-      );
-    }
-  }
-
   const busyManualIds = selectedIds.filter((id) => busyPlayerIds.has(id));
   if (busyManualIds.length > 0) {
     throw new GenerateMatchError(
       409,
       "One or more selected players are already busy on another court."
-    );
-  }
-
-  if (
-    !isValidManualMatchPartition(
-      parsedTeams,
-      playersById,
-      sessionData.mode as SessionMode,
-      sessionData.type as SessionType,
-      rotationHistory
-    )
-  ) {
-    throw new GenerateMatchError(
-      400,
-      sessionData.mode === SessionMode.MIXICANO
-        ? `That manual pairing is invalid for current ${mixedModeLabel} preferences.`
-        : "Invalid manual pairing."
     );
   }
 

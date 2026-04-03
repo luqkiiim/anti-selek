@@ -34,10 +34,12 @@ export function useSessionCourtMatchCreation({
   const [clearingQueuedMatch, setClearingQueuedMatch] = useState(false);
   const [assigningQueuedMatch, setAssigningQueuedMatch] = useState(false);
   const [reshufflingQueuedMatch, setReshufflingQueuedMatch] = useState(false);
+  const [reshufflingQueuedPlayerId, setReshufflingQueuedPlayerId] = useState<
+    string | null
+  >(null);
   const [manualCourtId, setManualCourtId] = useState<string | null>(null);
   const [manualQueueOpen, setManualQueueOpen] = useState(false);
   const [creatingManualMatch, setCreatingManualMatch] = useState(false);
-  const [manualIgnorePools, setManualIgnorePools] = useState(false);
   const [manualMatchForm, setManualMatchForm] =
     useState<ManualMatchFormState>(emptyManualMatchForm);
 
@@ -73,7 +75,6 @@ export function useSessionCourtMatchCreation({
   const openManualMatchModal = (courtId: string) => {
     setManualQueueOpen(false);
     setManualCourtId(courtId);
-    setManualIgnorePools(false);
     setManualMatchForm(emptyManualMatchForm());
     setError("");
   };
@@ -81,7 +82,6 @@ export function useSessionCourtMatchCreation({
   const openManualQueuedMatchModal = () => {
     setManualCourtId(null);
     setManualQueueOpen(true);
-    setManualIgnorePools(false);
     setManualMatchForm(emptyManualMatchForm());
     setError("");
   };
@@ -89,7 +89,6 @@ export function useSessionCourtMatchCreation({
   const closeManualMatchModal = () => {
     setManualCourtId(null);
     setManualQueueOpen(false);
-    setManualIgnorePools(false);
     setCreatingManualMatch(false);
     setManualMatchForm(emptyManualMatchForm());
   };
@@ -119,7 +118,6 @@ export function useSessionCourtMatchCreation({
         safeJson,
         body: {
           courtId: manualCourtId,
-          ignorePools: sessionData.poolsEnabled ? manualIgnorePools : false,
           manualTeams: {
             team1: [team1User1Id, team1User2Id],
             team2: [team2User1Id, team2User2Id],
@@ -161,7 +159,6 @@ export function useSessionCourtMatchCreation({
         {
           safeJson,
           body: {
-            ignorePools: sessionData.poolsEnabled ? manualIgnorePools : false,
             manualTeams: {
               team1: [team1User1Id, team1User2Id],
               team2: [team2User1Id, team2User2Id],
@@ -274,39 +271,62 @@ export function useSessionCourtMatchCreation({
     setReshufflingQueuedMatch(true);
     setError("");
     try {
-      const { res: clearRes, data: clearData } = await deleteSessionAction(
+      const { res, data } = await postSessionAction(
         `/api/sessions/${code}/queue-match`,
-        { safeJson }
+        {
+          safeJson,
+          body: { reshuffle: true },
+        }
       );
 
-      if (!clearRes.ok) {
-        setError(clearData.error || "Failed to reshuffle queued match");
-        return;
-      }
-
-      patchSessionData((current) => applyQueuedMatch(current, null));
-
-      const { res: queueRes, data: queueData } = await postSessionAction(
-        `/api/sessions/${code}/queue-match`,
-        { safeJson }
-      );
-
-      if (!queueRes.ok) {
-        setError(queueData.error || "Failed to reshuffle queued match");
-        scheduleSessionRefresh();
+      if (!res.ok) {
+        setError(data.error || "Failed to reshuffle queued match");
         return;
       }
 
       patchSessionData((current) =>
-        applyQueuedMatch(current, queueData.queuedMatch ?? null)
+        applyQueuedMatch(current, data.queuedMatch ?? null)
       );
       scheduleSessionRefresh();
     } catch (err) {
       console.error(err);
       setError("Network error reshuffling queued match");
-      scheduleSessionRefresh();
     } finally {
       setReshufflingQueuedMatch(false);
+    }
+  };
+
+  const reshuffleQueuedMatchWithoutPlayer = async (userId: string) => {
+    if (!sessionData?.queuedMatch) return;
+
+    setReshufflingQueuedPlayerId(userId);
+    setError("");
+    try {
+      const { res, data } = await postSessionAction(
+        `/api/sessions/${code}/queue-match`,
+        {
+          safeJson,
+          body: {
+            reshuffle: true,
+            excludeUserId: userId,
+          },
+        }
+      );
+
+      if (!res.ok) {
+        setError(data.error || "Failed to reshuffle queued match");
+        return;
+      }
+
+      patchSessionData((current) =>
+        applyQueuedMatch(current, data.queuedMatch ?? null)
+      );
+      scheduleSessionRefresh();
+    } catch (err) {
+      console.error(err);
+      setError("Network error reshuffling queued match");
+    } finally {
+      setReshufflingQueuedPlayerId(null);
     }
   };
 
@@ -317,20 +337,20 @@ export function useSessionCourtMatchCreation({
     clearingQueuedMatch,
     assigningQueuedMatch,
     reshufflingQueuedMatch,
+    reshufflingQueuedPlayerId,
     manualCourtId,
     manualQueueOpen,
     creatingManualMatch,
-    manualIgnorePools,
     manualMatchForm,
     createMatchesForCourts,
     queueNextMatch,
     clearQueuedMatch,
     assignQueuedMatch,
     reshuffleQueuedMatch,
+    reshuffleQueuedMatchWithoutPlayer,
     openManualMatchModal,
     openManualQueuedMatchModal,
     closeManualMatchModal,
-    setManualIgnorePools,
     updateManualMatchSlot,
     createManualMatch,
     createManualQueuedMatch,

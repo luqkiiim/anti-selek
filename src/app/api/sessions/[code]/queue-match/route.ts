@@ -15,6 +15,7 @@ import { buildMatchmakingState } from "../generate-match/selection";
 import {
   createManualQueuedMatchForSession,
   createQueuedMatchForSession,
+  reshuffleQueuedMatchForSession,
 } from "./shared";
 
 async function parseQueueMatchBody(request: Request) {
@@ -85,10 +86,39 @@ export async function POST(
     );
 
     const body = await parseQueueMatchBody(request);
+    const wantsReshuffle = body.reshuffle === true;
+    const excludedUserId =
+      typeof body.excludeUserId === "string" ? body.excludeUserId : undefined;
+
+    if (body.excludeUserId !== undefined && !excludedUserId) {
+      throw new GenerateMatchError(400, "Invalid excluded player");
+    }
+
+    if (wantsReshuffle) {
+      if (body.manualTeams !== undefined) {
+        throw new GenerateMatchError(
+          400,
+          "Manual queueing cannot be combined with reshuffle."
+        );
+      }
+
+      return NextResponse.json({
+        queuedMatch: await reshuffleQueuedMatchForSession(sessionData, {
+          excludedUserId,
+        }),
+      });
+    }
+
+    if (excludedUserId) {
+      throw new GenerateMatchError(
+        400,
+        "Excluded-player queue reshuffle must be combined with reshuffle."
+      );
+    }
+
     if (body.manualTeams !== undefined) {
       const parsedTeams = parseManualTeams(body.manualTeams);
-      const { busyPlayerIds, playersById, rotationHistory } =
-        await buildMatchmakingState(sessionData);
+      const { busyPlayerIds } = await buildMatchmakingState(sessionData);
 
       validateManualMatchRequest({
         sessionData,
@@ -97,9 +127,6 @@ export async function POST(
         >[0]["targetCourt"],
         parsedTeams,
         busyPlayerIds,
-        playersById,
-        rotationHistory,
-        ignorePools: body.ignorePools === true,
       });
 
       const poolSummary = summarizeSessionPoolMembership(

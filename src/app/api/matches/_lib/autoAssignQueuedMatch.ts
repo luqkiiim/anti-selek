@@ -1,5 +1,4 @@
 import { prisma } from "@/lib/prisma";
-import { getBusyPlayerIds } from "@/lib/matchmaking/busyFilter";
 import { createQueuedMatchAssignment } from "@/app/api/sessions/[code]/generate-match/assignments";
 import {
   applyPoolSelectionOutcome,
@@ -36,11 +35,9 @@ export async function autoAssignQueuedMatch(sessionId: string) {
     return { autoAssignedMatch: null, queuedMatchCleared: false };
   }
 
-  const { playersById, rotationHistory } = await buildMatchmakingState(
-    sessionData,
-    { reserveQueuedPlayers: false }
-  );
-  const busyPlayerIds = getBusyPlayerIds(sessionData.matches);
+  const { busyPlayerIds } = await buildMatchmakingState(sessionData, {
+    reserveQueuedPlayers: false,
+  });
   const partition = {
     team1: [
       sessionData.queuedMatch.team1User1Id,
@@ -58,8 +55,6 @@ export async function autoAssignQueuedMatch(sessionId: string) {
       targetCourt,
       parsedTeams: partition,
       busyPlayerIds,
-      playersById,
-      rotationHistory,
     });
   } catch (error) {
     if (error instanceof GenerateMatchError) {

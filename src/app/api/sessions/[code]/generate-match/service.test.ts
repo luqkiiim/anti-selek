@@ -226,7 +226,7 @@ describe("generate match service", () => {
         forceReshuffle: false,
         undoCurrentMatch: false,
         manualTeams: undefined,
-        ignorePools: false,
+        excludedUserId: undefined,
       });
     });
 
@@ -241,7 +241,23 @@ describe("generate match service", () => {
         forceReshuffle: false,
         undoCurrentMatch: false,
         manualTeams: undefined,
-        ignorePools: false,
+        excludedUserId: undefined,
+      });
+    });
+
+    it("accepts excluded-player reshuffles", () => {
+      expect(
+        parseGenerateMatchRequest({
+          courtId: "court-1",
+          forceReshuffle: true,
+          excludedUserId: "player-1",
+        })
+      ).toEqual({
+        requestedCourtIds: ["court-1"],
+        forceReshuffle: true,
+        undoCurrentMatch: false,
+        manualTeams: undefined,
+        excludedUserId: "player-1",
       });
     });
 
@@ -273,6 +289,20 @@ describe("generate match service", () => {
         new GenerateMatchError(
           400,
           "Reshuffle, undo, and manual match creation are only supported for one court at a time."
+        )
+      );
+    });
+
+    it("rejects excluded-player reshuffle without reshuffle", () => {
+      expect(() =>
+        parseGenerateMatchRequest({
+          courtId: "court-1",
+          excludedUserId: "player-1",
+        })
+      ).toThrowError(
+        new GenerateMatchError(
+          400,
+          "Excluded-player reshuffle must be combined with reshuffle."
         )
       );
     });
@@ -318,45 +348,45 @@ describe("generate match service", () => {
         targetCourt: createCourt("court-1"),
         parsedTeams: { team1: ["A", "B"], team2: ["C", "D"] },
         busyPlayerIds: new Set(),
-        playersById: createPlayersById(players),
-        rotationHistory: buildRotationHistory([]),
       });
 
       expect(selectedIds).toEqual(["A", "B", "C", "D"]);
     });
 
-    it("rejects invalid Mixicano pairings", () => {
+    it("allows manual override for cross-pool hybrid matches", () => {
       const players = [
-        createSessionPlayer("M1", { gender: PlayerGender.MALE }),
-        createSessionPlayer("M2", { gender: PlayerGender.MALE }),
+        createSessionPlayer("M1", {
+          gender: PlayerGender.MALE,
+          pool: SessionPool.A,
+        }),
+        createSessionPlayer("M2", {
+          gender: PlayerGender.MALE,
+          pool: SessionPool.B,
+        }),
         createSessionPlayer("F1", {
           gender: PlayerGender.FEMALE,
           partnerPreference: PartnerPreference.FEMALE_FLEX,
+          pool: SessionPool.A,
         }),
         createSessionPlayer("F2", {
           gender: PlayerGender.FEMALE,
           partnerPreference: PartnerPreference.FEMALE_FLEX,
+          pool: SessionPool.B,
         }),
       ];
 
-      expect(() =>
+      expect(
         validateManualMatchRequest({
           sessionData: createSessionData({
             mode: SessionMode.MIXICANO,
+            poolsEnabled: true,
             players,
           }),
           targetCourt: createCourt("court-1"),
           parsedTeams: { team1: ["F1", "F2"], team2: ["M1", "M2"] },
           busyPlayerIds: new Set(),
-          playersById: createPlayersById(players),
-          rotationHistory: buildRotationHistory([]),
         })
-      ).toThrowError(
-        new GenerateMatchError(
-          400,
-          "That manual pairing is invalid for current Mixed preferences."
-        )
-      );
+      ).toEqual(["F1", "F2", "M1", "M2"]);
     });
   });
 

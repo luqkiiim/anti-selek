@@ -6,43 +6,43 @@ import type { QueuedMatch } from "./sessionTypes";
 interface QueuedMatchCardProps {
   queuedMatch: QueuedMatch | null;
   poolLabel?: string | null;
-  canPauseQueuedPlayers: boolean;
+  canReshuffleQueuedPlayers: boolean;
   canOpenManualQueue: boolean;
   clearingQueuedMatch: boolean;
   creatingQueuedMatch: boolean;
   creatingManualQueuedMatch: boolean;
-  pausingQueuedPlayerId: string | null;
+  reshufflingQueuedPlayerId: string | null;
   reshufflingQueuedMatch: boolean;
   onClearQueuedMatch: () => void;
   onOpenManualQueuedMatchModal: () => void;
-  onPauseQueuedPlayer: (userId: string) => void;
   onReshuffleQueuedMatch: () => void;
+  onReshuffleQueuedPlayer: (userId: string) => void;
 }
 
 function TeamPlayers({
   players,
   align = "left",
-  canPauseQueuedPlayers,
+  canReshuffleQueuedPlayers,
   activeActionPlayerId,
-  pausingQueuedPlayerId,
+  reshufflingQueuedPlayerId,
   queueActionDisabled,
   onTogglePlayerAction,
-  onPauseQueuedPlayer,
+  onReshuffleQueuedPlayer,
 }: {
   players: [QueuedMatch["team1User1"], QueuedMatch["team1User2"]];
   align?: "left" | "right";
-  canPauseQueuedPlayers: boolean;
+  canReshuffleQueuedPlayers: boolean;
   activeActionPlayerId: string | null;
-  pausingQueuedPlayerId: string | null;
+  reshufflingQueuedPlayerId: string | null;
   queueActionDisabled: boolean;
   onTogglePlayerAction: (userId: string) => void;
-  onPauseQueuedPlayer: (userId: string) => void;
+  onReshuffleQueuedPlayer: (userId: string) => void;
 }) {
   return (
     <div className="min-w-0 space-y-2">
       {players.map((player) => {
         const actionOpen = activeActionPlayerId === player.id;
-        const isPausing = pausingQueuedPlayerId === player.id;
+        const isReshuffling = reshufflingQueuedPlayerId === player.id;
         const textAlignClass = align === "right" ? "text-right" : "text-left";
         const popoverPositionClass = align === "right" ? "right-0" : "left-0";
 
@@ -52,7 +52,7 @@ function TeamPlayers({
             className={`relative min-w-0 ${textAlignClass}`}
             data-queued-player-action-root={player.id}
           >
-            {canPauseQueuedPlayers ? (
+            {canReshuffleQueuedPlayers ? (
               <button
                 type="button"
                 onClick={() => onTogglePlayerAction(player.id)}
@@ -70,9 +70,9 @@ function TeamPlayers({
               </p>
             )}
 
-            {canPauseQueuedPlayers && actionOpen ? (
+            {canReshuffleQueuedPlayers && actionOpen ? (
               <div
-                className={`absolute top-full z-20 mt-2 w-24 max-w-[calc(100vw-3rem)] ${popoverPositionClass}`}
+                className={`absolute top-full z-20 mt-2 w-36 max-w-[calc(100vw-3rem)] ${popoverPositionClass}`}
               >
                 <div className="relative rounded-2xl border border-gray-900 bg-gray-950 p-2 shadow-[0_18px_40px_-22px_rgba(15,23,42,0.55)]">
                   <div
@@ -84,11 +84,11 @@ function TeamPlayers({
                   />
                   <button
                     type="button"
-                    onClick={() => onPauseQueuedPlayer(player.id)}
+                    onClick={() => onReshuffleQueuedPlayer(player.id)}
                     disabled={queueActionDisabled}
-                    className="w-full rounded-xl border border-amber-200/80 bg-amber-50 px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-amber-800 transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="w-full rounded-xl border border-blue-200/80 bg-blue-50 px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-blue-800 transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
                   >
-                    {isPausing ? "Pausing..." : "Pause"}
+                    {isReshuffling ? "Reshuffling..." : "Reshuffle Without"}
                   </button>
                 </div>
               </div>
@@ -103,17 +103,17 @@ function TeamPlayers({
 export function QueuedMatchCard({
   queuedMatch,
   poolLabel,
-  canPauseQueuedPlayers,
+  canReshuffleQueuedPlayers,
   canOpenManualQueue,
   clearingQueuedMatch,
   creatingQueuedMatch,
   creatingManualQueuedMatch,
-  pausingQueuedPlayerId,
+  reshufflingQueuedPlayerId,
   reshufflingQueuedMatch,
   onClearQueuedMatch,
   onOpenManualQueuedMatchModal,
-  onPauseQueuedPlayer,
   onReshuffleQueuedMatch,
+  onReshuffleQueuedPlayer,
 }: QueuedMatchCardProps) {
   const [activeActionPlayerId, setActiveActionPlayerId] = useState<string | null>(
     null
@@ -123,7 +123,7 @@ export function QueuedMatchCard({
     creatingQueuedMatch ||
     creatingManualQueuedMatch ||
     reshufflingQueuedMatch ||
-    pausingQueuedPlayerId !== null;
+    reshufflingQueuedPlayerId !== null;
 
   useEffect(() => {
     if (!activeActionPlayerId) return;
@@ -157,23 +157,23 @@ export function QueuedMatchCard({
   }, [activeActionPlayerId]);
 
   useEffect(() => {
-    if (!pausingQueuedPlayerId && activeActionPlayerId) {
+    if (!reshufflingQueuedPlayerId && activeActionPlayerId) {
       return;
     }
 
-    if (pausingQueuedPlayerId) {
-      setActiveActionPlayerId(pausingQueuedPlayerId);
+    if (reshufflingQueuedPlayerId) {
+      setActiveActionPlayerId(reshufflingQueuedPlayerId);
     }
-  }, [activeActionPlayerId, pausingQueuedPlayerId]);
+  }, [activeActionPlayerId, reshufflingQueuedPlayerId]);
 
   const togglePlayerAction = (userId: string) => {
     if (queueActionDisabled) return;
     setActiveActionPlayerId((current) => (current === userId ? null : userId));
   };
 
-  const handlePauseQueuedPlayer = (userId: string) => {
+  const handleReshuffleQueuedPlayer = (userId: string) => {
     setActiveActionPlayerId(userId);
-    onPauseQueuedPlayer(userId);
+    onReshuffleQueuedPlayer(userId);
   };
 
   const leftAction = queuedMatch ? (
@@ -233,12 +233,12 @@ export function QueuedMatchCard({
               <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2.5 sm:gap-3 md:gap-4 xl:gap-3">
                 <TeamPlayers
                   players={[queuedMatch.team1User1, queuedMatch.team1User2]}
-                  canPauseQueuedPlayers={canPauseQueuedPlayers}
+                  canReshuffleQueuedPlayers={canReshuffleQueuedPlayers}
                   activeActionPlayerId={activeActionPlayerId}
-                  pausingQueuedPlayerId={pausingQueuedPlayerId}
+                  reshufflingQueuedPlayerId={reshufflingQueuedPlayerId}
                   queueActionDisabled={queueActionDisabled}
                   onTogglePlayerAction={togglePlayerAction}
-                  onPauseQueuedPlayer={handlePauseQueuedPlayer}
+                  onReshuffleQueuedPlayer={handleReshuffleQueuedPlayer}
                 />
                 <span className="rounded-full border border-blue-200 bg-white px-2 py-1 text-[10px] font-black uppercase tracking-[0.24em] text-blue-700">
                   Next
@@ -246,12 +246,12 @@ export function QueuedMatchCard({
                 <TeamPlayers
                   players={[queuedMatch.team2User1, queuedMatch.team2User2]}
                   align="right"
-                  canPauseQueuedPlayers={canPauseQueuedPlayers}
+                  canReshuffleQueuedPlayers={canReshuffleQueuedPlayers}
                   activeActionPlayerId={activeActionPlayerId}
-                  pausingQueuedPlayerId={pausingQueuedPlayerId}
+                  reshufflingQueuedPlayerId={reshufflingQueuedPlayerId}
                   queueActionDisabled={queueActionDisabled}
                   onTogglePlayerAction={togglePlayerAction}
-                  onPauseQueuedPlayer={handlePauseQueuedPlayer}
+                  onReshuffleQueuedPlayer={handleReshuffleQueuedPlayer}
                 />
               </div>
             </div>

@@ -13,14 +13,14 @@ export function parseGenerateMatchRequest(
     forceReshuffle = false,
     undoCurrentMatch = false,
     manualTeams,
-    ignorePools = false,
+    excludedUserId,
   } = (typeof body === "object" && body !== null ? body : {}) as {
     courtId?: string;
     courtIds?: unknown;
     forceReshuffle?: boolean;
     undoCurrentMatch?: boolean;
     manualTeams?: unknown;
-    ignorePools?: unknown;
+    excludedUserId?: unknown;
   };
 
   const requestedCourtIds = Array.isArray(courtIds)
@@ -38,7 +38,16 @@ export function parseGenerateMatchRequest(
       "Choose either reshuffle or undo, not both."
     );
   }
-  if (manualTeams && (forceReshuffle || undoCurrentMatch)) {
+  if (excludedUserId !== undefined && typeof excludedUserId !== "string") {
+    throw new GenerateMatchError(400, "Invalid excluded player.");
+  }
+  if (excludedUserId && !forceReshuffle) {
+    throw new GenerateMatchError(
+      400,
+      "Excluded-player reshuffle must be combined with reshuffle."
+    );
+  }
+  if (manualTeams && (forceReshuffle || undoCurrentMatch || excludedUserId)) {
     throw new GenerateMatchError(
       400,
       "Manual match creation cannot be combined with reshuffle or undo."
@@ -59,7 +68,7 @@ export function parseGenerateMatchRequest(
     forceReshuffle,
     undoCurrentMatch,
     manualTeams,
-    ignorePools: ignorePools === true,
+    excludedUserId,
   };
 }
 
