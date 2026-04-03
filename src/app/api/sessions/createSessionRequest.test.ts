@@ -194,6 +194,16 @@ describe("parseCreateSessionRequest", () => {
     expect(raceParsed.type).toBe(SessionType.RACE);
   });
 
+  it("carries the test-session flag", () => {
+    const parsed = parseCreateSessionRequest({
+      name: "Dry Run",
+      communityId: "community-1",
+      isTest: true,
+    });
+
+    expect(parsed.isTest).toBe(true);
+  });
+
   it("rejects invalid session types", () => {
     expect(() =>
       parseCreateSessionRequest({

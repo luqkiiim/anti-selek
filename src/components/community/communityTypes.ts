@@ -49,6 +49,8 @@ export interface CommunityPageSession {
   name: string;
   type: string;
   status: string;
+  isTest: boolean;
+  sourceSessionId?: string | null;
   createdAt: string;
   endedAt?: string | null;
   players: { user: { id: string; name: string } }[];

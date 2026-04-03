@@ -129,7 +129,7 @@ export async function GET(
       prisma.match.findMany({
         where: {
           status: "COMPLETED",
-          session: { communityId: id },
+          session: { communityId: id, isTest: false },
         },
         select: {
           winnerTeam: true,

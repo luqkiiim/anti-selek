@@ -6,6 +6,7 @@ import { StatCard } from "@/components/ui/chrome";
 interface SessionOverviewPanelProps {
   sessionTypeLabel: string;
   sessionModeLabel: string;
+  isTestSession: boolean;
   playersCount: number;
   guestPlayersCount: number;
   activeMatchesCount: number;
@@ -24,6 +25,7 @@ interface SessionOverviewPanelProps {
 export function SessionOverviewPanel({
   sessionTypeLabel,
   sessionModeLabel,
+  isTestSession,
   playersCount,
   activeMatchesCount,
   completedMatchesCount,
@@ -68,6 +70,11 @@ export function SessionOverviewPanel({
                 : "Live session"}
           </p>
           <span className={`app-chip ${statusChipClass}`}>{sessionStatus}</span>
+          {isTestSession ? (
+            <span className="app-chip border-amber-200 bg-amber-50 text-amber-700">
+              Test Session
+            </span>
+          ) : null}
           <span className="app-chip app-chip-neutral">{sessionTypeLabel}</span>
           <span className="app-chip app-chip-neutral">{sessionModeLabel}</span>
         </div>

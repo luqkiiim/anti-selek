@@ -29,11 +29,18 @@ export async function POST(
         name: true,
         status: true,
         communityId: true,
+        isTest: true,
       },
     });
 
     if (!targetSession) {
       return NextResponse.json({ error: "Tournament not found" }, { status: 404 });
+    }
+    if (targetSession.isTest) {
+      return NextResponse.json(
+        { error: "Test sessions use reset or delete instead of rollback" },
+        { status: 400 }
+      );
     }
     if (targetSession.status !== SessionStatus.COMPLETED) {
       return NextResponse.json(
@@ -71,11 +78,15 @@ export async function POST(
           communityId: true,
           endedAt: true,
           createdAt: true,
+          isTest: true,
         },
       });
 
       if (!freshTarget) {
         throw new Error("NOT_FOUND");
+      }
+      if (freshTarget.isTest) {
+        throw new Error("IS_TEST");
       }
       if (freshTarget.status !== SessionStatus.COMPLETED) {
         throw new Error("NOT_COMPLETED");
@@ -85,6 +96,7 @@ export async function POST(
         where: {
           communityId: freshTarget.communityId,
           status: SessionStatus.COMPLETED,
+          isTest: false,
         },
         orderBy: [{ endedAt: "desc" }, { createdAt: "desc" }],
         select: { id: true },
@@ -178,6 +190,12 @@ export async function POST(
     if (message === "NOT_COMPLETED") {
       return NextResponse.json(
         { error: "Only completed tournaments can be rolled back" },
+        { status: 400 }
+      );
+    }
+    if (message === "IS_TEST") {
+      return NextResponse.json(
+        { error: "Test sessions use reset or delete instead of rollback" },
         { status: 400 }
       );
     }

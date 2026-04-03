@@ -74,6 +74,8 @@ model Session {
   type      String   @default("POINTS") // POINTS or ELO
   mode      String   @default("MEXICANO") // MEXICANO or MIXICANO
   status    String   @default("WAITING") // WAITING, ACTIVE, COMPLETED
+  isTest    Boolean  @default(false)
+  sourceSessionId String?
   poolsEnabled Boolean @default(false)
   poolAName  String?
   poolBName  String?

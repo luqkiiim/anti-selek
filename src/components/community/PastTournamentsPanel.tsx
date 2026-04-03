@@ -1,25 +1,15 @@
 "use client";
 
 import { getSessionTypeLabel } from "@/lib/sessionModeLabels";
-
-interface Tournament {
-  id: string;
-  code: string;
-  name: string;
-  type: string;
-  status: string;
-  createdAt: string;
-  endedAt?: string | null;
-  players: { user: { id: string; name: string } }[];
-}
+import type { CommunityPageSession } from "./communityTypes";
 
 interface PastTournamentsPanelProps {
-  tournaments: Tournament[];
+  tournaments: CommunityPageSession[];
   canManageCommunity: boolean;
   latestPastTournamentId: string | null;
   rollingBackTournamentCode: string | null;
   onOpenTournament: (code: string) => void;
-  onRollbackTournament: (tournament: Tournament) => void;
+  onRollbackTournament: (tournament: CommunityPageSession) => void;
 }
 
 function shouldIgnoreCardNavigation(target: EventTarget | null) {

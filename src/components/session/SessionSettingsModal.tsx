@@ -7,14 +7,21 @@ import type { Court } from "./sessionTypes";
 interface SessionSettingsModalProps {
   open: boolean;
   courts: Court[];
+  isTestSession: boolean;
   canOpenRoster: boolean;
   canEndSession: boolean;
+  canResetTestSession: boolean;
+  canCreateRealSession: boolean;
+  canDeleteTestSession: boolean;
   courtLabelDrafts: Record<string, string>;
   hasCourtLabelChanges: boolean;
   savingCourtLabels: boolean;
   onClose: () => void;
   onOpenRoster: () => void;
   onEndSession: () => void;
+  onResetTestSession: () => void;
+  onCreateRealSession: () => void;
+  onDeleteTestSession: () => void;
   onCourtLabelChange: (courtId: string, value: string) => void;
   onSaveCourtLabels: () => void;
 }
@@ -22,14 +29,21 @@ interface SessionSettingsModalProps {
 export function SessionSettingsModal({
   open,
   courts,
+  isTestSession,
   canOpenRoster,
   canEndSession,
+  canResetTestSession,
+  canCreateRealSession,
+  canDeleteTestSession,
   courtLabelDrafts,
   hasCourtLabelChanges,
   savingCourtLabels,
   onClose,
   onOpenRoster,
   onEndSession,
+  onResetTestSession,
+  onCreateRealSession,
+  onDeleteTestSession,
   onCourtLabelChange,
   onSaveCourtLabels,
 }: SessionSettingsModalProps) {
@@ -85,7 +99,41 @@ export function SessionSettingsModal({
                 End Session
               </button>
             ) : null}
+            {canResetTestSession ? (
+              <button
+                type="button"
+                onClick={onResetTestSession}
+                className="app-button-secondary justify-center"
+              >
+                Reset Test Session
+              </button>
+            ) : null}
+            {canCreateRealSession ? (
+              <button
+                type="button"
+                onClick={onCreateRealSession}
+                className="app-button-primary justify-center"
+              >
+                Create Real Session
+              </button>
+            ) : null}
+            {canDeleteTestSession ? (
+              <button
+                type="button"
+                onClick={onDeleteTestSession}
+                className="app-button-danger justify-center"
+              >
+                Delete Test Session
+              </button>
+            ) : null}
           </div>
+          {isTestSession ? (
+            <p className="text-sm text-gray-500">
+              Test sessions are safe for rehearsal. Reset clears simulated play,
+              and creating a real session copies this setup into a fresh live
+              tournament.
+            </p>
+          ) : null}
         </section>
 
         <section className="space-y-3">

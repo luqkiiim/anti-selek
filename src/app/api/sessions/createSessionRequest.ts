@@ -32,6 +32,7 @@ interface CreateSessionBody {
   name?: unknown;
   type?: unknown;
   mode?: unknown;
+  isTest?: unknown;
   playerIds?: unknown;
   guestNames?: unknown;
   playerConfigs?: unknown;
@@ -209,6 +210,7 @@ export function parseCreateSessionRequest(
     guestConfigs = [],
     communityId,
     courtCount = 3,
+    isTest = false,
     poolsEnabled = false,
     poolAName = DEFAULT_SESSION_POOL_A_NAME,
     poolBName = DEFAULT_SESSION_POOL_B_NAME,
@@ -268,6 +270,7 @@ export function parseCreateSessionRequest(
     type: type as SessionType,
     mode: mode as SessionMode,
     communityId,
+    isTest: isTest === true,
     courtCount: courtCount as number,
     requestedPlayerIds,
     playerConfigMap: normalizePlayerConfigMap(playerConfigs),

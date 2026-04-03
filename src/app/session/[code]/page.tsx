@@ -78,6 +78,13 @@ export default function SessionPage() {
   const [error, setError] = useState("");
   const [endingSession, setEndingSession] = useState(false);
   const [showEndSessionConfirm, setShowEndSessionConfirm] = useState(false);
+  const [resettingTestSession, setResettingTestSession] = useState(false);
+  const [showResetTestConfirm, setShowResetTestConfirm] = useState(false);
+  const [creatingRealSession, setCreatingRealSession] = useState(false);
+  const [showCreateRealSessionConfirm, setShowCreateRealSessionConfirm] =
+    useState(false);
+  const [deletingTestSession, setDeletingTestSession] = useState(false);
+  const [showDeleteTestConfirm, setShowDeleteTestConfirm] = useState(false);
   const [showPlayersModal, setShowPlayersModal] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [courtLabelDrafts, setCourtLabelDrafts] = useState<
@@ -279,6 +286,112 @@ export default function SessionPage() {
     }
   };
 
+  const openResetTestConfirm = useCallback(() => {
+    setError("");
+    setShowSettingsModal(false);
+    setShowResetTestConfirm(true);
+  }, []);
+
+  const closeResetTestConfirm = useCallback(() => {
+    if (resettingTestSession) return;
+    setShowResetTestConfirm(false);
+  }, [resettingTestSession]);
+
+  const resetTestSession = useCallback(async () => {
+    setResettingTestSession(true);
+    setError("");
+
+    try {
+      const res = await fetch(`/api/sessions/${code}/reset`, { method: "POST" });
+      const data = await safeJson(res);
+      if (!res.ok) {
+        setError(data.error || "Failed to reset test session");
+        return;
+      }
+
+      setShowResetTestConfirm(false);
+      patchSessionData((current) => mergeSessionSnapshot(current, data));
+      scheduleSessionRefresh();
+    } catch (err) {
+      console.error(err);
+      setError("Failed to reset test session");
+    } finally {
+      setResettingTestSession(false);
+    }
+  }, [code, patchSessionData, safeJson, scheduleSessionRefresh]);
+
+  const openCreateRealSessionConfirm = useCallback(() => {
+    setError("");
+    setShowSettingsModal(false);
+    setShowCreateRealSessionConfirm(true);
+  }, []);
+
+  const closeCreateRealSessionConfirm = useCallback(() => {
+    if (creatingRealSession) return;
+    setShowCreateRealSessionConfirm(false);
+  }, [creatingRealSession]);
+
+  const createRealSessionFromTest = useCallback(async () => {
+    setCreatingRealSession(true);
+    setError("");
+
+    try {
+      const res = await fetch(`/api/sessions/${code}/create-real`, {
+        method: "POST",
+      });
+      const data = await safeJson(res);
+      if (!res.ok) {
+        setError(data.error || "Failed to create real session");
+        return;
+      }
+
+      setShowCreateRealSessionConfirm(false);
+      router.push(`/session/${data.code}`);
+    } catch (err) {
+      console.error(err);
+      setError("Failed to create real session");
+    } finally {
+      setCreatingRealSession(false);
+    }
+  }, [code, router, safeJson]);
+
+  const openDeleteTestConfirm = useCallback(() => {
+    setError("");
+    setShowSettingsModal(false);
+    setShowDeleteTestConfirm(true);
+  }, []);
+
+  const closeDeleteTestConfirm = useCallback(() => {
+    if (deletingTestSession) return;
+    setShowDeleteTestConfirm(false);
+  }, [deletingTestSession]);
+
+  const deleteTestSession = useCallback(async () => {
+    setDeletingTestSession(true);
+    setError("");
+
+    try {
+      const res = await fetch(`/api/sessions/${code}/delete`, {
+        method: "DELETE",
+      });
+      const data = await safeJson(res);
+      if (!res.ok) {
+        setError(data.error || "Failed to delete test session");
+        return;
+      }
+
+      setShowDeleteTestConfirm(false);
+      router.push(
+        sessionData?.communityId ? `/community/${sessionData.communityId}` : "/"
+      );
+    } catch (err) {
+      console.error(err);
+      setError("Failed to delete test session");
+    } finally {
+      setDeletingTestSession(false);
+    }
+  }, [code, router, safeJson, sessionData?.communityId]);
+
   const handleBack = useCallback(() => {
     if (typeof window !== "undefined" && window.history.length > 1) {
       router.back();
@@ -292,8 +405,11 @@ export default function SessionPage() {
     !!sessionData?.viewerCanManage || !!user?.isAdmin || !!session?.user?.isAdmin;
   const isClaimedUser = user?.isClaimed === true;
   const currentUserId = session?.user?.id || "";
-  const canOpenPlayerManager = isAdmin && sessionData?.status !== SessionStatus.COMPLETED;
-  const canOpenSettings = isAdmin && sessionData?.status !== SessionStatus.COMPLETED;
+  const canOpenPlayerManager =
+    isAdmin && sessionData?.status !== SessionStatus.COMPLETED;
+  const canOpenSettings =
+    isAdmin &&
+    (sessionData?.status !== SessionStatus.COMPLETED || sessionData?.isTest);
   const isPlayerPickerOpen = showPlayersModal || showRosterModal;
 
   useEffect(() => {
@@ -835,6 +951,7 @@ export default function SessionPage() {
               <SessionOverviewPanel
                 sessionTypeLabel={sessionView.sessionTypeLabel}
                 sessionModeLabel={sessionView.sessionModeLabel}
+                isTestSession={sessionData.isTest}
                 playersCount={sessionData.players.length}
                 guestPlayersCount={sessionView.guestPlayersCount}
                 activeMatchesCount={sessionView.activeMatchesCount}
@@ -944,14 +1061,21 @@ export default function SessionPage() {
       <SessionSettingsModal
         open={showSettingsModal}
         courts={sessionData.courts}
+        isTestSession={sessionData.isTest}
         canOpenRoster={isAdmin && !sessionView.isCompletedSession}
         canEndSession={isAdmin && sessionData.status === SessionStatus.ACTIVE}
+        canResetTestSession={sessionData.isTest}
+        canCreateRealSession={sessionData.isTest}
+        canDeleteTestSession={sessionData.isTest}
         courtLabelDrafts={courtLabelDrafts}
         hasCourtLabelChanges={hasCourtLabelChanges}
         savingCourtLabels={savingCourtLabels}
         onClose={closeSettingsModal}
         onOpenRoster={openRosterFromSettings}
         onEndSession={openEndSessionConfirm}
+        onResetTestSession={openResetTestConfirm}
+        onCreateRealSession={openCreateRealSessionConfirm}
+        onDeleteTestSession={openDeleteTestConfirm}
         onCourtLabelChange={handleCourtLabelChange}
         onSaveCourtLabels={() => void saveCourtLabels()}
       />
@@ -1041,6 +1165,81 @@ export default function SessionPage() {
           isSubmitting={endingSession}
           onClose={closeEndSessionConfirm}
           onConfirm={() => void endSession()}
+        />
+      ) : null}
+
+      {showResetTestConfirm ? (
+        <SessionActionConfirmModal
+          title="Reset test session?"
+          subtitle="This clears all simulated results but keeps the setup, roster, guests, courts, and pools."
+          details={
+            <div className="app-panel-muted space-y-2 p-4">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">
+                Test session
+              </p>
+              <p className="text-sm font-semibold text-gray-900">
+                {sessionData.name}
+              </p>
+              <p className="text-sm text-gray-600">
+                Match history, standings, queue, and live courts will be reset.
+              </p>
+            </div>
+          }
+          confirmLabel="Confirm Reset"
+          cancelLabel="Keep Test Session"
+          isSubmitting={resettingTestSession}
+          onClose={closeResetTestConfirm}
+          onConfirm={() => void resetTestSession()}
+        />
+      ) : null}
+
+      {showCreateRealSessionConfirm ? (
+        <SessionActionConfirmModal
+          title="Create real session?"
+          subtitle="This will create a fresh live tournament using this test session's setup."
+          details={
+            <div className="app-panel-muted space-y-2 p-4">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">
+                What gets copied
+              </p>
+              <p className="text-sm text-gray-600">
+                Players, guests, courts, format, mode, and pools will carry over.
+              </p>
+              <p className="text-sm text-gray-600">
+                Simulated matches and standings will not.
+              </p>
+            </div>
+          }
+          confirmLabel="Create Real Session"
+          cancelLabel="Stay In Test Session"
+          isSubmitting={creatingRealSession}
+          onClose={closeCreateRealSessionConfirm}
+          onConfirm={() => void createRealSessionFromTest()}
+        />
+      ) : null}
+
+      {showDeleteTestConfirm ? (
+        <SessionActionConfirmModal
+          title="Delete test session?"
+          subtitle="This permanently removes the rehearsal session and its guest placeholders."
+          details={
+            <div className="app-panel-muted space-y-2 p-4">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">
+                Test session
+              </p>
+              <p className="text-sm font-semibold text-gray-900">
+                {sessionData.name}
+              </p>
+              <p className="text-sm text-gray-600">
+                This cannot be undone.
+              </p>
+            </div>
+          }
+          confirmLabel="Delete Test Session"
+          cancelLabel="Keep Test Session"
+          isSubmitting={deletingTestSession}
+          onClose={closeDeleteTestConfirm}
+          onConfirm={() => void deleteTestSession()}
         />
       ) : null}
 

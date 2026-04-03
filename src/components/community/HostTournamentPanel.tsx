@@ -10,6 +10,8 @@ interface HostTournamentPanelProps {
   onSessionTypeChange: (type: SessionType) => void;
   sessionMode: SessionMode;
   onSessionModeChange: (mode: SessionMode) => void;
+  isTestSession: boolean;
+  onIsTestSessionChange: (value: boolean) => void;
   openModeLabel: string;
   mixedModeLabel: string;
   courtCount: number;
@@ -208,6 +210,8 @@ export function HostTournamentPanel({
   onSessionTypeChange,
   sessionMode,
   onSessionModeChange,
+  isTestSession,
+  onIsTestSessionChange,
   openModeLabel,
   mixedModeLabel,
   courtCount,
@@ -340,6 +344,28 @@ export function HostTournamentPanel({
         <div className="app-subcard space-y-3 p-3 sm:p-4">
           <div className="flex items-center justify-between gap-3">
             <div>
+              <p className="text-sm font-semibold text-gray-900">Session type</p>
+              <p className="text-xs text-gray-500">
+                Test sessions are safe for rehearsal and can be reset later.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => onIsTestSessionChange(!isTestSession)}
+              className={`rounded-full border px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.18em] transition ${
+                isTestSession
+                  ? "border-amber-200 bg-amber-50 text-amber-700"
+                  : "border-gray-200 bg-white text-gray-500"
+              }`}
+            >
+              {isTestSession ? "Test" : "Real"}
+            </button>
+          </div>
+        </div>
+
+        <div className="app-subcard space-y-3 p-3 sm:p-4">
+          <div className="flex items-center justify-between gap-3">
+            <div>
               <p className="text-sm font-semibold text-gray-900">Pools</p>
               <p className="text-xs text-gray-500">
                 Split matchmaking into two soft groups that can crossover later.
@@ -421,7 +447,11 @@ export function HostTournamentPanel({
           disabled={!canCreateSession}
           className="app-button-primary flex-1 px-4 py-2.5"
         >
-          {creatingSession ? "Creating..." : "Create Tournament"}
+          {creatingSession
+            ? "Creating..."
+            : isTestSession
+              ? "Create Test Session"
+              : "Create Tournament"}
         </button>
       </div>
     </section>

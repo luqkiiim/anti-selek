@@ -52,6 +52,7 @@ export interface FinalizableMatch {
   session: {
     communityId: string | null;
     type: string;
+    isTest: boolean;
   };
   team1User1: MatchUserSnapshot;
   team1User2: MatchUserSnapshot;
@@ -225,7 +226,7 @@ export async function finalizeMatchResult({
         data: { lastPartnerId: match.team2User1Id },
       });
 
-      if (match.session.communityId) {
+      if (!match.session.isTest && match.session.communityId) {
         const team1Ids = [match.team1User1Id, match.team1User2Id];
         const team2Ids = [match.team2User1Id, match.team2User2Id];
 
@@ -254,7 +255,7 @@ export async function finalizeMatchResult({
             data: { elo: { increment: persistedTeam2EloChange } },
           });
         }
-      } else {
+      } else if (!match.session.isTest) {
         const team1CoreIds = [match.team1User1Id, match.team1User2Id].filter(
           (userId) => isGuestByUserId.get(userId) !== true
         );

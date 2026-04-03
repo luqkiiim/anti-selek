@@ -43,7 +43,8 @@ export function useCommunityPage() {
   const activeTournaments = useMemo(
     () =>
       data.sessions.filter(
-        (sessionItem) => sessionItem.status !== SessionStatus.COMPLETED
+        (sessionItem) =>
+          !sessionItem.isTest && sessionItem.status !== SessionStatus.COMPLETED
       ),
     [data.sessions]
   );
@@ -51,7 +52,23 @@ export function useCommunityPage() {
   const pastTournaments = useMemo(
     () =>
       data.sessions
-        .filter((sessionItem) => sessionItem.status === SessionStatus.COMPLETED)
+        .filter(
+          (sessionItem) =>
+            !sessionItem.isTest &&
+            sessionItem.status === SessionStatus.COMPLETED
+        )
+        .sort((a, b) => {
+          const aTime = new Date(a.endedAt ?? a.createdAt).getTime();
+          const bTime = new Date(b.endedAt ?? b.createdAt).getTime();
+          return bTime - aTime;
+        }),
+    [data.sessions]
+  );
+
+  const testSessions = useMemo(
+    () =>
+      data.sessions
+        .filter((sessionItem) => sessionItem.isTest)
         .sort((a, b) => {
           const aTime = new Date(a.endedAt ?? a.createdAt).getTime();
           const bTime = new Date(b.endedAt ?? b.createdAt).getTime();
@@ -143,6 +160,7 @@ export function useCommunityPage() {
     latestPastTournament,
     leaderboardPreview,
     canManageCommunity,
+    testSessions,
     selectablePlayers,
     filteredSelectablePlayers,
     currentUserClaimEligibility,

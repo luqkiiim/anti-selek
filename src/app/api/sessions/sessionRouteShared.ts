@@ -48,6 +48,7 @@ export interface ParsedCreateSessionRequest {
   type: SessionType;
   mode: SessionMode;
   communityId: string;
+  isTest: boolean;
   courtCount: number;
   requestedPlayerIds: string[];
   playerConfigMap: Map<string, PlayerConfigOverride>;

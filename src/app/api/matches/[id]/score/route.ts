@@ -41,6 +41,7 @@ export async function POST(
           select: {
             communityId: true,
             type: true,
+            isTest: true,
           },
         },
         team1User1Id: true,

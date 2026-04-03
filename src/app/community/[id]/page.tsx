@@ -13,6 +13,7 @@ import { CommunityRecentTournamentPanel } from "@/components/community/Community
 import { CurrentTournamentsPanel } from "@/components/community/CurrentTournamentsPanel";
 import { HostTournamentPanel } from "@/components/community/HostTournamentPanel";
 import { PastTournamentsPanel } from "@/components/community/PastTournamentsPanel";
+import { TestSessionsPanel } from "@/components/community/TestSessionsPanel";
 import type { CommunityPageSection } from "@/components/community/communityTypes";
 import { useCommunityPage } from "./useCommunityPage";
 
@@ -53,6 +54,8 @@ export default function CommunityPage() {
     setSessionType,
     sessionMode,
     setSessionMode,
+    isTestSession,
+    setIsTestSession,
     courtCount,
     setCourtCount,
     poolsEnabled,
@@ -89,6 +92,7 @@ export default function CommunityPage() {
     leaderboard,
     activeTournaments,
     pastTournaments,
+    testSessions,
     latestPastTournamentId,
     latestPastTournament,
     leaderboardPreview,
@@ -136,12 +140,13 @@ export default function CommunityPage() {
     const sessionCodes = new Set([
       ...activeTournaments.map((tournament) => tournament.code),
       ...pastTournaments.slice(0, 6).map((tournament) => tournament.code),
+      ...testSessions.slice(0, 6).map((sessionItem) => sessionItem.code),
     ]);
 
     sessionCodes.forEach((code) => {
       router.prefetch(`/session/${code}`);
     });
-  }, [activeTournaments, pastTournaments, router]);
+  }, [activeTournaments, pastTournaments, router, testSessions]);
 
   if (status === "loading" || loading) {
     return (
@@ -178,6 +183,8 @@ export default function CommunityPage() {
       onSessionTypeChange={setSessionType}
       sessionMode={sessionMode}
       onSessionModeChange={setSessionMode}
+      isTestSession={isTestSession}
+      onIsTestSessionChange={setIsTestSession}
       openModeLabel={openModeLabel}
       mixedModeLabel={mixedModeLabel}
       courtCount={courtCount}
@@ -303,7 +310,10 @@ export default function CommunityPage() {
                   </p>
                   <p className="mt-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">
                     {tab.detail({
-                      sessions: pastTournaments.length + activeTournaments.length,
+                      sessions:
+                        pastTournaments.length +
+                        activeTournaments.length +
+                        testSessions.length,
                       leaderboard: leaderboard.length,
                     })}
                   </p>
@@ -321,6 +331,14 @@ export default function CommunityPage() {
               onJoinTournament={joinTournament}
             />
 
+            {testSessions.length > 0 ? (
+              <TestSessionsPanel
+                sessions={testSessions}
+                currentUserId={user?.id}
+                onOpenSession={openTournament}
+              />
+            ) : null}
+
             {overviewSupportPanels}
           </>
         ) : null}
@@ -335,6 +353,11 @@ export default function CommunityPage() {
               tournaments={activeTournaments}
               currentUserId={user?.id}
               onJoinTournament={joinTournament}
+            />
+            <TestSessionsPanel
+              sessions={testSessions}
+              currentUserId={user?.id}
+              onOpenSession={openTournament}
             />
             <PastTournamentsPanel
               tournaments={pastTournaments}

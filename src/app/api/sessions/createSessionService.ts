@@ -168,6 +168,7 @@ export async function createSessionForUser({
         type: input.type,
         mode: input.mode,
         status: SessionStatus.WAITING,
+        isTest: input.isTest,
         poolsEnabled: input.poolsEnabled,
         poolAName: input.poolAName,
         poolBName: input.poolBName,

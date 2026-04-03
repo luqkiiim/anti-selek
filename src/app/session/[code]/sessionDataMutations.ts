@@ -186,6 +186,7 @@ function upsertHistoryMatch(
 
 function updatePlayersForCompletedMatch(
   sessionType: SessionData["type"],
+  isTestSession: boolean,
   players: SessionData["players"],
   payload: MatchPayload
 ) {
@@ -226,7 +227,10 @@ function updatePlayersForCompletedMatch(
           : player.sessionPoints,
         user: {
           ...player.user,
-          elo: player.isGuest ? player.user.elo : player.user.elo + payload.team1EloChange!,
+          elo:
+            player.isGuest || isTestSession
+              ? player.user.elo
+              : player.user.elo + payload.team1EloChange!,
         },
       };
     }
@@ -239,7 +243,10 @@ function updatePlayersForCompletedMatch(
           : player.sessionPoints,
         user: {
           ...player.user,
-          elo: player.isGuest ? player.user.elo : player.user.elo + payload.team2EloChange!,
+          elo:
+            player.isGuest || isTestSession
+              ? player.user.elo
+              : player.user.elo + payload.team2EloChange!,
         },
       };
     }
@@ -409,7 +416,12 @@ export function applyScoreApproval(
   return {
     ...current,
     courts,
-    players: updatePlayersForCompletedMatch(current.type, current.players, payload),
+    players: updatePlayersForCompletedMatch(
+      current.type,
+      current.isTest,
+      current.players,
+      payload
+    ),
     matches: historyMatch ? upsertHistoryMatch(current.matches, historyMatch) : current.matches,
   };
 }

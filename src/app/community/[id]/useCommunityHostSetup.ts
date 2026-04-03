@@ -46,6 +46,7 @@ export function useCommunityHostSetup({
   const [sessionMode, setSessionMode] = useState<SessionMode>(
     SessionMode.MEXICANO
   );
+  const [isTestSession, setIsTestSession] = useState(false);
   const [courtCount, setCourtCount] = useState(3);
   const [poolsEnabled, setPoolsEnabled] = useState(false);
   const [poolAName, setPoolAName] = useState("Open");
@@ -73,6 +74,7 @@ export function useCommunityHostSetup({
     setNewSessionName("");
     setSessionType(SessionType.POINTS);
     setSessionMode(SessionMode.MEXICANO);
+    setIsTestSession(false);
     setCourtCount(3);
     setPoolsEnabled(false);
     setPoolAName("Open");
@@ -116,6 +118,7 @@ export function useCommunityHostSetup({
           name: newSessionName,
           type: sessionType,
           mode: sessionMode,
+          isTest: isTestSession,
           courtCount,
           communityId,
           playerIds: selectedPlayerIds,
@@ -298,6 +301,8 @@ export function useCommunityHostSetup({
     setSessionType,
     sessionMode,
     setSessionMode,
+    isTestSession,
+    setIsTestSession,
     courtCount,
     setCourtCount,
     poolsEnabled,
