@@ -126,48 +126,7 @@ export default function SessionPage() {
       setError,
     });
 
-  const {
-    matchScores,
-    submittingMatchId,
-    confirmingScoreMatchId,
-    reopeningMatchId,
-    reshufflingCourtId,
-    reshufflingCourtPlayerId,
-    undoingCourtId,
-    courtActionDraft,
-    creatingOpenMatches,
-    creatingOpenCourtCount,
-    creatingQueuedMatch,
-    manualQueueOpen,
-    clearingQueuedMatch,
-    reshufflingQueuedMatch,
-    reshufflingQueuedPlayerId,
-    manualCourtId,
-    creatingManualMatch,
-    manualMatchForm,
-    createMatchesForCourts,
-    queueNextMatch,
-    clearQueuedMatch,
-    reshuffleQueuedMatch,
-    reshuffleQueuedMatchWithoutPlayer,
-    openManualMatchModal,
-    openManualQueuedMatchModal,
-    closeManualMatchModal,
-    updateManualMatchSlot,
-    createManualMatch,
-    createManualQueuedMatch,
-    reshuffleMatch,
-    reshuffleMatchWithoutPlayer,
-    undoMatchSelection,
-    closeCourtActionDraft,
-    confirmCourtAction,
-    handleScoreChange,
-    requestScoreSubmitConfirmation,
-    cancelScoreSubmitConfirmation,
-    submitScore,
-    approveScore,
-    reopenScoreForEdit,
-  } = useSessionMatchActions({
+  const { court: courtActions, score: scoreActions } = useSessionMatchActions({
     code,
     sessionData,
     safeJson,
@@ -434,14 +393,14 @@ export default function SessionPage() {
       sessionData,
       communityPlayers,
       rosterSearch,
-      manualMatchForm,
-      manualCourtId,
+      manualMatchForm: courtActions.manualMatchForm,
+      manualCourtId: courtActions.manualCourtId,
       openPreferenceEditor,
     });
   }, [
     communityPlayers,
-    manualCourtId,
-    manualMatchForm,
+    courtActions.manualCourtId,
+    courtActions.manualMatchForm,
     openPreferenceEditor,
     rosterSearch,
     sessionData,
@@ -986,47 +945,55 @@ export default function SessionPage() {
                   currentUserId={currentUserId}
                   isAdmin={isAdmin}
                   isClaimedUser={isClaimedUser}
-                  confirmingScoreMatchId={confirmingScoreMatchId}
+                  confirmingScoreMatchId={scoreActions.confirmingScoreMatchId}
                   activeMatchesCount={sessionView.activeMatchesCount}
                   readyCourtsCount={sessionView.readyCourtsCount}
                   creatableOpenCourtCount={sessionView.creatableOpenCourtCount}
                   creatableOpenCourtIds={sessionView.creatableOpenCourtIds}
-                  creatingOpenMatches={creatingOpenMatches}
-                  creatingOpenCourtCount={creatingOpenCourtCount}
+                  creatingOpenMatches={courtActions.creatingOpenMatches}
+                  creatingOpenCourtCount={courtActions.creatingOpenCourtCount}
                   canQueueNextMatch={sessionView.canQueueNextMatch}
-                  creatingQueuedMatch={creatingQueuedMatch}
-                  manualQueueOpen={manualQueueOpen}
-                  clearingQueuedMatch={clearingQueuedMatch}
-                  reshufflingQueuedPlayerId={reshufflingQueuedPlayerId}
-                  reshufflingQueuedMatch={reshufflingQueuedMatch}
-                  reshufflingCourtId={reshufflingCourtId}
-                  reshufflingCourtPlayerId={reshufflingCourtPlayerId}
-                  undoingCourtId={undoingCourtId}
-                  reopeningMatchId={reopeningMatchId}
-                  submittingMatchId={submittingMatchId}
-                  matchScores={matchScores}
-                  onCreateMatchesForCourts={createMatchesForCourts}
-                  onQueueNextMatch={queueNextMatch}
-                  onClearQueuedMatch={clearQueuedMatch}
-                  onOpenManualQueuedMatchModal={openManualQueuedMatchModal}
-                  onReshuffleQueuedMatch={reshuffleQueuedMatch}
-                  onReshuffleQueuedMatchWithoutPlayer={
-                    reshuffleQueuedMatchWithoutPlayer
+                  creatingQueuedMatch={courtActions.creatingQueuedMatch}
+                  manualQueueOpen={courtActions.manualQueueOpen}
+                  clearingQueuedMatch={courtActions.clearingQueuedMatch}
+                  reshufflingQueuedPlayerId={
+                    courtActions.reshufflingQueuedPlayerId
                   }
-                  onOpenManualMatchModal={openManualMatchModal}
-                  onReshuffleMatch={reshuffleMatch}
-                  onReshuffleMatchWithoutPlayer={reshuffleMatchWithoutPlayer}
-                  onUndoMatchSelection={undoMatchSelection}
-                  onHandleScoreChange={handleScoreChange}
+                  reshufflingQueuedMatch={courtActions.reshufflingQueuedMatch}
+                  reshufflingCourtId={courtActions.reshufflingCourtId}
+                  reshufflingCourtPlayerId={
+                    courtActions.reshufflingCourtPlayerId
+                  }
+                  undoingCourtId={courtActions.undoingCourtId}
+                  reopeningMatchId={scoreActions.reopeningMatchId}
+                  submittingMatchId={scoreActions.submittingMatchId}
+                  matchScores={scoreActions.matchScores}
+                  onCreateMatchesForCourts={courtActions.createMatchesForCourts}
+                  onQueueNextMatch={courtActions.queueNextMatch}
+                  onClearQueuedMatch={courtActions.clearQueuedMatch}
+                  onOpenManualQueuedMatchModal={
+                    courtActions.openManualQueuedMatchModal
+                  }
+                  onReshuffleQueuedMatch={courtActions.reshuffleQueuedMatch}
+                  onReshuffleQueuedMatchWithoutPlayer={
+                    courtActions.reshuffleQueuedMatchWithoutPlayer
+                  }
+                  onOpenManualMatchModal={courtActions.openManualMatchModal}
+                  onReshuffleMatch={courtActions.reshuffleMatch}
+                  onReshuffleMatchWithoutPlayer={
+                    courtActions.reshuffleMatchWithoutPlayer
+                  }
+                  onUndoMatchSelection={courtActions.undoMatchSelection}
+                  onHandleScoreChange={scoreActions.handleScoreChange}
                   onRequestScoreSubmitConfirmation={
-                    requestScoreSubmitConfirmation
+                    scoreActions.requestScoreSubmitConfirmation
                   }
                   onCancelScoreSubmitConfirmation={
-                    cancelScoreSubmitConfirmation
+                    scoreActions.cancelScoreSubmitConfirmation
                   }
-                  onSubmitScore={submitScore}
-                  onApproveScore={approveScore}
-                  onReopenScoreForEdit={reopenScoreForEdit}
+                  onSubmitScore={scoreActions.submitScore}
+                  onApproveScore={scoreActions.approveScore}
+                  onReopenScoreForEdit={scoreActions.reopenScoreForEdit}
                 />
               </section>
             ) : null}
@@ -1099,51 +1066,53 @@ export default function SessionPage() {
         onOpenPreferenceEditor={togglePreferenceEditor}
       />
 
-      {courtActionDraft ? (
+      {courtActions.courtActionDraft ? (
         <SessionActionConfirmModal
           title={
-            courtActionDraft.action === "reshuffle"
+            courtActions.courtActionDraft.action === "reshuffle"
               ? "Reshuffle match?"
               : "Undo match selection?"
           }
           subtitle={
-            courtActionDraft.action === "reshuffle"
-              ? `This will replace the current lineup on ${courtActionDraft.courtLabel} with a new one.`
-              : `This will clear ${courtActionDraft.courtLabel} and return these players to the pool.`
+            courtActions.courtActionDraft.action === "reshuffle"
+              ? `This will replace the current lineup on ${courtActions.courtActionDraft.courtLabel} with a new one.`
+              : `This will clear ${courtActions.courtActionDraft.courtLabel} and return these players to the pool.`
           }
           details={
             <div className="space-y-4">
               <div className="app-panel-muted space-y-2 p-4">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">
-                  {courtActionDraft.courtLabel}
+                  {courtActions.courtActionDraft.courtLabel}
                 </p>
                 <p className="text-sm font-semibold text-gray-900">
-                  {courtActionDraft.team1Names[0]} &amp;{" "}
-                  {courtActionDraft.team1Names[1]}
+                  {courtActions.courtActionDraft.team1Names[0]} &amp;{" "}
+                  {courtActions.courtActionDraft.team1Names[1]}
                 </p>
                 <p className="text-xs font-black uppercase tracking-[0.25em] text-gray-400">
                   vs
                 </p>
                 <p className="text-sm font-semibold text-gray-900">
-                  {courtActionDraft.team2Names[0]} &amp;{" "}
-                  {courtActionDraft.team2Names[1]}
+                  {courtActions.courtActionDraft.team2Names[0]} &amp;{" "}
+                  {courtActions.courtActionDraft.team2Names[1]}
                 </p>
               </div>
             </div>
           }
           confirmLabel={
-            courtActionDraft.action === "reshuffle"
+            courtActions.courtActionDraft.action === "reshuffle"
               ? "Confirm Reshuffle"
               : "Confirm Undo"
           }
           cancelLabel="Keep Match"
           isSubmitting={
-            courtActionDraft.action === "reshuffle"
-              ? reshufflingCourtId === courtActionDraft.courtId
-              : undoingCourtId === courtActionDraft.courtId
+            courtActions.courtActionDraft.action === "reshuffle"
+              ? courtActions.reshufflingCourtId ===
+                courtActions.courtActionDraft.courtId
+              : courtActions.undoingCourtId ===
+                courtActions.courtActionDraft.courtId
           }
-          onClose={closeCourtActionDraft}
-          onConfirm={() => void confirmCourtAction()}
+          onClose={courtActions.closeCourtActionDraft}
+          onConfirm={() => void courtActions.confirmCourtAction()}
         />
       ) : null}
 
@@ -1328,26 +1297,32 @@ export default function SessionPage() {
       />
 
       <ManualMatchModal
-        open={manualCourtId !== null || manualQueueOpen}
-        court={manualQueueOpen ? null : sessionView.activeManualCourt}
-        title={manualQueueOpen ? "Manual Queue" : undefined}
-        locationLabel={manualQueueOpen ? "Next Up" : undefined}
+        open={courtActions.manualCourtId !== null || courtActions.manualQueueOpen}
+        court={
+          courtActions.manualQueueOpen ? null : sessionView.activeManualCourt
+        }
+        title={courtActions.manualQueueOpen ? "Manual Queue" : undefined}
+        locationLabel={courtActions.manualQueueOpen ? "Next Up" : undefined}
         note={
-          manualQueueOpen
+          courtActions.manualQueueOpen
             ? "This sets the exact quartet waiting next. The queued match will still promote automatically when a court opens."
             : undefined
         }
-        submitLabel={manualQueueOpen ? "Queue Match" : undefined}
-        manualMatchForm={manualMatchForm}
+        submitLabel={courtActions.manualQueueOpen ? "Queue Match" : undefined}
+        manualMatchForm={courtActions.manualMatchForm}
         manualMatchPlayerOptions={sessionView.manualMatchPlayerOptions}
         selectedManualPlayerIds={sessionView.selectedManualPlayerIds}
-        creatingManualMatch={creatingManualMatch}
+        creatingManualMatch={courtActions.creatingManualMatch}
         poolsEnabled={sessionData.poolsEnabled}
         poolAName={sessionData.poolAName}
         poolBName={sessionData.poolBName}
-        onClose={closeManualMatchModal}
-        onUpdateSlot={updateManualMatchSlot}
-        onCreateMatch={manualQueueOpen ? createManualQueuedMatch : createManualMatch}
+        onClose={courtActions.closeManualMatchModal}
+        onUpdateSlot={courtActions.updateManualMatchSlot}
+        onCreateMatch={
+          courtActions.manualQueueOpen
+            ? courtActions.createManualQueuedMatch
+            : courtActions.createManualMatch
+        }
       />
     </div>
   );

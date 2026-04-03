@@ -20,6 +20,9 @@ const emptyManualMatchForm = (): ManualMatchFormState => ({
   team2User2Id: "",
 });
 
+type GeneratedMatchesPayload = Parameters<typeof applyGeneratedMatches>[1];
+type QueuedMatchPayload = Parameters<typeof applyQueuedMatch>[1];
+
 export function useSessionCourtMatchCreation({
   code,
   sessionData,
@@ -43,6 +46,30 @@ export function useSessionCourtMatchCreation({
   const [manualMatchForm, setManualMatchForm] =
     useState<ManualMatchFormState>(emptyManualMatchForm);
 
+  const syncGeneratedMatches = (matches: GeneratedMatchesPayload) => {
+    patchSessionData((current) => applyGeneratedMatches(current, matches));
+    scheduleSessionRefresh();
+  };
+
+  const syncQueuedMatch = (queuedMatch: QueuedMatchPayload) => {
+    patchSessionData((current) => applyQueuedMatch(current, queuedMatch));
+    scheduleSessionRefresh();
+  };
+
+  const buildManualTeams = (missingPlayersMessage: string) => {
+    const { team1User1Id, team1User2Id, team2User1Id, team2User2Id } =
+      manualMatchForm;
+    if (!team1User1Id || !team1User2Id || !team2User1Id || !team2User2Id) {
+      setError(missingPlayersMessage);
+      return null;
+    }
+
+    return {
+      team1: [team1User1Id, team1User2Id] as [string, string],
+      team2: [team2User1Id, team2User2Id] as [string, string],
+    };
+  };
+
   const createMatchesForCourts = async (courtIds: string[]) => {
     if (courtIds.length === 0) return;
 
@@ -58,8 +85,7 @@ export function useSessionCourtMatchCreation({
 
       if (res.ok) {
         const matches = Array.isArray(data.matches) ? data.matches : [data];
-        patchSessionData((current) => applyGeneratedMatches(current, matches));
-        scheduleSessionRefresh();
+        syncGeneratedMatches(matches);
       } else {
         setError(data.error || "Failed to create matches");
       }
@@ -103,10 +129,10 @@ export function useSessionCourtMatchCreation({
   const createManualMatch = async () => {
     if (!manualCourtId || !sessionData) return;
 
-    const { team1User1Id, team1User2Id, team2User1Id, team2User2Id } =
-      manualMatchForm;
-    if (!team1User1Id || !team1User2Id || !team2User1Id || !team2User2Id) {
-      setError("Choose all 4 players before creating a manual match");
+    const manualTeams = buildManualTeams(
+      "Choose all 4 players before creating a manual match"
+    );
+    if (!manualTeams) {
       return;
     }
 
@@ -118,10 +144,7 @@ export function useSessionCourtMatchCreation({
         safeJson,
         body: {
           courtId: manualCourtId,
-          manualTeams: {
-            team1: [team1User1Id, team1User2Id],
-            team2: [team2User1Id, team2User2Id],
-          },
+          manualTeams,
         },
       });
 
@@ -131,8 +154,7 @@ export function useSessionCourtMatchCreation({
       }
 
       closeManualMatchModal();
-      patchSessionData((current) => applyGeneratedMatches(current, [data]));
-      scheduleSessionRefresh();
+      syncGeneratedMatches([data]);
     } catch (err) {
       console.error(err);
       setError("Network error creating manual match");
@@ -144,10 +166,10 @@ export function useSessionCourtMatchCreation({
   const createManualQueuedMatch = async () => {
     if (!manualQueueOpen || !sessionData) return;
 
-    const { team1User1Id, team1User2Id, team2User1Id, team2User2Id } =
-      manualMatchForm;
-    if (!team1User1Id || !team1User2Id || !team2User1Id || !team2User2Id) {
-      setError("Choose all 4 players before queueing a manual match");
+    const manualTeams = buildManualTeams(
+      "Choose all 4 players before queueing a manual match"
+    );
+    if (!manualTeams) {
       return;
     }
 
@@ -159,10 +181,7 @@ export function useSessionCourtMatchCreation({
         {
           safeJson,
           body: {
-            manualTeams: {
-              team1: [team1User1Id, team1User2Id],
-              team2: [team2User1Id, team2User2Id],
-            },
+            manualTeams,
           },
         }
       );
@@ -173,10 +192,7 @@ export function useSessionCourtMatchCreation({
       }
 
       closeManualMatchModal();
-      patchSessionData((current) =>
-        applyQueuedMatch(current, data.queuedMatch ?? null)
-      );
-      scheduleSessionRefresh();
+      syncQueuedMatch(data.queuedMatch ?? null);
     } catch (err) {
       console.error(err);
       setError("Network error queueing manual match");
@@ -201,8 +217,7 @@ export function useSessionCourtMatchCreation({
         return;
       }
 
-      patchSessionData((current) => applyQueuedMatch(current, data.queuedMatch ?? null));
-      scheduleSessionRefresh();
+      syncQueuedMatch(data.queuedMatch ?? null);
     } catch (err) {
       console.error(err);
       setError("Network error queueing next match");
@@ -227,8 +242,7 @@ export function useSessionCourtMatchCreation({
         return;
       }
 
-      patchSessionData((current) => applyQueuedMatch(current, null));
-      scheduleSessionRefresh();
+      syncQueuedMatch(null);
     } catch (err) {
       console.error(err);
       setError("Network error clearing queued match");
@@ -284,10 +298,7 @@ export function useSessionCourtMatchCreation({
         return;
       }
 
-      patchSessionData((current) =>
-        applyQueuedMatch(current, data.queuedMatch ?? null)
-      );
-      scheduleSessionRefresh();
+      syncQueuedMatch(data.queuedMatch ?? null);
     } catch (err) {
       console.error(err);
       setError("Network error reshuffling queued match");
@@ -318,10 +329,7 @@ export function useSessionCourtMatchCreation({
         return;
       }
 
-      patchSessionData((current) =>
-        applyQueuedMatch(current, data.queuedMatch ?? null)
-      );
-      scheduleSessionRefresh();
+      syncQueuedMatch(data.queuedMatch ?? null);
     } catch (err) {
       console.error(err);
       setError("Network error reshuffling queued match");

@@ -30,7 +30,7 @@ export function useSessionMatchActions({
   });
 
   return {
-    ...scoreActions,
-    ...courtActions,
+    court: courtActions,
+    score: scoreActions,
   };
 }
