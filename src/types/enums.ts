@@ -39,6 +39,11 @@ export enum PartnerPreference {
   FEMALE_FLEX = "FEMALE_FLEX",
 }
 
+export enum SessionPool {
+  A = "A",
+  B = "B",
+}
+
 export enum ClaimRequestStatus {
   PENDING = "PENDING",
   APPROVED = "APPROVED",

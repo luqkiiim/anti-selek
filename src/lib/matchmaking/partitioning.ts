@@ -45,6 +45,7 @@ export interface PartitionCandidate {
   gender: string;
   partnerPreference: string;
   mixedSideOverride?: string | null;
+  pool?: string | null;
 }
 
 export interface RotationHistory {

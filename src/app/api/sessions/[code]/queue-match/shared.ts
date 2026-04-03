@@ -31,6 +31,7 @@ export function buildQueuedMatchResponse(
   return {
     id: queuedMatch.id,
     createdAt: queuedMatch.createdAt,
+    targetPool: queuedMatch.targetPool ?? null,
     team1User1,
     team1User2,
     team2User1,
@@ -65,7 +66,8 @@ async function ensureQueueSlotAvailable(sessionData: QueueSessionRecord) {
 
 async function createQueuedMatchRecord(
   sessionId: string,
-  partition: ManualMatchTeams
+  partition: ManualMatchTeams,
+  targetPool?: string | null
 ) {
   try {
     return await prisma.queuedMatch.create({
@@ -75,6 +77,7 @@ async function createQueuedMatchRecord(
         team1User2Id: partition.team1[1],
         team2User1Id: partition.team2[0],
         team2User2Id: partition.team2[1],
+        targetPool: targetPool ?? null,
       },
     });
   } catch (error) {
@@ -111,7 +114,8 @@ export async function createQueuedMatchForSession(sessionData: QueueSessionRecor
 
   const queuedMatch = await createQueuedMatchRecord(
     sessionData.id,
-    selection.partition
+    selection.partition,
+    "targetPool" in selection ? selection.targetPool : null
   );
 
   return buildQueuedMatchResponse(sessionData, queuedMatch);
@@ -119,10 +123,15 @@ export async function createQueuedMatchForSession(sessionData: QueueSessionRecor
 
 export async function createManualQueuedMatchForSession(
   sessionData: QueueSessionRecord,
-  partition: ManualMatchTeams
+  partition: ManualMatchTeams,
+  targetPool?: string | null
 ) {
   await ensureQueueSlotAvailable(sessionData);
-  const queuedMatch = await createQueuedMatchRecord(sessionData.id, partition);
+  const queuedMatch = await createQueuedMatchRecord(
+    sessionData.id,
+    partition,
+    targetPool
+  );
   return buildQueuedMatchResponse(sessionData, queuedMatch);
 }
 

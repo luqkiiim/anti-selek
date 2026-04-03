@@ -2,10 +2,12 @@ import { randomUUID } from "crypto";
 import { prisma } from "@/lib/prisma";
 import { getCommunityEloByUserId, withCommunityElo } from "@/lib/communityElo";
 import { resolveMixedSideState } from "@/lib/mixedSide";
+import { getNormalizedSessionPool } from "@/lib/sessionPools";
 import {
   MixedSide,
   PlayerGender,
   SessionMode,
+  SessionPool,
   SessionStatus,
 } from "@/types/enums";
 import {
@@ -19,6 +21,7 @@ function buildMemberSessionConfigs({
   selectedUsers,
   playerConfigMap,
   mode,
+  poolsEnabled,
 }: {
   uniquePlayerIds: string[];
   selectedUsers: Array<{
@@ -30,6 +33,7 @@ function buildMemberSessionConfigs({
   }>;
   playerConfigMap: ParsedCreateSessionRequest["playerConfigMap"];
   mode: SessionMode;
+  poolsEnabled: boolean;
 }) {
   const selectedUserById = new Map(selectedUsers.map((user) => [user.id, user]));
 
@@ -71,6 +75,9 @@ function buildMemberSessionConfigs({
       gender: sessionGender,
       partnerPreference: resolvedMixedState.partnerPreference,
       mixedSideOverride: resolvedMixedState.mixedSideOverride,
+      pool: poolsEnabled
+        ? getNormalizedSessionPool(override?.pool)
+        : SessionPool.A,
       sessionPoints: 0,
     };
   });
@@ -135,6 +142,7 @@ export async function createSessionForUser({
     selectedUsers,
     playerConfigMap: input.playerConfigMap,
     mode: input.mode,
+    poolsEnabled: input.poolsEnabled,
   });
 
   if (input.mode === SessionMode.MIXICANO) {
@@ -160,6 +168,10 @@ export async function createSessionForUser({
         type: input.type,
         mode: input.mode,
         status: SessionStatus.WAITING,
+        poolsEnabled: input.poolsEnabled,
+        poolAName: input.poolAName,
+        poolBName: input.poolBName,
+        crossoverMissThreshold: input.crossoverMissThreshold,
         courts: {
           create: Array.from({ length: input.courtCount }, (_, index) => ({
             courtNumber: index + 1,
@@ -207,6 +219,9 @@ export async function createSessionForUser({
           mixedSideOverride:
             guest.mixedSideOverride ??
             input.normalizedGuests[index].mixedSideOverride,
+          pool: input.poolsEnabled
+            ? input.normalizedGuests[index].pool
+            : SessionPool.A,
           sessionPoints: 0,
           joinedAt: new Date(),
           availableSince: new Date(),

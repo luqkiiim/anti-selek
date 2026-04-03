@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { SessionMode, SessionType } from "@/types/enums";
+import { SessionMode, SessionPool, SessionType } from "@/types/enums";
 
 interface HostTournamentPanelProps {
   newSessionName: string;
@@ -14,6 +14,14 @@ interface HostTournamentPanelProps {
   mixedModeLabel: string;
   courtCount: number;
   onCourtCountChange: (count: number) => void;
+  poolsEnabled: boolean;
+  onPoolsEnabledChange: (enabled: boolean) => void;
+  poolAName: string;
+  onPoolANameChange: (value: string) => void;
+  poolBName: string;
+  onPoolBNameChange: (value: string) => void;
+  selectedPoolCounts: Record<SessionPool, number>;
+  guestPoolCounts: Record<SessionPool, number>;
   selectedPlayerCount: number;
   guestCount: number;
   onOpenPlayers: () => void;
@@ -204,6 +212,14 @@ export function HostTournamentPanel({
   mixedModeLabel,
   courtCount,
   onCourtCountChange,
+  poolsEnabled,
+  onPoolsEnabledChange,
+  poolAName,
+  onPoolANameChange,
+  poolBName,
+  onPoolBNameChange,
+  selectedPoolCounts,
+  guestPoolCounts,
   selectedPlayerCount,
   guestCount,
   onOpenPlayers,
@@ -321,16 +337,77 @@ export function HostTournamentPanel({
           </div>
         </div>
 
+        <div className="app-subcard space-y-3 p-3 sm:p-4">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-semibold text-gray-900">Pools</p>
+              <p className="text-xs text-gray-500">
+                Split matchmaking into two soft groups that can crossover later.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => onPoolsEnabledChange(!poolsEnabled)}
+              className={`rounded-full border px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.18em] transition ${
+                poolsEnabled
+                  ? "border-blue-200 bg-blue-50 text-blue-700"
+                  : "border-gray-200 bg-white text-gray-500"
+              }`}
+            >
+              {poolsEnabled ? "Enabled" : "Off"}
+            </button>
+          </div>
+
+          {poolsEnabled ? (
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="block space-y-1.5 text-sm font-medium text-gray-900">
+                <span>Pool A</span>
+                <input
+                  type="text"
+                  value={poolAName}
+                  onChange={(event) => onPoolANameChange(event.target.value)}
+                  className="field"
+                />
+                <p className="text-xs text-gray-500">
+                  {selectedPoolCounts[SessionPool.A]} players,{" "}
+                  {guestPoolCounts[SessionPool.A]} guests
+                </p>
+              </label>
+              <label className="block space-y-1.5 text-sm font-medium text-gray-900">
+                <span>Pool B</span>
+                <input
+                  type="text"
+                  value={poolBName}
+                  onChange={(event) => onPoolBNameChange(event.target.value)}
+                  className="field"
+                />
+                <p className="text-xs text-gray-500">
+                  {selectedPoolCounts[SessionPool.B]} players,{" "}
+                  {guestPoolCounts[SessionPool.B]} guests
+                </p>
+              </label>
+            </div>
+          ) : null}
+        </div>
+
         <div className="grid gap-2">
           <RosterRow
             label="Players"
-            countLabel={`${selectedPlayerCount} selected`}
+            countLabel={
+              poolsEnabled
+                ? `${selectedPlayerCount} selected across ${poolAName.trim() || "Open"} and ${poolBName.trim() || "Regular"}`
+                : `${selectedPlayerCount} selected`
+            }
             actionLabel="Choose"
             onClick={onOpenPlayers}
           />
           <RosterRow
             label="Guests"
-            countLabel={`${guestCount} added`}
+            countLabel={
+              poolsEnabled
+                ? `${guestCount} added across ${poolAName.trim() || "Open"} and ${poolBName.trim() || "Regular"}`
+                : `${guestCount} added`
+            }
             actionLabel="Manage"
             onClick={onOpenGuests}
           />

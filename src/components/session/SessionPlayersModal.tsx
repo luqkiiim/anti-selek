@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { PlayerPickerSheet } from "@/components/ui/PlayerPickerSheet";
 import { SearchField } from "@/components/ui/SearchField";
+import { SessionPool } from "@/types/enums";
 import type { Player } from "./sessionTypes";
 
 type PlayerFilter = "all" | "active" | "paused";
@@ -12,6 +13,9 @@ interface SessionPlayersModalProps {
   players: Player[];
   currentUserId: string;
   canEditPreferences: boolean;
+  poolsEnabled: boolean;
+  poolAName?: string | null;
+  poolBName?: string | null;
   togglingPausePlayerId: string | null;
   onClose: () => void;
   onTogglePause: (userId: string, isPaused: boolean) => void;
@@ -32,6 +36,9 @@ export function SessionPlayersModal({
   players,
   currentUserId,
   canEditPreferences,
+  poolsEnabled,
+  poolAName,
+  poolBName,
   togglingPausePlayerId,
   onClose,
   onTogglePause,
@@ -128,6 +135,10 @@ export function SessionPlayersModal({
         <div className="space-y-2">
           {filteredPlayers.map((player) => {
             const isUpdatingPause = togglingPausePlayerId === player.userId;
+            const poolLabel =
+              player.pool === SessionPool.A
+                ? (poolAName ?? "Open")
+                : (poolBName ?? "Regular");
 
             return (
               <div
@@ -147,6 +158,11 @@ export function SessionPlayersModal({
                     {player.isGuest ? (
                       <span className="rounded-full border border-gray-200 bg-white px-2 py-0.5 text-[9px] font-medium uppercase tracking-wide text-gray-600">
                         Guest
+                      </span>
+                    ) : null}
+                    {poolsEnabled ? (
+                      <span className="rounded-full border border-indigo-200 bg-indigo-50 px-2 py-0.5 text-[9px] font-medium uppercase tracking-wide text-indigo-700">
+                        {poolLabel}
                       </span>
                     ) : null}
                     {player.isPaused ? (

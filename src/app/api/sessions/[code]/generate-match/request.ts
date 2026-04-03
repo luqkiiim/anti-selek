@@ -13,12 +13,14 @@ export function parseGenerateMatchRequest(
     forceReshuffle = false,
     undoCurrentMatch = false,
     manualTeams,
+    ignorePools = false,
   } = (typeof body === "object" && body !== null ? body : {}) as {
     courtId?: string;
     courtIds?: unknown;
     forceReshuffle?: boolean;
     undoCurrentMatch?: boolean;
     manualTeams?: unknown;
+    ignorePools?: unknown;
   };
 
   const requestedCourtIds = Array.isArray(courtIds)
@@ -57,6 +59,7 @@ export function parseGenerateMatchRequest(
     forceReshuffle,
     undoCurrentMatch,
     manualTeams,
+    ignorePools: ignorePools === true,
   };
 }
 

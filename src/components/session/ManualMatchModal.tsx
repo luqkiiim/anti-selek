@@ -1,6 +1,7 @@
 "use client";
 
 import { getCourtDisplayLabel } from "@/lib/courtLabels";
+import { SessionPool } from "@/types/enums";
 import type {
   Court,
   ManualMatchFormState,
@@ -19,7 +20,12 @@ interface ManualMatchModalProps {
   manualMatchPlayerOptions: Player[];
   selectedManualPlayerIds: Set<string>;
   creatingManualMatch: boolean;
+  poolsEnabled: boolean;
+  poolAName?: string | null;
+  poolBName?: string | null;
+  ignorePools: boolean;
   onClose: () => void;
+  onIgnorePoolsChange: (value: boolean) => void;
   onUpdateSlot: (slot: ManualMatchSlot, value: string) => void;
   onCreateMatch: () => void;
 }
@@ -38,11 +44,19 @@ export function ManualMatchModal({
   manualMatchPlayerOptions,
   selectedManualPlayerIds,
   creatingManualMatch,
+  poolsEnabled,
+  poolAName,
+  poolBName,
+  ignorePools,
   onClose,
+  onIgnorePoolsChange,
   onUpdateSlot,
   onCreateMatch,
 }: ManualMatchModalProps) {
   if (!open) return null;
+
+  const getPoolLabel = (pool: SessionPool) =>
+    pool === SessionPool.A ? (poolAName ?? "Open") : (poolBName ?? "Regular");
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-gray-900/70 p-0 backdrop-blur-sm sm:items-center sm:p-4">
@@ -87,7 +101,9 @@ export function ManualMatchModal({
                       value={player.userId}
                       disabled={isTakenElsewhere}
                     >
-                      {player.user.name} ({player.user.elo})
+                      {player.user.name}
+                      {poolsEnabled ? ` • ${getPoolLabel(player.pool)}` : ""}
+                      {` (${player.user.elo})`}
                     </option>
                   );
                 })}
@@ -118,7 +134,9 @@ export function ManualMatchModal({
                       value={player.userId}
                       disabled={isTakenElsewhere}
                     >
-                      {player.user.name} ({player.user.elo})
+                      {player.user.name}
+                      {poolsEnabled ? ` • ${getPoolLabel(player.pool)}` : ""}
+                      {` (${player.user.elo})`}
                     </option>
                   );
                 })}
@@ -133,6 +151,19 @@ export function ManualMatchModal({
             <p className="mt-1 text-xs text-blue-900">
               {note}
             </p>
+            {poolsEnabled ? (
+              <label className="mt-3 flex items-start gap-2 text-xs text-blue-900">
+                <input
+                  type="checkbox"
+                  checked={ignorePools}
+                  onChange={(event) => onIgnorePoolsChange(event.target.checked)}
+                  className="mt-0.5 h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                />
+                <span>
+                  Ignore pool boundaries for this manual match.
+                </span>
+              </label>
+            ) : null}
           </div>
 
           {manualMatchPlayerOptions.length < 4 ? (

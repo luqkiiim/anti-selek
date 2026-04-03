@@ -25,6 +25,7 @@ import {
   MixedSide,
   PlayerGender,
   SessionMode,
+  SessionPool,
 } from "@/types/enums";
 import { getSessionModeLabel } from "@/lib/sessionModeLabels";
 
@@ -106,6 +107,7 @@ export function useSessionPlayerManagement({
   const [guestGender, setGuestGender] = useState<PlayerGender>(PlayerGender.MALE);
   const [guestMixedSideOverride, setGuestMixedSideOverride] =
     useState<MixedSide | null>(null);
+  const [rosterPool, setRosterPool] = useState<SessionPool>(SessionPool.A);
   const [guestInitialElo, setGuestInitialElo] = useState<number>(1000);
   const [addingGuest, setAddingGuest] = useState(false);
   const [savingPreferencesFor, setSavingPreferencesFor] = useState<string | null>(null);
@@ -133,7 +135,13 @@ export function useSessionPlayerManagement({
       const rect = triggerEl.getBoundingClientRect();
       const panelWidth = 176;
       const panelHeight =
-        sessionData?.mode === SessionMode.MIXICANO ? 220 : 124;
+        sessionData?.mode === SessionMode.MIXICANO
+          ? sessionData?.poolsEnabled
+            ? 280
+            : 220
+          : sessionData?.poolsEnabled
+            ? 184
+            : 124;
       const margin = 8;
       const openUp = window.innerHeight - rect.bottom < panelHeight + margin;
 
@@ -189,6 +197,7 @@ export function useSessionPlayerManagement({
     setGuestGender(PlayerGender.MALE);
     setGuestMixedSideOverride(null);
     setGuestInitialElo(1000);
+    setRosterPool(SessionPool.A);
   };
 
   const resetRosterInputs = () => {
@@ -370,7 +379,10 @@ export function useSessionPlayerManagement({
       const adminRes = await fetch(`/api/sessions/${code}/join`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId }),
+        body: JSON.stringify({
+          userId,
+          pool: sessionData?.poolsEnabled ? rosterPool : SessionPool.A,
+        }),
       });
 
       if (adminRes.ok) {
@@ -418,6 +430,7 @@ export function useSessionPlayerManagement({
           gender: guestGender,
           partnerPreference: resolvedMixedState.partnerPreference,
           mixedSideOverride: resolvedMixedState.mixedSideOverride,
+          pool: sessionData?.poolsEnabled ? rosterPool : SessionPool.A,
         }),
       });
       const data = await safeJson(res);
@@ -440,7 +453,8 @@ export function useSessionPlayerManagement({
   const updatePlayerPreference = async (
     userId: string,
     nextGender: PlayerGender,
-    nextMixedSideOverride: MixedSide | null
+    nextMixedSideOverride: MixedSide | null,
+    nextPool: SessionPool
   ) => {
     setSavingPreferencesFor(userId);
     setError("");
@@ -453,6 +467,7 @@ export function useSessionPlayerManagement({
           body: JSON.stringify({
             gender: nextGender,
             mixedSideOverride: nextMixedSideOverride,
+            pool: sessionData?.poolsEnabled ? nextPool : SessionPool.A,
           }),
         }
       );
@@ -479,6 +494,7 @@ export function useSessionPlayerManagement({
     guestName,
     guestGender,
     guestMixedSideOverride,
+    rosterPool,
     guestInitialElo,
     addingGuest,
     savingPreferencesFor,
@@ -492,6 +508,7 @@ export function useSessionPlayerManagement({
     setRosterSearch,
     setGuestName,
     setGuestMixedSideOverride,
+    setRosterPool,
     setGuestInitialElo,
     setGuestRenameInput,
     setOpenPreferenceEditor,

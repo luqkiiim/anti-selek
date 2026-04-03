@@ -5,6 +5,7 @@ import type { QueuedMatch } from "./sessionTypes";
 
 interface QueuedMatchCardProps {
   queuedMatch: QueuedMatch | null;
+  poolLabel?: string | null;
   canPauseQueuedPlayers: boolean;
   canOpenManualQueue: boolean;
   clearingQueuedMatch: boolean;
@@ -101,6 +102,7 @@ function TeamPlayers({
 
 export function QueuedMatchCard({
   queuedMatch,
+  poolLabel,
   canPauseQueuedPlayers,
   canOpenManualQueue,
   clearingQueuedMatch,
@@ -217,6 +219,12 @@ export function QueuedMatchCard({
           {rightAction}
         </div>
       </div>
+
+      {poolLabel ? (
+        <div className="border-b border-gray-100 bg-indigo-50 px-3 py-2 text-center text-[10px] font-semibold uppercase tracking-[0.18em] text-indigo-700 md:px-4">
+          {poolLabel}
+        </div>
+      ) : null}
 
       <div className="flex flex-1 flex-col justify-center p-3 md:p-4">
         {queuedMatch ? (

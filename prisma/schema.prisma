@@ -73,6 +73,14 @@ model Session {
   type      String   @default("POINTS") // POINTS or ELO
   mode      String   @default("MEXICANO") // MEXICANO or MIXICANO
   status    String   @default("WAITING") // WAITING, ACTIVE, COMPLETED
+  poolsEnabled Boolean @default(false)
+  poolAName  String?
+  poolBName  String?
+  poolACourtAssignments Int @default(0)
+  poolBCourtAssignments Int @default(0)
+  poolAMissedTurns Int @default(0)
+  poolBMissedTurns Int @default(0)
+  crossoverMissThreshold Int @default(1)
   createdAt DateTime @default(now())
   endedAt   DateTime?
 
@@ -103,6 +111,7 @@ model SessionPlayer {
   gender       String   @default("UNSPECIFIED") // MALE, FEMALE, UNSPECIFIED
   partnerPreference String @default("OPEN") // legacy MIXICANO preference fallback: OPEN, FEMALE_FLEX
   mixedSideOverride String? // UPPER, LOWER
+  pool         String   @default("A") // A, B
   sessionPoints Int     @default(0)
   lastPartnerId String? // player ID of last partner (for repeat-partner penalty)
   isPaused     Boolean  @default(false)
@@ -163,6 +172,7 @@ model QueuedMatch {
   team1User2Id  String
   team2User1Id  String
   team2User2Id  String
+  targetPool    String? // A, B
   createdAt     DateTime @default(now())
 
   session Session @relation(fields: [sessionId], references: [id], onDelete: Cascade)

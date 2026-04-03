@@ -1,21 +1,10 @@
 "use client";
 
+import { useMemo, useState } from "react";
 import Link from "next/link";
-import { PartnerPreference, PlayerGender, SessionStatus, SessionType } from "@/types/enums";
-
-interface Player {
-  userId: string;
-  sessionPoints: number;
-  isPaused: boolean;
-  isGuest: boolean;
-  gender: PlayerGender;
-  partnerPreference: PartnerPreference;
-  user: {
-    id: string;
-    name: string;
-    elo: number;
-  };
-}
+import { getSessionPoolOptions } from "@/lib/sessionPools";
+import type { Player } from "./sessionTypes";
+import { SessionPool, SessionType } from "@/types/enums";
 
 interface PlayerStats {
   played: number;
@@ -31,6 +20,9 @@ interface LiveStandingsTableProps {
   pointDiffByUserId: Map<string, number>;
   getPlayerProfileHref: (player: Player) => string;
   calculatePlayerSessionStats: (userId: string) => PlayerStats;
+  poolsEnabled: boolean;
+  poolAName?: string | null;
+  poolBName?: string | null;
 }
 
 function getStandingValue(
@@ -94,14 +86,61 @@ export function LiveStandingsTable({
   pointDiffByUserId,
   getPlayerProfileHref,
   calculatePlayerSessionStats,
+  poolsEnabled,
+  poolAName,
+  poolBName,
 }: LiveStandingsTableProps) {
   const isLadderSession = sessionType === SessionType.LADDER;
   const isRaceSession = sessionType === SessionType.RACE;
+  const [poolFilter, setPoolFilter] = useState<"ALL" | SessionPool>("ALL");
+  const poolOptions = getSessionPoolOptions({
+    poolsEnabled,
+    poolAName,
+    poolBName,
+  });
+  const visiblePlayers = useMemo(
+    () =>
+      poolsEnabled && poolFilter !== "ALL"
+        ? players.filter((player) => player.pool === poolFilter)
+        : players,
+    [players, poolFilter, poolsEnabled]
+  );
 
   return (
     <div className="app-panel overflow-hidden">
-      <div className="flex items-center justify-between gap-3 border-b border-gray-100 px-5 py-4">
-        <p className="app-section-eyebrow">Standings</p>
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 px-5 py-4">
+        <div className="flex flex-wrap items-center gap-3">
+          <p className="app-section-eyebrow">Standings</p>
+          {poolsEnabled ? (
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => setPoolFilter("ALL")}
+                className={`rounded-full border px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] ${
+                  poolFilter === "ALL"
+                    ? "border-blue-200 bg-blue-50 text-blue-700"
+                    : "border-gray-200 bg-white text-gray-500"
+                }`}
+              >
+                All
+              </button>
+              {poolOptions.map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => setPoolFilter(option.value)}
+                  className={`rounded-full border px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] ${
+                    poolFilter === option.value
+                      ? "border-blue-200 bg-blue-50 text-blue-700"
+                      : "border-gray-200 bg-white text-gray-500"
+                  }`}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+          ) : null}
+        </div>
         <span className="rounded-full border border-gray-200 bg-gray-50 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-gray-500 sm:text-[11px]">
           {isLadderSession
             ? "Ladder"
@@ -129,11 +168,6 @@ export function LiveStandingsTable({
                     <span className="sm:hidden">Ld</span>
                     <span className="hidden sm:inline">Ladder</span>
                   </>
-                ) : isRaceSession ? (
-                  <>
-                    <span className="sm:hidden">Pts</span>
-                    <span className="hidden sm:inline">Points</span>
-                  </>
                 ) : (
                   <>
                     <span className="sm:hidden">Pts</span>
@@ -154,11 +188,13 @@ export function LiveStandingsTable({
             </tr>
           </thead>
           <tbody>
-            {players.map((player, idx) => {
+            {visiblePlayers.map((player, idx) => {
               const stats = calculatePlayerSessionStats(player.userId);
               const isMe = player.userId === currentUserId;
               const pointDiff = pointDiffByUserId.get(player.userId) ?? 0;
               const standingValue = getStandingValue(sessionType, player, stats);
+              const poolLabel =
+                player.pool === SessionPool.A ? poolAName ?? "Open" : poolBName ?? "Regular";
 
               return (
                 <tr
@@ -201,6 +237,11 @@ export function LiveStandingsTable({
                             Guest
                           </span>
                         ) : null}
+                        {poolsEnabled ? (
+                          <span className="rounded-full border border-indigo-200 bg-indigo-50 px-1.5 py-0.5 text-[8px] font-medium uppercase tracking-wide text-indigo-700 sm:px-2 sm:text-[9px]">
+                            {poolLabel}
+                          </span>
+                        ) : null}
                       </div>
                     </div>
                   </td>
@@ -236,6 +277,12 @@ export function LiveStandingsTable({
           </tbody>
         </table>
       </div>
+
+      {visiblePlayers.length === 0 ? (
+        <div className="border-t border-gray-100 px-5 py-6 text-sm text-gray-500">
+          No players in this pool yet.
+        </div>
+      ) : null}
     </div>
   );
 }

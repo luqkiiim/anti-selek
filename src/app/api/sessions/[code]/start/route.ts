@@ -52,6 +52,10 @@ export async function POST(
       where: { code },
       data: {
         status: SessionStatus.ACTIVE,
+        poolACourtAssignments: 0,
+        poolBCourtAssignments: 0,
+        poolAMissedTurns: 0,
+        poolBMissedTurns: 0,
         players: {
           updateMany: {
             where: {},

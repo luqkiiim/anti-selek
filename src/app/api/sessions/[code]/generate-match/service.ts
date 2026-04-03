@@ -18,6 +18,7 @@ export {
   parseManualTeams,
 } from "./request";
 export {
+  applyPoolSelectionOutcome,
   buildMatchmakingState,
   ensureEnoughPlayers,
   getRankedCandidates,

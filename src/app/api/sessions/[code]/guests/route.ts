@@ -7,9 +7,15 @@ import {
   isValidPlayerGender,
   resolveMixedSideState,
 } from "@/lib/mixedSide";
+import { isValidSessionPool } from "@/lib/sessionPools";
 import { prisma } from "@/lib/prisma";
 import { getSessionModeLabel } from "@/lib/sessionModeLabels";
-import { PlayerGender, SessionMode, SessionStatus } from "@/types/enums";
+import {
+  PlayerGender,
+  SessionMode,
+  SessionPool,
+  SessionStatus,
+} from "@/types/enums";
 
 export const dynamic = "force-dynamic";
 
@@ -30,13 +36,21 @@ export async function POST(
       return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
     }
 
-    const { name, initialElo, gender, partnerPreference, mixedSideOverride } =
+    const {
+      name,
+      initialElo,
+      gender,
+      partnerPreference,
+      mixedSideOverride,
+      pool,
+    } =
       body as {
       name?: unknown;
       initialElo?: unknown;
       gender?: unknown;
       partnerPreference?: unknown;
       mixedSideOverride?: unknown;
+      pool?: unknown;
     };
     if (typeof name !== "string" || name.trim().length < 2) {
       return NextResponse.json({ error: "Guest name must be at least 2 characters" }, { status: 400 });
@@ -68,7 +82,13 @@ export async function POST(
     const { code } = await params;
     const sessionData = await prisma.session.findUnique({
       where: { code },
-      select: { id: true, communityId: true, status: true, mode: true },
+      select: {
+        id: true,
+        communityId: true,
+        status: true,
+        mode: true,
+        poolsEnabled: true,
+      },
     });
 
     if (!sessionData) {
@@ -168,6 +188,10 @@ export async function POST(
           gender: user.gender,
           partnerPreference: user.partnerPreference,
           mixedSideOverride: user.mixedSideOverride,
+          pool:
+            sessionData.poolsEnabled && isValidSessionPool(pool)
+              ? pool
+              : SessionPool.A,
           sessionPoints: 0,
           matchmakingMatchesCredit,
           joinedAt: new Date(),
@@ -187,6 +211,10 @@ export async function POST(
       gender: createdGuest.gender,
       partnerPreference: createdGuest.partnerPreference,
       mixedSideOverride: createdGuest.mixedSideOverride,
+      pool:
+        sessionData.poolsEnabled && isValidSessionPool(pool)
+          ? pool
+          : SessionPool.A,
       ladderEntryAt: new Date().toISOString(),
     });
   } catch (error) {

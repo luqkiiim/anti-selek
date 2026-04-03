@@ -127,6 +127,7 @@ export async function GET(
         return {
           id: sessionData.queuedMatch.id,
           createdAt: sessionData.queuedMatch.createdAt,
+          targetPool: sessionData.queuedMatch.targetPool,
           team1User1,
           team1User2,
           team2User1,

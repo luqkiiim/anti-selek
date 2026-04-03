@@ -2,6 +2,10 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import {
+  buildSessionPoolMap,
+  summarizeSessionPoolMembership,
+} from "@/lib/sessionPools";
+import {
   GenerateMatchError,
   loadSessionRecord,
 } from "../generate-match/shared";
@@ -95,12 +99,28 @@ export async function POST(
         busyPlayerIds,
         playersById,
         rotationHistory,
+        ignorePools: body.ignorePools === true,
       });
+
+      const poolSummary = summarizeSessionPoolMembership(
+        [
+          parsedTeams.team1[0],
+          parsedTeams.team1[1],
+          parsedTeams.team2[0],
+          parsedTeams.team2[1],
+        ],
+        buildSessionPoolMap(
+          sessionData.players,
+          (player) => player.userId,
+          (player) => player.pool
+        )
+      );
 
       return NextResponse.json({
         queuedMatch: await createManualQueuedMatchForSession(
           sessionData,
-          parsedTeams
+          parsedTeams,
+          poolSummary.dominantPool
         ),
       });
     }

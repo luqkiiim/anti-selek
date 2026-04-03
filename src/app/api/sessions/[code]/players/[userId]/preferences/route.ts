@@ -6,9 +6,10 @@ import {
   isValidPlayerGender,
   resolveMixedSideState,
 } from "@/lib/mixedSide";
+import { isValidSessionPool } from "@/lib/sessionPools";
 import { prisma } from "@/lib/prisma";
 import { getSessionModeLabel } from "@/lib/sessionModeLabels";
-import { PlayerGender, SessionMode, SessionStatus } from "@/types/enums";
+import { PlayerGender, SessionMode, SessionPool, SessionStatus } from "@/types/enums";
 
 export const dynamic = "force-dynamic";
 
@@ -30,10 +31,11 @@ export async function PATCH(
       return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
     }
 
-    const { gender, partnerPreference, mixedSideOverride } = body as {
+    const { gender, partnerPreference, mixedSideOverride, pool } = body as {
       gender?: unknown;
       partnerPreference?: unknown;
       mixedSideOverride?: unknown;
+      pool?: unknown;
     };
 
     if (gender !== undefined && !isValidPlayerGender(gender)) {
@@ -52,10 +54,19 @@ export async function PATCH(
     ) {
       return NextResponse.json({ error: "Invalid mixed side override" }, { status: 400 });
     }
+    if (pool !== undefined && !isValidSessionPool(pool)) {
+      return NextResponse.json({ error: "Invalid pool" }, { status: 400 });
+    }
 
     const sessionData = await prisma.session.findUnique({
       where: { code },
-      select: { id: true, communityId: true, mode: true, status: true },
+      select: {
+        id: true,
+        communityId: true,
+        mode: true,
+        status: true,
+        poolsEnabled: true,
+      },
     });
     if (!sessionData) {
       return NextResponse.json({ error: "Session not found" }, { status: 404 });
@@ -89,7 +100,12 @@ export async function PATCH(
           userId,
         },
       },
-      select: { gender: true, partnerPreference: true, mixedSideOverride: true },
+      select: {
+        gender: true,
+        partnerPreference: true,
+        mixedSideOverride: true,
+        pool: true,
+      },
     });
     if (!existing) {
       return NextResponse.json({ error: "Player not found in session" }, { status: 404 });
@@ -136,6 +152,12 @@ export async function PATCH(
         gender: typeof gender === "string" ? gender : undefined,
         partnerPreference: resolvedMixedState.partnerPreference,
         mixedSideOverride: resolvedMixedState.mixedSideOverride,
+        pool:
+          sessionData.poolsEnabled && isValidSessionPool(pool)
+            ? pool
+            : sessionData.poolsEnabled
+              ? existing.pool
+              : SessionPool.A,
       },
       include: {
         user: { select: { id: true, name: true } },

@@ -3,8 +3,12 @@ import { auth } from "@/lib/auth";
 import { getCourtDisplayLabel } from "@/lib/courtLabels";
 import { prisma } from "@/lib/prisma";
 import { getBusyPlayerIds } from "@/lib/matchmaking/busyFilter";
+import { SessionPool } from "@/types/enums";
 import { createQueuedMatchAssignment } from "../../generate-match/assignments";
-import { buildMatchmakingState } from "../../generate-match/selection";
+import {
+  applyPoolSelectionOutcome,
+  buildMatchmakingState,
+} from "../../generate-match/selection";
 import {
   GenerateMatchError,
   loadCourtRecords,
@@ -116,6 +120,22 @@ export async function POST(
       courtId: targetCourt.id,
       partition,
     });
+
+    if (sessionData.poolsEnabled && sessionData.queuedMatch.targetPool) {
+      const nextPoolState = applyPoolSelectionOutcome(sessionData, {
+        targetPool: sessionData.queuedMatch.targetPool as SessionPool,
+        missedPool: null,
+      });
+      await prisma.session.update({
+        where: { id: sessionData.id },
+        data: {
+          poolACourtAssignments: nextPoolState.poolACourtAssignments,
+          poolBCourtAssignments: nextPoolState.poolBCourtAssignments,
+          poolAMissedTurns: nextPoolState.poolAMissedTurns,
+          poolBMissedTurns: nextPoolState.poolBMissedTurns,
+        },
+      });
+    }
 
     return NextResponse.json({
       ...match,

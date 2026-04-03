@@ -3,6 +3,7 @@ import {
   PartnerPreference,
   PlayerGender,
   SessionMode,
+  SessionPool,
 } from "@/types/enums";
 
 export interface Player {
@@ -14,6 +15,7 @@ export interface Player {
   gender: PlayerGender;
   partnerPreference: PartnerPreference;
   mixedSideOverride?: MixedSide | null;
+  pool: SessionPool;
   user: {
     id: string;
     name: string;
@@ -37,6 +39,7 @@ export interface Match {
 export interface QueuedMatch {
   id: string;
   createdAt?: string;
+  targetPool?: SessionPool | null;
   team1User1: { id: string; name: string };
   team1User2: { id: string; name: string };
   team2User1: { id: string; name: string };
@@ -80,6 +83,14 @@ export interface SessionData {
   type: string;
   mode: SessionMode;
   status: string;
+  poolsEnabled: boolean;
+  poolAName?: string | null;
+  poolBName?: string | null;
+  poolACourtAssignments: number;
+  poolBCourtAssignments: number;
+  poolAMissedTurns: number;
+  poolBMissedTurns: number;
+  crossoverMissThreshold: number;
   viewerCanManage?: boolean;
   viewerCommunityRole?: string | null;
   courts: Court[];

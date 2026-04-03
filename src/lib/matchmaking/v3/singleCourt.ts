@@ -68,6 +68,8 @@ export function findBestSingleCourtSelectionV3<T extends MatchmakerV3Player>(
     completedMatches = [],
     excludedQuartetKey,
     excludedPartitionKey,
+    targetPool,
+    minimumTargetPoolPlayers,
     now = Date.now(),
     matchDurationMs = DEFAULT_MATCH_DURATION_MS,
     randomFn = Math.random,
@@ -81,6 +83,8 @@ export function findBestSingleCourtSelectionV3<T extends MatchmakerV3Player>(
     }>;
     excludedQuartetKey?: string;
     excludedPartitionKey?: string;
+    targetPool?: string;
+    minimumTargetPoolPlayers?: number;
     now?: number;
     matchDurationMs?: number;
     randomFn?: () => number;
@@ -147,6 +151,15 @@ export function findBestSingleCourtSelectionV3<T extends MatchmakerV3Player>(
       string,
       string,
     ];
+
+    if (targetPool) {
+      const targetPoolCount = quartetPlayers.filter(
+        (player) => player.pool === targetPool
+      ).length;
+      if (targetPoolCount < (minimumTargetPoolPlayers ?? 1)) {
+        continue;
+      }
+    }
 
     if (excludedQuartetKey && getQuartetKey(ids) === excludedQuartetKey) {
       continue;

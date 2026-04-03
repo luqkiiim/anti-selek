@@ -65,6 +65,8 @@ export function findBestSingleCourtSelectionLadder<
     sessionMode,
     excludedQuartetKey,
     excludedPartitionKey,
+    targetPool,
+    minimumTargetPoolPlayers,
     now = Date.now(),
     matchDurationMs = DEFAULT_MATCH_DURATION_MS,
     randomFn = Math.random,
@@ -72,6 +74,8 @@ export function findBestSingleCourtSelectionLadder<
     sessionMode: SessionMode;
     excludedQuartetKey?: string;
     excludedPartitionKey?: string;
+    targetPool?: string;
+    minimumTargetPoolPlayers?: number;
     now?: number;
     matchDurationMs?: number;
     randomFn?: () => number;
@@ -139,6 +143,15 @@ export function findBestSingleCourtSelectionLadder<
       string,
       string,
     ];
+
+    if (targetPool) {
+      const targetPoolCount = quartetPlayers.filter(
+        (player) => player.pool === targetPool
+      ).length;
+      if (targetPoolCount < (minimumTargetPoolPlayers ?? 1)) {
+        continue;
+      }
+    }
 
     if (excludedQuartetKey && getQuartetKey(ids) === excludedQuartetKey) {
       continue;

@@ -3,7 +3,8 @@
 import { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { getMixedSideOverrideOptionForGender } from "@/lib/mixedSide";
-import { MixedSide, PlayerGender } from "@/types/enums";
+import { getSessionPoolOptions } from "@/lib/sessionPools";
+import { MixedSide, PlayerGender, SessionPool } from "@/types/enums";
 import type { Player, PreferenceEditorState } from "./sessionTypes";
 
 interface SessionPreferenceEditorPortalProps {
@@ -12,13 +13,17 @@ interface SessionPreferenceEditorPortalProps {
   isAdmin: boolean;
   isCompletedSession: boolean;
   isMixicano: boolean;
+  poolsEnabled: boolean;
+  poolAName?: string | null;
+  poolBName?: string | null;
   renamingGuestId: string | null;
   removingPlayerId: string | null;
   onClose: () => void;
   onUpdatePreference: (
     userId: string,
     nextGender: PlayerGender,
-    nextMixedSideOverride: MixedSide | null
+    nextMixedSideOverride: MixedSide | null,
+    nextPool: SessionPool
   ) => Promise<void>;
   onRequestRenameGuest: (userId: string, currentName: string) => void;
   onRemovePlayer: (userId: string, playerName: string) => void;
@@ -30,6 +35,9 @@ export function SessionPreferenceEditorPortal({
   isAdmin,
   isCompletedSession,
   isMixicano,
+  poolsEnabled,
+  poolAName,
+  poolBName,
   renamingGuestId,
   removingPlayerId,
   onClose,
@@ -51,6 +59,11 @@ export function SessionPreferenceEditorPortal({
   const mixedSideOption = getMixedSideOverrideOptionForGender(
     activePreferencePlayer.gender
   );
+  const poolOptions = getSessionPoolOptions({
+    poolsEnabled,
+    poolAName,
+    poolBName,
+  });
 
   useEffect(() => {
     const handlePointerDown = (event: PointerEvent) => {
@@ -96,7 +109,8 @@ export function SessionPreferenceEditorPortal({
                 await onUpdatePreference(
                   activePreferencePlayer.userId,
                   nextGender,
-                  null
+                  null,
+                  activePreferencePlayer.pool
                 );
               }}
               className="h-8 w-full rounded-lg border border-gray-200 bg-white px-2 text-[10px] font-black uppercase tracking-wide text-gray-700 focus:border-blue-400 focus:outline-none"
@@ -117,7 +131,8 @@ export function SessionPreferenceEditorPortal({
                   await onUpdatePreference(
                     activePreferencePlayer.userId,
                     activePreferencePlayer.gender,
-                    e.target.value ? (e.target.value as MixedSide) : null
+                    e.target.value ? (e.target.value as MixedSide) : null,
+                    activePreferencePlayer.pool
                   );
                 }}
                 className="h-8 w-full rounded-lg border border-gray-200 bg-white px-2 text-[10px] font-black uppercase tracking-wide text-gray-700 focus:border-blue-400 focus:outline-none"
@@ -137,6 +152,32 @@ export function SessionPreferenceEditorPortal({
           Player Actions
         </p>
       )}
+      {poolsEnabled ? (
+        <div className="space-y-1">
+          <p className="text-[9px] font-black uppercase tracking-wider text-gray-400">
+            Pool
+          </p>
+          <select
+            value={activePreferencePlayer.pool}
+            onChange={async (e) => {
+              onClose();
+              await onUpdatePreference(
+                activePreferencePlayer.userId,
+                activePreferencePlayer.gender,
+                activePreferencePlayer.mixedSideOverride ?? null,
+                e.target.value as SessionPool
+              );
+            }}
+            className="h-8 w-full rounded-lg border border-gray-200 bg-white px-2 text-[10px] font-black uppercase tracking-wide text-gray-700 focus:border-blue-400 focus:outline-none"
+          >
+            {poolOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </div>
+      ) : null}
       {activePreferencePlayer.isGuest ? (
         <div className="border-t border-gray-100 pt-1">
           <button

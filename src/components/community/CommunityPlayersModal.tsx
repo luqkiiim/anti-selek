@@ -4,28 +4,39 @@ import { useRef } from "react";
 import { PlayerPickerSheet } from "@/components/ui/PlayerPickerSheet";
 import { SearchField } from "@/components/ui/SearchField";
 import type { CommunityPageMember } from "./communityTypes";
+import { SessionPool } from "@/types/enums";
 
 interface CommunityPlayersModalProps {
   open: boolean;
   selectedPlayerIds: string[];
+  selectedPlayerPools: Record<string, SessionPool>;
   playerSearch: string;
+  poolsEnabled: boolean;
+  poolAName: string;
+  poolBName: string;
   selectablePlayers: CommunityPageMember[];
   filteredSelectablePlayers: CommunityPageMember[];
   onPlayerSearchChange: (value: string) => void;
   onToggleAllPlayers: () => void;
   onTogglePlayerSelection: (playerId: string) => void;
+  onChangePlayerPool: (playerId: string, pool: SessionPool) => void;
   onClose: () => void;
 }
 
 export function CommunityPlayersModal({
   open,
   selectedPlayerIds,
+  selectedPlayerPools,
   playerSearch,
+  poolsEnabled,
+  poolAName,
+  poolBName,
   selectablePlayers,
   filteredSelectablePlayers,
   onPlayerSearchChange,
   onToggleAllPlayers,
   onTogglePlayerSelection,
+  onChangePlayerPool,
   onClose,
 }: CommunityPlayersModalProps) {
   const searchInputRef = useRef<HTMLInputElement | null>(null);
@@ -102,40 +113,81 @@ export function CommunityPlayersModal({
         <div className="space-y-2">
           {filteredSelectablePlayers.map((player) => {
             const isSelected = selectedPlayerIds.includes(player.id);
+            const selectedPool = selectedPlayerPools[player.id] ?? SessionPool.A;
 
             return (
-              <button
+              <div
                 key={player.id}
-                type="button"
-                onPointerDownCapture={captureSearchFocusIntent}
-                onMouseDownCapture={captureSearchFocusIntent}
-                onClick={() => {
-                  onTogglePlayerSelection(player.id);
-                  restoreSearchFocusIfNeeded();
-                }}
                 className={`app-touch-pan-y flex w-full items-center justify-between gap-3 rounded-2xl border px-3 py-3 text-left transition ${
                   isSelected
                     ? "border-blue-200 bg-blue-50"
                     : "border-gray-200 bg-gray-50/70 hover:border-blue-200 hover:bg-white"
                 }`}
               >
-                <div className="min-w-0 space-y-1">
-                  <p className="truncate text-sm font-semibold text-gray-900">
-                    {player.name}
-                  </p>
-                  <p className="text-xs text-gray-500">Rating {player.elo}</p>
-                </div>
-
-                <span
-                  className={`inline-flex shrink-0 rounded-full border px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.18em] ${
-                    isSelected
-                      ? "border-blue-200 bg-blue-50 text-blue-700"
-                      : "border-gray-200 bg-white text-gray-500"
-                  }`}
+                <button
+                  type="button"
+                  onPointerDownCapture={captureSearchFocusIntent}
+                  onMouseDownCapture={captureSearchFocusIntent}
+                  onClick={() => {
+                    onTogglePlayerSelection(player.id);
+                    restoreSearchFocusIfNeeded();
+                  }}
+                  className="flex min-w-0 flex-1 items-center justify-between gap-3 text-left"
                 >
-                  {isSelected ? "Selected" : "Add"}
-                </span>
-              </button>
+                  <div className="min-w-0 space-y-1">
+                    <div className="flex min-w-0 flex-wrap items-center gap-2">
+                      <p className="truncate text-sm font-semibold text-gray-900">
+                        {player.name}
+                      </p>
+                      {poolsEnabled && isSelected ? (
+                        <span className="rounded-full border border-indigo-200 bg-indigo-50 px-2 py-0.5 text-[9px] font-medium uppercase tracking-wide text-indigo-700">
+                          {selectedPool === SessionPool.A ? poolAName : poolBName}
+                        </span>
+                      ) : null}
+                    </div>
+                    <p className="text-xs text-gray-500">Rating {player.elo}</p>
+                  </div>
+
+                  <span
+                    className={`inline-flex shrink-0 rounded-full border px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.18em] ${
+                      isSelected
+                        ? "border-blue-200 bg-blue-50 text-blue-700"
+                        : "border-gray-200 bg-white text-gray-500"
+                    }`}
+                  >
+                    {isSelected ? "Selected" : "Add"}
+                  </span>
+                </button>
+
+                {poolsEnabled && isSelected ? (
+                  <div className="flex shrink-0 gap-2">
+                    {[SessionPool.A, SessionPool.B].map((pool) => {
+                      const isActive = selectedPool === pool;
+                      const label = pool === SessionPool.A ? poolAName : poolBName;
+
+                      return (
+                        <button
+                          key={pool}
+                          type="button"
+                          onPointerDownCapture={captureSearchFocusIntent}
+                          onMouseDownCapture={captureSearchFocusIntent}
+                          onClick={() => {
+                            onChangePlayerPool(player.id, pool);
+                            restoreSearchFocusIfNeeded();
+                          }}
+                          className={`rounded-xl border px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.18em] transition ${
+                            isActive
+                              ? "border-indigo-200 bg-indigo-50 text-indigo-700"
+                              : "border-gray-200 bg-white text-gray-500"
+                          }`}
+                        >
+                          {label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : null}
+              </div>
             );
           })}
         </div>

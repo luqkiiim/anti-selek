@@ -5,7 +5,7 @@ import {
   getMixedSideDisplayLabel,
   getMixedSideOverrideOptionForGender,
 } from "@/lib/mixedSide";
-import { MixedSide, PlayerGender, SessionMode } from "@/types/enums";
+import { MixedSide, PlayerGender, SessionMode, SessionPool } from "@/types/enums";
 import type { CommunityGuestConfig } from "./communityTypes";
 
 interface CommunityGuestsModalProps {
@@ -15,9 +15,14 @@ interface CommunityGuestsModalProps {
   guestNameInput: string;
   guestGenderInput: PlayerGender;
   guestMixedSideOverrideInput: MixedSide | null;
+  guestPoolInput: SessionPool;
+  poolsEnabled: boolean;
+  poolAName: string;
+  poolBName: string;
   onGuestNameChange: (value: string) => void;
   onGuestGenderChange: (value: PlayerGender) => void;
   onGuestMixedSideOverrideChange: (value: MixedSide | null) => void;
+  onGuestPoolChange: (value: SessionPool) => void;
   onAddGuest: () => void;
   onRemoveGuest: (name: string) => void;
   onClose: () => void;
@@ -30,9 +35,14 @@ export function CommunityGuestsModal({
   guestNameInput,
   guestGenderInput,
   guestMixedSideOverrideInput,
+  guestPoolInput,
+  poolsEnabled,
+  poolAName,
+  poolBName,
   onGuestNameChange,
   onGuestGenderChange,
   onGuestMixedSideOverrideChange,
+  onGuestPoolChange,
   onAddGuest,
   onRemoveGuest,
   onClose,
@@ -84,6 +94,18 @@ export function CommunityGuestsModal({
               <option value={PlayerGender.MALE}>Male</option>
               <option value={PlayerGender.FEMALE}>Female</option>
             </select>
+            {poolsEnabled ? (
+              <select
+                value={guestPoolInput}
+                onChange={(event) =>
+                  onGuestPoolChange(event.target.value as SessionPool)
+                }
+                className="field px-3 py-2.5 text-sm"
+              >
+                <option value={SessionPool.A}>{poolAName}</option>
+                <option value={SessionPool.B}>{poolBName}</option>
+              </select>
+            ) : null}
             {mixedSideOption ? (
               <select
                 value={guestMixedSideOverrideInput ?? ""}
@@ -143,6 +165,11 @@ export function CommunityGuestsModal({
                   <span className="rounded-full border border-gray-200 bg-white px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-gray-600">
                     {guest.gender === PlayerGender.FEMALE ? "Female" : "Male"}
                   </span>
+                  {poolsEnabled ? (
+                    <span className="rounded-full border border-indigo-200 bg-indigo-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-indigo-700">
+                      {guest.pool === SessionPool.A ? poolAName : poolBName}
+                    </span>
+                  ) : null}
                   {guest.mixedSideOverride ? (
                     <span className="rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-blue-700">
                       {getMixedSideDisplayLabel({

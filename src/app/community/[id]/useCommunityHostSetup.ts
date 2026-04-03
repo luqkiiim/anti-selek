@@ -14,6 +14,7 @@ import {
   MixedSide,
   PlayerGender,
   SessionMode,
+  SessionPool,
   SessionType,
 } from "@/types/enums";
 
@@ -46,13 +47,22 @@ export function useCommunityHostSetup({
     SessionMode.MEXICANO
   );
   const [courtCount, setCourtCount] = useState(3);
+  const [poolsEnabled, setPoolsEnabled] = useState(false);
+  const [poolAName, setPoolAName] = useState("Open");
+  const [poolBName, setPoolBName] = useState("Regular");
   const [selectedPlayerIds, setSelectedPlayerIds] = useState<string[]>([]);
+  const [selectedPlayerPools, setSelectedPlayerPools] = useState<
+    Record<string, SessionPool>
+  >({});
   const [guestNameInput, setGuestNameInput] = useState("");
   const [guestGenderInput, setGuestGenderInput] = useState<PlayerGender>(
     PlayerGender.MALE
   );
   const [guestMixedSideOverrideInput, setGuestMixedSideOverrideInput] =
     useState<MixedSide | null>(null);
+  const [guestPoolInput, setGuestPoolInput] = useState<SessionPool>(
+    SessionPool.A
+  );
   const [guestConfigs, setGuestConfigs] = useState<CommunityGuestConfig[]>([]);
   const [creatingSession, setCreatingSession] = useState(false);
   const [showPlayersModal, setShowPlayersModal] = useState(false);
@@ -64,11 +74,16 @@ export function useCommunityHostSetup({
     setSessionType(SessionType.POINTS);
     setSessionMode(SessionMode.MEXICANO);
     setCourtCount(3);
+    setPoolsEnabled(false);
+    setPoolAName("Open");
+    setPoolBName("Regular");
     setSelectedPlayerIds([]);
+    setSelectedPlayerPools({});
     setGuestConfigs([]);
     setGuestNameInput("");
     setGuestGenderInput(PlayerGender.MALE);
     setGuestMixedSideOverrideInput(null);
+    setGuestPoolInput(SessionPool.A);
     setPlayerSearch("");
     setShowPlayersModal(false);
     setShowGuestsModal(false);
@@ -104,7 +119,16 @@ export function useCommunityHostSetup({
           courtCount,
           communityId,
           playerIds: selectedPlayerIds,
+          playerConfigs: selectedPlayerIds.map((userId) => ({
+            userId,
+            pool: poolsEnabled
+              ? (selectedPlayerPools[userId] ?? SessionPool.A)
+              : SessionPool.A,
+          })),
           guestConfigs,
+          poolsEnabled,
+          poolAName,
+          poolBName,
         }),
       });
       const data = await safeJson(res);
@@ -119,6 +143,7 @@ export function useCommunityHostSetup({
       setGuestNameInput("");
       setGuestGenderInput(PlayerGender.MALE);
       setGuestMixedSideOverrideInput(null);
+      setGuestPoolInput(SessionPool.A);
       setCourtCount(3);
       router.push(`/session/${data.code}`);
     } catch (err: unknown) {
@@ -131,10 +156,20 @@ export function useCommunityHostSetup({
   };
 
   const togglePlayerSelection = (playerId: string) => {
+    const isSelected = selectedPlayerIds.includes(playerId);
+    if (!isSelected) {
+      setSelectedPlayerPools((current) =>
+        current[playerId]
+          ? current
+          : {
+              ...current,
+              [playerId]: SessionPool.A,
+            }
+      );
+    }
+
     setSelectedPlayerIds((prev) =>
-      prev.includes(playerId)
-        ? prev.filter((id) => id !== playerId)
-        : [...prev, playerId]
+      isSelected ? prev.filter((id) => id !== playerId) : [...prev, playerId]
     );
   };
 
@@ -144,7 +179,23 @@ export function useCommunityHostSetup({
       setSelectedPlayerIds([]);
       return;
     }
+    setSelectedPlayerPools((current) => {
+      const next = { ...current };
+      for (const playerId of allOtherIds) {
+        if (!next[playerId]) {
+          next[playerId] = SessionPool.A;
+        }
+      }
+      return next;
+    });
     setSelectedPlayerIds(allOtherIds);
+  };
+
+  const updateSelectedPlayerPool = (playerId: string, pool: SessionPool) => {
+    setSelectedPlayerPools((current) => ({
+      ...current,
+      [playerId]: pool,
+    }));
   };
 
   const addGuestName = () => {
@@ -178,12 +229,14 @@ export function useCommunityHostSetup({
         gender: guestGenderInput,
         partnerPreference: resolvedMixedState.partnerPreference,
         mixedSideOverride: resolvedMixedState.mixedSideOverride,
+        pool: poolsEnabled ? guestPoolInput : SessionPool.A,
         initialElo: DEFAULT_GUEST_INITIAL_ELO,
       },
     ]);
     setGuestNameInput("");
     setGuestGenderInput(PlayerGender.MALE);
     setGuestMixedSideOverrideInput(null);
+    setGuestPoolInput(SessionPool.A);
   };
 
   const removeGuestName = (nameToRemove: string) => {
@@ -196,6 +249,29 @@ export function useCommunityHostSetup({
     setGuestGenderInput(nextGender);
     setGuestMixedSideOverrideInput(null);
   };
+
+  const selectedPoolCounts = selectedPlayerIds.reduce(
+    (counts, playerId) => {
+      const pool = selectedPlayerPools[playerId] ?? SessionPool.A;
+      counts[pool] += 1;
+      return counts;
+    },
+    {
+      [SessionPool.A]: 0,
+      [SessionPool.B]: 0,
+    }
+  );
+
+  const guestPoolCounts = guestConfigs.reduce(
+    (counts, guest) => {
+      counts[guest.pool] += 1;
+      return counts;
+    },
+    {
+      [SessionPool.A]: 0,
+      [SessionPool.B]: 0,
+    }
+  );
 
   const openPlayersModal = () => {
     setShowPlayersModal(true);
@@ -224,13 +300,24 @@ export function useCommunityHostSetup({
     setSessionMode,
     courtCount,
     setCourtCount,
+    poolsEnabled,
+    setPoolsEnabled,
+    poolAName,
+    setPoolAName,
+    poolBName,
+    setPoolBName,
     selectedPlayerIds,
+    selectedPlayerPools,
+    selectedPoolCounts,
     guestNameInput,
     setGuestNameInput,
     guestGenderInput,
     guestMixedSideOverrideInput,
     setGuestMixedSideOverrideInput,
+    guestPoolInput,
+    setGuestPoolInput,
     guestConfigs,
+    guestPoolCounts,
     creatingSession,
     showPlayersModal,
     showGuestsModal,
@@ -239,6 +326,7 @@ export function useCommunityHostSetup({
     createSession,
     togglePlayerSelection,
     toggleAllPlayers,
+    updateSelectedPlayerPool,
     addGuestName,
     removeGuestName,
     handleGuestGenderChange,

@@ -19,6 +19,7 @@ export interface ParsedGenerateMatchRequest {
   forceReshuffle: boolean;
   undoCurrentMatch: boolean;
   manualTeams?: unknown;
+  ignorePools?: boolean;
 }
 
 export async function loadSessionRecord(code: string) {

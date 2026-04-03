@@ -8,6 +8,8 @@ import {
   buildRotationHistory,
   type PartitionCandidate,
 } from "@/lib/matchmaking/partitioning";
+import { getNormalizedSessionPool } from "@/lib/sessionPools";
+import { SessionPool } from "@/types/enums";
 import { SessionMode, SessionType } from "@/types/enums";
 import {
   GenerateMatchError,
@@ -23,6 +25,7 @@ export function validateManualMatchRequest({
   busyPlayerIds,
   playersById,
   rotationHistory,
+  ignorePools = false,
 }: {
   sessionData: GenerateMatchSession;
   targetCourt: GenerateMatchCourt;
@@ -30,6 +33,7 @@ export function validateManualMatchRequest({
   busyPlayerIds: Set<string>;
   playersById: Map<string, PartitionCandidate>;
   rotationHistory: ReturnType<typeof buildRotationHistory>;
+  ignorePools?: boolean;
 }) {
   if (targetCourt.currentMatch) {
     throw new GenerateMatchError(
@@ -62,6 +66,21 @@ export function validateManualMatchRequest({
       400,
       "Paused players cannot be added to a manual match."
     );
+  }
+
+  if (sessionData.poolsEnabled && !ignorePools) {
+    const selectedPools = new Set(
+      selectedPlayers.map((player) =>
+        getNormalizedSessionPool(player?.pool ?? SessionPool.A)
+      )
+    );
+
+    if (selectedPools.size > 1) {
+      throw new GenerateMatchError(
+        400,
+        "Manual matches must stay within one pool unless override is enabled."
+      );
+    }
   }
 
   const busyManualIds = selectedIds.filter((id) => busyPlayerIds.has(id));

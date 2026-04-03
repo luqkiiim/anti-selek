@@ -135,6 +135,7 @@ export default function SessionPage() {
     reshufflingQueuedMatch,
     manualCourtId,
     creatingManualMatch,
+    manualIgnorePools,
     manualMatchForm,
     createMatchesForCourts,
     queueNextMatch,
@@ -143,6 +144,7 @@ export default function SessionPage() {
     openManualMatchModal,
     openManualQueuedMatchModal,
     closeManualMatchModal,
+    setManualIgnorePools,
     updateManualMatchSlot,
     createManualMatch,
     createManualQueuedMatch,
@@ -173,6 +175,7 @@ export default function SessionPage() {
     guestName,
     guestGender,
     guestMixedSideOverride,
+    rosterPool,
     guestInitialElo,
     addingGuest,
     savingPreferencesFor,
@@ -186,6 +189,7 @@ export default function SessionPage() {
     setRosterSearch,
     setGuestName,
     setGuestMixedSideOverride,
+    setRosterPool,
     setGuestInitialElo,
     setGuestRenameInput,
     setOpenPreferenceEditor,
@@ -856,7 +860,11 @@ export default function SessionPage() {
                 <LiveCourtsPanel
                   sessionStatus={sessionData.status}
                   courts={sessionData.courts}
+                  players={sessionData.players}
                   queuedMatch={sessionView.queuedMatch}
+                  poolsEnabled={sessionData.poolsEnabled}
+                  poolAName={sessionData.poolAName}
+                  poolBName={sessionData.poolBName}
                   currentUserId={currentUserId}
                   isAdmin={isAdmin}
                   isClaimedUser={isClaimedUser}
@@ -923,6 +931,9 @@ export default function SessionPage() {
                     sessionView.playerStatsByUserId.get(userId) ??
                     EMPTY_PLAYER_SESSION_STATS
                   }
+                  poolsEnabled={sessionData.poolsEnabled}
+                  poolAName={sessionData.poolAName}
+                  poolBName={sessionData.poolBName}
                 />
               </div>
             </section>
@@ -950,6 +961,9 @@ export default function SessionPage() {
         players={sessionData.players}
         currentUserId={currentUserId}
         canEditPreferences={!sessionView.isCompletedSession}
+        poolsEnabled={sessionData.poolsEnabled}
+        poolAName={sessionData.poolAName}
+        poolBName={sessionData.poolBName}
         togglingPausePlayerId={togglingPausePlayerId}
         onClose={() => setShowPlayersModal(false)}
         onTogglePause={togglePausePlayer}
@@ -1062,6 +1076,9 @@ export default function SessionPage() {
         isAdmin={isAdmin}
         isCompletedSession={sessionView.isCompletedSession}
         isMixicano={sessionView.isMixicano}
+        poolsEnabled={sessionData.poolsEnabled}
+        poolAName={sessionData.poolAName}
+        poolBName={sessionData.poolBName}
         renamingGuestId={renamingGuestId}
         removingPlayerId={removingPlayerId}
         onClose={() => setOpenPreferenceEditor(null)}
@@ -1083,7 +1100,11 @@ export default function SessionPage() {
         open={showRosterModal}
         isAdmin={isAdmin}
         isMixicano={sessionView.isMixicano}
+        poolsEnabled={sessionData.poolsEnabled}
+        poolAName={sessionData.poolAName}
+        poolBName={sessionData.poolBName}
         rosterSearch={rosterSearch}
+        rosterPool={rosterPool}
         guestName={guestName}
         guestGender={guestGender}
         guestMixedSideOverride={guestMixedSideOverride}
@@ -1093,6 +1114,7 @@ export default function SessionPage() {
         playersNotInSession={sessionView.playersNotInSession}
         onClose={closeRosterModal}
         onRosterSearchChange={setRosterSearch}
+        onRosterPoolChange={setRosterPool}
         onGuestNameChange={setGuestName}
         onGuestGenderChange={handleGuestGenderChange}
         onGuestMixedSideOverrideChange={setGuestMixedSideOverride}
@@ -1116,7 +1138,12 @@ export default function SessionPage() {
         manualMatchPlayerOptions={sessionView.manualMatchPlayerOptions}
         selectedManualPlayerIds={sessionView.selectedManualPlayerIds}
         creatingManualMatch={creatingManualMatch}
+        poolsEnabled={sessionData.poolsEnabled}
+        poolAName={sessionData.poolAName}
+        poolBName={sessionData.poolBName}
+        ignorePools={manualIgnorePools}
         onClose={closeManualMatchModal}
+        onIgnorePoolsChange={setManualIgnorePools}
         onUpdateSlot={updateManualMatchSlot}
         onCreateMatch={manualQueueOpen ? createManualQueuedMatch : createManualMatch}
       />

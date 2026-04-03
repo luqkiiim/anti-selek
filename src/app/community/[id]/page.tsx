@@ -55,13 +55,24 @@ export default function CommunityPage() {
     setSessionMode,
     courtCount,
     setCourtCount,
+    poolsEnabled,
+    setPoolsEnabled,
+    poolAName,
+    setPoolAName,
+    poolBName,
+    setPoolBName,
     selectedPlayerIds,
+    selectedPlayerPools,
+    selectedPoolCounts,
     guestNameInput,
     setGuestNameInput,
     guestGenderInput,
     guestMixedSideOverrideInput,
     setGuestMixedSideOverrideInput,
+    guestPoolInput,
+    setGuestPoolInput,
     guestConfigs,
+    guestPoolCounts,
     loading,
     creatingSession,
     activeSection,
@@ -95,6 +106,7 @@ export default function CommunityPage() {
     requestClaim,
     togglePlayerSelection,
     toggleAllPlayers,
+    updateSelectedPlayerPool,
     addGuestName,
     removeGuestName,
     handleGuestGenderChange,
@@ -170,6 +182,14 @@ export default function CommunityPage() {
       mixedModeLabel={mixedModeLabel}
       courtCount={courtCount}
       onCourtCountChange={setCourtCount}
+      poolsEnabled={poolsEnabled}
+      onPoolsEnabledChange={setPoolsEnabled}
+      poolAName={poolAName}
+      onPoolANameChange={setPoolAName}
+      poolBName={poolBName}
+      onPoolBNameChange={setPoolBName}
+      selectedPoolCounts={selectedPoolCounts}
+      guestPoolCounts={guestPoolCounts}
       selectedPlayerCount={selectedPlayerIds.length}
       guestCount={guestConfigs.length}
       onOpenPlayers={openPlayersModal}
@@ -354,12 +374,17 @@ export default function CommunityPage() {
       <CommunityPlayersModal
         open={showPlayersModal}
         selectedPlayerIds={selectedPlayerIds}
+        selectedPlayerPools={selectedPlayerPools}
         playerSearch={playerSearch}
+        poolsEnabled={poolsEnabled}
+        poolAName={poolAName}
+        poolBName={poolBName}
         selectablePlayers={selectablePlayers}
         filteredSelectablePlayers={filteredSelectablePlayers}
         onPlayerSearchChange={setPlayerSearch}
         onToggleAllPlayers={toggleAllPlayers}
         onTogglePlayerSelection={togglePlayerSelection}
+        onChangePlayerPool={updateSelectedPlayerPool}
         onClose={closePlayersModal}
       />
 
@@ -370,9 +395,14 @@ export default function CommunityPage() {
         guestNameInput={guestNameInput}
         guestGenderInput={guestGenderInput}
         guestMixedSideOverrideInput={guestMixedSideOverrideInput}
+        guestPoolInput={guestPoolInput}
+        poolsEnabled={poolsEnabled}
+        poolAName={poolAName}
+        poolBName={poolBName}
         onGuestNameChange={setGuestNameInput}
         onGuestGenderChange={handleGuestGenderChange}
         onGuestMixedSideOverrideChange={setGuestMixedSideOverrideInput}
+        onGuestPoolChange={setGuestPoolInput}
         onAddGuest={addGuestName}
         onRemoveGuest={removeGuestName}
         onClose={closeGuestsModal}

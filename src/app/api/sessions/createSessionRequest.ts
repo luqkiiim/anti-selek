@@ -7,13 +7,21 @@ import {
   resolveMixedSideState,
 } from "@/lib/mixedSide";
 import {
+  isValidSessionPool,
+  normalizeSessionPoolName,
+} from "@/lib/sessionPools";
+import {
   MixedSide,
   PartnerPreference,
   PlayerGender,
   SessionMode,
+  SessionPool,
   SessionType,
 } from "@/types/enums";
 import {
+  DEFAULT_SESSION_POOL_A_NAME,
+  DEFAULT_SESSION_POOL_B_NAME,
+  DEFAULT_SESSION_POOL_CROSSOVER_MISS_THRESHOLD,
   type NormalizedGuestConfig,
   type ParsedCreateSessionRequest,
   type PlayerConfigOverride,
@@ -30,6 +38,9 @@ interface CreateSessionBody {
   guestConfigs?: unknown;
   communityId?: unknown;
   courtCount?: unknown;
+  poolsEnabled?: unknown;
+  poolAName?: unknown;
+  poolBName?: unknown;
 }
 
 function normalizePlayerConfigMap(playerConfigs: unknown) {
@@ -46,6 +57,7 @@ function normalizePlayerConfigMap(playerConfigs: unknown) {
       gender?: unknown;
       partnerPreference?: unknown;
       mixedSideOverride?: unknown;
+      pool?: unknown;
     };
     if (typeof candidate.userId !== "string") continue;
 
@@ -67,6 +79,9 @@ function normalizePlayerConfigMap(playerConfigs: unknown) {
         candidate.partnerPreference
       );
     }
+    if (isValidSessionPool(candidate.pool)) {
+      normalized.pool = candidate.pool;
+    }
 
     playerConfigMap.set(candidate.userId, normalized);
   }
@@ -77,7 +92,8 @@ function normalizePlayerConfigMap(playerConfigs: unknown) {
 function normalizeGuests(
   guestNames: unknown,
   guestConfigs: unknown,
-  mode: SessionMode
+  mode: SessionMode,
+  poolsEnabled: boolean
 ) {
   const normalizedGuestsByName = new Map<string, NormalizedGuestConfig>();
 
@@ -91,6 +107,7 @@ function normalizeGuests(
     partnerPreference: PartnerPreference = defaultPartnerPreferenceForGender(
       gender
     ),
+    pool: SessionPool = SessionPool.A,
     initialElo = 1000,
     overwrite = false
   ) => {
@@ -105,6 +122,7 @@ function normalizeGuests(
       gender,
       partnerPreference,
       mixedSideOverride,
+      pool,
       initialElo,
     });
   };
@@ -126,6 +144,7 @@ function normalizeGuests(
         gender?: unknown;
         partnerPreference?: unknown;
         mixedSideOverride?: unknown;
+        pool?: unknown;
         initialElo?: unknown;
       };
       if (typeof candidate.name !== "string") continue;
@@ -153,12 +172,17 @@ function normalizeGuests(
         candidate.initialElo <= 5000
           ? candidate.initialElo
           : 1000;
+      const pool =
+        poolsEnabled && isValidSessionPool(candidate.pool)
+          ? candidate.pool
+          : SessionPool.A;
 
       upsertGuest(
         candidate.name,
         gender,
         mixedSideOverride,
         partnerPreference,
+        pool,
         initialElo,
         true
       );
@@ -185,6 +209,9 @@ export function parseCreateSessionRequest(
     guestConfigs = [],
     communityId,
     courtCount = 3,
+    poolsEnabled = false,
+    poolAName = DEFAULT_SESSION_POOL_A_NAME,
+    poolBName = DEFAULT_SESSION_POOL_B_NAME,
   } = body as CreateSessionBody;
 
   if (typeof name !== "string" || !name.trim()) {
@@ -222,6 +249,19 @@ export function parseCreateSessionRequest(
   const requestedPlayerIds = Array.isArray(playerIds)
     ? playerIds.filter((id): id is string => typeof id === "string")
     : [];
+  const normalizedPoolsEnabled = poolsEnabled === true;
+  const normalizedPoolAName = normalizeSessionPoolName(
+    typeof poolAName === "string" ? poolAName : null,
+    DEFAULT_SESSION_POOL_A_NAME
+  );
+  const normalizedPoolBName = normalizeSessionPoolName(
+    typeof poolBName === "string" ? poolBName : null,
+    DEFAULT_SESSION_POOL_B_NAME
+  );
+
+  if (normalizedPoolsEnabled && normalizedPoolAName === normalizedPoolBName) {
+    throw new SessionRouteError("Pool names must be different", 400);
+  }
 
   return {
     name: name.trim(),
@@ -231,6 +271,15 @@ export function parseCreateSessionRequest(
     courtCount: courtCount as number,
     requestedPlayerIds,
     playerConfigMap: normalizePlayerConfigMap(playerConfigs),
-    normalizedGuests: normalizeGuests(guestNames, guestConfigs, mode as SessionMode),
+    normalizedGuests: normalizeGuests(
+      guestNames,
+      guestConfigs,
+      mode as SessionMode,
+      normalizedPoolsEnabled
+    ),
+    poolsEnabled: normalizedPoolsEnabled,
+    poolAName: normalizedPoolAName,
+    poolBName: normalizedPoolBName,
+    crossoverMissThreshold: DEFAULT_SESSION_POOL_CROSSOVER_MISS_THRESHOLD,
   };
 }

@@ -1,9 +1,13 @@
 import { prisma } from "@/lib/prisma";
 import { getBusyPlayerIds } from "@/lib/matchmaking/busyFilter";
 import { createQueuedMatchAssignment } from "@/app/api/sessions/[code]/generate-match/assignments";
-import { buildMatchmakingState } from "@/app/api/sessions/[code]/generate-match/selection";
+import {
+  applyPoolSelectionOutcome,
+  buildMatchmakingState,
+} from "@/app/api/sessions/[code]/generate-match/selection";
 import { validateManualMatchRequest } from "@/app/api/sessions/[code]/generate-match/manual";
 import { GenerateMatchError } from "@/app/api/sessions/[code]/generate-match/shared";
+import { SessionPool } from "@/types/enums";
 
 export async function autoAssignQueuedMatch(sessionId: string) {
   const sessionData = await prisma.session.findUnique({
@@ -77,6 +81,22 @@ export async function autoAssignQueuedMatch(sessionId: string) {
     courtId: targetCourt.id,
     partition,
   });
+
+  if (sessionData.poolsEnabled && sessionData.queuedMatch.targetPool) {
+    const nextPoolState = applyPoolSelectionOutcome(sessionData, {
+      targetPool: sessionData.queuedMatch.targetPool as SessionPool,
+      missedPool: null,
+    });
+    await prisma.session.update({
+      where: { id: sessionId },
+      data: {
+        poolACourtAssignments: nextPoolState.poolACourtAssignments,
+        poolBCourtAssignments: nextPoolState.poolBCourtAssignments,
+        poolAMissedTurns: nextPoolState.poolAMissedTurns,
+        poolBMissedTurns: nextPoolState.poolBMissedTurns,
+      },
+    });
+  }
 
   return { autoAssignedMatch, queuedMatchCleared: false };
 }

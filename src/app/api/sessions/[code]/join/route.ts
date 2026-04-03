@@ -6,9 +6,15 @@ import {
   isValidPlayerGender,
   resolveMixedSideState,
 } from "@/lib/mixedSide";
+import { getNormalizedSessionPool, isValidSessionPool } from "@/lib/sessionPools";
 import { prisma } from "@/lib/prisma";
 import { getCommunityEloByUserId, withCommunityElo } from "@/lib/communityElo";
-import { PlayerGender, SessionMode, SessionStatus } from "@/types/enums";
+import {
+  PlayerGender,
+  SessionMode,
+  SessionPool,
+  SessionStatus,
+} from "@/types/enums";
 
 export const dynamic = "force-dynamic";
 
@@ -29,12 +35,14 @@ export async function POST(
       gender: overrideGender,
       partnerPreference: overridePreference,
       mixedSideOverride: overrideMixedSideOverride,
+      pool: overridePool,
     } =
       body as {
         userId?: unknown;
         gender?: unknown;
         partnerPreference?: unknown;
         mixedSideOverride?: unknown;
+        pool?: unknown;
       };
 
     // Determine who is joining
@@ -170,6 +178,10 @@ export async function POST(
             gender: sessionGender,
             partnerPreference: resolvedMixedState.partnerPreference,
             mixedSideOverride: resolvedMixedState.mixedSideOverride,
+            pool:
+              sessionData.poolsEnabled && isValidSessionPool(overridePool)
+                ? overridePool
+                : SessionPool.A,
             sessionPoints: 0,
             matchmakingMatchesCredit,
             joinedAt: new Date(),

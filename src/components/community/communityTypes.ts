@@ -4,6 +4,7 @@ import {
   MixedSide,
   PartnerPreference,
   PlayerGender,
+  SessionPool,
 } from "@/types/enums";
 
 export interface CommunityPageUser {
@@ -56,6 +57,7 @@ export interface CommunityGuestConfig {
   gender: PlayerGender;
   partnerPreference: PartnerPreference;
   mixedSideOverride?: MixedSide | null;
+  pool: SessionPool;
   initialElo: number;
 }
 

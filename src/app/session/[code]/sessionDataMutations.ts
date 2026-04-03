@@ -2,6 +2,7 @@
 
 import { getStandingPointsForTeam } from "@/lib/sessionStandings";
 import { hasQueuedMatchUser } from "@/lib/sessionQueue";
+import { getNormalizedSessionPool } from "@/lib/sessionPools";
 import type {
   CompletedMatchInfo,
   Match,
@@ -61,6 +62,7 @@ interface GuestPayload {
   gender: Player["gender"];
   partnerPreference: Player["partnerPreference"];
   mixedSideOverride?: Player["mixedSideOverride"];
+  pool?: Player["pool"];
 }
 
 interface SessionPlayerPayload {
@@ -68,6 +70,7 @@ interface SessionPlayerPayload {
   gender: Player["gender"];
   partnerPreference: Player["partnerPreference"];
   mixedSideOverride?: Player["mixedSideOverride"];
+  pool?: Player["pool"];
 }
 
 function normalizeOptionalNumber(value: number | null | undefined) {
@@ -159,6 +162,7 @@ function buildQueuedMatch(
   return {
     id: queuedMatch.id,
     createdAt: normalizeOptionalDate(queuedMatch.createdAt),
+    targetPool: queuedMatch.targetPool ?? null,
     team1User1: queuedMatch.team1User1,
     team1User2: queuedMatch.team1User2,
     team2User1: queuedMatch.team2User1,
@@ -450,6 +454,7 @@ export function applyGuestAdded(current: SessionData, guest: GuestPayload) {
         gender: guest.gender,
         partnerPreference: guest.partnerPreference,
         mixedSideOverride: guest.mixedSideOverride ?? null,
+        pool: getNormalizedSessionPool(guest.pool),
         user: {
           id: guest.id,
           name: guest.name,
@@ -559,6 +564,7 @@ export function applyPlayerPreferenceUpdate(
             gender: payload.gender,
             partnerPreference: payload.partnerPreference,
             mixedSideOverride: payload.mixedSideOverride ?? null,
+            pool: payload.pool ?? player.pool,
           }
         : player
     ),

@@ -37,6 +37,7 @@ export function useSessionCourtMatchCreation({
   const [manualCourtId, setManualCourtId] = useState<string | null>(null);
   const [manualQueueOpen, setManualQueueOpen] = useState(false);
   const [creatingManualMatch, setCreatingManualMatch] = useState(false);
+  const [manualIgnorePools, setManualIgnorePools] = useState(false);
   const [manualMatchForm, setManualMatchForm] =
     useState<ManualMatchFormState>(emptyManualMatchForm);
 
@@ -72,6 +73,7 @@ export function useSessionCourtMatchCreation({
   const openManualMatchModal = (courtId: string) => {
     setManualQueueOpen(false);
     setManualCourtId(courtId);
+    setManualIgnorePools(false);
     setManualMatchForm(emptyManualMatchForm());
     setError("");
   };
@@ -79,6 +81,7 @@ export function useSessionCourtMatchCreation({
   const openManualQueuedMatchModal = () => {
     setManualCourtId(null);
     setManualQueueOpen(true);
+    setManualIgnorePools(false);
     setManualMatchForm(emptyManualMatchForm());
     setError("");
   };
@@ -86,6 +89,7 @@ export function useSessionCourtMatchCreation({
   const closeManualMatchModal = () => {
     setManualCourtId(null);
     setManualQueueOpen(false);
+    setManualIgnorePools(false);
     setCreatingManualMatch(false);
     setManualMatchForm(emptyManualMatchForm());
   };
@@ -115,6 +119,7 @@ export function useSessionCourtMatchCreation({
         safeJson,
         body: {
           courtId: manualCourtId,
+          ignorePools: sessionData.poolsEnabled ? manualIgnorePools : false,
           manualTeams: {
             team1: [team1User1Id, team1User2Id],
             team2: [team2User1Id, team2User2Id],
@@ -156,6 +161,7 @@ export function useSessionCourtMatchCreation({
         {
           safeJson,
           body: {
+            ignorePools: sessionData.poolsEnabled ? manualIgnorePools : false,
             manualTeams: {
               team1: [team1User1Id, team1User2Id],
               team2: [team2User1Id, team2User2Id],
@@ -314,6 +320,7 @@ export function useSessionCourtMatchCreation({
     manualCourtId,
     manualQueueOpen,
     creatingManualMatch,
+    manualIgnorePools,
     manualMatchForm,
     createMatchesForCourts,
     queueNextMatch,
@@ -323,6 +330,7 @@ export function useSessionCourtMatchCreation({
     openManualMatchModal,
     openManualQueuedMatchModal,
     closeManualMatchModal,
+    setManualIgnorePools,
     updateManualMatchSlot,
     createManualMatch,
     createManualQueuedMatch,

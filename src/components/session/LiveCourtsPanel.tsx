@@ -1,15 +1,23 @@
 "use client";
 
 import { SectionCard } from "@/components/ui/chrome";
+import {
+  getSessionPoolBadgeLabel,
+  summarizeSessionPoolMembership,
+} from "@/lib/sessionPools";
 import { SessionStatus } from "@/types/enums";
-import type { Court, Match, MatchScores, QueuedMatch } from "./sessionTypes";
+import type { Court, Match, MatchScores, Player, QueuedMatch } from "./sessionTypes";
 import { LiveCourtCard } from "./LiveCourtCard";
 import { QueuedMatchCard } from "./QueuedMatchCard";
 
 interface LiveCourtsPanelProps {
   sessionStatus: string;
   courts: Court[];
+  players: Player[];
   queuedMatch: QueuedMatch | null;
+  poolsEnabled: boolean;
+  poolAName?: string | null;
+  poolBName?: string | null;
   currentUserId: string;
   isAdmin: boolean;
   isClaimedUser: boolean;
@@ -55,7 +63,11 @@ interface LiveCourtsPanelProps {
 export function LiveCourtsPanel({
   sessionStatus,
   courts,
+  players,
   queuedMatch,
+  poolsEnabled,
+  poolAName,
+  poolBName,
   currentUserId,
   isAdmin,
   isClaimedUser,
@@ -112,6 +124,52 @@ export function LiveCourtsPanel({
     0,
     readyCourtsCount - optimisticCreatingCount
   );
+  const playerPoolById = new Map(players.map((player) => [player.userId, player.pool]));
+  const getMatchPoolLabel = (match: Match | null) => {
+    if (!poolsEnabled || !match) {
+      return null;
+    }
+
+    return getSessionPoolBadgeLabel(
+      {
+        poolsEnabled,
+        poolAName,
+        poolBName,
+      },
+      summarizeSessionPoolMembership(
+        [
+          match.team1User1.id,
+          match.team1User2.id,
+          match.team2User1.id,
+          match.team2User2.id,
+        ],
+        playerPoolById
+      )
+    );
+  };
+  const queuedPoolLabel =
+    poolsEnabled && queuedMatch
+      ? queuedMatch.targetPool
+        ? (queuedMatch.targetPool === "A"
+            ? (poolAName ?? "Open")
+            : (poolBName ?? "Regular"))
+        : getSessionPoolBadgeLabel(
+            {
+              poolsEnabled,
+              poolAName,
+              poolBName,
+            },
+            summarizeSessionPoolMembership(
+              [
+                queuedMatch.team1User1.id,
+                queuedMatch.team1User2.id,
+                queuedMatch.team2User1.id,
+                queuedMatch.team2User2.id,
+              ],
+              playerPoolById
+            )
+          )
+      : null;
 
   return (
     <SectionCard
@@ -161,6 +219,7 @@ export function LiveCourtsPanel({
               key={court.id}
               sessionStatus={sessionStatus}
               court={court}
+              poolLabel={getMatchPoolLabel(court.currentMatch)}
               currentUserId={currentUserId}
               isAdmin={isAdmin}
               isClaimedUser={isClaimedUser}
@@ -184,6 +243,7 @@ export function LiveCourtsPanel({
         {showQueuedMatchSlot ? (
           <QueuedMatchCard
             queuedMatch={queuedMatch}
+            poolLabel={queuedPoolLabel}
             canPauseQueuedPlayers={isAdmin}
             canOpenManualQueue={isAdmin && !queuedMatch}
             clearingQueuedMatch={clearingQueuedMatch}

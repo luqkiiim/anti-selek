@@ -3,7 +3,7 @@
 import { PlayerPickerSheet } from "@/components/ui/PlayerPickerSheet";
 import { SearchField } from "@/components/ui/SearchField";
 import { getMixedSideOverrideOptionForGender } from "@/lib/mixedSide";
-import { MixedSide, PlayerGender } from "@/types/enums";
+import { MixedSide, PlayerGender, SessionPool } from "@/types/enums";
 import type { CommunityUser } from "./sessionTypes";
 
 const GUEST_ELO_PRESETS = [
@@ -16,7 +16,11 @@ interface SessionRosterModalProps {
   open: boolean;
   isAdmin: boolean;
   isMixicano: boolean;
+  poolsEnabled: boolean;
+  poolAName?: string | null;
+  poolBName?: string | null;
   rosterSearch: string;
+  rosterPool: SessionPool;
   guestName: string;
   guestGender: PlayerGender;
   guestMixedSideOverride: MixedSide | null;
@@ -26,6 +30,7 @@ interface SessionRosterModalProps {
   playersNotInSession: CommunityUser[];
   onClose: () => void;
   onRosterSearchChange: (value: string) => void;
+  onRosterPoolChange: (value: SessionPool) => void;
   onGuestNameChange: (value: string) => void;
   onGuestGenderChange: (value: PlayerGender) => void;
   onGuestMixedSideOverrideChange: (value: MixedSide | null) => void;
@@ -38,7 +43,11 @@ export function SessionRosterModal({
   open,
   isAdmin,
   isMixicano,
+  poolsEnabled,
+  poolAName,
+  poolBName,
   rosterSearch,
+  rosterPool,
   guestName,
   guestGender,
   guestMixedSideOverride,
@@ -48,6 +57,7 @@ export function SessionRosterModal({
   playersNotInSession,
   onClose,
   onRosterSearchChange,
+  onRosterPoolChange,
   onGuestNameChange,
   onGuestGenderChange,
   onGuestMixedSideOverrideChange,
@@ -70,11 +80,26 @@ export function SessionRosterModal({
       }
       onClose={onClose}
       toolbar={
-        <SearchField
-          value={rosterSearch}
-          onChange={onRosterSearchChange}
-          placeholder="Search players..."
-        />
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+          <SearchField
+            value={rosterSearch}
+            onChange={onRosterSearchChange}
+            placeholder="Search players..."
+            className="flex-1"
+          />
+          {poolsEnabled ? (
+            <select
+              value={rosterPool}
+              onChange={(event) =>
+                onRosterPoolChange(event.target.value as SessionPool)
+              }
+              className="field px-3 py-2.5 text-sm sm:max-w-[12rem]"
+            >
+              <option value={SessionPool.A}>{poolAName ?? "Open"}</option>
+              <option value={SessionPool.B}>{poolBName ?? "Regular"}</option>
+            </select>
+          ) : null}
+        </div>
       }
       bottomContent={
         isAdmin ? (
@@ -111,6 +136,18 @@ export function SessionRosterModal({
                   </option>
                 ))}
               </select>
+              {poolsEnabled ? (
+                <select
+                  value={rosterPool}
+                  onChange={(event) =>
+                    onRosterPoolChange(event.target.value as SessionPool)
+                  }
+                  className="field px-3 py-2.5 text-sm"
+                >
+                  <option value={SessionPool.A}>{poolAName ?? "Open"}</option>
+                  <option value={SessionPool.B}>{poolBName ?? "Regular"}</option>
+                </select>
+              ) : null}
               {isMixicano ? (
                 <>
                   <select
@@ -180,7 +217,14 @@ export function SessionRosterModal({
                 <p className="truncate text-sm font-semibold text-gray-900">
                   {player.name}
                 </p>
-                <p className="text-xs text-gray-500">Rating {player.elo}</p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="text-xs text-gray-500">Rating {player.elo}</p>
+                  {poolsEnabled ? (
+                    <span className="rounded-full border border-indigo-200 bg-indigo-50 px-2 py-0.5 text-[9px] font-medium uppercase tracking-wide text-indigo-700">
+                      Add to {rosterPool === SessionPool.A ? poolAName ?? "Open" : poolBName ?? "Regular"}
+                    </span>
+                  ) : null}
+                </div>
               </div>
 
               <button
