@@ -118,7 +118,7 @@ export function CommunityPlayersModal({
             return (
               <div
                 key={player.id}
-                className={`app-touch-pan-y flex w-full items-center justify-between gap-3 rounded-2xl border px-3 py-3 text-left transition ${
+                className={`app-touch-pan-y rounded-2xl border px-3 py-3 text-left transition ${
                   isSelected
                     ? "border-blue-200 bg-blue-50"
                     : "border-gray-200 bg-gray-50/70 hover:border-blue-200 hover:bg-white"
@@ -132,7 +132,7 @@ export function CommunityPlayersModal({
                     onTogglePlayerSelection(player.id);
                     restoreSearchFocusIfNeeded();
                   }}
-                  className="flex min-w-0 flex-1 items-center justify-between gap-3 text-left"
+                  className="flex w-full min-w-0 items-center justify-between gap-3 text-left"
                 >
                   <div className="min-w-0 space-y-1">
                     <div className="flex min-w-0 flex-wrap items-center gap-2">
@@ -165,7 +165,10 @@ export function CommunityPlayersModal({
                 </button>
 
                 {poolsEnabled && isSelected ? (
-                  <div className="flex shrink-0 gap-2">
+                  <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-blue-100 pt-3">
+                    <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-gray-500">
+                      Pool
+                    </span>
                     {[SessionPool.A, SessionPool.B].map((pool) => {
                       const isActive = selectedPool === pool;
                       const label = pool === SessionPool.A ? poolAName : poolBName;
