@@ -3,6 +3,7 @@ import {
   PartnerPreference,
   PlayerGender,
   SessionMode,
+  SessionPool,
   SessionStatus,
   SessionType,
 } from "@/types/enums";
@@ -89,6 +90,7 @@ function createSessionPlayer(
     joinedAt?: Date;
     availableSince?: Date;
     inactiveSeconds?: number;
+    pool?: SessionPool;
   } = {}
 ) {
   return {
@@ -104,6 +106,7 @@ function createSessionPlayer(
     joinedAt: options.joinedAt ?? new Date("2026-01-01T00:00:00Z"),
     availableSince: options.availableSince ?? new Date("2026-01-01T00:00:00Z"),
     inactiveSeconds: options.inactiveSeconds ?? 0,
+    pool: options.pool ?? SessionPool.A,
     user: {
       id: userId,
       name: options.name ?? userId,
@@ -123,6 +126,14 @@ function createSessionData(
     type: SessionType.ELO,
     mode: SessionMode.MEXICANO,
     status: SessionStatus.ACTIVE,
+    poolsEnabled: false,
+    poolAName: "Open",
+    poolBName: "Regular",
+    poolACourtAssignments: 0,
+    poolBCourtAssignments: 0,
+    poolAMissedTurns: 0,
+    poolBMissedTurns: 0,
+    crossoverMissThreshold: 1,
     players: [],
     matches: [],
     ...overrides,
@@ -215,6 +226,7 @@ describe("generate match service", () => {
         forceReshuffle: false,
         undoCurrentMatch: false,
         manualTeams: undefined,
+        ignorePools: false,
       });
     });
 
@@ -229,6 +241,7 @@ describe("generate match service", () => {
         forceReshuffle: false,
         undoCurrentMatch: false,
         manualTeams: undefined,
+        ignorePools: false,
       });
     });
 
@@ -589,6 +602,72 @@ describe("generate match service", () => {
       expect(findBestSingleCourtSelectionV3).not.toHaveBeenCalled();
     });
 
+    it("allows immediate crossover when no pool can field a same-pool quartet", () => {
+      const crossoverSelection = createLadderSelection(
+        ["A1", "A2", "B1", "B2"],
+        {
+          team1: ["A1", "B1"],
+          team2: ["A2", "B2"],
+        }
+      );
+
+      vi.mocked(findBestSingleCourtSelectionLadder).mockImplementation(
+        (players, options) => {
+          const activeIds = players
+            .filter((player) => !player.isBusy)
+            .map((player) => player.userId)
+            .sort()
+            .join("|");
+
+          if (activeIds === "A1|A2|A3|A4" || activeIds === "B1|B2|B3|B4") {
+            return { selection: null, debug: {} as never };
+          }
+
+          if (
+            activeIds === "A1|A2|A3|A4|B1|B2|B3|B4" &&
+            options.targetPool === SessionPool.A &&
+            options.minimumTargetPoolPlayers === 2
+          ) {
+            return { selection: crossoverSelection, debug: {} as never };
+          }
+
+          return { selection: null, debug: {} as never };
+        }
+      );
+
+      const players = [
+        createSessionPlayer("A1", { pool: SessionPool.A }),
+        createSessionPlayer("A2", { pool: SessionPool.A }),
+        createSessionPlayer("A3", { pool: SessionPool.A }),
+        createSessionPlayer("A4", { pool: SessionPool.A }),
+        createSessionPlayer("B1", { pool: SessionPool.B }),
+        createSessionPlayer("B2", { pool: SessionPool.B }),
+        createSessionPlayer("B3", { pool: SessionPool.B }),
+        createSessionPlayer("B4", { pool: SessionPool.B }),
+      ];
+      const sessionData = createSessionData({
+        type: SessionType.RACE,
+        mode: SessionMode.MIXICANO,
+        poolsEnabled: true,
+        players,
+      });
+      const { rankedCandidates } = getRankedCandidates(sessionData, new Set());
+
+      expect(
+        selectSingleCourtMatch({
+          rankedCandidates,
+          playersById: createPlayersById(players),
+          sessionData,
+          rotationHistory: buildRotationHistory([]),
+          reshuffleSource: null,
+        })
+      ).toEqual({
+        ...crossoverSelection,
+        targetPool: SessionPool.A,
+        missedPool: null,
+      });
+    });
+
     it("reshuffles ladder sessions to an alternative quartet when possible", () => {
       const initial = createLadderSelection(["A", "B", "C", "D"], {
         team1: ["A", "B"],
@@ -946,6 +1025,105 @@ describe("generate match service", () => {
         })
       ).toEqual(batchSelection);
       expect(findBestBatchSelectionV3).not.toHaveBeenCalled();
+    });
+
+    it("backtracks across pool-aware quartets instead of failing the whole batch", () => {
+      const firstQuartet = createLadderSelection(["A1", "A2", "A5", "A6"], {
+        team1: ["A1", "A5"],
+        team2: ["A2", "A6"],
+      });
+      const fallbackFirstQuartet = createLadderSelection(
+        ["A1", "A3", "A5", "A6"],
+        {
+          team1: ["A1", "A5"],
+          team2: ["A3", "A6"],
+        }
+      );
+      const secondQuartet = createLadderSelection(["A2", "A4", "B1", "B2"], {
+        team1: ["A2", "B1"],
+        team2: ["A4", "B2"],
+      });
+      const firstQuartetKey = "A1|A2|A5|A6";
+
+      vi.mocked(findBestSingleCourtSelectionLadder).mockImplementation(
+        (players, options) => {
+          const activeIds = players
+            .filter((player) => !player.isBusy)
+            .map((player) => player.userId)
+            .sort()
+            .join("|");
+
+          if (activeIds === "A1|A2|A3|A4|A5|A6") {
+            return {
+              selection: options.excludedQuartetKeys?.has(firstQuartetKey)
+                ? fallbackFirstQuartet
+                : firstQuartet,
+              debug: {} as never,
+            };
+          }
+
+          if (activeIds === "B1|B2|B3|B4") {
+            return { selection: null, debug: {} as never };
+          }
+
+          if (
+            activeIds === "A2|A4|B1|B2|B3|B4" &&
+            options.targetPool === SessionPool.B &&
+            options.minimumTargetPoolPlayers === 2
+          ) {
+            return { selection: secondQuartet, debug: {} as never };
+          }
+
+          return { selection: null, debug: {} as never };
+        }
+      );
+
+      const players = [
+        createSessionPlayer("A1", { pool: SessionPool.A }),
+        createSessionPlayer("A2", { pool: SessionPool.A }),
+        createSessionPlayer("A3", { pool: SessionPool.A }),
+        createSessionPlayer("A4", { pool: SessionPool.A }),
+        createSessionPlayer("A5", { pool: SessionPool.A }),
+        createSessionPlayer("A6", { pool: SessionPool.A }),
+        createSessionPlayer("B1", { pool: SessionPool.B }),
+        createSessionPlayer("B2", { pool: SessionPool.B }),
+        createSessionPlayer("B3", { pool: SessionPool.B }),
+        createSessionPlayer("B4", { pool: SessionPool.B }),
+      ];
+      const sessionData = createSessionData({
+        type: SessionType.RACE,
+        mode: SessionMode.MIXICANO,
+        poolsEnabled: true,
+        players,
+      });
+      const { rankedCandidates } = getRankedCandidates(sessionData, new Set());
+
+      expect(
+        selectBatchMatches({
+          rankedCandidates,
+          playersById: createPlayersById(players),
+          sessionData,
+          rotationHistory: buildRotationHistory([]),
+          requestedMatchCount: 2,
+        })
+      ).toEqual({
+        selections: [
+          {
+            ...fallbackFirstQuartet,
+            targetPool: SessionPool.A,
+            missedPool: null,
+          },
+          {
+            ...secondQuartet,
+            targetPool: SessionPool.B,
+            missedPool: null,
+          },
+        ],
+        poolSchedulingState: expect.objectContaining({
+          poolACourtAssignments: 1,
+          poolBCourtAssignments: 1,
+        }),
+      });
     });
 
     it("throws when no valid batch selection exists", () => {

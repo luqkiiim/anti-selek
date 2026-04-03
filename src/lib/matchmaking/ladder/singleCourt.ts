@@ -64,6 +64,7 @@ export function findBestSingleCourtSelectionLadder<
   {
     sessionMode,
     excludedQuartetKey,
+    excludedQuartetKeys,
     excludedPartitionKey,
     targetPool,
     minimumTargetPoolPlayers,
@@ -73,6 +74,7 @@ export function findBestSingleCourtSelectionLadder<
   }: {
     sessionMode: SessionMode;
     excludedQuartetKey?: string;
+    excludedQuartetKeys?: ReadonlySet<string>;
     excludedPartitionKey?: string;
     targetPool?: string;
     minimumTargetPoolPlayers?: number;
@@ -153,7 +155,11 @@ export function findBestSingleCourtSelectionLadder<
       }
     }
 
-    if (excludedQuartetKey && getQuartetKey(ids) === excludedQuartetKey) {
+    const quartetKey = getQuartetKey(ids);
+    if (
+      (excludedQuartetKey && quartetKey === excludedQuartetKey) ||
+      excludedQuartetKeys?.has(quartetKey)
+    ) {
       continue;
     }
 

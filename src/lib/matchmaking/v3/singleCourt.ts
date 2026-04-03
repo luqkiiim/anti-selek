@@ -67,6 +67,7 @@ export function findBestSingleCourtSelectionV3<T extends MatchmakerV3Player>(
     sessionType,
     completedMatches = [],
     excludedQuartetKey,
+    excludedQuartetKeys,
     excludedPartitionKey,
     targetPool,
     minimumTargetPoolPlayers,
@@ -82,6 +83,7 @@ export function findBestSingleCourtSelectionV3<T extends MatchmakerV3Player>(
       completedAt?: Date | null;
     }>;
     excludedQuartetKey?: string;
+    excludedQuartetKeys?: ReadonlySet<string>;
     excludedPartitionKey?: string;
     targetPool?: string;
     minimumTargetPoolPlayers?: number;
@@ -161,7 +163,11 @@ export function findBestSingleCourtSelectionV3<T extends MatchmakerV3Player>(
       }
     }
 
-    if (excludedQuartetKey && getQuartetKey(ids) === excludedQuartetKey) {
+    const quartetKey = getQuartetKey(ids);
+    if (
+      (excludedQuartetKey && quartetKey === excludedQuartetKey) ||
+      excludedQuartetKeys?.has(quartetKey)
+    ) {
       continue;
     }
 
