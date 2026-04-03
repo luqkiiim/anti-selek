@@ -139,6 +139,10 @@ export function SessionPlayersModal({
               player.pool === SessionPool.A
                 ? (poolAName ?? "Open")
                 : (poolBName ?? "Regular");
+            const poolBadgeClass =
+              player.pool === SessionPool.A
+                ? "border-indigo-200 bg-indigo-50 text-indigo-700"
+                : "border-emerald-200 bg-emerald-50 text-emerald-700";
 
             return (
               <div
@@ -161,7 +165,9 @@ export function SessionPlayersModal({
                       </span>
                     ) : null}
                     {poolsEnabled ? (
-                      <span className="rounded-full border border-indigo-200 bg-indigo-50 px-2 py-0.5 text-[9px] font-medium uppercase tracking-wide text-indigo-700">
+                      <span
+                        className={`rounded-full border px-2 py-0.5 text-[9px] font-medium uppercase tracking-wide ${poolBadgeClass}`}
+                      >
                         {poolLabel}
                       </span>
                     ) : null}
