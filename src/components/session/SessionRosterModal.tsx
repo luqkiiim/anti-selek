@@ -3,7 +3,12 @@
 import { PlayerPickerSheet } from "@/components/ui/PlayerPickerSheet";
 import { SearchField } from "@/components/ui/SearchField";
 import { getMixedSideOverrideOptionForGender } from "@/lib/mixedSide";
-import { MixedSide, PlayerGender, SessionPool } from "@/types/enums";
+import {
+  CommunityPlayerStatus,
+  MixedSide,
+  PlayerGender,
+  SessionPool,
+} from "@/types/enums";
 import type { CommunityUser } from "./sessionTypes";
 
 const GUEST_ELO_PRESETS = [
@@ -219,6 +224,11 @@ export function SessionRosterModal({
                 </p>
                 <div className="flex flex-wrap items-center gap-2">
                   <p className="text-xs text-gray-500">Rating {player.elo}</p>
+                  {player.status === CommunityPlayerStatus.OCCASIONAL ? (
+                    <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[9px] font-medium uppercase tracking-wide text-emerald-700">
+                      Occasional
+                    </span>
+                  ) : null}
                   {poolsEnabled ? (
                     <span className="rounded-full border border-indigo-200 bg-indigo-50 px-2 py-0.5 text-[9px] font-medium uppercase tracking-wide text-indigo-700">
                       Add to {rosterPool === SessionPool.A ? poolAName ?? "Open" : poolBName ?? "Regular"}

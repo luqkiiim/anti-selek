@@ -6,6 +6,7 @@ import {
   CommunityAdminClaimPill,
   CommunityAdminGenderPill,
   CommunityAdminRolePill,
+  CommunityAdminStatusPill,
 } from "./communityAdminDisplay";
 import type { CommunityAdminPlayer } from "./communityAdminTypes";
 
@@ -13,6 +14,7 @@ interface CommunityPlayersPanelProps {
   players: CommunityAdminPlayer[];
   filteredPlayers: CommunityAdminPlayer[];
   claimedPlayersCount: number;
+  occasionalPlayersCount: number;
   communityId: string;
   playerSearch: string;
   onPlayerSearchChange: (value: string) => void;
@@ -24,6 +26,7 @@ export function CommunityPlayersPanel({
   players,
   filteredPlayers,
   claimedPlayersCount,
+  occasionalPlayersCount,
   communityId,
   playerSearch,
   onPlayerSearchChange,
@@ -62,6 +65,9 @@ export function CommunityPlayersPanel({
           </span>
           <span className="app-chip app-chip-neutral">
             {players.length - claimedPlayersCount} placeholders
+          </span>
+          <span className="app-chip app-chip-neutral">
+            {occasionalPlayersCount} occasional
           </span>
         </div>
       </div>
@@ -137,6 +143,7 @@ export function CommunityPlayersPanel({
 
                   <div className="flex flex-wrap gap-2 lg:justify-end">
                     <CommunityAdminRolePill role={player.role} />
+                    <CommunityAdminStatusPill status={player.status} />
                     <CommunityAdminClaimPill isClaimed={player.isClaimed} />
                     <CommunityAdminGenderPill player={player} />
                   </div>

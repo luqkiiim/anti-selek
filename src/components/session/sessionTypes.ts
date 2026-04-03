@@ -1,4 +1,5 @@
 import {
+  CommunityPlayerStatus,
   MixedSide,
   PartnerPreference,
   PlayerGender,
@@ -70,6 +71,7 @@ export interface CommunityUser {
   id: string;
   name: string;
   elo: number;
+  status: CommunityPlayerStatus;
   gender: PlayerGender;
   partnerPreference: PartnerPreference;
   mixedSideOverride?: MixedSide | null;

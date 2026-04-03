@@ -8,7 +8,20 @@ import {
   isValidPlayerGender,
   resolveMixedSideState,
 } from "@/lib/mixedSide";
-import { MixedSide, PlayerGender } from "@/types/enums";
+import {
+  CommunityPlayerStatus,
+  MixedSide,
+  PlayerGender,
+} from "@/types/enums";
+
+function isValidCommunityPlayerStatus(
+  value: unknown
+): value is CommunityPlayerStatus {
+  return (
+    value === CommunityPlayerStatus.CORE ||
+    value === CommunityPlayerStatus.OCCASIONAL
+  );
+}
 
 export const dynamic = "force-dynamic";
 
@@ -102,6 +115,10 @@ export async function GET(
         id: m.user.id,
         name: m.user.name,
         email: m.user.email,
+        status:
+          m.status === CommunityPlayerStatus.OCCASIONAL
+            ? CommunityPlayerStatus.OCCASIONAL
+            : CommunityPlayerStatus.CORE,
         gender:
           [PlayerGender.MALE, PlayerGender.FEMALE].includes(m.user.gender as PlayerGender)
             ? m.user.gender
@@ -158,7 +175,15 @@ export async function POST(
       return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
     }
 
-    const { name, email, password, gender, partnerPreference, mixedSideOverride } =
+    const {
+      name,
+      email,
+      password,
+      gender,
+      partnerPreference,
+      mixedSideOverride,
+      status,
+    } =
       body as {
       name?: unknown;
       email?: unknown;
@@ -166,6 +191,7 @@ export async function POST(
       gender?: unknown;
       partnerPreference?: unknown;
       mixedSideOverride?: unknown;
+      status?: unknown;
     };
     if (typeof name !== "string" || name.trim().length < 2) {
       return NextResponse.json({ error: "Player name must be at least 2 characters" }, { status: 400 });
@@ -191,6 +217,9 @@ export async function POST(
       !isValidMixedSide(mixedSideOverride)
     ) {
       return NextResponse.json({ error: "Invalid mixed side override" }, { status: 400 });
+    }
+    if (status !== undefined && !isValidCommunityPlayerStatus(status)) {
+      return NextResponse.json({ error: "Invalid roster status" }, { status: 400 });
     }
 
     const normalizedName = name.trim();
@@ -328,10 +357,14 @@ export async function POST(
         communityId: id,
         userId: user.id,
         role: "MEMBER",
+        status: isValidCommunityPlayerStatus(status)
+          ? status
+          : CommunityPlayerStatus.CORE,
       },
       select: {
         role: true,
         elo: true,
+        status: true,
       },
     });
 
@@ -339,6 +372,10 @@ export async function POST(
       id: user.id,
       name: user.name,
       email: user.email,
+      status:
+        membership.status === CommunityPlayerStatus.OCCASIONAL
+          ? CommunityPlayerStatus.OCCASIONAL
+          : CommunityPlayerStatus.CORE,
       gender: resolvedGender,
       partnerPreference: resolvedMixedState.partnerPreference,
       mixedSideOverride: resolvedMixedState.mixedSideOverride,

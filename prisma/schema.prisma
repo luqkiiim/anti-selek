@@ -56,6 +56,7 @@ model CommunityMember {
   communityId String
   userId      String
   role        String   @default("MEMBER") // MEMBER or ADMIN
+  status      String   @default("CORE") // CORE or OCCASIONAL
   elo         Int      @default(1000)
   createdAt   DateTime @default(now())
 

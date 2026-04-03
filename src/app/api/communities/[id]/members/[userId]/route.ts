@@ -7,7 +7,16 @@ import {
   isValidPlayerGender,
   resolveMixedSideState,
 } from "@/lib/mixedSide";
-import { PlayerGender } from "@/types/enums";
+import { CommunityPlayerStatus, PlayerGender } from "@/types/enums";
+
+function isValidCommunityPlayerStatus(
+  value: unknown
+): value is CommunityPlayerStatus {
+  return (
+    value === CommunityPlayerStatus.CORE ||
+    value === CommunityPlayerStatus.OCCASIONAL
+  );
+}
 
 export const dynamic = "force-dynamic";
 
@@ -76,6 +85,7 @@ export async function PATCH(
       gender,
       partnerPreference,
       mixedSideOverride,
+      status,
       role,
     } = body as {
       name?: unknown;
@@ -85,6 +95,7 @@ export async function PATCH(
       gender?: unknown;
       partnerPreference?: unknown;
       mixedSideOverride?: unknown;
+      status?: unknown;
       role?: unknown;
     };
 
@@ -122,6 +133,9 @@ export async function PATCH(
       !isValidMixedSide(mixedSideOverride)
     ) {
       return NextResponse.json({ error: "Invalid mixed side override" }, { status: 400 });
+    }
+    if (status !== undefined && !isValidCommunityPlayerStatus(status)) {
+      return NextResponse.json({ error: "Invalid roster status" }, { status: 400 });
     }
     if (role !== undefined && role !== "ADMIN") {
       return NextResponse.json({ error: "Invalid role update" }, { status: 400 });
@@ -213,7 +227,9 @@ export async function PATCH(
     });
 
     const updatedMembership =
-      typeof elo === "number" || shouldPromoteToAdmin
+      typeof elo === "number" ||
+      shouldPromoteToAdmin ||
+      isValidCommunityPlayerStatus(status)
         ? await prisma.communityMember.update({
             where: {
               communityId_userId: {
@@ -223,9 +239,10 @@ export async function PATCH(
             },
             data: {
               ...(typeof elo === "number" ? { elo } : {}),
+              ...(isValidCommunityPlayerStatus(status) ? { status } : {}),
               ...(shouldPromoteToAdmin ? { role: "ADMIN" } : {}),
             },
-            select: { role: true, elo: true },
+            select: { role: true, elo: true, status: true },
           })
         : await prisma.communityMember.findUnique({
             where: {
@@ -234,13 +251,17 @@ export async function PATCH(
                 userId,
               },
             },
-            select: { role: true, elo: true },
+            select: { role: true, elo: true, status: true },
           });
 
     return NextResponse.json({
       ...updatedUser,
       role: updatedMembership?.role ?? membership.role,
       elo: updatedMembership?.elo ?? membership.elo,
+      status:
+        updatedMembership?.status === CommunityPlayerStatus.OCCASIONAL
+          ? CommunityPlayerStatus.OCCASIONAL
+          : CommunityPlayerStatus.CORE,
     });
   } catch (error) {
     console.error("Community admin update player error:", error);

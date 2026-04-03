@@ -5,7 +5,12 @@ import { useSession } from "next-auth/react";
 import { useParams, useRouter } from "next/navigation";
 import { getClaimRequesterEligibility } from "@/lib/communityClaimRules";
 import { getSessionModeLabel } from "@/lib/sessionModeLabels";
-import { ClaimRequestStatus, SessionMode, SessionStatus } from "@/types/enums";
+import {
+  ClaimRequestStatus,
+  CommunityPlayerStatus,
+  SessionMode,
+  SessionStatus,
+} from "@/types/enums";
 import { useCommunityHostSetup } from "./useCommunityHostSetup";
 import { useCommunityPageActions } from "./useCommunityPageActions";
 import { useCommunityPageData } from "./useCommunityPageData";
@@ -26,7 +31,9 @@ export function useCommunityPage() {
 
   const leaderboard = useMemo(
     () =>
-      [...data.communityMembers].sort((a, b) => {
+      data.communityMembers
+        .filter((member) => member.status !== CommunityPlayerStatus.OCCASIONAL)
+        .sort((a, b) => {
         if (b.elo !== a.elo) return b.elo - a.elo;
         return a.name.localeCompare(b.name);
       }),

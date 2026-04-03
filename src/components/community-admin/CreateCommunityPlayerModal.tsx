@@ -3,16 +3,22 @@
 import type { FormEvent } from "react";
 import { ModalFrame } from "@/components/ui/chrome";
 import { getMixedSideOverrideOptionForGender } from "@/lib/mixedSide";
-import { MixedSide, PlayerGender } from "@/types/enums";
+import {
+  CommunityPlayerStatus,
+  MixedSide,
+  PlayerGender,
+} from "@/types/enums";
 
 interface CreateCommunityPlayerModalProps {
   open: boolean;
   name: string;
   newPlayerGender: PlayerGender;
   newPlayerMixedSideOverride: MixedSide | null;
+  newPlayerStatus: CommunityPlayerStatus;
   onNameChange: (value: string) => void;
   onNewPlayerGenderChange: (value: PlayerGender) => void;
   onNewPlayerMixedSideOverrideChange: (value: MixedSide | null) => void;
+  onNewPlayerStatusChange: (value: CommunityPlayerStatus) => void;
   onClose: () => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 }
@@ -22,9 +28,11 @@ export function CreateCommunityPlayerModal({
   name,
   newPlayerGender,
   newPlayerMixedSideOverride,
+  newPlayerStatus,
   onNameChange,
   onNewPlayerGenderChange,
   onNewPlayerMixedSideOverrideChange,
+  onNewPlayerStatusChange,
   onClose,
   onSubmit,
 }: CreateCommunityPlayerModalProps) {
@@ -106,6 +114,24 @@ export function CreateCommunityPlayerModal({
             </select>
           </label>
         ) : null}
+
+        <label className="block space-y-2 text-sm font-medium text-gray-900">
+          <span>Roster status</span>
+          <select
+            value={newPlayerStatus}
+            onChange={(event) =>
+              onNewPlayerStatusChange(
+                event.target.value as CommunityPlayerStatus
+              )
+            }
+            className="field"
+          >
+            <option value={CommunityPlayerStatus.CORE}>Core</option>
+            <option value={CommunityPlayerStatus.OCCASIONAL}>
+              Occasional
+            </option>
+          </select>
+        </label>
       </form>
     </ModalFrame>
   );

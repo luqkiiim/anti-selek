@@ -152,6 +152,8 @@ export default function CommunityAdminPage() {
     setNewPlayerGender,
     newPlayerMixedSideOverride,
     setNewPlayerMixedSideOverride,
+    newPlayerStatus,
+    setNewPlayerStatus,
     editingPlayer,
     editorName,
     setEditorName,
@@ -174,6 +176,7 @@ export default function CommunityAdminPage() {
     savingPasswordReset,
     claimedPlayersCount,
     adminPlayersCount,
+    occasionalPlayersCount,
     filteredPlayers,
     pendingPlayerAction,
     closePendingPlayerAction,
@@ -290,6 +293,9 @@ export default function CommunityAdminPage() {
                 {claimedPlayersCount} claimed
               </span>
               <span className="app-chip app-chip-neutral">
+                {occasionalPlayersCount} occasional
+              </span>
+              <span className="app-chip app-chip-neutral">
                 {adminPlayersCount} admins
               </span>
               <span
@@ -343,6 +349,7 @@ export default function CommunityAdminPage() {
             players={players}
             filteredPlayers={filteredPlayers}
             claimedPlayersCount={claimedPlayersCount}
+            occasionalPlayersCount={occasionalPlayersCount}
             communityId={communityId}
             playerSearch={playerSearch}
             onPlayerSearchChange={setPlayerSearch}
@@ -387,12 +394,14 @@ export default function CommunityAdminPage() {
         name={name}
         newPlayerGender={newPlayerGender}
         newPlayerMixedSideOverride={newPlayerMixedSideOverride}
+        newPlayerStatus={newPlayerStatus}
         onNameChange={setName}
         onNewPlayerGenderChange={(value) => {
           setNewPlayerGender(value);
           setNewPlayerMixedSideOverride(null);
         }}
         onNewPlayerMixedSideOverrideChange={setNewPlayerMixedSideOverride}
+        onNewPlayerStatusChange={setNewPlayerStatus}
         onClose={closeCreatePlayerModal}
         onSubmit={handleAddPlayer}
       />

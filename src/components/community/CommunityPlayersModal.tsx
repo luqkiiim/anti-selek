@@ -4,7 +4,7 @@ import { useRef } from "react";
 import { PlayerPickerSheet } from "@/components/ui/PlayerPickerSheet";
 import { SearchField } from "@/components/ui/SearchField";
 import type { CommunityPageMember } from "./communityTypes";
-import { SessionPool } from "@/types/enums";
+import { CommunityPlayerStatus, SessionPool } from "@/types/enums";
 
 interface CommunityPlayersModalProps {
   open: boolean;
@@ -139,6 +139,11 @@ export function CommunityPlayersModal({
                       <p className="truncate text-sm font-semibold text-gray-900">
                         {player.name}
                       </p>
+                      {player.status === CommunityPlayerStatus.OCCASIONAL ? (
+                        <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[9px] font-medium uppercase tracking-wide text-emerald-700">
+                          Occasional
+                        </span>
+                      ) : null}
                       {poolsEnabled && isSelected ? (
                         <span className="rounded-full border border-indigo-200 bg-indigo-50 px-2 py-0.5 text-[9px] font-medium uppercase tracking-wide text-indigo-700">
                           {selectedPool === SessionPool.A ? poolAName : poolBName}

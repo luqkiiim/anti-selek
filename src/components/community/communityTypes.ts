@@ -1,6 +1,7 @@
 import type { ClaimRequesterEligibility } from "@/lib/communityClaimRules";
 import {
   ClaimRequestStatus,
+  CommunityPlayerStatus,
   MixedSide,
   PartnerPreference,
   PlayerGender,
@@ -31,6 +32,7 @@ export interface CommunityPageMember {
   id: string;
   name: string;
   email?: string | null;
+  status: CommunityPlayerStatus;
   gender: PlayerGender;
   partnerPreference: PartnerPreference;
   mixedSideOverride?: MixedSide | null;

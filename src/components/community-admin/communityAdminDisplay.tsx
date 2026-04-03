@@ -2,7 +2,7 @@
 
 import type { CommunityAdminPlayer } from "./communityAdminTypes";
 import { getMixedSideDisplayLabel } from "@/lib/mixedSide";
-import { PlayerGender } from "@/types/enums";
+import { CommunityPlayerStatus, PlayerGender } from "@/types/enums";
 
 export function getCommunityAdminGenderPillLabel(
   player: CommunityAdminPlayer
@@ -79,6 +79,26 @@ export function CommunityAdminGenderPill({
   return (
     <span className="inline-flex items-center rounded-full border border-gray-200 bg-gray-100 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-gray-700">
       {getCommunityAdminGenderPillLabel(player)}
+    </span>
+  );
+}
+
+export function CommunityAdminStatusPill({
+  status,
+}: {
+  status: CommunityAdminPlayer["status"];
+}) {
+  if (status === CommunityPlayerStatus.OCCASIONAL) {
+    return (
+      <span className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-100 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-emerald-800">
+        Occasional
+      </span>
+    );
+  }
+
+  return (
+    <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-100 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-slate-700">
+      Core
     </span>
   );
 }

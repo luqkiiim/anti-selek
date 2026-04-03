@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { listSessionsForCommunity } from "@/app/api/sessions/listSessionsService";
 import {
   ClaimRequestStatus,
+  CommunityPlayerStatus,
   PartnerPreference,
   PlayerGender,
 } from "@/types/enums";
@@ -235,6 +236,10 @@ export async function GET(
         id: member.user.id,
         name: member.user.name,
         email: member.user.email,
+        status:
+          member.status === CommunityPlayerStatus.OCCASIONAL
+            ? CommunityPlayerStatus.OCCASIONAL
+            : CommunityPlayerStatus.CORE,
         gender:
           [PlayerGender.MALE, PlayerGender.FEMALE].includes(
             member.user.gender as PlayerGender

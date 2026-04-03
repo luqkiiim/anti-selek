@@ -2,6 +2,7 @@
 
 import {
   ClaimRequestStatus,
+  CommunityPlayerStatus,
   MixedSide,
   PartnerPreference,
   PlayerGender,
@@ -20,6 +21,7 @@ export interface CommunityAdminPlayer {
   id: string;
   name: string;
   email: string | null;
+  status: CommunityPlayerStatus;
   gender: PlayerGender;
   partnerPreference: PartnerPreference;
   mixedSideOverride?: MixedSide | null;

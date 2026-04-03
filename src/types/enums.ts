@@ -44,6 +44,11 @@ export enum SessionPool {
   B = "B",
 }
 
+export enum CommunityPlayerStatus {
+  CORE = "CORE",
+  OCCASIONAL = "OCCASIONAL",
+}
+
 export enum ClaimRequestStatus {
   PENDING = "PENDING",
   APPROVED = "APPROVED",

@@ -10,9 +10,14 @@ import {
   CommunityAdminClaimPill,
   CommunityAdminGenderPill,
   CommunityAdminRolePill,
+  CommunityAdminStatusPill,
 } from "./communityAdminDisplay";
 import type { CommunityAdminPlayer } from "./communityAdminTypes";
-import { MixedSide, PlayerGender } from "@/types/enums";
+import {
+  CommunityPlayerStatus,
+  MixedSide,
+  PlayerGender,
+} from "@/types/enums";
 
 interface CommunityPlayerEditorModalProps {
   player: CommunityAdminPlayer | null;
@@ -32,7 +37,11 @@ interface CommunityPlayerEditorModalProps {
   onSavePlayerRating: (player: CommunityAdminPlayer) => Promise<void>;
   onUpdatePreferences: (
     player: CommunityAdminPlayer,
-    updates: { gender?: PlayerGender; mixedSideOverride?: MixedSide | null }
+    updates: {
+      gender?: PlayerGender;
+      mixedSideOverride?: MixedSide | null;
+      status?: CommunityPlayerStatus;
+    }
   ) => Promise<void>;
   onPromotePlayer: (player: CommunityAdminPlayer) => void;
   onOpenPasswordReset: (player: CommunityAdminPlayer) => void;
@@ -103,6 +112,7 @@ export function CommunityPlayerEditorModal({
             </div>
             <div className="flex flex-wrap gap-2">
               <CommunityAdminRolePill role={player.role} />
+              <CommunityAdminStatusPill status={player.status} />
               <CommunityAdminClaimPill isClaimed={player.isClaimed} />
               <CommunityAdminGenderPill player={player} />
             </div>
@@ -215,49 +225,76 @@ export function CommunityPlayerEditorModal({
           </div>
 
           <div className="app-panel-muted space-y-4 p-4">
-            <div>
-              <p className="text-sm font-semibold text-gray-900">
-                Admin access
-              </p>
-              <p className="mt-1 text-sm text-gray-600">
-                Promote claimed members to admin when they need community
-                control.
+            <div className="space-y-2">
+              <label className="block space-y-2 text-sm font-medium text-gray-900">
+                <span>Roster status</span>
+                <select
+                  value={player.status}
+                  onChange={async (event) => {
+                    await onUpdatePreferences(player, {
+                      status: event.target.value as CommunityPlayerStatus,
+                    });
+                  }}
+                  disabled={savingPreferences}
+                  className="field"
+                >
+                  <option value={CommunityPlayerStatus.CORE}>Core</option>
+                  <option value={CommunityPlayerStatus.OCCASIONAL}>
+                    Occasional
+                  </option>
+                </select>
+              </label>
+              <p className="text-sm text-gray-600">
+                Occasional players stay in the community and session pickers, but
+                are hidden from the community leaderboard.
               </p>
             </div>
 
-            {player.role === "ADMIN" ? (
-              <p className="text-sm text-gray-600">
-                This player already has admin access.
-              </p>
-            ) : player.isClaimed ? (
-              <button
-                type="button"
-                onClick={() => onPromotePlayer(player)}
-                disabled={savingRole}
-                className="app-button-secondary px-4 py-2"
-              >
-                {savingRole ? "Promoting..." : "Promote to admin"}
-              </button>
-            ) : (
-              <p className="text-sm text-gray-600">
-                Only claimed members can be promoted to admin.
-              </p>
-            )}
+            <div className="border-t border-gray-200 pt-4">
+              <div>
+                <p className="text-sm font-semibold text-gray-900">
+                  Admin access
+                </p>
+                <p className="mt-1 text-sm text-gray-600">
+                  Promote claimed members to admin when they need community
+                  control.
+                </p>
+              </div>
 
-            {player.isClaimed && player.email ? (
-              <button
-                type="button"
-                onClick={() => onOpenPasswordReset(player)}
-                className="app-button-secondary px-4 py-2"
-              >
-                Reset password
-              </button>
-            ) : (
-              <p className="text-sm text-gray-600">
-                Password resets are only available for claimed members with an
-                email.
-              </p>
-            )}
+              {player.role === "ADMIN" ? (
+                <p className="text-sm text-gray-600">
+                  This player already has admin access.
+                </p>
+              ) : player.isClaimed ? (
+                <button
+                  type="button"
+                  onClick={() => onPromotePlayer(player)}
+                  disabled={savingRole}
+                  className="app-button-secondary px-4 py-2"
+                >
+                  {savingRole ? "Promoting..." : "Promote to admin"}
+                </button>
+              ) : (
+                <p className="text-sm text-gray-600">
+                  Only claimed members can be promoted to admin.
+                </p>
+              )}
+
+              {player.isClaimed && player.email ? (
+                <button
+                  type="button"
+                  onClick={() => onOpenPasswordReset(player)}
+                  className="app-button-secondary px-4 py-2"
+                >
+                  Reset password
+                </button>
+              ) : (
+                <p className="text-sm text-gray-600">
+                  Password resets are only available for claimed members with an
+                  email.
+                </p>
+              )}
+            </div>
           </div>
         </div>
       </div>

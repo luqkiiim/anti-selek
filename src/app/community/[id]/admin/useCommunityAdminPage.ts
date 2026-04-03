@@ -5,6 +5,7 @@ import { useSession } from "next-auth/react";
 import { useParams, useRouter } from "next/navigation";
 import type { CommunityAdminSection } from "@/components/community-admin/communityAdminTypes";
 import { getCommunityAdminGenderPillLabel } from "@/components/community-admin/communityAdminDisplay";
+import { CommunityPlayerStatus } from "@/types/enums";
 import { useCommunityAdminCommunityActions } from "./useCommunityAdminCommunityActions";
 import { useCommunityAdminData } from "./useCommunityAdminData";
 import { useCommunityAdminPlayerActions } from "./useCommunityAdminPlayerActions";
@@ -49,6 +50,9 @@ export function useCommunityAdminPage() {
   const adminPlayersCount = adminData.players.filter(
     (player) => player.role === "ADMIN"
   ).length;
+  const occasionalPlayersCount = adminData.players.filter(
+    (player) => player.status === CommunityPlayerStatus.OCCASIONAL
+  ).length;
   const searchQuery = playerSearch.trim().toLowerCase();
   const filteredPlayers = adminData.players
     .slice()
@@ -58,6 +62,7 @@ export function useCommunityAdminPage() {
       return (
         player.name.toLowerCase().includes(searchQuery) ||
         player.email?.toLowerCase().includes(searchQuery) ||
+        player.status.toLowerCase().includes(searchQuery) ||
         getCommunityAdminGenderPillLabel(player)
           .toLowerCase()
           .includes(searchQuery)
@@ -74,6 +79,7 @@ export function useCommunityAdminPage() {
     setPlayerSearch,
     claimedPlayersCount,
     adminPlayersCount,
+    occasionalPlayersCount,
     filteredPlayers,
     ...adminData,
     ...playerActions,

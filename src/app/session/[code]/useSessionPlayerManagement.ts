@@ -22,6 +22,7 @@ import {
   mergeSessionSnapshot,
 } from "./sessionDataMutations";
 import {
+  CommunityPlayerStatus,
   MixedSide,
   PlayerGender,
   SessionMode,
@@ -52,6 +53,7 @@ function parseCommunityPlayers(data: unknown): CommunityUser[] {
         gender?: unknown;
         partnerPreference?: unknown;
         mixedSideOverride?: unknown;
+        status?: unknown;
       };
 
       if (
@@ -82,6 +84,10 @@ function parseCommunityPlayers(data: unknown): CommunityUser[] {
         id: candidate.id,
         name: candidate.name,
         elo: candidate.elo,
+        status:
+          candidate.status === CommunityPlayerStatus.OCCASIONAL
+            ? CommunityPlayerStatus.OCCASIONAL
+            : CommunityPlayerStatus.CORE,
         gender,
         partnerPreference,
         mixedSideOverride,
