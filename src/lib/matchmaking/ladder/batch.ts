@@ -24,6 +24,43 @@ const MAX_BATCH_CANDIDATE_PLAYERS = 20;
 const MAX_BATCH_SEARCH_BRANCHES = 20000;
 const MAX_BATCH_SEARCH_MS = 750;
 
+function buildFeasibilityCandidatePools<T extends MatchmakerLadderPlayer>(
+  initialPool: ReturnType<typeof buildCandidatePool<T>>
+) {
+  const variants = [initialPool];
+  if (!initialPool.selectionBand) {
+    return variants;
+  }
+
+  const selectionBandIndex = initialPool.fairnessBands.findIndex(
+    (band) =>
+      band.effectiveMatchCount === initialPool.selectionBandEffectiveMatchCount
+  );
+  if (selectionBandIndex < 0) {
+    return variants;
+  }
+
+  const selectablePlayers = [...initialPool.selectablePlayers];
+  const includedBandValues = [...initialPool.includedBandValues];
+
+  for (const band of initialPool.fairnessBands.slice(selectionBandIndex + 1)) {
+    selectablePlayers.push(...band.players);
+    includedBandValues.push(band.effectiveMatchCount);
+
+    variants.push({
+      ...initialPool,
+      selectablePlayers: [...selectablePlayers],
+      candidatePlayers: [...initialPool.lockedPlayers, ...selectablePlayers],
+      includedBandValues: [...includedBandValues],
+      widened: includedBandValues.length > 1,
+      selectionBand: band,
+      selectionBandEffectiveMatchCount: band.effectiveMatchCount,
+    });
+  }
+
+  return variants;
+}
+
 function buildCombinations<T>(items: T[], size: number): T[][] {
   if (size === 0) {
     return [[]];
@@ -280,22 +317,29 @@ export function findBestBatchSelectionLadder<T extends MatchmakerLadderPlayer>(
   }
 ): LadderBatchResult<ActiveMatchmakerLadderPlayer<T>> {
   const requiredPlayerCount = courtCount * 4;
-  const candidatePool = buildCandidatePool(players, {
+  const initialCandidatePool = buildCandidatePool(players, {
     requiredPlayerCount,
     now,
     matchDurationMs,
     randomFn,
     useWaitingTimeTieZone: false,
   });
+  let searchedCandidatePool = initialCandidatePool;
   const debug: LadderBatchDebug = {
-    eligiblePlayerIds: candidatePool.activePlayers.map((player) => player.userId),
-    lowestBand: candidatePool.lowestBand,
-    includedBandValues: candidatePool.includedBandValues,
-    widened: candidatePool.widened,
-    lockedPlayerIds: candidatePool.lockedPlayers.map((player) => player.userId),
+    eligiblePlayerIds: initialCandidatePool.activePlayers.map(
+      (player) => player.userId
+    ),
+    lowestBand: initialCandidatePool.lowestBand,
+    includedBandValues: initialCandidatePool.includedBandValues,
+    widened: initialCandidatePool.widened,
+    lockedPlayerIds: initialCandidatePool.lockedPlayers.map(
+      (player) => player.userId
+    ),
     tieZonePlayerIds:
-      candidatePool.tieZone?.players.map((player) => player.userId) ?? [],
-    candidatePlayerIds: candidatePool.candidatePlayers.map((player) => player.userId),
+      initialCandidatePool.tieZone?.players.map((player) => player.userId) ?? [],
+    candidatePlayerIds: initialCandidatePool.candidatePlayers.map(
+      (player) => player.userId
+    ),
     quartetCount: 0,
     validQuartetCount: 0,
     exploredBranches: 0,
@@ -314,8 +358,8 @@ export function findBestBatchSelectionLadder<T extends MatchmakerLadderPlayer>(
 
   if (
     courtCount <= 0 ||
-    candidatePool.insufficientPlayers ||
-    candidatePool.candidatePlayers.length < requiredPlayerCount
+    initialCandidatePool.insufficientPlayers ||
+    initialCandidatePool.candidatePlayers.length < requiredPlayerCount
   ) {
     return {
       selection: null,
@@ -323,125 +367,166 @@ export function findBestBatchSelectionLadder<T extends MatchmakerLadderPlayer>(
     };
   }
 
-  const batchCandidatePlayers = limitBatchCandidatePlayers(
-    candidatePool,
-    requiredPlayerCount
-  );
-  const quartetSelections = buildQuartetSelections(
-    batchCandidatePlayers,
-    sessionMode
-  ).sort((left, right) => compareSingleCourtSelections(left, right));
-
-  debug.candidatePlayerIds = batchCandidatePlayers.map((player) => player.userId);
-  debug.quartetCount = buildCombinations(batchCandidatePlayers, 4).length;
-  debug.validQuartetCount = quartetSelections.length;
-
-  if (quartetSelections.length < courtCount) {
-    return {
-      selection: null,
-      debug,
-    };
-  }
-
-  const orderedCandidateIds = batchCandidatePlayers.map((player) => player.userId);
-  const lockedIds = new Set(candidatePool.lockedPlayers.map((player) => player.userId));
-  const candidateIds = new Set(orderedCandidateIds);
-  const quartetsByUserId = new Map(
-    orderedCandidateIds.map((userId) => [
-      userId,
-      [] as LadderSingleCourtSelection<ActiveMatchmakerLadderPlayer<T>>[],
-    ])
-  );
-
-  for (const quartet of quartetSelections) {
-    for (const userId of quartet.ids) {
-      quartetsByUserId.get(userId)?.push(quartet);
-    }
-  }
-
-  let bestSelection: LadderBatchSelection<ActiveMatchmakerLadderPlayer<T>> | null =
+  const candidatePools = buildFeasibilityCandidatePools(initialCandidatePool);
+  let finalSelection: LadderBatchSelection<ActiveMatchmakerLadderPlayer<T>> | null =
     null;
-  const searchDeadline = Date.now() + MAX_BATCH_SEARCH_MS;
-  let searchAborted = false;
 
-  const backtrack = (
-    chosen: LadderSingleCourtSelection<ActiveMatchmakerLadderPlayer<T>>[],
-    usedIds: Set<string>
-  ) => {
-    debug.exploredBranches += 1;
+  for (const candidatePool of candidatePools) {
+    searchedCandidatePool = candidatePool;
 
-    if (
-      debug.exploredBranches >= MAX_BATCH_SEARCH_BRANCHES ||
-      Date.now() >= searchDeadline
-    ) {
-      searchAborted = true;
-      debug.prunedBranches += 1;
-      return;
+    const batchCandidatePlayers = limitBatchCandidatePlayers(
+      candidatePool,
+      requiredPlayerCount
+    );
+    const quartetSelections = buildQuartetSelections(
+      batchCandidatePlayers,
+      sessionMode
+    ).sort((left, right) => compareSingleCourtSelections(left, right));
+
+    debug.includedBandValues = candidatePool.includedBandValues;
+    debug.widened = candidatePool.widened;
+    debug.lockedPlayerIds = candidatePool.lockedPlayers.map(
+      (player) => player.userId
+    );
+    debug.tieZonePlayerIds =
+      candidatePool.tieZone?.players.map((player) => player.userId) ?? [];
+    debug.candidatePlayerIds = batchCandidatePlayers.map(
+      (player) => player.userId
+    );
+    debug.quartetCount = buildCombinations(batchCandidatePlayers, 4).length;
+    debug.validQuartetCount = quartetSelections.length;
+    debug.exploredBranches = 0;
+    debug.prunedBranches = 0;
+    debug.chosenQuartets = [];
+    debug.chosenMaxLadderGap = null;
+    debug.chosenTotalLadderGap = null;
+    debug.chosenTotalPointDiffGap = null;
+    debug.chosenMaxBalanceGap = null;
+    debug.chosenTotalBalanceGap = null;
+    debug.chosenMaxPointDiffBalanceGap = null;
+    debug.chosenTotalPointDiffBalanceGap = null;
+    debug.chosenMaxStrengthGap = null;
+    debug.chosenTotalStrengthGap = null;
+
+    if (quartetSelections.length < courtCount) {
+      continue;
     }
 
-    const remainingCourts = courtCount - chosen.length;
-    if (remainingCourts === 0) {
-      if (lockedIds.size > 0 && [...lockedIds].some((id) => !usedIds.has(id))) {
+    const orderedCandidateIds = batchCandidatePlayers.map(
+      (player) => player.userId
+    );
+    const lockedIds = new Set(
+      candidatePool.lockedPlayers.map((player) => player.userId)
+    );
+    const candidateIds = new Set(orderedCandidateIds);
+    const quartetsByUserId = new Map(
+      orderedCandidateIds.map((userId) => [
+        userId,
+        [] as LadderSingleCourtSelection<ActiveMatchmakerLadderPlayer<T>>[],
+      ])
+    );
+
+    for (const quartet of quartetSelections) {
+      for (const userId of quartet.ids) {
+        quartetsByUserId.get(userId)?.push(quartet);
+      }
+    }
+
+    let bestSelection:
+      | LadderBatchSelection<ActiveMatchmakerLadderPlayer<T>>
+      | null = null;
+    const searchDeadline = Date.now() + MAX_BATCH_SEARCH_MS;
+    let searchAborted = false;
+
+    const backtrack = (
+      chosen: LadderSingleCourtSelection<ActiveMatchmakerLadderPlayer<T>>[],
+      usedIds: Set<string>
+    ) => {
+      debug.exploredBranches += 1;
+
+      if (
+        debug.exploredBranches >= MAX_BATCH_SEARCH_BRANCHES ||
+        Date.now() >= searchDeadline
+      ) {
+        searchAborted = true;
+        debug.prunedBranches += 1;
         return;
       }
 
-      const batchSelection = summarizeBatch(chosen);
-      if (!bestSelection || compareBatchSelections(batchSelection, bestSelection) < 0) {
-        bestSelection = batchSelection;
+      const remainingCourts = courtCount - chosen.length;
+      if (remainingCourts === 0) {
+        if (
+          lockedIds.size > 0 &&
+          [...lockedIds].some((id) => !usedIds.has(id))
+        ) {
+          return;
+        }
+
+        const batchSelection = summarizeBatch(chosen);
+        if (
+          !bestSelection ||
+          compareBatchSelections(batchSelection, bestSelection) < 0
+        ) {
+          bestSelection = batchSelection;
+        }
+
+        return;
       }
 
-      return;
-    }
+      const remainingAvailablePlayers = [...candidateIds].filter(
+        (id) => !usedIds.has(id)
+      );
 
-    const remainingAvailablePlayers = [...candidateIds].filter(
-      (id) => !usedIds.has(id)
-    );
-
-    if (remainingAvailablePlayers.length < remainingCourts * 4) {
-      debug.prunedBranches += 1;
-      return;
-    }
-
-    const remainingLockedPlayers = [...lockedIds].filter((id) => !usedIds.has(id));
-    if (remainingLockedPlayers.length > remainingCourts * 4) {
-      debug.prunedBranches += 1;
-      return;
-    }
-
-    const anchorId =
-      orderedCandidateIds.find((id) => lockedIds.has(id) && !usedIds.has(id)) ??
-      orderedCandidateIds.find((id) => !usedIds.has(id));
-
-    if (!anchorId) {
-      debug.prunedBranches += 1;
-      return;
-    }
-
-    for (const quartet of quartetsByUserId.get(anchorId) ?? []) {
-      if (quartet.ids.some((id) => usedIds.has(id))) {
-        continue;
+      if (remainingAvailablePlayers.length < remainingCourts * 4) {
+        debug.prunedBranches += 1;
+        return;
       }
 
-      const nextUsedIds = new Set(usedIds);
-      quartet.ids.forEach((id) => nextUsedIds.add(id));
-      backtrack([...chosen, quartet], nextUsedIds);
+      const remainingLockedPlayers = [...lockedIds].filter(
+        (id) => !usedIds.has(id)
+      );
+      if (remainingLockedPlayers.length > remainingCourts * 4) {
+        debug.prunedBranches += 1;
+        return;
+      }
+
+      const anchorId =
+        orderedCandidateIds.find((id) => lockedIds.has(id) && !usedIds.has(id)) ??
+        orderedCandidateIds.find((id) => !usedIds.has(id));
+
+      if (!anchorId) {
+        debug.prunedBranches += 1;
+        return;
+      }
+
+      for (const quartet of quartetsByUserId.get(anchorId) ?? []) {
+        if (quartet.ids.some((id) => usedIds.has(id))) {
+          continue;
+        }
+
+        const nextUsedIds = new Set(usedIds);
+        quartet.ids.forEach((id) => nextUsedIds.add(id));
+        backtrack([...chosen, quartet], nextUsedIds);
+      }
+    };
+
+    backtrack([], new Set<string>());
+
+    finalSelection =
+      bestSelection ??
+      (searchAborted
+        ? findGreedyBatchSelection(
+            quartetSelections,
+            orderedCandidateIds,
+            lockedIds,
+            courtCount
+          )
+        : null);
+
+    if (!finalSelection) {
+      continue;
     }
-  };
 
-  backtrack([], new Set<string>());
-
-  const finalSelection =
-    bestSelection ??
-    (searchAborted
-      ? findGreedyBatchSelection(
-          quartetSelections,
-          orderedCandidateIds,
-          lockedIds,
-          courtCount
-        )
-      : null);
-
-  if (finalSelection) {
     debug.chosenQuartets = finalSelection.selections.map(
       (selection) => selection.ids
     );
@@ -455,7 +540,16 @@ export function findBestBatchSelectionLadder<T extends MatchmakerLadderPlayer>(
       finalSelection.totalPointDiffBalanceGap;
     debug.chosenMaxStrengthGap = finalSelection.maxStrengthGap;
     debug.chosenTotalStrengthGap = finalSelection.totalStrengthGap;
+    break;
   }
+
+  debug.includedBandValues = searchedCandidatePool.includedBandValues;
+  debug.widened = searchedCandidatePool.widened;
+  debug.lockedPlayerIds = searchedCandidatePool.lockedPlayers.map(
+    (player) => player.userId
+  );
+  debug.tieZonePlayerIds =
+    searchedCandidatePool.tieZone?.players.map((player) => player.userId) ?? [];
 
   return {
     selection: finalSelection,

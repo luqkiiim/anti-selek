@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { SessionMode } from "../../../types/enums";
+import {
+  PartnerPreference,
+  PlayerGender,
+  SessionMode,
+} from "../../../types/enums";
 import { findBestBatchSelectionLadder } from "./batch";
 import type { MatchmakerLadderPlayer } from "./types";
 
@@ -185,5 +189,68 @@ describe("ladder batch selection", () => {
     });
 
     expect(result.selection).toBeNull();
+  });
+
+  it("widens for Mixicano feasibility when the lowest 8-player band cannot form two legal courts", () => {
+    const players = [
+      createPlayer("LowM1", { matchesPlayed: 0, ladderScore: 0 }),
+      createPlayer("LowM2", { matchesPlayed: 0, ladderScore: 0 }),
+      createPlayer("LowM3", { matchesPlayed: 0, ladderScore: 0 }),
+      createPlayer("LowM4", { matchesPlayed: 0, ladderScore: 0 }),
+      createPlayer("LowM5", { matchesPlayed: 0, ladderScore: 0 }),
+      createPlayer("LowF1", {
+        matchesPlayed: 0,
+        ladderScore: 0,
+        gender: PlayerGender.FEMALE,
+        partnerPreference: PartnerPreference.FEMALE_FLEX,
+      }),
+      createPlayer("LowF2", {
+        matchesPlayed: 0,
+        ladderScore: 0,
+        gender: PlayerGender.FEMALE,
+        partnerPreference: PartnerPreference.FEMALE_FLEX,
+      }),
+      createPlayer("LowF3", {
+        matchesPlayed: 0,
+        ladderScore: 0,
+        gender: PlayerGender.FEMALE,
+        partnerPreference: PartnerPreference.FEMALE_FLEX,
+      }),
+      createPlayer("HighM1", { matchesPlayed: 1, ladderScore: 1 }),
+      createPlayer("HighM2", { matchesPlayed: 1, ladderScore: 1 }),
+      createPlayer("HighF1", {
+        matchesPlayed: 1,
+        ladderScore: 1,
+        gender: PlayerGender.FEMALE,
+        partnerPreference: PartnerPreference.FEMALE_FLEX,
+      }),
+      createPlayer("HighF2", {
+        matchesPlayed: 1,
+        ladderScore: 1,
+        gender: PlayerGender.FEMALE,
+        partnerPreference: PartnerPreference.FEMALE_FLEX,
+      }),
+    ];
+
+    const result = findBestBatchSelectionLadder(players, {
+      courtCount: 2,
+      sessionMode: SessionMode.MIXICANO,
+      randomFn: () => 0,
+    });
+
+    expect(result.selection).not.toBeNull();
+    expect(result.debug.includedBandValues).toEqual([0, 1]);
+    expect(
+      result.selection?.selections.flatMap((selection) => selection.players)
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ matchesPlayed: 1 }),
+      ])
+    );
+    expect(
+      result.selection?.selections
+        .flatMap((selection) => selection.ids)
+        .filter((userId, index, allIds) => allIds.indexOf(userId) === index)
+    ).toHaveLength(8);
   });
 });
