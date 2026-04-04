@@ -212,4 +212,91 @@ describe("ladder single-court selection", () => {
       team2: ["M2", "F1"],
     });
   });
+
+  it("widens for mixed feasibility when the lowest band has four players but no legal quartet", () => {
+    const players = [
+      createPlayer("LowM1", {
+        matchesPlayed: 2,
+        wins: 1,
+        losses: 0,
+        pointDiff: 3,
+        ladderScore: 1,
+        gender: PlayerGender.MALE,
+      }),
+      createPlayer("LowM2", {
+        matchesPlayed: 2,
+        wins: 1,
+        losses: 0,
+        pointDiff: 2,
+        ladderScore: 1,
+        gender: PlayerGender.MALE,
+      }),
+      createPlayer("LowM3", {
+        matchesPlayed: 2,
+        wins: 1,
+        losses: 0,
+        pointDiff: 1,
+        ladderScore: 1,
+        gender: PlayerGender.MALE,
+      }),
+      createPlayer("LowF1", {
+        matchesPlayed: 2,
+        wins: 1,
+        losses: 0,
+        pointDiff: 0,
+        ladderScore: 1,
+        gender: PlayerGender.FEMALE,
+        partnerPreference: PartnerPreference.FEMALE_FLEX,
+      }),
+      createPlayer("HighF2", {
+        matchesPlayed: 3,
+        wins: 1,
+        losses: 1,
+        pointDiff: 0,
+        ladderScore: 0,
+        gender: PlayerGender.FEMALE,
+        partnerPreference: PartnerPreference.FEMALE_FLEX,
+      }),
+      createPlayer("HighM4", {
+        matchesPlayed: 3,
+        wins: 4,
+        losses: 0,
+        pointDiff: 12,
+        ladderScore: 4,
+        gender: PlayerGender.MALE,
+      }),
+      createPlayer("HighM5", {
+        matchesPlayed: 3,
+        wins: 4,
+        losses: 0,
+        pointDiff: 11,
+        ladderScore: 4,
+        gender: PlayerGender.MALE,
+      }),
+      createPlayer("HighM6", {
+        matchesPlayed: 3,
+        wins: 4,
+        losses: 0,
+        pointDiff: 10,
+        ladderScore: 4,
+        gender: PlayerGender.MALE,
+      }),
+    ];
+
+    const result = findBestSingleCourtSelectionLadder(players, {
+      sessionMode: SessionMode.MIXICANO,
+      randomFn: () => 0,
+    });
+
+    expect(result.selection).not.toBeNull();
+    expect(result.debug.includedBandValues).toEqual([2, 3]);
+    expect(
+      result.selection?.players.filter((player) => player.matchesPlayed === 2).length
+    ).toBe(3);
+    expect(
+      result.selection?.players.filter(
+        (player) => player.gender === PlayerGender.FEMALE
+      ).length
+    ).toBe(2);
+  });
 });

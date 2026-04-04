@@ -12,6 +12,7 @@ import {
 
 import type {
   ActiveMatchmakerLadderPlayer,
+  LadderCandidatePool,
   LadderSingleCourtDebug,
   LadderSingleCourtResult,
   LadderSingleCourtSelection,
@@ -57,6 +58,64 @@ function getQuartetKey(ids: [string, string, string, string]) {
   return [...ids].sort().join("|");
 }
 
+function compareQuartetFairnessVectors<
+  T extends Pick<ActiveMatchmakerLadderPlayer, "effectiveMatchCount">,
+>(quartetPlayers: [T, T, T, T], otherQuartetPlayers: [T, T, T, T]) {
+  const leftVector = quartetPlayers
+    .map((player) => player.effectiveMatchCount)
+    .sort((left, right) => left - right);
+  const rightVector = otherQuartetPlayers
+    .map((player) => player.effectiveMatchCount)
+    .sort((left, right) => left - right);
+
+  for (let index = 0; index < Math.max(leftVector.length, rightVector.length); index++) {
+    const leftValue = leftVector[index] ?? Number.POSITIVE_INFINITY;
+    const rightValue = rightVector[index] ?? Number.POSITIVE_INFINITY;
+
+    if (leftValue !== rightValue) {
+      return leftValue - rightValue;
+    }
+  }
+
+  return 0;
+}
+
+function buildFeasibilityCandidatePools<T extends MatchmakerLadderPlayer>(
+  initialPool: LadderCandidatePool<ActiveMatchmakerLadderPlayer<T>>
+) {
+  const variants = [initialPool];
+  if (!initialPool.selectionBand) {
+    return variants;
+  }
+
+  const selectionBandIndex = initialPool.fairnessBands.findIndex(
+    (band) => band.effectiveMatchCount === initialPool.selectionBandEffectiveMatchCount
+  );
+  if (selectionBandIndex < 0) {
+    return variants;
+  }
+
+  const selectablePlayers = [...initialPool.selectablePlayers];
+  const includedBandValues = [...initialPool.includedBandValues];
+
+  for (const band of initialPool.fairnessBands.slice(selectionBandIndex + 1)) {
+    selectablePlayers.push(...band.players);
+    includedBandValues.push(band.effectiveMatchCount);
+
+    variants.push({
+      ...initialPool,
+      selectablePlayers: [...selectablePlayers],
+      candidatePlayers: [...initialPool.lockedPlayers, ...selectablePlayers],
+      includedBandValues: [...includedBandValues],
+      widened: includedBandValues.length > 1,
+      selectionBand: band,
+      selectionBandEffectiveMatchCount: band.effectiveMatchCount,
+    });
+  }
+
+  return variants;
+}
+
 export function findBestSingleCourtSelectionLadder<
   T extends MatchmakerLadderPlayer,
 >(
@@ -83,126 +142,185 @@ export function findBestSingleCourtSelectionLadder<
     randomFn?: () => number;
   }
 ): LadderSingleCourtResult<ActiveMatchmakerLadderPlayer<T>> {
-  const candidatePool = buildCandidatePool(players, {
+  const initialCandidatePool = buildCandidatePool(players, {
     requiredPlayerCount: 4,
     now,
     matchDurationMs,
     randomFn,
     useWaitingTimeTieZone: false,
   });
-  const debug: LadderSingleCourtDebug = {
-    eligiblePlayerIds: candidatePool.activePlayers.map((player) => player.userId),
-    lowestBand: candidatePool.lowestBand,
-    includedBandValues: candidatePool.includedBandValues,
-    widened: candidatePool.widened,
-    lockedPlayerIds: candidatePool.lockedPlayers.map((player) => player.userId),
-    tieZonePlayerIds:
-      candidatePool.tieZone?.players.map((player) => player.userId) ?? [],
-    candidatePlayerIds: candidatePool.candidatePlayers.map((player) => player.userId),
-    quartetCount: 0,
-    validPartitionCount: 0,
-    chosenIds: null,
-    chosenGrouping: null,
-    chosenBalanceGap: null,
-  };
 
-  if (candidatePool.insufficientPlayers || candidatePool.candidatePlayers.length < 4) {
+  if (
+    initialCandidatePool.insufficientPlayers ||
+    initialCandidatePool.candidatePlayers.length < 4
+  ) {
     return {
       selection: null,
-      debug,
+      debug: {
+        eligiblePlayerIds: initialCandidatePool.activePlayers.map(
+          (player) => player.userId
+        ),
+        lowestBand: initialCandidatePool.lowestBand,
+        includedBandValues: initialCandidatePool.includedBandValues,
+        widened: initialCandidatePool.widened,
+        lockedPlayerIds: initialCandidatePool.lockedPlayers.map(
+          (player) => player.userId
+        ),
+        tieZonePlayerIds:
+          initialCandidatePool.tieZone?.players.map((player) => player.userId) ??
+          [],
+        candidatePlayerIds: initialCandidatePool.candidatePlayers.map(
+          (player) => player.userId
+        ),
+        quartetCount: 0,
+        validPartitionCount: 0,
+        chosenIds: null,
+        chosenGrouping: null,
+        chosenBalanceGap: null,
+      },
     };
   }
 
-  const remainingSlots = 4 - candidatePool.lockedPlayers.length;
-  const quartetGroups =
-    remainingSlots === 0
-      ? [candidatePool.lockedPlayers]
-      : buildCombinations(candidatePool.selectablePlayers, remainingSlots).map(
-          (playersInSelectionBand) => [
-            ...candidatePool.lockedPlayers,
-            ...playersInSelectionBand,
-          ]
-        );
-  const playersById = new Map(
-    candidatePool.candidatePlayers.map((player) => [player.userId, player])
-  );
+  const candidatePools = buildFeasibilityCandidatePools(initialCandidatePool);
+  let searchedCandidatePool = initialCandidatePool;
+  let totalQuartetCount = 0;
+  let totalValidPartitionCount = 0;
 
   let bestSelection:
     | LadderSingleCourtSelection<ActiveMatchmakerLadderPlayer<T>>
     | null = null;
 
-  for (const group of quartetGroups) {
-    const quartetPlayers = toQuartet(group);
-    if (!quartetPlayers) {
-      continue;
-    }
+  for (const candidatePool of candidatePools) {
+    searchedCandidatePool = candidatePool;
 
-    debug.quartetCount += 1;
+    const remainingSlots = 4 - candidatePool.lockedPlayers.length;
+    const quartetGroups =
+      remainingSlots === 0
+        ? [candidatePool.lockedPlayers]
+        : buildCombinations(candidatePool.selectablePlayers, remainingSlots).map(
+            (playersInSelectionBand) => [
+              ...candidatePool.lockedPlayers,
+              ...playersInSelectionBand,
+            ]
+          );
+    const playersById = new Map(
+      candidatePool.candidatePlayers.map((player) => [player.userId, player])
+    );
+    let candidatePoolBestSelection:
+      | LadderSingleCourtSelection<ActiveMatchmakerLadderPlayer<T>>
+      | null = null;
 
-    const ids = quartetPlayers.map((player) => player.userId) as [
-      string,
-      string,
-      string,
-      string,
-    ];
-
-    if (targetPool) {
-      const targetPoolCount = quartetPlayers.filter(
-        (player) => player.pool === targetPool
-      ).length;
-      if (targetPoolCount < (minimumTargetPoolPlayers ?? 1)) {
+    for (const group of quartetGroups) {
+      const quartetPlayers = toQuartet(group);
+      if (!quartetPlayers) {
         continue;
       }
-    }
 
-    const quartetKey = getQuartetKey(ids);
-    if (
-      (excludedQuartetKey && quartetKey === excludedQuartetKey) ||
-      excludedQuartetKeys?.has(quartetKey)
-    ) {
-      continue;
-    }
+      totalQuartetCount += 1;
 
-    const waitSummary = buildWaitSummary(quartetPlayers);
-    const groupingSummary = buildLadderGroupingSummary(quartetPlayers);
-    const randomScore = getQuartetRandomScore(quartetPlayers);
+      const ids = quartetPlayers.map((player) => player.userId) as [
+        string,
+        string,
+        string,
+        string,
+      ];
 
-    for (const evaluation of evaluateBalancedPartitions(
-      ids,
-      playersById,
-      sessionMode
-    )) {
+      if (targetPool) {
+        const targetPoolCount = quartetPlayers.filter(
+          (player) => player.pool === targetPool
+        ).length;
+        if (targetPoolCount < (minimumTargetPoolPlayers ?? 1)) {
+          continue;
+        }
+      }
+
+      const quartetKey = getQuartetKey(ids);
       if (
-        excludedPartitionKey &&
-        getExactPartitionKey(evaluation.partition) === excludedPartitionKey
+        (excludedQuartetKey && quartetKey === excludedQuartetKey) ||
+        excludedQuartetKeys?.has(quartetKey)
       ) {
         continue;
       }
 
-      debug.validPartitionCount += 1;
+      const waitSummary = buildWaitSummary(quartetPlayers);
+      const groupingSummary = buildLadderGroupingSummary(quartetPlayers);
+      const randomScore = getQuartetRandomScore(quartetPlayers);
 
-      const selection: LadderSingleCourtSelection<
-        ActiveMatchmakerLadderPlayer<T>
-      > = {
+      for (const evaluation of evaluateBalancedPartitions(
         ids,
-        players: quartetPlayers,
-        partition: evaluation.partition,
-        waitSummary,
-        groupingSummary,
-        balanceGap: evaluation.balanceGap,
-        pointDiffGap: evaluation.pointDiffGap,
-        strengthGap: evaluation.strengthGap,
-        randomScore,
-      };
+        playersById,
+        sessionMode
+      )) {
+        if (
+          excludedPartitionKey &&
+          getExactPartitionKey(evaluation.partition) === excludedPartitionKey
+        ) {
+          continue;
+        }
 
-      if (
-        !bestSelection ||
-        compareSingleCourtSelections(selection, bestSelection) < 0
-      ) {
-        bestSelection = selection;
+        totalValidPartitionCount += 1;
+
+        const selection: LadderSingleCourtSelection<
+          ActiveMatchmakerLadderPlayer<T>
+        > = {
+          ids,
+          players: quartetPlayers,
+          partition: evaluation.partition,
+          waitSummary,
+          groupingSummary,
+          balanceGap: evaluation.balanceGap,
+          pointDiffGap: evaluation.pointDiffGap,
+          strengthGap: evaluation.strengthGap,
+          randomScore,
+        };
+
+        if (
+          !candidatePoolBestSelection ||
+          compareQuartetFairnessVectors(
+            selection.players,
+            candidatePoolBestSelection.players
+          ) < 0 ||
+          (compareQuartetFairnessVectors(
+            selection.players,
+            candidatePoolBestSelection.players
+          ) === 0 &&
+            compareSingleCourtSelections(
+              selection,
+              candidatePoolBestSelection
+            ) < 0)
+        ) {
+          candidatePoolBestSelection = selection;
+        }
       }
+    }
+
+    if (candidatePoolBestSelection) {
+      bestSelection = candidatePoolBestSelection;
+      break;
     }
   }
+
+  const debug: LadderSingleCourtDebug = {
+    eligiblePlayerIds: initialCandidatePool.activePlayers.map(
+      (player) => player.userId
+    ),
+    lowestBand: initialCandidatePool.lowestBand,
+    includedBandValues: searchedCandidatePool.includedBandValues,
+    widened: searchedCandidatePool.widened,
+    lockedPlayerIds: searchedCandidatePool.lockedPlayers.map(
+      (player) => player.userId
+    ),
+    tieZonePlayerIds:
+      searchedCandidatePool.tieZone?.players.map((player) => player.userId) ?? [],
+    candidatePlayerIds: searchedCandidatePool.candidatePlayers.map(
+      (player) => player.userId
+    ),
+    quartetCount: totalQuartetCount,
+    validPartitionCount: totalValidPartitionCount,
+    chosenIds: null,
+    chosenGrouping: null,
+    chosenBalanceGap: null,
+  };
 
   if (bestSelection) {
     debug.chosenIds = bestSelection.ids;
