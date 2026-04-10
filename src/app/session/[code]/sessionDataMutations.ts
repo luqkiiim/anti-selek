@@ -19,7 +19,7 @@ interface MatchParticipant {
   name: string;
 }
 
-interface MatchPayload {
+export interface MatchPayload {
   id: string;
   courtId?: string | null;
   status: string;
@@ -40,7 +40,7 @@ interface MatchPayload {
   team2User2?: MatchParticipant;
 }
 
-interface SessionSnapshotLike {
+export interface SessionSnapshotLike {
   status?: string;
   courts?: Array<{
     id: string;
@@ -53,7 +53,7 @@ interface SessionSnapshotLike {
   queuedMatch?: QueuedMatch | null;
 }
 
-interface GuestPayload {
+export interface GuestPayload {
   id: string;
   name: string;
   elo: number;
@@ -65,7 +65,7 @@ interface GuestPayload {
   pool?: Player["pool"];
 }
 
-interface SessionPlayerPayload {
+export interface SessionPlayerPayload {
   userId: string;
   gender: Player["gender"];
   partnerPreference: Player["partnerPreference"];

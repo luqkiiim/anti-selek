@@ -1,11 +1,12 @@
 "use client";
 
 import { useState } from "react";
+import { getErrorMessage } from "@/lib/http";
 import { applyGeneratedMatches, applyQueuedMatch } from "./sessionDataMutations";
 import {
   deleteSessionAction,
   postGenerateMatchAction,
-  postSessionAction,
+  postSessionActionTyped,
 } from "./sessionCourtActionApi";
 import type {
   ManualMatchFormState,
@@ -21,7 +22,24 @@ const emptyManualMatchForm = (): ManualMatchFormState => ({
 });
 
 type GeneratedMatchesPayload = Parameters<typeof applyGeneratedMatches>[1];
+type GeneratedMatchPayload = GeneratedMatchesPayload[number];
 type QueuedMatchPayload = Parameters<typeof applyQueuedMatch>[1];
+
+interface MatchGenerationResponse {
+  error?: string;
+  matches?: GeneratedMatchesPayload;
+  queuedMatch?: QueuedMatchPayload | null;
+}
+
+interface SingleMatchGenerationResponse extends GeneratedMatchPayload {
+  error?: string;
+  queuedMatch?: QueuedMatchPayload | null;
+}
+
+interface QueuedMatchResponse {
+  error?: string;
+  queuedMatch?: QueuedMatchPayload | null;
+}
 
 export function useSessionCourtMatchCreation({
   code,
@@ -91,20 +109,25 @@ export function useSessionCourtMatchCreation({
     setCreatingOpenCourtCount(courtIds.length);
     setError("");
     try {
-      const { res, data } = await postGenerateMatchAction({
+      const { res, data } = await postGenerateMatchAction<
+        MatchGenerationResponse | SingleMatchGenerationResponse
+      >({
         code,
         safeJson,
         body: courtIds.length === 1 ? { courtId: courtIds[0] } : { courtIds },
       });
 
       if (res.ok) {
-        const matches = Array.isArray(data.matches) ? data.matches : [data];
+        const matches =
+          "matches" in data && Array.isArray(data.matches)
+          ? data.matches
+          : [data as SingleMatchGenerationResponse];
         syncMatchGenerationResult(
           matches,
           "queuedMatch" in data ? (data.queuedMatch ?? null) : undefined
         );
       } else {
-        setError(data.error || "Failed to create matches");
+        setError(getErrorMessage(data, "Failed to create matches"));
       }
     } catch (err) {
       console.error(err);
@@ -156,7 +179,9 @@ export function useSessionCourtMatchCreation({
     setCreatingManualMatch(true);
     setError("");
     try {
-      const { res, data } = await postGenerateMatchAction({
+      const { res, data } = await postGenerateMatchAction<
+        SingleMatchGenerationResponse
+      >({
         code,
         safeJson,
         body: {
@@ -166,7 +191,7 @@ export function useSessionCourtMatchCreation({
       });
 
       if (!res.ok) {
-        setError(data.error || "Failed to create manual match");
+        setError(getErrorMessage(data, "Failed to create manual match"));
         return;
       }
 
@@ -193,7 +218,7 @@ export function useSessionCourtMatchCreation({
     setCreatingManualMatch(true);
     setError("");
     try {
-      const { res, data } = await postSessionAction(
+      const { res, data } = await postSessionActionTyped<QueuedMatchResponse>(
         `/api/sessions/${code}/queue-match`,
         {
           safeJson,
@@ -204,7 +229,7 @@ export function useSessionCourtMatchCreation({
       );
 
       if (!res.ok) {
-        setError(data.error || "Failed to queue manual match");
+        setError(getErrorMessage(data, "Failed to queue manual match"));
         return;
       }
 
@@ -224,13 +249,13 @@ export function useSessionCourtMatchCreation({
     setCreatingQueuedMatch(true);
     setError("");
     try {
-      const { res, data } = await postSessionAction(
+      const { res, data } = await postSessionActionTyped<QueuedMatchResponse>(
         `/api/sessions/${code}/queue-match`,
         { safeJson }
       );
 
       if (!res.ok) {
-        setError(data.error || "Failed to queue next match");
+        setError(getErrorMessage(data, "Failed to queue next match"));
         return;
       }
 
@@ -249,13 +274,13 @@ export function useSessionCourtMatchCreation({
     setClearingQueuedMatch(true);
     setError("");
     try {
-      const { res, data } = await deleteSessionAction(
+      const { res, data } = await deleteSessionAction<{ error?: string }>(
         `/api/sessions/${code}/queue-match`,
         { safeJson }
       );
 
       if (!res.ok) {
-        setError(data.error || "Failed to clear queued match");
+        setError(getErrorMessage(data, "Failed to clear queued match"));
         return;
       }
 
@@ -274,13 +299,12 @@ export function useSessionCourtMatchCreation({
     setAssigningQueuedMatch(true);
     setError("");
     try {
-      const { res, data } = await postSessionAction(
-        `/api/sessions/${code}/queue-match/assign`,
-        { safeJson }
-      );
+      const { res, data } = await postSessionActionTyped<
+        SingleMatchGenerationResponse
+      >(`/api/sessions/${code}/queue-match/assign`, { safeJson });
 
       if (!res.ok) {
-        setError(data.error || "Failed to assign queued match");
+        setError(getErrorMessage(data, "Failed to assign queued match"));
         return;
       }
 
@@ -299,7 +323,7 @@ export function useSessionCourtMatchCreation({
     setReshufflingQueuedMatch(true);
     setError("");
     try {
-      const { res, data } = await postSessionAction(
+      const { res, data } = await postSessionActionTyped<QueuedMatchResponse>(
         `/api/sessions/${code}/queue-match`,
         {
           safeJson,
@@ -308,7 +332,7 @@ export function useSessionCourtMatchCreation({
       );
 
       if (!res.ok) {
-        setError(data.error || "Failed to reshuffle queued match");
+        setError(getErrorMessage(data, "Failed to reshuffle queued match"));
         return;
       }
 
@@ -327,7 +351,7 @@ export function useSessionCourtMatchCreation({
     setReshufflingQueuedPlayerId(userId);
     setError("");
     try {
-      const { res, data } = await postSessionAction(
+      const { res, data } = await postSessionActionTyped<QueuedMatchResponse>(
         `/api/sessions/${code}/queue-match`,
         {
           safeJson,
@@ -339,7 +363,7 @@ export function useSessionCourtMatchCreation({
       );
 
       if (!res.ok) {
-        setError(data.error || "Failed to reshuffle queued match");
+        setError(getErrorMessage(data, "Failed to reshuffle queued match"));
         return;
       }
 
@@ -358,7 +382,7 @@ export function useSessionCourtMatchCreation({
     setReplacingQueuedPlayerId(userId);
     setError("");
     try {
-      const { res, data } = await postSessionAction(
+      const { res, data } = await postSessionActionTyped<QueuedMatchResponse>(
         `/api/sessions/${code}/queue-match`,
         {
           safeJson,
@@ -369,7 +393,7 @@ export function useSessionCourtMatchCreation({
       );
 
       if (!res.ok) {
-        setError(data.error || "Failed to replace queued player");
+        setError(getErrorMessage(data, "Failed to replace queued player"));
         return;
       }
 

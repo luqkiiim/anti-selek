@@ -11,7 +11,6 @@ import {
 } from "../../generate-match/selection";
 import {
   GenerateMatchError,
-  loadCourtRecords,
   loadSessionRecord,
 } from "../../generate-match/shared";
 import { validateManualMatchRequest } from "../../generate-match/manual";

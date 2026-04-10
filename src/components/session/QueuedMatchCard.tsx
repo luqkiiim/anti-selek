@@ -136,7 +136,7 @@ export function QueuedMatchCard({
   promotionSurfaceRef,
   promotionState = "normal",
 }: QueuedMatchCardProps) {
-  const [activeActionPlayerId, setActiveActionPlayerId] = useState<string | null>(
+  const [openActionPlayerId, setOpenActionPlayerId] = useState<string | null>(
     null
   );
   const queueActionDisabled =
@@ -146,6 +146,8 @@ export function QueuedMatchCard({
     reshufflingQueuedMatch ||
     reshufflingQueuedPlayerId !== null ||
     replacingQueuedPlayerId !== null;
+  const activeActionPlayerId =
+    reshufflingQueuedPlayerId ?? replacingQueuedPlayerId ?? openActionPlayerId;
 
   useEffect(() => {
     if (!activeActionPlayerId) return;
@@ -160,12 +162,12 @@ export function QueuedMatchCard({
         return;
       }
 
-      setActiveActionPlayerId(null);
+      setOpenActionPlayerId(null);
     };
 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
-        setActiveActionPlayerId(null);
+        setOpenActionPlayerId(null);
       }
     };
 
@@ -178,30 +180,18 @@ export function QueuedMatchCard({
     };
   }, [activeActionPlayerId]);
 
-  useEffect(() => {
-    const activePlayerId = reshufflingQueuedPlayerId ?? replacingQueuedPlayerId;
-
-    if (!activePlayerId && activeActionPlayerId) {
-      return;
-    }
-
-    if (activePlayerId) {
-      setActiveActionPlayerId(activePlayerId);
-    }
-  }, [activeActionPlayerId, replacingQueuedPlayerId, reshufflingQueuedPlayerId]);
-
   const togglePlayerAction = (userId: string) => {
     if (queueActionDisabled) return;
-    setActiveActionPlayerId((current) => (current === userId ? null : userId));
+    setOpenActionPlayerId((current) => (current === userId ? null : userId));
   };
 
   const handleReshuffleQueuedPlayer = (userId: string) => {
-    setActiveActionPlayerId(userId);
+    setOpenActionPlayerId(userId);
     onReshuffleQueuedPlayer(userId);
   };
 
   const handleReplaceQueuedPlayer = (userId: string) => {
-    setActiveActionPlayerId(userId);
+    setOpenActionPlayerId(userId);
     onReplaceQueuedPlayer(userId);
   };
   const contentVisibilityClass =

@@ -1,4 +1,5 @@
 import type { UseSessionMatchActionsDependencies } from "./sessionMatchActionTypes";
+import type { JsonResponseBody } from "@/lib/http";
 
 interface GenerateMatchRequestOptions {
   code: string;
@@ -6,7 +7,7 @@ interface GenerateMatchRequestOptions {
   body: Record<string, unknown>;
 }
 
-export async function postGenerateMatchAction({
+export async function postGenerateMatchAction<T = JsonResponseBody>({
   code,
   safeJson,
   body,
@@ -19,7 +20,7 @@ export async function postGenerateMatchAction({
 
   return {
     res,
-    data: await safeJson(res),
+    data: await safeJson<T>(res),
   };
 }
 
@@ -33,6 +34,13 @@ export async function postSessionAction(
   url: string,
   { safeJson, body }: Pick<SessionActionRequestOptions, "safeJson" | "body">
 ) {
+  return postSessionActionTyped<JsonResponseBody>(url, { safeJson, body });
+}
+
+export async function postSessionActionTyped<T = JsonResponseBody>(
+  url: string,
+  { safeJson, body }: Pick<SessionActionRequestOptions, "safeJson" | "body">
+) {
   const res = await fetch(url, {
     method: "POST",
     headers: body ? { "Content-Type": "application/json" } : undefined,
@@ -41,11 +49,11 @@ export async function postSessionAction(
 
   return {
     res,
-    data: await safeJson(res),
+    data: await safeJson<T>(res),
   };
 }
 
-export async function deleteSessionAction(
+export async function deleteSessionAction<T = JsonResponseBody>(
   url: string,
   { safeJson }: Pick<SessionActionRequestOptions, "safeJson">
 ) {
@@ -55,6 +63,6 @@ export async function deleteSessionAction(
 
   return {
     res,
-    data: await safeJson(res),
+    data: await safeJson<T>(res),
   };
 }

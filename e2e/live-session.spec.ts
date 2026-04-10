@@ -6,6 +6,9 @@ import {
   createManualMatchWithPlayers,
   createStartedHostSession,
   hostCommunityId,
+  openSessionPlayersModal,
+  openSessionRoster,
+  openSessionSettings,
   readCurrentMatchMixicanoShape,
   readCommunityMembersSnapshot,
   readCommunitySessionsSnapshot,
@@ -33,7 +36,7 @@ test("admin can host a tournament and reshuffle the first live court", async ({
     .not.toBe("");
 
   const firstLineup = await readCurrentMatchSignature(page, sessionCode);
-  await page.getByRole("button", { name: "Reshuffle" }).click();
+  await page.getByRole("button", { name: "Reshuffle" }).first().click();
   const reshuffleModal = page
     .locator(".app-modal-frame")
     .filter({ has: page.getByRole("heading", { name: "Reshuffle match?" }) });
@@ -67,7 +70,7 @@ test("admin can create and undo a manual match on an open court", async ({
     })
     .toBe("Admin E2E|Host Player 1|vs|Host Player 2|Host Player 3");
 
-  await page.getByRole("button", { name: "Undo" }).click();
+  await page.getByRole("button", { name: "Undo" }).first().click();
   const undoModal = page
     .locator(".app-modal-frame")
     .filter({ has: page.getByRole("heading", { name: "Undo match selection?" }) });
@@ -75,15 +78,19 @@ test("admin can create and undo a manual match on an open court", async ({
   await undoModal.getByRole("button", { name: "Confirm Undo" }).click();
 
   await expect
+    .poll(() => readCurrentMatchSignature(page, sessionCode), {
+      message: "expected the manual lineup to be removed from the live court",
+    })
+    .not.toBe("Admin E2E|Host Player 1|vs|Host Player 2|Host Player 3");
+  await expect
     .poll(async () => {
       const snapshot = await readSessionSnapshot(page, sessionCode);
       return snapshot.courts.filter((court) => court.currentMatch).length;
     })
-    .toBe(0);
-  await expect(page.getByRole("button", { name: "Manual" })).toBeVisible();
+    .toBe(1);
 });
 
-test("admin cannot create an invalid Mixicano manual pairing", async ({
+test("admin can manually override Mixicano pairing restrictions", async ({
   page,
 }) => {
   await signInAsAdmin(page);
@@ -107,17 +114,12 @@ test("admin cannot create an invalid Mixicano manual pairing", async ({
   await selects.nth(3).selectOption({ label: "Host Player 1 (1000)" });
   await manualModal.getByRole("button", { name: "Create Match" }).click();
 
-  await expect(
-    page.getByText("That manual pairing is invalid for current Mixed preferences.")
-  ).toBeVisible();
-  await expect(manualModal).toBeVisible();
-
   await expect
-    .poll(async () => {
-      const snapshot = await readSessionSnapshot(page, sessionCode);
-      return snapshot.courts.filter((court) => court.currentMatch).length;
+    .poll(() => readCurrentMatchSignature(page, sessionCode), {
+      message: "expected the manual override to place the requested lineup on court",
     })
-    .toBe(0);
+    .toBe("Host Player 2|Host Player 4|vs|Admin E2E|Host Player 1");
+  await expect(manualModal).toHaveCount(0);
 });
 
 test("mixed sessions reject guests without explicit gender via the guest API", async ({
@@ -193,7 +195,7 @@ test("admin can create and reshuffle valid Mixicano pairings", async ({
 
   const firstLineup = await readCurrentMatchSignature(page, sessionCode);
   expect(firstLineup).not.toBe("");
-  await page.getByRole("button", { name: "Reshuffle" }).click();
+  await page.getByRole("button", { name: "Reshuffle" }).first().click();
   const reshuffleModal = page
     .locator(".app-modal-frame")
     .filter({ has: page.getByRole("heading", { name: "Reshuffle match?" }) });
@@ -227,14 +229,13 @@ test("admin can add a community player into an active session", async ({
     selectedPlayerNames: ["Host Player 1", "Host Player 2", "Host Player 3"],
   });
 
-  await page.getByRole("button", { name: "Add Players" }).click();
-  const rosterModal = page
-    .locator("div.fixed.inset-0")
-    .filter({ has: page.getByPlaceholder("Search players...") });
-  await expect(rosterModal.getByRole("heading", { name: "Add Players" })).toBeVisible();
+  const rosterModal = await openSessionRoster(page);
   await rosterModal.getByPlaceholder("Search players...").fill("Host Player 4");
   await expect(rosterModal.getByText("Host Player 4")).toBeVisible();
-  await rosterModal.locator("button.bg-blue-600").click();
+  const playerRow = rosterModal
+    .locator("div.app-touch-pan-y")
+    .filter({ hasText: "Host Player 4" });
+  await playerRow.getByRole("button", { name: "Add" }).click();
 
   await expect
     .poll(async () => {
@@ -259,13 +260,9 @@ test("admin can add a guest into an active session", async ({ page }) => {
     selectedPlayerNames: ["Host Player 1", "Host Player 2", "Host Player 3"],
   });
 
-  await page.getByRole("button", { name: "Add Players" }).click();
-  const rosterModal = page
-    .locator("div.fixed.inset-0")
-    .filter({ has: page.getByPlaceholder("Guest name...") });
-  await expect(rosterModal.getByRole("heading", { name: "Add Players" })).toBeVisible();
-  await rosterModal.getByPlaceholder("Guest name...").fill("Late Guest");
-  await rosterModal.getByRole("button", { name: "Add" }).first().click();
+  const rosterModal = await openSessionRoster(page);
+  await rosterModal.getByPlaceholder("Guest name").fill("Late Guest");
+  await rosterModal.getByRole("button", { name: "Add Guest" }).click();
 
   await expect
     .poll(async () => {
@@ -292,20 +289,25 @@ test("admin can confirm removing a player from an active session", async ({
     selectedPlayerNames: ["Host Player 1", "Host Player 2", "Host Player 3"],
   });
 
-  const playerRow = page
-    .locator("tr")
-    .filter({ has: page.getByRole("link", { name: "Host Player 3" }) });
+  const playersModal = await openSessionPlayersModal(page);
+  await playersModal.getByPlaceholder("Search players...").fill("Host Player 3");
+  const playerRow = playersModal
+    .locator("div.app-touch-pan-y")
+    .filter({ hasText: "Host Player 3" });
+  await expect(playerRow).toBeVisible();
   await playerRow.getByRole("button", { name: "Edit" }).click();
   const removePlayerButton = page.getByRole("button", { name: "Remove Player" });
   await expect(removePlayerButton).toBeVisible();
-  await removePlayerButton.evaluate((button: HTMLButtonElement) => button.click());
+  await removePlayerButton.click();
 
   const removePlayerModal = page
     .locator(".app-modal-frame")
     .filter({ has: page.getByRole("heading", { name: "Remove player?" }) });
   await expect(removePlayerModal.getByRole("heading", { name: "Remove player?" })).toBeVisible();
   await expect(removePlayerModal.getByText("Host Player 3")).toBeVisible();
-  await removePlayerModal.getByRole("button", { name: "Confirm Remove Player" }).click();
+  await removePlayerModal
+    .getByRole("button", { name: "Confirm Remove Player" })
+    .evaluate((button: HTMLButtonElement) => button.click());
 
   await expect
     .poll(async () => {
@@ -356,11 +358,12 @@ test("admin can end and rollback the latest completed tournament", async ({
     })
     .toBe(true);
 
-  await page.getByRole("button", { name: "End Session" }).click();
+  const settingsModal = await openSessionSettings(page);
+  await settingsModal.getByRole("button", { name: "End Session" }).click();
   await expect(page.getByRole("heading", { name: "End session?" })).toBeVisible();
   await page.getByRole("button", { name: "Confirm End Session" }).click();
-  await expect(page.getByRole("heading", { name: "Final Standings" })).toBeVisible();
   await expect(page.getByText("Completed session")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Match History" })).toBeVisible();
 
   await page.getByRole("button", { name: "Back" }).click();
   await expect(page).toHaveURL(new RegExp(`/community/${hostCommunityId}$`));

@@ -1,5 +1,4 @@
 import {
-  PartnerPreference,
   PlayerGender,
   SessionMode,
   SessionType,

@@ -6,7 +6,7 @@ import {
   isValidPlayerGender,
   resolveMixedSideState,
 } from "@/lib/mixedSide";
-import { getNormalizedSessionPool, isValidSessionPool } from "@/lib/sessionPools";
+import { isValidSessionPool } from "@/lib/sessionPools";
 import { prisma } from "@/lib/prisma";
 import { getCommunityEloByUserId, withCommunityElo } from "@/lib/communityElo";
 import {

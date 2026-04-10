@@ -1,12 +1,13 @@
 "use client";
 
 import { startTransition, useCallback, useEffect, useRef, useState } from "react";
+import { getErrorMessage, type SafeJson } from "@/lib/http";
 import type { SessionData } from "@/components/session/sessionTypes";
 
 interface UseSessionDataArgs {
   code: string;
   enabled: boolean;
-  safeJson: (res: Response) => Promise<any>;
+  safeJson: SafeJson;
   setError: (message: string) => void;
 }
 
@@ -28,10 +29,10 @@ export function useSessionData({
 
       try {
         const res = await fetch(`/api/sessions/${code}`);
-        const data = await safeJson(res);
+        const data = await safeJson<SessionData | { error?: string }>(res);
         if (!res.ok) {
           if (!silent) {
-            setError(data.error || "Failed to load session");
+            setError(getErrorMessage(data, "Failed to load session"));
           }
           return;
         }

@@ -216,7 +216,7 @@ export function LiveMatchCard({
     blurTimerId: null,
     restoreTimerId: null,
   });
-  const [activeActionPlayerId, setActiveActionPlayerId] = useState<string | null>(
+  const [openActionPlayerId, setOpenActionPlayerId] = useState<string | null>(
     null
   );
   const isParticipant = [
@@ -251,6 +251,11 @@ export function LiveMatchCard({
     isAdmin && match.status === MatchStatus.IN_PROGRESS;
   const actionDisabled =
     reshufflingCourtPlayerId !== null || replacingCourtPlayerId !== null;
+  const forcedActionPlayerId =
+    reshufflingCourtPlayerId ?? replacingCourtPlayerId;
+  const activeActionPlayerId = forcedActionPlayerId
+    ? `${match.id}:${forcedActionPlayerId}`
+    : openActionPlayerId;
   const clearScoreInputRestoreTimers = useCallback(() => {
     const restoreState = scoreInputScrollRestoreRef.current;
     if (restoreState.blurTimerId !== null) {
@@ -404,12 +409,12 @@ export function LiveMatchCard({
         return;
       }
 
-      setActiveActionPlayerId(null);
+      setOpenActionPlayerId(null);
     };
 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
-        setActiveActionPlayerId(null);
+        setOpenActionPlayerId(null);
       }
     };
 
@@ -422,29 +427,20 @@ export function LiveMatchCard({
     };
   }, [activeActionPlayerId]);
 
-  useEffect(() => {
-    const activePlayerId = reshufflingCourtPlayerId ?? replacingCourtPlayerId;
-    if (!activePlayerId) {
-      return;
-    }
-
-    setActiveActionPlayerId(`${match.id}:${activePlayerId}`);
-  }, [match.id, replacingCourtPlayerId, reshufflingCourtPlayerId]);
-
   const handleTogglePlayerAction = (actionKey: string) => {
     if (actionDisabled) return;
-    setActiveActionPlayerId((current) =>
+    setOpenActionPlayerId((current) =>
       current === actionKey ? null : actionKey
     );
   };
 
   const handleReshuffleWithoutPlayer = (userId: string) => {
-    setActiveActionPlayerId(`${match.id}:${userId}`);
+    setOpenActionPlayerId(`${match.id}:${userId}`);
     onReshuffleWithoutPlayer(userId);
   };
 
   const handleReplacePlayer = (userId: string) => {
-    setActiveActionPlayerId(`${match.id}:${userId}`);
+    setOpenActionPlayerId(`${match.id}:${userId}`);
     onReplacePlayer(userId);
   };
 

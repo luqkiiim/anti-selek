@@ -2,6 +2,7 @@
 
 import { getCourtDisplayLabel } from "@/lib/courtLabels";
 import { useState } from "react";
+import { getErrorMessage } from "@/lib/http";
 import {
   applyGeneratedMatches,
   applyQueuedMatch,
@@ -12,6 +13,15 @@ import type {
   CourtActionDraft,
   UseSessionMatchActionsDependencies,
 } from "./sessionMatchActionTypes";
+
+type GeneratedMatchPayload = Parameters<typeof applyGeneratedMatches>[1][number];
+type QueuedMatchPayload = Parameters<typeof applyQueuedMatch>[1];
+
+interface UndoCourtMatchResponse {
+  error?: string;
+  queuedMatch?: QueuedMatchPayload | null;
+  autoAssignedMatch?: GeneratedMatchPayload;
+}
 
 export function useSessionCourtConfirmActions({
   code,
@@ -88,7 +98,9 @@ export function useSessionCourtConfirmActions({
     setReshufflingCourtPlayerId(userId);
     setError("");
     try {
-      const { res, data } = await postGenerateMatchAction({
+      const { res, data } = await postGenerateMatchAction<GeneratedMatchPayload & {
+        error?: string;
+      }>({
         code,
         safeJson,
         body: {
@@ -102,7 +114,7 @@ export function useSessionCourtConfirmActions({
         patchSessionData((current) => applyGeneratedMatches(current, [data]));
         scheduleSessionRefresh();
       } else {
-        setError(data.error || "Failed to reshuffle match");
+        setError(getErrorMessage(data, "Failed to reshuffle match"));
       }
     } catch (err) {
       console.error(err);
@@ -116,7 +128,9 @@ export function useSessionCourtConfirmActions({
     setReplacingCourtPlayerId(userId);
     setError("");
     try {
-      const { res, data } = await postGenerateMatchAction({
+      const { res, data } = await postGenerateMatchAction<GeneratedMatchPayload & {
+        error?: string;
+      }>({
         code,
         safeJson,
         body: {
@@ -129,7 +143,7 @@ export function useSessionCourtConfirmActions({
         patchSessionData((current) => applyGeneratedMatches(current, [data]));
         scheduleSessionRefresh();
       } else {
-        setError(data.error || "Failed to replace player");
+        setError(getErrorMessage(data, "Failed to replace player"));
       }
     } catch (err) {
       console.error(err);
@@ -146,7 +160,9 @@ export function useSessionCourtConfirmActions({
       setReshufflingCourtId(courtActionDraft.courtId);
       setError("");
       try {
-        const { res, data } = await postGenerateMatchAction({
+        const { res, data } = await postGenerateMatchAction<GeneratedMatchPayload & {
+          error?: string;
+        }>({
           code,
           safeJson,
           body: {
@@ -160,7 +176,7 @@ export function useSessionCourtConfirmActions({
           setCourtActionDraft(null);
           scheduleSessionRefresh();
         } else {
-          setError(data.error || "Failed to reshuffle match");
+          setError(getErrorMessage(data, "Failed to reshuffle match"));
         }
       } catch (err) {
         console.error(err);
@@ -175,7 +191,7 @@ export function useSessionCourtConfirmActions({
     setUndoingCourtId(courtActionDraft.courtId);
     setError("");
     try {
-      const { res, data } = await postGenerateMatchAction({
+      const { res, data } = await postGenerateMatchAction<UndoCourtMatchResponse>({
         code,
         safeJson,
         body: {
@@ -197,7 +213,7 @@ export function useSessionCourtConfirmActions({
         setCourtActionDraft(null);
         scheduleSessionRefresh();
       } else {
-        setError(data.error || "Failed to undo match");
+        setError(getErrorMessage(data, "Failed to undo match"));
       }
     } catch (err) {
       console.error(err);

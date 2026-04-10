@@ -45,27 +45,19 @@ export function SessionPreferenceEditorPortal({
   onRequestRenameGuest,
   onRemovePlayer,
 }: SessionPreferenceEditorPortalProps) {
-  if (
-    !openPreferenceEditor ||
-    !activePreferencePlayer ||
-    !isAdmin ||
-    isCompletedSession ||
-    typeof document === "undefined"
-  ) {
-    return null;
-  }
-
   const panelRef = useRef<HTMLDivElement | null>(null);
-  const mixedSideOption = getMixedSideOverrideOptionForGender(
-    activePreferencePlayer.gender
-  );
-  const poolOptions = getSessionPoolOptions({
-    poolsEnabled,
-    poolAName,
-    poolBName,
-  });
+  const canRender =
+    !!openPreferenceEditor &&
+    !!activePreferencePlayer &&
+    isAdmin &&
+    !isCompletedSession &&
+    typeof document !== "undefined";
 
   useEffect(() => {
+    if (!canRender) {
+      return;
+    }
+
     const handlePointerDown = (event: PointerEvent) => {
       if (
         panelRef.current &&
@@ -84,7 +76,20 @@ export function SessionPreferenceEditorPortal({
       window.clearTimeout(attachListenerTimeout);
       document.removeEventListener("pointerdown", handlePointerDown);
     };
-  }, [onClose]);
+  }, [canRender, onClose]);
+
+  if (!canRender || !openPreferenceEditor || !activePreferencePlayer) {
+    return null;
+  }
+
+  const mixedSideOption = getMixedSideOverrideOptionForGender(
+    activePreferencePlayer.gender
+  );
+  const poolOptions = getSessionPoolOptions({
+    poolsEnabled,
+    poolAName,
+    poolBName,
+  });
 
   return createPortal(
     <div

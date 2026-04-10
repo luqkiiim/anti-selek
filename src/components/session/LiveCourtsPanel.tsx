@@ -367,12 +367,12 @@ export function LiveCourtsPanel({
     };
 
     if (!sourceRect || !targetRect || prefersReducedMotion) {
-      startCourtPulse();
+      timers.push(setTimeout(startCourtPulse, 0));
       if (shouldAnimateQueuedReplacement) {
-        setQueuedPromotionState("entering");
+        timers.push(setTimeout(() => setQueuedPromotionState("entering"), 0));
         timers.push(setTimeout(clearQueuedAnimationState, 420));
       } else {
-        clearQueuedAnimationState();
+        timers.push(setTimeout(clearQueuedAnimationState, 0));
       }
       timers.push(setTimeout(onQueuePromotionAnimationComplete, 520));
 
@@ -383,16 +383,16 @@ export function LiveCourtsPanel({
       };
     }
 
-    setQueuedPromotionState("suppressed");
-    setGhostPromotion({
-      id: queuePromotionAnimation.id,
-      match: queuePromotionAnimation.sourceQueuedMatch,
-      sourceRect,
-      targetRect,
-      flying: false,
-    });
-
     firstFrameId = window.requestAnimationFrame(() => {
+      setQueuedPromotionState("suppressed");
+      setGhostPromotion({
+        id: queuePromotionAnimation.id,
+        match: queuePromotionAnimation.sourceQueuedMatch,
+        sourceRect,
+        targetRect,
+        flying: false,
+      });
+
       secondFrameId = window.requestAnimationFrame(() => {
         setGhostPromotion((current) =>
           current?.id === queuePromotionAnimation.id

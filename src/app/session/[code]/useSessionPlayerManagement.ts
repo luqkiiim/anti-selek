@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { getErrorMessage, type SafeJson } from "@/lib/http";
 import {
   isValidMixedSide,
   isValidPartnerPreference,
@@ -19,7 +20,10 @@ import {
   applyPlayerPreferenceUpdate,
   applyPlayerRemoval,
   applyQueuedMatch,
+  type GuestPayload,
   mergeSessionSnapshot,
+  type SessionPlayerPayload,
+  type SessionSnapshotLike,
 } from "./sessionDataMutations";
 import {
   CommunityPlayerStatus,
@@ -33,10 +37,22 @@ import { getSessionModeLabel } from "@/lib/sessionModeLabels";
 interface UseSessionPlayerManagementArgs {
   code: string;
   sessionData: SessionData | null;
-  safeJson: (res: Response) => Promise<any>;
+  safeJson: SafeJson;
   patchSessionData: (updater: (current: SessionData) => SessionData) => void;
   scheduleSessionRefresh: (delay?: number) => void;
   setError: (message: string) => void;
+}
+
+interface PausePlayerResponse {
+  error?: string;
+  ladderEntryAt?: string;
+  queuedMatchAffected?: boolean;
+  queuedMatch?: SessionData["queuedMatch"];
+}
+
+interface RenameGuestResponse {
+  error?: string;
+  name?: string;
 }
 
 function parseCommunityPlayers(data: unknown): CommunityUser[] {
@@ -189,7 +205,7 @@ export function useSessionPlayerManagement({
       const res = await fetch(
         `/api/communities/${sessionData.communityId}/members`
       );
-      const data = await safeJson(res);
+      const data = await safeJson<unknown>(res);
       if (res.ok) {
         setCommunityPlayers(parseCommunityPlayers(data));
       }
@@ -273,7 +289,7 @@ export function useSessionPlayerManagement({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ userId, isPaused: !currentPaused }),
       });
-      const data = await safeJson(res);
+      const data = await safeJson<PausePlayerResponse>(res);
       if (res.ok) {
         patchSessionData((current) => {
           let updated = applyPlayerPaused(
@@ -283,7 +299,7 @@ export function useSessionPlayerManagement({
             typeof data.ladderEntryAt === "string" ? data.ladderEntryAt : undefined
           );
 
-          if (data.queuedMatchAffected) {
+          if (data.queuedMatchAffected === true) {
             updated = applyQueuedMatch(updated, data.queuedMatch ?? null);
           }
 
@@ -291,7 +307,7 @@ export function useSessionPlayerManagement({
         });
         scheduleSessionRefresh();
       } else {
-        setError(data.error || "Failed to update player status");
+        setError(getErrorMessage(data, "Failed to update player status"));
       }
     } catch (err) {
       console.error(err);
@@ -322,9 +338,9 @@ export function useSessionPlayerManagement({
           body: JSON.stringify({ name: nextName }),
         }
       );
-      const data = await safeJson(res);
+      const data = await safeJson<RenameGuestResponse>(res);
       if (!res.ok) {
-        setError(data.error || "Failed to rename guest");
+        setError(getErrorMessage(data, "Failed to rename guest"));
         return;
       }
 
@@ -357,9 +373,9 @@ export function useSessionPlayerManagement({
           method: "DELETE",
         }
       );
-      const data = await safeJson(res);
+      const data = await safeJson<{ error?: string }>(res);
       if (!res.ok) {
-        setError(data.error || "Failed to remove player");
+        setError(getErrorMessage(data, "Failed to remove player"));
         return;
       }
 
@@ -388,12 +404,12 @@ export function useSessionPlayerManagement({
       });
 
       if (adminRes.ok) {
-        const data = await safeJson(adminRes);
+        const data = await safeJson<SessionSnapshotLike>(adminRes);
         patchSessionData((current) => mergeSessionSnapshot(current, data));
         scheduleSessionRefresh();
       } else {
-        const data = await safeJson(adminRes);
-        setError(data.error || "Failed to add player");
+        const data = await safeJson<{ error?: string }>(adminRes);
+        setError(getErrorMessage(data, "Failed to add player"));
       }
     } catch (err) {
       console.error(err);
@@ -435,9 +451,9 @@ export function useSessionPlayerManagement({
           pool: sessionData?.poolsEnabled ? rosterPool : SessionPool.A,
         }),
       });
-      const data = await safeJson(res);
+      const data = await safeJson<GuestPayload & { error?: string }>(res);
       if (!res.ok) {
-        setError(data.error || "Failed to add guest");
+        setError(getErrorMessage(data, "Failed to add guest"));
         return;
       }
 
@@ -473,9 +489,9 @@ export function useSessionPlayerManagement({
           }),
         }
       );
-      const data = await safeJson(res);
+      const data = await safeJson<SessionPlayerPayload & { error?: string }>(res);
       if (!res.ok) {
-        setError(data.error || "Failed to update preference");
+        setError(getErrorMessage(data, "Failed to update preference"));
         return;
       }
       patchSessionData((current) => applyPlayerPreferenceUpdate(current, data));

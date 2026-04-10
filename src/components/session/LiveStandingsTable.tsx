@@ -14,7 +14,6 @@ interface PlayerStats {
 
 interface LiveStandingsTableProps {
   sessionType: string;
-  sessionStatus: string;
   players: Player[];
   currentUserId: string;
   pointDiffByUserId: Map<string, number>;
@@ -80,7 +79,6 @@ function getRankBadgeClass(rank: number) {
 
 export function LiveStandingsTable({
   sessionType,
-  sessionStatus,
   players,
   currentUserId,
   pointDiffByUserId,

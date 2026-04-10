@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { FlashMessage } from "@/components/ui/chrome";
@@ -13,7 +12,6 @@ import { CommunityPlayersPanel } from "@/components/community-admin/CommunityPla
 import { CommunitySettingsPanel } from "@/components/community-admin/CommunitySettingsPanel";
 import { CreateCommunityPlayerModal } from "@/components/community-admin/CreateCommunityPlayerModal";
 import type { CommunityAdminSection } from "@/components/community-admin/communityAdminTypes";
-import { PlayerGender } from "@/types/enums";
 import { useCommunityAdminPage } from "./useCommunityAdminPage";
 
 const tabs: Array<{

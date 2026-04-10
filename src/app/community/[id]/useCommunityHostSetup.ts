@@ -6,7 +6,6 @@ import type {
   CommunityPageMember,
 } from "@/components/community/communityTypes";
 import {
-  getMixedSideOverrideOptionForGender,
   resolveMixedSideState,
 } from "@/lib/mixedSide";
 import { safeJson } from "./communityPageApi";

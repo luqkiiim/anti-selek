@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { PlayerPickerSheet } from "@/components/ui/PlayerPickerSheet";
 import { SearchField } from "@/components/ui/SearchField";
 import { SessionPool } from "@/types/enums";
@@ -46,13 +46,11 @@ export function SessionPlayersModal({
 }: SessionPlayersModalProps) {
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<PlayerFilter>("all");
-
-  useEffect(() => {
-    if (!open) {
-      setSearch("");
-      setFilter("all");
-    }
-  }, [open]);
+  const handleClose = () => {
+    setSearch("");
+    setFilter("all");
+    onClose();
+  };
 
   const counts = useMemo(() => getPlayerFilterCounts(players), [players]);
 
@@ -86,7 +84,7 @@ export function SessionPlayersModal({
       open={open}
       title="Players"
       subtitle="Search, pause, unpause, or edit player preferences."
-      onClose={onClose}
+      onClose={handleClose}
       toolbar={
         <div className="space-y-4">
           <SearchField
@@ -121,7 +119,7 @@ export function SessionPlayersModal({
       }
       footer={
         <div className="flex justify-end">
-          <button type="button" onClick={onClose} className="app-button-primary">
+          <button type="button" onClick={handleClose} className="app-button-primary">
             Done
           </button>
         </div>

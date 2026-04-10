@@ -1,15 +1,18 @@
 "use client";
 
 import { useCallback, useState } from "react";
+import { getErrorMessage } from "@/lib/http";
 import {
   applyGeneratedMatches,
   applyQueuedMatch,
   applyScoreApproval,
   applyScoreReopen,
   applyScoreSubmission,
+  type MatchPayload,
 } from "./sessionDataMutations";
 import type {
   MatchScores,
+  QueuedMatch,
 } from "@/components/session/sessionTypes";
 import { MatchStatus } from "@/types/enums";
 import type {
@@ -19,8 +22,13 @@ import type {
 
 const emptyMatchScores = (): MatchScores => ({});
 
+interface MatchActionResponse extends MatchPayload {
+  error?: string;
+  queuedMatch?: QueuedMatch | null;
+  autoAssignedMatch?: MatchPayload;
+}
+
 export function useSessionScoreActions({
-  code,
   sessionData,
   safeJson,
   patchSessionData,
@@ -96,7 +104,7 @@ export function useSessionScoreActions({
           team2Score: parsedScores.team2Score,
         }),
       });
-      const data = await safeJson(res);
+      const data = await safeJson<MatchActionResponse>(res);
       if (res.ok) {
         setMatchScores((prev) => {
           const nextScores = { ...prev };
@@ -124,6 +132,7 @@ export function useSessionScoreActions({
         if (
           data.status === MatchStatus.COMPLETED &&
           data.autoAssignedMatch &&
+          typeof data.autoAssignedMatch.courtId === "string" &&
           sourceQueuedMatch
         ) {
           setQueuePromotionAnimation({
@@ -135,7 +144,7 @@ export function useSessionScoreActions({
         }
         scheduleSessionRefresh();
       } else {
-        setError(data.error || "Failed to submit score");
+        setError(getErrorMessage(data, "Failed to submit score"));
       }
     } catch (err) {
       console.error(err);
@@ -161,7 +170,7 @@ export function useSessionScoreActions({
           team2Score: overrideTeam2,
         }),
       });
-      const data = await safeJson(res);
+      const data = await safeJson<MatchActionResponse>(res);
       if (res.ok) {
         patchSessionData((current) => {
           const nextState = applyScoreApproval(current, data);
@@ -173,7 +182,11 @@ export function useSessionScoreActions({
             data.queuedMatch ?? null
           );
         });
-        if (data.autoAssignedMatch && sourceQueuedMatch) {
+        if (
+          data.autoAssignedMatch &&
+          typeof data.autoAssignedMatch.courtId === "string" &&
+          sourceQueuedMatch
+        ) {
           setQueuePromotionAnimation({
             id: `${data.autoAssignedMatch.id}:${Date.now()}`,
             sourceQueuedMatch,
@@ -183,7 +196,7 @@ export function useSessionScoreActions({
         }
         scheduleSessionRefresh();
       } else {
-        setError(data.error || "Failed to approve score");
+        setError(getErrorMessage(data, "Failed to approve score"));
       }
     } catch (err) {
       console.error(err);
@@ -197,7 +210,7 @@ export function useSessionScoreActions({
       const res = await fetch(`/api/matches/${matchId}/reopen`, {
         method: "POST",
       });
-      const data = await safeJson(res);
+      const data = await safeJson<MatchActionResponse>(res);
       if (res.ok) {
         setMatchScores((prev) => {
           const nextScores = { ...prev };
@@ -207,7 +220,7 @@ export function useSessionScoreActions({
         patchSessionData((current) => applyScoreReopen(current, data));
         scheduleSessionRefresh();
       } else {
-        setError(data.error || "Failed to reopen score entry");
+        setError(getErrorMessage(data, "Failed to reopen score entry"));
       }
     } catch (err) {
       console.error(err);

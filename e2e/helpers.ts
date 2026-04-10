@@ -5,6 +5,7 @@ export const adminCredentials = {
   email: "admin-e2e@example.com",
   password: "Password123!",
 };
+const adminPlayerName = "Admin E2E";
 
 export const claimRequesterCredentials = {
   email: "claim-requester@example.com",
@@ -118,32 +119,39 @@ export async function createStartedHostSession(
     page.getByRole("heading", { name: "E2E Host Club" })
   ).toBeVisible();
 
-  await page.getByRole("button", { name: "Host Tournament" }).click();
-  await page.getByPlaceholder("Tournament Name").fill(sessionName);
+  await page.getByRole("button", { name: "Open Host Setup" }).click();
+  await page.getByLabel("Name").fill(sessionName);
   await page
     .getByRole("button", {
-      name: sessionType === SessionType.ELO ? "Ratings Format" : "Points Format",
+      name: getSessionTypeButtonName(sessionType),
       exact: true,
     })
     .click();
   await page
     .getByRole("button", {
-      name: sessionMode === SessionMode.MIXICANO ? "Mixed" : "Open",
+      name: getSessionModeButtonName(sessionMode),
       exact: true,
     })
     .click();
   await page.locator("select").selectOption(String(courtCount));
 
-  await page.getByRole("button", { name: "Add Players" }).click();
+  await page.getByRole("button", { name: "Choose" }).click();
   const playersModal = page
-    .locator("div.fixed.inset-0")
+    .getByRole("dialog")
     .filter({ has: page.getByRole("heading", { name: "Add Players" }) });
   await expect(playersModal.getByRole("heading", { name: "Add Players" })).toBeVisible();
 
-  if (selectedPlayerNames && selectedPlayerNames.length > 0) {
-    for (const playerName of selectedPlayerNames) {
+  const playerNamesToSelect =
+    selectedPlayerNames && selectedPlayerNames.length > 0
+      ? Array.from(new Set([adminPlayerName, ...selectedPlayerNames]))
+      : null;
+
+  if (playerNamesToSelect) {
+    for (const playerName of playerNamesToSelect) {
       await playersModal
-        .getByRole("button", { name: new RegExp(`^${escapeRegex(playerName)}\\s`) })
+        .getByRole("button", {
+          name: new RegExp(`^${escapeRegex(playerName)}\\b`),
+        })
         .click();
     }
   } else {
@@ -164,6 +172,37 @@ export async function createStartedHostSession(
   }
 
   return sessionCode;
+}
+
+export async function openSessionSettings(page: Page) {
+  await page.getByRole("button", { name: "Settings" }).click();
+  const settingsModal = page
+    .locator(".app-modal-frame")
+    .filter({ has: page.getByRole("heading", { name: "Session settings" }) });
+  await expect(
+    settingsModal.getByRole("heading", { name: "Session settings" })
+  ).toBeVisible();
+  return settingsModal;
+}
+
+export async function openSessionRoster(page: Page) {
+  const settingsModal = await openSessionSettings(page);
+  await settingsModal.getByRole("button", { name: "Add Players" }).click();
+
+  const rosterModal = page
+    .getByRole("dialog")
+    .filter({ has: page.getByRole("heading", { name: "Add Players" }) });
+  await expect(rosterModal.getByRole("heading", { name: "Add Players" })).toBeVisible();
+  return rosterModal;
+}
+
+export async function openSessionPlayersModal(page: Page) {
+  await page.getByRole("button", { name: "Players" }).click();
+  const playersModal = page
+    .getByRole("dialog")
+    .filter({ has: page.getByRole("heading", { name: "Players" }) });
+  await expect(playersModal.getByRole("heading", { name: "Players" })).toBeVisible();
+  return playersModal;
 }
 
 export async function readSessionSnapshot(
@@ -309,11 +348,8 @@ export async function submitAndApproveVisibleMatch(
   await scoreInputs.nth(0).fill(String(team1Score));
   await scoreInputs.nth(1).fill(String(team2Score));
   await page.getByRole("button", { name: "Submit Score" }).click();
-
-  await expect(
-    page.getByRole("heading", { name: "Confirm score submission" })
-  ).toBeVisible();
-  await page.getByRole("button", { name: "Confirm Submission" }).click();
+  await expect(page.getByRole("button", { name: "Confirm", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Confirm", exact: true }).click();
   await expect(page.getByText("Awaiting Confirmation")).toBeVisible();
   await page.getByRole("button", { name: "Confirm Results" }).click();
 }
@@ -337,6 +373,23 @@ export async function createManualMatchWithPlayers(
 
   await manualModal.getByRole("button", { name: "Create Match" }).click();
   await expect(manualModal).toHaveCount(0);
+}
+
+function getSessionTypeButtonName(sessionType: SessionType) {
+  switch (sessionType) {
+    case SessionType.ELO:
+      return "Ratings";
+    case SessionType.LADDER:
+      return "Ladder";
+    case SessionType.RACE:
+      return "Race";
+    default:
+      return "Points";
+  }
+}
+
+function getSessionModeButtonName(sessionMode: SessionMode) {
+  return sessionMode === SessionMode.MIXICANO ? "Mixed" : "Open";
 }
 
 function escapeRegex(value: string) {

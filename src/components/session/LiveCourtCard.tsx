@@ -3,7 +3,7 @@
 import type { Ref } from "react";
 import { getCourtDisplayLabel } from "@/lib/courtLabels";
 import { MatchStatus, SessionStatus } from "@/types/enums";
-import type { Court, Match, MatchScores } from "./sessionTypes";
+import type { Court, MatchScores } from "./sessionTypes";
 import { LiveMatchCard } from "./LiveMatchCard";
 
 interface LiveCourtCardProps {

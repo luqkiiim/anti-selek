@@ -10,6 +10,7 @@ import {
 } from "react";
 import { useSession } from "next-auth/react";
 import { useParams, useRouter } from "next/navigation";
+import { getErrorMessage, safeJson } from "@/lib/http";
 import { FlashMessage } from "@/components/ui/chrome";
 import { LiveCourtsPanel } from "@/components/session/LiveCourtsPanel";
 import { SessionMobileSectionNav } from "@/components/session/SessionMobileSectionNav";
@@ -28,6 +29,7 @@ import { SessionStatus } from "@/types/enums";
 import {
   applyCourtLabelUpdates,
   mergeSessionSnapshot,
+  type SessionSnapshotLike,
 } from "./sessionDataMutations";
 import { buildSessionViewModel } from "./sessionViewModel";
 import { useSessionData } from "./useSessionData";
@@ -58,6 +60,28 @@ const COMPLETED_MOBILE_SECTIONS: Array<{
   { id: "session", label: "Session" },
   { id: "results", label: "Results" },
 ];
+
+interface SessionUserResponse {
+  user?: CurrentUser;
+  error?: string;
+}
+
+type SessionSnapshotResponse = SessionSnapshotLike & {
+  error?: string;
+};
+
+interface SessionCodeResponse {
+  code?: string;
+  error?: string;
+}
+
+interface CourtLabelUpdatesResponse {
+  error?: string;
+  courts?: Array<{
+    id: string;
+    label?: string | null;
+  }>;
+}
 
 export default function SessionPage() {
   const { data: session, status } = useSession();
@@ -94,29 +118,19 @@ export default function SessionPage() {
   const [mobileSection, setMobileSection] =
     useState<SessionMobileSection>("session");
 
-  const safeJson = useCallback(async (res: Response) => {
-    const text = await res.text();
-    try {
-      return text ? JSON.parse(text) : {};
-    } catch {
-      console.error("Failed to parse JSON:", text);
-      return { error: "Invalid server response" };
-    }
-  }, []);
-
   const fetchUser = useCallback(async () => {
     try {
       const res = await fetch("/api/user/me");
       if (!res.ok) return;
 
-      const data = await safeJson(res);
+      const data = await safeJson<SessionUserResponse>(res);
       if (data.user) {
-        setUser(data.user as CurrentUser);
+        setUser(data.user);
       }
     } catch (err) {
       console.error(err);
     }
-  }, [safeJson]);
+  }, []);
 
   const { sessionData, patchSessionData, scheduleSessionRefresh } =
     useSessionData({
@@ -146,7 +160,6 @@ export default function SessionPage() {
     rosterPool,
     guestInitialElo,
     addingGuest,
-    savingPreferencesFor,
     togglingPausePlayerId,
     guestRenameDraft,
     guestRenameInput,
@@ -200,12 +213,12 @@ export default function SessionPage() {
     try {
       const res = await fetch(`/api/sessions/${code}/start`, { method: "POST" });
       if (res.ok) {
-        const data = await safeJson(res);
+        const data = await safeJson<SessionSnapshotResponse>(res);
         patchSessionData((current) => mergeSessionSnapshot(current, data));
         scheduleSessionRefresh();
       } else {
-        const data = await safeJson(res);
-        setError(data.error || "Failed to start session");
+        const data = await safeJson<SessionSnapshotResponse>(res);
+        setError(getErrorMessage(data, "Failed to start session"));
       }
     } catch (err) {
       console.error(err);
@@ -230,13 +243,13 @@ export default function SessionPage() {
     try {
       const res = await fetch(`/api/sessions/${code}/end`, { method: "POST" });
       if (res.ok) {
-        const data = await safeJson(res);
+        const data = await safeJson<SessionSnapshotResponse>(res);
         setShowEndSessionConfirm(false);
         patchSessionData((current) => mergeSessionSnapshot(current, data));
         scheduleSessionRefresh();
       } else {
-        const data = await safeJson(res);
-        setError(data.error || "Failed to end session");
+        const data = await safeJson<SessionSnapshotResponse>(res);
+        setError(getErrorMessage(data, "Failed to end session"));
       }
     } catch (err) {
       console.error(err);
@@ -263,9 +276,9 @@ export default function SessionPage() {
 
     try {
       const res = await fetch(`/api/sessions/${code}/reset`, { method: "POST" });
-      const data = await safeJson(res);
+      const data = await safeJson<SessionSnapshotResponse>(res);
       if (!res.ok) {
-        setError(data.error || "Failed to reset test session");
+        setError(getErrorMessage(data, "Failed to reset test session"));
         return;
       }
 
@@ -278,7 +291,7 @@ export default function SessionPage() {
     } finally {
       setResettingTestSession(false);
     }
-  }, [code, patchSessionData, safeJson, scheduleSessionRefresh]);
+  }, [code, patchSessionData, scheduleSessionRefresh]);
 
   const openCreateRealSessionConfirm = useCallback(() => {
     setError("");
@@ -299,9 +312,14 @@ export default function SessionPage() {
       const res = await fetch(`/api/sessions/${code}/create-real`, {
         method: "POST",
       });
-      const data = await safeJson(res);
+      const data = await safeJson<SessionCodeResponse>(res);
       if (!res.ok) {
-        setError(data.error || "Failed to create real session");
+        setError(getErrorMessage(data, "Failed to create real session"));
+        return;
+      }
+
+      if (typeof data.code !== "string") {
+        setError("Failed to create real session");
         return;
       }
 
@@ -313,7 +331,7 @@ export default function SessionPage() {
     } finally {
       setCreatingRealSession(false);
     }
-  }, [code, router, safeJson]);
+  }, [code, router]);
 
   const openDeleteTestConfirm = useCallback(() => {
     setError("");
@@ -334,9 +352,9 @@ export default function SessionPage() {
       const res = await fetch(`/api/sessions/${code}/delete`, {
         method: "DELETE",
       });
-      const data = await safeJson(res);
+      const data = await safeJson<SessionCodeResponse>(res);
       if (!res.ok) {
-        setError(data.error || "Failed to delete test session");
+        setError(getErrorMessage(data, "Failed to delete test session"));
         return;
       }
 
@@ -350,7 +368,7 @@ export default function SessionPage() {
     } finally {
       setDeletingTestSession(false);
     }
-  }, [code, router, safeJson, sessionData?.communityId]);
+  }, [code, router, sessionData?.communityId]);
 
   const handleBack = useCallback(() => {
     if (typeof window !== "undefined" && window.history.length > 1) {
@@ -502,10 +520,10 @@ export default function SessionPage() {
           })),
         }),
       });
-      const data = await safeJson(res);
+      const data = await safeJson<CourtLabelUpdatesResponse>(res);
 
       if (!res.ok) {
-        setError(data.error || "Failed to update court labels");
+        setError(getErrorMessage(data, "Failed to update court labels"));
         return;
       }
 
@@ -525,7 +543,6 @@ export default function SessionPage() {
     courtLabelDrafts,
     hasCourtLabelChanges,
     patchSessionData,
-    safeJson,
     scheduleSessionRefresh,
     sessionData,
   ]);
@@ -809,6 +826,7 @@ export default function SessionPage() {
   }, [
     clearProgrammaticPagerSync,
     isPlayerPickerOpen,
+    mobileSections,
     settleMobilePagerToNearestSection,
   ]);
 
@@ -1072,7 +1090,6 @@ export default function SessionPage() {
 
                 <LiveStandingsTable
                   sessionType={sessionData.type}
-                  sessionStatus={sessionData.status}
                   players={sessionView.sortedPlayers}
                   currentUserId={currentUserId}
                   pointDiffByUserId={sessionView.pointDiffByUserId}
@@ -1114,6 +1131,7 @@ export default function SessionPage() {
       />
 
       <SessionPlayersModal
+        key={showPlayersModal ? "session-players-open" : "session-players-closed"}
         open={showPlayersModal}
         players={sessionData.players}
         currentUserId={currentUserId}

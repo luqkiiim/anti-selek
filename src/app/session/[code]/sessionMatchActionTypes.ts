@@ -1,11 +1,12 @@
 "use client";
 
+import type { SafeJson } from "@/lib/http";
 import type { QueuedMatch, SessionData } from "@/components/session/sessionTypes";
 
 export interface UseSessionMatchActionsDependencies {
   code: string;
   sessionData: SessionData | null;
-  safeJson: (res: Response) => Promise<any>;
+  safeJson: SafeJson;
   patchSessionData: (updater: (current: SessionData) => SessionData) => void;
   scheduleSessionRefresh: (delay?: number) => void;
   setError: (message: string) => void;

@@ -66,15 +66,6 @@ async function waitForServer(url, timeoutMs = 120_000) {
   throw new Error(`Server not ready: ${url}`);
 }
 
-async function isServerReady(url) {
-  try {
-    const response = await fetch(url);
-    return response.ok;
-  } catch {
-    return false;
-  }
-}
-
 async function prepareReviewDatabase() {
   console.log("Preparing review database copy...");
   await fs.rm(reviewDb, { force: true });

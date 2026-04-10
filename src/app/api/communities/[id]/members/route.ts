@@ -10,7 +10,6 @@ import {
 } from "@/lib/mixedSide";
 import {
   CommunityPlayerStatus,
-  MixedSide,
   PlayerGender,
 } from "@/types/enums";
 
