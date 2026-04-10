@@ -138,6 +138,37 @@ function usePrefersReducedMotion() {
   return prefersReducedMotion;
 }
 
+function QueuePromotionGhostTeamNames({
+  players,
+  align = "left",
+}: {
+  players: [QueuedMatch["team1User1"], QueuedMatch["team1User2"]];
+  align?: "left" | "right";
+}) {
+  const textAlignClass = align === "right" ? "text-right" : "text-left";
+
+  return (
+    <div className={`min-w-0 space-y-1 ${textAlignClass}`}>
+      {players.map((player) => (
+        <p
+          key={player.id}
+          className="truncate text-[14px] font-bold leading-tight text-gray-900 sm:text-base md:text-[1.35rem] xl:text-base"
+        >
+          {player.name}
+        </p>
+      ))}
+    </div>
+  );
+}
+
+function QueuePromotionGhostScoreSlot() {
+  return (
+    <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-gray-100 bg-white text-lg font-black tabular-nums text-gray-300 sm:h-11 sm:w-11 sm:text-xl md:h-14 md:w-14 md:text-[2rem] xl:h-11 xl:w-11 xl:text-xl">
+      -
+    </div>
+  );
+}
+
 function QueuePromotionGhost({ ghost }: { ghost: PromotionGhostState }) {
   if (typeof document === "undefined") {
     return null;
@@ -167,27 +198,17 @@ function QueuePromotionGhost({ ghost }: { ghost: PromotionGhostState }) {
           `transform ${GHOST_MOVE_MS}ms cubic-bezier(0.22, 1, 0.36, 1), opacity ${GHOST_FADE_MS}ms ease`,
       }}
     >
-      <div className="h-full rounded-2xl border border-blue-200 bg-white/96 p-3 shadow-[0_24px_60px_-28px_rgba(13,63,136,0.5)] backdrop-blur-sm">
-        <div className="grid h-full grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2.5">
-          <div className="min-w-0 space-y-2 text-left">
-            <p className="truncate text-[14px] font-bold leading-tight text-gray-900">
-              {ghost.match.team1User1.name}
-            </p>
-            <p className="truncate text-[14px] font-bold leading-tight text-gray-900">
-              {ghost.match.team1User2.name}
-            </p>
-          </div>
-          <span className="rounded-full border border-blue-200 bg-white px-2 py-1 text-[10px] font-black uppercase tracking-[0.24em] text-blue-700">
-            Next
-          </span>
-          <div className="min-w-0 space-y-2 text-right">
-            <p className="truncate text-[14px] font-bold leading-tight text-gray-900">
-              {ghost.match.team2User1.name}
-            </p>
-            <p className="truncate text-[14px] font-bold leading-tight text-gray-900">
-              {ghost.match.team2User2.name}
-            </p>
-          </div>
+      <div className="h-full rounded-2xl border border-blue-100 bg-blue-50/40 p-3 shadow-[0_24px_60px_-28px_rgba(13,63,136,0.5)] md:p-3.5">
+        <div className="grid h-full grid-cols-[minmax(0,1fr)_2.5rem_2.5rem_minmax(0,1fr)] items-center gap-2.5 sm:grid-cols-[minmax(0,1fr)_2.75rem_2.75rem_minmax(0,1fr)] sm:gap-3 md:grid-cols-[minmax(0,1fr)_3.5rem_3.5rem_minmax(0,1fr)] md:gap-4 xl:grid-cols-[minmax(0,1fr)_2.75rem_2.75rem_minmax(0,1fr)] xl:gap-3">
+          <QueuePromotionGhostTeamNames
+            players={[ghost.match.team1User1, ghost.match.team1User2]}
+          />
+          <QueuePromotionGhostScoreSlot />
+          <QueuePromotionGhostScoreSlot />
+          <QueuePromotionGhostTeamNames
+            players={[ghost.match.team2User1, ghost.match.team2User2]}
+            align="right"
+          />
         </div>
       </div>
     </div>,
