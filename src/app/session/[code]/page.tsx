@@ -968,6 +968,7 @@ export default function SessionPage() {
                   reopeningMatchId={scoreActions.reopeningMatchId}
                   submittingMatchId={scoreActions.submittingMatchId}
                   matchScores={scoreActions.matchScores}
+                  queuePromotionAnimation={scoreActions.queuePromotionAnimation}
                   onCreateMatchesForCourts={courtActions.createMatchesForCourts}
                   onQueueNextMatch={courtActions.queueNextMatch}
                   onClearQueuedMatch={courtActions.clearQueuedMatch}
@@ -994,6 +995,9 @@ export default function SessionPage() {
                   onSubmitScore={scoreActions.submitScore}
                   onApproveScore={scoreActions.approveScore}
                   onReopenScoreForEdit={scoreActions.reopenScoreForEdit}
+                  onQueuePromotionAnimationComplete={
+                    scoreActions.clearQueuePromotionAnimation
+                  }
                 />
               </section>
             ) : null}

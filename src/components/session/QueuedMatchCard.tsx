@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type Ref } from "react";
 import type { QueuedMatch } from "./sessionTypes";
 
 interface QueuedMatchCardProps {
@@ -17,6 +17,8 @@ interface QueuedMatchCardProps {
   onOpenManualQueuedMatchModal: () => void;
   onReshuffleQueuedMatch: () => void;
   onReshuffleQueuedPlayer: (userId: string) => void;
+  promotionSurfaceRef?: Ref<HTMLDivElement>;
+  promotionState?: "normal" | "suppressed" | "entering";
 }
 
 function TeamPlayers({
@@ -114,6 +116,8 @@ export function QueuedMatchCard({
   onOpenManualQueuedMatchModal,
   onReshuffleQueuedMatch,
   onReshuffleQueuedPlayer,
+  promotionSurfaceRef,
+  promotionState = "normal",
 }: QueuedMatchCardProps) {
   const [activeActionPlayerId, setActiveActionPlayerId] = useState<string | null>(
     null
@@ -175,6 +179,12 @@ export function QueuedMatchCard({
     setActiveActionPlayerId(userId);
     onReshuffleQueuedPlayer(userId);
   };
+  const contentVisibilityClass =
+    promotionState === "suppressed"
+      ? "opacity-0 translate-y-1 scale-[0.985]"
+      : promotionState === "entering"
+        ? "opacity-100 translate-y-0 scale-100"
+        : "opacity-100 translate-y-0 scale-100";
 
   const leftAction = queuedMatch ? (
     <button
@@ -226,10 +236,16 @@ export function QueuedMatchCard({
         </div>
       ) : null}
 
-      <div className="flex flex-1 flex-col justify-center p-3 md:p-4">
+      <div
+        className={`flex flex-1 flex-col justify-center p-3 transition-[opacity,transform] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] md:p-4 ${contentVisibilityClass}`}
+      >
         {queuedMatch ? (
           <div className="space-y-3">
-            <div className="rounded-2xl border border-blue-100 bg-blue-50/40 p-3 transition-all md:p-3.5">
+            <div
+              ref={promotionSurfaceRef}
+              data-queued-promotion-surface="true"
+              className="rounded-2xl border border-blue-100 bg-blue-50/40 p-3 transition-all md:p-3.5"
+            >
               <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2.5 sm:gap-3 md:gap-4 xl:gap-3">
                 <TeamPlayers
                   players={[queuedMatch.team1User1, queuedMatch.team1User2]}

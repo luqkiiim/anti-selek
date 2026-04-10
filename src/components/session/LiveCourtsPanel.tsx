@@ -1,5 +1,15 @@
 "use client";
 
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import { createPortal } from "react-dom";
+import type { QueuePromotionAnimation } from "@/app/session/[code]/sessionMatchActionTypes";
 import { SectionCard } from "@/components/ui/chrome";
 import {
   getSessionPoolBadgeLabel,
@@ -40,6 +50,7 @@ interface LiveCourtsPanelProps {
   reopeningMatchId: string | null;
   submittingMatchId: string | null;
   matchScores: MatchScores;
+  queuePromotionAnimation: QueuePromotionAnimation | null;
   onCreateMatchesForCourts: (courtIds: string[]) => void;
   onQueueNextMatch: () => void;
   onClearQueuedMatch: () => void;
@@ -60,6 +71,124 @@ interface LiveCourtsPanelProps {
   onSubmitScore: (matchId: string) => void;
   onApproveScore: (matchId: string) => void;
   onReopenScoreForEdit: (matchId: string) => void;
+  onQueuePromotionAnimationComplete: () => void;
+}
+
+interface RectSnapshot {
+  top: number;
+  left: number;
+  width: number;
+  height: number;
+}
+
+interface PromotionGhostState {
+  id: string;
+  match: QueuedMatch;
+  sourceRect: RectSnapshot;
+  targetRect: RectSnapshot;
+  flying: boolean;
+}
+
+const COURT_PULSE_CLEAR_MS = 760;
+const GHOST_MOVE_MS = 680;
+const GHOST_FADE_MS = 260;
+const COURT_PULSE_DELAY_MS = 250;
+const QUEUE_REVEAL_DELAY_MS = 520;
+const GHOST_REMOVE_DELAY_MS = 920;
+const QUEUE_RESET_DELAY_MS = 1140;
+const ANIMATION_COMPLETE_DELAY_MS = 1280;
+
+function snapshotRect(rect: DOMRect): RectSnapshot {
+  return {
+    top: rect.top,
+    left: rect.left,
+    width: rect.width,
+    height: rect.height,
+  };
+}
+
+function usePrefersReducedMotion() {
+  const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
+      return;
+    }
+
+    const mediaQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const updatePreference = () => {
+      setPrefersReducedMotion(mediaQuery.matches);
+    };
+
+    updatePreference();
+
+    if (typeof mediaQuery.addEventListener === "function") {
+      mediaQuery.addEventListener("change", updatePreference);
+      return () => mediaQuery.removeEventListener("change", updatePreference);
+    }
+
+    mediaQuery.addListener(updatePreference);
+    return () => mediaQuery.removeListener(updatePreference);
+  }, []);
+
+  return prefersReducedMotion;
+}
+
+function QueuePromotionGhost({ ghost }: { ghost: PromotionGhostState }) {
+  if (typeof document === "undefined") {
+    return null;
+  }
+
+  const translateX = ghost.targetRect.left - ghost.sourceRect.left;
+  const translateY = ghost.targetRect.top - ghost.sourceRect.top;
+  const scaleX = ghost.targetRect.width / Math.max(ghost.sourceRect.width, 1);
+  const scaleY = ghost.targetRect.height / Math.max(ghost.sourceRect.height, 1);
+
+  return createPortal(
+    <div
+      aria-hidden="true"
+      data-queue-promotion-ghost="true"
+      className="pointer-events-none fixed z-[70]"
+      style={{
+        top: ghost.sourceRect.top,
+        left: ghost.sourceRect.left,
+        width: ghost.sourceRect.width,
+        height: ghost.sourceRect.height,
+        transformOrigin: "top left",
+        transform: ghost.flying
+          ? `translate(${translateX}px, ${translateY}px) scale(${scaleX}, ${scaleY})`
+          : "translate(0px, 0px) scale(1, 1)",
+        opacity: ghost.flying ? 0.9 : 1,
+        transition:
+          `transform ${GHOST_MOVE_MS}ms cubic-bezier(0.22, 1, 0.36, 1), opacity ${GHOST_FADE_MS}ms ease`,
+      }}
+    >
+      <div className="h-full rounded-2xl border border-blue-200 bg-white/96 p-3 shadow-[0_24px_60px_-28px_rgba(13,63,136,0.5)] backdrop-blur-sm">
+        <div className="grid h-full grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2.5">
+          <div className="min-w-0 space-y-2 text-left">
+            <p className="truncate text-[14px] font-bold leading-tight text-gray-900">
+              {ghost.match.team1User1.name}
+            </p>
+            <p className="truncate text-[14px] font-bold leading-tight text-gray-900">
+              {ghost.match.team1User2.name}
+            </p>
+          </div>
+          <span className="rounded-full border border-blue-200 bg-white px-2 py-1 text-[10px] font-black uppercase tracking-[0.24em] text-blue-700">
+            Next
+          </span>
+          <div className="min-w-0 space-y-2 text-right">
+            <p className="truncate text-[14px] font-bold leading-tight text-gray-900">
+              {ghost.match.team2User1.name}
+            </p>
+            <p className="truncate text-[14px] font-bold leading-tight text-gray-900">
+              {ghost.match.team2User2.name}
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
 }
 
 export function LiveCourtsPanel({
@@ -92,6 +221,7 @@ export function LiveCourtsPanel({
   reopeningMatchId,
   submittingMatchId,
   matchScores,
+  queuePromotionAnimation,
   onCreateMatchesForCourts,
   onQueueNextMatch,
   onClearQueuedMatch,
@@ -108,7 +238,23 @@ export function LiveCourtsPanel({
   onSubmitScore,
   onApproveScore,
   onReopenScoreForEdit,
+  onQueuePromotionAnimationComplete,
 }: LiveCourtsPanelProps) {
+  const orderedCourts = useMemo(
+    () => courts.slice().sort((a, b) => a.courtNumber - b.courtNumber),
+    [courts]
+  );
+  const prefersReducedMotion = usePrefersReducedMotion();
+  const courtSurfaceRefs = useRef(new Map<string, HTMLDivElement | null>());
+  const queuedSurfaceRef = useRef<HTMLDivElement | null>(null);
+  const queuedSurfaceSnapshotRef = useRef<RectSnapshot | null>(null);
+  const [ghostPromotion, setGhostPromotion] = useState<PromotionGhostState | null>(
+    null
+  );
+  const [highlightedCourtId, setHighlightedCourtId] = useState<string | null>(null);
+  const [queuedPromotionState, setQueuedPromotionState] = useState<
+    "normal" | "suppressed" | "entering"
+  >("normal");
   const showCreateMatchesAction =
     sessionStatus === SessionStatus.ACTIVE &&
     isAdmin &&
@@ -129,6 +275,165 @@ export function LiveCourtsPanel({
     readyCourtsCount - optimisticCreatingCount
   );
   const playerPoolById = new Map(players.map((player) => [player.userId, player.pool]));
+  const setCourtSurfaceRef = useCallback(
+    (courtId: string, node: HTMLDivElement | null) => {
+      if (node) {
+        courtSurfaceRefs.current.set(courtId, node);
+        return;
+      }
+
+      courtSurfaceRefs.current.delete(courtId);
+    },
+    []
+  );
+  const setQueuedSurfaceNode = useCallback((node: HTMLDivElement | null) => {
+    queuedSurfaceRef.current = node;
+  }, []);
+
+  useLayoutEffect(() => {
+    const node = queuedSurfaceRef.current;
+    if (!node) {
+      return;
+    }
+
+    const updateSnapshot = () => {
+      queuedSurfaceSnapshotRef.current = snapshotRect(node.getBoundingClientRect());
+    };
+
+    updateSnapshot();
+    window.addEventListener("resize", updateSnapshot);
+
+    if (typeof ResizeObserver === "undefined") {
+      return () => {
+        window.removeEventListener("resize", updateSnapshot);
+      };
+    }
+
+    const observer = new ResizeObserver(() => {
+      updateSnapshot();
+    });
+    observer.observe(node);
+
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", updateSnapshot);
+    };
+  }, [queuedMatch?.id, showQueuedMatchSlot]);
+
+  useEffect(() => {
+    if (!queuePromotionAnimation) {
+      return;
+    }
+
+    const sourceRect =
+      queuedSurfaceSnapshotRef.current ??
+      (queuedSurfaceRef.current
+        ? snapshotRect(queuedSurfaceRef.current.getBoundingClientRect())
+        : null);
+    const targetNode =
+      courtSurfaceRefs.current.get(queuePromotionAnimation.targetCourtId) ?? null;
+    const targetRect = targetNode
+      ? snapshotRect(targetNode.getBoundingClientRect())
+      : null;
+    const shouldAnimateQueuedReplacement =
+      queuePromotionAnimation.replacementQueuedMatchId !== null;
+    const timers: Array<ReturnType<typeof setTimeout>> = [];
+    let firstFrameId: number | null = null;
+    let secondFrameId: number | null = null;
+
+    const clearTargetPulse = () => {
+      setHighlightedCourtId((current) =>
+        current === queuePromotionAnimation.targetCourtId ? null : current
+      );
+    };
+
+    const clearQueuedAnimationState = () => {
+      setQueuedPromotionState((current) =>
+        current === "suppressed" || current === "entering" ? "normal" : current
+      );
+    };
+
+    const startCourtPulse = () => {
+      setHighlightedCourtId(queuePromotionAnimation.targetCourtId);
+      timers.push(setTimeout(clearTargetPulse, COURT_PULSE_CLEAR_MS));
+    };
+
+    if (!sourceRect || !targetRect || prefersReducedMotion) {
+      startCourtPulse();
+      if (shouldAnimateQueuedReplacement) {
+        setQueuedPromotionState("entering");
+        timers.push(setTimeout(clearQueuedAnimationState, 420));
+      } else {
+        clearQueuedAnimationState();
+      }
+      timers.push(setTimeout(onQueuePromotionAnimationComplete, 520));
+
+      return () => {
+        timers.forEach((timer) => clearTimeout(timer));
+        clearTargetPulse();
+        clearQueuedAnimationState();
+      };
+    }
+
+    setQueuedPromotionState("suppressed");
+    setGhostPromotion({
+      id: queuePromotionAnimation.id,
+      match: queuePromotionAnimation.sourceQueuedMatch,
+      sourceRect,
+      targetRect,
+      flying: false,
+    });
+
+    firstFrameId = window.requestAnimationFrame(() => {
+      secondFrameId = window.requestAnimationFrame(() => {
+        setGhostPromotion((current) =>
+          current?.id === queuePromotionAnimation.id
+            ? { ...current, flying: true }
+            : current
+        );
+      });
+    });
+
+    timers.push(setTimeout(startCourtPulse, COURT_PULSE_DELAY_MS));
+    timers.push(
+      setTimeout(() => {
+        setQueuedPromotionState(
+          shouldAnimateQueuedReplacement ? "entering" : "normal"
+        );
+      }, QUEUE_REVEAL_DELAY_MS)
+    );
+    timers.push(
+      setTimeout(() => {
+        setGhostPromotion((current) =>
+          current?.id === queuePromotionAnimation.id ? null : current
+        );
+      }, GHOST_REMOVE_DELAY_MS)
+    );
+    timers.push(setTimeout(clearQueuedAnimationState, QUEUE_RESET_DELAY_MS));
+    timers.push(
+      setTimeout(onQueuePromotionAnimationComplete, ANIMATION_COMPLETE_DELAY_MS)
+    );
+
+    return () => {
+      if (firstFrameId !== null) {
+        window.cancelAnimationFrame(firstFrameId);
+      }
+      if (secondFrameId !== null) {
+        window.cancelAnimationFrame(secondFrameId);
+      }
+      timers.forEach((timer) => clearTimeout(timer));
+      setGhostPromotion((current) =>
+        current?.id === queuePromotionAnimation.id ? null : current
+      );
+      clearTargetPulse();
+      clearQueuedAnimationState();
+    };
+  }, [
+    onQueuePromotionAnimationComplete,
+    prefersReducedMotion,
+    queuePromotionAnimation,
+  ]);
+
   const getMatchPoolLabel = (match: Match | null) => {
     if (!poolsEnabled || !match) {
       return null;
@@ -215,37 +520,36 @@ export function LiveCourtsPanel({
       }
     >
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:gap-4 xl:grid-cols-3">
-        {courts
-          .slice()
-          .sort((a, b) => a.courtNumber - b.courtNumber)
-          .map((court) => (
-            <LiveCourtCard
-              key={court.id}
-              sessionStatus={sessionStatus}
-              court={court}
-              poolLabel={getMatchPoolLabel(court.currentMatch)}
-              currentUserId={currentUserId}
-              isAdmin={isAdmin}
-              isClaimedUser={isClaimedUser}
-              confirmingScoreMatchId={confirmingScoreMatchId}
-              reshufflingCourtId={reshufflingCourtId}
-              reshufflingCourtPlayerId={reshufflingCourtPlayerId}
-              undoingCourtId={undoingCourtId}
-              reopeningMatchId={reopeningMatchId}
-              submittingMatchId={submittingMatchId}
-              matchScores={matchScores}
-              onOpenManualMatchModal={onOpenManualMatchModal}
-              onReshuffleMatch={onReshuffleMatch}
-              onReshuffleMatchWithoutPlayer={onReshuffleMatchWithoutPlayer}
-              onUndoMatchSelection={onUndoMatchSelection}
-              onHandleScoreChange={onHandleScoreChange}
-              onRequestScoreSubmitConfirmation={onRequestScoreSubmitConfirmation}
-              onCancelScoreSubmitConfirmation={onCancelScoreSubmitConfirmation}
-              onSubmitScore={onSubmitScore}
-              onApproveScore={onApproveScore}
-              onReopenScoreForEdit={onReopenScoreForEdit}
-            />
-          ))}
+        {orderedCourts.map((court) => (
+          <LiveCourtCard
+            key={court.id}
+            sessionStatus={sessionStatus}
+            court={court}
+            poolLabel={getMatchPoolLabel(court.currentMatch)}
+            currentUserId={currentUserId}
+            isAdmin={isAdmin}
+            isClaimedUser={isClaimedUser}
+            confirmingScoreMatchId={confirmingScoreMatchId}
+            reshufflingCourtId={reshufflingCourtId}
+            reshufflingCourtPlayerId={reshufflingCourtPlayerId}
+            undoingCourtId={undoingCourtId}
+            reopeningMatchId={reopeningMatchId}
+            submittingMatchId={submittingMatchId}
+            matchScores={matchScores}
+            promotionSurfaceRef={(node) => setCourtSurfaceRef(court.id, node)}
+            isPromotionTarget={highlightedCourtId === court.id}
+            onOpenManualMatchModal={onOpenManualMatchModal}
+            onReshuffleMatch={onReshuffleMatch}
+            onReshuffleMatchWithoutPlayer={onReshuffleMatchWithoutPlayer}
+            onUndoMatchSelection={onUndoMatchSelection}
+            onHandleScoreChange={onHandleScoreChange}
+            onRequestScoreSubmitConfirmation={onRequestScoreSubmitConfirmation}
+            onCancelScoreSubmitConfirmation={onCancelScoreSubmitConfirmation}
+            onSubmitScore={onSubmitScore}
+            onApproveScore={onApproveScore}
+            onReopenScoreForEdit={onReopenScoreForEdit}
+          />
+        ))}
         {showQueuedMatchSlot ? (
           <QueuedMatchCard
             queuedMatch={queuedMatch}
@@ -257,6 +561,8 @@ export function LiveCourtsPanel({
             creatingManualQueuedMatch={manualQueueOpen}
             reshufflingQueuedPlayerId={reshufflingQueuedPlayerId}
             reshufflingQueuedMatch={reshufflingQueuedMatch}
+            promotionSurfaceRef={setQueuedSurfaceNode}
+            promotionState={queuedPromotionState}
             onClearQueuedMatch={onClearQueuedMatch}
             onOpenManualQueuedMatchModal={onOpenManualQueuedMatchModal}
             onReshuffleQueuedMatch={onReshuffleQueuedMatch}
@@ -264,6 +570,7 @@ export function LiveCourtsPanel({
           />
         ) : null}
       </div>
+      {ghostPromotion ? <QueuePromotionGhost ghost={ghostPromotion} /> : null}
     </SectionCard>
   );
 }

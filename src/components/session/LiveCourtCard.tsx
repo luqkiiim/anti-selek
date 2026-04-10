@@ -1,5 +1,6 @@
 "use client";
 
+import type { Ref } from "react";
 import { getCourtDisplayLabel } from "@/lib/courtLabels";
 import { MatchStatus, SessionStatus } from "@/types/enums";
 import type { Court, Match, MatchScores } from "./sessionTypes";
@@ -33,6 +34,8 @@ interface LiveCourtCardProps {
   onSubmitScore: (matchId: string) => void;
   onApproveScore: (matchId: string) => void;
   onReopenScoreForEdit: (matchId: string) => void;
+  promotionSurfaceRef?: Ref<HTMLDivElement>;
+  isPromotionTarget?: boolean;
 }
 
 export function LiveCourtCard({
@@ -59,6 +62,8 @@ export function LiveCourtCard({
   onSubmitScore,
   onApproveScore,
   onReopenScoreForEdit,
+  promotionSurfaceRef,
+  isPromotionTarget = false,
 }: LiveCourtCardProps) {
   const currentMatch = court.currentMatch;
   const courtPlayerActionActive =
@@ -108,7 +113,12 @@ export function LiveCourtCard({
   ) : null;
 
   return (
-    <div className="flex min-w-0 flex-col overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
+    <div
+      data-live-court-card={court.id}
+      className={`flex min-w-0 flex-col overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm transition-shadow ${
+        isPromotionTarget ? "app-court-promotion-target" : ""
+      }`}
+    >
       <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 border-b border-gray-100 bg-white px-3 py-3 md:px-4 md:py-3.5">
         <div className="flex min-w-0 justify-start">
           {leftAction}
@@ -139,6 +149,7 @@ export function LiveCourtCard({
             reopeningMatchId={reopeningMatchId}
             submittingMatchId={submittingMatchId}
             matchScores={matchScores}
+            lineupRef={promotionSurfaceRef}
             onReshuffleWithoutPlayer={(userId) =>
               onReshuffleMatchWithoutPlayer(court.id, userId)
             }

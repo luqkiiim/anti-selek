@@ -1,6 +1,6 @@
 "use client";
 
-import type { SessionData } from "@/components/session/sessionTypes";
+import type { QueuedMatch, SessionData } from "@/components/session/sessionTypes";
 
 export interface UseSessionMatchActionsDependencies {
   code: string;
@@ -18,4 +18,11 @@ export interface CourtActionDraft {
   courtLabel: string;
   team1Names: [string, string];
   team2Names: [string, string];
+}
+
+export interface QueuePromotionAnimation {
+  id: string;
+  sourceQueuedMatch: QueuedMatch;
+  targetCourtId: string;
+  replacementQueuedMatchId: string | null;
 }

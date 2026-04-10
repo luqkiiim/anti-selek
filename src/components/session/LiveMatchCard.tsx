@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type Ref } from "react";
 import { canApprovePendingSubmission } from "@/lib/matchApprovalRules";
 import { MatchStatus } from "@/types/enums";
 import type { Match, MatchScores } from "./sessionTypes";
@@ -28,6 +28,7 @@ interface LiveMatchCardProps {
   onSubmitScore: (matchId: string) => void;
   onApproveScore: (matchId: string) => void;
   onReopenScoreForEdit: (matchId: string) => void;
+  lineupRef?: Ref<HTMLDivElement>;
 }
 
 interface TeamNamesProps {
@@ -175,6 +176,7 @@ export function LiveMatchCard({
   onSubmitScore,
   onApproveScore,
   onReopenScoreForEdit,
+  lineupRef,
 }: LiveMatchCardProps) {
   const [activeActionPlayerId, setActiveActionPlayerId] = useState<string | null>(
     null
@@ -265,6 +267,8 @@ export function LiveMatchCard({
   return (
     <div className="space-y-3">
       <div
+        ref={lineupRef}
+        data-court-promotion-surface={match.id}
         className={`rounded-2xl border p-3 transition-all md:p-3.5 ${
           isPendingApproval
             ? "border-orange-200 bg-orange-50/60"

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import {
   applyGeneratedMatches,
   applyQueuedMatch,
@@ -12,12 +12,16 @@ import type {
   MatchScores,
 } from "@/components/session/sessionTypes";
 import { MatchStatus } from "@/types/enums";
-import type { UseSessionMatchActionsDependencies } from "./sessionMatchActionTypes";
+import type {
+  QueuePromotionAnimation,
+  UseSessionMatchActionsDependencies,
+} from "./sessionMatchActionTypes";
 
 const emptyMatchScores = (): MatchScores => ({});
 
 export function useSessionScoreActions({
   code,
+  sessionData,
   safeJson,
   patchSessionData,
   scheduleSessionRefresh,
@@ -31,6 +35,11 @@ export function useSessionScoreActions({
     string | null
   >(null);
   const [reopeningMatchId, setReopeningMatchId] = useState<string | null>(null);
+  const [queuePromotionAnimation, setQueuePromotionAnimation] =
+    useState<QueuePromotionAnimation | null>(null);
+  const clearQueuePromotionAnimation = useCallback(() => {
+    setQueuePromotionAnimation(null);
+  }, []);
 
   const getParsedScores = (matchId: string) => {
     const scores = matchScores[matchId];
@@ -73,6 +82,7 @@ export function useSessionScoreActions({
   const submitScore = async (matchId: string) => {
     const parsedScores = getParsedScores(matchId);
     if (!parsedScores) return;
+    const sourceQueuedMatch = sessionData?.queuedMatch ?? null;
 
     setSubmittingMatchId(matchId);
     setError("");
@@ -111,6 +121,18 @@ export function useSessionScoreActions({
             data.queuedMatch ?? null
           );
         });
+        if (
+          data.status === MatchStatus.COMPLETED &&
+          data.autoAssignedMatch &&
+          sourceQueuedMatch
+        ) {
+          setQueuePromotionAnimation({
+            id: `${data.autoAssignedMatch.id}:${Date.now()}`,
+            sourceQueuedMatch,
+            targetCourtId: data.autoAssignedMatch.courtId,
+            replacementQueuedMatchId: data.queuedMatch?.id ?? null,
+          });
+        }
         scheduleSessionRefresh();
       } else {
         setError(data.error || "Failed to submit score");
@@ -128,6 +150,8 @@ export function useSessionScoreActions({
     overrideTeam1?: number,
     overrideTeam2?: number
   ) => {
+    const sourceQueuedMatch = sessionData?.queuedMatch ?? null;
+
     try {
       const res = await fetch(`/api/matches/${matchId}/approve`, {
         method: "POST",
@@ -149,6 +173,14 @@ export function useSessionScoreActions({
             data.queuedMatch ?? null
           );
         });
+        if (data.autoAssignedMatch && sourceQueuedMatch) {
+          setQueuePromotionAnimation({
+            id: `${data.autoAssignedMatch.id}:${Date.now()}`,
+            sourceQueuedMatch,
+            targetCourtId: data.autoAssignedMatch.courtId,
+            replacementQueuedMatchId: data.queuedMatch?.id ?? null,
+          });
+        }
         scheduleSessionRefresh();
       } else {
         setError(data.error || "Failed to approve score");
@@ -190,11 +222,13 @@ export function useSessionScoreActions({
     submittingMatchId,
     confirmingScoreMatchId,
     reopeningMatchId,
+    queuePromotionAnimation,
     handleScoreChange,
     requestScoreSubmitConfirmation,
     cancelScoreSubmitConfirmation,
     submitScore,
     approveScore,
     reopenScoreForEdit,
+    clearQueuePromotionAnimation,
   };
 }

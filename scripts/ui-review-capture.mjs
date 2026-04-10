@@ -1,15 +1,21 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
+import { randomUUID } from "node:crypto";
 
 import bcrypt from "bcryptjs";
 import { PrismaClient } from "@prisma/client";
 import { chromium } from "@playwright/test";
 
 const cwd = process.cwd();
-const baseURL = "http://127.0.0.1:3005";
+const port = process.env.UI_REVIEW_PORT ?? "3013";
+const baseURL = `http://127.0.0.1:${port}`;
 const sourceDb = path.resolve(cwd, "prisma", "dev.db");
-const reviewDb = path.resolve(cwd, "prisma", "ui-review.db");
+const reviewDb = path.resolve(
+  cwd,
+  "prisma",
+  `ui-review-${randomUUID().slice(0, 8)}.db`
+);
 const reviewDbUrl = `file:${reviewDb.replace(/\\/g, "/")}`;
 const screenshotDir = path.resolve(cwd, "test-results", "ui-review");
 const skipSetup = process.env.UI_REVIEW_SKIP_SETUP === "1";
@@ -38,6 +44,14 @@ const scorePlayerIds = [
   "user-ui-review-score-1",
   "user-ui-review-score-2",
   "user-ui-review-score-3",
+  "user-ui-review-score-4",
+  "user-ui-review-score-5",
+  "user-ui-review-score-6",
+  "user-ui-review-score-7",
+  "user-ui-review-score-8",
+  "user-ui-review-score-9",
+  "user-ui-review-score-10",
+  "user-ui-review-score-11",
 ];
 
 async function waitForServer(url, timeoutMs = 120_000) {
@@ -76,6 +90,11 @@ async function prepareReviewDatabase() {
   try {
     await prisma.match.deleteMany({
       where: { id: "match-ui-review-active" },
+    });
+    await prisma.queuedMatch.deleteMany({
+      where: {
+        sessionId: { in: [ids.scoreSessionId, ids.waitingSessionId] },
+      },
     });
     await prisma.sessionPlayer.deleteMany({
       where: {
@@ -144,8 +163,8 @@ async function prepareReviewDatabase() {
           name: `Score Player ${index + 1}`,
           passwordHash,
           isClaimed: true,
-          gender: index % 2 === 0 ? "MALE" : "FEMALE",
-          partnerPreference: index % 2 === 0 ? "OPEN" : "FEMALE_FLEX",
+          gender: "MALE",
+          partnerPreference: "OPEN",
         })),
       ],
     });
@@ -232,12 +251,11 @@ async function prepareReviewDatabase() {
         communityId: ids.scoreCommunityId,
         name: "UI Review Active Session",
         type: "POINTS",
-        mode: "MEXICANO",
+        mode: "OPEN",
         status: "ACTIVE",
         courts: {
           create: [
             { id: ids.scoreCourtId, courtNumber: 1 },
-            { id: "court-ui-review-active-2", courtNumber: 2 },
           ],
         },
         players: {
@@ -251,8 +269,8 @@ async function prepareReviewDatabase() {
             {
               userId: scorePlayerIds[0],
               isGuest: false,
-              gender: "FEMALE",
-              partnerPreference: "FEMALE_FLEX",
+              gender: "MALE",
+              partnerPreference: "OPEN",
             },
             {
               userId: scorePlayerIds[1],
@@ -263,9 +281,15 @@ async function prepareReviewDatabase() {
             {
               userId: scorePlayerIds[2],
               isGuest: false,
-              gender: "FEMALE",
-              partnerPreference: "FEMALE_FLEX",
+              gender: "MALE",
+              partnerPreference: "OPEN",
             },
+            ...scorePlayerIds.slice(3).map((userId) => ({
+              userId,
+              isGuest: false,
+              gender: "MALE",
+              partnerPreference: "OPEN",
+            })),
           ],
         },
       },
@@ -288,6 +312,16 @@ async function prepareReviewDatabase() {
       where: { id: ids.scoreCourtId },
       data: { currentMatchId: activeMatch.id },
     });
+
+    await prisma.queuedMatch.create({
+      data: {
+        sessionId: ids.scoreSessionId,
+        team1User1Id: scorePlayerIds[3],
+        team1User2Id: scorePlayerIds[4],
+        team2User1Id: scorePlayerIds[5],
+        team2User2Id: scorePlayerIds[6],
+      },
+    });
   } finally {
     await prisma.$disconnect();
   }
@@ -297,7 +331,7 @@ function startReviewServer() {
   console.log("Starting local review server...");
   return spawn(
     "cmd.exe",
-    ["/c", "npm.cmd", "run", "start", "--", "--hostname", "127.0.0.1", "--port", "3005"],
+    ["/c", "npm.cmd", "run", "start", "--", "--hostname", "127.0.0.1", "--port", port],
     {
       cwd,
       env: {
@@ -316,8 +350,24 @@ function startReviewServer() {
   );
 }
 
+function stopReviewServer(server) {
+  if (!server || server.killed) {
+    return;
+  }
+
+  if (process.platform === "win32") {
+    spawnSync("taskkill", ["/pid", String(server.pid), "/t", "/f"], {
+      stdio: "ignore",
+    });
+    return;
+  }
+
+  server.kill("SIGTERM");
+}
+
 async function signIn(context) {
   const page = await context.newPage();
+  await page.emulateMedia({ reducedMotion: "no-preference" });
   await page.goto(`${baseURL}/signin`);
   await page.getByLabel("Email").fill("ui-review-admin@example.com");
   await page.getByLabel("Password").fill("Password123!");
@@ -336,30 +386,8 @@ async function captureScreens() {
     const desktop = await browser.newContext({
       viewport: { width: 1440, height: 1400 },
     });
-    const mobile = await browser.newContext({
-      viewport: { width: 390, height: 844 },
-    });
 
     const desktopPage = await signIn(desktop);
-    await desktopPage.goto(`${baseURL}/community/${ids.hostCommunityId}`);
-    await desktopPage
-      .getByRole("heading", { name: "UI Review Host Club" })
-      .waitFor();
-    await desktopPage.screenshot({
-      path: path.join(screenshotDir, "community-overview-desktop.png"),
-      fullPage: true,
-    });
-    await desktopPage
-      .getByRole("button", { name: "Open Host Setup" })
-      .first()
-      .click();
-    await desktopPage
-      .getByRole("button", { name: "Create Tournament" })
-      .waitFor();
-    await desktopPage.screenshot({
-      path: path.join(screenshotDir, "community-host-setup-desktop.png"),
-      fullPage: true,
-    });
     await desktopPage.goto(`${baseURL}/session/${ids.scoreSessionId}`);
     await desktopPage
       .getByRole("heading", { name: "UI Review Active Session" })
@@ -368,48 +396,81 @@ async function captureScreens() {
       path: path.join(screenshotDir, "session-active-desktop.png"),
       fullPage: true,
     });
+    const scoreInputs = desktopPage.locator('input[type="number"]');
+    await scoreInputs.nth(0).fill("21");
+    await scoreInputs.nth(1).fill("15");
+    await desktopPage.getByRole("button", { name: "Submit Score" }).click();
+    await desktopPage.getByRole("button", { name: "Confirm" }).waitFor();
+    await desktopPage.screenshot({
+      path: path.join(screenshotDir, "queue-promotion-confirm-desktop.png"),
+      fullPage: true,
+    });
+    await desktopPage.getByRole("button", { name: "Confirm" }).click();
+    await desktopPage.getByRole("button", { name: "Confirm Results" }).waitFor();
+    await desktopPage.screenshot({
+      path: path.join(screenshotDir, "queue-promotion-pending-desktop.png"),
+      fullPage: true,
+    });
+    await desktopPage.getByRole("button", { name: "Confirm Results" }).click();
 
-    const mobilePage = await signIn(mobile);
-    await mobilePage.goto(`${baseURL}/community/${ids.hostCommunityId}`);
-    await mobilePage
-      .getByRole("heading", { name: "UI Review Host Club" })
-      .waitFor();
-    await mobilePage.screenshot({
-      path: path.join(screenshotDir, "community-overview-mobile.png"),
-      fullPage: true,
-    });
-    await mobilePage
-      .getByRole("button", { name: "Open Host Setup" })
-      .first()
-      .click();
-    await mobilePage
-      .getByRole("button", { name: "Create Tournament" })
-      .waitFor();
-    await mobilePage.screenshot({
-      path: path.join(screenshotDir, "community-host-setup-mobile.png"),
-      fullPage: true,
-    });
-    await mobilePage.goto(`${baseURL}/session/${ids.scoreSessionId}`);
-    await mobilePage
-      .getByRole("heading", { name: "UI Review Active Session" })
-      .waitFor();
-    await mobilePage.screenshot({
-      path: path.join(screenshotDir, "session-active-mobile.png"),
-      fullPage: true,
-    });
+    const frameDelays = [40, 140, 280, 520, 900];
+    const debugFrames = [];
+    let elapsed = 0;
+    for (const [index, delay] of frameDelays.entries()) {
+      await desktopPage.waitForTimeout(delay - elapsed);
+      elapsed = delay;
+      debugFrames.push(
+        await desktopPage.evaluate((frameNumber) => {
+          const ghost = document.querySelector("[data-queue-promotion-ghost='true']");
+          const queueSurface = document.querySelector(
+            "[data-queued-promotion-surface='true']"
+          );
+
+          const toRect = (element) => {
+            if (!element) return null;
+            const rect = element.getBoundingClientRect();
+            return {
+              top: rect.top,
+              left: rect.left,
+              width: rect.width,
+              height: rect.height,
+              opacity: window.getComputedStyle(element).opacity,
+            };
+          };
+
+          return {
+            frame: frameNumber,
+            ghost: toRect(ghost),
+            queueSurface: toRect(queueSurface),
+            courtCards: Array.from(
+              document.querySelectorAll("[data-live-court-card]")
+            ).map((card) => ({
+              courtId: card.getAttribute("data-live-court-card"),
+              text: card.textContent,
+            })),
+          };
+        }, index + 1)
+      );
+      await desktopPage.screenshot({
+        path: path.join(
+          screenshotDir,
+          `queue-promotion-frame-${String(index + 1).padStart(2, "0")}.png`
+        ),
+      });
+    }
+    await fs.writeFile(
+      path.join(screenshotDir, "queue-promotion-debug.json"),
+      JSON.stringify(debugFrames, null, 2)
+    );
   } finally {
     await browser.close();
   }
 }
 
 async function main() {
-  const reviewDbExists = await fs
-    .access(reviewDb)
-    .then(() => true)
-    .catch(() => false);
-  const serverAlreadyRunning = await isServerReady(`${baseURL}/signin`);
+  const serverAlreadyRunning = false;
 
-  if (!skipSetup && !reviewDbExists) {
+  if (!skipSetup) {
     await prepareReviewDatabase();
   }
 
@@ -427,7 +488,7 @@ async function main() {
     console.log(`Screenshots written to ${screenshotDir}`);
   } finally {
     if (server) {
-      server.kill();
+      stopReviewServer(server);
     }
   }
 }
