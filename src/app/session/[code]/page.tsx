@@ -622,12 +622,65 @@ export default function SessionPage() {
     [clearProgrammaticPagerSync, markProgrammaticPagerSync, mobileSections]
   );
 
+  const getNearestMobileSection = useCallback(
+    (container: HTMLDivElement) => {
+      const pageWidth = Math.max(container.clientWidth, 1);
+      const sectionIndex = Math.min(
+        mobileSections.length - 1,
+        Math.max(0, Math.round(container.scrollLeft / pageWidth))
+      );
+
+      return {
+        sectionIndex,
+        sectionId: mobileSections[sectionIndex]?.id ?? null,
+        targetLeft: sectionIndex * pageWidth,
+      };
+    },
+    [mobileSections]
+  );
+
   const updateMobileSection = useCallback(
     (sectionId: SessionMobileSection, behavior: ScrollBehavior = "smooth") => {
       setMobileSection(sectionId);
       scrollMobilePagerToSection(sectionId, behavior);
     },
     [scrollMobilePagerToSection]
+  );
+
+  const settleMobilePagerToNearestSection = useCallback(
+    (behavior: ScrollBehavior = "smooth") => {
+      const container = mobilePagerRef.current;
+      if (!container) {
+        return;
+      }
+
+      const { sectionId, targetLeft } = getNearestMobileSection(container);
+      if (!sectionId) {
+        return;
+      }
+
+      const isAligned = Math.abs(container.scrollLeft - targetLeft) < 4;
+
+      if (sectionId !== activeMobileSection) {
+        if (isAligned) {
+          setMobileSection(sectionId);
+          return;
+        }
+
+        updateMobileSection(sectionId, behavior);
+        return;
+      }
+
+      if (!isAligned) {
+        scrollMobilePagerToSection(sectionId, behavior);
+      }
+    },
+    [
+      activeMobileSection,
+      getNearestMobileSection,
+      scrollMobilePagerToSection,
+      updateMobileSection,
+    ]
   );
 
   const settleMobilePagerFromSwipe = useCallback(
@@ -646,7 +699,7 @@ export default function SessionPage() {
 
       const swipeDelta = endX === null ? 0 : startX - endX;
       const swipeThreshold = Math.max(container.clientWidth * 0.16, 32);
-      let targetIndex = startIndex;
+      let targetIndex = getNearestMobileSection(container).sectionIndex;
 
       if (Math.abs(swipeDelta) >= swipeThreshold) {
         targetIndex = Math.min(
@@ -660,9 +713,15 @@ export default function SessionPage() {
         return;
       }
 
+      const targetLeft = targetIndex * Math.max(container.clientWidth, 1);
+      if (Math.abs(container.scrollLeft - targetLeft) < 4) {
+        setMobileSection(targetSection);
+        return;
+      }
+
       updateMobileSection(targetSection, "smooth");
     },
-    [mobileSections, updateMobileSection]
+    [getNearestMobileSection, mobileSections, updateMobileSection]
   );
 
   useLayoutEffect(() => {
@@ -745,20 +804,12 @@ export default function SessionPage() {
     }
 
     pagerSnapTimeoutRef.current = setTimeout(() => {
-      const settledIndex = Math.round(
-        container.scrollLeft / Math.max(container.clientWidth, 1)
-      );
-      const settledSection = mobileSections[settledIndex]?.id;
-
-      if (settledSection && settledSection !== activeMobileSection) {
-        setMobileSection(settledSection);
-      }
-    }, 120);
+      settleMobilePagerToNearestSection("smooth");
+    }, 140);
   }, [
-    activeMobileSection,
     clearProgrammaticPagerSync,
     isPlayerPickerOpen,
-    mobileSections,
+    settleMobilePagerToNearestSection,
   ]);
 
   const handleMobilePagerTouchStart = useCallback(
