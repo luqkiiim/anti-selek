@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type Ref } from "react";
+import { useCallback, useEffect, useRef, useState, type Ref } from "react";
 import { canApprovePendingSubmission } from "@/lib/matchApprovalRules";
 import { MatchStatus } from "@/types/enums";
 import type { Match, MatchScores } from "./sessionTypes";
@@ -115,27 +115,37 @@ function TeamNames({
 }
 
 interface ScoreSlotProps {
+  matchId: string;
   canEdit: boolean;
   scoreValue: string;
   readonlyScore?: string | number;
   pendingScore?: number;
   onScoreChange: (value: string) => void;
+  onScoreFocus?: () => void;
+  onScoreBlur?: () => void;
 }
 
 function ScoreSlot({
+  matchId,
   canEdit,
   scoreValue,
   readonlyScore,
   pendingScore,
   onScoreChange,
+  onScoreFocus,
+  onScoreBlur,
 }: ScoreSlotProps) {
   if (canEdit) {
     return (
       <input
         type="number"
         inputMode="numeric"
+        data-live-score-input="true"
+        data-score-input-match-id={matchId}
         value={scoreValue}
         onChange={(event) => onScoreChange(event.target.value)}
+        onFocus={onScoreFocus}
+        onBlur={onScoreBlur}
         className="h-10 w-10 rounded-lg border border-blue-200 bg-white text-center text-lg font-black tabular-nums text-gray-900 focus:border-blue-500 focus:outline-none sm:h-11 sm:w-11 sm:text-xl md:h-14 md:w-14 md:text-[2rem] xl:h-11 xl:w-11 xl:text-xl"
         placeholder="0"
       />
@@ -178,6 +188,17 @@ export function LiveMatchCard({
   onReopenScoreForEdit,
   lineupRef,
 }: LiveMatchCardProps) {
+  const scoreInputScrollRestoreRef = useRef<{
+    scrollY: number | null;
+    viewportHeight: number | null;
+    blurTimerId: number | null;
+    restoreTimerId: number | null;
+  }>({
+    scrollY: null,
+    viewportHeight: null,
+    blurTimerId: null,
+    restoreTimerId: null,
+  });
   const [activeActionPlayerId, setActiveActionPlayerId] = useState<string | null>(
     null
   );
@@ -212,6 +233,141 @@ export function LiveMatchCard({
   const canReshuffleWithoutPlayer =
     isAdmin && match.status === MatchStatus.IN_PROGRESS;
   const actionDisabled = reshufflingCourtPlayerId !== null;
+  const clearScoreInputRestoreTimers = useCallback(() => {
+    const restoreState = scoreInputScrollRestoreRef.current;
+    if (restoreState.blurTimerId !== null) {
+      window.clearTimeout(restoreState.blurTimerId);
+      restoreState.blurTimerId = null;
+    }
+    if (restoreState.restoreTimerId !== null) {
+      window.clearTimeout(restoreState.restoreTimerId);
+      restoreState.restoreTimerId = null;
+    }
+  }, []);
+
+  const clearSavedScoreInputScrollPosition = useCallback(() => {
+    clearScoreInputRestoreTimers();
+    scoreInputScrollRestoreRef.current.scrollY = null;
+    scoreInputScrollRestoreRef.current.viewportHeight = null;
+  }, [clearScoreInputRestoreTimers]);
+
+  const isTouchScrollRestoreSupported = useCallback(() => {
+    if (typeof window === "undefined") {
+      return false;
+    }
+
+    return navigator.maxTouchPoints > 0;
+  }, []);
+
+  const isScoreInputElement = useCallback((element: Element | null) => {
+    return element?.getAttribute("data-live-score-input") === "true";
+  }, []);
+
+  const isOwnScoreInputElement = useCallback(
+    (element: Element | null) => {
+      return (
+        isScoreInputElement(element) &&
+        element?.getAttribute("data-score-input-match-id") === match.id
+      );
+    },
+    [isScoreInputElement, match.id]
+  );
+
+  const restoreSavedScoreInputScrollPosition = useCallback(() => {
+    if (!isTouchScrollRestoreSupported()) {
+      return;
+    }
+
+    const restoreState = scoreInputScrollRestoreRef.current;
+    if (restoreState.scrollY === null) {
+      return;
+    }
+
+    clearScoreInputRestoreTimers();
+
+    const targetScrollY = restoreState.scrollY;
+    const initialViewportHeight = restoreState.viewportHeight;
+    const startedAt = Date.now();
+
+    const attemptRestore = () => {
+      const currentViewportHeight =
+        window.visualViewport?.height ?? window.innerHeight;
+      const keyboardLikelyClosed =
+        initialViewportHeight === null ||
+        currentViewportHeight >= initialViewportHeight - 48;
+      const waitedLongEnough = Date.now() - startedAt >= 900;
+
+      if (!keyboardLikelyClosed && !waitedLongEnough) {
+        restoreState.restoreTimerId = window.setTimeout(attemptRestore, 80);
+        return;
+      }
+
+      restoreState.restoreTimerId = null;
+      restoreState.scrollY = null;
+      restoreState.viewportHeight = null;
+
+      if (Math.abs(window.scrollY - targetScrollY) < 4) {
+        return;
+      }
+
+      window.scrollTo({
+        top: targetScrollY,
+        behavior: "auto",
+      });
+    };
+
+    restoreState.restoreTimerId = window.setTimeout(attemptRestore, 120);
+  }, [clearScoreInputRestoreTimers, isTouchScrollRestoreSupported]);
+
+  const handleScoreInputFocus = useCallback(() => {
+    if (!isTouchScrollRestoreSupported()) {
+      return;
+    }
+
+    const restoreState = scoreInputScrollRestoreRef.current;
+    if (restoreState.scrollY === null) {
+      restoreState.scrollY = window.scrollY;
+      restoreState.viewportHeight =
+        window.visualViewport?.height ?? window.innerHeight;
+    }
+
+    clearScoreInputRestoreTimers();
+  }, [clearScoreInputRestoreTimers, isTouchScrollRestoreSupported]);
+
+  const handleScoreInputBlur = useCallback(() => {
+    if (!isTouchScrollRestoreSupported()) {
+      return;
+    }
+
+    const restoreState = scoreInputScrollRestoreRef.current;
+    if (restoreState.blurTimerId !== null) {
+      window.clearTimeout(restoreState.blurTimerId);
+    }
+
+    restoreState.blurTimerId = window.setTimeout(() => {
+      restoreState.blurTimerId = null;
+
+      const activeElement =
+        document.activeElement instanceof Element ? document.activeElement : null;
+
+      if (isOwnScoreInputElement(activeElement)) {
+        return;
+      }
+
+      if (isScoreInputElement(activeElement)) {
+        clearSavedScoreInputScrollPosition();
+        return;
+      }
+
+      restoreSavedScoreInputScrollPosition();
+    }, 40);
+  }, [
+    clearSavedScoreInputScrollPosition,
+    isOwnScoreInputElement,
+    isScoreInputElement,
+    isTouchScrollRestoreSupported,
+    restoreSavedScoreInputScrollPosition,
+  ]);
 
   useEffect(() => {
     if (!activeActionPlayerId) return;
@@ -264,6 +420,20 @@ export function LiveMatchCard({
     onReshuffleWithoutPlayer(userId);
   };
 
+  useEffect(() => {
+    if (canEditScores) {
+      return;
+    }
+
+    restoreSavedScoreInputScrollPosition();
+  }, [canEditScores, restoreSavedScoreInputScrollPosition]);
+
+  useEffect(() => {
+    return () => {
+      clearSavedScoreInputScrollPosition();
+    };
+  }, [clearSavedScoreInputScrollPosition]);
+
   return (
     <div className="space-y-3">
       <div
@@ -287,18 +457,24 @@ export function LiveMatchCard({
             onReshuffleWithoutPlayer={handleReshuffleWithoutPlayer}
           />
           <ScoreSlot
+            matchId={match.id}
             canEdit={canEditScores}
             scoreValue={scores.team1}
             readonlyScore={isConfirmingSubmission ? scores.team1 : undefined}
             pendingScore={isPendingApproval ? match.team1Score : undefined}
             onScoreChange={(value) => onHandleScoreChange(match.id, "team1", value)}
+            onScoreFocus={handleScoreInputFocus}
+            onScoreBlur={handleScoreInputBlur}
           />
           <ScoreSlot
+            matchId={match.id}
             canEdit={canEditScores}
             scoreValue={scores.team2}
             readonlyScore={isConfirmingSubmission ? scores.team2 : undefined}
             pendingScore={isPendingApproval ? match.team2Score : undefined}
             onScoreChange={(value) => onHandleScoreChange(match.id, "team2", value)}
+            onScoreFocus={handleScoreInputFocus}
+            onScoreBlur={handleScoreInputBlur}
           />
           <TeamNames
             matchId={match.id}
