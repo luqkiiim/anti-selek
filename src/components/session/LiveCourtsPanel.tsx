@@ -3,6 +3,7 @@
 import {
   useCallback,
   useEffect,
+  useEffectEvent,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -93,12 +94,16 @@ interface PromotionGhostState {
   flying: boolean;
 }
 
+type PromotionSurfaceState = "normal" | "suppressed" | "entering";
+
 const COURT_PULSE_CLEAR_MS = 760;
 const GHOST_MOVE_MS = 680;
 const GHOST_FADE_MS = 260;
 const COURT_PULSE_DELAY_MS = 250;
 const QUEUE_REVEAL_DELAY_MS = 520;
 const GHOST_REMOVE_DELAY_MS = 920;
+const TARGET_REVEAL_DELAY_MS = GHOST_REMOVE_DELAY_MS;
+const TARGET_RESET_DELAY_MS = 980;
 const QUEUE_RESET_DELAY_MS = 1140;
 const ANIMATION_COMPLETE_DELAY_MS = 1280;
 
@@ -277,13 +282,22 @@ export function LiveCourtsPanel({
   const courtSurfaceRefs = useRef(new Map<string, HTMLDivElement | null>());
   const queuedSurfaceRef = useRef<HTMLDivElement | null>(null);
   const queuedSurfaceSnapshotRef = useRef<RectSnapshot | null>(null);
+  const [activeQueuePromotion, setActiveQueuePromotion] =
+    useState<QueuePromotionAnimation | null>(null);
   const [ghostPromotion, setGhostPromotion] = useState<PromotionGhostState | null>(
     null
   );
   const [highlightedCourtId, setHighlightedCourtId] = useState<string | null>(null);
-  const [queuedPromotionState, setQueuedPromotionState] = useState<
-    "normal" | "suppressed" | "entering"
-  >("normal");
+  const [queuedPromotionState, setQueuedPromotionState] =
+    useState<PromotionSurfaceState>("normal");
+  const [targetPromotionCourtId, setTargetPromotionCourtId] = useState<
+    string | null
+  >(null);
+  const [targetPromotionState, setTargetPromotionState] =
+    useState<PromotionSurfaceState>("normal");
+  const handleQueuePromotionAnimationComplete = useEffectEvent(() => {
+    onQueuePromotionAnimationComplete();
+  });
   const showCreateMatchesAction =
     sessionStatus === SessionStatus.ACTIVE &&
     isAdmin &&
@@ -354,25 +368,42 @@ export function LiveCourtsPanel({
       return;
     }
 
+    const nextQueuePromotion = queuePromotionAnimation;
+    const frameId = window.requestAnimationFrame(() => {
+      setActiveQueuePromotion((current) =>
+        current?.id === nextQueuePromotion.id ? current : nextQueuePromotion
+      );
+    });
+
+    return () => {
+      window.cancelAnimationFrame(frameId);
+    };
+  }, [queuePromotionAnimation]);
+
+  useLayoutEffect(() => {
+    if (!activeQueuePromotion) {
+      return;
+    }
+
     const sourceRect =
       queuedSurfaceSnapshotRef.current ??
       (queuedSurfaceRef.current
         ? snapshotRect(queuedSurfaceRef.current.getBoundingClientRect())
         : null);
     const targetNode =
-      courtSurfaceRefs.current.get(queuePromotionAnimation.targetCourtId) ?? null;
+      courtSurfaceRefs.current.get(activeQueuePromotion.targetCourtId) ?? null;
     const targetRect = targetNode
       ? snapshotRect(targetNode.getBoundingClientRect())
       : null;
     const shouldAnimateQueuedReplacement =
-      queuePromotionAnimation.replacementQueuedMatchId !== null;
+      activeQueuePromotion.replacementQueuedMatchId !== null;
     const timers: Array<ReturnType<typeof setTimeout>> = [];
     let firstFrameId: number | null = null;
     let secondFrameId: number | null = null;
 
     const clearTargetPulse = () => {
       setHighlightedCourtId((current) =>
-        current === queuePromotionAnimation.targetCourtId ? null : current
+        current === activeQueuePromotion.targetCourtId ? null : current
       );
     };
 
@@ -381,9 +412,32 @@ export function LiveCourtsPanel({
         current === "suppressed" || current === "entering" ? "normal" : current
       );
     };
+    const startTargetSuppression = () => {
+      setTargetPromotionCourtId(activeQueuePromotion.targetCourtId);
+      setTargetPromotionState("suppressed");
+    };
+    const revealTargetCard = () => {
+      setTargetPromotionCourtId(activeQueuePromotion.targetCourtId);
+      setTargetPromotionState("entering");
+      timers.push(
+        setTimeout(() => {
+          setTargetPromotionState((current) =>
+            current === "entering" ? "normal" : current
+          );
+        }, TARGET_RESET_DELAY_MS - TARGET_REVEAL_DELAY_MS)
+      );
+    };
+    const clearTargetAnimationState = () => {
+      setTargetPromotionState((current) =>
+        current === "suppressed" || current === "entering" ? "normal" : current
+      );
+      setTargetPromotionCourtId((current) =>
+        current === activeQueuePromotion.targetCourtId ? null : current
+      );
+    };
 
     const startCourtPulse = () => {
-      setHighlightedCourtId(queuePromotionAnimation.targetCourtId);
+      setHighlightedCourtId(activeQueuePromotion.targetCourtId);
       timers.push(setTimeout(clearTargetPulse, COURT_PULSE_CLEAR_MS));
     };
 
@@ -395,20 +449,29 @@ export function LiveCourtsPanel({
       } else {
         timers.push(setTimeout(clearQueuedAnimationState, 0));
       }
-      timers.push(setTimeout(onQueuePromotionAnimationComplete, 520));
+      timers.push(
+        setTimeout(() => {
+          setActiveQueuePromotion((current) =>
+            current?.id === activeQueuePromotion.id ? null : current
+          );
+          handleQueuePromotionAnimationComplete();
+        }, 520)
+      );
 
       return () => {
         timers.forEach((timer) => clearTimeout(timer));
         clearTargetPulse();
         clearQueuedAnimationState();
+        clearTargetAnimationState();
       };
     }
 
+    startTargetSuppression();
     firstFrameId = window.requestAnimationFrame(() => {
       setQueuedPromotionState("suppressed");
       setGhostPromotion({
-        id: queuePromotionAnimation.id,
-        match: queuePromotionAnimation.sourceQueuedMatch,
+        id: activeQueuePromotion.id,
+        match: activeQueuePromotion.sourceQueuedMatch,
         sourceRect,
         targetRect,
         flying: false,
@@ -416,7 +479,7 @@ export function LiveCourtsPanel({
 
       secondFrameId = window.requestAnimationFrame(() => {
         setGhostPromotion((current) =>
-          current?.id === queuePromotionAnimation.id
+          current?.id === activeQueuePromotion.id
             ? { ...current, flying: true }
             : current
         );
@@ -424,6 +487,7 @@ export function LiveCourtsPanel({
     });
 
     timers.push(setTimeout(startCourtPulse, COURT_PULSE_DELAY_MS));
+    timers.push(setTimeout(revealTargetCard, TARGET_REVEAL_DELAY_MS));
     timers.push(
       setTimeout(() => {
         setQueuedPromotionState(
@@ -434,13 +498,19 @@ export function LiveCourtsPanel({
     timers.push(
       setTimeout(() => {
         setGhostPromotion((current) =>
-          current?.id === queuePromotionAnimation.id ? null : current
+          current?.id === activeQueuePromotion.id ? null : current
         );
       }, GHOST_REMOVE_DELAY_MS)
     );
     timers.push(setTimeout(clearQueuedAnimationState, QUEUE_RESET_DELAY_MS));
+    timers.push(setTimeout(clearTargetAnimationState, TARGET_RESET_DELAY_MS));
     timers.push(
-      setTimeout(onQueuePromotionAnimationComplete, ANIMATION_COMPLETE_DELAY_MS)
+      setTimeout(() => {
+        setActiveQueuePromotion((current) =>
+          current?.id === activeQueuePromotion.id ? null : current
+        );
+        handleQueuePromotionAnimationComplete();
+      }, ANIMATION_COMPLETE_DELAY_MS)
     );
 
     return () => {
@@ -452,15 +522,15 @@ export function LiveCourtsPanel({
       }
       timers.forEach((timer) => clearTimeout(timer));
       setGhostPromotion((current) =>
-        current?.id === queuePromotionAnimation.id ? null : current
+        current?.id === activeQueuePromotion.id ? null : current
       );
       clearTargetPulse();
       clearQueuedAnimationState();
+      clearTargetAnimationState();
     };
   }, [
-    onQueuePromotionAnimationComplete,
+    activeQueuePromotion,
     prefersReducedMotion,
-    queuePromotionAnimation,
   ]);
 
   const getMatchPoolLabel = (match: Match | null) => {
@@ -508,6 +578,8 @@ export function LiveCourtsPanel({
             )
           )
       : null;
+  const getCourtPromotionState = (courtId: string): PromotionSurfaceState =>
+    targetPromotionCourtId === courtId ? targetPromotionState : "normal";
 
   return (
     <SectionCard
@@ -568,6 +640,7 @@ export function LiveCourtsPanel({
             matchScores={matchScores}
             promotionSurfaceRef={(node) => setCourtSurfaceRef(court.id, node)}
             isPromotionTarget={highlightedCourtId === court.id}
+            promotionState={getCourtPromotionState(court.id)}
             onOpenManualMatchModal={onOpenManualMatchModal}
             onReshuffleMatch={onReshuffleMatch}
             onReshuffleMatchWithoutPlayer={onReshuffleMatchWithoutPlayer}

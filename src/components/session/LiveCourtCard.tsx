@@ -6,6 +6,31 @@ import { MatchStatus, SessionStatus } from "@/types/enums";
 import type { Court, MatchScores } from "./sessionTypes";
 import { LiveMatchCard } from "./LiveMatchCard";
 
+type PromotionSurfaceState = "normal" | "suppressed" | "entering";
+
+function PromotionArrivalPlaceholder() {
+  return (
+    <div aria-hidden="true" className="space-y-3">
+      <div className="rounded-2xl border border-blue-100 bg-blue-50/20 p-3 md:p-3.5">
+        <div className="grid grid-cols-[minmax(0,1fr)_2.5rem_2.5rem_minmax(0,1fr)] items-center gap-2.5 sm:grid-cols-[minmax(0,1fr)_2.75rem_2.75rem_minmax(0,1fr)] sm:gap-3 md:grid-cols-[minmax(0,1fr)_3.5rem_3.5rem_minmax(0,1fr)] md:gap-4 xl:grid-cols-[minmax(0,1fr)_2.75rem_2.75rem_minmax(0,1fr)] xl:gap-3">
+          <div className="space-y-1">
+            <div className="h-5 rounded bg-white/70 sm:h-6 md:h-8 xl:h-6" />
+            <div className="h-5 rounded bg-white/70 sm:h-6 md:h-8 xl:h-6" />
+          </div>
+          <div className="h-10 w-10 rounded-lg border border-blue-100 bg-white/60 sm:h-11 sm:w-11 md:h-14 md:w-14 xl:h-11 xl:w-11" />
+          <div className="h-10 w-10 rounded-lg border border-blue-100 bg-white/60 sm:h-11 sm:w-11 md:h-14 md:w-14 xl:h-11 xl:w-11" />
+          <div className="space-y-1">
+            <div className="h-5 rounded bg-white/70 sm:h-6 md:h-8 xl:h-6" />
+            <div className="h-5 rounded bg-white/70 sm:h-6 md:h-8 xl:h-6" />
+          </div>
+        </div>
+      </div>
+
+      <div className="h-12 rounded-xl bg-gray-100/70" />
+    </div>
+  );
+}
+
 interface LiveCourtCardProps {
   sessionStatus: string;
   court: Court;
@@ -38,6 +63,7 @@ interface LiveCourtCardProps {
   onReopenScoreForEdit: (matchId: string) => void;
   promotionSurfaceRef?: Ref<HTMLDivElement>;
   isPromotionTarget?: boolean;
+  promotionState?: PromotionSurfaceState;
 }
 
 export function LiveCourtCard({
@@ -68,6 +94,7 @@ export function LiveCourtCard({
   onReopenScoreForEdit,
   promotionSurfaceRef,
   isPromotionTarget = false,
+  promotionState = "normal",
 }: LiveCourtCardProps) {
   const currentMatch = court.currentMatch;
   const courtPlayerActionActive =
@@ -115,6 +142,10 @@ export function LiveCourtCard({
       {undoingCourtId === court.id ? "Undoing..." : "Undo"}
     </button>
   ) : null;
+  const matchContentVisibilityClass =
+    promotionState === "entering"
+      ? "opacity-100 translate-y-0 scale-100"
+      : "opacity-100 translate-y-0 scale-100";
 
   return (
     <div
@@ -143,29 +174,44 @@ export function LiveCourtCard({
 
       <div className="flex flex-1 flex-col justify-center p-3 md:p-4">
         {currentMatch ? (
-          <LiveMatchCard
-            match={currentMatch}
-            currentUserId={currentUserId}
-            isAdmin={isAdmin}
-            isClaimedUser={isClaimedUser}
-            confirmingScoreMatchId={confirmingScoreMatchId}
-            reshufflingCourtPlayerId={reshufflingCourtPlayerId}
-            replacingCourtPlayerId={replacingCourtPlayerId}
-            reopeningMatchId={reopeningMatchId}
-            submittingMatchId={submittingMatchId}
-            matchScores={matchScores}
-            lineupRef={promotionSurfaceRef}
-            onReshuffleWithoutPlayer={(userId) =>
-              onReshuffleMatchWithoutPlayer(court.id, userId)
-            }
-            onReplacePlayer={(userId) => onReplaceMatchPlayer(court.id, userId)}
-            onHandleScoreChange={onHandleScoreChange}
-            onRequestScoreSubmitConfirmation={onRequestScoreSubmitConfirmation}
-            onCancelScoreSubmitConfirmation={onCancelScoreSubmitConfirmation}
-            onSubmitScore={onSubmitScore}
-            onApproveScore={onApproveScore}
-            onReopenScoreForEdit={onReopenScoreForEdit}
-          />
+          <div ref={promotionSurfaceRef} data-live-court-promotion-surface={court.id}>
+            {promotionState === "suppressed" ? (
+              <PromotionArrivalPlaceholder />
+            ) : (
+              <div
+                className={`transition-[opacity,transform] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${matchContentVisibilityClass}`}
+              >
+                <LiveMatchCard
+                  match={currentMatch}
+                  currentUserId={currentUserId}
+                  isAdmin={isAdmin}
+                  isClaimedUser={isClaimedUser}
+                  confirmingScoreMatchId={confirmingScoreMatchId}
+                  reshufflingCourtPlayerId={reshufflingCourtPlayerId}
+                  replacingCourtPlayerId={replacingCourtPlayerId}
+                  reopeningMatchId={reopeningMatchId}
+                  submittingMatchId={submittingMatchId}
+                  matchScores={matchScores}
+                  onReshuffleWithoutPlayer={(userId) =>
+                    onReshuffleMatchWithoutPlayer(court.id, userId)
+                  }
+                  onReplacePlayer={(userId) =>
+                    onReplaceMatchPlayer(court.id, userId)
+                  }
+                  onHandleScoreChange={onHandleScoreChange}
+                  onRequestScoreSubmitConfirmation={
+                    onRequestScoreSubmitConfirmation
+                  }
+                  onCancelScoreSubmitConfirmation={
+                    onCancelScoreSubmitConfirmation
+                  }
+                  onSubmitScore={onSubmitScore}
+                  onApproveScore={onApproveScore}
+                  onReopenScoreForEdit={onReopenScoreForEdit}
+                />
+              </div>
+            )}
+          </div>
         ) : (
           <div className="px-4 py-10 text-center">
             <div className="mb-2 text-xs font-black tracking-[0.35em] opacity-40">
