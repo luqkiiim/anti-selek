@@ -168,7 +168,10 @@ function QueuePromotionGhostTeamNames({
 
 function QueuePromotionGhostScoreSlot() {
   return (
-    <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-gray-100 bg-white text-lg font-black tabular-nums text-gray-300 sm:h-11 sm:w-11 sm:text-xl md:h-14 md:w-14 md:text-[2rem] xl:h-11 xl:w-11 xl:text-xl">
+    <div
+      data-queue-promotion-ghost-score-slot="true"
+      className="flex h-10 w-10 items-center justify-center rounded-lg border border-gray-100 bg-white text-lg font-black tabular-nums text-gray-300 sm:h-11 sm:w-11 sm:text-xl md:h-14 md:w-14 md:text-[2rem] xl:h-11 xl:w-11 xl:text-xl"
+    >
       -
     </div>
   );
@@ -179,10 +182,17 @@ function QueuePromotionGhost({ ghost }: { ghost: PromotionGhostState }) {
     return null;
   }
 
-  const translateX = ghost.targetRect.left - ghost.sourceRect.left;
-  const translateY = ghost.targetRect.top - ghost.sourceRect.top;
-  const scaleX = ghost.targetRect.width / Math.max(ghost.sourceRect.width, 1);
-  const scaleY = ghost.targetRect.height / Math.max(ghost.sourceRect.height, 1);
+  const sourceCenterX = ghost.sourceRect.left + ghost.sourceRect.width / 2;
+  const sourceCenterY = ghost.sourceRect.top + ghost.sourceRect.height / 2;
+  const targetCenterX = ghost.targetRect.left + ghost.targetRect.width / 2;
+  const targetCenterY = ghost.targetRect.top + ghost.targetRect.height / 2;
+  const startScale = Math.min(
+    ghost.sourceRect.width / Math.max(ghost.targetRect.width, 1),
+    ghost.sourceRect.height / Math.max(ghost.targetRect.height, 1),
+    1
+  );
+  const startTranslateX = sourceCenterX - targetCenterX;
+  const startTranslateY = sourceCenterY - targetCenterY;
 
   return createPortal(
     <div
@@ -190,14 +200,14 @@ function QueuePromotionGhost({ ghost }: { ghost: PromotionGhostState }) {
       data-queue-promotion-ghost="true"
       className="pointer-events-none fixed z-[70]"
       style={{
-        top: ghost.sourceRect.top,
-        left: ghost.sourceRect.left,
-        width: ghost.sourceRect.width,
-        height: ghost.sourceRect.height,
-        transformOrigin: "top left",
+        top: ghost.targetRect.top,
+        left: ghost.targetRect.left,
+        width: ghost.targetRect.width,
+        height: ghost.targetRect.height,
+        transformOrigin: "center center",
         transform: ghost.flying
-          ? `translate(${translateX}px, ${translateY}px) scale(${scaleX}, ${scaleY})`
-          : "translate(0px, 0px) scale(1, 1)",
+          ? "translate(0px, 0px) scale(1)"
+          : `translate(${startTranslateX}px, ${startTranslateY}px) scale(${startScale})`,
         opacity: ghost.flying ? 0.9 : 1,
         transition:
           `transform ${GHOST_MOVE_MS}ms cubic-bezier(0.22, 1, 0.36, 1), opacity ${GHOST_FADE_MS}ms ease`,

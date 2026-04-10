@@ -413,6 +413,9 @@ async function captureScreens() {
       debugFrames.push(
         await desktopPage.evaluate((frameNumber) => {
           const ghost = document.querySelector("[data-queue-promotion-ghost='true']");
+          const ghostScoreSlots = Array.from(
+            document.querySelectorAll("[data-queue-promotion-ghost-score-slot]")
+          );
           const queueSurface = document.querySelector(
             "[data-queued-promotion-surface='true']"
           );
@@ -432,6 +435,7 @@ async function captureScreens() {
           return {
             frame: frameNumber,
             ghost: toRect(ghost),
+            ghostScoreSlots: ghostScoreSlots.map((slot) => toRect(slot)),
             queueSurface: toRect(queueSurface),
             courtCards: Array.from(
               document.querySelectorAll("[data-live-court-card]")
@@ -453,6 +457,33 @@ async function captureScreens() {
       path.join(screenshotDir, "queue-promotion-debug.json"),
       JSON.stringify(debugFrames, null, 2)
     );
+
+    const stretchedGhostFrame = debugFrames.find((frame) =>
+      frame.ghostScoreSlots.some((slot) => {
+        if (!slot) {
+          return false;
+        }
+
+        const aspectRatio = slot.width / Math.max(slot.height, 1);
+        return aspectRatio < 0.92 || aspectRatio > 1.08;
+      })
+    );
+
+    if (stretchedGhostFrame) {
+      throw new Error(
+        `Queue promotion ghost stretched score slot on frame ${stretchedGhostFrame.frame}`
+      );
+    }
+
+    const missingGhostSlotFrame = debugFrames.find(
+      (frame) => frame.ghost && frame.ghostScoreSlots.length === 0
+    );
+
+    if (missingGhostSlotFrame) {
+      throw new Error(
+        `Queue promotion ghost score slots were not measurable on frame ${missingGhostSlotFrame.frame}`
+      );
+    }
   } finally {
     await browser.close();
   }

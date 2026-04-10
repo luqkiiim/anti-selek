@@ -8,10 +8,20 @@ import { LiveMatchCard } from "./LiveMatchCard";
 
 type PromotionSurfaceState = "normal" | "suppressed" | "entering";
 
-function PromotionArrivalPlaceholder() {
+function PromotionArrivalPlaceholder({
+  surfaceRef,
+  surfaceId,
+}: {
+  surfaceRef?: Ref<HTMLDivElement>;
+  surfaceId: string;
+}) {
   return (
     <div aria-hidden="true" className="space-y-3">
-      <div className="rounded-2xl border border-blue-100 bg-blue-50/20 p-3 md:p-3.5">
+      <div
+        ref={surfaceRef}
+        data-live-court-promotion-surface={surfaceId}
+        className="rounded-2xl border border-blue-100 bg-blue-50/20 p-3 md:p-3.5"
+      >
         <div className="grid grid-cols-[minmax(0,1fr)_2.5rem_2.5rem_minmax(0,1fr)] items-center gap-2.5 sm:grid-cols-[minmax(0,1fr)_2.75rem_2.75rem_minmax(0,1fr)] sm:gap-3 md:grid-cols-[minmax(0,1fr)_3.5rem_3.5rem_minmax(0,1fr)] md:gap-4 xl:grid-cols-[minmax(0,1fr)_2.75rem_2.75rem_minmax(0,1fr)] xl:gap-3">
           <div className="space-y-1">
             <div className="h-5 rounded bg-white/70 sm:h-6 md:h-8 xl:h-6" />
@@ -174,44 +184,46 @@ export function LiveCourtCard({
 
       <div className="flex flex-1 flex-col justify-center p-3 md:p-4">
         {currentMatch ? (
-          <div ref={promotionSurfaceRef} data-live-court-promotion-surface={court.id}>
-            {promotionState === "suppressed" ? (
-              <PromotionArrivalPlaceholder />
-            ) : (
-              <div
-                className={`transition-[opacity,transform] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${matchContentVisibilityClass}`}
-              >
-                <LiveMatchCard
-                  match={currentMatch}
-                  currentUserId={currentUserId}
-                  isAdmin={isAdmin}
-                  isClaimedUser={isClaimedUser}
-                  confirmingScoreMatchId={confirmingScoreMatchId}
-                  reshufflingCourtPlayerId={reshufflingCourtPlayerId}
-                  replacingCourtPlayerId={replacingCourtPlayerId}
-                  reopeningMatchId={reopeningMatchId}
-                  submittingMatchId={submittingMatchId}
-                  matchScores={matchScores}
-                  onReshuffleWithoutPlayer={(userId) =>
-                    onReshuffleMatchWithoutPlayer(court.id, userId)
-                  }
-                  onReplacePlayer={(userId) =>
-                    onReplaceMatchPlayer(court.id, userId)
-                  }
-                  onHandleScoreChange={onHandleScoreChange}
-                  onRequestScoreSubmitConfirmation={
-                    onRequestScoreSubmitConfirmation
-                  }
-                  onCancelScoreSubmitConfirmation={
-                    onCancelScoreSubmitConfirmation
-                  }
-                  onSubmitScore={onSubmitScore}
-                  onApproveScore={onApproveScore}
-                  onReopenScoreForEdit={onReopenScoreForEdit}
-                />
-              </div>
-            )}
-          </div>
+          promotionState === "suppressed" ? (
+            <PromotionArrivalPlaceholder
+              surfaceRef={promotionSurfaceRef}
+              surfaceId={court.id}
+            />
+          ) : (
+            <div
+              className={`transition-[opacity,transform] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${matchContentVisibilityClass}`}
+            >
+              <LiveMatchCard
+                match={currentMatch}
+                currentUserId={currentUserId}
+                isAdmin={isAdmin}
+                isClaimedUser={isClaimedUser}
+                confirmingScoreMatchId={confirmingScoreMatchId}
+                reshufflingCourtPlayerId={reshufflingCourtPlayerId}
+                replacingCourtPlayerId={replacingCourtPlayerId}
+                reopeningMatchId={reopeningMatchId}
+                submittingMatchId={submittingMatchId}
+                matchScores={matchScores}
+                lineupRef={promotionSurfaceRef}
+                onReshuffleWithoutPlayer={(userId) =>
+                  onReshuffleMatchWithoutPlayer(court.id, userId)
+                }
+                onReplacePlayer={(userId) =>
+                  onReplaceMatchPlayer(court.id, userId)
+                }
+                onHandleScoreChange={onHandleScoreChange}
+                onRequestScoreSubmitConfirmation={
+                  onRequestScoreSubmitConfirmation
+                }
+                onCancelScoreSubmitConfirmation={
+                  onCancelScoreSubmitConfirmation
+                }
+                onSubmitScore={onSubmitScore}
+                onApproveScore={onApproveScore}
+                onReopenScoreForEdit={onReopenScoreForEdit}
+              />
+            </div>
+          )
         ) : (
           <div className="px-4 py-10 text-center">
             <div className="mb-2 text-xs font-black tracking-[0.35em] opacity-40">
