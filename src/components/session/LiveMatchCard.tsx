@@ -310,9 +310,13 @@ export function LiveMatchCard({
         return;
       }
 
+      const prefersReducedMotion =
+        typeof window.matchMedia === "function" &&
+        window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
       window.scrollTo({
         top: targetScrollY,
-        behavior: "auto",
+        behavior: prefersReducedMotion ? "auto" : "smooth",
       });
     };
 
