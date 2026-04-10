@@ -135,6 +135,7 @@ interface ScoreSlotProps {
   scoreValue: string;
   readonlyScore?: string | number;
   pendingScore?: number;
+  inputRef?: Ref<HTMLInputElement>;
   onScoreChange: (value: string) => void;
   onScoreFocus?: () => void;
   onScoreBlur?: () => void;
@@ -146,6 +147,7 @@ function ScoreSlot({
   scoreValue,
   readonlyScore,
   pendingScore,
+  inputRef,
   onScoreChange,
   onScoreFocus,
   onScoreBlur,
@@ -153,6 +155,7 @@ function ScoreSlot({
   if (canEdit) {
     return (
       <input
+        ref={inputRef}
         type="number"
         inputMode="numeric"
         data-live-score-input="true"
@@ -216,6 +219,8 @@ export function LiveMatchCard({
     blurTimerId: null,
     restoreTimerId: null,
   });
+  const team1ScoreInputRef = useRef<HTMLInputElement | null>(null);
+  const team2ScoreInputRef = useRef<HTMLInputElement | null>(null);
   const [openActionPlayerId, setOpenActionPlayerId] = useState<string | null>(
     null
   );
@@ -444,6 +449,37 @@ export function LiveMatchCard({
     onReplacePlayer(userId);
   };
 
+  const focusOpponentScoreInput = useCallback(
+    (input: HTMLInputElement | null) => {
+      if (!input) {
+        return;
+      }
+
+      window.requestAnimationFrame(() => {
+        input.focus();
+      });
+    },
+    []
+  );
+
+  const handleTeam1ScoreChange = useCallback(
+    (value: string) => {
+      onHandleScoreChange(match.id, "team1", value);
+
+      if (/^\d{2}$/.test(value)) {
+        focusOpponentScoreInput(team2ScoreInputRef.current);
+      }
+    },
+    [focusOpponentScoreInput, match.id, onHandleScoreChange]
+  );
+
+  const handleTeam2ScoreChange = useCallback(
+    (value: string) => {
+      onHandleScoreChange(match.id, "team2", value);
+    },
+    [match.id, onHandleScoreChange]
+  );
+
   useEffect(() => {
     if (canEditScores) {
       return;
@@ -488,7 +524,8 @@ export function LiveMatchCard({
             scoreValue={scores.team1}
             readonlyScore={isConfirmingSubmission ? scores.team1 : undefined}
             pendingScore={isPendingApproval ? match.team1Score : undefined}
-            onScoreChange={(value) => onHandleScoreChange(match.id, "team1", value)}
+            inputRef={team1ScoreInputRef}
+            onScoreChange={handleTeam1ScoreChange}
             onScoreFocus={handleScoreInputFocus}
             onScoreBlur={handleScoreInputBlur}
           />
@@ -498,7 +535,8 @@ export function LiveMatchCard({
             scoreValue={scores.team2}
             readonlyScore={isConfirmingSubmission ? scores.team2 : undefined}
             pendingScore={isPendingApproval ? match.team2Score : undefined}
-            onScoreChange={(value) => onHandleScoreChange(match.id, "team2", value)}
+            inputRef={team2ScoreInputRef}
+            onScoreChange={handleTeam2ScoreChange}
             onScoreFocus={handleScoreInputFocus}
             onScoreBlur={handleScoreInputBlur}
           />

@@ -397,6 +397,21 @@ test("admin can end and rollback the latest completed tournament", async ({
     });
 });
 
+test("score entry auto-advances to the opponent box after two digits", async ({
+  page,
+}) => {
+  await signInAsAdmin(page);
+  await page.goto(`/session/${scoreSessionCode}`);
+
+  const scoreInputs = page.locator('input[type="number"]');
+  await expect(scoreInputs).toHaveCount(2);
+
+  await scoreInputs.nth(0).click();
+  await page.keyboard.type("21");
+
+  await expect(scoreInputs.nth(1)).toBeFocused();
+});
+
 test("admin can submit and approve a pending score", async ({ page }) => {
   await signInAsAdmin(page);
   await page.goto(`/session/${scoreSessionCode}`);
