@@ -261,6 +261,22 @@ describe("generate match service", () => {
       });
     });
 
+    it("accepts replace-player requests", () => {
+      expect(
+        parseGenerateMatchRequest({
+          courtId: "court-1",
+          replaceUserId: "player-2",
+        })
+      ).toEqual({
+        requestedCourtIds: ["court-1"],
+        forceReshuffle: false,
+        undoCurrentMatch: false,
+        manualTeams: undefined,
+        excludedUserId: undefined,
+        replaceUserId: "player-2",
+      });
+    });
+
     it("rejects missing court identifiers", () => {
       expect(() => parseGenerateMatchRequest({})).toThrowError(
         new GenerateMatchError(400, "Court ID required")
@@ -288,7 +304,7 @@ describe("generate match service", () => {
       ).toThrowError(
         new GenerateMatchError(
           400,
-          "Reshuffle, undo, and manual match creation are only supported for one court at a time."
+          "Reshuffle, undo, replace player, and manual match creation are only supported for one court at a time."
         )
       );
     });
@@ -303,6 +319,21 @@ describe("generate match service", () => {
         new GenerateMatchError(
           400,
           "Excluded-player reshuffle must be combined with reshuffle."
+        )
+      );
+    });
+
+    it("rejects replace-player requests combined with reshuffle", () => {
+      expect(() =>
+        parseGenerateMatchRequest({
+          courtId: "court-1",
+          forceReshuffle: true,
+          replaceUserId: "player-1",
+        })
+      ).toThrowError(
+        new GenerateMatchError(
+          400,
+          "Replace player cannot be combined with reshuffle, undo, or manual match creation."
         )
       );
     });

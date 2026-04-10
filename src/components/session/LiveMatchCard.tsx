@@ -14,10 +14,12 @@ interface LiveMatchCardProps {
   isClaimedUser: boolean;
   confirmingScoreMatchId: string | null;
   reshufflingCourtPlayerId: string | null;
+  replacingCourtPlayerId: string | null;
   reopeningMatchId: string | null;
   submittingMatchId: string | null;
   matchScores: MatchScores;
   onReshuffleWithoutPlayer: (userId: string) => void;
+  onReplacePlayer: (userId: string) => void;
   onHandleScoreChange: (
     matchId: string,
     team: "team1" | "team2",
@@ -38,9 +40,11 @@ interface TeamNamesProps {
   canReshuffleWithoutPlayer: boolean;
   activeActionPlayerId: string | null;
   reshufflingCourtPlayerId: string | null;
+  replacingCourtPlayerId: string | null;
   actionDisabled: boolean;
   onTogglePlayerAction: (actionKey: string) => void;
   onReshuffleWithoutPlayer: (userId: string) => void;
+  onReplacePlayer: (userId: string) => void;
 }
 
 function TeamNames({
@@ -50,9 +54,11 @@ function TeamNames({
   canReshuffleWithoutPlayer,
   activeActionPlayerId,
   reshufflingCourtPlayerId,
+  replacingCourtPlayerId,
   actionDisabled,
   onTogglePlayerAction,
   onReshuffleWithoutPlayer,
+  onReplacePlayer,
 }: TeamNamesProps) {
   const textAlignClass = align === "right" ? "text-right" : "text-left";
   const popoverPositionClass = align === "right" ? "right-0" : "left-0";
@@ -63,6 +69,7 @@ function TeamNames({
         const actionKey = `${matchId}:${player.id}`;
         const actionOpen = activeActionPlayerId === actionKey;
         const isReshuffling = reshufflingCourtPlayerId === player.id;
+        const isReplacing = replacingCourtPlayerId === player.id;
 
         return (
           <div
@@ -88,9 +95,9 @@ function TeamNames({
 
             {canReshuffleWithoutPlayer && actionOpen ? (
               <div
-                className={`absolute top-full z-20 mt-2 w-36 max-w-[calc(100vw-3rem)] ${popoverPositionClass}`}
+                className={`absolute top-full z-20 mt-2 w-40 max-w-[calc(100vw-3rem)] ${popoverPositionClass}`}
               >
-                <div className="relative rounded-2xl border border-gray-900 bg-gray-950 p-2 shadow-[0_18px_40px_-22px_rgba(15,23,42,0.55)]">
+                <div className="relative space-y-2 rounded-2xl border border-gray-900 bg-gray-950 p-2 shadow-[0_18px_40px_-22px_rgba(15,23,42,0.55)]">
                   <div
                     className={`absolute top-0 h-3 w-3 -translate-y-1/2 rotate-45 border-l border-t border-gray-900 bg-gray-950 ${
                       align === "right" ? "right-4" : "left-4"
@@ -103,6 +110,14 @@ function TeamNames({
                     className="w-full rounded-xl border border-blue-200/80 bg-blue-50 px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-blue-800 transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     {isReshuffling ? "Reshuffling..." : "Reshuffle Without"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onReplacePlayer(player.id)}
+                    disabled={actionDisabled}
+                    className="w-full rounded-xl border border-emerald-200/80 bg-emerald-50 px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-emerald-800 transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {isReplacing ? "Replacing..." : "Replace"}
                   </button>
                 </div>
               </div>
@@ -176,10 +191,12 @@ export function LiveMatchCard({
   isClaimedUser,
   confirmingScoreMatchId,
   reshufflingCourtPlayerId,
+  replacingCourtPlayerId,
   reopeningMatchId,
   submittingMatchId,
   matchScores,
   onReshuffleWithoutPlayer,
+  onReplacePlayer,
   onHandleScoreChange,
   onRequestScoreSubmitConfirmation,
   onCancelScoreSubmitConfirmation,
@@ -232,7 +249,8 @@ export function LiveMatchCard({
   const canEditScores = canEdit && !isConfirmingSubmission;
   const canReshuffleWithoutPlayer =
     isAdmin && match.status === MatchStatus.IN_PROGRESS;
-  const actionDisabled = reshufflingCourtPlayerId !== null;
+  const actionDisabled =
+    reshufflingCourtPlayerId !== null || replacingCourtPlayerId !== null;
   const clearScoreInputRestoreTimers = useCallback(() => {
     const restoreState = scoreInputScrollRestoreRef.current;
     if (restoreState.blurTimerId !== null) {
@@ -405,12 +423,13 @@ export function LiveMatchCard({
   }, [activeActionPlayerId]);
 
   useEffect(() => {
-    if (!reshufflingCourtPlayerId) {
+    const activePlayerId = reshufflingCourtPlayerId ?? replacingCourtPlayerId;
+    if (!activePlayerId) {
       return;
     }
 
-    setActiveActionPlayerId(`${match.id}:${reshufflingCourtPlayerId}`);
-  }, [match.id, reshufflingCourtPlayerId]);
+    setActiveActionPlayerId(`${match.id}:${activePlayerId}`);
+  }, [match.id, replacingCourtPlayerId, reshufflingCourtPlayerId]);
 
   const handleTogglePlayerAction = (actionKey: string) => {
     if (actionDisabled) return;
@@ -422,6 +441,11 @@ export function LiveMatchCard({
   const handleReshuffleWithoutPlayer = (userId: string) => {
     setActiveActionPlayerId(`${match.id}:${userId}`);
     onReshuffleWithoutPlayer(userId);
+  };
+
+  const handleReplacePlayer = (userId: string) => {
+    setActiveActionPlayerId(`${match.id}:${userId}`);
+    onReplacePlayer(userId);
   };
 
   useEffect(() => {
@@ -456,9 +480,11 @@ export function LiveMatchCard({
             canReshuffleWithoutPlayer={canReshuffleWithoutPlayer}
             activeActionPlayerId={activeActionPlayerId}
             reshufflingCourtPlayerId={reshufflingCourtPlayerId}
+            replacingCourtPlayerId={replacingCourtPlayerId}
             actionDisabled={actionDisabled}
             onTogglePlayerAction={handleTogglePlayerAction}
             onReshuffleWithoutPlayer={handleReshuffleWithoutPlayer}
+            onReplacePlayer={handleReplacePlayer}
           />
           <ScoreSlot
             matchId={match.id}
@@ -487,9 +513,11 @@ export function LiveMatchCard({
             canReshuffleWithoutPlayer={canReshuffleWithoutPlayer}
             activeActionPlayerId={activeActionPlayerId}
             reshufflingCourtPlayerId={reshufflingCourtPlayerId}
+            replacingCourtPlayerId={replacingCourtPlayerId}
             actionDisabled={actionDisabled}
             onTogglePlayerAction={handleTogglePlayerAction}
             onReshuffleWithoutPlayer={handleReshuffleWithoutPlayer}
+            onReplacePlayer={handleReplacePlayer}
           />
         </div>
       </div>

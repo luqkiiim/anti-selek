@@ -40,6 +40,9 @@ export function useSessionCourtMatchCreation({
   const [reshufflingQueuedPlayerId, setReshufflingQueuedPlayerId] = useState<
     string | null
   >(null);
+  const [replacingQueuedPlayerId, setReplacingQueuedPlayerId] = useState<
+    string | null
+  >(null);
   const [manualCourtId, setManualCourtId] = useState<string | null>(null);
   const [manualQueueOpen, setManualQueueOpen] = useState(false);
   const [creatingManualMatch, setCreatingManualMatch] = useState(false);
@@ -349,6 +352,36 @@ export function useSessionCourtMatchCreation({
     }
   };
 
+  const replaceQueuedMatchPlayer = async (userId: string) => {
+    if (!sessionData?.queuedMatch) return;
+
+    setReplacingQueuedPlayerId(userId);
+    setError("");
+    try {
+      const { res, data } = await postSessionAction(
+        `/api/sessions/${code}/queue-match`,
+        {
+          safeJson,
+          body: {
+            replaceUserId: userId,
+          },
+        }
+      );
+
+      if (!res.ok) {
+        setError(data.error || "Failed to replace queued player");
+        return;
+      }
+
+      syncQueuedMatch(data.queuedMatch ?? null);
+    } catch (err) {
+      console.error(err);
+      setError("Network error replacing queued player");
+    } finally {
+      setReplacingQueuedPlayerId(null);
+    }
+  };
+
   return {
     creatingOpenMatches,
     creatingOpenCourtCount,
@@ -357,6 +390,7 @@ export function useSessionCourtMatchCreation({
     assigningQueuedMatch,
     reshufflingQueuedMatch,
     reshufflingQueuedPlayerId,
+    replacingQueuedPlayerId,
     manualCourtId,
     manualQueueOpen,
     creatingManualMatch,
@@ -367,6 +401,7 @@ export function useSessionCourtMatchCreation({
     assignQueuedMatch,
     reshuffleQueuedMatch,
     reshuffleQueuedMatchWithoutPlayer,
+    replaceQueuedMatchPlayer,
     openManualMatchModal,
     openManualQueuedMatchModal,
     closeManualMatchModal,

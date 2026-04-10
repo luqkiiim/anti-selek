@@ -5,6 +5,7 @@ import {
   buildMatchmakingState,
   ensureEnoughPlayers,
   getRankedCandidates,
+  selectReplacementMatch,
   selectSingleCourtMatch,
 } from "../generate-match/selection";
 import {
@@ -239,6 +240,74 @@ export async function reshuffleQueuedMatchForSession(
     queuedMatchId: sessionData.queuedMatch.id,
     partition: selection.partition,
     targetPool: "targetPool" in selection ? selection.targetPool : null,
+  });
+
+  return buildQueuedMatchResponse(sessionData, queuedMatch);
+}
+
+export async function replaceQueuedMatchPlayerForSession(
+  sessionData: QueueSessionRecord,
+  replaceUserId: string
+) {
+  if (sessionData.status !== "ACTIVE") {
+    throw new GenerateMatchError(400, "Session not active");
+  }
+
+  if (!sessionData.queuedMatch) {
+    throw new GenerateMatchError(400, "No queued match to replace a player in.");
+  }
+
+  const currentQueuedUserIds = [
+    sessionData.queuedMatch.team1User1Id,
+    sessionData.queuedMatch.team1User2Id,
+    sessionData.queuedMatch.team2User1Id,
+    sessionData.queuedMatch.team2User2Id,
+  ];
+
+  if (!currentQueuedUserIds.includes(replaceUserId)) {
+    throw new GenerateMatchError(
+      400,
+      "Selected player is not part of the queued match."
+    );
+  }
+
+  const retainedUserIds = currentQueuedUserIds.filter(
+    (userId) => userId !== replaceUserId
+  );
+
+  if (retainedUserIds.length !== 3) {
+    throw new GenerateMatchError(
+      400,
+      "Replace player requires exactly three retained players."
+    );
+  }
+
+  const replacementSessionData = {
+    ...sessionData,
+    queuedMatch: null,
+  };
+  const { busyPlayerIds, playersById } = await buildMatchmakingState(
+    replacementSessionData,
+    {
+      reserveQueuedPlayers: false,
+    }
+  );
+  const { rankedCandidates } = getRankedCandidates(
+    replacementSessionData,
+    busyPlayerIds
+  );
+  const replacementSelection = selectReplacementMatch({
+    rankedCandidates,
+    playersById,
+    sessionData: replacementSessionData,
+    retainedUserIds: retainedUserIds as [string, string, string],
+    excludedUserIds: currentQueuedUserIds,
+  });
+
+  const queuedMatch = await updateQueuedMatchRecord({
+    queuedMatchId: sessionData.queuedMatch.id,
+    partition: replacementSelection.partition,
+    targetPool: sessionData.queuedMatch.targetPool ?? null,
   });
 
   return buildQueuedMatchResponse(sessionData, queuedMatch);

@@ -28,6 +28,9 @@ export function useSessionCourtConfirmActions({
   const [reshufflingCourtPlayerId, setReshufflingCourtPlayerId] = useState<
     string | null
   >(null);
+  const [replacingCourtPlayerId, setReplacingCourtPlayerId] = useState<
+    string | null
+  >(null);
   const [courtActionDraft, setCourtActionDraft] =
     useState<CourtActionDraft | null>(null);
 
@@ -109,6 +112,33 @@ export function useSessionCourtConfirmActions({
     }
   };
 
+  const replaceMatchPlayer = async (courtId: string, userId: string) => {
+    setReplacingCourtPlayerId(userId);
+    setError("");
+    try {
+      const { res, data } = await postGenerateMatchAction({
+        code,
+        safeJson,
+        body: {
+          courtId,
+          replaceUserId: userId,
+        },
+      });
+
+      if (res.ok) {
+        patchSessionData((current) => applyGeneratedMatches(current, [data]));
+        scheduleSessionRefresh();
+      } else {
+        setError(data.error || "Failed to replace player");
+      }
+    } catch (err) {
+      console.error(err);
+      setError("Network error replacing player");
+    } finally {
+      setReplacingCourtPlayerId(null);
+    }
+  };
+
   const confirmCourtAction = async () => {
     if (!courtActionDraft) return;
 
@@ -181,10 +211,12 @@ export function useSessionCourtConfirmActions({
     reshufflingCourtId,
     undoingCourtId,
     reshufflingCourtPlayerId,
+    replacingCourtPlayerId,
     courtActionDraft,
     closeCourtActionDraft,
     reshuffleMatch,
     reshuffleMatchWithoutPlayer,
+    replaceMatchPlayer,
     undoMatchSelection,
     confirmCourtAction,
   };

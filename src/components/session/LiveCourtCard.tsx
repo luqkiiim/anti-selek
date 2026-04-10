@@ -16,6 +16,7 @@ interface LiveCourtCardProps {
   confirmingScoreMatchId: string | null;
   reshufflingCourtId: string | null;
   reshufflingCourtPlayerId: string | null;
+  replacingCourtPlayerId: string | null;
   undoingCourtId: string | null;
   reopeningMatchId: string | null;
   submittingMatchId: string | null;
@@ -23,6 +24,7 @@ interface LiveCourtCardProps {
   onOpenManualMatchModal: (courtId: string) => void;
   onReshuffleMatch: (courtId: string) => void;
   onReshuffleMatchWithoutPlayer: (courtId: string, userId: string) => void;
+  onReplaceMatchPlayer: (courtId: string, userId: string) => void;
   onUndoMatchSelection: (courtId: string) => void;
   onHandleScoreChange: (
     matchId: string,
@@ -48,6 +50,7 @@ export function LiveCourtCard({
   confirmingScoreMatchId,
   reshufflingCourtId,
   reshufflingCourtPlayerId,
+  replacingCourtPlayerId,
   undoingCourtId,
   reopeningMatchId,
   submittingMatchId,
@@ -55,6 +58,7 @@ export function LiveCourtCard({
   onOpenManualMatchModal,
   onReshuffleMatch,
   onReshuffleMatchWithoutPlayer,
+  onReplaceMatchPlayer,
   onUndoMatchSelection,
   onHandleScoreChange,
   onRequestScoreSubmitConfirmation,
@@ -146,6 +150,7 @@ export function LiveCourtCard({
             isClaimedUser={isClaimedUser}
             confirmingScoreMatchId={confirmingScoreMatchId}
             reshufflingCourtPlayerId={reshufflingCourtPlayerId}
+            replacingCourtPlayerId={replacingCourtPlayerId}
             reopeningMatchId={reopeningMatchId}
             submittingMatchId={submittingMatchId}
             matchScores={matchScores}
@@ -153,6 +158,7 @@ export function LiveCourtCard({
             onReshuffleWithoutPlayer={(userId) =>
               onReshuffleMatchWithoutPlayer(court.id, userId)
             }
+            onReplacePlayer={(userId) => onReplaceMatchPlayer(court.id, userId)}
             onHandleScoreChange={onHandleScoreChange}
             onRequestScoreSubmitConfirmation={onRequestScoreSubmitConfirmation}
             onCancelScoreSubmitConfirmation={onCancelScoreSubmitConfirmation}

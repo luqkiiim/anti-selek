@@ -12,11 +12,13 @@ interface QueuedMatchCardProps {
   creatingQueuedMatch: boolean;
   creatingManualQueuedMatch: boolean;
   reshufflingQueuedPlayerId: string | null;
+  replacingQueuedPlayerId: string | null;
   reshufflingQueuedMatch: boolean;
   onClearQueuedMatch: () => void;
   onOpenManualQueuedMatchModal: () => void;
   onReshuffleQueuedMatch: () => void;
   onReshuffleQueuedPlayer: (userId: string) => void;
+  onReplaceQueuedPlayer: (userId: string) => void;
   promotionSurfaceRef?: Ref<HTMLDivElement>;
   promotionState?: "normal" | "suppressed" | "entering";
 }
@@ -27,24 +29,29 @@ function TeamPlayers({
   canReshuffleQueuedPlayers,
   activeActionPlayerId,
   reshufflingQueuedPlayerId,
+  replacingQueuedPlayerId,
   queueActionDisabled,
   onTogglePlayerAction,
   onReshuffleQueuedPlayer,
+  onReplaceQueuedPlayer,
 }: {
   players: [QueuedMatch["team1User1"], QueuedMatch["team1User2"]];
   align?: "left" | "right";
   canReshuffleQueuedPlayers: boolean;
   activeActionPlayerId: string | null;
   reshufflingQueuedPlayerId: string | null;
+  replacingQueuedPlayerId: string | null;
   queueActionDisabled: boolean;
   onTogglePlayerAction: (userId: string) => void;
   onReshuffleQueuedPlayer: (userId: string) => void;
+  onReplaceQueuedPlayer: (userId: string) => void;
 }) {
   return (
     <div className="min-w-0 space-y-2">
       {players.map((player) => {
         const actionOpen = activeActionPlayerId === player.id;
         const isReshuffling = reshufflingQueuedPlayerId === player.id;
+        const isReplacing = replacingQueuedPlayerId === player.id;
         const textAlignClass = align === "right" ? "text-right" : "text-left";
         const popoverPositionClass = align === "right" ? "right-0" : "left-0";
 
@@ -74,9 +81,9 @@ function TeamPlayers({
 
             {canReshuffleQueuedPlayers && actionOpen ? (
               <div
-                className={`absolute top-full z-20 mt-2 w-36 max-w-[calc(100vw-3rem)] ${popoverPositionClass}`}
+                className={`absolute top-full z-20 mt-2 w-40 max-w-[calc(100vw-3rem)] ${popoverPositionClass}`}
               >
-                <div className="relative rounded-2xl border border-gray-900 bg-gray-950 p-2 shadow-[0_18px_40px_-22px_rgba(15,23,42,0.55)]">
+                <div className="relative space-y-2 rounded-2xl border border-gray-900 bg-gray-950 p-2 shadow-[0_18px_40px_-22px_rgba(15,23,42,0.55)]">
                   <div
                     className={`absolute top-0 h-3 w-3 -translate-y-1/2 rotate-45 border-l border-t border-gray-900 bg-gray-950 ${
                       align === "right"
@@ -91,6 +98,14 @@ function TeamPlayers({
                     className="w-full rounded-xl border border-blue-200/80 bg-blue-50 px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-blue-800 transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     {isReshuffling ? "Reshuffling..." : "Reshuffle Without"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onReplaceQueuedPlayer(player.id)}
+                    disabled={queueActionDisabled}
+                    className="w-full rounded-xl border border-emerald-200/80 bg-emerald-50 px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-emerald-800 transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {isReplacing ? "Replacing..." : "Replace"}
                   </button>
                 </div>
               </div>
@@ -111,11 +126,13 @@ export function QueuedMatchCard({
   creatingQueuedMatch,
   creatingManualQueuedMatch,
   reshufflingQueuedPlayerId,
+  replacingQueuedPlayerId,
   reshufflingQueuedMatch,
   onClearQueuedMatch,
   onOpenManualQueuedMatchModal,
   onReshuffleQueuedMatch,
   onReshuffleQueuedPlayer,
+  onReplaceQueuedPlayer,
   promotionSurfaceRef,
   promotionState = "normal",
 }: QueuedMatchCardProps) {
@@ -127,7 +144,8 @@ export function QueuedMatchCard({
     creatingQueuedMatch ||
     creatingManualQueuedMatch ||
     reshufflingQueuedMatch ||
-    reshufflingQueuedPlayerId !== null;
+    reshufflingQueuedPlayerId !== null ||
+    replacingQueuedPlayerId !== null;
 
   useEffect(() => {
     if (!activeActionPlayerId) return;
@@ -161,14 +179,16 @@ export function QueuedMatchCard({
   }, [activeActionPlayerId]);
 
   useEffect(() => {
-    if (!reshufflingQueuedPlayerId && activeActionPlayerId) {
+    const activePlayerId = reshufflingQueuedPlayerId ?? replacingQueuedPlayerId;
+
+    if (!activePlayerId && activeActionPlayerId) {
       return;
     }
 
-    if (reshufflingQueuedPlayerId) {
-      setActiveActionPlayerId(reshufflingQueuedPlayerId);
+    if (activePlayerId) {
+      setActiveActionPlayerId(activePlayerId);
     }
-  }, [activeActionPlayerId, reshufflingQueuedPlayerId]);
+  }, [activeActionPlayerId, replacingQueuedPlayerId, reshufflingQueuedPlayerId]);
 
   const togglePlayerAction = (userId: string) => {
     if (queueActionDisabled) return;
@@ -178,6 +198,11 @@ export function QueuedMatchCard({
   const handleReshuffleQueuedPlayer = (userId: string) => {
     setActiveActionPlayerId(userId);
     onReshuffleQueuedPlayer(userId);
+  };
+
+  const handleReplaceQueuedPlayer = (userId: string) => {
+    setActiveActionPlayerId(userId);
+    onReplaceQueuedPlayer(userId);
   };
   const contentVisibilityClass =
     promotionState === "suppressed"
@@ -252,9 +277,11 @@ export function QueuedMatchCard({
                   canReshuffleQueuedPlayers={canReshuffleQueuedPlayers}
                   activeActionPlayerId={activeActionPlayerId}
                   reshufflingQueuedPlayerId={reshufflingQueuedPlayerId}
+                  replacingQueuedPlayerId={replacingQueuedPlayerId}
                   queueActionDisabled={queueActionDisabled}
                   onTogglePlayerAction={togglePlayerAction}
                   onReshuffleQueuedPlayer={handleReshuffleQueuedPlayer}
+                  onReplaceQueuedPlayer={handleReplaceQueuedPlayer}
                 />
                 <span className="rounded-full border border-blue-200 bg-white px-2 py-1 text-[10px] font-black uppercase tracking-[0.24em] text-blue-700">
                   Next
@@ -265,9 +292,11 @@ export function QueuedMatchCard({
                   canReshuffleQueuedPlayers={canReshuffleQueuedPlayers}
                   activeActionPlayerId={activeActionPlayerId}
                   reshufflingQueuedPlayerId={reshufflingQueuedPlayerId}
+                  replacingQueuedPlayerId={replacingQueuedPlayerId}
                   queueActionDisabled={queueActionDisabled}
                   onTogglePlayerAction={togglePlayerAction}
                   onReshuffleQueuedPlayer={handleReshuffleQueuedPlayer}
+                  onReplaceQueuedPlayer={handleReplaceQueuedPlayer}
                 />
               </div>
             </div>

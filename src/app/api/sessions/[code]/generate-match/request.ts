@@ -14,6 +14,7 @@ export function parseGenerateMatchRequest(
     undoCurrentMatch = false,
     manualTeams,
     excludedUserId,
+    replaceUserId,
   } = (typeof body === "object" && body !== null ? body : {}) as {
     courtId?: string;
     courtIds?: unknown;
@@ -21,6 +22,7 @@ export function parseGenerateMatchRequest(
     undoCurrentMatch?: boolean;
     manualTeams?: unknown;
     excludedUserId?: unknown;
+    replaceUserId?: unknown;
   };
 
   const requestedCourtIds = Array.isArray(courtIds)
@@ -41,13 +43,22 @@ export function parseGenerateMatchRequest(
   if (excludedUserId !== undefined && typeof excludedUserId !== "string") {
     throw new GenerateMatchError(400, "Invalid excluded player.");
   }
+  if (replaceUserId !== undefined && typeof replaceUserId !== "string") {
+    throw new GenerateMatchError(400, "Invalid replacement player.");
+  }
   if (excludedUserId && !forceReshuffle) {
     throw new GenerateMatchError(
       400,
       "Excluded-player reshuffle must be combined with reshuffle."
     );
   }
-  if (manualTeams && (forceReshuffle || undoCurrentMatch || excludedUserId)) {
+  if (replaceUserId && (forceReshuffle || undoCurrentMatch || manualTeams || excludedUserId)) {
+    throw new GenerateMatchError(
+      400,
+      "Replace player cannot be combined with reshuffle, undo, or manual match creation."
+    );
+  }
+  if (manualTeams && (forceReshuffle || undoCurrentMatch || excludedUserId || replaceUserId)) {
     throw new GenerateMatchError(
       400,
       "Manual match creation cannot be combined with reshuffle or undo."
@@ -55,11 +66,11 @@ export function parseGenerateMatchRequest(
   }
   if (
     requestedCourtIds.length > 1 &&
-    (forceReshuffle || undoCurrentMatch || manualTeams)
+    (forceReshuffle || undoCurrentMatch || manualTeams || replaceUserId)
   ) {
     throw new GenerateMatchError(
       400,
-      "Reshuffle, undo, and manual match creation are only supported for one court at a time."
+      "Reshuffle, undo, replace player, and manual match creation are only supported for one court at a time."
     );
   }
 
@@ -69,6 +80,7 @@ export function parseGenerateMatchRequest(
     undoCurrentMatch,
     manualTeams,
     excludedUserId,
+    replaceUserId,
   };
 }
 

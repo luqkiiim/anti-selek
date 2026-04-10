@@ -18,6 +18,7 @@ import {
   parseGenerateMatchRequest,
   parseManualTeams,
   replaceCurrentCourtMatchAssignment,
+  selectReplacementMatch,
   selectBatchMatches,
   selectSingleCourtMatch,
   undoCurrentCourtMatch,
@@ -44,6 +45,7 @@ export async function POST(
       undoCurrentMatch,
       manualTeams,
       excludedUserId,
+      replaceUserId,
     } = parseGenerateMatchRequest(body);
 
     const {
@@ -112,6 +114,71 @@ export async function POST(
         ...createdMatch,
         queuedMatch: await tryRebuildQueuedMatchForSessionId(sessionData.id),
       });
+    }
+
+    if (replaceUserId) {
+      if (!targetCourt.currentMatch) {
+        throw new GenerateMatchError(
+          400,
+          "No live match is available to replace a player."
+        );
+      }
+
+      const currentMatchUserIds = [
+        targetCourt.currentMatch.team1User1Id,
+        targetCourt.currentMatch.team1User2Id,
+        targetCourt.currentMatch.team2User1Id,
+        targetCourt.currentMatch.team2User2Id,
+      ];
+
+      if (!currentMatchUserIds.includes(replaceUserId)) {
+        throw new GenerateMatchError(
+          400,
+          "Selected player is not part of this match."
+        );
+      }
+
+      const retainedUserIds = currentMatchUserIds.filter(
+        (userId) => userId !== replaceUserId
+      );
+
+      if (retainedUserIds.length !== 3) {
+        throw new GenerateMatchError(
+          400,
+          "Replace player requires exactly three retained players."
+        );
+      }
+
+      const replacementSessionData = {
+        ...sessionData,
+        matches: sessionData.matches.filter(
+          (match) => match.id !== targetCourt.currentMatch!.id
+        ),
+      };
+      const { busyPlayerIds, playersById } = await buildMatchmakingState(
+        replacementSessionData
+      );
+      const { rankedCandidates } = getRankedCandidates(
+        replacementSessionData,
+        busyPlayerIds
+      );
+      const replacementSelection = selectReplacementMatch({
+        rankedCandidates,
+        playersById,
+        sessionData: replacementSessionData,
+        retainedUserIds: retainedUserIds as [string, string, string],
+        excludedUserIds: currentMatchUserIds,
+      });
+
+      return NextResponse.json(
+        await replaceCurrentCourtMatchAssignment({
+          sessionId: sessionData.id,
+          courtId: targetCourt.id,
+          currentMatchId: targetCourt.currentMatch.id,
+          selectedIds: [...replacementSelection.ids],
+          partition: replacementSelection.partition,
+        })
+      );
     }
 
     if (forceReshuffle && targetCourt.currentMatch) {

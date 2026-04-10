@@ -483,6 +483,77 @@ describe("generate match route integration", () => {
     expect(storedMatches).toHaveLength(1);
   });
 
+  it("replaces one live-match player with the next eligible waiting player", async () => {
+    const prefix = `replace-live-${randomUUID().slice(0, 8)}`;
+    const { communityId } = await createCommunityAdmin(prefix);
+    const playerKeys = ["p1", "p2", "p3", "p4", "p5", "p6"];
+    const playerIds = playerKeys.map((key) => `${prefix}-${key}`);
+    const courtId = `${prefix}-court-1`;
+
+    await createUsers(
+      prefix,
+      playerKeys.map((key) => ({ key }))
+    );
+
+    const { sessionId, code } = await createSessionWithCourtsAndPlayers({
+      prefix,
+      communityId,
+      type: SessionType.POINTS,
+      mode: SessionMode.MEXICANO,
+      players: [
+        { userId: playerIds[0], matchesPlayed: 2 },
+        { userId: playerIds[1], matchesPlayed: 2 },
+        { userId: playerIds[2], matchesPlayed: 2 },
+        { userId: playerIds[3], matchesPlayed: 2 },
+        { userId: playerIds[4], matchesPlayed: 0 },
+        { userId: playerIds[5], matchesPlayed: 1 },
+      ],
+      courtIds: [courtId],
+    });
+
+    const currentMatch = await prisma.match.create({
+      data: {
+        id: `${prefix}-current-match`,
+        sessionId,
+        courtId,
+        status: MatchStatus.IN_PROGRESS,
+        team1User1Id: playerIds[0],
+        team1User2Id: playerIds[1],
+        team2User1Id: playerIds[2],
+        team2User2Id: playerIds[3],
+        createdAt: new Date("2026-04-04T00:00:00Z"),
+      },
+    });
+
+    await prisma.court.update({
+      where: { id: courtId },
+      data: { currentMatchId: currentMatch.id },
+    });
+
+    const response = await postGenerateMatch(code, {
+      courtId,
+      replaceUserId: playerIds[1],
+    });
+    const payload = await response.json();
+    const replacedIds = getSelectedIds(payload).sort();
+
+    expect(response.status).toBe(200);
+    expect(payload.id).not.toBe(currentMatch.id);
+    expect(replacedIds).toEqual(
+      [playerIds[0], playerIds[2], playerIds[3], playerIds[4]].sort()
+    );
+
+    const refreshedCourt = await prisma.court.findUnique({
+      where: { id: courtId },
+    });
+    const storedOriginalMatch = await prisma.match.findUnique({
+      where: { id: currentMatch.id },
+    });
+
+    expect(refreshedCourt?.currentMatchId).toBe(payload.id);
+    expect(storedOriginalMatch).toBeNull();
+  });
+
   it("undoes an in-progress match and clears the court when no queued match exists", async () => {
     const prefix = `undo-${randomUUID().slice(0, 8)}`;
     const { communityId } = await createCommunityAdmin(prefix);

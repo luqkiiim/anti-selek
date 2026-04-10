@@ -990,6 +990,112 @@ export function selectSingleCourtMatch({
   return alternativePartition.selection;
 }
 
+function selectExactQuartetMatch({
+  rankedCandidates,
+  playersById,
+  sessionData,
+  selectedIds,
+}: {
+  rankedCandidates: RankedCandidates;
+  playersById: Map<string, PartitionCandidate>;
+  sessionData: GenerateMatchSession;
+  selectedIds: [string, string, string, string];
+}): PoolAwareSelection | null {
+  const selectedUserIds = new Set(selectedIds);
+  const exactRankedCandidates = rankedCandidates.filter((candidate) =>
+    selectedUserIds.has(candidate.userId)
+  );
+
+  if (exactRankedCandidates.length !== 4) {
+    return null;
+  }
+
+  const usesCompetitiveGrouping =
+    sessionData.type === SessionType.LADDER ||
+    sessionData.type === SessionType.RACE;
+
+  if (usesCompetitiveGrouping) {
+    const result = findBestSingleCourtSelectionLadder(
+      buildLadderPlayers(sessionData, playersById, exactRankedCandidates),
+      {
+        sessionMode: sessionData.mode as SessionMode,
+      }
+    );
+
+    return result.selection
+      ? {
+          ids: result.selection.ids,
+          partition: result.selection.partition,
+        }
+      : null;
+  }
+
+  const result = findBestSingleCourtSelectionV3(
+    buildV3Players(sessionData, playersById, exactRankedCandidates),
+    {
+      sessionMode: sessionData.mode as SessionMode,
+      sessionType: sessionData.type as SessionType,
+      completedMatches: buildCompletedMatches(sessionData),
+    }
+  );
+
+  return result.selection
+    ? {
+        ids: result.selection.ids,
+        partition: result.selection.partition,
+      }
+    : null;
+}
+
+export function selectReplacementMatch({
+  rankedCandidates,
+  playersById,
+  sessionData,
+  retainedUserIds,
+  excludedUserIds = [],
+}: {
+  rankedCandidates: RankedCandidates;
+  playersById: Map<string, PartitionCandidate>;
+  sessionData: GenerateMatchSession;
+  retainedUserIds: [string, string, string];
+  excludedUserIds?: string[];
+}) {
+  const retainedUserIdSet = new Set(retainedUserIds);
+  if (retainedUserIdSet.size !== 3) {
+    throw new GenerateMatchError(
+      400,
+      "Replace player requires exactly three retained players."
+    );
+  }
+
+  const excludedUserIdSet = new Set(excludedUserIds);
+
+  for (const candidate of rankedCandidates) {
+    if (
+      retainedUserIdSet.has(candidate.userId) ||
+      excludedUserIdSet.has(candidate.userId)
+    ) {
+      continue;
+    }
+
+    const selection = selectExactQuartetMatch({
+      rankedCandidates,
+      playersById,
+      sessionData,
+      selectedIds: [...retainedUserIds, candidate.userId],
+    });
+
+    if (selection) {
+      return selection;
+    }
+  }
+
+  throw new GenerateMatchError(
+    409,
+    "No eligible replacement player was available for this match."
+  );
+}
+
 export function selectBatchMatches({
   rankedCandidates,
   playersById,

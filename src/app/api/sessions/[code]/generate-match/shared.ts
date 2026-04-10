@@ -20,6 +20,7 @@ export interface ParsedGenerateMatchRequest {
   undoCurrentMatch: boolean;
   manualTeams?: unknown;
   excludedUserId?: string;
+  replaceUserId?: string;
 }
 
 const sessionRecordInclude = {

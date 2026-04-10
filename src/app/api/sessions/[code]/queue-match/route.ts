@@ -15,6 +15,7 @@ import { buildMatchmakingState } from "../generate-match/selection";
 import {
   createManualQueuedMatchForSession,
   createQueuedMatchForSession,
+  replaceQueuedMatchPlayerForSession,
   reshuffleQueuedMatchForSession,
 } from "./shared";
 
@@ -89,12 +90,23 @@ export async function POST(
     const wantsReshuffle = body.reshuffle === true;
     const excludedUserId =
       typeof body.excludeUserId === "string" ? body.excludeUserId : undefined;
+    const replaceUserId =
+      typeof body.replaceUserId === "string" ? body.replaceUserId : undefined;
 
     if (body.excludeUserId !== undefined && !excludedUserId) {
       throw new GenerateMatchError(400, "Invalid excluded player");
     }
+    if (body.replaceUserId !== undefined && !replaceUserId) {
+      throw new GenerateMatchError(400, "Invalid replacement player");
+    }
 
     if (wantsReshuffle) {
+      if (replaceUserId) {
+        throw new GenerateMatchError(
+          400,
+          "Replace player cannot be combined with reshuffle."
+        );
+      }
       if (body.manualTeams !== undefined) {
         throw new GenerateMatchError(
           400,
@@ -106,6 +118,28 @@ export async function POST(
         queuedMatch: await reshuffleQueuedMatchForSession(sessionData, {
           excludedUserId,
         }),
+      });
+    }
+
+    if (replaceUserId) {
+      if (excludedUserId) {
+        throw new GenerateMatchError(
+          400,
+          "Replace player cannot be combined with excluded-player reshuffle."
+        );
+      }
+      if (body.manualTeams !== undefined) {
+        throw new GenerateMatchError(
+          400,
+          "Replace player cannot be combined with manual queueing."
+        );
+      }
+
+      return NextResponse.json({
+        queuedMatch: await replaceQueuedMatchPlayerForSession(
+          sessionData,
+          replaceUserId
+        ),
       });
     }
 

@@ -959,11 +959,13 @@ export default function SessionPage() {
                   reshufflingQueuedPlayerId={
                     courtActions.reshufflingQueuedPlayerId
                   }
+                  replacingQueuedPlayerId={courtActions.replacingQueuedPlayerId}
                   reshufflingQueuedMatch={courtActions.reshufflingQueuedMatch}
                   reshufflingCourtId={courtActions.reshufflingCourtId}
                   reshufflingCourtPlayerId={
                     courtActions.reshufflingCourtPlayerId
                   }
+                  replacingCourtPlayerId={courtActions.replacingCourtPlayerId}
                   undoingCourtId={courtActions.undoingCourtId}
                   reopeningMatchId={scoreActions.reopeningMatchId}
                   submittingMatchId={scoreActions.submittingMatchId}
@@ -979,11 +981,15 @@ export default function SessionPage() {
                   onReshuffleQueuedMatchWithoutPlayer={
                     courtActions.reshuffleQueuedMatchWithoutPlayer
                   }
+                  onReplaceQueuedMatchPlayer={
+                    courtActions.replaceQueuedMatchPlayer
+                  }
                   onOpenManualMatchModal={courtActions.openManualMatchModal}
                   onReshuffleMatch={courtActions.reshuffleMatch}
                   onReshuffleMatchWithoutPlayer={
                     courtActions.reshuffleMatchWithoutPlayer
                   }
+                  onReplaceMatchPlayer={courtActions.replaceMatchPlayer}
                   onUndoMatchSelection={courtActions.undoMatchSelection}
                   onHandleScoreChange={scoreActions.handleScoreChange}
                   onRequestScoreSubmitConfirmation={

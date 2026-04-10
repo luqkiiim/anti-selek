@@ -26,6 +26,7 @@ export {
   ensureEnoughPlayers,
   getRankedCandidates,
   getRequestedOpenCourts,
+  selectReplacementMatch,
   selectBatchMatches,
   selectSingleCourtMatch,
   type MatchmakingState,
