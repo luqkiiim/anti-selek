@@ -6,14 +6,17 @@ import {
   ensureEnoughPlayers,
   getRankedCandidates,
   selectSingleCourtMatch,
-} from "../generate-match/service";
+} from "../generate-match/selection";
 import {
   GenerateMatchError,
   loadSessionRecord,
+  loadSessionRecordById,
   type ReshuffleSource,
 } from "../generate-match/shared";
 
-type QueueSessionRecord = NonNullable<Awaited<ReturnType<typeof loadSessionRecord>>>;
+type QueueSessionRecord = NonNullable<
+  Awaited<ReturnType<typeof loadSessionRecordById>>
+>;
 type QueueRecord = NonNullable<QueueSessionRecord["queuedMatch"]>;
 
 export function buildQueuedMatchResponse(
@@ -42,6 +45,8 @@ export function buildQueuedMatchResponse(
     team2User2,
   };
 }
+
+export type QueuedMatchResponse = ReturnType<typeof buildQueuedMatchResponse>;
 
 async function ensureQueueSlotAvailable(sessionData: QueueSessionRecord) {
   if (sessionData.status !== "ACTIVE") {
@@ -253,8 +258,10 @@ export async function createManualQueuedMatchForSession(
   return buildQueuedMatchResponse(sessionData, queuedMatch);
 }
 
-export async function tryRebuildQueuedMatchForCode(code: string) {
-  const sessionData = await loadSessionRecord(code);
+async function tryRebuildQueuedMatch(
+  loadSessionData: () => Promise<QueueSessionRecord | null>
+) {
+  const sessionData = await loadSessionData();
   if (!sessionData) {
     return null;
   }
@@ -268,7 +275,7 @@ export async function tryRebuildQueuedMatchForCode(code: string) {
   } catch (error) {
     if (error instanceof GenerateMatchError) {
       if (error.status === 409) {
-        const reloadedSessionData = await loadSessionRecord(code);
+        const reloadedSessionData = await loadSessionData();
         if (reloadedSessionData?.queuedMatch) {
           return buildQueuedMatchResponse(
             reloadedSessionData,
@@ -282,4 +289,12 @@ export async function tryRebuildQueuedMatchForCode(code: string) {
 
     throw error;
   }
+}
+
+export async function tryRebuildQueuedMatchForCode(code: string) {
+  return tryRebuildQueuedMatch(() => loadSessionRecord(code));
+}
+
+export async function tryRebuildQueuedMatchForSessionId(sessionId: string) {
+  return tryRebuildQueuedMatch(() => loadSessionRecordById(sessionId));
 }

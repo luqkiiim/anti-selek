@@ -1,4 +1,4 @@
-import { autoAssignQueuedMatch } from "@/app/api/matches/_lib/autoAssignQueuedMatch";
+import { reconcileSessionQueueAfterCourtChange } from "@/app/api/matches/_lib/reconcileSessionQueue";
 import { prisma } from "@/lib/prisma";
 import { MatchStatus, SessionStatus } from "@/types/enums";
 import {
@@ -126,14 +126,15 @@ export async function undoCurrentCourtMatch(targetCourt: GenerateMatchCourt) {
     }),
   ]);
 
-  const { autoAssignedMatch, queuedMatchCleared } =
-    await autoAssignQueuedMatch(targetCourt.sessionId);
+  const { autoAssignedMatch, queuedMatchCleared, queuedMatch } =
+    await reconcileSessionQueueAfterCourtChange(targetCourt.sessionId);
 
   return {
     ok: true,
     undoneMatchId: targetCourt.currentMatch.id,
     autoAssignedMatch,
     queuedMatchCleared,
+    queuedMatch,
   };
 }
 

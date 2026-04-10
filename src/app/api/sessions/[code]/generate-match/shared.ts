@@ -22,16 +22,25 @@ export interface ParsedGenerateMatchRequest {
   excludedUserId?: string;
 }
 
+const sessionRecordInclude = {
+  players: {
+    include: { user: { select: { id: true, name: true, elo: true } } },
+  },
+  matches: true,
+  queuedMatch: true,
+};
+
 export async function loadSessionRecord(code: string) {
   return prisma.session.findUnique({
     where: { code },
-    include: {
-      players: {
-        include: { user: { select: { id: true, name: true, elo: true } } },
-      },
-      matches: true,
-      queuedMatch: true,
-    },
+    include: sessionRecordInclude,
+  });
+}
+
+export async function loadSessionRecordById(id: string) {
+  return prisma.session.findUnique({
+    where: { id },
+    include: sessionRecordInclude,
   });
 }
 
@@ -49,7 +58,7 @@ export async function loadCourtRecords(
 }
 
 export type GenerateMatchSession = NonNullable<
-  Awaited<ReturnType<typeof loadSessionRecord>>
+  Awaited<ReturnType<typeof loadSessionRecordById>>
 >;
 
 export type GenerateMatchCourt = Awaited<

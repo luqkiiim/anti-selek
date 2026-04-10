@@ -46,8 +46,19 @@ export function useSessionCourtMatchCreation({
   const [manualMatchForm, setManualMatchForm] =
     useState<ManualMatchFormState>(emptyManualMatchForm);
 
-  const syncGeneratedMatches = (matches: GeneratedMatchesPayload) => {
-    patchSessionData((current) => applyGeneratedMatches(current, matches));
+  const syncMatchGenerationResult = (
+    matches: GeneratedMatchesPayload,
+    queuedMatch?: QueuedMatchPayload | null
+  ) => {
+    patchSessionData((current) => {
+      let next = applyGeneratedMatches(current, matches);
+
+      if (queuedMatch !== undefined) {
+        next = applyQueuedMatch(next, queuedMatch ?? null);
+      }
+
+      return next;
+    });
     scheduleSessionRefresh();
   };
 
@@ -85,7 +96,10 @@ export function useSessionCourtMatchCreation({
 
       if (res.ok) {
         const matches = Array.isArray(data.matches) ? data.matches : [data];
-        syncGeneratedMatches(matches);
+        syncMatchGenerationResult(
+          matches,
+          "queuedMatch" in data ? (data.queuedMatch ?? null) : undefined
+        );
       } else {
         setError(data.error || "Failed to create matches");
       }
@@ -154,7 +168,7 @@ export function useSessionCourtMatchCreation({
       }
 
       closeManualMatchModal();
-      syncGeneratedMatches([data]);
+      syncMatchGenerationResult([data], data.queuedMatch ?? null);
     } catch (err) {
       console.error(err);
       setError("Network error creating manual match");
@@ -267,10 +281,7 @@ export function useSessionCourtMatchCreation({
         return;
       }
 
-      patchSessionData((current) =>
-        applyQueuedMatch(applyGeneratedMatches(current, [data]), null)
-      );
-      scheduleSessionRefresh();
+      syncMatchGenerationResult([data], data.queuedMatch ?? null);
     } catch (err) {
       console.error(err);
       setError("Network error assigning queued match");

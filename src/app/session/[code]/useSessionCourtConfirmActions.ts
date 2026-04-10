@@ -160,12 +160,9 @@ export function useSessionCourtConfirmActions({
 
           if (data.autoAssignedMatch) {
             updated = applyGeneratedMatches(updated, [data.autoAssignedMatch]);
-            updated = applyQueuedMatch(updated, null);
-          } else if (data.queuedMatchCleared) {
-            updated = applyQueuedMatch(updated, null);
           }
 
-          return updated;
+          return applyQueuedMatch(updated, data.queuedMatch ?? null);
         });
         setCourtActionDraft(null);
         scheduleSessionRefresh();

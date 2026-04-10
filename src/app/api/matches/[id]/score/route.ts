@@ -5,7 +5,7 @@ import { shouldRequireOpponentApproval } from "@/lib/matchApprovalRules";
 import { prisma } from "@/lib/prisma";
 import { isValidBadmintonScore } from "@/lib/matchRules";
 import { MatchStatus } from "@/types/enums";
-import { autoAssignQueuedMatch } from "../../_lib/autoAssignQueuedMatch";
+import { reconcileSessionQueueAfterCourtChange } from "../../_lib/reconcileSessionQueue";
 
 export const dynamic = "force-dynamic";
 
@@ -126,12 +126,13 @@ export async function POST(
           finalTeam2Score: team2Score,
           scoreSubmittedByUserId: session.user.id,
         });
-        const { autoAssignedMatch, queuedMatchCleared } =
-          await autoAssignQueuedMatch(match.sessionId);
+        const { autoAssignedMatch, queuedMatchCleared, queuedMatch } =
+          await reconcileSessionQueueAfterCourtChange(match.sessionId);
         return NextResponse.json({
           ...updated,
           autoAssignedMatch,
           queuedMatchCleared,
+          queuedMatch,
         });
       } catch (error: unknown) {
         const message = error instanceof Error ? error.message : "";

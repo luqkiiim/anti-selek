@@ -46,17 +46,27 @@ function getPrismaBinary() {
 }
 
 function getSelectedIds(match: {
-  team1User1Id: string;
-  team1User2Id: string;
-  team2User1Id: string;
-  team2User2Id: string;
+  team1User1Id?: string;
+  team1User2Id?: string;
+  team2User1Id?: string;
+  team2User2Id?: string;
+  team1User1?: { id: string };
+  team1User2?: { id: string };
+  team2User1?: { id: string };
+  team2User2?: { id: string };
 }) {
-  return [
-    match.team1User1Id,
-    match.team1User2Id,
-    match.team2User1Id,
-    match.team2User2Id,
+  const selectedIds = [
+    match.team1User1Id ?? match.team1User1?.id,
+    match.team1User2Id ?? match.team1User2?.id,
+    match.team2User1Id ?? match.team2User1?.id,
+    match.team2User2Id ?? match.team2User2?.id,
   ];
+
+  if (selectedIds.some((userId) => typeof userId !== "string")) {
+    throw new Error("Expected four selected user ids.");
+  }
+
+  return selectedIds as string[];
 }
 
 async function removeDatabaseFiles() {
@@ -347,6 +357,59 @@ describe("generate match route integration", () => {
     );
   });
 
+  it("creates a queued next match after filling the last open courts", async () => {
+    const prefix = `batch-queue-${randomUUID().slice(0, 8)}`;
+    const { communityId } = await createCommunityAdmin(prefix);
+    const playerKeys = [
+      "p1",
+      "p2",
+      "p3",
+      "p4",
+      "p5",
+      "p6",
+      "p7",
+      "p8",
+      "p9",
+      "p10",
+      "p11",
+      "p12",
+    ];
+    const playerIds = playerKeys.map((key) => `${prefix}-${key}`);
+    const courtIds = [`${prefix}-court-1`, `${prefix}-court-2`];
+
+    await createUsers(
+      prefix,
+      playerKeys.map((key) => ({ key }))
+    );
+
+    const { sessionId, code } = await createSessionWithCourtsAndPlayers({
+      prefix,
+      communityId,
+      type: SessionType.POINTS,
+      mode: SessionMode.MEXICANO,
+      players: playerIds.map((userId) => ({ userId })),
+      courtIds,
+    });
+
+    const response = await postGenerateMatch(code, { courtIds });
+    const payload = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(payload.matches).toHaveLength(2);
+    expect(payload.queuedMatch).not.toBeNull();
+    const selectedIds = payload.matches.flatMap(getSelectedIds);
+    const queuedIds = getSelectedIds(payload.queuedMatch);
+
+    expect(new Set([...selectedIds, ...queuedIds]).size).toBe(12);
+    expect([...selectedIds, ...queuedIds].sort()).toEqual([...playerIds].sort());
+
+    const storedQueuedMatch = await prisma.queuedMatch.findUnique({
+      where: { sessionId },
+    });
+
+    expect(storedQueuedMatch).not.toBeNull();
+  });
+
   it("reshuffles an in-progress match to a different quartet when alternates exist", async () => {
     const prefix = `reshuffle-${randomUUID().slice(0, 8)}`;
     const { communityId } = await createCommunityAdmin(prefix);
@@ -472,6 +535,7 @@ describe("generate match route integration", () => {
       undoneMatchId: currentMatch.id,
       autoAssignedMatch: null,
       queuedMatchCleared: false,
+      queuedMatch: null,
     });
 
     const refreshedCourt = await prisma.court.findUnique({
@@ -487,6 +551,106 @@ describe("generate match route integration", () => {
     expect(refreshedCourt?.currentMatchId).toBeNull();
     expect(storedMatch).toBeNull();
     expect(storedMatches).toHaveLength(0);
+  });
+
+  it("undoes a live match, promotes the queued match, and rebuilds the queue", async () => {
+    const prefix = `undo-refill-${randomUUID().slice(0, 8)}`;
+    const { communityId } = await createCommunityAdmin(prefix);
+    const playerKeys = [
+      "p1",
+      "p2",
+      "p3",
+      "p4",
+      "p5",
+      "p6",
+      "p7",
+      "p8",
+      "p9",
+      "p10",
+      "p11",
+      "p12",
+    ];
+    const playerIds = playerKeys.map((key) => `${prefix}-${key}`);
+    const courtId = `${prefix}-court-1`;
+
+    await createUsers(
+      prefix,
+      playerKeys.map((key) => ({ key }))
+    );
+
+    const { sessionId, code } = await createSessionWithCourtsAndPlayers({
+      prefix,
+      communityId,
+      type: SessionType.POINTS,
+      mode: SessionMode.MEXICANO,
+      players: playerIds.map((userId) => ({ userId })),
+      courtIds: [courtId],
+    });
+
+    const currentMatch = await prisma.match.create({
+      data: {
+        id: `${prefix}-current-match`,
+        sessionId,
+        courtId,
+        status: MatchStatus.IN_PROGRESS,
+        team1User1Id: playerIds[0],
+        team1User2Id: playerIds[1],
+        team2User1Id: playerIds[2],
+        team2User2Id: playerIds[3],
+        createdAt: new Date("2026-04-04T00:00:00Z"),
+      },
+    });
+
+    await prisma.court.update({
+      where: { id: courtId },
+      data: { currentMatchId: currentMatch.id },
+    });
+
+    await prisma.queuedMatch.create({
+      data: {
+        sessionId,
+        team1User1Id: playerIds[4],
+        team1User2Id: playerIds[5],
+        team2User1Id: playerIds[6],
+        team2User2Id: playerIds[7],
+      },
+    });
+
+    const response = await postGenerateMatch(code, {
+      courtId,
+      undoCurrentMatch: true,
+    });
+    const payload = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(payload.ok).toBe(true);
+    expect(payload.undoneMatchId).toBe(currentMatch.id);
+    expect(payload.autoAssignedMatch).not.toBeNull();
+    expect(payload.queuedMatchCleared).toBe(false);
+    expect(payload.queuedMatch).not.toBeNull();
+    const autoAssignedIds = getSelectedIds(payload.autoAssignedMatch).sort();
+    const rebuiltQueuedIds = getSelectedIds(payload.queuedMatch).sort();
+
+    expect(autoAssignedIds).toEqual(playerIds.slice(4, 8).sort());
+    expect(
+      rebuiltQueuedIds.every((userId) => !autoAssignedIds.includes(userId))
+    ).toBe(true);
+    expect(
+      rebuiltQueuedIds.every((userId) =>
+        [...playerIds.slice(0, 4), ...playerIds.slice(8, 12)].includes(userId)
+      )
+    ).toBe(true);
+
+    const refreshedCourt = await prisma.court.findUnique({
+      where: { id: courtId },
+    });
+    const storedQueuedMatch = await prisma.queuedMatch.findUnique({
+      where: { sessionId },
+    });
+
+    expect(refreshedCourt?.currentMatchId).toBe(payload.autoAssignedMatch.id);
+    expect(storedQueuedMatch).not.toBeNull();
+    expect(getSelectedIds(storedQueuedMatch!).sort()).toEqual(rebuiltQueuedIds);
   });
 
   it("preserves the race regression behavior through the real POST route", async () => {

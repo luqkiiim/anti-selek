@@ -104,18 +104,12 @@ export function useSessionScoreActions({
             return nextState;
           }
 
-          if (data.autoAssignedMatch) {
-            return applyQueuedMatch(
-              applyGeneratedMatches(nextState, [data.autoAssignedMatch]),
-              null
-            );
-          }
-
-          if (data.queuedMatchCleared) {
-            return applyQueuedMatch(nextState, null);
-          }
-
-          return nextState;
+          return applyQueuedMatch(
+            data.autoAssignedMatch
+              ? applyGeneratedMatches(nextState, [data.autoAssignedMatch])
+              : nextState,
+            data.queuedMatch ?? null
+          );
         });
         scheduleSessionRefresh();
       } else {
@@ -148,18 +142,12 @@ export function useSessionScoreActions({
         patchSessionData((current) => {
           const nextState = applyScoreApproval(current, data);
 
-          if (data.autoAssignedMatch) {
-            return applyQueuedMatch(
-              applyGeneratedMatches(nextState, [data.autoAssignedMatch]),
-              null
-            );
-          }
-
-          if (data.queuedMatchCleared) {
-            return applyQueuedMatch(nextState, null);
-          }
-
-          return nextState;
+          return applyQueuedMatch(
+            data.autoAssignedMatch
+              ? applyGeneratedMatches(nextState, [data.autoAssignedMatch])
+              : nextState,
+            data.queuedMatch ?? null
+          );
         });
         scheduleSessionRefresh();
       } else {

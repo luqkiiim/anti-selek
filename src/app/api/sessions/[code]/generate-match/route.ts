@@ -5,6 +5,7 @@ import {
   buildSessionPoolMap,
   summarizeSessionPoolMembership,
 } from "@/lib/sessionPools";
+import { tryRebuildQueuedMatchForSessionId } from "../queue-match/shared";
 import {
   applyPoolSelectionOutcome,
   buildMatchmakingState,
@@ -107,7 +108,10 @@ export async function POST(
         }
       }
 
-      return NextResponse.json(createdMatch);
+      return NextResponse.json({
+        ...createdMatch,
+        queuedMatch: await tryRebuildQueuedMatchForSessionId(sessionData.id),
+      });
     }
 
     if (forceReshuffle && targetCourt.currentMatch) {
@@ -235,7 +239,10 @@ export async function POST(
         });
       }
 
-      return NextResponse.json(newMatch);
+      return NextResponse.json({
+        ...newMatch,
+        queuedMatch: await tryRebuildQueuedMatchForSessionId(sessionData.id),
+      });
     }
 
     const batchSelection = selectBatchMatches({
@@ -276,7 +283,10 @@ export async function POST(
       });
     }
 
-    return NextResponse.json({ matches: newMatches });
+    return NextResponse.json({
+      matches: newMatches,
+      queuedMatch: await tryRebuildQueuedMatchForSessionId(sessionData.id),
+    });
   } catch (error: unknown) {
     if (error instanceof GenerateMatchError) {
       return NextResponse.json(

@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { getCourtDisplayLabel } from "@/lib/courtLabels";
 import { prisma } from "@/lib/prisma";
 import { SessionPool } from "@/types/enums";
+import { tryRebuildQueuedMatchForSessionId } from "../shared";
 import { createQueuedMatchAssignment } from "../../generate-match/assignments";
 import {
   applyPoolSelectionOutcome,
@@ -139,6 +140,7 @@ export async function POST(
         id: targetCourt.id,
         label: getCourtDisplayLabel(targetCourt),
       },
+      queuedMatch: await tryRebuildQueuedMatchForSessionId(sessionData.id),
     });
   } catch (error) {
     if (error instanceof GenerateMatchError) {
