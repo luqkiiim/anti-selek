@@ -312,6 +312,107 @@ describe("generate match route integration", () => {
     expect(storedCourt?.currentMatchId).toBe(payload.id);
   });
 
+  it("does not auto-queue the next match for a single-court session with exactly eight active players", async () => {
+    const prefix = `single-eight-${randomUUID().slice(0, 8)}`;
+    const { communityId } = await createCommunityAdmin(prefix);
+    const playerKeys = ["p1", "p2", "p3", "p4", "p5", "p6", "p7", "p8"];
+    const playerIds = playerKeys.map((key) => `${prefix}-${key}`);
+    const courtId = `${prefix}-court-1`;
+
+    await createUsers(
+      prefix,
+      playerKeys.map((key) => ({ key }))
+    );
+
+    const { sessionId, code } = await createSessionWithCourtsAndPlayers({
+      prefix,
+      communityId,
+      type: SessionType.POINTS,
+      mode: SessionMode.MEXICANO,
+      players: playerIds.map((userId) => ({ userId })),
+      courtIds: [courtId],
+    });
+
+    const response = await postGenerateMatch(code, { courtId });
+    const payload = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(payload.status).toBe(MatchStatus.IN_PROGRESS);
+    expect(payload.courtId).toBe(courtId);
+    expect(getSelectedIds(payload).every((userId) => playerIds.includes(userId))).toBe(
+      true
+    );
+    expect(payload.queuedMatch).toBeNull();
+
+    const storedCourt = await prisma.court.findUnique({
+      where: { id: courtId },
+    });
+    const storedMatches = await prisma.match.findMany({
+      where: { sessionId },
+    });
+    const storedQueuedMatch = await prisma.queuedMatch.findUnique({
+      where: { sessionId },
+    });
+
+    expect(storedMatches).toHaveLength(1);
+    expect(storedCourt?.currentMatchId).toBe(payload.id);
+    expect(storedQueuedMatch).toBeNull();
+  });
+
+  it("still auto-queues the next match for a single-court session with more than eight active players", async () => {
+    const prefix = `single-queue-${randomUUID().slice(0, 8)}`;
+    const { communityId } = await createCommunityAdmin(prefix);
+    const playerKeys = [
+      "p1",
+      "p2",
+      "p3",
+      "p4",
+      "p5",
+      "p6",
+      "p7",
+      "p8",
+      "p9",
+      "p10",
+      "p11",
+      "p12",
+    ];
+    const playerIds = playerKeys.map((key) => `${prefix}-${key}`);
+    const courtId = `${prefix}-court-1`;
+
+    await createUsers(
+      prefix,
+      playerKeys.map((key) => ({ key }))
+    );
+
+    const { sessionId, code } = await createSessionWithCourtsAndPlayers({
+      prefix,
+      communityId,
+      type: SessionType.POINTS,
+      mode: SessionMode.MEXICANO,
+      players: playerIds.map((userId) => ({ userId })),
+      courtIds: [courtId],
+    });
+
+    const response = await postGenerateMatch(code, { courtId });
+    const payload = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(payload.queuedMatch).not.toBeNull();
+
+    const selectedIds = getSelectedIds(payload);
+    const queuedIds = getSelectedIds(payload.queuedMatch);
+    const storedQueuedMatch = await prisma.queuedMatch.findUnique({
+      where: { sessionId },
+    });
+
+    expect(new Set([...selectedIds, ...queuedIds]).size).toBe(8);
+    expect(
+      [...selectedIds, ...queuedIds].every((userId) => playerIds.includes(userId))
+    ).toBe(true);
+    expect(queuedIds.every((userId) => !selectedIds.includes(userId))).toBe(true);
+    expect(storedQueuedMatch).not.toBeNull();
+  });
+
   it("creates a real batch across two courts without duplicating players", async () => {
     const prefix = `batch-${randomUUID().slice(0, 8)}`;
     const { communityId } = await createCommunityAdmin(prefix);

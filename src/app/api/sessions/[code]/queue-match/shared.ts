@@ -49,6 +49,24 @@ export function buildQueuedMatchResponse(
 
 export type QueuedMatchResponse = ReturnType<typeof buildQueuedMatchResponse>;
 
+async function shouldSuppressAutomaticQueueCreation(
+  sessionData: QueueSessionRecord
+) {
+  const activePlayerCount = sessionData.players.filter(
+    (player) => !player.isPaused
+  ).length;
+
+  if (activePlayerCount !== 8) {
+    return false;
+  }
+
+  const courtCount = await prisma.court.count({
+    where: { sessionId: sessionData.id },
+  });
+
+  return courtCount === 1;
+}
+
 async function ensureQueueSlotAvailable(sessionData: QueueSessionRecord) {
   if (sessionData.status !== "ACTIVE") {
     throw new GenerateMatchError(400, "Session not active");
@@ -337,6 +355,10 @@ async function tryRebuildQueuedMatch(
 
   if (sessionData.queuedMatch) {
     return buildQueuedMatchResponse(sessionData, sessionData.queuedMatch);
+  }
+
+  if (await shouldSuppressAutomaticQueueCreation(sessionData)) {
+    return null;
   }
 
   try {
