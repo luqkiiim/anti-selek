@@ -393,4 +393,63 @@ describe("buildSessionViewModel", () => {
       "Dan",
     ]);
   });
+
+  it("falls back to joinedAt when ladderEntryAt is missing for competitive standings", () => {
+    const players = [
+      createPlayer("u1", "Alice", {
+        joinedAt: "2026-03-16T01:30:00.000Z",
+      }),
+      createPlayer("u2", "Ben"),
+      createPlayer("u3", "Cara"),
+      createPlayer("u4", "Dan"),
+    ];
+
+    const sessionData = createSessionData({
+      type: SessionType.RACE,
+      mode: SessionMode.MEXICANO,
+      players,
+      matches: [
+        {
+          id: "match-1",
+          team1User1Id: "u1",
+          team1User2Id: "u2",
+          team2User1Id: "u3",
+          team2User2Id: "u4",
+          team1Score: 21,
+          team2Score: 18,
+          winnerTeam: 1,
+          status: MatchStatus.COMPLETED,
+          completedAt: "2026-03-16T01:00:00.000Z",
+        },
+        {
+          id: "match-2",
+          team1User1Id: "u1",
+          team1User2Id: "u4",
+          team2User1Id: "u2",
+          team2User2Id: "u3",
+          team1Score: 19,
+          team2Score: 21,
+          winnerTeam: 2,
+          status: MatchStatus.COMPLETED,
+          completedAt: "2026-03-16T02:00:00.000Z",
+        },
+      ],
+    });
+
+    const viewModel = buildSessionViewModel({
+      sessionData,
+      communityPlayers: [],
+      rosterSearch: "",
+      manualMatchForm: emptyManualMatchForm,
+      manualCourtId: null,
+      openPreferenceEditor: null,
+    });
+
+    expect(viewModel.playerStatsByUserId.get("u1")).toEqual({
+      played: 1,
+      wins: 0,
+      losses: 1,
+    });
+    expect(viewModel.pointDiffByUserId.get("u1")).toBe(-2);
+  });
 });

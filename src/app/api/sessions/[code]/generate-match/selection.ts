@@ -11,6 +11,7 @@ import {
 } from "@/lib/sessionPools";
 import { getBusyPlayerIds } from "@/lib/matchmaking/busyFilter";
 import {
+  getCompetitiveEntryAt,
   deriveLadderRecordsByEntryTime,
   deriveRaceRecordsByEntryTime,
   findBestBatchSelectionLadder,
@@ -233,7 +234,7 @@ function buildLadderPlayers(
   const ladderEntryAtByUserId = new Map(
     sessionData.players.map((player) => [
       player.userId,
-      player.ladderEntryAt ?? player.joinedAt ?? null,
+      getCompetitiveEntryAt(player),
     ])
   );
   const ladderRecordByUserId =

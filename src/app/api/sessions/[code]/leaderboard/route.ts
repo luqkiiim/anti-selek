@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getCommunityEloByUserId } from "@/lib/communityElo";
 import {
+  getCompetitiveEntryAt,
   deriveLadderRecordsByEntryTime,
   deriveRaceRecordsByEntryTime,
 } from "@/lib/matchmaking/ladder";
@@ -139,7 +140,7 @@ export async function GET(
     new Map(
       sessionData.players.map((player) => [
         player.userId,
-        player.ladderEntryAt ?? null,
+        getCompetitiveEntryAt(player),
       ])
     ),
     sessionData.matches.map((match) => ({
@@ -170,7 +171,7 @@ export async function GET(
     new Map(
       sessionData.players.map((player) => [
         player.userId,
-        player.ladderEntryAt ?? null,
+        getCompetitiveEntryAt(player),
       ])
     ),
     sessionData.matches.map((match) => ({

@@ -3,6 +3,24 @@ import { createEmptyLadderRecord } from "./records";
 
 import type { MatchmakerLadderPlayer } from "./types";
 
+export function getCompetitiveEntryAt(
+  player: {
+    ladderEntryAt?: Date | string | null;
+    joinedAt?: Date | string | null;
+  }
+) {
+  const rawEntryAt = player.ladderEntryAt ?? player.joinedAt ?? null;
+
+  if (!rawEntryAt) {
+    return null;
+  }
+
+  const normalizedEntryAt =
+    rawEntryAt instanceof Date ? rawEntryAt : new Date(rawEntryAt);
+
+  return Number.isNaN(normalizedEntryAt.getTime()) ? null : normalizedEntryAt;
+}
+
 export function getNeutralMatchmakingBaseline<T extends MatchmakerLadderPlayer>(
   players: T[],
   {

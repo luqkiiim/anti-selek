@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  getCompetitiveEntryAt,
   deriveLadderRecordsByEntryTime,
   deriveRaceRecordsByEntryTime,
 } from "@/lib/matchmaking/ladder";
@@ -109,7 +110,7 @@ function buildPlayerPerformanceMaps(sessionData: SessionData) {
     const entryMap = new Map(
       sessionData.players.map((player) => [
         player.userId,
-        player.ladderEntryAt ? new Date(player.ladderEntryAt) : null,
+        getCompetitiveEntryAt(player),
       ])
     );
     const historyMatches = (sessionData.matches ?? []).map((match) => ({

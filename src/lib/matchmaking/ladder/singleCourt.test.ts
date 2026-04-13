@@ -96,6 +96,28 @@ describe("ladder single-court selection", () => {
     expect(result.selection?.ids).toEqual(["A", "B", "C", "D"]);
   });
 
+  it("prefers A+D vs B+C for race-style quartets when point diff breaks the score tie", () => {
+    const players = [
+      createPlayer("A", { matchesPlayed: 5, ladderScore: 6, pointDiff: 3 }),
+      createPlayer("B", { matchesPlayed: 5, ladderScore: 6, pointDiff: 1 }),
+      createPlayer("C", { matchesPlayed: 5, ladderScore: 3, pointDiff: -2 }),
+      createPlayer("D", { matchesPlayed: 5, ladderScore: 0, pointDiff: -27 }),
+    ];
+
+    const result = findBestSingleCourtSelectionLadder(players, {
+      sessionMode: SessionMode.MEXICANO,
+      randomFn: () => 0,
+    });
+
+    expect(result.selection?.ids).toEqual(["A", "B", "C", "D"]);
+    expect(result.selection?.partition).toEqual({
+      team1: ["A", "D"],
+      team2: ["B", "C"],
+    });
+    expect(result.selection?.balanceGap).toBe(3);
+    expect(result.selection?.pointDiffGap).toBe(11.5);
+  });
+
   it("does not let longer wait time override a cleaner ladder grouping inside one fairness band", () => {
     const players = [
       createPlayer("A", {
