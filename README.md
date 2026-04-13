@@ -29,8 +29,8 @@ Community-based badminton tournament web app for running live sessions, managing
 - TypeScript
 - Tailwind CSS v4
 - Prisma `5.22.0`
-- SQLite for local development
-- LibSQL/Turso adapter for runtime cloud mode
+- SQLite for local schema/migrations and fallback local runtime
+- LibSQL/Turso adapter for runtime when Turso env vars are present
 - NextAuth v5 beta
 - Vitest
 - Playwright
@@ -54,6 +54,12 @@ TURSO_DATABASE_URL="libsql://..."
 TURSO_AUTH_TOKEN="..."
 ```
 
+Runtime database selection:
+
+- If `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN` are set, the app uses Turso even during local `npm run dev`
+- If those Turso variables are unset or empty, the app falls back to local SQLite via `DATABASE_URL`
+- Prisma schema and `prisma migrate dev` still use the SQLite datasource from `DATABASE_URL`
+
 ## Local Setup
 
 1. Install dependencies
@@ -68,7 +74,19 @@ npm install
 npx prisma migrate dev
 ```
 
-3. Start the app
+3. Choose runtime database
+
+Use local SQLite runtime:
+
+```bash
+# PowerShell
+$env:TURSO_DATABASE_URL=""
+$env:TURSO_AUTH_TOKEN=""
+```
+
+Keep the Turso variables set if you want local app runtime to use the remote Turso database.
+
+4. Start the app
 
 ```bash
 npm run dev
@@ -80,7 +98,7 @@ Open `http://localhost:3000`.
 
 - `npm run dev` - dev server
 - `npm run db:migrate:turso` - apply pending SQL migrations to Turso
-- `npm run build` - production build
+- `npm run build` - production build; runs the Turso migration wrapper first
 - `npm run start` - production server
 - `npm run lint` - ESLint
 - `npm run test` - Vitest using thread pool mode
@@ -92,6 +110,11 @@ Open `http://localhost:3000`.
 npm run build
 npx vitest run --pool=threads
 ```
+
+Notes:
+
+- `npm run dev` can run fully offline only if Turso variables are unset and the app is using local SQLite
+- `npm run build` always invokes the Turso migration wrapper first, but that wrapper only applies migrations on Vercel unless you force it with `npm run db:migrate:turso`
 
 ## Core Workflow
 
