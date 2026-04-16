@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { buildPlayerProfileDerivedData, type ProfileMatchSource } from "./profileStats";
+import {
+  PROFILE_RECENT_SESSION_COUNT,
+  buildPlayerProfileDerivedData,
+  type ProfileMatchSource,
+} from "./profileStats";
 
 function createMatch(
   id: string,
@@ -138,6 +142,26 @@ describe("profileStats", () => {
         count: 1,
       },
     });
+    expect(result.recentSessions.map((session) => session.id)).toEqual([
+      "s1",
+      "s2",
+    ]);
+    expect(result.trend).toEqual({
+      sessions: 2,
+      matches: 4,
+      wins: 2,
+      losses: 2,
+      winRate: 50,
+      pointDifferential: 2,
+      ratingChange: 5,
+      direction: "RISING",
+      bestSession: expect.objectContaining({
+        id: "s1",
+      }),
+      worstSession: expect.objectContaining({
+        id: "s2",
+      }),
+    });
     expect(result.partners.mostPlayed).toMatchObject({
       user: partner1,
       matches: 3,
@@ -222,6 +246,7 @@ describe("profileStats", () => {
       user: partnerWin,
       winRate: 100,
     });
+    expect(result.trend.direction).toBe("RISING");
     expect(result.opponents.toughest).toMatchObject({
       user: opponent3,
       winRate: 0,
@@ -229,6 +254,214 @@ describe("profileStats", () => {
     expect(result.recentForm.currentStreak).toEqual({
       result: "WIN",
       count: 1,
+    });
+  });
+
+  it("groups recent matches into a five-session window", () => {
+    const user = { id: "u1", name: "Alice" };
+    const partner = { id: "u2", name: "Ben" };
+    const opponent1 = { id: "u3", name: "Cara" };
+    const opponent2 = { id: "u4", name: "Dan" };
+
+    const result = buildPlayerProfileDerivedData(user.id, [
+      createMatch("m1", {
+        sessionId: "s6",
+        sessionCode: "week-6",
+        sessionName: "Week 6",
+        completedAt: "2026-04-12T12:00:00.000Z",
+        team1: [user, partner],
+        team2: [opponent1, opponent2],
+        team1Score: 21,
+        team2Score: 18,
+        winnerTeam: 1,
+        team1EloChange: 5,
+      }),
+      createMatch("m2", {
+        sessionId: "s6",
+        sessionCode: "week-6",
+        sessionName: "Week 6",
+        completedAt: "2026-04-11T12:00:00.000Z",
+        team1: [user, partner],
+        team2: [opponent1, opponent2],
+        team1Score: 19,
+        team2Score: 21,
+        winnerTeam: 2,
+        team1EloChange: -2,
+      }),
+      createMatch("m3", {
+        sessionId: "s5",
+        sessionCode: "week-5",
+        sessionName: "Week 5",
+        completedAt: "2026-04-10T12:00:00.000Z",
+        team1: [user, partner],
+        team2: [opponent1, opponent2],
+        team1Score: 21,
+        team2Score: 17,
+        winnerTeam: 1,
+        team1EloChange: 4,
+      }),
+      createMatch("m4", {
+        sessionId: "s4",
+        sessionCode: "week-4",
+        sessionName: "Week 4",
+        completedAt: "2026-04-09T12:00:00.000Z",
+        team1: [user, partner],
+        team2: [opponent1, opponent2],
+        team1Score: 18,
+        team2Score: 21,
+        winnerTeam: 2,
+        team1EloChange: -3,
+      }),
+      createMatch("m5", {
+        sessionId: "s3",
+        sessionCode: "week-3",
+        sessionName: "Week 3",
+        completedAt: "2026-04-08T12:00:00.000Z",
+        team1: [user, partner],
+        team2: [opponent1, opponent2],
+        team1Score: 21,
+        team2Score: 15,
+        winnerTeam: 1,
+        team1EloChange: 6,
+      }),
+      createMatch("m6", {
+        sessionId: "s2",
+        sessionCode: "week-2",
+        sessionName: "Week 2",
+        completedAt: "2026-04-07T12:00:00.000Z",
+        team1: [user, partner],
+        team2: [opponent1, opponent2],
+        team1Score: 17,
+        team2Score: 21,
+        winnerTeam: 2,
+        team1EloChange: -4,
+      }),
+      createMatch("m7", {
+        sessionId: "s1",
+        sessionCode: "week-1",
+        sessionName: "Week 1",
+        completedAt: "2026-04-06T12:00:00.000Z",
+        team1: [user, partner],
+        team2: [opponent1, opponent2],
+        team1Score: 21,
+        team2Score: 19,
+        winnerTeam: 1,
+        team1EloChange: 2,
+      }),
+    ]);
+
+    expect(result.recentSessions).toHaveLength(PROFILE_RECENT_SESSION_COUNT);
+    expect(result.recentSessions.map((session) => session.id)).toEqual([
+      "s6",
+      "s5",
+      "s4",
+      "s3",
+      "s2",
+    ]);
+    expect(result.recentSessions[0]).toMatchObject({
+      id: "s6",
+      matches: 2,
+      wins: 1,
+      losses: 1,
+      pointDifferential: 1,
+      ratingChange: 3,
+    });
+    expect(result.trend).toMatchObject({
+      sessions: PROFILE_RECENT_SESSION_COUNT,
+      wins: 3,
+      losses: 3,
+      ratingChange: 6,
+      pointDifferential: 4,
+    });
+  });
+
+  it("marks the trend as slipping when recent sessions lose rating and point differential", () => {
+    const user = { id: "u1", name: "Alice" };
+    const partner = { id: "u2", name: "Ben" };
+    const opponent1 = { id: "u3", name: "Cara" };
+    const opponent2 = { id: "u4", name: "Dan" };
+
+    const result = buildPlayerProfileDerivedData(user.id, [
+      createMatch("m1", {
+        sessionId: "s1",
+        sessionCode: "week-1",
+        sessionName: "Week 1",
+        completedAt: "2026-04-10T12:00:00.000Z",
+        team1: [user, partner],
+        team2: [opponent1, opponent2],
+        team1Score: 18,
+        team2Score: 21,
+        winnerTeam: 2,
+        team1EloChange: -6,
+      }),
+      createMatch("m2", {
+        sessionId: "s2",
+        sessionCode: "week-2",
+        sessionName: "Week 2",
+        completedAt: "2026-04-08T12:00:00.000Z",
+        team1: [user, partner],
+        team2: [opponent1, opponent2],
+        team1Score: 17,
+        team2Score: 21,
+        winnerTeam: 2,
+        team1EloChange: -7,
+      }),
+    ]);
+
+    expect(result.trend).toMatchObject({
+      sessions: 2,
+      matches: 2,
+      wins: 0,
+      losses: 2,
+      ratingChange: -13,
+      pointDifferential: -7,
+      direction: "SLIPPING",
+      worstSession: expect.objectContaining({
+        id: "s2",
+      }),
+    });
+  });
+
+  it("marks the trend as flat when recent sessions break even", () => {
+    const user = { id: "u1", name: "Alice" };
+    const partner = { id: "u2", name: "Ben" };
+    const opponent1 = { id: "u3", name: "Cara" };
+    const opponent2 = { id: "u4", name: "Dan" };
+
+    const result = buildPlayerProfileDerivedData(user.id, [
+      createMatch("m1", {
+        sessionId: "s1",
+        sessionCode: "week-1",
+        sessionName: "Week 1",
+        completedAt: "2026-04-10T12:00:00.000Z",
+        team1: [user, partner],
+        team2: [opponent1, opponent2],
+        team1Score: 21,
+        team2Score: 18,
+        winnerTeam: 1,
+        team1EloChange: 5,
+      }),
+      createMatch("m2", {
+        sessionId: "s2",
+        sessionCode: "week-2",
+        sessionName: "Week 2",
+        completedAt: "2026-04-09T12:00:00.000Z",
+        team1: [user, partner],
+        team2: [opponent1, opponent2],
+        team1Score: 18,
+        team2Score: 21,
+        winnerTeam: 2,
+        team1EloChange: -5,
+      }),
+    ]);
+
+    expect(result.trend).toMatchObject({
+      sessions: 2,
+      wins: 1,
+      losses: 1,
+      ratingChange: 0,
+      pointDifferential: 0,
+      direction: "FLAT",
     });
   });
 });

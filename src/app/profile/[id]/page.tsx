@@ -10,6 +10,7 @@ import type {
   PlayerProfileRecentFormSummary,
   PlayerProfileSessionSummary,
   PlayerProfileStatsSummary,
+  PlayerProfileTrendSummary,
 } from "@/lib/profileStats";
 import {
   EmptyState,
@@ -28,11 +29,17 @@ interface UserProfileResponse {
   };
   context?: {
     communityId: string;
-    communityRank: number | null;
-    leaderboardSize: number;
+    rankContext: {
+      leaderboardSize: number;
+      currentRank: number | null;
+      previousRank: number | null;
+      rankDelta: number | null;
+    };
   } | null;
   stats: PlayerProfileStatsSummary;
   recentForm: PlayerProfileRecentFormSummary;
+  recentSessions: PlayerProfileSessionSummary[];
+  trend: PlayerProfileTrendSummary;
   partners: {
     mostPlayed: PlayerProfileConnectionSummary | null;
     bestWinRate: PlayerProfileConnectionSummary | null;
@@ -86,6 +93,71 @@ function getPlayerProfileHref(userId: string, communityId: string) {
 
 function getSessionHistoryHref(sessionCode: string) {
   return `/session/${sessionCode}/history`;
+}
+
+function getSignedChipClass(value: number) {
+  if (value > 0) {
+    return "app-chip app-chip-success";
+  }
+
+  if (value < 0) {
+    return "app-chip app-chip-danger";
+  }
+
+  return "app-chip app-chip-neutral";
+}
+
+function getTrendDirectionLabel(direction: PlayerProfileTrendSummary["direction"]) {
+  switch (direction) {
+    case "RISING":
+      return "Rising";
+    case "SLIPPING":
+      return "Slipping";
+    default:
+      return "Flat";
+  }
+}
+
+function getTrendDirectionChipClass(
+  direction: PlayerProfileTrendSummary["direction"]
+) {
+  switch (direction) {
+    case "RISING":
+      return "app-chip app-chip-success";
+    case "SLIPPING":
+      return "app-chip app-chip-danger";
+    default:
+      return "app-chip app-chip-neutral";
+  }
+}
+
+function getTrendDirectionDetail(
+  direction: PlayerProfileTrendSummary["direction"]
+) {
+  switch (direction) {
+    case "RISING":
+      return "Recent sessions are moving upward on results, rating, or point swing.";
+    case "SLIPPING":
+      return "Recent sessions are giving back rating or point swing.";
+    default:
+      return "Recent sessions are balancing out without a clear swing.";
+  }
+}
+
+function getRankMovementLabel(rankDelta: number | null) {
+  if (rankDelta === null || rankDelta === 0) {
+    return "No change";
+  }
+
+  return rankDelta > 0 ? `Up ${rankDelta}` : `Down ${Math.abs(rankDelta)}`;
+}
+
+function getRankMovementChipClass(rankDelta: number | null) {
+  if (rankDelta === null || rankDelta === 0) {
+    return "app-chip app-chip-neutral";
+  }
+
+  return rankDelta > 0 ? "app-chip app-chip-success" : "app-chip app-chip-danger";
 }
 
 function InsightCard({
@@ -185,6 +257,43 @@ function SessionValue({
   );
 }
 
+function RecentSessionCard({
+  summary,
+}: {
+  summary: PlayerProfileSessionSummary;
+}) {
+  return (
+    <article className="app-subcard min-w-[15rem] snap-start p-4 sm:min-w-[16rem]">
+      <div className="flex items-start justify-between gap-3">
+        <div className="space-y-1">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-gray-500">
+            {formatShortDate(summary.date)}
+          </p>
+          <Link
+            href={getSessionHistoryHref(summary.code)}
+            className="text-base font-semibold text-gray-900 hover:text-blue-700 hover:underline"
+          >
+            {summary.name}
+          </Link>
+        </div>
+        <span className="app-chip app-chip-neutral">{summary.matches} matches</span>
+      </div>
+
+      <div className="mt-4 flex flex-wrap gap-2">
+        <span className="app-chip app-chip-accent">
+          {summary.wins}-{summary.losses}
+        </span>
+        <span className={getSignedChipClass(summary.pointDifferential)}>
+          {formatSignedNumber(summary.pointDifferential)} diff
+        </span>
+        <span className={getSignedChipClass(summary.ratingChange)}>
+          {formatSignedNumber(summary.ratingChange)} rating
+        </span>
+      </div>
+    </article>
+  );
+}
+
 export default function ProfilePage() {
   const { data: session, status } = useSession();
   const router = useRouter();
@@ -281,6 +390,8 @@ export default function ProfilePage() {
     data.recentForm.currentStreak.result === null
       ? "No streak yet"
       : `${data.recentForm.currentStreak.result === "WIN" ? "W" : "L"}${data.recentForm.currentStreak.count}`;
+  const trendDirectionLabel = getTrendDirectionLabel(data.trend.direction);
+  const rankContext = data.context?.rankContext ?? null;
 
   return (
     <main className="app-page">
@@ -300,10 +411,9 @@ export default function ProfilePage() {
                 {data.context?.communityId ? "Community Rating" : "Overall Rating"}{" "}
                 {data.user.elo}
               </span>
-              {data.context?.communityRank ? (
+              {rankContext?.currentRank ? (
                 <span className="app-chip app-chip-neutral">
-                  Rank #{data.context.communityRank} of{" "}
-                  {data.context.leaderboardSize}
+                  Rank #{rankContext.currentRank} of {rankContext.leaderboardSize}
                 </span>
               ) : null}
             </>
@@ -335,6 +445,118 @@ export default function ProfilePage() {
             detail={`${data.stats.averageMatchesPerSession} matches per session`}
           />
         </section>
+
+        <SectionCard
+          eyebrow="Momentum"
+          title="Recent sessions"
+          description="Short-term form from the last five completed sessions."
+          action={
+            <span className="app-chip app-chip-neutral">
+              {data.recentSessions.length} session window
+            </span>
+          }
+        >
+          <div className="space-y-4">
+            {data.recentSessions.length === 0 ? (
+              <EmptyState
+                title="No recent sessions yet"
+                detail="Complete a few matches and the momentum view will start filling in."
+              />
+            ) : (
+              <div className="-mx-1 flex snap-x gap-3 overflow-x-auto px-1 pb-1">
+                {data.recentSessions.map((session) => (
+                  <RecentSessionCard key={session.id} summary={session} />
+                ))}
+              </div>
+            )}
+
+            <div
+              className={`grid gap-4 ${rankContext ? "lg:grid-cols-2" : ""}`}
+            >
+              <InsightCard
+                title={
+                  data.trend.sessions > 0
+                    ? `${trendDirectionLabel} lately`
+                    : "No trend yet"
+                }
+                eyebrow="Trend"
+              >
+                <InsightRow
+                  label="Direction"
+                  value={
+                    <span
+                      className={getTrendDirectionChipClass(data.trend.direction)}
+                    >
+                      {trendDirectionLabel}
+                    </span>
+                  }
+                  detail={
+                    data.trend.sessions > 0
+                      ? getTrendDirectionDetail(data.trend.direction)
+                      : "Momentum starts once completed sessions are available."
+                  }
+                />
+                <InsightRow
+                  label="Window"
+                  value={
+                    data.trend.sessions > 0
+                      ? `${data.trend.wins}-${data.trend.losses} across ${data.trend.matches} matches`
+                      : "No completed sessions in the window"
+                  }
+                  detail={
+                    data.trend.sessions > 0
+                      ? `${formatSignedNumber(data.trend.ratingChange)} rating, ${formatSignedNumber(data.trend.pointDifferential)} diff over ${data.trend.sessions} sessions`
+                      : "The profile uses completed matches only for this view."
+                  }
+                />
+                <InsightRow
+                  label="Best recent session"
+                  value={<SessionValue summary={data.trend.bestSession} />}
+                />
+              </InsightCard>
+
+              {rankContext ? (
+                <InsightCard
+                  title={
+                    rankContext.currentRank
+                      ? `Rank #${rankContext.currentRank}`
+                      : "Not on ranked board"
+                  }
+                  eyebrow="Community rank"
+                >
+                  <InsightRow
+                    label="Movement"
+                    value={
+                      <span
+                        className={getRankMovementChipClass(rankContext.rankDelta)}
+                      >
+                        {rankContext.currentRank === null
+                          ? "Unranked"
+                          : getRankMovementLabel(rankContext.rankDelta)}
+                      </span>
+                    }
+                    detail={
+                      rankContext.currentRank === null
+                        ? "Only ranked community members appear on the leaderboard."
+                        : rankContext.previousRank
+                          ? `Started this window at #${rankContext.previousRank}.`
+                          : "Previous rank is unavailable for this window."
+                    }
+                  />
+                  <InsightRow
+                    label="Leaderboard"
+                    value={`${rankContext.leaderboardSize} ranked players`}
+                    detail={
+                      data.recentSessions.length > 0
+                        ? "Movement is rolled back across the same recent-session window."
+                        : "No recent sessions yet, so movement is unchanged."
+                    }
+                  />
+                </InsightCard>
+              ) : null}
+            </div>
+          </div>
+        </SectionCard>
 
         <SectionCard
           eyebrow="Insights"

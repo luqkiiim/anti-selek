@@ -1,4 +1,5 @@
 export const PROFILE_RECENT_FORM_MATCH_COUNT = 10;
+export const PROFILE_RECENT_SESSION_COUNT = 5;
 const PREFERRED_CONNECTION_MIN_MATCHES = 2;
 
 interface ProfileParticipant {
@@ -55,6 +56,8 @@ export interface PlayerProfileRecentFormSummary {
   };
 }
 
+export type PlayerProfileTrendDirection = "RISING" | "FLAT" | "SLIPPING";
+
 export interface PlayerProfileConnectionSummary {
   user: ProfileParticipant;
   matches: number;
@@ -78,6 +81,19 @@ export interface PlayerProfileSessionSummary {
   ratingChange: number;
 }
 
+export interface PlayerProfileTrendSummary {
+  sessions: number;
+  matches: number;
+  wins: number;
+  losses: number;
+  winRate: number;
+  pointDifferential: number;
+  ratingChange: number;
+  direction: PlayerProfileTrendDirection;
+  bestSession: PlayerProfileSessionSummary | null;
+  worstSession: PlayerProfileSessionSummary | null;
+}
+
 export interface PlayerProfileMatchHistoryEntry {
   id: string;
   date: string | null;
@@ -95,6 +111,8 @@ export interface PlayerProfileMatchHistoryEntry {
 export interface PlayerProfileDerivedData {
   stats: PlayerProfileStatsSummary;
   recentForm: PlayerProfileRecentFormSummary;
+  recentSessions: PlayerProfileSessionSummary[];
+  trend: PlayerProfileTrendSummary;
   partners: {
     mostPlayed: PlayerProfileConnectionSummary | null;
     bestWinRate: PlayerProfileConnectionSummary | null;
@@ -297,6 +315,47 @@ function compareBestSessions(
   );
 }
 
+function compareWorstSessions(
+  left: PlayerProfileSessionSummary,
+  right: PlayerProfileSessionSummary
+) {
+  return (
+    left.wins - right.wins ||
+    left.winRate - right.winRate ||
+    left.pointDifferential - right.pointDifferential ||
+    left.ratingChange - right.ratingChange ||
+    compareLatestSessions(left, right)
+  );
+}
+
+function getTrendDirection({
+  ratingChange,
+  pointDifferential,
+  wins,
+  losses,
+}: {
+  ratingChange: number;
+  pointDifferential: number;
+  wins: number;
+  losses: number;
+}): PlayerProfileTrendDirection {
+  if (
+    ratingChange > 0 ||
+    (ratingChange === 0 && (pointDifferential > 0 || wins > losses))
+  ) {
+    return "RISING";
+  }
+
+  if (
+    ratingChange < 0 ||
+    (ratingChange === 0 && (pointDifferential < 0 || wins < losses))
+  ) {
+    return "SLIPPING";
+  }
+
+  return "FLAT";
+}
+
 export function buildPlayerProfileDerivedData(
   userId: string,
   matches: ProfileMatchSource[]
@@ -441,6 +500,30 @@ export function buildPlayerProfileDerivedData(
     toConnectionSummary
   );
   const sessionSummaries = [...sessionAggregates.values()].map(toSessionSummary);
+  const recentSessions = sessionSummaries
+    .slice()
+    .sort(compareLatestSessions)
+    .slice(0, PROFILE_RECENT_SESSION_COUNT);
+  const recentSessionWins = recentSessions.reduce(
+    (sum, session) => sum + session.wins,
+    0
+  );
+  const recentSessionLosses = recentSessions.reduce(
+    (sum, session) => sum + session.losses,
+    0
+  );
+  const recentSessionMatches = recentSessions.reduce(
+    (sum, session) => sum + session.matches,
+    0
+  );
+  const recentSessionPointDifferential = recentSessions.reduce(
+    (sum, session) => sum + session.pointDifferential,
+    0
+  );
+  const recentSessionRatingChange = recentSessions.reduce(
+    (sum, session) => sum + session.ratingChange,
+    0
+  );
 
   return {
     stats: {
@@ -470,6 +553,26 @@ export function buildPlayerProfileDerivedData(
       ),
       currentStreak,
     },
+    recentSessions,
+    trend: {
+      sessions: recentSessions.length,
+      matches: recentSessionMatches,
+      wins: recentSessionWins,
+      losses: recentSessionLosses,
+      winRate: getWinRate(recentSessionWins, recentSessionMatches),
+      pointDifferential: recentSessionPointDifferential,
+      ratingChange: recentSessionRatingChange,
+      direction: getTrendDirection({
+        ratingChange: recentSessionRatingChange,
+        pointDifferential: recentSessionPointDifferential,
+        wins: recentSessionWins,
+        losses: recentSessionLosses,
+      }),
+      bestSession:
+        recentSessions.slice().sort(compareBestSessions)[0] ?? null,
+      worstSession:
+        recentSessions.slice().sort(compareWorstSessions)[0] ?? null,
+    },
     partners: {
       mostPlayed: pickPreferredConnection(
         partnerSummaries,
@@ -491,7 +594,7 @@ export function buildPlayerProfileDerivedData(
       ),
     },
     sessions: {
-      latest: sessionSummaries.slice().sort(compareLatestSessions)[0] ?? null,
+      latest: recentSessions[0] ?? null,
       best: sessionSummaries.slice().sort(compareBestSessions)[0] ?? null,
     },
     matchHistory,

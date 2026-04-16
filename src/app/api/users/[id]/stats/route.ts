@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { buildProfileCommunityRankWindow } from "@/lib/profileCommunityRank";
 import { buildPlayerProfileDerivedData } from "@/lib/profileStats";
 import { CommunityPlayerStatus, MatchStatus } from "@/types/enums";
 
@@ -37,10 +38,21 @@ export async function GET(
   let context:
     | {
         communityId: string;
-        communityRank: number | null;
-        leaderboardSize: number;
+        rankContext: {
+          leaderboardSize: number;
+          currentRank: number | null;
+          previousRank: number | null;
+          rankDelta: number | null;
+        };
       }
     | null = null;
+  let leaderboardMembers: Array<{
+    userId: string;
+    elo: number;
+    user: {
+      name: string;
+    };
+  }> = [];
 
   if (communityId) {
     const [requesterMembership, targetMembership] = await Promise.all([
@@ -83,46 +95,23 @@ export async function GET(
 
     effectiveElo = targetMembership.elo;
 
-    const leaderboardMembers =
-      targetMembership.status === CommunityPlayerStatus.OCCASIONAL
-        ? []
-        : await prisma.communityMember.findMany({
-            where: {
-              communityId,
-              status: {
-                not: CommunityPlayerStatus.OCCASIONAL,
-              },
-            },
-            select: {
-              userId: true,
-              elo: true,
-              user: {
-                select: {
-                  name: true,
-                },
-              },
-            },
-          });
-
-    const rankedMembers = leaderboardMembers.sort((left, right) => {
-      if (right.elo !== left.elo) {
-        return right.elo - left.elo;
-      }
-
-      return left.user.name.localeCompare(right.user.name, undefined, {
-        sensitivity: "base",
-      });
+    leaderboardMembers = await prisma.communityMember.findMany({
+      where: {
+        communityId,
+        status: {
+          not: CommunityPlayerStatus.OCCASIONAL,
+        },
+      },
+      select: {
+        userId: true,
+        elo: true,
+        user: {
+          select: {
+            name: true,
+          },
+        },
+      },
     });
-    const communityRank =
-      targetMembership.status === CommunityPlayerStatus.OCCASIONAL
-        ? null
-        : rankedMembers.findIndex((member) => member.userId === id) + 1 || null;
-
-    context = {
-      communityId,
-      communityRank,
-      leaderboardSize: rankedMembers.length,
-    };
   }
 
   const matches = await prisma.match.findMany({
@@ -148,6 +137,46 @@ export async function GET(
     },
   });
   const profileData = buildPlayerProfileDerivedData(id, matches);
+
+  if (communityId) {
+    const recentSessionIds = profileData.recentSessions.map((session) => session.id);
+    const rankWindowMatches =
+      recentSessionIds.length > 0
+        ? await prisma.match.findMany({
+            where: {
+              status: MatchStatus.COMPLETED,
+              sessionId: {
+                in: recentSessionIds,
+              },
+              session: {
+                communityId,
+                isTest: false,
+              },
+            },
+            select: {
+              team1User1Id: true,
+              team1User2Id: true,
+              team2User1Id: true,
+              team2User2Id: true,
+              team1EloChange: true,
+              team2EloChange: true,
+            },
+          })
+        : [];
+
+    context = {
+      communityId,
+      rankContext: buildProfileCommunityRankWindow(
+        id,
+        leaderboardMembers.map((member) => ({
+          userId: member.userId,
+          name: member.user.name,
+          elo: member.elo,
+        })),
+        rankWindowMatches
+      ),
+    };
+  }
 
   return NextResponse.json({
     user: {
