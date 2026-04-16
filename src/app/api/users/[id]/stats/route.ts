@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { MatchStatus } from "@/types/enums";
+import { buildPlayerProfileDerivedData } from "@/lib/profileStats";
+import { CommunityPlayerStatus, MatchStatus } from "@/types/enums";
 
 export const dynamic = "force-dynamic";
 
@@ -33,6 +34,13 @@ export async function GET(
   }
 
   let effectiveElo = user.elo;
+  let context:
+    | {
+        communityId: string;
+        communityRank: number | null;
+        leaderboardSize: number;
+      }
+    | null = null;
 
   if (communityId) {
     const [requesterMembership, targetMembership] = await Promise.all([
@@ -52,7 +60,16 @@ export async function GET(
             userId: id,
           },
         },
-        select: { elo: true },
+        select: {
+          elo: true,
+          status: true,
+          user: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
+        },
       }),
     ]);
 
@@ -65,9 +82,49 @@ export async function GET(
     }
 
     effectiveElo = targetMembership.elo;
+
+    const leaderboardMembers =
+      targetMembership.status === CommunityPlayerStatus.OCCASIONAL
+        ? []
+        : await prisma.communityMember.findMany({
+            where: {
+              communityId,
+              status: {
+                not: CommunityPlayerStatus.OCCASIONAL,
+              },
+            },
+            select: {
+              userId: true,
+              elo: true,
+              user: {
+                select: {
+                  name: true,
+                },
+              },
+            },
+          });
+
+    const rankedMembers = leaderboardMembers.sort((left, right) => {
+      if (right.elo !== left.elo) {
+        return right.elo - left.elo;
+      }
+
+      return left.user.name.localeCompare(right.user.name, undefined, {
+        sensitivity: "base",
+      });
+    });
+    const communityRank =
+      targetMembership.status === CommunityPlayerStatus.OCCASIONAL
+        ? null
+        : rankedMembers.findIndex((member) => member.userId === id) + 1 || null;
+
+    context = {
+      communityId,
+      communityRank,
+      leaderboardSize: rankedMembers.length,
+    };
   }
 
-  // Fetch all completed matches for this user
   const matches = await prisma.match.findMany({
     where: {
       status: MatchStatus.COMPLETED,
@@ -87,67 +144,17 @@ export async function GET(
       team1User2: { select: { id: true, name: true } },
       team2User1: { select: { id: true, name: true } },
       team2User2: { select: { id: true, name: true } },
-      session: { select: { name: true } },
+      session: { select: { id: true, code: true, name: true } },
     },
   });
-
-  const totalMatches = matches.length;
-  let wins = 0;
-  let pointsScored = 0;
-  let pointsConceded = 0;
-
-  const matchHistory = matches.map((match) => {
-    const isTeam1 =
-      match.team1User1Id === id || match.team1User2Id === id;
-
-    const myTeam = isTeam1 ? 1 : 2;
-    const isWinner = match.winnerTeam === myTeam;
-
-    if (isWinner) wins++;
-
-    const myScore = isTeam1 ? match.team1Score : match.team2Score;
-    const opponentScore = isTeam1 ? match.team2Score : match.team1Score;
-    const myEloChange = isTeam1 ? match.team1EloChange : match.team2EloChange;
-
-    pointsScored += myScore || 0;
-    pointsConceded += opponentScore || 0;
-
-    return {
-      id: match.id,
-      date: match.completedAt,
-      sessionName: match.session.name,
-      partner: isTeam1
-        ? match.team1User1Id === id
-          ? match.team1User2
-          : match.team1User1
-        : match.team2User1Id === id
-        ? match.team2User2
-        : match.team2User1,
-      opponents: isTeam1
-        ? [match.team2User1, match.team2User2]
-        : [match.team1User1, match.team1User2],
-      score: `${myScore} - ${opponentScore}`,
-      result: isWinner ? "WIN" : "LOSS",
-      eloChange: myEloChange,
-    };
-  });
-
-  const winRate = totalMatches > 0 ? Math.round((wins / totalMatches) * 100) : 0;
+  const profileData = buildPlayerProfileDerivedData(id, matches);
 
   return NextResponse.json({
     user: {
       ...user,
       elo: effectiveElo,
     },
-    context: communityId ? { communityId } : null,
-    stats: {
-      totalMatches,
-      wins,
-      losses: totalMatches - wins,
-      winRate,
-      pointsScored,
-      pointsConceded,
-    },
-    matchHistory,
+    context,
+    ...profileData,
   });
 }
