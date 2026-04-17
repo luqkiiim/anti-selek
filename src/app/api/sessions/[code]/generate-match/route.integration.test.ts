@@ -3,7 +3,6 @@ import { randomUUID } from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi, type MockedFunction } from "vitest";
-import type { prisma as PrismaInstance } from "@/lib/prisma";
 import {
   MatchStatus,
   PartnerPreference,
@@ -18,6 +17,7 @@ vi.mock("@/lib/auth", () => ({
 }));
 
 type RouteHandler = typeof import("./route")["POST"];
+type PrismaInstance = typeof import("@/lib/prisma")["prisma"];
 
 const tempDatabaseFile = path.resolve(
   process.cwd(),
@@ -25,11 +25,12 @@ const tempDatabaseFile = path.resolve(
   `generate-match-route-${randomUUID()}.db`
 );
 const tempDatabaseUrl = `file:${tempDatabaseFile.replace(/\\/g, "/")}`;
+const mutableEnv = process.env as Record<string, string | undefined>;
 const previousEnv = {
-  DATABASE_URL: process.env.DATABASE_URL,
-  TURSO_DATABASE_URL: process.env.TURSO_DATABASE_URL,
-  TURSO_AUTH_TOKEN: process.env.TURSO_AUTH_TOKEN,
-  NODE_ENV: process.env.NODE_ENV,
+  DATABASE_URL: mutableEnv.DATABASE_URL,
+  TURSO_DATABASE_URL: mutableEnv.TURSO_DATABASE_URL,
+  TURSO_AUTH_TOKEN: mutableEnv.TURSO_AUTH_TOKEN,
+  NODE_ENV: mutableEnv.NODE_ENV,
 };
 
 let prisma: PrismaInstance;
@@ -220,10 +221,10 @@ async function postGenerateMatch(
 }
 
 beforeAll(async () => {
-  process.env.DATABASE_URL = tempDatabaseUrl;
-  process.env.TURSO_DATABASE_URL = "";
-  process.env.TURSO_AUTH_TOKEN = "";
-  process.env.NODE_ENV = "test";
+  mutableEnv.DATABASE_URL = tempDatabaseUrl;
+  mutableEnv.TURSO_DATABASE_URL = "";
+  mutableEnv.TURSO_AUTH_TOKEN = "";
+  mutableEnv.NODE_ENV = "test";
 
   await removeDatabaseFiles();
 
@@ -263,10 +264,10 @@ afterAll(async () => {
   await prisma?.$disconnect();
   (globalThis as { prisma?: PrismaInstance }).prisma = undefined;
 
-  process.env.DATABASE_URL = previousEnv.DATABASE_URL;
-  process.env.TURSO_DATABASE_URL = previousEnv.TURSO_DATABASE_URL;
-  process.env.TURSO_AUTH_TOKEN = previousEnv.TURSO_AUTH_TOKEN;
-  process.env.NODE_ENV = previousEnv.NODE_ENV;
+  mutableEnv.DATABASE_URL = previousEnv.DATABASE_URL;
+  mutableEnv.TURSO_DATABASE_URL = previousEnv.TURSO_DATABASE_URL;
+  mutableEnv.TURSO_AUTH_TOKEN = previousEnv.TURSO_AUTH_TOKEN;
+  mutableEnv.NODE_ENV = previousEnv.NODE_ENV;
 
   await removeDatabaseFiles();
 });

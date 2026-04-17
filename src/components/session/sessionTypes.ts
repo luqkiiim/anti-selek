@@ -11,6 +11,7 @@ export interface Player {
   userId: string;
   sessionPoints: number;
   ladderEntryAt?: string;
+  joinedAt?: string;
   isPaused: boolean;
   isGuest: boolean;
   gender: PlayerGender;

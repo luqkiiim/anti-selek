@@ -21,13 +21,10 @@ function createPlayer(
     wins: 0,
     losses: 0,
     pointDiff: 0,
-    ladderScore: Object.prototype.hasOwnProperty.call(overrides, "ladderScore")
-      ? overrides.ladderScore
-      : (undefined as unknown as number),
     isBusy: false,
     isPaused: false,
     ...overrides,
-  };
+  } as MatchmakerLadderPlayer;
 }
 
 describe("ladder fairness", () => {

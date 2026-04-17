@@ -199,9 +199,10 @@ describe("generate-match race regressions", () => {
     const selectedCompletedMixedCount = selection.ids.filter((userId) =>
       completedMixedIds.has(userId)
     ).length;
-    const selectedWaitingCount = selection.players.filter(
-      (player) => player.matchesPlayed === 0
-    ).length;
+    const selectedWaitingCount = selection.ids.filter((userId) => {
+      const player = players.find((candidate) => candidate.userId === userId);
+      return (player?.matchesPlayed ?? 0) === 0;
+    }).length;
 
     expect(selection.ids).toHaveLength(4);
     expect(selectedCompletedMixedCount).toBe(1);

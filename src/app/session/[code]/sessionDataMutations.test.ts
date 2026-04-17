@@ -3,6 +3,7 @@ import {
   PartnerPreference,
   PlayerGender,
   SessionMode,
+  SessionPool,
   SessionType,
 } from "@/types/enums";
 import type { SessionData } from "@/components/session/sessionTypes";
@@ -31,6 +32,14 @@ function createSessionData(): SessionData {
     mode: SessionMode.MEXICANO,
     status: "ACTIVE",
     isTest: false,
+    poolsEnabled: false,
+    poolAName: "Open",
+    poolBName: "Regular",
+    poolACourtAssignments: 0,
+    poolBCourtAssignments: 0,
+    poolAMissedTurns: 0,
+    poolBMissedTurns: 0,
+    crossoverMissThreshold: 1,
     viewerCanManage: true,
     viewerCommunityRole: "ADMIN",
     courts: [
@@ -48,6 +57,7 @@ function createSessionData(): SessionData {
         isGuest: false,
         gender: PlayerGender.MALE,
         partnerPreference: PartnerPreference.OPEN,
+        pool: SessionPool.A,
         user: { id: "p1", name: "Player 1", elo: 1000 },
       },
       {
@@ -57,6 +67,7 @@ function createSessionData(): SessionData {
         isGuest: false,
         gender: PlayerGender.FEMALE,
         partnerPreference: PartnerPreference.FEMALE_FLEX,
+        pool: SessionPool.A,
         user: { id: "p2", name: "Player 2", elo: 1000 },
       },
       {
@@ -66,6 +77,7 @@ function createSessionData(): SessionData {
         isGuest: false,
         gender: PlayerGender.MALE,
         partnerPreference: PartnerPreference.OPEN,
+        pool: SessionPool.A,
         user: { id: "p3", name: "Player 3", elo: 1000 },
       },
       {
@@ -75,6 +87,7 @@ function createSessionData(): SessionData {
         isGuest: false,
         gender: PlayerGender.FEMALE,
         partnerPreference: PartnerPreference.FEMALE_FLEX,
+        pool: SessionPool.A,
         user: { id: "p4", name: "Player 4", elo: 1000 },
       },
     ],

@@ -49,11 +49,19 @@ vi.mock("@/lib/matchmaking/ladder", async () => {
 import {
   findBestBatchSelectionV3,
   findBestSingleCourtSelectionV3,
+  type ActiveMatchmakerV3Player,
+  type MatchmakerV3Player,
+  type V3BatchSelection,
+  type V3SingleCourtSelection,
 } from "@/lib/matchmaking/v3";
 import { getCommunityEloByUserId } from "@/lib/communityElo";
 import {
   findBestBatchSelectionLadder,
   findBestSingleCourtSelectionLadder,
+  type ActiveMatchmakerLadderPlayer,
+  type LadderBatchSelection,
+  type LadderSingleCourtSelection,
+  type MatchmakerLadderPlayer,
 } from "@/lib/matchmaking/ladder";
 import {
   buildRotationHistory,
@@ -169,13 +177,81 @@ function createPlayersById(players: GenerateMatchSession["players"]) {
   );
 }
 
+function createActiveV3Player(
+  userId: string
+): ActiveMatchmakerV3Player<MatchmakerV3Player> {
+  return {
+    userId,
+    matchesPlayed: 0,
+    matchmakingBaseline: 0,
+    availableSince: new Date("2026-01-01T00:00:00Z"),
+    strength: 1000,
+    effectiveMatchCount: 0,
+    waitMs: 0,
+    randomScore: 0,
+    rank: 0,
+  };
+}
+
+function createActiveLadderPlayer(
+  userId: string
+): ActiveMatchmakerLadderPlayer<MatchmakerLadderPlayer> {
+  return {
+    userId,
+    matchesPlayed: 0,
+    matchmakingBaseline: 0,
+    availableSince: new Date("2026-01-01T00:00:00Z"),
+    strength: 1000,
+    wins: 0,
+    losses: 0,
+    pointDiff: 0,
+    ladderScore: 0,
+    effectiveMatchCount: 0,
+    waitMs: 0,
+    randomScore: 0,
+    rank: 0,
+  };
+}
+
+function createV3PlayersTuple(
+  ids: [string, string, string, string]
+): [
+  ActiveMatchmakerV3Player<MatchmakerV3Player>,
+  ActiveMatchmakerV3Player<MatchmakerV3Player>,
+  ActiveMatchmakerV3Player<MatchmakerV3Player>,
+  ActiveMatchmakerV3Player<MatchmakerV3Player>,
+] {
+  return ids.map((userId) => createActiveV3Player(userId)) as [
+    ActiveMatchmakerV3Player<MatchmakerV3Player>,
+    ActiveMatchmakerV3Player<MatchmakerV3Player>,
+    ActiveMatchmakerV3Player<MatchmakerV3Player>,
+    ActiveMatchmakerV3Player<MatchmakerV3Player>,
+  ];
+}
+
+function createLadderPlayersTuple(
+  ids: [string, string, string, string]
+): [
+  ActiveMatchmakerLadderPlayer<MatchmakerLadderPlayer>,
+  ActiveMatchmakerLadderPlayer<MatchmakerLadderPlayer>,
+  ActiveMatchmakerLadderPlayer<MatchmakerLadderPlayer>,
+  ActiveMatchmakerLadderPlayer<MatchmakerLadderPlayer>,
+] {
+  return ids.map((userId) => createActiveLadderPlayer(userId)) as [
+    ActiveMatchmakerLadderPlayer<MatchmakerLadderPlayer>,
+    ActiveMatchmakerLadderPlayer<MatchmakerLadderPlayer>,
+    ActiveMatchmakerLadderPlayer<MatchmakerLadderPlayer>,
+    ActiveMatchmakerLadderPlayer<MatchmakerLadderPlayer>,
+  ];
+}
+
 function createV3Selection(
   ids: [string, string, string, string],
   partition: { team1: [string, string]; team2: [string, string] }
-) {
+): V3SingleCourtSelection<ActiveMatchmakerV3Player<MatchmakerV3Player>> {
   return {
     ids,
-    players: [] as never[],
+    players: createV3PlayersTuple(ids),
     partition,
     waitSummary: {
       totalWaitMs: 0,
@@ -191,10 +267,12 @@ function createV3Selection(
 function createLadderSelection(
   ids: [string, string, string, string],
   partition: { team1: [string, string]; team2: [string, string] }
-) {
+): LadderSingleCourtSelection<
+  ActiveMatchmakerLadderPlayer<MatchmakerLadderPlayer>
+> {
   return {
     ids,
-    players: [] as never[],
+    players: createLadderPlayersTuple(ids),
     partition,
     waitSummary: {
       totalWaitMs: 0,
@@ -934,7 +1012,9 @@ describe("generate match service", () => {
 
   describe("selectBatchMatches", () => {
     it("returns the selected batch when one is available", () => {
-      const batchSelection = {
+      const batchSelection: V3BatchSelection<
+        ActiveMatchmakerV3Player<MatchmakerV3Player>
+      > = {
         selections: [
           createV3Selection(["A", "B", "C", "D"], {
             team1: ["A", "B"],
@@ -977,7 +1057,9 @@ describe("generate match service", () => {
     });
 
     it("uses the ladder batch selector for ladder sessions", () => {
-      const batchSelection = {
+      const batchSelection: LadderBatchSelection<
+        ActiveMatchmakerLadderPlayer<MatchmakerLadderPlayer>
+      > = {
         selections: [
           createLadderSelection(["A", "B", "C", "D"], {
             team1: ["A", "B"],
@@ -994,6 +1076,10 @@ describe("generate match service", () => {
         totalPointDiffGap: 0,
         maxBalanceGap: 0,
         totalBalanceGap: 0,
+        maxPointDiffBalanceGap: 0,
+        totalPointDiffBalanceGap: 0,
+        maxStrengthGap: 0,
+        totalStrengthGap: 0,
         totalRandomScore: 0,
       };
       vi.mocked(findBestBatchSelectionLadder).mockReturnValueOnce({
@@ -1026,26 +1112,14 @@ describe("generate match service", () => {
     });
 
     it("uses the ladder batch selector for race sessions", () => {
-      const batchSelection = {
+      const batchSelection: LadderBatchSelection<
+        ActiveMatchmakerLadderPlayer<MatchmakerLadderPlayer>
+      > = {
         selections: [
-          {
-            ids: ["A", "B", "C", "D"] as [string, string, string, string],
-            players: [] as never[],
-            partition: { team1: ["A", "B"], team2: ["C", "D"] },
-            waitSummary: {
-              totalWaitMs: 0,
-              minimumWaitMs: 0,
-              waitVector: [],
-            },
-            groupingSummary: {
-              maxLadderGap: 0,
-              totalLadderGap: 0,
-              pointDiffSpread: 0,
-              totalPointDiffGap: 0,
-            },
-            balanceGap: 0,
-            randomScore: 0,
-          },
+          createLadderSelection(["A", "B", "C", "D"], {
+            team1: ["A", "B"],
+            team2: ["C", "D"],
+          }),
         ],
         waitSummary: {
           totalWaitMs: 0,
@@ -1057,6 +1131,10 @@ describe("generate match service", () => {
         totalPointDiffGap: 0,
         maxBalanceGap: 0,
         totalBalanceGap: 0,
+        maxPointDiffBalanceGap: 0,
+        totalPointDiffBalanceGap: 0,
+        maxStrengthGap: 0,
+        totalStrengthGap: 0,
         totalRandomScore: 0,
       };
       vi.mocked(findBestBatchSelectionLadder).mockReturnValueOnce({
