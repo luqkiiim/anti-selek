@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { logAuditEvent } from "@/lib/serverAudit";
 
 export const dynamic = "force-dynamic";
 
@@ -100,6 +101,26 @@ export async function POST(
     await prisma.user.update({
       where: { id: userId },
       data: { passwordHash },
+    });
+
+    logAuditEvent({
+      action: "community.member.password_reset",
+      actor: {
+        email: session.user.email ?? null,
+        isGlobalAdmin: !!session.user.isAdmin,
+        userId: session.user.id,
+      },
+      outcome: "success",
+      request,
+      scope: {
+        communityId,
+        route: "/api/communities/[id]/members/[userId]/password",
+      },
+      target: {
+        id: membership.user.id,
+        name: membership.user.name,
+        type: "user",
+      },
     });
 
     return NextResponse.json({

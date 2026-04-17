@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { listSessionsForCommunity } from "@/app/api/sessions/listSessionsService";
+import { logAuditEvent } from "@/lib/serverAudit";
 import {
   ClaimRequestStatus,
   CommunityPlayerStatus,
@@ -420,6 +421,25 @@ export async function DELETE(
     }
 
     await prisma.community.delete({ where: { id } });
+
+    logAuditEvent({
+      action: "community.delete",
+      actor: {
+        email: session.user.email ?? null,
+        isGlobalAdmin: !!session.user.isAdmin,
+        userId: session.user.id,
+      },
+      outcome: "success",
+      request,
+      scope: {
+        communityId: id,
+        route: "/api/communities/[id]",
+      },
+      target: {
+        id,
+        type: "community",
+      },
+    });
 
     return NextResponse.json({ success: true });
   } catch (error) {

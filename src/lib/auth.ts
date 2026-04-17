@@ -3,6 +3,15 @@ import Credentials from "next-auth/providers/credentials";
 import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
 import { isGlobalAdminEmail, normalizeAuthEmail } from "@/lib/globalAdmin";
+import {
+  applyRateLimit,
+  buildRateLimitKey,
+  getRequestRateLimitSource,
+} from "@/lib/rateLimit";
+import { logAuditEvent } from "@/lib/serverAudit";
+
+const SIGN_IN_MAX_ATTEMPTS = 10;
+const SIGN_IN_WINDOW_MS = 15 * 60 * 1000;
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   providers: [
@@ -12,7 +21,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         email: { label: "Email", type: "email" },
         password: { label: "Password", type: "password" },
       },
-      async authorize(credentials) {
+      async authorize(credentials, request) {
         if (!credentials?.email || !credentials?.password) {
           return null;
         }
@@ -22,29 +31,144 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           return null;
         }
 
-        const user = await prisma.user.findUnique({
-          where: { email: normalizedEmail },
-        });
+        try {
+          const rateLimit = applyRateLimit({
+            key: buildRateLimitKey([
+              "auth",
+              "signin",
+              normalizedEmail,
+              getRequestRateLimitSource(request),
+            ]),
+            max: SIGN_IN_MAX_ATTEMPTS,
+            windowMs: SIGN_IN_WINDOW_MS,
+          });
+          if (!rateLimit.allowed) {
+            logAuditEvent({
+              action: "auth.sign_in",
+              actor: {
+                email: normalizedEmail,
+              },
+              details: {
+                reason: "rate_limited",
+                retryAfterSeconds: rateLimit.retryAfterSeconds,
+              },
+              outcome: "denied",
+              request,
+              scope: {
+                route: "/api/auth/[...nextauth]",
+              },
+              target: {
+                id: normalizedEmail,
+                type: "auth_credentials",
+              },
+            });
+            return null;
+          }
 
-        if (!user || !user.passwordHash) {
-          return null;
+          const user = await prisma.user.findUnique({
+            where: { email: normalizedEmail },
+          });
+
+          if (!user || !user.passwordHash) {
+            logAuditEvent({
+              action: "auth.sign_in",
+              actor: {
+                email: normalizedEmail,
+              },
+              details: {
+                reason: "invalid_credentials",
+              },
+              outcome: "denied",
+              request,
+              scope: {
+                route: "/api/auth/[...nextauth]",
+              },
+              target: {
+                id: normalizedEmail,
+                type: "auth_credentials",
+              },
+            });
+            return null;
+          }
+
+          const isValid = await bcrypt.compare(
+            credentials.password as string,
+            user.passwordHash
+          );
+
+          if (!isValid) {
+            logAuditEvent({
+              action: "auth.sign_in",
+              actor: {
+                email: normalizedEmail,
+              },
+              details: {
+                reason: "invalid_credentials",
+              },
+              outcome: "denied",
+              request,
+              scope: {
+                route: "/api/auth/[...nextauth]",
+              },
+              target: {
+                id: normalizedEmail,
+                type: "auth_credentials",
+              },
+            });
+            return null;
+          }
+
+          const resolvedEmail = user.email ?? normalizedEmail;
+          const isAdmin = isGlobalAdminEmail(resolvedEmail);
+
+          logAuditEvent({
+            action: "auth.sign_in",
+            actor: {
+              email: resolvedEmail,
+              isGlobalAdmin: isAdmin,
+              userId: user.id,
+            },
+            outcome: "success",
+            request,
+            scope: {
+              route: "/api/auth/[...nextauth]",
+            },
+            target: {
+              id: user.id,
+              name: user.name,
+              type: "user",
+            },
+          });
+
+          return {
+            id: user.id,
+            email: resolvedEmail,
+            name: user.name,
+            isAdmin,
+          };
+        } catch (error) {
+          logAuditEvent({
+            action: "auth.sign_in",
+            actor: {
+              email: normalizedEmail,
+            },
+            details: {
+              errorMessage:
+                error instanceof Error ? error.message : "Unknown error",
+              reason: "sign_in_error",
+            },
+            outcome: "error",
+            request,
+            scope: {
+              route: "/api/auth/[...nextauth]",
+            },
+            target: {
+              id: normalizedEmail,
+              type: "auth_credentials",
+            },
+          });
+          throw error;
         }
-
-        const isValid = await bcrypt.compare(
-          credentials.password as string,
-          user.passwordHash
-        );
-
-        if (!isValid) {
-          return null;
-        }
-
-        return {
-          id: user.id,
-          email: user.email ?? normalizedEmail,
-          name: user.name,
-          isAdmin: isGlobalAdminEmail(user.email ?? normalizedEmail),
-        };
       },
     }),
   ],

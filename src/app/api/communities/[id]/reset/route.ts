@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { logAuditEvent } from "@/lib/serverAudit";
 import {
   collectGuestUserIds,
   deleteEphemeralGuestUsers,
@@ -85,6 +86,25 @@ export async function POST(
         where: { communityId: id },
         data: { elo: 1000 },
       });
+    });
+
+    logAuditEvent({
+      action: "community.reset",
+      actor: {
+        email: session.user.email ?? null,
+        isGlobalAdmin: !!session.user.isAdmin,
+        userId: session.user.id,
+      },
+      outcome: "success",
+      request,
+      scope: {
+        communityId: id,
+        route: "/api/communities/[id]/reset",
+      },
+      target: {
+        id,
+        type: "community",
+      },
     });
 
     return NextResponse.json({ success: true });

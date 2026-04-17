@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { logAuditEvent } from "@/lib/serverAudit";
 
 export const dynamic = "force-dynamic";
 
@@ -108,6 +109,25 @@ export async function DELETE(
     // Delete the user (cascades will handle SessionPlayer and Match records)
     await prisma.user.delete({
       where: { id },
+    });
+
+    logAuditEvent({
+      action: "admin.user.delete",
+      actor: {
+        email: session.user.email ?? null,
+        isGlobalAdmin: !!session.user.isAdmin,
+        userId: session.user.id,
+      },
+      outcome: "success",
+      request,
+      scope: {
+        route: "/api/admin/players/[id]",
+      },
+      target: {
+        id: user.id,
+        name: user.name,
+        type: "user",
+      },
     });
 
     return NextResponse.json({ success: true });

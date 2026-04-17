@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { logAuditEvent } from "@/lib/serverAudit";
 import {
   collectGuestUserIds,
   computeRollbackEloDeltas,
@@ -179,6 +180,29 @@ export async function POST(
         sessionName: freshTarget.name,
         reversedPlayers: eloReverseDeltaByUserId.size,
       };
+    });
+
+    logAuditEvent({
+      action: "session.rollback",
+      actor: {
+        email: session.user.email ?? null,
+        isGlobalAdmin: !!session.user.isAdmin,
+        userId: session.user.id,
+      },
+      details: {
+        reversedPlayers: result.reversedPlayers,
+      },
+      outcome: "success",
+      request: _request,
+      scope: {
+        route: "/api/sessions/[code]/rollback",
+        sessionCode: result.sessionCode,
+      },
+      target: {
+        id: result.sessionCode,
+        name: result.sessionName,
+        type: "session",
+      },
     });
 
     return NextResponse.json({ success: true, ...result });

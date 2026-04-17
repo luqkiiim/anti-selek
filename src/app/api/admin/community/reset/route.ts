@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { logAuditEvent } from "@/lib/serverAudit";
 
 export const dynamic = "force-dynamic";
 
@@ -31,6 +32,23 @@ export async function POST(request: Request) {
       // 4. Delete all sessions
       prisma.session.deleteMany({}),
     ]);
+
+    logAuditEvent({
+      action: "admin.community.reset_all",
+      actor: {
+        email: session.user.email ?? null,
+        isGlobalAdmin: !!session.user.isAdmin,
+        userId: session.user.id,
+      },
+      outcome: "success",
+      request,
+      scope: {
+        route: "/api/admin/community/reset",
+      },
+      target: {
+        type: "platform",
+      },
+    });
 
     return NextResponse.json({ success: true });
   } catch (error: unknown) {

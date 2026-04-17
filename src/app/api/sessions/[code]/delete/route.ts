@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { logAuditEvent } from "@/lib/serverAudit";
 import {
   collectGuestUserIds,
   deleteEphemeralGuestUsers,
@@ -9,7 +10,7 @@ import {
 export const dynamic = "force-dynamic";
 
 export async function DELETE(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ code: string }> }
 ) {
   try {
@@ -79,6 +80,26 @@ export async function DELETE(
         where: { id: targetSession.id },
       });
       await deleteEphemeralGuestUsers(tx, guestUserIds);
+    });
+
+    logAuditEvent({
+      action: "session.delete_test",
+      actor: {
+        email: session.user.email ?? null,
+        isGlobalAdmin: !!session.user.isAdmin,
+        userId: session.user.id,
+      },
+      outcome: "success",
+      request,
+      scope: {
+        communityId: targetSession.communityId ?? undefined,
+        route: "/api/sessions/[code]/delete",
+        sessionCode: targetSession.code,
+      },
+      target: {
+        id: targetSession.code,
+        type: "session",
+      },
     });
 
     return NextResponse.json({

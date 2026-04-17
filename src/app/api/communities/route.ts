@@ -15,16 +15,6 @@ export async function GET() {
     const isGlobalAdmin =
       !!session.user.isAdmin || isGlobalAdminEmail(session.user.email ?? null);
 
-    if (isGlobalAdmin) {
-      await prisma.communityMember.updateMany({
-        where: {
-          userId: session.user.id,
-          NOT: { role: "ADMIN" },
-        },
-        data: { role: "ADMIN" },
-      });
-    }
-
     const memberships = await prisma.communityMember.findMany({
       where: { userId: session.user.id },
       include: {
