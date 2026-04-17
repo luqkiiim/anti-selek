@@ -46,6 +46,7 @@ export function useCommunityHostSetup({
     SessionMode.MEXICANO
   );
   const [isTestSession, setIsTestSession] = useState(false);
+  const [autoQueueEnabled, setAutoQueueEnabled] = useState(true);
   const [courtCount, setCourtCount] = useState(3);
   const [poolsEnabled, setPoolsEnabled] = useState(false);
   const [poolAName, setPoolAName] = useState("Open");
@@ -74,6 +75,7 @@ export function useCommunityHostSetup({
     setSessionType(SessionType.POINTS);
     setSessionMode(SessionMode.MEXICANO);
     setIsTestSession(false);
+    setAutoQueueEnabled(true);
     setCourtCount(3);
     setPoolsEnabled(false);
     setPoolAName("Open");
@@ -118,6 +120,7 @@ export function useCommunityHostSetup({
           type: sessionType,
           mode: sessionMode,
           isTest: isTestSession,
+          autoQueueEnabled,
           courtCount,
           communityId,
           playerIds: selectedPlayerIds,
@@ -146,6 +149,7 @@ export function useCommunityHostSetup({
       setGuestGenderInput(PlayerGender.MALE);
       setGuestMixedSideOverrideInput(null);
       setGuestPoolInput(SessionPool.A);
+      setAutoQueueEnabled(true);
       setCourtCount(3);
       router.push(`/session/${data.code}`);
     } catch (err: unknown) {
@@ -302,6 +306,8 @@ export function useCommunityHostSetup({
     setSessionMode,
     isTestSession,
     setIsTestSession,
+    autoQueueEnabled,
+    setAutoQueueEnabled,
     courtCount,
     setCourtCount,
     poolsEnabled,

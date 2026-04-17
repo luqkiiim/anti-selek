@@ -49,6 +49,7 @@ describe("parseCreateSessionRequest", () => {
     expect(parsed.type).toBe(SessionType.ELO);
     expect(parsed.mode).toBe(SessionMode.MIXICANO);
     expect(parsed.courtCount).toBe(4);
+    expect(parsed.autoQueueEnabled).toBe(true);
     expect(parsed.requestedPlayerIds).toEqual(["user-1", "user-2"]);
     expect(parsed.playerConfigMap.get("user-1")).toEqual({
       gender: PlayerGender.FEMALE,
@@ -202,6 +203,16 @@ describe("parseCreateSessionRequest", () => {
     });
 
     expect(parsed.isTest).toBe(true);
+  });
+
+  it("allows auto queue to be disabled explicitly", () => {
+    const parsed = parseCreateSessionRequest({
+      name: "No Queue Night",
+      communityId: "community-1",
+      autoQueueEnabled: false,
+    });
+
+    expect(parsed.autoQueueEnabled).toBe(false);
   });
 
   it("rejects invalid session types", () => {

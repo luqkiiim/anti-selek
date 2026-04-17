@@ -32,6 +32,7 @@ function createSessionData(): SessionData {
     mode: SessionMode.MEXICANO,
     status: "ACTIVE",
     isTest: false,
+    autoQueueEnabled: true,
     poolsEnabled: false,
     poolAName: "Open",
     poolBName: "Regular",

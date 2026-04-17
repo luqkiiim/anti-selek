@@ -148,6 +148,7 @@ async function createSessionWithCourtsAndPlayers({
   communityId,
   type,
   mode,
+  autoQueueEnabled = true,
   players,
   courtIds,
 }: {
@@ -155,6 +156,7 @@ async function createSessionWithCourtsAndPlayers({
   communityId: string;
   type: SessionType;
   mode: SessionMode;
+  autoQueueEnabled?: boolean;
   players: Array<{
     userId: string;
     gender?: PlayerGender;
@@ -177,6 +179,7 @@ async function createSessionWithCourtsAndPlayers({
       type,
       mode,
       status: SessionStatus.ACTIVE,
+      autoQueueEnabled,
       players: {
         create: players.map((player) => ({
           userId: player.userId,
@@ -412,6 +415,55 @@ describe("generate match route integration", () => {
     ).toBe(true);
     expect(queuedIds.every((userId) => !selectedIds.includes(userId))).toBe(true);
     expect(storedQueuedMatch).not.toBeNull();
+  });
+
+  it("does not auto-queue when the session auto-queue toggle is off", async () => {
+    const prefix = `batch-no-auto-queue-${randomUUID().slice(0, 8)}`;
+    const { communityId } = await createCommunityAdmin(prefix);
+    const playerKeys = [
+      "p1",
+      "p2",
+      "p3",
+      "p4",
+      "p5",
+      "p6",
+      "p7",
+      "p8",
+      "p9",
+      "p10",
+      "p11",
+      "p12",
+    ];
+    const playerIds = playerKeys.map((key) => `${prefix}-${key}`);
+    const courtIds = [`${prefix}-court-1`, `${prefix}-court-2`];
+
+    await createUsers(
+      prefix,
+      playerKeys.map((key) => ({ key }))
+    );
+
+    const { sessionId, code } = await createSessionWithCourtsAndPlayers({
+      prefix,
+      communityId,
+      type: SessionType.POINTS,
+      mode: SessionMode.MEXICANO,
+      autoQueueEnabled: false,
+      players: playerIds.map((userId) => ({ userId })),
+      courtIds,
+    });
+
+    const response = await postGenerateMatch(code, { courtIds });
+    const payload = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(payload.matches).toHaveLength(2);
+    expect(payload.queuedMatch).toBeNull();
+
+    const storedQueuedMatch = await prisma.queuedMatch.findUnique({
+      where: { sessionId },
+    });
+
+    expect(storedQueuedMatch).toBeNull();
   });
 
   it("creates a real batch across two courts without duplicating players", async () => {

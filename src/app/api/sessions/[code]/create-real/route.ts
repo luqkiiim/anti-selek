@@ -93,6 +93,7 @@ export async function POST(
           status: SessionStatus.WAITING,
           isTest: false,
           sourceSessionId: sourceSession.id,
+          autoQueueEnabled: sourceSession.autoQueueEnabled,
           poolsEnabled: sourceSession.poolsEnabled,
           poolAName: sourceSession.poolAName,
           poolBName: sourceSession.poolBName,

@@ -137,6 +137,7 @@ describe("createSessionForUser", () => {
     expect(sessionCreate).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
+          autoQueueEnabled: true,
           players: {
             create: [
               expect.objectContaining({

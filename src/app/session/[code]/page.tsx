@@ -111,10 +111,11 @@ export default function SessionPage() {
   const [showDeleteTestConfirm, setShowDeleteTestConfirm] = useState(false);
   const [showPlayersModal, setShowPlayersModal] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [autoQueueDraft, setAutoQueueDraft] = useState(true);
   const [courtLabelDrafts, setCourtLabelDrafts] = useState<
     Record<string, string>
   >({});
-  const [savingCourtLabels, setSavingCourtLabels] = useState(false);
+  const [savingSettings, setSavingSettings] = useState(false);
   const [mobileSection, setMobileSection] =
     useState<SessionMobileSection>("session");
 
@@ -456,6 +457,14 @@ export default function SessionPage() {
         (courtLabelDrafts[court.id] ?? "").trim() !== (court.label ?? "").trim()
     );
   }, [courtLabelDrafts, sessionData]);
+  const hasAutoQueueChange = useMemo(() => {
+    if (!sessionData) {
+      return false;
+    }
+
+    return autoQueueDraft !== sessionData.autoQueueEnabled;
+  }, [autoQueueDraft, sessionData]);
+  const hasSettingsChanges = hasCourtLabelChanges || hasAutoQueueChange;
 
   const openSettingsModal = useCallback(() => {
     if (!sessionData || !canOpenSettings) {
@@ -463,6 +472,7 @@ export default function SessionPage() {
     }
 
     setError("");
+    setAutoQueueDraft(sessionData.autoQueueEnabled);
     setCourtLabelDrafts(
       Object.fromEntries(
         sessionData.courts.map((court) => [court.id, court.label ?? ""])
@@ -472,12 +482,12 @@ export default function SessionPage() {
   }, [canOpenSettings, sessionData]);
 
   const closeSettingsModal = useCallback(() => {
-    if (savingCourtLabels) {
+    if (savingSettings) {
       return;
     }
 
     setShowSettingsModal(false);
-  }, [savingCourtLabels]);
+  }, [savingSettings]);
 
   const openRosterFromSettings = useCallback(() => {
     setShowSettingsModal(false);
@@ -501,47 +511,71 @@ export default function SessionPage() {
     []
   );
 
-  const saveCourtLabels = useCallback(async () => {
-    if (!sessionData || !hasCourtLabelChanges) {
+  const saveSessionSettings = useCallback(async () => {
+    if (!sessionData || !hasSettingsChanges) {
       return;
     }
 
-    setSavingCourtLabels(true);
+    setSavingSettings(true);
     setError("");
 
     try {
-      const res = await fetch(`/api/sessions/${code}/courts/labels`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          courts: sessionData.courts.map((court) => ({
-            courtId: court.id,
-            label: courtLabelDrafts[court.id] ?? "",
-          })),
-        }),
-      });
-      const data = await safeJson<CourtLabelUpdatesResponse>(res);
+      if (hasCourtLabelChanges) {
+        const res = await fetch(`/api/sessions/${code}/courts/labels`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            courts: sessionData.courts.map((court) => ({
+              courtId: court.id,
+              label: courtLabelDrafts[court.id] ?? "",
+            })),
+          }),
+        });
+        const data = await safeJson<CourtLabelUpdatesResponse>(res);
 
-      if (!res.ok) {
-        setError(getErrorMessage(data, "Failed to update court labels"));
-        return;
+        if (!res.ok) {
+          setError(getErrorMessage(data, "Failed to update court labels"));
+          return;
+        }
+
+        patchSessionData((current) =>
+          applyCourtLabelUpdates(current, data.courts ?? [])
+        );
       }
 
-      patchSessionData((current) =>
-        applyCourtLabelUpdates(current, data.courts ?? [])
-      );
+      if (hasAutoQueueChange) {
+        const res = await fetch(`/api/sessions/${code}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            autoQueueEnabled: autoQueueDraft,
+          }),
+        });
+        const data = await safeJson<SessionSnapshotResponse>(res);
+
+        if (!res.ok) {
+          setError(getErrorMessage(data, "Failed to update auto queue"));
+          return;
+        }
+
+        patchSessionData((current) => mergeSessionSnapshot(current, data));
+      }
+
       setShowSettingsModal(false);
       scheduleSessionRefresh();
     } catch (err) {
       console.error(err);
-      setError("Failed to update court labels");
+      setError("Failed to update session settings");
     } finally {
-      setSavingCourtLabels(false);
+      setSavingSettings(false);
     }
   }, [
+    autoQueueDraft,
     code,
     courtLabelDrafts,
+    hasAutoQueueChange,
     hasCourtLabelChanges,
+    hasSettingsChanges,
     patchSessionData,
     scheduleSessionRefresh,
     sessionData,
@@ -1112,22 +1146,27 @@ export default function SessionPage() {
         open={showSettingsModal}
         courts={sessionData.courts}
         isTestSession={sessionData.isTest}
+        autoQueueEnabled={sessionData.autoQueueEnabled}
+        autoQueueDraft={autoQueueDraft}
         canOpenRoster={isAdmin && !sessionView.isCompletedSession}
         canEndSession={isAdmin && sessionData.status === SessionStatus.ACTIVE}
         canResetTestSession={sessionData.isTest}
         canCreateRealSession={sessionData.isTest}
         canDeleteTestSession={sessionData.isTest}
         courtLabelDrafts={courtLabelDrafts}
+        hasAutoQueueChange={hasAutoQueueChange}
         hasCourtLabelChanges={hasCourtLabelChanges}
-        savingCourtLabels={savingCourtLabels}
+        hasSettingsChanges={hasSettingsChanges}
+        savingSettings={savingSettings}
         onClose={closeSettingsModal}
         onOpenRoster={openRosterFromSettings}
         onEndSession={openEndSessionConfirm}
         onResetTestSession={openResetTestConfirm}
         onCreateRealSession={openCreateRealSessionConfirm}
         onDeleteTestSession={openDeleteTestConfirm}
+        onAutoQueueChange={setAutoQueueDraft}
         onCourtLabelChange={handleCourtLabelChange}
-        onSaveCourtLabels={() => void saveCourtLabels()}
+        onSaveSettings={() => void saveSessionSettings()}
       />
 
       <SessionPlayersModal

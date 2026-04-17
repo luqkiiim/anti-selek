@@ -8,69 +8,79 @@ interface SessionSettingsModalProps {
   open: boolean;
   courts: Court[];
   isTestSession: boolean;
+  autoQueueEnabled: boolean;
+  autoQueueDraft: boolean;
   canOpenRoster: boolean;
   canEndSession: boolean;
   canResetTestSession: boolean;
   canCreateRealSession: boolean;
   canDeleteTestSession: boolean;
   courtLabelDrafts: Record<string, string>;
+  hasAutoQueueChange: boolean;
   hasCourtLabelChanges: boolean;
-  savingCourtLabels: boolean;
+  hasSettingsChanges: boolean;
+  savingSettings: boolean;
   onClose: () => void;
   onOpenRoster: () => void;
   onEndSession: () => void;
   onResetTestSession: () => void;
   onCreateRealSession: () => void;
   onDeleteTestSession: () => void;
+  onAutoQueueChange: (enabled: boolean) => void;
   onCourtLabelChange: (courtId: string, value: string) => void;
-  onSaveCourtLabels: () => void;
+  onSaveSettings: () => void;
 }
 
 export function SessionSettingsModal({
   open,
   courts,
   isTestSession,
+  autoQueueEnabled,
+  autoQueueDraft,
   canOpenRoster,
   canEndSession,
   canResetTestSession,
   canCreateRealSession,
   canDeleteTestSession,
   courtLabelDrafts,
+  hasAutoQueueChange,
   hasCourtLabelChanges,
-  savingCourtLabels,
+  hasSettingsChanges,
+  savingSettings,
   onClose,
   onOpenRoster,
   onEndSession,
   onResetTestSession,
   onCreateRealSession,
   onDeleteTestSession,
+  onAutoQueueChange,
   onCourtLabelChange,
-  onSaveCourtLabels,
+  onSaveSettings,
 }: SessionSettingsModalProps) {
   if (!open) return null;
 
   return (
     <ModalFrame
       title="Session settings"
-      subtitle="Manage roster, court labels, and session controls."
+      subtitle="Manage roster, queue behavior, court labels, and session controls."
       onClose={onClose}
       footer={
         <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
           <button
             type="button"
             onClick={onClose}
-            disabled={savingCourtLabels}
+            disabled={savingSettings}
             className="app-button-secondary"
           >
             Close
           </button>
           <button
             type="button"
-            onClick={onSaveCourtLabels}
-            disabled={!hasCourtLabelChanges || savingCourtLabels}
+            onClick={onSaveSettings}
+            disabled={!hasSettingsChanges || savingSettings}
             className="app-button-primary"
           >
-            {savingCourtLabels ? "Saving..." : "Save Labels"}
+            {savingSettings ? "Saving..." : "Save Changes"}
           </button>
         </div>
       }
@@ -132,6 +142,39 @@ export function SessionSettingsModal({
               Test sessions are safe for rehearsal. Reset clears simulated play,
               and creating a real session copies this setup into a fresh live
               tournament.
+            </p>
+          ) : null}
+        </section>
+
+        <section className="space-y-3">
+          <div className="flex items-start justify-between gap-4 rounded-2xl border border-gray-200 bg-gray-50/80 px-4 py-4">
+            <div className="space-y-1">
+              <h3 className="text-sm font-semibold text-gray-900">Auto queue</h3>
+              <p className="text-sm text-gray-500">
+                When on, the app locks the next quartet automatically once every
+                court is busy.
+              </p>
+              {autoQueueEnabled && !autoQueueDraft ? (
+                <p className="text-xs font-medium text-amber-700">
+                  Turning this off clears the current queued match.
+                </p>
+              ) : null}
+            </div>
+            <button
+              type="button"
+              onClick={() => onAutoQueueChange(!autoQueueDraft)}
+              className={`shrink-0 rounded-full border px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.18em] transition ${
+                autoQueueDraft
+                  ? "border-blue-200 bg-blue-50 text-blue-700"
+                  : "border-gray-200 bg-white text-gray-500"
+              }`}
+            >
+              {autoQueueDraft ? "On" : "Off"}
+            </button>
+          </div>
+          {hasAutoQueueChange && !hasCourtLabelChanges ? (
+            <p className="text-xs text-gray-500">
+              Queue behavior will update when you save.
             </p>
           ) : null}
         </section>

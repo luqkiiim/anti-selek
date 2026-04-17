@@ -12,6 +12,8 @@ interface HostTournamentPanelProps {
   onSessionModeChange: (mode: SessionMode) => void;
   isTestSession: boolean;
   onIsTestSessionChange: (value: boolean) => void;
+  autoQueueEnabled: boolean;
+  onAutoQueueEnabledChange: (value: boolean) => void;
   openModeLabel: string;
   mixedModeLabel: string;
   courtCount: number;
@@ -212,6 +214,8 @@ export function HostTournamentPanel({
   onSessionModeChange,
   isTestSession,
   onIsTestSessionChange,
+  autoQueueEnabled,
+  onAutoQueueEnabledChange,
   openModeLabel,
   mixedModeLabel,
   courtCount,
@@ -359,6 +363,29 @@ export function HostTournamentPanel({
               }`}
             >
               {isTestSession ? "Test" : "Real"}
+            </button>
+          </div>
+        </div>
+
+        <div className="app-subcard space-y-3 p-3 sm:p-4">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-semibold text-gray-900">Auto queue</p>
+              <p className="text-xs text-gray-500">
+                When on, the app locks the next quartet automatically once all
+                courts are full.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => onAutoQueueEnabledChange(!autoQueueEnabled)}
+              className={`rounded-full border px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.18em] transition ${
+                autoQueueEnabled
+                  ? "border-blue-200 bg-blue-50 text-blue-700"
+                  : "border-gray-200 bg-white text-gray-500"
+              }`}
+            >
+              {autoQueueEnabled ? "On" : "Off"}
             </button>
           </div>
         </div>

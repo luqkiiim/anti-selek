@@ -52,6 +52,10 @@ export type QueuedMatchResponse = ReturnType<typeof buildQueuedMatchResponse>;
 async function shouldSuppressAutomaticQueueCreation(
   sessionData: QueueSessionRecord
 ) {
+  if (!sessionData.autoQueueEnabled) {
+    return true;
+  }
+
   const activePlayerCount = sessionData.players.filter(
     (player) => !player.isPaused
   ).length;

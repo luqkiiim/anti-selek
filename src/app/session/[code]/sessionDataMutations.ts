@@ -42,6 +42,7 @@ export interface MatchPayload {
 
 export interface SessionSnapshotLike {
   status?: string;
+  autoQueueEnabled?: boolean;
   courts?: Array<{
     id: string;
     courtNumber: number;

@@ -56,6 +56,8 @@ export default function CommunityPage() {
     setSessionMode,
     isTestSession,
     setIsTestSession,
+    autoQueueEnabled,
+    setAutoQueueEnabled,
     courtCount,
     setCourtCount,
     poolsEnabled,
@@ -185,6 +187,8 @@ export default function CommunityPage() {
       onSessionModeChange={setSessionMode}
       isTestSession={isTestSession}
       onIsTestSessionChange={setIsTestSession}
+      autoQueueEnabled={autoQueueEnabled}
+      onAutoQueueEnabledChange={setAutoQueueEnabled}
       openModeLabel={openModeLabel}
       mixedModeLabel={mixedModeLabel}
       courtCount={courtCount}

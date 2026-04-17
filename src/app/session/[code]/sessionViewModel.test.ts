@@ -49,6 +49,7 @@ function createSessionData(overrides: Partial<SessionData> = {}): SessionData {
     mode: SessionMode.MIXICANO,
     status: SessionStatus.ACTIVE,
     isTest: false,
+    autoQueueEnabled: true,
     poolsEnabled: false,
     poolAName: "Open",
     poolBName: "Regular",

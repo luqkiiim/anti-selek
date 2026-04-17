@@ -76,6 +76,7 @@ model Session {
   status    String   @default("WAITING") // WAITING, ACTIVE, COMPLETED
   isTest    Boolean  @default(false)
   sourceSessionId String?
+  autoQueueEnabled Boolean @default(true)
   poolsEnabled Boolean @default(false)
   poolAName  String?
   poolBName  String?

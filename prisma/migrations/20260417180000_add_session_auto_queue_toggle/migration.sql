@@ -1,0 +1,2 @@
+ALTER TABLE "Session"
+ADD COLUMN "autoQueueEnabled" BOOLEAN NOT NULL DEFAULT true;

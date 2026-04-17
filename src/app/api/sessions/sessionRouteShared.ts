@@ -53,6 +53,7 @@ export interface ParsedCreateSessionRequest {
   requestedPlayerIds: string[];
   playerConfigMap: Map<string, PlayerConfigOverride>;
   normalizedGuests: NormalizedGuestConfig[];
+  autoQueueEnabled: boolean;
   poolsEnabled: boolean;
   poolAName: string;
   poolBName: string;

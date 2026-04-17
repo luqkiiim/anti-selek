@@ -4,8 +4,34 @@ import { prisma } from "@/lib/prisma";
 import { getCommunityEloByUserId, withCommunityElo } from "@/lib/communityElo";
 import { MatchStatus } from "@/types/enums";
 import { getQueuedMatchUserIds } from "@/lib/sessionQueue";
+import { tryRebuildQueuedMatchForSessionId } from "./queue-match/shared";
 
 export const dynamic = "force-dynamic";
+
+interface UpdateSessionSettingsRequest {
+  autoQueueEnabled?: unknown;
+}
+
+async function getCommunityRole(
+  communityId: string | null | undefined,
+  userId: string
+) {
+  if (!communityId) {
+    return null;
+  }
+
+  const membership = await prisma.communityMember.findUnique({
+    where: {
+      communityId_userId: {
+        communityId,
+        userId,
+      },
+    },
+    select: { role: true },
+  });
+
+  return membership?.role ?? null;
+}
 
 export async function GET(
   request: Request,
@@ -77,19 +103,10 @@ export async function GET(
     return NextResponse.json({ error: "Session not found" }, { status: 404 });
   }
 
-  let communityRole: string | null = null;
-  if (sessionData.communityId) {
-    const membership = await prisma.communityMember.findUnique({
-      where: {
-        communityId_userId: {
-          communityId: sessionData.communityId,
-          userId: session.user.id,
-        },
-      },
-      select: { role: true },
-    });
-    communityRole = membership?.role ?? null;
-  }
+  const communityRole = await getCommunityRole(
+    sessionData.communityId,
+    session.user.id
+  );
 
   const isSessionPlayer = sessionData.players.some((p) => p.userId === session.user.id);
   const canView = session.user.isAdmin || !!communityRole || isSessionPlayer;
@@ -143,4 +160,80 @@ export async function GET(
     viewerCommunityRole: communityRole,
     viewerCanManage: session.user.isAdmin || communityRole === "ADMIN",
   });
+}
+
+export async function PATCH(
+  request: Request,
+  { params }: { params: Promise<{ code: string }> }
+) {
+  try {
+    const session = await auth();
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+    }
+
+    const body =
+      (await request.json().catch(() => null)) as UpdateSessionSettingsRequest | null;
+    if (!body || typeof body.autoQueueEnabled !== "boolean") {
+      return NextResponse.json(
+        { error: "autoQueueEnabled must be true or false" },
+        { status: 400 }
+      );
+    }
+
+    const { code } = await params;
+    const sessionData = await prisma.session.findUnique({
+      where: { code },
+      select: {
+        id: true,
+        communityId: true,
+      },
+    });
+
+    if (!sessionData) {
+      return NextResponse.json({ error: "Session not found" }, { status: 404 });
+    }
+
+    const communityRole = await getCommunityRole(
+      sessionData.communityId,
+      session.user.id
+    );
+    const canManage = session.user.isAdmin || communityRole === "ADMIN";
+    if (!canManage) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+    }
+
+    if (!body.autoQueueEnabled) {
+      await prisma.$transaction([
+        prisma.session.update({
+          where: { id: sessionData.id },
+          data: { autoQueueEnabled: false },
+        }),
+        prisma.queuedMatch.deleteMany({
+          where: { sessionId: sessionData.id },
+        }),
+      ]);
+
+      return NextResponse.json({
+        autoQueueEnabled: false,
+        queuedMatch: null,
+      });
+    }
+
+    await prisma.session.update({
+      where: { id: sessionData.id },
+      data: { autoQueueEnabled: true },
+    });
+
+    return NextResponse.json({
+      autoQueueEnabled: true,
+      queuedMatch: await tryRebuildQueuedMatchForSessionId(sessionData.id),
+    });
+  } catch (error) {
+    console.error("Update session settings error:", error);
+    return NextResponse.json(
+      { error: "Failed to update session settings" },
+      { status: 500 }
+    );
+  }
 }

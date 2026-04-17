@@ -88,6 +88,7 @@ export interface SessionData {
   status: string;
   isTest: boolean;
   sourceSessionId?: string | null;
+  autoQueueEnabled: boolean;
   poolsEnabled: boolean;
   poolAName?: string | null;
   poolBName?: string | null;
