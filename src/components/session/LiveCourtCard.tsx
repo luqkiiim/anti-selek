@@ -246,8 +246,8 @@ export function LiveCourtCard({
                     : option.key === "WOMENS"
                       ? "border-rose-200/80 bg-rose-50 text-rose-800"
                       : option.key === "MENS"
-                        ? "border-emerald-200/80 bg-emerald-50 text-emerald-800"
-                        : "border-blue-200/80 bg-blue-50 text-blue-800"
+                        ? "border-blue-200/80 bg-blue-50 text-blue-800"
+                        : "border-emerald-200/80 bg-emerald-50 text-emerald-800"
                 }`}
               >
                 <span className="text-[10px] font-semibold uppercase tracking-[0.18em]">
