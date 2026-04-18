@@ -83,9 +83,9 @@ function TeamPlayers({
               <div
                 className={`absolute top-full z-20 mt-2 w-40 max-w-[calc(100vw-3rem)] ${popoverPositionClass}`}
               >
-                <div className="relative space-y-2 rounded-2xl border border-gray-900 bg-gray-950 p-2 shadow-[0_18px_40px_-22px_rgba(15,23,42,0.55)]">
+                <div className="relative space-y-2 rounded-2xl border border-gray-200 bg-white p-2 shadow-[0_22px_48px_-24px_rgba(15,23,42,0.35)]">
                   <div
-                    className={`absolute top-0 h-3 w-3 -translate-y-1/2 rotate-45 border-l border-t border-gray-900 bg-gray-950 ${
+                    className={`absolute top-0 h-3 w-3 -translate-y-1/2 rotate-45 border-l border-t border-gray-200 bg-white ${
                       align === "right"
                         ? "right-4"
                         : "left-4"

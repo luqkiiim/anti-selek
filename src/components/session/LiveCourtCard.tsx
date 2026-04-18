@@ -232,8 +232,8 @@ export function LiveCourtCard({
 
       {createMenuOpen ? (
         <div className="absolute left-0 top-full z-20 mt-2 w-48 max-w-[calc(100vw-3rem)]">
-          <div className="relative space-y-2 rounded-2xl border border-gray-900 bg-gray-950 p-2 shadow-[0_18px_40px_-22px_rgba(15,23,42,0.55)]">
-            <div className="absolute left-4 top-0 h-3 w-3 -translate-y-1/2 rotate-45 border-l border-t border-gray-900 bg-gray-950" />
+          <div className="relative space-y-2 rounded-2xl border border-gray-200 bg-white p-2 shadow-[0_22px_48px_-24px_rgba(15,23,42,0.35)]">
+            <div className="absolute left-4 top-0 h-3 w-3 -translate-y-1/2 rotate-45 border-l border-t border-gray-200 bg-white" />
             {createMatchOptions.map((option) => (
               <button
                 key={option.key}
@@ -242,7 +242,7 @@ export function LiveCourtCard({
                 disabled={option.disabled || createActionDisabled}
                 className={`flex w-full flex-col rounded-xl border px-3 py-2 text-left transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-60 ${
                   option.key === "MANUAL"
-                    ? "border-gray-700 bg-gray-900 text-white"
+                    ? "border-slate-200 bg-slate-50 text-slate-800"
                     : option.key === "WOMENS"
                       ? "border-rose-200/80 bg-rose-50 text-rose-800"
                       : option.key === "MENS"
