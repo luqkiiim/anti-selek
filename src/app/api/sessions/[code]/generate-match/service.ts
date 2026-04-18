@@ -24,6 +24,8 @@ export {
   applyPoolSelectionOutcome,
   buildMatchmakingState,
   ensureEnoughPlayers,
+  ensureEnoughMatchTypePlayers,
+  filterRankedCandidatesByMatchType,
   getRankedCandidates,
   getRequestedOpenCourts,
   selectReplacementMatch,

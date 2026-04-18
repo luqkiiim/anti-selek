@@ -1075,6 +1075,7 @@ export default function SessionPage() {
                   matchScores={scoreActions.matchScores}
                   queuePromotionAnimation={scoreActions.queuePromotionAnimation}
                   onCreateMatchesForCourts={courtActions.createMatchesForCourts}
+                  onCreateCourtMatch={courtActions.createMatchForCourt}
                   onQueueNextMatch={courtActions.queueNextMatch}
                   onClearQueuedMatch={courtActions.clearQueuedMatch}
                   onOpenManualQueuedMatchModal={

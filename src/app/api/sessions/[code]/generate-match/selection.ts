@@ -1,6 +1,12 @@
+import {
+  getSideSpecificCourtCreateMixedSide,
+  getSideSpecificCourtCreateShortageMessage,
+  type SideSpecificCourtCreateType,
+} from "@/lib/courtCreate";
 import { getCommunityEloByUserId } from "@/lib/communityElo";
 import { getSessionModeLabel } from "@/lib/sessionModeLabels";
 import { getQueuedMatchUserIds } from "@/lib/sessionQueue";
+import { getEffectiveMixedSide } from "@/lib/mixedSide";
 import {
   getNormalizedSessionPool,
   getOppositeSessionPool,
@@ -419,6 +425,42 @@ export function ensureEnoughPlayers(
     throw new GenerateMatchError(
       400,
       `Not enough players available (need ${requestedMatchCount * 4}, have ${availableCandidatesCount})`
+    );
+  }
+}
+
+export function filterRankedCandidatesByMatchType(
+  rankedCandidates: RankedCandidates,
+  sessionData: GenerateMatchSession,
+  matchType: SideSpecificCourtCreateType
+) {
+  const requestedSide = getSideSpecificCourtCreateMixedSide(matchType);
+  const eligibleUserIds = new Set(
+    sessionData.players
+      .filter(
+        (player) =>
+          getEffectiveMixedSide({
+            gender: player.gender,
+            partnerPreference: player.partnerPreference,
+            mixedSideOverride: player.mixedSideOverride,
+          }) === requestedSide
+      )
+      .map((player) => player.userId)
+  );
+
+  return rankedCandidates.filter((candidate) =>
+    eligibleUserIds.has(candidate.userId)
+  );
+}
+
+export function ensureEnoughMatchTypePlayers(
+  matchType: SideSpecificCourtCreateType,
+  availableCount: number
+) {
+  if (availableCount < 4) {
+    throw new GenerateMatchError(
+      400,
+      getSideSpecificCourtCreateShortageMessage(matchType, availableCount)
     );
   }
 }

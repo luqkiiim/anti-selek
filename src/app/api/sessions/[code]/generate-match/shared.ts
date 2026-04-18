@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { getSessionModeLabel } from "@/lib/sessionModeLabels";
+import type { SideSpecificCourtCreateType } from "@/lib/courtCreate";
 import { SessionMode } from "@/types/enums";
 import type { ManualMatchTeams } from "@/lib/matchmaking/manualMatch";
 
@@ -21,6 +22,7 @@ export interface ParsedGenerateMatchRequest {
   manualTeams?: unknown;
   excludedUserId?: string;
   replaceUserId?: string;
+  matchType?: SideSpecificCourtCreateType;
 }
 
 const sessionRecordInclude = {

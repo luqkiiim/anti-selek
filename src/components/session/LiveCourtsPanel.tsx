@@ -12,10 +12,12 @@ import {
 import { createPortal } from "react-dom";
 import type { QueuePromotionAnimation } from "@/app/session/[code]/sessionMatchActionTypes";
 import { SectionCard } from "@/components/ui/chrome";
+import type { SideSpecificCourtCreateType } from "@/lib/courtCreate";
 import {
   getSessionPoolBadgeLabel,
   summarizeSessionPoolMembership,
 } from "@/lib/sessionPools";
+import { buildCourtCreateOptionStates } from "./courtCreateOptions";
 import { SessionStatus } from "@/types/enums";
 import type { Court, Match, MatchScores, Player, QueuedMatch } from "./sessionTypes";
 import { LiveCourtCard } from "./LiveCourtCard";
@@ -55,6 +57,10 @@ interface LiveCourtsPanelProps {
   matchScores: MatchScores;
   queuePromotionAnimation: QueuePromotionAnimation | null;
   onCreateMatchesForCourts: (courtIds: string[]) => void;
+  onCreateCourtMatch: (
+    courtId: string,
+    matchType?: SideSpecificCourtCreateType
+  ) => void;
   onQueueNextMatch: () => void;
   onClearQueuedMatch: () => void;
   onOpenManualQueuedMatchModal: () => void;
@@ -265,6 +271,7 @@ export function LiveCourtsPanel({
   matchScores,
   queuePromotionAnimation,
   onCreateMatchesForCourts,
+  onCreateCourtMatch,
   onQueueNextMatch,
   onClearQueuedMatch,
   onOpenManualQueuedMatchModal,
@@ -328,6 +335,15 @@ export function LiveCourtsPanel({
     readyCourtsCount - optimisticCreatingCount
   );
   const playerPoolById = new Map(players.map((player) => [player.userId, player.pool]));
+  const createMatchOptions = useMemo(
+    () =>
+      buildCourtCreateOptionStates({
+        players,
+        courts,
+        queuedMatch,
+      }),
+    [courts, players, queuedMatch]
+  );
   const setCourtSurfaceRef = useCallback(
     (courtId: string, node: HTMLDivElement | null) => {
       if (node) {
@@ -648,9 +664,12 @@ export function LiveCourtsPanel({
             reopeningMatchId={reopeningMatchId}
             submittingMatchId={submittingMatchId}
             matchScores={matchScores}
+            createMatchOptions={createMatchOptions}
+            createActionDisabled={creatingOpenMatches}
             promotionSurfaceRef={(node) => setCourtSurfaceRef(court.id, node)}
             isPromotionTarget={highlightedCourtId === court.id}
             promotionState={getCourtPromotionState(court.id)}
+            onCreateCourtMatch={onCreateCourtMatch}
             onOpenManualMatchModal={onOpenManualMatchModal}
             onReshuffleMatch={onReshuffleMatch}
             onReshuffleMatchWithoutPlayer={onReshuffleMatchWithoutPlayer}

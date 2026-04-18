@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
+import { getSideSpecificCourtCreateLabel } from "@/lib/courtCreate";
 import { prisma } from "@/lib/prisma";
 import {
   buildSessionPoolMap,
@@ -11,6 +12,8 @@ import {
   buildMatchmakingState,
   createMatchesForAssignments,
   ensureEnoughPlayers,
+  ensureEnoughMatchTypePlayers,
+  filterRankedCandidatesByMatchType,
   GenerateMatchError,
   getRankedCandidates,
   getRequestedOpenCourts,
@@ -46,6 +49,7 @@ export async function POST(
       manualTeams,
       excludedUserId,
       replaceUserId,
+      matchType,
     } = parseGenerateMatchRequest(body);
 
     const {
@@ -64,6 +68,15 @@ export async function POST(
 
     if (undoCurrentMatch) {
       return NextResponse.json(await undoCurrentCourtMatch(targetCourt));
+    }
+
+    if (matchType && sessionData.queuedMatch) {
+      throw new GenerateMatchError(
+        409,
+        `Resolve the queued match before creating a ${getSideSpecificCourtCreateLabel(
+          matchType
+        )}.`
+      );
     }
 
     if (manualTeams) {
@@ -269,16 +282,23 @@ export async function POST(
       sessionData,
       busyPlayerIds
     );
+    const eligibleRankedCandidates = matchType
+      ? filterRankedCandidatesByMatchType(rankedCandidates, sessionData, matchType)
+      : rankedCandidates;
 
-    ensureEnoughPlayers(
-      availableCandidates.length,
-      rankedCandidates.length,
-      requestedMatchCount
-    );
+    if (matchType) {
+      ensureEnoughMatchTypePlayers(matchType, eligibleRankedCandidates.length);
+    } else {
+      ensureEnoughPlayers(
+        availableCandidates.length,
+        rankedCandidates.length,
+        requestedMatchCount
+      );
+    }
 
     if (requestedMatchCount === 1) {
       const bestSelection = selectSingleCourtMatch({
-        rankedCandidates,
+        rankedCandidates: eligibleRankedCandidates,
         playersById,
         sessionData,
         rotationHistory,

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { getErrorMessage } from "@/lib/http";
+import type { SideSpecificCourtCreateType } from "@/lib/courtCreate";
 import { applyGeneratedMatches, applyQueuedMatch } from "./sessionDataMutations";
 import {
   deleteSessionAction,
@@ -132,6 +133,42 @@ export function useSessionCourtMatchCreation({
     } catch (err) {
       console.error(err);
       setError("Network error creating matches");
+    } finally {
+      setCreatingOpenMatches(false);
+      setCreatingOpenCourtCount(0);
+    }
+  };
+
+  const createMatchForCourt = async (
+    courtId: string,
+    matchType?: SideSpecificCourtCreateType
+  ) => {
+    if (!sessionData) return;
+
+    setCreatingOpenMatches(true);
+    setCreatingOpenCourtCount(1);
+    setError("");
+    try {
+      const { res, data } = await postGenerateMatchAction<
+        SingleMatchGenerationResponse
+      >({
+        code,
+        safeJson,
+        body: {
+          courtId,
+          ...(matchType ? { matchType } : {}),
+        },
+      });
+
+      if (!res.ok) {
+        setError(getErrorMessage(data, "Failed to create match"));
+        return;
+      }
+
+      syncMatchGenerationResult([data], data.queuedMatch ?? null);
+    } catch (err) {
+      console.error(err);
+      setError("Network error creating match");
     } finally {
       setCreatingOpenMatches(false);
       setCreatingOpenCourtCount(0);
@@ -420,6 +457,7 @@ export function useSessionCourtMatchCreation({
     creatingManualMatch,
     manualMatchForm,
     createMatchesForCourts,
+    createMatchForCourt,
     queueNextMatch,
     clearQueuedMatch,
     assignQueuedMatch,

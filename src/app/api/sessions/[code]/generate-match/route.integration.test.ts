@@ -5,6 +5,7 @@ import path from "node:path";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi, type MockedFunction } from "vitest";
 import {
   MatchStatus,
+  MixedSide,
   PartnerPreference,
   PlayerGender,
   SessionMode,
@@ -126,6 +127,7 @@ async function createUsers(
     key: string;
     gender?: PlayerGender;
     partnerPreference?: PartnerPreference;
+    mixedSideOverride?: MixedSide | null;
     elo?: number;
   }>
 ) {
@@ -138,6 +140,7 @@ async function createUsers(
       isClaimed: true,
       gender: player.gender ?? PlayerGender.MALE,
       partnerPreference: player.partnerPreference ?? PartnerPreference.OPEN,
+      mixedSideOverride: player.mixedSideOverride ?? null,
       elo: player.elo ?? 1000,
     })),
   });
@@ -161,6 +164,7 @@ async function createSessionWithCourtsAndPlayers({
     userId: string;
     gender?: PlayerGender;
     partnerPreference?: PartnerPreference;
+    mixedSideOverride?: MixedSide | null;
     matchesPlayed?: number;
     availableSince?: Date;
     joinedAt?: Date;
@@ -187,6 +191,7 @@ async function createSessionWithCourtsAndPlayers({
           gender: player.gender ?? PlayerGender.MALE,
           partnerPreference:
             player.partnerPreference ?? PartnerPreference.OPEN,
+          mixedSideOverride: player.mixedSideOverride ?? null,
           matchesPlayed: player.matchesPlayed ?? 0,
           availableSince:
             player.availableSince ?? new Date("2026-04-04T00:00:00Z"),
@@ -1054,5 +1059,177 @@ describe("generate match route integration", () => {
     expect(storedMatches.map((match) => match.id)).toContain(completedMatch.id);
     expect(storedMatches.map((match) => match.id)).toContain(activeMensMatch.id);
     expect(storedMatches.map((match) => match.id)).toContain(payload.id);
+  });
+
+  it("creates a women's court from effective side overrides instead of raw gender", async () => {
+    const prefix = `womens-${randomUUID().slice(0, 8)}`;
+    const { communityId } = await createCommunityAdmin(prefix);
+    const courtId = `${prefix}-court-1`;
+    const lowerSideIds = [
+      `${prefix}-F1`,
+      `${prefix}-F2`,
+      `${prefix}-F3`,
+      `${prefix}-MLOW`,
+    ].sort();
+
+    await createUsers(prefix, [
+      {
+        key: "F1",
+        gender: PlayerGender.FEMALE,
+        partnerPreference: PartnerPreference.FEMALE_FLEX,
+      },
+      {
+        key: "F2",
+        gender: PlayerGender.FEMALE,
+        partnerPreference: PartnerPreference.FEMALE_FLEX,
+      },
+      {
+        key: "F3",
+        gender: PlayerGender.FEMALE,
+        partnerPreference: PartnerPreference.FEMALE_FLEX,
+      },
+      {
+        key: "MLOW",
+        mixedSideOverride: MixedSide.LOWER,
+      },
+      {
+        key: "FUP",
+        gender: PlayerGender.FEMALE,
+        partnerPreference: PartnerPreference.OPEN,
+        mixedSideOverride: MixedSide.UPPER,
+      },
+    ]);
+
+    const { code } = await createSessionWithCourtsAndPlayers({
+      prefix,
+      communityId,
+      type: SessionType.ELO,
+      mode: SessionMode.MIXICANO,
+      players: [
+        {
+          userId: `${prefix}-F1`,
+          gender: PlayerGender.FEMALE,
+          partnerPreference: PartnerPreference.FEMALE_FLEX,
+        },
+        {
+          userId: `${prefix}-F2`,
+          gender: PlayerGender.FEMALE,
+          partnerPreference: PartnerPreference.FEMALE_FLEX,
+        },
+        {
+          userId: `${prefix}-F3`,
+          gender: PlayerGender.FEMALE,
+          partnerPreference: PartnerPreference.FEMALE_FLEX,
+        },
+        {
+          userId: `${prefix}-MLOW`,
+          mixedSideOverride: MixedSide.LOWER,
+        },
+        {
+          userId: `${prefix}-FUP`,
+          gender: PlayerGender.FEMALE,
+          partnerPreference: PartnerPreference.OPEN,
+          mixedSideOverride: MixedSide.UPPER,
+        },
+      ],
+      courtIds: [courtId],
+    });
+
+    const response = await postGenerateMatch(code, {
+      courtId,
+      matchType: "WOMENS",
+    });
+    const payload = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(getSelectedIds(payload).sort()).toEqual(lowerSideIds);
+  });
+
+  it("rejects men's/women's court creation while a queued match exists", async () => {
+    const prefix = `queue-guard-${randomUUID().slice(0, 8)}`;
+    const { communityId } = await createCommunityAdmin(prefix);
+    const courtId = `${prefix}-court-1`;
+
+    await createUsers(prefix, [
+      { key: "M1" },
+      { key: "M2" },
+      { key: "M3" },
+      { key: "M4" },
+      {
+        key: "F1",
+        gender: PlayerGender.FEMALE,
+        partnerPreference: PartnerPreference.FEMALE_FLEX,
+      },
+      {
+        key: "F2",
+        gender: PlayerGender.FEMALE,
+        partnerPreference: PartnerPreference.FEMALE_FLEX,
+      },
+      {
+        key: "F3",
+        gender: PlayerGender.FEMALE,
+        partnerPreference: PartnerPreference.FEMALE_FLEX,
+      },
+      {
+        key: "F4",
+        gender: PlayerGender.FEMALE,
+        partnerPreference: PartnerPreference.FEMALE_FLEX,
+      },
+    ]);
+
+    const { sessionId, code } = await createSessionWithCourtsAndPlayers({
+      prefix,
+      communityId,
+      type: SessionType.ELO,
+      mode: SessionMode.MIXICANO,
+      players: [
+        { userId: `${prefix}-M1` },
+        { userId: `${prefix}-M2` },
+        { userId: `${prefix}-M3` },
+        { userId: `${prefix}-M4` },
+        {
+          userId: `${prefix}-F1`,
+          gender: PlayerGender.FEMALE,
+          partnerPreference: PartnerPreference.FEMALE_FLEX,
+        },
+        {
+          userId: `${prefix}-F2`,
+          gender: PlayerGender.FEMALE,
+          partnerPreference: PartnerPreference.FEMALE_FLEX,
+        },
+        {
+          userId: `${prefix}-F3`,
+          gender: PlayerGender.FEMALE,
+          partnerPreference: PartnerPreference.FEMALE_FLEX,
+        },
+        {
+          userId: `${prefix}-F4`,
+          gender: PlayerGender.FEMALE,
+          partnerPreference: PartnerPreference.FEMALE_FLEX,
+        },
+      ],
+      courtIds: [courtId],
+    });
+
+    await prisma.queuedMatch.create({
+      data: {
+        sessionId,
+        team1User1Id: `${prefix}-F1`,
+        team1User2Id: `${prefix}-F2`,
+        team2User1Id: `${prefix}-F3`,
+        team2User2Id: `${prefix}-F4`,
+      },
+    });
+
+    const response = await postGenerateMatch(code, {
+      courtId,
+      matchType: "WOMENS",
+    });
+    const payload = await response.json();
+
+    expect(response.status).toBe(409);
+    expect(payload).toEqual({
+      error: "Resolve the queued match before creating a Women's Court.",
+    });
   });
 });

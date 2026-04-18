@@ -1,8 +1,10 @@
 "use client";
 
-import type { Ref } from "react";
+import { useEffect, useState, type Ref } from "react";
 import { getCourtDisplayLabel } from "@/lib/courtLabels";
+import type { SideSpecificCourtCreateType } from "@/lib/courtCreate";
 import { MatchStatus, SessionStatus } from "@/types/enums";
+import type { CourtCreateOptionState } from "./courtCreateOptions";
 import type { Court, MatchScores } from "./sessionTypes";
 import { LiveMatchCard } from "./LiveMatchCard";
 
@@ -56,6 +58,12 @@ interface LiveCourtCardProps {
   reopeningMatchId: string | null;
   submittingMatchId: string | null;
   matchScores: MatchScores;
+  createMatchOptions: CourtCreateOptionState[];
+  createActionDisabled: boolean;
+  onCreateCourtMatch: (
+    courtId: string,
+    matchType?: SideSpecificCourtCreateType
+  ) => void;
   onOpenManualMatchModal: (courtId: string) => void;
   onReshuffleMatch: (courtId: string) => void;
   onReshuffleMatchWithoutPlayer: (courtId: string, userId: string) => void;
@@ -91,6 +99,9 @@ export function LiveCourtCard({
   reopeningMatchId,
   submittingMatchId,
   matchScores,
+  createMatchOptions,
+  createActionDisabled,
+  onCreateCourtMatch,
   onOpenManualMatchModal,
   onReshuffleMatch,
   onReshuffleMatchWithoutPlayer,
@@ -106,6 +117,7 @@ export function LiveCourtCard({
   isPromotionTarget = false,
   promotionState = "normal",
 }: LiveCourtCardProps) {
+  const [createMenuOpen, setCreateMenuOpen] = useState(false);
   const currentMatch = court.currentMatch;
   const courtPlayerActionActive =
     !!currentMatch &&
@@ -122,6 +134,77 @@ export function LiveCourtCard({
     reshufflingCourtId === court.id || courtPlayerActionActive;
   const showManualButton =
     sessionStatus === SessionStatus.ACTIVE && !currentMatch && isAdmin;
+  const activeCreateMenuId = createMenuOpen ? court.id : null;
+
+  useEffect(() => {
+    if (!activeCreateMenuId) return;
+
+    const handlePointerDown = (event: PointerEvent) => {
+      if (!(event.target instanceof Element)) return;
+      const actionRoot = event.target.closest("[data-empty-court-create-root]");
+      if (
+        actionRoot?.getAttribute("data-empty-court-create-root") ===
+        activeCreateMenuId
+      ) {
+        return;
+      }
+
+      setCreateMenuOpen(false);
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setCreateMenuOpen(false);
+      }
+    };
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [activeCreateMenuId]);
+
+  useEffect(() => {
+    if (currentMatch || !showManualButton) {
+      const frameId = window.requestAnimationFrame(() => {
+        setCreateMenuOpen(false);
+      });
+
+      return () => {
+        window.cancelAnimationFrame(frameId);
+      };
+    }
+  }, [currentMatch, showManualButton]);
+
+  const handleCreateMenuToggle = () => {
+    if (createActionDisabled) {
+      return;
+    }
+
+    setCreateMenuOpen((current) => !current);
+  };
+
+  const handleCreateOption = (option: CourtCreateOptionState) => {
+    if (option.disabled || createActionDisabled) {
+      return;
+    }
+
+    setCreateMenuOpen(false);
+
+    if (option.key === "MANUAL") {
+      onOpenManualMatchModal(court.id);
+      return;
+    }
+
+    onCreateCourtMatch(
+      court.id,
+      option.key === "BEST" ? undefined : option.key
+    );
+  };
+
   const leftAction = canManageLiveCourt ? (
     <button
       type="button"
@@ -133,13 +216,54 @@ export function LiveCourtCard({
       {liveCourtActionDisabled ? "Reshuffling..." : "Reshuffle"}
     </button>
   ) : showManualButton ? (
-    <button
-      type="button"
-      onClick={() => onOpenManualMatchModal(court.id)}
-      className="rounded-lg bg-gray-900 px-2.5 py-1.5 text-[10px] font-black uppercase tracking-wider text-white transition-all active:scale-95 md:px-3"
+    <div
+      className="relative"
+      data-empty-court-create-root={court.id}
     >
-      Manual
-    </button>
+      <button
+        type="button"
+        onClick={handleCreateMenuToggle}
+        disabled={createActionDisabled}
+        aria-expanded={createMenuOpen}
+        className="rounded-lg bg-gray-900 px-2.5 py-1.5 text-[10px] font-black uppercase tracking-wider text-white transition-all active:scale-95 disabled:cursor-not-allowed disabled:opacity-50 md:px-3"
+      >
+        Create
+      </button>
+
+      {createMenuOpen ? (
+        <div className="absolute left-0 top-full z-20 mt-2 w-48 max-w-[calc(100vw-3rem)]">
+          <div className="relative space-y-2 rounded-2xl border border-gray-900 bg-gray-950 p-2 shadow-[0_18px_40px_-22px_rgba(15,23,42,0.55)]">
+            <div className="absolute left-4 top-0 h-3 w-3 -translate-y-1/2 rotate-45 border-l border-t border-gray-900 bg-gray-950" />
+            {createMatchOptions.map((option) => (
+              <button
+                key={option.key}
+                type="button"
+                onClick={() => handleCreateOption(option)}
+                disabled={option.disabled || createActionDisabled}
+                className={`flex w-full flex-col rounded-xl border px-3 py-2 text-left transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-60 ${
+                  option.key === "MANUAL"
+                    ? "border-gray-700 bg-gray-900 text-white"
+                    : option.key === "WOMENS"
+                      ? "border-rose-200/80 bg-rose-50 text-rose-800"
+                      : option.key === "MENS"
+                        ? "border-emerald-200/80 bg-emerald-50 text-emerald-800"
+                        : "border-blue-200/80 bg-blue-50 text-blue-800"
+                }`}
+              >
+                <span className="text-[10px] font-semibold uppercase tracking-[0.18em]">
+                  {option.label}
+                </span>
+                {option.detail ? (
+                  <span className="mt-1 text-[11px] font-medium normal-case tracking-normal">
+                    {option.detail}
+                  </span>
+                ) : null}
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : null}
+    </div>
   ) : null;
   const rightAction = canManageLiveCourt ? (
     <button

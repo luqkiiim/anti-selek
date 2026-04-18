@@ -1,3 +1,7 @@
+import {
+  isSideSpecificCourtCreateType,
+  type SideSpecificCourtCreateType,
+} from "@/lib/courtCreate";
 import type { ManualMatchTeams } from "@/lib/matchmaking/manualMatch";
 import {
   GenerateMatchError,
@@ -15,6 +19,7 @@ export function parseGenerateMatchRequest(
     manualTeams,
     excludedUserId,
     replaceUserId,
+    matchType,
   } = (typeof body === "object" && body !== null ? body : {}) as {
     courtId?: string;
     courtIds?: unknown;
@@ -23,6 +28,7 @@ export function parseGenerateMatchRequest(
     manualTeams?: unknown;
     excludedUserId?: unknown;
     replaceUserId?: unknown;
+    matchType?: unknown;
   };
 
   const requestedCourtIds = Array.isArray(courtIds)
@@ -46,6 +52,12 @@ export function parseGenerateMatchRequest(
   if (replaceUserId !== undefined && typeof replaceUserId !== "string") {
     throw new GenerateMatchError(400, "Invalid replacement player.");
   }
+  if (
+    matchType !== undefined &&
+    !isSideSpecificCourtCreateType(matchType)
+  ) {
+    throw new GenerateMatchError(400, "Invalid court match type.");
+  }
   if (excludedUserId && !forceReshuffle) {
     throw new GenerateMatchError(
       400,
@@ -58,6 +70,19 @@ export function parseGenerateMatchRequest(
       "Replace player cannot be combined with reshuffle, undo, or manual match creation."
     );
   }
+  if (
+    matchType &&
+    (forceReshuffle ||
+      undoCurrentMatch ||
+      manualTeams ||
+      excludedUserId ||
+      replaceUserId)
+  ) {
+    throw new GenerateMatchError(
+      400,
+      "Men's/Women's court creation cannot be combined with reshuffle, undo, replace player, or manual match creation."
+    );
+  }
   if (manualTeams && (forceReshuffle || undoCurrentMatch || excludedUserId || replaceUserId)) {
     throw new GenerateMatchError(
       400,
@@ -66,11 +91,11 @@ export function parseGenerateMatchRequest(
   }
   if (
     requestedCourtIds.length > 1 &&
-    (forceReshuffle || undoCurrentMatch || manualTeams || replaceUserId)
+    (forceReshuffle || undoCurrentMatch || manualTeams || replaceUserId || matchType)
   ) {
     throw new GenerateMatchError(
       400,
-      "Reshuffle, undo, replace player, and manual match creation are only supported for one court at a time."
+      "Reshuffle, undo, replace player, men's/women's court creation, and manual match creation are only supported for one court at a time."
     );
   }
 
@@ -81,6 +106,7 @@ export function parseGenerateMatchRequest(
     manualTeams,
     excludedUserId,
     replaceUserId,
+    matchType: matchType as SideSpecificCourtCreateType | undefined,
   };
 }
 

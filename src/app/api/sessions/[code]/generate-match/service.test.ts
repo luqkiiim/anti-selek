@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  MixedSide,
   PartnerPreference,
   PlayerGender,
   SessionMode,
@@ -70,6 +71,8 @@ import {
 import {
   buildMatchmakingState,
   ensureEnoughPlayers,
+  ensureEnoughMatchTypePlayers,
+  filterRankedCandidatesByMatchType,
   GenerateMatchError,
   getRankedCandidates,
   getRequestedOpenCourts,
@@ -92,6 +95,7 @@ function createSessionPlayer(
     isGuest?: boolean;
     sessionPoints?: number;
     elo?: number;
+    mixedSideOverride?: MixedSide | null;
     lastPartnerId?: string | null;
     matchesPlayed?: number;
     matchmakingMatchesCredit?: number;
@@ -108,6 +112,7 @@ function createSessionPlayer(
     isGuest: options.isGuest ?? false,
     gender: options.gender ?? PlayerGender.MALE,
     partnerPreference: options.partnerPreference ?? PartnerPreference.OPEN,
+    mixedSideOverride: options.mixedSideOverride ?? null,
     lastPartnerId: options.lastPartnerId ?? null,
     matchesPlayed: options.matchesPlayed ?? 0,
     matchmakingMatchesCredit: options.matchmakingMatchesCredit ?? 0,
@@ -172,6 +177,7 @@ function createPlayersById(players: GenerateMatchSession["players"]) {
         lastPartnerId: player.lastPartnerId,
         gender: player.gender,
         partnerPreference: player.partnerPreference,
+        mixedSideOverride: player.mixedSideOverride,
       },
     ])
   );
@@ -305,6 +311,8 @@ describe("generate match service", () => {
         undoCurrentMatch: false,
         manualTeams: undefined,
         excludedUserId: undefined,
+        replaceUserId: undefined,
+        matchType: undefined,
       });
     });
 
@@ -320,6 +328,8 @@ describe("generate match service", () => {
         undoCurrentMatch: false,
         manualTeams: undefined,
         excludedUserId: undefined,
+        replaceUserId: undefined,
+        matchType: undefined,
       });
     });
 
@@ -336,6 +346,8 @@ describe("generate match service", () => {
         undoCurrentMatch: false,
         manualTeams: undefined,
         excludedUserId: "player-1",
+        replaceUserId: undefined,
+        matchType: undefined,
       });
     });
 
@@ -352,6 +364,24 @@ describe("generate match service", () => {
         manualTeams: undefined,
         excludedUserId: undefined,
         replaceUserId: "player-2",
+        matchType: undefined,
+      });
+    });
+
+    it("accepts men's and women's court requests", () => {
+      expect(
+        parseGenerateMatchRequest({
+          courtId: "court-1",
+          matchType: "WOMENS",
+        })
+      ).toEqual({
+        requestedCourtIds: ["court-1"],
+        forceReshuffle: false,
+        undoCurrentMatch: false,
+        manualTeams: undefined,
+        excludedUserId: undefined,
+        replaceUserId: undefined,
+        matchType: "WOMENS",
       });
     });
 
@@ -382,7 +412,7 @@ describe("generate match service", () => {
       ).toThrowError(
         new GenerateMatchError(
           400,
-          "Reshuffle, undo, replace player, and manual match creation are only supported for one court at a time."
+          "Reshuffle, undo, replace player, men's/women's court creation, and manual match creation are only supported for one court at a time."
         )
       );
     });
@@ -412,6 +442,30 @@ describe("generate match service", () => {
         new GenerateMatchError(
           400,
           "Replace player cannot be combined with reshuffle, undo, or manual match creation."
+        )
+      );
+    });
+
+    it("rejects invalid court match types", () => {
+      expect(() =>
+        parseGenerateMatchRequest({
+          courtId: "court-1",
+          matchType: "DOUBLES",
+        })
+      ).toThrowError(new GenerateMatchError(400, "Invalid court match type."));
+    });
+
+    it("rejects men's/women's court creation combined with manual creation", () => {
+      expect(() =>
+        parseGenerateMatchRequest({
+          courtId: "court-1",
+          matchType: "MENS",
+          manualTeams: { team1: ["A", "B"], team2: ["C", "D"] },
+        })
+      ).toThrowError(
+        new GenerateMatchError(
+          400,
+          "Men's/Women's court creation cannot be combined with reshuffle, undo, replace player, or manual match creation."
         )
       );
     });
@@ -547,6 +601,17 @@ describe("generate match service", () => {
     });
   });
 
+  describe("ensureEnoughMatchTypePlayers", () => {
+    it("throws a label-specific shortage error for side-filtered creation", () => {
+      expect(() => ensureEnoughMatchTypePlayers("WOMENS", 3)).toThrowError(
+        new GenerateMatchError(
+          400,
+          "Not enough available players for a Women's Court (need 4, have 3)."
+        )
+      );
+    });
+  });
+
   describe("getRankedCandidates", () => {
     it("uses the v3 effective baseline for ordering", () => {
       const now = new Date("2026-01-01T00:00:00Z");
@@ -619,6 +684,35 @@ describe("generate match service", () => {
   });
 
   describe("selectSingleCourtMatch", () => {
+    it("filters women's court requests by effective side instead of raw gender", () => {
+      const players = [
+        createSessionPlayer("male-upper"),
+        createSessionPlayer("male-lower", {
+          mixedSideOverride: MixedSide.LOWER,
+        }),
+        createSessionPlayer("female-lower", {
+          gender: PlayerGender.FEMALE,
+          partnerPreference: PartnerPreference.FEMALE_FLEX,
+        }),
+        createSessionPlayer("female-upper", {
+          gender: PlayerGender.FEMALE,
+          partnerPreference: PartnerPreference.OPEN,
+          mixedSideOverride: MixedSide.UPPER,
+        }),
+      ];
+      const sessionData = createSessionData({
+        mode: SessionMode.MIXICANO,
+        players,
+      });
+      const { rankedCandidates } = getRankedCandidates(sessionData, new Set());
+
+      expect(
+        filterRankedCandidatesByMatchType(rankedCandidates, sessionData, "WOMENS")
+          .map((candidate) => candidate.userId)
+          .sort()
+      ).toEqual(["female-lower", "male-lower"]);
+    });
+
     it("throws when no valid pairing exists", () => {
       vi.mocked(findBestSingleCourtSelectionV3).mockReturnValueOnce({
         selection: null,
