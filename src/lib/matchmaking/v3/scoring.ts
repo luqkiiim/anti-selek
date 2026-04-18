@@ -9,6 +9,7 @@ import type {
 
 export const ELO_EXACT_REMATCH_BALANCE_TOLERANCE = 30;
 export const POINTS_EXACT_REMATCH_BALANCE_TOLERANCE = 1;
+export const POINTS_PARTNER_REPEAT_BALANCE_TOLERANCE = 1;
 
 export function buildWaitSummary<
   T extends Pick<ActiveMatchmakerV3Player, "waitMs">,
@@ -70,6 +71,24 @@ export function compareSingleCourtSelections<
   }
 
   const balanceDiff = left.balanceGap - right.balanceGap;
+
+  if (sessionType === SessionType.POINTS) {
+    const partnerDiff = left.partnerRepeatPenalty - right.partnerRepeatPenalty;
+
+    if (
+      partnerDiff !== 0 &&
+      Math.abs(balanceDiff) <= POINTS_PARTNER_REPEAT_BALANCE_TOLERANCE
+    ) {
+      return partnerDiff;
+    }
+
+    if (balanceDiff !== 0) {
+      return balanceDiff;
+    }
+
+    return left.randomScore - right.randomScore;
+  }
+
   const rematchDiff = left.exactRematchPenalty - right.exactRematchPenalty;
 
   if (
@@ -102,6 +121,32 @@ export function compareBatchSelections<T extends ActiveMatchmakerV3Player>(
 
   const maxBalanceDiff = left.maxBalanceGap - right.maxBalanceGap;
   const totalBalanceDiff = left.totalBalanceGap - right.totalBalanceGap;
+
+  if (sessionType === SessionType.POINTS) {
+    const partnerDiff =
+      left.totalPartnerRepeatPenalty - right.totalPartnerRepeatPenalty;
+    const partnerTolerance =
+      POINTS_PARTNER_REPEAT_BALANCE_TOLERANCE * left.selections.length;
+
+    if (
+      partnerDiff !== 0 &&
+      Math.abs(maxBalanceDiff) <= POINTS_PARTNER_REPEAT_BALANCE_TOLERANCE &&
+      Math.abs(totalBalanceDiff) <= partnerTolerance
+    ) {
+      return partnerDiff;
+    }
+
+    if (maxBalanceDiff !== 0) {
+      return maxBalanceDiff;
+    }
+
+    if (totalBalanceDiff !== 0) {
+      return totalBalanceDiff;
+    }
+
+    return left.totalRandomScore - right.totalRandomScore;
+  }
+
   const rematchDiff =
     left.totalExactRematchPenalty - right.totalExactRematchPenalty;
   const rematchTolerance =

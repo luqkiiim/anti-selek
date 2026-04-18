@@ -4,7 +4,9 @@ import { buildCandidatePool } from "./candidatePool";
 import { DEFAULT_MATCH_DURATION_MS } from "./fairness";
 import {
   buildExactRematchHistory,
+  buildPartnerRepeatHistory,
   getExactRematchPenalty,
+  getPartnerRepeatPenalty,
 } from "./rematch";
 import {
   buildWaitSummary,
@@ -92,6 +94,10 @@ function summarizeBatch<T extends ActiveMatchmakerV3Player>(
       (sum, selection) => sum + selection.balanceGap,
       0
     ),
+    totalPartnerRepeatPenalty: selections.reduce(
+      (sum, selection) => sum + selection.partnerRepeatPenalty,
+      0
+    ),
     totalExactRematchPenalty: selections.reduce(
       (sum, selection) => sum + selection.exactRematchPenalty,
       0
@@ -122,6 +128,7 @@ function buildQuartetSelections<T extends MatchmakerV3Player>(
     candidatePlayers.map((player) => [player.userId, player])
   );
   const rematchHistory = buildExactRematchHistory(completedMatches);
+  const partnerHistory = buildPartnerRepeatHistory(completedMatches);
   const selections: V3SingleCourtSelection<ActiveMatchmakerV3Player<T>>[] = [];
 
   for (const group of quartets) {
@@ -150,6 +157,10 @@ function buildQuartetSelections<T extends MatchmakerV3Player>(
         partition: evaluation.partition,
         waitSummary,
         balanceGap: evaluation.balanceGap,
+        partnerRepeatPenalty: getPartnerRepeatPenalty(
+          evaluation.partition,
+          partnerHistory
+        ),
         exactRematchPenalty: getExactRematchPenalty(
           evaluation.partition,
           rematchHistory

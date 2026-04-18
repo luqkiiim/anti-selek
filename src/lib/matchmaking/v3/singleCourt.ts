@@ -4,8 +4,10 @@ import { evaluateBalancedPartitions } from "./balance";
 import { DEFAULT_MATCH_DURATION_MS } from "./fairness";
 import {
   buildExactRematchHistory,
+  buildPartnerRepeatHistory,
   getExactPartitionKey,
   getExactRematchPenalty,
+  getPartnerRepeatPenalty,
 } from "./rematch";
 import {
   buildWaitSummary,
@@ -209,6 +211,7 @@ export function findBestSingleCourtSelectionV3<T extends MatchmakerV3Player>(
 
   const candidatePools = buildFeasibilityCandidatePools(initialCandidatePool);
   const rematchHistory = buildExactRematchHistory(completedMatches);
+  const partnerHistory = buildPartnerRepeatHistory(completedMatches);
   let searchedCandidatePool = initialCandidatePool;
   let totalQuartetCount = 0;
   let totalValidPartitionCount = 0;
@@ -291,6 +294,10 @@ export function findBestSingleCourtSelectionV3<T extends MatchmakerV3Player>(
           partition: evaluation.partition,
           waitSummary,
           balanceGap: evaluation.balanceGap,
+          partnerRepeatPenalty: getPartnerRepeatPenalty(
+            evaluation.partition,
+            partnerHistory
+          ),
           exactRematchPenalty: getExactRematchPenalty(
             evaluation.partition,
             rematchHistory

@@ -265,6 +265,7 @@ function createV3Selection(
       waitVector: [],
     },
     balanceGap: 0,
+    partnerRepeatPenalty: 0,
     exactRematchPenalty: 0,
     randomScore: 0,
   };
@@ -1122,6 +1123,7 @@ describe("generate match service", () => {
         },
         maxBalanceGap: 0,
         totalBalanceGap: 0,
+        totalPartnerRepeatPenalty: 0,
         totalExactRematchPenalty: 0,
         totalRandomScore: 0,
       };

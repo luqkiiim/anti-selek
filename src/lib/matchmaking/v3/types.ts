@@ -88,6 +88,7 @@ export interface V3SingleCourtSelection<
   partition: V3DoublesPartition;
   waitSummary: V3WaitSummary;
   balanceGap: number;
+  partnerRepeatPenalty: number;
   exactRematchPenalty: number;
   randomScore: number;
 }
@@ -121,6 +122,7 @@ export interface V3BatchSelection<
   waitSummary: V3WaitSummary;
   maxBalanceGap: number;
   totalBalanceGap: number;
+  totalPartnerRepeatPenalty: number;
   totalExactRematchPenalty: number;
   totalRandomScore: number;
 }

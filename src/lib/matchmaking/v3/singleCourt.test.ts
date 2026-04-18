@@ -86,6 +86,66 @@ describe("matchmaking v3 single-court selection", () => {
     });
   });
 
+  it("prefers a different partner over a slightly better-balanced repeated partner in points sessions", () => {
+    const result = findBestSingleCourtSelectionV3(
+      [
+        createPlayer("A", { strength: 11 }),
+        createPlayer("B", { strength: 9 }),
+        createPlayer("C", { strength: 10.5 }),
+        createPlayer("D", { strength: 9.5 }),
+      ],
+      {
+        sessionMode: SessionMode.MEXICANO,
+        sessionType: SessionType.POINTS,
+        completedMatches: [
+          {
+            team1: ["A", "B"],
+            team2: ["X", "Y"],
+            completedAt: new Date("2026-03-18T00:00:00Z"),
+          },
+        ],
+        now: new Date("2026-03-18T01:00:00Z").getTime(),
+        randomFn: () => 0,
+      }
+    );
+
+    expect(result.selection?.partition).not.toEqual({
+      team1: ["A", "B"],
+      team2: ["C", "D"],
+    });
+    expect(result.selection?.partnerRepeatPenalty).toBe(0);
+  });
+
+  it("keeps the repeated partner in points sessions when the fresh option is much less balanced", () => {
+    const result = findBestSingleCourtSelectionV3(
+      [
+        createPlayer("A", { strength: 15 }),
+        createPlayer("B", { strength: 5 }),
+        createPlayer("C", { strength: 11 }),
+        createPlayer("D", { strength: 9 }),
+      ],
+      {
+        sessionMode: SessionMode.MEXICANO,
+        sessionType: SessionType.POINTS,
+        completedMatches: [
+          {
+            team1: ["A", "B"],
+            team2: ["X", "Y"],
+            completedAt: new Date("2026-03-18T00:00:00Z"),
+          },
+        ],
+        now: new Date("2026-03-18T01:00:00Z").getTime(),
+        randomFn: () => 0,
+      }
+    );
+
+    expect(result.selection?.partition).toEqual({
+      team1: ["A", "B"],
+      team2: ["C", "D"],
+    });
+    expect(result.selection?.partnerRepeatPenalty).toBeGreaterThan(0);
+  });
+
   it("returns no selection when fewer than four active players are available", () => {
     const result = findBestSingleCourtSelectionV3(
       [

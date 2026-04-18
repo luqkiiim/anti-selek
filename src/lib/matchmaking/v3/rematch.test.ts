@@ -2,8 +2,10 @@ import { describe, expect, it } from "vitest";
 
 import {
   buildExactRematchHistory,
+  buildPartnerRepeatHistory,
   getExactPartitionKey,
   getExactRematchPenalty,
+  getPartnerRepeatPenalty,
 } from "./rematch";
 
 describe("matchmaking v3 rematch", () => {
@@ -58,6 +60,40 @@ describe("matchmaking v3 rematch", () => {
         {
           team1: ["A", "B"],
           team2: ["C", "D"],
+        },
+        history
+      )
+    ).toBe(0);
+  });
+
+  it("tracks repeated partners independently from pods or opponents", () => {
+    const history = buildPartnerRepeatHistory([
+      {
+        team1: ["A", "B"],
+        team2: ["C", "D"],
+        completedAt: new Date("2026-03-18T00:00:00Z"),
+      },
+      {
+        team1: ["A", "C"],
+        team2: ["B", "D"],
+        completedAt: new Date("2026-03-18T00:10:00Z"),
+      },
+    ]);
+
+    expect(
+      getPartnerRepeatPenalty(
+        {
+          team1: ["A", "B"],
+          team2: ["C", "D"],
+        },
+        history
+      )
+    ).toBeCloseTo(0.85 + 0.85, 10);
+    expect(
+      getPartnerRepeatPenalty(
+        {
+          team1: ["A", "D"],
+          team2: ["B", "C"],
         },
         history
       )
