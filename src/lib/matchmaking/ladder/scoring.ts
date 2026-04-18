@@ -1,3 +1,5 @@
+import { getEffectiveMixedSide } from "@/lib/mixedSide";
+import { SessionMode } from "../../../types/enums";
 import type {
   ActiveMatchmakerLadderPlayer,
   LadderBatchSelection,
@@ -6,6 +8,60 @@ import type {
   LadderWaitSummary,
 } from "./types";
 import { compareLadderGroupingSummaries } from "./ladderGrouping";
+
+function inferMixicanoCourtType<
+  T extends Pick<
+    ActiveMatchmakerLadderPlayer,
+    "gender" | "partnerPreference" | "mixedSideOverride"
+  >,
+>(players: T[]) {
+  const effectiveSides = players.map((player) =>
+    getEffectiveMixedSide({
+      gender: player.gender,
+      partnerPreference: player.partnerPreference,
+      mixedSideOverride: player.mixedSideOverride,
+    })
+  );
+
+  if (effectiveSides.some((side) => side === null)) {
+    return "UNKNOWN";
+  }
+
+  const lowerCount = effectiveSides.filter((side) => side === "LOWER").length;
+
+  if (lowerCount === 0) {
+    return "MENS";
+  }
+
+  if (lowerCount === effectiveSides.length) {
+    return "WOMENS";
+  }
+
+  if (lowerCount * 2 === effectiveSides.length) {
+    return "MIXED";
+  }
+
+  return "HYBRID";
+}
+
+function getMixicanoSameGenderCourtScore<
+  T extends Pick<
+    ActiveMatchmakerLadderPlayer,
+    "gender" | "partnerPreference" | "mixedSideOverride"
+  >,
+>(players: T[]) {
+  const matchType = inferMixicanoCourtType(players);
+  return matchType === "MENS" || matchType === "WOMENS" ? 1 : 0;
+}
+
+function getMixicanoSameGenderBatchScore<T extends ActiveMatchmakerLadderPlayer>(
+  selections: LadderSingleCourtSelection<T>[]
+) {
+  return selections.reduce(
+    (sum, selection) => sum + getMixicanoSameGenderCourtScore(selection.players),
+    0
+  );
+}
 
 export function buildWaitSummary<
   T extends Pick<ActiveMatchmakerLadderPlayer, "waitMs">,
@@ -59,7 +115,8 @@ export function compareSingleCourtSelections<
   T extends ActiveMatchmakerLadderPlayer,
 >(
   left: LadderSingleCourtSelection<T>,
-  right: LadderSingleCourtSelection<T>
+  right: LadderSingleCourtSelection<T>,
+  sessionMode: SessionMode
 ) {
   const groupingCompare = compareLadderGroupingSummaries(
     left.groupingSummary,
@@ -67,6 +124,15 @@ export function compareSingleCourtSelections<
   );
   if (groupingCompare !== 0) {
     return groupingCompare;
+  }
+
+  if (sessionMode === SessionMode.MIXICANO) {
+    const sameGenderCourtDiff =
+      getMixicanoSameGenderCourtScore(right.players) -
+      getMixicanoSameGenderCourtScore(left.players);
+    if (sameGenderCourtDiff !== 0) {
+      return sameGenderCourtDiff;
+    }
   }
 
   if (left.balanceGap !== right.balanceGap) {
@@ -91,7 +157,8 @@ export function compareSingleCourtSelections<
 
 export function compareBatchSelections<T extends ActiveMatchmakerLadderPlayer>(
   left: LadderBatchSelection<T>,
-  right: LadderBatchSelection<T>
+  right: LadderBatchSelection<T>,
+  sessionMode: SessionMode
 ) {
   if (left.maxLadderGap !== right.maxLadderGap) {
     return left.maxLadderGap - right.maxLadderGap;
@@ -103,6 +170,15 @@ export function compareBatchSelections<T extends ActiveMatchmakerLadderPlayer>(
 
   if (left.totalPointDiffGap !== right.totalPointDiffGap) {
     return left.totalPointDiffGap - right.totalPointDiffGap;
+  }
+
+  if (sessionMode === SessionMode.MIXICANO) {
+    const sameGenderBatchDiff =
+      getMixicanoSameGenderBatchScore(right.selections) -
+      getMixicanoSameGenderBatchScore(left.selections);
+    if (sameGenderBatchDiff !== 0) {
+      return sameGenderBatchDiff;
+    }
   }
 
   if (left.maxBalanceGap !== right.maxBalanceGap) {

@@ -253,4 +253,42 @@ describe("ladder batch selection", () => {
         .filter((userId, index, allIds) => allIds.indexOf(userId) === index)
     ).toHaveLength(8);
   });
+
+  it("prefers same-gender courts over splitting the batch into all mixed courts when grouping is tied", () => {
+    const players = [
+      createPlayer("M1"),
+      createPlayer("F1", {
+        gender: PlayerGender.FEMALE,
+        partnerPreference: PartnerPreference.FEMALE_FLEX,
+      }),
+      createPlayer("M2"),
+      createPlayer("F2", {
+        gender: PlayerGender.FEMALE,
+        partnerPreference: PartnerPreference.FEMALE_FLEX,
+      }),
+      createPlayer("M3"),
+      createPlayer("F3", {
+        gender: PlayerGender.FEMALE,
+        partnerPreference: PartnerPreference.FEMALE_FLEX,
+      }),
+      createPlayer("M4"),
+      createPlayer("F4", {
+        gender: PlayerGender.FEMALE,
+        partnerPreference: PartnerPreference.FEMALE_FLEX,
+      }),
+    ];
+
+    const result = findBestBatchSelectionLadder(players, {
+      courtCount: 2,
+      sessionMode: SessionMode.MIXICANO,
+      randomFn: () => 0,
+    });
+
+    expect(result.selection).not.toBeNull();
+    expect(
+      result.selection?.selections.every(
+        (selection) => new Set(selection.players.map((player) => player.gender)).size === 1
+      )
+    ).toBe(true);
+  });
 });

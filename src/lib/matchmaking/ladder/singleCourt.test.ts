@@ -321,4 +321,39 @@ describe("ladder single-court selection", () => {
       ).length
     ).toBe(2);
   });
+
+  it("prefers a same-gender court over a mixed court when ladder grouping is otherwise tied", () => {
+    const players = [
+      createPlayer("M1"),
+      createPlayer("F1", {
+        gender: PlayerGender.FEMALE,
+        partnerPreference: PartnerPreference.FEMALE_FLEX,
+      }),
+      createPlayer("M2"),
+      createPlayer("F2", {
+        gender: PlayerGender.FEMALE,
+        partnerPreference: PartnerPreference.FEMALE_FLEX,
+      }),
+      createPlayer("M3"),
+      createPlayer("F3", {
+        gender: PlayerGender.FEMALE,
+        partnerPreference: PartnerPreference.FEMALE_FLEX,
+      }),
+      createPlayer("M4"),
+      createPlayer("F4", {
+        gender: PlayerGender.FEMALE,
+        partnerPreference: PartnerPreference.FEMALE_FLEX,
+      }),
+    ];
+
+    const result = findBestSingleCourtSelectionLadder(players, {
+      sessionMode: SessionMode.MIXICANO,
+      randomFn: () => 0,
+    });
+
+    expect(result.selection).not.toBeNull();
+    expect(
+      new Set(result.selection?.players.map((player) => player.gender))
+    ).toHaveLength(1);
+  });
 });

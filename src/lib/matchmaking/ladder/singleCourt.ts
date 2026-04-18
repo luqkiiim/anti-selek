@@ -286,7 +286,8 @@ export function findBestSingleCourtSelectionLadder<
           ) === 0 &&
             compareSingleCourtSelections(
               selection,
-              candidatePoolBestSelection
+              candidatePoolBestSelection,
+              sessionMode
             ) < 0)
         ) {
           candidatePoolBestSelection = selection;

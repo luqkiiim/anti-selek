@@ -381,7 +381,9 @@ export function findBestBatchSelectionLadder<T extends MatchmakerLadderPlayer>(
     const quartetSelections = buildQuartetSelections(
       batchCandidatePlayers,
       sessionMode
-    ).sort((left, right) => compareSingleCourtSelections(left, right));
+    ).sort((left, right) =>
+      compareSingleCourtSelections(left, right, sessionMode)
+    );
 
     debug.includedBandValues = candidatePool.includedBandValues;
     debug.widened = candidatePool.widened;
@@ -465,7 +467,7 @@ export function findBestBatchSelectionLadder<T extends MatchmakerLadderPlayer>(
         const batchSelection = summarizeBatch(chosen);
         if (
           !bestSelection ||
-          compareBatchSelections(batchSelection, bestSelection) < 0
+          compareBatchSelections(batchSelection, bestSelection, sessionMode) < 0
         ) {
           bestSelection = batchSelection;
         }
