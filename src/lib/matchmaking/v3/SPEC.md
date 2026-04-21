@@ -12,8 +12,8 @@ This document defines the intended behavior of the live `v3` matcher.
 
 - Fair court time is the top priority
 - No catch-up for late joiners or resumed players
+- Prefer fresh partners when balance is still close
 - Balanced matches within the fair pool
-- Avoid exact rematches when a reasonably close alternative exists
 - Allow small controlled randomness among near-equal good options
 
 ## Non-goals
@@ -28,15 +28,15 @@ This document defines the intended behavior of the live `v3` matcher.
 Global priority order:
 
 1. Fairness of court time
-2. Match balance
-3. Exact rematch avoidance
+2. Fresh partners when balance is still close
+3. Match balance
 4. Controlled randomness
 
 Inside an already allowed fairness pool:
 
 1. Waiting time
-2. Match balance
-3. Exact rematch avoidance
+2. Fresh partners when balance is still close
+3. Match balance
 4. Controlled randomness
 
 ## Definitions
@@ -55,12 +55,9 @@ Inside an already allowed fairness pool:
 `Near-equal waiting time`
 - Waiting times within about one match duration of each other
 
-`Exact rematch`
-- The same 4-player partition repeated again
-- Example:
-  - `A & B vs C & D`
-  - `B & A vs D & C`
-- These are the same partition and count as an exact rematch
+`Repeated partner`
+- A player is paired with the same teammate again
+- This is the only variety signal the default matcher actively penalizes
 
 ## Hard Constraints
 
@@ -168,42 +165,42 @@ Variety is intentionally narrow in the default matcher.
 
 Main rule:
 
-- Heavily penalize exact repeated partitions
+- Softly penalize repeated partners
 
 Not primary rules:
 
 - repeated same-court pod
-- repeated teammates
 - repeated opponents
 
 These are not the main optimization target in the default matcher.
 
 ### History window
 
-Exact rematch avoidance should use recent history only, not full-session memory.
+Partner-repeat avoidance should use recent history only, not full-session
+memory.
 
 Rules:
 
-- Look at the last `6` relevant completed matches
+- Look at the last `8` relevant completed matches
 - Apply exponential decay so the most recent rematches matter the most
-- Old exact rematches should fade out naturally
+- Old partner pairings should fade out naturally
 
 ### Rematch tradeoff
 
-Exact rematches should lose to a reasonably close alternative.
+Repeated partners should lose to a reasonably close alternative.
 
 But:
 
-- a clearly worse match should not win only because it avoids the rematch
+- a clearly worse match should not win only because it gives a new partner
 
-So exact-rematch avoidance is strong, but not absolute.
+So partner freshness is a soft preference, not a hard block.
 
 Starting tolerance:
 
-- `Ratings` sessions: a non-rematch may be up to about `25-30 Elo` worse on
-  team-balance gap and still win
-- `Points` sessions: a non-rematch may be up to about `1 point` worse on the
-  balance measure and still win
+- `Ratings` sessions: only prefer the fresh partner option when the rating
+  balance difference stays very close
+- `Points` sessions: only prefer the fresh partner option when the points-based
+  balance difference stays very close
 
 ## Randomness
 
@@ -262,7 +259,7 @@ Single-court and multi-court selection should share:
 - the same fairness rules
 - the same waiting-time behavior
 - the same balance model
-- the same exact-rematch logic
+- the same partner-repeat logic
 
 Only the search strategy differs:
 
@@ -315,15 +312,15 @@ Required behavior:
 - Waiting time starts from unpause
 - They rotate normally from there
 
-### Example D: Exact rematch penalty
+### Example D: Repeated partner penalty
 
 Recent match:
 
-- `A & B vs C & D`
+- `A & B vs X & Y`
 
 Current options:
 
-- Option 1: `A & B vs C & D` again
+- Option 1: `A & B vs C & D`
 - Option 2: `A & C vs B & D`
 
 Preferred behavior:
@@ -350,7 +347,7 @@ Debug output should be able to explain:
 - which players were eligible
 - chosen quartet or batch
 - balance score
-- exact-rematch penalty
+- partner-repeat penalty
 
 Initial debug output should be structured data, not UI.
 

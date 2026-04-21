@@ -66,7 +66,7 @@ describe("matchmaking v3 batch selection", () => {
     ).toEqual(new Set(["A", "B", "C", "D", "E", "F", "G", "H"]));
   });
 
-  it("prefers a close non-rematch batch over repeating exact rematches", () => {
+  it("prefers fresh partners across the batch when Elo balance stays close", () => {
     const result = findBestBatchSelectionV3(
       [
         createPlayer("A", { strength: 1600 }),
@@ -85,12 +85,12 @@ describe("matchmaking v3 batch selection", () => {
         completedMatches: [
           {
             team1: ["A", "B"],
-            team2: ["C", "D"],
+            team2: ["X", "Y"],
             completedAt: new Date("2026-03-18T00:00:00Z"),
           },
           {
             team1: ["E", "F"],
-            team2: ["G", "H"],
+            team2: ["U", "V"],
             completedAt: new Date("2026-03-18T00:10:00Z"),
           },
         ],
@@ -99,13 +99,15 @@ describe("matchmaking v3 batch selection", () => {
       }
     );
 
-    const partitionKeys = result.selection?.selections.map((selection) => [
-      [...selection.partition.team1].sort().join("|"),
-      [...selection.partition.team2].sort().join("|"),
-    ].sort().join("||"));
+    const teamKeys = new Set(
+      result.selection?.selections.flatMap((selection) => [
+        [...selection.partition.team1].sort().join("|"),
+        [...selection.partition.team2].sort().join("|"),
+      ])
+    );
 
-    expect(partitionKeys).not.toContain("A|B||C|D");
-    expect(partitionKeys).not.toContain("E|F||G|H");
+    expect(teamKeys).not.toContain("A|B");
+    expect(teamKeys).not.toContain("E|F");
   });
 
   it("returns no batch when not enough active players are available", () => {

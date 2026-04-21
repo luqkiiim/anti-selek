@@ -105,6 +105,7 @@ export interface V3SingleCourtDebug {
   validPartitionCount: number;
   chosenIds: [string, string, string, string] | null;
   chosenBalanceGap: number | null;
+  chosenPartnerRepeatPenalty: number | null;
   chosenExactRematchPenalty: number | null;
 }
 
@@ -142,6 +143,7 @@ export interface V3BatchDebug {
   chosenQuartets: Array<[string, string, string, string]>;
   chosenMaxBalanceGap: number | null;
   chosenTotalBalanceGap: number | null;
+  chosenTotalPartnerRepeatPenalty: number | null;
   chosenTotalExactRematchPenalty: number | null;
 }
 

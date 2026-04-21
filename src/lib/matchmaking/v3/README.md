@@ -10,8 +10,8 @@ heuristics onto the previous engine.
 ## Agreed priorities
 
 1. Fairness of court time
-2. Balanced match strength
-3. Exact rematch avoidance
+2. Fresh partners when balance is still close
+3. Balanced match strength
 4. Small controlled randomness among near-equal options
 
 ## Core rules
@@ -48,10 +48,11 @@ heuristics onto the previous engine.
    - Very mixed quartets are acceptable if the two teams are balanced.
 
 6. Variety is intentionally narrow.
-   - Heavily penalize exact repeated partitions.
+   - Softly penalize repeated partners using recent history.
    - Recent history matters, with decay.
-   - Repeated pods, teammates, and opponents are not primary penalties by
-     themselves in the default mode.
+   - Same pods and same opponents are acceptable by themselves.
+   - Exact rematches are discouraged only because they repeat both partner
+     pairings.
 
 7. Batch selection must be global.
    - When multiple courts are open, choose the best batch across all open
@@ -68,15 +69,15 @@ heuristics onto the previous engine.
 Inside the allowed fairness pool:
 
 1. Waiting time
-2. Team-vs-team balance
-3. Exact rematch avoidance
+2. Prefer fresh partners when balance stays reasonably close
+3. Team-vs-team balance
 4. Small randomness among near-equal options
 
 Global rule ordering:
 
-1. Fairness beats balance
-2. Balance beats exact rematch avoidance
-3. Exact rematch avoidance beats randomness
+1. Fairness beats partner freshness
+2. Partner freshness beats balance only inside the tolerance window
+3. Balance beats randomness
 
 ## Design intent
 

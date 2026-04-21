@@ -204,6 +204,7 @@ export function findBestSingleCourtSelectionV3<T extends MatchmakerV3Player>(
         validPartitionCount: 0,
         chosenIds: null,
         chosenBalanceGap: null,
+        chosenPartnerRepeatPenalty: null,
         chosenExactRematchPenalty: null,
       },
     };
@@ -351,12 +352,14 @@ export function findBestSingleCourtSelectionV3<T extends MatchmakerV3Player>(
     validPartitionCount: totalValidPartitionCount,
     chosenIds: null,
     chosenBalanceGap: null,
+    chosenPartnerRepeatPenalty: null,
     chosenExactRematchPenalty: null,
   };
 
   if (bestSelection) {
     debug.chosenIds = bestSelection.ids;
     debug.chosenBalanceGap = bestSelection.balanceGap;
+    debug.chosenPartnerRepeatPenalty = bestSelection.partnerRepeatPenalty;
     debug.chosenExactRematchPenalty = bestSelection.exactRematchPenalty;
   }
 

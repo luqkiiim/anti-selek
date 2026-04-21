@@ -240,18 +240,29 @@ function compressQuartetSelections<T extends ActiveMatchmakerV3Player>(
       compressedSelections.push(bestBalanceSelection);
     }
 
-    const bestFreshSelection = sortedGroup.find(
-      (selection) => selection.exactRematchPenalty === 0
-    );
+    const bestVarietySelection =
+      sessionType === SessionType.POINTS || sessionType === SessionType.ELO
+        ? [...group].sort(
+            (left, right) =>
+              left.partnerRepeatPenalty - right.partnerRepeatPenalty ||
+              left.balanceGap - right.balanceGap ||
+              left.randomScore - right.randomScore
+          )[0]
+        : [...group].sort(
+            (left, right) =>
+              left.exactRematchPenalty - right.exactRematchPenalty ||
+              left.balanceGap - right.balanceGap ||
+              left.randomScore - right.randomScore
+          )[0];
 
     if (
-      bestFreshSelection &&
-      getSelectionKey(bestFreshSelection) !== getSelectionKey(firstSelection) &&
+      bestVarietySelection &&
+      getSelectionKey(bestVarietySelection) !== getSelectionKey(firstSelection) &&
       (!bestBalanceSelection ||
-        getSelectionKey(bestFreshSelection) !==
+        getSelectionKey(bestVarietySelection) !==
           getSelectionKey(bestBalanceSelection))
     ) {
-      compressedSelections.push(bestFreshSelection);
+      compressedSelections.push(bestVarietySelection);
     }
   }
 
@@ -353,6 +364,7 @@ export function findBestBatchSelectionV3<T extends MatchmakerV3Player>(
     chosenQuartets: [],
     chosenMaxBalanceGap: null,
     chosenTotalBalanceGap: null,
+    chosenTotalPartnerRepeatPenalty: null,
     chosenTotalExactRematchPenalty: null,
   };
 
@@ -494,6 +506,8 @@ export function findBestBatchSelectionV3<T extends MatchmakerV3Player>(
     );
     debug.chosenMaxBalanceGap = finalSelection.maxBalanceGap;
     debug.chosenTotalBalanceGap = finalSelection.totalBalanceGap;
+    debug.chosenTotalPartnerRepeatPenalty =
+      finalSelection.totalPartnerRepeatPenalty;
     debug.chosenTotalExactRematchPenalty =
       finalSelection.totalExactRematchPenalty;
   }

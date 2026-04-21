@@ -122,39 +122,66 @@ describe("matchmaking v3 scoring", () => {
     ).toBeLessThan(0);
   });
 
-  it("lets a non-rematch beat a close rematch in Elo sessions", () => {
-    const rematch = createSelection({
+  it("prefers a new partner over a slightly better-balanced repeated partner in Elo sessions", () => {
+    const repeatedPartner = createSelection({
       balanceGap: 0,
-      exactRematchPenalty: 1,
+      partnerRepeatPenalty: 1,
+      exactRematchPenalty: 0,
     });
-    const closeAlternative = createSelection({
-      balanceGap: 25,
+    const freshPartner = createSelection({
+      balanceGap: 1,
+      partnerRepeatPenalty: 0,
       exactRematchPenalty: 0,
     });
 
     expect(
       compareSingleCourtSelections(
-        closeAlternative,
-        rematch,
+        freshPartner,
+        repeatedPartner,
         SessionType.ELO
       )
     ).toBeLessThan(0);
   });
 
-  it("keeps the much better-balanced rematch when the alternative is too far off", () => {
-    const rematch = createSelection({
+  it("keeps the much better-balanced repeated partner in Elo sessions when the alternative is too far off", () => {
+    const repeatedPartner = createSelection({
       balanceGap: 0,
-      exactRematchPenalty: 1,
+      partnerRepeatPenalty: 1,
+      exactRematchPenalty: 0,
     });
-    const farWorseAlternative = createSelection({
-      balanceGap: 50,
+    const farWorseFreshPartner = createSelection({
+      balanceGap: 3,
+      partnerRepeatPenalty: 0,
       exactRematchPenalty: 0,
     });
 
     expect(
       compareSingleCourtSelections(
-        rematch,
-        farWorseAlternative,
+        repeatedPartner,
+        farWorseFreshPartner,
+        SessionType.ELO
+      )
+    ).toBeLessThan(0);
+  });
+
+  it("ignores exact rematch differences for Elo when partner repeats are equal", () => {
+    const lowerRandom = createSelection({
+      balanceGap: 0,
+      partnerRepeatPenalty: 0,
+      exactRematchPenalty: 1,
+      randomScore: 0,
+    });
+    const higherRandom = createSelection({
+      balanceGap: 0,
+      partnerRepeatPenalty: 0,
+      exactRematchPenalty: 0,
+      randomScore: 1,
+    });
+
+    expect(
+      compareSingleCourtSelections(
+        lowerRandom,
+        higherRandom,
         SessionType.ELO
       )
     ).toBeLessThan(0);
@@ -242,6 +269,27 @@ describe("matchmaking v3 scoring", () => {
         freshPartnerBatch,
         repeatedPartnerBatch,
         SessionType.POINTS
+      )
+    ).toBeLessThan(0);
+  });
+
+  it("prefers the lower total partner-repeat batch when Elo balance is close", () => {
+    const repeatedPartnerBatch = createBatchSelection({
+      maxBalanceGap: 0,
+      totalBalanceGap: 0,
+      totalPartnerRepeatPenalty: 1,
+    });
+    const freshPartnerBatch = createBatchSelection({
+      maxBalanceGap: 1,
+      totalBalanceGap: 1,
+      totalPartnerRepeatPenalty: 0,
+    });
+
+    expect(
+      compareBatchSelections(
+        freshPartnerBatch,
+        repeatedPartnerBatch,
+        SessionType.ELO
       )
     ).toBeLessThan(0);
   });

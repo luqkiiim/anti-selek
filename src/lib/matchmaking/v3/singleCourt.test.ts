@@ -28,13 +28,13 @@ function createPlayer(
 }
 
 describe("matchmaking v3 single-court selection", () => {
-  it("prefers a close non-rematch over an exact rematch", () => {
+  it("prefers a different partner over a slightly better-balanced repeated partner in Elo sessions", () => {
     const result = findBestSingleCourtSelectionV3(
       [
-        createPlayer("A", { strength: 1550 }),
-        createPlayer("B", { strength: 1450 }),
-        createPlayer("C", { strength: 1525 }),
-        createPlayer("D", { strength: 1475 }),
+        createPlayer("A", { strength: 11 }),
+        createPlayer("B", { strength: 9 }),
+        createPlayer("C", { strength: 10.5 }),
+        createPlayer("D", { strength: 9.5 }),
       ],
       {
         sessionMode: SessionMode.MEXICANO,
@@ -42,7 +42,7 @@ describe("matchmaking v3 single-court selection", () => {
         completedMatches: [
           {
             team1: ["A", "B"],
-            team2: ["C", "D"],
+            team2: ["X", "Y"],
             completedAt: new Date("2026-03-18T00:00:00Z"),
           },
         ],
@@ -51,19 +51,20 @@ describe("matchmaking v3 single-court selection", () => {
       }
     );
 
-    expect(result.selection?.partition).toEqual({
-      team1: ["A", "D"],
-      team2: ["B", "C"],
+    expect(result.selection?.partition).not.toEqual({
+      team1: ["A", "B"],
+      team2: ["C", "D"],
     });
+    expect(result.selection?.partnerRepeatPenalty).toBe(0);
   });
 
-  it("keeps the better-balanced rematch when alternatives are too far away", () => {
+  it("keeps the repeated partner in Elo sessions when the fresh option is much less balanced", () => {
     const result = findBestSingleCourtSelectionV3(
       [
-        createPlayer("A", { strength: 1600 }),
-        createPlayer("B", { strength: 1400 }),
-        createPlayer("C", { strength: 1550 }),
-        createPlayer("D", { strength: 1450 }),
+        createPlayer("A", { strength: 15 }),
+        createPlayer("B", { strength: 5 }),
+        createPlayer("C", { strength: 11 }),
+        createPlayer("D", { strength: 9 }),
       ],
       {
         sessionMode: SessionMode.MEXICANO,
@@ -71,7 +72,7 @@ describe("matchmaking v3 single-court selection", () => {
         completedMatches: [
           {
             team1: ["A", "B"],
-            team2: ["C", "D"],
+            team2: ["X", "Y"],
             completedAt: new Date("2026-03-18T00:00:00Z"),
           },
         ],
@@ -84,6 +85,7 @@ describe("matchmaking v3 single-court selection", () => {
       team1: ["A", "B"],
       team2: ["C", "D"],
     });
+    expect(result.selection?.partnerRepeatPenalty).toBeGreaterThan(0);
   });
 
   it("prefers a different partner over a slightly better-balanced repeated partner in points sessions", () => {
