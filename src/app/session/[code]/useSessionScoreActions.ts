@@ -53,9 +53,10 @@ export function useSessionScoreActions({
     const scores = matchScores[matchId];
     if (!scores || !scores.team1 || !scores.team2) return null;
 
-    const team1Score = Number.parseInt(scores.team1, 10);
-    const team2Score = Number.parseInt(scores.team2, 10);
-    if (Number.isNaN(team1Score) || Number.isNaN(team2Score)) return null;
+    const team1Score = Number(scores.team1);
+    const team2Score = Number(scores.team2);
+    if (!Number.isInteger(team1Score) || !Number.isInteger(team2Score)) return null;
+    if (team1Score < 0 || team2Score < 0) return null;
 
     return { team1Score, team2Score };
   };

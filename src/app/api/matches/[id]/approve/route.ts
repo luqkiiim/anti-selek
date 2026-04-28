@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { finalizeMatchResult } from "@/lib/matchCompletion";
 import { canApprovePendingSubmission } from "@/lib/matchApprovalRules";
-import { isValidBadmintonScore } from "@/lib/matchRules";
+import { MATCH_SCORE_ERROR_MESSAGE, isValidMatchScore } from "@/lib/matchRules";
 import { prisma } from "@/lib/prisma";
 import { MatchStatus } from "@/types/enums";
 import { reconcileSessionQueueAfterCourtChange } from "../../_lib/reconcileSessionQueue";
@@ -112,9 +112,9 @@ export async function POST(
     if (typeof finalTeam1Score !== "number" || typeof finalTeam2Score !== "number") {
       return NextResponse.json({ error: "Missing match scores" }, { status: 400 });
     }
-    if (!isValidBadmintonScore(finalTeam1Score, finalTeam2Score)) {
+    if (!isValidMatchScore(finalTeam1Score, finalTeam2Score)) {
       return NextResponse.json(
-        { error: "Score must be 21+ win by 2, or 30-29 cap" },
+        { error: MATCH_SCORE_ERROR_MESSAGE },
         { status: 400 }
       );
     }

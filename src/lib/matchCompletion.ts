@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { getCommunityEloByUserId } from "@/lib/communityElo";
-import { isValidBadmintonScore } from "@/lib/matchRules";
+import { isValidMatchScore } from "@/lib/matchRules";
 import { getStandingPointsForTeam } from "@/lib/sessionStandings";
 import { MatchStatus, SessionType } from "@/types/enums";
 
@@ -73,7 +73,7 @@ export async function finalizeMatchResult({
   finalTeam2Score: number;
   scoreSubmittedByUserId?: string | null;
 }) {
-  if (!isValidBadmintonScore(finalTeam1Score, finalTeam2Score)) {
+  if (!isValidMatchScore(finalTeam1Score, finalTeam2Score)) {
     throw new Error("INVALID_SCORE");
   }
 

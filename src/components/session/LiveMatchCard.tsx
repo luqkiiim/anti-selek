@@ -158,6 +158,8 @@ function ScoreSlot({
         ref={inputRef}
         type="number"
         inputMode="numeric"
+        min={0}
+        step={1}
         data-live-score-input="true"
         data-score-input-match-id={matchId}
         value={scoreValue}

@@ -3,7 +3,7 @@ import { auth } from "@/lib/auth";
 import { finalizeMatchResult } from "@/lib/matchCompletion";
 import { shouldRequireOpponentApproval } from "@/lib/matchApprovalRules";
 import { prisma } from "@/lib/prisma";
-import { isValidBadmintonScore } from "@/lib/matchRules";
+import { MATCH_SCORE_ERROR_MESSAGE, isValidMatchScore } from "@/lib/matchRules";
 import { MatchStatus } from "@/types/enums";
 import { reconcileSessionQueueAfterCourtChange } from "../../_lib/reconcileSessionQueue";
 
@@ -96,9 +96,9 @@ export async function POST(
     if (typeof team1Score !== "number" || typeof team2Score !== "number") {
       return NextResponse.json({ error: "Invalid score" }, { status: 400 });
     }
-    if (!isValidBadmintonScore(team1Score, team2Score)) {
+    if (!isValidMatchScore(team1Score, team2Score)) {
       return NextResponse.json(
-        { error: "Score must be 21+ win by 2, or 30-29 cap" },
+        { error: MATCH_SCORE_ERROR_MESSAGE },
         { status: 400 }
       );
     }

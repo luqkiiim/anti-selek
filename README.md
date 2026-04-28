@@ -141,7 +141,7 @@ Notes:
 
 ### Match score validity
 
-- Scores must be valid badminton scores: `21+` win by 2, or `30-29`
+- Scores must be non-negative whole numbers with one team ahead. The higher score wins, with no minimum target score or win-by-2 requirement.
 
 ### Standings
 
