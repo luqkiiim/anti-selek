@@ -1150,6 +1150,15 @@ describe("generate match service", () => {
           requestedMatchCount: 1,
         })
       ).toEqual(batchSelection);
+      expect(findBestBatchSelectionV3).toHaveBeenCalledWith(
+        expect.any(Array),
+        expect.objectContaining({
+          randomFn: expect.any(Function),
+        })
+      );
+      expect(
+        vi.mocked(findBestBatchSelectionV3).mock.calls[0]?.[1].randomFn?.()
+      ).toBe(0);
     });
 
     it("uses the ladder batch selector for ladder sessions", () => {
@@ -1381,6 +1390,62 @@ describe("generate match service", () => {
         new GenerateMatchError(
           400,
           "No valid set of matches found for current Open session rules. Try changing player preferences."
+        )
+      );
+    });
+
+    it("throws a specific mixed batch reason when v3 debug explains the failure", () => {
+      const players = [
+        createSessionPlayer("M1"),
+        createSessionPlayer("M2"),
+        createSessionPlayer("M3"),
+        createSessionPlayer("M4"),
+        createSessionPlayer("F1", {
+          gender: PlayerGender.FEMALE,
+          partnerPreference: PartnerPreference.FEMALE_FLEX,
+        }),
+        createSessionPlayer("F2", {
+          gender: PlayerGender.FEMALE,
+          partnerPreference: PartnerPreference.FEMALE_FLEX,
+        }),
+        createSessionPlayer("F3", {
+          gender: PlayerGender.FEMALE,
+          partnerPreference: PartnerPreference.FEMALE_FLEX,
+        }),
+        createSessionPlayer("F4", {
+          gender: PlayerGender.FEMALE,
+          partnerPreference: PartnerPreference.FEMALE_FLEX,
+        }),
+      ];
+      const sessionData = createSessionData({
+        type: SessionType.POINTS,
+        mode: SessionMode.MIXICANO,
+        players,
+      });
+      const { rankedCandidates } = getRankedCandidates(sessionData, new Set());
+
+      vi.mocked(findBestBatchSelectionV3).mockReturnValueOnce({
+        selection: null,
+        debug: {
+          eligiblePlayerIds: players.map((player) => player.userId),
+          candidatePlayerIds: players.map((player) => player.userId),
+          validQuartetCount: 1,
+          failureReason: "NOT_ENOUGH_NON_OVERLAPPING_COURTS",
+        } as never,
+      });
+
+      expect(() =>
+        selectBatchMatches({
+          rankedCandidates,
+          playersById: createPlayersById(players),
+          sessionData,
+          rotationHistory: buildRotationHistory([]),
+          requestedMatchCount: 2,
+        })
+      ).toThrowError(
+        new GenerateMatchError(
+          400,
+          "Found 1 legal court option, but not 2 non-overlapping courts from 8 candidates. Available Mixed sides: 4 upper-side, 4 lower-side."
         )
       );
     });

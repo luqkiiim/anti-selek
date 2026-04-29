@@ -128,6 +128,13 @@ export interface V3BatchSelection<
   totalRandomScore: number;
 }
 
+export type V3BatchFailureReason =
+  | "INSUFFICIENT_PLAYERS"
+  | "NO_VALID_MIXED_QUARTETS"
+  | "NOT_ENOUGH_NON_OVERLAPPING_COURTS"
+  | "LOCKED_PLAYERS_CANNOT_ALL_FIT"
+  | "SEARCH_LIMIT_REACHED";
+
 export interface V3BatchDebug {
   eligiblePlayerIds: string[];
   lowestBand: number | null;
@@ -140,6 +147,9 @@ export interface V3BatchDebug {
   validQuartetCount: number;
   exploredBranches: number;
   prunedBranches: number;
+  searchAttemptCount: number;
+  searchLimitReached: boolean;
+  failureReason: V3BatchFailureReason | null;
   chosenQuartets: Array<[string, string, string, string]>;
   chosenMaxBalanceGap: number | null;
   chosenTotalBalanceGap: number | null;

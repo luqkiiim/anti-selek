@@ -1,8 +1,15 @@
 import { describe, expect, it } from "vitest";
 
-import { SessionMode, SessionType } from "../../../types/enums";
+import {
+  MixedSide,
+  PartnerPreference,
+  PlayerGender,
+  SessionMode,
+  SessionType,
+} from "../../../types/enums";
+import { getEffectiveMixedSide } from "@/lib/mixedSide";
 import { findBestBatchSelectionV3 } from "./batch";
-import type { MatchmakerV3Player } from "./types";
+import type { MatchmakerV3Player, V3BatchSelection } from "./types";
 
 function createPlayer(
   userId: string,
@@ -20,6 +27,51 @@ function createPlayer(
     partnerPreference: "OPEN",
     ...overrides,
   };
+}
+
+function createLowerPlayer(
+  userId: string,
+  overrides: Partial<MatchmakerV3Player> = {}
+) {
+  return createPlayer(userId, {
+    gender: PlayerGender.FEMALE,
+    partnerPreference: PartnerPreference.FEMALE_FLEX,
+    ...overrides,
+  });
+}
+
+function expectLegalMixedBatch(
+  selection: V3BatchSelection | null | undefined,
+  expectedCourtCount: number
+) {
+  expect(selection?.selections).toHaveLength(expectedCourtCount);
+
+  const selectedIds =
+    selection?.selections.flatMap((courtSelection) => courtSelection.ids) ?? [];
+  expect(new Set(selectedIds).size).toBe(expectedCourtCount * 4);
+
+  for (const courtSelection of selection?.selections ?? []) {
+    const playersById = new Map(
+      courtSelection.players.map((player) => [player.userId, player])
+    );
+    const lowerCounts = [
+      courtSelection.partition.team1,
+      courtSelection.partition.team2,
+    ].map(
+      (team) =>
+        team.filter(
+          (userId) =>
+            getEffectiveMixedSide(playersById.get(userId) ?? {}) ===
+            MixedSide.LOWER
+        ).length
+    );
+
+    expect([
+      [0, 0],
+      [1, 1],
+      [2, 2],
+    ]).toContainEqual(lowerCounts);
+  }
 }
 
 describe("matchmaking v3 batch selection", () => {
@@ -108,6 +160,85 @@ describe("matchmaking v3 batch selection", () => {
 
     expect(teamKeys).not.toContain("A|B");
     expect(teamKeys).not.toContain("E|F");
+  });
+
+  it("widens mixed batch candidates when the capped fair pool cannot fill two legal courts", () => {
+    const result = findBestBatchSelectionV3(
+      [
+        createPlayer("M1", { matchesPlayed: 0 }),
+        createPlayer("M2", { matchesPlayed: 0 }),
+        createPlayer("M3", { matchesPlayed: 0 }),
+        createLowerPlayer("F1", { matchesPlayed: 0 }),
+        createLowerPlayer("F2", { matchesPlayed: 0 }),
+        createLowerPlayer("F3", { matchesPlayed: 1 }),
+        createLowerPlayer("F4", { matchesPlayed: 1 }),
+        createLowerPlayer("F5", { matchesPlayed: 1 }),
+        createLowerPlayer("F6", { matchesPlayed: 1 }),
+        createLowerPlayer("F7", { matchesPlayed: 1 }),
+        createLowerPlayer("F8", { matchesPlayed: 1 }),
+        createPlayer("M4", { matchesPlayed: 1 }),
+        createPlayer("M5", { matchesPlayed: 1 }),
+      ],
+      {
+        courtCount: 2,
+        sessionMode: SessionMode.MIXICANO,
+        sessionType: SessionType.POINTS,
+        now: new Date("2026-03-18T01:00:00Z").getTime(),
+        randomFn: () => 0,
+      }
+    );
+
+    expect(result.selection).not.toBeNull();
+    expect(result.debug.searchAttemptCount).toBeGreaterThan(1);
+    expect(result.debug.candidatePlayerIds).toHaveLength(13);
+    expectLegalMixedBatch(result.selection, 2);
+  });
+
+  it("relaxes locked mixed batch players when one fair player must wait for feasibility", () => {
+    const result = findBestBatchSelectionV3(
+      [
+        createLowerPlayer("F1", { matchesPlayed: 0 }),
+        createLowerPlayer("F2", { matchesPlayed: 0 }),
+        createLowerPlayer("F3", { matchesPlayed: 0 }),
+        createLowerPlayer("F4", { matchesPlayed: 0 }),
+        createLowerPlayer("F5", { matchesPlayed: 0 }),
+        createPlayer("M1", { matchesPlayed: 1 }),
+        createPlayer("M2", { matchesPlayed: 1 }),
+        createPlayer("M3", { matchesPlayed: 1 }),
+        createPlayer("M4", { matchesPlayed: 1 }),
+      ],
+      {
+        courtCount: 2,
+        sessionMode: SessionMode.MIXICANO,
+        sessionType: SessionType.POINTS,
+        now: new Date("2026-03-18T01:00:00Z").getTime(),
+        randomFn: () => 0,
+      }
+    );
+
+    expect(result.selection).not.toBeNull();
+    expect(result.debug.searchAttemptCount).toBeGreaterThan(1);
+    expectLegalMixedBatch(result.selection, 2);
+  });
+
+  it("reports when mixed rules cannot form any legal court", () => {
+    const result = findBestBatchSelectionV3(
+      Array.from({ length: 8 }, (_, index) =>
+        createPlayer(`P${index + 1}`, {
+          gender: PlayerGender.UNSPECIFIED,
+        })
+      ),
+      {
+        courtCount: 2,
+        sessionMode: SessionMode.MIXICANO,
+        sessionType: SessionType.POINTS,
+        now: new Date("2026-03-18T01:00:00Z").getTime(),
+        randomFn: () => 0,
+      }
+    );
+
+    expect(result.selection).toBeNull();
+    expect(result.debug.failureReason).toBe("NO_VALID_MIXED_QUARTETS");
   });
 
   it("returns no batch when not enough active players are available", () => {

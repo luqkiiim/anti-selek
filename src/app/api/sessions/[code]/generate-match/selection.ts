@@ -33,9 +33,11 @@ import {
   findBestBatchSelectionV3,
   findBestSingleCourtSelectionV3,
   type MatchmakerV3Player,
+  type V3BatchDebug,
 } from "@/lib/matchmaking/v3";
 import { getExactPartitionKey } from "@/lib/matchmaking/v3/rematch";
 import {
+  MixedSide,
   MatchStatus,
   SessionMode,
   SessionPool,
@@ -204,11 +206,25 @@ function buildV3Players(
   playersById: Map<string, PartitionCandidate>,
   rankedCandidates: RankedCandidates
 ): MatchmakerV3Player[] {
+  const sessionPlayersById = new Map(
+    sessionData.players.map((player) => [player.userId, player])
+  );
   const availableUserIds = new Set(
     rankedCandidates.map((candidate) => candidate.userId)
   );
 
-  return sessionData.players.map((player) => ({
+  const orderedPlayers = [
+    ...rankedCandidates
+      .map((candidate) => sessionPlayersById.get(candidate.userId))
+      .filter((player): player is GenerateMatchSession["players"][number] =>
+        Boolean(player)
+      ),
+    ...sessionData.players.filter(
+      (player) => !availableUserIds.has(player.userId)
+    ),
+  ];
+
+  return orderedPlayers.map((player) => ({
     userId: player.userId,
     matchesPlayed: player.matchesPlayed,
     matchmakingBaseline:
@@ -462,6 +478,123 @@ export function ensureEnoughMatchTypePlayers(
       400,
       getSideSpecificCourtCreateShortageMessage(matchType, availableCount)
     );
+  }
+}
+
+function formatCountLabel(
+  count: number,
+  singular: string,
+  plural = `${singular}s`
+) {
+  return `${count} ${count === 1 ? singular : plural}`;
+}
+
+function getMixedSideCounts(
+  sessionData: GenerateMatchSession,
+  includedUserIds: ReadonlySet<string>
+) {
+  let upper = 0;
+  let lower = 0;
+  let unspecified = 0;
+
+  for (const player of sessionData.players) {
+    if (!includedUserIds.has(player.userId)) {
+      continue;
+    }
+
+    const side = getEffectiveMixedSide({
+      gender: player.gender,
+      partnerPreference: player.partnerPreference,
+      mixedSideOverride: player.mixedSideOverride,
+    });
+
+    if (side === MixedSide.UPPER) {
+      upper += 1;
+    } else if (side === MixedSide.LOWER) {
+      lower += 1;
+    } else {
+      unspecified += 1;
+    }
+  }
+
+  return { upper, lower, unspecified };
+}
+
+function formatMixedSideCounts({
+  upper,
+  lower,
+  unspecified,
+}: ReturnType<typeof getMixedSideCounts>) {
+  const parts = [
+    `${upper} upper-side`,
+    `${lower} lower-side`,
+  ];
+
+  if (unspecified > 0) {
+    parts.push(`${unspecified} unspecified`);
+  }
+
+  return `Available Mixed sides: ${parts.join(", ")}.`;
+}
+
+function getV3BatchFailureMessage({
+  debug,
+  rankedCandidates,
+  requestedMatchCount,
+  sessionData,
+}: {
+  debug: V3BatchDebug;
+  rankedCandidates: RankedCandidates;
+  requestedMatchCount: number;
+  sessionData: GenerateMatchSession;
+}) {
+  const requiredPlayerCount = requestedMatchCount * 4;
+  const modeLabel = getSessionModeLabel(sessionData.mode);
+  const courtLabel = formatCountLabel(requestedMatchCount, "court");
+  const candidateIds =
+    Array.isArray(debug.candidatePlayerIds) && debug.candidatePlayerIds.length > 0
+      ? debug.candidatePlayerIds
+      : rankedCandidates.map((candidate) => candidate.userId);
+  const eligibleCount = Array.isArray(debug.eligiblePlayerIds)
+    ? debug.eligiblePlayerIds.length
+    : rankedCandidates.length;
+  const validQuartetCount =
+    typeof debug.validQuartetCount === "number" ? debug.validQuartetCount : 0;
+  const sideSummary =
+    sessionData.mode === SessionMode.MIXICANO
+      ? ` ${formatMixedSideCounts(
+          getMixedSideCounts(sessionData, new Set(candidateIds))
+        )}`
+      : "";
+
+  switch (debug.failureReason) {
+    case "INSUFFICIENT_PLAYERS":
+      return `Need ${requiredPlayerCount} available players for ${courtLabel}, but only ${eligibleCount} are available.`;
+    case "NO_VALID_MIXED_QUARTETS":
+      return `Mixed rules could not form any legal court from ${formatCountLabel(
+        candidateIds.length,
+        "candidate"
+      )}. Each Mixed court must be all upper-side, all lower-side, or 2 upper-side + 2 lower-side players.${sideSummary}`;
+    case "NOT_ENOUGH_NON_OVERLAPPING_COURTS":
+      return `Found ${formatCountLabel(
+        validQuartetCount,
+        "legal court option"
+      )}, but not ${requestedMatchCount} non-overlapping courts from ${formatCountLabel(
+        candidateIds.length,
+        "candidate"
+      )}.${sideSummary}`;
+    case "LOCKED_PLAYERS_CANNOT_ALL_FIT":
+      return `The fairest waiting group could not be split into ${courtLabel} under current ${modeLabel} rules. The matcher considered ${formatCountLabel(
+        candidateIds.length,
+        "candidate"
+      )} and found ${formatCountLabel(
+        validQuartetCount,
+        "legal court option"
+      )}.${sideSummary}`;
+    case "SEARCH_LIMIT_REACHED":
+      return `The matcher hit its search limit while trying to form ${courtLabel}. Try creating fewer courts at once.`;
+    default:
+      return `No valid set of matches found for current ${modeLabel} session rules. Try changing player preferences.`;
   }
 }
 
@@ -1220,32 +1353,50 @@ export function selectBatchMatches({
     return result;
   }
 
-  const result =
+  if (
     sessionData.type === SessionType.LADDER ||
     sessionData.type === SessionType.RACE
-      ? findBestBatchSelectionLadder(
-          buildLadderPlayers(sessionData, playersById, rankedCandidates),
-          {
-            courtCount: requestedMatchCount,
-            sessionMode: sessionData.mode as SessionMode,
-          }
-        )
-      : findBestBatchSelectionV3(
-          buildV3Players(sessionData, playersById, rankedCandidates),
-          {
-            courtCount: requestedMatchCount,
-            sessionMode: sessionData.mode as SessionMode,
-            sessionType: sessionData.type as SessionType,
-            completedMatches: buildCompletedMatches(sessionData),
-          }
-        );
+  ) {
+    const result = findBestBatchSelectionLadder(
+      buildLadderPlayers(sessionData, playersById, rankedCandidates),
+      {
+        courtCount: requestedMatchCount,
+        sessionMode: sessionData.mode as SessionMode,
+      }
+    );
+
+    if (!result.selection) {
+      throw new GenerateMatchError(
+        400,
+        `No valid set of matches found for current ${getSessionModeLabel(
+          sessionData.mode
+        )} session rules. Try changing player preferences.`
+      );
+    }
+
+    return result.selection;
+  }
+
+  const result = findBestBatchSelectionV3(
+    buildV3Players(sessionData, playersById, rankedCandidates),
+    {
+      courtCount: requestedMatchCount,
+      sessionMode: sessionData.mode as SessionMode,
+      sessionType: sessionData.type as SessionType,
+      completedMatches: buildCompletedMatches(sessionData),
+      randomFn: () => 0,
+    }
+  );
 
   if (!result.selection) {
     throw new GenerateMatchError(
       400,
-      `No valid set of matches found for current ${getSessionModeLabel(
-        sessionData.mode
-      )} session rules. Try changing player preferences.`
+      getV3BatchFailureMessage({
+        debug: result.debug,
+        rankedCandidates,
+        requestedMatchCount,
+        sessionData,
+      })
     );
   }
 
