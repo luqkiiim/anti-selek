@@ -139,6 +139,148 @@ function buildFeasibilityCandidatePools<T extends MatchmakerV3Player>(
   return variants;
 }
 
+function relaxLockedPlayersForMixedFeasibility<T extends MatchmakerV3Player>(
+  candidatePool: V3CandidatePool<ActiveMatchmakerV3Player<T>>
+): V3CandidatePool<ActiveMatchmakerV3Player<T>> | null {
+  if (candidatePool.lockedPlayers.length === 0) {
+    return null;
+  }
+
+  return {
+    ...candidatePool,
+    lockedPlayers: [],
+    requiredSelectableCount: 4,
+    selectablePlayers: [...candidatePool.candidatePlayers],
+    tieZone: null,
+  };
+}
+
+function searchCandidatePool<T extends MatchmakerV3Player>({
+  candidatePool,
+  sessionMode,
+  sessionType,
+  targetPool,
+  minimumTargetPoolPlayers,
+  excludedQuartetKey,
+  excludedQuartetKeys,
+  excludedPartitionKey,
+  rematchHistory,
+  partnerHistory,
+}: {
+  candidatePool: V3CandidatePool<ActiveMatchmakerV3Player<T>>;
+  sessionMode: SessionMode;
+  sessionType: SessionType;
+  targetPool?: string;
+  minimumTargetPoolPlayers?: number;
+  excludedQuartetKey?: string;
+  excludedQuartetKeys?: ReadonlySet<string>;
+  excludedPartitionKey?: string;
+  rematchHistory: ReturnType<typeof buildExactRematchHistory>;
+  partnerHistory: ReturnType<typeof buildPartnerRepeatHistory>;
+}) {
+  const remainingSlots = 4 - candidatePool.lockedPlayers.length;
+  const quartetGroups =
+    remainingSlots === 0
+      ? [candidatePool.lockedPlayers]
+      : buildCombinations(candidatePool.selectablePlayers, remainingSlots).map(
+          (playersInSelectionBand) => [
+            ...candidatePool.lockedPlayers,
+            ...playersInSelectionBand,
+          ]
+        );
+  const playersById = new Map(
+    candidatePool.candidatePlayers.map((player) => [player.userId, player])
+  );
+  let quartetCount = 0;
+  let validPartitionCount = 0;
+  let bestSelection:
+    | V3SingleCourtSelection<ActiveMatchmakerV3Player<T>>
+    | null = null;
+
+  for (const group of quartetGroups) {
+    const quartetPlayers = toQuartet(group);
+    if (!quartetPlayers) {
+      continue;
+    }
+
+    quartetCount += 1;
+
+    const ids = quartetPlayers.map((player) => player.userId) as [
+      string,
+      string,
+      string,
+      string,
+    ];
+
+    if (targetPool) {
+      const targetPoolCount = quartetPlayers.filter(
+        (player) => player.pool === targetPool
+      ).length;
+      if (targetPoolCount < (minimumTargetPoolPlayers ?? 1)) {
+        continue;
+      }
+    }
+
+    const quartetKey = getQuartetKey(ids);
+    if (
+      (excludedQuartetKey && quartetKey === excludedQuartetKey) ||
+      excludedQuartetKeys?.has(quartetKey)
+    ) {
+      continue;
+    }
+
+    const waitSummary = buildWaitSummary(quartetPlayers);
+    const randomScore = getQuartetRandomScore(quartetPlayers);
+
+    for (const evaluation of evaluateBalancedPartitions(
+      ids,
+      playersById,
+      sessionMode
+    )) {
+      if (
+        excludedPartitionKey &&
+        getExactPartitionKey(evaluation.partition) === excludedPartitionKey
+      ) {
+        continue;
+      }
+
+      validPartitionCount += 1;
+
+      const selection: V3SingleCourtSelection<ActiveMatchmakerV3Player<T>> = {
+        ids,
+        players: quartetPlayers,
+        partition: evaluation.partition,
+        waitSummary,
+        balanceGap: evaluation.balanceGap,
+        partnerRepeatPenalty: getPartnerRepeatPenalty(
+          evaluation.partition,
+          partnerHistory
+        ),
+        exactRematchPenalty: getExactRematchPenalty(
+          evaluation.partition,
+          rematchHistory
+        ),
+        randomScore,
+      };
+
+      if (
+        !bestSelection ||
+        compareQuartetFairnessVectors(selection.players, bestSelection.players) < 0 ||
+        (compareQuartetFairnessVectors(selection.players, bestSelection.players) === 0 &&
+          compareSingleCourtSelections(selection, bestSelection, sessionType) < 0)
+      ) {
+        bestSelection = selection;
+      }
+    }
+  }
+
+  return {
+    bestSelection,
+    quartetCount,
+    validPartitionCount,
+  };
+}
+
 export function findBestSingleCourtSelectionV3<T extends MatchmakerV3Player>(
   players: T[],
   {
@@ -223,112 +365,44 @@ export function findBestSingleCourtSelectionV3<T extends MatchmakerV3Player>(
   for (const candidatePool of candidatePools) {
     searchedCandidatePool = candidatePool;
 
-    const remainingSlots = 4 - candidatePool.lockedPlayers.length;
-    const quartetGroups =
-      remainingSlots === 0
-        ? [candidatePool.lockedPlayers]
-        : buildCombinations(candidatePool.selectablePlayers, remainingSlots).map(
-            (playersInSelectionBand) => [
-              ...candidatePool.lockedPlayers,
-              ...playersInSelectionBand,
-            ]
-          );
-    const playersById = new Map(
-      candidatePool.candidatePlayers.map((player) => [player.userId, player])
-    );
-    let candidatePoolBestSelection:
-      | V3SingleCourtSelection<ActiveMatchmakerV3Player<T>>
-      | null = null;
+    let candidatePoolSearch = searchCandidatePool({
+      candidatePool,
+      sessionMode,
+      sessionType,
+      targetPool,
+      minimumTargetPoolPlayers,
+      excludedQuartetKey,
+      excludedQuartetKeys,
+      excludedPartitionKey,
+      rematchHistory,
+      partnerHistory,
+    });
+    totalQuartetCount += candidatePoolSearch.quartetCount;
+    totalValidPartitionCount += candidatePoolSearch.validPartitionCount;
 
-    for (const group of quartetGroups) {
-      const quartetPlayers = toQuartet(group);
-      if (!quartetPlayers) {
-        continue;
-      }
+    if (!candidatePoolSearch.bestSelection && sessionMode === SessionMode.MIXICANO) {
+      const relaxedCandidatePool = relaxLockedPlayersForMixedFeasibility(candidatePool);
 
-      totalQuartetCount += 1;
-
-      const ids = quartetPlayers.map((player) => player.userId) as [
-        string,
-        string,
-        string,
-        string,
-      ];
-
-      if (targetPool) {
-        const targetPoolCount = quartetPlayers.filter(
-          (player) => player.pool === targetPool
-        ).length;
-        if (targetPoolCount < (minimumTargetPoolPlayers ?? 1)) {
-          continue;
-        }
-      }
-
-      const quartetKey = getQuartetKey(ids);
-      if (
-        (excludedQuartetKey && quartetKey === excludedQuartetKey) ||
-        excludedQuartetKeys?.has(quartetKey)
-      ) {
-        continue;
-      }
-
-      const waitSummary = buildWaitSummary(quartetPlayers);
-      const randomScore = getQuartetRandomScore(quartetPlayers);
-
-      for (const evaluation of evaluateBalancedPartitions(
-        ids,
-        playersById,
-        sessionMode
-      )) {
-        if (
-          excludedPartitionKey &&
-          getExactPartitionKey(evaluation.partition) === excludedPartitionKey
-        ) {
-          continue;
-        }
-
-        totalValidPartitionCount += 1;
-
-        const selection: V3SingleCourtSelection<ActiveMatchmakerV3Player<T>> = {
-          ids,
-          players: quartetPlayers,
-          partition: evaluation.partition,
-          waitSummary,
-          balanceGap: evaluation.balanceGap,
-          partnerRepeatPenalty: getPartnerRepeatPenalty(
-            evaluation.partition,
-            partnerHistory
-          ),
-          exactRematchPenalty: getExactRematchPenalty(
-            evaluation.partition,
-            rematchHistory
-          ),
-          randomScore,
-        };
-
-        if (
-          !candidatePoolBestSelection ||
-          compareQuartetFairnessVectors(
-            selection.players,
-            candidatePoolBestSelection.players
-          ) < 0 ||
-          (compareQuartetFairnessVectors(
-            selection.players,
-            candidatePoolBestSelection.players
-          ) === 0 &&
-            compareSingleCourtSelections(
-              selection,
-              candidatePoolBestSelection,
-              sessionType
-            ) < 0)
-        ) {
-          candidatePoolBestSelection = selection;
-        }
+      if (relaxedCandidatePool) {
+        candidatePoolSearch = searchCandidatePool({
+          candidatePool: relaxedCandidatePool,
+          sessionMode,
+          sessionType,
+          targetPool,
+          minimumTargetPoolPlayers,
+          excludedQuartetKey,
+          excludedQuartetKeys,
+          excludedPartitionKey,
+          rematchHistory,
+          partnerHistory,
+        });
+        totalQuartetCount += candidatePoolSearch.quartetCount;
+        totalValidPartitionCount += candidatePoolSearch.validPartitionCount;
       }
     }
 
-    if (candidatePoolBestSelection) {
-      bestSelection = candidatePoolBestSelection;
+    if (candidatePoolSearch.bestSelection) {
+      bestSelection = candidatePoolSearch.bestSelection;
       break;
     }
   }

@@ -227,4 +227,119 @@ describe("matchmaking v3 single-court selection", () => {
       ).length
     ).toBe(2);
   });
+
+  it("relaxes locked lower-side players when all three have fewer matches", () => {
+    const result = findBestSingleCourtSelectionV3(
+      [
+        createPlayer("LowF1", {
+          matchesPlayed: 2,
+          gender: PlayerGender.FEMALE,
+          partnerPreference: PartnerPreference.FEMALE_FLEX,
+        }),
+        createPlayer("LowF2", {
+          matchesPlayed: 2,
+          gender: PlayerGender.FEMALE,
+          partnerPreference: PartnerPreference.FEMALE_FLEX,
+        }),
+        createPlayer("LowF3", {
+          matchesPlayed: 2,
+          gender: PlayerGender.FEMALE,
+          partnerPreference: PartnerPreference.FEMALE_FLEX,
+        }),
+        createPlayer("HighM1", {
+          matchesPlayed: 3,
+          gender: PlayerGender.MALE,
+        }),
+        createPlayer("HighM2", {
+          matchesPlayed: 3,
+          gender: PlayerGender.MALE,
+        }),
+        createPlayer("HighM3", {
+          matchesPlayed: 3,
+          gender: PlayerGender.MALE,
+        }),
+        createPlayer("HighM4", {
+          matchesPlayed: 3,
+          gender: PlayerGender.MALE,
+        }),
+      ],
+      {
+        sessionMode: SessionMode.MIXICANO,
+        sessionType: SessionType.POINTS,
+        now: new Date("2026-03-18T01:00:00Z").getTime(),
+        randomFn: () => 0,
+      }
+    );
+
+    expect(result.selection).not.toBeNull();
+    expect(result.debug.lockedPlayerIds).toEqual(["LowF1", "LowF2", "LowF3"]);
+    expect(
+      result.selection?.players.filter(
+        (player) => player.gender === PlayerGender.FEMALE
+      ).length
+    ).toBe(2);
+    expect(
+      result.selection?.players.filter(
+        (player) => player.gender === PlayerGender.MALE
+      ).length
+    ).toBe(2);
+  });
+
+  it("relaxes locked upper-side players when all three have fewer matches", () => {
+    const result = findBestSingleCourtSelectionV3(
+      [
+        createPlayer("LowM1", {
+          matchesPlayed: 2,
+          gender: PlayerGender.MALE,
+        }),
+        createPlayer("LowM2", {
+          matchesPlayed: 2,
+          gender: PlayerGender.MALE,
+        }),
+        createPlayer("LowM3", {
+          matchesPlayed: 2,
+          gender: PlayerGender.MALE,
+        }),
+        createPlayer("HighF1", {
+          matchesPlayed: 3,
+          gender: PlayerGender.FEMALE,
+          partnerPreference: PartnerPreference.FEMALE_FLEX,
+        }),
+        createPlayer("HighF2", {
+          matchesPlayed: 3,
+          gender: PlayerGender.FEMALE,
+          partnerPreference: PartnerPreference.FEMALE_FLEX,
+        }),
+        createPlayer("HighF3", {
+          matchesPlayed: 3,
+          gender: PlayerGender.FEMALE,
+          partnerPreference: PartnerPreference.FEMALE_FLEX,
+        }),
+        createPlayer("HighF4", {
+          matchesPlayed: 3,
+          gender: PlayerGender.FEMALE,
+          partnerPreference: PartnerPreference.FEMALE_FLEX,
+        }),
+      ],
+      {
+        sessionMode: SessionMode.MIXICANO,
+        sessionType: SessionType.POINTS,
+        now: new Date("2026-03-18T01:00:00Z").getTime(),
+        randomFn: () => 0,
+      }
+    );
+
+    expect(result.selection).not.toBeNull();
+    expect(result.debug.lockedPlayerIds).toEqual(["LowM1", "LowM2", "LowM3"]);
+    expect(
+      result.selection?.players.filter(
+        (player) => player.gender === PlayerGender.FEMALE
+      ).length
+    ).toBe(2);
+    expect(
+      result.selection?.players.filter(
+        (player) => player.gender === PlayerGender.MALE
+      ).length
+    ).toBe(2);
+  });
 });
