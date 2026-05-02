@@ -10,10 +10,17 @@ import {
 } from "react";
 import { useSession } from "next-auth/react";
 import { useParams, useRouter } from "next/navigation";
+import {
+  ClipboardList,
+  Grid3X3,
+  Medal,
+  Trophy,
+  type LucideIcon,
+} from "lucide-react";
 import { getErrorMessage, safeJson } from "@/lib/http";
 import { FlashMessage } from "@/components/ui/chrome";
+import { MobileBottomTabs } from "@/components/ui/MobileBottomTabs";
 import { LiveCourtsPanel } from "@/components/session/LiveCourtsPanel";
-import { SessionMobileSectionNav } from "@/components/session/SessionMobileSectionNav";
 import { LiveStandingsTable } from "@/components/session/LiveStandingsTable";
 import { ManualMatchModal } from "@/components/session/ManualMatchModal";
 import { SessionActionConfirmModal } from "@/components/session/SessionActionConfirmModal";
@@ -47,18 +54,20 @@ type SessionMobileSection = "session" | "courts" | "standings" | "results";
 const LIVE_MOBILE_SECTIONS: Array<{
   id: SessionMobileSection;
   label: string;
+  icon: LucideIcon;
 }> = [
-  { id: "session", label: "Session" },
-  { id: "courts", label: "Courts" },
-  { id: "standings", label: "Standings" },
+  { id: "session", label: "Session", icon: ClipboardList },
+  { id: "courts", label: "Courts", icon: Grid3X3 },
+  { id: "standings", label: "Standings", icon: Trophy },
 ];
 
 const COMPLETED_MOBILE_SECTIONS: Array<{
   id: SessionMobileSection;
   label: string;
+  icon: LucideIcon;
 }> = [
-  { id: "session", label: "Session" },
-  { id: "results", label: "Results" },
+  { id: "session", label: "Session", icon: ClipboardList },
+  { id: "results", label: "Results", icon: Medal },
 ];
 
 interface SessionUserResponse {
@@ -1014,16 +1023,6 @@ export default function SessionPage() {
       </nav>
 
       <main className="app-shell max-w-7xl space-y-4 sm:space-y-6">
-        <div className="sticky top-[4.75rem] z-20 xl:hidden">
-          <SessionMobileSectionNav
-            sections={mobileSections}
-            activeSection={activeMobileSection}
-            onSelect={(sectionId) =>
-              updateMobileSection(sectionId as SessionMobileSection)
-            }
-          />
-        </div>
-
         {error ? <FlashMessage tone="error">{error}</FlashMessage> : null}
 
         <div
@@ -1168,6 +1167,14 @@ export default function SessionPage() {
           </div>
         </div>
       </main>
+
+      <MobileBottomTabs
+        items={mobileSections}
+        activeId={activeMobileSection}
+        onSelect={(sectionId) => updateMobileSection(sectionId)}
+        ariaLabel="Session navigation"
+        visibilityClassName="xl:hidden"
+      />
 
       <SessionSettingsModal
         open={showSettingsModal}

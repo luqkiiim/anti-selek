@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { getSessionTypeLabel } from "@/lib/sessionModeLabels";
@@ -10,6 +10,7 @@ import { CommunityBottomTabs } from "@/components/community/CommunityBottomTabs"
 import { CommunityGuestsModal } from "@/components/community/CommunityGuestsModal";
 import { CommunityLeaderboardPanel } from "@/components/community/CommunityLeaderboardPanel";
 import { CommunityPlayersModal } from "@/components/community/CommunityPlayersModal";
+import { CommunityProfilePanel } from "@/components/community/CommunityProfilePanel";
 import { CommunityRecentTournamentPanel } from "@/components/community/CommunityRecentTournamentPanel";
 import { CurrentTournamentsPanel } from "@/components/community/CurrentTournamentsPanel";
 import { HostTournamentPanel } from "@/components/community/HostTournamentPanel";
@@ -19,7 +20,7 @@ import type { CommunityPageSection } from "@/components/community/communityTypes
 import { useCommunityPage } from "./useCommunityPage";
 
 const baseSectionTabs: Array<{
-  key: Exclude<CommunityPageSection, "host">;
+  key: Exclude<CommunityPageSection, "host" | "profile">;
   label: string;
   detail: (counts: { sessions: number; leaderboard: number }) => string;
 }> = [
@@ -55,6 +56,7 @@ function getRequestedCommunitySection(
     case "overview":
     case "tournaments":
     case "leaderboard":
+    case "profile":
       return tab;
     case "host":
       return canManageCommunity ? "host" : null;
@@ -67,6 +69,10 @@ export default function CommunityPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const requestedTab = searchParams.get("tab");
+  const communityPagerRef = useRef<HTMLDivElement | null>(null);
+  const communityPagerSnapTimeoutRef = useRef<ReturnType<
+    typeof setTimeout
+  > | null>(null);
   const {
     status,
     communityId,
@@ -153,6 +159,24 @@ export default function CommunityPage() {
     openTournament,
   } = useCommunityPage();
 
+  const mobileSections = useMemo(() => {
+    const sections: CommunityPageSection[] = [
+      "overview",
+      "tournaments",
+      "leaderboard",
+    ];
+
+    if (canManageCommunity) {
+      sections.splice(2, 0, "host");
+    }
+
+    if (user?.id) {
+      sections.push("profile");
+    }
+
+    return sections;
+  }, [canManageCommunity, user?.id]);
+
   const handleBack = useCallback(() => {
     if (typeof window !== "undefined" && window.history.length > 1) {
       router.back();
@@ -162,14 +186,32 @@ export default function CommunityPage() {
     router.push("/");
   }, [router]);
 
+  const scrollCommunityPagerToSection = useCallback(
+    (
+      section: CommunityPageSection,
+      behavior: ScrollBehavior = "auto"
+    ) => {
+      const container = communityPagerRef.current;
+      if (!container) return;
+
+      const sectionIndex = mobileSections.findIndex((id) => id === section);
+      if (sectionIndex < 0) return;
+
+      const nextLeft = sectionIndex * Math.max(container.clientWidth, 1);
+      container.scrollTo({ left: nextLeft, behavior });
+    },
+    [mobileSections]
+  );
+
   const switchCommunitySection = useCallback(
     (section: CommunityPageSection) => {
       switchSection(section);
       router.replace(getCommunitySectionHref(communityId, section), {
         scroll: false,
       });
+      scrollCommunityPagerToSection(section, "smooth");
     },
-    [communityId, router, switchSection]
+    [communityId, router, scrollCommunityPagerToSection, switchSection]
   );
 
   const exitCommunityHostMode = useCallback(() => {
@@ -177,7 +219,14 @@ export default function CommunityPage() {
     router.replace(getCommunitySectionHref(communityId, lastNonHostSection), {
       scroll: false,
     });
-  }, [communityId, exitHostMode, lastNonHostSection, router]);
+    scrollCommunityPagerToSection(lastNonHostSection, "smooth");
+  }, [
+    communityId,
+    exitHostMode,
+    lastNonHostSection,
+    router,
+    scrollCommunityPagerToSection,
+  ]);
 
   const handleCommunityHostButtonClick = useCallback(() => {
     if (!canManageCommunity) return;
@@ -195,6 +244,40 @@ export default function CommunityPage() {
     switchCommunitySection,
   ]);
 
+  const handleCommunityPagerScroll = useCallback(() => {
+    const container = communityPagerRef.current;
+    if (!container) return;
+
+    if (communityPagerSnapTimeoutRef.current) {
+      clearTimeout(communityPagerSnapTimeoutRef.current);
+    }
+
+    communityPagerSnapTimeoutRef.current = setTimeout(() => {
+      const currentContainer = communityPagerRef.current;
+      if (!currentContainer) return;
+
+      const pageWidth = Math.max(currentContainer.clientWidth, 1);
+      const sectionIndex = Math.min(
+        mobileSections.length - 1,
+        Math.max(0, Math.round(currentContainer.scrollLeft / pageWidth))
+      );
+      const section = mobileSections[sectionIndex];
+      if (!section) return;
+
+      const targetLeft = sectionIndex * pageWidth;
+      if (Math.abs(currentContainer.scrollLeft - targetLeft) > 4) {
+        currentContainer.scrollTo({ left: targetLeft, behavior: "smooth" });
+      }
+
+      if (section !== activeSection) {
+        switchSection(section);
+        router.replace(getCommunitySectionHref(communityId, section), {
+          scroll: false,
+        });
+      }
+    }, 120);
+  }, [activeSection, communityId, mobileSections, router, switchSection]);
+
   useEffect(() => {
     router.prefetch("/");
 
@@ -208,6 +291,29 @@ export default function CommunityPage() {
       router.prefetch(`/session/${code}`);
     });
   }, [activeTournaments, pastTournaments, router, testSessions]);
+
+  useEffect(() => {
+    scrollCommunityPagerToSection(activeSection, "auto");
+  }, [activeSection, scrollCommunityPagerToSection]);
+
+  useEffect(() => {
+    const handleResize = () => {
+      scrollCommunityPagerToSection(activeSection, "auto");
+    };
+
+    window.addEventListener("resize", handleResize);
+    return () => {
+      window.removeEventListener("resize", handleResize);
+    };
+  }, [activeSection, scrollCommunityPagerToSection]);
+
+  useEffect(() => {
+    return () => {
+      if (communityPagerSnapTimeoutRef.current) {
+        clearTimeout(communityPagerSnapTimeoutRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (status === "loading" || loading || !community || !communityId) {
@@ -329,6 +435,87 @@ export default function CommunityPage() {
       />
     </div>
   );
+  const profilePanel = (
+    <CommunityProfilePanel userId={user?.id} communityId={communityId} />
+  );
+  const tournamentsPanel = (
+    <div className="space-y-8">
+      <CurrentTournamentsPanel
+        tournaments={activeTournaments}
+        currentUserId={user?.id}
+        onJoinTournament={joinTournament}
+      />
+      <TestSessionsPanel
+        sessions={testSessions}
+        currentUserId={user?.id}
+        onOpenSession={openTournament}
+      />
+      <PastTournamentsPanel
+        tournaments={pastTournaments}
+        canManageCommunity={canManageCommunity}
+        latestPastTournamentId={latestPastTournamentId}
+        rollingBackTournamentCode={rollingBackTournamentCode}
+        onOpenTournament={openTournament}
+        onRollbackTournament={requestRollbackTournament}
+      />
+    </div>
+  );
+  const leaderboardPanel = (
+    <CommunityLeaderboardPanel
+      title="Leaderboard"
+      subtitle="Full community rankings"
+      players={leaderboard}
+      communityId={communityId}
+      action={
+        <span className="app-chip app-chip-neutral">
+          {leaderboard.length} players
+        </span>
+      }
+      claimState={{
+        currentUser: user,
+        currentUserClaimEligibility,
+        myPendingClaimRequest,
+        pendingClaimByTargetId,
+        requestingClaimFor,
+      }}
+      onRequestClaim={requestClaim}
+      onOpenPlayerProfile={openCommunityPlayerProfile}
+    />
+  );
+  const renderCommunitySection = (section: CommunityPageSection) => {
+    switch (section) {
+      case "overview":
+        return (
+          <>
+            <CurrentTournamentsPanel
+              tournaments={activeTournaments}
+              currentUserId={user?.id}
+              onJoinTournament={joinTournament}
+            />
+
+            {testSessions.length > 0 ? (
+              <TestSessionsPanel
+                sessions={testSessions}
+                currentUserId={user?.id}
+                onOpenSession={openTournament}
+              />
+            ) : null}
+
+            {overviewSupportPanels}
+          </>
+        );
+      case "host":
+        return hostSetupPanel;
+      case "tournaments":
+        return tournamentsPanel;
+      case "leaderboard":
+        return leaderboardPanel;
+      case "profile":
+        return profilePanel;
+      default:
+        return null;
+    }
+  };
 
   return (
     <main className="app-page">
@@ -418,75 +605,28 @@ export default function CommunityPage() {
           </div>
         </section>
 
-        {activeSection === "overview" ? (
-          <>
-            <CurrentTournamentsPanel
-              tournaments={activeTournaments}
-              currentUserId={user?.id}
-              onJoinTournament={joinTournament}
-            />
-
-            {testSessions.length > 0 ? (
-              <TestSessionsPanel
-                sessions={testSessions}
-                currentUserId={user?.id}
-                onOpenSession={openTournament}
-              />
-            ) : null}
-
-            {overviewSupportPanels}
-          </>
-        ) : null}
-
-        {activeSection === "host" ? (
-          hostSetupPanel
-        ) : null}
-
-        {activeSection === "tournaments" ? (
-          <div className="space-y-8">
-            <CurrentTournamentsPanel
-              tournaments={activeTournaments}
-              currentUserId={user?.id}
-              onJoinTournament={joinTournament}
-            />
-            <TestSessionsPanel
-              sessions={testSessions}
-              currentUserId={user?.id}
-              onOpenSession={openTournament}
-            />
-            <PastTournamentsPanel
-              tournaments={pastTournaments}
-              canManageCommunity={canManageCommunity}
-              latestPastTournamentId={latestPastTournamentId}
-              rollingBackTournamentCode={rollingBackTournamentCode}
-              onOpenTournament={openTournament}
-              onRollbackTournament={requestRollbackTournament}
-            />
+        <div
+          ref={communityPagerRef}
+          onScroll={handleCommunityPagerScroll}
+          className="app-swipe-track -mx-1 overflow-x-auto overscroll-x-none sm:hidden"
+        >
+          <div className="flex snap-x snap-mandatory">
+            {mobileSections.map((section) => (
+              <section
+                key={section}
+                className="w-full shrink-0 snap-center px-1"
+              >
+                <div className="space-y-8">
+                  {renderCommunitySection(section)}
+                </div>
+              </section>
+            ))}
           </div>
-        ) : null}
+        </div>
 
-        {activeSection === "leaderboard" ? (
-          <CommunityLeaderboardPanel
-            title="Leaderboard"
-            subtitle="Full community rankings"
-            players={leaderboard}
-            communityId={communityId}
-            action={
-              <span className="app-chip app-chip-neutral">
-                {leaderboard.length} players
-              </span>
-            }
-            claimState={{
-              currentUser: user,
-              currentUserClaimEligibility,
-              myPendingClaimRequest,
-              pendingClaimByTargetId,
-              requestingClaimFor,
-            }}
-            onRequestClaim={requestClaim}
-            onOpenPlayerProfile={openCommunityPlayerProfile}
-          />
-        ) : null}
+        <div className="hidden space-y-8 sm:block">
+          {renderCommunitySection(activeSection)}
+        </div>
       </div>
 
       <CommunityPlayersModal
@@ -571,6 +711,7 @@ export default function CommunityPage() {
         canManageCommunity={canManageCommunity}
         communityId={communityId}
         currentUserId={user?.id}
+        onSelect={switchCommunitySection}
       />
     </main>
   );

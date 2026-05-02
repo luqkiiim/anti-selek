@@ -92,4 +92,5 @@ export type CommunityPageSection =
   | "overview"
   | "host"
   | "tournaments"
-  | "leaderboard";
+  | "leaderboard"
+  | "profile";
