@@ -25,7 +25,7 @@ import { SessionGuestRenameModal } from "@/components/session/SessionGuestRename
 import { SessionRosterModal } from "@/components/session/SessionRosterModal";
 import { SessionSettingsModal } from "@/components/session/SessionSettingsModal";
 import type { CurrentUser } from "@/components/session/sessionTypes";
-import { SessionStatus } from "@/types/enums";
+import { MatchStatus, SessionStatus } from "@/types/enums";
 import {
   applyCourtLabelUpdates,
   mergeSessionSnapshot,
@@ -107,6 +107,10 @@ export default function SessionPage() {
   const [creatingRealSession, setCreatingRealSession] = useState(false);
   const [showCreateRealSessionConfirm, setShowCreateRealSessionConfirm] =
     useState(false);
+  const [
+    createRealSessionIncludesResults,
+    setCreateRealSessionIncludesResults,
+  ] = useState(false);
   const [deletingTestSession, setDeletingTestSession] = useState(false);
   const [showDeleteTestConfirm, setShowDeleteTestConfirm] = useState(false);
   const [showPlayersModal, setShowPlayersModal] = useState(false);
@@ -297,8 +301,16 @@ export default function SessionPage() {
   const openCreateRealSessionConfirm = useCallback(() => {
     setError("");
     setShowSettingsModal(false);
+    setCreateRealSessionIncludesResults(
+      (sessionData?.matches ?? []).some(
+        (match) =>
+          match.status === MatchStatus.COMPLETED &&
+          typeof match.team1Score === "number" &&
+          typeof match.team2Score === "number"
+      )
+    );
     setShowCreateRealSessionConfirm(true);
-  }, []);
+  }, [sessionData?.matches]);
 
   const closeCreateRealSessionConfirm = useCallback(() => {
     if (creatingRealSession) return;
@@ -312,6 +324,10 @@ export default function SessionPage() {
     try {
       const res = await fetch(`/api/sessions/${code}/create-real`, {
         method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          includeResults: createRealSessionIncludesResults,
+        }),
       });
       const data = await safeJson<SessionCodeResponse>(res);
       if (!res.ok) {
@@ -332,7 +348,7 @@ export default function SessionPage() {
     } finally {
       setCreatingRealSession(false);
     }
-  }, [code, router]);
+  }, [code, createRealSessionIncludesResults, router]);
 
   const openDeleteTestConfirm = useCallback(() => {
     setError("");
@@ -465,6 +481,16 @@ export default function SessionPage() {
     return autoQueueDraft !== sessionData.autoQueueEnabled;
   }, [autoQueueDraft, sessionData]);
   const hasSettingsChanges = hasCourtLabelChanges || hasAutoQueueChange;
+  const completedScoredTestMatchesCount = useMemo(
+    () =>
+      (sessionData?.matches ?? []).filter(
+        (match) =>
+          match.status === MatchStatus.COMPLETED &&
+          typeof match.team1Score === "number" &&
+          typeof match.team2Score === "number"
+      ).length,
+    [sessionData?.matches]
+  );
 
   const openSettingsModal = useCallback(() => {
     if (!sessionData || !canOpenSettings) {
@@ -1289,21 +1315,92 @@ export default function SessionPage() {
       {showCreateRealSessionConfirm ? (
         <SessionActionConfirmModal
           title="Create real session?"
-          subtitle="This will create a fresh live tournament using this test session's setup."
+          subtitle="Choose whether the real session should start clean or include the completed results from this test."
           details={
-            <div className="app-panel-muted space-y-2 p-4">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">
-                What gets copied
-              </p>
-              <p className="text-sm text-gray-600">
-                Players, guests, courts, format, mode, and pools will carry over.
-              </p>
-              <p className="text-sm text-gray-600">
-                Simulated matches and standings will not.
+            <div className="space-y-3">
+              <div className="app-panel-muted space-y-2 p-4">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">
+                  What gets copied
+                </p>
+                <p className="text-sm text-gray-600">
+                  Players, guests, courts, format, mode, and pools will carry over.
+                </p>
+                <p className="text-sm text-gray-600">
+                  {completedScoredTestMatchesCount} completed scored{" "}
+                  {completedScoredTestMatchesCount === 1 ? "match" : "matches"}{" "}
+                  found in this test session.
+                </p>
+              </div>
+
+              <div className="grid gap-2">
+                <label
+                  className={`flex cursor-pointer gap-3 rounded-lg border p-3 ${
+                    !createRealSessionIncludesResults
+                      ? "border-gray-900 bg-white"
+                      : "border-gray-200 bg-gray-50"
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="create-real-session-mode"
+                    checked={!createRealSessionIncludesResults}
+                    disabled={creatingRealSession}
+                    onChange={() => setCreateRealSessionIncludesResults(false)}
+                    className="mt-1"
+                  />
+                  <span className="space-y-1">
+                    <span className="block text-sm font-semibold text-gray-900">
+                      Setup only
+                    </span>
+                    <span className="block text-sm text-gray-600">
+                      Start a clean real session with the same roster, courts,
+                      format, mode, and pools.
+                    </span>
+                  </span>
+                </label>
+
+                <label
+                  className={`flex gap-3 rounded-lg border p-3 ${
+                    completedScoredTestMatchesCount === 0
+                      ? "cursor-not-allowed border-gray-200 bg-gray-50 opacity-60"
+                      : createRealSessionIncludesResults
+                        ? "cursor-pointer border-gray-900 bg-white"
+                        : "cursor-pointer border-gray-200 bg-gray-50"
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="create-real-session-mode"
+                    checked={createRealSessionIncludesResults}
+                    disabled={
+                      creatingRealSession || completedScoredTestMatchesCount === 0
+                    }
+                    onChange={() => setCreateRealSessionIncludesResults(true)}
+                    className="mt-1"
+                  />
+                  <span className="space-y-1">
+                    <span className="block text-sm font-semibold text-gray-900">
+                      Include completed results
+                    </span>
+                    <span className="block text-sm text-gray-600">
+                      Copy completed scored matches into the real session and
+                      apply standings, partner history, point difference, and
+                      ratings.
+                    </span>
+                  </span>
+                </label>
+              </div>
+
+              <p className="text-xs text-gray-500">
+                Active, pending, and unscored matches stay in the test session.
               </p>
             </div>
           }
-          confirmLabel="Create Real Session"
+          confirmLabel={
+            createRealSessionIncludesResults
+              ? "Create With Results"
+              : "Create Setup Copy"
+          }
           cancelLabel="Stay In Test Session"
           isSubmitting={creatingRealSession}
           onClose={closeCreateRealSessionConfirm}

@@ -2,20 +2,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MatchStatus, SessionType } from "@/types/enums";
 
 const mocks = vi.hoisted(() => ({
-  getCommunityEloByUserId: vi.fn(),
-  sessionPlayerFindMany: vi.fn(),
   transaction: vi.fn(),
-}));
-
-vi.mock("@/lib/communityElo", () => ({
-  getCommunityEloByUserId: mocks.getCommunityEloByUserId,
 }));
 
 vi.mock("@/lib/prisma", () => ({
   prisma: {
-    sessionPlayer: {
-      findMany: mocks.sessionPlayerFindMany,
-    },
     $transaction: mocks.transaction,
   },
 }));
@@ -48,13 +39,26 @@ function createTransactionMock(storedMatch: unknown) {
       findUnique: vi.fn().mockResolvedValue(storedMatch),
     },
     sessionPlayer: {
+      findMany: vi.fn().mockResolvedValue([
+        { userId: "a1", isGuest: false },
+        { userId: "a2", isGuest: false },
+        { userId: "b1", isGuest: false },
+        { userId: "b2", isGuest: false },
+      ]),
       updateMany: vi.fn().mockResolvedValue({ count: 2 }),
       update: vi.fn().mockResolvedValue({}),
     },
     communityMember: {
+      findMany: vi.fn().mockResolvedValue([]),
       updateMany: vi.fn().mockResolvedValue({ count: 0 }),
     },
     user: {
+      findMany: vi.fn().mockResolvedValue([
+        { id: "a1", elo: 1000 },
+        { id: "a2", elo: 1000 },
+        { id: "b1", elo: 1000 },
+        { id: "b2", elo: 1000 },
+      ]),
       updateMany: vi.fn().mockResolvedValue({ count: 0 }),
     },
     court: {
@@ -68,12 +72,6 @@ type TransactionMock = ReturnType<typeof createTransactionMock>;
 describe("finalizeMatchResult", () => {
   beforeEach(() => {
     Object.values(mocks).forEach((mock) => mock.mockReset());
-    mocks.sessionPlayerFindMany.mockResolvedValue([
-      { userId: "a1", isGuest: false },
-      { userId: "a2", isGuest: false },
-      { userId: "b1", isGuest: false },
-      { userId: "b2", isGuest: false },
-    ]);
   });
 
   it("derives winnerTeam from the higher final score", async () => {
@@ -108,5 +106,49 @@ describe("finalizeMatchResult", () => {
       }),
     });
     expect(result).toBe(storedMatch);
+  });
+
+  it("uses a supplied completion time for replayed results", async () => {
+    const completedAt = new Date("2026-05-02T10:30:00.000Z");
+    const storedMatch = {
+      id: "match-1",
+      team1Score: 11,
+      team2Score: 9,
+      winnerTeam: 1,
+      status: MatchStatus.COMPLETED,
+      completedAt,
+    };
+    const tx: TransactionMock = createTransactionMock(storedMatch);
+    mocks.transaction.mockImplementation((callback: (tx: TransactionMock) => unknown) =>
+      callback(tx)
+    );
+
+    await finalizeMatchResult({
+      match: finalizableMatch,
+      expectedStatus: MatchStatus.IN_PROGRESS,
+      finalTeam1Score: 11,
+      finalTeam2Score: 9,
+      completedAt,
+    });
+
+    expect(tx.match.updateMany).toHaveBeenCalledWith({
+      where: { id: "match-1", status: MatchStatus.IN_PROGRESS },
+      data: expect.objectContaining({
+        team1Score: 11,
+        team2Score: 9,
+        winnerTeam: 1,
+        completedAt,
+      }),
+    });
+    expect(tx.sessionPlayer.updateMany).toHaveBeenNthCalledWith(
+      1,
+      expect.any(Object)
+    );
+    expect(tx.sessionPlayer.updateMany.mock.calls[0][0].data).toEqual(
+      expect.objectContaining({
+        lastPlayedAt: completedAt,
+        availableSince: completedAt,
+      })
+    );
   });
 });
