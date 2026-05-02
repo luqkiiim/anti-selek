@@ -1,6 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { getSessionTypeLabel } from "@/lib/sessionModeLabels";
@@ -70,6 +77,10 @@ export default function CommunityPage() {
   const searchParams = useSearchParams();
   const requestedTab = searchParams.get("tab");
   const communityPagerRef = useRef<HTMLDivElement | null>(null);
+  const communityPanelRefs = useRef<
+    Partial<Record<CommunityPageSection, HTMLElement | null>>
+  >({});
+  const communityPanelMeasureFrameRef = useRef<number | null>(null);
   const communityPagerSnapTimeoutRef = useRef<ReturnType<
     typeof setTimeout
   > | null>(null);
@@ -81,6 +92,9 @@ export default function CommunityPage() {
   const communityPagerStartIndexRef = useRef<number | null>(null);
   const communityPagerIsDraggingRef = useRef(false);
   const pendingCommunitySectionRef = useRef<CommunityPageSection | null>(null);
+  const [communityPagerHeight, setCommunityPagerHeight] = useState<
+    number | null
+  >(null);
   const {
     status,
     communityId,
@@ -187,6 +201,32 @@ export default function CommunityPage() {
   const activeMobileSection = mobileSections.includes(activeSection)
     ? activeSection
     : mobileSections[0] ?? "overview";
+
+  const measureActiveCommunityPanel = useCallback(() => {
+    const activePanel = communityPanelRefs.current[activeMobileSection];
+    if (!activePanel) {
+      setCommunityPagerHeight(null);
+      return;
+    }
+
+    const nextHeight = Math.ceil(activePanel.getBoundingClientRect().height);
+    setCommunityPagerHeight((currentHeight) =>
+      currentHeight !== null && Math.abs(currentHeight - nextHeight) < 1
+        ? currentHeight
+        : nextHeight
+    );
+  }, [activeMobileSection]);
+
+  const scheduleMeasureActiveCommunityPanel = useCallback(() => {
+    if (communityPanelMeasureFrameRef.current !== null) {
+      cancelAnimationFrame(communityPanelMeasureFrameRef.current);
+    }
+
+    communityPanelMeasureFrameRef.current = requestAnimationFrame(() => {
+      communityPanelMeasureFrameRef.current = null;
+      measureActiveCommunityPanel();
+    });
+  }, [measureActiveCommunityPanel]);
 
   const handleBack = useCallback(() => {
     if (typeof window !== "undefined" && window.history.length > 1) {
@@ -588,6 +628,8 @@ export default function CommunityPage() {
       return;
     }
 
+    scheduleMeasureActiveCommunityPanel();
+
     if (
       programmaticCommunityPagerTargetRef.current ||
       communityPagerIsDraggingRef.current
@@ -600,25 +642,53 @@ export default function CommunityPage() {
     activeMobileSection,
     community,
     loading,
+    scheduleMeasureActiveCommunityPanel,
     scrollCommunityPagerToSection,
     status,
   ]);
 
   useEffect(() => {
+    const activePanel = communityPanelRefs.current[activeMobileSection];
+    if (!activePanel || typeof ResizeObserver === "undefined") {
+      scheduleMeasureActiveCommunityPanel();
+      return;
+    }
+
+    const observer = new ResizeObserver(() => {
+      scheduleMeasureActiveCommunityPanel();
+    });
+    observer.observe(activePanel);
+    scheduleMeasureActiveCommunityPanel();
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [activeMobileSection, scheduleMeasureActiveCommunityPanel, mobileSections]);
+
+  useEffect(() => {
     const handleResize = () => {
       scrollCommunityPagerToSection(activeMobileSection, "auto");
+      scheduleMeasureActiveCommunityPanel();
     };
 
     window.addEventListener("resize", handleResize);
     return () => {
       window.removeEventListener("resize", handleResize);
     };
-  }, [activeMobileSection, scrollCommunityPagerToSection]);
+  }, [
+    activeMobileSection,
+    scheduleMeasureActiveCommunityPanel,
+    scrollCommunityPagerToSection,
+  ]);
 
   useEffect(() => {
     return () => {
       if (communityPagerSnapTimeoutRef.current) {
         clearTimeout(communityPagerSnapTimeoutRef.current);
+      }
+
+      if (communityPanelMeasureFrameRef.current !== null) {
+        cancelAnimationFrame(communityPanelMeasureFrameRef.current);
       }
 
       clearProgrammaticCommunityPagerSync();
@@ -890,12 +960,21 @@ export default function CommunityPage() {
           onTouchMove={handleCommunityPagerTouchMove}
           onTouchEnd={handleCommunityPagerTouchEnd}
           onTouchCancel={handleCommunityPagerTouchCancel}
-          className="app-swipe-track -mx-1 overflow-x-auto overscroll-x-none sm:hidden"
+          className="app-swipe-track -mx-1 overflow-x-auto overflow-y-hidden overscroll-x-none sm:hidden"
+          style={
+            communityPagerHeight !== null
+              ? { height: `${communityPagerHeight}px` }
+              : undefined
+          }
         >
-          <div className="flex snap-x snap-mandatory">
+          <div className="flex snap-x snap-mandatory items-start">
             {mobileSections.map((section) => (
               <section
                 key={section}
+                ref={(node) => {
+                  communityPanelRefs.current[section] = node;
+                }}
+                data-community-section={section}
                 className="w-full shrink-0 snap-center px-1"
               >
                 <div className="space-y-8">

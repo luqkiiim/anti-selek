@@ -40,6 +40,9 @@ test("community mobile swiper pages one tab at a time", async ({
     toX: 0.14,
   });
   await expectActiveTab(nav, "Tournaments");
+  await expectPagerHeightToMatchActiveSection(pager, "tournaments", {
+    expectInactivePanelTaller: true,
+  });
 
   await swipePager(page, client, pager, {
     name: "hard-left-2",
@@ -170,6 +173,40 @@ async function getActiveTab(nav: Locator) {
 
 async function expectActiveTab(nav: Locator, expectedTab: string) {
   await expect.poll(() => getActiveTab(nav)).toBe(expectedTab);
+}
+
+async function expectPagerHeightToMatchActiveSection(
+  pager: Locator,
+  section: string,
+  {
+    expectInactivePanelTaller = false,
+  }: {
+    expectInactivePanelTaller?: boolean;
+  } = {}
+) {
+  const heights = await pager.evaluate((node, activeSection) => {
+    const panels = Array.from(
+      node.querySelectorAll<HTMLElement>("[data-community-section]")
+    );
+    const activePanel = panels.find(
+      (panel) => panel.dataset.communitySection === activeSection
+    );
+
+    return {
+      activeHeight: activePanel?.getBoundingClientRect().height ?? 0,
+      maxPanelHeight: Math.max(
+        0,
+        ...panels.map((panel) => panel.getBoundingClientRect().height)
+      ),
+      pagerHeight: node.getBoundingClientRect().height,
+    };
+  }, section);
+
+  expect(Math.abs(heights.pagerHeight - heights.activeHeight)).toBeLessThan(4);
+
+  if (expectInactivePanelTaller) {
+    expect(heights.maxPanelHeight - heights.activeHeight).toBeGreaterThan(24);
+  }
 }
 
 async function swipePager(
