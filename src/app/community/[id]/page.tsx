@@ -76,6 +76,7 @@ export default function CommunityPage() {
   const communityPagerIntentRef = useRef<"horizontal" | "vertical" | null>(
     null
   );
+  const pendingCommunitySectionRef = useRef<CommunityPageSection | null>(null);
   const [communityDragOffset, setCommunityDragOffset] = useState(0);
   const [isCommunityDragging, setIsCommunityDragging] = useState(false);
   const {
@@ -204,6 +205,7 @@ export default function CommunityPage() {
 
   const switchCommunitySection = useCallback(
     (section: CommunityPageSection) => {
+      pendingCommunitySectionRef.current = section;
       switchSection(section);
       router.replace(getCommunitySectionHref(communityId, section), {
         scroll: false,
@@ -216,6 +218,7 @@ export default function CommunityPage() {
 
   const exitCommunityHostMode = useCallback(() => {
     exitHostMode();
+    pendingCommunitySectionRef.current = lastNonHostSection;
     router.replace(getCommunitySectionHref(communityId, lastNonHostSection), {
       scroll: false,
     });
@@ -282,6 +285,7 @@ export default function CommunityPage() {
         return;
       }
 
+      pendingCommunitySectionRef.current = targetSection;
       switchSection(targetSection);
       router.replace(getCommunitySectionHref(communityId, targetSection), {
         scroll: false,
@@ -401,6 +405,15 @@ export default function CommunityPage() {
       canManageCommunity
     );
     const nextSection = requestedSection ?? "overview";
+    const pendingSection = pendingCommunitySectionRef.current;
+
+    if (pendingSection) {
+      if (requestedSection === pendingSection) {
+        pendingCommunitySectionRef.current = null;
+      } else {
+        return;
+      }
+    }
 
     if (requestedTab && !requestedSection) {
       router.replace(getCommunitySectionHref(communityId, "overview"), {
