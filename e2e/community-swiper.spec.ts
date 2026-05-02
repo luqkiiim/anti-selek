@@ -26,7 +26,7 @@ test("community mobile swiper pages one tab at a time", async ({
   ).toBeVisible();
 
   const nav = page.locator('nav[aria-label="Community navigation"]');
-  const pager = page.locator("div.app-touch-pan-y.overflow-hidden").first();
+  const pager = page.locator("div.app-swipe-track.overflow-x-auto").first();
   await expect(nav).toBeVisible();
   await expect(pager).toBeVisible();
 
@@ -94,19 +94,27 @@ test("community mobile swiper pages one tab at a time", async ({
   });
   expect(await getActiveTab(nav)).toBe(beforeVerticalDrag);
 
-  const trackState = await pager.evaluate((node) => {
+  const pagerState = await pager.evaluate((node) => {
     const track = node.firstElementChild;
     if (!track) return null;
 
-    const styles = getComputedStyle(track);
+    const pagerStyles = getComputedStyle(node);
+    const trackStyles = getComputedStyle(track);
     return {
-      transform: styles.transform,
-      transition: styles.transition,
+      clientWidth: node.clientWidth,
+      overflowX: pagerStyles.overflowX,
+      scrollLeft: node.scrollLeft,
+      scrollSnapType: trackStyles.scrollSnapType,
     };
   });
 
-  expect(trackState?.transition).toContain("transform");
-  expect(trackState?.transform).toContain("matrix");
+  expect(pagerState?.overflowX).toMatch(/auto|scroll/);
+  expect(pagerState?.scrollSnapType).toContain("mandatory");
+  expect(
+    Math.abs(
+      (pagerState?.scrollLeft ?? 0) - (pagerState?.clientWidth ?? 0) * 3
+    )
+  ).toBeLessThan(4);
 });
 
 test("community mobile swiper handles fast flicks without skipping tabs", async ({
@@ -120,7 +128,7 @@ test("community mobile swiper handles fast flicks without skipping tabs", async 
   ).toBeVisible();
 
   const nav = page.locator('nav[aria-label="Community navigation"]');
-  const pager = page.locator("div.app-touch-pan-y.overflow-hidden").first();
+  const pager = page.locator("div.app-swipe-track.overflow-x-auto").first();
   await expect(nav).toBeVisible();
   await expect(pager).toBeVisible();
 
@@ -187,23 +195,23 @@ async function swipePager(
   }
 ) {
   await test.step(name, async () => {
-  const box = await pager.boundingBox();
-  if (!box) {
-    throw new Error("Community pager is not visible.");
-  }
+    const box = await pager.boundingBox();
+    if (!box) {
+      throw new Error("Community pager is not visible.");
+    }
 
-  const viewport = page.viewportSize();
-  if (!viewport) {
-    throw new Error("Mobile viewport is not available.");
-  }
+    const viewport = page.viewportSize();
+    if (!viewport) {
+      throw new Error("Mobile viewport is not available.");
+    }
 
-  const visibleTop = Math.max(box.y, 0);
-  const visibleBottom = Math.min(box.y + box.height, viewport.height - 128);
-  if (visibleBottom <= visibleTop) {
-    throw new Error("Community pager has no visible swipe area.");
-  }
+    const visibleTop = Math.max(box.y, 0);
+    const visibleBottom = Math.min(box.y + box.height, viewport.height - 128);
+    if (visibleBottom <= visibleTop) {
+      throw new Error("Community pager has no visible swipe area.");
+    }
 
-  const startX = box.x + box.width * fromX;
+    const startX = box.x + box.width * fromX;
     const endX = box.x + box.width * toX;
     const visibleHeight = visibleBottom - visibleTop;
     const startY = visibleTop + visibleHeight * fromY;

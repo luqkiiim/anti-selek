@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { getSessionTypeLabel } from "@/lib/sessionModeLabels";
@@ -70,15 +70,17 @@ export default function CommunityPage() {
   const searchParams = useSearchParams();
   const requestedTab = searchParams.get("tab");
   const communityPagerRef = useRef<HTMLDivElement | null>(null);
+  const communityPagerSnapTimeoutRef = useRef<ReturnType<
+    typeof setTimeout
+  > | null>(null);
+  const programmaticCommunityPagerTargetRef =
+    useRef<CommunityPageSection | null>(null);
+  const programmaticCommunityPagerReleaseTimeoutRef =
+    useRef<ReturnType<typeof setTimeout> | null>(null);
   const communityPagerStartXRef = useRef<number | null>(null);
-  const communityPagerStartYRef = useRef<number | null>(null);
   const communityPagerStartIndexRef = useRef<number | null>(null);
-  const communityPagerIntentRef = useRef<"horizontal" | "vertical" | null>(
-    null
-  );
+  const communityPagerIsDraggingRef = useRef(false);
   const pendingCommunitySectionRef = useRef<CommunityPageSection | null>(null);
-  const [communityDragOffset, setCommunityDragOffset] = useState(0);
-  const [isCommunityDragging, setIsCommunityDragging] = useState(false);
   const {
     status,
     communityId,
@@ -182,17 +184,9 @@ export default function CommunityPage() {
 
     return sections;
   }, [canManageCommunity, user?.id]);
-  const activeMobileSectionIndex = Math.max(
-    0,
-    mobileSections.findIndex((section) => section === activeSection)
-  );
-  const communityTrackOffset =
-    mobileSections.length > 0
-      ? (activeMobileSectionIndex * 100) / mobileSections.length
-      : 0;
-  const communityTrackWidth = `${Math.max(mobileSections.length, 1) * 100}%`;
-  const communityPanelWidth =
-    mobileSections.length > 0 ? `${100 / mobileSections.length}%` : "100%";
+  const activeMobileSection = mobileSections.includes(activeSection)
+    ? activeSection
+    : mobileSections[0] ?? "overview";
 
   const handleBack = useCallback(() => {
     if (typeof window !== "undefined" && window.history.length > 1) {
@@ -203,28 +197,145 @@ export default function CommunityPage() {
     router.push("/");
   }, [router]);
 
-  const switchCommunitySection = useCallback(
-    (section: CommunityPageSection) => {
+  const clearProgrammaticCommunityPagerSync = useCallback(() => {
+    if (programmaticCommunityPagerReleaseTimeoutRef.current) {
+      clearTimeout(programmaticCommunityPagerReleaseTimeoutRef.current);
+      programmaticCommunityPagerReleaseTimeoutRef.current = null;
+    }
+
+    programmaticCommunityPagerTargetRef.current = null;
+  }, []);
+
+  const markProgrammaticCommunityPagerSync = useCallback(
+    (section: CommunityPageSection, behavior: ScrollBehavior) => {
+      if (programmaticCommunityPagerReleaseTimeoutRef.current) {
+        clearTimeout(programmaticCommunityPagerReleaseTimeoutRef.current);
+      }
+
+      programmaticCommunityPagerTargetRef.current = section;
+      programmaticCommunityPagerReleaseTimeoutRef.current = setTimeout(() => {
+        if (programmaticCommunityPagerTargetRef.current === section) {
+          programmaticCommunityPagerTargetRef.current = null;
+        }
+
+        programmaticCommunityPagerReleaseTimeoutRef.current = null;
+      }, behavior === "smooth" ? 280 : 80);
+    },
+    []
+  );
+
+  const scrollCommunityPagerToSection = useCallback(
+    (section: CommunityPageSection, behavior: ScrollBehavior = "auto") => {
+      const container = communityPagerRef.current;
+      if (!container) return;
+
+      if (communityPagerSnapTimeoutRef.current) {
+        clearTimeout(communityPagerSnapTimeoutRef.current);
+        communityPagerSnapTimeoutRef.current = null;
+      }
+
+      const sectionIndex = mobileSections.findIndex(
+        (sectionItem) => sectionItem === section
+      );
+      if (sectionIndex < 0) return;
+
+      if (container.clientWidth <= 0) {
+        requestAnimationFrame(() => {
+          const retryContainer = communityPagerRef.current;
+          if (!retryContainer || retryContainer.clientWidth <= 0) return;
+
+          const retryIndex = mobileSections.findIndex(
+            (sectionItem) => sectionItem === section
+          );
+          if (retryIndex < 0) return;
+
+          const retryLeft = retryIndex * retryContainer.clientWidth;
+          if (Math.abs(retryContainer.scrollLeft - retryLeft) < 4) {
+            clearProgrammaticCommunityPagerSync();
+            return;
+          }
+
+          markProgrammaticCommunityPagerSync(section, behavior);
+          retryContainer.scrollTo({
+            left: retryLeft,
+            behavior,
+          });
+        });
+        return;
+      }
+
+      const nextLeft = sectionIndex * container.clientWidth;
+      if (Math.abs(container.scrollLeft - nextLeft) < 4) {
+        clearProgrammaticCommunityPagerSync();
+        return;
+      }
+
+      markProgrammaticCommunityPagerSync(section, behavior);
+      container.scrollTo({
+        left: nextLeft,
+        behavior,
+      });
+    },
+    [
+      clearProgrammaticCommunityPagerSync,
+      markProgrammaticCommunityPagerSync,
+      mobileSections,
+    ]
+  );
+
+  const getNearestCommunitySection = useCallback(
+    (container: HTMLDivElement) => {
+      const pageWidth = Math.max(container.clientWidth, 1);
+      const sectionIndex = Math.min(
+        mobileSections.length - 1,
+        Math.max(0, Math.round(container.scrollLeft / pageWidth))
+      );
+
+      return {
+        sectionIndex,
+        section: mobileSections[sectionIndex] ?? null,
+        targetLeft: sectionIndex * pageWidth,
+      };
+    },
+    [mobileSections]
+  );
+
+  const navigateCommunitySection = useCallback(
+    (
+      section: CommunityPageSection,
+      behavior: ScrollBehavior = "smooth"
+    ) => {
       pendingCommunitySectionRef.current = section;
       switchSection(section);
+      scrollCommunityPagerToSection(section, behavior);
       router.replace(getCommunitySectionHref(communityId, section), {
         scroll: false,
       });
-      setCommunityDragOffset(0);
-      setIsCommunityDragging(false);
     },
-    [communityId, router, switchSection]
+    [communityId, router, scrollCommunityPagerToSection, switchSection]
+  );
+
+  const switchCommunitySection = useCallback(
+    (section: CommunityPageSection) => {
+      navigateCommunitySection(section, "smooth");
+    },
+    [navigateCommunitySection]
   );
 
   const exitCommunityHostMode = useCallback(() => {
     exitHostMode();
     pendingCommunitySectionRef.current = lastNonHostSection;
+    scrollCommunityPagerToSection(lastNonHostSection, "smooth");
     router.replace(getCommunitySectionHref(communityId, lastNonHostSection), {
       scroll: false,
     });
-    setCommunityDragOffset(0);
-    setIsCommunityDragging(false);
-  }, [communityId, exitHostMode, lastNonHostSection, router]);
+  }, [
+    communityId,
+    exitHostMode,
+    lastNonHostSection,
+    router,
+    scrollCommunityPagerToSection,
+  ]);
 
   const handleCommunityHostButtonClick = useCallback(() => {
     if (!canManageCommunity) return;
@@ -242,36 +353,59 @@ export default function CommunityPage() {
     switchCommunitySection,
   ]);
 
-  const resetCommunityPagerGesture = useCallback(() => {
-    communityPagerStartXRef.current = null;
-    communityPagerStartYRef.current = null;
-    communityPagerStartIndexRef.current = null;
-    communityPagerIntentRef.current = null;
-    setCommunityDragOffset(0);
-    setIsCommunityDragging(false);
-  }, []);
+  const settleCommunityPagerToNearestSection = useCallback(
+    (behavior: ScrollBehavior = "smooth") => {
+      const container = communityPagerRef.current;
+      if (!container) {
+        return;
+      }
 
-  const completeCommunitySwipe = useCallback(
+      const { section, targetLeft } = getNearestCommunitySection(container);
+      if (!section) {
+        return;
+      }
+
+      const isAligned = Math.abs(container.scrollLeft - targetLeft) < 4;
+
+      if (section !== activeMobileSection) {
+        if (isAligned) {
+          navigateCommunitySection(section, "auto");
+          return;
+        }
+
+        navigateCommunitySection(section, behavior);
+        return;
+      }
+
+      if (!isAligned) {
+        scrollCommunityPagerToSection(section, behavior);
+      }
+    },
+    [
+      activeMobileSection,
+      getNearestCommunitySection,
+      navigateCommunitySection,
+      scrollCommunityPagerToSection,
+    ]
+  );
+
+  const settleCommunityPagerFromSwipe = useCallback(
     (endX: number | null) => {
       const container = communityPagerRef.current;
       const startX = communityPagerStartXRef.current;
       const startIndex = communityPagerStartIndexRef.current;
-      const intent = communityPagerIntentRef.current;
 
-      resetCommunityPagerGesture();
+      communityPagerIsDraggingRef.current = false;
+      communityPagerStartXRef.current = null;
+      communityPagerStartIndexRef.current = null;
 
-      if (
-        !container ||
-        startX === null ||
-        startIndex === null ||
-        intent !== "horizontal"
-      ) {
+      if (!container || startX === null || startIndex === null) {
         return;
       }
 
       const swipeDelta = endX === null ? 0 : startX - endX;
       const swipeThreshold = Math.max(container.clientWidth * 0.16, 32);
-      let targetIndex = startIndex;
+      let targetIndex = getNearestCommunitySection(container).sectionIndex;
 
       if (Math.abs(swipeDelta) >= swipeThreshold) {
         targetIndex = Math.min(
@@ -281,39 +415,74 @@ export default function CommunityPage() {
       }
 
       const targetSection = mobileSections[targetIndex];
-      if (!targetSection || targetSection === activeSection) {
+      if (!targetSection) {
         return;
       }
 
-      pendingCommunitySectionRef.current = targetSection;
-      switchSection(targetSection);
-      router.replace(getCommunitySectionHref(communityId, targetSection), {
-        scroll: false,
-      });
+      navigateCommunitySection(targetSection, "smooth");
     },
     [
-      activeSection,
-      communityId,
+      getNearestCommunitySection,
       mobileSections,
-      resetCommunityPagerGesture,
-      router,
-      switchSection,
+      navigateCommunitySection,
     ]
   );
 
+  const handleCommunityPagerScroll = useCallback(() => {
+    const container = communityPagerRef.current;
+    if (!container) return;
+
+    const programmaticTarget = programmaticCommunityPagerTargetRef.current;
+    if (programmaticTarget) {
+      const targetIndex = mobileSections.findIndex(
+        (section) => section === programmaticTarget
+      );
+      if (targetIndex >= 0) {
+        const targetLeft = targetIndex * Math.max(container.clientWidth, 1);
+        if (Math.abs(container.scrollLeft - targetLeft) > 4) {
+          return;
+        }
+      }
+
+      clearProgrammaticCommunityPagerSync();
+    }
+
+    if (communityPagerIsDraggingRef.current) {
+      return;
+    }
+
+    if (communityPagerSnapTimeoutRef.current) {
+      clearTimeout(communityPagerSnapTimeoutRef.current);
+    }
+
+    communityPagerSnapTimeoutRef.current = setTimeout(() => {
+      settleCommunityPagerToNearestSection("smooth");
+    }, 140);
+  }, [
+    clearProgrammaticCommunityPagerSync,
+    mobileSections,
+    settleCommunityPagerToNearestSection,
+  ]);
+
   const handleCommunityPagerTouchStart = useCallback(
     (event: React.TouchEvent<HTMLDivElement>) => {
+      const container = communityPagerRef.current;
       const touch = event.touches[0];
-      if (!touch) return;
+      if (!container || !touch) return;
 
+      clearProgrammaticCommunityPagerSync();
+      if (communityPagerSnapTimeoutRef.current) {
+        clearTimeout(communityPagerSnapTimeoutRef.current);
+        communityPagerSnapTimeoutRef.current = null;
+      }
+
+      communityPagerIsDraggingRef.current = true;
       communityPagerStartXRef.current = touch.clientX;
-      communityPagerStartYRef.current = touch.clientY;
-      communityPagerStartIndexRef.current = activeMobileSectionIndex;
-      communityPagerIntentRef.current = null;
-      setCommunityDragOffset(0);
-      setIsCommunityDragging(false);
+      communityPagerStartIndexRef.current = Math.round(
+        container.scrollLeft / Math.max(container.clientWidth, 1)
+      );
     },
-    [activeMobileSectionIndex]
+    [clearProgrammaticCommunityPagerSync]
   );
 
   const handleCommunityPagerTouchMove = useCallback(
@@ -321,50 +490,28 @@ export default function CommunityPage() {
       const container = communityPagerRef.current;
       const touch = event.touches[0];
       const startX = communityPagerStartXRef.current;
-      const startY = communityPagerStartYRef.current;
       const startIndex = communityPagerStartIndexRef.current;
 
-      if (
-        !container ||
-        !touch ||
-        startX === null ||
-        startY === null ||
-        startIndex === null
-      ) {
+      if (!container || !touch || startX === null || startIndex === null) {
         return;
       }
 
       const deltaX = touch.clientX - startX;
-      const deltaY = touch.clientY - startY;
-      const absX = Math.abs(deltaX);
-      const absY = Math.abs(deltaY);
-
-      if (!communityPagerIntentRef.current) {
-        if (absX < 8 && absY < 8) {
-          return;
-        }
-
-        communityPagerIntentRef.current =
-          absX > absY + 4 ? "horizontal" : "vertical";
-      }
-
-      if (communityPagerIntentRef.current !== "horizontal") {
-        return;
-      }
-
-      if (event.cancelable) {
-        event.preventDefault();
-      }
-
       const isAtFirstSection = startIndex === 0;
       const isAtLastSection = startIndex === mobileSections.length - 1;
       const isPushingPastFirst = isAtFirstSection && deltaX > 0;
       const isPushingPastLast = isAtLastSection && deltaX < 0;
-      const resistedDelta =
-        isPushingPastFirst || isPushingPastLast ? deltaX * 0.32 : deltaX;
 
-      setIsCommunityDragging(true);
-      setCommunityDragOffset(resistedDelta);
+      if (!isPushingPastFirst && !isPushingPastLast) {
+        return;
+      }
+
+      event.preventDefault();
+
+      const lockedLeft = startIndex * container.clientWidth;
+      if (Math.abs(container.scrollLeft - lockedLeft) > 1) {
+        container.scrollLeft = lockedLeft;
+      }
     },
     [mobileSections.length]
   );
@@ -372,14 +519,14 @@ export default function CommunityPage() {
   const handleCommunityPagerTouchEnd = useCallback(
     (event: React.TouchEvent<HTMLDivElement>) => {
       const touch = event.changedTouches[0];
-      completeCommunitySwipe(touch ? touch.clientX : null);
+      settleCommunityPagerFromSwipe(touch ? touch.clientX : null);
     },
-    [completeCommunitySwipe]
+    [settleCommunityPagerFromSwipe]
   );
 
   const handleCommunityPagerTouchCancel = useCallback(() => {
-    completeCommunitySwipe(null);
-  }, [completeCommunitySwipe]);
+    settleCommunityPagerFromSwipe(null);
+  }, [settleCommunityPagerFromSwipe]);
 
   useEffect(() => {
     router.prefetch("/");
@@ -435,6 +582,48 @@ export default function CommunityPage() {
     status,
     switchSection,
   ]);
+
+  useLayoutEffect(() => {
+    if (status === "loading" || loading || !community) {
+      return;
+    }
+
+    if (
+      programmaticCommunityPagerTargetRef.current ||
+      communityPagerIsDraggingRef.current
+    ) {
+      return;
+    }
+
+    scrollCommunityPagerToSection(activeMobileSection, "auto");
+  }, [
+    activeMobileSection,
+    community,
+    loading,
+    scrollCommunityPagerToSection,
+    status,
+  ]);
+
+  useEffect(() => {
+    const handleResize = () => {
+      scrollCommunityPagerToSection(activeMobileSection, "auto");
+    };
+
+    window.addEventListener("resize", handleResize);
+    return () => {
+      window.removeEventListener("resize", handleResize);
+    };
+  }, [activeMobileSection, scrollCommunityPagerToSection]);
+
+  useEffect(() => {
+    return () => {
+      if (communityPagerSnapTimeoutRef.current) {
+        clearTimeout(communityPagerSnapTimeoutRef.current);
+      }
+
+      clearProgrammaticCommunityPagerSync();
+    };
+  }, [clearProgrammaticCommunityPagerSync]);
 
   if (status === "loading" || loading) {
     return (
@@ -696,28 +885,18 @@ export default function CommunityPage() {
 
         <div
           ref={communityPagerRef}
+          onScroll={handleCommunityPagerScroll}
           onTouchStart={handleCommunityPagerTouchStart}
           onTouchMove={handleCommunityPagerTouchMove}
           onTouchEnd={handleCommunityPagerTouchEnd}
           onTouchCancel={handleCommunityPagerTouchCancel}
-          className="app-touch-pan-y -mx-1 overflow-hidden sm:hidden"
+          className="app-swipe-track -mx-1 overflow-x-auto overscroll-x-none sm:hidden"
         >
-          <div
-            className="flex"
-            style={{
-              width: communityTrackWidth,
-              transform: `translate3d(calc(-${communityTrackOffset}% + ${communityDragOffset}px), 0, 0)`,
-              transition: isCommunityDragging
-                ? "none"
-                : "transform 220ms cubic-bezier(0.22, 1, 0.36, 1)",
-              willChange: "transform",
-            }}
-          >
+          <div className="flex snap-x snap-mandatory">
             {mobileSections.map((section) => (
               <section
                 key={section}
-                className="shrink-0 px-1"
-                style={{ width: communityPanelWidth }}
+                className="w-full shrink-0 snap-center px-1"
               >
                 <div className="space-y-8">
                   {renderCommunitySection(section)}
