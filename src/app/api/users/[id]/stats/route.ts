@@ -38,6 +38,7 @@ export async function GET(
   let context:
     | {
         communityId: string;
+        viewerCanManageCommunity: boolean;
         rankContext: {
           leaderboardSize: number;
           currentRank: number | null;
@@ -46,6 +47,7 @@ export async function GET(
         };
       }
     | null = null;
+  let viewerCanManageCommunity = false;
   let leaderboardMembers: Array<{
     userId: string;
     elo: number;
@@ -93,6 +95,8 @@ export async function GET(
       return NextResponse.json({ error: "Player is not in this community" }, { status: 404 });
     }
 
+    viewerCanManageCommunity =
+      requesterMembership.role === "ADMIN" || !!session.user.isAdmin;
     effectiveElo = targetMembership.elo;
 
     leaderboardMembers = await prisma.communityMember.findMany({
@@ -166,6 +170,7 @@ export async function GET(
 
     context = {
       communityId,
+      viewerCanManageCommunity,
       rankContext: buildProfileCommunityRankWindow(
         id,
         leaderboardMembers.map((member) => ({

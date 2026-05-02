@@ -2,10 +2,11 @@
 
 import { useCallback, useEffect } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { getSessionTypeLabel } from "@/lib/sessionModeLabels";
 import { FlashMessage, HeroCard } from "@/components/ui/chrome";
 import { CommunityActionConfirmModal } from "@/components/community/CommunityActionConfirmModal";
+import { CommunityBottomTabs } from "@/components/community/CommunityBottomTabs";
 import { CommunityGuestsModal } from "@/components/community/CommunityGuestsModal";
 import { CommunityLeaderboardPanel } from "@/components/community/CommunityLeaderboardPanel";
 import { CommunityPlayersModal } from "@/components/community/CommunityPlayersModal";
@@ -39,8 +40,33 @@ const baseSectionTabs: Array<{
   },
 ];
 
+function getCommunitySectionHref(
+  communityId: string,
+  section: CommunityPageSection
+) {
+  return `/community/${communityId}?tab=${section}`;
+}
+
+function getRequestedCommunitySection(
+  tab: string | null,
+  canManageCommunity: boolean
+): CommunityPageSection | null {
+  switch (tab) {
+    case "overview":
+    case "tournaments":
+    case "leaderboard":
+      return tab;
+    case "host":
+      return canManageCommunity ? "host" : null;
+    default:
+      return null;
+  }
+}
+
 export default function CommunityPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const requestedTab = searchParams.get("tab");
   const {
     status,
     communityId,
@@ -81,6 +107,7 @@ export default function CommunityPage() {
     loading,
     creatingSession,
     activeSection,
+    lastNonHostSection,
     showPlayersModal,
     showGuestsModal,
     playerSearch,
@@ -122,7 +149,6 @@ export default function CommunityPage() {
     closeGuestsModal,
     switchSection,
     exitHostMode,
-    handleHostButtonClick,
     openCommunityPlayerProfile,
     openTournament,
   } = useCommunityPage();
@@ -135,6 +161,39 @@ export default function CommunityPage() {
 
     router.push("/");
   }, [router]);
+
+  const switchCommunitySection = useCallback(
+    (section: CommunityPageSection) => {
+      switchSection(section);
+      router.replace(getCommunitySectionHref(communityId, section), {
+        scroll: false,
+      });
+    },
+    [communityId, router, switchSection]
+  );
+
+  const exitCommunityHostMode = useCallback(() => {
+    exitHostMode();
+    router.replace(getCommunitySectionHref(communityId, lastNonHostSection), {
+      scroll: false,
+    });
+  }, [communityId, exitHostMode, lastNonHostSection, router]);
+
+  const handleCommunityHostButtonClick = useCallback(() => {
+    if (!canManageCommunity) return;
+
+    if (activeSection === "host") {
+      exitCommunityHostMode();
+      return;
+    }
+
+    switchCommunitySection("host");
+  }, [
+    activeSection,
+    canManageCommunity,
+    exitCommunityHostMode,
+    switchCommunitySection,
+  ]);
 
   useEffect(() => {
     router.prefetch("/");
@@ -149,6 +208,38 @@ export default function CommunityPage() {
       router.prefetch(`/session/${code}`);
     });
   }, [activeTournaments, pastTournaments, router, testSessions]);
+
+  useEffect(() => {
+    if (status === "loading" || loading || !community || !communityId) {
+      return;
+    }
+
+    const requestedSection = getRequestedCommunitySection(
+      requestedTab,
+      canManageCommunity
+    );
+    const nextSection = requestedSection ?? "overview";
+
+    if (requestedTab && !requestedSection) {
+      router.replace(getCommunitySectionHref(communityId, "overview"), {
+        scroll: false,
+      });
+    }
+
+    if (activeSection !== nextSection) {
+      switchSection(nextSection);
+    }
+  }, [
+    activeSection,
+    canManageCommunity,
+    community,
+    communityId,
+    loading,
+    requestedTab,
+    router,
+    status,
+    switchSection,
+  ]);
 
   if (status === "loading" || loading) {
     return (
@@ -206,7 +297,7 @@ export default function CommunityPage() {
       onOpenPlayers={openPlayersModal}
       onOpenGuests={openGuestsModal}
       onCreateSession={createSession}
-      onExitHostMode={exitHostMode}
+      onExitHostMode={exitCommunityHostMode}
       exitHostModeLabel="Back"
       creatingSession={creatingSession}
     />
@@ -221,7 +312,7 @@ export default function CommunityPage() {
         action={
           <button
             type="button"
-            onClick={() => switchSection("leaderboard")}
+            onClick={() => switchCommunitySection("leaderboard")}
             className="app-button-secondary px-4 py-2"
           >
             Full Leaderboard
@@ -233,7 +324,7 @@ export default function CommunityPage() {
 
       <CommunityRecentTournamentPanel
         latestPastTournament={latestPastTournament}
-        onOpenTournaments={() => switchSection("tournaments")}
+        onOpenTournaments={() => switchCommunitySection("tournaments")}
         onOpenTournament={openTournament}
       />
     </div>
@@ -279,7 +370,7 @@ export default function CommunityPage() {
             canManageCommunity ? (
               <button
                 type="button"
-                onClick={handleHostButtonClick}
+                onClick={handleCommunityHostButtonClick}
                 className="app-button-primary"
               >
                 {isHostMode ? "Exit Host Setup" : "Open Host Setup"}
@@ -290,7 +381,7 @@ export default function CommunityPage() {
 
         {success ? <FlashMessage tone="success">{success}</FlashMessage> : null}
 
-        <section className="app-panel-soft p-2">
+        <section className="app-panel-soft hidden p-2 sm:block">
           <div
             className={`grid gap-2 ${
               canManageCommunity ? "sm:grid-cols-4" : "sm:grid-cols-3"
@@ -302,7 +393,7 @@ export default function CommunityPage() {
                 <button
                   key={tab.key}
                   type="button"
-                  onClick={() => switchSection(tab.key)}
+                  onClick={() => switchCommunitySection(tab.key)}
                   className={`rounded-2xl px-4 py-3 text-left transition ${
                     isActive
                       ? "bg-white shadow-sm ring-1 ring-blue-100"
@@ -463,7 +554,7 @@ export default function CommunityPage() {
       ) : null}
 
       {error ? (
-        <div className="fixed bottom-6 left-6 right-6 z-50">
+        <div className="fixed bottom-24 left-6 right-6 z-50 sm:bottom-6">
           <div className="bg-red-600 text-white px-6 py-4 rounded-2xl shadow-2xl flex justify-between items-center">
             <p className="text-xs font-black uppercase tracking-wide">
               {error}
@@ -474,6 +565,13 @@ export default function CommunityPage() {
           </div>
         </div>
       ) : null}
+
+      <CommunityBottomTabs
+        activeTab={activeSection}
+        canManageCommunity={canManageCommunity}
+        communityId={communityId}
+        currentUserId={user?.id}
+      />
     </main>
   );
 }

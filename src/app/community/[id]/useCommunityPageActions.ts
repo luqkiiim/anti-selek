@@ -1,6 +1,11 @@
 "use client";
 
-import { useState, type Dispatch, type SetStateAction } from "react";
+import {
+  useCallback,
+  useState,
+  type Dispatch,
+  type SetStateAction,
+} from "react";
 import type {
   CommunityPageMember,
   CommunityPageSection,
@@ -133,18 +138,18 @@ export function useCommunityPageActions({
     }
   };
 
-  const switchSection = (section: CommunityPageSection) => {
+  const switchSection = useCallback((section: CommunityPageSection) => {
     setActiveSection(section);
     if (section !== "host") {
       setLastNonHostSection(section);
     }
-  };
+  }, []);
 
-  const exitHostMode = () => {
+  const exitHostMode = useCallback(() => {
     setActiveSection(lastNonHostSection);
-  };
+  }, [lastNonHostSection]);
 
-  const handleHostButtonClick = () => {
+  const handleHostButtonClick = useCallback(() => {
     if (!canManageCommunity) return;
     if (activeSection === "host") {
       exitHostMode();
@@ -152,7 +157,7 @@ export function useCommunityPageActions({
     }
     setLastNonHostSection(activeSection);
     setActiveSection("host");
-  };
+  }, [activeSection, canManageCommunity, exitHostMode]);
 
   const openCommunityPlayerProfile = (playerId: string) => {
     router.push(`/profile/${playerId}?communityId=${communityId}`);

@@ -19,6 +19,7 @@ import {
   SectionCard,
   StatCard,
 } from "@/components/ui/chrome";
+import { CommunityBottomTabs } from "@/components/community/CommunityBottomTabs";
 
 interface UserProfileResponse {
   user: {
@@ -29,6 +30,7 @@ interface UserProfileResponse {
   };
   context?: {
     communityId: string;
+    viewerCanManageCommunity: boolean;
     rankContext: {
       leaderboardSize: number;
       currentRank: number | null;
@@ -758,6 +760,15 @@ export default function ProfilePage() {
           )}
         </SectionCard>
       </div>
+
+      {communityId ? (
+        <CommunityBottomTabs
+          activeTab="profile"
+          canManageCommunity={!!data.context?.viewerCanManageCommunity}
+          communityId={communityId}
+          currentUserId={session?.user?.id}
+        />
+      ) : null}
     </main>
   );
 }
