@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { getSessionTypeLabel } from "@/lib/sessionModeLabels";
@@ -70,9 +70,14 @@ export default function CommunityPage() {
   const searchParams = useSearchParams();
   const requestedTab = searchParams.get("tab");
   const communityPagerRef = useRef<HTMLDivElement | null>(null);
-  const communityPagerSnapTimeoutRef = useRef<ReturnType<
-    typeof setTimeout
-  > | null>(null);
+  const communityPagerStartXRef = useRef<number | null>(null);
+  const communityPagerStartYRef = useRef<number | null>(null);
+  const communityPagerStartIndexRef = useRef<number | null>(null);
+  const communityPagerIntentRef = useRef<"horizontal" | "vertical" | null>(
+    null
+  );
+  const [communityDragOffset, setCommunityDragOffset] = useState(0);
+  const [isCommunityDragging, setIsCommunityDragging] = useState(false);
   const {
     status,
     communityId,
@@ -176,6 +181,17 @@ export default function CommunityPage() {
 
     return sections;
   }, [canManageCommunity, user?.id]);
+  const activeMobileSectionIndex = Math.max(
+    0,
+    mobileSections.findIndex((section) => section === activeSection)
+  );
+  const communityTrackOffset =
+    mobileSections.length > 0
+      ? (activeMobileSectionIndex * 100) / mobileSections.length
+      : 0;
+  const communityTrackWidth = `${Math.max(mobileSections.length, 1) * 100}%`;
+  const communityPanelWidth =
+    mobileSections.length > 0 ? `${100 / mobileSections.length}%` : "100%";
 
   const handleBack = useCallback(() => {
     if (typeof window !== "undefined" && window.history.length > 1) {
@@ -186,32 +202,16 @@ export default function CommunityPage() {
     router.push("/");
   }, [router]);
 
-  const scrollCommunityPagerToSection = useCallback(
-    (
-      section: CommunityPageSection,
-      behavior: ScrollBehavior = "auto"
-    ) => {
-      const container = communityPagerRef.current;
-      if (!container) return;
-
-      const sectionIndex = mobileSections.findIndex((id) => id === section);
-      if (sectionIndex < 0) return;
-
-      const nextLeft = sectionIndex * Math.max(container.clientWidth, 1);
-      container.scrollTo({ left: nextLeft, behavior });
-    },
-    [mobileSections]
-  );
-
   const switchCommunitySection = useCallback(
     (section: CommunityPageSection) => {
       switchSection(section);
       router.replace(getCommunitySectionHref(communityId, section), {
         scroll: false,
       });
-      scrollCommunityPagerToSection(section, "smooth");
+      setCommunityDragOffset(0);
+      setIsCommunityDragging(false);
     },
-    [communityId, router, scrollCommunityPagerToSection, switchSection]
+    [communityId, router, switchSection]
   );
 
   const exitCommunityHostMode = useCallback(() => {
@@ -219,14 +219,9 @@ export default function CommunityPage() {
     router.replace(getCommunitySectionHref(communityId, lastNonHostSection), {
       scroll: false,
     });
-    scrollCommunityPagerToSection(lastNonHostSection, "smooth");
-  }, [
-    communityId,
-    exitHostMode,
-    lastNonHostSection,
-    router,
-    scrollCommunityPagerToSection,
-  ]);
+    setCommunityDragOffset(0);
+    setIsCommunityDragging(false);
+  }, [communityId, exitHostMode, lastNonHostSection, router]);
 
   const handleCommunityHostButtonClick = useCallback(() => {
     if (!canManageCommunity) return;
@@ -244,39 +239,143 @@ export default function CommunityPage() {
     switchCommunitySection,
   ]);
 
-  const handleCommunityPagerScroll = useCallback(() => {
-    const container = communityPagerRef.current;
-    if (!container) return;
+  const resetCommunityPagerGesture = useCallback(() => {
+    communityPagerStartXRef.current = null;
+    communityPagerStartYRef.current = null;
+    communityPagerStartIndexRef.current = null;
+    communityPagerIntentRef.current = null;
+    setCommunityDragOffset(0);
+    setIsCommunityDragging(false);
+  }, []);
 
-    if (communityPagerSnapTimeoutRef.current) {
-      clearTimeout(communityPagerSnapTimeoutRef.current);
-    }
+  const completeCommunitySwipe = useCallback(
+    (endX: number | null) => {
+      const container = communityPagerRef.current;
+      const startX = communityPagerStartXRef.current;
+      const startIndex = communityPagerStartIndexRef.current;
+      const intent = communityPagerIntentRef.current;
 
-    communityPagerSnapTimeoutRef.current = setTimeout(() => {
-      const currentContainer = communityPagerRef.current;
-      if (!currentContainer) return;
+      resetCommunityPagerGesture();
 
-      const pageWidth = Math.max(currentContainer.clientWidth, 1);
-      const sectionIndex = Math.min(
-        mobileSections.length - 1,
-        Math.max(0, Math.round(currentContainer.scrollLeft / pageWidth))
-      );
-      const section = mobileSections[sectionIndex];
-      if (!section) return;
-
-      const targetLeft = sectionIndex * pageWidth;
-      if (Math.abs(currentContainer.scrollLeft - targetLeft) > 4) {
-        currentContainer.scrollTo({ left: targetLeft, behavior: "smooth" });
+      if (
+        !container ||
+        startX === null ||
+        startIndex === null ||
+        intent !== "horizontal"
+      ) {
+        return;
       }
 
-      if (section !== activeSection) {
-        switchSection(section);
-        router.replace(getCommunitySectionHref(communityId, section), {
-          scroll: false,
-        });
+      const swipeDelta = endX === null ? 0 : startX - endX;
+      const swipeThreshold = Math.max(container.clientWidth * 0.16, 32);
+      let targetIndex = startIndex;
+
+      if (Math.abs(swipeDelta) >= swipeThreshold) {
+        targetIndex = Math.min(
+          mobileSections.length - 1,
+          Math.max(0, startIndex + (swipeDelta > 0 ? 1 : -1))
+        );
       }
-    }, 120);
-  }, [activeSection, communityId, mobileSections, router, switchSection]);
+
+      const targetSection = mobileSections[targetIndex];
+      if (!targetSection || targetSection === activeSection) {
+        return;
+      }
+
+      switchSection(targetSection);
+      router.replace(getCommunitySectionHref(communityId, targetSection), {
+        scroll: false,
+      });
+    },
+    [
+      activeSection,
+      communityId,
+      mobileSections,
+      resetCommunityPagerGesture,
+      router,
+      switchSection,
+    ]
+  );
+
+  const handleCommunityPagerTouchStart = useCallback(
+    (event: React.TouchEvent<HTMLDivElement>) => {
+      const touch = event.touches[0];
+      if (!touch) return;
+
+      communityPagerStartXRef.current = touch.clientX;
+      communityPagerStartYRef.current = touch.clientY;
+      communityPagerStartIndexRef.current = activeMobileSectionIndex;
+      communityPagerIntentRef.current = null;
+      setCommunityDragOffset(0);
+      setIsCommunityDragging(false);
+    },
+    [activeMobileSectionIndex]
+  );
+
+  const handleCommunityPagerTouchMove = useCallback(
+    (event: React.TouchEvent<HTMLDivElement>) => {
+      const container = communityPagerRef.current;
+      const touch = event.touches[0];
+      const startX = communityPagerStartXRef.current;
+      const startY = communityPagerStartYRef.current;
+      const startIndex = communityPagerStartIndexRef.current;
+
+      if (
+        !container ||
+        !touch ||
+        startX === null ||
+        startY === null ||
+        startIndex === null
+      ) {
+        return;
+      }
+
+      const deltaX = touch.clientX - startX;
+      const deltaY = touch.clientY - startY;
+      const absX = Math.abs(deltaX);
+      const absY = Math.abs(deltaY);
+
+      if (!communityPagerIntentRef.current) {
+        if (absX < 8 && absY < 8) {
+          return;
+        }
+
+        communityPagerIntentRef.current =
+          absX > absY + 4 ? "horizontal" : "vertical";
+      }
+
+      if (communityPagerIntentRef.current !== "horizontal") {
+        return;
+      }
+
+      if (event.cancelable) {
+        event.preventDefault();
+      }
+
+      const isAtFirstSection = startIndex === 0;
+      const isAtLastSection = startIndex === mobileSections.length - 1;
+      const isPushingPastFirst = isAtFirstSection && deltaX > 0;
+      const isPushingPastLast = isAtLastSection && deltaX < 0;
+      const resistedDelta =
+        isPushingPastFirst || isPushingPastLast ? deltaX * 0.32 : deltaX;
+
+      setIsCommunityDragging(true);
+      setCommunityDragOffset(resistedDelta);
+    },
+    [mobileSections.length]
+  );
+
+  const handleCommunityPagerTouchEnd = useCallback(
+    (event: React.TouchEvent<HTMLDivElement>) => {
+      const touch = event.changedTouches[0];
+      completeCommunitySwipe(touch ? touch.clientX : null);
+    },
+    [completeCommunitySwipe]
+  );
+
+  const handleCommunityPagerTouchCancel = useCallback(() => {
+    completeCommunitySwipe(null);
+  }, [completeCommunitySwipe]);
 
   useEffect(() => {
     router.prefetch("/");
@@ -291,29 +390,6 @@ export default function CommunityPage() {
       router.prefetch(`/session/${code}`);
     });
   }, [activeTournaments, pastTournaments, router, testSessions]);
-
-  useEffect(() => {
-    scrollCommunityPagerToSection(activeSection, "auto");
-  }, [activeSection, scrollCommunityPagerToSection]);
-
-  useEffect(() => {
-    const handleResize = () => {
-      scrollCommunityPagerToSection(activeSection, "auto");
-    };
-
-    window.addEventListener("resize", handleResize);
-    return () => {
-      window.removeEventListener("resize", handleResize);
-    };
-  }, [activeSection, scrollCommunityPagerToSection]);
-
-  useEffect(() => {
-    return () => {
-      if (communityPagerSnapTimeoutRef.current) {
-        clearTimeout(communityPagerSnapTimeoutRef.current);
-      }
-    };
-  }, []);
 
   useEffect(() => {
     if (status === "loading" || loading || !community || !communityId) {
@@ -607,14 +683,28 @@ export default function CommunityPage() {
 
         <div
           ref={communityPagerRef}
-          onScroll={handleCommunityPagerScroll}
-          className="app-swipe-track -mx-1 overflow-x-auto overscroll-x-none sm:hidden"
+          onTouchStart={handleCommunityPagerTouchStart}
+          onTouchMove={handleCommunityPagerTouchMove}
+          onTouchEnd={handleCommunityPagerTouchEnd}
+          onTouchCancel={handleCommunityPagerTouchCancel}
+          className="app-touch-pan-y -mx-1 overflow-hidden sm:hidden"
         >
-          <div className="flex snap-x snap-mandatory">
+          <div
+            className="flex"
+            style={{
+              width: communityTrackWidth,
+              transform: `translate3d(calc(-${communityTrackOffset}% + ${communityDragOffset}px), 0, 0)`,
+              transition: isCommunityDragging
+                ? "none"
+                : "transform 220ms cubic-bezier(0.22, 1, 0.36, 1)",
+              willChange: "transform",
+            }}
+          >
             {mobileSections.map((section) => (
               <section
                 key={section}
-                className="w-full shrink-0 snap-center px-1"
+                className="shrink-0 px-1"
+                style={{ width: communityPanelWidth }}
               >
                 <div className="space-y-8">
                   {renderCommunitySection(section)}
