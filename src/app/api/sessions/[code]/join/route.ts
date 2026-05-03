@@ -9,6 +9,7 @@ import {
 import { isValidSessionPool } from "@/lib/sessionPools";
 import { prisma } from "@/lib/prisma";
 import { getCommunityEloByUserId, withCommunityElo } from "@/lib/communityElo";
+import { canQuickAccessCommunity, isQuickAccessSession } from "@/lib/quickAccess";
 import {
   PlayerGender,
   SessionMode,
@@ -56,6 +57,9 @@ export async function POST(
     if (!sessionData) {
       return NextResponse.json({ error: "Session not found" }, { status: 404 });
     }
+    if (!canQuickAccessCommunity(session, sessionData.communityId)) {
+      return NextResponse.json({ error: "Not authorized for this session" }, { status: 403 });
+    }
 
     if (sessionData.status === SessionStatus.COMPLETED) {
       return NextResponse.json({ error: "Session already ended" }, { status: 400 });
@@ -80,6 +84,9 @@ export async function POST(
 
     // If admin is trying to add someone else
     if (typeof targetUserId === "string" && targetUserId !== session.user.id) {
+      if (isQuickAccessSession(session)) {
+        return NextResponse.json({ error: "Not authorized" }, { status: 403 });
+      }
       const isCommunityAdmin = requesterCommunityRole === "ADMIN";
       if (!session.user.isAdmin && !isCommunityAdmin) {
         return NextResponse.json({ error: "Only community admins can add other players" }, { status: 403 });

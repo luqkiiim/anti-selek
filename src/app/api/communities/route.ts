@@ -3,6 +3,11 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
 import { isGlobalAdminEmail } from "@/lib/globalAdmin";
+import {
+  getQuickAccessDeniedMessage,
+  isQuickAccessSession,
+  normalizeNameLookupKey,
+} from "@/lib/quickAccess";
 
 export const dynamic = "force-dynamic";
 
@@ -12,11 +17,22 @@ export async function GET() {
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
     }
+    const isQuickAccess = isQuickAccessSession(session);
     const isGlobalAdmin =
-      !!session.user.isAdmin || isGlobalAdminEmail(session.user.email ?? null);
+      !isQuickAccess &&
+      (!!session.user.isAdmin || isGlobalAdminEmail(session.user.email ?? null));
+
+    if (isQuickAccess && !session.user.quickAccessCommunityId) {
+      return NextResponse.json([]);
+    }
 
     const memberships = await prisma.communityMember.findMany({
-      where: { userId: session.user.id },
+      where: {
+        userId: session.user.id,
+        ...(isQuickAccess
+          ? { communityId: session.user.quickAccessCommunityId ?? "" }
+          : {}),
+      },
       include: {
         community: {
           select: {
@@ -40,7 +56,7 @@ export async function GET() {
       memberships.map((m) => ({
         id: m.community.id,
         name: m.community.name,
-        role: isGlobalAdmin ? "ADMIN" : m.role,
+        role: isQuickAccess ? "MEMBER" : isGlobalAdmin ? "ADMIN" : m.role,
         isPasswordProtected: m.community.isPasswordProtected,
         createdAt: m.community.createdAt,
         membersCount: m.community._count.members,
@@ -58,6 +74,12 @@ export async function POST(request: Request) {
     const session = await auth();
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+    }
+    if (isQuickAccessSession(session)) {
+      return NextResponse.json(
+        { error: getQuickAccessDeniedMessage() },
+        { status: 403 }
+      );
     }
 
     const body = await request.json().catch(() => null);
@@ -77,6 +99,21 @@ export async function POST(request: Request) {
     }
 
     const normalizedName = name.trim();
+    const normalizedLookupName = normalizeNameLookupKey(normalizedName);
+    if (!normalizedLookupName) {
+      return NextResponse.json({ error: "Community name must include letters or numbers" }, { status: 400 });
+    }
+
+    const existingCommunities = await prisma.community.findMany({
+      select: { name: true },
+    });
+    const normalizedNameExists = existingCommunities.some(
+      (community) => normalizeNameLookupKey(community.name) === normalizedLookupName
+    );
+    if (normalizedNameExists) {
+      return NextResponse.json({ error: "Community name already exists" }, { status: 409 });
+    }
+
     const passwordHash = typeof password === "string" && password.length > 0
       ? await bcrypt.hash(password, 10)
       : null;

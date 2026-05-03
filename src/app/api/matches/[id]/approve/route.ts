@@ -4,6 +4,7 @@ import { finalizeMatchResult } from "@/lib/matchCompletion";
 import { canApprovePendingSubmission } from "@/lib/matchApprovalRules";
 import { MATCH_SCORE_ERROR_MESSAGE, isValidMatchScore } from "@/lib/matchRules";
 import { prisma } from "@/lib/prisma";
+import { canQuickAccessCommunity, isQuickAccessSession } from "@/lib/quickAccess";
 import { MatchStatus } from "@/types/enums";
 import { reconcileSessionQueueAfterCourtChange } from "../../_lib/reconcileSessionQueue";
 
@@ -37,6 +38,9 @@ export async function POST(
     if (!match) {
       return NextResponse.json({ error: "Match not found" }, { status: 404 });
     }
+    if (!canQuickAccessCommunity(session, match.session.communityId)) {
+      return NextResponse.json({ error: "Not authorized" }, { status: 403 });
+    }
 
     if (match.status !== MatchStatus.PENDING_APPROVAL) {
       return NextResponse.json({ error: "Match not pending approval" }, { status: 400 });
@@ -56,7 +60,8 @@ export async function POST(
       });
       isCommunityAdmin = membership?.role === "ADMIN";
     }
-    const isAdmin = !!session.user.isAdmin || isCommunityAdmin;
+    const isAdmin =
+      !isQuickAccessSession(session) && (!!session.user.isAdmin || isCommunityAdmin);
     const isPlayer = [
       match.team1User1Id,
       match.team1User2Id,

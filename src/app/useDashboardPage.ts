@@ -8,6 +8,7 @@ import type { DashboardCommunity } from "@/components/dashboard/dashboardTypes";
 export function useDashboardPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
+  const isQuickAccess = session?.user?.isQuickAccess === true;
 
   const [communities, setCommunities] = useState<DashboardCommunity[]>([]);
   const [newCommunityName, setNewCommunityName] = useState("");
@@ -160,6 +161,7 @@ export function useDashboardPage() {
 
   return {
     status,
+    isQuickAccess,
     accountName: session?.user?.name ?? "",
     communities,
     newCommunityName,

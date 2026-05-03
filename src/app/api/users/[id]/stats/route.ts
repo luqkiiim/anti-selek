@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { buildProfileCommunityRankWindow } from "@/lib/profileCommunityRank";
 import { buildPlayerProfileDerivedData } from "@/lib/profileStats";
+import { canQuickAccessCommunity, isQuickAccessSession } from "@/lib/quickAccess";
 import { CommunityPlayerStatus, MatchStatus } from "@/types/enums";
 
 export const dynamic = "force-dynamic";
@@ -57,6 +58,10 @@ export async function GET(
   }> = [];
 
   if (communityId) {
+    if (!canQuickAccessCommunity(session, communityId)) {
+      return NextResponse.json({ error: "Not authorized for this community" }, { status: 403 });
+    }
+
     const [requesterMembership, targetMembership] = await Promise.all([
       prisma.communityMember.findUnique({
         where: {
@@ -96,7 +101,8 @@ export async function GET(
     }
 
     viewerCanManageCommunity =
-      requesterMembership.role === "ADMIN" || !!session.user.isAdmin;
+      !isQuickAccessSession(session) &&
+      (requesterMembership.role === "ADMIN" || !!session.user.isAdmin);
     effectiveElo = targetMembership.elo;
 
     leaderboardMembers = await prisma.communityMember.findMany({

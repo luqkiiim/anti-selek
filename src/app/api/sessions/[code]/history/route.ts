@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { canQuickAccessCommunity, isQuickAccessSession } from "@/lib/quickAccess";
 import { MatchStatus } from "@/types/enums";
 
 export const dynamic = "force-dynamic";
@@ -69,6 +70,9 @@ export async function GET(
   if (!sessionData) {
     return NextResponse.json({ error: "Session not found" }, { status: 404 });
   }
+  if (!canQuickAccessCommunity(session, sessionData.communityId)) {
+    return NextResponse.json({ error: "Not authorized for this session" }, { status: 403 });
+  }
 
   let communityRole: string | null = null;
   if (sessionData.communityId) {
@@ -85,7 +89,10 @@ export async function GET(
   }
 
   const isSessionPlayer = sessionData.players.some((player) => player.userId === session.user.id);
-  const canView = session.user.isAdmin || !!communityRole || isSessionPlayer;
+  const canView =
+    (!isQuickAccessSession(session) && session.user.isAdmin) ||
+    !!communityRole ||
+    isSessionPlayer;
   if (!canView) {
     return NextResponse.json({ error: "Not authorized for this session" }, { status: 403 });
   }

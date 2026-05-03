@@ -5,6 +5,7 @@ import {
   approveCommunityClaimRequest,
   CommunityClaimError,
 } from "@/lib/communityClaims";
+import { getQuickAccessDeniedMessage, isQuickAccessSession } from "@/lib/quickAccess";
 import { ClaimRequestStatus } from "@/types/enums";
 
 export const dynamic = "force-dynamic";
@@ -17,6 +18,12 @@ export async function PATCH(
     const session = await auth();
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+    }
+    if (isQuickAccessSession(session)) {
+      return NextResponse.json(
+        { error: getQuickAccessDeniedMessage() },
+        { status: 403 }
+      );
     }
 
     const { id: communityId, requestId } = await params;

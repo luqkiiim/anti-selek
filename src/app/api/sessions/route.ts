@@ -4,6 +4,11 @@ import { parseCreateSessionRequest } from "./createSessionRequest";
 import { createSessionForUser } from "./createSessionService";
 import { listSessionsForCommunity } from "./listSessionsService";
 import { SessionRouteError } from "./sessionRouteShared";
+import {
+  canQuickAccessCommunity,
+  getQuickAccessDeniedMessage,
+  isQuickAccessSession,
+} from "@/lib/quickAccess";
 
 export const dynamic = "force-dynamic";
 
@@ -12,6 +17,12 @@ export async function POST(request: Request) {
     const session = await auth();
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+    }
+    if (isQuickAccessSession(session)) {
+      return NextResponse.json(
+        { error: getQuickAccessDeniedMessage() },
+        { status: 403 }
+      );
     }
 
     const body = await request.json().catch(() => null);
@@ -45,11 +56,14 @@ export async function GET(request: Request) {
     if (!communityId) {
       return NextResponse.json([]);
     }
+    if (!canQuickAccessCommunity(session, communityId)) {
+      return NextResponse.json({ error: "Not authorized" }, { status: 403 });
+    }
 
     const sessions = await listSessionsForCommunity({
       communityId,
       viewerId: session.user.id,
-      viewerIsAdmin: !!session.user.isAdmin,
+      viewerIsAdmin: !isQuickAccessSession(session) && !!session.user.isAdmin,
     });
 
     return NextResponse.json(sessions);

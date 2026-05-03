@@ -10,6 +10,7 @@ import { useDashboardPage } from "./useDashboardPage";
 export default function Home() {
   const {
     status,
+    isQuickAccess,
     accountName,
     communities,
     newCommunityName,
@@ -87,22 +88,24 @@ export default function Home() {
                 jump straight back into the sessions you already belong to.
               </p>
             </div>
-            <div className="flex flex-wrap justify-center gap-3">
-              <button
-                type="button"
-                onClick={openJoinCommunityModal}
-                className="app-button-secondary"
-              >
-                Join Community
-              </button>
-              <button
-                type="button"
-                onClick={openCreateCommunityModal}
-                className="app-button-primary"
-              >
-                Create Community
-              </button>
-            </div>
+            {!isQuickAccess ? (
+              <div className="flex flex-wrap justify-center gap-3">
+                <button
+                  type="button"
+                  onClick={openJoinCommunityModal}
+                  className="app-button-secondary"
+                >
+                  Join Community
+                </button>
+                <button
+                  type="button"
+                  onClick={openCreateCommunityModal}
+                  className="app-button-primary"
+                >
+                  Create Community
+                </button>
+              </div>
+            ) : null}
           </div>
         </section>
 

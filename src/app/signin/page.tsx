@@ -2,16 +2,22 @@
 
 import Link from "next/link";
 import { Suspense, useState } from "react";
-import { signIn } from "next-auth/react";
+import { getSession, signIn } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 
 import { FlashMessage } from "@/components/ui/chrome";
 
+type AccessMode = "account" | "quick";
+
 function SigninForm() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [communityName, setCommunityName] = useState("");
+  const [playerName, setPlayerName] = useState("");
+  const [accessMode, setAccessMode] = useState<AccessMode>("account");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [quickLoading, setQuickLoading] = useState(false);
   const router = useRouter();
   const searchParams = useSearchParams();
   const registered = searchParams.get("registered");
@@ -39,6 +45,35 @@ function SigninForm() {
       setError("Something went wrong");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleQuickAccessSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+    setQuickLoading(true);
+
+    try {
+      const result = await signIn("credentials", {
+        quickAccess: "true",
+        communityName,
+        playerName,
+        redirect: false,
+      });
+
+      if (result?.error) {
+        setError("No matching community profile found");
+        return;
+      }
+
+      const nextSession = await getSession();
+      const quickCommunityId = nextSession?.user?.quickAccessCommunityId;
+      router.push(quickCommunityId ? `/community/${quickCommunityId}` : "/");
+      router.refresh();
+    } catch {
+      setError("Something went wrong");
+    } finally {
+      setQuickLoading(false);
     }
   };
 
@@ -75,40 +110,107 @@ function SigninForm() {
           <section className="app-panel px-6 py-8 sm:px-8">
             <p className="app-eyebrow">Account access</p>
             <h2 className="mt-3 text-2xl font-semibold text-gray-900">Welcome back</h2>
-            <p className="mt-2 text-sm text-gray-600">Continue with the email and password tied to your player account.</p>
+            <p className="mt-2 text-sm text-gray-600">
+              Continue with your account or enter a community profile your host already added.
+            </p>
+
+            <div className="mt-6 grid grid-cols-2 gap-2 rounded-2xl border border-gray-200 bg-gray-50 p-1">
+              <button
+                type="button"
+                onClick={() => {
+                  setAccessMode("account");
+                  setError("");
+                }}
+                className={`rounded-xl px-3 py-2 text-sm font-semibold transition ${
+                  accessMode === "account"
+                    ? "bg-white text-gray-950 shadow-sm"
+                    : "text-gray-600 hover:bg-white/70"
+                }`}
+              >
+                Log in
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setAccessMode("quick");
+                  setError("");
+                }}
+                className={`rounded-xl px-3 py-2 text-sm font-semibold transition ${
+                  accessMode === "quick"
+                    ? "bg-white text-gray-950 shadow-sm"
+                    : "text-gray-600 hover:bg-white/70"
+                }`}
+              >
+                Quick access
+              </button>
+            </div>
 
             <div className="mt-6 space-y-4">
               {registered ? <FlashMessage tone="success">Account created. Please sign in.</FlashMessage> : null}
               {error ? <FlashMessage tone="error">{error}</FlashMessage> : null}
             </div>
 
-            <form onSubmit={handleSubmit} className="mt-6 space-y-4">
-              <label className="block space-y-2 text-sm font-medium text-gray-900">
-                <span>Email</span>
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="field"
-                  required
-                />
-              </label>
+            {accessMode === "account" ? (
+              <form onSubmit={handleSubmit} className="mt-6 space-y-4">
+                <label className="block space-y-2 text-sm font-medium text-gray-900">
+                  <span>Email</span>
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="field"
+                    required
+                  />
+                </label>
 
-              <label className="block space-y-2 text-sm font-medium text-gray-900">
-                <span>Password</span>
-                <input
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="field"
-                  required
-                />
-              </label>
+                <label className="block space-y-2 text-sm font-medium text-gray-900">
+                  <span>Password</span>
+                  <input
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="field"
+                    required
+                  />
+                </label>
 
-              <button type="submit" disabled={loading} className="app-button-primary w-full">
-                {loading ? "Signing in..." : "Sign in"}
-              </button>
-            </form>
+                <button type="submit" disabled={loading} className="app-button-primary w-full">
+                  {loading ? "Signing in..." : "Sign in"}
+                </button>
+              </form>
+            ) : (
+              <form onSubmit={handleQuickAccessSubmit} className="mt-6 space-y-4">
+                <label className="block space-y-2 text-sm font-medium text-gray-900">
+                  <span>Community name</span>
+                  <input
+                    type="text"
+                    value={communityName}
+                    onChange={(e) => setCommunityName(e.target.value)}
+                    className="field"
+                    required
+                  />
+                </label>
+
+                <label className="block space-y-2 text-sm font-medium text-gray-900">
+                  <span>Your player name</span>
+                  <input
+                    type="text"
+                    value={playerName}
+                    onChange={(e) => setPlayerName(e.target.value)}
+                    className="field"
+                    required
+                  />
+                </label>
+
+                <button
+                  type="submit"
+                  disabled={quickLoading || !communityName.trim() || !playerName.trim()}
+                  className="app-button-primary w-full"
+                >
+                  {quickLoading ? "Entering..." : "Enter community"}
+                </button>
+              </form>
+            )}
 
             <p className="mt-6 text-sm text-gray-600">
               Don&apos;t have an account?{" "}

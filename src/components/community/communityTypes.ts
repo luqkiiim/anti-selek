@@ -11,7 +11,7 @@ import {
 export interface CommunityPageUser {
   id: string;
   name: string;
-  email: string;
+  email: string | null;
   isAdmin?: boolean;
   elo: number;
   gender: PlayerGender;

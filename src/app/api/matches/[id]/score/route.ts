@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { finalizeMatchResult } from "@/lib/matchCompletion";
 import { shouldRequireOpponentApproval } from "@/lib/matchApprovalRules";
 import { prisma } from "@/lib/prisma";
+import { canQuickAccessCommunity, isQuickAccessSession } from "@/lib/quickAccess";
 import { MATCH_SCORE_ERROR_MESSAGE, isValidMatchScore } from "@/lib/matchRules";
 import { MatchStatus } from "@/types/enums";
 import { reconcileSessionQueueAfterCourtChange } from "../../_lib/reconcileSessionQueue";
@@ -66,6 +67,9 @@ export async function POST(
     if (!match) {
       return NextResponse.json({ error: "Match not found" }, { status: 404 });
     }
+    if (!canQuickAccessCommunity(session, match.session.communityId)) {
+      return NextResponse.json({ error: "Not authorized" }, { status: 403 });
+    }
 
     let isCommunityAdmin = false;
     if (match.session.communityId) {
@@ -81,7 +85,8 @@ export async function POST(
       isCommunityAdmin = membership?.role === "ADMIN";
     }
 
-    const isAdmin = !!session.user.isAdmin || isCommunityAdmin;
+    const isAdmin =
+      !isQuickAccessSession(session) && (!!session.user.isAdmin || isCommunityAdmin);
     const isParticipant = [
       match.team1User1Id,
       match.team1User2Id,

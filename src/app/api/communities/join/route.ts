@@ -3,6 +3,11 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
 import { isGlobalAdminEmail } from "@/lib/globalAdmin";
+import {
+  getQuickAccessDeniedMessage,
+  isQuickAccessSession,
+  normalizeNameLookupKey,
+} from "@/lib/quickAccess";
 
 export const dynamic = "force-dynamic";
 
@@ -11,6 +16,12 @@ export async function POST(request: Request) {
     const session = await auth();
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+    }
+    if (isQuickAccessSession(session)) {
+      return NextResponse.json(
+        { error: getQuickAccessDeniedMessage() },
+        { status: 403 }
+      );
     }
 
     const body = await request.json().catch(() => null);
@@ -23,15 +34,29 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Community name is required" }, { status: 400 });
     }
 
-    const community = await prisma.community.findUnique({
-      where: { name: name.trim() },
-      select: {
-        id: true,
-        name: true,
-        isPasswordProtected: true,
-        passwordHash: true,
-      },
-    });
+    const normalizedLookupName = normalizeNameLookupKey(name);
+    if (!normalizedLookupName) {
+      return NextResponse.json({ error: "Community name is required" }, { status: 400 });
+    }
+
+    const matchingCommunities = (
+      await prisma.community.findMany({
+        select: {
+          id: true,
+          name: true,
+          isPasswordProtected: true,
+          passwordHash: true,
+        },
+      })
+    ).filter(
+      (community) => normalizeNameLookupKey(community.name) === normalizedLookupName
+    );
+
+    if (matchingCommunities.length > 1) {
+      return NextResponse.json({ error: "Community name is ambiguous" }, { status: 409 });
+    }
+
+    const community = matchingCommunities[0] ?? null;
 
     if (!community) {
       return NextResponse.json({ error: "Community not found" }, { status: 404 });

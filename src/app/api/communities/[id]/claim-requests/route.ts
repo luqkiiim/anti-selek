@@ -6,6 +6,7 @@ import {
   doClaimNamesMatch,
   getClaimRequesterEligibility,
 } from "@/lib/communityClaimRules";
+import { isQuickAccessSession } from "@/lib/quickAccess";
 import { ClaimRequestStatus } from "@/types/enums";
 
 export const dynamic = "force-dynamic";
@@ -59,7 +60,9 @@ export async function GET(
       select: { role: true },
     });
 
-    const isCommunityAdmin = membership?.role === "ADMIN" || !!session.user.isAdmin;
+    const isQuickAccess = isQuickAccessSession(session);
+    const isCommunityAdmin =
+      !isQuickAccess && (membership?.role === "ADMIN" || !!session.user.isAdmin);
     if (!membership && !session.user.isAdmin) {
       return NextResponse.json({ error: "Not authorized" }, { status: 403 });
     }
@@ -112,6 +115,12 @@ export async function POST(
     const session = await auth();
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+    }
+    if (isQuickAccessSession(session)) {
+      return NextResponse.json(
+        { error: "Sign up or log in with a full account to request a profile claim" },
+        { status: 403 }
+      );
     }
 
     const { id: communityId } = await params;

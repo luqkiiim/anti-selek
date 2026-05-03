@@ -8,6 +8,11 @@ import {
   resolveMixedSideState,
 } from "@/lib/mixedSide";
 import { CommunityPlayerStatus, PlayerGender } from "@/types/enums";
+import {
+  getQuickAccessDeniedMessage,
+  isQuickAccessSession,
+  normalizeNameLookupKey,
+} from "@/lib/quickAccess";
 
 function isValidCommunityPlayerStatus(
   value: unknown
@@ -40,6 +45,43 @@ async function requireCommunityAdmin(
   return membership?.role === "ADMIN";
 }
 
+async function findDuplicateUnclaimedMemberName({
+  communityId,
+  name,
+  excludeUserId,
+}: {
+  communityId: string;
+  name: string;
+  excludeUserId?: string;
+}) {
+  const lookupName = normalizeNameLookupKey(name);
+  if (!lookupName) return null;
+
+  const members = await prisma.communityMember.findMany({
+    where: { communityId },
+    include: {
+      user: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          isClaimed: true,
+        },
+      },
+    },
+  });
+
+  return (
+    members.find(
+      (member) =>
+        member.user.id !== excludeUserId &&
+        !member.user.isClaimed &&
+        member.user.email === null &&
+        normalizeNameLookupKey(member.user.name) === lookupName
+    ) ?? null
+  );
+}
+
 export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ id: string; userId: string }> }
@@ -48,6 +90,12 @@ export async function PATCH(
     const session = await auth();
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+    }
+    if (isQuickAccessSession(session)) {
+      return NextResponse.json(
+        { error: getQuickAccessDeniedMessage() },
+        { status: 403 }
+      );
     }
 
     const { id: communityId, userId } = await params;
@@ -170,6 +218,9 @@ export async function PATCH(
     const currentUser = await prisma.user.findUnique({
       where: { id: userId },
       select: {
+        name: true,
+        email: true,
+        isClaimed: true,
         gender: true,
         partnerPreference: true,
         mixedSideOverride: true,
@@ -177,6 +228,34 @@ export async function PATCH(
     });
     if (!currentUser) {
       return NextResponse.json({ error: "Player not found" }, { status: 404 });
+    }
+
+    const nextName = typeof name === "string" ? name.trim() : currentUser.name;
+    if (!normalizeNameLookupKey(nextName)) {
+      return NextResponse.json(
+        { error: "Player name must include letters or numbers" },
+        { status: 400 }
+      );
+    }
+
+    const nextEmail =
+      email !== undefined
+        ? typeof normalizedEmail === "string" && normalizedEmail.length > 0
+          ? normalizedEmail
+          : null
+        : currentUser.email;
+    if (!currentUser.isClaimed && nextEmail === null) {
+      const duplicate = await findDuplicateUnclaimedMemberName({
+        communityId,
+        name: nextName,
+        excludeUserId: userId,
+      });
+      if (duplicate) {
+        return NextResponse.json(
+          { error: "An unclaimed player with this name already exists in this community" },
+          { status: 409 }
+        );
+      }
     }
 
     const nextGender =
@@ -277,6 +356,12 @@ export async function DELETE(
     const session = await auth();
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+    }
+    if (isQuickAccessSession(session)) {
+      return NextResponse.json(
+        { error: getQuickAccessDeniedMessage() },
+        { status: 403 }
+      );
     }
 
     const { id: communityId, userId } = await params;

@@ -34,7 +34,11 @@ export async function GET() {
   return NextResponse.json({
     user: {
       ...user,
-      isAdmin: !!session.user.isAdmin || isGlobalAdminEmail(user.email),
+      isAdmin:
+        !session.user.isQuickAccess &&
+        (!!session.user.isAdmin || isGlobalAdminEmail(user.email)),
+      isQuickAccess: !!session.user.isQuickAccess,
+      quickAccessCommunityId: session.user.quickAccessCommunityId ?? null,
     },
   });
 }

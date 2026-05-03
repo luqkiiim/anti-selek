@@ -12,6 +12,11 @@ import {
   CommunityPlayerStatus,
   PlayerGender,
 } from "@/types/enums";
+import {
+  getQuickAccessDeniedMessage,
+  isQuickAccessSession,
+  normalizeNameLookupKey,
+} from "@/lib/quickAccess";
 
 function isValidCommunityPlayerStatus(
   value: unknown
@@ -19,6 +24,43 @@ function isValidCommunityPlayerStatus(
   return (
     value === CommunityPlayerStatus.CORE ||
     value === CommunityPlayerStatus.OCCASIONAL
+  );
+}
+
+async function findDuplicateUnclaimedMemberName({
+  communityId,
+  name,
+  excludeUserId,
+}: {
+  communityId: string;
+  name: string;
+  excludeUserId?: string;
+}) {
+  const lookupName = normalizeNameLookupKey(name);
+  if (!lookupName) return null;
+
+  const members = await prisma.communityMember.findMany({
+    where: { communityId },
+    include: {
+      user: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          isClaimed: true,
+        },
+      },
+    },
+  });
+
+  return (
+    members.find(
+      (member) =>
+        member.user.id !== excludeUserId &&
+        !member.user.isClaimed &&
+        member.user.email === null &&
+        normalizeNameLookupKey(member.user.name) === lookupName
+    ) ?? null
   );
 }
 
@@ -151,6 +193,12 @@ export async function POST(
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
     }
+    if (isQuickAccessSession(session)) {
+      return NextResponse.json(
+        { error: getQuickAccessDeniedMessage() },
+        { status: 403 }
+      );
+    }
 
     const { id } = await params;
 
@@ -226,6 +274,22 @@ export async function POST(
       typeof email === "string" && email.trim().length > 0 ? email.trim().toLowerCase() : null;
     const normalizedPassword =
       typeof password === "string" && password.length > 0 ? password : null;
+
+    if (!normalizeNameLookupKey(normalizedName)) {
+      return NextResponse.json({ error: "Player name must include letters or numbers" }, { status: 400 });
+    }
+    if (!normalizedEmail) {
+      const duplicate = await findDuplicateUnclaimedMemberName({
+        communityId: id,
+        name: normalizedName,
+      });
+      if (duplicate) {
+        return NextResponse.json(
+          { error: "An unclaimed player with this name already exists in this community" },
+          { status: 409 }
+        );
+      }
+    }
 
     let user: {
       id: string;

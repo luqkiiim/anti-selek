@@ -5,6 +5,12 @@ import { prisma } from "@/lib/prisma";
 import { listSessionsForCommunity } from "@/app/api/sessions/listSessionsService";
 import { logAuditEvent } from "@/lib/serverAudit";
 import {
+  canQuickAccessCommunity,
+  getQuickAccessDeniedMessage,
+  isQuickAccessSession,
+  normalizeNameLookupKey,
+} from "@/lib/quickAccess";
+import {
   ClaimRequestStatus,
   CommunityPlayerStatus,
   PartnerPreference,
@@ -50,8 +56,13 @@ export async function GET(
     }
 
     const { id } = await params;
+    if (!canQuickAccessCommunity(session, id)) {
+      return NextResponse.json({ error: "Not authorized" }, { status: 403 });
+    }
+
     const viewerId = session.user.id;
-    const viewerIsAdmin = !!session.user.isAdmin;
+    const viewerIsQuickAccess = isQuickAccessSession(session);
+    const viewerIsAdmin = !viewerIsQuickAccess && !!session.user.isAdmin;
 
     const [viewer, membership, community] = await Promise.all([
       prisma.user.findUnique({
@@ -227,7 +238,11 @@ export async function GET(
       community: {
         id: community.id,
         name: community.name,
-        role: viewerIsAdmin ? "ADMIN" : membership?.role ?? "MEMBER",
+        role: viewerIsQuickAccess
+          ? "MEMBER"
+          : viewerIsAdmin
+            ? "ADMIN"
+            : membership?.role ?? "MEMBER",
         isPasswordProtected: community.isPasswordProtected,
         membersCount: community._count.members,
         sessionsCount: community._count.sessions,
@@ -282,6 +297,12 @@ export async function PATCH(
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
     }
+    if (isQuickAccessSession(session)) {
+      return NextResponse.json(
+        { error: getQuickAccessDeniedMessage() },
+        { status: 403 }
+      );
+    }
 
     const { id } = await params;
 
@@ -318,7 +339,31 @@ export async function PATCH(
           { status: 400 }
         );
       }
-      updates.name = name.trim();
+      const nextName = name.trim();
+      const normalizedLookupName = normalizeNameLookupKey(nextName);
+      if (!normalizedLookupName) {
+        return NextResponse.json(
+          { error: "Community name must include letters or numbers" },
+          { status: 400 }
+        );
+      }
+
+      const existingCommunities = await prisma.community.findMany({
+        where: { NOT: { id } },
+        select: { name: true },
+      });
+      const normalizedNameExists = existingCommunities.some(
+        (community) =>
+          normalizeNameLookupKey(community.name) === normalizedLookupName
+      );
+      if (normalizedNameExists) {
+        return NextResponse.json(
+          { error: "Community name already exists" },
+          { status: 409 }
+        );
+      }
+
+      updates.name = nextName;
     }
 
     if (password !== undefined) {
@@ -382,6 +427,12 @@ export async function DELETE(
     const session = await auth();
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+    }
+    if (isQuickAccessSession(session)) {
+      return NextResponse.json(
+        { error: getQuickAccessDeniedMessage() },
+        { status: 403 }
+      );
     }
 
     const { id } = await params;

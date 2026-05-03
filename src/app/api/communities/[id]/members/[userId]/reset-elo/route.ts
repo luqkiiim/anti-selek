@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { getQuickAccessDeniedMessage, isQuickAccessSession } from "@/lib/quickAccess";
 
 export const dynamic = "force-dynamic";
 
@@ -12,6 +13,12 @@ export async function POST(
     const session = await auth();
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+    }
+    if (isQuickAccessSession(session)) {
+      return NextResponse.json(
+        { error: getQuickAccessDeniedMessage() },
+        { status: 403 }
+      );
     }
 
     const { id: communityId, userId } = await params;
