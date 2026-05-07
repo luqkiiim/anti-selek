@@ -4,6 +4,7 @@ import Link from "next/link";
 import { type ReactNode, useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
+import { ArrowLeft } from "lucide-react";
 import type {
   PlayerProfileConnectionSummary,
   PlayerProfileMatchHistoryEntry,
@@ -15,11 +16,8 @@ import type {
 import {
   EmptyState,
   FlashMessage,
-  HeroCard,
   SectionCard,
-  StatCard,
 } from "@/components/ui/chrome";
-import { CommunityBottomTabs } from "@/components/community/CommunityBottomTabs";
 
 interface UserProfileResponse {
   user: {
@@ -55,6 +53,14 @@ interface UserProfileResponse {
     best: PlayerProfileSessionSummary | null;
   };
   matchHistory: PlayerProfileMatchHistoryEntry[];
+}
+
+type RankContext = NonNullable<
+  NonNullable<UserProfileResponse["context"]>["rankContext"]
+>;
+
+function cx(...values: Array<string | false | null | undefined>) {
+  return values.filter(Boolean).join(" ");
 }
 
 function formatSignedNumber(value: number) {
@@ -162,31 +168,59 @@ function getRankMovementChipClass(rankDelta: number | null) {
   return rankDelta > 0 ? "app-chip app-chip-success" : "app-chip app-chip-danger";
 }
 
-function InsightCard({
-  title,
-  eyebrow,
+function getResultLabel(result: PlayerProfileMatchHistoryEntry["result"]) {
+  return result === "WIN" ? "Win" : "Loss";
+}
+
+function getResultChipClass(result: PlayerProfileMatchHistoryEntry["result"]) {
+  return result === "WIN" ? "app-chip app-chip-success" : "app-chip app-chip-danger";
+}
+
+function ProfileLink({
+  href,
   children,
 }: {
-  title: string;
-  eyebrow?: string;
+  href: string;
   children: ReactNode;
 }) {
   return (
-    <article className="app-subcard p-4 sm:p-5">
-      <div className="space-y-1">
-        {eyebrow ? (
-          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-gray-500">
-            {eyebrow}
-          </p>
-        ) : null}
-        <h3 className="text-lg font-semibold text-gray-900">{title}</h3>
-      </div>
-      <div className="mt-4 space-y-3">{children}</div>
-    </article>
+    <Link
+      href={href}
+      className="font-semibold text-[var(--accent-strong)] underline-offset-2 hover:text-[var(--accent)] hover:underline"
+    >
+      {children}
+    </Link>
   );
 }
 
-function InsightRow({
+function ProfileMetric({
+  label,
+  value,
+  detail,
+  accent,
+}: {
+  label: string;
+  value: ReactNode;
+  detail?: ReactNode;
+  accent?: boolean;
+}) {
+  return (
+    <div
+      className={cx(
+        "rounded-xl border border-[var(--line)] bg-[var(--surface)] px-3 py-3 sm:px-4",
+        accent && "border-[rgba(15,118,110,0.22)] bg-[var(--accent-faint)]"
+      )}
+    >
+      <p className="text-xs font-semibold text-gray-500">{label}</p>
+      <p className="mt-2 text-2xl font-semibold leading-none text-gray-900 sm:text-3xl">
+        {value}
+      </p>
+      {detail ? <p className="mt-1.5 text-xs text-gray-600">{detail}</p> : null}
+    </div>
+  );
+}
+
+function MiniFact({
   label,
   value,
   detail,
@@ -196,44 +230,163 @@ function InsightRow({
   detail?: ReactNode;
 }) {
   return (
-    <div className="rounded-2xl bg-gray-50 px-3 py-3">
-      <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-gray-500">
-        {label}
-      </p>
+    <div className="rounded-xl border border-[var(--line)] bg-[var(--surface)] px-3 py-3">
+      <p className="text-xs font-semibold text-gray-500">{label}</p>
       <div className="mt-1 text-sm font-semibold text-gray-900">{value}</div>
       {detail ? <p className="mt-1 text-xs text-gray-600">{detail}</p> : null}
     </div>
   );
 }
 
-function ConnectionValue({
+function ProfileHeader({
+  data,
+  rankContext,
+  recentFormSummary,
+  recentStreakSummary,
+  onBack,
+}: {
+  data: UserProfileResponse;
+  rankContext: RankContext | null;
+  recentFormSummary: string;
+  recentStreakSummary: string;
+  onBack: () => void;
+}) {
+  const ratingLabel = data.context?.communityId
+    ? "Community rating"
+    : "Overall rating";
+  const recentFormChipClass =
+    data.recentForm.matches === 0
+      ? "app-chip app-chip-neutral"
+      : data.recentForm.wins >= data.recentForm.losses
+        ? "app-chip app-chip-success"
+        : "app-chip app-chip-danger";
+
+  return (
+    <section className="app-panel overflow-hidden">
+      <div className="border-b border-[var(--line)] px-4 py-4 sm:px-6 sm:py-5">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <button
+            type="button"
+            onClick={onBack}
+            className="app-button-secondary inline-flex min-h-11 items-center gap-2 px-3 py-2"
+          >
+            <ArrowLeft aria-hidden="true" size={18} strokeWidth={2.2} />
+            Back
+          </button>
+          <span className="app-chip app-chip-warning">
+            {ratingLabel} {data.user.elo}
+          </span>
+        </div>
+
+        <div className="mt-5 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+          <div className="min-w-0">
+            <p className="app-eyebrow">Player profile</p>
+            <h1 className="mt-2 truncate text-3xl font-semibold leading-tight text-gray-900 sm:text-4xl">
+              {data.user.name}
+            </h1>
+            <p className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-sm text-gray-600">
+              <span>Joined {formatShortDate(data.user.createdAt)}</span>
+              <span>Last played {formatShortDate(data.stats.lastPlayedAt)}</span>
+            </p>
+          </div>
+
+          <div className="flex flex-wrap gap-2 sm:justify-end">
+            {rankContext ? (
+              <span className="app-chip app-chip-neutral">
+                {rankContext.currentRank
+                  ? `Rank #${rankContext.currentRank} of ${rankContext.leaderboardSize}`
+                  : "Unranked"}
+              </span>
+            ) : null}
+            <span className={recentFormChipClass}>{recentFormSummary}</span>
+            <span className="app-chip app-chip-neutral">
+              Streak {recentStreakSummary}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3 p-4 sm:grid-cols-4 sm:p-5">
+        <ProfileMetric
+          label="Matches"
+          value={data.stats.totalMatches}
+          detail={`Last played ${formatShortDate(data.stats.lastPlayedAt)}`}
+          accent
+        />
+        <ProfileMetric
+          label="Win rate"
+          value={`${data.stats.winRate}%`}
+          detail={`${data.stats.wins} wins / ${data.stats.losses} losses`}
+        />
+        <ProfileMetric
+          label="Point diff"
+          value={formatSignedNumber(data.stats.pointDifferential)}
+          detail={`${data.stats.pointsScored} scored / ${data.stats.pointsConceded} conceded`}
+        />
+        <ProfileMetric
+          label="Sessions"
+          value={data.stats.sessionsPlayed}
+          detail={`${data.stats.averageMatchesPerSession} matches per session`}
+        />
+      </div>
+    </section>
+  );
+}
+
+function ConnectionFeature({
+  label,
   summary,
   communityId,
+  tone = "neutral",
 }: {
+  label: string;
   summary: PlayerProfileConnectionSummary | null;
   communityId: string;
+  tone?: "neutral" | "partner" | "rival";
 }) {
+  const toneClass =
+    tone === "partner"
+      ? "border-[rgba(15,118,110,0.18)] bg-[var(--accent-faint)]"
+      : tone === "rival"
+        ? "border-[rgba(140,100,22,0.2)] bg-[var(--warning-soft)]"
+        : "border-[var(--line)] bg-[var(--surface)]";
+
   if (!summary) {
-    return <span className="text-gray-500">Not enough match history yet</span>;
+    return (
+      <div className={cx("min-h-28 rounded-xl border px-3 py-3", toneClass)}>
+        <p className="text-sm font-semibold text-gray-700">{label}</p>
+        <p className="mt-2 text-sm text-gray-500">
+          Not enough match history yet
+        </p>
+      </div>
+    );
   }
 
   return (
-    <div className="space-y-1">
-      <Link
-        href={getPlayerProfileHref(summary.user.id, communityId)}
-        className="font-semibold text-blue-700 hover:text-blue-800 hover:underline"
-      >
-        {summary.user.name}
-      </Link>
-      <p className="text-xs text-gray-600">
-        {summary.wins}-{summary.losses} record, {summary.matches} matches,{" "}
-        {formatSignedNumber(summary.pointDifferential)} diff
-      </p>
+    <div className={cx("min-h-28 rounded-xl border px-3 py-3", toneClass)}>
+      <div className="flex items-start justify-between gap-3">
+        <p className="text-sm font-semibold text-gray-700">{label}</p>
+        <span className="app-chip app-chip-neutral">{summary.matches} matches</span>
+      </div>
+      <div className="mt-2 text-lg leading-tight">
+        <ProfileLink href={getPlayerProfileHref(summary.user.id, communityId)}>
+          {summary.user.name}
+        </ProfileLink>
+      </div>
+      <div className="mt-3 flex flex-wrap gap-2">
+        <span className="app-chip app-chip-accent">{summary.winRate}% win</span>
+        <span className="app-chip app-chip-neutral">
+          {summary.wins}-{summary.losses}
+        </span>
+        <span className={getSignedChipClass(summary.pointDifferential)}>
+          {formatSignedNumber(summary.pointDifferential)} diff
+        </span>
+      </div>
     </div>
   );
 }
 
-function SessionValue({
+function SessionInlineValue({
   summary,
 }: {
   summary: PlayerProfileSessionSummary | null;
@@ -244,12 +397,9 @@ function SessionValue({
 
   return (
     <div className="space-y-1">
-      <Link
-        href={getSessionHistoryHref(summary.code)}
-        className="font-semibold text-blue-700 hover:text-blue-800 hover:underline"
-      >
+      <ProfileLink href={getSessionHistoryHref(summary.code)}>
         {summary.name}
-      </Link>
+      </ProfileLink>
       <p className="text-xs text-gray-600">
         {summary.wins}-{summary.losses} record,{" "}
         {formatSignedNumber(summary.pointDifferential)} diff
@@ -259,29 +409,26 @@ function SessionValue({
   );
 }
 
-function RecentSessionCard({
+function RecentSessionTile({
   summary,
 }: {
   summary: PlayerProfileSessionSummary;
 }) {
   return (
-    <article className="app-subcard min-w-[15rem] snap-start p-4 sm:min-w-[16rem]">
-      <div className="flex items-start justify-between gap-3">
-        <div className="space-y-1">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-gray-500">
-            {formatShortDate(summary.date)}
-          </p>
-          <Link
-            href={getSessionHistoryHref(summary.code)}
-            className="text-base font-semibold text-gray-900 hover:text-blue-700 hover:underline"
-          >
+    <article className="snap-start rounded-xl border border-[var(--line)] bg-[var(--surface)] px-3 py-3 sm:min-w-[15rem]">
+      <div className="min-w-0">
+        <p className="text-xs font-semibold text-gray-500">
+          {formatShortDate(summary.date)}
+        </p>
+        <div className="mt-1 truncate text-sm">
+          <ProfileLink href={getSessionHistoryHref(summary.code)}>
             {summary.name}
-          </Link>
+          </ProfileLink>
         </div>
-        <span className="app-chip app-chip-neutral">{summary.matches} matches</span>
       </div>
 
-      <div className="mt-4 flex flex-wrap gap-2">
+      <div className="mt-3 flex flex-wrap gap-2">
+        <span className="app-chip app-chip-neutral">{summary.matches} matches</span>
         <span className="app-chip app-chip-accent">
           {summary.wins}-{summary.losses}
         </span>
@@ -291,6 +438,151 @@ function RecentSessionCard({
         <span className={getSignedChipClass(summary.ratingChange)}>
           {formatSignedNumber(summary.ratingChange)} rating
         </span>
+      </div>
+    </article>
+  );
+}
+
+function RelationshipSection({
+  data,
+  communityId,
+}: {
+  data: UserProfileResponse;
+  communityId: string;
+}) {
+  return (
+    <SectionCard
+      eyebrow="Relationships"
+      title="Rivals and partners"
+      description="The people shaping this player's table: who they see most, who gives them trouble, and who clicks as a partner."
+    >
+      <div className="grid gap-3 lg:grid-cols-[1.15fr_0.85fr]">
+        <div className="rounded-xl border border-[rgba(140,100,22,0.18)] bg-[var(--warning-soft)] p-4">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <p className="app-eyebrow">Opponents</p>
+              <h3 className="mt-1 text-xl font-semibold text-gray-900">
+                Rivalries
+              </h3>
+            </div>
+            <span className="app-chip app-chip-warning">Head-to-head</span>
+          </div>
+          <div className="mt-4 grid gap-3">
+            <ConnectionFeature
+              label="Most faced"
+              summary={data.opponents.mostFaced}
+              communityId={communityId}
+              tone="rival"
+            />
+            <ConnectionFeature
+              label="Toughest"
+              summary={data.opponents.toughest}
+              communityId={communityId}
+              tone="rival"
+            />
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-[rgba(15,118,110,0.16)] bg-[var(--accent-faint)] p-4">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <p className="app-eyebrow">Connections</p>
+              <h3 className="mt-1 text-xl font-semibold text-gray-900">
+                Partner chemistry
+              </h3>
+            </div>
+            <span className="app-chip app-chip-accent">Doubles</span>
+          </div>
+          <div className="mt-4 grid gap-3">
+            <ConnectionFeature
+              label="Most played"
+              summary={data.partners.mostPlayed}
+              communityId={communityId}
+              tone="partner"
+            />
+            <ConnectionFeature
+              label="Best partner"
+              summary={data.partners.bestWinRate}
+              communityId={communityId}
+              tone="partner"
+            />
+          </div>
+        </div>
+      </div>
+    </SectionCard>
+  );
+}
+
+function MatchTimelineCard({
+  match,
+  userName,
+  communityId,
+}: {
+  match: PlayerProfileMatchHistoryEntry;
+  userName: string;
+  communityId: string;
+}) {
+  return (
+    <article className="app-subcard p-4 sm:p-5">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="truncate text-base sm:text-lg">
+            <ProfileLink href={getSessionHistoryHref(match.sessionCode)}>
+              {match.sessionName}
+            </ProfileLink>
+          </div>
+          <p className="mt-1 text-xs text-gray-600 sm:text-sm">
+            {formatDateTime(match.date)}
+          </p>
+        </div>
+        <span className={getResultChipClass(match.result)}>
+          {getResultLabel(match.result)}
+        </span>
+      </div>
+
+      <div className="mt-3 grid gap-3 rounded-xl border border-[var(--line)] bg-[var(--surface-muted)] px-3 py-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+        <div className="min-w-0 space-y-1 text-sm text-gray-700">
+          <p className="min-w-0">
+            <span className="text-gray-500">With </span>
+            <span className="font-semibold text-gray-900">{userName}</span>
+            <span> &amp; </span>
+            <ProfileLink href={getPlayerProfileHref(match.partner.id, communityId)}>
+              {match.partner.name}
+            </ProfileLink>
+          </p>
+          <p className="min-w-0">
+            <span className="text-gray-500">vs </span>
+            {match.opponents.map((opponent, index) => (
+              <span key={opponent.id}>
+                <ProfileLink href={getPlayerProfileHref(opponent.id, communityId)}>
+                  {opponent.name}
+                </ProfileLink>
+                {index === match.opponents.length - 1 ? null : " & "}
+              </span>
+            ))}
+          </p>
+        </div>
+
+        <div className="w-fit rounded-full bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm">
+          {match.score}
+        </div>
+      </div>
+
+      <div className="mt-3 flex flex-wrap gap-2">
+        <span className="app-chip app-chip-neutral">
+          Diff {formatSignedNumber(match.pointDifferential)}
+        </span>
+        {typeof match.eloChange === "number" ? (
+          <span
+            className={
+              match.eloChange >= 0
+                ? "app-chip app-chip-success"
+                : "app-chip app-chip-danger"
+            }
+          >
+            {formatSignedNumber(match.eloChange)} rating
+          </span>
+        ) : null}
       </div>
     </article>
   );
@@ -397,257 +689,141 @@ export default function ProfilePage() {
 
   return (
     <main className="app-page">
-      <div className="app-shell space-y-6">
-        <HeroCard
-          eyebrow="Player profile"
-          title={data.user.name}
-          description={
-            <span className="inline-flex flex-wrap items-center gap-2">
-              <span>Joined {formatShortDate(data.user.createdAt)}.</span>
-              <span>Last played {formatShortDate(data.stats.lastPlayedAt)}.</span>
-            </span>
-          }
-          meta={
-            <>
-              <span className="app-chip app-chip-warning">
-                {data.context?.communityId ? "Community Rating" : "Overall Rating"}{" "}
-                {data.user.elo}
-              </span>
-              {rankContext?.currentRank ? (
-                <span className="app-chip app-chip-neutral">
-                  Rank #{rankContext.currentRank} of {rankContext.leaderboardSize}
-                </span>
-              ) : null}
-            </>
-          }
+      <div
+        className="app-shell space-y-5 sm:space-y-6"
+      >
+        <ProfileHeader
+          data={data}
+          rankContext={rankContext}
+          recentFormSummary={recentFormSummary}
+          recentStreakSummary={recentStreakSummary}
           onBack={handleBack}
-          backLabel="Back"
         />
 
-        <section className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
-          <StatCard
-            label="Matches"
-            value={data.stats.totalMatches}
-            detail={`Last played ${formatShortDate(data.stats.lastPlayedAt)}`}
-            accent
-          />
-          <StatCard
-            label="Win rate"
-            value={`${data.stats.winRate}%`}
-            detail={`${data.stats.wins} wins / ${data.stats.losses} losses`}
-          />
-          <StatCard
-            label="Point diff"
-            value={formatSignedNumber(data.stats.pointDifferential)}
-            detail={`${data.stats.pointsScored} scored / ${data.stats.pointsConceded} conceded`}
-          />
-          <StatCard
-            label="Sessions"
-            value={data.stats.sessionsPlayed}
-            detail={`${data.stats.averageMatchesPerSession} matches per session`}
-          />
-        </section>
+        <RelationshipSection data={data} communityId={communityId} />
 
         <SectionCard
-          eyebrow="Momentum"
-          title="Recent sessions"
-          description="Short-term form from the last five completed sessions."
+          eyebrow="Form"
+          title="Momentum and sessions"
+          description="Recent form, rating movement, and the sessions behind the profile."
           action={
             <span className="app-chip app-chip-neutral">
               {data.recentSessions.length} session window
             </span>
           }
         >
-          <div className="space-y-4">
-            {data.recentSessions.length === 0 ? (
-              <EmptyState
-                title="No recent sessions yet"
-                detail="Complete a few matches and the momentum view will start filling in."
-              />
-            ) : (
-              <div className="-mx-1 flex snap-x gap-3 overflow-x-auto px-1 pb-1">
-                {data.recentSessions.map((session) => (
-                  <RecentSessionCard key={session.id} summary={session} />
-                ))}
+          <div className="grid gap-3 lg:grid-cols-[0.95fr_1.05fr]">
+            <div className="app-subcard p-4">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <p className="app-eyebrow">Recent form</p>
+                  <h3 className="mt-1 text-xl font-semibold text-gray-900">
+                    {recentFormSummary}
+                  </h3>
+                </div>
+                <span className={getTrendDirectionChipClass(data.trend.direction)}>
+                  {trendDirectionLabel}
+                </span>
               </div>
-            )}
 
-            <div
-              className={`grid gap-4 ${rankContext ? "lg:grid-cols-2" : ""}`}
-            >
-              <InsightCard
-                title={
-                  data.trend.sessions > 0
-                    ? `${trendDirectionLabel} lately`
-                    : "No trend yet"
-                }
-                eyebrow="Trend"
-              >
-                <InsightRow
-                  label="Direction"
-                  value={
-                    <span
-                      className={getTrendDirectionChipClass(data.trend.direction)}
-                    >
-                      {trendDirectionLabel}
-                    </span>
-                  }
+              <div className="mt-4 grid gap-2 sm:grid-cols-2">
+                <MiniFact
+                  label="Point swing"
+                  value={formatSignedNumber(data.recentForm.pointDifferential)}
+                  detail={`Rating ${formatSignedNumber(data.recentForm.ratingChange)}`}
+                />
+                <MiniFact
+                  label="Current streak"
+                  value={recentStreakSummary}
                   detail={
-                    data.trend.sessions > 0
-                      ? getTrendDirectionDetail(data.trend.direction)
-                      : "Momentum starts once completed sessions are available."
+                    data.recentForm.currentStreak.result
+                      ? `${data.recentForm.currentStreak.count} straight ${
+                          data.recentForm.currentStreak.result.toLowerCase()
+                        }s`
+                      : "Streak starts once results come in"
                   }
                 />
-                <InsightRow
-                  label="Window"
-                  value={
-                    data.trend.sessions > 0
-                      ? `${data.trend.wins}-${data.trend.losses} across ${data.trend.matches} matches`
-                      : "No completed sessions in the window"
-                  }
-                  detail={
-                    data.trend.sessions > 0
-                      ? `${formatSignedNumber(data.trend.ratingChange)} rating, ${formatSignedNumber(data.trend.pointDifferential)} diff over ${data.trend.sessions} sessions`
-                      : "The profile uses completed matches only for this view."
-                  }
-                />
-                <InsightRow
-                  label="Best recent session"
-                  value={<SessionValue summary={data.trend.bestSession} />}
-                />
-              </InsightCard>
+              </div>
+            </div>
 
-              {rankContext ? (
-                <InsightCard
-                  title={
-                    rankContext.currentRank
-                      ? `Rank #${rankContext.currentRank}`
-                      : "Not on ranked board"
-                  }
-                  eyebrow="Community rank"
-                >
-                  <InsightRow
-                    label="Movement"
-                    value={
-                      <span
-                        className={getRankMovementChipClass(rankContext.rankDelta)}
-                      >
-                        {rankContext.currentRank === null
-                          ? "Unranked"
-                          : getRankMovementLabel(rankContext.rankDelta)}
-                      </span>
-                    }
-                    detail={
-                      rankContext.currentRank === null
-                        ? "Only ranked community members appear on the leaderboard."
-                        : rankContext.previousRank
-                          ? `Started this window at #${rankContext.previousRank}.`
-                          : "Previous rank is unavailable for this window."
-                    }
-                  />
-                  <InsightRow
-                    label="Leaderboard"
-                    value={`${rankContext.leaderboardSize} ranked players`}
-                    detail={
-                      data.recentSessions.length > 0
-                        ? "Movement is rolled back across the same recent-session window."
-                        : "No recent sessions yet, so movement is unchanged."
-                    }
-                  />
-                </InsightCard>
-              ) : null}
+            <div className="app-subcard p-4">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <p className="app-eyebrow">Recent sessions</p>
+                  <h3 className="mt-1 text-xl font-semibold text-gray-900">
+                    Last completed sessions
+                  </h3>
+                </div>
+                <span className="app-chip app-chip-neutral">
+                  {data.trend.matches} matches
+                </span>
+              </div>
+
+              {data.recentSessions.length === 0 ? (
+                <EmptyState
+                  title="No recent sessions yet"
+                  detail="Complete a few matches and the momentum view will start filling in."
+                  className="mt-4 py-6"
+                />
+              ) : (
+                <div className="mt-4 grid gap-3 sm:-mx-1 sm:flex sm:snap-x sm:overflow-x-auto sm:px-1 sm:pb-1">
+                  {data.recentSessions.map((recentSession) => (
+                    <RecentSessionTile
+                      key={recentSession.id}
+                      summary={recentSession}
+                    />
+                  ))}
+                </div>
+              )}
             </div>
           </div>
-        </SectionCard>
 
-        <SectionCard
-          eyebrow="Insights"
-          title="Current picture"
-          description="Recent form, chemistry, rivalries, and session footprint at a glance."
-        >
-          <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
-            <InsightCard
-              title={recentFormSummary}
-              eyebrow="Recent form"
-            >
-              <InsightRow
-                label="Point swing"
-                value={formatSignedNumber(data.recentForm.pointDifferential)}
-                detail={`Rating change ${formatSignedNumber(data.recentForm.ratingChange)}`}
-              />
-              <InsightRow
-                label="Current streak"
-                value={recentStreakSummary}
+          <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <MiniFact
+              label="Trend window"
+              value={
+                data.trend.sessions > 0
+                  ? `${data.trend.wins}-${data.trend.losses}, ${data.trend.winRate}%`
+                  : "No window yet"
+              }
+              detail={
+                data.trend.sessions > 0
+                  ? `${formatSignedNumber(data.trend.ratingChange)} rating, ${formatSignedNumber(data.trend.pointDifferential)} diff over ${data.trend.sessions} sessions`
+                  : getTrendDirectionDetail(data.trend.direction)
+              }
+            />
+            {rankContext ? (
+              <MiniFact
+                label="Rank movement"
+                value={
+                  <span className={getRankMovementChipClass(rankContext.rankDelta)}>
+                    {rankContext.currentRank === null
+                      ? "Unranked"
+                      : getRankMovementLabel(rankContext.rankDelta)}
+                  </span>
+                }
                 detail={
-                  data.recentForm.currentStreak.result
-                    ? `${data.recentForm.currentStreak.count} straight ${
-                        data.recentForm.currentStreak.result.toLowerCase()
-                      }s`
-                    : "Streak starts once results come in"
+                  rankContext.currentRank === null
+                    ? "Only ranked community members appear on the leaderboard."
+                    : rankContext.previousRank
+                      ? `Started this window at #${rankContext.previousRank}.`
+                      : "Previous rank is unavailable for this window."
                 }
               />
-            </InsightCard>
-
-            <InsightCard title="Partner chemistry" eyebrow="Connections">
-              <InsightRow
-                label="Most played"
-                value={
-                  <ConnectionValue
-                    summary={data.partners.mostPlayed}
-                    communityId={communityId}
-                  />
-                }
-              />
-              <InsightRow
-                label="Best win rate"
-                value={
-                  <ConnectionValue
-                    summary={data.partners.bestWinRate}
-                    communityId={communityId}
-                  />
-                }
-              />
-            </InsightCard>
-
-            <InsightCard title="Rivalries" eyebrow="Opponents">
-              <InsightRow
-                label="Most faced"
-                value={
-                  <ConnectionValue
-                    summary={data.opponents.mostFaced}
-                    communityId={communityId}
-                  />
-                }
-              />
-              <InsightRow
-                label="Toughest opponent"
-                value={
-                  <ConnectionValue
-                    summary={data.opponents.toughest}
-                    communityId={communityId}
-                  />
-                }
-              />
-            </InsightCard>
-
-            <InsightCard title="Session footprint" eyebrow="Sessions">
-              <InsightRow
-                label="Volume"
-                value={`${data.stats.sessionsPlayed} sessions played`}
-                detail={`${data.stats.averageMatchesPerSession} matches per session`}
-              />
-              <InsightRow
-                label="Latest session"
-                value={<SessionValue summary={data.sessions.latest} />}
-              />
-            </InsightCard>
-
-            <InsightCard title="Best session" eyebrow="Highlights">
-              <InsightRow
-                label="Standout run"
-                value={<SessionValue summary={data.sessions.best} />}
-              />
-            </InsightCard>
+            ) : null}
+            <MiniFact
+              label="Latest session"
+              value={<SessionInlineValue summary={data.sessions.latest} />}
+            />
+            <MiniFact
+              label="Best session"
+              value={<SessionInlineValue summary={data.sessions.best} />}
+            />
+            <MiniFact
+              label="Session volume"
+              value={`${data.stats.sessionsPlayed} sessions`}
+              detail={`${data.stats.averageMatchesPerSession} matches per session`}
+            />
           </div>
         </SectionCard>
 
@@ -668,107 +844,17 @@ export default function ProfilePage() {
           ) : (
             <div className="space-y-3">
               {data.matchHistory.map((match) => (
-                <article key={match.id} className="app-subcard p-4 sm:p-5">
-                  <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                    <div className="space-y-1">
-                      <Link
-                        href={getSessionHistoryHref(match.sessionCode)}
-                        className="text-lg font-semibold text-gray-900 hover:text-blue-700 hover:underline"
-                      >
-                        {match.sessionName}
-                      </Link>
-                      <p className="text-sm text-gray-600">
-                        {formatDateTime(match.date)}
-                      </p>
-                    </div>
-
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span
-                        className={`app-chip ${
-                          match.result === "WIN"
-                            ? "app-chip-success"
-                            : "app-chip-danger"
-                        }`}
-                      >
-                        {match.result}
-                      </span>
-                      <span className="app-chip app-chip-neutral">
-                        Diff {formatSignedNumber(match.pointDifferential)}
-                      </span>
-                      {typeof match.eloChange === "number" ? (
-                        <span
-                          className={`app-chip ${
-                            match.eloChange >= 0
-                              ? "app-chip-success"
-                              : "app-chip-danger"
-                          }`}
-                        >
-                          {formatSignedNumber(match.eloChange)} Rating
-                        </span>
-                      ) : null}
-                    </div>
-                  </div>
-
-                  <div className="mt-4 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 sm:gap-3">
-                    <div className="app-panel-muted p-3">
-                      <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">
-                        Team
-                      </p>
-                      <p className="mt-2 text-sm font-semibold text-gray-900">
-                        {data.user.name} &amp;{" "}
-                        <Link
-                          href={getPlayerProfileHref(
-                            match.partner.id,
-                            communityId
-                          )}
-                          className="text-blue-700 hover:text-blue-800 hover:underline"
-                        >
-                          {match.partner.name}
-                        </Link>
-                      </p>
-                    </div>
-
-                    <div className="mx-auto rounded-full bg-gray-100 px-3 py-2 text-center text-xs font-semibold text-gray-900 sm:px-4 sm:text-sm">
-                      {match.score}
-                    </div>
-
-                    <div className="app-panel-muted p-3">
-                      <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">
-                        Opponents
-                      </p>
-                      <div className="mt-2 flex flex-wrap gap-x-2 text-sm font-semibold text-gray-900">
-                        {match.opponents.map((opponent, index) => (
-                          <span key={opponent.id}>
-                            <Link
-                              href={getPlayerProfileHref(
-                                opponent.id,
-                                communityId
-                              )}
-                              className="text-blue-700 hover:text-blue-800 hover:underline"
-                            >
-                              {opponent.name}
-                            </Link>
-                            {index === match.opponents.length - 1 ? null : " & "}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                </article>
+                <MatchTimelineCard
+                  key={match.id}
+                  match={match}
+                  userName={data.user.name}
+                  communityId={communityId}
+                />
               ))}
             </div>
           )}
         </SectionCard>
       </div>
-
-      {communityId ? (
-        <CommunityBottomTabs
-          activeTab="profile"
-          canManageCommunity={!!data.context?.viewerCanManageCommunity}
-          communityId={communityId}
-          currentUserId={session?.user?.id}
-        />
-      ) : null}
     </main>
   );
 }
