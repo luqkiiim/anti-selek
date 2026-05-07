@@ -362,7 +362,7 @@ export function HostTournamentPanel({
             <button
               type="button"
               onClick={() => onIsTestSessionChange(!isTestSession)}
-              className={`rounded-full border px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.18em] transition ${
+              className={`rounded-full border px-3 py-2 text-xs font-semibold transition ${
                 isTestSession
                   ? "border-amber-200 bg-amber-50 text-amber-700"
                   : "border-gray-200 bg-white text-gray-500"
@@ -385,7 +385,7 @@ export function HostTournamentPanel({
             <button
               type="button"
               onClick={() => onAutoQueueEnabledChange(!autoQueueEnabled)}
-              className={`rounded-full border px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.18em] transition ${
+              className={`rounded-full border px-3 py-2 text-xs font-semibold transition ${
                 autoQueueEnabled
                   ? "border-blue-200 bg-blue-50 text-blue-700"
                   : "border-gray-200 bg-white text-gray-500"
@@ -407,7 +407,7 @@ export function HostTournamentPanel({
             <button
               type="button"
               onClick={() => onPoolsEnabledChange(!poolsEnabled)}
-              className={`rounded-full border px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.18em] transition ${
+              className={`rounded-full border px-3 py-2 text-xs font-semibold transition ${
                 poolsEnabled
                   ? "border-blue-200 bg-blue-50 text-blue-700"
                   : "border-gray-200 bg-white text-gray-500"

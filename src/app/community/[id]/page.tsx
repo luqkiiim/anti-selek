@@ -932,16 +932,16 @@ export default function CommunityPage() {
                   key={tab.key}
                   type="button"
                   onClick={() => switchCommunitySection(tab.key)}
-                  className={`rounded-2xl px-4 py-3 text-left transition ${
+                  className={`rounded-lg px-4 py-3 text-left transition ${
                     isActive
-                      ? "bg-white shadow-sm ring-1 ring-blue-100"
+                      ? "bg-white shadow-sm ring-1 ring-[rgba(15,118,110,0.16)]"
                       : "bg-transparent text-gray-600 hover:bg-white"
                   }`}
                 >
                   <p className="text-sm font-semibold text-gray-900">
                     {tab.label}
                   </p>
-                  <p className="mt-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">
+                  <p className="mt-1 text-xs font-semibold text-gray-500">
                     {tab.detail({
                       sessions:
                         pastTournaments.length +
@@ -980,7 +980,7 @@ export default function CommunityPage() {
                 data-community-section={section}
                 className="w-full shrink-0 snap-center px-1"
               >
-                <div className="space-y-8">
+                <div className="space-y-8 pb-28">
                   {renderCommunitySection(section)}
                 </div>
               </section>

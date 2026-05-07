@@ -425,6 +425,18 @@ async function captureScreens() {
   const browser = await chromium.launch({ headless: true });
   try {
     async function saveScreenshot(page, name, options = {}) {
+      await page.addStyleTag({
+        content: `
+          nextjs-portal,
+          [data-nextjs-dev-tools-button],
+          [data-nextjs-dev-tools],
+          [data-nextjs-toast],
+          [aria-label="Open Next.js Dev Tools"] {
+            display: none !important;
+            visibility: hidden !important;
+          }
+        `,
+      });
       await page.screenshot({
         path: path.join(screenshotDir, name),
         fullPage: options.fullPage ?? true,

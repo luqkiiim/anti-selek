@@ -5,6 +5,7 @@ import type { LucideIcon } from "lucide-react";
 export interface MobileBottomTabItem<T extends string> {
   id: T;
   label: string;
+  shortLabel?: string;
   icon: LucideIcon;
   disabled?: boolean;
 }
@@ -55,7 +56,7 @@ export function MobileBottomTabs<T extends string>({
             >
               <Icon aria-hidden="true" size={20} strokeWidth={2.15} />
               <span className="max-w-full truncate text-[10px] font-semibold">
-                {item.label}
+                {item.shortLabel ?? item.label}
               </span>
             </button>
           );

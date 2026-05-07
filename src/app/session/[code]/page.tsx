@@ -1037,7 +1037,7 @@ export default function SessionPage() {
           className="app-swipe-track -mx-1 overflow-x-auto overscroll-x-none xl:mx-0 xl:overflow-visible"
         >
           <div className="flex snap-x snap-mandatory xl:block xl:space-y-6">
-            <section className="w-full shrink-0 snap-center xl:w-auto xl:shrink xl:snap-none">
+            <section className="w-full shrink-0 snap-center pb-24 xl:w-auto xl:shrink xl:snap-none xl:pb-0">
               <SessionOverviewPanel
                 sessionTypeLabel={sessionView.sessionTypeLabel}
                 sessionModeLabel={sessionView.sessionModeLabel}
@@ -1063,7 +1063,7 @@ export default function SessionPage() {
             </section>
 
             {!sessionView.isCompletedSession ? (
-              <section className="w-full shrink-0 snap-center xl:w-auto xl:shrink xl:snap-none">
+              <section className="w-full shrink-0 snap-center pb-24 xl:w-auto xl:shrink xl:snap-none xl:pb-0">
                 <LiveCourtsPanel
                   sessionStatus={sessionData.status}
                   courts={sessionData.courts}
@@ -1139,7 +1139,7 @@ export default function SessionPage() {
               </section>
             ) : null}
 
-            <section className="w-full shrink-0 snap-center xl:w-auto xl:shrink xl:snap-none">
+            <section className="w-full shrink-0 snap-center pb-24 xl:w-auto xl:shrink xl:snap-none xl:pb-0">
               <div className="space-y-6">
                 {sessionView.isCompletedSession ? (
                   <SessionPodium

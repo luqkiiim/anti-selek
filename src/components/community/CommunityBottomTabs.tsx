@@ -54,6 +54,7 @@ export function CommunityBottomTabs({
           {
             id: "host" as const,
             label: "Host setup",
+            shortLabel: "Host",
             icon: SlidersHorizontal,
           },
         ]
@@ -68,6 +69,7 @@ export function CommunityBottomTabs({
           {
             id: "profile" as const,
             label: "Player profile",
+            shortLabel: "Profile",
             icon: User,
           },
         ]
