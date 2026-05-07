@@ -276,7 +276,7 @@ export default function CommunityAdminPage() {
             <div className="max-w-3xl space-y-3">
               <p className="app-eyebrow">Admin workspace</p>
               <h2 className="text-2xl font-semibold text-gray-900 sm:text-3xl">
-                {community?.name || "Community"}
+                Community controls
               </h2>
             </div>
             <div className="flex flex-wrap gap-2">

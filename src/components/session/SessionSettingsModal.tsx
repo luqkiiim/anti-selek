@@ -147,7 +147,7 @@ export function SessionSettingsModal({
         </section>
 
         <section className="space-y-3">
-          <div className="flex items-start justify-between gap-4 rounded-2xl border border-gray-200 bg-gray-50/80 px-4 py-4">
+          <div className="flex items-start justify-between gap-4 rounded-xl border border-gray-200 bg-gray-50/80 px-4 py-4">
             <div className="space-y-1">
               <h3 className="text-sm font-semibold text-gray-900">Auto queue</h3>
               <p className="text-sm text-gray-500">
@@ -163,7 +163,7 @@ export function SessionSettingsModal({
             <button
               type="button"
               onClick={() => onAutoQueueChange(!autoQueueDraft)}
-              className={`shrink-0 rounded-full border px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.18em] transition ${
+              className={`shrink-0 rounded-lg border px-3 py-2 text-sm font-semibold transition ${
                 autoQueueDraft
                   ? "border-blue-200 bg-blue-50 text-blue-700"
                   : "border-gray-200 bg-white text-gray-500"
@@ -194,7 +194,7 @@ export function SessionSettingsModal({
               .map((court) => (
                 <label
                   key={court.id}
-                  className="flex items-center gap-3 rounded-2xl border border-gray-200 bg-gray-50/80 px-3 py-3"
+                  className="flex items-center gap-3 rounded-xl border border-gray-200 bg-gray-50/80 px-3 py-3"
                 >
                   <span className="min-w-0 flex-1 text-sm font-semibold text-gray-900">
                     {getCourtDisplayLabel(court)}

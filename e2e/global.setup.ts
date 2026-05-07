@@ -285,6 +285,7 @@ async function seedDatabase() {
 
 export default async function globalSetup() {
   await resetDatabaseFiles();
+  await fs.writeFile(e2eDatabaseFile, "");
 
   const prismaCli = path.join(
     process.cwd(),
@@ -292,12 +293,21 @@ export default async function globalSetup() {
     ".bin",
     process.platform === "win32" ? "prisma.cmd" : "prisma"
   );
+  const prismaArgs = ["db", "push", "--skip-generate"];
 
-  execFileSync("cmd.exe", ["/c", prismaCli, "db", "push", "--skip-generate"], {
-    cwd: process.cwd(),
-    env: e2eEnv as NodeJS.ProcessEnv,
-    stdio: "inherit",
-  });
+  if (process.platform === "win32") {
+    execFileSync("cmd.exe", ["/c", prismaCli, ...prismaArgs], {
+      cwd: process.cwd(),
+      env: e2eEnv as NodeJS.ProcessEnv,
+      stdio: "inherit",
+    });
+  } else {
+    execFileSync(prismaCli, prismaArgs, {
+      cwd: process.cwd(),
+      env: e2eEnv as NodeJS.ProcessEnv,
+      stdio: "inherit",
+    });
+  }
 
   await seedDatabase();
 }

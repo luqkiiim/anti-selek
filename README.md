@@ -62,6 +62,15 @@ Runtime database selection:
 
 ## Local Setup
 
+Use Node.js `20` or `22` LTS. Node `24` is intentionally blocked because
+Prisma `5.22` and the local Next.js dev server are unreliable there.
+
+If you use `nvm`, run:
+
+```bash
+nvm use
+```
+
 1. Install dependencies
 
 ```bash

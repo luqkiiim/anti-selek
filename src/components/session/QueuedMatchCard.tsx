@@ -68,13 +68,13 @@ function TeamPlayers({
                 onClick={() => onTogglePlayerAction(player.id)}
                 disabled={queueActionDisabled}
                 aria-expanded={actionOpen}
-                className={`min-w-0 max-w-full truncate text-base font-semibold leading-tight text-gray-900 transition hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-50 md:text-[1.35rem] xl:text-base ${textAlignClass}`}
+                className={`min-w-0 max-w-full whitespace-normal break-words text-base font-semibold leading-tight text-gray-900 transition hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-50 md:text-[1.35rem] xl:text-base ${textAlignClass}`}
               >
                 {player.name}
               </button>
             ) : (
               <p
-                className={`min-w-0 truncate text-base font-semibold leading-tight text-gray-900 md:text-[1.35rem] xl:text-base ${textAlignClass}`}
+                className={`min-w-0 whitespace-normal break-words text-base font-semibold leading-tight text-gray-900 md:text-[1.35rem] xl:text-base ${textAlignClass}`}
               >
                 {player.name}
               </p>

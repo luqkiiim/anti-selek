@@ -6,6 +6,7 @@ import {
   createManualMatchWithPlayers,
   createStartedHostSession,
   hostCommunityId,
+  openManualMatchModal,
   openSessionPlayersModal,
   openSessionRoster,
   openSessionSettings,
@@ -56,6 +57,7 @@ test("admin can create and undo a manual match on an open court", async ({
   await signInAsAdmin(page);
   const sessionCode = await createStartedHostSession(page, {
     sessionName: "E2E Manual Session",
+    selectedPlayerNames: ["Host Player 1", "Host Player 2", "Host Player 3"],
   });
 
   await createManualMatchWithPlayers(page, [
@@ -87,7 +89,7 @@ test("admin can create and undo a manual match on an open court", async ({
       const snapshot = await readSessionSnapshot(page, sessionCode);
       return snapshot.courts.filter((court) => court.currentMatch).length;
     })
-    .toBe(1);
+    .toBe(0);
 });
 
 test("admin can manually override Mixicano pairing restrictions", async ({
@@ -99,13 +101,7 @@ test("admin can manually override Mixicano pairing restrictions", async ({
     sessionMode: SessionMode.MIXICANO,
   });
 
-  await expect(page.getByRole("button", { name: "Manual" })).toBeVisible();
-  await page.getByRole("button", { name: "Manual" }).click();
-
-  const manualModal = page
-    .locator("div.fixed.inset-0")
-    .filter({ has: page.getByRole("heading", { name: "Manual Match" }) });
-  await expect(manualModal.getByRole("heading", { name: "Manual Match" })).toBeVisible();
+  const manualModal = await openManualMatchModal(page);
 
   const selects = manualModal.locator("select");
   await selects.nth(0).selectOption({ label: "Host Player 2 (1000)" });
@@ -366,18 +362,28 @@ test("admin can end and rollback the latest completed tournament", async ({
   await expect(page.getByRole("button", { name: "Match History" })).toBeVisible();
 
   await page.getByRole("button", { name: "Back" }).click();
-  await expect(page).toHaveURL(new RegExp(`/community/${hostCommunityId}$`));
+  await expect(page).toHaveURL(
+    new RegExp(`/community/${hostCommunityId}(\\?tab=host)?$`)
+  );
   await page.getByRole("button", { name: "Tournaments" }).click();
-  await expect(page.getByText(sessionName)).toBeVisible();
+  await expect(
+    page.getByText(sessionName).filter({ visible: true }).first()
+  ).toBeVisible();
 
-  await page.getByRole("button", { name: "Rollback" }).click();
+  await page
+    .getByRole("button", { name: "Rollback" })
+    .filter({ visible: true })
+    .first()
+    .click();
   await expect(
     page.getByRole("heading", { name: "Rollback tournament?" })
   ).toBeVisible();
   await page.getByRole("button", { name: "Confirm Rollback" }).click();
 
   await expect(page.getByText(`Rolled back "${sessionName}".`)).toBeVisible();
-  await expect(page.getByText("No past tournaments")).toBeVisible();
+  await expect(
+    page.getByText("No past tournaments").filter({ visible: true }).first()
+  ).toBeVisible();
 
   await expect
     .poll(async () => {

@@ -84,8 +84,8 @@ export function getHostPlayerCredentials(index: number) {
 export async function signIn(page: Page, credentials: { email: string; password: string }) {
   await page.context().clearCookies();
   await page.goto("/signin");
-  await page.getByLabel("Email").fill(credentials.email);
-  await page.getByLabel("Password").fill(credentials.password);
+  await page.getByLabel("Email", { exact: true }).fill(credentials.email);
+  await page.getByLabel("Password", { exact: true }).fill(credentials.password);
   await page.getByRole("button", { name: "Sign in" }).click();
   await expect(page).toHaveURL(/\/$/);
 }
@@ -120,22 +120,30 @@ export async function createStartedHostSession(
   ).toBeVisible();
 
   await page.getByRole("button", { name: "Open Host Setup" }).click();
-  await page.getByLabel("Name").fill(sessionName);
-  await page
+  const hostPanel = page
+    .locator("section.app-panel")
+    .filter({ has: page.getByText("New tournament") })
+    .filter({ visible: true });
+  await expect(hostPanel).toBeVisible();
+
+  await hostPanel.getByLabel("Name", { exact: true }).fill(sessionName);
+  await hostPanel
     .getByRole("button", {
       name: getSessionTypeButtonName(sessionType),
       exact: true,
     })
     .click();
-  await page
+  await hostPanel
     .getByRole("button", {
       name: getSessionModeButtonName(sessionMode),
       exact: true,
     })
     .click();
-  await page.locator("select").selectOption(String(courtCount));
+  await hostPanel
+    .getByRole("combobox", { name: "Courts" })
+    .selectOption(String(courtCount));
 
-  await page.getByRole("button", { name: "Choose" }).click();
+  await hostPanel.getByRole("button", { name: "Choose" }).click();
   const playersModal = page
     .getByRole("dialog")
     .filter({ has: page.getByRole("heading", { name: "Add Players" }) });
@@ -161,7 +169,7 @@ export async function createStartedHostSession(
 
   await playersModal.getByRole("button", { name: "Done" }).click();
 
-  await page.getByRole("button", { name: "Create Tournament" }).click();
+  await hostPanel.getByRole("button", { name: "Create Tournament" }).click();
   await expect(page).toHaveURL(/\/session\/.+/);
   await expect(page.getByRole("button", { name: "Start Session" })).toBeVisible();
   await page.getByRole("button", { name: "Start Session" }).click();
@@ -358,13 +366,7 @@ export async function createManualMatchWithPlayers(
   page: Page,
   playerLabels: [string, string, string, string]
 ) {
-  await expect(page.getByRole("button", { name: "Manual" })).toBeVisible();
-  await page.getByRole("button", { name: "Manual" }).click();
-
-  const manualModal = page
-    .locator("div.fixed.inset-0")
-    .filter({ has: page.getByRole("heading", { name: "Manual Match" }) });
-  await expect(manualModal.getByRole("heading", { name: "Manual Match" })).toBeVisible();
+  const manualModal = await openManualMatchModal(page);
 
   const selects = manualModal.locator("select");
   for (const [index, label] of playerLabels.entries()) {
@@ -373,6 +375,30 @@ export async function createManualMatchWithPlayers(
 
   await manualModal.getByRole("button", { name: "Create Match" }).click();
   await expect(manualModal).toHaveCount(0);
+}
+
+export async function openManualMatchModal(page: Page) {
+  const createButton = page
+    .getByRole("button", { name: "Create", exact: true })
+    .filter({ visible: true })
+    .first();
+  await expect(createButton).toBeVisible();
+  await createButton.click();
+
+  const manualOption = page
+    .getByRole("button", { name: "Manual", exact: true })
+    .filter({ visible: true });
+  await expect(manualOption).toBeVisible();
+  await manualOption.click();
+
+  const manualModal = page
+    .locator("div.fixed.inset-0")
+    .filter({ has: page.getByRole("heading", { name: "Manual Match" }) });
+  await expect(
+    manualModal.getByRole("heading", { name: "Manual Match" })
+  ).toBeVisible();
+
+  return manualModal;
 }
 
 function getSessionTypeButtonName(sessionType: SessionType) {

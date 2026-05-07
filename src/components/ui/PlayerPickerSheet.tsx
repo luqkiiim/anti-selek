@@ -126,7 +126,7 @@ export function PlayerPickerSheet({
   return createPortal(
     <div
       className={cx(
-        "fixed inset-0 z-[80] bg-[rgba(7,20,35,0.52)] backdrop-blur-md",
+        "fixed inset-0 z-[80] bg-[rgba(23,32,31,0.42)] backdrop-blur-sm",
         overlayClassName
       )}
     >
@@ -135,11 +135,11 @@ export function PlayerPickerSheet({
           role="dialog"
           aria-modal="true"
           className={cx(
-            "flex h-full min-h-0 w-full flex-col bg-[var(--surface-strong)] shadow-[0_24px_72px_rgba(7,20,35,0.24)] lg:h-auto lg:max-h-[min(92vh,92dvh)] lg:max-w-[40rem] lg:rounded-[28px] lg:border lg:border-[color:var(--line)]",
+            "flex h-full min-h-0 w-full flex-col bg-[var(--surface-strong)] shadow-[0_18px_52px_rgba(23,32,31,0.2)] lg:h-auto lg:max-h-[min(92vh,92dvh)] lg:max-w-[40rem] lg:rounded-[14px] lg:border lg:border-[color:var(--line)]",
             panelClassName
           )}
         >
-          <div className="shrink-0 border-b border-gray-100 px-4 pb-4 pt-[calc(1rem+env(safe-area-inset-top))] sm:px-5 sm:pt-4">
+          <div className="shrink-0 border-b border-gray-200 bg-gray-50 px-4 pb-4 pt-[calc(1rem+env(safe-area-inset-top))] sm:px-5 sm:pt-4">
             <div className="flex items-start justify-between gap-4">
               <div>
                 <h2 className="text-lg font-semibold text-gray-900">{title}</h2>
@@ -150,7 +150,7 @@ export function PlayerPickerSheet({
               <button
                 type="button"
                 onClick={onClose}
-                className="flex h-8 w-8 items-center justify-center rounded-full bg-gray-100 text-lg font-semibold text-gray-500 transition hover:text-gray-700"
+                className="flex h-9 w-9 items-center justify-center rounded-lg border border-gray-200 bg-white text-lg font-semibold text-gray-500 transition hover:text-gray-700"
                 aria-label="Close"
               >
                 &times;
@@ -159,7 +159,7 @@ export function PlayerPickerSheet({
           </div>
 
           {toolbar ? (
-            <div className="shrink-0 border-b border-gray-100 px-4 py-4 sm:px-5">
+            <div className="shrink-0 border-b border-gray-200 px-4 py-4 sm:px-5">
               {toolbar}
             </div>
           ) : null}
@@ -169,13 +169,13 @@ export function PlayerPickerSheet({
           </div>
 
           {bottomContent ? (
-            <div className="shrink-0 border-t border-gray-100 px-4 py-4 sm:px-5">
+            <div className="shrink-0 border-t border-gray-200 bg-gray-50 px-4 py-4 sm:px-5">
               {bottomContent}
             </div>
           ) : null}
 
           {footer ? (
-            <div className="shrink-0 border-t border-gray-100 px-4 pt-4 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:px-5 sm:pb-4">
+            <div className="shrink-0 border-t border-gray-200 bg-gray-50 px-4 pt-4 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:px-5 sm:pb-4">
               {footer}
             </div>
           ) : null}

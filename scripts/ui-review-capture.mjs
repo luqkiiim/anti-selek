@@ -26,6 +26,8 @@ const ids = {
   scoreCommunityId: "community-ui-review-score",
   scoreSessionId: "session-ui-review-active",
   scoreCourtId: "court-ui-review-active-1",
+  mobileScoreSessionId: "session-ui-review-mobile-active",
+  mobileScoreCourtId: "court-ui-review-mobile-active-1",
   waitingSessionId: "session-ui-review-waiting",
 };
 
@@ -68,6 +70,7 @@ async function waitForServer(url, timeoutMs = 120_000) {
 async function prepareReviewDatabase() {
   console.log("Preparing review database...");
   await fs.rm(reviewDb, { force: true });
+  await fs.writeFile(reviewDb, "");
 
   process.env.DATABASE_URL = reviewDbUrl;
   process.env.TURSO_DATABASE_URL = "";
@@ -118,27 +121,37 @@ async function prepareReviewDatabase() {
     });
     await prisma.queuedMatch.deleteMany({
       where: {
-        sessionId: { in: [ids.scoreSessionId, ids.waitingSessionId] },
+        sessionId: {
+          in: [ids.scoreSessionId, ids.mobileScoreSessionId, ids.waitingSessionId],
+        },
       },
     });
     await prisma.sessionPlayer.deleteMany({
       where: {
-        sessionId: { in: [ids.scoreSessionId, ids.waitingSessionId] },
+        sessionId: {
+          in: [ids.scoreSessionId, ids.mobileScoreSessionId, ids.waitingSessionId],
+        },
       },
     });
     await prisma.court.deleteMany({
       where: {
-        sessionId: { in: [ids.scoreSessionId, ids.waitingSessionId] },
+        sessionId: {
+          in: [ids.scoreSessionId, ids.mobileScoreSessionId, ids.waitingSessionId],
+        },
       },
     });
     await prisma.match.deleteMany({
       where: {
-        sessionId: { in: [ids.scoreSessionId, ids.waitingSessionId] },
+        sessionId: {
+          in: [ids.scoreSessionId, ids.mobileScoreSessionId, ids.waitingSessionId],
+        },
       },
     });
     await prisma.session.deleteMany({
       where: {
-        id: { in: [ids.scoreSessionId, ids.waitingSessionId] },
+        id: {
+          in: [ids.scoreSessionId, ids.mobileScoreSessionId, ids.waitingSessionId],
+        },
       },
     });
     await prisma.communityMember.deleteMany({
@@ -269,83 +282,83 @@ async function prepareReviewDatabase() {
       },
     });
 
-    await prisma.session.create({
-      data: {
-        id: ids.scoreSessionId,
-        code: ids.scoreSessionId,
-        communityId: ids.scoreCommunityId,
-        name: "UI Review Active Session",
-        type: "POINTS",
-        mode: "OPEN",
-        status: "ACTIVE",
-        courts: {
-          create: [
-            { id: ids.scoreCourtId, courtNumber: 1 },
-          ],
+    async function createActiveScoreSession({
+      sessionId,
+      courtId,
+      matchId,
+      name,
+    }) {
+      await prisma.session.create({
+        data: {
+          id: sessionId,
+          code: sessionId,
+          communityId: ids.scoreCommunityId,
+          name,
+          type: "POINTS",
+          mode: "OPEN",
+          status: "ACTIVE",
+          courts: {
+            create: [{ id: courtId, courtNumber: 1 }],
+          },
+          players: {
+            create: [
+              {
+                userId: ids.adminUserId,
+                isGuest: false,
+                gender: "MALE",
+                partnerPreference: "OPEN",
+              },
+              ...scorePlayerIds.map((userId) => ({
+                userId,
+                isGuest: false,
+                gender: "MALE",
+                partnerPreference: "OPEN",
+              })),
+            ],
+          },
         },
-        players: {
-          create: [
-            {
-              userId: ids.adminUserId,
-              isGuest: false,
-              gender: "MALE",
-              partnerPreference: "OPEN",
-            },
-            {
-              userId: scorePlayerIds[0],
-              isGuest: false,
-              gender: "MALE",
-              partnerPreference: "OPEN",
-            },
-            {
-              userId: scorePlayerIds[1],
-              isGuest: false,
-              gender: "MALE",
-              partnerPreference: "OPEN",
-            },
-            {
-              userId: scorePlayerIds[2],
-              isGuest: false,
-              gender: "MALE",
-              partnerPreference: "OPEN",
-            },
-            ...scorePlayerIds.slice(3).map((userId) => ({
-              userId,
-              isGuest: false,
-              gender: "MALE",
-              partnerPreference: "OPEN",
-            })),
-          ],
+      });
+
+      const activeMatch = await prisma.match.create({
+        data: {
+          id: matchId,
+          sessionId,
+          courtId,
+          status: "IN_PROGRESS",
+          team1User1Id: ids.adminUserId,
+          team1User2Id: scorePlayerIds[0],
+          team2User1Id: scorePlayerIds[1],
+          team2User2Id: scorePlayerIds[2],
         },
-      },
-    });
+      });
 
-    const activeMatch = await prisma.match.create({
-      data: {
-        id: "match-ui-review-active",
-        sessionId: ids.scoreSessionId,
-        courtId: ids.scoreCourtId,
-        status: "IN_PROGRESS",
-        team1User1Id: ids.adminUserId,
-        team1User2Id: scorePlayerIds[0],
-        team2User1Id: scorePlayerIds[1],
-        team2User2Id: scorePlayerIds[2],
-      },
-    });
+      await prisma.court.update({
+        where: { id: courtId },
+        data: { currentMatchId: activeMatch.id },
+      });
 
-    await prisma.court.update({
-      where: { id: ids.scoreCourtId },
-      data: { currentMatchId: activeMatch.id },
-    });
+      await prisma.queuedMatch.create({
+        data: {
+          sessionId,
+          team1User1Id: scorePlayerIds[3],
+          team1User2Id: scorePlayerIds[4],
+          team2User1Id: scorePlayerIds[5],
+          team2User2Id: scorePlayerIds[6],
+        },
+      });
+    }
 
-    await prisma.queuedMatch.create({
-      data: {
-        sessionId: ids.scoreSessionId,
-        team1User1Id: scorePlayerIds[3],
-        team1User2Id: scorePlayerIds[4],
-        team2User1Id: scorePlayerIds[5],
-        team2User2Id: scorePlayerIds[6],
-      },
+    await createActiveScoreSession({
+      sessionId: ids.scoreSessionId,
+      courtId: ids.scoreCourtId,
+      matchId: "match-ui-review-active",
+      name: "UI Review Active Session",
+    });
+    await createActiveScoreSession({
+      sessionId: ids.mobileScoreSessionId,
+      courtId: ids.mobileScoreCourtId,
+      matchId: "match-ui-review-mobile-active",
+      name: "UI Review Mobile Active Session",
     });
   } finally {
     await prisma.$disconnect();
@@ -369,6 +382,7 @@ function startReviewServer() {
           "your-secret-key-change-in-production-min-32-chars",
         NEXTAUTH_URL: baseURL,
         AUTH_URL: baseURL,
+        E2E_DISABLE_RATE_LIMITS: "true",
       },
       stdio: ["ignore", "pipe", "pipe"],
     }
@@ -394,8 +408,10 @@ async function signIn(context) {
   const page = await context.newPage();
   await page.emulateMedia({ reducedMotion: "no-preference" });
   await page.goto(`${baseURL}/signin`);
-  await page.getByLabel("Email").fill("ui-review-admin@example.com");
-  await page.getByLabel("Password").fill("Password123!");
+  await page
+    .getByLabel("Email", { exact: true })
+    .fill("ui-review-admin@example.com");
+  await page.getByLabel("Password", { exact: true }).fill("Password123!");
   await page.getByRole("button", { name: "Sign in" }).click();
   await page.waitForURL(`${baseURL}/`);
   await page.getByRole("heading", { name: "Anti-Selek" }).waitFor();
@@ -408,116 +424,186 @@ async function captureScreens() {
 
   const browser = await chromium.launch({ headless: true });
   try {
+    async function saveScreenshot(page, name, options = {}) {
+      await page.screenshot({
+        path: path.join(screenshotDir, name),
+        fullPage: options.fullPage ?? true,
+      });
+    }
+
+    async function captureSignIn(context, label) {
+      const page = await context.newPage();
+      await page.emulateMedia({ reducedMotion: "no-preference" });
+      await page.goto(`${baseURL}/signin`);
+      await page.getByLabel("Email", { exact: true }).waitFor();
+      await saveScreenshot(page, `sign-in-${label}.png`);
+      await page.close();
+    }
+
+    async function captureQueuePromotionFrames(page) {
+      const frameDelays = [40, 140, 280, 520, 900];
+      const debugFrames = [];
+      let elapsed = 0;
+
+      for (const [index, delay] of frameDelays.entries()) {
+        await page.waitForTimeout(delay - elapsed);
+        elapsed = delay;
+        debugFrames.push(
+          await page.evaluate((frameNumber) => {
+            const ghost = document.querySelector(
+              "[data-queue-promotion-ghost='true']"
+            );
+            const ghostScoreSlots = Array.from(
+              document.querySelectorAll("[data-queue-promotion-ghost-score-slot]")
+            );
+            const queueSurface = document.querySelector(
+              "[data-queued-promotion-surface='true']"
+            );
+
+            const toRect = (element) => {
+              if (!element) return null;
+              const rect = element.getBoundingClientRect();
+              return {
+                top: rect.top,
+                left: rect.left,
+                width: rect.width,
+                height: rect.height,
+                opacity: window.getComputedStyle(element).opacity,
+              };
+            };
+
+            return {
+              frame: frameNumber,
+              ghost: toRect(ghost),
+              ghostScoreSlots: ghostScoreSlots.map((slot) => toRect(slot)),
+              queueSurface: toRect(queueSurface),
+              courtCards: Array.from(
+                document.querySelectorAll("[data-live-court-card]")
+              ).map((card) => ({
+                courtId: card.getAttribute("data-live-court-card"),
+                text: card.textContent,
+              })),
+            };
+          }, index + 1)
+        );
+        await saveScreenshot(
+          page,
+          `queue-promotion-frame-${String(index + 1).padStart(2, "0")}.png`,
+          { fullPage: false }
+        );
+      }
+
+      await fs.writeFile(
+        path.join(screenshotDir, "queue-promotion-debug.json"),
+        JSON.stringify(debugFrames, null, 2)
+      );
+
+      const stretchedGhostFrame = debugFrames.find((frame) =>
+        frame.ghostScoreSlots.some((slot) => {
+          if (!slot) {
+            return false;
+          }
+
+          const aspectRatio = slot.width / Math.max(slot.height, 1);
+          return aspectRatio < 0.92 || aspectRatio > 1.08;
+        })
+      );
+
+      if (stretchedGhostFrame) {
+        throw new Error(
+          `Queue promotion ghost stretched score slot on frame ${stretchedGhostFrame.frame}`
+        );
+      }
+
+      const missingGhostSlotFrame = debugFrames.find(
+        (frame) => frame.ghost && frame.ghostScoreSlots.length === 0
+      );
+
+      if (missingGhostSlotFrame) {
+        throw new Error(
+          `Queue promotion ghost score slots were not measurable on frame ${missingGhostSlotFrame.frame}`
+        );
+      }
+    }
+
+    async function captureSignedInReviewFlow({
+      context,
+      label,
+      scoreSessionId,
+      sessionHeading,
+      captureQueueFrames = false,
+    }) {
+      const page = await signIn(context);
+      await saveScreenshot(page, `dashboard-${label}.png`);
+
+      await page.goto(`${baseURL}/community/${ids.hostCommunityId}`);
+      await page
+        .getByRole("heading", { name: "UI Review Host Club" })
+        .waitFor();
+      await saveScreenshot(page, `community-hub-${label}.png`);
+
+      await page.getByRole("button", { name: "Open Host Setup" }).click();
+      await page
+        .getByText("New tournament")
+        .filter({ visible: true })
+        .first()
+        .waitFor();
+      await saveScreenshot(page, `host-setup-${label}.png`);
+
+      await page.goto(`${baseURL}/session/${scoreSessionId}`);
+      await page.getByRole("heading", { name: sessionHeading }).waitFor();
+      await saveScreenshot(page, `session-active-${label}.png`);
+
+      await page
+        .getByText("Standings")
+        .filter({ visible: true })
+        .first()
+        .scrollIntoViewIfNeeded();
+      await saveScreenshot(page, `standings-${label}.png`, { fullPage: false });
+
+      const scoreInputs = page.locator('input[type="number"]');
+      await scoreInputs.nth(0).fill("21");
+      await scoreInputs.nth(1).fill("15");
+      await page.getByRole("button", { name: "Submit Score" }).click();
+      await page.getByRole("button", { name: "Confirm" }).waitFor();
+      await saveScreenshot(page, `score-confirmation-${label}.png`);
+
+      await page.getByRole("button", { name: "Confirm" }).click();
+      await page.getByRole("button", { name: "Confirm Results" }).waitFor();
+      await saveScreenshot(page, `pending-approval-${label}.png`);
+
+      if (captureQueueFrames) {
+        await page.getByRole("button", { name: "Confirm Results" }).click();
+        await captureQueuePromotionFrames(page);
+      }
+
+      await page.close();
+    }
+
     const desktop = await browser.newContext({
       viewport: { width: 1440, height: 1400 },
     });
-
-    const desktopPage = await signIn(desktop);
-    await desktopPage.goto(`${baseURL}/session/${ids.scoreSessionId}`);
-    await desktopPage
-      .getByRole("heading", { name: "UI Review Active Session" })
-      .waitFor();
-    await desktopPage.screenshot({
-      path: path.join(screenshotDir, "session-active-desktop.png"),
-      fullPage: true,
+    const mobile = await browser.newContext({
+      viewport: { width: 390, height: 844 },
+      isMobile: true,
+      hasTouch: true,
     });
-    const scoreInputs = desktopPage.locator('input[type="number"]');
-    await scoreInputs.nth(0).fill("21");
-    await scoreInputs.nth(1).fill("15");
-    await desktopPage.getByRole("button", { name: "Submit Score" }).click();
-    await desktopPage.getByRole("button", { name: "Confirm" }).waitFor();
-    await desktopPage.screenshot({
-      path: path.join(screenshotDir, "queue-promotion-confirm-desktop.png"),
-      fullPage: true,
+
+    await captureSignIn(desktop, "desktop");
+    await captureSignIn(mobile, "mobile");
+    await captureSignedInReviewFlow({
+      context: desktop,
+      label: "desktop",
+      scoreSessionId: ids.scoreSessionId,
+      sessionHeading: "UI Review Active Session",
+      captureQueueFrames: true,
     });
-    await desktopPage.getByRole("button", { name: "Confirm" }).click();
-    await desktopPage.getByRole("button", { name: "Confirm Results" }).waitFor();
-    await desktopPage.screenshot({
-      path: path.join(screenshotDir, "queue-promotion-pending-desktop.png"),
-      fullPage: true,
+    await captureSignedInReviewFlow({
+      context: mobile,
+      label: "mobile",
+      scoreSessionId: ids.mobileScoreSessionId,
+      sessionHeading: "UI Review Mobile Active Session",
     });
-    await desktopPage.getByRole("button", { name: "Confirm Results" }).click();
-
-    const frameDelays = [40, 140, 280, 520, 900];
-    const debugFrames = [];
-    let elapsed = 0;
-    for (const [index, delay] of frameDelays.entries()) {
-      await desktopPage.waitForTimeout(delay - elapsed);
-      elapsed = delay;
-      debugFrames.push(
-        await desktopPage.evaluate((frameNumber) => {
-          const ghost = document.querySelector("[data-queue-promotion-ghost='true']");
-          const ghostScoreSlots = Array.from(
-            document.querySelectorAll("[data-queue-promotion-ghost-score-slot]")
-          );
-          const queueSurface = document.querySelector(
-            "[data-queued-promotion-surface='true']"
-          );
-
-          const toRect = (element) => {
-            if (!element) return null;
-            const rect = element.getBoundingClientRect();
-            return {
-              top: rect.top,
-              left: rect.left,
-              width: rect.width,
-              height: rect.height,
-              opacity: window.getComputedStyle(element).opacity,
-            };
-          };
-
-          return {
-            frame: frameNumber,
-            ghost: toRect(ghost),
-            ghostScoreSlots: ghostScoreSlots.map((slot) => toRect(slot)),
-            queueSurface: toRect(queueSurface),
-            courtCards: Array.from(
-              document.querySelectorAll("[data-live-court-card]")
-            ).map((card) => ({
-              courtId: card.getAttribute("data-live-court-card"),
-              text: card.textContent,
-            })),
-          };
-        }, index + 1)
-      );
-      await desktopPage.screenshot({
-        path: path.join(
-          screenshotDir,
-          `queue-promotion-frame-${String(index + 1).padStart(2, "0")}.png`
-        ),
-      });
-    }
-    await fs.writeFile(
-      path.join(screenshotDir, "queue-promotion-debug.json"),
-      JSON.stringify(debugFrames, null, 2)
-    );
-
-    const stretchedGhostFrame = debugFrames.find((frame) =>
-      frame.ghostScoreSlots.some((slot) => {
-        if (!slot) {
-          return false;
-        }
-
-        const aspectRatio = slot.width / Math.max(slot.height, 1);
-        return aspectRatio < 0.92 || aspectRatio > 1.08;
-      })
-    );
-
-    if (stretchedGhostFrame) {
-      throw new Error(
-        `Queue promotion ghost stretched score slot on frame ${stretchedGhostFrame.frame}`
-      );
-    }
-
-    const missingGhostSlotFrame = debugFrames.find(
-      (frame) => frame.ghost && frame.ghostScoreSlots.length === 0
-    );
-
-    if (missingGhostSlotFrame) {
-      throw new Error(
-        `Queue promotion ghost score slots were not measurable on frame ${missingGhostSlotFrame.frame}`
-      );
-    }
   } finally {
     await browser.close();
   }

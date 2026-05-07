@@ -200,7 +200,7 @@ export function ModalFrame({
           fullscreenUntilDesktop && "app-modal-frame-fullscreen-tablet"
         )}
       >
-        <div className="border-b border-gray-100 px-4 py-4 sm:px-5">
+        <div className="border-b border-gray-200 bg-gray-50 px-4 py-4 sm:px-5">
           <div className="flex items-start justify-between gap-4">
             <div>
               <h2 className="text-lg font-semibold text-gray-900">{title}</h2>
@@ -211,7 +211,7 @@ export function ModalFrame({
             <button
               type="button"
               onClick={onClose}
-              className="flex h-8 w-8 items-center justify-center rounded-full bg-gray-100 text-lg font-semibold text-gray-500 transition hover:text-gray-700"
+              className="flex h-9 w-9 items-center justify-center rounded-lg border border-gray-200 bg-white text-lg font-semibold text-gray-500 transition hover:text-gray-700"
               aria-label="Close"
             >
               &times;
@@ -229,7 +229,7 @@ export function ModalFrame({
           {children}
         </div>
         {footer ? (
-          <div className="border-t border-gray-100 px-4 pt-4 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:px-5 sm:pb-4">
+          <div className="border-t border-gray-200 bg-gray-50 px-4 pt-4 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:px-5 sm:pb-4">
             {footer}
           </div>
         ) : null}

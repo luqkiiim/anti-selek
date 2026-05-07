@@ -12,6 +12,7 @@ const rawEnv = {
   AUTH_SECRET: process.env.AUTH_SECRET ?? "e2e-auth-secret",
   NEXTAUTH_URL: e2eBaseURL,
   AUTH_URL: e2eBaseURL,
+  E2E_DISABLE_RATE_LIMITS: "true",
   ADMIN_EMAILS: "",
   TURSO_DATABASE_URL: "",
   TURSO_AUTH_TOKEN: "",

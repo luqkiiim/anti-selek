@@ -235,6 +235,7 @@ beforeAll(async () => {
   mutableEnv.NODE_ENV = "test";
 
   await removeDatabaseFiles();
+  await fs.writeFile(tempDatabaseFile, "");
 
   const prismaBinary = getPrismaBinary();
   if (process.platform === "win32") {

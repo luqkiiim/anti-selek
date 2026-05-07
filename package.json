@@ -2,13 +2,22 @@
   "name": "tournament-app",
   "version": "0.1.0",
   "private": true,
+  "engines": {
+    "node": ">=20 <23",
+    "npm": ">=10"
+  },
   "scripts": {
+    "predev": "node scripts/ensure-node-lts.mjs",
     "dev": "next dev",
+    "prebuild": "node scripts/ensure-node-lts.mjs",
     "build": "node scripts/apply-turso-migrations.mjs && next build",
+    "prestart": "node scripts/ensure-node-lts.mjs",
     "db:migrate:turso": "node scripts/apply-turso-migrations.mjs --force",
     "start": "next start",
     "lint": "eslint",
+    "pretest": "node scripts/ensure-node-lts.mjs",
     "test": "vitest run --pool=threads src",
+    "pretest:e2e": "node scripts/ensure-node-lts.mjs",
     "test:e2e": "playwright test",
     "postinstall": "prisma generate"
   },

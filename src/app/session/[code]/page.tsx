@@ -1016,7 +1016,7 @@ export default function SessionPage() {
               Back
             </button>
             <div className="min-w-0 flex flex-col">
-              <h1 className="truncate text-lg font-semibold leading-tight text-gray-900 sm:text-xl">
+              <h1 className="whitespace-normal break-words text-base font-semibold leading-tight text-gray-900 sm:text-xl">
                 {sessionData.name}
               </h1>
             </div>
