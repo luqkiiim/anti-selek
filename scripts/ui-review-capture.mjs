@@ -431,6 +431,107 @@ async function captureScreens() {
       });
     }
 
+    async function saveFlowScreenshot(page, name, label, options = {}) {
+      await saveScreenshot(page, name, {
+        ...options,
+        fullPage: options.fullPage ?? label !== "mobile",
+      });
+    }
+
+    async function showSessionMobileTab(page, tabLabel, sectionIndex) {
+      const mobileTab = page
+        .locator(`nav[aria-label="Session navigation"] button[aria-label="${tabLabel}"]`)
+        .filter({ visible: true })
+        .first();
+
+      if ((await mobileTab.count()) === 0) {
+        return false;
+      }
+
+      await mobileTab.click();
+      await page.waitForFunction(
+        ({ tabLabel: targetTabLabel, sectionIndex: targetSectionIndex }) => {
+          const activeTab = document.querySelector(
+            `nav[aria-label="Session navigation"] button[aria-label="${targetTabLabel}"]`
+          );
+          const pager = document.querySelector(".app-swipe-track");
+
+          if (activeTab?.getAttribute("aria-current") !== "page") {
+            return false;
+          }
+
+          if (!pager) {
+            return true;
+          }
+
+          const targetLeft = (pager.clientWidth || 1) * targetSectionIndex;
+          return Math.abs(pager.scrollLeft - targetLeft) < 6;
+        },
+        { tabLabel, sectionIndex }
+      );
+      return true;
+    }
+
+    async function showSessionStandings(page) {
+      if (await showSessionMobileTab(page, "Standings", 2)) {
+        return;
+      }
+
+      await page
+        .getByText("Standings")
+        .filter({ visible: true })
+        .first()
+        .scrollIntoViewIfNeeded();
+    }
+
+    async function waitForCommunityMobileSection(page, section) {
+      const labelsBySection = {
+        overview: "Overview",
+        tournaments: "Tournaments",
+        host: "Host setup",
+        leaderboard: "Leaderboard",
+        profile: "Player profile",
+      };
+      const tabLabel = labelsBySection[section];
+      if (!tabLabel) return;
+
+      const mobileTab = page
+        .locator(`nav[aria-label="Community navigation"] button[aria-label="${tabLabel}"]`)
+        .filter({ visible: true })
+        .first();
+
+      if ((await mobileTab.count()) === 0) {
+        return;
+      }
+
+      await page.waitForFunction(
+        ({ section: targetSection, tabLabel: targetTabLabel }) => {
+          const activeTab = document.querySelector(
+            `nav[aria-label="Community navigation"] button[aria-label="${targetTabLabel}"]`
+          );
+          const pager = document.querySelector(
+            "div.app-swipe-track.overflow-x-auto"
+          );
+          const panel = document.querySelector(
+            `[data-community-section="${targetSection}"]`
+          );
+
+          if (activeTab?.getAttribute("aria-current") !== "page") {
+            return false;
+          }
+
+          if (!pager || !panel) {
+            return true;
+          }
+
+          const pagerRect = pager.getBoundingClientRect();
+          const panelRect = panel.getBoundingClientRect();
+          return Math.abs(panelRect.left - pagerRect.left) < 6;
+        },
+        { section, tabLabel }
+      );
+    }
+
     async function captureSignIn(context, label) {
       const page = await context.newPage();
       await page.emulateMedia({ reducedMotion: "no-preference" });
@@ -534,13 +635,13 @@ async function captureScreens() {
       captureQueueFrames = false,
     }) {
       const page = await signIn(context);
-      await saveScreenshot(page, `dashboard-${label}.png`);
+      await saveFlowScreenshot(page, `dashboard-${label}.png`, label);
 
       await page.goto(`${baseURL}/community/${ids.hostCommunityId}`);
       await page
         .getByRole("heading", { name: "UI Review Host Club" })
         .waitFor();
-      await saveScreenshot(page, `community-hub-${label}.png`);
+      await saveFlowScreenshot(page, `community-hub-${label}.png`, label);
 
       await page.getByRole("button", { name: "Open Host Setup" }).click();
       await page
@@ -548,29 +649,27 @@ async function captureScreens() {
         .filter({ visible: true })
         .first()
         .waitFor();
-      await saveScreenshot(page, `host-setup-${label}.png`);
+      await waitForCommunityMobileSection(page, "host");
+      await saveFlowScreenshot(page, `host-setup-${label}.png`, label);
 
       await page.goto(`${baseURL}/session/${scoreSessionId}`);
       await page.getByRole("heading", { name: sessionHeading }).waitFor();
-      await saveScreenshot(page, `session-active-${label}.png`);
+      await saveFlowScreenshot(page, `session-active-${label}.png`, label);
 
-      await page
-        .getByText("Standings")
-        .filter({ visible: true })
-        .first()
-        .scrollIntoViewIfNeeded();
+      await showSessionStandings(page);
       await saveScreenshot(page, `standings-${label}.png`, { fullPage: false });
+      await showSessionMobileTab(page, "Courts", 1);
 
       const scoreInputs = page.locator('input[type="number"]');
       await scoreInputs.nth(0).fill("21");
       await scoreInputs.nth(1).fill("15");
       await page.getByRole("button", { name: "Submit Score" }).click();
       await page.getByRole("button", { name: "Confirm" }).waitFor();
-      await saveScreenshot(page, `score-confirmation-${label}.png`);
+      await saveFlowScreenshot(page, `score-confirmation-${label}.png`, label);
 
       await page.getByRole("button", { name: "Confirm" }).click();
       await page.getByRole("button", { name: "Confirm Results" }).waitFor();
-      await saveScreenshot(page, `pending-approval-${label}.png`);
+      await saveFlowScreenshot(page, `pending-approval-${label}.png`, label);
 
       if (captureQueueFrames) {
         await page.getByRole("button", { name: "Confirm Results" }).click();

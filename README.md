@@ -24,7 +24,7 @@ Community-based badminton tournament web app for running live sessions, managing
 
 ## Tech Stack
 
-- Next.js `16.1.6` (App Router)
+- Next.js `16.2.4` (App Router)
 - React `19.2.3`
 - TypeScript
 - Tailwind CSS v4
@@ -109,6 +109,7 @@ Open `http://localhost:3000`.
 - `npm run db:migrate:turso` - apply pending SQL migrations to Turso
 - `npm run build` - production build; runs the Turso migration wrapper first
 - `npm run start` - production server
+- `npm run smoke:production` - non-mutating production smoke against `https://antiselek.com`
 - `npm run lint` - ESLint
 - `npm run test` - Vitest using thread pool mode
 - `npm run test:e2e` - Playwright end-to-end tests
@@ -124,6 +125,7 @@ Notes:
 
 - `npm run dev` can run fully offline only if Turso variables are unset and the app is using local SQLite
 - `npm run build` always invokes the Turso migration wrapper first, but that wrapper only applies migrations on Vercel unless you force it with `npm run db:migrate:turso`
+- `npm run smoke:production` defaults to public, non-mutating checks. Set `PRODUCTION_SMOKE_EMAIL`, `PRODUCTION_SMOKE_PASSWORD`, `PRODUCTION_SMOKE_COMMUNITY_ID`, and `PRODUCTION_SMOKE_SESSION_CODE` to include signed-in production paths. Set `PRODUCTION_SMOKE_MUTATE=1` only for a disposable production session where score submission and approval are safe.
 
 ## Core Workflow
 

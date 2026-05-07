@@ -92,15 +92,15 @@ function SigninForm() {
 
               <div className="mt-8 grid gap-3 sm:grid-cols-3">
                 <div className="app-panel-muted p-4">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">Quick return</p>
+                  <p className="text-xs font-semibold text-gray-500">Quick return</p>
                   <p className="mt-2 text-sm font-semibold text-gray-900">Resume active sessions in a couple of taps.</p>
                 </div>
                 <div className="app-panel-muted p-4">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">Clear standings</p>
+                  <p className="text-xs font-semibold text-gray-500">Clear standings</p>
                   <p className="mt-2 text-sm font-semibold text-gray-900">Check points, ratings, and match history from one place.</p>
                 </div>
                 <div className="app-panel-muted p-4">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">Mobile ready</p>
+                  <p className="text-xs font-semibold text-gray-500">Mobile ready</p>
                   <p className="mt-2 text-sm font-semibold text-gray-900">Comfortable controls for court-side use.</p>
                 </div>
               </div>
