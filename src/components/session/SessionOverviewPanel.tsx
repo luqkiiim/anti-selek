@@ -1,5 +1,6 @@
 "use client";
 
+import { History, Play, Settings, Users } from "lucide-react";
 import { SessionStatus } from "@/types/enums";
 import { StatCard } from "@/components/ui/chrome";
 
@@ -27,6 +28,7 @@ export function SessionOverviewPanel({
   sessionModeLabel,
   isTestSession,
   playersCount,
+  guestPlayersCount,
   activeMatchesCount,
   completedMatchesCount,
   pausedPlayersCount,
@@ -82,6 +84,7 @@ export function SessionOverviewPanel({
         <div className="flex flex-wrap gap-3 xl:max-w-[28rem] xl:justify-end">
           {canStartSession ? (
             <button type="button" onClick={onStartSession} className="app-button-primary">
+              <Play aria-hidden="true" size={17} />
               Start Session
             </button>
           ) : null}
@@ -91,6 +94,7 @@ export function SessionOverviewPanel({
               onClick={onOpenSettings}
               className="app-button-secondary"
             >
+              <Settings aria-hidden="true" size={17} />
               Settings
             </button>
           ) : null}
@@ -99,6 +103,7 @@ export function SessionOverviewPanel({
             onClick={onOpenMatchHistory}
             className="app-button-secondary"
           >
+            <History aria-hidden="true" size={17} />
             Match History
           </button>
           {canOpenPlayerManager ? (
@@ -107,6 +112,7 @@ export function SessionOverviewPanel({
               onClick={onOpenPlayerManager}
               className="app-button-secondary ml-auto"
             >
+              <Users aria-hidden="true" size={17} />
               Players
             </button>
           ) : null}
@@ -114,7 +120,12 @@ export function SessionOverviewPanel({
       </div>
 
       <div className="mt-5 grid grid-cols-2 gap-3 xl:grid-cols-4">
-        <StatCard label="Players" value={playersCount} accent />
+        <StatCard
+          label="Players"
+          value={playersCount}
+          detail={guestPlayersCount > 0 ? `${guestPlayersCount} guests` : undefined}
+          accent
+        />
         <StatCard
           label={isCompleted ? "Matches" : "Active courts"}
           value={isCompleted ? completedMatchesCount : activeMatchesCount}

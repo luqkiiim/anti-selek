@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { UserPlus } from "lucide-react";
 
 import { FlashMessage } from "@/components/ui/chrome";
 
@@ -61,7 +62,6 @@ export default function SignupPage() {
       <div className="w-full max-w-5xl">
         <div className="grid gap-6 lg:grid-cols-[1.05fr_0.95fr]">
           <section className="app-panel relative overflow-hidden px-6 py-8 sm:px-8">
-            <div className="pointer-events-none absolute left-[-4rem] top-16 h-44 w-44 rounded-full bg-[rgba(25,154,97,0.14)] blur-3xl" />
             <div className="relative">
               <p className="app-eyebrow">Player setup</p>
               <h1 className="mt-3 app-title text-gray-900">Create a player account that can claim your community profile.</h1>
@@ -139,6 +139,7 @@ export default function SignupPage() {
               </label>
 
               <button type="submit" disabled={loading} className="app-button-primary w-full">
+                <UserPlus aria-hidden="true" size={17} />
                 {loading ? "Signing up..." : "Create account"}
               </button>
             </form>

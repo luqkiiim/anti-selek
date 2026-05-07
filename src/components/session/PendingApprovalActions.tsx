@@ -27,7 +27,7 @@ export function PendingApprovalActions({
             <button
               type="button"
               onClick={onApprove}
-              className="w-full rounded-xl bg-blue-600 py-3 text-sm font-black uppercase text-white shadow-md transition-all active:scale-95 active:bg-blue-700"
+              className="app-button-primary min-h-12 w-full py-3"
             >
               Confirm Results
             </button>
@@ -37,14 +37,14 @@ export function PendingApprovalActions({
               type="button"
               onClick={onReopen}
               disabled={isReopening}
-              className="w-full rounded-xl border border-gray-200 bg-gray-100 py-3 text-sm font-black uppercase text-gray-700 transition-all active:scale-95 active:bg-gray-200 disabled:cursor-not-allowed disabled:opacity-50"
+              className="app-button-secondary min-h-12 w-full py-3"
             >
               {isReopening ? "Opening..." : "Back To Edit"}
             </button>
           ) : null}
         </div>
       ) : null}
-      <div className="rounded-lg border border-orange-100 bg-orange-50 py-2 text-center text-[10px] font-black uppercase tracking-widest text-orange-700">
+      <div className="rounded-lg border border-orange-100 bg-orange-50 py-2 text-center text-sm font-semibold text-orange-700">
         Awaiting Confirmation
       </div>
     </div>

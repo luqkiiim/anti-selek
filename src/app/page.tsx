@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { signOut } from "next-auth/react";
+import { LogIn, LogOut, Plus } from "lucide-react";
 import { EmptyState, FlashMessage, SectionCard } from "@/components/ui/chrome";
 import { CreateCommunityModal } from "@/components/dashboard/CreateCommunityModal";
 import { JoinCommunityModal } from "@/components/dashboard/JoinCommunityModal";
@@ -66,15 +67,14 @@ export default function Home() {
               onClick={() => signOut()}
               className="app-button-secondary px-4 py-2"
             >
+              <LogOut aria-hidden="true" size={16} />
               Logout
             </button>
           </div>
         </div>
 
-        <section className="app-panel relative overflow-hidden px-5 py-6 sm:px-6">
-          <div className="pointer-events-none absolute inset-y-0 right-[-5rem] top-[-2rem] w-64 rounded-full bg-[radial-gradient(circle,_rgba(22,119,242,0.16),_transparent_65%)] blur-2xl" />
-          <div className="pointer-events-none absolute bottom-[-4rem] left-[-2rem] h-40 w-40 rounded-full bg-[radial-gradient(circle,_rgba(25,154,97,0.12),_transparent_68%)] blur-2xl" />
-          <div className="relative space-y-6 text-center">
+        <section className="app-panel px-5 py-6 sm:px-6">
+          <div className="space-y-6 text-center">
             <div className="flex flex-wrap items-center justify-center gap-3">
               <p className="app-eyebrow">Dashboard</p>
               <span className="app-chip app-chip-neutral">
@@ -95,6 +95,7 @@ export default function Home() {
                   onClick={openJoinCommunityModal}
                   className="app-button-secondary"
                 >
+                  <LogIn aria-hidden="true" size={17} />
                   Join Community
                 </button>
                 <button
@@ -102,6 +103,7 @@ export default function Home() {
                   onClick={openCreateCommunityModal}
                   className="app-button-primary"
                 >
+                  <Plus aria-hidden="true" size={17} />
                   Create Community
                 </button>
               </div>

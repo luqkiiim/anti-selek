@@ -97,14 +97,14 @@ function renderClaimControls({
 
   return (
     <div className="mt-3 flex items-center justify-between gap-3 border-t border-gray-200 pt-3">
-      <p className="text-[10px] font-bold uppercase tracking-wider text-gray-500">
+      <p className="text-xs font-semibold text-gray-500">
         {statusText}
       </p>
       <button
         type="button"
         onClick={() => onRequestClaim(player)}
         disabled={buttonDisabled}
-        className="rounded-xl bg-gray-900 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-white disabled:cursor-not-allowed disabled:opacity-50"
+        className="app-button-dark px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-50"
       >
         {buttonLabel}
       </button>
@@ -124,13 +124,13 @@ export function CommunityLeaderboardPanel({
   onOpenPlayerProfile,
 }: CommunityLeaderboardPanelProps) {
   return (
-    <div className="bg-white p-6 rounded-3xl shadow-md border border-gray-100 space-y-4">
+    <div className="app-panel space-y-4 p-5 sm:p-6">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <h3 className="text-sm font-black text-gray-900 uppercase tracking-widest">
+          <h3 className="app-section-eyebrow">
             {title}
           </h3>
-          <p className="mt-1 text-[10px] font-bold uppercase tracking-wider text-gray-400">
+          <p className="mt-1 text-xs font-semibold text-gray-500">
             {subtitle}
           </p>
         </div>
@@ -139,8 +139,8 @@ export function CommunityLeaderboardPanel({
 
       <div className="space-y-2">
         {players.length === 0 ? (
-          <div className="bg-gray-50 border-2 border-dashed border-gray-100 rounded-2xl p-4 text-center">
-            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">
+          <div className="app-empty p-4 text-center">
+            <p className="text-sm font-semibold text-gray-500">
               No players yet
             </p>
           </div>
@@ -166,30 +166,30 @@ export function CommunityLeaderboardPanel({
                   onOpenPlayerProfile(player.id);
                 }
               }}
-              className="cursor-pointer rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3 transition hover:-translate-y-0.5 hover:border-blue-300 hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 focus-visible:ring-offset-2"
+              className="cursor-pointer rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 transition hover:-translate-y-0.5 hover:border-blue-300 hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 focus-visible:ring-offset-2"
             >
               <div className="flex items-center justify-between gap-3">
                 <div className="flex min-w-0 items-center gap-3">
-                  <span className="w-6 shrink-0 text-[10px] font-black uppercase tracking-widest text-blue-600">
+                  <span className="w-6 shrink-0 text-xs font-semibold text-blue-600">
                     #{index + 1}
                   </span>
                   <div className="min-w-0">
                     <Link
                       href={`/profile/${player.id}?communityId=${communityId}`}
-                      className="text-sm font-black text-gray-900 hover:text-blue-600 hover:underline"
+                      className="text-sm font-semibold text-gray-900 hover:text-blue-600 hover:underline"
                     >
                       {player.name}
                     </Link>
-                    <p className="mt-1 text-[10px] font-bold uppercase tracking-wider text-gray-500">
+                    <p className="mt-1 text-xs font-semibold text-gray-500">
                       {player.role}
                     </p>
                   </div>
                 </div>
                 <div className="shrink-0 text-right">
-                  <p className="text-sm font-black text-gray-900">
+                  <p className="text-sm font-semibold text-gray-900">
                     {player.elo}
                   </p>
-                  <p className="whitespace-nowrap text-[10px] font-black uppercase tracking-wider">
+                  <p className="whitespace-nowrap text-xs font-semibold">
                     <span className="text-green-600">W {player.wins}</span>
                     <span className="text-gray-300"> / </span>
                     <span className="text-red-600">L {player.losses}</span>

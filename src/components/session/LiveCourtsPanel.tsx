@@ -219,7 +219,7 @@ function QueuePromotionGhost({ ghost }: { ghost: PromotionGhostState }) {
           `transform ${GHOST_MOVE_MS}ms cubic-bezier(0.22, 1, 0.36, 1), opacity ${GHOST_FADE_MS}ms ease`,
       }}
     >
-      <div className="h-full rounded-2xl border border-blue-100 bg-blue-50/40 p-3 shadow-[0_24px_60px_-28px_rgba(13,63,136,0.5)] md:p-3.5">
+      <div className="h-full rounded-xl border border-blue-100 bg-[var(--accent-faint)] p-3 shadow-[0_18px_44px_-28px_rgba(15,118,110,0.5)] md:p-3.5">
         <div className="grid h-full grid-cols-[minmax(0,1fr)_2.5rem_2.5rem_minmax(0,1fr)] items-center gap-2.5 sm:grid-cols-[minmax(0,1fr)_2.75rem_2.75rem_minmax(0,1fr)] sm:gap-3 md:grid-cols-[minmax(0,1fr)_3.5rem_3.5rem_minmax(0,1fr)] md:gap-4 xl:grid-cols-[minmax(0,1fr)_2.75rem_2.75rem_minmax(0,1fr)] xl:gap-3">
           <QueuePromotionGhostTeamNames
             players={[ghost.match.team1User1, ghost.match.team1User2]}
@@ -326,7 +326,6 @@ export function LiveCourtsPanel({
     !queuedMatch &&
     canQueueNextMatch;
   const showQueuedMatchSlot = Boolean(queuedMatch) || canQueueNextMatch;
-  const showCourtCountPills = courts.length >= 5;
   const canCreateMatches = creatableOpenCourtCount > 0 && !creatingOpenMatches;
   const optimisticCreatingCount = creatingOpenMatches ? creatingOpenCourtCount : 0;
   const displayedActiveMatchesCount = activeMatchesCount + optimisticCreatingCount;
@@ -612,17 +611,13 @@ export function LiveCourtsPanel({
       eyebrow={sessionStatus === SessionStatus.ACTIVE ? "Court board" : "Court layout"}
       eyebrowClassName="app-section-eyebrow"
       action={
-        <div className="flex w-full min-w-0 items-start justify-between gap-3 sm:w-auto sm:justify-end">
-          {showCourtCountPills ? (
-            <div className="flex min-w-0 flex-col items-start gap-2">
-              <span className="app-chip app-chip-accent">
-                {displayedActiveMatchesCount} in use
-              </span>
-              <span className="app-chip app-chip-neutral">
-                {displayedReadyCourtsCount} ready
-              </span>
-            </div>
-          ) : null}
+        <div className="flex w-full min-w-0 flex-wrap items-center justify-between gap-2 sm:w-auto sm:justify-end">
+          <span className="app-chip app-chip-accent">
+            {displayedActiveMatchesCount} in use
+          </span>
+          <span className="app-chip app-chip-neutral">
+            {displayedReadyCourtsCount} ready
+          </span>
           {showCreateMatchesAction ? (
             <button
               type="button"

@@ -10,6 +10,7 @@ import {
 } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
+import { ArrowLeft, SlidersHorizontal } from "lucide-react";
 import { getSessionTypeLabel } from "@/lib/sessionModeLabels";
 import { FlashMessage, HeroCard } from "@/components/ui/chrome";
 import { CommunityActionConfirmModal } from "@/components/community/CommunityActionConfirmModal";
@@ -879,6 +880,7 @@ export default function CommunityPage() {
                   onClick={handleBack}
                   className="app-button-secondary px-4 py-2"
                 >
+                  <ArrowLeft aria-hidden="true" size={17} />
                   Back
                 </button>
               </div>
@@ -908,6 +910,7 @@ export default function CommunityPage() {
                 onClick={handleCommunityHostButtonClick}
                 className="app-button-primary"
               >
+                <SlidersHorizontal aria-hidden="true" size={17} />
                 {isHostMode ? "Exit Host Setup" : "Open Host Setup"}
               </button>
             ) : null
@@ -932,7 +935,7 @@ export default function CommunityPage() {
                   className={`rounded-2xl px-4 py-3 text-left transition ${
                     isActive
                       ? "bg-white shadow-sm ring-1 ring-blue-100"
-                      : "bg-transparent text-gray-600 hover:bg-white/70"
+                      : "bg-transparent text-gray-600 hover:bg-white"
                   }`}
                 >
                   <p className="text-sm font-semibold text-gray-900">

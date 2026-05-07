@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, type Ref } from "react";
+import { Plus, RefreshCw, Undo2 } from "lucide-react";
 import { getCourtDisplayLabel } from "@/lib/courtLabels";
 import type { SideSpecificCourtCreateType } from "@/lib/courtCreate";
 import { MatchStatus, SessionStatus } from "@/types/enums";
@@ -22,7 +23,7 @@ function PromotionArrivalPlaceholder({
       <div
         ref={surfaceRef}
         data-live-court-promotion-surface={surfaceId}
-        className="rounded-2xl border border-blue-100 bg-blue-50/20 p-3 md:p-3.5"
+        className="rounded-xl border border-blue-100 bg-blue-50/20 p-3 md:p-3.5"
       >
         <div className="grid grid-cols-[minmax(0,1fr)_2.5rem_2.5rem_minmax(0,1fr)] items-center gap-2.5 sm:grid-cols-[minmax(0,1fr)_2.75rem_2.75rem_minmax(0,1fr)] sm:gap-3 md:grid-cols-[minmax(0,1fr)_3.5rem_3.5rem_minmax(0,1fr)] md:gap-4 xl:grid-cols-[minmax(0,1fr)_2.75rem_2.75rem_minmax(0,1fr)] xl:gap-3">
           <div className="space-y-1">
@@ -205,14 +206,17 @@ export function LiveCourtCard({
     );
   };
 
+  const liveActionClass =
+    "inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-gray-700 transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-50 md:px-3";
   const leftAction = canManageLiveCourt ? (
     <button
       type="button"
       onClick={() => onReshuffleMatch(court.id)}
       disabled={liveCourtActionDisabled}
-      className="flex items-center gap-1 rounded-lg bg-gray-100 px-2.5 py-1.5 text-[10px] font-black uppercase tracking-wider text-gray-600 transition-all active:scale-95 disabled:cursor-not-allowed disabled:opacity-50 md:px-3"
+      className={liveActionClass}
       title="Pick different players"
     >
+      <RefreshCw aria-hidden="true" size={14} />
       {liveCourtActionDisabled ? "Reshuffling..." : "Reshuffle"}
     </button>
   ) : showManualButton ? (
@@ -225,14 +229,15 @@ export function LiveCourtCard({
         onClick={handleCreateMenuToggle}
         disabled={createActionDisabled}
         aria-expanded={createMenuOpen}
-        className="rounded-lg bg-gray-900 px-2.5 py-1.5 text-[10px] font-black uppercase tracking-wider text-white transition-all active:scale-95 disabled:cursor-not-allowed disabled:opacity-50 md:px-3"
+        className="inline-flex min-h-9 items-center gap-1.5 rounded-lg bg-gray-900 px-2.5 py-1.5 text-xs font-semibold text-white transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-50 md:px-3"
       >
+        <Plus aria-hidden="true" size={14} />
         Create
       </button>
 
       {createMenuOpen ? (
         <div className="absolute left-0 top-full z-20 mt-2 w-48 max-w-[calc(100vw-3rem)]">
-          <div className="relative space-y-2 rounded-2xl border border-gray-200 bg-white p-2 shadow-[0_22px_48px_-24px_rgba(15,23,42,0.35)]">
+          <div className="relative space-y-2 rounded-xl border border-gray-200 bg-white p-2 shadow-[0_14px_32px_-22px_rgba(15,23,42,0.35)]">
             <div className="absolute left-4 top-0 h-3 w-3 -translate-y-1/2 rotate-45 border-l border-t border-gray-200 bg-white" />
             {createMatchOptions.map((option) => (
               <button
@@ -240,7 +245,7 @@ export function LiveCourtCard({
                 type="button"
                 onClick={() => handleCreateOption(option)}
                 disabled={option.disabled || createActionDisabled}
-                className={`flex w-full flex-col rounded-xl border px-3 py-2 text-left transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-60 ${
+                className={`flex w-full flex-col rounded-lg border px-3 py-2 text-left transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-60 ${
                   option.key === "MANUAL"
                     ? "border-slate-200 bg-slate-50 text-slate-800"
                     : option.key === "WOMENS"
@@ -250,7 +255,7 @@ export function LiveCourtCard({
                         : "border-emerald-200/80 bg-emerald-50 text-emerald-800"
                 }`}
               >
-                <span className="text-[10px] font-semibold uppercase tracking-[0.18em]">
+                <span className="text-xs font-semibold">
                   {option.label}
                 </span>
                 {option.detail ? (
@@ -270,9 +275,10 @@ export function LiveCourtCard({
       type="button"
       onClick={() => onUndoMatchSelection(court.id)}
       disabled={undoingCourtId === court.id || courtPlayerActionActive}
-      className="flex items-center gap-1 rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-1.5 text-[10px] font-black uppercase tracking-wider text-rose-700 transition-all active:scale-95 disabled:cursor-not-allowed disabled:opacity-50 md:px-3"
+      className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-1.5 text-xs font-semibold text-rose-700 transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-50 md:px-3"
       title="Put selected players back in pool"
     >
+      <Undo2 aria-hidden="true" size={14} />
       {undoingCourtId === court.id ? "Undoing..." : "Undo"}
     </button>
   ) : null;
@@ -284,15 +290,15 @@ export function LiveCourtCard({
   return (
     <div
       data-live-court-card={court.id}
-      className={`flex min-w-0 flex-col overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm transition-shadow ${
+      className={`flex min-w-0 flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm transition-shadow ${
         isPromotionTarget ? "app-court-promotion-target" : ""
       }`}
     >
-      <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 border-b border-gray-100 bg-white px-3 py-3 md:px-4 md:py-3.5">
+      <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 border-b border-gray-200 bg-gray-50 px-3 py-3 md:px-4 md:py-3.5">
         <div className="flex min-w-0 justify-start">
           {leftAction}
         </div>
-        <div className="pointer-events-none inline-flex min-w-0 items-center rounded-full bg-[var(--accent-strong)] px-4 py-1.5 text-sm font-black uppercase tracking-[0.24em] text-white md:px-5 md:py-2 md:text-lg">
+        <div className="pointer-events-none inline-flex min-w-0 items-center rounded-lg bg-[var(--accent-strong)] px-4 py-1.5 text-sm font-semibold text-white md:px-5 md:py-2 md:text-lg">
           <span className="truncate">{getCourtDisplayLabel(court)}</span>
         </div>
         <div className="flex min-w-0 justify-end">
@@ -301,7 +307,7 @@ export function LiveCourtCard({
       </div>
 
       {poolLabel ? (
-        <div className="border-b border-gray-100 bg-indigo-50 px-3 py-2 text-center text-[10px] font-semibold uppercase tracking-[0.18em] text-indigo-700 md:px-4">
+        <div className="border-b border-gray-100 bg-indigo-50 px-3 py-2 text-center text-xs font-semibold text-indigo-700 md:px-4">
           {poolLabel}
         </div>
       ) : null}
@@ -349,11 +355,8 @@ export function LiveCourtCard({
             </div>
           )
         ) : (
-          <div className="px-4 py-10 text-center">
-            <div className="mb-2 text-xs font-black tracking-[0.35em] opacity-40">
-              COURT
-            </div>
-            <p className="text-xs font-bold uppercase tracking-widest text-gray-400">
+          <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 px-4 py-10 text-center">
+            <p className="text-sm font-semibold text-gray-500">
               {sessionStatus === SessionStatus.ACTIVE
                 ? "Next match soon"
                 : "Court Inactive"}

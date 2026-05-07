@@ -4,6 +4,7 @@ import Link from "next/link";
 import { Suspense, useState } from "react";
 import { getSession, signIn } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { LogIn } from "lucide-react";
 
 import { FlashMessage } from "@/components/ui/chrome";
 
@@ -82,7 +83,6 @@ function SigninForm() {
       <div className="w-full max-w-5xl">
         <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
           <section className="app-panel relative overflow-hidden px-6 py-8 sm:px-8">
-            <div className="pointer-events-none absolute inset-y-0 right-[-6rem] top-[-2rem] w-56 rounded-full bg-[radial-gradient(circle,_rgba(22,119,242,0.16),_transparent_65%)] blur-2xl" />
             <div className="relative">
               <p className="app-eyebrow">Court control</p>
               <h1 className="mt-3 app-title text-gray-900">Sign in to your badminton dashboard.</h1>
@@ -175,6 +175,7 @@ function SigninForm() {
                 </label>
 
                 <button type="submit" disabled={loading} className="app-button-primary w-full">
+                  <LogIn aria-hidden="true" size={17} />
                   {loading ? "Signing in..." : "Sign in"}
                 </button>
               </form>
@@ -207,6 +208,7 @@ function SigninForm() {
                   disabled={quickLoading || !communityName.trim() || !playerName.trim()}
                   className="app-button-primary w-full"
                 >
+                  <LogIn aria-hidden="true" size={17} />
                   {quickLoading ? "Entering..." : "Enter community"}
                 </button>
               </form>

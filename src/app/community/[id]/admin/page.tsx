@@ -2,6 +2,7 @@
 
 import { useCallback } from "react";
 import { useRouter } from "next/navigation";
+import { ArrowLeft } from "lucide-react";
 import { FlashMessage } from "@/components/ui/chrome";
 import { ClaimRequestsPanel } from "@/components/community-admin/ClaimRequestsPanel";
 import { CommunityAdminActionConfirmModal } from "@/components/community-admin/CommunityAdminActionConfirmModal";
@@ -243,6 +244,7 @@ export default function CommunityAdminPage() {
               onClick={handleBack}
               className="app-button-secondary px-4 py-2"
             >
+              <ArrowLeft aria-hidden="true" size={17} />
               Back
             </button>
             <div>
@@ -269,19 +271,13 @@ export default function CommunityAdminPage() {
       </div>
 
       <div className="app-shell space-y-8">
-        <section className="app-panel relative overflow-hidden px-5 py-6 sm:px-6">
-          <div className="pointer-events-none absolute inset-y-0 right-[-5rem] top-[-2rem] w-64 rounded-full bg-[radial-gradient(circle,_rgba(22,119,242,0.16),_transparent_65%)] blur-2xl" />
-          <div className="pointer-events-none absolute bottom-[-4rem] left-[-2rem] h-40 w-40 rounded-full bg-[radial-gradient(circle,_rgba(25,154,97,0.12),_transparent_68%)] blur-2xl" />
-          <div className="relative flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
+        <section className="app-panel px-5 py-6 sm:px-6">
+          <div className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
             <div className="max-w-3xl space-y-3">
               <p className="app-eyebrow">Admin workspace</p>
               <h2 className="text-2xl font-semibold text-gray-900 sm:text-3xl">
-                Keep the roster clean and the community ready for tournaments.
+                {community?.name || "Community"}
               </h2>
-              <p className="text-sm text-gray-600 sm:text-base">
-                Players, claim reviews, and community settings now live in
-                focused sections instead of one long admin screen.
-              </p>
             </div>
             <div className="flex flex-wrap gap-2">
               <span className="app-chip app-chip-accent">
@@ -324,7 +320,7 @@ export default function CommunityAdminPage() {
                   className={`rounded-2xl px-4 py-3 text-left transition ${
                     isActive
                       ? "bg-white shadow-sm ring-1 ring-blue-100"
-                      : "bg-transparent text-gray-600 hover:bg-white/70"
+                      : "bg-transparent text-gray-600 hover:bg-white"
                   }`}
                 >
                   <p className="text-sm font-semibold text-gray-900">

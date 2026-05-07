@@ -64,7 +64,7 @@ function TeamNames({
   const popoverPositionClass = align === "right" ? "right-0" : "left-0";
 
   return (
-    <div className={`min-w-0 space-y-1 ${textAlignClass}`}>
+    <div className={`min-w-0 space-y-2 ${textAlignClass}`}>
       {players.map((player) => {
         const actionKey = `${matchId}:${player.id}`;
         const actionOpen = activeActionPlayerId === actionKey;
@@ -83,12 +83,12 @@ function TeamNames({
                 onClick={() => onTogglePlayerAction(actionKey)}
                 disabled={actionDisabled}
                 aria-expanded={actionOpen}
-                className={`min-w-0 max-w-full truncate text-[14px] font-bold leading-tight text-gray-900 transition hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-50 sm:text-base md:text-[1.35rem] xl:text-base ${textAlignClass}`}
+                className={`min-w-0 max-w-full truncate text-base font-semibold leading-tight text-gray-900 transition hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-50 md:text-[1.35rem] xl:text-base ${textAlignClass}`}
               >
                 {player.name}
               </button>
             ) : (
-              <p className="truncate text-[14px] font-bold leading-tight text-gray-900 sm:text-base md:text-[1.35rem] xl:text-base">
+              <p className="truncate text-base font-semibold leading-tight text-gray-900 md:text-[1.35rem] xl:text-base">
                 {player.name}
               </p>
             )}
@@ -97,7 +97,7 @@ function TeamNames({
               <div
                 className={`absolute top-full z-20 mt-2 w-40 max-w-[calc(100vw-3rem)] ${popoverPositionClass}`}
               >
-                <div className="relative space-y-2 rounded-2xl border border-gray-200 bg-white p-2 shadow-[0_22px_48px_-24px_rgba(15,23,42,0.35)]">
+                <div className="relative space-y-2 rounded-xl border border-gray-200 bg-white p-2 shadow-[0_14px_32px_-22px_rgba(15,23,42,0.35)]">
                   <div
                     className={`absolute top-0 h-3 w-3 -translate-y-1/2 rotate-45 border-l border-t border-gray-200 bg-white ${
                       align === "right" ? "right-4" : "left-4"
@@ -107,7 +107,7 @@ function TeamNames({
                     type="button"
                     onClick={() => onReshuffleWithoutPlayer(player.id)}
                     disabled={actionDisabled}
-                    className="w-full rounded-xl border border-blue-200/80 bg-blue-50 px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-blue-800 transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="w-full rounded-lg border border-blue-200/80 bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-800 transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     {isReshuffling ? "Reshuffling..." : "Reshuffle Without"}
                   </button>
@@ -115,7 +115,7 @@ function TeamNames({
                     type="button"
                     onClick={() => onReplacePlayer(player.id)}
                     disabled={actionDisabled}
-                    className="w-full rounded-xl border border-emerald-200/80 bg-emerald-50 px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-emerald-800 transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="w-full rounded-lg border border-emerald-200/80 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-800 transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     {isReplacing ? "Replacing..." : "Replace"}
                   </button>
@@ -166,7 +166,7 @@ function ScoreSlot({
         onChange={(event) => onScoreChange(event.target.value)}
         onFocus={onScoreFocus}
         onBlur={onScoreBlur}
-        className="h-10 w-10 rounded-lg border border-blue-200 bg-white text-center text-lg font-black tabular-nums text-gray-900 focus:border-blue-500 focus:outline-none sm:h-11 sm:w-11 sm:text-xl md:h-14 md:w-14 md:text-[2rem] xl:h-11 xl:w-11 xl:text-xl"
+        className="h-14 w-14 rounded-xl border border-blue-200 bg-white text-center text-2xl font-semibold tabular-nums text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 sm:h-16 sm:w-16 sm:text-3xl xl:h-14 xl:w-14 xl:text-2xl"
         placeholder="0"
       />
     );
@@ -178,7 +178,7 @@ function ScoreSlot({
 
   return (
     <div
-      className={`flex h-10 w-10 items-center justify-center rounded-lg border bg-white text-lg font-black tabular-nums sm:h-11 sm:w-11 sm:text-xl md:h-14 md:w-14 md:text-[2rem] xl:h-11 xl:w-11 xl:text-xl ${
+      className={`flex h-14 w-14 items-center justify-center rounded-xl border bg-white text-2xl font-semibold tabular-nums sm:h-16 sm:w-16 sm:text-3xl xl:h-14 xl:w-14 xl:text-2xl ${
         displayScore !== null
           ? "border-gray-200 text-gray-900"
           : "border-gray-100 text-gray-300"
@@ -501,13 +501,13 @@ export function LiveMatchCard({
       <div
         ref={lineupRef}
         data-court-promotion-surface={match.id}
-        className={`rounded-2xl border p-3 transition-all md:p-3.5 ${
+        className={`rounded-xl border p-3 transition-all md:p-4 ${
           isPendingApproval
-            ? "border-orange-200 bg-orange-50/60"
-            : "border-blue-100 bg-blue-50/40"
+            ? "border-orange-200 bg-orange-50/80"
+            : "border-blue-100 bg-[var(--accent-faint)]"
         }`}
       >
-        <div className="grid grid-cols-[minmax(0,1fr)_2.5rem_2.5rem_minmax(0,1fr)] items-center gap-2.5 sm:grid-cols-[minmax(0,1fr)_2.75rem_2.75rem_minmax(0,1fr)] sm:gap-3 md:grid-cols-[minmax(0,1fr)_3.5rem_3.5rem_minmax(0,1fr)] md:gap-4 xl:grid-cols-[minmax(0,1fr)_2.75rem_2.75rem_minmax(0,1fr)] xl:gap-3">
+        <div className="grid grid-cols-[minmax(0,1fr)_3.5rem_3.5rem_minmax(0,1fr)] items-center gap-3 sm:grid-cols-[minmax(0,1fr)_4rem_4rem_minmax(0,1fr)] md:gap-4 xl:grid-cols-[minmax(0,1fr)_3.5rem_3.5rem_minmax(0,1fr)]">
           <TeamNames
             matchId={match.id}
             players={[match.team1User1, match.team1User2]}
@@ -581,7 +581,7 @@ export function LiveMatchCard({
 
       {match.status === MatchStatus.IN_PROGRESS && !canEdit ? (
         <div className="py-2 text-center">
-          <span className="inline-flex items-center rounded-full bg-blue-100 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-blue-800">
+          <span className="inline-flex items-center rounded-full bg-blue-100 px-3 py-1 text-xs font-semibold text-blue-800">
             Match Active
           </span>
         </div>

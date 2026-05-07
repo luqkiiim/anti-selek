@@ -24,7 +24,7 @@ export function ScoreEntryControls({
           type="button"
           onClick={onEdit}
           disabled={isSubmitting}
-          className="rounded-xl border border-gray-200 bg-white py-3 text-sm font-black uppercase text-gray-700 transition-all active:scale-95 active:bg-gray-50 disabled:opacity-50"
+          className="app-button-secondary min-h-12 py-3"
         >
           Edit
         </button>
@@ -32,7 +32,7 @@ export function ScoreEntryControls({
           type="button"
           onClick={onConfirm}
           disabled={isSubmitting}
-          className="rounded-xl bg-gray-900 py-3 text-sm font-black uppercase text-white shadow-md transition-all active:scale-95 active:bg-gray-800 disabled:opacity-50"
+          className="app-button-primary min-h-12 py-3"
         >
           {isSubmitting ? "Saving..." : "Confirm"}
         </button>
@@ -46,7 +46,7 @@ export function ScoreEntryControls({
         type="button"
         onClick={onSubmit}
         disabled={isSubmitting || !canSubmit}
-        className="w-full rounded-xl bg-gray-900 py-3 text-sm font-black uppercase text-white shadow-md transition-all active:scale-95 active:bg-gray-800 disabled:opacity-50"
+        className="app-button-primary min-h-12 w-full py-3"
       >
         {isSubmitting ? "Saving..." : "Submit Score"}
       </button>

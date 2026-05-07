@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { UserPlus, Users } from "lucide-react";
 import { SessionMode, SessionPool, SessionType } from "@/types/enums";
 
 interface HostTournamentPanelProps {
@@ -105,7 +106,7 @@ function FormatCard({
       <button
         type="button"
         onClick={onSelect}
-        className={`w-full rounded-2xl border px-2.5 py-2.5 pr-7 text-left transition ${
+        className={`w-full rounded-xl border px-2.5 py-2.5 pr-7 text-left transition ${
           selected
             ? "border-blue-300 bg-blue-50 text-blue-700 shadow-sm"
             : "border-gray-200 bg-white text-gray-800 hover:border-blue-200 hover:bg-blue-50/40"
@@ -133,7 +134,7 @@ function FormatCard({
         <div
           className={`absolute top-full z-20 mt-2 w-[min(15rem,calc(100vw-2rem))] max-w-[15rem] ${bubblePositionClass}`}
         >
-          <div className="relative rounded-2xl border border-gray-900 bg-gray-950 px-3 py-3 shadow-[0_18px_40px_-22px_rgba(15,23,42,0.55)]">
+          <div className="relative rounded-xl border border-gray-900 bg-gray-950 px-3 py-3 shadow-[0_18px_40px_-22px_rgba(15,23,42,0.55)]">
             <div
               className={`absolute top-0 h-3 w-3 -translate-y-1/2 rotate-45 border-l border-t border-gray-900 bg-gray-950 ${bubbleArrowClass}`}
             />
@@ -164,7 +165,7 @@ function SegmentedOption({
     <button
       type="button"
       onClick={onClick}
-      className={`rounded-full border px-3 py-2 text-sm font-semibold transition ${
+      className={`rounded-lg border px-3 py-2 text-sm font-semibold transition ${
         selected
           ? "border-blue-300 bg-blue-50 text-blue-700 shadow-sm"
           : "border-gray-200 bg-white text-gray-700 hover:border-blue-200 hover:bg-blue-50/40"
@@ -187,7 +188,7 @@ function RosterRow({
   onClick: () => void;
 }) {
   return (
-    <div className="flex items-center justify-between gap-3 rounded-2xl border border-gray-200 bg-gray-50/80 px-3 py-3">
+    <div className="flex items-center justify-between gap-3 rounded-xl border border-gray-200 bg-gray-50/80 px-3 py-3">
       <div className="min-w-0">
         <p className="text-sm font-semibold text-gray-900">{label}</p>
         <p className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">
@@ -199,6 +200,11 @@ function RosterRow({
         onClick={onClick}
         className="app-button-secondary shrink-0 px-3 py-2 text-sm"
       >
+        {label === "Players" ? (
+          <Users aria-hidden="true" size={16} />
+        ) : (
+          <UserPlus aria-hidden="true" size={16} />
+        )}
         {actionLabel}
       </button>
     </div>

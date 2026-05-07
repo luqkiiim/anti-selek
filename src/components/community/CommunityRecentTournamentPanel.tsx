@@ -23,13 +23,13 @@ export function CommunityRecentTournamentPanel({
   onOpenTournament,
 }: CommunityRecentTournamentPanelProps) {
   return (
-    <div className="bg-white p-6 rounded-3xl shadow-md border border-gray-100 space-y-4">
+    <div className="app-panel space-y-4 p-5 sm:p-6">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <h3 className="text-sm font-black text-gray-900 uppercase tracking-widest">
+          <h3 className="app-section-eyebrow">
             Recent Tournament
           </h3>
-          <p className="mt-1 text-[10px] font-bold uppercase tracking-wider text-gray-400">
+          <p className="mt-1 text-xs font-semibold text-gray-500">
             Latest completed result
           </p>
         </div>
@@ -61,36 +61,36 @@ export function CommunityRecentTournamentPanel({
               onOpenTournament(latestPastTournament.code);
             }
           }}
-          className="cursor-pointer rounded-2xl border border-gray-100 bg-gray-50 p-5 transition hover:-translate-y-0.5 hover:border-blue-300 hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 focus-visible:ring-offset-2"
+          className="cursor-pointer rounded-xl border border-gray-200 bg-gray-50 p-5 transition hover:-translate-y-0.5 hover:border-blue-300 hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 focus-visible:ring-offset-2"
         >
           <div className="flex items-start justify-between gap-3">
             <div>
               <h4 className="text-lg font-semibold text-gray-900">
                 {latestPastTournament.name}
               </h4>
-              <p className="mt-2 text-[10px] font-bold uppercase tracking-wider text-gray-500">
+              <p className="mt-2 text-xs font-semibold text-gray-500">
                 {latestPastTournament.players.length} Players -{" "}
                 {getSessionTypeLabel(latestPastTournament.type)}
               </p>
             </div>
-            <span className="rounded-lg bg-gray-200 px-2 py-1 text-[10px] font-black uppercase tracking-widest text-gray-600">
+            <span className="rounded-lg bg-gray-200 px-2 py-1 text-xs font-semibold text-gray-600">
               {latestPastTournament.status}
             </span>
           </div>
           <div className="mt-5 flex items-center justify-between gap-3 border-t border-gray-200 pt-4">
-            <p className="text-[10px] font-bold uppercase tracking-wider text-gray-500">
+            <p className="text-xs font-semibold text-gray-500">
               {new Date(
                 latestPastTournament.endedAt ?? latestPastTournament.createdAt
               ).toLocaleDateString()}
             </p>
-            <span className="text-[10px] font-black uppercase tracking-widest text-blue-600">
+            <span className="text-xs font-semibold text-blue-600">
               Open Results
             </span>
           </div>
         </div>
       ) : (
-        <div className="bg-gray-50 border-2 border-dashed border-gray-100 rounded-2xl p-6 text-center">
-          <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">
+        <div className="app-empty p-6 text-center">
+          <p className="text-sm font-semibold text-gray-500">
             No completed tournaments yet
           </p>
         </div>

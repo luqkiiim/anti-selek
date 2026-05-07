@@ -11,6 +11,7 @@ import {
 import { useSession } from "next-auth/react";
 import { useParams, useRouter } from "next/navigation";
 import {
+  ArrowLeft,
   ClipboardList,
   Grid3X3,
   Medal,
@@ -1011,6 +1012,7 @@ export default function SessionPage() {
               onClick={handleBack}
               className="app-button-secondary px-4 py-2"
             >
+              <ArrowLeft aria-hidden="true" size={17} />
               Back
             </button>
             <div className="min-w-0 flex flex-col">

@@ -10,7 +10,6 @@ import { chromium } from "@playwright/test";
 const cwd = process.cwd();
 const port = process.env.UI_REVIEW_PORT ?? "3013";
 const baseURL = `http://127.0.0.1:${port}`;
-const sourceDb = path.resolve(cwd, "prisma", "dev.db");
 const reviewDb = path.resolve(
   cwd,
   "prisma",
@@ -67,13 +66,48 @@ async function waitForServer(url, timeoutMs = 120_000) {
 }
 
 async function prepareReviewDatabase() {
-  console.log("Preparing review database copy...");
+  console.log("Preparing review database...");
   await fs.rm(reviewDb, { force: true });
-  await fs.copyFile(sourceDb, reviewDb);
 
   process.env.DATABASE_URL = reviewDbUrl;
   process.env.TURSO_DATABASE_URL = "";
   process.env.TURSO_AUTH_TOKEN = "";
+
+  const prismaCli = path.join(
+    cwd,
+    "node_modules",
+    ".bin",
+    process.platform === "win32" ? "prisma.cmd" : "prisma"
+  );
+  const schemaPush = spawnSync(
+    process.platform === "win32" ? "cmd.exe" : prismaCli,
+    process.platform === "win32"
+      ? ["/c", prismaCli, "db", "push", "--skip-generate"]
+      : ["db", "push", "--skip-generate"],
+    {
+      cwd,
+      env: {
+        ...process.env,
+        DATABASE_URL: reviewDbUrl,
+        TURSO_DATABASE_URL: "",
+        TURSO_AUTH_TOKEN: "",
+      },
+      stdio: "inherit",
+    }
+  );
+
+  if (schemaPush.status !== 0) {
+    const fallbackDb = path.resolve(cwd, "prisma", "e2e.db");
+    try {
+      console.warn(
+        "Prisma schema push failed; falling back to the current e2e database schema."
+      );
+      await fs.rm(reviewDb, { force: true });
+      await fs.copyFile(fallbackDb, reviewDb);
+    } catch {
+      throw new Error("Failed to prepare UI review database schema");
+    }
+  }
 
   const prisma = new PrismaClient();
   const passwordHash = await bcrypt.hash("Password123!", 10);
@@ -322,7 +356,7 @@ function startReviewServer() {
   console.log("Starting local review server...");
   return spawn(
     "cmd.exe",
-    ["/c", "npm.cmd", "run", "start", "--", "--hostname", "127.0.0.1", "--port", port],
+    ["/c", "npm.cmd", "run", "dev", "--", "--hostname", "127.0.0.1", "--port", port],
     {
       cwd,
       env: {
