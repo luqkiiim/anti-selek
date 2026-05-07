@@ -2,6 +2,7 @@
 
 import { useEffect, type ReactNode } from "react";
 import { createPortal } from "react-dom";
+import { X } from "lucide-react";
 
 type PickerSheetLockSnapshot = {
   bodyOverflow: string;
@@ -126,7 +127,7 @@ export function PlayerPickerSheet({
   return createPortal(
     <div
       className={cx(
-        "fixed inset-0 z-[80] bg-[rgba(23,32,31,0.42)] backdrop-blur-sm",
+        "fixed inset-0 z-[80] bg-[rgba(23,32,31,0.38)] backdrop-blur-[6px]",
         overlayClassName
       )}
     >
@@ -135,7 +136,7 @@ export function PlayerPickerSheet({
           role="dialog"
           aria-modal="true"
           className={cx(
-            "flex h-full min-h-0 w-full flex-col bg-[var(--surface-strong)] shadow-[0_18px_52px_rgba(23,32,31,0.2)] lg:h-auto lg:max-h-[min(92vh,92dvh)] lg:max-w-[40rem] lg:rounded-[14px] lg:border lg:border-[color:var(--line)]",
+            "flex h-full min-h-0 w-full flex-col bg-[var(--surface-strong)] shadow-[0_16px_40px_rgba(23,32,31,0.14)] lg:h-auto lg:max-h-[min(92vh,92dvh)] lg:max-w-[40rem] lg:rounded-[14px] lg:border lg:border-[color:var(--line)]",
             panelClassName
           )}
         >
@@ -150,10 +151,10 @@ export function PlayerPickerSheet({
               <button
                 type="button"
                 onClick={onClose}
-                className="flex h-9 w-9 items-center justify-center rounded-lg border border-gray-200 bg-white text-lg font-semibold text-gray-500 transition hover:text-gray-700"
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-500 transition hover:border-[rgba(15,118,110,0.28)] hover:text-[var(--accent-strong)]"
                 aria-label="Close"
               >
-                &times;
+                <X aria-hidden="true" size={18} strokeWidth={2.2} />
               </button>
             </div>
           </div>

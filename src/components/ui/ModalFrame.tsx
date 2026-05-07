@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, type ReactNode } from "react";
+import { X } from "lucide-react";
 
 type ScrollLockSnapshot = {
   bodyOverflow: string;
@@ -189,18 +190,21 @@ export function ModalFrame({
   return (
     <div
       className={cx(
-        "app-modal-backdrop",
+        "app-modal-backdrop fixed inset-0",
         fullscreenUntilDesktop && "app-modal-backdrop-fullscreen-tablet"
       )}
     >
       <div
         ref={frameRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
         className={cx(
           "app-modal-frame",
           fullscreenUntilDesktop && "app-modal-frame-fullscreen-tablet"
         )}
       >
-        <div className="border-b border-gray-200 bg-gray-50 px-4 py-4 sm:px-5">
+        <div className="border-b border-gray-200 bg-gray-50 px-4 pb-4 pt-[calc(1rem+env(safe-area-inset-top))] sm:px-5 sm:pt-4">
           <div className="flex items-start justify-between gap-4">
             <div>
               <h2 className="text-lg font-semibold text-gray-900">{title}</h2>
@@ -211,10 +215,10 @@ export function ModalFrame({
             <button
               type="button"
               onClick={onClose}
-              className="flex h-9 w-9 items-center justify-center rounded-lg border border-gray-200 bg-white text-lg font-semibold text-gray-500 transition hover:text-gray-700"
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-500 transition hover:border-[rgba(15,118,110,0.28)] hover:text-[var(--accent-strong)]"
               aria-label="Close"
             >
-              &times;
+              <X aria-hidden="true" size={18} strokeWidth={2.2} />
             </button>
           </div>
         </div>

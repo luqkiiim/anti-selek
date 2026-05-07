@@ -29,6 +29,14 @@ interface SessionPreferenceEditorPortalProps {
   onRemovePlayer: (userId: string, playerName: string) => void;
 }
 
+function labelClassName() {
+  return "text-[11px] font-semibold text-gray-500";
+}
+
+function selectClassName() {
+  return "field h-10 px-3 py-2 text-sm";
+}
+
 export function SessionPreferenceEditorPortal({
   openPreferenceEditor,
   activePreferencePlayer,
@@ -94,22 +102,29 @@ export function SessionPreferenceEditorPortal({
   return createPortal(
     <div
       ref={panelRef}
-      className="fixed z-[80] w-44 space-y-2 rounded-xl border border-gray-200 bg-white p-2.5 shadow-2xl"
+      role="dialog"
+      aria-label={`Player actions for ${activePreferencePlayer.user.name}`}
+      className="fixed z-[80] w-56 space-y-3 rounded-xl border border-gray-200 bg-white p-3 shadow-[0_16px_34px_rgba(23,32,31,0.14)]"
       style={{
         left: openPreferenceEditor.left,
         top: openPreferenceEditor.top,
       }}
     >
+      <div>
+        <p className="truncate text-sm font-semibold text-gray-900">
+          {activePreferencePlayer.user.name}
+        </p>
+        <p className="mt-0.5 text-xs text-gray-500">Player actions</p>
+      </div>
+
       {isMixicano ? (
         <>
-          <div className="space-y-1">
-            <p className="text-[9px] font-black uppercase tracking-wider text-gray-400">
-              Gender
-            </p>
+          <label className="block space-y-1.5">
+            <span className={labelClassName()}>Gender</span>
             <select
               value={activePreferencePlayer.gender}
-              onChange={async (e) => {
-                const nextGender = e.target.value as PlayerGender;
+              onChange={async (event) => {
+                const nextGender = event.target.value as PlayerGender;
                 onClose();
                 await onUpdatePreference(
                   activePreferencePlayer.userId,
@@ -118,62 +133,56 @@ export function SessionPreferenceEditorPortal({
                   activePreferencePlayer.pool
                 );
               }}
-              className="h-8 w-full rounded-lg border border-gray-200 bg-white px-2 text-[10px] font-black uppercase tracking-wide text-gray-700 focus:border-blue-400 focus:outline-none"
+              className={selectClassName()}
             >
               <option value={PlayerGender.MALE}>Male</option>
               <option value={PlayerGender.FEMALE}>Female</option>
             </select>
-          </div>
-          <div className="space-y-1">
-            <p className="text-[9px] font-black uppercase tracking-wider text-gray-400">
-              Mixed Side
-            </p>
+          </label>
+
+          <label className="block space-y-1.5">
+            <span className={labelClassName()}>Mixed side</span>
             {mixedSideOption ? (
               <select
                 value={activePreferencePlayer.mixedSideOverride ?? ""}
-                onChange={async (e) => {
+                onChange={async (event) => {
                   onClose();
                   await onUpdatePreference(
                     activePreferencePlayer.userId,
                     activePreferencePlayer.gender,
-                    e.target.value ? (e.target.value as MixedSide) : null,
+                    event.target.value ? (event.target.value as MixedSide) : null,
                     activePreferencePlayer.pool
                   );
                 }}
-                className="h-8 w-full rounded-lg border border-gray-200 bg-white px-2 text-[10px] font-black uppercase tracking-wide text-gray-700 focus:border-blue-400 focus:outline-none"
+                className={selectClassName()}
               >
                 <option value="">Default</option>
                 <option value={mixedSideOption.value}>{mixedSideOption.label}</option>
               </select>
             ) : (
-              <p className="px-1 py-2 text-[10px] font-black uppercase tracking-wide text-gray-500">
+              <p className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-600">
                 Default
               </p>
             )}
-          </div>
+          </label>
         </>
-      ) : (
-        <p className="px-0.5 text-[9px] font-black uppercase tracking-wider text-gray-400">
-          Player Actions
-        </p>
-      )}
+      ) : null}
+
       {poolsEnabled ? (
-        <div className="space-y-1">
-          <p className="text-[9px] font-black uppercase tracking-wider text-gray-400">
-            Pool
-          </p>
+        <label className="block space-y-1.5">
+          <span className={labelClassName()}>Pool</span>
           <select
             value={activePreferencePlayer.pool}
-            onChange={async (e) => {
+            onChange={async (event) => {
               onClose();
               await onUpdatePreference(
                 activePreferencePlayer.userId,
                 activePreferencePlayer.gender,
                 activePreferencePlayer.mixedSideOverride ?? null,
-                e.target.value as SessionPool
+                event.target.value as SessionPool
               );
             }}
-            className="h-8 w-full rounded-lg border border-gray-200 bg-white px-2 text-[10px] font-black uppercase tracking-wide text-gray-700 focus:border-blue-400 focus:outline-none"
+            className={selectClassName()}
           >
             {poolOptions.map((option) => (
               <option key={option.value} value={option.value}>
@@ -181,10 +190,11 @@ export function SessionPreferenceEditorPortal({
               </option>
             ))}
           </select>
-        </div>
+        </label>
       ) : null}
+
       {activePreferencePlayer.isGuest ? (
-        <div className="border-t border-gray-100 pt-1">
+        <div className="border-t border-gray-100 pt-3">
           <button
             type="button"
             onClick={() => {
@@ -195,7 +205,7 @@ export function SessionPreferenceEditorPortal({
               );
             }}
             disabled={renamingGuestId === activePreferencePlayer.userId}
-            className="h-8 w-full rounded-lg border border-blue-200 bg-blue-50 text-[10px] font-black uppercase tracking-wide text-blue-700 disabled:opacity-50"
+            className="app-button-secondary w-full px-3 py-2.5 text-sm"
           >
             {renamingGuestId === activePreferencePlayer.userId
               ? "Opening..."
@@ -203,7 +213,8 @@ export function SessionPreferenceEditorPortal({
           </button>
         </div>
       ) : null}
-      <div className="border-t border-gray-100 pt-1">
+
+      <div className="border-t border-gray-100 pt-3">
         <button
           type="button"
           onClick={() =>
@@ -213,22 +224,21 @@ export function SessionPreferenceEditorPortal({
             )
           }
           disabled={removingPlayerId === activePreferencePlayer.userId}
-          className="h-8 w-full rounded-lg border border-rose-200 bg-rose-50 text-[10px] font-black uppercase tracking-wide text-rose-700 disabled:opacity-50"
+          className="app-button-danger w-full px-3 py-2.5 text-sm"
         >
           {removingPlayerId === activePreferencePlayer.userId
             ? "Removing..."
             : "Remove Player"}
         </button>
       </div>
-      <div className="flex justify-end">
-        <button
-          type="button"
-          onClick={onClose}
-          className="text-[9px] font-black uppercase tracking-widest text-gray-500"
-        >
-          Close
-        </button>
-      </div>
+
+      <button
+        type="button"
+        onClick={onClose}
+        className="flex h-9 w-full items-center justify-center rounded-lg text-sm font-semibold text-gray-500 transition hover:text-[var(--accent-strong)]"
+      >
+        Close
+      </button>
     </div>,
     document.body
   );

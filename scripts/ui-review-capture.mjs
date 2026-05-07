@@ -298,7 +298,10 @@ async function prepareReviewDatabase() {
           mode: "OPEN",
           status: "ACTIVE",
           courts: {
-            create: [{ id: courtId, courtNumber: 1 }],
+            create: [
+              { id: courtId, courtNumber: 1 },
+              { id: `${courtId}-empty`, courtNumber: 2 },
+            ],
           },
           players: {
             create: [
@@ -448,6 +451,83 @@ async function captureScreens() {
         ...options,
         fullPage: options.fullPage ?? label !== "mobile",
       });
+    }
+
+    async function closeTopModal(page) {
+      await page.getByLabel("Close").filter({ visible: true }).first().click();
+      await page.waitForTimeout(150);
+    }
+
+    async function captureDashboardPopups(page, label) {
+      if (label !== "mobile") {
+        return;
+      }
+
+      await page.getByRole("button", { name: "Create Community" }).click();
+      await page
+        .getByRole("heading", { name: "Create community" })
+        .waitFor();
+      await saveScreenshot(page, "popup-create-community-mobile.png", {
+        fullPage: false,
+      });
+      await closeTopModal(page);
+
+      await page.getByRole("button", { name: "Join Community" }).click();
+      await page.getByRole("heading", { name: "Join community" }).waitFor();
+      await saveScreenshot(page, "popup-join-community-mobile.png", {
+        fullPage: false,
+      });
+      await closeTopModal(page);
+    }
+
+    async function captureHostSetupPopups(page, label) {
+      if (label !== "mobile") {
+        return;
+      }
+
+      await page.getByRole("button", { name: "Choose" }).first().click();
+      await page.getByRole("heading", { name: "Add Players" }).waitFor();
+      await saveScreenshot(page, "popup-host-player-picker-mobile.png", {
+        fullPage: false,
+      });
+      await closeTopModal(page);
+    }
+
+    async function captureManualMatchPopup(page, label) {
+      if (label !== "mobile") {
+        return;
+      }
+
+      await showSessionMobileTab(page, "Courts", 1);
+      await page
+        .locator('[data-empty-court-create-root] button')
+        .filter({ hasText: "Create" })
+        .first()
+        .click();
+      await page.getByRole("button", { name: "Manual" }).click();
+      await page.getByRole("heading", { name: "Manual Match" }).waitFor();
+      await saveScreenshot(page, "popup-manual-match-mobile.png", {
+        fullPage: false,
+      });
+      await closeTopModal(page);
+    }
+
+    async function captureAdminConfirmPopup(page, label) {
+      if (label !== "mobile") {
+        return;
+      }
+
+      await page.goto(`${baseURL}/community/${ids.hostCommunityId}/admin`);
+      await page.getByRole("heading", { name: "Community controls" }).waitFor();
+      await page.getByRole("button", { name: "Settings" }).click();
+      await page.getByRole("button", { name: "Delete community" }).click();
+      await page
+        .getByRole("heading", { name: "Delete community permanently?" })
+        .waitFor();
+      await saveScreenshot(page, "popup-admin-delete-confirm-mobile.png", {
+        fullPage: false,
+      });
+      await closeTopModal(page);
     }
 
     async function showSessionMobileTab(page, tabLabel, sectionIndex) {
@@ -648,6 +728,7 @@ async function captureScreens() {
     }) {
       const page = await signIn(context);
       await saveFlowScreenshot(page, `dashboard-${label}.png`, label);
+      await captureDashboardPopups(page, label);
 
       await page.goto(`${baseURL}/community/${ids.hostCommunityId}`);
       await page
@@ -663,10 +744,13 @@ async function captureScreens() {
         .waitFor();
       await waitForCommunityMobileSection(page, "host");
       await saveFlowScreenshot(page, `host-setup-${label}.png`, label);
+      await captureHostSetupPopups(page, label);
+      await captureAdminConfirmPopup(page, label);
 
       await page.goto(`${baseURL}/session/${scoreSessionId}`);
       await page.getByRole("heading", { name: sessionHeading }).waitFor();
       await saveFlowScreenshot(page, `session-active-${label}.png`, label);
+      await captureManualMatchPopup(page, label);
 
       await showSessionStandings(page);
       await saveScreenshot(page, `standings-${label}.png`, { fullPage: false });

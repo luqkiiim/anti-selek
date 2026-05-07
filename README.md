@@ -125,7 +125,7 @@ Notes:
 
 - `npm run dev` can run fully offline only if Turso variables are unset and the app is using local SQLite
 - `npm run build` always invokes the Turso migration wrapper first, but that wrapper only applies migrations on Vercel unless you force it with `npm run db:migrate:turso`
-- `npm run smoke:production` defaults to public, non-mutating checks. Set `PRODUCTION_SMOKE_EMAIL`, `PRODUCTION_SMOKE_PASSWORD`, `PRODUCTION_SMOKE_COMMUNITY_ID`, and `PRODUCTION_SMOKE_SESSION_CODE` to include signed-in production paths. Set `PRODUCTION_SMOKE_MUTATE=1` only for a disposable production session where score submission and approval are safe.
+- `npm run smoke:production` defaults to public, non-mutating checks. Set `PRODUCTION_SMOKE_EMAIL`, `PRODUCTION_SMOKE_PASSWORD`, `PRODUCTION_SMOKE_COMMUNITY_ID`, and `PRODUCTION_SMOKE_SESSION_CODE` to include signed-in production paths. Signed-in smoke checks mobile first, then desktop. Set `PRODUCTION_SMOKE_MUTATE=1` only for a disposable production session where score submission and approval are safe.
 
 ## Core Workflow
 

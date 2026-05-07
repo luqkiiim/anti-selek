@@ -118,10 +118,10 @@ export function CommunityPlayersModal({
             return (
               <div
                 key={player.id}
-                className={`app-touch-pan-y rounded-2xl border px-3 py-3 text-left transition ${
+                className={`app-touch-pan-y rounded-xl border px-3 py-3 text-left transition ${
                   isSelected
-                    ? "border-blue-200 bg-blue-50"
-                    : "border-gray-200 bg-gray-50/70 hover:border-blue-200 hover:bg-white"
+                    ? "border-[rgba(15,118,110,0.24)] bg-[var(--accent-faint)]"
+                    : "border-gray-200 bg-gray-50/70 hover:border-[rgba(15,118,110,0.2)] hover:bg-white"
                 }`}
               >
                 <button
@@ -140,12 +140,12 @@ export function CommunityPlayersModal({
                         {player.name}
                       </p>
                       {player.status === CommunityPlayerStatus.OCCASIONAL ? (
-                        <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[9px] font-medium uppercase tracking-wide text-emerald-700">
+                        <span className="app-chip app-chip-success px-2 py-0.5 text-[10px]">
                           Occasional
                         </span>
                       ) : null}
                       {poolsEnabled && isSelected ? (
-                        <span className="rounded-full border border-indigo-200 bg-indigo-50 px-2 py-0.5 text-[9px] font-medium uppercase tracking-wide text-indigo-700">
+                        <span className="app-chip app-chip-accent px-2 py-0.5 text-[10px]">
                           {selectedPool === SessionPool.A ? poolAName : poolBName}
                         </span>
                       ) : null}
@@ -154,9 +154,9 @@ export function CommunityPlayersModal({
                   </div>
 
                   <span
-                    className={`inline-flex shrink-0 rounded-full border px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.18em] ${
+                    className={`inline-flex min-h-9 shrink-0 items-center rounded-lg border px-3 py-1.5 text-xs font-semibold ${
                       isSelected
-                        ? "border-blue-200 bg-blue-50 text-blue-700"
+                        ? "border-[rgba(15,118,110,0.24)] bg-[var(--accent-faint)] text-[var(--accent-strong)]"
                         : "border-gray-200 bg-white text-gray-500"
                     }`}
                   >
@@ -165,8 +165,8 @@ export function CommunityPlayersModal({
                 </button>
 
                 {poolsEnabled && isSelected ? (
-                  <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-blue-100 pt-3">
-                    <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-gray-500">
+                  <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-gray-200 pt-3">
+                    <span className="text-xs font-semibold text-gray-500">
                       Pool
                     </span>
                     {[SessionPool.A, SessionPool.B].map((pool) => {
@@ -183,9 +183,9 @@ export function CommunityPlayersModal({
                             onChangePlayerPool(player.id, pool);
                             restoreSearchFocusIfNeeded();
                           }}
-                          className={`rounded-xl border px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.18em] transition ${
+                          className={`min-h-9 rounded-lg border px-3 py-2 text-xs font-semibold transition ${
                             isActive
-                              ? "border-indigo-200 bg-indigo-50 text-indigo-700"
+                              ? "border-[rgba(15,118,110,0.24)] bg-[var(--accent-faint)] text-[var(--accent-strong)]"
                               : "border-gray-200 bg-white text-gray-500"
                           }`}
                         >

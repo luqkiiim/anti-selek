@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, type RefObject } from "react";
+import { X } from "lucide-react";
 
 interface SearchFieldProps {
   value: string;
@@ -71,10 +72,10 @@ export function SearchField({
             onChange("");
             restoreFocusIfNeeded();
           }}
-          className="absolute right-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full bg-gray-100 text-base font-semibold text-gray-500 transition hover:text-gray-700"
+          className="absolute right-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-lg bg-gray-100 text-gray-500 transition hover:text-[var(--accent-strong)]"
           aria-label="Clear search"
         >
-          &times;
+          <X aria-hidden="true" size={16} strokeWidth={2.2} />
         </button>
       ) : null}
     </div>

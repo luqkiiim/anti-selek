@@ -105,9 +105,9 @@ export function SessionPlayersModal({
                 key={value}
                 type="button"
                 onClick={() => setFilter(value)}
-                className={`rounded-full border px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.18em] transition ${
+                className={`min-h-9 rounded-lg border px-3 py-1.5 text-xs font-semibold transition ${
                   filter === value
-                    ? "border-blue-200 bg-blue-50 text-blue-700"
+                    ? "border-[rgba(15,118,110,0.24)] bg-[var(--accent-faint)] text-[var(--accent-strong)]"
                     : "border-gray-200 bg-white text-gray-500"
                 }`}
               >
@@ -126,7 +126,7 @@ export function SessionPlayersModal({
       }
     >
       {filteredPlayers.length === 0 ? (
-        <div className="rounded-3xl border border-dashed border-gray-200 bg-gray-50/70 px-4 py-10 text-center text-sm text-gray-500">
+        <div className="app-empty px-4 py-10 text-center text-sm text-gray-500">
           No players match this view.
         </div>
       ) : (
@@ -139,13 +139,13 @@ export function SessionPlayersModal({
                 : (poolBName ?? "Regular");
             const poolBadgeClass =
               player.pool === SessionPool.A
-                ? "border-indigo-200 bg-indigo-50 text-indigo-700"
-                : "border-emerald-200 bg-emerald-50 text-emerald-700";
+                ? "app-chip-accent"
+                : "app-chip-success";
 
             return (
               <div
                 key={player.userId}
-                className="app-touch-pan-y flex items-center justify-between gap-3 rounded-2xl border border-gray-200 bg-gray-50/70 px-3 py-3"
+                className="app-touch-pan-y flex items-center justify-between gap-3 rounded-xl border border-gray-200 bg-gray-50/70 px-3 py-3"
               >
                 <div className="min-w-0 space-y-1">
                   <div className="flex min-w-0 flex-wrap items-center gap-1.5">
@@ -153,24 +153,24 @@ export function SessionPlayersModal({
                       {player.user.name}
                     </p>
                     {player.userId === currentUserId ? (
-                      <span className="rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[9px] font-medium uppercase tracking-wide text-blue-700">
+                      <span className="app-chip app-chip-accent px-2 py-0.5 text-[10px]">
                         Me
                       </span>
                     ) : null}
                     {player.isGuest ? (
-                      <span className="rounded-full border border-gray-200 bg-white px-2 py-0.5 text-[9px] font-medium uppercase tracking-wide text-gray-600">
+                      <span className="app-chip app-chip-neutral px-2 py-0.5 text-[10px]">
                         Guest
                       </span>
                     ) : null}
                     {poolsEnabled ? (
                       <span
-                        className={`rounded-full border px-2 py-0.5 text-[9px] font-medium uppercase tracking-wide ${poolBadgeClass}`}
+                        className={`app-chip px-2 py-0.5 text-[10px] ${poolBadgeClass}`}
                       >
                         {poolLabel}
                       </span>
                     ) : null}
                     {player.isPaused ? (
-                      <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[9px] font-medium uppercase tracking-wide text-amber-800">
+                      <span className="app-chip app-chip-warning px-2 py-0.5 text-[10px]">
                         Paused
                       </span>
                     ) : null}
@@ -185,7 +185,7 @@ export function SessionPlayersModal({
                       onClick={(event) =>
                         onOpenPreferenceEditor(player.userId, event.currentTarget)
                       }
-                      className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-blue-700 transition"
+                      className="app-button-secondary px-3 py-2 text-sm"
                     >
                       Edit
                     </button>
@@ -194,8 +194,8 @@ export function SessionPlayersModal({
                     type="button"
                     onClick={() => onTogglePause(player.userId, player.isPaused)}
                     disabled={togglingPausePlayerId !== null}
-                    className={`rounded-xl px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-white transition disabled:cursor-not-allowed disabled:opacity-50 ${
-                      player.isPaused ? "bg-amber-500" : "bg-gray-900"
+                    className={`min-h-10 rounded-lg px-3 py-2 text-sm font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-50 ${
+                      player.isPaused ? "bg-[var(--warning)]" : "bg-[var(--foreground)]"
                     }`}
                   >
                     {isUpdatingPause

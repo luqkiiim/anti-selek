@@ -417,8 +417,8 @@ h4 {
   align-items: stretch;
   justify-content: center;
   padding: 0;
-  background: rgba(23, 32, 31, 0.42);
-  backdrop-filter: blur(8px);
+  background: rgba(23, 32, 31, 0.38);
+  backdrop-filter: blur(6px);
   overscroll-behavior: contain;
 }
 
@@ -433,7 +433,7 @@ h4 {
   border: 1px solid var(--line);
   background: var(--surface-strong);
   border-radius: 0;
-  box-shadow: 0 18px 52px rgba(23, 32, 31, 0.2);
+  box-shadow: 0 16px 40px rgba(23, 32, 31, 0.14);
 }
 
 .app-modal-scroll-region {
@@ -466,6 +466,13 @@ h4 {
   border-radius: 12px;
   padding: 1rem 1.15rem;
   box-shadow: 0 14px 36px rgba(23, 32, 31, 0.18);
+}
+
+.app-popup-card {
+  border: 1px solid var(--line);
+  background: var(--surface);
+  border-radius: 12px;
+  box-shadow: var(--shadow-soft);
 }
 
 .app-swipe-track {

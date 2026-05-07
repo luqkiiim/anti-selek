@@ -155,23 +155,23 @@ export function CommunityGuestsModal({
           {guestConfigs.map((guest) => (
             <div
               key={guest.name}
-              className="flex items-center justify-between gap-3 rounded-2xl border border-gray-200 bg-gray-50/70 px-3 py-3"
+              className="flex items-center justify-between gap-3 rounded-xl border border-gray-200 bg-gray-50/70 px-3 py-3"
             >
               <div className="min-w-0 space-y-1">
                 <p className="truncate text-sm font-semibold text-gray-900">
                   {guest.name}
                 </p>
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="rounded-full border border-gray-200 bg-white px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-gray-600">
+                  <span className="app-chip app-chip-neutral px-2 py-0.5 text-[10px]">
                     {guest.gender === PlayerGender.FEMALE ? "Female" : "Male"}
                   </span>
                   {poolsEnabled ? (
-                    <span className="rounded-full border border-indigo-200 bg-indigo-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-indigo-700">
+                    <span className="app-chip app-chip-accent px-2 py-0.5 text-[10px]">
                       {guest.pool === SessionPool.A ? poolAName : poolBName}
                     </span>
                   ) : null}
                   {guest.mixedSideOverride ? (
-                    <span className="rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-blue-700">
+                    <span className="app-chip app-chip-accent px-2 py-0.5 text-[10px]">
                       {getMixedSideDisplayLabel({
                         gender: guest.gender,
                         mixedSideOverride: guest.mixedSideOverride,

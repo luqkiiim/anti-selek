@@ -65,7 +65,47 @@ async function signIn(page) {
     .waitFor({ timeout: 25_000 });
 }
 
-async function smokeSignedInSurface(context) {
+function validateSmokeConfiguration() {
+  if (!allowMutation) {
+    return;
+  }
+
+  const missing = [];
+  if (!smokeEmail) missing.push("PRODUCTION_SMOKE_EMAIL");
+  if (!smokePassword) missing.push("PRODUCTION_SMOKE_PASSWORD");
+  if (!smokeSessionCode) missing.push("PRODUCTION_SMOKE_SESSION_CODE");
+
+  if (missing.length > 0) {
+    throw new Error(
+      `PRODUCTION_SMOKE_MUTATE=1 requires disposable production data. Missing: ${missing.join(", ")}`
+    );
+  }
+}
+
+async function showMobileTab(page, navLabel, tabLabel) {
+  const tab = page
+    .locator(`nav[aria-label="${navLabel}"] button[aria-label="${tabLabel}"]`)
+    .filter({ visible: true })
+    .first();
+
+  if ((await tab.count()) === 0) {
+    return false;
+  }
+
+  await tab.click();
+  await page.waitForFunction(
+    ({ navLabel: targetNavLabel, tabLabel: targetTabLabel }) => {
+      const activeTab = document.querySelector(
+        `nav[aria-label="${targetNavLabel}"] button[aria-label="${targetTabLabel}"]`
+      );
+      return activeTab?.getAttribute("aria-current") === "page";
+    },
+    { navLabel, tabLabel }
+  );
+  return true;
+}
+
+async function smokeSignedInSurface(context, label, { allowScoreMutation = false } = {}) {
   if (!smokeEmail || !smokePassword) {
     log("signed-in smoke skipped; set PRODUCTION_SMOKE_EMAIL and PRODUCTION_SMOKE_PASSWORD");
     return;
@@ -73,12 +113,12 @@ async function smokeSignedInSurface(context) {
 
   const page = await context.newPage();
   await signIn(page);
-  log("signed-in dashboard loaded");
+  log(`${label} signed-in dashboard loaded`);
 
   if (smokeCommunityId) {
     await page.goto(`/community/${smokeCommunityId}`, { waitUntil: "networkidle" });
     await page.getByText("Community hub").first().waitFor({ timeout: 25_000 });
-    log("community hub loaded");
+    log(`${label} community hub loaded`);
 
     const hostSetupButton = page
       .getByRole("button", { name: "Open Host Setup" })
@@ -87,28 +127,29 @@ async function smokeSignedInSurface(context) {
     if ((await hostSetupButton.count()) > 0) {
       await hostSetupButton.click();
       await page.getByText("New tournament").first().waitFor({ timeout: 10_000 });
-      log("host setup opened");
+      log(`${label} host setup opened`);
     } else {
-      log("host setup skipped; smoke user is not an admin for the community");
+      log(`${label} host setup skipped; smoke user is not an admin for the community`);
     }
+  } else {
+    log(`${label} community smoke skipped; set PRODUCTION_SMOKE_COMMUNITY_ID`);
   }
 
   if (smokeSessionCode) {
     await page.goto(`/session/${smokeSessionCode}`, { waitUntil: "networkidle" });
-    await page.getByText("Court board").first().waitFor({ timeout: 25_000 });
-    log("live session loaded");
+    await page
+      .getByText(/Court board|Court layout|Standings/i)
+      .first()
+      .waitFor({ timeout: 25_000 });
+    await showMobileTab(page, "Session navigation", "Courts");
+    log(`${label} live session loaded`);
 
-    const standingsTab = page
-      .getByRole("button", { name: "Standings" })
-      .filter({ visible: true })
-      .first();
-    if ((await standingsTab.count()) > 0) {
-      await standingsTab.click();
-    }
+    await showMobileTab(page, "Session navigation", "Standings");
     await page.getByText("Standings").first().waitFor({ timeout: 10_000 });
-    log("standings visible");
+    log(`${label} standings visible`);
 
-    if (allowMutation) {
+    if (allowScoreMutation) {
+      await showMobileTab(page, "Session navigation", "Courts");
       const scoreInputs = page.locator('input[type="number"]');
       if ((await scoreInputs.count()) < 2) {
         throw new Error("PRODUCTION_SMOKE_MUTATE=1 set, but score inputs are unavailable");
@@ -117,8 +158,8 @@ async function smokeSignedInSurface(context) {
       await scoreInputs.nth(0).fill("21");
       await scoreInputs.nth(1).fill("15");
       await page.getByRole("button", { name: "Submit Score" }).click();
-      await page.getByRole("button", { name: "Confirm" }).click();
-      log("score submitted");
+      await page.getByRole("button", { name: "Confirm", exact: true }).click();
+      log(`${label} score submitted`);
 
       const approveButton = page
         .getByRole("button", { name: "Confirm Results" })
@@ -126,11 +167,13 @@ async function smokeSignedInSurface(context) {
         .first();
       if ((await approveButton.count()) > 0) {
         await approveButton.click();
-        log("pending score approved");
+        log(`${label} pending score approved`);
       }
     } else {
-      log("score submission skipped; set PRODUCTION_SMOKE_MUTATE=1 only for a disposable production session");
+      log(`${label} score submission skipped; set PRODUCTION_SMOKE_MUTATE=1 only for a disposable production session`);
     }
+  } else {
+    log(`${label} session smoke skipped; set PRODUCTION_SMOKE_SESSION_CODE`);
   }
 
   await page.close();
@@ -138,6 +181,7 @@ async function smokeSignedInSurface(context) {
 
 async function main() {
   log(`base URL: ${baseURL}`);
+  validateSmokeConfiguration();
 
   await assertFetchOk("/", "home");
   await assertFetchOk("/signin", "sign in");
@@ -159,7 +203,16 @@ async function main() {
 
     await smokePublicSurface(desktop, "desktop");
     await smokePublicSurface(mobile, "mobile");
-    await smokeSignedInSurface(desktop);
+    if (smokeEmail && smokePassword) {
+      await smokeSignedInSurface(mobile, "mobile", {
+        allowScoreMutation: allowMutation,
+      });
+      await smokeSignedInSurface(desktop, "desktop", {
+        allowScoreMutation: false,
+      });
+    } else {
+      await smokeSignedInSurface(mobile, "mobile");
+    }
 
     await desktop.close();
     await mobile.close();

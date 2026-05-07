@@ -216,7 +216,7 @@ export function SessionRosterModal({
           {playersNotInSession.map((player) => (
             <div
               key={player.id}
-              className="app-touch-pan-y flex items-center justify-between gap-3 rounded-2xl border border-gray-200 bg-gray-50/70 px-3 py-3 transition"
+              className="app-touch-pan-y flex items-center justify-between gap-3 rounded-xl border border-gray-200 bg-gray-50/70 px-3 py-3 transition"
             >
               <div className="min-w-0 space-y-1">
                 <p className="truncate text-sm font-semibold text-gray-900">
@@ -225,12 +225,12 @@ export function SessionRosterModal({
                 <div className="flex flex-wrap items-center gap-2">
                   <p className="text-xs text-gray-500">Rating {player.elo}</p>
                   {player.status === CommunityPlayerStatus.OCCASIONAL ? (
-                    <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[9px] font-medium uppercase tracking-wide text-emerald-700">
+                    <span className="app-chip app-chip-success px-2 py-0.5 text-[10px]">
                       Occasional
                     </span>
                   ) : null}
                   {poolsEnabled ? (
-                    <span className="rounded-full border border-indigo-200 bg-indigo-50 px-2 py-0.5 text-[9px] font-medium uppercase tracking-wide text-indigo-700">
+                    <span className="app-chip app-chip-accent px-2 py-0.5 text-[10px]">
                       Add to {rosterPool === SessionPool.A ? poolAName ?? "Open" : poolBName ?? "Regular"}
                     </span>
                   ) : null}
