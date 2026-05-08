@@ -12,7 +12,6 @@ import {
   TrendingUp,
   Trophy,
   Users,
-  Zap,
 } from "lucide-react";
 import { getSessionTypeLabel } from "@/lib/sessionModeLabels";
 import type {
@@ -166,7 +165,7 @@ export function CommunityOverviewPulsePanel({
     recentMatches: 0,
     activePlayers: 0,
   };
-  const liveTournaments = activeTournaments.slice(0, 3);
+  const currentTournaments = activeTournaments.slice(0, 3);
   const topRankedPlayer = leaderboardPreview[0] ?? null;
   const hotPlayers = communityPulse?.hotPlayers ?? [];
   const rivalries = communityPulse?.rivalries ?? [];
@@ -187,9 +186,9 @@ export function CommunityOverviewPulsePanel({
             value={metrics.members}
           />
           <PulseMetric
-            icon={<Zap aria-hidden="true" size={15} />}
-            label="Live"
-            value={metrics.activeTournaments}
+            icon={<Activity aria-hidden="true" size={15} />}
+            label="Recent players"
+            value={metrics.activePlayers}
           />
           <PulseMetric
             icon={<Trophy aria-hidden="true" size={15} />}
@@ -231,8 +230,8 @@ export function CommunityOverviewPulsePanel({
       <section className="app-panel space-y-4 p-5 sm:p-6">
         <SectionHeader
           icon={<Play aria-hidden="true" size={20} />}
-          title="Live now"
-          detail="Jump into active play"
+          title="Current tournament"
+          detail="Open or running now"
           action={
             activeTournaments.length > 3 ? (
               <button
@@ -245,9 +244,9 @@ export function CommunityOverviewPulsePanel({
             ) : null
           }
         />
-        {liveTournaments.length > 0 ? (
+        {currentTournaments.length > 0 ? (
           <div className="space-y-2">
-            {liveTournaments.map((tournament) => {
+            {currentTournaments.map((tournament) => {
               const isParticipant = isTournamentParticipant(
                 tournament,
                 currentUserId
@@ -294,7 +293,7 @@ export function CommunityOverviewPulsePanel({
             })}
           </div>
         ) : (
-          <EmptyPulseState>No live tournaments right now</EmptyPulseState>
+          <EmptyPulseState>No current tournament</EmptyPulseState>
         )}
       </section>
 

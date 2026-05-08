@@ -172,6 +172,10 @@ describe("communityPulse", () => {
       ],
     });
 
+    expect(result.metrics).toMatchObject({
+      recentMatches: 2,
+      activePlayers: 4,
+    });
     expect(result.hotPlayers[0]).toMatchObject({
       user: players.alice,
       matches: 2,
