@@ -10,7 +10,7 @@ import {
 } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ArrowLeft, SlidersHorizontal } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import { getSessionTypeLabel } from "@/lib/sessionModeLabels";
 import { FlashMessage, HeroCard } from "@/components/ui/chrome";
 import { CommunityActionConfirmModal } from "@/components/community/CommunityActionConfirmModal";
@@ -378,22 +378,6 @@ export default function CommunityPage() {
     scrollCommunityPagerToSection,
   ]);
 
-  const handleCommunityHostButtonClick = useCallback(() => {
-    if (!canManageCommunity) return;
-
-    if (activeSection === "host") {
-      exitCommunityHostMode();
-      return;
-    }
-
-    switchCommunitySection("host");
-  }, [
-    activeSection,
-    canManageCommunity,
-    exitCommunityHostMode,
-    switchCommunitySection,
-  ]);
-
   const settleCommunityPagerToNearestSection = useCallback(
     (behavior: ScrollBehavior = "smooth") => {
       const container = communityPagerRef.current;
@@ -708,7 +692,6 @@ export default function CommunityPage() {
   }
 
   const communityName = community?.name || "Community";
-  const isHostMode = activeSection === "host";
   const communityRoleLabel = canManageCommunity
     ? "ADMIN"
     : community?.role || "MEMBER";
@@ -902,18 +885,6 @@ export default function CommunityPage() {
                 )}
               </div>
             </div>
-          }
-          actions={
-            canManageCommunity ? (
-              <button
-                type="button"
-                onClick={handleCommunityHostButtonClick}
-                className="app-button-primary"
-              >
-                <SlidersHorizontal aria-hidden="true" size={17} />
-                {isHostMode ? "Exit Host Setup" : "Open Host Setup"}
-              </button>
-            ) : null
           }
         />
 
