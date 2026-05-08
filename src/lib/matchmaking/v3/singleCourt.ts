@@ -4,9 +4,11 @@ import { evaluateBalancedPartitions } from "./balance";
 import { DEFAULT_MATCH_DURATION_MS } from "./fairness";
 import {
   buildExactRematchHistory,
+  buildOpponentRepeatHistory,
   buildPartnerRepeatHistory,
   getExactPartitionKey,
   getExactRematchPenalty,
+  getOpponentRepeatPenalty,
   getPartnerRepeatPenalty,
 } from "./rematch";
 import {
@@ -166,6 +168,7 @@ function searchCandidatePool<T extends MatchmakerV3Player>({
   excludedPartitionKey,
   rematchHistory,
   partnerHistory,
+  opponentHistory,
 }: {
   candidatePool: V3CandidatePool<ActiveMatchmakerV3Player<T>>;
   sessionMode: SessionMode;
@@ -177,6 +180,7 @@ function searchCandidatePool<T extends MatchmakerV3Player>({
   excludedPartitionKey?: string;
   rematchHistory: ReturnType<typeof buildExactRematchHistory>;
   partnerHistory: ReturnType<typeof buildPartnerRepeatHistory>;
+  opponentHistory: ReturnType<typeof buildOpponentRepeatHistory>;
 }) {
   const remainingSlots = 4 - candidatePool.lockedPlayers.length;
   const quartetGroups =
@@ -255,6 +259,10 @@ function searchCandidatePool<T extends MatchmakerV3Player>({
         partnerRepeatPenalty: getPartnerRepeatPenalty(
           evaluation.partition,
           partnerHistory
+        ),
+        opponentRepeatPenalty: getOpponentRepeatPenalty(
+          evaluation.partition,
+          opponentHistory
         ),
         exactRematchPenalty: getExactRematchPenalty(
           evaluation.partition,
@@ -347,6 +355,7 @@ export function findBestSingleCourtSelectionV3<T extends MatchmakerV3Player>(
         chosenIds: null,
         chosenBalanceGap: null,
         chosenPartnerRepeatPenalty: null,
+        chosenOpponentRepeatPenalty: null,
         chosenExactRematchPenalty: null,
       },
     };
@@ -355,6 +364,7 @@ export function findBestSingleCourtSelectionV3<T extends MatchmakerV3Player>(
   const candidatePools = buildFeasibilityCandidatePools(initialCandidatePool);
   const rematchHistory = buildExactRematchHistory(completedMatches);
   const partnerHistory = buildPartnerRepeatHistory(completedMatches);
+  const opponentHistory = buildOpponentRepeatHistory(completedMatches);
   let searchedCandidatePool = initialCandidatePool;
   let totalQuartetCount = 0;
   let totalValidPartitionCount = 0;
@@ -376,6 +386,7 @@ export function findBestSingleCourtSelectionV3<T extends MatchmakerV3Player>(
       excludedPartitionKey,
       rematchHistory,
       partnerHistory,
+      opponentHistory,
     });
     totalQuartetCount += candidatePoolSearch.quartetCount;
     totalValidPartitionCount += candidatePoolSearch.validPartitionCount;
@@ -395,6 +406,7 @@ export function findBestSingleCourtSelectionV3<T extends MatchmakerV3Player>(
           excludedPartitionKey,
           rematchHistory,
           partnerHistory,
+          opponentHistory,
         });
         totalQuartetCount += candidatePoolSearch.quartetCount;
         totalValidPartitionCount += candidatePoolSearch.validPartitionCount;
@@ -427,6 +439,7 @@ export function findBestSingleCourtSelectionV3<T extends MatchmakerV3Player>(
     chosenIds: null,
     chosenBalanceGap: null,
     chosenPartnerRepeatPenalty: null,
+    chosenOpponentRepeatPenalty: null,
     chosenExactRematchPenalty: null,
   };
 
@@ -434,6 +447,7 @@ export function findBestSingleCourtSelectionV3<T extends MatchmakerV3Player>(
     debug.chosenIds = bestSelection.ids;
     debug.chosenBalanceGap = bestSelection.balanceGap;
     debug.chosenPartnerRepeatPenalty = bestSelection.partnerRepeatPenalty;
+    debug.chosenOpponentRepeatPenalty = bestSelection.opponentRepeatPenalty;
     debug.chosenExactRematchPenalty = bestSelection.exactRematchPenalty;
   }
 

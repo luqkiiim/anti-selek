@@ -4,8 +4,10 @@ import { buildCandidatePool } from "./candidatePool";
 import { DEFAULT_MATCH_DURATION_MS } from "./fairness";
 import {
   buildExactRematchHistory,
+  buildOpponentRepeatHistory,
   buildPartnerRepeatHistory,
   getExactRematchPenalty,
+  getOpponentRepeatPenalty,
   getPartnerRepeatPenalty,
 } from "./rematch";
 import {
@@ -167,6 +169,10 @@ function summarizeBatch<T extends ActiveMatchmakerV3Player>(
       (sum, selection) => sum + selection.partnerRepeatPenalty,
       0
     ),
+    totalOpponentRepeatPenalty: selections.reduce(
+      (sum, selection) => sum + selection.opponentRepeatPenalty,
+      0
+    ),
     totalExactRematchPenalty: selections.reduce(
       (sum, selection) => sum + selection.exactRematchPenalty,
       0
@@ -227,6 +233,7 @@ function buildQuartetSelections<T extends MatchmakerV3Player>(
   );
   const rematchHistory = buildExactRematchHistory(completedMatches);
   const partnerHistory = buildPartnerRepeatHistory(completedMatches);
+  const opponentHistory = buildOpponentRepeatHistory(completedMatches);
   const selections: V3SingleCourtSelection<ActiveMatchmakerV3Player<T>>[] = [];
 
   for (const group of quartets) {
@@ -258,6 +265,10 @@ function buildQuartetSelections<T extends MatchmakerV3Player>(
         partnerRepeatPenalty: getPartnerRepeatPenalty(
           evaluation.partition,
           partnerHistory
+        ),
+        opponentRepeatPenalty: getOpponentRepeatPenalty(
+          evaluation.partition,
+          opponentHistory
         ),
         exactRematchPenalty: getExactRematchPenalty(
           evaluation.partition,
@@ -340,19 +351,27 @@ function compressQuartetSelections<T extends ActiveMatchmakerV3Player>(
     }
 
     const bestVarietySelection =
-      sessionType === SessionType.POINTS || sessionType === SessionType.ELO
+      sessionType === SessionType.POINTS
         ? [...group].sort(
             (left, right) =>
               left.partnerRepeatPenalty - right.partnerRepeatPenalty ||
+              left.opponentRepeatPenalty - right.opponentRepeatPenalty ||
               left.balanceGap - right.balanceGap ||
               left.randomScore - right.randomScore
           )[0]
-        : [...group].sort(
-            (left, right) =>
-              left.exactRematchPenalty - right.exactRematchPenalty ||
-              left.balanceGap - right.balanceGap ||
-              left.randomScore - right.randomScore
-          )[0];
+        : sessionType === SessionType.ELO
+          ? [...group].sort(
+              (left, right) =>
+                left.partnerRepeatPenalty - right.partnerRepeatPenalty ||
+                left.balanceGap - right.balanceGap ||
+                left.randomScore - right.randomScore
+            )[0]
+          : [...group].sort(
+              (left, right) =>
+                left.exactRematchPenalty - right.exactRematchPenalty ||
+                left.balanceGap - right.balanceGap ||
+                left.randomScore - right.randomScore
+            )[0];
 
     if (
       bestVarietySelection &&
@@ -663,6 +682,7 @@ export function findBestBatchSelectionV3<T extends MatchmakerV3Player>(
     chosenMaxBalanceGap: null,
     chosenTotalBalanceGap: null,
     chosenTotalPartnerRepeatPenalty: null,
+    chosenTotalOpponentRepeatPenalty: null,
     chosenTotalExactRematchPenalty: null,
   };
 
@@ -803,6 +823,8 @@ export function findBestBatchSelectionV3<T extends MatchmakerV3Player>(
     debug.chosenTotalBalanceGap = finalSelection.totalBalanceGap;
     debug.chosenTotalPartnerRepeatPenalty =
       finalSelection.totalPartnerRepeatPenalty;
+    debug.chosenTotalOpponentRepeatPenalty =
+      finalSelection.totalOpponentRepeatPenalty;
     debug.chosenTotalExactRematchPenalty =
       finalSelection.totalExactRematchPenalty;
   }

@@ -35,12 +35,14 @@ function createSelection(
     waitMs = [10, 10, 10, 10],
     balanceGap,
     partnerRepeatPenalty = 0,
+    opponentRepeatPenalty = 0,
     exactRematchPenalty,
     randomScore = 0,
   }: {
     waitMs?: number[];
     balanceGap: number;
     partnerRepeatPenalty?: number;
+    opponentRepeatPenalty?: number;
     exactRematchPenalty: number;
     randomScore?: number;
   }
@@ -64,6 +66,7 @@ function createSelection(
     waitSummary: buildWaitSummary(players),
     balanceGap,
     partnerRepeatPenalty,
+    opponentRepeatPenalty,
     exactRematchPenalty,
     randomScore,
   };
@@ -73,18 +76,21 @@ function createBatchSelection({
   maxBalanceGap,
   totalBalanceGap,
   totalPartnerRepeatPenalty = 0,
+  totalOpponentRepeatPenalty = 0,
   totalExactRematchPenalty = 0,
   totalRandomScore = 0,
 }: {
   maxBalanceGap: number;
   totalBalanceGap: number;
   totalPartnerRepeatPenalty?: number;
+  totalOpponentRepeatPenalty?: number;
   totalExactRematchPenalty?: number;
   totalRandomScore?: number;
 }): V3BatchSelection {
   const selection = createSelection({
     balanceGap: maxBalanceGap,
     partnerRepeatPenalty: totalPartnerRepeatPenalty,
+    opponentRepeatPenalty: totalOpponentRepeatPenalty,
     exactRematchPenalty: totalExactRematchPenalty,
     randomScore: totalRandomScore,
   });
@@ -95,6 +101,7 @@ function createBatchSelection({
     maxBalanceGap,
     totalBalanceGap,
     totalPartnerRepeatPenalty,
+    totalOpponentRepeatPenalty,
     totalExactRematchPenalty,
     totalRandomScore,
   };
@@ -194,7 +201,7 @@ describe("matchmaking v3 scoring", () => {
       exactRematchPenalty: 0,
     });
     const freshPartner = createSelection({
-      balanceGap: 1,
+      balanceGap: 1.5,
       partnerRepeatPenalty: 0,
       exactRematchPenalty: 0,
     });
@@ -208,7 +215,7 @@ describe("matchmaking v3 scoring", () => {
     ).toBeLessThan(0);
   });
 
-  it("keeps the much better-balanced repeated partner in points sessions when the alternative is too far off", () => {
+  it("keeps the repeated partner in points sessions when the fresh option is a full win step worse", () => {
     const repeatedPartner = createSelection({
       balanceGap: 0,
       partnerRepeatPenalty: 1,
@@ -224,6 +231,52 @@ describe("matchmaking v3 scoring", () => {
       compareSingleCourtSelections(
         repeatedPartner,
         farWorseFreshPartner,
+        SessionType.POINTS
+      )
+    ).toBeLessThan(0);
+  });
+
+  it("prefers fresher opponents in points sessions when partner repeats and balance are close", () => {
+    const repeatedOpponent = createSelection({
+      balanceGap: 0,
+      partnerRepeatPenalty: 0,
+      opponentRepeatPenalty: 1,
+      exactRematchPenalty: 0,
+    });
+    const freshOpponent = createSelection({
+      balanceGap: 1.5,
+      partnerRepeatPenalty: 0,
+      opponentRepeatPenalty: 0,
+      exactRematchPenalty: 0,
+    });
+
+    expect(
+      compareSingleCourtSelections(
+        freshOpponent,
+        repeatedOpponent,
+        SessionType.POINTS
+      )
+    ).toBeLessThan(0);
+  });
+
+  it("does not let opponent variety override a full win-step balance difference", () => {
+    const repeatedOpponent = createSelection({
+      balanceGap: 0,
+      partnerRepeatPenalty: 0,
+      opponentRepeatPenalty: 1,
+      exactRematchPenalty: 0,
+    });
+    const freshOpponent = createSelection({
+      balanceGap: 3,
+      partnerRepeatPenalty: 0,
+      opponentRepeatPenalty: 0,
+      exactRematchPenalty: 0,
+    });
+
+    expect(
+      compareSingleCourtSelections(
+        repeatedOpponent,
+        freshOpponent,
         SessionType.POINTS
       )
     ).toBeLessThan(0);
@@ -259,8 +312,8 @@ describe("matchmaking v3 scoring", () => {
       totalPartnerRepeatPenalty: 1,
     });
     const freshPartnerBatch = createBatchSelection({
-      maxBalanceGap: 1,
-      totalBalanceGap: 1,
+      maxBalanceGap: 1.5,
+      totalBalanceGap: 1.5,
       totalPartnerRepeatPenalty: 0,
     });
 
@@ -268,6 +321,29 @@ describe("matchmaking v3 scoring", () => {
       compareBatchSelections(
         freshPartnerBatch,
         repeatedPartnerBatch,
+        SessionType.POINTS
+      )
+    ).toBeLessThan(0);
+  });
+
+  it("prefers the lower total opponent-repeat batch when points partners and balance are close", () => {
+    const repeatedOpponentBatch = createBatchSelection({
+      maxBalanceGap: 0,
+      totalBalanceGap: 0,
+      totalPartnerRepeatPenalty: 0,
+      totalOpponentRepeatPenalty: 1,
+    });
+    const freshOpponentBatch = createBatchSelection({
+      maxBalanceGap: 1.5,
+      totalBalanceGap: 1.5,
+      totalPartnerRepeatPenalty: 0,
+      totalOpponentRepeatPenalty: 0,
+    });
+
+    expect(
+      compareBatchSelections(
+        freshOpponentBatch,
+        repeatedOpponentBatch,
         SessionType.POINTS
       )
     ).toBeLessThan(0);

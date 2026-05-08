@@ -4,6 +4,8 @@ export const DEFAULT_EXACT_REMATCH_HISTORY_LIMIT = 6;
 export const DEFAULT_EXACT_REMATCH_DECAY = 0.85;
 export const DEFAULT_PARTNER_REPEAT_HISTORY_LIMIT = 8;
 export const DEFAULT_PARTNER_REPEAT_DECAY = 0.85;
+export const DEFAULT_OPPONENT_REPEAT_HISTORY_LIMIT = 8;
+export const DEFAULT_OPPONENT_REPEAT_DECAY = 0.85;
 
 function getPairKey(playerA: string, playerB: string) {
   return [playerA, playerB].sort().join("|");
@@ -34,6 +36,10 @@ export interface V3ExactRematchHistory {
 
 export interface V3PartnerRepeatHistory {
   partnerCounts: Map<string, number>;
+}
+
+export interface V3OpponentRepeatHistory {
+  opponentCounts: Map<string, number>;
 }
 
 export function buildExactRematchHistory(
@@ -129,4 +135,50 @@ export function getPartnerRepeatPenalty(
       getPairKey(partition.team2[0], partition.team2[1])
     ) ?? 0)
   );
+}
+
+function getOpponentPairKeys(partition: V3DoublesPartition) {
+  return partition.team1.flatMap((team1Player) =>
+    partition.team2.map((team2Player) => getPairKey(team1Player, team2Player))
+  );
+}
+
+export function buildOpponentRepeatHistory(
+  matches: V3CompletedMatch[],
+  {
+    limit = DEFAULT_OPPONENT_REPEAT_HISTORY_LIMIT,
+    decay = DEFAULT_OPPONENT_REPEAT_DECAY,
+  }: {
+    limit?: number;
+    decay?: number;
+  } = {}
+): V3OpponentRepeatHistory {
+  const recentMatches = getChronologicalCompletedMatches(matches).slice(-limit);
+  const opponentCounts = new Map<string, number>();
+
+  for (const [index, match] of recentMatches.entries()) {
+    const recencyWeight = Math.pow(decay, recentMatches.length - index - 1);
+
+    for (const opponentKey of getOpponentPairKeys({
+      team1: match.team1,
+      team2: match.team2,
+    })) {
+      opponentCounts.set(
+        opponentKey,
+        (opponentCounts.get(opponentKey) ?? 0) + recencyWeight
+      );
+    }
+  }
+
+  return { opponentCounts };
+}
+
+export function getOpponentRepeatPenalty(
+  partition: V3DoublesPartition,
+  history: V3OpponentRepeatHistory
+) {
+  return getOpponentPairKeys(partition).reduce((sum, opponentKey) => {
+    const repeatWeight = history.opponentCounts.get(opponentKey) ?? 0;
+    return sum + repeatWeight * repeatWeight;
+  }, 0);
 }

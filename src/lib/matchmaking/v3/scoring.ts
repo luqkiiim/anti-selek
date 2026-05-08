@@ -8,7 +8,11 @@ import type {
 } from "./types";
 
 export const ELO_EXACT_REMATCH_BALANCE_TOLERANCE = 30;
-export const PARTNER_REPEAT_BALANCE_TOLERANCE = 1;
+export const ELO_PARTNER_REPEAT_BALANCE_TOLERANCE = 1;
+export const POINTS_PARTNER_REPEAT_BALANCE_TOLERANCE = 1.5;
+export const POINTS_OPPONENT_REPEAT_BALANCE_TOLERANCE = 1.5;
+export const PARTNER_REPEAT_BALANCE_TOLERANCE =
+  POINTS_PARTNER_REPEAT_BALANCE_TOLERANCE;
 
 export function buildWaitSummary<
   T extends Pick<ActiveMatchmakerV3Player, "waitMs">,
@@ -34,6 +38,12 @@ function usesPartnerRepeatPreference(sessionType: SessionType) {
   return (
     sessionType === SessionType.POINTS || sessionType === SessionType.ELO
   );
+}
+
+function getPartnerRepeatBalanceTolerance(sessionType: SessionType) {
+  return sessionType === SessionType.POINTS
+    ? POINTS_PARTNER_REPEAT_BALANCE_TOLERANCE
+    : ELO_PARTNER_REPEAT_BALANCE_TOLERANCE;
 }
 
 export function compareWaitSummaries(left: V3WaitSummary, right: V3WaitSummary) {
@@ -71,12 +81,44 @@ export function compareSingleCourtSelections<
 
   const balanceDiff = left.balanceGap - right.balanceGap;
 
+  if (sessionType === SessionType.POINTS) {
+    const varietyTolerance = Math.min(
+      POINTS_PARTNER_REPEAT_BALANCE_TOLERANCE,
+      POINTS_OPPONENT_REPEAT_BALANCE_TOLERANCE
+    );
+
+    if (Math.abs(balanceDiff) <= varietyTolerance) {
+      const partnerDiff = left.partnerRepeatPenalty - right.partnerRepeatPenalty;
+      if (partnerDiff !== 0) {
+        return partnerDiff;
+      }
+
+      const opponentDiff =
+        left.opponentRepeatPenalty - right.opponentRepeatPenalty;
+      if (opponentDiff !== 0) {
+        return opponentDiff;
+      }
+
+      if (balanceDiff !== 0) {
+        return balanceDiff;
+      }
+
+      return left.randomScore - right.randomScore;
+    }
+
+    if (balanceDiff !== 0) {
+      return balanceDiff;
+    }
+
+    return left.randomScore - right.randomScore;
+  }
+
   if (usesPartnerRepeatPreference(sessionType)) {
     const partnerDiff = left.partnerRepeatPenalty - right.partnerRepeatPenalty;
 
     if (
       partnerDiff !== 0 &&
-      Math.abs(balanceDiff) <= PARTNER_REPEAT_BALANCE_TOLERANCE
+      Math.abs(balanceDiff) <= getPartnerRepeatBalanceTolerance(sessionType)
     ) {
       return partnerDiff;
     }
@@ -121,15 +163,60 @@ export function compareBatchSelections<T extends ActiveMatchmakerV3Player>(
   const maxBalanceDiff = left.maxBalanceGap - right.maxBalanceGap;
   const totalBalanceDiff = left.totalBalanceGap - right.totalBalanceGap;
 
+  if (sessionType === SessionType.POINTS) {
+    const partnerDiff =
+      left.totalPartnerRepeatPenalty - right.totalPartnerRepeatPenalty;
+    const varietyTolerance = Math.min(
+      POINTS_PARTNER_REPEAT_BALANCE_TOLERANCE,
+      POINTS_OPPONENT_REPEAT_BALANCE_TOLERANCE
+    );
+    const totalVarietyTolerance = varietyTolerance * left.selections.length;
+
+    if (
+      Math.abs(maxBalanceDiff) <= varietyTolerance &&
+      Math.abs(totalBalanceDiff) <= totalVarietyTolerance
+    ) {
+      if (partnerDiff !== 0) {
+        return partnerDiff;
+      }
+
+      const opponentDiff =
+        left.totalOpponentRepeatPenalty - right.totalOpponentRepeatPenalty;
+      if (opponentDiff !== 0) {
+        return opponentDiff;
+      }
+
+      if (maxBalanceDiff !== 0) {
+        return maxBalanceDiff;
+      }
+
+      if (totalBalanceDiff !== 0) {
+        return totalBalanceDiff;
+      }
+
+      return left.totalRandomScore - right.totalRandomScore;
+    }
+
+    if (maxBalanceDiff !== 0) {
+      return maxBalanceDiff;
+    }
+
+    if (totalBalanceDiff !== 0) {
+      return totalBalanceDiff;
+    }
+
+    return left.totalRandomScore - right.totalRandomScore;
+  }
+
   if (usesPartnerRepeatPreference(sessionType)) {
     const partnerDiff =
       left.totalPartnerRepeatPenalty - right.totalPartnerRepeatPenalty;
     const partnerTolerance =
-      PARTNER_REPEAT_BALANCE_TOLERANCE * left.selections.length;
+      getPartnerRepeatBalanceTolerance(sessionType) * left.selections.length;
 
     if (
       partnerDiff !== 0 &&
-      Math.abs(maxBalanceDiff) <= PARTNER_REPEAT_BALANCE_TOLERANCE &&
+      Math.abs(maxBalanceDiff) <= getPartnerRepeatBalanceTolerance(sessionType) &&
       Math.abs(totalBalanceDiff) <= partnerTolerance
     ) {
       return partnerDiff;

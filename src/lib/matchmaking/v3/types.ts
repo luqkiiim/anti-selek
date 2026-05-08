@@ -89,6 +89,7 @@ export interface V3SingleCourtSelection<
   waitSummary: V3WaitSummary;
   balanceGap: number;
   partnerRepeatPenalty: number;
+  opponentRepeatPenalty: number;
   exactRematchPenalty: number;
   randomScore: number;
 }
@@ -106,6 +107,7 @@ export interface V3SingleCourtDebug {
   chosenIds: [string, string, string, string] | null;
   chosenBalanceGap: number | null;
   chosenPartnerRepeatPenalty: number | null;
+  chosenOpponentRepeatPenalty: number | null;
   chosenExactRematchPenalty: number | null;
 }
 
@@ -124,6 +126,7 @@ export interface V3BatchSelection<
   maxBalanceGap: number;
   totalBalanceGap: number;
   totalPartnerRepeatPenalty: number;
+  totalOpponentRepeatPenalty: number;
   totalExactRematchPenalty: number;
   totalRandomScore: number;
 }
@@ -154,6 +157,7 @@ export interface V3BatchDebug {
   chosenMaxBalanceGap: number | null;
   chosenTotalBalanceGap: number | null;
   chosenTotalPartnerRepeatPenalty: number | null;
+  chosenTotalOpponentRepeatPenalty: number | null;
   chosenTotalExactRematchPenalty: number | null;
 }
 

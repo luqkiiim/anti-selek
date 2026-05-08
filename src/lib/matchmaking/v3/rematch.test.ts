@@ -2,9 +2,11 @@ import { describe, expect, it } from "vitest";
 
 import {
   buildExactRematchHistory,
+  buildOpponentRepeatHistory,
   buildPartnerRepeatHistory,
   getExactPartitionKey,
   getExactRematchPenalty,
+  getOpponentRepeatPenalty,
   getPartnerRepeatPenalty,
 } from "./rematch";
 
@@ -98,5 +100,64 @@ describe("matchmaking v3 rematch", () => {
         history
       )
     ).toBe(0);
+  });
+
+  it("tracks cross-team opponent pairs independently from partner pairs", () => {
+    const history = buildOpponentRepeatHistory([
+      {
+        team1: ["A", "B"],
+        team2: ["C", "D"],
+        completedAt: new Date("2026-03-18T00:00:00Z"),
+      },
+      {
+        team1: ["A", "C"],
+        team2: ["B", "D"],
+        completedAt: new Date("2026-03-18T00:10:00Z"),
+      },
+    ]);
+
+    expect(
+      getOpponentRepeatPenalty(
+        {
+          team1: ["A", "D"],
+          team2: ["B", "C"],
+        },
+        history
+      )
+    ).toBeCloseTo(1 + 1 + 0.85 ** 2 + 0.85 ** 2, 10);
+    expect(
+      getOpponentRepeatPenalty(
+        {
+          team1: ["A", "B"],
+          team2: ["C", "D"],
+        },
+        history
+      )
+    ).toBeCloseTo(1.85 ** 2 * 2 + 0.85 ** 2 * 2, 10);
+  });
+
+  it("decays older opponent repeats across the recent history window", () => {
+    const history = buildOpponentRepeatHistory([
+      {
+        team1: ["A", "B"],
+        team2: ["C", "D"],
+        completedAt: new Date("2026-03-18T00:00:00Z"),
+      },
+      {
+        team1: ["A", "B"],
+        team2: ["C", "D"],
+        completedAt: new Date("2026-03-18T00:10:00Z"),
+      },
+    ]);
+
+    expect(
+      getOpponentRepeatPenalty(
+        {
+          team1: ["A", "B"],
+          team2: ["C", "D"],
+        },
+        history
+      )
+    ).toBeCloseTo(1.85 ** 2 * 4, 10);
   });
 });

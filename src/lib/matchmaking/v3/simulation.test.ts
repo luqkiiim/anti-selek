@@ -29,6 +29,27 @@ function createLateJoiner(userId: string): V3SimulationPlayer {
   };
 }
 
+function getPairKey(playerA: string, playerB: string) {
+  return [playerA, playerB].sort().join("|");
+}
+
+function getOpponentPairCounts(
+  matches: Array<{ team1: [string, string]; team2: [string, string] }>
+) {
+  const counts = new Map<string, number>();
+
+  for (const match of matches) {
+    for (const team1Player of match.team1) {
+      for (const team2Player of match.team2) {
+        const key = getPairKey(team1Player, team2Player);
+        counts.set(key, (counts.get(key) ?? 0) + 1);
+      }
+    }
+  }
+
+  return counts;
+}
+
 describe("matchmaking v3 simulation", () => {
   it("keeps one-court seven-player rotation within a one-match spread", () => {
     const state = createSimulationState(createSimulationPlayers(7), {
@@ -132,5 +153,31 @@ describe("matchmaking v3 simulation", () => {
       0,
       4,
     ]);
+  });
+
+  it("keeps a two-court ten-player points rotation varied while preserving fair turns", () => {
+    const state = createSimulationState(
+      createSimulationPlayers(10, { strengthStep: 0 }),
+      {
+        matchDurationMs: 10 * 60 * 1000,
+      }
+    );
+
+    for (let round = 0; round < 8; round++) {
+      playRound(state, {
+        courtCount: 2,
+        sessionMode: SessionMode.MEXICANO,
+        sessionType: SessionType.POINTS,
+        randomFn: () => 0,
+      });
+    }
+
+    const matchCounts = Object.values(getMatchCounts(state.players));
+    const opponentCounts = [...getOpponentPairCounts(state.completedMatches).values()];
+
+    expect(Math.max(...matchCounts) - Math.min(...matchCounts)).toBeLessThanOrEqual(1);
+    expect(Math.min(...matchCounts)).toBe(6);
+    expect(Math.max(...matchCounts)).toBe(7);
+    expect(Math.max(...opponentCounts)).toBeLessThanOrEqual(2);
   });
 });
