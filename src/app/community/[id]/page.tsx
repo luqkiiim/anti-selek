@@ -8,6 +8,7 @@ import {
   useRef,
   useState,
 } from "react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowLeft, Shield } from "lucide-react";
 import { getSessionTypeLabel } from "@/lib/sessionModeLabels";
@@ -866,10 +867,20 @@ export default function CommunityPage() {
                   Back
                 </button>
               </div>
-              <div className="flex items-center gap-2 text-sm font-medium text-gray-600">
-                <Shield aria-hidden="true" size={15} className="text-gray-500" />
-                <span>{communityRoleLabel}</span>
-              </div>
+              {canManageCommunity ? (
+                <Link
+                  href={`/community/${communityId}/admin`}
+                  className="app-button-secondary px-3 py-2 text-sm"
+                >
+                  <Shield aria-hidden="true" size={15} />
+                  <span>{communityRoleLabel}</span>
+                </Link>
+              ) : (
+                <div className="flex items-center gap-2 text-sm font-medium text-gray-600">
+                  <Shield aria-hidden="true" size={15} className="text-gray-500" />
+                  <span>{communityRoleLabel}</span>
+                </div>
+              )}
             </div>
           }
         />
