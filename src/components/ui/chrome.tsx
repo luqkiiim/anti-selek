@@ -128,6 +128,7 @@ export function HeroCard({
   onBack,
   backLabel = "Back",
   meta,
+  headingAlign = "left",
 }: {
   eyebrow?: string;
   title?: ReactNode;
@@ -138,6 +139,7 @@ export function HeroCard({
   onBack?: () => void;
   backLabel?: string;
   meta?: ReactNode;
+  headingAlign?: "left" | "center";
 }) {
   const hasHeadingContent = Boolean(title) || Boolean(description);
   const showActionsBelow = actionsPosition === "below" && !!actions;
@@ -161,10 +163,17 @@ export function HeroCard({
             {meta}
           </div>
           {hasHeadingContent ? (
-            <div>
+            <div className={headingAlign === "center" ? "text-center" : undefined}>
               {title ? <h1 className="app-title text-gray-900">{title}</h1> : null}
               {description ? (
-                <p className="mt-3 max-w-3xl text-sm text-gray-600 sm:text-base">{description}</p>
+                <p
+                  className={cx(
+                    "mt-3 max-w-3xl text-sm text-gray-600 sm:text-base",
+                    headingAlign === "center" && "mx-auto"
+                  )}
+                >
+                  {description}
+                </p>
               ) : null}
             </div>
           ) : null}

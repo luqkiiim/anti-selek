@@ -8,9 +8,8 @@ import {
   useRef,
   useState,
 } from "react";
-import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Shield } from "lucide-react";
 import { getSessionTypeLabel } from "@/lib/sessionModeLabels";
 import { FlashMessage, HeroCard } from "@/components/ui/chrome";
 import { CommunityActionConfirmModal } from "@/components/community/CommunityActionConfirmModal";
@@ -692,9 +691,7 @@ export default function CommunityPage() {
   }
 
   const communityName = community?.name || "Community";
-  const communityRoleLabel = canManageCommunity
-    ? "ADMIN"
-    : community?.role || "MEMBER";
+  const communityRoleLabel = canManageCommunity ? "Admin" : community?.role || "Member";
   const sectionTabs = canManageCommunity
     ? [
         baseSectionTabs[0],
@@ -854,35 +851,24 @@ export default function CommunityPage() {
       <div className="app-shell space-y-8">
         <HeroCard
           title={communityName}
+          description="Community hub"
+          headingAlign="center"
           actionsPosition="below"
           meta={
-            <div className="grid w-full grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3">
-              <div className="justify-self-start">
+            <div className="flex w-full items-center justify-between gap-3">
+              <div>
                 <button
                   type="button"
                   onClick={handleBack}
-                  className="app-button-secondary px-4 py-2"
+                  className="app-button-secondary px-3 py-2 text-sm"
                 >
                   <ArrowLeft aria-hidden="true" size={17} />
                   Back
                 </button>
               </div>
-              <p className="app-eyebrow justify-self-center text-center">
-                Community hub
-              </p>
-              <div className="justify-self-end">
-                {canManageCommunity ? (
-                  <Link
-                    href={`/community/${communityId}/admin`}
-                    className="app-chip app-chip-accent transition hover:opacity-90"
-                  >
-                    {communityRoleLabel}
-                  </Link>
-                ) : (
-                  <span className="app-chip app-chip-neutral">
-                    {communityRoleLabel}
-                  </span>
-                )}
+              <div className="flex items-center gap-2 text-sm font-medium text-gray-600">
+                <Shield aria-hidden="true" size={15} className="text-gray-500" />
+                <span>{communityRoleLabel}</span>
               </div>
             </div>
           }
