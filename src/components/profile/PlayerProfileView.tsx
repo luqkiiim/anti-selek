@@ -17,6 +17,7 @@ import {
   Award,
   BarChart3,
   CalendarDays,
+  ChevronRight,
   Flame,
   Medal,
   Shield,
@@ -138,18 +139,41 @@ function formatShortDate(value: string | null) {
   });
 }
 
-function formatDateTime(value: string | null) {
+function formatMatchHistoryDate(value: string | null) {
   if (!value) {
-    return "No matches yet";
+    return "No date";
   }
 
-  return new Date(value).toLocaleString(undefined, {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "No date";
+  }
+
+  const diffMs = Date.now() - date.getTime();
+  if (diffMs >= 0) {
+    const days = Math.floor(diffMs / 86_400_000);
+    if (days === 0) {
+      return "Today";
+    }
+
+    if (days < 7) {
+      return `${days}d ago`;
+    }
+
+    const weeks = Math.floor(days / 7);
+    if (weeks < 8) {
+      return `${weeks}w ago`;
+    }
+  }
+
+  return date.toLocaleDateString(undefined, {
     day: "numeric",
     month: "short",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
   });
+}
+
+function formatMatchScore(score: string) {
+  return score.replace(/\s*-\s*/g, "-");
 }
 
 function getPlayerProfileHref(userId: string, communityId: string) {
@@ -231,8 +255,21 @@ function getResultLabel(result: PlayerProfileMatchHistoryEntry["result"]) {
   return result === "WIN" ? "Win" : "Loss";
 }
 
-function getResultChipClass(result: PlayerProfileMatchHistoryEntry["result"]) {
-  return result === "WIN" ? "app-chip app-chip-success" : "app-chip app-chip-danger";
+function getResultPillClass(result: PlayerProfileMatchHistoryEntry["result"]) {
+  return cx(
+    "inline-flex min-w-[3.25rem] items-center justify-center rounded-full px-2.5 py-1 text-xs font-semibold",
+    result === "WIN"
+      ? "bg-emerald-100 text-emerald-700"
+      : "bg-rose-100 text-rose-700"
+  );
+}
+
+function getEloChangeClass(value: number | null) {
+  if (value === null || value === 0) {
+    return "text-gray-500";
+  }
+
+  return value > 0 ? "text-emerald-600" : "text-rose-600";
 }
 
 function getInitials(name: string) {
@@ -1254,72 +1291,75 @@ function MatchCard({
   communityId: string;
   compact?: boolean;
 }) {
+  const sessionHref = getSessionHistoryHref(match.sessionCode);
+
   return (
-    <article className="rounded-2xl border border-[var(--line)] bg-white p-4 shadow-[0_8px_18px_rgba(23,32,31,0.04)]">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <div className="truncate text-base">
-            <ProfileLink href={getSessionHistoryHref(match.sessionCode)}>
-              {match.sessionName}
-            </ProfileLink>
-          </div>
-          <p className="mt-1 text-xs text-gray-600 sm:text-sm">
-            {formatDateTime(match.date)}
-          </p>
-        </div>
-        <span className={getResultChipClass(match.result)}>
+    <article
+      className={cx(
+        "rounded-xl border border-[var(--line)] bg-white shadow-[0_6px_16px_rgba(23,32,31,0.035)]",
+        compact ? "px-3 py-3" : "px-3.5 py-3.5 sm:px-4"
+      )}
+    >
+      <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3">
+        <span className={getResultPillClass(match.result)}>
           {getResultLabel(match.result)}
         </span>
-      </div>
 
-      <div className="mt-3 grid gap-3 rounded-xl border border-[var(--line)] bg-[var(--surface-muted)] px-3 py-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
-        <div className="min-w-0 space-y-1 text-sm text-gray-700">
-          <p>
-            <span className="text-gray-500">With </span>
-            <span className="font-semibold text-gray-900">{userName}</span>
-            <span> &amp; </span>
-            <ProfileLink href={getPlayerProfileHref(match.partner.id, communityId)}>
-              {match.partner.name}
-            </ProfileLink>
-          </p>
-          <p>
+        <div className="min-w-0">
+          <div className="flex min-w-0 items-baseline justify-between gap-2">
+            <p className="min-w-0 truncate text-sm font-semibold text-gray-900 sm:text-base">
+              <span>{userName}</span>
+              <span className="px-1 text-gray-400">/</span>
+              <ProfileLink href={getPlayerProfileHref(match.partner.id, communityId)}>
+                {match.partner.name}
+              </ProfileLink>
+            </p>
+            <p className="shrink-0 text-sm font-semibold text-gray-950 sm:text-base">
+              {formatMatchScore(match.score)}
+            </p>
+          </div>
+
+          <p className="mt-0.5 min-w-0 truncate text-xs text-gray-600 sm:text-sm">
             <span className="text-gray-500">vs </span>
             {match.opponents.map((opponent, index) => (
               <span key={opponent.id}>
                 <ProfileLink href={getPlayerProfileHref(opponent.id, communityId)}>
                   {opponent.name}
                 </ProfileLink>
-                {index === match.opponents.length - 1 ? null : " & "}
+                {index === match.opponents.length - 1 ? null : (
+                  <span className="text-gray-400"> / </span>
+                )}
               </span>
             ))}
           </p>
         </div>
 
-        <div className="w-fit rounded-full bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm">
-          {match.score}
-        </div>
-      </div>
+        <div className="flex items-center gap-1">
+          <div className="w-[3.4rem] text-right">
+            <p
+              className={cx(
+                "whitespace-nowrap text-xs font-semibold sm:text-sm",
+                getEloChangeClass(match.eloChange)
+              )}
+            >
+              {typeof match.eloChange === "number"
+                ? `${formatSignedNumber(match.eloChange)} ELO`
+                : "No ELO"}
+            </p>
+            <p className="mt-0.5 whitespace-nowrap text-xs text-gray-500">
+              {formatMatchHistoryDate(match.date)}
+            </p>
+          </div>
 
-      <div className="mt-3 flex flex-wrap gap-2">
-        <span className="app-chip app-chip-neutral">
-          Diff {formatSignedNumber(match.pointDifferential)}
-        </span>
-        {typeof match.eloChange === "number" ? (
-          <span
-            className={
-              match.eloChange >= 0
-                ? "app-chip app-chip-success"
-                : "app-chip app-chip-danger"
-            }
+          <Link
+            href={sessionHref}
+            aria-label={`Open ${match.sessionName} history`}
+            title={match.sessionName}
+            className="-mr-2 inline-flex h-11 w-10 items-center justify-center rounded-lg text-gray-500 transition hover:bg-[var(--surface-muted)] hover:text-[var(--accent-strong)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]"
           >
-            {formatSignedNumber(match.eloChange)} rating
-          </span>
-        ) : null}
-        {compact ? null : (
-          <span className="app-chip app-chip-neutral">
-            {match.opponents.length} opponents
-          </span>
-        )}
+            <ChevronRight className="h-5 w-5" aria-hidden="true" />
+          </Link>
+        </div>
       </div>
     </article>
   );
