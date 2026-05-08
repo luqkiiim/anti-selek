@@ -1,7 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { type ReactNode, useEffect, useMemo, useState } from "react";
+import {
+  type PointerEvent as ReactPointerEvent,
+  type ReactNode,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useSession } from "next-auth/react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import {
@@ -84,6 +91,13 @@ interface StyleTrait {
   label: string;
   value: number;
   detail: string;
+}
+
+interface RatingSeriesPoint {
+  value: number;
+  index: number;
+  label: string;
+  deltaFromPrev: number | null;
 }
 
 const PROFILE_TABS: Array<{ id: ProfileTab; label: string }> = [
@@ -247,6 +261,18 @@ function getRankContextLabel(rankContext: RankContext | null) {
   return `Top ${topPercent}% of players`;
 }
 
+function getRatingStepLabel(stepsBack: number) {
+  if (stepsBack <= 0) {
+    return "Now";
+  }
+
+  if (stepsBack === 1) {
+    return "1 step ago";
+  }
+
+  return `${stepsBack} steps ago`;
+}
+
 function buildRatingSeries(data: UserProfileResponse) {
   const sessionChanges = data.recentSessions
     .slice()
@@ -259,22 +285,42 @@ function buildRatingSeries(data: UserProfileResponse) {
   const changes = sessionChanges.length > 0 ? sessionChanges : matchChanges;
 
   if (changes.length === 0) {
-    return [data.user.elo, data.user.elo];
+    return [
+      {
+        value: data.user.elo,
+        index: 0,
+        label: "Now",
+        deltaFromPrev: null,
+      },
+    ] satisfies RatingSeriesPoint[];
   }
 
   let rating = data.user.elo - changes.reduce((sum, change) => sum + change, 0);
-  const series = [rating];
+  const values: RatingSeriesPoint[] = [
+    {
+      value: rating,
+      index: 0,
+      label: "",
+      deltaFromPrev: null,
+    },
+  ];
 
   for (const change of changes) {
     rating += change;
-    series.push(rating);
+    values.push({
+      value: rating,
+      index: values.length,
+      label: "",
+      deltaFromPrev: change,
+    });
   }
 
-  if (series.length === 1) {
-    series.push(data.user.elo);
-  }
-
-  return series;
+  const lastIndex = values.length - 1;
+  return values.map((point, index) => ({
+    ...point,
+    index,
+    label: getRatingStepLabel(lastIndex - index),
+  }));
 }
 
 function buildAchievements(
@@ -421,17 +467,18 @@ function ProfileLink({
 }
 
 function RatingSparkline({
-  values,
+  series,
   className,
   stroke = "#5eead4",
 }: {
-  values: number[];
+  series: RatingSeriesPoint[];
   className?: string;
   stroke?: string;
 }) {
   const width = 180;
   const height = 66;
   const padding = 8;
+  const values = series.map((point) => point.value);
   const min = Math.min(...values);
   const max = Math.max(...values);
   const range = max - min || 1;
@@ -442,43 +489,167 @@ function RatingSparkline({
         : (index / (values.length - 1)) * (width - padding * 2) + padding;
     const y =
       height - padding - ((value - min) / range) * (height - padding * 2);
-    return `${x.toFixed(1)},${y.toFixed(1)}`;
+    return {
+      x,
+      y,
+    };
   });
+  const pointPairs = points.map((point) => `${point.x.toFixed(1)},${point.y.toFixed(1)}`);
   const areaPoints = [
     `${padding},${height - padding}`,
-    ...points,
+    ...pointPairs,
     `${width - padding},${height - padding}`,
   ].join(" ");
+  const [activeIndex, setActiveIndex] = useState<number | null>(null);
+  const [isScrubbing, setIsScrubbing] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const getClosestIndex = (clientX: number) => {
+    const rect = containerRef.current?.getBoundingClientRect();
+    if (!rect || rect.width <= 0) {
+      return series.length - 1;
+    }
+
+    const ratio = clamp((clientX - rect.left) / rect.width, 0, 1);
+    const chartX = padding + ratio * (width - padding * 2);
+    let bestIndex = 0;
+    let bestDistance = Number.POSITIVE_INFINITY;
+
+    for (let index = 0; index < points.length; index += 1) {
+      const distance = Math.abs(points[index].x - chartX);
+      if (distance < bestDistance) {
+        bestDistance = distance;
+        bestIndex = index;
+      }
+    }
+
+    return bestIndex;
+  };
+
+  const beginScrub = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (event.pointerType === "mouse" && event.button !== 0) {
+      return;
+    }
+
+    setIsScrubbing(true);
+    setActiveIndex(getClosestIndex(event.clientX));
+    event.currentTarget.setPointerCapture(event.pointerId);
+  };
+
+  const moveScrub = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (!isScrubbing) {
+      return;
+    }
+
+    setActiveIndex(getClosestIndex(event.clientX));
+  };
+
+  const endScrub = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    setIsScrubbing(false);
+    setActiveIndex(null);
+  };
+
+  const scrubPoint =
+    activeIndex !== null ? points[activeIndex] : null;
+  const scrubValue =
+    activeIndex !== null ? series[activeIndex] : null;
+  const scrubDeltaLabel = scrubValue
+    ? scrubValue.deltaFromPrev === null
+      ? "Starting point"
+      : `${formatSignedNumber(scrubValue.deltaFromPrev)} from previous`
+    : "";
+  const tooltipLeftPercent =
+    scrubPoint === null ? 0 : clamp((scrubPoint.x / width) * 100, 11, 89);
 
   return (
-    <svg
-      viewBox={`0 0 ${width} ${height}`}
-      aria-hidden="true"
-      className={className}
-      preserveAspectRatio="none"
+    <div
+      ref={containerRef}
+      className={cx("relative overflow-visible", className)}
+      data-rating-chart-root="true"
+      onPointerDown={beginScrub}
+      onPointerMove={moveScrub}
+      onPointerUp={endScrub}
+      onPointerCancel={endScrub}
+      onPointerLeave={(event) => {
+        if (event.pointerType === "mouse" && !isScrubbing) {
+          setActiveIndex(null);
+        }
+      }}
+      style={{ touchAction: "pan-y" }}
+      aria-label="Rating progression chart"
+      role="img"
     >
-      <polygon points={areaPoints} fill="rgba(94, 234, 212, 0.12)" />
-      <polyline
-        points={points.join(" ")}
-        fill="none"
-        stroke={stroke}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        strokeWidth="4"
-      />
-      {points.map((point, index) => {
-        const [cxValue, cyValue] = point.split(",");
-        return (
-          <circle
-            key={`${point}-${index}`}
-            cx={cxValue}
-            cy={cyValue}
-            r={index === points.length - 1 ? 4 : 2.3}
-            fill={index === points.length - 1 ? stroke : "rgba(255,255,255,0.7)"}
+      {scrubPoint && scrubValue ? (
+        <div
+          className="pointer-events-none absolute z-20 rounded-lg border border-[rgba(15,118,110,0.26)] bg-white/96 px-2.5 py-1.5 text-[11px] text-gray-700 shadow-[0_8px_16px_rgba(17,25,23,0.16)]"
+          data-rating-tooltip="true"
+          style={{
+            left: `${tooltipLeftPercent}%`,
+            top: `${Math.max(scrubPoint.y - 10, 8)}px`,
+            transform: "translate(-50%, -100%)",
+          }}
+        >
+          <p className="font-semibold text-[var(--accent-strong)]">
+            {scrubValue.value}
+          </p>
+          <p className="text-gray-600">{scrubValue.label}</p>
+          <p className="text-gray-500">{scrubDeltaLabel}</p>
+        </div>
+      ) : null}
+      <svg
+        viewBox={`0 0 ${width} ${height}`}
+        className="h-full w-full"
+        preserveAspectRatio="none"
+        aria-hidden="true"
+      >
+        <polygon points={areaPoints} fill="rgba(94, 234, 212, 0.12)" />
+        <polyline
+          points={pointPairs.join(" ")}
+          fill="none"
+          stroke={stroke}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth="4"
+        />
+        {scrubPoint ? (
+          <line
+            x1={scrubPoint.x}
+            y1={padding}
+            x2={scrubPoint.x}
+            y2={height - padding}
+            stroke="rgba(255,255,255,0.58)"
+            strokeDasharray="3 3"
+            strokeWidth="1.5"
           />
-        );
-      })}
-    </svg>
+        ) : null}
+        {points.map((point, index) => (
+          <circle
+            key={`${point.x}-${point.y}-${index}`}
+            cx={point.x.toFixed(1)}
+            cy={point.y.toFixed(1)}
+            r={
+              activeIndex === index
+                ? 4.8
+                : index === points.length - 1
+                  ? 4
+                  : 2.3
+            }
+            fill={
+              activeIndex === index
+                ? "white"
+                : index === points.length - 1
+                  ? stroke
+                  : "rgba(255,255,255,0.7)"
+            }
+            stroke={activeIndex === index ? stroke : "none"}
+            strokeWidth={activeIndex === index ? "2.2" : "0"}
+          />
+        ))}
+      </svg>
+    </div>
   );
 }
 
@@ -494,7 +665,7 @@ function ProfileHero({
   rankContext: RankContext | null;
   recentFormSummary: string;
   recentStreakSummary: string;
-  ratingSeries: number[];
+  ratingSeries: RatingSeriesPoint[];
   onBack: () => void;
 }) {
   const ratingDelta = data.trend.ratingChange;
@@ -604,7 +775,7 @@ function ProfileHero({
               {getRankContextLabel(rankContext)}
             </p>
             <RatingSparkline
-              values={ratingSeries}
+              series={ratingSeries}
               className="mt-4 h-20 w-full"
               stroke="#5eead4"
             />
@@ -891,10 +1062,11 @@ function RatingProgressCard({
   ratingSeries,
 }: {
   data: UserProfileResponse;
-  ratingSeries: number[];
+  ratingSeries: RatingSeriesPoint[];
 }) {
-  const peak = Math.max(...ratingSeries, data.user.elo);
-  const low = Math.min(...ratingSeries, data.user.elo);
+  const ratings = ratingSeries.map((point) => point.value);
+  const peak = Math.max(...ratings, data.user.elo);
+  const low = Math.min(...ratings, data.user.elo);
 
   return (
     <ProfileSection
@@ -904,7 +1076,7 @@ function RatingProgressCard({
     >
       <div className="rounded-2xl border border-[rgba(15,118,110,0.16)] bg-[var(--accent-faint)] p-4">
         <RatingSparkline
-          values={ratingSeries}
+          series={ratingSeries}
           className="h-36 w-full"
           stroke="#0f766e"
         />
@@ -1174,7 +1346,7 @@ function OverviewTab({
   data: UserProfileResponse;
   rankContext: RankContext | null;
   communityId: string;
-  ratingSeries: number[];
+  ratingSeries: RatingSeriesPoint[];
   achievements: DerivedAchievement[];
 }) {
   return (
@@ -1457,7 +1629,17 @@ export default function ProfilePage() {
 
   const rankContext = data?.context?.rankContext ?? null;
   const ratingSeries = useMemo(
-    () => (data ? buildRatingSeries(data) : [0, 0]),
+    () =>
+      data
+        ? buildRatingSeries(data)
+        : [
+            {
+              value: 0,
+              index: 0,
+              label: "Now",
+              deltaFromPrev: null,
+            },
+          ],
     [data]
   );
   const achievements = useMemo(
