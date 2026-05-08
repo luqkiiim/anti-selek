@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { auth } from "@/lib/auth";
+import { buildCommunityPulse } from "@/lib/communityPulse";
 import { prisma } from "@/lib/prisma";
 import { listSessionsForCommunity } from "@/app/api/sessions/listSessionsService";
 import { logAuditEvent } from "@/lib/serverAudit";
@@ -143,11 +144,31 @@ export async function GET(
           session: { communityId: id, isTest: false },
         },
         select: {
+          id: true,
+          completedAt: true,
           winnerTeam: true,
           team1User1Id: true,
           team1User2Id: true,
           team2User1Id: true,
           team2User2Id: true,
+          team1Score: true,
+          team2Score: true,
+          team1EloChange: true,
+          team2EloChange: true,
+          team1User1: { select: { id: true, name: true } },
+          team1User2: { select: { id: true, name: true } },
+          team2User1: { select: { id: true, name: true } },
+          team2User2: { select: { id: true, name: true } },
+          session: {
+            select: {
+              id: true,
+              code: true,
+              name: true,
+              type: true,
+              createdAt: true,
+              endedAt: true,
+            },
+          },
         },
       }),
       listSessionsForCommunity({
@@ -213,6 +234,43 @@ export async function GET(
       }
     }
 
+    const communityMembers = members.map((member) => ({
+      id: member.user.id,
+      name: member.user.name,
+      email: member.user.email,
+      status:
+        member.status === CommunityPlayerStatus.OCCASIONAL
+          ? CommunityPlayerStatus.OCCASIONAL
+          : CommunityPlayerStatus.CORE,
+      gender:
+        [PlayerGender.MALE, PlayerGender.FEMALE].includes(
+          member.user.gender as PlayerGender
+        )
+          ? member.user.gender
+          : PlayerGender.MALE,
+      partnerPreference: member.user.partnerPreference,
+      mixedSideOverride:
+        typeof member.user.mixedSideOverride === "string"
+          ? member.user.mixedSideOverride
+          : null,
+      elo: member.elo,
+      isActive: member.user.isActive,
+      isClaimed: member.user.isClaimed,
+      createdAt: member.user.createdAt,
+      wins: statsByUserId.get(member.user.id)?.wins ?? 0,
+      losses: statsByUserId.get(member.user.id)?.losses ?? 0,
+      role: member.role,
+    }));
+    const communityPulse = buildCommunityPulse({
+      members: communityMembers.map((member) => ({
+        id: member.id,
+        name: member.name,
+        elo: member.elo,
+      })),
+      sessions,
+      completedMatches,
+    });
+
     return NextResponse.json({
       viewer: {
         id: viewer.id,
@@ -247,34 +305,9 @@ export async function GET(
         membersCount: community._count.members,
         sessionsCount: community._count.sessions,
       },
-      communityMembers: members.map((member) => ({
-        id: member.user.id,
-        name: member.user.name,
-        email: member.user.email,
-        status:
-          member.status === CommunityPlayerStatus.OCCASIONAL
-            ? CommunityPlayerStatus.OCCASIONAL
-            : CommunityPlayerStatus.CORE,
-        gender:
-          [PlayerGender.MALE, PlayerGender.FEMALE].includes(
-            member.user.gender as PlayerGender
-          )
-            ? member.user.gender
-            : PlayerGender.MALE,
-        partnerPreference: member.user.partnerPreference,
-        mixedSideOverride:
-          typeof member.user.mixedSideOverride === "string"
-            ? member.user.mixedSideOverride
-            : null,
-        elo: member.elo,
-        isActive: member.user.isActive,
-        isClaimed: member.user.isClaimed,
-        createdAt: member.user.createdAt,
-        wins: statsByUserId.get(member.user.id)?.wins ?? 0,
-        losses: statsByUserId.get(member.user.id)?.losses ?? 0,
-        role: member.role,
-      })),
+      communityMembers,
       sessions,
+      communityPulse,
       claimRequests: claimRequests.map(toClaimRequestResponse),
     });
   } catch (error) {

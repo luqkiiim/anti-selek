@@ -17,9 +17,9 @@ import { CommunityActionConfirmModal } from "@/components/community/CommunityAct
 import { CommunityBottomTabs } from "@/components/community/CommunityBottomTabs";
 import { CommunityGuestsModal } from "@/components/community/CommunityGuestsModal";
 import { CommunityLeaderboardPanel } from "@/components/community/CommunityLeaderboardPanel";
+import { CommunityOverviewPulsePanel } from "@/components/community/CommunityOverviewPulsePanel";
 import { CommunityPlayersModal } from "@/components/community/CommunityPlayersModal";
 import { CommunityProfilePanel } from "@/components/community/CommunityProfilePanel";
-import { CommunityRecentTournamentPanel } from "@/components/community/CommunityRecentTournamentPanel";
 import { CurrentTournamentsPanel } from "@/components/community/CurrentTournamentsPanel";
 import { HostTournamentPanel } from "@/components/community/HostTournamentPanel";
 import { PastTournamentsPanel } from "@/components/community/PastTournamentsPanel";
@@ -152,8 +152,8 @@ export default function CommunityPage() {
     pastTournaments,
     testSessions,
     latestPastTournamentId,
-    latestPastTournament,
     leaderboardPreview,
+    communityPulse,
     canManageCommunity,
     selectablePlayers,
     filteredSelectablePlayers,
@@ -738,32 +738,18 @@ export default function CommunityPage() {
       creatingSession={creatingSession}
     />
   ) : null;
-  const overviewSupportPanels = (
-    <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
-      <CommunityLeaderboardPanel
-        title="Leaderboard Snapshot"
-        subtitle="Top performers right now"
-        players={leaderboardPreview}
-        communityId={communityId}
-        action={
-          <button
-            type="button"
-            onClick={() => switchCommunitySection("leaderboard")}
-            className="app-button-secondary px-4 py-2"
-          >
-            Full Leaderboard
-          </button>
-        }
-        showClaimControls={false}
-        onOpenPlayerProfile={openCommunityPlayerProfile}
-      />
-
-      <CommunityRecentTournamentPanel
-        latestPastTournament={latestPastTournament}
-        onOpenTournaments={() => switchCommunitySection("tournaments")}
-        onOpenTournament={openTournament}
-      />
-    </div>
+  const overviewPanel = (
+    <CommunityOverviewPulsePanel
+      communityPulse={communityPulse}
+      activeTournaments={activeTournaments}
+      leaderboardPreview={leaderboardPreview}
+      currentUserId={user?.id}
+      onJoinTournament={joinTournament}
+      onOpenTournament={openTournament}
+      onOpenLeaderboard={() => switchCommunitySection("leaderboard")}
+      onOpenTournaments={() => switchCommunitySection("tournaments")}
+      onOpenPlayerProfile={openCommunityPlayerProfile}
+    />
   );
   const profilePanel = (
     <CommunityProfilePanel userId={user?.id} communityId={communityId} />
@@ -815,25 +801,7 @@ export default function CommunityPage() {
   const renderCommunitySection = (section: CommunityPageSection) => {
     switch (section) {
       case "overview":
-        return (
-          <>
-            <CurrentTournamentsPanel
-              tournaments={activeTournaments}
-              currentUserId={user?.id}
-              onJoinTournament={joinTournament}
-            />
-
-            {testSessions.length > 0 ? (
-              <TestSessionsPanel
-                sessions={testSessions}
-                currentUserId={user?.id}
-                onOpenSession={openTournament}
-              />
-            ) : null}
-
-            {overviewSupportPanels}
-          </>
-        );
+        return overviewPanel;
       case "host":
         return hostSetupPanel;
       case "tournaments":

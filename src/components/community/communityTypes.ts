@@ -1,4 +1,5 @@
 import type { ClaimRequesterEligibility } from "@/lib/communityClaimRules";
+import type { CommunityPulseSnapshot } from "@/lib/communityPulse";
 import {
   ClaimRequestStatus,
   CommunityPlayerStatus,
@@ -79,6 +80,8 @@ export interface CommunityClaimRequest {
   createdAt: string;
   reviewedAt?: string | null;
 }
+
+export type CommunityPagePulse = CommunityPulseSnapshot;
 
 export interface CommunityLeaderboardClaimState {
   currentUser: CommunityPageUser | null;

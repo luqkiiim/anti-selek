@@ -4,6 +4,7 @@ import type {
   CommunityClaimRequest,
   CommunityPageCommunity,
   CommunityPageMember,
+  CommunityPagePulse,
   CommunityPageSession,
   CommunityPageUser,
 } from "@/components/community/communityTypes";
@@ -37,6 +38,9 @@ export async function fetchCommunityPageSnapshot(communityId: string) {
     sessions: Array.isArray(snapshotData.sessions)
       ? (snapshotData.sessions as CommunityPageSession[])
       : [],
+    communityPulse: snapshotData.communityPulse
+      ? (snapshotData.communityPulse as CommunityPagePulse)
+      : null,
     claimRequests: Array.isArray(snapshotData.claimRequests)
       ? (snapshotData.claimRequests as CommunityClaimRequest[])
       : [],

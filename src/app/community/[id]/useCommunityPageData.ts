@@ -5,6 +5,7 @@ import type {
   CommunityClaimRequest,
   CommunityPageCommunity,
   CommunityPageMember,
+  CommunityPagePulse,
   CommunityPageSession,
   CommunityPageUser,
 } from "@/components/community/communityTypes";
@@ -29,6 +30,8 @@ export function useCommunityPageData({
     []
   );
   const [sessions, setSessions] = useState<CommunityPageSession[]>([]);
+  const [communityPulse, setCommunityPulse] =
+    useState<CommunityPagePulse | null>(null);
   const [claimRequests, setClaimRequests] = useState<CommunityClaimRequest[]>(
     []
   );
@@ -44,6 +47,7 @@ export function useCommunityPageData({
     setCommunity(snapshot.community);
     setCommunityMembers(snapshot.communityMembers);
     setSessions(snapshot.sessions);
+    setCommunityPulse(snapshot.communityPulse);
     setClaimRequests(snapshot.claimRequests);
   }, [communityId]);
 
@@ -74,6 +78,7 @@ export function useCommunityPageData({
     community,
     communityMembers,
     sessions,
+    communityPulse,
     claimRequests,
     loading,
     error,
