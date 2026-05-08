@@ -236,8 +236,8 @@ export function QueuedMatchCard({
   ) : null;
 
   return (
-    <div className="flex min-w-0 flex-col overflow-hidden rounded-xl border border-amber-200 bg-white shadow-sm">
-      <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 border-b border-amber-200 bg-amber-50 px-3 py-3 md:px-4 md:py-3.5">
+    <div className="flex min-w-0 flex-col overflow-visible rounded-xl border border-amber-200 bg-white shadow-sm">
+      <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 rounded-t-xl border-b border-amber-200 bg-amber-50 px-3 py-3 md:px-4 md:py-3.5">
         <div className="flex min-w-0 justify-start">
           {leftAction}
         </div>

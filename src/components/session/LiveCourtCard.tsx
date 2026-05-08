@@ -290,11 +290,11 @@ export function LiveCourtCard({
   return (
     <div
       data-live-court-card={court.id}
-      className={`flex min-w-0 flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm transition-shadow ${
+      className={`flex min-w-0 flex-col overflow-visible rounded-xl border border-gray-200 bg-white shadow-sm transition-shadow ${
         isPromotionTarget ? "app-court-promotion-target" : ""
       }`}
     >
-      <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 border-b border-gray-200 bg-gray-50 px-3 py-3 md:px-4 md:py-3.5">
+      <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 rounded-t-xl border-b border-gray-200 bg-gray-50 px-3 py-3 md:px-4 md:py-3.5">
         <div className="flex min-w-0 justify-start">
           {leftAction}
         </div>
