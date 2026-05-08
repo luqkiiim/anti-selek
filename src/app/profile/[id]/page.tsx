@@ -261,65 +261,75 @@ function getRankContextLabel(rankContext: RankContext | null) {
   return `Top ${topPercent}% of players`;
 }
 
-function getRatingStepLabel(stepsBack: number) {
-  if (stepsBack <= 0) {
-    return "Now";
+function formatRatingTooltipDate(value: string | null) {
+  if (!value) {
+    return "Date unknown";
   }
 
-  if (stepsBack === 1) {
-    return "1 step ago";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "Date unknown";
   }
 
-  return `${stepsBack} steps ago`;
+  return date.toLocaleDateString(undefined, {
+    day: "numeric",
+    month: "short",
+  });
 }
 
 function buildRatingSeries(data: UserProfileResponse) {
-  const sessionChanges = data.recentSessions
+  const sessionPoints = data.recentSessions
     .slice()
     .reverse()
-    .map((session) => session.ratingChange);
-  const matchChanges = data.matchHistory
+    .map((session) => ({
+      change: session.ratingChange,
+      date: session.date,
+    }));
+  const matchPoints = data.matchHistory
     .slice(0, 8)
     .reverse()
-    .map((match) => match.eloChange ?? 0);
-  const changes = sessionChanges.length > 0 ? sessionChanges : matchChanges;
+    .map((match) => ({
+      change: match.eloChange ?? 0,
+      date: match.date,
+    }));
+  const changes = sessionPoints.length > 0 ? sessionPoints : matchPoints;
 
   if (changes.length === 0) {
     return [
       {
         value: data.user.elo,
         index: 0,
-        label: "Now",
+        label: "Start",
         deltaFromPrev: null,
       },
     ] satisfies RatingSeriesPoint[];
   }
 
-  let rating = data.user.elo - changes.reduce((sum, change) => sum + change, 0);
+  let rating =
+    data.user.elo -
+    changes.reduce((sum, point) => sum + point.change, 0);
   const values: RatingSeriesPoint[] = [
     {
       value: rating,
       index: 0,
-      label: "",
+      label: "Start",
       deltaFromPrev: null,
     },
   ];
 
-  for (const change of changes) {
-    rating += change;
+  for (const point of changes) {
+    rating += point.change;
     values.push({
       value: rating,
       index: values.length,
-      label: "",
-      deltaFromPrev: change,
+      label: formatRatingTooltipDate(point.date),
+      deltaFromPrev: point.change,
     });
   }
 
-  const lastIndex = values.length - 1;
   return values.map((point, index) => ({
     ...point,
     index,
-    label: getRatingStepLabel(lastIndex - index),
   }));
 }
 
@@ -1636,7 +1646,7 @@ export default function ProfilePage() {
             {
               value: 0,
               index: 0,
-              label: "Now",
+              label: "Start",
               deltaFromPrev: null,
             },
           ],
