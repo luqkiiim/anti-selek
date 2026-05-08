@@ -36,7 +36,7 @@ describe("matchmaking credit", () => {
     ).toBe(4);
   });
 
-  it("aligns a resumed player to the active pool average without touching real match counts", () => {
+  it("aligns a resumed player to the lowest active effective count without touching real match counts", () => {
     expect(
       calculateNoCatchUpMatchmakingCredit({
         player: {
@@ -50,7 +50,23 @@ describe("matchmaking credit", () => {
           { matchesPlayed: 6, matchmakingMatchesCredit: 0 },
         ],
       })
-    ).toBe(6);
+    ).toBe(5);
+  });
+
+  it("uses active players' effective counts when calculating neutral entry credit", () => {
+    expect(
+      calculateNoCatchUpMatchmakingCredit({
+        player: {
+          matchesPlayed: 1,
+          matchmakingMatchesCredit: 0,
+        },
+        activePlayers: [
+          { matchesPlayed: 1, matchmakingMatchesCredit: 2 },
+          { matchesPlayed: 4, matchmakingMatchesCredit: 0 },
+          { matchesPlayed: 5, matchmakingMatchesCredit: 0 },
+        ],
+      })
+    ).toBe(2);
   });
 
   it("never reduces an existing no-catch-up credit on later resumes", () => {

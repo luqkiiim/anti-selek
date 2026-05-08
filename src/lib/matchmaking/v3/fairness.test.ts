@@ -79,6 +79,34 @@ describe("matchmaking v3 fairness", () => {
     expect(ranked.map((player) => player.rank)).toEqual([0, 1, 2]);
   });
 
+  it("does not let neutral resume credit outrank lower effective-match players", () => {
+    const now = new Date("2026-03-18T01:00:00Z").getTime();
+    const ranked = buildActivePlayers(
+      [
+        createPlayer("Resumed", {
+          matchesPlayed: 0,
+          matchmakingBaseline: 2,
+          availableSince: new Date("2026-03-18T01:00:00Z"),
+        }),
+        createPlayer("Behind", {
+          matchesPlayed: 1,
+          availableSince: new Date("2026-03-18T00:30:00Z"),
+        }),
+        createPlayer("Current", {
+          matchesPlayed: 2,
+          availableSince: new Date("2026-03-18T00:00:00Z"),
+        }),
+      ],
+      { now, randomFn: () => 0 }
+    );
+
+    expect(ranked.map((player) => player.userId)).toEqual([
+      "Behind",
+      "Current",
+      "Resumed",
+    ]);
+  });
+
   it("groups ranked players into strict effective-match bands", () => {
     const now = new Date("2026-03-18T01:00:00Z").getTime();
     const activePlayers = buildActivePlayers(

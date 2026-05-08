@@ -28,12 +28,9 @@ export function calculateNoCatchUpMatchmakingCredit({
     return currentCredit;
   }
 
-  const averageEffectiveMatches =
-    activePlayers.reduce(
-      (sum, player) => sum + getEffectiveMatchesPlayed(player),
-      0
-    ) / activePlayers.length;
-  const targetEffectiveMatches = Math.round(averageEffectiveMatches);
+  const targetEffectiveMatches = Math.min(
+    ...activePlayers.map((player) => getEffectiveMatchesPlayed(player))
+  );
 
   return Math.max(
     currentCredit,

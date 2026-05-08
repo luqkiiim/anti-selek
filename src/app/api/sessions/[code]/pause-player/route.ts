@@ -7,6 +7,8 @@ import { tryRebuildQueuedMatchForCode } from "../queue-match/shared";
 
 export const dynamic = "force-dynamic";
 
+const RESUME_QUEUE_RESET_GUARD_MS = 60 * 1000;
+
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ code: string }> }
@@ -77,27 +79,35 @@ export async function POST(
     let inactiveSecondsToIncrement = 0;
     let nextMatchmakingMatchesCredit =
       existingPlayer.matchmakingMatchesCredit;
+    const now = new Date();
+    let shouldResetResumeQueue = false;
     if (!isPaused && existingPlayer.pausedAt) {
       // Transitioning from Paused to Unpaused
-      const durationMs = Date.now() - existingPlayer.pausedAt.getTime();
-      inactiveSecondsToIncrement = Math.floor(durationMs / 1000);
+      const durationMs = now.getTime() - existingPlayer.pausedAt.getTime();
+      const isAccidentalToggle =
+        durationMs < RESUME_QUEUE_RESET_GUARD_MS;
 
-      const activePlayers = await prisma.sessionPlayer.findMany({
-        where: {
-          sessionId: sessionData.id,
-          userId: { not: userId },
-          isPaused: false,
-        },
-        select: {
-          matchesPlayed: true,
-          matchmakingMatchesCredit: true,
-        },
-      });
+      if (!isAccidentalToggle) {
+        inactiveSecondsToIncrement = Math.floor(durationMs / 1000);
+        shouldResetResumeQueue = true;
 
-      nextMatchmakingMatchesCredit = calculateNoCatchUpMatchmakingCredit({
-        player: existingPlayer,
-        activePlayers,
-      });
+        const activePlayers = await prisma.sessionPlayer.findMany({
+          where: {
+            sessionId: sessionData.id,
+            userId: { not: userId },
+            isPaused: false,
+          },
+          select: {
+            matchesPlayed: true,
+            matchmakingMatchesCredit: true,
+          },
+        });
+
+        nextMatchmakingMatchesCredit = calculateNoCatchUpMatchmakingCredit({
+          player: existingPlayer,
+          activePlayers,
+        });
+      }
     }
 
     const { nextPlayer, queuedMatchAffected } = await prisma.$transaction(async (tx) => {
@@ -110,9 +120,9 @@ export async function POST(
         },
         data: {
           isPaused,
-          pausedAt: isPaused ? new Date() : null,
-          availableSince: isPaused ? undefined : new Date(),
-          ladderEntryAt: isPaused ? undefined : new Date(),
+          pausedAt: isPaused ? now : null,
+          availableSince: shouldResetResumeQueue ? now : undefined,
+          ladderEntryAt: shouldResetResumeQueue ? now : undefined,
           inactiveSeconds: { increment: inactiveSecondsToIncrement },
           matchmakingMatchesCredit: nextMatchmakingMatchesCredit,
         },
