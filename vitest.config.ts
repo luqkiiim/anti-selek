@@ -10,4 +10,7 @@ export default defineConfig({
       "@": path.resolve(rootDir, "src"),
     },
   },
+  test: {
+    hookTimeout: 30000,
+  },
 });

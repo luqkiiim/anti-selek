@@ -11,6 +11,7 @@ import {
 import {
   buildMatchmakingState,
   getRankedCandidates,
+  selectBatchMatches,
   selectSingleCourtMatch,
 } from "./selection";
 import type { GenerateMatchSession } from "./shared";
@@ -103,6 +104,18 @@ function createSessionData(
     queuedMatch: null,
     ...overrides,
   } as unknown as GenerateMatchSession;
+}
+
+function createSequenceRandom(values: number[]) {
+  let index = 0;
+
+  return () => values[index++] ?? 0;
+}
+
+function getSelectedBatchIds(selection: ReturnType<typeof selectBatchMatches>) {
+  return new Set(
+    selection.selections.flatMap((courtSelection) => courtSelection.ids)
+  );
 }
 
 describe("generate-match race regressions", () => {
@@ -207,5 +220,53 @@ describe("generate-match race regressions", () => {
     expect(selection.ids).toHaveLength(4);
     expect(selectedCompletedMixedCount).toBe(1);
     expect(selectedWaitingCount).toBe(3);
+  });
+});
+
+describe("generate-match points batch regressions", () => {
+  it("can recreate a different equally fair opening batch after an unscored batch is undone", async () => {
+    const players = Array.from({ length: 10 }, (_, index) =>
+      createSessionPlayer(String.fromCharCode(65 + index))
+    );
+    const sessionData = createSessionData({
+      type: SessionType.POINTS,
+      mode: SessionMode.MEXICANO,
+      players,
+      matches: [],
+    });
+    const { busyPlayerIds, playersById, rotationHistory } =
+      await buildMatchmakingState(sessionData);
+    const { rankedCandidates } = getRankedCandidates(sessionData, busyPlayerIds);
+
+    const firstBatch = selectBatchMatches({
+      rankedCandidates,
+      playersById,
+      sessionData,
+      rotationHistory,
+      requestedMatchCount: 2,
+      randomFn: createSequenceRandom([
+        0.9, 0.8, 0.7, 0.6, 0.1, 0.2, 0.3, 0.4, 0.5, 0,
+      ]),
+    });
+    const recreatedBatch = selectBatchMatches({
+      rankedCandidates,
+      playersById,
+      sessionData,
+      rotationHistory,
+      requestedMatchCount: 2,
+      randomFn: createSequenceRandom([
+        0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.9, 0.8,
+      ]),
+    });
+
+    expect(getSelectedBatchIds(firstBatch)).toEqual(
+      new Set(["C", "D", "E", "F", "G", "H", "I", "J"])
+    );
+    expect(getSelectedBatchIds(recreatedBatch)).toEqual(
+      new Set(["A", "B", "C", "D", "E", "F", "G", "H"])
+    );
+    expect(getSelectedBatchIds(firstBatch)).not.toEqual(
+      getSelectedBatchIds(recreatedBatch)
+    );
   });
 });

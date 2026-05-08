@@ -1155,12 +1155,61 @@ describe("generate match service", () => {
       expect(findBestBatchSelectionV3).toHaveBeenCalledWith(
         expect.any(Array),
         expect.objectContaining({
-          randomFn: expect.any(Function),
+          randomFn: undefined,
         })
       );
+    });
+
+    it("passes an injected batch random function for deterministic tests", () => {
+      const batchSelection: V3BatchSelection<
+        ActiveMatchmakerV3Player<MatchmakerV3Player>
+      > = {
+        selections: [
+          createV3Selection(["A", "B", "C", "D"], {
+            team1: ["A", "B"],
+            team2: ["C", "D"],
+          }),
+        ],
+        waitSummary: {
+          totalWaitMs: 0,
+          minimumWaitMs: 0,
+          waitVector: [],
+        },
+        maxBalanceGap: 0,
+        totalBalanceGap: 0,
+        totalPartnerRepeatPenalty: 0,
+        totalOpponentRepeatPenalty: 0,
+        totalExactRematchPenalty: 0,
+        totalRandomScore: 0,
+      };
+      const randomFn = vi.fn(() => 0.42);
+      vi.mocked(findBestBatchSelectionV3).mockReturnValueOnce({
+        selection: batchSelection,
+        debug: {} as never,
+      });
+
+      const players = [
+        createSessionPlayer("A"),
+        createSessionPlayer("B"),
+        createSessionPlayer("C"),
+        createSessionPlayer("D"),
+      ];
+
       expect(
-        vi.mocked(findBestBatchSelectionV3).mock.calls[0]?.[1].randomFn?.()
-      ).toBe(0);
+        selectBatchMatches({
+          rankedCandidates: [] as ReturnType<
+            typeof getRankedCandidates
+          >["rankedCandidates"],
+          playersById: createPlayersById(players),
+          sessionData: createSessionData({ players }),
+          rotationHistory: buildRotationHistory([]),
+          requestedMatchCount: 1,
+          randomFn,
+        })
+      ).toEqual(batchSelection);
+      expect(
+        vi.mocked(findBestBatchSelectionV3).mock.calls[0]?.[1].randomFn
+      ).toBe(randomFn);
     });
 
     it("uses the ladder batch selector for ladder sessions", () => {

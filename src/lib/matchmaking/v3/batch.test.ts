@@ -40,6 +40,18 @@ function createLowerPlayer(
   });
 }
 
+function createSequenceRandom(values: number[]) {
+  let index = 0;
+
+  return () => values[index++] ?? 0;
+}
+
+function getBatchSelectedIds(selection: V3BatchSelection | null | undefined) {
+  return new Set(
+    selection?.selections.flatMap((courtSelection) => courtSelection.ids) ?? []
+  );
+}
+
 function expectLegalMixedBatch(
   selection: V3BatchSelection | null | undefined,
   expectedCourtCount: number
@@ -75,6 +87,85 @@ function expectLegalMixedBatch(
 }
 
 describe("matchmaking v3 batch selection", () => {
+  it("uses random tie-breaks instead of insertion order for tied points batches", () => {
+    const players = Array.from({ length: 10 }, (_, index) =>
+      createPlayer(String.fromCharCode(65 + index), { strength: 0 })
+    );
+
+    const result = findBestBatchSelectionV3(players, {
+      courtCount: 2,
+      sessionMode: SessionMode.MEXICANO,
+      sessionType: SessionType.POINTS,
+      now: new Date("2026-03-18T01:00:00Z").getTime(),
+      randomFn: createSequenceRandom([
+        0.9, 0.8, 0.7, 0.6, 0.1, 0.2, 0.3, 0.4, 0.5, 0,
+      ]),
+    });
+
+    expect(getBatchSelectedIds(result.selection)).toEqual(
+      new Set(["C", "D", "E", "F", "G", "H", "I", "J"])
+    );
+  });
+
+  it("can produce a different equally fair tied points batch with a different random sequence", () => {
+    const players = Array.from({ length: 10 }, (_, index) =>
+      createPlayer(String.fromCharCode(65 + index), { strength: 0 })
+    );
+
+    const firstResult = findBestBatchSelectionV3(players, {
+      courtCount: 2,
+      sessionMode: SessionMode.MEXICANO,
+      sessionType: SessionType.POINTS,
+      now: new Date("2026-03-18T01:00:00Z").getTime(),
+      randomFn: createSequenceRandom([
+        0.9, 0.8, 0.7, 0.6, 0.1, 0.2, 0.3, 0.4, 0.5, 0,
+      ]),
+    });
+    const secondResult = findBestBatchSelectionV3(players, {
+      courtCount: 2,
+      sessionMode: SessionMode.MEXICANO,
+      sessionType: SessionType.POINTS,
+      now: new Date("2026-03-18T01:00:00Z").getTime(),
+      randomFn: createSequenceRandom([
+        0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.9, 0.8,
+      ]),
+    });
+
+    expect(getBatchSelectedIds(firstResult.selection)).not.toEqual(
+      getBatchSelectedIds(secondResult.selection)
+    );
+    expect(getBatchSelectedIds(secondResult.selection)).toEqual(
+      new Set(["A", "B", "C", "D", "E", "F", "G", "H"])
+    );
+  });
+
+  it("keeps lower-match-count players ahead of random tied-batch variation", () => {
+    const players = [
+      ...Array.from({ length: 8 }, (_, index) =>
+        createPlayer(String.fromCharCode(65 + index), {
+          strength: 0,
+          matchesPlayed: 0,
+        })
+      ),
+      createPlayer("I", { strength: 0, matchesPlayed: 1 }),
+      createPlayer("J", { strength: 0, matchesPlayed: 1 }),
+    ];
+
+    const result = findBestBatchSelectionV3(players, {
+      courtCount: 2,
+      sessionMode: SessionMode.MEXICANO,
+      sessionType: SessionType.POINTS,
+      now: new Date("2026-03-18T01:00:00Z").getTime(),
+      randomFn: createSequenceRandom([
+        0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3, 0.2, 0, 0.1,
+      ]),
+    });
+
+    expect(getBatchSelectedIds(result.selection)).toEqual(
+      new Set(["A", "B", "C", "D", "E", "F", "G", "H"])
+    );
+  });
+
   it("builds a full global batch and uses all locked lower-band players", () => {
     const result = findBestBatchSelectionV3(
       [

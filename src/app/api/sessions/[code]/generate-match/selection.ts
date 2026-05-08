@@ -1277,12 +1277,14 @@ export function selectBatchMatches({
   playersById,
   sessionData,
   requestedMatchCount,
+  randomFn,
 }: {
   rankedCandidates: RankedCandidates;
   playersById: Map<string, PartitionCandidate>;
   sessionData: GenerateMatchSession;
   rotationHistory: ReturnType<typeof buildRotationHistory>;
   requestedMatchCount: number;
+  randomFn?: () => number;
 }) {
   if (sessionData.poolsEnabled) {
     const search = ({
@@ -1384,7 +1386,7 @@ export function selectBatchMatches({
       sessionMode: sessionData.mode as SessionMode,
       sessionType: sessionData.type as SessionType,
       completedMatches: buildCompletedMatches(sessionData),
-      randomFn: () => 0,
+      randomFn,
     }
   );
 
