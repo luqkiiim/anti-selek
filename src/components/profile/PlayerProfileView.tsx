@@ -251,16 +251,12 @@ function getRankMovementChipClass(rankDelta: number | null) {
   return rankDelta > 0 ? "app-chip app-chip-success" : "app-chip app-chip-danger";
 }
 
-function getResultLabel(result: PlayerProfileMatchHistoryEntry["result"]) {
-  return result === "WIN" ? "Win" : "Loss";
-}
-
-function getResultPillClass(result: PlayerProfileMatchHistoryEntry["result"]) {
+function getMatchResultSurfaceClass(result: PlayerProfileMatchHistoryEntry["result"]) {
   return cx(
-    "inline-flex min-w-[3.25rem] items-center justify-center rounded-full px-2.5 py-1 text-xs font-semibold",
+    "border-l-4",
     result === "WIN"
-      ? "bg-emerald-100 text-emerald-700"
-      : "bg-rose-100 text-rose-700"
+      ? "border-l-emerald-400 bg-emerald-50/70"
+      : "border-l-rose-400 bg-rose-50/70"
   );
 }
 
@@ -1296,15 +1292,12 @@ function MatchCard({
   return (
     <article
       className={cx(
-        "rounded-xl border border-[var(--line)] bg-white shadow-[0_6px_16px_rgba(23,32,31,0.035)]",
+        "rounded-xl border border-[var(--line)] shadow-[0_6px_16px_rgba(23,32,31,0.035)]",
+        getMatchResultSurfaceClass(match.result),
         compact ? "px-3 py-3" : "px-3.5 py-3.5 sm:px-4"
       )}
     >
-      <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3">
-        <span className={getResultPillClass(match.result)}>
-          {getResultLabel(match.result)}
-        </span>
-
+      <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2.5">
         <div className="min-w-0">
           <div className="flex min-w-0 items-baseline justify-between gap-2">
             <p className="min-w-0 truncate text-sm font-semibold text-gray-900 sm:text-base">
@@ -1335,10 +1328,10 @@ function MatchCard({
         </div>
 
         <div className="flex items-center gap-1">
-          <div className="w-[3.4rem] text-right">
+          <div className="w-[3.2rem] text-right">
             <p
               className={cx(
-                "whitespace-nowrap text-xs font-semibold sm:text-sm",
+                "whitespace-nowrap text-[11px] font-semibold leading-tight sm:text-sm",
                 getEloChangeClass(match.eloChange)
               )}
             >
