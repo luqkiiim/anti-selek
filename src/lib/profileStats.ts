@@ -264,8 +264,17 @@ function compareBestPartnerConnections(
   left: PlayerProfileConnectionSummary,
   right: PlayerProfileConnectionSummary
 ) {
+  const leftTotalMatches = left.wins + left.losses;
+  const rightTotalMatches = right.wins + right.losses;
+  const leftBayesianWinRate = (left.wins + 1) / (leftTotalMatches + 2);
+  const rightBayesianWinRate = (right.wins + 1) / (rightTotalMatches + 2);
+  const leftWeight = Math.log(leftTotalMatches + 1);
+  const rightWeight = Math.log(rightTotalMatches + 1);
+  const leftPartnerScore = leftBayesianWinRate * leftWeight;
+  const rightPartnerScore = rightBayesianWinRate * rightWeight;
+
   return (
-    right.winRate - left.winRate ||
+    rightPartnerScore - leftPartnerScore ||
     right.matches - left.matches ||
     right.pointDifferential - left.pointDifferential ||
     left.user.name.localeCompare(right.user.name, undefined, {
@@ -278,8 +287,19 @@ function compareToughestOpponents(
   left: PlayerProfileConnectionSummary,
   right: PlayerProfileConnectionSummary
 ) {
+  const leftTotalMatches = left.wins + left.losses;
+  const rightTotalMatches = right.wins + right.losses;
+  const leftLosses = left.losses;
+  const rightLosses = right.losses;
+  const leftBayesianWinRate = (leftLosses + 1) / (leftTotalMatches + 2);
+  const rightBayesianWinRate = (rightLosses + 1) / (rightTotalMatches + 2);
+  const leftWeight = Math.log(leftTotalMatches + 1);
+  const rightWeight = Math.log(rightTotalMatches + 1);
+  const leftToughness = leftBayesianWinRate * leftWeight;
+  const rightToughness = rightBayesianWinRate * rightWeight;
+
   return (
-    left.winRate - right.winRate ||
+    rightToughness - leftToughness ||
     right.matches - left.matches ||
     left.pointDifferential - right.pointDifferential ||
     left.user.name.localeCompare(right.user.name, undefined, {

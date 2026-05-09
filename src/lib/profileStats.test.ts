@@ -257,6 +257,124 @@ describe("profileStats", () => {
     });
   });
 
+  it("weights toughest opponents so short raw-loss records do not dominate", () => {
+    const user = { id: "u1", name: "Alice" };
+    const partner = { id: "u2", name: "Ben" };
+    const shortOpponent = { id: "u3", name: "Short Sample" };
+    const shortMate = { id: "u4", name: "Short Mate" };
+    const provenOpponent = { id: "u5", name: "Proven Opponent" };
+    const fillers = Array.from({ length: 8 }, (_, index) => ({
+      id: `f${index + 1}`,
+      name: `Filler ${index + 1}`,
+    }));
+
+    const matches: ProfileMatchSource[] = [
+      createMatch("m1", {
+        sessionId: "s1",
+        sessionCode: "week-1",
+        sessionName: "Week 1",
+        completedAt: "2026-04-10T12:00:00.000Z",
+        team1: [user, partner],
+        team2: [shortOpponent, shortMate],
+        team1Score: 16,
+        team2Score: 21,
+        winnerTeam: 2,
+      }),
+      createMatch("m2", {
+        sessionId: "s1",
+        sessionCode: "week-1",
+        sessionName: "Week 1",
+        completedAt: "2026-04-09T12:00:00.000Z",
+        team1: [user, partner],
+        team2: [shortOpponent, shortMate],
+        team1Score: 17,
+        team2Score: 21,
+        winnerTeam: 2,
+      }),
+      ...fillers.map((filler, index) =>
+        createMatch(`m${index + 3}`, {
+          sessionId: "s2",
+          sessionCode: "week-2",
+          sessionName: "Week 2",
+          completedAt: `2026-04-${String(8 - index).padStart(2, "0")}T12:00:00.000Z`,
+          team1: [user, partner],
+          team2: [provenOpponent, filler],
+          team1Score: index < 5 ? 18 : 21,
+          team2Score: index < 5 ? 21 : 19,
+          winnerTeam: index < 5 ? 2 : 1,
+        })
+      ),
+    ];
+
+    const result = buildPlayerProfileDerivedData(user.id, matches);
+
+    expect(result.opponents.toughest).toMatchObject({
+      user: provenOpponent,
+      matches: 8,
+      wins: 3,
+      losses: 5,
+      winRate: 38,
+    });
+  });
+
+  it("weights best partners so short perfect records do not dominate", () => {
+    const user = { id: "u1", name: "Alice" };
+    const shortPartner = { id: "u2", name: "Short Partner" };
+    const provenPartner = { id: "u3", name: "Proven Partner" };
+    const opponents = Array.from({ length: 20 }, (_, index) => ({
+      id: `o${index + 1}`,
+      name: `Opponent ${index + 1}`,
+    }));
+
+    const matches: ProfileMatchSource[] = [
+      createMatch("m1", {
+        sessionId: "s1",
+        sessionCode: "week-1",
+        sessionName: "Week 1",
+        completedAt: "2026-04-12T12:00:00.000Z",
+        team1: [user, shortPartner],
+        team2: [opponents[0], opponents[1]],
+        team1Score: 21,
+        team2Score: 17,
+        winnerTeam: 1,
+      }),
+      createMatch("m2", {
+        sessionId: "s1",
+        sessionCode: "week-1",
+        sessionName: "Week 1",
+        completedAt: "2026-04-11T12:00:00.000Z",
+        team1: [user, shortPartner],
+        team2: [opponents[2], opponents[3]],
+        team1Score: 21,
+        team2Score: 18,
+        winnerTeam: 1,
+      }),
+      ...Array.from({ length: 8 }, (_, index) =>
+        createMatch(`m${index + 3}`, {
+          sessionId: "s2",
+          sessionCode: "week-2",
+          sessionName: "Week 2",
+          completedAt: `2026-04-${String(10 - index).padStart(2, "0")}T12:00:00.000Z`,
+          team1: [user, provenPartner],
+          team2: [opponents[index * 2 + 4], opponents[index * 2 + 5]],
+          team1Score: index < 5 ? 21 : 18,
+          team2Score: index < 5 ? 17 : 21,
+          winnerTeam: index < 5 ? 1 : 2,
+        })
+      ),
+    ];
+
+    const result = buildPlayerProfileDerivedData(user.id, matches);
+
+    expect(result.partners.bestWinRate).toMatchObject({
+      user: provenPartner,
+      matches: 8,
+      wins: 5,
+      losses: 3,
+      winRate: 63,
+    });
+  });
+
   it("groups recent matches into a five-session window", () => {
     const user = { id: "u1", name: "Alice" };
     const partner = { id: "u2", name: "Ben" };
