@@ -162,7 +162,8 @@ describe("profileStats", () => {
         id: "s2",
       }),
     });
-    expect(result.partners.mostPlayed).toMatchObject({
+    expect(result.partners.best).toHaveLength(2);
+    expect(result.partners.best[0]).toMatchObject({
       user: partner1,
       matches: 3,
       wins: 1,
@@ -171,14 +172,17 @@ describe("profileStats", () => {
       pointDifferential: -3,
       ratingChange: -1,
     });
-    expect(result.partners.bestWinRate).toMatchObject({
-      user: partner1,
+    expect(result.partners.best[1]).toMatchObject({
+      user: partner2,
+      matches: 1,
     });
-    expect(result.opponents.mostFaced).toMatchObject({
-      user: opponent1,
-      matches: 3,
-    });
-    expect(result.opponents.toughest).toMatchObject({
+    expect(result.opponents.toughest).toHaveLength(3);
+    expect(result.opponents.toughest.map((summary) => summary.user)).toEqual([
+      opponent1,
+      opponent2,
+      opponent3,
+    ]);
+    expect(result.opponents.toughest[0]).toMatchObject({
       user: opponent1,
       matches: 3,
       winRate: 33,
@@ -238,19 +242,23 @@ describe("profileStats", () => {
       }),
     ]);
 
-    expect(result.partners.mostPlayed).toMatchObject({
+    expect(result.partners.best).toHaveLength(2);
+    expect(result.partners.best[0]).toMatchObject({
       user: partnerWin,
       matches: 1,
-    });
-    expect(result.partners.bestWinRate).toMatchObject({
-      user: partnerWin,
       winRate: 100,
     });
-    expect(result.trend.direction).toBe("RISING");
-    expect(result.opponents.toughest).toMatchObject({
-      user: opponent3,
+    expect(result.partners.best[1]).toMatchObject({
+      user: partnerLoss,
+      matches: 1,
       winRate: 0,
     });
+    expect(result.trend.direction).toBe("RISING");
+    expect(result.opponents.toughest.map((summary) => summary.user)).toEqual([
+      opponent3,
+      opponent4,
+      opponent1,
+    ]);
     expect(result.recentForm.currentStreak).toEqual({
       result: "WIN",
       count: 1,
@@ -308,7 +316,13 @@ describe("profileStats", () => {
 
     const result = buildPlayerProfileDerivedData(user.id, matches);
 
-    expect(result.opponents.toughest).toMatchObject({
+    expect(result.opponents.toughest).toHaveLength(3);
+    expect(result.opponents.toughest.map((summary) => summary.user)).toEqual([
+      provenOpponent,
+      shortMate,
+      shortOpponent,
+    ]);
+    expect(result.opponents.toughest[0]).toMatchObject({
       user: provenOpponent,
       matches: 8,
       wins: 3,
@@ -321,7 +335,9 @@ describe("profileStats", () => {
     const user = { id: "u1", name: "Alice" };
     const shortPartner = { id: "u2", name: "Short Partner" };
     const provenPartner = { id: "u3", name: "Proven Partner" };
-    const opponents = Array.from({ length: 20 }, (_, index) => ({
+    const solidPartner = { id: "u4", name: "Solid Partner" };
+    const weakPartner = { id: "u5", name: "Weak Partner" };
+    const opponents = Array.from({ length: 28 }, (_, index) => ({
       id: `o${index + 1}`,
       name: `Opponent ${index + 1}`,
     }));
@@ -362,11 +378,61 @@ describe("profileStats", () => {
           winnerTeam: index < 5 ? 1 : 2,
         })
       ),
+      createMatch("m11", {
+        sessionId: "s3",
+        sessionCode: "week-3",
+        sessionName: "Week 3",
+        completedAt: "2026-04-02T12:00:00.000Z",
+        team1: [user, solidPartner],
+        team2: [opponents[20], opponents[21]],
+        team1Score: 21,
+        team2Score: 19,
+        winnerTeam: 1,
+      }),
+      createMatch("m12", {
+        sessionId: "s3",
+        sessionCode: "week-3",
+        sessionName: "Week 3",
+        completedAt: "2026-04-01T12:00:00.000Z",
+        team1: [user, solidPartner],
+        team2: [opponents[22], opponents[23]],
+        team1Score: 18,
+        team2Score: 21,
+        winnerTeam: 2,
+      }),
+      createMatch("m13", {
+        sessionId: "s4",
+        sessionCode: "week-4",
+        sessionName: "Week 4",
+        completedAt: "2026-03-31T12:00:00.000Z",
+        team1: [user, weakPartner],
+        team2: [opponents[24], opponents[25]],
+        team1Score: 17,
+        team2Score: 21,
+        winnerTeam: 2,
+      }),
+      createMatch("m14", {
+        sessionId: "s4",
+        sessionCode: "week-4",
+        sessionName: "Week 4",
+        completedAt: "2026-03-30T12:00:00.000Z",
+        team1: [user, weakPartner],
+        team2: [opponents[26], opponents[27]],
+        team1Score: 16,
+        team2Score: 21,
+        winnerTeam: 2,
+      }),
     ];
 
     const result = buildPlayerProfileDerivedData(user.id, matches);
 
-    expect(result.partners.bestWinRate).toMatchObject({
+    expect(result.partners.best).toHaveLength(3);
+    expect(result.partners.best.map((summary) => summary.user)).toEqual([
+      provenPartner,
+      shortPartner,
+      solidPartner,
+    ]);
+    expect(result.partners.best[0]).toMatchObject({
       user: provenPartner,
       matches: 8,
       wins: 5,

@@ -60,12 +60,10 @@ interface UserProfileResponse {
   recentSessions: PlayerProfileSessionSummary[];
   trend: PlayerProfileTrendSummary;
   partners: {
-    mostPlayed: PlayerProfileConnectionSummary | null;
-    bestWinRate: PlayerProfileConnectionSummary | null;
+    best: PlayerProfileConnectionSummary[];
   };
   opponents: {
-    mostFaced: PlayerProfileConnectionSummary | null;
-    toughest: PlayerProfileConnectionSummary | null;
+    toughest: PlayerProfileConnectionSummary[];
   };
   sessions: {
     latest: PlayerProfileSessionSummary | null;
@@ -381,10 +379,10 @@ function buildAchievements(
     data.recentForm.currentStreak.result === "WIN"
       ? data.recentForm.currentStreak.count
       : 0;
+  const bestPartner = data.partners.best[0] ?? null;
+  const toughestOpponent = data.opponents.toughest[0] ?? null;
   const hasPartnerChemistry =
-    (data.partners.bestWinRate?.matches ?? 0) >= 2 &&
-    (data.partners.bestWinRate?.winRate ?? 0) >= 60;
-  const toughestOpponent = data.opponents.toughest;
+    (bestPartner?.matches ?? 0) >= 2 && (bestPartner?.winRate ?? 0) >= 60;
 
   return [
     {
@@ -410,8 +408,8 @@ function buildAchievements(
     {
       icon: Users,
       title: "Partner chemistry",
-      detail: data.partners.bestWinRate
-        ? `${data.partners.bestWinRate.winRate}% with ${data.partners.bestWinRate.user.name}`
+      detail: bestPartner
+        ? `${bestPartner.winRate}% with ${bestPartner.user.name}`
         : "Build a winning partner record",
       unlocked: hasPartnerChemistry,
       tone: "accent",
@@ -491,9 +489,9 @@ function buildStyleTraits(data: UserProfileResponse): StyleTrait[] {
     },
     {
       label: "Chemistry",
-      value: clamp(data.partners.bestWinRate?.winRate ?? 0, 0, 100),
-      detail: data.partners.bestWinRate
-        ? `${data.partners.bestWinRate.winRate}% best partner win rate`
+      value: clamp(data.partners.best[0]?.winRate ?? 0, 0, 100),
+      detail: data.partners.best[0]
+        ? `${data.partners.best[0].winRate}% best partner win rate`
         : "No partner trend yet",
     },
   ];
@@ -1011,26 +1009,45 @@ function PerformanceSummary({ data }: { data: UserProfileResponse }) {
   );
 }
 
-function ConnectionAvatar({ name }: { name: string }) {
+function ConnectionRow({
+  summary,
+  rank,
+  communityId,
+}: {
+  summary: PlayerProfileConnectionSummary;
+  rank: number;
+  communityId: string;
+}) {
   return (
-    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-[var(--line)] bg-[var(--surface-muted)] text-sm font-semibold text-[var(--accent-strong)]">
-      {getInitials(name)}
-    </span>
+    <div className="flex items-center gap-3 rounded-xl border border-[var(--line)] bg-white px-3 py-3">
+      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-[rgba(15,118,110,0.18)] bg-[var(--accent-faint)] text-xs font-semibold text-[var(--accent-strong)]">
+        #{rank}
+      </span>
+      <div className="min-w-0 flex-1">
+        <div className="truncate text-sm">
+          <ProfileLink href={getPlayerProfileHref(summary.user.id, communityId)}>
+            {summary.user.name}
+          </ProfileLink>
+        </div>
+        <p className="mt-1 text-xs text-gray-600">
+          {summary.wins}-{summary.losses}, {summary.winRate}% win,{" "}
+          {summary.matches} {summary.matches === 1 ? "match" : "matches"}
+        </p>
+      </div>
+    </div>
   );
 }
 
-function ConnectionRow({
-  label,
-  summary,
+function ConnectionRankList({
+  summaries,
   communityId,
   emptyText,
 }: {
-  label: string;
-  summary: PlayerProfileConnectionSummary | null;
+  summaries: PlayerProfileConnectionSummary[];
   communityId: string;
   emptyText: string;
 }) {
-  if (!summary) {
+  if (summaries.length === 0) {
     return (
       <div className="rounded-xl border border-dashed border-[var(--line-strong)] bg-[var(--surface-muted)] px-3 py-4 text-sm text-gray-600">
         {emptyText}
@@ -1039,23 +1056,15 @@ function ConnectionRow({
   }
 
   return (
-    <div className="flex items-center gap-3 rounded-xl border border-[var(--line)] bg-white px-3 py-3">
-      <ConnectionAvatar name={summary.user.name} />
-      <div className="min-w-0 flex-1">
-        <p className="text-xs font-semibold text-gray-500">{label}</p>
-        <div className="truncate text-sm">
-          <ProfileLink href={getPlayerProfileHref(summary.user.id, communityId)}>
-            {summary.user.name}
-          </ProfileLink>
-        </div>
-        <p className="mt-1 text-xs text-gray-600">
-          {summary.wins}-{summary.losses}, {summary.winRate}% win
-        </p>
-      </div>
-      <div className="text-right text-xs font-semibold text-gray-600">
-        <p>{summary.matches}</p>
-        <p>matches</p>
-      </div>
+    <div className="space-y-2">
+      {summaries.map((summary, index) => (
+        <ConnectionRow
+          key={summary.user.id}
+          summary={summary}
+          rank={index + 1}
+          communityId={communityId}
+        />
+      ))}
     </div>
   );
 }
@@ -1074,41 +1083,23 @@ function RelationshipCards({
         title="Best partners"
         action={<span className="app-chip app-chip-accent">Doubles</span>}
       >
-        <div className="space-y-3">
-          <ConnectionRow
-            label="Best partner"
-            summary={data.partners.bestWinRate}
-            communityId={communityId}
-            emptyText="Complete a few partner matches to reveal chemistry."
-          />
-          <ConnectionRow
-            label="Most played"
-            summary={data.partners.mostPlayed}
-            communityId={communityId}
-            emptyText="No repeated partners yet."
-          />
-        </div>
+        <ConnectionRankList
+          summaries={data.partners.best}
+          communityId={communityId}
+          emptyText="Complete a few partner matches to reveal chemistry."
+        />
       </ProfileSection>
 
       <ProfileSection
         eyebrow="Opponents"
-        title="Rivals"
+        title="Toughest opponents"
         action={<span className="app-chip app-chip-warning">Head-to-head</span>}
       >
-        <div className="space-y-3">
-          <ConnectionRow
-            label="Toughest"
-            summary={data.opponents.toughest}
-            communityId={communityId}
-            emptyText="Toughest opponent appears once enough history exists."
-          />
-          <ConnectionRow
-            label="Most faced"
-            summary={data.opponents.mostFaced}
-            communityId={communityId}
-            emptyText="No recurring rivals yet."
-          />
-        </div>
+        <ConnectionRankList
+          summaries={data.opponents.toughest}
+          communityId={communityId}
+          emptyText="Toughest opponents appear once enough history exists."
+        />
       </ProfileSection>
     </div>
   );

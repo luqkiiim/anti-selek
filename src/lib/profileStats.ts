@@ -114,12 +114,10 @@ export interface PlayerProfileDerivedData {
   recentSessions: PlayerProfileSessionSummary[];
   trend: PlayerProfileTrendSummary;
   partners: {
-    mostPlayed: PlayerProfileConnectionSummary | null;
-    bestWinRate: PlayerProfileConnectionSummary | null;
+    best: PlayerProfileConnectionSummary[];
   };
   opponents: {
-    mostFaced: PlayerProfileConnectionSummary | null;
-    toughest: PlayerProfileConnectionSummary | null;
+    toughest: PlayerProfileConnectionSummary[];
   };
   sessions: {
     latest: PlayerProfileSessionSummary | null;
@@ -230,34 +228,30 @@ function updateConnectionAggregate(
   aggregates.set(participant.id, existing);
 }
 
-function pickPreferredConnection(
+function pickPreferredConnections(
   summaries: PlayerProfileConnectionSummary[],
   compare: (
     left: PlayerProfileConnectionSummary,
     right: PlayerProfileConnectionSummary
-  ) => number
+  ) => number,
+  limit = 3
 ) {
   const candidates =
     summaries.filter(
       (summary) => summary.matches >= PREFERRED_CONNECTION_MIN_MATCHES
     );
-  const source = candidates.length > 0 ? candidates : summaries;
+  const sortedCandidates = candidates.slice().sort(compare);
+  const selected = sortedCandidates.slice(0, limit);
 
-  return source.slice().sort(compare)[0] ?? null;
-}
+  if (selected.length < limit) {
+    const selectedIds = new Set(selected.map((summary) => summary.user.id));
+    const fillers = summaries
+      .filter((summary) => !selectedIds.has(summary.user.id))
+      .sort(compare);
+    selected.push(...fillers.slice(0, limit - selected.length));
+  }
 
-function compareMostPlayedConnections(
-  left: PlayerProfileConnectionSummary,
-  right: PlayerProfileConnectionSummary
-) {
-  return (
-    right.matches - left.matches ||
-    right.winRate - left.winRate ||
-    right.pointDifferential - left.pointDifferential ||
-    left.user.name.localeCompare(right.user.name, undefined, {
-      sensitivity: "base",
-    })
-  );
+  return selected;
 }
 
 function compareBestPartnerConnections(
@@ -594,21 +588,13 @@ export function buildPlayerProfileDerivedData(
         recentSessions.slice().sort(compareWorstSessions)[0] ?? null,
     },
     partners: {
-      mostPlayed: pickPreferredConnection(
-        partnerSummaries,
-        compareMostPlayedConnections
-      ),
-      bestWinRate: pickPreferredConnection(
+      best: pickPreferredConnections(
         partnerSummaries,
         compareBestPartnerConnections
       ),
     },
     opponents: {
-      mostFaced: pickPreferredConnection(
-        opponentSummaries,
-        compareMostPlayedConnections
-      ),
-      toughest: pickPreferredConnection(
+      toughest: pickPreferredConnections(
         opponentSummaries,
         compareToughestOpponents
       ),
