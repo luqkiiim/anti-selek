@@ -67,6 +67,15 @@ export async function PATCH(
         elo: elo !== undefined ? elo : undefined,
         isActive: isActive !== undefined ? isActive : undefined,
       },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        elo: true,
+        isActive: true,
+        isClaimed: true,
+        createdAt: true,
+      },
     });
 
     return NextResponse.json(updated);

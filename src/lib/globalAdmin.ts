@@ -1,7 +1,3 @@
-const FORCED_GLOBAL_ADMIN_EMAILS = new Set<string>([
-  "h.luqman1998@gmail.com",
-]);
-
 function normalizeEmail(email?: string | null): string | null {
   if (typeof email !== "string") return null;
   const normalized = email.trim().toLowerCase();
@@ -14,10 +10,6 @@ const configuredAdminEmails = new Set<string>(
     .map((email) => normalizeEmail(email))
     .filter((email): email is string => !!email)
 );
-
-for (const email of FORCED_GLOBAL_ADMIN_EMAILS) {
-  configuredAdminEmails.add(email);
-}
 
 export function isGlobalAdminEmail(email?: string | null): boolean {
   const normalized = normalizeEmail(email);

@@ -28,6 +28,15 @@ export async function POST(
     const updated = await prisma.user.update({
       where: { id },
       data: { elo: 1000 },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        elo: true,
+        isActive: true,
+        isClaimed: true,
+        createdAt: true,
+      },
     });
 
     return NextResponse.json(updated);

@@ -380,9 +380,7 @@ function startReviewServer() {
         DATABASE_URL: reviewDbUrl,
         TURSO_DATABASE_URL: "",
         TURSO_AUTH_TOKEN: "",
-        AUTH_SECRET:
-          process.env.AUTH_SECRET ||
-          "your-secret-key-change-in-production-min-32-chars",
+        AUTH_SECRET: process.env.AUTH_SECRET,
         NEXTAUTH_URL: baseURL,
         AUTH_URL: baseURL,
         E2E_DISABLE_RATE_LIMITS: "true",
