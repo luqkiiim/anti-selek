@@ -4,6 +4,8 @@ import { parseCreateSessionRequest } from "./createSessionRequest";
 import { createSessionForUser } from "./createSessionService";
 import { listSessionsForCommunity } from "./listSessionsService";
 import { SessionRouteError } from "./sessionRouteShared";
+import { logError, safeErrorResponse } from "@/lib/errors";
+import { rateLimit } from "@/lib/rateLimit";
 import {
   canQuickAccessCommunity,
   getQuickAccessDeniedMessage,
@@ -14,6 +16,9 @@ export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
   try {
+    const rateLimitResponse = await rateLimit(request, "api:sessions:post", { limit: 15, windowMs: 60_000 });
+    if (rateLimitResponse) return rateLimitResponse;
+
     const session = await auth();
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
@@ -39,13 +44,16 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: error.message }, { status: error.status });
     }
 
-    console.error("Session creation error details:", error);
-    return NextResponse.json({ error: "Failed to create session" }, { status: 500 });
+    logError("Session creation error details", error);
+    return safeErrorResponse();
   }
 }
 
 export async function GET(request: Request) {
   try {
+    const rateLimitResponse = await rateLimit(request, "api:sessions:get", { limit: 30, windowMs: 60_000 });
+    if (rateLimitResponse) return rateLimitResponse;
+
     const session = await auth();
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
@@ -72,7 +80,7 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: error.message }, { status: error.status });
     }
 
-    console.error("Session list error:", error);
-    return NextResponse.json({ error: "Failed to load tournaments" }, { status: 500 });
+    logError("Session list error", error);
+    return safeErrorResponse();
   }
 }

@@ -203,3 +203,15 @@ model ClaimRequest {
   @@index([requesterUserId, status])
   @@index([targetUserId, status])
 }
+
+model RateLimitBucket {
+  key       String   @id
+  scope     String
+  count     Int      @default(0)
+  resetAt   DateTime
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([scope])
+  @@index([resetAt])
+}

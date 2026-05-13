@@ -8,6 +8,8 @@ import {
   resolveMixedSideState,
 } from "@/lib/mixedSide";
 import { CommunityPlayerStatus, PlayerGender } from "@/types/enums";
+import { logError, safeErrorResponse } from "@/lib/errors";
+import { rateLimit, checkInvalidTargetRateLimit, invalidTargetResponse } from "@/lib/rateLimit";
 import {
   getQuickAccessDeniedMessage,
   isQuickAccessSession,
@@ -87,6 +89,9 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string; userId: string }> }
 ) {
   try {
+    const rateLimitResponse = await rateLimit(request, "api:communities:id:members:userId:patch", { limit: 15, windowMs: 60_000 });
+    if (rateLimitResponse) return rateLimitResponse;
+
     const session = await auth();
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
@@ -99,13 +104,21 @@ export async function PATCH(
     }
 
     const { id: communityId, userId } = await params;
+
+    if (typeof communityId !== "string" || communityId.length === 0 || typeof userId !== "string" || userId.length === 0) {
+      return NextResponse.json({ error: "Invalid request parameters" }, { status: 400 });
+    }
+
+    const invalidTargetLimitResponse = await checkInvalidTargetRateLimit(request, "api:communities:id:members:userId");
+
+    if (invalidTargetLimitResponse) return invalidTargetLimitResponse;
     const canManage = await requireCommunityAdmin(
       communityId,
       session.user.id,
       !!session.user.isAdmin
     );
     if (!canManage) {
-      return NextResponse.json({ error: "Not authorized" }, { status: 403 });
+      return invalidTargetResponse(request, "api:communities:id:members:userId");
     }
 
     const membership = await prisma.communityMember.findUnique({
@@ -117,7 +130,7 @@ export async function PATCH(
       },
     });
     if (!membership) {
-      return NextResponse.json({ error: "Player not found in this community" }, { status: 404 });
+      return invalidTargetResponse(request, "api:communities:id:members:userId");
     }
 
     const body = await request.json().catch(() => null);
@@ -227,7 +240,7 @@ export async function PATCH(
       },
     });
     if (!currentUser) {
-      return NextResponse.json({ error: "Player not found" }, { status: 404 });
+      return invalidTargetResponse(request, "api:communities:id:members:userId");
     }
 
     const nextName = typeof name === "string" ? name.trim() : currentUser.name;
@@ -343,8 +356,8 @@ export async function PATCH(
           : CommunityPlayerStatus.CORE,
     });
   } catch (error) {
-    console.error("Community admin update player error:", error);
-    return NextResponse.json({ error: "Failed to update player" }, { status: 500 });
+    logError("Community admin update player error", error);
+    return safeErrorResponse();
   }
 }
 
@@ -353,6 +366,9 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string; userId: string }> }
 ) {
   try {
+    const rateLimitResponse = await rateLimit(request, "api:communities:id:members:userId:delete", { limit: 15, windowMs: 60_000 });
+    if (rateLimitResponse) return rateLimitResponse;
+
     const session = await auth();
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
@@ -365,13 +381,21 @@ export async function DELETE(
     }
 
     const { id: communityId, userId } = await params;
+
+    if (typeof communityId !== "string" || communityId.length === 0 || typeof userId !== "string" || userId.length === 0) {
+      return NextResponse.json({ error: "Invalid request parameters" }, { status: 400 });
+    }
+
+    const invalidTargetLimitResponse = await checkInvalidTargetRateLimit(request, "api:communities:id:members:userId");
+
+    if (invalidTargetLimitResponse) return invalidTargetLimitResponse;
     const canManage = await requireCommunityAdmin(
       communityId,
       session.user.id,
       !!session.user.isAdmin
     );
     if (!canManage) {
-      return NextResponse.json({ error: "Not authorized" }, { status: 403 });
+      return invalidTargetResponse(request, "api:communities:id:members:userId");
     }
     if (userId === session.user.id) {
       return NextResponse.json({ error: "Cannot remove yourself from the community" }, { status: 400 });
@@ -387,7 +411,7 @@ export async function DELETE(
       select: { id: true },
     });
     if (!membership) {
-      return NextResponse.json({ error: "Player not found in this community" }, { status: 404 });
+      return invalidTargetResponse(request, "api:communities:id:members:userId");
     }
 
     const sessionRows = await prisma.session.findMany({
@@ -418,7 +442,7 @@ export async function DELETE(
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error("Community admin remove player error:", error);
-    return NextResponse.json({ error: "Failed to remove player from community" }, { status: 500 });
+    logError("Community admin remove player error", error);
+    return safeErrorResponse();
   }
 }

@@ -5,6 +5,8 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getQuickAccessDeniedMessage, isQuickAccessSession } from "@/lib/quickAccess";
 import { logAuditEvent } from "@/lib/serverAudit";
+import { logError, safeErrorResponse } from "@/lib/errors";
+import { rateLimit, checkInvalidTargetRateLimit, invalidTargetResponse } from "@/lib/rateLimit";
 
 export const dynamic = "force-dynamic";
 
@@ -33,6 +35,9 @@ export async function POST(
   { params }: { params: Promise<{ id: string; userId: string }> }
 ) {
   try {
+    const rateLimitResponse = await rateLimit(request, "api:communities:id:members:userId:password:post", { limit: 15, windowMs: 60_000 });
+    if (rateLimitResponse) return rateLimitResponse;
+
     const session = await auth();
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
@@ -45,6 +50,14 @@ export async function POST(
     }
 
     const { id: communityId, userId } = await params;
+
+    if (typeof communityId !== "string" || communityId.length === 0 || typeof userId !== "string" || userId.length === 0) {
+      return NextResponse.json({ error: "Invalid request parameters" }, { status: 400 });
+    }
+
+    const invalidTargetLimitResponse = await checkInvalidTargetRateLimit(request, "api:communities:id:members:userId:password");
+
+    if (invalidTargetLimitResponse) return invalidTargetLimitResponse;
     const canManage = await requireCommunityAdmin(
       communityId,
       session.user.id,
@@ -52,7 +65,7 @@ export async function POST(
     );
 
     if (!canManage) {
-      return NextResponse.json({ error: "Not authorized" }, { status: 403 });
+      return invalidTargetResponse(request, "api:communities:id:members:userId:password");
     }
 
     const body = await request.json().catch(() => null);
@@ -93,7 +106,7 @@ export async function POST(
     });
 
     if (!membership?.user) {
-      return NextResponse.json({ error: "Player not found in this community" }, { status: 404 });
+      return invalidTargetResponse(request, "api:communities:id:members:userId:password");
     }
 
     if (!membership.user.email || !membership.user.isClaimed) {
@@ -137,7 +150,7 @@ export async function POST(
       email: membership.user.email,
     });
   } catch (error) {
-    console.error("Community admin reset player password error:", error);
-    return NextResponse.json({ error: "Failed to reset password" }, { status: 500 });
+    logError("Community admin reset player password error", error);
+    return safeErrorResponse();
   }
 }

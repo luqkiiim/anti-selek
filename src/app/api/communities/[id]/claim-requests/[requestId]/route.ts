@@ -7,6 +7,8 @@ import {
 } from "@/lib/communityClaims";
 import { getQuickAccessDeniedMessage, isQuickAccessSession } from "@/lib/quickAccess";
 import { ClaimRequestStatus } from "@/types/enums";
+import { logError, safeErrorResponse } from "@/lib/errors";
+import { rateLimit, checkInvalidTargetRateLimit, invalidTargetResponse } from "@/lib/rateLimit";
 
 export const dynamic = "force-dynamic";
 
@@ -15,6 +17,9 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string; requestId: string }> }
 ) {
   try {
+    const rateLimitResponse = await rateLimit(request, "api:communities:id:claim-requests:requestId:patch", { limit: 15, windowMs: 60_000 });
+    if (rateLimitResponse) return rateLimitResponse;
+
     const session = await auth();
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
@@ -27,6 +32,14 @@ export async function PATCH(
     }
 
     const { id: communityId, requestId } = await params;
+
+    if (typeof communityId !== "string" || communityId.length === 0 || typeof requestId !== "string" || requestId.length === 0) {
+      return NextResponse.json({ error: "Invalid request parameters" }, { status: 400 });
+    }
+
+    const invalidTargetLimitResponse = await checkInvalidTargetRateLimit(request, "api:communities:id:claim-requests:requestId");
+
+    if (invalidTargetLimitResponse) return invalidTargetLimitResponse;
     const membership = await prisma.communityMember.findUnique({
       where: {
         communityId_userId: {
@@ -38,7 +51,7 @@ export async function PATCH(
     });
 
     if (membership?.role !== "ADMIN" && !session.user.isAdmin) {
-      return NextResponse.json({ error: "Not authorized" }, { status: 403 });
+      return invalidTargetResponse(request, "api:communities:id:claim-requests:requestId");
     }
 
     const body = await request.json().catch(() => null);
@@ -62,7 +75,7 @@ export async function PATCH(
       });
 
       if (!existingRequest || existingRequest.communityId !== communityId) {
-        return NextResponse.json({ error: "Claim request not found" }, { status: 404 });
+        return invalidTargetResponse(request, "api:communities:id:claim-requests:requestId");
       }
 
       if (existingRequest.requesterUserId === session.user.id) {
@@ -93,7 +106,7 @@ export async function PATCH(
     });
 
     if (!existingRequest || existingRequest.communityId !== communityId) {
-      return NextResponse.json({ error: "Claim request not found" }, { status: 404 });
+      return invalidTargetResponse(request, "api:communities:id:claim-requests:requestId");
     }
 
     if (existingRequest.status !== ClaimRequestStatus.PENDING) {
@@ -127,10 +140,7 @@ export async function PATCH(
       );
     }
 
-    console.error("Review community claim request error:", error);
-    return NextResponse.json(
-      { error: "Failed to review claim request" },
-      { status: 500 }
-    );
+    logError("Review community claim request error", error);
+    return safeErrorResponse();
   }
 }

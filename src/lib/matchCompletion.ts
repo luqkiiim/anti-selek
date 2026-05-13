@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { isValidMatchScore } from "@/lib/matchRules";
 import { getStandingPointsForTeam } from "@/lib/sessionStandings";
-import { MatchStatus, SessionType } from "@/types/enums";
+import { MatchStatus, SessionStatus, SessionType } from "@/types/enums";
 import type { Prisma } from "@prisma/client";
 
 const K_FACTOR = 32;
@@ -67,6 +67,25 @@ interface FinalizeMatchResultArgs {
   finalTeam2Score: number;
   scoreSubmittedByUserId?: string | null;
   completedAt?: Date;
+}
+
+export class UndoCompletedMatchError extends Error {
+  constructor(
+    public readonly code:
+      | "MATCH_NOT_FOUND"
+      | "MATCH_NOT_COMPLETED"
+      | "SESSION_NOT_ACTIVE"
+      | "NOT_LATEST_COMPLETED_MATCH",
+    message: string
+  ) {
+    super(message);
+    this.name = "UndoCompletedMatchError";
+  }
+}
+
+interface UndoCompletedMatchResultArgs {
+  matchId: string;
+  undoneAt?: Date;
 }
 
 async function getCommunityEloByUserIdInTransaction(
@@ -365,6 +384,260 @@ export async function finalizeMatchResultInTransaction(
   return updatedMatch;
 }
 
+function getMatchPartnerIdForUser(
+  match: {
+    team1User1Id: string;
+    team1User2Id: string;
+    team2User1Id: string;
+    team2User2Id: string;
+  },
+  userId: string
+) {
+  if (match.team1User1Id === userId) return match.team1User2Id;
+  if (match.team1User2Id === userId) return match.team1User1Id;
+  if (match.team2User1Id === userId) return match.team2User2Id;
+  if (match.team2User2Id === userId) return match.team2User1Id;
+  return null;
+}
+
+async function restoreSessionPlayerRotationState(
+  tx: Prisma.TransactionClient,
+  {
+    sessionId,
+    userIds,
+    availableSince,
+  }: {
+    sessionId: string;
+    userIds: string[];
+    availableSince: Date;
+  }
+) {
+  for (const userId of userIds) {
+    const previousCompletedMatch = await tx.match.findFirst({
+      where: {
+        sessionId,
+        status: MatchStatus.COMPLETED,
+        OR: [
+          { team1User1Id: userId },
+          { team1User2Id: userId },
+          { team2User1Id: userId },
+          { team2User2Id: userId },
+        ],
+      },
+      orderBy: [{ completedAt: "desc" }, { createdAt: "desc" }, { id: "desc" }],
+      select: {
+        completedAt: true,
+        createdAt: true,
+        team1User1Id: true,
+        team1User2Id: true,
+        team2User1Id: true,
+        team2User2Id: true,
+      },
+    });
+
+    await tx.sessionPlayer.updateMany({
+      where: { sessionId, userId },
+      data: {
+        availableSince,
+        lastPlayedAt: previousCompletedMatch?.completedAt ?? null,
+        lastPartnerId: previousCompletedMatch
+          ? getMatchPartnerIdForUser(previousCompletedMatch, userId)
+          : null,
+      },
+    });
+  }
+}
+
+export async function undoCompletedMatchResultInTransaction(
+  tx: Prisma.TransactionClient,
+  { matchId, undoneAt }: UndoCompletedMatchResultArgs
+) {
+  const undoneAtDate = undoneAt ?? new Date();
+  const match = await tx.match.findUnique({
+    where: { id: matchId },
+    include: {
+      session: {
+        select: {
+          communityId: true,
+          isTest: true,
+          status: true,
+          type: true,
+        },
+      },
+    },
+  });
+
+  if (!match) {
+    throw new UndoCompletedMatchError("MATCH_NOT_FOUND", "Match not found");
+  }
+
+  if (match.status !== MatchStatus.COMPLETED) {
+    throw new UndoCompletedMatchError(
+      "MATCH_NOT_COMPLETED",
+      "Only completed matches can be undone."
+    );
+  }
+
+  if (match.session.status !== SessionStatus.ACTIVE) {
+    throw new UndoCompletedMatchError(
+      "SESSION_NOT_ACTIVE",
+      "Only active sessions can undo completed matches."
+    );
+  }
+
+  const latestCompletedMatch = await tx.match.findFirst({
+    where: {
+      sessionId: match.sessionId,
+      status: MatchStatus.COMPLETED,
+    },
+    orderBy: [{ completedAt: "desc" }, { createdAt: "desc" }, { id: "desc" }],
+    select: { id: true },
+  });
+
+  if (latestCompletedMatch?.id !== match.id) {
+    throw new UndoCompletedMatchError(
+      "NOT_LATEST_COMPLETED_MATCH",
+      "Only the latest completed match can be undone."
+    );
+  }
+
+  const team1Ids = [match.team1User1Id, match.team1User2Id];
+  const team2Ids = [match.team2User1Id, match.team2User2Id];
+  const affectedUserIds = [...team1Ids, ...team2Ids];
+  const sessionPlayerRows = await tx.sessionPlayer.findMany({
+    where: {
+      sessionId: match.sessionId,
+      userId: { in: affectedUserIds },
+    },
+    select: {
+      userId: true,
+      isGuest: true,
+    },
+  });
+  const isGuestByUserId = new Map(
+    sessionPlayerRows.map((player) => [player.userId, player.isGuest])
+  );
+
+  const team1ReverseEloDelta = -(match.team1EloChange ?? 0);
+  const team2ReverseEloDelta = -(match.team2EloChange ?? 0);
+
+  if (!match.session.isTest) {
+    const team1CoreIds = team1Ids.filter(
+      (userId) => isGuestByUserId.get(userId) !== true
+    );
+    const team2CoreIds = team2Ids.filter(
+      (userId) => isGuestByUserId.get(userId) !== true
+    );
+
+    if (match.session.communityId) {
+      if (team1CoreIds.length > 0 && team1ReverseEloDelta !== 0) {
+        await tx.communityMember.updateMany({
+          where: {
+            communityId: match.session.communityId,
+            userId: { in: team1CoreIds },
+          },
+          data: { elo: { increment: team1ReverseEloDelta } },
+        });
+      }
+      if (team2CoreIds.length > 0 && team2ReverseEloDelta !== 0) {
+        await tx.communityMember.updateMany({
+          where: {
+            communityId: match.session.communityId,
+            userId: { in: team2CoreIds },
+          },
+          data: { elo: { increment: team2ReverseEloDelta } },
+        });
+      }
+    } else {
+      if (team1CoreIds.length > 0 && team1ReverseEloDelta !== 0) {
+        await tx.user.updateMany({
+          where: { id: { in: team1CoreIds } },
+          data: { elo: { increment: team1ReverseEloDelta } },
+        });
+      }
+      if (team2CoreIds.length > 0 && team2ReverseEloDelta !== 0) {
+        await tx.user.updateMany({
+          where: { id: { in: team2CoreIds } },
+          data: { elo: { increment: team2ReverseEloDelta } },
+        });
+      }
+    }
+  }
+
+  const winnerTeam = match.winnerTeam === 1 || match.winnerTeam === 2
+    ? match.winnerTeam
+    : null;
+  const awardsStandingPoints =
+    winnerTeam !== null &&
+    match.session.type !== SessionType.LADDER &&
+    match.session.type !== SessionType.RACE;
+  const team1StandingPoints = awardsStandingPoints
+    ? getStandingPointsForTeam(winnerTeam, 1)
+    : 0;
+  const team2StandingPoints = awardsStandingPoints
+    ? getStandingPointsForTeam(winnerTeam, 2)
+    : 0;
+
+  await tx.sessionPlayer.updateMany({
+    where: {
+      sessionId: match.sessionId,
+      userId: { in: team1Ids },
+    },
+    data: {
+      ...(team1StandingPoints > 0
+        ? { sessionPoints: { decrement: team1StandingPoints } }
+        : {}),
+      matchesPlayed: { decrement: 1 },
+    },
+  });
+  await tx.sessionPlayer.updateMany({
+    where: {
+      sessionId: match.sessionId,
+      userId: { in: team2Ids },
+    },
+    data: {
+      ...(team2StandingPoints > 0
+        ? { sessionPoints: { decrement: team2StandingPoints } }
+        : {}),
+      matchesPlayed: { decrement: 1 },
+    },
+  });
+
+  const deleteResult = await tx.match.deleteMany({
+    where: {
+      id: match.id,
+      status: MatchStatus.COMPLETED,
+    },
+  });
+
+  if (deleteResult.count === 0) {
+    throw new UndoCompletedMatchError(
+      "MATCH_NOT_COMPLETED",
+      "Match was already updated by someone else."
+    );
+  }
+
+  await restoreSessionPlayerRotationState(tx, {
+    sessionId: match.sessionId,
+    userIds: affectedUserIds,
+    availableSince: undoneAtDate,
+  });
+
+  return {
+    ok: true,
+    undoneMatchId: match.id,
+    affectedUserIds,
+  };
+}
+
 export async function finalizeMatchResult(args: FinalizeMatchResultArgs) {
   return prisma.$transaction((tx) => finalizeMatchResultInTransaction(tx, args));
+}
+
+export async function undoCompletedMatchResult(
+  args: UndoCompletedMatchResultArgs
+) {
+  return prisma.$transaction((tx) =>
+    undoCompletedMatchResultInTransaction(tx, args)
+  );
 }

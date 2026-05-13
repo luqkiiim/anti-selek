@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { MatchStatus, SessionType } from "@/types/enums";
+import { MatchStatus, SessionStatus, SessionType } from "@/types/enums";
 
 const mocks = vi.hoisted(() => ({
   transaction: vi.fn(),
@@ -11,7 +11,12 @@ vi.mock("@/lib/prisma", () => ({
   },
 }));
 
-import { finalizeMatchResult, type FinalizableMatch } from "./matchCompletion";
+import {
+  finalizeMatchResult,
+  undoCompletedMatchResult,
+  UndoCompletedMatchError,
+  type FinalizableMatch,
+} from "./matchCompletion";
 
 const finalizableMatch: FinalizableMatch = {
   id: "match-1",
@@ -68,6 +73,69 @@ function createTransactionMock(storedMatch: unknown) {
 }
 
 type TransactionMock = ReturnType<typeof createTransactionMock>;
+
+function createUndoTransactionMock({
+  match = {
+    id: "match-1",
+    sessionId: "session-1",
+    courtId: "court-1",
+    status: MatchStatus.COMPLETED,
+    team1User1Id: "a1",
+    team1User2Id: "a2",
+    team2User1Id: "b1",
+    team2User2Id: "b2",
+    team1Score: 21,
+    team2Score: 18,
+    winnerTeam: 1,
+    team1EloChange: 10,
+    team2EloChange: -10,
+    completedAt: new Date("2026-05-02T10:30:00.000Z"),
+    createdAt: new Date("2026-05-02T10:00:00.000Z"),
+    session: {
+      communityId: "community-1",
+      isTest: false,
+      status: SessionStatus.ACTIVE,
+      type: SessionType.POINTS,
+    },
+  },
+  latestCompletedMatch = { id: "match-1" },
+  previousCompletedMatch = {
+    completedAt: new Date("2026-05-02T09:30:00.000Z"),
+    createdAt: new Date("2026-05-02T09:00:00.000Z"),
+    team1User1Id: "a1",
+    team1User2Id: "b1",
+    team2User1Id: "a2",
+    team2User2Id: "b2",
+  },
+} = {}) {
+  return {
+    match: {
+      findUnique: vi.fn().mockResolvedValue(match),
+      findFirst: vi
+        .fn()
+        .mockResolvedValueOnce(latestCompletedMatch)
+        .mockResolvedValue(previousCompletedMatch),
+      deleteMany: vi.fn().mockResolvedValue({ count: 1 }),
+    },
+    sessionPlayer: {
+      findMany: vi.fn().mockResolvedValue([
+        { userId: "a1", isGuest: false },
+        { userId: "a2", isGuest: true },
+        { userId: "b1", isGuest: false },
+        { userId: "b2", isGuest: false },
+      ]),
+      updateMany: vi.fn().mockResolvedValue({ count: 2 }),
+    },
+    communityMember: {
+      updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+    },
+    user: {
+      updateMany: vi.fn().mockResolvedValue({ count: 0 }),
+    },
+  };
+}
+
+type UndoTransactionMock = ReturnType<typeof createUndoTransactionMock>;
 
 describe("finalizeMatchResult", () => {
   beforeEach(() => {
@@ -150,5 +218,147 @@ describe("finalizeMatchResult", () => {
         availableSince: completedAt,
       })
     );
+  });
+});
+
+describe("undoCompletedMatchResult", () => {
+  beforeEach(() => {
+    Object.values(mocks).forEach((mock) => mock.mockReset());
+  });
+
+  it("reverses the latest completed result without touching live courts", async () => {
+    const undoneAt = new Date("2026-05-02T11:00:00.000Z");
+    const tx: UndoTransactionMock = createUndoTransactionMock();
+    mocks.transaction.mockImplementation(
+      (callback: (tx: UndoTransactionMock) => unknown) => callback(tx)
+    );
+
+    const result = await undoCompletedMatchResult({
+      matchId: "match-1",
+      undoneAt,
+    });
+
+    expect(result).toEqual({
+      ok: true,
+      undoneMatchId: "match-1",
+      affectedUserIds: ["a1", "a2", "b1", "b2"],
+    });
+    expect(tx.communityMember.updateMany).toHaveBeenNthCalledWith(1, {
+      where: {
+        communityId: "community-1",
+        userId: { in: ["a1"] },
+      },
+      data: { elo: { increment: -10 } },
+    });
+    expect(tx.communityMember.updateMany).toHaveBeenNthCalledWith(2, {
+      where: {
+        communityId: "community-1",
+        userId: { in: ["b1", "b2"] },
+      },
+      data: { elo: { increment: 10 } },
+    });
+    expect(tx.sessionPlayer.updateMany).toHaveBeenNthCalledWith(1, {
+      where: {
+        sessionId: "session-1",
+        userId: { in: ["a1", "a2"] },
+      },
+      data: {
+        sessionPoints: { decrement: 3 },
+        matchesPlayed: { decrement: 1 },
+      },
+    });
+    expect(tx.sessionPlayer.updateMany).toHaveBeenNthCalledWith(2, {
+      where: {
+        sessionId: "session-1",
+        userId: { in: ["b1", "b2"] },
+      },
+      data: {
+        matchesPlayed: { decrement: 1 },
+      },
+    });
+    expect(tx.match.deleteMany).toHaveBeenCalledWith({
+      where: {
+        id: "match-1",
+        status: MatchStatus.COMPLETED,
+      },
+    });
+    expect(tx.sessionPlayer.updateMany).toHaveBeenCalledWith({
+      where: { sessionId: "session-1", userId: "a1" },
+      data: {
+        availableSince: undoneAt,
+        lastPlayedAt: new Date("2026-05-02T09:30:00.000Z"),
+        lastPartnerId: "b1",
+      },
+    });
+    expect(tx.sessionPlayer.updateMany).toHaveBeenCalledWith({
+      where: { sessionId: "session-1", userId: "a2" },
+      data: {
+        availableSince: undoneAt,
+        lastPlayedAt: new Date("2026-05-02T09:30:00.000Z"),
+        lastPartnerId: "b2",
+      },
+    });
+  });
+
+  it("does not reverse Elo or session points for test ladder sessions", async () => {
+    const tx: UndoTransactionMock = createUndoTransactionMock({
+      match: {
+        id: "match-1",
+        sessionId: "session-1",
+        courtId: "court-1",
+        status: MatchStatus.COMPLETED,
+        team1User1Id: "a1",
+        team1User2Id: "a2",
+        team2User1Id: "b1",
+        team2User2Id: "b2",
+        team1Score: 21,
+        team2Score: 18,
+        winnerTeam: 1,
+        team1EloChange: 10,
+        team2EloChange: -10,
+        completedAt: new Date("2026-05-02T10:30:00.000Z"),
+        createdAt: new Date("2026-05-02T10:00:00.000Z"),
+        session: {
+          communityId: "community-1",
+          isTest: true,
+          status: SessionStatus.ACTIVE,
+          type: SessionType.LADDER,
+        },
+      },
+    });
+    mocks.transaction.mockImplementation(
+      (callback: (tx: UndoTransactionMock) => unknown) => callback(tx)
+    );
+
+    await undoCompletedMatchResult({ matchId: "match-1" });
+
+    expect(tx.communityMember.updateMany).not.toHaveBeenCalled();
+    expect(tx.user.updateMany).not.toHaveBeenCalled();
+    expect(tx.sessionPlayer.updateMany).toHaveBeenNthCalledWith(1, {
+      where: {
+        sessionId: "session-1",
+        userId: { in: ["a1", "a2"] },
+      },
+      data: {
+        matchesPlayed: { decrement: 1 },
+      },
+    });
+  });
+
+  it("rejects undoing an older completed match", async () => {
+    const tx: UndoTransactionMock = createUndoTransactionMock({
+      latestCompletedMatch: { id: "newer-match" },
+    });
+    mocks.transaction.mockImplementation(
+      (callback: (tx: UndoTransactionMock) => unknown) => callback(tx)
+    );
+
+    await expect(
+      undoCompletedMatchResult({ matchId: "match-1" })
+    ).rejects.toMatchObject({
+      code: "NOT_LATEST_COMPLETED_MATCH",
+    } satisfies Partial<UndoCompletedMatchError>);
+    expect(tx.match.deleteMany).not.toHaveBeenCalled();
+    expect(tx.sessionPlayer.updateMany).not.toHaveBeenCalled();
   });
 });

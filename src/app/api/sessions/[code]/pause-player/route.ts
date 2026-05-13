@@ -4,6 +4,8 @@ import { calculateNoCatchUpMatchmakingCredit } from "@/lib/matchmaking/matchmaki
 import { prisma } from "@/lib/prisma";
 import { hasQueuedMatchUser } from "@/lib/sessionQueue";
 import { tryRebuildQueuedMatchForCode } from "../queue-match/shared";
+import { logError, safeErrorResponse } from "@/lib/errors";
+import { rateLimit, checkInvalidTargetRateLimit, invalidTargetResponse } from "@/lib/rateLimit";
 
 export const dynamic = "force-dynamic";
 
@@ -14,12 +16,23 @@ export async function POST(
   { params }: { params: Promise<{ code: string }> }
 ) {
   try {
+    const rateLimitResponse = await rateLimit(request, "api:sessions:code:pause-player:post", { limit: 15, windowMs: 60_000 });
+    if (rateLimitResponse) return rateLimitResponse;
+
     const session = await auth();
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
     }
 
     const { code } = await params;
+
+    if (typeof code !== "string" || code.length === 0) {
+      return NextResponse.json({ error: "Invalid request parameters" }, { status: 400 });
+    }
+
+    const invalidTargetLimitResponse = await checkInvalidTargetRateLimit(request, "api:sessions:code:pause-player");
+
+    if (invalidTargetLimitResponse) return invalidTargetLimitResponse;
     const body = await request.json().catch(() => null);
     if (!body || typeof body !== "object") {
       return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
@@ -35,7 +48,7 @@ export async function POST(
     });
 
     if (!sessionData) {
-      return NextResponse.json({ error: "Session not found" }, { status: 404 });
+      return invalidTargetResponse(request, "api:sessions:code:pause-player");
     }
 
     let isCommunityAdmin = false;
@@ -54,7 +67,7 @@ export async function POST(
 
     // Check if the requester is a manager or the player themselves
     if (!session.user.isAdmin && !isCommunityAdmin && session.user.id !== userId) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+      return invalidTargetResponse(request, "api:sessions:code:pause-player");
     }
 
     const existingPlayer = await prisma.sessionPlayer.findUnique({
@@ -73,7 +86,7 @@ export async function POST(
     });
 
     if (!existingPlayer) {
-      return NextResponse.json({ error: "Player not found in session" }, { status: 404 });
+      return invalidTargetResponse(request, "api:sessions:code:pause-player");
     }
 
     let inactiveSecondsToIncrement = 0;
@@ -155,7 +168,7 @@ export async function POST(
       queuedMatch,
     });
   } catch (error) {
-    console.error("Pause player error:", error);
-    return NextResponse.json({ error: "Failed to update player status" }, { status: 500 });
+    logError("Pause player error", error);
+    return safeErrorResponse();
   }
 }

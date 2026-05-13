@@ -7,6 +7,8 @@ import {
   summarizeSessionPoolMembership,
 } from "@/lib/sessionPools";
 import { tryRebuildQueuedMatchForSessionId } from "../queue-match/shared";
+import { logError, safeErrorResponse } from "@/lib/errors";
+import { rateLimit, checkInvalidTargetRateLimit, invalidTargetResponse } from "@/lib/rateLimit";
 import {
   applyPoolSelectionOutcome,
   buildMatchmakingState,
@@ -35,12 +37,23 @@ export async function POST(
   { params }: { params: Promise<{ code: string }> }
 ) {
   try {
+    const rateLimitResponse = await rateLimit(request, "api:sessions:code:generate-match:post", { limit: 15, windowMs: 60_000 });
+    if (rateLimitResponse) return rateLimitResponse;
+
     const session = await auth();
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
     }
 
     const { code } = await params;
+
+    if (typeof code !== "string" || code.length === 0) {
+      return NextResponse.json({ error: "Invalid request parameters" }, { status: 400 });
+    }
+
+    const invalidTargetLimitResponse = await checkInvalidTargetRateLimit(request, "api:sessions:code:generate-match");
+
+    if (invalidTargetLimitResponse) return invalidTargetLimitResponse;
     const body = await request.json().catch(() => ({}));
     const {
       requestedCourtIds,
@@ -376,16 +389,17 @@ export async function POST(
     });
   } catch (error: unknown) {
     if (error instanceof GenerateMatchError) {
+      if (error.status === 403 || error.status === 404) {
+        return invalidTargetResponse(request, "api:sessions:code:generate-match");
+      }
+
       return NextResponse.json(
         { error: error.message },
         { status: error.status }
       );
     }
 
-    console.error("Generate match error:", error);
-    return NextResponse.json(
-      { error: "Failed to generate match" },
-      { status: 500 }
-    );
+    logError("Generate match error", error);
+    return safeErrorResponse();
   }
 }

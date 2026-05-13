@@ -3,6 +3,8 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getCommunityEloByUserId, withCommunityElo } from "@/lib/communityElo";
 import { SessionStatus } from "@/types/enums";
+import { logError, safeErrorResponse } from "@/lib/errors";
+import { rateLimit, checkInvalidTargetRateLimit, invalidTargetResponse } from "@/lib/rateLimit";
 
 export const dynamic = "force-dynamic";
 
@@ -11,19 +13,30 @@ export async function POST(
   { params }: { params: Promise<{ code: string }> }
 ) {
   try {
+    const rateLimitResponse = await rateLimit(request, "api:sessions:code:start:post", { limit: 15, windowMs: 60_000 });
+    if (rateLimitResponse) return rateLimitResponse;
+
     const session = await auth();
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
     }
 
     const { code } = await params;
+
+    if (typeof code !== "string" || code.length === 0) {
+      return NextResponse.json({ error: "Invalid request parameters" }, { status: 400 });
+    }
+
+    const invalidTargetLimitResponse = await checkInvalidTargetRateLimit(request, "api:sessions:code:start");
+
+    if (invalidTargetLimitResponse) return invalidTargetLimitResponse;
     const sessionData = await prisma.session.findUnique({
       where: { code },
       include: { players: true },
     });
 
     if (!sessionData) {
-      return NextResponse.json({ error: "Session not found" }, { status: 404 });
+      return invalidTargetResponse(request, "api:sessions:code:start");
     }
 
     let isCommunityAdmin = false;
@@ -84,7 +97,7 @@ export async function POST(
 
     return NextResponse.json({ ...updated, players });
   } catch (error) {
-    console.error("Start session error:", error);
-    return NextResponse.json({ error: "Failed to start session" }, { status: 500 });
+    logError("Start session error", error);
+    return safeErrorResponse();
   }
 }

@@ -2,18 +2,28 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { logAuditEvent } from "@/lib/serverAudit";
+import { logError, safeErrorResponse } from "@/lib/errors";
+import { rateLimit } from "@/lib/rateLimit";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
   try {
+    const rateLimitResponse = await rateLimit(request, "api:admin:community:reset:post", { limit: 15, windowMs: 60_000 });
+    if (rateLimitResponse) return rateLimitResponse;
+
     const session = await auth();
 
     if (!session?.user?.isAdmin) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
     }
 
-    const { confirmation } = await request.json();
+    const body = await request.json().catch(() => null);
+    if (!body || typeof body !== "object") {
+      return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
+    }
+
+    const { confirmation } = body as { confirmation?: unknown };
 
     if (confirmation !== "RESET") {
       return NextResponse.json({ error: "Invalid confirmation text" }, { status: 400 });
@@ -52,8 +62,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ success: true });
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : "Unknown error";
-    console.error("Community reset error:", error);
-    return NextResponse.json({ error: `Failed to reset community: ${message}` }, { status: 500 });
+    logError("Community reset error", error);
+    return safeErrorResponse();
   }
 }

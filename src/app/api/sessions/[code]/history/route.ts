@@ -3,11 +3,13 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { canQuickAccessCommunity, isQuickAccessSession } from "@/lib/quickAccess";
-import { MatchStatus } from "@/types/enums";
+import { MatchStatus, SessionStatus } from "@/types/enums";
+import { logError, safeErrorResponse } from "@/lib/errors";
+import { rateLimit, checkInvalidTargetRateLimit, invalidTargetResponse } from "@/lib/rateLimit";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(
+async function getSessionHistory(
   _request: Request,
   { params }: { params: Promise<{ code: string }> }
 ) {
@@ -17,6 +19,14 @@ export async function GET(
   }
 
   const { code } = await params;
+
+  if (typeof code !== "string" || code.length === 0) {
+    return NextResponse.json({ error: "Invalid request parameters" }, { status: 400 });
+  }
+
+  const invalidTargetLimitResponse = await checkInvalidTargetRateLimit(_request, "api:sessions:code:history");
+
+  if (invalidTargetLimitResponse) return invalidTargetLimitResponse;
 
   const sessionData = await prisma.session.findUnique({
     where: { code },
@@ -41,7 +51,7 @@ export async function GET(
             in: [MatchStatus.COMPLETED, MatchStatus.PENDING_APPROVAL],
           },
         },
-        orderBy: [{ completedAt: "desc" }, { createdAt: "desc" }],
+        orderBy: [{ completedAt: "desc" }, { createdAt: "desc" }, { id: "desc" }],
         select: {
           id: true,
           status: true,
@@ -68,10 +78,10 @@ export async function GET(
   });
 
   if (!sessionData) {
-    return NextResponse.json({ error: "Session not found" }, { status: 404 });
+    return invalidTargetResponse(_request, "api:sessions:code:history");
   }
   if (!canQuickAccessCommunity(session, sessionData.communityId)) {
-    return NextResponse.json({ error: "Not authorized for this session" }, { status: 403 });
+    return invalidTargetResponse(_request, "api:sessions:code:history");
   }
 
   let communityRole: string | null = null;
@@ -89,13 +99,23 @@ export async function GET(
   }
 
   const isSessionPlayer = sessionData.players.some((player) => player.userId === session.user.id);
+  const viewerCanManage =
+    !isQuickAccessSession(session) &&
+    (!!session.user.isAdmin || communityRole === "ADMIN");
   const canView =
-    (!isQuickAccessSession(session) && session.user.isAdmin) ||
+    viewerCanManage ||
     !!communityRole ||
     isSessionPlayer;
   if (!canView) {
-    return NextResponse.json({ error: "Not authorized for this session" }, { status: 403 });
+    return invalidTargetResponse(_request, "api:sessions:code:history");
   }
+
+  const undoableMatchId =
+    viewerCanManage && sessionData.status === SessionStatus.ACTIVE
+      ? (sessionData.matches.find(
+          (match) => match.status === MatchStatus.COMPLETED
+        )?.id ?? null)
+      : null;
 
   return NextResponse.json({
     session: {
@@ -109,6 +129,20 @@ export async function GET(
       createdAt: sessionData.createdAt,
       endedAt: sessionData.endedAt,
     },
+    viewerCanManage,
+    undoableMatchId,
     matches: sessionData.matches,
   });
+}
+
+export async function GET(...args: Parameters<typeof getSessionHistory>) {
+  try {
+    const rateLimitResponse = await rateLimit(args[0], "api:sessions:code:history:get", { limit: 30, windowMs: 60_000 });
+    if (rateLimitResponse) return rateLimitResponse;
+
+    return await getSessionHistory(...args);
+  } catch (error) {
+    logError("Load session history error", error);
+    return safeErrorResponse();
+  }
 }

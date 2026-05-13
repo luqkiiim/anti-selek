@@ -4,6 +4,8 @@ import { prisma } from "@/lib/prisma";
 import { hasQueuedMatchUser } from "@/lib/sessionQueue";
 import { deleteEphemeralGuestUsers } from "@/lib/sessionLifecycle";
 import { MatchStatus, SessionStatus } from "@/types/enums";
+import { logError, safeErrorResponse } from "@/lib/errors";
+import { rateLimit, checkInvalidTargetRateLimit, invalidTargetResponse } from "@/lib/rateLimit";
 
 export const dynamic = "force-dynamic";
 
@@ -12,6 +14,9 @@ export async function PATCH(
   { params }: { params: Promise<{ code: string; userId: string }> }
 ) {
   try {
+    const rateLimitResponse = await rateLimit(request, "api:sessions:code:players:userId:patch", { limit: 15, windowMs: 60_000 });
+    if (rateLimitResponse) return rateLimitResponse;
+
     const session = await auth();
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
@@ -31,6 +36,14 @@ export async function PATCH(
     }
 
     const { code, userId } = await params;
+
+    if (typeof code !== "string" || code.length === 0 || typeof userId !== "string" || userId.length === 0) {
+      return NextResponse.json({ error: "Invalid request parameters" }, { status: 400 });
+    }
+
+    const invalidTargetLimitResponse = await checkInvalidTargetRateLimit(request, "api:sessions:code:players:userId");
+
+    if (invalidTargetLimitResponse) return invalidTargetLimitResponse;
     const sessionData = await prisma.session.findUnique({
       where: { code },
       select: {
@@ -41,7 +54,7 @@ export async function PATCH(
     });
 
     if (!sessionData) {
-      return NextResponse.json({ error: "Session not found" }, { status: 404 });
+      return invalidTargetResponse(request, "api:sessions:code:players:userId");
     }
     if (sessionData.status === SessionStatus.COMPLETED) {
       return NextResponse.json(
@@ -65,7 +78,7 @@ export async function PATCH(
     }
 
     if (!session.user.isAdmin && !isCommunityAdmin) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+      return invalidTargetResponse(request, "api:sessions:code:players:userId");
     }
 
     const existingPlayer = await prisma.sessionPlayer.findUnique({
@@ -82,10 +95,7 @@ export async function PATCH(
     });
 
     if (!existingPlayer) {
-      return NextResponse.json(
-        { error: "Player not found in session" },
-        { status: 404 }
-      );
+      return invalidTargetResponse(request, "api:sessions:code:players:userId");
     }
 
     if (!existingPlayer.isGuest) {
@@ -111,11 +121,8 @@ export async function PATCH(
       name: updatedUser.name,
     });
   } catch (error) {
-    console.error("Rename session guest error:", error);
-    return NextResponse.json(
-      { error: "Failed to rename guest" },
-      { status: 500 }
-    );
+    logError("Rename session guest error", error);
+    return safeErrorResponse();
   }
 }
 
@@ -124,12 +131,23 @@ export async function DELETE(
   { params }: { params: Promise<{ code: string; userId: string }> }
 ) {
   try {
+    const rateLimitResponse = await rateLimit(_request, "api:sessions:code:players:userId:delete", { limit: 15, windowMs: 60_000 });
+    if (rateLimitResponse) return rateLimitResponse;
+
     const session = await auth();
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
     }
 
     const { code, userId } = await params;
+
+    if (typeof code !== "string" || code.length === 0 || typeof userId !== "string" || userId.length === 0) {
+      return NextResponse.json({ error: "Invalid request parameters" }, { status: 400 });
+    }
+
+    const invalidTargetLimitResponse = await checkInvalidTargetRateLimit(_request, "api:sessions:code:players:userId");
+
+    if (invalidTargetLimitResponse) return invalidTargetLimitResponse;
     const sessionData = await prisma.session.findUnique({
       where: { code },
       select: {
@@ -140,7 +158,7 @@ export async function DELETE(
     });
 
     if (!sessionData) {
-      return NextResponse.json({ error: "Session not found" }, { status: 404 });
+      return invalidTargetResponse(_request, "api:sessions:code:players:userId");
     }
     if (sessionData.status === SessionStatus.COMPLETED) {
       return NextResponse.json(
@@ -164,7 +182,7 @@ export async function DELETE(
     }
 
     if (!session.user.isAdmin && !isCommunityAdmin) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+      return invalidTargetResponse(_request, "api:sessions:code:players:userId");
     }
 
     const existingPlayer = await prisma.sessionPlayer.findUnique({
@@ -184,10 +202,7 @@ export async function DELETE(
     });
 
     if (!existingPlayer) {
-      return NextResponse.json(
-        { error: "Player not found in session" },
-        { status: 404 }
-      );
+      return invalidTargetResponse(_request, "api:sessions:code:players:userId");
     }
 
     const playerMatchWhere = {
@@ -275,10 +290,7 @@ export async function DELETE(
 
     return NextResponse.json({ ok: true, ...result });
   } catch (error) {
-    console.error("Remove player from session error:", error);
-    return NextResponse.json(
-      { error: "Failed to remove player from session" },
-      { status: 500 }
-    );
+    logError("Remove player from session error", error);
+    return safeErrorResponse();
   }
 }

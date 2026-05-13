@@ -10,6 +10,8 @@ import {
   isQuickAccessSession,
 } from "@/lib/quickAccess";
 import { tryRebuildQueuedMatchForSessionId } from "./queue-match/shared";
+import { logError, safeErrorResponse } from "@/lib/errors";
+import { rateLimit, checkInvalidTargetRateLimit, invalidTargetResponse } from "@/lib/rateLimit";
 
 export const dynamic = "force-dynamic";
 
@@ -38,7 +40,7 @@ async function getCommunityRole(
   return membership?.role ?? null;
 }
 
-export async function GET(
+async function getSessionRoute(
   request: Request,
   { params }: { params: Promise<{ code: string }> }
 ) {
@@ -48,6 +50,14 @@ export async function GET(
   }
 
   const { code } = await params;
+
+  if (typeof code !== "string" || code.length === 0) {
+    return NextResponse.json({ error: "Invalid request parameters" }, { status: 400 });
+  }
+
+  const invalidTargetLimitResponse = await checkInvalidTargetRateLimit(request, "api:sessions:code");
+
+  if (invalidTargetLimitResponse) return invalidTargetLimitResponse;
 
   const sessionData = await prisma.session.findUnique({
     where: { code },
@@ -105,10 +115,10 @@ export async function GET(
   });
 
   if (!sessionData) {
-    return NextResponse.json({ error: "Session not found" }, { status: 404 });
+    return invalidTargetResponse(request, "api:sessions:code");
   }
   if (!canQuickAccessCommunity(session, sessionData.communityId)) {
-    return NextResponse.json({ error: "Not authorized for this session" }, { status: 403 });
+    return invalidTargetResponse(request, "api:sessions:code");
   }
 
   const communityRole = await getCommunityRole(
@@ -121,7 +131,7 @@ export async function GET(
   const canView =
     (!isQuickAccess && session.user.isAdmin) || !!communityRole || isSessionPlayer;
   if (!canView) {
-    return NextResponse.json({ error: "Not authorized for this session" }, { status: 403 });
+    return invalidTargetResponse(request, "api:sessions:code");
   }
 
   const players =
@@ -173,11 +183,26 @@ export async function GET(
   });
 }
 
+export async function GET(...args: Parameters<typeof getSessionRoute>) {
+  try {
+    const rateLimitResponse = await rateLimit(args[0], "api:sessions:code:get", { limit: 30, windowMs: 60_000 });
+    if (rateLimitResponse) return rateLimitResponse;
+
+    return await getSessionRoute(...args);
+  } catch (error) {
+    logError("Load session error", error);
+    return safeErrorResponse();
+  }
+}
+
 export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ code: string }> }
 ) {
   try {
+    const rateLimitResponse = await rateLimit(request, "api:sessions:code:patch", { limit: 15, windowMs: 60_000 });
+    if (rateLimitResponse) return rateLimitResponse;
+
     const session = await auth();
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
@@ -199,6 +224,14 @@ export async function PATCH(
     }
 
     const { code } = await params;
+
+    if (typeof code !== "string" || code.length === 0) {
+      return NextResponse.json({ error: "Invalid request parameters" }, { status: 400 });
+    }
+
+    const invalidTargetLimitResponse = await checkInvalidTargetRateLimit(request, "api:sessions:code");
+
+    if (invalidTargetLimitResponse) return invalidTargetLimitResponse;
     const sessionData = await prisma.session.findUnique({
       where: { code },
       select: {
@@ -208,7 +241,7 @@ export async function PATCH(
     });
 
     if (!sessionData) {
-      return NextResponse.json({ error: "Session not found" }, { status: 404 });
+      return invalidTargetResponse(request, "api:sessions:code");
     }
 
     const communityRole = await getCommunityRole(
@@ -217,7 +250,7 @@ export async function PATCH(
     );
     const canManage = session.user.isAdmin || communityRole === "ADMIN";
     if (!canManage) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+      return invalidTargetResponse(request, "api:sessions:code");
     }
 
     if (!body.autoQueueEnabled) {
@@ -247,10 +280,7 @@ export async function PATCH(
       queuedMatch: await tryRebuildQueuedMatchForSessionId(sessionData.id),
     });
   } catch (error) {
-    console.error("Update session settings error:", error);
-    return NextResponse.json(
-      { error: "Failed to update session settings" },
-      { status: 500 }
-    );
+    logError("Update session settings error", error);
+    return safeErrorResponse();
   }
 }

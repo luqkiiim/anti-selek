@@ -7,6 +7,8 @@ import { canQuickAccessCommunity, isQuickAccessSession } from "@/lib/quickAccess
 import { MATCH_SCORE_ERROR_MESSAGE, isValidMatchScore } from "@/lib/matchRules";
 import { MatchStatus } from "@/types/enums";
 import { reconcileSessionQueueAfterCourtChange } from "../../_lib/reconcileSessionQueue";
+import { logError, safeErrorResponse } from "@/lib/errors";
+import { rateLimit, checkInvalidTargetRateLimit, invalidTargetResponse } from "@/lib/rateLimit";
 
 export const dynamic = "force-dynamic";
 
@@ -15,12 +17,23 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const rateLimitResponse = await rateLimit(request, "api:matches:id:score:post", { limit: 15, windowMs: 60_000 });
+    if (rateLimitResponse) return rateLimitResponse;
+
     const session = await auth();
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
     }
 
     const { id } = await params;
+
+    if (typeof id !== "string" || id.length === 0) {
+      return NextResponse.json({ error: "Invalid request parameters" }, { status: 400 });
+    }
+
+    const invalidTargetLimitResponse = await checkInvalidTargetRateLimit(request, "api:matches:id:score");
+
+    if (invalidTargetLimitResponse) return invalidTargetLimitResponse;
     const body = await request.json().catch(() => null);
     if (!body || typeof body !== "object") {
       return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
@@ -65,10 +78,10 @@ export async function POST(
     });
 
     if (!match) {
-      return NextResponse.json({ error: "Match not found" }, { status: 404 });
+      return invalidTargetResponse(request, "api:matches:id:score");
     }
     if (!canQuickAccessCommunity(session, match.session.communityId)) {
-      return NextResponse.json({ error: "Not authorized" }, { status: 403 });
+      return invalidTargetResponse(request, "api:matches:id:score");
     }
 
     let isCommunityAdmin = false;
@@ -95,7 +108,7 @@ export async function POST(
     ].includes(session.user.id);
 
     if (!isAdmin && !isParticipant) {
-      return NextResponse.json({ error: "Not authorized" }, { status: 403 });
+      return invalidTargetResponse(request, "api:matches:id:score");
     }
 
     if (typeof team1Score !== "number" || typeof team2Score !== "number") {
@@ -188,7 +201,7 @@ export async function POST(
 
     return NextResponse.json(updated);
   } catch (error) {
-    console.error("Score submission error:", error);
-    return NextResponse.json({ error: "Failed to submit score" }, { status: 500 });
+    logError("Score submission error", error);
+    return safeErrorResponse();
   }
 }

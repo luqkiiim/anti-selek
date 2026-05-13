@@ -3,11 +3,7 @@ import Credentials from "next-auth/providers/credentials";
 import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
 import { isGlobalAdminEmail, normalizeAuthEmail } from "@/lib/globalAdmin";
-import {
-  applyRateLimit,
-  buildRateLimitKey,
-  getRequestRateLimitSource,
-} from "@/lib/rateLimit";
+import { checkRateLimit } from "@/lib/rateLimit";
 import { normalizeNameLookupKey } from "@/lib/quickAccess";
 import { logAuditEvent } from "@/lib/serverAudit";
 
@@ -115,15 +111,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           try {
             const rateLimit = DISABLE_RATE_LIMITS
               ? null
-              : applyRateLimit({
-                  key: buildRateLimitKey([
-                    "auth",
-                    "quick_access",
-                    communityKey,
-                    playerKey,
-                    getRequestRateLimitSource(request),
-                  ]),
-                  max: QUICK_ACCESS_MAX_ATTEMPTS,
+              : await checkRateLimit(request, "auth:quick_access", {
+                  applyHighRiskBucket: false,
+                  identity: `${communityKey}:${playerKey}`,
+                  limit: QUICK_ACCESS_MAX_ATTEMPTS,
                   windowMs: QUICK_ACCESS_WINDOW_MS,
                 });
             if (rateLimit && !rateLimit.allowed) {
@@ -229,14 +220,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         try {
           const rateLimit = DISABLE_RATE_LIMITS
             ? null
-            : applyRateLimit({
-                key: buildRateLimitKey([
-                  "auth",
-                  "signin",
-                  normalizedEmail,
-                  getRequestRateLimitSource(request),
-                ]),
-                max: SIGN_IN_MAX_ATTEMPTS,
+            : await checkRateLimit(request, "auth:signin", {
+                applyHighRiskBucket: false,
+                identity: normalizedEmail,
+                limit: SIGN_IN_MAX_ATTEMPTS,
                 windowMs: SIGN_IN_WINDOW_MS,
               });
           if (rateLimit && !rateLimit.allowed) {

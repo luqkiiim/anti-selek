@@ -10,6 +10,8 @@ import {
 import { isValidSessionPool } from "@/lib/sessionPools";
 import { prisma } from "@/lib/prisma";
 import { getSessionModeLabel } from "@/lib/sessionModeLabels";
+import { logError, safeErrorResponse } from "@/lib/errors";
+import { rateLimit, checkInvalidTargetRateLimit, invalidTargetResponse } from "@/lib/rateLimit";
 import {
   PlayerGender,
   SessionMode,
@@ -26,6 +28,9 @@ export async function POST(
   { params }: { params: Promise<{ code: string }> }
 ) {
   try {
+    const rateLimitResponse = await rateLimit(request, "api:sessions:code:guests:post", { limit: 15, windowMs: 60_000 });
+    if (rateLimitResponse) return rateLimitResponse;
+
     const session = await auth();
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
@@ -80,6 +85,14 @@ export async function POST(
     });
 
     const { code } = await params;
+
+    if (typeof code !== "string" || code.length === 0) {
+      return NextResponse.json({ error: "Invalid request parameters" }, { status: 400 });
+    }
+
+    const invalidTargetLimitResponse = await checkInvalidTargetRateLimit(request, "api:sessions:code:guests");
+
+    if (invalidTargetLimitResponse) return invalidTargetLimitResponse;
     const sessionData = await prisma.session.findUnique({
       where: { code },
       select: {
@@ -92,7 +105,7 @@ export async function POST(
     });
 
     if (!sessionData) {
-      return NextResponse.json({ error: "Session not found" }, { status: 404 });
+      return invalidTargetResponse(request, "api:sessions:code:guests");
     }
     if (sessionData.status === SessionStatus.COMPLETED) {
       return NextResponse.json({ error: "Session already ended" }, { status: 400 });
@@ -218,7 +231,7 @@ export async function POST(
       ladderEntryAt: new Date().toISOString(),
     });
   } catch (error) {
-    console.error("Create guest error:", error);
-    return NextResponse.json({ error: "Failed to create guest" }, { status: 500 });
+    logError("Create guest error", error);
+    return safeErrorResponse();
   }
 }

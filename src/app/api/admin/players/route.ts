@@ -2,18 +2,32 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
+import { logError, safeErrorResponse } from "@/lib/errors";
+import { rateLimit } from "@/lib/rateLimit";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
   try {
+    const rateLimitResponse = await rateLimit(request, "api:admin:players:post", { limit: 15, windowMs: 60_000 });
+    if (rateLimitResponse) return rateLimitResponse;
+
     const session = await auth();
 
     if (!session?.user?.isAdmin) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
     }
 
-    const { email, name, password } = await request.json();
+    const body = await request.json().catch(() => null);
+    if (!body || typeof body !== "object") {
+      return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
+    }
+
+    const { email, name, password } = body as {
+      email?: string | null;
+      name?: string | null;
+      password?: string | null;
+    };
 
     if (!name) {
       return NextResponse.json(
@@ -54,16 +68,16 @@ export async function POST(request: Request) {
       isClaimed: user.isClaimed,
     });
   } catch (error) {
-    console.error("Admin add player error:", error);
-    return NextResponse.json(
-      { error: "Failed to create player" },
-      { status: 500 }
-    );
+    logError("Admin add player error", error);
+    return safeErrorResponse();
   }
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
+    const rateLimitResponse = await rateLimit(request, "api:admin:players:get", { limit: 20, windowMs: 60_000 });
+    if (rateLimitResponse) return rateLimitResponse;
+
     const session = await auth();
 
     if (!session?.user?.isAdmin) {
@@ -85,10 +99,7 @@ export async function GET() {
 
     return NextResponse.json(players);
   } catch (error) {
-    console.error("Admin list players error:", error);
-    return NextResponse.json(
-      { error: "Failed to list players" },
-      { status: 500 }
-    );
+    logError("Admin list players error", error);
+    return safeErrorResponse();
   }
 }

@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
+import { logError, safeErrorResponse } from "@/lib/errors";
+import { rateLimit, checkInvalidTargetRateLimit, invalidTargetResponse } from "@/lib/rateLimit";
 import {
   isValidMixedSide,
   isValidPartnerPreference,
@@ -71,12 +73,23 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const rateLimitResponse = await rateLimit(request, "api:communities:id:members:get", { limit: 30, windowMs: 60_000 });
+    if (rateLimitResponse) return rateLimitResponse;
+
     const session = await auth();
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
     }
 
     const { id } = await params;
+
+    if (typeof id !== "string" || id.length === 0) {
+      return NextResponse.json({ error: "Invalid request parameters" }, { status: 400 });
+    }
+
+    const invalidTargetLimitResponse = await checkInvalidTargetRateLimit(request, "api:communities:id:members");
+
+    if (invalidTargetLimitResponse) return invalidTargetLimitResponse;
 
     const membership = await prisma.communityMember.findUnique({
       where: {
@@ -88,7 +101,7 @@ export async function GET(
     });
 
     if (!membership) {
-      return NextResponse.json({ error: "Not authorized" }, { status: 403 });
+      return invalidTargetResponse(request, "api:communities:id:members");
     }
 
     const members = await prisma.communityMember.findMany({
@@ -179,8 +192,8 @@ export async function GET(
       }))
     );
   } catch (error) {
-    console.error("List community members error:", error);
-    return NextResponse.json({ error: "Failed to load community members" }, { status: 500 });
+    logError("List community members error", error);
+    return safeErrorResponse();
   }
 }
 
@@ -189,6 +202,9 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const rateLimitResponse = await rateLimit(request, "api:communities:id:members:post", { limit: 15, windowMs: 60_000 });
+    if (rateLimitResponse) return rateLimitResponse;
+
     const session = await auth();
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
@@ -202,6 +218,14 @@ export async function POST(
 
     const { id } = await params;
 
+    if (typeof id !== "string" || id.length === 0) {
+      return NextResponse.json({ error: "Invalid request parameters" }, { status: 400 });
+    }
+
+    const invalidTargetLimitResponse = await checkInvalidTargetRateLimit(request, "api:communities:id:members");
+
+    if (invalidTargetLimitResponse) return invalidTargetLimitResponse;
+
     const requesterMembership = await prisma.communityMember.findUnique({
       where: {
         communityId_userId: {
@@ -214,7 +238,7 @@ export async function POST(
 
     const canManage = requesterMembership?.role === "ADMIN" || session.user.isAdmin;
     if (!canManage) {
-      return NextResponse.json({ error: "Not authorized" }, { status: 403 });
+      return invalidTargetResponse(request, "api:communities:id:members");
     }
 
     const body = await request.json().catch(() => null);
@@ -449,7 +473,7 @@ export async function POST(
       role: membership.role,
     });
   } catch (error) {
-    console.error("Add community member error:", error);
-    return NextResponse.json({ error: "Failed to add player to community" }, { status: 500 });
+    logError("Add community member error", error);
+    return safeErrorResponse();
   }
 }

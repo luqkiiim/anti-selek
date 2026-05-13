@@ -1,12 +1,9 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
-import {
-  applyRateLimit,
-  buildRateLimitKey,
-  getRequestRateLimitSource,
-} from "@/lib/rateLimit";
+import { checkRateLimit, rateLimit } from "@/lib/rateLimit";
 import { logAuditEvent } from "@/lib/serverAudit";
+import { logError, safeErrorResponse } from "@/lib/errors";
 
 export const dynamic = "force-dynamic";
 
@@ -17,6 +14,9 @@ export async function POST(request: Request) {
   let normalizedEmail: string | null = null;
 
   try {
+    const rateLimitResponse = await rateLimit(request, "api:auth:signup:post", { limit: 10, windowMs: 60_000 });
+    if (rateLimitResponse) return rateLimitResponse;
+
     const body = await request.json().catch(() => null);
     if (!body || typeof body !== "object") {
       return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
@@ -56,17 +56,13 @@ export async function POST(request: Request) {
       );
     }
 
-    const rateLimit = applyRateLimit({
-      key: buildRateLimitKey([
-        "auth",
-        "signup",
-        normalizedEmail,
-        getRequestRateLimitSource(request),
-      ]),
-      max: SIGN_UP_MAX_ATTEMPTS,
+    const credentialRateLimit = await checkRateLimit(request, "auth:signup", {
+      applyHighRiskBucket: false,
+      identity: normalizedEmail,
+      limit: SIGN_UP_MAX_ATTEMPTS,
       windowMs: SIGN_UP_WINDOW_MS,
     });
-    if (!rateLimit.allowed) {
+    if (!credentialRateLimit.allowed) {
       logAuditEvent({
         action: "auth.sign_up",
         actor: {
@@ -74,7 +70,7 @@ export async function POST(request: Request) {
         },
         details: {
           reason: "rate_limited",
-          retryAfterSeconds: rateLimit.retryAfterSeconds,
+          retryAfterSeconds: credentialRateLimit.retryAfterSeconds,
         },
         outcome: "denied",
         request,
@@ -87,10 +83,10 @@ export async function POST(request: Request) {
         },
       });
       return NextResponse.json(
-        { error: "Too many signup attempts. Please wait and try again." },
+        { success: false, error: "Rate limit exceeded" },
         {
           headers: {
-            "Retry-After": String(rateLimit.retryAfterSeconds),
+            "Retry-After": String(credentialRateLimit.retryAfterSeconds),
           },
           status: 429,
         }
@@ -199,10 +195,7 @@ export async function POST(request: Request) {
             type: "user",
           },
     });
-    console.error("Signup error details:", error);
-    return NextResponse.json(
-      { error: "Failed to create user" },
-      { status: 500 }
-    );
+    logError("Signup error details", error);
+    return safeErrorResponse();
   }
 }

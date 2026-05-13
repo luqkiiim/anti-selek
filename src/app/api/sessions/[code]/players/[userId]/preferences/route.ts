@@ -10,6 +10,8 @@ import { isValidSessionPool } from "@/lib/sessionPools";
 import { prisma } from "@/lib/prisma";
 import { getSessionModeLabel } from "@/lib/sessionModeLabels";
 import { PlayerGender, SessionMode, SessionPool, SessionStatus } from "@/types/enums";
+import { logError, safeErrorResponse } from "@/lib/errors";
+import { rateLimit, checkInvalidTargetRateLimit, invalidTargetResponse } from "@/lib/rateLimit";
 
 export const dynamic = "force-dynamic";
 
@@ -20,12 +22,23 @@ export async function PATCH(
   { params }: { params: Promise<{ code: string; userId: string }> }
 ) {
   try {
+    const rateLimitResponse = await rateLimit(request, "api:sessions:code:players:userId:preferences:patch", { limit: 15, windowMs: 60_000 });
+    if (rateLimitResponse) return rateLimitResponse;
+
     const session = await auth();
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
     }
 
     const { code, userId } = await params;
+
+    if (typeof code !== "string" || code.length === 0 || typeof userId !== "string" || userId.length === 0) {
+      return NextResponse.json({ error: "Invalid request parameters" }, { status: 400 });
+    }
+
+    const invalidTargetLimitResponse = await checkInvalidTargetRateLimit(request, "api:sessions:code:players:userId:preferences");
+
+    if (invalidTargetLimitResponse) return invalidTargetLimitResponse;
     const body = await request.json().catch(() => null);
     if (!body || typeof body !== "object") {
       return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
@@ -69,7 +82,7 @@ export async function PATCH(
       },
     });
     if (!sessionData) {
-      return NextResponse.json({ error: "Session not found" }, { status: 404 });
+      return invalidTargetResponse(request, "api:sessions:code:players:userId:preferences");
     }
     if (sessionData.status === SessionStatus.COMPLETED) {
       return NextResponse.json({ error: "Session already completed" }, { status: 400 });
@@ -108,7 +121,7 @@ export async function PATCH(
       },
     });
     if (!existing) {
-      return NextResponse.json({ error: "Player not found in session" }, { status: 404 });
+      return invalidTargetResponse(request, "api:sessions:code:players:userId:preferences");
     }
 
     const nextGender =
@@ -166,7 +179,7 @@ export async function PATCH(
 
     return NextResponse.json(updated);
   } catch (error) {
-    console.error("Update session preference error:", error);
-    return NextResponse.json({ error: "Failed to update session preference" }, { status: 500 });
+    logError("Update session preference error", error);
+    return safeErrorResponse();
   }
 }

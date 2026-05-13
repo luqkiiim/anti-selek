@@ -3,6 +3,8 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
 import { isGlobalAdminEmail } from "@/lib/globalAdmin";
+import { logError, safeErrorResponse } from "@/lib/errors";
+import { rateLimit } from "@/lib/rateLimit";
 import {
   getQuickAccessDeniedMessage,
   isQuickAccessSession,
@@ -11,8 +13,11 @@ import {
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
+    const rateLimitResponse = await rateLimit(request, "api:communities:get", { limit: 30, windowMs: 60_000 });
+    if (rateLimitResponse) return rateLimitResponse;
+
     const session = await auth();
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
@@ -64,13 +69,16 @@ export async function GET() {
       }))
     );
   } catch (error) {
-    console.error("List communities error:", error);
-    return NextResponse.json({ error: "Failed to load communities" }, { status: 500 });
+    logError("List communities error", error);
+    return safeErrorResponse();
   }
 }
 
 export async function POST(request: Request) {
   try {
+    const rateLimitResponse = await rateLimit(request, "api:communities:post", { limit: 15, windowMs: 60_000 });
+    if (rateLimitResponse) return rateLimitResponse;
+
     const session = await auth();
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
@@ -148,7 +156,7 @@ export async function POST(request: Request) {
     if (code === "P2002") {
       return NextResponse.json({ error: "Community name already exists" }, { status: 409 });
     }
-    console.error("Create community error:", error);
-    return NextResponse.json({ error: "Failed to create community" }, { status: 500 });
+    logError("Create community error", error);
+    return safeErrorResponse();
   }
 }

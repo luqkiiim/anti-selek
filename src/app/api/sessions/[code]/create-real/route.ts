@@ -9,6 +9,8 @@ import {
 import { isValidMatchScore } from "@/lib/matchRules";
 import { prisma } from "@/lib/prisma";
 import { MatchStatus, SessionPool, SessionStatus } from "@/types/enums";
+import { logError, safeErrorResponse } from "@/lib/errors";
+import { rateLimit, checkInvalidTargetRateLimit, invalidTargetResponse } from "@/lib/rateLimit";
 
 export const dynamic = "force-dynamic";
 
@@ -22,6 +24,9 @@ export async function POST(
   { params }: { params: Promise<{ code: string }> }
 ) {
   try {
+    const rateLimitResponse = await rateLimit(request, "api:sessions:code:create-real:post", { limit: 15, windowMs: 60_000 });
+    if (rateLimitResponse) return rateLimitResponse;
+
     const session = await auth();
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
@@ -34,6 +39,14 @@ export async function POST(
     const allowDuplicateResults = body?.allowDuplicateResults === true;
 
     const { code } = await params;
+
+    if (typeof code !== "string" || code.length === 0) {
+      return NextResponse.json({ error: "Invalid request parameters" }, { status: 400 });
+    }
+
+    const invalidTargetLimitResponse = await checkInvalidTargetRateLimit(request, "api:sessions:code:create-real");
+
+    if (invalidTargetLimitResponse) return invalidTargetLimitResponse;
     const sourceSession = await prisma.session.findUnique({
       where: { code },
       include: {
@@ -78,7 +91,7 @@ export async function POST(
     });
 
     if (!sourceSession) {
-      return NextResponse.json({ error: "Session not found" }, { status: 404 });
+      return invalidTargetResponse(request, "api:sessions:code:create-real");
     }
 
     let isCommunityAdmin = false;
@@ -404,10 +417,11 @@ export async function POST(
     });
 
     if (!createdSession) {
-      return NextResponse.json(
-        { error: "Failed to create real session" },
-        { status: 500 }
+      logError(
+        "Create real session returned no session",
+        new Error("Session transaction completed without a created session")
       );
+      return safeErrorResponse();
     }
 
     const players =
@@ -426,10 +440,7 @@ export async function POST(
       players,
     });
   } catch (error) {
-    console.error("Create real session from test error:", error);
-    return NextResponse.json(
-      { error: "Failed to create real session from test setup" },
-      { status: 500 }
-    );
+    logError("Create real session from test error", error);
+    return safeErrorResponse();
   }
 }

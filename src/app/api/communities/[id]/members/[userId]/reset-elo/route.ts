@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getQuickAccessDeniedMessage, isQuickAccessSession } from "@/lib/quickAccess";
+import { logError, safeErrorResponse } from "@/lib/errors";
+import { rateLimit, checkInvalidTargetRateLimit, invalidTargetResponse } from "@/lib/rateLimit";
 
 export const dynamic = "force-dynamic";
 
@@ -10,6 +12,9 @@ export async function POST(
   { params }: { params: Promise<{ id: string; userId: string }> }
 ) {
   try {
+    const rateLimitResponse = await rateLimit(request, "api:communities:id:members:userId:reset-elo:post", { limit: 15, windowMs: 60_000 });
+    if (rateLimitResponse) return rateLimitResponse;
+
     const session = await auth();
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
@@ -23,6 +28,14 @@ export async function POST(
 
     const { id: communityId, userId } = await params;
 
+    if (typeof communityId !== "string" || communityId.length === 0 || typeof userId !== "string" || userId.length === 0) {
+      return NextResponse.json({ error: "Invalid request parameters" }, { status: 400 });
+    }
+
+    const invalidTargetLimitResponse = await checkInvalidTargetRateLimit(request, "api:communities:id:members:userId:reset-elo");
+
+    if (invalidTargetLimitResponse) return invalidTargetLimitResponse;
+
     const requesterMembership = await prisma.communityMember.findUnique({
       where: {
         communityId_userId: {
@@ -34,7 +47,7 @@ export async function POST(
     });
 
     if (requesterMembership?.role !== "ADMIN" && !session.user.isAdmin) {
-      return NextResponse.json({ error: "Not authorized" }, { status: 403 });
+      return invalidTargetResponse(request, "api:communities:id:members:userId:reset-elo");
     }
 
     const targetMembership = await prisma.communityMember.findUnique({
@@ -48,7 +61,7 @@ export async function POST(
     });
 
     if (!targetMembership) {
-      return NextResponse.json({ error: "Player not found in this community" }, { status: 404 });
+      return invalidTargetResponse(request, "api:communities:id:members:userId:reset-elo");
     }
 
     const [updatedMembership, updatedUser] = await prisma.$transaction([
@@ -81,8 +94,7 @@ export async function POST(
       elo: updatedMembership.elo,
     });
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : "Unknown error";
-    console.error("Community admin reset ELO error:", error);
-    return NextResponse.json({ error: `Failed to reset rating: ${message}` }, { status: 500 });
+    logError("Community admin reset ELO error", error);
+    return safeErrorResponse();
   }
 }

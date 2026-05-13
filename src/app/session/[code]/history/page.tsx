@@ -1,12 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 
+import { SessionActionConfirmModal } from "@/components/session/SessionActionConfirmModal";
 import { EmptyState, FlashMessage, HeroCard, SectionCard } from "@/components/ui/chrome";
 import { getCourtDisplayLabel } from "@/lib/courtLabels";
+import { getErrorMessage } from "@/lib/http";
 import { getSessionModeLabel, getSessionTypeLabel } from "@/lib/sessionModeLabels";
 import { MatchStatus } from "@/types/enums";
 
@@ -42,6 +44,8 @@ interface SessionHistoryData {
     createdAt: string;
     endedAt?: string | null;
   };
+  viewerCanManage?: boolean;
+  undoableMatchId?: string | null;
   matches: HistoryMatch[];
 }
 
@@ -56,6 +60,40 @@ export default function SessionHistoryPage() {
   const [data, setData] = useState<SessionHistoryData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [undoDraft, setUndoDraft] = useState<HistoryMatch | null>(null);
+  const [undoingMatchId, setUndoingMatchId] = useState<string | null>(null);
+
+  const fetchHistory = useCallback(
+    async ({ showLoading = false }: { showLoading?: boolean } = {}) => {
+      if (!code) return;
+
+      if (showLoading) {
+        setLoading(true);
+      }
+      setError("");
+
+      try {
+        const res = await fetch(`/api/sessions/${code}/history`);
+        if (!res.ok) {
+          const payload = (await res.json().catch(() => null)) as
+            | { error?: string }
+            | null;
+          throw new Error(payload?.error || "Failed to load match history");
+        }
+
+        const json = (await res.json()) as SessionHistoryData;
+        setData(json);
+      } catch (err) {
+        console.error(err);
+        setError(
+          err instanceof Error ? err.message : "Failed to load match history"
+        );
+      } finally {
+        setLoading(false);
+      }
+    },
+    [code]
+  );
 
   useEffect(() => {
     if (status === "unauthenticated") {
@@ -73,30 +111,45 @@ export default function SessionHistoryPage() {
   };
 
   useEffect(() => {
-    const fetchHistory = async () => {
-      if (!code) return;
-
-      try {
-        const res = await fetch(`/api/sessions/${code}/history`);
-        if (!res.ok) {
-          const payload = (await res.json().catch(() => null)) as { error?: string } | null;
-          throw new Error(payload?.error || "Failed to load match history");
-        }
-
-        const json = (await res.json()) as SessionHistoryData;
-        setData(json);
-      } catch (err) {
-        console.error(err);
-        setError(err instanceof Error ? err.message : "Failed to load match history");
-      } finally {
-        setLoading(false);
-      }
-    };
-
     if (session?.user) {
-      fetchHistory();
+      void fetchHistory({ showLoading: true });
     }
-  }, [code, session]);
+  }, [fetchHistory, session]);
+
+  const closeUndoDraft = () => {
+    if (undoDraft && undoingMatchId === undoDraft.id) {
+      return;
+    }
+
+    setUndoDraft(null);
+  };
+
+  const confirmUndoResult = async () => {
+    if (!undoDraft) return;
+
+    setUndoingMatchId(undoDraft.id);
+    setError("");
+
+    try {
+      const res = await fetch(`/api/matches/${undoDraft.id}/undo`, {
+        method: "POST",
+      });
+      const payload = await res.json().catch(() => null);
+
+      if (!res.ok) {
+        setError(getErrorMessage(payload, "Failed to undo result"));
+        return;
+      }
+
+      setUndoDraft(null);
+      await fetchHistory();
+    } catch (err) {
+      console.error(err);
+      setError("Network error undoing result");
+    } finally {
+      setUndoingMatchId(null);
+    }
+  };
 
   if (status === "loading" || loading) {
     return (
@@ -162,6 +215,10 @@ export default function SessionHistoryPage() {
               {data.matches.map((match) => {
                 const isPendingApproval = match.status === MatchStatus.PENDING_APPROVAL;
                 const matchTimestamp = match.completedAt ?? match.createdAt;
+                const canUndoResult =
+                  data.viewerCanManage === true &&
+                  data.undoableMatchId === match.id &&
+                  match.status === MatchStatus.COMPLETED;
                 return (
                   <article key={match.id} className="app-subcard p-4 sm:p-5">
                     <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
@@ -180,6 +237,17 @@ export default function SessionHistoryPage() {
                       {isPendingApproval ? (
                         <div className="flex flex-wrap items-center gap-2">
                           <span className="app-chip app-chip-warning">Awaiting approval</span>
+                        </div>
+                      ) : null}
+                      {canUndoResult ? (
+                        <div className="flex justify-start lg:justify-end">
+                          <button
+                            type="button"
+                            onClick={() => setUndoDraft(match)}
+                            className="app-button-danger min-h-10 px-3 py-2 text-xs"
+                          >
+                            Undo result
+                          </button>
                         </div>
                       ) : null}
                     </div>
@@ -230,6 +298,51 @@ export default function SessionHistoryPage() {
           )}
         </SectionCard>
       </div>
+
+      {undoDraft ? (
+        <SessionActionConfirmModal
+          title="Undo result?"
+          subtitle="This removes the latest recorded result and reverses its standings and rating changes."
+          details={
+            <div className="space-y-4">
+              <div className="app-panel-muted space-y-3 p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-sm font-semibold text-gray-900">
+                    {getCourtDisplayLabel(undoDraft.court)}
+                  </p>
+                  <p className="text-sm font-semibold tabular-nums text-gray-700">
+                    {typeof undoDraft.team1Score === "number" &&
+                    typeof undoDraft.team2Score === "number"
+                      ? `${undoDraft.team1Score} - ${undoDraft.team2Score}`
+                      : "Recorded result"}
+                  </p>
+                </div>
+                <div className="space-y-1 text-sm text-gray-700">
+                  <p className="font-semibold text-gray-900">
+                    {undoDraft.team1User1.name} &amp;{" "}
+                    {undoDraft.team1User2.name}
+                  </p>
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">
+                    vs
+                  </p>
+                  <p className="font-semibold text-gray-900">
+                    {undoDraft.team2User1.name} &amp;{" "}
+                    {undoDraft.team2User2.name}
+                  </p>
+                </div>
+              </div>
+              <p className="text-sm text-gray-600">
+                Current live matches and queued matches will stay as they are.
+              </p>
+            </div>
+          }
+          confirmLabel="Undo Result"
+          cancelLabel="Keep Result"
+          isSubmitting={undoingMatchId === undoDraft.id}
+          onClose={closeUndoDraft}
+          onConfirm={() => void confirmUndoResult()}
+        />
+      ) : null}
     </main>
   );
 }

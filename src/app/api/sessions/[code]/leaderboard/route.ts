@@ -13,10 +13,12 @@ import {
 } from "@/lib/sessionStandings";
 import { canQuickAccessCommunity, isQuickAccessSession } from "@/lib/quickAccess";
 import { MatchStatus, SessionType } from "@/types/enums";
+import { logError, safeErrorResponse } from "@/lib/errors";
+import { rateLimit, checkInvalidTargetRateLimit, invalidTargetResponse } from "@/lib/rateLimit";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(
+async function getSessionLeaderboard(
   request: Request,
   { params }: { params: Promise<{ code: string }> }
 ) {
@@ -26,6 +28,14 @@ export async function GET(
   }
 
   const { code } = await params;
+
+  if (typeof code !== "string" || code.length === 0) {
+    return NextResponse.json({ error: "Invalid request parameters" }, { status: 400 });
+  }
+
+  const invalidTargetLimitResponse = await checkInvalidTargetRateLimit(request, "api:sessions:code:leaderboard");
+
+  if (invalidTargetLimitResponse) return invalidTargetLimitResponse;
   const sessionData = await prisma.session.findUnique({
     where: { code },
     include: {
@@ -59,10 +69,10 @@ export async function GET(
   });
 
   if (!sessionData) {
-    return NextResponse.json({ error: "Session not found" }, { status: 404 });
+    return invalidTargetResponse(request, "api:sessions:code:leaderboard");
   }
   if (!canQuickAccessCommunity(session, sessionData.communityId)) {
-    return NextResponse.json({ error: "Not authorized for this session" }, { status: 403 });
+    return invalidTargetResponse(request, "api:sessions:code:leaderboard");
   }
 
   let communityRole: string | null = null;
@@ -85,7 +95,7 @@ export async function GET(
     !!communityRole ||
     isSessionPlayer;
   if (!canView) {
-    return NextResponse.json({ error: "Not authorized for this session" }, { status: 403 });
+    return invalidTargetResponse(request, "api:sessions:code:leaderboard");
   }
 
   // Calculate match counts
@@ -217,4 +227,16 @@ export async function GET(
           ? raceLeaderboard
         : sessionPointsLeaderboard,
   });
+}
+
+export async function GET(...args: Parameters<typeof getSessionLeaderboard>) {
+  try {
+    const rateLimitResponse = await rateLimit(args[0], "api:sessions:code:leaderboard:get", { limit: 30, windowMs: 60_000 });
+    if (rateLimitResponse) return rateLimitResponse;
+
+    return await getSessionLeaderboard(...args);
+  } catch (error) {
+    logError("Load session leaderboard error", error);
+    return safeErrorResponse();
+  }
 }

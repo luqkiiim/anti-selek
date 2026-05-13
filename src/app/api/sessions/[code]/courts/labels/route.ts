@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { logError, safeErrorResponse } from "@/lib/errors";
+import { rateLimit, checkInvalidTargetRateLimit, invalidTargetResponse } from "@/lib/rateLimit";
 
 export const dynamic = "force-dynamic";
 
@@ -16,12 +18,23 @@ export async function PATCH(
   { params }: { params: Promise<{ code: string }> }
 ) {
   try {
+    const rateLimitResponse = await rateLimit(request, "api:sessions:code:courts:labels:patch", { limit: 15, windowMs: 60_000 });
+    if (rateLimitResponse) return rateLimitResponse;
+
     const session = await auth();
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
     }
 
     const { code } = await params;
+
+    if (typeof code !== "string" || code.length === 0) {
+      return NextResponse.json({ error: "Invalid request parameters" }, { status: 400 });
+    }
+
+    const invalidTargetLimitResponse = await checkInvalidTargetRateLimit(request, "api:sessions:code:courts:labels");
+
+    if (invalidTargetLimitResponse) return invalidTargetLimitResponse;
     const body = (await request.json().catch(() => null)) as CourtLabelUpdateRequest | null;
     if (!body || !Array.isArray(body.courts) || body.courts.length === 0) {
       return NextResponse.json({ error: "Court labels are required" }, { status: 400 });
@@ -42,7 +55,7 @@ export async function PATCH(
     });
 
     if (!sessionData) {
-      return NextResponse.json({ error: "Session not found" }, { status: 404 });
+      return invalidTargetResponse(request, "api:sessions:code:courts:labels");
     }
 
     let isCommunityAdmin = false;
@@ -60,7 +73,7 @@ export async function PATCH(
     }
 
     if (!session.user.isAdmin && !isCommunityAdmin) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+      return invalidTargetResponse(request, "api:sessions:code:courts:labels");
     }
 
     const knownCourtIds = new Set(sessionData.courts.map((court) => court.id));
@@ -78,7 +91,7 @@ export async function PATCH(
       seenCourtIds.add(court.courtId);
 
       if (!knownCourtIds.has(court.courtId)) {
-        return NextResponse.json({ error: "Court not found in this session" }, { status: 404 });
+        return invalidTargetResponse(request, "api:sessions:code:courts:labels");
       }
 
       if (court.label !== undefined && typeof court.label !== "string") {
@@ -122,10 +135,7 @@ export async function PATCH(
       courts: updatedCourts,
     });
   } catch (error) {
-    console.error("Update court labels error:", error);
-    return NextResponse.json(
-      { error: "Failed to update court labels" },
-      { status: 500 }
-    );
+    logError("Update court labels error", error);
+    return safeErrorResponse();
   }
 }

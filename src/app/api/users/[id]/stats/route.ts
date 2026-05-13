@@ -5,10 +5,12 @@ import { buildProfileCommunityRankWindow } from "@/lib/profileCommunityRank";
 import { buildPlayerProfileDerivedData } from "@/lib/profileStats";
 import { canQuickAccessCommunity, isQuickAccessSession } from "@/lib/quickAccess";
 import { CommunityPlayerStatus, MatchStatus } from "@/types/enums";
+import { logError, safeErrorResponse } from "@/lib/errors";
+import { rateLimit, checkInvalidTargetRateLimit, invalidTargetResponse } from "@/lib/rateLimit";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(
+async function getUserStatsRoute(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -18,6 +20,14 @@ export async function GET(
   }
 
   const { id } = await params;
+
+  if (typeof id !== "string" || id.length === 0) {
+    return NextResponse.json({ error: "Invalid request parameters" }, { status: 400 });
+  }
+
+  const invalidTargetLimitResponse = await checkInvalidTargetRateLimit(request, "api:users:id:stats");
+
+  if (invalidTargetLimitResponse) return invalidTargetLimitResponse;
   const url = new URL(request.url);
   const communityId = url.searchParams.get("communityId");
 
@@ -32,7 +42,7 @@ export async function GET(
   });
 
   if (!user) {
-    return NextResponse.json({ error: "User not found" }, { status: 404 });
+    return invalidTargetResponse(request, "api:users:id:stats");
   }
 
   let effectiveElo = user.elo;
@@ -59,7 +69,7 @@ export async function GET(
 
   if (communityId) {
     if (!canQuickAccessCommunity(session, communityId)) {
-      return NextResponse.json({ error: "Not authorized for this community" }, { status: 403 });
+      return invalidTargetResponse(request, "api:users:id:stats");
     }
 
     const [requesterMembership, targetMembership] = await Promise.all([
@@ -93,11 +103,11 @@ export async function GET(
     ]);
 
     if (!requesterMembership) {
-      return NextResponse.json({ error: "Not authorized for this community" }, { status: 403 });
+      return invalidTargetResponse(request, "api:users:id:stats");
     }
 
     if (!targetMembership) {
-      return NextResponse.json({ error: "Player is not in this community" }, { status: 404 });
+      return invalidTargetResponse(request, "api:users:id:stats");
     }
 
     viewerCanManageCommunity =
@@ -197,4 +207,16 @@ export async function GET(
     context,
     ...profileData,
   });
+}
+
+export async function GET(...args: Parameters<typeof getUserStatsRoute>) {
+  try {
+    const rateLimitResponse = await rateLimit(args[0], "api:users:id:stats:get", { limit: 30, windowMs: 60_000 });
+    if (rateLimitResponse) return rateLimitResponse;
+
+    return await getUserStatsRoute(...args);
+  } catch (error) {
+    logError("Load user stats error", error);
+    return safeErrorResponse();
+  }
 }

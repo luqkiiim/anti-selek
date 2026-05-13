@@ -2,10 +2,14 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { isGlobalAdminEmail } from "@/lib/globalAdmin";
+import { logError, safeErrorResponse } from "@/lib/errors";
+import { rateLimit } from "@/lib/rateLimit";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+async function getCurrentUserRoute(_request: Request) {
+  void _request;
+
   const session = await auth();
 
   if (!session?.user?.id) {
@@ -41,4 +45,16 @@ export async function GET() {
       quickAccessCommunityId: session.user.quickAccessCommunityId ?? null,
     },
   });
+}
+
+export async function GET(...args: Parameters<typeof getCurrentUserRoute>) {
+  try {
+    const rateLimitResponse = await rateLimit(args[0], "api:user:me:get", { limit: 30, windowMs: 60_000 });
+    if (rateLimitResponse) return rateLimitResponse;
+
+    return await getCurrentUserRoute(...args);
+  } catch (error) {
+    logError("Load current user error", error);
+    return safeErrorResponse();
+  }
 }

@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { logAuditEvent } from "@/lib/serverAudit";
+import { logError, safeErrorResponse } from "@/lib/errors";
+import { rateLimit, checkInvalidTargetRateLimit, invalidTargetResponse } from "@/lib/rateLimit";
 
 export const dynamic = "force-dynamic";
 
@@ -10,13 +12,24 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const rateLimitResponse = await rateLimit(request, "api:admin:players:id:patch", { limit: 15, windowMs: 60_000 });
+    if (rateLimitResponse) return rateLimitResponse;
+
     const session = await auth();
 
     if (!session?.user?.isAdmin) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+      return invalidTargetResponse(request, "api:admin:players:id");
     }
 
     const { id } = await params;
+
+    if (typeof id !== "string" || id.length === 0) {
+      return NextResponse.json({ error: "Invalid request parameters" }, { status: 400 });
+    }
+
+    const invalidTargetLimitResponse = await checkInvalidTargetRateLimit(request, "api:admin:players:id");
+
+    if (invalidTargetLimitResponse) return invalidTargetLimitResponse;
     const body = await request.json().catch(() => null);
     if (!body || typeof body !== "object") {
       return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
@@ -56,7 +69,7 @@ export async function PATCH(
     });
 
     if (!user) {
-      return NextResponse.json({ error: "User not found" }, { status: 404 });
+      return invalidTargetResponse(request, "api:admin:players:id");
     }
 
     const updated = await prisma.user.update({
@@ -80,11 +93,8 @@ export async function PATCH(
 
     return NextResponse.json(updated);
   } catch (error) {
-    console.error("Admin update player error details:", error);
-    return NextResponse.json(
-      { error: "Failed to update player" },
-      { status: 500 }
-    );
+    logError("Admin update player error details", error);
+    return safeErrorResponse();
   }
 }
 
@@ -93,13 +103,23 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const rateLimitResponse = await rateLimit(request, "api:admin:players:id:delete", { limit: 15, windowMs: 60_000 });
+    if (rateLimitResponse) return rateLimitResponse;
+
     const session = await auth();
 
     if (!session?.user?.isAdmin) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+      return invalidTargetResponse(request, "api:admin:players:id");
     }
 
     const { id } = await params;
+    if (typeof id !== "string" || id.length === 0) {
+      return NextResponse.json({ error: "Invalid request parameters" }, { status: 400 });
+    }
+
+    const invalidTargetLimitResponse = await checkInvalidTargetRateLimit(request, "api:admin:players:id");
+
+    if (invalidTargetLimitResponse) return invalidTargetLimitResponse;
 
     // Don't allow deleting yourself
     if (id === session.user.id) {
@@ -112,7 +132,7 @@ export async function DELETE(
     });
 
     if (!user) {
-      return NextResponse.json({ error: "User not found" }, { status: 404 });
+      return invalidTargetResponse(request, "api:admin:players:id");
     }
 
     // Delete the user (cascades will handle SessionPlayer and Match records)
@@ -141,10 +161,7 @@ export async function DELETE(
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error("Admin delete player error details:", error);
-    return NextResponse.json(
-      { error: "Failed to delete player" },
-      { status: 500 }
-    );
+    logError("Admin delete player error details", error);
+    return safeErrorResponse();
   }
 }

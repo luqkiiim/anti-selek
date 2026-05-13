@@ -5,6 +5,8 @@ import { buildCommunityPulse } from "@/lib/communityPulse";
 import { prisma } from "@/lib/prisma";
 import { listSessionsForCommunity } from "@/app/api/sessions/listSessionsService";
 import { logAuditEvent } from "@/lib/serverAudit";
+import { logError, safeErrorResponse } from "@/lib/errors";
+import { rateLimit, checkInvalidTargetRateLimit, invalidTargetResponse } from "@/lib/rateLimit";
 import {
   canQuickAccessCommunity,
   getQuickAccessDeniedMessage,
@@ -51,14 +53,25 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const rateLimitResponse = await rateLimit(request, "api:communities:id:get", { limit: 30, windowMs: 60_000 });
+    if (rateLimitResponse) return rateLimitResponse;
+
     const session = await auth();
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
     }
 
     const { id } = await params;
+
+    if (typeof id !== "string" || id.length === 0) {
+      return NextResponse.json({ error: "Invalid request parameters" }, { status: 400 });
+    }
+
+    const invalidTargetLimitResponse = await checkInvalidTargetRateLimit(request, "api:communities:id");
+
+    if (invalidTargetLimitResponse) return invalidTargetLimitResponse;
     if (!canQuickAccessCommunity(session, id)) {
-      return NextResponse.json({ error: "Not authorized" }, { status: 403 });
+      return invalidTargetResponse(request, "api:communities:id");
     }
 
     const viewerId = session.user.id;
@@ -107,15 +120,15 @@ export async function GET(
     ]);
 
     if (!community) {
-      return NextResponse.json({ error: "Community not found" }, { status: 404 });
+      return invalidTargetResponse(request, "api:communities:id");
     }
 
     if (!membership && !viewerIsAdmin) {
-      return NextResponse.json({ error: "Not authorized" }, { status: 403 });
+      return invalidTargetResponse(request, "api:communities:id");
     }
 
     if (!viewer) {
-      return NextResponse.json({ error: "User not found" }, { status: 404 });
+      return invalidTargetResponse(request, "api:communities:id");
     }
 
     const [members, completedMatches, sessions, claimRequests] = await Promise.all([
@@ -311,11 +324,8 @@ export async function GET(
       claimRequests: claimRequests.map(toClaimRequestResponse),
     });
   } catch (error) {
-    console.error("Get community snapshot error:", error);
-    return NextResponse.json(
-      { error: "Failed to load community" },
-      { status: 500 }
-    );
+    logError("Get community snapshot error", error);
+    return safeErrorResponse();
   }
 }
 
@@ -326,6 +336,9 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const rateLimitResponse = await rateLimit(request, "api:communities:id:patch", { limit: 15, windowMs: 60_000 });
+    if (rateLimitResponse) return rateLimitResponse;
+
     const session = await auth();
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
@@ -339,6 +352,14 @@ export async function PATCH(
 
     const { id } = await params;
 
+    if (typeof id !== "string" || id.length === 0) {
+      return NextResponse.json({ error: "Invalid request parameters" }, { status: 400 });
+    }
+
+    const invalidTargetLimitResponse = await checkInvalidTargetRateLimit(request, "api:communities:id");
+
+    if (invalidTargetLimitResponse) return invalidTargetLimitResponse;
+
     const membership = await prisma.communityMember.findUnique({
       where: {
         communityId_userId: {
@@ -350,7 +371,7 @@ export async function PATCH(
     });
 
     if (!membership || (membership.role !== "ADMIN" && !session.user.isAdmin)) {
-      return NextResponse.json({ error: "Not authorized" }, { status: 403 });
+      return invalidTargetResponse(request, "api:communities:id");
     }
 
     const body = await request.json().catch(() => null);
@@ -424,7 +445,7 @@ export async function PATCH(
       select: { id: true },
     });
     if (!existing) {
-      return NextResponse.json({ error: "Community not found" }, { status: 404 });
+      return invalidTargetResponse(request, "api:communities:id");
     }
 
     const updatedCommunity = await prisma.community.update({
@@ -447,8 +468,8 @@ export async function PATCH(
     if (code === "P2002") {
       return NextResponse.json({ error: "Community name already exists" }, { status: 409 });
     }
-    console.error("Update community error:", error);
-    return NextResponse.json({ error: "Failed to update community" }, { status: 500 });
+    logError("Update community error", error);
+    return safeErrorResponse();
   }
 }
 
@@ -457,6 +478,9 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const rateLimitResponse = await rateLimit(request, "api:communities:id:delete", { limit: 15, windowMs: 60_000 });
+    if (rateLimitResponse) return rateLimitResponse;
+
     const session = await auth();
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
@@ -470,6 +494,14 @@ export async function DELETE(
 
     const { id } = await params;
 
+    if (typeof id !== "string" || id.length === 0) {
+      return NextResponse.json({ error: "Invalid request parameters" }, { status: 400 });
+    }
+
+    const invalidTargetLimitResponse = await checkInvalidTargetRateLimit(request, "api:communities:id");
+
+    if (invalidTargetLimitResponse) return invalidTargetLimitResponse;
+
     const membership = await prisma.communityMember.findUnique({
       where: {
         communityId_userId: {
@@ -481,10 +513,10 @@ export async function DELETE(
     });
 
     if (!membership) {
-      return NextResponse.json({ error: "Not authorized" }, { status: 403 });
+      return invalidTargetResponse(request, "api:communities:id");
     }
     if (membership.role !== "ADMIN" && !session.user.isAdmin) {
-      return NextResponse.json({ error: "Not authorized" }, { status: 403 });
+      return invalidTargetResponse(request, "api:communities:id");
     }
 
     const body = await request.json().catch(() => null);
@@ -501,7 +533,7 @@ export async function DELETE(
       select: { id: true },
     });
     if (!existing) {
-      return NextResponse.json({ error: "Community not found" }, { status: 404 });
+      return invalidTargetResponse(request, "api:communities:id");
     }
 
     await prisma.community.delete({ where: { id } });
@@ -527,7 +559,7 @@ export async function DELETE(
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error("Delete community error:", error);
-    return NextResponse.json({ error: "Failed to delete community" }, { status: 500 });
+    logError("Delete community error", error);
+    return safeErrorResponse();
   }
 }

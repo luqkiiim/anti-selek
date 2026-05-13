@@ -3,6 +3,8 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
 import { isGlobalAdminEmail } from "@/lib/globalAdmin";
+import { logError, safeErrorResponse } from "@/lib/errors";
+import { rateLimit } from "@/lib/rateLimit";
 import {
   getQuickAccessDeniedMessage,
   isQuickAccessSession,
@@ -13,6 +15,9 @@ export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
   try {
+    const rateLimitResponse = await rateLimit(request, "api:communities:join:post", { limit: 15, windowMs: 60_000 });
+    if (rateLimitResponse) return rateLimitResponse;
+
     const session = await auth();
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
@@ -108,7 +113,7 @@ export async function POST(request: Request) {
       createdAt: membership.community.createdAt,
     });
   } catch (error) {
-    console.error("Join community error:", error);
-    return NextResponse.json({ error: "Failed to join community" }, { status: 500 });
+    logError("Join community error", error);
+    return safeErrorResponse();
   }
 }

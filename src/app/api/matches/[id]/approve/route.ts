@@ -7,6 +7,8 @@ import { prisma } from "@/lib/prisma";
 import { canQuickAccessCommunity, isQuickAccessSession } from "@/lib/quickAccess";
 import { MatchStatus } from "@/types/enums";
 import { reconcileSessionQueueAfterCourtChange } from "../../_lib/reconcileSessionQueue";
+import { logError, safeErrorResponse } from "@/lib/errors";
+import { rateLimit, checkInvalidTargetRateLimit, invalidTargetResponse } from "@/lib/rateLimit";
 
 export const dynamic = "force-dynamic";
 
@@ -15,12 +17,23 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const rateLimitResponse = await rateLimit(request, "api:matches:id:approve:post", { limit: 15, windowMs: 60_000 });
+    if (rateLimitResponse) return rateLimitResponse;
+
     const session = await auth();
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
     }
 
     const { id } = await params;
+
+    if (typeof id !== "string" || id.length === 0) {
+      return NextResponse.json({ error: "Invalid request parameters" }, { status: 400 });
+    }
+
+    const invalidTargetLimitResponse = await checkInvalidTargetRateLimit(request, "api:matches:id:approve");
+
+    if (invalidTargetLimitResponse) return invalidTargetLimitResponse;
 
     const match = await prisma.match.findUnique({
       where: { id },
@@ -36,10 +49,10 @@ export async function POST(
     });
 
     if (!match) {
-      return NextResponse.json({ error: "Match not found" }, { status: 404 });
+      return invalidTargetResponse(request, "api:matches:id:approve");
     }
     if (!canQuickAccessCommunity(session, match.session.communityId)) {
-      return NextResponse.json({ error: "Not authorized" }, { status: 403 });
+      return invalidTargetResponse(request, "api:matches:id:approve");
     }
 
     if (match.status !== MatchStatus.PENDING_APPROVAL) {
@@ -70,7 +83,7 @@ export async function POST(
     ].includes(session.user.id);
 
     if (!isAdmin && !isPlayer) {
-      return NextResponse.json({ error: "Not authorized" }, { status: 403 });
+      return invalidTargetResponse(request, "api:matches:id:approve");
     }
 
     let approverIsClaimed = false;
@@ -149,7 +162,7 @@ export async function POST(
       throw error;
     }
   } catch (error) {
-    console.error("Approve match error:", error);
-    return NextResponse.json({ error: "Failed to approve match" }, { status: 500 });
+    logError("Approve match error", error);
+    return safeErrorResponse();
   }
 }

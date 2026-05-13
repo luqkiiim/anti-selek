@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { MatchStatus } from "@/types/enums";
+import { logError, safeErrorResponse } from "@/lib/errors";
+import { rateLimit, checkInvalidTargetRateLimit, invalidTargetResponse } from "@/lib/rateLimit";
 
 export const dynamic = "force-dynamic";
 
@@ -10,12 +12,23 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const rateLimitResponse = await rateLimit(_request, "api:matches:id:reopen:post", { limit: 15, windowMs: 60_000 });
+    if (rateLimitResponse) return rateLimitResponse;
+
     const session = await auth();
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
     }
 
     const { id } = await params;
+
+    if (typeof id !== "string" || id.length === 0) {
+      return NextResponse.json({ error: "Invalid request parameters" }, { status: 400 });
+    }
+
+    const invalidTargetLimitResponse = await checkInvalidTargetRateLimit(_request, "api:matches:id:reopen");
+
+    if (invalidTargetLimitResponse) return invalidTargetLimitResponse;
 
     const match = await prisma.match.findUnique({
       where: { id },
@@ -31,7 +44,7 @@ export async function POST(
     });
 
     if (!match) {
-      return NextResponse.json({ error: "Match not found" }, { status: 404 });
+      return invalidTargetResponse(_request, "api:matches:id:reopen");
     }
 
     if (match.status !== MatchStatus.PENDING_APPROVAL) {
@@ -90,7 +103,7 @@ export async function POST(
 
     return NextResponse.json(updatedMatch);
   } catch (error) {
-    console.error("Reopen score error:", error);
-    return NextResponse.json({ error: "Failed to reopen score entry" }, { status: 500 });
+    logError("Reopen score error", error);
+    return safeErrorResponse();
   }
 }

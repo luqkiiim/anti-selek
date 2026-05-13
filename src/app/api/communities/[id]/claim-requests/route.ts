@@ -8,6 +8,8 @@ import {
 } from "@/lib/communityClaimRules";
 import { isQuickAccessSession } from "@/lib/quickAccess";
 import { ClaimRequestStatus } from "@/types/enums";
+import { logError, safeErrorResponse } from "@/lib/errors";
+import { rateLimit, checkInvalidTargetRateLimit, invalidTargetResponse } from "@/lib/rateLimit";
 
 export const dynamic = "force-dynamic";
 
@@ -44,12 +46,23 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const rateLimitResponse = await rateLimit(request, "api:communities:id:claim-requests:get", { limit: 30, windowMs: 60_000 });
+    if (rateLimitResponse) return rateLimitResponse;
+
     const session = await auth();
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
     }
 
     const { id: communityId } = await params;
+
+    if (typeof communityId !== "string" || communityId.length === 0) {
+      return NextResponse.json({ error: "Invalid request parameters" }, { status: 400 });
+    }
+
+    const invalidTargetLimitResponse = await checkInvalidTargetRateLimit(request, "api:communities:id:claim-requests");
+
+    if (invalidTargetLimitResponse) return invalidTargetLimitResponse;
     const membership = await prisma.communityMember.findUnique({
       where: {
         communityId_userId: {
@@ -64,7 +77,7 @@ export async function GET(
     const isCommunityAdmin =
       !isQuickAccess && (membership?.role === "ADMIN" || !!session.user.isAdmin);
     if (!membership && !session.user.isAdmin) {
-      return NextResponse.json({ error: "Not authorized" }, { status: 403 });
+      return invalidTargetResponse(request, "api:communities:id:claim-requests");
     }
 
     const requests = await prisma.claimRequest.findMany({
@@ -99,11 +112,8 @@ export async function GET(
 
     return NextResponse.json(requests.map(toClaimRequestResponse));
   } catch (error) {
-    console.error("List community claim requests error:", error);
-    return NextResponse.json(
-      { error: "Failed to load claim requests" },
-      { status: 500 }
-    );
+    logError("List community claim requests error", error);
+    return safeErrorResponse();
   }
 }
 
@@ -112,6 +122,9 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const rateLimitResponse = await rateLimit(request, "api:communities:id:claim-requests:post", { limit: 15, windowMs: 60_000 });
+    if (rateLimitResponse) return rateLimitResponse;
+
     const session = await auth();
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
@@ -124,6 +137,14 @@ export async function POST(
     }
 
     const { id: communityId } = await params;
+
+    if (typeof communityId !== "string" || communityId.length === 0) {
+      return NextResponse.json({ error: "Invalid request parameters" }, { status: 400 });
+    }
+
+    const invalidTargetLimitResponse = await checkInvalidTargetRateLimit(request, "api:communities:id:claim-requests");
+
+    if (invalidTargetLimitResponse) return invalidTargetLimitResponse;
     const requesterMembership = await prisma.communityMember.findUnique({
       where: {
         communityId_userId: {
@@ -295,8 +316,11 @@ export async function POST(
     return NextResponse.json(toClaimRequestResponse(createdRequest), { status: 201 });
   } catch (error) {
     if (error instanceof Error) {
+      if (error.message === "Target profile not found in this community") {
+        return invalidTargetResponse(request, "api:communities:id:claim-requests");
+      }
+
       const status = (() => {
-        if (error.message === "Target profile not found in this community") return 404;
         if (
           error.message === "You already have a pending claim request in this community" ||
           error.message === "This profile already has a pending claim request"
@@ -308,10 +332,7 @@ export async function POST(
       return NextResponse.json({ error: error.message }, { status });
     }
 
-    console.error("Create community claim request error:", error);
-    return NextResponse.json(
-      { error: "Failed to create claim request" },
-      { status: 500 }
-    );
+    logError("Create community claim request error", error);
+    return safeErrorResponse();
   }
 }
