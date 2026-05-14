@@ -69,6 +69,65 @@ export function CurrentTournamentsPanel({
                 ? tournament.communities.map((community) => community.name).join(" + ")
                 : null;
 
+            if (canReviewCollab) {
+              return (
+                <div
+                  key={tournament.id}
+                  className="block rounded-xl border border-amber-200 bg-amber-50 p-4 transition hover:-translate-y-0.5 hover:border-amber-300"
+                >
+                  <div className="mb-2 flex items-start justify-between gap-3">
+                    <h4 className="font-semibold text-gray-900">
+                      {tournament.name}
+                    </h4>
+                    <span className="rounded-lg bg-amber-100 px-2 py-1 text-xs font-semibold text-amber-700">
+                      Pending
+                    </span>
+                  </div>
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <p className="text-xs font-semibold text-gray-500">
+                        {tournament.players.length} Players - {getSessionTypeLabel(tournament.type)}
+                      </p>
+                      {communityLabel ? (
+                        <p className="mt-1 text-xs font-semibold text-gray-500">
+                          {communityLabel}
+                        </p>
+                      ) : null}
+                      <p className="mt-1 text-xs font-semibold text-amber-700">
+                        Partner approval required before start
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          onReviewCollabTournament(
+                            tournament.code,
+                            "REJECTED"
+                          )
+                        }
+                        className="app-button-secondary px-3 py-1.5 text-sm"
+                      >
+                        Reject
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          onReviewCollabTournament(
+                            tournament.code,
+                            "ACCEPTED"
+                          )
+                        }
+                        className="app-button-dark px-3 py-1.5 text-sm"
+                      >
+                        Approve
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            }
+
             return isParticipant ? (
               <Link
                 key={tournament.id}
@@ -117,43 +176,14 @@ export function CurrentTournamentsPanel({
                       </p>
                     ) : null}
                   </div>
-                  {canReviewCollab ? (
-                    <div className="flex flex-wrap gap-2">
-                      <button
-                        type="button"
-                        onClick={() =>
-                          onReviewCollabTournament(
-                            tournament.code,
-                            "REJECTED"
-                          )
-                        }
-                        className="app-button-secondary px-3 py-1.5 text-sm"
-                      >
-                        Reject
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          onReviewCollabTournament(
-                            tournament.code,
-                            "ACCEPTED"
-                          )
-                        }
-                        className="app-button-dark px-3 py-1.5 text-sm"
-                      >
-                        Approve
-                      </button>
-                    </div>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => onJoinTournament(tournament.code)}
-                      disabled={isPendingCollab}
-                      className="app-button-dark px-3 py-1.5 text-sm disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      {isPendingCollab ? "Pending" : "Join"}
-                    </button>
-                  )}
+                  <button
+                    type="button"
+                    onClick={() => onJoinTournament(tournament.code)}
+                    disabled={isPendingCollab}
+                    className="app-button-dark px-3 py-1.5 text-sm disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {isPendingCollab ? "Pending" : "Join"}
+                  </button>
                 </div>
               </div>
             );
