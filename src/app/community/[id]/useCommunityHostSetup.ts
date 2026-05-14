@@ -2,6 +2,7 @@
 
 import { useEffect, useState, type Dispatch, type SetStateAction } from "react";
 import type {
+  CommunityCollabCandidate,
   CommunityGuestConfig,
   CommunityPageMember,
 } from "@/components/community/communityTypes";
@@ -27,6 +28,7 @@ export function useCommunityHostSetup({
   communityId,
   router,
   selectablePlayers,
+  collabCandidates,
   mixedModeLabel,
   setError,
   setSuccess,
@@ -34,6 +36,7 @@ export function useCommunityHostSetup({
   communityId: string;
   router: CommunityPageRouter;
   selectablePlayers: CommunityPageMember[];
+  collabCandidates: CommunityCollabCandidate[];
   mixedModeLabel: string;
   setError: Dispatch<SetStateAction<string>>;
   setSuccess: Dispatch<SetStateAction<string>>;
@@ -52,6 +55,9 @@ export function useCommunityHostSetup({
   const [poolAName, setPoolAName] = useState("Open");
   const [poolBName, setPoolBName] = useState("Regular");
   const [selectedPlayerIds, setSelectedPlayerIds] = useState<string[]>([]);
+  const [partnerCommunityId, setPartnerCommunityId] = useState("");
+  const [collabRoster, setCollabRoster] = useState<CommunityPageMember[]>([]);
+  const [loadingCollabRoster, setLoadingCollabRoster] = useState(false);
   const [selectedPlayerPools, setSelectedPlayerPools] = useState<
     Record<string, SessionPool>
   >({});
@@ -81,6 +87,9 @@ export function useCommunityHostSetup({
     setPoolAName("Open");
     setPoolBName("Regular");
     setSelectedPlayerIds([]);
+    setPartnerCommunityId("");
+    setCollabRoster([]);
+    setLoadingCollabRoster(false);
     setSelectedPlayerPools({});
     setGuestConfigs([]);
     setGuestNameInput("");
@@ -91,6 +100,59 @@ export function useCommunityHostSetup({
     setShowPlayersModal(false);
     setShowGuestsModal(false);
   }, [communityId]);
+
+  useEffect(() => {
+    if (!partnerCommunityId || !communityId) {
+      setCollabRoster([]);
+      return;
+    }
+
+    let cancelled = false;
+    void (async () => {
+      setLoadingCollabRoster(true);
+      setError("");
+      try {
+        const res = await fetch(
+          `/api/communities/${communityId}/collab-roster?partnerCommunityId=${encodeURIComponent(partnerCommunityId)}`
+        );
+        const data = await safeJson(res);
+        if (!res.ok) {
+          throw new Error(data.error || "Failed to load collab roster");
+        }
+        if (!cancelled) {
+          setCollabRoster(Array.isArray(data) ? data : []);
+        }
+      } catch (err: unknown) {
+        if (!cancelled) {
+          setCollabRoster([]);
+          setError(
+            err instanceof Error ? err.message : "Failed to load collab roster"
+          );
+        }
+      } finally {
+        if (!cancelled) {
+          setLoadingCollabRoster(false);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [communityId, partnerCommunityId, setError]);
+
+  const effectiveSelectablePlayers = partnerCommunityId
+    ? collabRoster
+    : selectablePlayers;
+
+  useEffect(() => {
+    const availableIds = new Set(
+      effectiveSelectablePlayers.map((player) => player.id)
+    );
+    setSelectedPlayerIds((current) =>
+      current.filter((playerId) => availableIds.has(playerId))
+    );
+  }, [effectiveSelectablePlayers]);
 
   const createSession = async () => {
     if (!newSessionName.trim() || !communityId) return;
@@ -123,6 +185,7 @@ export function useCommunityHostSetup({
           autoQueueEnabled,
           courtCount,
           communityId,
+          partnerCommunityId: partnerCommunityId || undefined,
           playerIds: selectedPlayerIds,
           playerConfigs: selectedPlayerIds.map((userId) => ({
             userId,
@@ -180,7 +243,7 @@ export function useCommunityHostSetup({
   };
 
   const toggleAllPlayers = () => {
-    const allOtherIds = selectablePlayers.map((player) => player.id);
+    const allOtherIds = effectiveSelectablePlayers.map((player) => player.id);
     if (selectedPlayerIds.length === allOtherIds.length) {
       setSelectedPlayerIds([]);
       return;
@@ -316,6 +379,11 @@ export function useCommunityHostSetup({
     setPoolAName,
     poolBName,
     setPoolBName,
+    partnerCommunityId,
+    setPartnerCommunityId,
+    collabCandidates,
+    loadingCollabRoster,
+    selectablePlayers: effectiveSelectablePlayers,
     selectedPlayerIds,
     selectedPlayerPools,
     selectedPoolCounts,

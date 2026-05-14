@@ -151,6 +151,23 @@ export function CommunityPlayersModal({
                       ) : null}
                     </div>
                     <p className="text-xs text-gray-500">Rating {player.elo}</p>
+                    {player.communityBadges && player.communityBadges.length > 0 ? (
+                      <div className="flex flex-wrap gap-1.5">
+                        {player.communityBadges.map((badge) => (
+                          <span
+                            key={badge.id}
+                            className="rounded-full border border-gray-200 bg-white px-2 py-0.5 text-[10px] font-semibold text-gray-600"
+                          >
+                            {badge.name} {badge.elo}
+                          </span>
+                        ))}
+                        {!player.isClaimed ? (
+                          <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
+                            Unclaimed
+                          </span>
+                        ) : null}
+                      </div>
+                    ) : null}
                   </div>
 
                   <span

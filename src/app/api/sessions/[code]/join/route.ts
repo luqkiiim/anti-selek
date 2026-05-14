@@ -9,6 +9,13 @@ import {
 import { isValidSessionPool } from "@/lib/sessionPools";
 import { prisma } from "@/lib/prisma";
 import { getCommunityEloByUserId, withCommunityElo } from "@/lib/communityElo";
+import {
+  getAcceptedSessionCommunityIds,
+  getPlayerCommunityBadges,
+  getSessionAdminMembership,
+  getSessionMembership,
+  withPlayerCommunityBadges,
+} from "@/lib/sessionCollab";
 import { canQuickAccessCommunity, isQuickAccessSession } from "@/lib/quickAccess";
 import { logError, safeErrorResponse } from "@/lib/errors";
 import { rateLimit, checkInvalidTargetRateLimit, invalidTargetResponse } from "@/lib/rateLimit";
@@ -78,19 +85,18 @@ export async function POST(
       return NextResponse.json({ error: "Session already ended" }, { status: 400 });
     }
 
-    let requesterCommunityRole: string | null = null;
+    const requesterMembership = await getSessionMembership(prisma, {
+      session: sessionData,
+      userId: session.user.id,
+      acceptedOnly: true,
+    });
+    const requesterAdminMembership = await getSessionAdminMembership(prisma, {
+      session: sessionData,
+      userId: session.user.id,
+      acceptedOnly: true,
+    });
     if (sessionData.communityId) {
-      const requesterMembership = await prisma.communityMember.findUnique({
-        where: {
-          communityId_userId: {
-            communityId: sessionData.communityId,
-            userId: session.user.id,
-          },
-        },
-        select: { role: true },
-      });
-      requesterCommunityRole = requesterMembership?.role ?? null;
-      if (!requesterCommunityRole && !session.user.isAdmin) {
+      if (!requesterMembership && !session.user.isAdmin) {
         return NextResponse.json({ error: "Not a member of this community" }, { status: 403 });
       }
     }
@@ -100,21 +106,17 @@ export async function POST(
       if (isQuickAccessSession(session)) {
         return invalidTargetResponse(request, "api:sessions:code:join");
       }
-      const isCommunityAdmin = requesterCommunityRole === "ADMIN";
-      if (!session.user.isAdmin && !isCommunityAdmin) {
+      if (!session.user.isAdmin && !requesterAdminMembership) {
         return NextResponse.json({ error: "Only community admins can add other players" }, { status: 403 });
       }
       userIdToJoin = targetUserId;
     }
 
     if (sessionData.communityId) {
-      const targetMembership = await prisma.communityMember.findUnique({
-        where: {
-          communityId_userId: {
-            communityId: sessionData.communityId,
-            userId: userIdToJoin,
-          },
-        },
+      const targetMembership = await getSessionMembership(prisma, {
+        session: sessionData,
+        userId: userIdToJoin,
+        acceptedOnly: true,
       });
       if (!targetMembership) {
         return NextResponse.json({ error: "Target player is not a member of this community" }, { status: 400 });
@@ -229,16 +231,24 @@ export async function POST(
       },
     });
 
+    const linkedCommunityIds = await getAcceptedSessionCommunityIds(
+      prisma,
+      updatedSession
+    );
+    const playerIds = updatedSession.players.map((p) => p.userId);
     const players =
-      updatedSession.communityId && updatedSession.players.length > 0
-        ? withCommunityElo(
+      linkedCommunityIds.length > 1 && updatedSession.players.length > 0
+        ? withPlayerCommunityBadges(
             updatedSession.players,
-            await getCommunityEloByUserId(
-              updatedSession.communityId,
-              updatedSession.players.map((p) => p.userId)
-            )
+            await getPlayerCommunityBadges(prisma, linkedCommunityIds, playerIds),
+            updatedSession.communityId
           )
-        : updatedSession.players;
+        : updatedSession.communityId && updatedSession.players.length > 0
+          ? withCommunityElo(
+              updatedSession.players,
+              await getCommunityEloByUserId(updatedSession.communityId, playerIds)
+            )
+          : updatedSession.players;
 
     return NextResponse.json({ ...updatedSession, players });
   } catch (error) {

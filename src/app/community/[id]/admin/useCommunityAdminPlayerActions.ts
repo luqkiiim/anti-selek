@@ -1,6 +1,13 @@
 "use client";
 
-import { useMemo, useState, type Dispatch, type FormEvent, type SetStateAction } from "react";
+import {
+  useEffect,
+  useMemo,
+  useState,
+  type Dispatch,
+  type FormEvent,
+  type SetStateAction,
+} from "react";
 import type { CommunityAdminPlayer } from "@/components/community-admin/communityAdminTypes";
 import {
   CommunityPlayerStatus,
@@ -12,6 +19,13 @@ import { safeJson } from "./communityAdminApi";
 interface PendingPlayerAction {
   kind: "remove" | "promote";
   player: CommunityAdminPlayer;
+}
+
+export interface LinkableCommunityPlayer {
+  id: string;
+  name: string;
+  email: string | null;
+  communities: Array<{ id: string; name: string; elo: number }>;
 }
 
 export function useCommunityAdminPlayerActions({
@@ -31,6 +45,12 @@ export function useCommunityAdminPlayerActions({
 }) {
   const [isCreatePlayerOpen, setIsCreatePlayerOpen] = useState(false);
   const [name, setName] = useState("");
+  const [linkSearch, setLinkSearch] = useState("");
+  const [linkCandidates, setLinkCandidates] = useState<LinkableCommunityPlayer[]>(
+    []
+  );
+  const [loadingLinkCandidates, setLoadingLinkCandidates] = useState(false);
+  const [linkingPlayerId, setLinkingPlayerId] = useState<string | null>(null);
   const [newPlayerGender, setNewPlayerGender] = useState<PlayerGender>(
     PlayerGender.MALE
   );
@@ -67,8 +87,48 @@ export function useCommunityAdminPlayerActions({
     [editingPlayerId, players]
   );
 
+  useEffect(() => {
+    if (!isCreatePlayerOpen || !communityId) return;
+
+    let cancelled = false;
+    const timeout = setTimeout(() => {
+      void (async () => {
+        setLoadingLinkCandidates(true);
+        try {
+          const res = await fetch(
+            `/api/communities/${communityId}/members/link?search=${encodeURIComponent(
+              linkSearch
+            )}`
+          );
+          const data = await safeJson(res);
+          if (!res.ok) {
+            throw new Error(data.error || "Failed to load link candidates");
+          }
+          if (!cancelled) {
+            setLinkCandidates(Array.isArray(data) ? data : []);
+          }
+        } catch {
+          if (!cancelled) {
+            setLinkCandidates([]);
+          }
+        } finally {
+          if (!cancelled) {
+            setLoadingLinkCandidates(false);
+          }
+        }
+      })();
+    }, 180);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timeout);
+    };
+  }, [communityId, isCreatePlayerOpen, linkSearch]);
+
   const openCreatePlayerModal = () => {
     setName("");
+    setLinkSearch("");
+    setLinkCandidates([]);
     setNewPlayerGender(PlayerGender.MALE);
     setNewPlayerMixedSideOverride(null);
     setNewPlayerStatus(CommunityPlayerStatus.CORE);
@@ -77,6 +137,7 @@ export function useCommunityAdminPlayerActions({
 
   const closeCreatePlayerModal = () => {
     setIsCreatePlayerOpen(false);
+    setLinkingPlayerId(null);
   };
 
   const openPlayerEditor = (player: CommunityAdminPlayer) => {
@@ -145,6 +206,37 @@ export function useCommunityAdminPlayerActions({
       await refreshCommunityData();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Failed to add player");
+    }
+  };
+
+  const handleLinkExistingPlayer = async (player: LinkableCommunityPlayer) => {
+    setLinkingPlayerId(player.id);
+    setError("");
+    setSuccess("");
+
+    try {
+      const res = await fetch(`/api/communities/${communityId}/members/link`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId: player.id,
+          status: newPlayerStatus,
+        }),
+      });
+      const data = await safeJson(res);
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to link player");
+      }
+
+      setSuccess(`${player.name} linked into this community.`);
+      setIsCreatePlayerOpen(false);
+      setLinkSearch("");
+      setLinkCandidates([]);
+      await refreshCommunityData();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to link player");
+    } finally {
+      setLinkingPlayerId(null);
     }
   };
 
@@ -407,6 +499,11 @@ export function useCommunityAdminPlayerActions({
     isCreatePlayerOpen,
     name,
     setName,
+    linkSearch,
+    setLinkSearch,
+    linkCandidates,
+    loadingLinkCandidates,
+    linkingPlayerId,
     newPlayerGender,
     setNewPlayerGender,
     newPlayerMixedSideOverride,
@@ -438,6 +535,7 @@ export function useCommunityAdminPlayerActions({
     openPasswordResetModal,
     closePasswordResetModal,
     handleAddPlayer,
+    handleLinkExistingPlayer,
     handleSavePlayerName,
     handleSavePlayerRating,
     handleRemovePlayer: requestRemovePlayer,

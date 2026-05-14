@@ -113,6 +113,10 @@ export default function CommunityPage() {
     setIsTestSession,
     autoQueueEnabled,
     setAutoQueueEnabled,
+    partnerCommunityId,
+    setPartnerCommunityId,
+    collabCandidates,
+    loadingCollabRoster,
     courtCount,
     setCourtCount,
     poolsEnabled,
@@ -166,6 +170,7 @@ export default function CommunityPage() {
     closeRollbackModal,
     confirmRollbackTournament,
     requestClaim,
+    reviewCollabTournament,
     togglePlayerSelection,
     toggleAllPlayers,
     updateSelectedPlayerPool,
@@ -716,6 +721,10 @@ export default function CommunityPage() {
       onIsTestSessionChange={setIsTestSession}
       autoQueueEnabled={autoQueueEnabled}
       onAutoQueueEnabledChange={setAutoQueueEnabled}
+      partnerCommunityId={partnerCommunityId}
+      onPartnerCommunityIdChange={setPartnerCommunityId}
+      collabCandidates={collabCandidates}
+      loadingCollabRoster={loadingCollabRoster}
       openModeLabel={openModeLabel}
       mixedModeLabel={mixedModeLabel}
       courtCount={courtCount}
@@ -759,7 +768,10 @@ export default function CommunityPage() {
       <CurrentTournamentsPanel
         tournaments={activeTournaments}
         currentUserId={user?.id}
+        currentCommunityId={communityId}
+        canManageCommunity={canManageCommunity}
         onJoinTournament={joinTournament}
+        onReviewCollabTournament={reviewCollabTournament}
       />
       <TestSessionsPanel
         sessions={testSessions}

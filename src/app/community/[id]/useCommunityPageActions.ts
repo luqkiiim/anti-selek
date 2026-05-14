@@ -138,6 +138,38 @@ export function useCommunityPageActions({
     }
   };
 
+  const reviewCollabTournament = async (
+    code: string,
+    status: "ACCEPTED" | "REJECTED"
+  ) => {
+    if (!canManageCommunity) return;
+
+    setError("");
+    setSuccess("");
+    try {
+      const res = await fetch(`/api/sessions/${code}/collab`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status }),
+      });
+      const data = await safeJson(res);
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to review collab request");
+      }
+
+      await refreshCommunityData();
+      setSuccess(
+        status === "ACCEPTED"
+          ? `Approved collab with ${data.communityName}.`
+          : `Rejected collab with ${data.communityName}.`
+      );
+    } catch (err: unknown) {
+      setError(
+        err instanceof Error ? err.message : "Failed to review collab request"
+      );
+    }
+  };
+
   const switchSection = useCallback((section: CommunityPageSection) => {
     setActiveSection(section);
     if (section !== "host") {
@@ -178,6 +210,7 @@ export function useCommunityPageActions({
     closeRollbackModal,
     confirmRollbackTournament,
     requestClaim,
+    reviewCollabTournament,
     switchSection,
     exitHostMode,
     handleHostButtonClick,

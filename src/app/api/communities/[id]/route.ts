@@ -154,7 +154,20 @@ export async function GET(
       prisma.match.findMany({
         where: {
           status: "COMPLETED",
-          session: { communityId: id, isTest: false },
+          session: {
+            isTest: false,
+            OR: [
+              { communityId: id },
+              {
+                sessionCommunities: {
+                  some: {
+                    communityId: id,
+                    status: "ACCEPTED",
+                  },
+                },
+              },
+            ],
+          },
         },
         select: {
           id: true,
@@ -220,6 +233,23 @@ export async function GET(
         orderBy: { createdAt: "asc" },
       }),
     ]);
+
+    const canManageCommunity = membership?.role === "ADMIN" || viewerIsAdmin;
+    const collabCandidates = canManageCommunity
+      ? await prisma.community.findMany({
+          where: { NOT: { id } },
+          select: {
+            id: true,
+            name: true,
+            _count: {
+              select: {
+                members: true,
+              },
+            },
+          },
+          orderBy: { name: "asc" },
+        })
+      : [];
 
     const statsByUserId = new Map<string, { wins: number; losses: number }>();
     for (const member of members) {
@@ -322,6 +352,11 @@ export async function GET(
       sessions,
       communityPulse,
       claimRequests: claimRequests.map(toClaimRequestResponse),
+      collabCandidates: collabCandidates.map((candidate) => ({
+        id: candidate.id,
+        name: candidate.name,
+        membersCount: candidate._count.members,
+      })),
     });
   } catch (error) {
     logError("Get community snapshot error", error);

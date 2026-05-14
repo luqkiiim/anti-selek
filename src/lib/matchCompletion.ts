@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { isValidMatchScore } from "@/lib/matchRules";
+import { getAcceptedSessionCommunityIds } from "@/lib/sessionCollab";
 import { getStandingPointsForTeam } from "@/lib/sessionStandings";
 import { MatchStatus, SessionStatus, SessionType } from "@/types/enums";
 import type { Prisma } from "@prisma/client";
@@ -126,6 +127,275 @@ async function getUserEloByUserIdInTransaction(
   return new Map(rows.map((row) => [row.id, row.elo]));
 }
 
+interface TeamEloDeltas {
+  team1Delta: number;
+  team2Delta: number;
+}
+
+interface EloAdjustmentInput {
+  matchId: string;
+  communityId: string;
+  userId: string;
+  delta: number;
+  beforeElo: number;
+  afterElo: number;
+}
+
+function getMatchEloAdjustmentDelegate(tx: Prisma.TransactionClient) {
+  return (
+    tx as unknown as {
+      matchEloAdjustment?: {
+        createMany?: (args: { data: EloAdjustmentInput[] }) => Promise<unknown>;
+        findMany?: (args: {
+          where: { matchId: string };
+          select: {
+            communityId: true;
+            userId: true;
+            delta: true;
+          };
+        }) => Promise<
+          Array<{
+            communityId: string;
+            userId: string;
+            delta: number;
+          }>
+        >;
+      };
+    }
+  ).matchEloAdjustment;
+}
+
+function calculateTeamEloDeltas({
+  winnerTeam,
+  team1AvgElo,
+  team2AvgElo,
+  team1Points,
+  team2Points,
+  guestImpactMultiplier,
+}: {
+  winnerTeam: 1 | 2;
+  team1AvgElo: number;
+  team2AvgElo: number;
+  team1Points: number;
+  team2Points: number;
+  guestImpactMultiplier: number;
+}): TeamEloDeltas {
+  let team1EloChange: number;
+  let team2EloChange: number;
+
+  if (winnerTeam === 1) {
+    const delta = calculateEloChange(
+      team1AvgElo,
+      team2AvgElo,
+      team1Points,
+      team2Points
+    );
+    team1EloChange = delta;
+    team2EloChange = -delta;
+  } else {
+    const delta = calculateEloChange(
+      team2AvgElo,
+      team1AvgElo,
+      team2Points,
+      team1Points
+    );
+    team1EloChange = -delta;
+    team2EloChange = delta;
+  }
+
+  return {
+    team1Delta: applyGuestMultiplierToDelta(
+      team1EloChange,
+      guestImpactMultiplier
+    ),
+    team2Delta: applyGuestMultiplierToDelta(
+      team2EloChange,
+      guestImpactMultiplier
+    ),
+  };
+}
+
+function getPlayerSnapshotElo(match: FinalizableMatch, userId: string) {
+  if (match.team1User1Id === userId) return match.team1User1.elo;
+  if (match.team1User2Id === userId) return match.team1User2.elo;
+  if (match.team2User1Id === userId) return match.team2User1.elo;
+  if (match.team2User2Id === userId) return match.team2User2.elo;
+  return 1000;
+}
+
+function getDisplayPlayerEloChanges({
+  adjustments,
+  preferredCommunityId,
+}: {
+  adjustments: EloAdjustmentInput[];
+  preferredCommunityId?: string | null;
+}) {
+  const byUserId = new Map<string, EloAdjustmentInput[]>();
+  for (const adjustment of adjustments) {
+    const current = byUserId.get(adjustment.userId) ?? [];
+    current.push(adjustment);
+    byUserId.set(adjustment.userId, current);
+  }
+
+  return Array.from(byUserId.entries()).map(([userId, userAdjustments]) => {
+    const preferred = preferredCommunityId
+      ? userAdjustments.find(
+          (adjustment) => adjustment.communityId === preferredCommunityId
+        )
+      : null;
+    const selected = preferred ?? userAdjustments[0];
+
+    return {
+      userId,
+      delta: selected.delta,
+      communityId: selected.communityId,
+    };
+  });
+}
+
+async function buildCommunityEloAdjustments({
+  tx,
+  match,
+  playerIds,
+  isGuestByUserId,
+  winnerTeam,
+  team1Points,
+  team2Points,
+  guestImpactMultiplier,
+  userEloByUserId,
+}: {
+  tx: Prisma.TransactionClient;
+  match: FinalizableMatch;
+  playerIds: string[];
+  isGuestByUserId: Map<string, boolean>;
+  winnerTeam: 1 | 2;
+  team1Points: number;
+  team2Points: number;
+  guestImpactMultiplier: number;
+  userEloByUserId: Map<string, number>;
+}) {
+  const communityIds = match.session.communityId
+    ? await getAcceptedSessionCommunityIds(tx, {
+        id: match.sessionId,
+        communityId: match.session.communityId,
+      })
+    : [];
+
+  if (communityIds.length === 0) {
+    return {
+      teamDeltasByCommunityId: new Map<string, TeamEloDeltas>(),
+      adjustments: [] as EloAdjustmentInput[],
+      sourceEloByUserId: new Map<string, number>(),
+    };
+  }
+
+  const memberships = await tx.communityMember.findMany({
+    where: {
+      communityId: { in: communityIds },
+      userId: { in: playerIds },
+    },
+    select: {
+      communityId: true,
+      userId: true,
+      elo: true,
+    },
+  });
+  const membershipByCommunityAndUser = new Map<string, number>();
+  const communityIdsByUserId = new Map<string, string[]>();
+  for (const membership of memberships) {
+    membershipByCommunityAndUser.set(
+      `${membership.communityId}:${membership.userId}`,
+      membership.elo
+    );
+    const current = communityIdsByUserId.get(membership.userId) ?? [];
+    current.push(membership.communityId);
+    communityIdsByUserId.set(membership.userId, current);
+  }
+
+  const hostCommunityId = match.session.communityId;
+  const sourceEloByUserId = new Map<string, number>();
+  for (const userId of playerIds) {
+    const playerCommunityIds = communityIdsByUserId.get(userId) ?? [];
+    const sourceCommunityId =
+      (hostCommunityId && playerCommunityIds.includes(hostCommunityId)
+        ? hostCommunityId
+        : playerCommunityIds[0]) ?? null;
+    const sourceElo = sourceCommunityId
+      ? membershipByCommunityAndUser.get(`${sourceCommunityId}:${userId}`)
+      : undefined;
+
+    sourceEloByUserId.set(
+      userId,
+      sourceElo ??
+        userEloByUserId.get(userId) ??
+        getPlayerSnapshotElo(match, userId)
+    );
+  }
+
+  const team1Ids = [match.team1User1Id, match.team1User2Id];
+  const team2Ids = [match.team2User1Id, match.team2User2Id];
+  const teamDeltasByCommunityId = new Map<string, TeamEloDeltas>();
+  const adjustments: EloAdjustmentInput[] = [];
+
+  for (const communityId of communityIds) {
+    const getRating = (userId: string) =>
+      membershipByCommunityAndUser.get(`${communityId}:${userId}`) ??
+      sourceEloByUserId.get(userId) ??
+      userEloByUserId.get(userId) ??
+      getPlayerSnapshotElo(match, userId);
+
+    const team1AvgElo = (getRating(team1Ids[0]) + getRating(team1Ids[1])) / 2;
+    const team2AvgElo = (getRating(team2Ids[0]) + getRating(team2Ids[1])) / 2;
+    const deltas = calculateTeamEloDeltas({
+      winnerTeam,
+      team1AvgElo,
+      team2AvgElo,
+      team1Points,
+      team2Points,
+      guestImpactMultiplier,
+    });
+    teamDeltasByCommunityId.set(communityId, deltas);
+
+    for (const userId of team1Ids) {
+      const beforeElo = membershipByCommunityAndUser.get(
+        `${communityId}:${userId}`
+      );
+      if (beforeElo === undefined || isGuestByUserId.get(userId) === true) {
+        continue;
+      }
+
+      adjustments.push({
+        matchId: match.id,
+        communityId,
+        userId,
+        delta: deltas.team1Delta,
+        beforeElo,
+        afterElo: beforeElo + deltas.team1Delta,
+      });
+    }
+
+    for (const userId of team2Ids) {
+      const beforeElo = membershipByCommunityAndUser.get(
+        `${communityId}:${userId}`
+      );
+      if (beforeElo === undefined || isGuestByUserId.get(userId) === true) {
+        continue;
+      }
+
+      adjustments.push({
+        matchId: match.id,
+        communityId,
+        userId,
+        delta: deltas.team2Delta,
+        beforeElo,
+        afterElo: beforeElo + deltas.team2Delta,
+      });
+    }
+  }
+
+  return { teamDeltasByCommunityId, adjustments, sourceEloByUserId };
+}
+
 export async function finalizeMatchResultInTransaction(
   tx: Prisma.TransactionClient,
   {
@@ -174,67 +444,54 @@ export async function finalizeMatchResultInTransaction(
     (userId) => isGuestByUserId.get(userId) === true
   ).length;
   const guestImpactMultiplier = getGuestImpactMultiplier(guestCount);
-  const communityEloByUserId =
-    match.session.communityId
-      ? await getCommunityEloByUserIdInTransaction(
-          tx,
-          match.session.communityId,
-          playerIds
-        )
-      : new Map<string, number>();
   const userEloByUserId = await getUserEloByUserIdInTransaction(tx, playerIds);
-
-  const team1User1Elo =
-    communityEloByUserId.get(match.team1User1Id) ??
-    userEloByUserId.get(match.team1User1Id) ??
-    match.team1User1.elo;
-  const team1User2Elo =
-    communityEloByUserId.get(match.team1User2Id) ??
-    userEloByUserId.get(match.team1User2Id) ??
-    match.team1User2.elo;
-  const team2User1Elo =
-    communityEloByUserId.get(match.team2User1Id) ??
-    userEloByUserId.get(match.team2User1Id) ??
-    match.team2User1.elo;
-  const team2User2Elo =
-    communityEloByUserId.get(match.team2User2Id) ??
-    userEloByUserId.get(match.team2User2Id) ??
-    match.team2User2.elo;
-
-  const team1AvgElo = (team1User1Elo + team1User2Elo) / 2;
-  const team2AvgElo = (team2User1Elo + team2User2Elo) / 2;
-
-  let team1EloChange: number;
-  let team2EloChange: number;
-
-  if (winnerTeam === 1) {
-    const delta = calculateEloChange(
-      team1AvgElo,
-      team2AvgElo,
-      team1Points,
-      team2Points
-    );
-    team1EloChange = delta;
-    team2EloChange = -delta;
-  } else {
-    const delta = calculateEloChange(
-      team2AvgElo,
-      team1AvgElo,
-      team2Points,
-      team1Points
-    );
-    team1EloChange = -delta;
-    team2EloChange = delta;
-  }
-
-  const persistedTeam1EloChange = applyGuestMultiplierToDelta(
-    team1EloChange,
-    guestImpactMultiplier
-  );
-  const persistedTeam2EloChange = applyGuestMultiplierToDelta(
-    team2EloChange,
-    guestImpactMultiplier
-  );
+  const communityEloResult = await buildCommunityEloAdjustments({
+    tx,
+    match,
+    playerIds,
+    isGuestByUserId,
+    winnerTeam,
+    team1Points,
+    team2Points,
+    guestImpactMultiplier,
+    userEloByUserId,
+  });
+  const hostCommunityDeltas = match.session.communityId
+    ? communityEloResult.teamDeltasByCommunityId.get(match.session.communityId)
+    : undefined;
+  const firstCommunityDeltas = Array.from(
+    communityEloResult.teamDeltasByCommunityId.values()
+  )[0];
+  const fallbackDeltas = calculateTeamEloDeltas({
+    winnerTeam,
+    team1AvgElo:
+      ((communityEloResult.sourceEloByUserId.get(match.team1User1Id) ??
+        userEloByUserId.get(match.team1User1Id) ??
+        match.team1User1.elo) +
+        (communityEloResult.sourceEloByUserId.get(match.team1User2Id) ??
+          userEloByUserId.get(match.team1User2Id) ??
+          match.team1User2.elo)) /
+      2,
+    team2AvgElo:
+      ((communityEloResult.sourceEloByUserId.get(match.team2User1Id) ??
+        userEloByUserId.get(match.team2User1Id) ??
+        match.team2User1.elo) +
+        (communityEloResult.sourceEloByUserId.get(match.team2User2Id) ??
+          userEloByUserId.get(match.team2User2Id) ??
+          match.team2User2.elo)) /
+      2,
+    team1Points,
+    team2Points,
+    guestImpactMultiplier,
+  });
+  const persistedTeam1EloChange =
+    hostCommunityDeltas?.team1Delta ??
+    firstCommunityDeltas?.team1Delta ??
+    fallbackDeltas.team1Delta;
+  const persistedTeam2EloChange =
+    hostCommunityDeltas?.team2Delta ??
+    firstCommunityDeltas?.team2Delta ??
+    fallbackDeltas.team2Delta;
 
   const updatedMatchResult = await tx.match.updateMany({
     where: { id: match.id, status: expectedStatus },
@@ -325,7 +582,25 @@ export async function finalizeMatchResultInTransaction(
     data: { lastPartnerId: match.team2User1Id },
   });
 
-  if (!match.session.isTest && match.session.communityId) {
+  if (!match.session.isTest && communityEloResult.adjustments.length > 0) {
+    for (const adjustment of communityEloResult.adjustments) {
+      await tx.communityMember.update({
+        where: {
+          communityId_userId: {
+            communityId: adjustment.communityId,
+            userId: adjustment.userId,
+          },
+        },
+        data: {
+          elo: { increment: adjustment.delta },
+        },
+      });
+    }
+
+    await getMatchEloAdjustmentDelegate(tx)?.createMany?.({
+      data: communityEloResult.adjustments,
+    });
+  } else if (!match.session.isTest && match.session.communityId) {
     const team1Ids = [match.team1User1Id, match.team1User2Id];
     const team2Ids = [match.team2User1Id, match.team2User2Id];
 
@@ -381,7 +656,18 @@ export async function finalizeMatchResultInTransaction(
     data: { currentMatchId: null },
   });
 
-  return updatedMatch;
+  if (!updatedMatch || match.session.isTest || communityEloResult.adjustments.length === 0) {
+    return updatedMatch;
+  }
+
+  return {
+    ...updatedMatch,
+    playerEloChanges: getDisplayPlayerEloChanges({
+      adjustments: communityEloResult.adjustments,
+      preferredCommunityId: match.session.communityId,
+    }),
+    eloAdjustments: communityEloResult.adjustments,
+  };
 }
 
 function getMatchPartnerIdForUser(
@@ -518,10 +804,33 @@ export async function undoCompletedMatchResultInTransaction(
     sessionPlayerRows.map((player) => [player.userId, player.isGuest])
   );
 
+  const ledgerAdjustments =
+    (await getMatchEloAdjustmentDelegate(tx)?.findMany?.({
+      where: { matchId: match.id },
+      select: {
+        communityId: true,
+        userId: true,
+        delta: true,
+      },
+    })) ?? [];
   const team1ReverseEloDelta = -(match.team1EloChange ?? 0);
   const team2ReverseEloDelta = -(match.team2EloChange ?? 0);
 
-  if (!match.session.isTest) {
+  if (!match.session.isTest && ledgerAdjustments.length > 0) {
+    for (const adjustment of ledgerAdjustments) {
+      if (adjustment.delta === 0) continue;
+
+      await tx.communityMember.updateMany({
+        where: {
+          communityId: adjustment.communityId,
+          userId: adjustment.userId,
+        },
+        data: {
+          elo: { increment: -adjustment.delta },
+        },
+      });
+    }
+  } else if (!match.session.isTest) {
     const team1CoreIds = team1Ids.filter(
       (userId) => isGuestByUserId.get(userId) !== true
     );

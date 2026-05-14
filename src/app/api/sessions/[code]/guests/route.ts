@@ -9,6 +9,7 @@ import {
 } from "@/lib/mixedSide";
 import { isValidSessionPool } from "@/lib/sessionPools";
 import { prisma } from "@/lib/prisma";
+import { getSessionAdminMembership } from "@/lib/sessionCollab";
 import { getSessionModeLabel } from "@/lib/sessionModeLabels";
 import { logError, safeErrorResponse } from "@/lib/errors";
 import { rateLimit, checkInvalidTargetRateLimit, invalidTargetResponse } from "@/lib/rateLimit";
@@ -122,16 +123,12 @@ export async function POST(
 
     let canManage = !!session.user.isAdmin;
     if (sessionData.communityId) {
-      const membership = await prisma.communityMember.findUnique({
-        where: {
-          communityId_userId: {
-            communityId: sessionData.communityId,
-            userId: session.user.id,
-          },
-        },
-        select: { role: true },
+      const membership = await getSessionAdminMembership(prisma, {
+        session: sessionData,
+        userId: session.user.id,
+        acceptedOnly: true,
       });
-      canManage = canManage || membership?.role === "ADMIN";
+      canManage = canManage || !!membership;
     } else if (!canManage) {
       const isSessionPlayer = await prisma.sessionPlayer.findUnique({
         where: {

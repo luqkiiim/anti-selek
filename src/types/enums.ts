@@ -54,3 +54,14 @@ export enum ClaimRequestStatus {
   APPROVED = "APPROVED",
   REJECTED = "REJECTED",
 }
+
+export enum SessionCommunityRole {
+  HOST = "HOST",
+  PARTNER = "PARTNER",
+}
+
+export enum SessionCommunityStatus {
+  PENDING = "PENDING",
+  ACCEPTED = "ACCEPTED",
+  REJECTED = "REJECTED",
+}

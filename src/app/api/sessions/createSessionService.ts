@@ -1,6 +1,10 @@
 import { randomUUID } from "crypto";
 import { prisma } from "@/lib/prisma";
 import { getCommunityEloByUserId, withCommunityElo } from "@/lib/communityElo";
+import {
+  getPlayerCommunityBadges,
+  withPlayerCommunityBadges,
+} from "@/lib/sessionCollab";
 import { resolveMixedSideState } from "@/lib/mixedSide";
 import { getNormalizedSessionPool } from "@/lib/sessionPools";
 import {
@@ -9,6 +13,8 @@ import {
   SessionMode,
   SessionPool,
   SessionStatus,
+  SessionCommunityRole,
+  SessionCommunityStatus,
 } from "@/types/enums";
 import {
   mixedModeLabel,
@@ -111,8 +117,22 @@ export async function createSessionForUser({
     );
   }
 
+  const involvedCommunityIds = input.partnerCommunityId
+    ? [input.communityId, input.partnerCommunityId]
+    : [input.communityId];
+  if (input.partnerCommunityId) {
+    const partnerCommunity = await prisma.community.findUnique({
+      where: { id: input.partnerCommunityId },
+      select: { id: true },
+    });
+
+    if (!partnerCommunity) {
+      throw new SessionRouteError("Partner community not found", 404);
+    }
+  }
+
   const memberRows = await prisma.communityMember.findMany({
-    where: { communityId: input.communityId },
+    where: { communityId: { in: involvedCommunityIds } },
     select: { userId: true },
   });
   const memberSet = new Set(memberRows.map((member) => member.userId));
@@ -179,6 +199,28 @@ export async function createSessionForUser({
             courtNumber: index + 1,
           })),
         },
+        sessionCommunities: {
+          create: [
+            {
+              communityId: input.communityId,
+              role: SessionCommunityRole.HOST,
+              status: SessionCommunityStatus.ACCEPTED,
+              requestedById: requesterId,
+              reviewedById: requesterId,
+              reviewedAt: new Date(),
+            },
+            ...(input.partnerCommunityId
+              ? [
+                  {
+                    communityId: input.partnerCommunityId,
+                    role: SessionCommunityRole.PARTNER,
+                    status: SessionCommunityStatus.PENDING,
+                    requestedById: requesterId,
+                  },
+                ]
+              : []),
+          ],
+        },
         players: {
           create: memberSessionConfigs,
         },
@@ -234,6 +276,11 @@ export async function createSessionForUser({
     return tx.session.findUnique({
       where: { id: createdSession.id },
       include: {
+        sessionCommunities: {
+          include: {
+            community: { select: { id: true, name: true } },
+          },
+        },
         courts: true,
         players: {
           include: {
@@ -258,16 +305,20 @@ export async function createSessionForUser({
     throw new SessionRouteError("Failed to load created tournament", 500);
   }
 
+  const playerIds = newSession.players.map((player) => player.userId);
   const players =
-    newSession.communityId && newSession.players.length > 0
-      ? withCommunityElo(
+    input.partnerCommunityId && newSession.players.length > 0
+      ? withPlayerCommunityBadges(
           newSession.players,
-          await getCommunityEloByUserId(
-            newSession.communityId,
-            newSession.players.map((player) => player.userId)
-          )
+          await getPlayerCommunityBadges(prisma, involvedCommunityIds, playerIds),
+          newSession.communityId
         )
-      : newSession.players;
+      : newSession.communityId && newSession.players.length > 0
+        ? withCommunityElo(
+            newSession.players,
+            await getCommunityEloByUserId(newSession.communityId, playerIds)
+          )
+        : newSession.players;
 
   return { ...newSession, players };
 }

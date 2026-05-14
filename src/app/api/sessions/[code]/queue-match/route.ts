@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { getSessionAdminMembership } from "@/lib/sessionCollab";
 import {
   buildSessionPoolMap,
   summarizeSessionPoolMembership,
@@ -38,6 +39,7 @@ async function parseQueueMatchBody(request: Request) {
 }
 
 async function ensureManagePermission(
+  sessionId: string,
   communityId: string | null | undefined,
   userId: string,
   requesterIsAdmin: boolean
@@ -46,21 +48,13 @@ async function ensureManagePermission(
     return;
   }
 
-  if (!communityId) {
-    throw new GenerateMatchError(403, "Unauthorized");
-  }
-
-  const membership = await prisma.communityMember.findUnique({
-    where: {
-      communityId_userId: {
-        communityId,
-        userId,
-      },
-    },
-    select: { role: true },
+  const membership = await getSessionAdminMembership(prisma, {
+    session: { id: sessionId, communityId },
+    userId,
+    acceptedOnly: true,
   });
 
-  if (membership?.role !== "ADMIN") {
+  if (!membership) {
     throw new GenerateMatchError(403, "Unauthorized");
   }
 }
@@ -94,6 +88,7 @@ export async function POST(
     }
 
     await ensureManagePermission(
+      sessionData.id,
       sessionData.communityId,
       session.user.id,
       !!session.user.isAdmin
@@ -245,6 +240,7 @@ export async function DELETE(
     }
 
     await ensureManagePermission(
+      sessionData.id,
       sessionData.communityId,
       session.user.id,
       !!session.user.isAdmin

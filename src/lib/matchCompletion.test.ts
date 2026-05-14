@@ -1,5 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { MatchStatus, SessionStatus, SessionType } from "@/types/enums";
+import {
+  MatchStatus,
+  SessionCommunityRole,
+  SessionCommunityStatus,
+  SessionStatus,
+  SessionType,
+} from "@/types/enums";
 
 const mocks = vi.hoisted(() => ({
   transaction: vi.fn(),
@@ -219,6 +225,117 @@ describe("finalizeMatchResult", () => {
       })
     );
   });
+
+  it("writes a per-community Elo ledger for accepted collab sessions", async () => {
+    const storedMatch = {
+      id: "match-1",
+      team1Score: 21,
+      team2Score: 15,
+      winnerTeam: 1,
+      status: MatchStatus.COMPLETED,
+    };
+    const baseTx = createTransactionMock(storedMatch);
+    const communityMemberUpdate = vi.fn().mockResolvedValue({});
+    const matchEloAdjustmentCreateMany = vi
+      .fn()
+      .mockResolvedValue({ count: 5 });
+    const tx = {
+      ...baseTx,
+      sessionCommunity: {
+        findMany: vi.fn().mockResolvedValue([
+          {
+            id: "link-host",
+            sessionId: "session-1",
+            communityId: "community-a",
+            role: SessionCommunityRole.HOST,
+            status: SessionCommunityStatus.ACCEPTED,
+            createdAt: new Date("2026-05-14T09:00:00.000Z"),
+            community: { id: "community-a", name: "Host Club" },
+          },
+          {
+            id: "link-partner",
+            sessionId: "session-1",
+            communityId: "community-b",
+            role: SessionCommunityRole.PARTNER,
+            status: SessionCommunityStatus.ACCEPTED,
+            createdAt: new Date("2026-05-14T09:01:00.000Z"),
+            community: { id: "community-b", name: "Partner Club" },
+          },
+        ]),
+      },
+      communityMember: {
+        ...baseTx.communityMember,
+        findMany: vi.fn().mockResolvedValue([
+          { communityId: "community-a", userId: "a1", elo: 1000 },
+          { communityId: "community-a", userId: "a2", elo: 1000 },
+          { communityId: "community-b", userId: "a1", elo: 1100 },
+          { communityId: "community-b", userId: "b1", elo: 1200 },
+          { communityId: "community-b", userId: "b2", elo: 1200 },
+        ]),
+        update: communityMemberUpdate,
+      },
+      matchEloAdjustment: {
+        createMany: matchEloAdjustmentCreateMany,
+      },
+    };
+    mocks.transaction.mockImplementation((callback: (tx: unknown) => unknown) =>
+      callback(tx)
+    );
+
+    const result = await finalizeMatchResult({
+      match: {
+        ...finalizableMatch,
+        session: {
+          communityId: "community-a",
+          type: SessionType.ELO,
+          isTest: false,
+        },
+        team1User1: { id: "a1", name: "A1", elo: 1000 },
+        team1User2: { id: "a2", name: "A2", elo: 1000 },
+        team2User1: { id: "b1", name: "B1", elo: 1200 },
+        team2User2: { id: "b2", name: "B2", elo: 1200 },
+      },
+      expectedStatus: MatchStatus.IN_PROGRESS,
+      finalTeam1Score: 21,
+      finalTeam2Score: 15,
+    });
+
+    expect(communityMemberUpdate).toHaveBeenCalledTimes(5);
+    expect(matchEloAdjustmentCreateMany).toHaveBeenCalledTimes(1);
+    const ledgerRows = matchEloAdjustmentCreateMany.mock.calls[0][0].data;
+    expect(
+      ledgerRows.map((row: { communityId: string; userId: string }) => [
+        row.communityId,
+        row.userId,
+      ])
+    ).toEqual([
+      ["community-a", "a1"],
+      ["community-a", "a2"],
+      ["community-b", "a1"],
+      ["community-b", "b1"],
+      ["community-b", "b2"],
+    ]);
+    expect(
+      ledgerRows.find(
+        (row: { communityId: string; userId: string }) =>
+          row.communityId === "community-a" && row.userId === "a1"
+      )?.delta
+    ).toBeGreaterThan(0);
+    expect(
+      ledgerRows.find(
+        (row: { communityId: string; userId: string }) =>
+          row.communityId === "community-b" && row.userId === "b1"
+      )?.delta
+    ).toBeLessThan(0);
+    expect(result).toMatchObject({
+      playerEloChanges: expect.arrayContaining([
+        expect.objectContaining({ userId: "a1", communityId: "community-a" }),
+        expect.objectContaining({ userId: "a2", communityId: "community-a" }),
+        expect.objectContaining({ userId: "b1", communityId: "community-b" }),
+        expect.objectContaining({ userId: "b2", communityId: "community-b" }),
+      ]),
+    });
+  });
 });
 
 describe("undoCompletedMatchResult", () => {
@@ -342,6 +459,49 @@ describe("undoCompletedMatchResult", () => {
       data: {
         matchesPlayed: { decrement: 1 },
       },
+    });
+  });
+
+  it("reverses collab Elo from the stored ledger", async () => {
+    const baseTx = createUndoTransactionMock();
+    const matchEloAdjustmentFindMany = vi.fn().mockResolvedValue([
+      { communityId: "community-a", userId: "a1", delta: 14 },
+      { communityId: "community-b", userId: "b1", delta: -16 },
+    ]);
+    const tx = {
+      ...baseTx,
+      matchEloAdjustment: {
+        findMany: matchEloAdjustmentFindMany,
+      },
+    };
+    mocks.transaction.mockImplementation((callback: (tx: unknown) => unknown) =>
+      callback(tx)
+    );
+
+    await undoCompletedMatchResult({ matchId: "match-1" });
+
+    expect(matchEloAdjustmentFindMany).toHaveBeenCalledWith({
+      where: { matchId: "match-1" },
+      select: {
+        communityId: true,
+        userId: true,
+        delta: true,
+      },
+    });
+    expect(tx.communityMember.updateMany).toHaveBeenCalledTimes(2);
+    expect(tx.communityMember.updateMany).toHaveBeenNthCalledWith(1, {
+      where: {
+        communityId: "community-a",
+        userId: "a1",
+      },
+      data: { elo: { increment: -14 } },
+    });
+    expect(tx.communityMember.updateMany).toHaveBeenNthCalledWith(2, {
+      where: {
+        communityId: "community-b",
+        userId: "b1",
+      },
+      data: { elo: { increment: 16 } },
     });
   });
 

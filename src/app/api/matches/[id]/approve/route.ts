@@ -5,6 +5,7 @@ import { canApprovePendingSubmission } from "@/lib/matchApprovalRules";
 import { MATCH_SCORE_ERROR_MESSAGE, isValidMatchScore } from "@/lib/matchRules";
 import { prisma } from "@/lib/prisma";
 import { canQuickAccessCommunity, isQuickAccessSession } from "@/lib/quickAccess";
+import { getSessionAdminMembership } from "@/lib/sessionCollab";
 import { MatchStatus } from "@/types/enums";
 import { reconcileSessionQueueAfterCourtChange } from "../../_lib/reconcileSessionQueue";
 import { logError, safeErrorResponse } from "@/lib/errors";
@@ -60,21 +61,13 @@ export async function POST(
     }
 
     // Check if admin or one of the players
-    let isCommunityAdmin = false;
-    if (match.session.communityId) {
-      const membership = await prisma.communityMember.findUnique({
-        where: {
-          communityId_userId: {
-            communityId: match.session.communityId,
-            userId: session.user.id,
-          },
-        },
-        select: { role: true },
-      });
-      isCommunityAdmin = membership?.role === "ADMIN";
-    }
+    const adminMembership = await getSessionAdminMembership(prisma, {
+      session: { id: match.sessionId, communityId: match.session.communityId },
+      userId: session.user.id,
+      acceptedOnly: true,
+    });
     const isAdmin =
-      !isQuickAccessSession(session) && (!!session.user.isAdmin || isCommunityAdmin);
+      !isQuickAccessSession(session) && (!!session.user.isAdmin || !!adminMembership);
     const isPlayer = [
       match.team1User1Id,
       match.team1User2Id,

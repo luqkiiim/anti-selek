@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { hasQueuedMatchUser } from "@/lib/sessionQueue";
 import { deleteEphemeralGuestUsers } from "@/lib/sessionLifecycle";
+import { getSessionAdminMembership } from "@/lib/sessionCollab";
 import { MatchStatus, SessionStatus } from "@/types/enums";
 import { logError, safeErrorResponse } from "@/lib/errors";
 import { rateLimit, checkInvalidTargetRateLimit, invalidTargetResponse } from "@/lib/rateLimit";
@@ -63,21 +64,13 @@ export async function PATCH(
       );
     }
 
-    let isCommunityAdmin = false;
-    if (sessionData.communityId) {
-      const membership = await prisma.communityMember.findUnique({
-        where: {
-          communityId_userId: {
-            communityId: sessionData.communityId,
-            userId: session.user.id,
-          },
-        },
-        select: { role: true },
-      });
-      isCommunityAdmin = membership?.role === "ADMIN";
-    }
+    const adminMembership = await getSessionAdminMembership(prisma, {
+      session: sessionData,
+      userId: session.user.id,
+      acceptedOnly: true,
+    });
 
-    if (!session.user.isAdmin && !isCommunityAdmin) {
+    if (!session.user.isAdmin && !adminMembership) {
       return invalidTargetResponse(request, "api:sessions:code:players:userId");
     }
 
@@ -167,21 +160,13 @@ export async function DELETE(
       );
     }
 
-    let isCommunityAdmin = false;
-    if (sessionData.communityId) {
-      const membership = await prisma.communityMember.findUnique({
-        where: {
-          communityId_userId: {
-            communityId: sessionData.communityId,
-            userId: session.user.id,
-          },
-        },
-        select: { role: true },
-      });
-      isCommunityAdmin = membership?.role === "ADMIN";
-    }
+    const adminMembership = await getSessionAdminMembership(prisma, {
+      session: sessionData,
+      userId: session.user.id,
+      acceptedOnly: true,
+    });
 
-    if (!session.user.isAdmin && !isCommunityAdmin) {
+    if (!session.user.isAdmin && !adminMembership) {
       return invalidTargetResponse(_request, "api:sessions:code:players:userId");
     }
 

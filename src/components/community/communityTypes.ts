@@ -42,6 +42,7 @@ export interface CommunityPageMember {
   losses: number;
   isClaimed: boolean;
   role: "ADMIN" | "MEMBER";
+  communityBadges?: Array<{ id: string; name: string; elo: number }>;
 }
 
 export interface CommunityPageSession {
@@ -55,6 +56,19 @@ export interface CommunityPageSession {
   createdAt: string;
   endedAt?: string | null;
   players: { user: { id: string; name: string } }[];
+  collabStatus?: "PENDING" | "ACCEPTED" | "REJECTED";
+  communities?: Array<{
+    id: string;
+    name: string;
+    role: "HOST" | "PARTNER";
+    status: "PENDING" | "ACCEPTED" | "REJECTED";
+  }>;
+}
+
+export interface CommunityCollabCandidate {
+  id: string;
+  name: string;
+  membersCount: number;
 }
 
 export interface CommunityGuestConfig {

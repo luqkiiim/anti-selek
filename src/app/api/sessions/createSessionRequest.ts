@@ -39,6 +39,7 @@ interface CreateSessionBody {
   playerConfigs?: unknown;
   guestConfigs?: unknown;
   communityId?: unknown;
+  partnerCommunityId?: unknown;
   courtCount?: unknown;
   poolsEnabled?: unknown;
   poolAName?: unknown;
@@ -210,6 +211,7 @@ export function parseCreateSessionRequest(
     playerConfigs = [],
     guestConfigs = [],
     communityId,
+    partnerCommunityId,
     courtCount = 3,
     isTest = false,
     autoQueueEnabled = true,
@@ -223,6 +225,15 @@ export function parseCreateSessionRequest(
   }
   if (typeof communityId !== "string" || !communityId) {
     throw new SessionRouteError("Community is required", 400);
+  }
+  if (
+    partnerCommunityId !== undefined &&
+    partnerCommunityId !== null &&
+    (typeof partnerCommunityId !== "string" ||
+      partnerCommunityId.length === 0 ||
+      partnerCommunityId === communityId)
+  ) {
+    throw new SessionRouteError("Invalid partner community", 400);
   }
   if (
     !Number.isInteger(courtCount) ||
@@ -273,6 +284,8 @@ export function parseCreateSessionRequest(
     type: type as SessionType,
     mode: mode as SessionMode,
     communityId,
+    partnerCommunityId:
+      typeof partnerCommunityId === "string" ? partnerCommunityId : null,
     isTest: isTest === true,
     courtCount: courtCount as number,
     requestedPlayerIds,

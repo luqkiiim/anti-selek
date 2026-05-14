@@ -2,6 +2,7 @@
 
 import type {
   CommunityClaimRequest,
+  CommunityCollabCandidate,
   CommunityPageCommunity,
   CommunityPageMember,
   CommunityPagePulse,
@@ -43,6 +44,9 @@ export async function fetchCommunityPageSnapshot(communityId: string) {
       : null,
     claimRequests: Array.isArray(snapshotData.claimRequests)
       ? (snapshotData.claimRequests as CommunityClaimRequest[])
+      : [],
+    collabCandidates: Array.isArray(snapshotData.collabCandidates)
+      ? (snapshotData.collabCandidates as CommunityCollabCandidate[])
       : [],
   };
 }

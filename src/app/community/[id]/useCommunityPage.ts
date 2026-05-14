@@ -82,7 +82,7 @@ export function useCommunityPage() {
   const leaderboardPreview = leaderboard.slice(0, 5);
   const canManageCommunity =
     (!!data.community && data.community.role === "ADMIN") || !!data.user?.isAdmin;
-  const selectablePlayers = useMemo(
+  const baseSelectablePlayers = useMemo(
     () =>
       data.communityMembers
         .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" })),
@@ -125,7 +125,8 @@ export function useCommunityPage() {
   const hostSetup = useCommunityHostSetup({
     communityId,
     router,
-    selectablePlayers,
+    selectablePlayers: baseSelectablePlayers,
+    collabCandidates: data.collabCandidates,
     mixedModeLabel,
     setError: data.setError,
     setSuccess: data.setSuccess,
@@ -133,10 +134,10 @@ export function useCommunityPage() {
 
   const filteredSelectablePlayers = useMemo(
     () =>
-      selectablePlayers.filter((member) =>
+      hostSetup.selectablePlayers.filter((member) =>
         member.name.toLowerCase().includes(hostSetup.playerSearch.toLowerCase())
       ),
-    [hostSetup.playerSearch, selectablePlayers]
+    [hostSetup.playerSearch, hostSetup.selectablePlayers]
   );
 
   const actions = useCommunityPageActions({
@@ -161,7 +162,6 @@ export function useCommunityPage() {
     leaderboardPreview,
     canManageCommunity,
     testSessions,
-    selectablePlayers,
     filteredSelectablePlayers,
     currentUserClaimEligibility,
     pendingClaimByTargetId,

@@ -147,6 +147,11 @@ export default function CommunityAdminPage() {
     isCreatePlayerOpen,
     name,
     setName,
+    linkSearch,
+    setLinkSearch,
+    linkCandidates,
+    loadingLinkCandidates,
+    linkingPlayerId,
     newPlayerGender,
     setNewPlayerGender,
     newPlayerMixedSideOverride,
@@ -192,6 +197,7 @@ export default function CommunityAdminPage() {
     openPasswordResetModal,
     closePasswordResetModal,
     handleAddPlayer,
+    handleLinkExistingPlayer,
     handleSavePlayerName,
     handleSavePlayerRating,
     handleRemovePlayer,
@@ -386,10 +392,16 @@ export default function CommunityAdminPage() {
       <CreateCommunityPlayerModal
         open={isCreatePlayerOpen}
         name={name}
+        linkSearch={linkSearch}
+        linkCandidates={linkCandidates}
+        loadingLinkCandidates={loadingLinkCandidates}
+        linkingPlayerId={linkingPlayerId}
         newPlayerGender={newPlayerGender}
         newPlayerMixedSideOverride={newPlayerMixedSideOverride}
         newPlayerStatus={newPlayerStatus}
         onNameChange={setName}
+        onLinkSearchChange={setLinkSearch}
+        onLinkExistingPlayer={handleLinkExistingPlayer}
         onNewPlayerGenderChange={(value) => {
           setNewPlayerGender(value);
           setNewPlayerMixedSideOverride(null);

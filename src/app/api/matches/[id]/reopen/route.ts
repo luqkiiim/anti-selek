@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { getSessionAdminMembership } from "@/lib/sessionCollab";
 import { MatchStatus } from "@/types/enums";
 import { logError, safeErrorResponse } from "@/lib/errors";
 import { rateLimit, checkInvalidTargetRateLimit, invalidTargetResponse } from "@/lib/rateLimit";
@@ -34,6 +35,7 @@ export async function POST(
       where: { id },
       select: {
         id: true,
+        sessionId: true,
         status: true,
         session: {
           select: {
@@ -51,21 +53,13 @@ export async function POST(
       return NextResponse.json({ error: "Match is not pending approval" }, { status: 400 });
     }
 
-    let isCommunityAdmin = false;
-    if (match.session.communityId) {
-      const membership = await prisma.communityMember.findUnique({
-        where: {
-          communityId_userId: {
-            communityId: match.session.communityId,
-            userId: session.user.id,
-          },
-        },
-        select: { role: true },
-      });
-      isCommunityAdmin = membership?.role === "ADMIN";
-    }
+    const adminMembership = await getSessionAdminMembership(prisma, {
+      session: { id: match.sessionId, communityId: match.session.communityId },
+      userId: session.user.id,
+      acceptedOnly: true,
+    });
 
-    const isAdmin = !!session.user.isAdmin || isCommunityAdmin;
+    const isAdmin = !!session.user.isAdmin || !!adminMembership;
     if (!isAdmin) {
       return NextResponse.json({ error: "Only admins can reopen score entry" }, { status: 403 });
     }

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type {
   CommunityClaimRequest,
+  CommunityCollabCandidate,
   CommunityPageCommunity,
   CommunityPageMember,
   CommunityPagePulse,
@@ -35,6 +36,9 @@ export function useCommunityPageData({
   const [claimRequests, setClaimRequests] = useState<CommunityClaimRequest[]>(
     []
   );
+  const [collabCandidates, setCollabCandidates] = useState<
+    CommunityCollabCandidate[]
+  >([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -49,6 +53,7 @@ export function useCommunityPageData({
     setSessions(snapshot.sessions);
     setCommunityPulse(snapshot.communityPulse);
     setClaimRequests(snapshot.claimRequests);
+    setCollabCandidates(snapshot.collabCandidates);
   }, [communityId]);
 
   useEffect(() => {
@@ -80,6 +85,7 @@ export function useCommunityPageData({
     sessions,
     communityPulse,
     claimRequests,
+    collabCandidates,
     loading,
     error,
     setError,

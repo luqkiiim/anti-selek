@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { UserPlus, Users } from "lucide-react";
+import type { CommunityCollabCandidate } from "./communityTypes";
 import { SessionMode, SessionPool, SessionType } from "@/types/enums";
 
 interface HostTournamentPanelProps {
@@ -15,6 +16,10 @@ interface HostTournamentPanelProps {
   onIsTestSessionChange: (value: boolean) => void;
   autoQueueEnabled: boolean;
   onAutoQueueEnabledChange: (value: boolean) => void;
+  partnerCommunityId: string;
+  onPartnerCommunityIdChange: (value: string) => void;
+  collabCandidates: CommunityCollabCandidate[];
+  loadingCollabRoster: boolean;
   openModeLabel: string;
   mixedModeLabel: string;
   courtCount: number;
@@ -222,6 +227,10 @@ export function HostTournamentPanel({
   onIsTestSessionChange,
   autoQueueEnabled,
   onAutoQueueEnabledChange,
+  partnerCommunityId,
+  onPartnerCommunityIdChange,
+  collabCandidates,
+  loadingCollabRoster,
   openModeLabel,
   mixedModeLabel,
   courtCount,
@@ -352,6 +361,44 @@ export function HostTournamentPanel({
         </div>
 
         <div className="app-subcard space-y-3 p-3 sm:p-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+            <label className="block flex-1 space-y-1.5 text-sm font-medium text-gray-900">
+              <span>Collab community</span>
+              <select
+                value={partnerCommunityId}
+                onChange={(event) =>
+                  onPartnerCommunityIdChange(event.target.value)
+                }
+                className="field"
+              >
+                <option value="">None</option>
+                {collabCandidates.map((candidate) => (
+                  <option key={candidate.id} value={candidate.id}>
+                    {candidate.name} ({candidate.membersCount})
+                  </option>
+                ))}
+              </select>
+            </label>
+            {partnerCommunityId ? (
+              <span className="app-chip app-chip-warning shrink-0">
+                Approval required
+              </span>
+            ) : null}
+          </div>
+          {partnerCommunityId ? (
+            <p className="text-xs text-gray-500">
+              The partner community must approve this tournament before it can
+              start. The player picker uses explicit player IDs and de-duplicates
+              shared members.
+            </p>
+          ) : (
+            <p className="text-xs text-gray-500">
+              Leave empty for a regular community tournament.
+            </p>
+          )}
+        </div>
+
+        <div className="app-subcard space-y-3 p-3 sm:p-4">
           <div className="flex items-center justify-between gap-3">
             <div>
               <p className="text-sm font-semibold text-gray-900">Session type</p>
@@ -453,7 +500,9 @@ export function HostTournamentPanel({
           <RosterRow
             label="Players"
             countLabel={
-              poolsEnabled
+              loadingCollabRoster
+                ? "Loading collab roster"
+                : poolsEnabled
                 ? `${selectedPlayerCount} selected across ${poolAName.trim() || "Open"} and ${poolBName.trim() || "Regular"}`
                 : `${selectedPlayerCount} selected`
             }

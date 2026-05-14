@@ -4,6 +4,11 @@ import {
   type SideSpecificCourtCreateType,
 } from "@/lib/courtCreate";
 import { getCommunityEloByUserId } from "@/lib/communityElo";
+import { prisma } from "@/lib/prisma";
+import {
+  getAcceptedSessionCommunityIds,
+  getPlayerCommunityBadges,
+} from "@/lib/sessionCollab";
 import { getSessionModeLabel } from "@/lib/sessionModeLabels";
 import { getQueuedMatchUserIds } from "@/lib/sessionQueue";
 import { getEffectiveMixedSide } from "@/lib/mixedSide";
@@ -310,15 +315,33 @@ export async function buildMatchmakingState(
       busyPlayerIds.add(userId);
     }
   }
-  const communityEloByUserId =
+  const sessionCommunityIds =
     sessionData.type === SessionType.ELO &&
     sessionData.communityId &&
     sessionData.players.length > 0
-      ? await getCommunityEloByUserId(
-          sessionData.communityId,
-          sessionData.players.map((player) => player.userId)
-        )
-      : new Map<string, number>();
+      ? await getAcceptedSessionCommunityIds(prisma, sessionData)
+      : [];
+  const playerIds = sessionData.players.map((player) => player.userId);
+  const hostCommunityId = sessionData.communityId;
+  let usesLegacySingleCommunityElo = false;
+  let legacyCommunityEloByUserId = new Map<string, number>();
+
+  if (
+    typeof hostCommunityId === "string" &&
+    sessionCommunityIds.length === 1 &&
+    sessionCommunityIds[0] === hostCommunityId
+  ) {
+    usesLegacySingleCommunityElo = true;
+    legacyCommunityEloByUserId = await getCommunityEloByUserId(
+      hostCommunityId,
+      playerIds
+    );
+  }
+
+  const communityBadgesByUserId =
+    sessionCommunityIds.length > 0 && !usesLegacySingleCommunityElo
+      ? await getPlayerCommunityBadges(prisma, sessionCommunityIds, playerIds)
+      : new Map<string, Array<{ id: string; name: string; elo: number }>>();
   const pointDiffByUserId = new Map<string, number>();
 
   for (const match of sessionData.matches) {
@@ -356,7 +379,12 @@ export async function buildMatchmakingState(
         elo: getPlayerBalanceInput({
           sessionType: sessionData.type as SessionType,
           sessionPoints: player.sessionPoints,
-          communityElo: communityEloByUserId.get(player.userId),
+        communityElo:
+          legacyCommunityEloByUserId.get(player.userId) ??
+          communityBadgesByUserId
+            .get(player.userId)
+            ?.find((badge) => badge.id === sessionData.communityId)?.elo ??
+          communityBadgesByUserId.get(player.userId)?.[0]?.elo,
           userElo: player.user.elo,
         }),
         pointDiff: pointDiffByUserId.get(player.userId) ?? 0,

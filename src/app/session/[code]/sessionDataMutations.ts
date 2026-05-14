@@ -28,6 +28,11 @@ export interface MatchPayload {
   team2Score?: number | null;
   team1EloChange?: number | null;
   team2EloChange?: number | null;
+  playerEloChanges?: Array<{
+    userId: string;
+    delta: number;
+    communityId?: string | null;
+  }>;
   completedAt?: string | Date | null;
   scoreSubmittedByUserId?: string | null;
   team1User1Id?: string;
@@ -218,6 +223,12 @@ function updatePlayersForCompletedMatch(
   const team2StandingPoints = getStandingPointsForTeam(payload.winnerTeam, 2);
   const awardsStandingPoints =
     sessionType !== SessionType.LADDER && sessionType !== SessionType.RACE;
+  const playerEloChangeByUserId = new Map(
+    (payload.playerEloChanges ?? []).map((change) => [
+      change.userId,
+      change.delta,
+    ])
+  );
 
   return players.map((player) => {
     if (team1Ids.has(player.userId)) {
@@ -231,7 +242,9 @@ function updatePlayersForCompletedMatch(
           elo:
             player.isGuest || isTestSession
               ? player.user.elo
-              : player.user.elo + payload.team1EloChange!,
+              : player.user.elo +
+                (playerEloChangeByUserId.get(player.userId) ??
+                  payload.team1EloChange!),
         },
       };
     }
@@ -247,7 +260,9 @@ function updatePlayersForCompletedMatch(
           elo:
             player.isGuest || isTestSession
               ? player.user.elo
-              : player.user.elo + payload.team2EloChange!,
+              : player.user.elo +
+                (playerEloChangeByUserId.get(player.userId) ??
+                  payload.team2EloChange!),
         },
       };
     }

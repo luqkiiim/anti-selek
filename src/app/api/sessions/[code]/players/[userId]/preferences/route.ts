@@ -8,6 +8,7 @@ import {
 } from "@/lib/mixedSide";
 import { isValidSessionPool } from "@/lib/sessionPools";
 import { prisma } from "@/lib/prisma";
+import { getSessionAdminMembership } from "@/lib/sessionCollab";
 import { getSessionModeLabel } from "@/lib/sessionModeLabels";
 import { PlayerGender, SessionMode, SessionPool, SessionStatus } from "@/types/enums";
 import { logError, safeErrorResponse } from "@/lib/errors";
@@ -88,21 +89,13 @@ export async function PATCH(
       return NextResponse.json({ error: "Session already completed" }, { status: 400 });
     }
 
-    let isCommunityAdmin = false;
-    if (sessionData.communityId) {
-      const membership = await prisma.communityMember.findUnique({
-        where: {
-          communityId_userId: {
-            communityId: sessionData.communityId,
-            userId: session.user.id,
-          },
-        },
-        select: { role: true },
-      });
-      isCommunityAdmin = membership?.role === "ADMIN";
-    }
+    const adminMembership = await getSessionAdminMembership(prisma, {
+      session: sessionData,
+      userId: session.user.id,
+      acceptedOnly: true,
+    });
 
-    if (!session.user.isAdmin && !isCommunityAdmin) {
+    if (!session.user.isAdmin && !adminMembership) {
       return NextResponse.json({ error: "Only admins can update preferences" }, { status: 403 });
     }
 

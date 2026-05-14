@@ -2,6 +2,12 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getCommunityEloByUserId, withCommunityElo } from "@/lib/communityElo";
+import {
+  getPlayerCommunityBadges,
+  getSessionAdminMembership,
+  getSessionMembership,
+  withPlayerCommunityBadges,
+} from "@/lib/sessionCollab";
 import { MatchStatus } from "@/types/enums";
 import { getQueuedMatchUserIds } from "@/lib/sessionQueue";
 import {
@@ -17,27 +23,6 @@ export const dynamic = "force-dynamic";
 
 interface UpdateSessionSettingsRequest {
   autoQueueEnabled?: unknown;
-}
-
-async function getCommunityRole(
-  communityId: string | null | undefined,
-  userId: string
-) {
-  if (!communityId) {
-    return null;
-  }
-
-  const membership = await prisma.communityMember.findUnique({
-    where: {
-      communityId_userId: {
-        communityId,
-        userId,
-      },
-    },
-    select: { role: true },
-  });
-
-  return membership?.role ?? null;
 }
 
 async function getSessionRoute(
@@ -78,6 +63,11 @@ async function getSessionRoute(
               team2User2: { select: { id: true, name: true } },
             },
           },
+        },
+      },
+      sessionCommunities: {
+        include: {
+          community: { select: { id: true, name: true } },
         },
       },
       players: {
@@ -121,10 +111,17 @@ async function getSessionRoute(
     return invalidTargetResponse(request, "api:sessions:code");
   }
 
-  const communityRole = await getCommunityRole(
-    sessionData.communityId,
-    session.user.id
-  );
+  const membership = await getSessionMembership(prisma, {
+    session: sessionData,
+    userId: session.user.id,
+    acceptedOnly: false,
+  });
+  const adminMembership = await getSessionAdminMembership(prisma, {
+    session: sessionData,
+    userId: session.user.id,
+    acceptedOnly: false,
+  });
+  const communityRole = membership?.role ?? null;
 
   const isSessionPlayer = sessionData.players.some((p) => p.userId === session.user.id);
   const isQuickAccess = isQuickAccessSession(session);
@@ -134,16 +131,28 @@ async function getSessionRoute(
     return invalidTargetResponse(request, "api:sessions:code");
   }
 
+  const linkedCommunityIds = Array.from(
+    new Set(
+      [
+        ...(sessionData.communityId ? [sessionData.communityId] : []),
+        ...sessionData.sessionCommunities.map((link) => link.communityId),
+      ].filter(Boolean)
+    )
+  );
+  const playerIds = sessionData.players.map((p) => p.userId);
   const players =
-    sessionData.communityId && sessionData.players.length > 0
-      ? withCommunityElo(
+    linkedCommunityIds.length > 1 && sessionData.players.length > 0
+      ? withPlayerCommunityBadges(
           sessionData.players,
-          await getCommunityEloByUserId(
-            sessionData.communityId,
-            sessionData.players.map((p) => p.userId)
-          )
+          await getPlayerCommunityBadges(prisma, linkedCommunityIds, playerIds),
+          sessionData.communityId
         )
-      : sessionData.players;
+      : sessionData.communityId && sessionData.players.length > 0
+        ? withCommunityElo(
+            sessionData.players,
+            await getCommunityEloByUserId(sessionData.communityId, playerIds)
+          )
+        : sessionData.players;
 
   const queuedMatch = sessionData.queuedMatch
     ? (() => {
@@ -179,7 +188,13 @@ async function getSessionRoute(
     queuedMatch,
     viewerCommunityRole: communityRole,
     viewerCanManage:
-      !isQuickAccess && (session.user.isAdmin || communityRole === "ADMIN"),
+      !isQuickAccess && (session.user.isAdmin || !!adminMembership),
+    communities: sessionData.sessionCommunities.map((link) => ({
+      id: link.community.id,
+      name: link.community.name,
+      role: link.role,
+      status: link.status,
+    })),
   });
 }
 
@@ -244,11 +259,12 @@ export async function PATCH(
       return invalidTargetResponse(request, "api:sessions:code");
     }
 
-    const communityRole = await getCommunityRole(
-      sessionData.communityId,
-      session.user.id
-    );
-    const canManage = session.user.isAdmin || communityRole === "ADMIN";
+    const adminMembership = await getSessionAdminMembership(prisma, {
+      session: sessionData,
+      userId: session.user.id,
+      acceptedOnly: false,
+    });
+    const canManage = session.user.isAdmin || !!adminMembership;
     if (!canManage) {
       return invalidTargetResponse(request, "api:sessions:code");
     }

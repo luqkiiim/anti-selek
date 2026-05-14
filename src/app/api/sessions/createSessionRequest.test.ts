@@ -165,6 +165,13 @@ describe("parseCreateSessionRequest", () => {
         400
       )
     );
+    expect(() =>
+      parseCreateSessionRequest({
+        name: "Session",
+        communityId: "community-1",
+        partnerCommunityId: "community-1",
+      })
+    ).toThrowError(new SessionRouteError("Invalid partner community", 400));
   });
 
   it("rejects invalid session modes", () => {
@@ -213,6 +220,16 @@ describe("parseCreateSessionRequest", () => {
     });
 
     expect(parsed.autoQueueEnabled).toBe(false);
+  });
+
+  it("accepts a distinct partner community for collab sessions", () => {
+    const parsed = parseCreateSessionRequest({
+      name: "Collab Night",
+      communityId: "community-1",
+      partnerCommunityId: "community-2",
+    });
+
+    expect(parsed.partnerCommunityId).toBe("community-2");
   });
 
   it("rejects invalid session types", () => {

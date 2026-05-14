@@ -1,5 +1,6 @@
 import { reconcileSessionQueueAfterCourtChange } from "@/app/api/matches/_lib/reconcileSessionQueue";
 import { prisma } from "@/lib/prisma";
+import { getSessionAdminMembership } from "@/lib/sessionCollab";
 import { MatchStatus, SessionStatus } from "@/types/enums";
 import {
   GenerateMatchError,
@@ -11,27 +12,20 @@ import {
 } from "./shared";
 
 async function ensureManagePermission(
+  sessionId: string,
   communityId: string | null | undefined,
   userId: string,
   requesterIsAdmin: boolean
 ) {
   if (requesterIsAdmin) return;
 
-  let isCommunityAdmin = false;
-  if (communityId) {
-    const membership = await prisma.communityMember.findUnique({
-      where: {
-        communityId_userId: {
-          communityId,
-          userId,
-        },
-      },
-      select: { role: true },
-    });
-    isCommunityAdmin = membership?.role === "ADMIN";
-  }
+  const membership = await getSessionAdminMembership(prisma, {
+    session: { id: sessionId, communityId },
+    userId,
+    acceptedOnly: true,
+  });
 
-  if (!isCommunityAdmin) {
+  if (!membership) {
     throw new GenerateMatchError(403, "Unauthorized");
   }
 }
@@ -59,6 +53,7 @@ export async function loadGenerateMatchContext({
   }
 
   await ensureManagePermission(
+    sessionData.id,
     sessionData.communityId,
     userId,
     requesterIsAdmin

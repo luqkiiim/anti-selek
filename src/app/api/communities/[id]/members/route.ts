@@ -127,7 +127,19 @@ export async function GET(
     const completedMatches = await prisma.match.findMany({
       where: {
         status: "COMPLETED",
-        session: { communityId: id },
+        session: {
+          OR: [
+            { communityId: id },
+            {
+              sessionCommunities: {
+                some: {
+                  communityId: id,
+                  status: "ACCEPTED",
+                },
+              },
+            },
+          ],
+        },
       },
       select: {
         winnerTeam: true,

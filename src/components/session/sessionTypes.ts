@@ -23,6 +23,7 @@ export interface Player {
     name: string;
     elo: number;
   };
+  communityBadges?: Array<{ id: string; name: string; elo: number }>;
 }
 
 export interface Match {
@@ -99,6 +100,12 @@ export interface SessionData {
   crossoverMissThreshold: number;
   viewerCanManage?: boolean;
   viewerCommunityRole?: string | null;
+  communities?: Array<{
+    id: string;
+    name: string;
+    role: string;
+    status: string;
+  }>;
   courts: Court[];
   players: Player[];
   matches?: CompletedMatchInfo[];

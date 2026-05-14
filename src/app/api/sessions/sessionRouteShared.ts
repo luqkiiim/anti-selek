@@ -48,6 +48,7 @@ export interface ParsedCreateSessionRequest {
   type: SessionType;
   mode: SessionMode;
   communityId: string;
+  partnerCommunityId?: string | null;
   isTest: boolean;
   courtCount: number;
   requestedPlayerIds: string[];

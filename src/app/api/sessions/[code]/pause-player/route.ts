@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { calculateNoCatchUpMatchmakingCredit } from "@/lib/matchmaking/matchmakingCredit";
 import { prisma } from "@/lib/prisma";
+import { getSessionAdminMembership } from "@/lib/sessionCollab";
 import { hasQueuedMatchUser } from "@/lib/sessionQueue";
 import { tryRebuildQueuedMatchForCode } from "../queue-match/shared";
 import { logError, safeErrorResponse } from "@/lib/errors";
@@ -51,22 +52,14 @@ export async function POST(
       return invalidTargetResponse(request, "api:sessions:code:pause-player");
     }
 
-    let isCommunityAdmin = false;
-    if (sessionData.communityId) {
-      const membership = await prisma.communityMember.findUnique({
-        where: {
-          communityId_userId: {
-            communityId: sessionData.communityId,
-            userId: session.user.id,
-          },
-        },
-        select: { role: true },
-      });
-      isCommunityAdmin = membership?.role === "ADMIN";
-    }
+    const adminMembership = await getSessionAdminMembership(prisma, {
+      session: sessionData,
+      userId: session.user.id,
+      acceptedOnly: true,
+    });
 
     // Check if the requester is a manager or the player themselves
-    if (!session.user.isAdmin && !isCommunityAdmin && session.user.id !== userId) {
+    if (!session.user.isAdmin && !adminMembership && session.user.id !== userId) {
       return invalidTargetResponse(request, "api:sessions:code:pause-player");
     }
 

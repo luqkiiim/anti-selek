@@ -2,6 +2,12 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getCommunityEloByUserId, withCommunityElo } from "@/lib/communityElo";
+import {
+  getAcceptedSessionCommunityIds,
+  getPlayerCommunityBadges,
+  getSessionAdminMembership,
+  withPlayerCommunityBadges,
+} from "@/lib/sessionCollab";
 import { MatchStatus, SessionStatus } from "@/types/enums";
 import { logError, safeErrorResponse } from "@/lib/errors";
 import { rateLimit, checkInvalidTargetRateLimit, invalidTargetResponse } from "@/lib/rateLimit";
@@ -43,20 +49,12 @@ export async function POST(
       return invalidTargetResponse(_request, "api:sessions:code:end");
     }
 
-    let isCommunityAdmin = false;
-    if (sessionData.communityId) {
-      const membership = await prisma.communityMember.findUnique({
-        where: {
-          communityId_userId: {
-            communityId: sessionData.communityId,
-            userId: session.user.id,
-          },
-        },
-        select: { role: true },
-      });
-      isCommunityAdmin = membership?.role === "ADMIN";
-    }
-    if (!session.user.isAdmin && !isCommunityAdmin) {
+    const adminMembership = await getSessionAdminMembership(prisma, {
+      session: sessionData,
+      userId: session.user.id,
+      acceptedOnly: true,
+    });
+    if (!session.user.isAdmin && !adminMembership) {
       return NextResponse.json({ error: "Admin only" }, { status: 403 });
     }
 
@@ -96,16 +94,24 @@ export async function POST(
       });
     });
 
+    const linkedCommunityIds = await getAcceptedSessionCommunityIds(
+      prisma,
+      updated
+    );
+    const playerIds = updated.players.map((p) => p.userId);
     const players =
-      updated.communityId && updated.players.length > 0
-        ? withCommunityElo(
+      linkedCommunityIds.length > 1 && updated.players.length > 0
+        ? withPlayerCommunityBadges(
             updated.players,
-            await getCommunityEloByUserId(
-              updated.communityId,
-              updated.players.map((p) => p.userId)
-            )
+            await getPlayerCommunityBadges(prisma, linkedCommunityIds, playerIds),
+            updated.communityId
           )
-        : updated.players;
+        : updated.communityId && updated.players.length > 0
+          ? withCommunityElo(
+              updated.players,
+              await getCommunityEloByUserId(updated.communityId, playerIds)
+            )
+          : updated.players;
 
     return NextResponse.json({ ...updated, players, queuedMatch: null });
   } catch (error) {
