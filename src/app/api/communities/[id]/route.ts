@@ -234,23 +234,6 @@ export async function GET(
       }),
     ]);
 
-    const canManageCommunity = membership?.role === "ADMIN" || viewerIsAdmin;
-    const collabCandidates = canManageCommunity
-      ? await prisma.community.findMany({
-          where: { NOT: { id } },
-          select: {
-            id: true,
-            name: true,
-            _count: {
-              select: {
-                members: true,
-              },
-            },
-          },
-          orderBy: { name: "asc" },
-        })
-      : [];
-
     const statsByUserId = new Map<string, { wins: number; losses: number }>();
     for (const member of members) {
       statsByUserId.set(member.user.id, { wins: 0, losses: 0 });
@@ -352,11 +335,6 @@ export async function GET(
       sessions,
       communityPulse,
       claimRequests: claimRequests.map(toClaimRequestResponse),
-      collabCandidates: collabCandidates.map((candidate) => ({
-        id: candidate.id,
-        name: candidate.name,
-        membersCount: candidate._count.members,
-      })),
     });
   } catch (error) {
     logError("Get community snapshot error", error);

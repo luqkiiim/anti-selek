@@ -126,7 +126,6 @@ export function useCommunityPage() {
     communityId,
     router,
     selectablePlayers: baseSelectablePlayers,
-    collabCandidates: data.collabCandidates,
     mixedModeLabel,
     setError: data.setError,
     setSuccess: data.setSuccess,

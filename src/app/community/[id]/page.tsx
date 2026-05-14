@@ -114,8 +114,13 @@ export default function CommunityPage() {
     autoQueueEnabled,
     setAutoQueueEnabled,
     partnerCommunityId,
-    setPartnerCommunityId,
+    partnerCommunitySearch,
+    setPartnerCommunitySearch,
     collabCandidates,
+    selectedPartnerCommunity,
+    loadingCollabCandidates,
+    selectPartnerCommunity,
+    clearPartnerCommunity,
     loadingCollabRoster,
     courtCount,
     setCourtCount,
@@ -722,8 +727,13 @@ export default function CommunityPage() {
       autoQueueEnabled={autoQueueEnabled}
       onAutoQueueEnabledChange={setAutoQueueEnabled}
       partnerCommunityId={partnerCommunityId}
-      onPartnerCommunityIdChange={setPartnerCommunityId}
+      partnerCommunitySearch={partnerCommunitySearch}
+      onPartnerCommunitySearchChange={setPartnerCommunitySearch}
       collabCandidates={collabCandidates}
+      selectedPartnerCommunity={selectedPartnerCommunity}
+      loadingCollabCandidates={loadingCollabCandidates}
+      onSelectPartnerCommunity={selectPartnerCommunity}
+      onClearPartnerCommunity={clearPartnerCommunity}
       loadingCollabRoster={loadingCollabRoster}
       openModeLabel={openModeLabel}
       mixedModeLabel={mixedModeLabel}

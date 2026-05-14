@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { UserPlus, Users } from "lucide-react";
+import { UserPlus, Users, X } from "lucide-react";
 import type { CommunityCollabCandidate } from "./communityTypes";
 import { SessionMode, SessionPool, SessionType } from "@/types/enums";
 
@@ -17,8 +17,13 @@ interface HostTournamentPanelProps {
   autoQueueEnabled: boolean;
   onAutoQueueEnabledChange: (value: boolean) => void;
   partnerCommunityId: string;
-  onPartnerCommunityIdChange: (value: string) => void;
+  partnerCommunitySearch: string;
+  onPartnerCommunitySearchChange: (value: string) => void;
   collabCandidates: CommunityCollabCandidate[];
+  selectedPartnerCommunity: CommunityCollabCandidate | null;
+  loadingCollabCandidates: boolean;
+  onSelectPartnerCommunity: (candidate: CommunityCollabCandidate) => void;
+  onClearPartnerCommunity: () => void;
   loadingCollabRoster: boolean;
   openModeLabel: string;
   mixedModeLabel: string;
@@ -228,8 +233,13 @@ export function HostTournamentPanel({
   autoQueueEnabled,
   onAutoQueueEnabledChange,
   partnerCommunityId,
-  onPartnerCommunityIdChange,
+  partnerCommunitySearch,
+  onPartnerCommunitySearchChange,
   collabCandidates,
+  selectedPartnerCommunity,
+  loadingCollabCandidates,
+  onSelectPartnerCommunity,
+  onClearPartnerCommunity,
   loadingCollabRoster,
   openModeLabel,
   mixedModeLabel,
@@ -257,6 +267,8 @@ export function HostTournamentPanel({
     null
   );
   const canCreateSession = Boolean(newSessionName.trim()) && !creatingSession;
+  const hasPartnerCommunity = Boolean(partnerCommunityId);
+  const trimmedPartnerSearch = partnerCommunitySearch.trim();
 
   useEffect(() => {
     if (!infoSessionType) return;
@@ -364,28 +376,81 @@ export function HostTournamentPanel({
           <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
             <label className="block flex-1 space-y-1.5 text-sm font-medium text-gray-900">
               <span>Collab community</span>
-              <select
-                value={partnerCommunityId}
-                onChange={(event) =>
-                  onPartnerCommunityIdChange(event.target.value)
-                }
-                className="field"
-              >
-                <option value="">None</option>
-                {collabCandidates.map((candidate) => (
-                  <option key={candidate.id} value={candidate.id}>
-                    {candidate.name} ({candidate.membersCount})
-                  </option>
-                ))}
-              </select>
+              {selectedPartnerCommunity ? (
+                <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold text-gray-900">
+                      {selectedPartnerCommunity.name}
+                    </p>
+                    <p className="text-xs font-semibold text-amber-700">
+                      {selectedPartnerCommunity.membersCount} members
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={onClearPartnerCommunity}
+                    className="app-button-secondary shrink-0 px-2.5 py-1.5 text-xs"
+                  >
+                    <X aria-hidden="true" size={14} />
+                    Clear
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <input
+                    type="search"
+                    value={partnerCommunitySearch}
+                    onChange={(event) =>
+                      onPartnerCommunitySearchChange(event.target.value)
+                    }
+                    placeholder="Search by community name"
+                    className="field"
+                  />
+                  {partnerCommunitySearch.length > 0 ? (
+                    <div className="rounded-xl border border-gray-200 bg-white p-2 shadow-sm">
+                      {trimmedPartnerSearch.length < 2 ? (
+                        <p className="px-2 py-1.5 text-xs font-semibold text-gray-500">
+                          Type at least 2 characters.
+                        </p>
+                      ) : loadingCollabCandidates ? (
+                        <p className="px-2 py-1.5 text-xs font-semibold text-gray-500">
+                          Searching communities...
+                        </p>
+                      ) : collabCandidates.length > 0 ? (
+                        <div className="grid gap-1">
+                          {collabCandidates.map((candidate) => (
+                            <button
+                              key={candidate.id}
+                              type="button"
+                              onClick={() => onSelectPartnerCommunity(candidate)}
+                              className="flex items-center justify-between gap-3 rounded-lg px-2 py-2 text-left transition hover:bg-blue-50"
+                            >
+                              <span className="min-w-0 truncate text-sm font-semibold text-gray-900">
+                                {candidate.name}
+                              </span>
+                              <span className="shrink-0 text-xs font-semibold text-gray-500">
+                                {candidate.membersCount} members
+                              </span>
+                            </button>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="px-2 py-1.5 text-xs font-semibold text-gray-500">
+                          No communities found.
+                        </p>
+                      )}
+                    </div>
+                  ) : null}
+                </div>
+              )}
             </label>
-            {partnerCommunityId ? (
+            {hasPartnerCommunity ? (
               <span className="app-chip app-chip-warning shrink-0">
                 Approval required
               </span>
             ) : null}
           </div>
-          {partnerCommunityId ? (
+          {hasPartnerCommunity ? (
             <p className="text-xs text-gray-500">
               The partner community must approve this tournament before it can
               start. The player picker uses explicit player IDs and de-duplicates

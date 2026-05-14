@@ -28,7 +28,6 @@ export function useCommunityHostSetup({
   communityId,
   router,
   selectablePlayers,
-  collabCandidates,
   mixedModeLabel,
   setError,
   setSuccess,
@@ -36,7 +35,6 @@ export function useCommunityHostSetup({
   communityId: string;
   router: CommunityPageRouter;
   selectablePlayers: CommunityPageMember[];
-  collabCandidates: CommunityCollabCandidate[];
   mixedModeLabel: string;
   setError: Dispatch<SetStateAction<string>>;
   setSuccess: Dispatch<SetStateAction<string>>;
@@ -56,6 +54,13 @@ export function useCommunityHostSetup({
   const [poolBName, setPoolBName] = useState("Regular");
   const [selectedPlayerIds, setSelectedPlayerIds] = useState<string[]>([]);
   const [partnerCommunityId, setPartnerCommunityId] = useState("");
+  const [partnerCommunitySearch, setPartnerCommunitySearch] = useState("");
+  const [collabCandidates, setCollabCandidates] = useState<
+    CommunityCollabCandidate[]
+  >([]);
+  const [selectedPartnerCommunity, setSelectedPartnerCommunity] =
+    useState<CommunityCollabCandidate | null>(null);
+  const [loadingCollabCandidates, setLoadingCollabCandidates] = useState(false);
   const [collabRoster, setCollabRoster] = useState<CommunityPageMember[]>([]);
   const [loadingCollabRoster, setLoadingCollabRoster] = useState(false);
   const [selectedPlayerPools, setSelectedPlayerPools] = useState<
@@ -88,6 +93,10 @@ export function useCommunityHostSetup({
     setPoolBName("Regular");
     setSelectedPlayerIds([]);
     setPartnerCommunityId("");
+    setPartnerCommunitySearch("");
+    setCollabCandidates([]);
+    setSelectedPartnerCommunity(null);
+    setLoadingCollabCandidates(false);
     setCollabRoster([]);
     setLoadingCollabRoster(false);
     setSelectedPlayerPools({});
@@ -100,6 +109,57 @@ export function useCommunityHostSetup({
     setShowPlayersModal(false);
     setShowGuestsModal(false);
   }, [communityId]);
+
+  useEffect(() => {
+    if (!communityId || partnerCommunityId) {
+      setCollabCandidates([]);
+      setLoadingCollabCandidates(false);
+      return;
+    }
+
+    const search = partnerCommunitySearch.trim();
+    if (search.length < 2) {
+      setCollabCandidates([]);
+      setLoadingCollabCandidates(false);
+      return;
+    }
+
+    let cancelled = false;
+    const timeout = window.setTimeout(() => {
+      void (async () => {
+        setLoadingCollabCandidates(true);
+        setError("");
+        try {
+          const res = await fetch(
+            `/api/communities/${communityId}/collab-candidates?search=${encodeURIComponent(search)}`
+          );
+          const data = await safeJson(res);
+          if (!res.ok) {
+            throw new Error(data.error || "Failed to search communities");
+          }
+          if (!cancelled) {
+            setCollabCandidates(Array.isArray(data) ? data : []);
+          }
+        } catch (err: unknown) {
+          if (!cancelled) {
+            setCollabCandidates([]);
+            setError(
+              err instanceof Error ? err.message : "Failed to search communities"
+            );
+          }
+        } finally {
+          if (!cancelled) {
+            setLoadingCollabCandidates(false);
+          }
+        }
+      })();
+    }, 250);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeout);
+    };
+  }, [communityId, partnerCommunityId, partnerCommunitySearch, setError]);
 
   useEffect(() => {
     if (!partnerCommunityId || !communityId) {
@@ -214,6 +274,10 @@ export function useCommunityHostSetup({
       setGuestPoolInput(SessionPool.A);
       setAutoQueueEnabled(true);
       setCourtCount(3);
+      setPartnerCommunityId("");
+      setPartnerCommunitySearch("");
+      setSelectedPartnerCommunity(null);
+      setCollabCandidates([]);
       router.push(`/session/${data.code}`);
     } catch (err: unknown) {
       setError(
@@ -360,6 +424,20 @@ export function useCommunityHostSetup({
     setGuestNameInput("");
   };
 
+  const selectPartnerCommunity = (candidate: CommunityCollabCandidate) => {
+    setSelectedPartnerCommunity(candidate);
+    setPartnerCommunityId(candidate.id);
+    setPartnerCommunitySearch("");
+    setCollabCandidates([]);
+  };
+
+  const clearPartnerCommunity = () => {
+    setSelectedPartnerCommunity(null);
+    setPartnerCommunityId("");
+    setPartnerCommunitySearch("");
+    setCollabCandidates([]);
+  };
+
   return {
     newSessionName,
     setNewSessionName,
@@ -380,8 +458,13 @@ export function useCommunityHostSetup({
     poolBName,
     setPoolBName,
     partnerCommunityId,
-    setPartnerCommunityId,
+    partnerCommunitySearch,
+    setPartnerCommunitySearch,
     collabCandidates,
+    selectedPartnerCommunity,
+    loadingCollabCandidates,
+    selectPartnerCommunity,
+    clearPartnerCommunity,
     loadingCollabRoster,
     selectablePlayers: effectiveSelectablePlayers,
     selectedPlayerIds,
