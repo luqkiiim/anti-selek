@@ -11,6 +11,7 @@ import {
   getPartnerRepeatPenalty,
 } from "./rematch";
 import {
+  POINTS_WAIT_TOLERANCE_MS,
   buildWaitSummary,
   compareBatchSelections,
   compareSingleCourtSelections,
@@ -661,6 +662,8 @@ export function findBestBatchSelectionV3<T extends MatchmakerV3Player>(
     now,
     matchDurationMs,
     randomFn,
+    waitToleranceMs:
+      sessionType === SessionType.POINTS ? POINTS_WAIT_TOLERANCE_MS : 0,
   });
   const debug: V3BatchDebug = {
     eligiblePlayerIds: candidatePool.activePlayers.map((player) => player.userId),

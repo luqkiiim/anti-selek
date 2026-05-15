@@ -6,6 +6,7 @@ import {
   buildWaitingTimeTieZone,
   getEffectiveMatchCount,
 } from "./fairness";
+import { POINTS_WAIT_TOLERANCE_MS } from "./scoring";
 import type { MatchmakerV3Player } from "./types";
 
 function createPlayer(
@@ -77,6 +78,39 @@ describe("matchmaking v3 fairness", () => {
 
     expect(ranked.map((player) => player.userId)).toEqual(["B", "A", "C"]);
     expect(ranked.map((player) => player.rank)).toEqual([0, 1, 2]);
+  });
+
+  it("keeps match-count priority while treating waits inside tolerance as tied", () => {
+    const now = new Date("2026-03-18T01:00:00Z").getTime();
+    const randomValues = [0.5, 0.9, 0.1];
+    let randomIndex = 0;
+    const ranked = buildActivePlayers(
+      [
+        createPlayer("LowerMatchCount", {
+          matchesPlayed: 0,
+          availableSince: new Date("2026-03-18T00:59:00Z"),
+        }),
+        createPlayer("LongerWait", {
+          matchesPlayed: 1,
+          availableSince: new Date("2026-03-18T00:00:00Z"),
+        }),
+        createPlayer("ShorterWait", {
+          matchesPlayed: 1,
+          availableSince: new Date("2026-03-18T00:01:00Z"),
+        }),
+      ],
+      {
+        now,
+        randomFn: () => randomValues[randomIndex++] ?? 0,
+        waitToleranceMs: POINTS_WAIT_TOLERANCE_MS,
+      }
+    );
+
+    expect(ranked.map((player) => player.userId)).toEqual([
+      "LowerMatchCount",
+      "ShorterWait",
+      "LongerWait",
+    ]);
   });
 
   it("does not let neutral resume credit outrank lower effective-match players", () => {

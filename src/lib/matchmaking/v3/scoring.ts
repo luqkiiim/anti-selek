@@ -9,6 +9,7 @@ import type {
 
 export const ELO_EXACT_REMATCH_BALANCE_TOLERANCE = 30;
 export const ELO_PARTNER_REPEAT_BALANCE_TOLERANCE = 1;
+export const POINTS_WAIT_TOLERANCE_MS = 120 * 1000;
 export const POINTS_PARTNER_REPEAT_BALANCE_TOLERANCE = 1.5;
 export const POINTS_OPPONENT_REPEAT_BALANCE_TOLERANCE = 1.5;
 export const PARTNER_REPEAT_BALANCE_TOLERANCE =
@@ -46,21 +47,57 @@ function getPartnerRepeatBalanceTolerance(sessionType: SessionType) {
     : ELO_PARTNER_REPEAT_BALANCE_TOLERANCE;
 }
 
-export function compareWaitSummaries(left: V3WaitSummary, right: V3WaitSummary) {
-  if (left.totalWaitMs !== right.totalWaitMs) {
-    return right.totalWaitMs - left.totalWaitMs;
+function getWaitToleranceMs(sessionType: SessionType) {
+  return sessionType === SessionType.POINTS ? POINTS_WAIT_TOLERANCE_MS : 0;
+}
+
+function compareWaitValues(left: number, right: number, toleranceMs: number) {
+  const diff = right - left;
+
+  return Math.abs(diff) > toleranceMs ? diff : 0;
+}
+
+export function compareWaitSummaries(
+  left: V3WaitSummary,
+  right: V3WaitSummary,
+  waitToleranceMs = 0
+) {
+  const playerCount = Math.max(left.waitVector.length, right.waitVector.length);
+  const totalWaitCompare = compareWaitValues(
+    left.totalWaitMs,
+    right.totalWaitMs,
+    waitToleranceMs * playerCount
+  );
+
+  if (totalWaitCompare !== 0) {
+    return totalWaitCompare;
   }
 
-  if (left.minimumWaitMs !== right.minimumWaitMs) {
-    return right.minimumWaitMs - left.minimumWaitMs;
+  const minimumWaitCompare = compareWaitValues(
+    left.minimumWaitMs,
+    right.minimumWaitMs,
+    waitToleranceMs
+  );
+
+  if (minimumWaitCompare !== 0) {
+    return minimumWaitCompare;
   }
 
-  for (let index = 0; index < Math.max(left.waitVector.length, right.waitVector.length); index++) {
+  for (
+    let index = 0;
+    index < Math.max(left.waitVector.length, right.waitVector.length);
+    index++
+  ) {
     const leftWaitMs = left.waitVector[index] ?? 0;
     const rightWaitMs = right.waitVector[index] ?? 0;
+    const waitCompare = compareWaitValues(
+      leftWaitMs,
+      rightWaitMs,
+      waitToleranceMs
+    );
 
-    if (leftWaitMs !== rightWaitMs) {
-      return rightWaitMs - leftWaitMs;
+    if (waitCompare !== 0) {
+      return waitCompare;
     }
   }
 
@@ -74,7 +111,11 @@ export function compareSingleCourtSelections<
   right: V3SingleCourtSelection<T>,
   sessionType: SessionType
 ) {
-  const waitCompare = compareWaitSummaries(left.waitSummary, right.waitSummary);
+  const waitCompare = compareWaitSummaries(
+    left.waitSummary,
+    right.waitSummary,
+    getWaitToleranceMs(sessionType)
+  );
   if (waitCompare !== 0) {
     return waitCompare;
   }
@@ -155,7 +196,11 @@ export function compareBatchSelections<T extends ActiveMatchmakerV3Player>(
   right: V3BatchSelection<T>,
   sessionType: SessionType
 ) {
-  const waitCompare = compareWaitSummaries(left.waitSummary, right.waitSummary);
+  const waitCompare = compareWaitSummaries(
+    left.waitSummary,
+    right.waitSummary,
+    getWaitToleranceMs(sessionType)
+  );
   if (waitCompare !== 0) {
     return waitCompare;
   }

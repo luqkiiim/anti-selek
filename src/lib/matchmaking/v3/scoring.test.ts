@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { SessionType } from "../../../types/enums";
 import {
+  POINTS_WAIT_TOLERANCE_MS,
   buildWaitSummary,
   compareBatchSelections,
   compareSingleCourtSelections,
@@ -73,6 +74,7 @@ function createSelection(
 }
 
 function createBatchSelection({
+  waitMs = [10, 10, 10, 10],
   maxBalanceGap,
   totalBalanceGap,
   totalPartnerRepeatPenalty = 0,
@@ -80,6 +82,7 @@ function createBatchSelection({
   totalExactRematchPenalty = 0,
   totalRandomScore = 0,
 }: {
+  waitMs?: number[];
   maxBalanceGap: number;
   totalBalanceGap: number;
   totalPartnerRepeatPenalty?: number;
@@ -88,6 +91,7 @@ function createBatchSelection({
   totalRandomScore?: number;
 }): V3BatchSelection {
   const selection = createSelection({
+    waitMs,
     balanceGap: maxBalanceGap,
     partnerRepeatPenalty: totalPartnerRepeatPenalty,
     opponentRepeatPenalty: totalOpponentRepeatPenalty,
@@ -125,6 +129,48 @@ describe("matchmaking v3 scoring", () => {
         longerWaiting,
         shorterWaiting,
         SessionType.ELO
+      )
+    ).toBeLessThan(0);
+  });
+
+  it("treats small wait differences as tied in points sessions", () => {
+    const slightlyLongerWaiting = createSelection({
+      waitMs: Array(4).fill(POINTS_WAIT_TOLERANCE_MS - 1),
+      balanceGap: 5,
+      exactRematchPenalty: 0,
+    });
+    const betterBalanced = createSelection({
+      waitMs: [0, 0, 0, 0],
+      balanceGap: 0,
+      exactRematchPenalty: 0,
+    });
+
+    expect(
+      compareSingleCourtSelections(
+        betterBalanced,
+        slightlyLongerWaiting,
+        SessionType.POINTS
+      )
+    ).toBeLessThan(0);
+  });
+
+  it("keeps meaningful wait differences ahead of points balance", () => {
+    const longerWaiting = createSelection({
+      waitMs: Array(4).fill(POINTS_WAIT_TOLERANCE_MS + 1),
+      balanceGap: 5,
+      exactRematchPenalty: 0,
+    });
+    const betterBalanced = createSelection({
+      waitMs: [0, 0, 0, 0],
+      balanceGap: 0,
+      exactRematchPenalty: 0,
+    });
+
+    expect(
+      compareSingleCourtSelections(
+        longerWaiting,
+        betterBalanced,
+        SessionType.POINTS
       )
     ).toBeLessThan(0);
   });
@@ -321,6 +367,27 @@ describe("matchmaking v3 scoring", () => {
       compareBatchSelections(
         freshPartnerBatch,
         repeatedPartnerBatch,
+        SessionType.POINTS
+      )
+    ).toBeLessThan(0);
+  });
+
+  it("treats small batch wait differences as tied in points sessions", () => {
+    const slightlyLongerWaitingBatch = createBatchSelection({
+      waitMs: Array(4).fill(POINTS_WAIT_TOLERANCE_MS - 1),
+      maxBalanceGap: 5,
+      totalBalanceGap: 5,
+    });
+    const betterBalancedBatch = createBatchSelection({
+      waitMs: [0, 0, 0, 0],
+      maxBalanceGap: 0,
+      totalBalanceGap: 0,
+    });
+
+    expect(
+      compareBatchSelections(
+        betterBalancedBatch,
+        slightlyLongerWaitingBatch,
         SessionType.POINTS
       )
     ).toBeLessThan(0);

@@ -20,14 +20,20 @@ export function buildCandidatePool<T extends MatchmakerV3Player>(
     now = Date.now(),
     matchDurationMs = DEFAULT_MATCH_DURATION_MS,
     randomFn = Math.random,
+    waitToleranceMs = 0,
   }: {
     requiredPlayerCount: number;
     now?: number;
     matchDurationMs?: number;
     randomFn?: () => number;
+    waitToleranceMs?: number;
   }
 ): V3CandidatePool<ActiveMatchmakerV3Player<T>> {
-  const activePlayers = buildActivePlayers(players, { now, randomFn });
+  const activePlayers = buildActivePlayers(players, {
+    now,
+    randomFn,
+    waitToleranceMs,
+  });
   const fairnessBands = buildFairnessBands(activePlayers);
   const lowestBand = fairnessBands[0]?.effectiveMatchCount ?? null;
 

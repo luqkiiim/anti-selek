@@ -12,6 +12,7 @@ import {
   getPartnerRepeatPenalty,
 } from "./rematch";
 import {
+  POINTS_WAIT_TOLERANCE_MS,
   buildWaitSummary,
   compareSingleCourtSelections,
   getQuartetRandomScore,
@@ -326,6 +327,8 @@ export function findBestSingleCourtSelectionV3<T extends MatchmakerV3Player>(
     now,
     matchDurationMs,
     randomFn,
+    waitToleranceMs:
+      sessionType === SessionType.POINTS ? POINTS_WAIT_TOLERANCE_MS : 0,
   });
 
   if (

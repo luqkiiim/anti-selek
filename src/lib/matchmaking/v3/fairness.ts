@@ -18,9 +18,11 @@ export function buildActivePlayers<T extends MatchmakerV3Player>(
   {
     now = Date.now(),
     randomFn = Math.random,
+    waitToleranceMs = 0,
   }: {
     now?: number;
     randomFn?: () => number;
+    waitToleranceMs?: number;
   } = {}
 ): ActiveMatchmakerV3Player<T>[] {
   return players
@@ -37,8 +39,9 @@ export function buildActivePlayers<T extends MatchmakerV3Player>(
         return left.effectiveMatchCount - right.effectiveMatchCount;
       }
 
-      if (left.waitMs !== right.waitMs) {
-        return right.waitMs - left.waitMs;
+      const waitDiff = right.waitMs - left.waitMs;
+      if (Math.abs(waitDiff) > waitToleranceMs) {
+        return waitDiff;
       }
 
       return left.randomScore - right.randomScore;
