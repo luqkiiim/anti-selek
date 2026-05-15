@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { MatchStatus } from "@/types/enums";
 import type { ManualMatchTeams } from "@/lib/matchmaking/manualMatch";
+import { parseMatchmakingReasonJson } from "@/lib/matchmaking/matchReason";
 import { GenerateMatchError } from "./shared";
 
 function getAllSelectedIds(
@@ -61,6 +62,7 @@ async function createMatchAssignment(
   assignment: {
     courtId: string;
     partition: ManualMatchTeams;
+    matchmakingReasonJson?: string | null;
   }
 ) {
   const match = await tx.match.create({
@@ -72,6 +74,7 @@ async function createMatchAssignment(
       team1User2Id: assignment.partition.team1[1],
       team2User1Id: assignment.partition.team2[0],
       team2User2Id: assignment.partition.team2[1],
+      matchmakingReasonJson: assignment.matchmakingReasonJson ?? null,
     },
     include: {
       team1User1: { select: { id: true, name: true } },
@@ -93,7 +96,12 @@ async function createMatchAssignment(
     );
   }
 
-  return match;
+  const { matchmakingReasonJson, ...matchResponse } = match;
+
+  return {
+    ...matchResponse,
+    matchmakingReason: parseMatchmakingReasonJson(matchmakingReasonJson),
+  };
 }
 
 export async function createMatchesForAssignments(
@@ -102,6 +110,7 @@ export async function createMatchesForAssignments(
     courtId: string;
     selectedIds: string[];
     partition: ManualMatchTeams;
+    matchmakingReasonJson?: string | null;
   }>
 ) {
   return prisma.$transaction(async (tx) => {
@@ -124,12 +133,14 @@ export async function replaceCurrentCourtMatchAssignment({
   currentMatchId,
   selectedIds,
   partition,
+  matchmakingReasonJson,
 }: {
   sessionId: string;
   courtId: string;
   currentMatchId: string;
   selectedIds: string[];
   partition: ManualMatchTeams;
+  matchmakingReasonJson?: string | null;
 }) {
   return prisma.$transaction(async (tx) => {
     const deletedMatch = await tx.match.deleteMany({
@@ -169,6 +180,7 @@ export async function replaceCurrentCourtMatchAssignment({
     return createMatchAssignment(tx, sessionId, {
       courtId,
       partition,
+      matchmakingReasonJson,
     });
   });
 }
@@ -178,11 +190,13 @@ export async function createQueuedMatchAssignment({
   queuedMatchId,
   courtId,
   partition,
+  matchmakingReasonJson,
 }: {
   sessionId: string;
   queuedMatchId: string;
   courtId: string;
   partition: ManualMatchTeams;
+  matchmakingReasonJson?: string | null;
 }) {
   return prisma.$transaction(async (tx) => {
     await assertAssignmentsAvailable(tx, sessionId, [
@@ -199,6 +213,7 @@ export async function createQueuedMatchAssignment({
     const match = await createMatchAssignment(tx, sessionId, {
       courtId,
       partition,
+      matchmakingReasonJson,
     });
 
     await tx.queuedMatch.deleteMany({

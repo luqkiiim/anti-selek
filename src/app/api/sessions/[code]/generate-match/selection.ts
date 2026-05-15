@@ -21,6 +21,7 @@ import {
   SESSION_POOL_IDS,
 } from "@/lib/sessionPools";
 import { getBusyPlayerIds } from "@/lib/matchmaking/busyFilter";
+import { buildV3MatchmakingReasonJson } from "@/lib/matchmaking/matchReason";
 import {
   getCompetitiveEntryAt,
   deriveLadderRecordsByEntryTime,
@@ -39,6 +40,7 @@ import {
   findBestSingleCourtSelectionV3,
   type MatchmakerV3Player,
   type V3BatchDebug,
+  type V3SingleCourtSelection,
 } from "@/lib/matchmaking/v3";
 import { getExactPartitionKey } from "@/lib/matchmaking/v3/rematch";
 import {
@@ -83,12 +85,48 @@ interface PoolAwareSelection {
   };
   targetPool?: SessionPool | null;
   missedPool?: SessionPool | null;
+  matchmakingReasonJson?: string | null;
 }
 
 const MAX_POOL_SELECTION_OPTIONS_PER_PLAN = 64;
 
 function getV3QuartetKey(ids: readonly string[]) {
   return [...ids].sort().join("|");
+}
+
+function isV3Selection(
+  selection: PoolAwareSelection | V3SingleCourtSelection
+): selection is PoolAwareSelection & V3SingleCourtSelection {
+  return (
+    "players" in selection &&
+    Array.isArray(selection.players) &&
+    "waitSummary" in selection &&
+    typeof selection.balanceGap === "number" &&
+    typeof selection.partnerRepeatPenalty === "number" &&
+    typeof selection.opponentRepeatPenalty === "number" &&
+    typeof selection.exactRematchPenalty === "number"
+  );
+}
+
+function withMatchmakingReason<
+  TSelection extends PoolAwareSelection | V3SingleCourtSelection,
+>(selection: TSelection, sessionData: GenerateMatchSession) {
+  if (!isV3Selection(selection)) {
+    return {
+      ...selection,
+      matchmakingReasonJson: null,
+    };
+  }
+
+  return {
+    ...selection,
+    matchmakingReasonJson: buildV3MatchmakingReasonJson(selection, {
+      sessionType: sessionData.type as SessionType,
+      sessionMode: sessionData.mode as SessionMode,
+      targetPool: "targetPool" in selection ? selection.targetPool ?? null : null,
+      missedPool: "missedPool" in selection ? selection.missedPool ?? null : null,
+    }),
+  };
 }
 
 function getPlayerBalanceInput({
@@ -846,7 +884,7 @@ function listPoolEnabledSingleCourtMatches({
       ...selectionsForPool.map((selection) => ({
         ...selection,
         missedPool: getMissedPoolOutcome(duePool, pool, waitingCounts),
-      }))
+      })).map((selection) => withMatchmakingReason(selection, sessionData))
     );
   }
 
@@ -881,7 +919,7 @@ function listPoolEnabledSingleCourtMatches({
         ...selectionsForPool.map((selection) => ({
           ...selection,
           missedPool: getMissedPoolOutcome(duePool, pool, waitingCounts),
-        }))
+        })).map((selection) => withMatchmakingReason(selection, sessionData))
       );
     }
   }
@@ -956,10 +994,13 @@ function selectPoolEnabledSingleCourtMatch({
     });
     if (samePoolSelection) {
       foundSamePoolSelection = true;
-      return {
-        ...samePoolSelection,
-        missedPool: getMissedPoolOutcome(duePool, pool, waitingCounts),
-      };
+      return withMatchmakingReason(
+        {
+          ...samePoolSelection,
+          missedPool: getMissedPoolOutcome(duePool, pool, waitingCounts),
+        },
+        sessionData
+      );
     }
   }
 
@@ -984,10 +1025,13 @@ function selectPoolEnabledSingleCourtMatch({
           minimumTargetPoolPlayers,
         });
         if (crossoverSelection) {
-          return {
-            ...crossoverSelection,
-            missedPool: getMissedPoolOutcome(duePool, pool, waitingCounts),
-          };
+          return withMatchmakingReason(
+            {
+              ...crossoverSelection,
+              missedPool: getMissedPoolOutcome(duePool, pool, waitingCounts),
+            },
+            sessionData
+          );
         }
       }
     }
@@ -1096,7 +1140,7 @@ export function selectSingleCourtMatch({
   }
 
   if (!reshuffleSource) {
-    return initialResult.selection;
+    return withMatchmakingReason(initialResult.selection, sessionData);
   }
 
   if (usesCompetitiveGrouping) {
@@ -1113,7 +1157,7 @@ export function selectSingleCourtMatch({
     );
 
     if (selectedQuartetKey !== previousQuartetKey) {
-      return initialResult.selection;
+      return withMatchmakingReason(initialResult.selection, sessionData);
     }
 
     const alternativeQuartet = findBestSingleCourtSelectionLadder(
@@ -1125,11 +1169,11 @@ export function selectSingleCourtMatch({
     );
 
     if (alternativeQuartet.selection) {
-      return alternativeQuartet.selection;
+      return withMatchmakingReason(alternativeQuartet.selection, sessionData);
     }
 
     if (selectedPartitionKey !== previousPartitionKey) {
-      return initialResult.selection;
+      return withMatchmakingReason(initialResult.selection, sessionData);
     }
 
     const alternativePartition = findBestSingleCourtSelectionLadder(
@@ -1147,7 +1191,7 @@ export function selectSingleCourtMatch({
       );
     }
 
-    return alternativePartition.selection;
+    return withMatchmakingReason(alternativePartition.selection, sessionData);
   }
 
   const v3Players = buildV3Players(sessionData, playersById, rankedCandidates);
@@ -1159,7 +1203,7 @@ export function selectSingleCourtMatch({
   );
 
   if (selectedQuartetKey !== previousQuartetKey) {
-    return initialResult.selection;
+    return withMatchmakingReason(initialResult.selection, sessionData);
   }
 
   const alternativeQuartet = findBestSingleCourtSelectionV3(v3Players, {
@@ -1170,11 +1214,11 @@ export function selectSingleCourtMatch({
   });
 
   if (alternativeQuartet.selection) {
-    return alternativeQuartet.selection;
+    return withMatchmakingReason(alternativeQuartet.selection, sessionData);
   }
 
   if (selectedPartitionKey !== previousPartitionKey) {
-    return initialResult.selection;
+    return withMatchmakingReason(initialResult.selection, sessionData);
   }
 
   const alternativePartition = findBestSingleCourtSelectionV3(v3Players, {
@@ -1191,7 +1235,7 @@ export function selectSingleCourtMatch({
     );
   }
 
-  return alternativePartition.selection;
+  return withMatchmakingReason(alternativePartition.selection, sessionData);
 }
 
 function selectExactQuartetMatch({
@@ -1227,10 +1271,13 @@ function selectExactQuartetMatch({
     );
 
     return result.selection
-      ? {
-          ids: result.selection.ids,
-          partition: result.selection.partition,
-        }
+      ? withMatchmakingReason(
+          {
+            ids: result.selection.ids,
+            partition: result.selection.partition,
+          },
+          sessionData
+        )
       : null;
   }
 
@@ -1244,10 +1291,7 @@ function selectExactQuartetMatch({
   );
 
   return result.selection
-    ? {
-        ids: result.selection.ids,
-        partition: result.selection.partition,
-      }
+    ? withMatchmakingReason(result.selection, sessionData)
     : null;
 }
 
@@ -1404,7 +1448,12 @@ export function selectBatchMatches({
       );
     }
 
-    return result.selection;
+    return {
+      ...result.selection,
+      selections: result.selection.selections.map((selection) =>
+        withMatchmakingReason(selection, sessionData)
+      ),
+    };
   }
 
   const result = findBestBatchSelectionV3(
@@ -1430,5 +1479,10 @@ export function selectBatchMatches({
     );
   }
 
-  return result.selection;
+  return {
+    ...result.selection,
+    selections: result.selection.selections.map((selection) =>
+      withMatchmakingReason(selection, sessionData)
+    ),
+  };
 }

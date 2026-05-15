@@ -75,6 +75,7 @@ export async function autoAssignQueuedMatch(sessionId: string) {
     queuedMatchId: sessionData.queuedMatch.id,
     courtId: targetCourt.id,
     partition,
+    matchmakingReasonJson: sessionData.queuedMatch.matchmakingReasonJson ?? null,
   });
 
   if (sessionData.poolsEnabled && sessionData.queuedMatch.targetPool) {

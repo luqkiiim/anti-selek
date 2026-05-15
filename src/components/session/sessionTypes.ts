@@ -6,6 +6,7 @@ import {
   SessionMode,
   SessionPool,
 } from "@/types/enums";
+import type { MatchmakingReason } from "@/lib/matchmaking/matchReason";
 
 export interface Player {
   userId: string;
@@ -37,6 +38,7 @@ export interface Match {
   team1Score?: number;
   team2Score?: number;
   completedAt?: string;
+  matchmakingReason?: MatchmakingReason | null;
 }
 
 export interface QueuedMatch {
@@ -47,6 +49,7 @@ export interface QueuedMatch {
   team1User2: { id: string; name: string };
   team2User1: { id: string; name: string };
   team2User2: { id: string; name: string };
+  matchmakingReason?: MatchmakingReason | null;
 }
 
 export interface CompletedMatchInfo {

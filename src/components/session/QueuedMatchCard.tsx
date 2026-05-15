@@ -1,13 +1,15 @@
 "use client";
 
 import { useEffect, useState, type Ref } from "react";
-import { Clock3, Plus, RefreshCw, Undo2 } from "lucide-react";
+import { Clock3, Info, Plus, RefreshCw, Undo2 } from "lucide-react";
 import type { QueuedMatch } from "./sessionTypes";
+import { MatchReasonModal } from "./MatchReasonModal";
 
 interface QueuedMatchCardProps {
   queuedMatch: QueuedMatch | null;
   poolLabel?: string | null;
   canReshuffleQueuedPlayers: boolean;
+  canViewMatchReason: boolean;
   canOpenManualQueue: boolean;
   clearingQueuedMatch: boolean;
   creatingQueuedMatch: boolean;
@@ -122,6 +124,7 @@ export function QueuedMatchCard({
   queuedMatch,
   poolLabel,
   canReshuffleQueuedPlayers,
+  canViewMatchReason,
   canOpenManualQueue,
   clearingQueuedMatch,
   creatingQueuedMatch,
@@ -140,6 +143,7 @@ export function QueuedMatchCard({
   const [openActionPlayerId, setOpenActionPlayerId] = useState<string | null>(
     null
   );
+  const [matchReasonOpen, setMatchReasonOpen] = useState(false);
   const queueActionDisabled =
     clearingQueuedMatch ||
     creatingQueuedMatch ||
@@ -149,6 +153,8 @@ export function QueuedMatchCard({
     replacingQueuedPlayerId !== null;
   const activeActionPlayerId =
     reshufflingQueuedPlayerId ?? replacingQueuedPlayerId ?? openActionPlayerId;
+  const canShowMatchReason =
+    canViewMatchReason && !!queuedMatch?.matchmakingReason;
 
   useEffect(() => {
     if (!activeActionPlayerId) return;
@@ -264,8 +270,21 @@ export function QueuedMatchCard({
             <div
               ref={promotionSurfaceRef}
               data-queued-promotion-surface="true"
-              className="rounded-xl border border-amber-200 bg-amber-50/70 p-3 transition-all md:p-3.5"
+              className={`relative rounded-xl border border-amber-200 bg-amber-50/70 p-3 transition-all md:p-3.5 ${
+                canShowMatchReason ? "pr-10 md:pr-11" : ""
+              }`}
             >
+              {canShowMatchReason ? (
+                <button
+                  type="button"
+                  onClick={() => setMatchReasonOpen(true)}
+                  className="absolute right-2 top-2 z-10 flex h-7 w-7 items-center justify-center rounded-lg border border-amber-200 bg-white/90 text-amber-700 shadow-sm transition hover:border-amber-300 hover:bg-white hover:text-amber-800 active:scale-95"
+                  aria-label="Show match reasoning"
+                  title="Match reasoning"
+                >
+                  <Info aria-hidden="true" size={14} strokeWidth={2.3} />
+                </button>
+              ) : null}
               <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2.5 sm:gap-3 md:gap-4 xl:gap-3">
                 <TeamPlayers
                   players={[queuedMatch.team1User1, queuedMatch.team1User2]}
@@ -295,6 +314,13 @@ export function QueuedMatchCard({
                 />
               </div>
             </div>
+
+            {canShowMatchReason && matchReasonOpen ? (
+              <MatchReasonModal
+                reason={queuedMatch.matchmakingReason!}
+                onClose={() => setMatchReasonOpen(false)}
+              />
+            ) : null}
 
             <div className="pt-2">
               <button

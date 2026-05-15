@@ -1,9 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, type Ref } from "react";
+import { Info } from "lucide-react";
 import { canApprovePendingSubmission } from "@/lib/matchApprovalRules";
 import { MatchStatus } from "@/types/enums";
 import type { Match, MatchScores } from "./sessionTypes";
+import { MatchReasonModal } from "./MatchReasonModal";
 import { PendingApprovalActions } from "./PendingApprovalActions";
 import { ScoreEntryControls } from "./ScoreEntryControls";
 
@@ -226,6 +228,7 @@ export function LiveMatchCard({
   const [openActionPlayerId, setOpenActionPlayerId] = useState<string | null>(
     null
   );
+  const [matchReasonOpen, setMatchReasonOpen] = useState(false);
   const isParticipant = [
     match.team1User1.id,
     match.team1User2.id,
@@ -263,6 +266,7 @@ export function LiveMatchCard({
   const activeActionPlayerId = forcedActionPlayerId
     ? `${match.id}:${forcedActionPlayerId}`
     : openActionPlayerId;
+  const canShowMatchReason = isAdmin && !!match.matchmakingReason;
   const clearScoreInputRestoreTimers = useCallback(() => {
     const restoreState = scoreInputScrollRestoreRef.current;
     if (restoreState.blurTimerId !== null) {
@@ -501,12 +505,23 @@ export function LiveMatchCard({
       <div
         ref={lineupRef}
         data-court-promotion-surface={match.id}
-        className={`rounded-xl border p-3 transition-all md:p-4 ${
+        className={`relative rounded-xl border p-3 transition-all md:p-4 ${
           isPendingApproval
             ? "border-orange-200 bg-orange-50/80"
             : "border-blue-100 bg-[var(--accent-faint)]"
-        }`}
+        } ${canShowMatchReason ? "pr-10 md:pr-11" : ""}`}
       >
+        {canShowMatchReason ? (
+          <button
+            type="button"
+            onClick={() => setMatchReasonOpen(true)}
+            className="absolute right-2 top-2 z-10 flex h-7 w-7 items-center justify-center rounded-lg border border-blue-200 bg-white/90 text-blue-700 shadow-sm transition hover:border-blue-300 hover:bg-white hover:text-blue-800 active:scale-95"
+            aria-label="Show match reasoning"
+            title="Match reasoning"
+          >
+            <Info aria-hidden="true" size={14} strokeWidth={2.3} />
+          </button>
+        ) : null}
         <div className="grid grid-cols-[minmax(0,1fr)_3.5rem_3.5rem_minmax(0,1fr)] items-center gap-3 sm:grid-cols-[minmax(0,1fr)_4rem_4rem_minmax(0,1fr)] md:gap-4 xl:grid-cols-[minmax(0,1fr)_3.5rem_3.5rem_minmax(0,1fr)]">
           <TeamNames
             matchId={match.id}
@@ -585,6 +600,13 @@ export function LiveMatchCard({
             Match Active
           </span>
         </div>
+      ) : null}
+
+      {canShowMatchReason && matchReasonOpen ? (
+        <MatchReasonModal
+          reason={match.matchmakingReason!}
+          onClose={() => setMatchReasonOpen(false)}
+        />
       ) : null}
     </div>
   );

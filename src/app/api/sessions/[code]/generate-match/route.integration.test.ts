@@ -71,6 +71,42 @@ function getSelectedIds(match: {
   return selectedIds as string[];
 }
 
+function createReasonJson({
+  selectedIds,
+  team1,
+  team2,
+}: {
+  selectedIds: [string, string, string, string];
+  team1: [string, string];
+  team2: [string, string];
+}) {
+  return JSON.stringify({
+    version: 1,
+    source: "v3",
+    sessionType: SessionType.POINTS,
+    sessionMode: SessionMode.MEXICANO,
+    selectedUserIds: selectedIds,
+    team1UserIds: team1,
+    team2UserIds: team2,
+    summary: ["Stored queued reason."],
+    metrics: {
+      fairnessBand: 0,
+      selectedMatchCounts: [0, 0, 0, 0],
+      balanceGap: 0,
+      partnerRepeatPenalty: 0,
+      opponentRepeatPenalty: 0,
+      exactRematchPenalty: 0,
+      waitRangeSeconds: 0,
+      minimumWaitSeconds: 0,
+      totalWaitSeconds: 0,
+      waitToleranceSeconds: 120,
+      targetPool: null,
+      missedPool: null,
+      mixedMode: false,
+    },
+  });
+}
+
 async function removeDatabaseFiles() {
   await Promise.all(
     ["", "-journal", "-shm", "-wal"].map((suffix) =>
@@ -310,6 +346,16 @@ describe("generate match route integration", () => {
     expect(payload.status).toBe(MatchStatus.IN_PROGRESS);
     expect(payload.courtId).toBe(courtId);
     expect(getSelectedIds(payload).sort()).toEqual([...playerIds].sort());
+    expect(payload.matchmakingReason).toEqual(
+      expect.objectContaining({
+        source: "v3",
+        sessionType: SessionType.POINTS,
+        metrics: expect.objectContaining({
+          waitToleranceSeconds: 120,
+        }),
+      })
+    );
+    expect(payload.matchmakingReasonJson).toBeUndefined();
 
     const storedCourt = await prisma.court.findUnique({
       where: { id: courtId },
@@ -320,6 +366,47 @@ describe("generate match route integration", () => {
 
     expect(storedMatches).toHaveLength(1);
     expect(storedCourt?.currentMatchId).toBe(payload.id);
+    expect(storedMatches[0]?.matchmakingReasonJson).toEqual(expect.any(String));
+  });
+
+  it("does not store reasoning for manual matches", async () => {
+    const prefix = `manual-reason-${randomUUID().slice(0, 8)}`;
+    const { communityId } = await createCommunityAdmin(prefix);
+    const playerKeys = ["p1", "p2", "p3", "p4"];
+    const playerIds = playerKeys.map((key) => `${prefix}-${key}`);
+    const courtId = `${prefix}-court-1`;
+
+    await createUsers(
+      prefix,
+      playerKeys.map((key) => ({ key }))
+    );
+
+    const { sessionId, code } = await createSessionWithCourtsAndPlayers({
+      prefix,
+      communityId,
+      type: SessionType.POINTS,
+      mode: SessionMode.MEXICANO,
+      players: playerIds.map((userId) => ({ userId })),
+      courtIds: [courtId],
+    });
+
+    const response = await postGenerateMatch(code, {
+      courtId,
+      manualTeams: {
+        team1: [playerIds[0], playerIds[1]],
+        team2: [playerIds[2], playerIds[3]],
+      },
+    });
+    const payload = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(payload.matchmakingReason).toBeNull();
+
+    const storedMatch = await prisma.match.findFirst({
+      where: { sessionId },
+    });
+
+    expect(storedMatch?.matchmakingReasonJson).toBeNull();
   });
 
   it("does not auto-queue the next match for a single-court session with exactly eight active players", async () => {
@@ -408,6 +495,12 @@ describe("generate match route integration", () => {
 
     expect(response.status).toBe(200);
     expect(payload.queuedMatch).not.toBeNull();
+    expect(payload.matchmakingReason).toEqual(
+      expect.objectContaining({ source: "v3" })
+    );
+    expect(payload.queuedMatch.matchmakingReason).toEqual(
+      expect.objectContaining({ source: "v3" })
+    );
 
     const selectedIds = getSelectedIds(payload);
     const queuedIds = getSelectedIds(payload.queuedMatch);
@@ -421,6 +514,7 @@ describe("generate match route integration", () => {
     ).toBe(true);
     expect(queuedIds.every((userId) => !selectedIds.includes(userId))).toBe(true);
     expect(storedQueuedMatch).not.toBeNull();
+    expect(storedQueuedMatch?.matchmakingReasonJson).toEqual(expect.any(String));
   });
 
   it("does not auto-queue when the session auto-queue toggle is off", async () => {
@@ -837,6 +931,17 @@ describe("generate match route integration", () => {
       data: { currentMatchId: currentMatch.id },
     });
 
+    const queuedReasonJson = createReasonJson({
+      selectedIds: [
+        playerIds[4],
+        playerIds[5],
+        playerIds[6],
+        playerIds[7],
+      ],
+      team1: [playerIds[4], playerIds[5]],
+      team2: [playerIds[6], playerIds[7]],
+    });
+
     await prisma.queuedMatch.create({
       data: {
         sessionId,
@@ -844,6 +949,7 @@ describe("generate match route integration", () => {
         team1User2Id: playerIds[5],
         team2User1Id: playerIds[6],
         team2User2Id: playerIds[7],
+        matchmakingReasonJson: queuedReasonJson,
       },
     });
 
@@ -857,6 +963,9 @@ describe("generate match route integration", () => {
     expect(payload.ok).toBe(true);
     expect(payload.undoneMatchId).toBe(currentMatch.id);
     expect(payload.autoAssignedMatch).not.toBeNull();
+    expect(payload.autoAssignedMatch.matchmakingReason?.summary).toEqual([
+      "Stored queued reason.",
+    ]);
     expect(payload.queuedMatchCleared).toBe(false);
     expect(payload.queuedMatch).not.toBeNull();
     const autoAssignedIds = getSelectedIds(payload.autoAssignedMatch).sort();
@@ -875,11 +984,17 @@ describe("generate match route integration", () => {
     const refreshedCourt = await prisma.court.findUnique({
       where: { id: courtId },
     });
+    const storedAutoAssignedMatch = await prisma.match.findUnique({
+      where: { id: payload.autoAssignedMatch.id },
+    });
     const storedQueuedMatch = await prisma.queuedMatch.findUnique({
       where: { sessionId },
     });
 
     expect(refreshedCourt?.currentMatchId).toBe(payload.autoAssignedMatch.id);
+    expect(storedAutoAssignedMatch?.matchmakingReasonJson).toBe(
+      queuedReasonJson
+    );
     expect(storedQueuedMatch).not.toBeNull();
     expect(getSelectedIds(storedQueuedMatch!).sort()).toEqual(rebuiltQueuedIds);
   });

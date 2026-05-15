@@ -107,6 +107,7 @@ export async function POST(
           courtId: targetCourt.id,
           selectedIds,
           partition: parsedTeams,
+          matchmakingReasonJson: null,
         },
       ]);
 
@@ -203,6 +204,7 @@ export async function POST(
           currentMatchId: targetCourt.currentMatch.id,
           selectedIds: [...replacementSelection.ids],
           partition: replacementSelection.partition,
+          matchmakingReasonJson: replacementSelection.matchmakingReasonJson ?? null,
         })
       );
     }
@@ -265,6 +267,7 @@ export async function POST(
         currentMatchId: targetCourt.currentMatch.id,
         selectedIds: [...bestSelection.ids],
         partition: bestSelection.partition,
+        matchmakingReasonJson: bestSelection.matchmakingReasonJson ?? null,
       });
 
       if (sessionData.poolsEnabled && "targetPool" in bestSelection) {
@@ -323,6 +326,7 @@ export async function POST(
           courtId: requestedOpenCourts[0].id,
           selectedIds: [...bestSelection.ids],
           partition: bestSelection.partition,
+          matchmakingReasonJson: bestSelection.matchmakingReasonJson ?? null,
         },
       ]);
 
@@ -361,6 +365,7 @@ export async function POST(
           courtId: court.id,
           selectedIds: [...selection.ids],
           partition: selection.partition,
+          matchmakingReasonJson: selection.matchmakingReasonJson ?? null,
         };
       })
     );

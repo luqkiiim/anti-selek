@@ -10,6 +10,7 @@ import type {
   QueuedMatch,
   SessionData,
 } from "@/components/session/sessionTypes";
+import type { MatchmakingReason } from "@/lib/matchmaking/matchReason";
 import { SessionType } from "@/types/enums";
 
 type LiveMatch = NonNullable<SessionData["courts"][number]["currentMatch"]>;
@@ -43,6 +44,7 @@ export interface MatchPayload {
   team1User2?: MatchParticipant;
   team2User1?: MatchParticipant;
   team2User2?: MatchParticipant;
+  matchmakingReason?: MatchmakingReason | null;
 }
 
 export interface SessionSnapshotLike {
@@ -126,6 +128,8 @@ function buildLiveMatch(
     team1Score: normalizeOptionalNumber(payload.team1Score),
     team2Score: normalizeOptionalNumber(payload.team2Score),
     completedAt: normalizeOptionalDate(payload.completedAt),
+    matchmakingReason:
+      payload.matchmakingReason ?? fallbackMatch?.matchmakingReason ?? null,
   };
 }
 
@@ -173,6 +177,7 @@ function buildQueuedMatch(
     team1User2: queuedMatch.team1User2,
     team2User1: queuedMatch.team2User1,
     team2User2: queuedMatch.team2User2,
+    matchmakingReason: queuedMatch.matchmakingReason ?? null,
   };
 }
 

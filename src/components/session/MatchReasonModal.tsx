@@ -1,0 +1,119 @@
+"use client";
+
+import { ModalFrame } from "@/components/ui/chrome";
+import type { MatchmakingReason } from "@/lib/matchmaking/matchReason";
+
+function formatNumber(value: number) {
+  return Number.isInteger(value) ? value.toString() : value.toFixed(1);
+}
+
+function formatSeconds(value: number) {
+  return `${formatNumber(value)}s`;
+}
+
+function buildMetricRows(reason: MatchmakingReason) {
+  const { metrics } = reason;
+  const rows = [
+    {
+      label: "Fairness band",
+      value:
+        metrics.fairnessBand === null
+          ? "Unknown"
+          : metrics.fairnessBand.toString(),
+    },
+    {
+      label: "Match counts",
+      value: metrics.selectedMatchCounts.join(", "),
+    },
+    {
+      label: "Balance gap",
+      value: formatNumber(metrics.balanceGap),
+    },
+    {
+      label: "Wait range",
+      value: formatSeconds(metrics.waitRangeSeconds),
+    },
+    {
+      label: "Minimum wait",
+      value: formatSeconds(metrics.minimumWaitSeconds),
+    },
+    {
+      label: "Partner repeats",
+      value: formatNumber(metrics.partnerRepeatPenalty),
+    },
+    {
+      label: "Opponent repeats",
+      value: formatNumber(metrics.opponentRepeatPenalty),
+    },
+  ];
+
+  if (metrics.waitToleranceSeconds !== undefined) {
+    rows.splice(5, 0, {
+      label: "Wait tolerance",
+      value: formatSeconds(metrics.waitToleranceSeconds),
+    });
+  }
+
+  if (metrics.exactRematchPenalty > 0) {
+    rows.push({
+      label: "Exact rematch",
+      value: formatNumber(metrics.exactRematchPenalty),
+    });
+  }
+
+  if (metrics.targetPool) {
+    rows.push({
+      label: "Pool",
+      value: metrics.missedPool
+        ? `${metrics.targetPool} over ${metrics.missedPool}`
+        : metrics.targetPool,
+    });
+  }
+
+  return rows;
+}
+
+export function MatchReasonModal({
+  reason,
+  onClose,
+}: {
+  reason: MatchmakingReason;
+  onClose: () => void;
+}) {
+  const metricRows = buildMetricRows(reason);
+
+  return (
+    <ModalFrame
+      title="Match Reason"
+      subtitle="Why the auto matcher picked this court."
+      onClose={onClose}
+      bodyClassName="p-4 sm:p-5"
+    >
+      <div className="space-y-4">
+        <div className="rounded-xl border border-blue-100 bg-blue-50/70 p-3">
+          <ul className="space-y-2 text-sm font-medium leading-relaxed text-gray-800">
+            {reason.summary.map((item, index) => (
+              <li key={`${index}:${item}`}>{item}</li>
+            ))}
+          </ul>
+        </div>
+
+        <div className="grid grid-cols-2 gap-2">
+          {metricRows.map((row) => (
+            <div
+              key={row.label}
+              className="rounded-lg border border-gray-200 bg-white px-3 py-2"
+            >
+              <p className="text-[11px] font-semibold uppercase text-gray-500">
+                {row.label}
+              </p>
+              <p className="mt-1 truncate text-sm font-semibold text-gray-900">
+                {row.value}
+              </p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </ModalFrame>
+  );
+}

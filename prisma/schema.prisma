@@ -184,6 +184,7 @@ model Match {
   winnerTeam   Int?     // 1 or 2
   team1EloChange Int?
   team2EloChange Int?
+  matchmakingReasonJson String?
 
   createdAt    DateTime @default(now())
   completedAt  DateTime?
@@ -225,6 +226,7 @@ model QueuedMatch {
   team2User1Id  String
   team2User2Id  String
   targetPool    String? // A, B
+  matchmakingReasonJson String?
   createdAt     DateTime @default(now())
 
   session Session @relation(fields: [sessionId], references: [id], onDelete: Cascade)

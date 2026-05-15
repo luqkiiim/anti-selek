@@ -683,6 +683,7 @@ export function LiveCourtsPanel({
             queuedMatch={queuedMatch}
             poolLabel={queuedPoolLabel}
             canReshuffleQueuedPlayers={isAdmin}
+            canViewMatchReason={isAdmin}
             canOpenManualQueue={isAdmin && !queuedMatch}
             clearingQueuedMatch={clearingQueuedMatch}
             creatingQueuedMatch={creatingQueuedMatch}

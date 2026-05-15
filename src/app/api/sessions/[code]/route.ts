@@ -10,6 +10,7 @@ import {
 } from "@/lib/sessionCollab";
 import { MatchStatus } from "@/types/enums";
 import { getQueuedMatchUserIds } from "@/lib/sessionQueue";
+import { parseMatchmakingReasonJson } from "@/lib/matchmaking/matchReason";
 import {
   canQuickAccessCommunity,
   getQuickAccessDeniedMessage,
@@ -57,6 +58,7 @@ async function getSessionRoute(
               team2Score: true,
               completedAt: true,
               scoreSubmittedByUserId: true,
+              matchmakingReasonJson: true,
               team1User1: { select: { id: true, name: true } },
               team1User2: { select: { id: true, name: true } },
               team2User1: { select: { id: true, name: true } },
@@ -174,6 +176,9 @@ async function getSessionRoute(
           id: sessionData.queuedMatch.id,
           createdAt: sessionData.queuedMatch.createdAt,
           targetPool: sessionData.queuedMatch.targetPool,
+          matchmakingReason: parseMatchmakingReasonJson(
+            sessionData.queuedMatch.matchmakingReasonJson
+          ),
           team1User1,
           team1User2,
           team2User1,
@@ -181,9 +186,25 @@ async function getSessionRoute(
         };
       })()
     : null;
+  const courts = sessionData.courts.map((court) => {
+    if (!court.currentMatch) {
+      return court;
+    }
+
+    const { matchmakingReasonJson, ...currentMatch } = court.currentMatch;
+
+    return {
+      ...court,
+      currentMatch: {
+        ...currentMatch,
+        matchmakingReason: parseMatchmakingReasonJson(matchmakingReasonJson),
+      },
+    };
+  });
 
   return NextResponse.json({
     ...sessionData,
+    courts,
     players,
     queuedMatch,
     viewerCommunityRole: communityRole,

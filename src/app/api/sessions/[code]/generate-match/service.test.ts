@@ -766,7 +766,10 @@ describe("generate match service", () => {
           rotationHistory: buildRotationHistory([]),
           reshuffleSource: null,
         })
-      ).toEqual(selection);
+      ).toEqual({
+        ...selection,
+        matchmakingReasonJson: expect.any(String),
+      });
     });
 
     it("uses the ladder selector for ladder sessions", () => {
@@ -799,7 +802,10 @@ describe("generate match service", () => {
           rotationHistory: buildRotationHistory([]),
           reshuffleSource: null,
         })
-      ).toEqual(selection);
+      ).toEqual({
+        ...selection,
+        matchmakingReasonJson: null,
+      });
       expect(findBestSingleCourtSelectionV3).not.toHaveBeenCalled();
     });
 
@@ -833,7 +839,10 @@ describe("generate match service", () => {
           rotationHistory: buildRotationHistory([]),
           reshuffleSource: null,
         })
-      ).toEqual(selection);
+      ).toEqual({
+        ...selection,
+        matchmakingReasonJson: null,
+      });
       expect(findBestSingleCourtSelectionV3).not.toHaveBeenCalled();
     });
 
@@ -900,6 +909,7 @@ describe("generate match service", () => {
         ...crossoverSelection,
         targetPool: SessionPool.A,
         missedPool: null,
+        matchmakingReasonJson: null,
       });
     });
 
@@ -941,7 +951,10 @@ describe("generate match service", () => {
             partition: { team1: ["A", "B"], team2: ["C", "D"] },
           },
         })
-      ).toEqual(alternative);
+      ).toEqual({
+        ...alternative,
+        matchmakingReasonJson: null,
+      });
       expect(findBestSingleCourtSelectionLadder).toHaveBeenNthCalledWith(
         2,
         expect.any(Array),
@@ -1027,7 +1040,10 @@ describe("generate match service", () => {
             partition: { team1: ["A", "B"], team2: ["C", "D"] },
           },
         })
-      ).toEqual(alternative);
+      ).toEqual({
+        ...alternative,
+        matchmakingReasonJson: expect.any(String),
+      });
     });
 
     it("falls back to an alternative partition when only the same partition repeats", () => {
@@ -1064,7 +1080,10 @@ describe("generate match service", () => {
             partition: { team1: ["A", "B"], team2: ["C", "D"] },
           },
         })
-      ).toEqual(alternative);
+      ).toEqual({
+        ...alternative,
+        matchmakingReasonJson: expect.any(String),
+      });
     });
 
     it("throws when reshuffle has no valid alternative", () => {
@@ -1151,7 +1170,13 @@ describe("generate match service", () => {
           rotationHistory: buildRotationHistory([]),
           requestedMatchCount: 1,
         })
-      ).toEqual(batchSelection);
+      ).toEqual({
+        ...batchSelection,
+        selections: batchSelection.selections.map((selection) => ({
+          ...selection,
+          matchmakingReasonJson: expect.any(String),
+        })),
+      });
       expect(findBestBatchSelectionV3).toHaveBeenCalledWith(
         expect.any(Array),
         expect.objectContaining({
@@ -1206,7 +1231,13 @@ describe("generate match service", () => {
           requestedMatchCount: 1,
           randomFn,
         })
-      ).toEqual(batchSelection);
+      ).toEqual({
+        ...batchSelection,
+        selections: batchSelection.selections.map((selection) => ({
+          ...selection,
+          matchmakingReasonJson: expect.any(String),
+        })),
+      });
       expect(
         vi.mocked(findBestBatchSelectionV3).mock.calls[0]?.[1].randomFn
       ).toBe(randomFn);
@@ -1263,7 +1294,13 @@ describe("generate match service", () => {
           rotationHistory: buildRotationHistory([]),
           requestedMatchCount: 1,
         })
-      ).toEqual(batchSelection);
+      ).toEqual({
+        ...batchSelection,
+        selections: batchSelection.selections.map((selection) => ({
+          ...selection,
+          matchmakingReasonJson: null,
+        })),
+      });
       expect(findBestBatchSelectionV3).not.toHaveBeenCalled();
     });
 
@@ -1318,7 +1355,13 @@ describe("generate match service", () => {
           rotationHistory: buildRotationHistory([]),
           requestedMatchCount: 1,
         })
-      ).toEqual(batchSelection);
+      ).toEqual({
+        ...batchSelection,
+        selections: batchSelection.selections.map((selection) => ({
+          ...selection,
+          matchmakingReasonJson: null,
+        })),
+      });
       expect(findBestBatchSelectionV3).not.toHaveBeenCalled();
     });
 
@@ -1407,11 +1450,13 @@ describe("generate match service", () => {
             ...fallbackFirstQuartet,
             targetPool: SessionPool.A,
             missedPool: null,
+            matchmakingReasonJson: null,
           },
           {
             ...secondQuartet,
             targetPool: SessionPool.B,
             missedPool: null,
+            matchmakingReasonJson: null,
           },
         ],
         poolSchedulingState: expect.objectContaining({

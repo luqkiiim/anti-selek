@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import type { ManualMatchTeams } from "@/lib/matchmaking/manualMatch";
+import { parseMatchmakingReasonJson } from "@/lib/matchmaking/matchReason";
 import {
   buildMatchmakingState,
   ensureEnoughPlayers,
@@ -40,6 +41,9 @@ export function buildQueuedMatchResponse(
     id: queuedMatch.id,
     createdAt: queuedMatch.createdAt,
     targetPool: queuedMatch.targetPool ?? null,
+    matchmakingReason: parseMatchmakingReasonJson(
+      queuedMatch.matchmakingReasonJson
+    ),
     team1User1,
     team1User2,
     team2User1,
@@ -99,7 +103,8 @@ async function ensureQueueSlotAvailable(sessionData: QueueSessionRecord) {
 async function createQueuedMatchRecord(
   sessionId: string,
   partition: ManualMatchTeams,
-  targetPool?: string | null
+  targetPool?: string | null,
+  matchmakingReasonJson?: string | null
 ) {
   try {
     return await prisma.queuedMatch.create({
@@ -110,6 +115,7 @@ async function createQueuedMatchRecord(
         team2User1Id: partition.team2[0],
         team2User2Id: partition.team2[1],
         targetPool: targetPool ?? null,
+        matchmakingReasonJson: matchmakingReasonJson ?? null,
       },
     });
   } catch (error) {
@@ -128,10 +134,12 @@ async function updateQueuedMatchRecord({
   queuedMatchId,
   partition,
   targetPool,
+  matchmakingReasonJson,
 }: {
   queuedMatchId: string;
   partition: ManualMatchTeams;
   targetPool?: string | null;
+  matchmakingReasonJson?: string | null;
 }) {
   return prisma.queuedMatch.update({
     where: { id: queuedMatchId },
@@ -141,6 +149,7 @@ async function updateQueuedMatchRecord({
       team2User1Id: partition.team2[0],
       team2User2Id: partition.team2[1],
       targetPool: targetPool ?? null,
+      matchmakingReasonJson: matchmakingReasonJson ?? null,
     },
   });
 }
@@ -193,7 +202,8 @@ export async function createQueuedMatchForSession(sessionData: QueueSessionRecor
   const queuedMatch = await createQueuedMatchRecord(
     sessionData.id,
     selection.partition,
-    "targetPool" in selection ? selection.targetPool : null
+    "targetPool" in selection ? selection.targetPool : null,
+    selection.matchmakingReasonJson ?? null
   );
 
   return buildQueuedMatchResponse(sessionData, queuedMatch);
@@ -262,6 +272,7 @@ export async function reshuffleQueuedMatchForSession(
     queuedMatchId: sessionData.queuedMatch.id,
     partition: selection.partition,
     targetPool: "targetPool" in selection ? selection.targetPool : null,
+    matchmakingReasonJson: selection.matchmakingReasonJson ?? null,
   });
 
   return buildQueuedMatchResponse(sessionData, queuedMatch);
@@ -330,6 +341,7 @@ export async function replaceQueuedMatchPlayerForSession(
     queuedMatchId: sessionData.queuedMatch.id,
     partition: replacementSelection.partition,
     targetPool: sessionData.queuedMatch.targetPool ?? null,
+    matchmakingReasonJson: replacementSelection.matchmakingReasonJson ?? null,
   });
 
   return buildQueuedMatchResponse(sessionData, queuedMatch);
@@ -344,7 +356,8 @@ export async function createManualQueuedMatchForSession(
   const queuedMatch = await createQueuedMatchRecord(
     sessionData.id,
     partition,
-    targetPool
+    targetPool,
+    null
   );
   return buildQueuedMatchResponse(sessionData, queuedMatch);
 }
