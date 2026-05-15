@@ -164,6 +164,7 @@ export function useCommunityHostSetup({
   useEffect(() => {
     if (!partnerCommunityId || !communityId) {
       setCollabRoster([]);
+      setLoadingCollabRoster(false);
       return;
     }
 
@@ -278,6 +279,8 @@ export function useCommunityHostSetup({
       setPartnerCommunitySearch("");
       setSelectedPartnerCommunity(null);
       setCollabCandidates([]);
+      setCollabRoster([]);
+      setLoadingCollabRoster(false);
       router.push(`/session/${data.code}`);
     } catch (err: unknown) {
       setError(
@@ -429,6 +432,8 @@ export function useCommunityHostSetup({
     setPartnerCommunityId(candidate.id);
     setPartnerCommunitySearch("");
     setCollabCandidates([]);
+    setSelectedPlayerIds([]);
+    setSelectedPlayerPools({});
   };
 
   const clearPartnerCommunity = () => {
@@ -436,6 +441,10 @@ export function useCommunityHostSetup({
     setPartnerCommunityId("");
     setPartnerCommunitySearch("");
     setCollabCandidates([]);
+    setCollabRoster([]);
+    setLoadingCollabRoster(false);
+    setSelectedPlayerIds([]);
+    setSelectedPlayerPools({});
   };
 
   return {

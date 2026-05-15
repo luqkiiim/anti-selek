@@ -376,15 +376,17 @@ export function HostTournamentPanel({
           <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
             <label className="block flex-1 space-y-1.5 text-sm font-medium text-gray-900">
               <span>Collab community</span>
-              {selectedPartnerCommunity ? (
+              {hasPartnerCommunity ? (
                 <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2">
                   <div className="min-w-0">
                     <p className="truncate text-sm font-semibold text-gray-900">
-                      {selectedPartnerCommunity.name}
+                      {selectedPartnerCommunity?.name ?? "Selected community"}
                     </p>
-                    <p className="text-xs font-semibold text-amber-700">
-                      {selectedPartnerCommunity.membersCount} members
-                    </p>
+                    {selectedPartnerCommunity ? (
+                      <p className="text-xs font-semibold text-amber-700">
+                        {selectedPartnerCommunity.membersCount} members
+                      </p>
+                    ) : null}
                   </div>
                   <button
                     type="button"
