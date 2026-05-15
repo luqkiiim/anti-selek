@@ -45,6 +45,7 @@ interface CommunityPlayerEditorModalProps {
   ) => Promise<void>;
   onPromotePlayer: (player: CommunityAdminPlayer) => void;
   onOpenPasswordReset: (player: CommunityAdminPlayer) => void;
+  onOpenMergeDuplicate: (player: CommunityAdminPlayer) => void;
 }
 
 export function CommunityPlayerEditorModal({
@@ -66,10 +67,12 @@ export function CommunityPlayerEditorModal({
   onUpdatePreferences,
   onPromotePlayer,
   onOpenPasswordReset,
+  onOpenMergeDuplicate,
 }: CommunityPlayerEditorModalProps) {
   if (!player) return null;
 
   const mixedSideOption = getMixedSideOverrideOptionForGender(player.gender);
+  const canMergeDuplicate = !player.isClaimed && player.email === null;
 
   return (
     <ModalFrame
@@ -117,12 +120,23 @@ export function CommunityPlayerEditorModal({
               <CommunityAdminGenderPill player={player} />
             </div>
           </div>
-          <Link
-            href={`/profile/${player.id}?communityId=${communityId}`}
-            className="app-button-secondary inline-flex px-4 py-2"
-          >
-            View profile
-          </Link>
+          <div className="flex flex-wrap gap-2">
+            <Link
+              href={`/profile/${player.id}?communityId=${communityId}`}
+              className="app-button-secondary inline-flex px-4 py-2"
+            >
+              View profile
+            </Link>
+            {canMergeDuplicate ? (
+              <button
+                type="button"
+                onClick={() => onOpenMergeDuplicate(player)}
+                className="app-button-secondary px-4 py-2"
+              >
+                Merge duplicate
+              </button>
+            ) : null}
+          </div>
         </div>
 
         <div className="grid gap-4 sm:grid-cols-2">

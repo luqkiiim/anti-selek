@@ -9,6 +9,7 @@ import { CommunityAdminActionConfirmModal } from "@/components/community-admin/C
 import { CommunityDangerZonePanel } from "@/components/community-admin/CommunityDangerZonePanel";
 import { CommunityPasswordResetModal } from "@/components/community-admin/CommunityPasswordResetModal";
 import { CommunityPlayerEditorModal } from "@/components/community-admin/CommunityPlayerEditorModal";
+import { CommunityPlayerMergeModal } from "@/components/community-admin/CommunityPlayerMergeModal";
 import { CommunityPlayersPanel } from "@/components/community-admin/CommunityPlayersPanel";
 import { CommunitySettingsPanel } from "@/components/community-admin/CommunitySettingsPanel";
 import { CreateCommunityPlayerModal } from "@/components/community-admin/CreateCommunityPlayerModal";
@@ -152,6 +153,12 @@ export default function CommunityAdminPage() {
     linkCandidates,
     loadingLinkCandidates,
     linkingPlayerId,
+    mergeSourcePlayer,
+    mergeSearch,
+    setMergeSearch,
+    mergeCandidates,
+    loadingMergeCandidates,
+    mergingPlayerId,
     newPlayerGender,
     setNewPlayerGender,
     newPlayerMixedSideOverride,
@@ -194,10 +201,13 @@ export default function CommunityAdminPage() {
     closeCreatePlayerModal,
     openPlayerEditor,
     closePlayerEditor,
+    openMergeDuplicateModal,
+    closeMergeDuplicateModal,
     openPasswordResetModal,
     closePasswordResetModal,
     handleAddPlayer,
     handleLinkExistingPlayer,
+    handleMergeDuplicatePlayer,
     handleSavePlayerName,
     handleSavePlayerRating,
     handleRemovePlayer,
@@ -431,6 +441,18 @@ export default function CommunityAdminPage() {
         onUpdatePreferences={handleUpdatePreferences}
         onPromotePlayer={handlePromotePlayer}
         onOpenPasswordReset={openPasswordResetModal}
+        onOpenMergeDuplicate={openMergeDuplicateModal}
+      />
+
+      <CommunityPlayerMergeModal
+        sourcePlayer={mergeSourcePlayer}
+        search={mergeSearch}
+        candidates={mergeCandidates}
+        loadingCandidates={loadingMergeCandidates}
+        mergingPlayerId={mergingPlayerId}
+        onSearchChange={setMergeSearch}
+        onMerge={handleMergeDuplicatePlayer}
+        onClose={closeMergeDuplicateModal}
       />
 
       <CommunityPasswordResetModal

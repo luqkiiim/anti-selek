@@ -28,6 +28,12 @@ export interface LinkableCommunityPlayer {
   communities: Array<{ id: string; name: string; elo: number }>;
 }
 
+export interface MergeDuplicateCandidate {
+  id: string;
+  name: string;
+  communities: Array<{ id: string; name: string; elo: number }>;
+}
+
 export function useCommunityAdminPlayerActions({
   communityId,
   players,
@@ -51,6 +57,14 @@ export function useCommunityAdminPlayerActions({
   );
   const [loadingLinkCandidates, setLoadingLinkCandidates] = useState(false);
   const [linkingPlayerId, setLinkingPlayerId] = useState<string | null>(null);
+  const [mergeSourcePlayer, setMergeSourcePlayer] =
+    useState<CommunityAdminPlayer | null>(null);
+  const [mergeSearch, setMergeSearch] = useState("");
+  const [mergeCandidates, setMergeCandidates] = useState<
+    MergeDuplicateCandidate[]
+  >([]);
+  const [loadingMergeCandidates, setLoadingMergeCandidates] = useState(false);
+  const [mergingPlayerId, setMergingPlayerId] = useState<string | null>(null);
   const [newPlayerGender, setNewPlayerGender] = useState<PlayerGender>(
     PlayerGender.MALE
   );
@@ -125,6 +139,55 @@ export function useCommunityAdminPlayerActions({
     };
   }, [communityId, isCreatePlayerOpen, linkSearch]);
 
+  useEffect(() => {
+    if (!mergeSourcePlayer || !communityId) {
+      setMergeCandidates([]);
+      setLoadingMergeCandidates(false);
+      return;
+    }
+
+    const search = mergeSearch.trim();
+    if (search.length < 2) {
+      setMergeCandidates([]);
+      setLoadingMergeCandidates(false);
+      return;
+    }
+
+    let cancelled = false;
+    const timeout = setTimeout(() => {
+      void (async () => {
+        setLoadingMergeCandidates(true);
+        try {
+          const res = await fetch(
+            `/api/communities/${communityId}/members/${mergeSourcePlayer.id}/merge-candidates?search=${encodeURIComponent(
+              search
+            )}`
+          );
+          const data = await safeJson(res);
+          if (!res.ok) {
+            throw new Error(data.error || "Failed to load merge candidates");
+          }
+          if (!cancelled) {
+            setMergeCandidates(Array.isArray(data) ? data : []);
+          }
+        } catch {
+          if (!cancelled) {
+            setMergeCandidates([]);
+          }
+        } finally {
+          if (!cancelled) {
+            setLoadingMergeCandidates(false);
+          }
+        }
+      })();
+    }, 180);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timeout);
+    };
+  }, [communityId, mergeSearch, mergeSourcePlayer]);
+
   const openCreatePlayerModal = () => {
     setName("");
     setLinkSearch("");
@@ -156,6 +219,25 @@ export function useCommunityAdminPlayerActions({
     setSavingRating(false);
     setSavingRole(false);
     setSavingPreferences(false);
+  };
+
+  const openMergeDuplicateModal = (player: CommunityAdminPlayer) => {
+    setMergeSourcePlayer(player);
+    setMergeSearch(player.name);
+    setMergeCandidates([]);
+    setLoadingMergeCandidates(false);
+    setMergingPlayerId(null);
+    closePlayerEditor();
+    setError("");
+    setSuccess("");
+  };
+
+  const closeMergeDuplicateModal = () => {
+    if (mergingPlayerId) return;
+    setMergeSourcePlayer(null);
+    setMergeSearch("");
+    setMergeCandidates([]);
+    setLoadingMergeCandidates(false);
   };
 
   const openPasswordResetModal = (player: CommunityAdminPlayer) => {
@@ -237,6 +319,43 @@ export function useCommunityAdminPlayerActions({
       setError(err instanceof Error ? err.message : "Failed to link player");
     } finally {
       setLinkingPlayerId(null);
+    }
+  };
+
+  const handleMergeDuplicatePlayer = async (
+    candidate: MergeDuplicateCandidate
+  ) => {
+    if (!mergeSourcePlayer) return;
+
+    setMergingPlayerId(candidate.id);
+    setError("");
+    setSuccess("");
+
+    try {
+      const res = await fetch(
+        `/api/communities/${communityId}/members/${mergeSourcePlayer.id}/merge`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ targetUserId: candidate.id }),
+        }
+      );
+      const data = await safeJson(res);
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to merge duplicate player");
+      }
+
+      setSuccess(`${mergeSourcePlayer.name} merged into ${candidate.name}.`);
+      setMergeSourcePlayer(null);
+      setMergeSearch("");
+      setMergeCandidates([]);
+      await refreshCommunityData();
+    } catch (err: unknown) {
+      setError(
+        err instanceof Error ? err.message : "Failed to merge duplicate player"
+      );
+    } finally {
+      setMergingPlayerId(null);
     }
   };
 
@@ -504,6 +623,12 @@ export function useCommunityAdminPlayerActions({
     linkCandidates,
     loadingLinkCandidates,
     linkingPlayerId,
+    mergeSourcePlayer,
+    mergeSearch,
+    setMergeSearch,
+    mergeCandidates,
+    loadingMergeCandidates,
+    mergingPlayerId,
     newPlayerGender,
     setNewPlayerGender,
     newPlayerMixedSideOverride,
@@ -532,10 +657,13 @@ export function useCommunityAdminPlayerActions({
     closeCreatePlayerModal,
     openPlayerEditor,
     closePlayerEditor,
+    openMergeDuplicateModal,
+    closeMergeDuplicateModal,
     openPasswordResetModal,
     closePasswordResetModal,
     handleAddPlayer,
     handleLinkExistingPlayer,
+    handleMergeDuplicatePlayer,
     handleSavePlayerName,
     handleSavePlayerRating,
     handleRemovePlayer: requestRemovePlayer,
