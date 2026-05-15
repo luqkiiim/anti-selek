@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useId, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 
@@ -99,6 +99,9 @@ export function PlayerPickerSheet({
   panelClassName,
   overlayClassName,
 }: PlayerPickerSheetProps) {
+  const titleId = useId();
+  const subtitleId = useId();
+
   useEffect(() => {
     if (!open) {
       return;
@@ -135,6 +138,8 @@ export function PlayerPickerSheet({
         <section
           role="dialog"
           aria-modal="true"
+          aria-labelledby={titleId}
+          aria-describedby={subtitle ? subtitleId : undefined}
           className={cx(
             "flex h-full min-h-0 w-full flex-col bg-[var(--surface-strong)] shadow-[0_16px_40px_rgba(23,32,31,0.14)] lg:h-auto lg:max-h-[min(92vh,92dvh)] lg:max-w-[40rem] lg:rounded-[14px] lg:border lg:border-[color:var(--line)]",
             panelClassName
@@ -143,9 +148,13 @@ export function PlayerPickerSheet({
           <div className="shrink-0 border-b border-gray-200 bg-gray-50 px-4 pb-4 pt-[calc(1rem+env(safe-area-inset-top))] sm:px-5 sm:pt-4">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <h2 className="text-lg font-semibold text-gray-900">{title}</h2>
+                <h2 id={titleId} className="text-lg font-semibold text-gray-900">
+                  {title}
+                </h2>
                 {subtitle ? (
-                  <p className="mt-1 text-sm text-gray-500">{subtitle}</p>
+                  <p id={subtitleId} className="mt-1 text-sm text-gray-500">
+                    {subtitle}
+                  </p>
                 ) : null}
               </div>
               <button

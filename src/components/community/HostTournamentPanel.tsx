@@ -374,10 +374,13 @@ export function HostTournamentPanel({
 
         <div className="app-subcard space-y-3 p-3 sm:p-4">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-            <label className="block flex-1 space-y-1.5 text-sm font-medium text-gray-900">
+            <div className="block flex-1 space-y-1.5 text-sm font-medium text-gray-900">
               <span>Collab community</span>
               {hasPartnerCommunity ? (
-                <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2">
+                <div
+                  key="selected-partner-community"
+                  className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2"
+                >
                   <div className="min-w-0">
                     <p className="truncate text-sm font-semibold text-gray-900">
                       {selectedPartnerCommunity?.name ?? "Selected community"}
@@ -390,7 +393,12 @@ export function HostTournamentPanel({
                   </div>
                   <button
                     type="button"
-                    onClick={onClearPartnerCommunity}
+                    onClick={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      onClearPartnerCommunity();
+                    }}
+                    aria-label="Clear collab community"
                     className="app-button-secondary shrink-0 px-2.5 py-1.5 text-xs"
                   >
                     <X aria-hidden="true" size={14} />
@@ -398,13 +406,14 @@ export function HostTournamentPanel({
                   </button>
                 </div>
               ) : (
-                <div className="space-y-2">
+                <div key="partner-community-search" className="space-y-2">
                   <input
                     type="search"
                     value={partnerCommunitySearch}
                     onChange={(event) =>
                       onPartnerCommunitySearchChange(event.target.value)
                     }
+                    aria-label="Search collab community"
                     placeholder="Search by community name"
                     className="field"
                   />
@@ -424,7 +433,12 @@ export function HostTournamentPanel({
                             <button
                               key={candidate.id}
                               type="button"
-                              onClick={() => onSelectPartnerCommunity(candidate)}
+                              onClick={(event) => {
+                                event.preventDefault();
+                                event.stopPropagation();
+                                onSelectPartnerCommunity(candidate);
+                              }}
+                              aria-label={`Select ${candidate.name} for collab`}
                               className="flex items-center justify-between gap-3 rounded-lg px-2 py-2 text-left transition hover:bg-blue-50"
                             >
                               <span className="min-w-0 truncate text-sm font-semibold text-gray-900">
@@ -445,7 +459,7 @@ export function HostTournamentPanel({
                   ) : null}
                 </div>
               )}
-            </label>
+            </div>
             {hasPartnerCommunity ? (
               <span className="app-chip app-chip-warning shrink-0">
                 Approval required
