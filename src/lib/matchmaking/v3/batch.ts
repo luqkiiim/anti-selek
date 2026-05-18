@@ -6,9 +6,13 @@ import {
   buildExactRematchHistory,
   buildOpponentRepeatHistory,
   buildPartnerRepeatHistory,
+  buildSocialMixHistory,
   getExactRematchPenalty,
+  getOpponentCoveragePenalty,
   getOpponentRepeatPenalty,
+  getPartnerCoveragePenalty,
   getPartnerRepeatPenalty,
+  getSharedCourtRepeatPenalty,
 } from "./rematch";
 import {
   POINTS_WAIT_TOLERANCE_MS,
@@ -30,6 +34,7 @@ import type {
 } from "./types";
 
 const MAX_BATCH_EXTRA_CANDIDATES = 2;
+const SOCIAL_MIX_BATCH_EXTRA_CANDIDATES = 5;
 const MAX_BATCH_FALLBACK_CANDIDATE_PLAYERS = 20;
 const MAX_BATCH_SEARCH_BRANCHES = 20000;
 const MAX_BATCH_SEARCH_MS = 750;
@@ -166,6 +171,18 @@ function summarizeBatch<T extends ActiveMatchmakerV3Player>(
       (sum, selection) => sum + selection.balanceGap,
       0
     ),
+    totalSharedCourtRepeatPenalty: selections.reduce(
+      (sum, selection) => sum + selection.sharedCourtRepeatPenalty,
+      0
+    ),
+    totalPartnerCoveragePenalty: selections.reduce(
+      (sum, selection) => sum + selection.partnerCoveragePenalty,
+      0
+    ),
+    totalOpponentCoveragePenalty: selections.reduce(
+      (sum, selection) => sum + selection.opponentCoveragePenalty,
+      0
+    ),
     totalPartnerRepeatPenalty: selections.reduce(
       (sum, selection) => sum + selection.partnerRepeatPenalty,
       0
@@ -235,6 +252,7 @@ function buildQuartetSelections<T extends MatchmakerV3Player>(
   const rematchHistory = buildExactRematchHistory(completedMatches);
   const partnerHistory = buildPartnerRepeatHistory(completedMatches);
   const opponentHistory = buildOpponentRepeatHistory(completedMatches);
+  const socialMixHistory = buildSocialMixHistory(completedMatches);
   const selections: V3SingleCourtSelection<ActiveMatchmakerV3Player<T>>[] = [];
 
   for (const group of quartets) {
@@ -263,6 +281,18 @@ function buildQuartetSelections<T extends MatchmakerV3Player>(
         partition: evaluation.partition,
         waitSummary,
         balanceGap: evaluation.balanceGap,
+        sharedCourtRepeatPenalty: getSharedCourtRepeatPenalty(
+          evaluation.partition,
+          socialMixHistory
+        ),
+        partnerCoveragePenalty: getPartnerCoveragePenalty(
+          evaluation.partition,
+          socialMixHistory
+        ),
+        opponentCoveragePenalty: getOpponentCoveragePenalty(
+          evaluation.partition,
+          socialMixHistory
+        ),
         partnerRepeatPenalty: getPartnerRepeatPenalty(
           evaluation.partition,
           partnerHistory
@@ -306,6 +336,16 @@ function limitBatchCandidatePlayers<T extends MatchmakerV3Player>(
     ...candidatePool.lockedPlayers,
     ...candidatePool.selectablePlayers.slice(0, selectableLimit),
   ];
+}
+
+function getMaxBatchCandidateCount(
+  sessionType: SessionType,
+  requiredPlayerCount: number
+) {
+  return requiredPlayerCount +
+    (sessionType === SessionType.SOCIAL_MIX
+      ? SOCIAL_MIX_BATCH_EXTRA_CANDIDATES
+      : MAX_BATCH_EXTRA_CANDIDATES);
 }
 
 function compressQuartetSelections<T extends ActiveMatchmakerV3Player>(
@@ -352,7 +392,19 @@ function compressQuartetSelections<T extends ActiveMatchmakerV3Player>(
     }
 
     const bestVarietySelection =
-      sessionType === SessionType.POINTS
+      sessionType === SessionType.SOCIAL_MIX
+        ? [...group].sort(
+            (left, right) =>
+              left.sharedCourtRepeatPenalty - right.sharedCourtRepeatPenalty ||
+              left.partnerCoveragePenalty - right.partnerCoveragePenalty ||
+              left.opponentCoveragePenalty - right.opponentCoveragePenalty ||
+              left.balanceGap - right.balanceGap ||
+              left.partnerRepeatPenalty - right.partnerRepeatPenalty ||
+              left.opponentRepeatPenalty - right.opponentRepeatPenalty ||
+              left.exactRematchPenalty - right.exactRematchPenalty ||
+              left.randomScore - right.randomScore
+          )[0]
+        : sessionType === SessionType.POINTS
         ? [...group].sort(
             (left, right) =>
               left.partnerRepeatPenalty - right.partnerRepeatPenalty ||
@@ -663,7 +715,10 @@ export function findBestBatchSelectionV3<T extends MatchmakerV3Player>(
     matchDurationMs,
     randomFn,
     waitToleranceMs:
-      sessionType === SessionType.POINTS ? POINTS_WAIT_TOLERANCE_MS : 0,
+      sessionType === SessionType.POINTS ||
+      sessionType === SessionType.SOCIAL_MIX
+        ? POINTS_WAIT_TOLERANCE_MS
+        : 0,
   });
   const debug: V3BatchDebug = {
     eligiblePlayerIds: candidatePool.activePlayers.map((player) => player.userId),
@@ -750,7 +805,8 @@ export function findBestBatchSelectionV3<T extends MatchmakerV3Player>(
     pool: candidatePool,
     candidatePlayers: limitBatchCandidatePlayers(
       candidatePool,
-      requiredPlayerCount
+      requiredPlayerCount,
+      getMaxBatchCandidateCount(sessionType, requiredPlayerCount)
     ),
     lockedIds: strictLockedIds,
   });
@@ -764,7 +820,10 @@ export function findBestBatchSelectionV3<T extends MatchmakerV3Player>(
       const fallbackCandidatePlayers = limitBatchCandidatePlayers(
         fallbackPool,
         requiredPlayerCount,
-        MAX_BATCH_FALLBACK_CANDIDATE_PLAYERS
+        Math.max(
+          MAX_BATCH_FALLBACK_CANDIDATE_PLAYERS,
+          getMaxBatchCandidateCount(sessionType, requiredPlayerCount)
+        )
       );
       const fallbackLockedIds = new Set(
         fallbackPool.lockedPlayers.map((player) => player.userId)

@@ -41,6 +41,13 @@ function usesPartnerRepeatPreference(sessionType: SessionType) {
   );
 }
 
+function usesPointsWaitTolerance(sessionType: SessionType) {
+  return (
+    sessionType === SessionType.POINTS ||
+    sessionType === SessionType.SOCIAL_MIX
+  );
+}
+
 function getPartnerRepeatBalanceTolerance(sessionType: SessionType) {
   return sessionType === SessionType.POINTS
     ? POINTS_PARTNER_REPEAT_BALANCE_TOLERANCE
@@ -48,7 +55,7 @@ function getPartnerRepeatBalanceTolerance(sessionType: SessionType) {
 }
 
 function getWaitToleranceMs(sessionType: SessionType) {
-  return sessionType === SessionType.POINTS ? POINTS_WAIT_TOLERANCE_MS : 0;
+  return usesPointsWaitTolerance(sessionType) ? POINTS_WAIT_TOLERANCE_MS : 0;
 }
 
 function compareWaitValues(left: number, right: number, toleranceMs: number) {
@@ -118,6 +125,49 @@ export function compareSingleCourtSelections<
   );
   if (waitCompare !== 0) {
     return waitCompare;
+  }
+
+  if (sessionType === SessionType.SOCIAL_MIX) {
+    const sharedCourtDiff =
+      left.sharedCourtRepeatPenalty - right.sharedCourtRepeatPenalty;
+    if (sharedCourtDiff !== 0) {
+      return sharedCourtDiff;
+    }
+
+    const partnerCoverageDiff =
+      left.partnerCoveragePenalty - right.partnerCoveragePenalty;
+    if (partnerCoverageDiff !== 0) {
+      return partnerCoverageDiff;
+    }
+
+    const opponentCoverageDiff =
+      left.opponentCoveragePenalty - right.opponentCoveragePenalty;
+    if (opponentCoverageDiff !== 0) {
+      return opponentCoverageDiff;
+    }
+
+    const balanceDiff = left.balanceGap - right.balanceGap;
+    if (balanceDiff !== 0) {
+      return balanceDiff;
+    }
+
+    const partnerDiff = left.partnerRepeatPenalty - right.partnerRepeatPenalty;
+    if (partnerDiff !== 0) {
+      return partnerDiff;
+    }
+
+    const opponentDiff =
+      left.opponentRepeatPenalty - right.opponentRepeatPenalty;
+    if (opponentDiff !== 0) {
+      return opponentDiff;
+    }
+
+    const rematchDiff = left.exactRematchPenalty - right.exactRematchPenalty;
+    if (rematchDiff !== 0) {
+      return rematchDiff;
+    }
+
+    return left.randomScore - right.randomScore;
   }
 
   const balanceDiff = left.balanceGap - right.balanceGap;
@@ -203,6 +253,56 @@ export function compareBatchSelections<T extends ActiveMatchmakerV3Player>(
   );
   if (waitCompare !== 0) {
     return waitCompare;
+  }
+
+  if (sessionType === SessionType.SOCIAL_MIX) {
+    const sharedCourtDiff =
+      left.totalSharedCourtRepeatPenalty - right.totalSharedCourtRepeatPenalty;
+    if (sharedCourtDiff !== 0) {
+      return sharedCourtDiff;
+    }
+
+    const partnerCoverageDiff =
+      left.totalPartnerCoveragePenalty - right.totalPartnerCoveragePenalty;
+    if (partnerCoverageDiff !== 0) {
+      return partnerCoverageDiff;
+    }
+
+    const opponentCoverageDiff =
+      left.totalOpponentCoveragePenalty - right.totalOpponentCoveragePenalty;
+    if (opponentCoverageDiff !== 0) {
+      return opponentCoverageDiff;
+    }
+
+    const maxBalanceDiff = left.maxBalanceGap - right.maxBalanceGap;
+    if (maxBalanceDiff !== 0) {
+      return maxBalanceDiff;
+    }
+
+    const totalBalanceDiff = left.totalBalanceGap - right.totalBalanceGap;
+    if (totalBalanceDiff !== 0) {
+      return totalBalanceDiff;
+    }
+
+    const partnerDiff =
+      left.totalPartnerRepeatPenalty - right.totalPartnerRepeatPenalty;
+    if (partnerDiff !== 0) {
+      return partnerDiff;
+    }
+
+    const opponentDiff =
+      left.totalOpponentRepeatPenalty - right.totalOpponentRepeatPenalty;
+    if (opponentDiff !== 0) {
+      return opponentDiff;
+    }
+
+    const rematchDiff =
+      left.totalExactRematchPenalty - right.totalExactRematchPenalty;
+    if (rematchDiff !== 0) {
+      return rematchDiff;
+    }
+
+    return left.totalRandomScore - right.totalRandomScore;
   }
 
   const maxBalanceDiff = left.maxBalanceGap - right.maxBalanceGap;

@@ -184,7 +184,15 @@ describe("parseCreateSessionRequest", () => {
     ).toThrowError(new SessionRouteError("Invalid session mode", 400));
   });
 
-  it("accepts ladder and race as valid session types", () => {
+  it("accepts social mix, ladder, and race as valid session types", () => {
+    const socialMixParsed = parseCreateSessionRequest({
+      name: "Social Night",
+      communityId: "community-1",
+      type: SessionType.SOCIAL_MIX,
+    });
+
+    expect(socialMixParsed.type).toBe(SessionType.SOCIAL_MIX);
+
     const parsed = parseCreateSessionRequest({
       name: "Ladder Night",
       communityId: "community-1",

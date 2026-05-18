@@ -532,6 +532,60 @@ describe("sessionDataMutations", () => {
     expect(updated.players.find((player) => player.userId === "p1")?.user.elo).toBe(1010);
   });
 
+  it("awards session points and ratings when approving a social mix match", () => {
+    const socialMixSession = {
+      ...createSessionData(),
+      type: SessionType.SOCIAL_MIX,
+    };
+    const updated = applyScoreApproval(
+      applyScoreSubmission(
+        applyGeneratedMatches(socialMixSession, [
+          {
+            id: "match-1",
+            courtId: "court-1",
+            status: "IN_PROGRESS",
+            team1User1: { id: "p1", name: "Player 1" },
+            team1User2: { id: "p2", name: "Player 2" },
+            team2User1: { id: "p3", name: "Player 3" },
+            team2User2: { id: "p4", name: "Player 4" },
+          },
+        ]),
+        {
+          id: "match-1",
+          status: "PENDING_APPROVAL",
+          winnerTeam: 1,
+          team1Score: 21,
+          team2Score: 18,
+          completedAt: "2026-03-16T10:00:00.000Z",
+          team1User1: { id: "p1", name: "Player 1" },
+          team1User2: { id: "p2", name: "Player 2" },
+          team2User1: { id: "p3", name: "Player 3" },
+          team2User2: { id: "p4", name: "Player 4" },
+        }
+      ),
+      {
+        id: "match-1",
+        status: "COMPLETED",
+        winnerTeam: 1,
+        team1Score: 21,
+        team2Score: 18,
+        team1EloChange: 10,
+        team2EloChange: -10,
+        completedAt: "2026-03-16T10:00:00.000Z",
+        team1User1Id: "p1",
+        team1User2Id: "p2",
+        team2User1Id: "p3",
+        team2User2Id: "p4",
+      }
+    );
+
+    expect(updated.players.find((player) => player.userId === "p1")?.sessionPoints).toBe(3);
+    expect(updated.players.find((player) => player.userId === "p2")?.sessionPoints).toBe(3);
+    expect(updated.players.find((player) => player.userId === "p3")?.sessionPoints).toBe(0);
+    expect(updated.players.find((player) => player.userId === "p1")?.user.elo).toBe(1010);
+    expect(updated.players.find((player) => player.userId === "p3")?.user.elo).toBe(990);
+  });
+
   it("does not award session points when approving a race match", () => {
     const raceSession = {
       ...createSessionData(),

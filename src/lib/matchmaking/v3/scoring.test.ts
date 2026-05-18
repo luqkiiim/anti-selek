@@ -35,6 +35,9 @@ function createSelection(
   {
     waitMs = [10, 10, 10, 10],
     balanceGap,
+    sharedCourtRepeatPenalty = 0,
+    partnerCoveragePenalty = 0,
+    opponentCoveragePenalty = 0,
     partnerRepeatPenalty = 0,
     opponentRepeatPenalty = 0,
     exactRematchPenalty,
@@ -42,6 +45,9 @@ function createSelection(
   }: {
     waitMs?: number[];
     balanceGap: number;
+    sharedCourtRepeatPenalty?: number;
+    partnerCoveragePenalty?: number;
+    opponentCoveragePenalty?: number;
     partnerRepeatPenalty?: number;
     opponentRepeatPenalty?: number;
     exactRematchPenalty: number;
@@ -66,6 +72,9 @@ function createSelection(
     },
     waitSummary: buildWaitSummary(players),
     balanceGap,
+    sharedCourtRepeatPenalty,
+    partnerCoveragePenalty,
+    opponentCoveragePenalty,
     partnerRepeatPenalty,
     opponentRepeatPenalty,
     exactRematchPenalty,
@@ -77,6 +86,9 @@ function createBatchSelection({
   waitMs = [10, 10, 10, 10],
   maxBalanceGap,
   totalBalanceGap,
+  totalSharedCourtRepeatPenalty = 0,
+  totalPartnerCoveragePenalty = 0,
+  totalOpponentCoveragePenalty = 0,
   totalPartnerRepeatPenalty = 0,
   totalOpponentRepeatPenalty = 0,
   totalExactRematchPenalty = 0,
@@ -85,6 +97,9 @@ function createBatchSelection({
   waitMs?: number[];
   maxBalanceGap: number;
   totalBalanceGap: number;
+  totalSharedCourtRepeatPenalty?: number;
+  totalPartnerCoveragePenalty?: number;
+  totalOpponentCoveragePenalty?: number;
   totalPartnerRepeatPenalty?: number;
   totalOpponentRepeatPenalty?: number;
   totalExactRematchPenalty?: number;
@@ -93,6 +108,9 @@ function createBatchSelection({
   const selection = createSelection({
     waitMs,
     balanceGap: maxBalanceGap,
+    sharedCourtRepeatPenalty: totalSharedCourtRepeatPenalty,
+    partnerCoveragePenalty: totalPartnerCoveragePenalty,
+    opponentCoveragePenalty: totalOpponentCoveragePenalty,
     partnerRepeatPenalty: totalPartnerRepeatPenalty,
     opponentRepeatPenalty: totalOpponentRepeatPenalty,
     exactRematchPenalty: totalExactRematchPenalty,
@@ -104,6 +122,9 @@ function createBatchSelection({
     waitSummary: selection.waitSummary,
     maxBalanceGap,
     totalBalanceGap,
+    totalSharedCourtRepeatPenalty,
+    totalPartnerCoveragePenalty,
+    totalOpponentCoveragePenalty,
     totalPartnerRepeatPenalty,
     totalOpponentRepeatPenalty,
     totalExactRematchPenalty,
@@ -351,6 +372,52 @@ describe("matchmaking v3 scoring", () => {
     ).toBeLessThan(0);
   });
 
+  it("prefers first-time shared-court contacts over balance in social mix sessions", () => {
+    const repeatedCourt = createSelection({
+      balanceGap: 0,
+      sharedCourtRepeatPenalty: 2,
+      exactRematchPenalty: 0,
+    });
+    const freshCourt = createSelection({
+      balanceGap: 2,
+      sharedCourtRepeatPenalty: 0,
+      exactRematchPenalty: 0,
+    });
+
+    expect(
+      compareSingleCourtSelections(
+        freshCourt,
+        repeatedCourt,
+        SessionType.SOCIAL_MIX
+      )
+    ).toBeLessThan(0);
+  });
+
+  it("prefers fresh partners before fresher opponents in social mix sessions", () => {
+    const repeatedPartners = createSelection({
+      balanceGap: 0,
+      sharedCourtRepeatPenalty: 0,
+      partnerCoveragePenalty: 1,
+      opponentCoveragePenalty: 0,
+      exactRematchPenalty: 0,
+    });
+    const freshPartners = createSelection({
+      balanceGap: 0,
+      sharedCourtRepeatPenalty: 0,
+      partnerCoveragePenalty: 0,
+      opponentCoveragePenalty: 1,
+      exactRematchPenalty: 0,
+    });
+
+    expect(
+      compareSingleCourtSelections(
+        freshPartners,
+        repeatedPartners,
+        SessionType.SOCIAL_MIX
+      )
+    ).toBeLessThan(0);
+  });
+
   it("prefers the lower total partner-repeat batch when points balance is close", () => {
     const repeatedPartnerBatch = createBatchSelection({
       maxBalanceGap: 0,
@@ -368,6 +435,27 @@ describe("matchmaking v3 scoring", () => {
         freshPartnerBatch,
         repeatedPartnerBatch,
         SessionType.POINTS
+      )
+    ).toBeLessThan(0);
+  });
+
+  it("prefers lower total shared-court repeats before balance in social mix batches", () => {
+    const repeatedCourtBatch = createBatchSelection({
+      maxBalanceGap: 0,
+      totalBalanceGap: 0,
+      totalSharedCourtRepeatPenalty: 4,
+    });
+    const freshCourtBatch = createBatchSelection({
+      maxBalanceGap: 2,
+      totalBalanceGap: 2,
+      totalSharedCourtRepeatPenalty: 0,
+    });
+
+    expect(
+      compareBatchSelections(
+        freshCourtBatch,
+        repeatedCourtBatch,
+        SessionType.SOCIAL_MIX
       )
     ).toBeLessThan(0);
   });

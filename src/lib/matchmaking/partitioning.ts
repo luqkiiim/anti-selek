@@ -224,14 +224,21 @@ function getQuartetRandomScore<T extends { userId: string }>(
   return ids.reduce((sum, id) => sum + (randomByUserId.get(id) ?? 0), 0);
 }
 
+function usesSessionPointBalance(sessionType: SessionType) {
+  return (
+    sessionType === SessionType.POINTS ||
+    sessionType === SessionType.SOCIAL_MIX
+  );
+}
+
 function getBalanceGapNormalizer(sessionType: SessionType) {
-  return sessionType === SessionType.POINTS
+  return usesSessionPointBalance(sessionType)
     ? POINTS_BALANCE_GAP_NORMALIZER
     : ELO_BALANCE_GAP_NORMALIZER;
 }
 
 function getExactPartitionBalanceTolerance(sessionType: SessionType) {
-  return sessionType === SessionType.POINTS
+  return usesSessionPointBalance(sessionType)
     ? POINTS_EXACT_PARTITION_BALANCE_TOLERANCE
     : ELO_EXACT_PARTITION_BALANCE_TOLERANCE;
 }
@@ -262,7 +269,7 @@ function comparePartitionScoreDetails(
   }
 
   if (
-    sessionType === SessionType.POINTS &&
+    usesSessionPointBalance(sessionType) &&
     left.pointDiffGap !== right.pointDiffGap
   ) {
     return left.pointDiffGap - right.pointDiffGap;

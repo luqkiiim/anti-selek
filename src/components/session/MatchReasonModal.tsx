@@ -37,6 +37,30 @@ function buildMetricRows(reason: MatchmakingReason) {
       label: "Minimum wait",
       value: formatSeconds(metrics.minimumWaitSeconds),
     },
+    ...(metrics.sharedCourtRepeatPenalty !== undefined
+      ? [
+          {
+            label: "Shared-court repeats",
+            value: formatNumber(metrics.sharedCourtRepeatPenalty),
+          },
+        ]
+      : []),
+    ...(metrics.partnerCoveragePenalty !== undefined
+      ? [
+          {
+            label: "Partner coverage",
+            value: formatNumber(metrics.partnerCoveragePenalty),
+          },
+        ]
+      : []),
+    ...(metrics.opponentCoveragePenalty !== undefined
+      ? [
+          {
+            label: "Opponent coverage",
+            value: formatNumber(metrics.opponentCoveragePenalty),
+          },
+        ]
+      : []),
     {
       label: "Partner repeats",
       value: formatNumber(metrics.partnerRepeatPenalty),

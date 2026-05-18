@@ -1,13 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import {
-  ChevronDown,
-  SlidersHorizontal,
-  UserPlus,
-  Users,
-  X,
-} from "lucide-react";
+import { useState } from "react";
+import { ChevronDown, SlidersHorizontal, UserPlus, Users, X } from "lucide-react";
 import type { CommunityCollabCandidate } from "./communityTypes";
 import { SessionMode, SessionPool, SessionType } from "@/types/enums";
 
@@ -53,6 +47,14 @@ interface HostTournamentPanelProps {
   creatingSession: boolean;
 }
 
+const SESSION_TYPE_ORDER: SessionType[] = [
+  SessionType.POINTS,
+  SessionType.SOCIAL_MIX,
+  SessionType.ELO,
+  SessionType.LADDER,
+  SessionType.RACE,
+];
+
 const SESSION_TYPE_INFO: Record<
   SessionType,
   {
@@ -66,6 +68,14 @@ const SESSION_TYPE_INFO: Record<
       "Balances by current session points.",
       "Everyone starts at 0.",
       "Best for groups still finding their level.",
+    ],
+  },
+  [SessionType.SOCIAL_MIX]: {
+    label: "Social Mix",
+    lines: [
+      "Pushes for first-time partners and opponents across the session.",
+      "Still records scores, session points, and rating updates.",
+      "Best for social nights where mixing matters most.",
     ],
   },
   [SessionType.ELO]: {
@@ -93,80 +103,6 @@ const SESSION_TYPE_INFO: Record<
     ],
   },
 };
-
-function FormatCard({
-  sessionType,
-  selected,
-  infoOpen,
-  onSelect,
-  onToggleInfo,
-}: {
-  sessionType: SessionType;
-  selected: boolean;
-  infoOpen: boolean;
-  onSelect: () => void;
-  onToggleInfo: () => void;
-}) {
-  const info = SESSION_TYPE_INFO[sessionType];
-  const bubblePositionClass =
-    sessionType === SessionType.ELO || sessionType === SessionType.RACE
-      ? "right-0 sm:left-1/2 sm:right-auto sm:-translate-x-1/2"
-      : "left-0 sm:left-1/2 sm:-translate-x-1/2";
-  const bubbleArrowClass =
-    sessionType === SessionType.ELO || sessionType === SessionType.RACE
-      ? "right-4 sm:left-1/2 sm:right-auto sm:-translate-x-1/2"
-      : "left-4 sm:left-1/2 sm:-translate-x-1/2";
-
-  return (
-    <div className="relative" data-format-info-root="true">
-      <button
-        type="button"
-        onClick={onSelect}
-        className={`w-full rounded-xl border px-2.5 py-2.5 pr-7 text-left transition ${
-          selected
-            ? "border-blue-300 bg-blue-50 text-blue-700 shadow-sm"
-            : "border-gray-200 bg-white text-gray-800 hover:border-blue-200 hover:bg-blue-50/40"
-        }`}
-      >
-        <span className="block text-[13px] font-semibold leading-tight">
-          {info.label}
-        </span>
-      </button>
-
-      <button
-        type="button"
-        onClick={(event) => {
-          event.stopPropagation();
-          onToggleInfo();
-        }}
-        aria-label={`About ${info.label} format`}
-        aria-expanded={infoOpen}
-        className="absolute right-1.5 top-1.5 flex h-[18px] w-[18px] items-center justify-center rounded-full border border-gray-200 bg-white text-[9px] font-semibold text-gray-500 shadow-sm transition hover:border-blue-200 hover:text-blue-700"
-      >
-        i
-      </button>
-
-      {infoOpen ? (
-        <div
-          className={`absolute top-full z-20 mt-2 w-[min(15rem,calc(100vw-2rem))] max-w-[15rem] ${bubblePositionClass}`}
-        >
-          <div className="relative rounded-xl border border-gray-900 bg-gray-950 px-3 py-3 shadow-[0_18px_40px_-22px_rgba(15,23,42,0.55)]">
-            <div
-              className={`absolute top-0 h-3 w-3 -translate-y-1/2 rotate-45 border-l border-t border-gray-900 bg-gray-950 ${bubbleArrowClass}`}
-            />
-            <div className="space-y-1.5">
-              {info.lines.map((line) => (
-                <p key={line} className="text-sm leading-5 text-white">
-                  {line}
-                </p>
-              ))}
-            </div>
-          </div>
-        </div>
-      ) : null}
-    </div>
-  );
-}
 
 function SegmentedOption({
   label,
@@ -328,10 +264,6 @@ export function HostTournamentPanel({
   exitHostModeLabel,
   creatingSession,
 }: HostTournamentPanelProps) {
-  const formatInfoAreaRef = useRef<HTMLDivElement | null>(null);
-  const [infoSessionType, setInfoSessionType] = useState<SessionType | null>(
-    null
-  );
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const canCreateSession = Boolean(newSessionName.trim()) && !creatingSession;
   const hasPartnerCommunity = Boolean(partnerCommunityId);
@@ -350,21 +282,7 @@ export function HostTournamentPanel({
     advancedSummaryItems.length > 0
       ? advancedSummaryItems.join(" / ")
       : "Regular tournament / Auto queue on";
-
-  useEffect(() => {
-    if (!infoSessionType) return;
-
-    const handlePointerDown = (event: PointerEvent) => {
-      if (!(event.target instanceof Node)) return;
-      if (formatInfoAreaRef.current?.contains(event.target)) return;
-      setInfoSessionType(null);
-    };
-
-    document.addEventListener("pointerdown", handlePointerDown);
-    return () => {
-      document.removeEventListener("pointerdown", handlePointerDown);
-    };
-  }, [infoSessionType]);
+  const selectedFormatInfo = SESSION_TYPE_INFO[sessionType];
 
   return (
     <section className="app-panel p-3 sm:p-4">
@@ -402,24 +320,29 @@ export function HostTournamentPanel({
           </label>
 
           <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_120px]">
-            <div ref={formatInfoAreaRef} className="space-y-1.5">
+            <div className="space-y-1.5">
               <p className="text-sm font-medium text-gray-900">Format</p>
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                {(Object.values(SessionType) as SessionType[]).map((type) => (
-                  <FormatCard
-                    key={type}
-                    sessionType={type}
-                    selected={sessionType === type}
-                    infoOpen={infoSessionType === type}
-                    onSelect={() => {
-                      setInfoSessionType(null);
-                      onSessionTypeChange(type);
-                    }}
-                    onToggleInfo={() =>
-                      setInfoSessionType((prev) => (prev === type ? null : type))
-                    }
-                  />
+              <select
+                value={sessionType}
+                onChange={(event) =>
+                  onSessionTypeChange(event.target.value as SessionType)
+                }
+                className="field"
+              >
+                {SESSION_TYPE_ORDER.map((type) => (
+                  <option key={type} value={type}>
+                    {SESSION_TYPE_INFO[type].label}
+                  </option>
                 ))}
+              </select>
+              <div className="rounded-xl border border-gray-200 bg-gray-50/80 px-3 py-3">
+                <div className="space-y-1.5">
+                  {selectedFormatInfo.lines.map((line) => (
+                    <p key={line} className="text-sm leading-5 text-gray-700">
+                      {line}
+                    </p>
+                  ))}
+                </div>
               </div>
             </div>
 

@@ -142,6 +142,7 @@ function getPlayerBalanceInput({
 }) {
   switch (sessionType) {
     case SessionType.POINTS:
+    case SessionType.SOCIAL_MIX:
       return sessionPoints;
     case SessionType.ELO:
       return communityElo ?? userElo;
@@ -275,7 +276,8 @@ function buildV3Players(
     availableSince: player.availableSince,
     strength:
       playersById.get(player.userId)?.elo ??
-      (sessionData.type === SessionType.POINTS
+      (sessionData.type === SessionType.POINTS ||
+      sessionData.type === SessionType.SOCIAL_MIX
         ? player.sessionPoints
         : player.user.elo),
     isBusy: !player.isPaused && !availableUserIds.has(player.userId),

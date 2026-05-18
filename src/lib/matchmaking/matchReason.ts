@@ -18,6 +18,9 @@ export interface MatchmakingReason {
     fairnessBand: number | null;
     selectedMatchCounts: number[];
     balanceGap: number;
+    sharedCourtRepeatPenalty?: number;
+    partnerCoveragePenalty?: number;
+    opponentCoveragePenalty?: number;
     partnerRepeatPenalty: number;
     opponentRepeatPenalty: number;
     exactRematchPenalty: number;
@@ -71,7 +74,10 @@ function formatMetric(value: number) {
 }
 
 function getBalanceUnit(sessionType: SessionType | string) {
-  return sessionType === SessionType.POINTS ? "point" : "rating";
+  return sessionType === SessionType.POINTS ||
+    sessionType === SessionType.SOCIAL_MIX
+    ? "point"
+    : "rating";
 }
 
 function buildReasonSummary({
@@ -104,22 +110,46 @@ function buildReasonSummary({
     );
   }
 
-  summary.push(
-    metrics.partnerRepeatPenalty === 0
-      ? "No recent partner repeat penalty on this selection."
-      : `Partner repeat penalty is ${formatMetric(
-          metrics.partnerRepeatPenalty
-        )}.`
-  );
-
-  if (sessionType === SessionType.POINTS) {
+  if (sessionType === SessionType.SOCIAL_MIX) {
     summary.push(
-      metrics.opponentRepeatPenalty === 0
-        ? "Opponent repeat pressure stayed at zero."
-        : `Opponent repeat penalty is ${formatMetric(
-            metrics.opponentRepeatPenalty
+      metrics.sharedCourtRepeatPenalty === 0
+        ? "All six shared-court pairings are first-time contacts this session."
+        : `Shared-court repeat penalty is ${formatMetric(
+            metrics.sharedCourtRepeatPenalty ?? 0
+          )} of 6 possible pairings.`
+    );
+    summary.push(
+      metrics.partnerCoveragePenalty === 0
+        ? "Both partner pairings are new for this session."
+        : `Partner coverage penalty is ${formatMetric(
+            metrics.partnerCoveragePenalty ?? 0
+          )} of 2 pairings.`
+    );
+    summary.push(
+      metrics.opponentCoveragePenalty === 0
+        ? "All four opponent pairings are new for this session."
+        : `Opponent coverage penalty is ${formatMetric(
+            metrics.opponentCoveragePenalty ?? 0
+          )} of 4 pairings.`
+    );
+  } else {
+    summary.push(
+      metrics.partnerRepeatPenalty === 0
+        ? "No recent partner repeat penalty on this selection."
+        : `Partner repeat penalty is ${formatMetric(
+            metrics.partnerRepeatPenalty
           )}.`
     );
+
+    if (sessionType === SessionType.POINTS) {
+      summary.push(
+        metrics.opponentRepeatPenalty === 0
+          ? "Opponent repeat pressure stayed at zero."
+          : `Opponent repeat penalty is ${formatMetric(
+              metrics.opponentRepeatPenalty
+            )}.`
+      );
+    }
   }
 
   if (sessionMode === SessionMode.MIXICANO) {
@@ -154,6 +184,9 @@ export function buildV3MatchmakingReason<
       selectedMatchCounts.length > 0 ? Math.min(...selectedMatchCounts) : null,
     selectedMatchCounts,
     balanceGap: roundMetric(selection.balanceGap),
+    sharedCourtRepeatPenalty: selection.sharedCourtRepeatPenalty,
+    partnerCoveragePenalty: selection.partnerCoveragePenalty,
+    opponentCoveragePenalty: selection.opponentCoveragePenalty,
     partnerRepeatPenalty: selection.partnerRepeatPenalty,
     opponentRepeatPenalty: selection.opponentRepeatPenalty,
     exactRematchPenalty: selection.exactRematchPenalty,
@@ -165,7 +198,10 @@ export function buildV3MatchmakingReason<
     mixedMode: context.sessionMode === SessionMode.MIXICANO,
   };
 
-  if (context.sessionType === SessionType.POINTS) {
+  if (
+    context.sessionType === SessionType.POINTS ||
+    context.sessionType === SessionType.SOCIAL_MIX
+  ) {
     metrics.waitToleranceSeconds = secondsFromMs(POINTS_WAIT_TOLERANCE_MS);
   }
 
@@ -240,6 +276,27 @@ export function parseMatchmakingReasonJson(
   }
 
   if (
+    metrics.sharedCourtRepeatPenalty !== undefined &&
+    typeof metrics.sharedCourtRepeatPenalty !== "number"
+  ) {
+    return null;
+  }
+
+  if (
+    metrics.partnerCoveragePenalty !== undefined &&
+    typeof metrics.partnerCoveragePenalty !== "number"
+  ) {
+    return null;
+  }
+
+  if (
+    metrics.opponentCoveragePenalty !== undefined &&
+    typeof metrics.opponentCoveragePenalty !== "number"
+  ) {
+    return null;
+  }
+
+  if (
     metrics.fairnessBand !== null &&
     typeof metrics.fairnessBand !== "number"
   ) {
@@ -266,6 +323,9 @@ export function parseMatchmakingReasonJson(
       fairnessBand: metrics.fairnessBand,
       selectedMatchCounts: metrics.selectedMatchCounts,
       balanceGap: metrics.balanceGap,
+      sharedCourtRepeatPenalty: metrics.sharedCourtRepeatPenalty,
+      partnerCoveragePenalty: metrics.partnerCoveragePenalty,
+      opponentCoveragePenalty: metrics.opponentCoveragePenalty,
       partnerRepeatPenalty: metrics.partnerRepeatPenalty,
       opponentRepeatPenalty: metrics.opponentRepeatPenalty,
       exactRematchPenalty: metrics.exactRematchPenalty,

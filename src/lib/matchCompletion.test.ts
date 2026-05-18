@@ -336,6 +336,59 @@ describe("finalizeMatchResult", () => {
       ]),
     });
   });
+
+  it("awards session points and persistent ratings for social mix sessions", async () => {
+    const storedMatch = {
+      id: "match-1",
+      team1Score: 21,
+      team2Score: 18,
+      winnerTeam: 1,
+      status: MatchStatus.COMPLETED,
+    };
+    const tx: TransactionMock = createTransactionMock(storedMatch);
+    mocks.transaction.mockImplementation(
+      (callback: (tx: TransactionMock) => unknown) => callback(tx)
+    );
+
+    await finalizeMatchResult({
+      match: {
+        ...finalizableMatch,
+        session: {
+          communityId: null,
+          type: SessionType.SOCIAL_MIX,
+          isTest: false,
+        },
+      },
+      expectedStatus: MatchStatus.IN_PROGRESS,
+      finalTeam1Score: 21,
+      finalTeam2Score: 18,
+    });
+
+    expect(tx.sessionPlayer.updateMany).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        data: expect.objectContaining({
+          sessionPoints: { increment: 3 },
+        }),
+      })
+    );
+    expect(tx.sessionPlayer.updateMany).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        data: expect.objectContaining({
+          sessionPoints: { increment: 0 },
+        }),
+      })
+    );
+    expect(tx.user.updateMany).toHaveBeenNthCalledWith(1, {
+      where: { id: { in: ["a1", "a2"] } },
+      data: { elo: { increment: expect.any(Number) } },
+    });
+    expect(tx.user.updateMany).toHaveBeenNthCalledWith(2, {
+      where: { id: { in: ["b1", "b2"] } },
+      data: { elo: { increment: expect.any(Number) } },
+    });
+  });
 });
 
 describe("undoCompletedMatchResult", () => {

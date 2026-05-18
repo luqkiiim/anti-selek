@@ -277,6 +277,36 @@ describe("buildSessionViewModel", () => {
     expect(viewModel.getPlayerProfileHref(players[0])).toBe("/profile/u1");
   });
 
+  it("labels social mix sessions while keeping points-style ordering", () => {
+    const players = [
+      createPlayer("u1", "Alice", { sessionPoints: 3 }),
+      createPlayer("u2", "Ben", { sessionPoints: 6 }),
+      createPlayer("u3", "Cara", { sessionPoints: 0 }),
+      createPlayer("u4", "Dan", { sessionPoints: 3 }),
+    ];
+
+    const viewModel = buildSessionViewModel({
+      sessionData: createSessionData({
+        type: SessionType.SOCIAL_MIX,
+        mode: SessionMode.MEXICANO,
+        players,
+      }),
+      communityPlayers: [],
+      rosterSearch: "",
+      manualMatchForm: emptyManualMatchForm,
+      manualCourtId: null,
+      openPreferenceEditor: null,
+    });
+
+    expect(viewModel.sessionTypeLabel).toBe("Social Mix");
+    expect(viewModel.sortedPlayers.map((player) => player.user.name)).toEqual([
+      "Ben",
+      "Alice",
+      "Dan",
+      "Cara",
+    ]);
+  });
+
   it("sorts ladder standings by record and ignores matches before ladder re-entry", () => {
     const players = [
       createPlayer("u1", "Alice"),

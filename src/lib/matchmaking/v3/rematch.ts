@@ -7,7 +7,7 @@ export const DEFAULT_PARTNER_REPEAT_DECAY = 0.85;
 export const DEFAULT_OPPONENT_REPEAT_HISTORY_LIMIT = 8;
 export const DEFAULT_OPPONENT_REPEAT_DECAY = 0.85;
 
-function getPairKey(playerA: string, playerB: string) {
+export function getPairKey(playerA: string, playerB: string) {
   return [playerA, playerB].sort().join("|");
 }
 
@@ -40,6 +40,12 @@ export interface V3PartnerRepeatHistory {
 
 export interface V3OpponentRepeatHistory {
   opponentCounts: Map<string, number>;
+}
+
+export interface V3SocialMixHistory {
+  sharedCourtPairs: Set<string>;
+  partnerPairs: Set<string>;
+  opponentPairs: Set<string>;
 }
 
 export function buildExactRematchHistory(
@@ -143,6 +149,31 @@ function getOpponentPairKeys(partition: V3DoublesPartition) {
   );
 }
 
+function getSharedCourtPairKeys(partition: V3DoublesPartition) {
+  const allPlayers = [
+    partition.team1[0],
+    partition.team1[1],
+    partition.team2[0],
+    partition.team2[1],
+  ];
+  const pairKeys: string[] = [];
+
+  for (let left = 0; left < allPlayers.length - 1; left += 1) {
+    for (let right = left + 1; right < allPlayers.length; right += 1) {
+      pairKeys.push(getPairKey(allPlayers[left], allPlayers[right]));
+    }
+  }
+
+  return pairKeys;
+}
+
+function getPartnerPairKeys(partition: V3DoublesPartition) {
+  return [
+    getPairKey(partition.team1[0], partition.team1[1]),
+    getPairKey(partition.team2[0], partition.team2[1]),
+  ];
+}
+
 export function buildOpponentRepeatHistory(
   matches: V3CompletedMatch[],
   {
@@ -181,4 +212,67 @@ export function getOpponentRepeatPenalty(
     const repeatWeight = history.opponentCounts.get(opponentKey) ?? 0;
     return sum + repeatWeight * repeatWeight;
   }, 0);
+}
+
+export function buildSocialMixHistory(
+  matches: V3CompletedMatch[]
+): V3SocialMixHistory {
+  const sharedCourtPairs = new Set<string>();
+  const partnerPairs = new Set<string>();
+  const opponentPairs = new Set<string>();
+
+  for (const match of matches) {
+    const partition = {
+      team1: match.team1,
+      team2: match.team2,
+    };
+
+    for (const pairKey of getSharedCourtPairKeys(partition)) {
+      sharedCourtPairs.add(pairKey);
+    }
+
+    for (const pairKey of getPartnerPairKeys(partition)) {
+      partnerPairs.add(pairKey);
+    }
+
+    for (const pairKey of getOpponentPairKeys(partition)) {
+      opponentPairs.add(pairKey);
+    }
+  }
+
+  return {
+    sharedCourtPairs,
+    partnerPairs,
+    opponentPairs,
+  };
+}
+
+export function getSharedCourtRepeatPenalty(
+  partition: V3DoublesPartition,
+  history: V3SocialMixHistory
+) {
+  return getSharedCourtPairKeys(partition).reduce(
+    (count, pairKey) => count + Number(history.sharedCourtPairs.has(pairKey)),
+    0
+  );
+}
+
+export function getPartnerCoveragePenalty(
+  partition: V3DoublesPartition,
+  history: V3SocialMixHistory
+) {
+  return getPartnerPairKeys(partition).reduce(
+    (count, pairKey) => count + Number(history.partnerPairs.has(pairKey)),
+    0
+  );
+}
+
+export function getOpponentCoveragePenalty(
+  partition: V3DoublesPartition,
+  history: V3SocialMixHistory
+) {
+  return getOpponentPairKeys(partition).reduce(
+    (count, pairKey) => count + Number(history.opponentPairs.has(pairKey)),
+    0
+  );
 }

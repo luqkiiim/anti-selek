@@ -148,6 +148,34 @@ describe("matchmaking v3 single-court selection", () => {
     expect(result.selection?.partnerRepeatPenalty).toBeGreaterThan(0);
   });
 
+  it("prefers a fresher shared-court quartet in social mix sessions", () => {
+    const result = findBestSingleCourtSelectionV3(
+      [
+        createPlayer("A", { strength: 10 }),
+        createPlayer("B", { strength: 10 }),
+        createPlayer("C", { strength: 10 }),
+        createPlayer("D", { strength: 10 }),
+        createPlayer("E", { strength: 8 }),
+      ],
+      {
+        sessionMode: SessionMode.MEXICANO,
+        sessionType: SessionType.SOCIAL_MIX,
+        completedMatches: [
+          {
+            team1: ["A", "B"],
+            team2: ["C", "D"],
+            completedAt: new Date("2026-03-18T00:00:00Z"),
+          },
+        ],
+        now: new Date("2026-03-18T01:00:00Z").getTime(),
+        randomFn: () => 0,
+      }
+    );
+
+    expect(result.selection?.ids).toContain("E");
+    expect(result.selection?.sharedCourtRepeatPenalty).toBeLessThan(6);
+  });
+
   it("returns no selection when fewer than four active players are available", () => {
     const result = findBestSingleCourtSelectionV3(
       [

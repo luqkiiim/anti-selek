@@ -15,6 +15,8 @@ export function getSessionTypeLabel(type: SessionType | string): string {
   switch (type) {
     case SessionType.POINTS:
       return "Points";
+    case SessionType.SOCIAL_MIX:
+      return "Social Mix";
     case SessionType.ELO:
       return "Ratings";
     case SessionType.LADDER:

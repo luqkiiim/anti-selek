@@ -1,5 +1,6 @@
 export enum SessionType {
   POINTS = "POINTS",
+  SOCIAL_MIX = "SOCIAL_MIX",
   ELO = "ELO",
   LADDER = "LADDER",
   RACE = "RACE",

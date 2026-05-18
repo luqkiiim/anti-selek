@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { getSessionPoolOptions } from "@/lib/sessionPools";
+import { getSessionTypeLabel } from "@/lib/sessionModeLabels";
 import type { Player } from "./sessionTypes";
 import { SessionPool, SessionType } from "@/types/enums";
 
@@ -89,7 +90,6 @@ export function LiveStandingsTable({
   poolBName,
 }: LiveStandingsTableProps) {
   const isLadderSession = sessionType === SessionType.LADDER;
-  const isRaceSession = sessionType === SessionType.RACE;
   const [poolFilter, setPoolFilter] = useState<"ALL" | SessionPool>("ALL");
   const poolOptions = getSessionPoolOptions({
     poolsEnabled,
@@ -140,13 +140,7 @@ export function LiveStandingsTable({
           ) : null}
         </div>
         <span className="rounded-full border border-gray-200 bg-white px-3 py-1 text-xs font-semibold text-gray-500">
-          {isLadderSession
-            ? "Ladder"
-            : isRaceSession
-              ? "Race"
-              : sessionType === SessionType.ELO
-                ? "Ratings"
-                : "Points"}
+          {getSessionTypeLabel(sessionType)}
         </span>
       </div>
 

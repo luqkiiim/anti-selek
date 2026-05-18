@@ -251,6 +251,7 @@ export function parseCreateSessionRequest(
   if (
     ![
       SessionType.POINTS,
+      SessionType.SOCIAL_MIX,
       SessionType.ELO,
       SessionType.LADDER,
       SessionType.RACE,

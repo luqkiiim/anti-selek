@@ -54,6 +54,9 @@ function createSelection(
     },
     waitSummary: buildWaitSummary(players),
     balanceGap: 1.5,
+    sharedCourtRepeatPenalty: 0,
+    partnerCoveragePenalty: 0,
+    opponentCoveragePenalty: 0,
     partnerRepeatPenalty: 1,
     opponentRepeatPenalty: 2,
     exactRematchPenalty: 0,
@@ -99,6 +102,30 @@ describe("matchmaking reason", () => {
     expect(reason.metrics.waitToleranceSeconds).toBeUndefined();
     expect(reason.summary.join(" ")).not.toContain("Wait differences within");
     expect(reason.summary.join(" ")).toContain("rating");
+  });
+
+  it("builds social mix reasons with first-time contact coverage metrics", () => {
+    const reason = buildV3MatchmakingReason(
+      createSelection({
+        sharedCourtRepeatPenalty: 1,
+        partnerCoveragePenalty: 0,
+        opponentCoveragePenalty: 2,
+        partnerRepeatPenalty: 0,
+        opponentRepeatPenalty: 0,
+      }),
+      {
+        sessionType: SessionType.SOCIAL_MIX,
+        sessionMode: SessionMode.MEXICANO,
+      }
+    );
+
+    expect(reason.metrics.waitToleranceSeconds).toBe(120);
+    expect(reason.metrics.sharedCourtRepeatPenalty).toBe(1);
+    expect(reason.metrics.partnerCoveragePenalty).toBe(0);
+    expect(reason.metrics.opponentCoveragePenalty).toBe(2);
+    expect(reason.summary.join(" ")).toContain("Shared-court repeat penalty");
+    expect(reason.summary.join(" ")).toContain("Both partner pairings are new");
+    expect(reason.summary.join(" ")).toContain("Opponent coverage");
   });
 
   it("parses valid reason JSON and ignores invalid JSON", () => {

@@ -253,6 +253,42 @@ describe("matchmaking v3 batch selection", () => {
     expect(teamKeys).not.toContain("E|F");
   });
 
+  it("avoids repeating whole court groups when social mix can create fresher batches", () => {
+    const result = findBestBatchSelectionV3(
+      Array.from({ length: 8 }, (_, index) =>
+        createPlayer(String.fromCharCode(65 + index), { strength: 1000 })
+      ),
+      {
+        courtCount: 2,
+        sessionMode: SessionMode.MEXICANO,
+        sessionType: SessionType.SOCIAL_MIX,
+        completedMatches: [
+          {
+            team1: ["A", "B"],
+            team2: ["C", "D"],
+            completedAt: new Date("2026-03-18T00:00:00Z"),
+          },
+          {
+            team1: ["E", "F"],
+            team2: ["G", "H"],
+            completedAt: new Date("2026-03-18T00:10:00Z"),
+          },
+        ],
+        now: new Date("2026-03-18T01:00:00Z").getTime(),
+        randomFn: () => 0,
+      }
+    );
+
+    const quartetKeys = new Set(
+      result.selection?.selections.map((selection) =>
+        [...selection.ids].sort().join("|")
+      )
+    );
+
+    expect(quartetKeys).not.toContain("A|B|C|D");
+    expect(quartetKeys).not.toContain("E|F|G|H");
+  });
+
   it("widens mixed batch candidates when the capped fair pool cannot fill two legal courts", () => {
     const result = findBestBatchSelectionV3(
       [

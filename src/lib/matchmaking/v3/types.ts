@@ -88,6 +88,9 @@ export interface V3SingleCourtSelection<
   partition: V3DoublesPartition;
   waitSummary: V3WaitSummary;
   balanceGap: number;
+  sharedCourtRepeatPenalty: number;
+  partnerCoveragePenalty: number;
+  opponentCoveragePenalty: number;
   partnerRepeatPenalty: number;
   opponentRepeatPenalty: number;
   exactRematchPenalty: number;
@@ -125,6 +128,9 @@ export interface V3BatchSelection<
   waitSummary: V3WaitSummary;
   maxBalanceGap: number;
   totalBalanceGap: number;
+  totalSharedCourtRepeatPenalty: number;
+  totalPartnerCoveragePenalty: number;
+  totalOpponentCoveragePenalty: number;
   totalPartnerRepeatPenalty: number;
   totalOpponentRepeatPenalty: number;
   totalExactRematchPenalty: number;

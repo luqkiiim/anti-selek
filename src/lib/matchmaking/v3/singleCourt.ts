@@ -6,10 +6,14 @@ import {
   buildExactRematchHistory,
   buildOpponentRepeatHistory,
   buildPartnerRepeatHistory,
+  buildSocialMixHistory,
   getExactPartitionKey,
   getExactRematchPenalty,
+  getOpponentCoveragePenalty,
   getOpponentRepeatPenalty,
+  getPartnerCoveragePenalty,
   getPartnerRepeatPenalty,
+  getSharedCourtRepeatPenalty,
 } from "./rematch";
 import {
   POINTS_WAIT_TOLERANCE_MS,
@@ -170,6 +174,7 @@ function searchCandidatePool<T extends MatchmakerV3Player>({
   rematchHistory,
   partnerHistory,
   opponentHistory,
+  socialMixHistory,
 }: {
   candidatePool: V3CandidatePool<ActiveMatchmakerV3Player<T>>;
   sessionMode: SessionMode;
@@ -182,6 +187,7 @@ function searchCandidatePool<T extends MatchmakerV3Player>({
   rematchHistory: ReturnType<typeof buildExactRematchHistory>;
   partnerHistory: ReturnType<typeof buildPartnerRepeatHistory>;
   opponentHistory: ReturnType<typeof buildOpponentRepeatHistory>;
+  socialMixHistory: ReturnType<typeof buildSocialMixHistory>;
 }) {
   const remainingSlots = 4 - candidatePool.lockedPlayers.length;
   const quartetGroups =
@@ -257,6 +263,18 @@ function searchCandidatePool<T extends MatchmakerV3Player>({
         partition: evaluation.partition,
         waitSummary,
         balanceGap: evaluation.balanceGap,
+        sharedCourtRepeatPenalty: getSharedCourtRepeatPenalty(
+          evaluation.partition,
+          socialMixHistory
+        ),
+        partnerCoveragePenalty: getPartnerCoveragePenalty(
+          evaluation.partition,
+          socialMixHistory
+        ),
+        opponentCoveragePenalty: getOpponentCoveragePenalty(
+          evaluation.partition,
+          socialMixHistory
+        ),
         partnerRepeatPenalty: getPartnerRepeatPenalty(
           evaluation.partition,
           partnerHistory
@@ -328,7 +346,10 @@ export function findBestSingleCourtSelectionV3<T extends MatchmakerV3Player>(
     matchDurationMs,
     randomFn,
     waitToleranceMs:
-      sessionType === SessionType.POINTS ? POINTS_WAIT_TOLERANCE_MS : 0,
+      sessionType === SessionType.POINTS ||
+      sessionType === SessionType.SOCIAL_MIX
+        ? POINTS_WAIT_TOLERANCE_MS
+        : 0,
   });
 
   if (
@@ -368,6 +389,7 @@ export function findBestSingleCourtSelectionV3<T extends MatchmakerV3Player>(
   const rematchHistory = buildExactRematchHistory(completedMatches);
   const partnerHistory = buildPartnerRepeatHistory(completedMatches);
   const opponentHistory = buildOpponentRepeatHistory(completedMatches);
+  const socialMixHistory = buildSocialMixHistory(completedMatches);
   let searchedCandidatePool = initialCandidatePool;
   let totalQuartetCount = 0;
   let totalValidPartitionCount = 0;
@@ -390,6 +412,7 @@ export function findBestSingleCourtSelectionV3<T extends MatchmakerV3Player>(
       rematchHistory,
       partnerHistory,
       opponentHistory,
+      socialMixHistory,
     });
     totalQuartetCount += candidatePoolSearch.quartetCount;
     totalValidPartitionCount += candidatePoolSearch.validPartitionCount;
@@ -410,6 +433,7 @@ export function findBestSingleCourtSelectionV3<T extends MatchmakerV3Player>(
           rematchHistory,
           partnerHistory,
           opponentHistory,
+          socialMixHistory,
         });
         totalQuartetCount += candidatePoolSearch.quartetCount;
         totalValidPartitionCount += candidatePoolSearch.validPartitionCount;
