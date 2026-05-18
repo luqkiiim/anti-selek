@@ -304,13 +304,12 @@ export function QueuedMatchCard({
             >
               {canShowMatchReason ? (
                 <div
-                  data-queued-match-reason-layout="right-rail"
-                  className="grid grid-cols-[minmax(0,1fr)_1.75rem] items-stretch gap-2 md:grid-cols-[minmax(0,1fr)_2rem] md:gap-3"
+                  data-queued-match-reason-layout="top-row"
+                  className="space-y-2.5"
                 >
-                  <div className="min-w-0">{queuedLineup}</div>
                   <div
-                    data-queued-match-reason-rail="true"
-                    className="flex items-center justify-center"
+                    data-queued-match-reason-row="true"
+                    className="flex items-center justify-end"
                   >
                     <button
                       type="button"
@@ -322,6 +321,7 @@ export function QueuedMatchCard({
                       <Info aria-hidden="true" size={14} strokeWidth={2.3} />
                     </button>
                   </div>
+                  <div className="min-w-0">{queuedLineup}</div>
                 </div>
               ) : (
                 queuedLineup

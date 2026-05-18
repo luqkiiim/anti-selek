@@ -85,12 +85,12 @@ function TeamNames({
                 onClick={() => onTogglePlayerAction(actionKey)}
                 disabled={actionDisabled}
                 aria-expanded={actionOpen}
-                className={`min-w-0 max-w-full whitespace-normal break-words text-base font-semibold leading-tight text-gray-900 transition hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-50 md:text-[1.35rem] xl:text-base ${textAlignClass}`}
+                className={`min-w-0 max-w-full whitespace-normal break-words text-[0.95rem] font-semibold leading-tight text-gray-900 transition hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-50 sm:text-base md:text-[1.35rem] xl:text-base ${textAlignClass}`}
               >
                 {player.name}
               </button>
             ) : (
-              <p className="whitespace-normal break-words text-base font-semibold leading-tight text-gray-900 md:text-[1.35rem] xl:text-base">
+              <p className="whitespace-normal break-words text-[0.95rem] font-semibold leading-tight text-gray-900 sm:text-base md:text-[1.35rem] xl:text-base">
                 {player.name}
               </p>
             )}
@@ -168,7 +168,7 @@ function ScoreSlot({
         onChange={(event) => onScoreChange(event.target.value)}
         onFocus={onScoreFocus}
         onBlur={onScoreBlur}
-        className="h-14 w-14 rounded-xl border border-blue-200 bg-white text-center text-2xl font-semibold tabular-nums text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 sm:h-16 sm:w-16 sm:text-3xl xl:h-14 xl:w-14 xl:text-2xl"
+        className="h-[3.25rem] w-[3.25rem] rounded-xl border border-blue-200 bg-white text-center text-[1.75rem] font-semibold tabular-nums text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 sm:h-16 sm:w-16 sm:text-3xl xl:h-14 xl:w-14 xl:text-2xl"
         placeholder="0"
       />
     );
@@ -180,7 +180,7 @@ function ScoreSlot({
 
   return (
     <div
-      className={`flex h-14 w-14 items-center justify-center rounded-xl border bg-white text-2xl font-semibold tabular-nums sm:h-16 sm:w-16 sm:text-3xl xl:h-14 xl:w-14 xl:text-2xl ${
+      className={`flex h-[3.25rem] w-[3.25rem] items-center justify-center rounded-xl border bg-white text-[1.75rem] font-semibold tabular-nums sm:h-16 sm:w-16 sm:text-3xl xl:h-14 xl:w-14 xl:text-2xl ${
         displayScore !== null
           ? "border-gray-200 text-gray-900"
           : "border-gray-100 text-gray-300"
@@ -501,7 +501,7 @@ export function LiveMatchCard({
   }, [clearSavedScoreInputScrollPosition]);
 
   const matchLineup = (
-    <div className="grid grid-cols-[minmax(0,1fr)_3.5rem_3.5rem_minmax(0,1fr)] items-center gap-3 sm:grid-cols-[minmax(0,1fr)_4rem_4rem_minmax(0,1fr)] md:gap-4 xl:grid-cols-[minmax(0,1fr)_3.5rem_3.5rem_minmax(0,1fr)]">
+    <div className="grid grid-cols-[minmax(0,1fr)_3.25rem_3.25rem_minmax(0,1fr)] items-center gap-1.5 sm:grid-cols-[minmax(0,1fr)_4rem_4rem_minmax(0,1fr)] sm:gap-3 md:gap-4 xl:grid-cols-[minmax(0,1fr)_3.5rem_3.5rem_minmax(0,1fr)] xl:gap-3">
       <TeamNames
         matchId={match.id}
         players={[match.team1User1, match.team1User2]}
@@ -564,19 +564,10 @@ export function LiveMatchCard({
         }`}
       >
         {canShowMatchReason ? (
-          <div
-            data-live-match-reason-layout="balanced-rails"
-            className="grid grid-cols-[1.75rem_minmax(0,1fr)_1.75rem] items-stretch gap-2 md:grid-cols-[2rem_minmax(0,1fr)_2rem] md:gap-3"
-          >
+          <div data-live-match-reason-layout="top-row" className="space-y-2.5">
             <div
-              aria-hidden="true"
-              data-live-match-reason-spacer="true"
-              className="pointer-events-none"
-            />
-            <div className="min-w-0">{matchLineup}</div>
-            <div
-              data-live-match-reason-rail="true"
-              className="flex items-center justify-center"
+              data-live-match-reason-row="true"
+              className="flex items-center justify-end"
             >
               <button
                 type="button"
@@ -588,6 +579,7 @@ export function LiveMatchCard({
                 <Info aria-hidden="true" size={14} strokeWidth={2.3} />
               </button>
             </div>
+            <div className="min-w-0">{matchLineup}</div>
           </div>
         ) : (
           matchLineup

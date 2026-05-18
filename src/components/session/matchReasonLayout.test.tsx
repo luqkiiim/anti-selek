@@ -100,45 +100,82 @@ function renderQueuedCard(queuedMatch: QueuedMatch | null) {
 }
 
 describe("match reason layout", () => {
-  it("uses balanced live match rails when reasoning is available", () => {
+  it("uses a live top-row reason control when reasoning is available", () => {
     const markup = renderLiveCard(
       createLiveMatch({ matchmakingReason: matchReason })
     );
 
-    expect(markup).toContain('data-live-match-reason-layout="balanced-rails"');
-    expect(markup).toContain('data-live-match-reason-spacer="true"');
-    expect(markup).toContain('data-live-match-reason-rail="true"');
+    expect(markup).toContain('data-live-match-reason-layout="top-row"');
+    expect(markup).toContain('data-live-match-reason-row="true"');
     expect(markup).toContain('aria-label="Show match reasoning"');
-    expect(markup).not.toContain("pr-10 md:pr-11");
+    expect(markup).not.toContain("data-live-match-reason-spacer");
+    expect(markup).not.toContain("data-live-match-reason-rail");
   });
 
-  it("omits live match rails when no reasoning is available", () => {
+  it("omits live match reason controls when no reasoning is available", () => {
     const markup = renderLiveCard(createLiveMatch({ matchmakingReason: null }));
 
     expect(markup).not.toContain("data-live-match-reason-layout");
-    expect(markup).not.toContain("data-live-match-reason-spacer");
-    expect(markup).not.toContain("data-live-match-reason-rail");
+    expect(markup).not.toContain("data-live-match-reason-row");
     expect(markup).not.toContain('aria-label="Show match reasoning"');
   });
 
-  it("uses a queued right rail when reasoning is available", () => {
+  it("uses a queued top-row reason control when reasoning is available", () => {
     const markup = renderQueuedCard(
       createQueuedMatch({ matchmakingReason: matchReason })
     );
 
-    expect(markup).toContain('data-queued-match-reason-layout="right-rail"');
-    expect(markup).toContain('data-queued-match-reason-rail="true"');
+    expect(markup).toContain('data-queued-match-reason-layout="top-row"');
+    expect(markup).toContain('data-queued-match-reason-row="true"');
     expect(markup).toContain('aria-label="Show match reasoning"');
-    expect(markup).not.toContain("pr-10 md:pr-11");
+    expect(markup).not.toContain("data-queued-match-reason-rail");
   });
 
-  it("omits queued rails when no reasoning is available", () => {
+  it("omits queued match reason controls when no reasoning is available", () => {
     const markup = renderQueuedCard(
       createQueuedMatch({ matchmakingReason: null })
     );
 
     expect(markup).not.toContain("data-queued-match-reason-layout");
-    expect(markup).not.toContain("data-queued-match-reason-rail");
+    expect(markup).not.toContain("data-queued-match-reason-row");
     expect(markup).not.toContain('aria-label="Show match reasoning"');
+  });
+
+  it("keeps the live top-row layout with eight-character names", () => {
+    const markup = renderLiveCard(
+      createLiveMatch({
+        team1User1: { id: "u1", name: "Marcella" },
+        team1User2: { id: "u2", name: "Patricia" },
+        team2User1: { id: "u3", name: "Dominick" },
+        team2User2: { id: "u4", name: "Shantell" },
+        matchmakingReason: matchReason,
+      })
+    );
+
+    expect(markup).toContain("Marcella");
+    expect(markup).toContain("Patricia");
+    expect(markup).toContain("Dominick");
+    expect(markup).toContain("Shantell");
+    expect(markup).toContain('data-live-match-reason-layout="top-row"');
+    expect(markup).not.toContain("data-live-match-reason-rail");
+  });
+
+  it("keeps the queued top-row layout with eight-character names", () => {
+    const markup = renderQueuedCard(
+      createQueuedMatch({
+        team1User1: { id: "u1", name: "Marcella" },
+        team1User2: { id: "u2", name: "Patricia" },
+        team2User1: { id: "u3", name: "Dominick" },
+        team2User2: { id: "u4", name: "Shantell" },
+        matchmakingReason: matchReason,
+      })
+    );
+
+    expect(markup).toContain("Marcella");
+    expect(markup).toContain("Patricia");
+    expect(markup).toContain("Dominick");
+    expect(markup).toContain("Shantell");
+    expect(markup).toContain('data-queued-match-reason-layout="top-row"');
+    expect(markup).not.toContain("data-queued-match-reason-rail");
   });
 });
