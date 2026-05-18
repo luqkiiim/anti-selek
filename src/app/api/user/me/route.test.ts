@@ -26,7 +26,6 @@ import { GET } from "./route";
 describe("current user route", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    process.env.AVATAR_PUBLIC_BASE_URL = "https://cdn.test";
   });
 
   it("returns avatarUrl for the current user payload", async () => {
@@ -42,7 +41,7 @@ describe("current user route", () => {
       id: "user-1",
       email: "user@example.com",
       name: "Owner",
-      avatarKey: "avatars/user-1/avatar.jpg",
+      avatarKey: "https://blob.vercel-storage.com/avatars/user-1/avatar.jpg",
       isClaimed: true,
       gender: "MALE",
       partnerPreference: "OPEN",
@@ -56,7 +55,7 @@ describe("current user route", () => {
 
     expect(response.status).toBe(200);
     expect(body.user.avatarUrl).toBe(
-      "https://cdn.test/avatars/user-1/avatar.jpg"
+      "https://blob.vercel-storage.com/avatars/user-1/avatar.jpg"
     );
   });
 });

@@ -62,7 +62,6 @@ import { GET } from "./route";
 describe("session route GET", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    process.env.AVATAR_PUBLIC_BASE_URL = "https://cdn.test";
 
     mocks.auth.mockResolvedValue({
       user: { id: "u1", isAdmin: false },
@@ -77,7 +76,7 @@ describe("session route GET", () => {
     const user = (id: string, name: string) => ({
       id,
       name,
-      avatarKey: `avatars/${id}/photo.jpg`,
+      avatarKey: `https://blob.vercel-storage.com/avatars/${id}/photo.jpg`,
       elo: 1000,
       gender: "MALE",
       partnerPreference: "OPEN",
@@ -122,10 +121,10 @@ describe("session route GET", () => {
             completedAt: null,
             scoreSubmittedByUserId: null,
             matchmakingReasonJson: null,
-            team1User1: { id: "u1", name: "Alice", avatarKey: "avatars/u1/photo.jpg" },
-            team1User2: { id: "u2", name: "Bianca", avatarKey: "avatars/u2/photo.jpg" },
-            team2User1: { id: "u3", name: "Charlie", avatarKey: "avatars/u3/photo.jpg" },
-            team2User2: { id: "u4", name: "Dinesh", avatarKey: "avatars/u4/photo.jpg" },
+            team1User1: { id: "u1", name: "Alice", avatarKey: "https://blob.vercel-storage.com/avatars/u1/photo.jpg" },
+            team1User2: { id: "u2", name: "Bianca", avatarKey: "https://blob.vercel-storage.com/avatars/u2/photo.jpg" },
+            team2User1: { id: "u3", name: "Charlie", avatarKey: "https://blob.vercel-storage.com/avatars/u3/photo.jpg" },
+            team2User2: { id: "u4", name: "Dinesh", avatarKey: "https://blob.vercel-storage.com/avatars/u4/photo.jpg" },
           },
         },
       ],
@@ -156,13 +155,13 @@ describe("session route GET", () => {
 
     expect(response.status).toBe(200);
     expect(body.players[0].user.avatarUrl).toBe(
-      "https://cdn.test/avatars/u1/photo.jpg"
+      "https://blob.vercel-storage.com/avatars/u1/photo.jpg"
     );
     expect(body.courts[0].currentMatch.team1User1.avatarUrl).toBe(
-      "https://cdn.test/avatars/u1/photo.jpg"
+      "https://blob.vercel-storage.com/avatars/u1/photo.jpg"
     );
     expect(body.queuedMatch.team1User1.avatarUrl).toBe(
-      "https://cdn.test/avatars/u1/photo.jpg"
+      "https://blob.vercel-storage.com/avatars/u1/photo.jpg"
     );
   });
 });

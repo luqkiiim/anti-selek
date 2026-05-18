@@ -1,91 +1,38 @@
-import {
-  DeleteObjectCommand,
-  PutObjectCommand,
-  S3Client,
-} from "@aws-sdk/client-s3";
+import { del, put } from "@vercel/blob";
 import { logError } from "@/lib/errors";
-import { resolveAvatarStorageConfig } from "@/lib/avatar";
 
-type DeleteAvatarObject = (avatarKey: string) => Promise<boolean>;
-
-let cachedAvatarS3Client: S3Client | null = null;
-let cachedAvatarS3ClientKey: string | null = null;
-
-function getAvatarClientCacheKey(config: {
-  endpoint: string;
-  region: string;
-  bucket: string;
-  accessKeyId: string;
-}) {
-  return `${config.endpoint}|${config.region}|${config.bucket}|${config.accessKeyId}`;
-}
-
-export function getAvatarS3Client() {
-  const config = resolveAvatarStorageConfig();
-  if (!config) {
-    throw new Error("Avatar storage is not configured");
-  }
-
-  const cacheKey = getAvatarClientCacheKey(config);
-  if (cachedAvatarS3Client && cachedAvatarS3ClientKey === cacheKey) {
-    return { client: cachedAvatarS3Client, config };
-  }
-
-  const client = new S3Client({
-    region: config.region,
-    endpoint: config.endpoint,
-    forcePathStyle: true,
-    credentials: {
-      accessKeyId: config.accessKeyId,
-      secretAccessKey: config.secretAccessKey,
-    },
-  });
-
-  cachedAvatarS3Client = client;
-  cachedAvatarS3ClientKey = cacheKey;
-  return { client, config };
-}
+type DeleteAvatarObject = (avatarUrl: string) => Promise<boolean>;
 
 export async function uploadAvatarObject({
-  avatarKey,
+  avatarPathname,
   body,
   contentType,
 }: {
-  avatarKey: string;
-  body: Buffer;
+  avatarPathname: string;
+  body: Blob | Buffer | ArrayBuffer;
   contentType: string;
 }) {
-  const { client, config } = getAvatarS3Client();
+  const blob = await put(avatarPathname, body, {
+    access: "public",
+    addRandomSuffix: false,
+    cacheControlMaxAge: 31_536_000,
+    contentType,
+  });
 
-  await client.send(
-    new PutObjectCommand({
-      Bucket: config.bucket,
-      Key: avatarKey,
-      Body: body,
-      ContentType: contentType,
-      CacheControl: "public, max-age=31536000, immutable",
-    })
-  );
+  return blob.url;
 }
 
-export async function deleteAvatarObject(avatarKey: string) {
-  const { client, config } = getAvatarS3Client();
-
-  await client.send(
-    new DeleteObjectCommand({
-      Bucket: config.bucket,
-      Key: avatarKey,
-    })
-  );
+export async function deleteAvatarObject(avatarUrl: string) {
+  await del(avatarUrl);
 }
 
-export async function deleteAvatarObjectBestEffort(avatarKey: string) {
-  if (!avatarKey) {
+export async function deleteAvatarObjectBestEffort(avatarUrl: string) {
+  if (!avatarUrl) {
     return false;
   }
 
   try {
-    await deleteAvatarObject(avatarKey);
+    await deleteAvatarObject(avatarUrl);
     return true;
   } catch (error) {
     logError("Delete avatar object error", error);

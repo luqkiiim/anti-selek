@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 
-export const AVATAR_MAX_FILE_BYTES = 5 * 1024 * 1024;
+export const AVATAR_MAX_FILE_BYTES = 4 * 1024 * 1024;
 export const AVATAR_ALLOWED_MIME_TYPES = [
   "image/jpeg",
   "image/png",
@@ -37,7 +37,7 @@ export function getAvatarValidationError({
   }
 
   if (size > AVATAR_MAX_FILE_BYTES) {
-    return "Avatar images must be 5MB or smaller.";
+    return "Avatar images must be 4MB or smaller.";
   }
 
   return null;
@@ -59,21 +59,13 @@ export function buildAvatarObjectKey({
 }
 
 export function resolveAvatarUrl(
-  avatarKey: string | null | undefined,
-  publicBaseUrl = process.env.AVATAR_PUBLIC_BASE_URL
+  avatarKey: string | null | undefined
 ) {
-  if (
-    typeof avatarKey !== "string" ||
-    avatarKey.trim().length === 0 ||
-    typeof publicBaseUrl !== "string" ||
-    publicBaseUrl.trim().length === 0
-  ) {
+  if (typeof avatarKey !== "string" || avatarKey.trim().length === 0) {
     return null;
   }
 
-  const normalizedBaseUrl = publicBaseUrl.trim().replace(/\/+$/, "");
-  const normalizedKey = avatarKey.trim().replace(/^\/+/, "");
-  return `${normalizedBaseUrl}/${normalizedKey}`;
+  return avatarKey.trim();
 }
 
 export function serializeAvatarEntity<T extends { avatarKey: string | null }>(
@@ -86,42 +78,11 @@ export function serializeAvatarEntity<T extends { avatarKey: string | null }>(
   };
 }
 
-export interface AvatarStorageConfig {
-  endpoint: string;
-  region: string;
-  bucket: string;
-  accessKeyId: string;
-  secretAccessKey: string;
-  publicBaseUrl: string;
-}
-
-export function resolveAvatarStorageConfig(
+export function isAvatarStorageConfigured(
   env: NodeJS.ProcessEnv = process.env
-): AvatarStorageConfig | null {
-  const endpoint = env.AVATAR_S3_ENDPOINT?.trim();
-  const region = env.AVATAR_S3_REGION?.trim();
-  const bucket = env.AVATAR_S3_BUCKET?.trim();
-  const accessKeyId = env.AVATAR_S3_ACCESS_KEY_ID?.trim();
-  const secretAccessKey = env.AVATAR_S3_SECRET_ACCESS_KEY?.trim();
-  const publicBaseUrl = env.AVATAR_PUBLIC_BASE_URL?.trim();
-
-  if (
-    !endpoint ||
-    !region ||
-    !bucket ||
-    !accessKeyId ||
-    !secretAccessKey ||
-    !publicBaseUrl
-  ) {
-    return null;
-  }
-
-  return {
-    endpoint,
-    region,
-    bucket,
-    accessKeyId,
-    secretAccessKey,
-    publicBaseUrl,
-  };
+) {
+  return (
+    typeof env.BLOB_READ_WRITE_TOKEN === "string" &&
+    env.BLOB_READ_WRITE_TOKEN.trim().length > 0
+  );
 }

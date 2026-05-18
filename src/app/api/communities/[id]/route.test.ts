@@ -65,7 +65,6 @@ import { GET } from "./route";
 describe("community snapshot route", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    process.env.AVATAR_PUBLIC_BASE_URL = "https://cdn.test";
 
     mocks.auth.mockResolvedValue({
       user: { id: "viewer-1", isAdmin: false },
@@ -74,7 +73,7 @@ describe("community snapshot route", () => {
       id: "viewer-1",
       name: "Viewer",
       email: "viewer@example.com",
-      avatarKey: "avatars/viewer-1/avatar.jpg",
+      avatarKey: "https://blob.vercel-storage.com/avatars/viewer-1/avatar.jpg",
       elo: 1100,
       gender: "MALE",
       partnerPreference: "OPEN",
@@ -99,7 +98,7 @@ describe("community snapshot route", () => {
           id: "viewer-1",
           name: "Viewer",
           email: "viewer@example.com",
-          avatarKey: "avatars/viewer-1/avatar.jpg",
+          avatarKey: "https://blob.vercel-storage.com/avatars/viewer-1/avatar.jpg",
           gender: "MALE",
           partnerPreference: "OPEN",
           mixedSideOverride: null,
@@ -141,7 +140,7 @@ describe("community snapshot route", () => {
             user: {
               id: "viewer-1",
               name: "Viewer",
-              avatarUrl: "https://cdn.test/avatars/viewer-1/avatar.jpg",
+              avatarUrl: "https://blob.vercel-storage.com/avatars/viewer-1/avatar.jpg",
             },
           },
         ],
@@ -173,13 +172,13 @@ describe("community snapshot route", () => {
 
     expect(response.status).toBe(200);
     expect(body.viewer.avatarUrl).toBe(
-      "https://cdn.test/avatars/viewer-1/avatar.jpg"
+      "https://blob.vercel-storage.com/avatars/viewer-1/avatar.jpg"
     );
     expect(body.communityMembers[0].avatarUrl).toBe(
-      "https://cdn.test/avatars/viewer-1/avatar.jpg"
+      "https://blob.vercel-storage.com/avatars/viewer-1/avatar.jpg"
     );
     expect(body.sessions[0].players[0].user.avatarUrl).toBe(
-      "https://cdn.test/avatars/viewer-1/avatar.jpg"
+      "https://blob.vercel-storage.com/avatars/viewer-1/avatar.jpg"
     );
   });
 });

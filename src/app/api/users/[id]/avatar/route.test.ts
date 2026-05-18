@@ -1,4 +1,5 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { AVATAR_MAX_FILE_BYTES } from "@/lib/avatar";
 
 const mocks = vi.hoisted(() => ({
   auth: vi.fn(),
@@ -42,14 +43,17 @@ vi.mock("@/lib/rateLimit", () => ({
 
 import { DELETE, POST } from "./route";
 
-function createAvatarRequest(url = "http://localhost/api/users/user-1/avatar") {
+function createAvatarRequest({
+  url = "http://localhost/api/users/user-1/avatar",
+  file = new File([new Uint8Array([1, 2, 3])], "avatar.png", {
+    type: "image/png",
+  }),
+}: {
+  url?: string;
+  file?: File;
+} = {}) {
   const formData = new FormData();
-  formData.append(
-    "avatar",
-    new File([new Uint8Array([1, 2, 3])], "avatar.png", {
-      type: "image/png",
-    })
-  );
+  formData.append("avatar", file);
 
   return new Request(url, {
     method: "POST",
@@ -58,37 +62,24 @@ function createAvatarRequest(url = "http://localhost/api/users/user-1/avatar") {
 }
 
 describe("user avatar route", () => {
-  const previousEnv = {
-    AVATAR_S3_ENDPOINT: process.env.AVATAR_S3_ENDPOINT,
-    AVATAR_S3_REGION: process.env.AVATAR_S3_REGION,
-    AVATAR_S3_BUCKET: process.env.AVATAR_S3_BUCKET,
-    AVATAR_S3_ACCESS_KEY_ID: process.env.AVATAR_S3_ACCESS_KEY_ID,
-    AVATAR_S3_SECRET_ACCESS_KEY: process.env.AVATAR_S3_SECRET_ACCESS_KEY,
-    AVATAR_PUBLIC_BASE_URL: process.env.AVATAR_PUBLIC_BASE_URL,
-  };
+  const previousBlobToken = process.env.BLOB_READ_WRITE_TOKEN;
 
   beforeEach(() => {
     vi.clearAllMocks();
-    process.env.AVATAR_S3_ENDPOINT = "https://s3.test";
-    process.env.AVATAR_S3_REGION = "auto";
-    process.env.AVATAR_S3_BUCKET = "avatars";
-    process.env.AVATAR_S3_ACCESS_KEY_ID = "key";
-    process.env.AVATAR_S3_SECRET_ACCESS_KEY = "secret";
-    process.env.AVATAR_PUBLIC_BASE_URL = "https://cdn.test";
+    process.env.BLOB_READ_WRITE_TOKEN = "blob_rw_token";
 
-    mocks.userUpdate.mockImplementation(async ({ data }: { data: { avatarKey?: string | null } }) => ({
-      avatarKey: data.avatarKey ?? null,
-    }));
+    mocks.uploadAvatarObject.mockResolvedValue(
+      "https://blob.vercel-storage.com/avatars/user-1/123-avatar.png"
+    );
+    mocks.userUpdate.mockImplementation(
+      async ({ data }: { data: { avatarKey?: string | null } }) => ({
+        avatarKey: data.avatarKey ?? null,
+      })
+    );
   });
 
   afterAll(() => {
-    process.env.AVATAR_S3_ENDPOINT = previousEnv.AVATAR_S3_ENDPOINT;
-    process.env.AVATAR_S3_REGION = previousEnv.AVATAR_S3_REGION;
-    process.env.AVATAR_S3_BUCKET = previousEnv.AVATAR_S3_BUCKET;
-    process.env.AVATAR_S3_ACCESS_KEY_ID = previousEnv.AVATAR_S3_ACCESS_KEY_ID;
-    process.env.AVATAR_S3_SECRET_ACCESS_KEY =
-      previousEnv.AVATAR_S3_SECRET_ACCESS_KEY;
-    process.env.AVATAR_PUBLIC_BASE_URL = previousEnv.AVATAR_PUBLIC_BASE_URL;
+    process.env.BLOB_READ_WRITE_TOKEN = previousBlobToken;
   });
 
   it("uploads an avatar for a claimed owner", async () => {
@@ -97,7 +88,7 @@ describe("user avatar route", () => {
     });
     mocks.userFindUnique.mockResolvedValue({
       id: "user-1",
-      avatarKey: "avatars/user-1/old.jpg",
+      avatarKey: "https://blob.vercel-storage.com/avatars/user-1/old.jpg",
       isClaimed: true,
       name: "Owner",
     });
@@ -110,11 +101,62 @@ describe("user avatar route", () => {
     expect(response.status).toBe(200);
     expect(mocks.uploadAvatarObject).toHaveBeenCalledTimes(1);
     expect(mocks.userUpdate).toHaveBeenCalledTimes(1);
-    expect(body.avatarUrl).toMatch(/^https:\/\/cdn\.test\/avatars\/user-1\//);
+    expect(body.avatarUrl).toBe(
+      "https://blob.vercel-storage.com/avatars/user-1/123-avatar.png"
+    );
     expect(mocks.cleanupSupersededAvatar).toHaveBeenCalledWith({
-      previousAvatarKey: "avatars/user-1/old.jpg",
-      nextAvatarKey: expect.stringMatching(/^avatars\/user-1\//),
+      previousAvatarKey: "https://blob.vercel-storage.com/avatars/user-1/old.jpg",
+      nextAvatarKey: "https://blob.vercel-storage.com/avatars/user-1/123-avatar.png",
     });
+  });
+
+  it("rejects avatars above the 4MB limit", async () => {
+    mocks.auth.mockResolvedValue({
+      user: { id: "user-1", isAdmin: false, isQuickAccess: false },
+    });
+    mocks.userFindUnique.mockResolvedValue({
+      id: "user-1",
+      avatarKey: null,
+      isClaimed: true,
+      name: "Owner",
+    });
+
+    const response = await POST(
+      createAvatarRequest({
+        file: new File([new Uint8Array(AVATAR_MAX_FILE_BYTES + 1)], "big.png", {
+          type: "image/png",
+        }),
+      }),
+      {
+        params: Promise.resolve({ id: "user-1" }),
+      }
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(body.error).toBe("Avatar images must be 4MB or smaller.");
+    expect(mocks.uploadAvatarObject).not.toHaveBeenCalled();
+  });
+
+  it("returns 503 when blob storage is not configured", async () => {
+    process.env.BLOB_READ_WRITE_TOKEN = "";
+    mocks.auth.mockResolvedValue({
+      user: { id: "user-1", isAdmin: false, isQuickAccess: false },
+    });
+    mocks.userFindUnique.mockResolvedValue({
+      id: "user-1",
+      avatarKey: null,
+      isClaimed: true,
+      name: "Owner",
+    });
+
+    const response = await POST(createAvatarRequest(), {
+      params: Promise.resolve({ id: "user-1" }),
+    });
+    const body = await response.json();
+
+    expect(response.status).toBe(503);
+    expect(body.error).toBe("Avatar storage is not configured");
   });
 
   it("rejects quick-access self-management", async () => {
@@ -151,9 +193,9 @@ describe("user avatar route", () => {
       .mockResolvedValueOnce({ role: "MEMBER" });
 
     const response = await POST(
-      createAvatarRequest(
-        "http://localhost/api/users/placeholder-1/avatar?communityId=community-1"
-      ),
+      createAvatarRequest({
+        url: "http://localhost/api/users/placeholder-1/avatar?communityId=community-1",
+      }),
       {
         params: Promise.resolve({ id: "placeholder-1" }),
       }
@@ -169,7 +211,7 @@ describe("user avatar route", () => {
     });
     mocks.userFindUnique.mockResolvedValue({
       id: "user-9",
-      avatarKey: "avatars/user-9/avatar.jpg",
+      avatarKey: "https://blob.vercel-storage.com/avatars/user-9/avatar.jpg",
       isClaimed: false,
       name: "Managed User",
     });
@@ -191,7 +233,7 @@ describe("user avatar route", () => {
       data: { avatarKey: null },
     });
     expect(mocks.cleanupSupersededAvatar).toHaveBeenCalledWith({
-      previousAvatarKey: "avatars/user-9/avatar.jpg",
+      previousAvatarKey: "https://blob.vercel-storage.com/avatars/user-9/avatar.jpg",
       nextAvatarKey: null,
     });
   });

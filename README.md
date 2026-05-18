@@ -60,12 +60,7 @@ TURSO_DATABASE_URL="libsql://..."
 TURSO_AUTH_TOKEN="..."
 
 # Optional avatar storage (required only when enabling profile photos)
-AVATAR_S3_ENDPOINT="https://..."
-AVATAR_S3_REGION="auto"
-AVATAR_S3_BUCKET="avatars"
-AVATAR_S3_ACCESS_KEY_ID="..."
-AVATAR_S3_SECRET_ACCESS_KEY="..."
-AVATAR_PUBLIC_BASE_URL="https://cdn.example.com"
+BLOB_READ_WRITE_TOKEN="vercel_blob_rw_token"
 ```
 
 Runtime database selection:
@@ -75,7 +70,7 @@ Runtime database selection:
 - Set `USE_TURSO=false` to force SQLite explicitly in any environment
 - Production uses Turso automatically when `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN` are present and `USE_TURSO` is not set to `false`
 - Prisma schema and `prisma migrate dev` still use the SQLite datasource from `DATABASE_URL`
-- Profile photos require the six `AVATAR_*` variables above and use S3-compatible object storage
+- Profile photos use Vercel Blob and require `BLOB_READ_WRITE_TOKEN`
 
 ## Local Setup
 
@@ -117,6 +112,13 @@ USE_TURSO="true"
 ```
 
 This requires valid `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN`.
+
+To test profile photo uploads locally, create a public Vercel Blob store for the
+same Vercel project and pull `BLOB_READ_WRITE_TOKEN` into your local env:
+
+```bash
+vercel env pull
+```
 
 4. Start the app
 
@@ -261,6 +263,7 @@ Shared constraints:
 ## Deployment Notes
 
 - Set `AUTH_SECRET`, `ADMIN_EMAILS`, `TURSO_DATABASE_URL`, and `TURSO_AUTH_TOKEN` in production
+- Create a public Vercel Blob store for the project so Vercel provisions `BLOB_READ_WRITE_TOKEN`
 - The app uses Turso in production when the Turso environment variables are present, unless `USE_TURSO=false` is explicitly set
 - Prisma migrations still target the local SQLite datasource from `DATABASE_URL`
 - For Turso schema updates, SQL migrations are applied to Turso separately

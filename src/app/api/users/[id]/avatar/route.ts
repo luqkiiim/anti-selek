@@ -3,7 +3,7 @@ import { auth } from "@/lib/auth";
 import {
   buildAvatarObjectKey,
   getAvatarValidationError,
-  resolveAvatarStorageConfig,
+  isAvatarStorageConfigured,
   resolveAvatarUrl,
 } from "@/lib/avatar";
 import {
@@ -93,7 +93,7 @@ export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  let uploadedAvatarKey: string | null = null;
+  let uploadedAvatarUrl: string | null = null;
 
   try {
     const rateLimitResponse = await rateLimit(
@@ -142,7 +142,7 @@ export async function POST(
       return invalidTargetResponse(request, "api:users:id:avatar");
     }
 
-    if (!resolveAvatarStorageConfig()) {
+    if (!isAvatarStorageConfigured()) {
       return NextResponse.json(
         { error: "Avatar storage is not configured" },
         { status: 503 }
@@ -166,20 +166,20 @@ export async function POST(
       return NextResponse.json({ error: validationError }, { status: 400 });
     }
 
-    uploadedAvatarKey = buildAvatarObjectKey({
+    const avatarPathname = buildAvatarObjectKey({
       userId: targetUser.id,
       mimeType: avatarFile.type as "image/jpeg" | "image/png" | "image/webp",
     });
 
-    await uploadAvatarObject({
-      avatarKey: uploadedAvatarKey,
-      body: Buffer.from(await avatarFile.arrayBuffer()),
+    uploadedAvatarUrl = await uploadAvatarObject({
+      avatarPathname,
+      body: avatarFile,
       contentType: avatarFile.type,
     });
 
     const updatedUser = await prisma.user.update({
       where: { id: targetUser.id },
-      data: { avatarKey: uploadedAvatarKey },
+      data: { avatarKey: uploadedAvatarUrl },
       select: { avatarKey: true },
     });
 
@@ -193,7 +193,7 @@ export async function POST(
     });
   } catch (error) {
     await rollbackUploadedAvatar({
-      uploadedAvatarKey,
+      uploadedAvatarKey: uploadedAvatarUrl,
     });
     logError("Upload avatar error", error);
     return safeErrorResponse();

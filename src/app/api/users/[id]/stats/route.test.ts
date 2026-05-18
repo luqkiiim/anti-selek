@@ -52,7 +52,6 @@ import { GET } from "./route";
 describe("user stats route", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    process.env.AVATAR_PUBLIC_BASE_URL = "https://cdn.test";
 
     mocks.auth.mockResolvedValue({
       user: { id: "viewer-1", isAdmin: false },
@@ -60,7 +59,7 @@ describe("user stats route", () => {
     mocks.userFindUnique.mockResolvedValue({
       id: "user-1",
       name: "Alex Lee",
-      avatarKey: "avatars/user-1/profile.webp",
+      avatarKey: "https://blob.vercel-storage.com/avatars/user-1/profile.webp",
       elo: 1333,
       createdAt: new Date("2026-05-18T00:00:00.000Z"),
     });
@@ -118,7 +117,7 @@ describe("user stats route", () => {
 
     expect(response.status).toBe(200);
     expect(body.user.avatarUrl).toBe(
-      "https://cdn.test/avatars/user-1/profile.webp"
+      "https://blob.vercel-storage.com/avatars/user-1/profile.webp"
     );
   });
 });

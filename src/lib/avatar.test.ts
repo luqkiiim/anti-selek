@@ -3,7 +3,7 @@ import {
   AVATAR_MAX_FILE_BYTES,
   buildAvatarObjectKey,
   getAvatarValidationError,
-  resolveAvatarStorageConfig,
+  isAvatarStorageConfigured,
   resolveAvatarUrl,
 } from "@/lib/avatar";
 import {
@@ -23,11 +23,13 @@ describe("avatar helpers", () => {
     expect(key).toBe("avatars/user-1/1234567890-abc123.webp");
   });
 
-  it("resolves public avatar URLs without duplicated slashes", () => {
-    expect(resolveAvatarUrl("/avatars/u1/photo.jpg", "https://cdn.test/")).toBe(
-      "https://cdn.test/avatars/u1/photo.jpg"
-    );
-    expect(resolveAvatarUrl(null, "https://cdn.test")).toBeNull();
+  it("passes through stored public avatar URLs", () => {
+    expect(
+      resolveAvatarUrl(
+        " https://blob.vercel-storage.com/avatars/u1/photo.jpg "
+      )
+    ).toBe("https://blob.vercel-storage.com/avatars/u1/photo.jpg");
+    expect(resolveAvatarUrl(null)).toBeNull();
   });
 
   it("validates image type and max size", () => {
@@ -43,7 +45,7 @@ describe("avatar helpers", () => {
         mimeType: "image/png",
         size: AVATAR_MAX_FILE_BYTES + 1,
       })
-    ).toBe("Avatar images must be 5MB or smaller.");
+    ).toBe("Avatar images must be 4MB or smaller.");
 
     expect(
       getAvatarValidationError({
@@ -53,43 +55,36 @@ describe("avatar helpers", () => {
     ).toBeNull();
   });
 
-  it("parses avatar storage config only when every env var exists", () => {
-    expect(resolveAvatarStorageConfig({} as NodeJS.ProcessEnv)).toBeNull();
-
+  it("detects blob storage only when the token exists", () => {
+    expect(isAvatarStorageConfigured({} as NodeJS.ProcessEnv)).toBe(false);
     expect(
-      resolveAvatarStorageConfig({
-        AVATAR_S3_ENDPOINT: "https://s3.test",
-        AVATAR_S3_REGION: "auto",
-        AVATAR_S3_BUCKET: "avatars",
-        AVATAR_S3_ACCESS_KEY_ID: "key",
-        AVATAR_S3_SECRET_ACCESS_KEY: "secret",
-        AVATAR_PUBLIC_BASE_URL: "https://cdn.test",
+      isAvatarStorageConfigured({
+        BLOB_READ_WRITE_TOKEN: "blob_rw_token",
       } as unknown as NodeJS.ProcessEnv)
-    ).toEqual({
-      endpoint: "https://s3.test",
-      region: "auto",
-      bucket: "avatars",
-      accessKeyId: "key",
-      secretAccessKey: "secret",
-      publicBaseUrl: "https://cdn.test",
-    });
+    ).toBe(true);
   });
 
   it("cleans up superseded keys and rolls back failed uploads", async () => {
     const deleteObject = vi.fn(async () => true);
 
     await cleanupSupersededAvatar({
-      previousAvatarKey: "avatars/old.jpg",
-      nextAvatarKey: "avatars/new.jpg",
+      previousAvatarKey: "https://blob.vercel-storage.com/avatars/old.jpg",
+      nextAvatarKey: "https://blob.vercel-storage.com/avatars/new.jpg",
       deleteObject,
     });
     await rollbackUploadedAvatar({
-      uploadedAvatarKey: "avatars/new.jpg",
+      uploadedAvatarKey: "https://blob.vercel-storage.com/avatars/new.jpg",
       persistedAvatarKey: null,
       deleteObject,
     });
 
-    expect(deleteObject).toHaveBeenNthCalledWith(1, "avatars/old.jpg");
-    expect(deleteObject).toHaveBeenNthCalledWith(2, "avatars/new.jpg");
+    expect(deleteObject).toHaveBeenNthCalledWith(
+      1,
+      "https://blob.vercel-storage.com/avatars/old.jpg"
+    );
+    expect(deleteObject).toHaveBeenNthCalledWith(
+      2,
+      "https://blob.vercel-storage.com/avatars/new.jpg"
+    );
   });
 });
