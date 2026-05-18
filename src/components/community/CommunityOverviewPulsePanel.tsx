@@ -319,7 +319,7 @@ export function CommunityOverviewPulsePanel({
                   key={player.user.id}
                   type="button"
                   onClick={() => onOpenPlayerProfile(player.user.id)}
-                  className="flex w-full items-center justify-between gap-3 rounded-lg border border-[var(--line)] bg-white px-4 py-3 text-left transition hover:border-[var(--accent)] hover:bg-[var(--accent-faint)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgba(15,118,110,0.24)]"
+                  className="flex w-full items-center justify-between gap-3 rounded-lg border border-[var(--line)] bg-white px-4 py-2 text-left transition hover:border-[var(--accent)] hover:bg-[var(--accent-faint)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgba(15,118,110,0.24)]"
                 >
                   <div className="flex min-w-0 items-center gap-3">
                     <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[var(--success-soft)] text-sm font-semibold text-[var(--success)]">
@@ -328,7 +328,7 @@ export function CommunityOverviewPulsePanel({
                     <Avatar
                       name={player.user.name}
                       avatarUrl={player.user.avatarUrl}
-                      size="sm"
+                      size="md"
                     />
                     <div className="min-w-0">
                       <p className="truncate text-sm font-semibold text-gray-900">
@@ -440,13 +440,13 @@ export function CommunityOverviewPulsePanel({
                   onClick={() =>
                     onOpenPlayerProfile(latestStory.topPerformer!.user.id)
                   }
-                  className="mt-4 flex w-full items-center justify-between gap-3 rounded-lg bg-[var(--accent-faint)] px-4 py-3 text-left transition hover:bg-[var(--accent-soft)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgba(15,118,110,0.24)]"
+                  className="mt-4 flex w-full items-center justify-between gap-3 rounded-lg bg-[var(--accent-faint)] px-4 py-2 text-left transition hover:bg-[var(--accent-soft)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgba(15,118,110,0.24)]"
                 >
                   <div className="flex min-w-0 items-center gap-3">
                     <Avatar
                       name={latestStory.topPerformer.user.name}
                       avatarUrl={latestStory.topPerformer.user.avatarUrl}
-                      size="sm"
+                      size="md"
                     />
                     <div className="min-w-0">
                       <p className="text-xs font-semibold text-gray-500">
@@ -505,13 +505,13 @@ export function CommunityOverviewPulsePanel({
                   key={player.id}
                   type="button"
                   onClick={() => onOpenPlayerProfile(player.id)}
-                  className="flex w-full items-center justify-between gap-3 rounded-lg border border-[var(--line)] bg-white px-4 py-3 text-left transition hover:border-[var(--accent)] hover:bg-[var(--accent-faint)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgba(15,118,110,0.24)]"
+                  className="flex w-full items-center justify-between gap-3 rounded-lg border border-[var(--line)] bg-white px-4 py-2 text-left transition hover:border-[var(--accent)] hover:bg-[var(--accent-faint)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgba(15,118,110,0.24)]"
                 >
                   <div className="flex min-w-0 items-center gap-3">
                     <span className="w-7 shrink-0 text-xs font-semibold text-[var(--accent)]">
                       #{index + 1}
                     </span>
-                    <Avatar name={player.name} avatarUrl={player.avatarUrl} size="sm" />
+                    <Avatar name={player.name} avatarUrl={player.avatarUrl} size="md" />
                     <div className="min-w-0">
                       <p className="truncate text-sm font-semibold text-gray-900">
                         {player.name}

@@ -119,7 +119,7 @@ export function CommunityPlayersModal({
             return (
               <div
                 key={player.id}
-                className={`app-touch-pan-y rounded-xl border px-3 py-3 text-left transition ${
+                className={`app-touch-pan-y rounded-xl border px-3 py-2 text-left transition ${
                   isSelected
                     ? "border-[rgba(15,118,110,0.24)] bg-[var(--accent-faint)]"
                     : "border-gray-200 bg-gray-50/70 hover:border-[rgba(15,118,110,0.2)] hover:bg-white"
@@ -136,8 +136,8 @@ export function CommunityPlayersModal({
                   className="flex w-full min-w-0 items-center justify-between gap-3 text-left"
                 >
                   <div className="min-w-0 flex items-center gap-3">
-                    <Avatar name={player.name} avatarUrl={player.avatarUrl} size="sm" />
-                    <div className="min-w-0 space-y-1">
+                    <Avatar name={player.name} avatarUrl={player.avatarUrl} size="md" />
+                    <div className="min-w-0 space-y-0.5">
                       <div className="flex min-w-0 flex-wrap items-center gap-2">
                         <p className="truncate text-sm font-semibold text-gray-900">
                           {player.name}

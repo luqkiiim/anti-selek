@@ -167,14 +167,14 @@ export function CommunityLeaderboardPanel({
                   onOpenPlayerProfile(player.id);
                 }
               }}
-              className="cursor-pointer rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 transition hover:-translate-y-0.5 hover:border-blue-300 hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 focus-visible:ring-offset-2"
+              className="cursor-pointer rounded-xl border border-gray-200 bg-gray-50 px-4 py-2 transition hover:-translate-y-0.5 hover:border-blue-300 hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 focus-visible:ring-offset-2"
             >
               <div className="flex items-center justify-between gap-3">
                 <div className="flex min-w-0 items-center gap-3">
                   <span className="w-6 shrink-0 text-xs font-semibold text-blue-600">
                     #{index + 1}
                   </span>
-                  <Avatar name={player.name} avatarUrl={player.avatarUrl} size="sm" />
+                  <Avatar name={player.name} avatarUrl={player.avatarUrl} size="md" />
                   <div className="min-w-0">
                     <Link
                       href={`/profile/${player.id}?communityId=${communityId}`}
