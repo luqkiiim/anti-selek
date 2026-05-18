@@ -4,6 +4,7 @@ import type { ChangeEvent } from "react";
 import { useEffect, useRef, useState } from "react";
 import { Upload, X } from "lucide-react";
 import { Avatar } from "@/components/ui/Avatar";
+import { AvatarCropModal } from "@/components/ui/AvatarCropModal";
 import { getAvatarValidationError } from "@/lib/avatar";
 
 function getErrorMessage(error: unknown) {
@@ -33,6 +34,8 @@ export function AvatarUploader({
 }) {
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [cropSourceFile, setCropSourceFile] = useState<File | null>(null);
+  const [cropSourceUrl, setCropSourceUrl] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [uploading, setUploading] = useState(false);
   const [removing, setRemoving] = useState(false);
@@ -44,6 +47,14 @@ export function AvatarUploader({
       }
     };
   }, [previewUrl]);
+
+  useEffect(() => {
+    return () => {
+      if (cropSourceUrl) {
+        URL.revokeObjectURL(cropSourceUrl);
+      }
+    };
+  }, [cropSourceUrl]);
 
   const handleChooseFile = () => {
     if (!editable || uploading || removing) {
@@ -70,10 +81,31 @@ export function AvatarUploader({
       return;
     }
 
+    if (cropSourceUrl) {
+      URL.revokeObjectURL(cropSourceUrl);
+    }
+
+    const nextCropSourceUrl = URL.createObjectURL(file);
+    setCropSourceFile(file);
+    setCropSourceUrl(nextCropSourceUrl);
+    setError("");
+  };
+
+  const handleCloseCropModal = () => {
+    if (cropSourceUrl) {
+      URL.revokeObjectURL(cropSourceUrl);
+    }
+
+    setCropSourceFile(null);
+    setCropSourceUrl(null);
+  };
+
+  const handleConfirmCrop = async (file: File) => {
     const nextPreviewUrl = URL.createObjectURL(file);
     if (previewUrl) {
       URL.revokeObjectURL(previewUrl);
     }
+
     setPreviewUrl(nextPreviewUrl);
     setError("");
     setUploading(true);
@@ -142,6 +174,14 @@ export function AvatarUploader({
       </div>
       {helperText ? <p className="text-sm text-gray-600">{helperText}</p> : null}
       {error ? <p className="text-sm font-semibold text-rose-600">{error}</p> : null}
+      <AvatarCropModal
+        file={cropSourceFile}
+        imageUrl={cropSourceUrl}
+        onClose={handleCloseCropModal}
+        onConfirm={(file) => {
+          void handleConfirmCrop(file);
+        }}
+      />
     </div>
   );
 }

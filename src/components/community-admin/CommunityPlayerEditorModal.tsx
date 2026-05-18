@@ -123,7 +123,7 @@ export function CommunityPlayerEditorModal({
                 name={player.name}
                 avatarUrl={player.avatarUrl}
                 size="lg"
-                helperText="Community admins can manage photos for claimed members and placeholders."
+                helperText="Community admins can manage photos for claimed members and placeholders, with drag-and-zoom cropping before save."
                 onUpload={(file) => onUploadAvatar(player, file)}
                 onRemove={() => onRemoveAvatar(player)}
               />
