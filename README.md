@@ -30,7 +30,7 @@ Community-based badminton tournament web app for running live sessions, managing
 - Tailwind CSS v4
 - Prisma `5.22.0`
 - SQLite for local schema/migrations and fallback local runtime
-- LibSQL/Turso adapter for runtime when Turso env vars are present
+- LibSQL/Turso adapter for runtime when explicitly enabled locally or when production has Turso credentials
 - NextAuth v5 beta
 - Vitest
 - Playwright
@@ -49,6 +49,12 @@ AUTH_SECRET="replace-with-a-strong-secret"
 # Optional platform admin allowlist (comma-separated emails)
 ADMIN_EMAILS="you@example.com"
 
+# Optional local runtime override
+# - Leave unset to use SQLite locally
+# - Set to true to force Turso in local dev
+# - Set to false to force SQLite explicitly
+USE_TURSO="false"
+
 # Cloud runtime database
 TURSO_DATABASE_URL="libsql://..."
 TURSO_AUTH_TOKEN="..."
@@ -56,8 +62,10 @@ TURSO_AUTH_TOKEN="..."
 
 Runtime database selection:
 
-- If `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN` are set, the app uses Turso even during local `npm run dev`
-- If those Turso variables are unset or empty, the app falls back to local SQLite via `DATABASE_URL`
+- Local development defaults to SQLite via `DATABASE_URL`, even if Turso credentials are present in `.env`
+- Set `USE_TURSO=true` when you want local `npm run dev` to use Turso intentionally
+- Set `USE_TURSO=false` to force SQLite explicitly in any environment
+- Production uses Turso automatically when `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN` are present and `USE_TURSO` is not set to `false`
 - Prisma schema and `prisma migrate dev` still use the SQLite datasource from `DATABASE_URL`
 
 ## Local Setup
@@ -85,15 +93,21 @@ npx prisma migrate dev
 
 3. Choose runtime database
 
-Use local SQLite runtime:
+Use local SQLite runtime (default):
 
 ```bash
-# PowerShell
-$env:TURSO_DATABASE_URL=""
-$env:TURSO_AUTH_TOKEN=""
+# .env or .env.local
+USE_TURSO="false"
 ```
 
-Keep the Turso variables set if you want local app runtime to use the remote Turso database.
+Use Turso intentionally in local dev:
+
+```bash
+# .env.local
+USE_TURSO="true"
+```
+
+This requires valid `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN`.
 
 4. Start the app
 
@@ -123,7 +137,7 @@ npx vitest run --pool=threads
 
 Notes:
 
-- `npm run dev` can run fully offline only if Turso variables are unset and the app is using local SQLite
+- `npm run dev` can run fully offline when `USE_TURSO` is unset/`false` and the app is using local SQLite
 - `npm run build` always invokes the Turso migration wrapper first, but that wrapper only applies migrations on Vercel unless you force it with `npm run db:migrate:turso`
 - `npm run smoke:production` defaults to public, non-mutating checks. Set `PRODUCTION_SMOKE_EMAIL`, `PRODUCTION_SMOKE_PASSWORD`, `PRODUCTION_SMOKE_COMMUNITY_ID`, and `PRODUCTION_SMOKE_SESSION_CODE` to include signed-in production paths. Signed-in smoke checks mobile first, then desktop. Set `PRODUCTION_SMOKE_MUTATE=1` only for a disposable production session where score submission and approval are safe.
 
@@ -238,7 +252,7 @@ Shared constraints:
 ## Deployment Notes
 
 - Set `AUTH_SECRET`, `ADMIN_EMAILS`, `TURSO_DATABASE_URL`, and `TURSO_AUTH_TOKEN` in production
-- The app uses Turso when the Turso environment variables are present
+- The app uses Turso in production when the Turso environment variables are present, unless `USE_TURSO=false` is explicitly set
 - Prisma migrations still target the local SQLite datasource from `DATABASE_URL`
 - For Turso schema updates, SQL migrations are applied to Turso separately
 - `npm run build` auto-applies pending Turso SQL migrations only on Vercel builds

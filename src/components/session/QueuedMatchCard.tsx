@@ -240,6 +240,36 @@ export function QueuedMatchCard({
       {clearingQueuedMatch ? "Undoing..." : "Undo"}
     </button>
   ) : null;
+  const queuedLineup = queuedMatch ? (
+    <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2.5 sm:gap-3 md:gap-4 xl:gap-3">
+      <TeamPlayers
+        players={[queuedMatch.team1User1, queuedMatch.team1User2]}
+        canReshuffleQueuedPlayers={canReshuffleQueuedPlayers}
+        activeActionPlayerId={activeActionPlayerId}
+        reshufflingQueuedPlayerId={reshufflingQueuedPlayerId}
+        replacingQueuedPlayerId={replacingQueuedPlayerId}
+        queueActionDisabled={queueActionDisabled}
+        onTogglePlayerAction={togglePlayerAction}
+        onReshuffleQueuedPlayer={handleReshuffleQueuedPlayer}
+        onReplaceQueuedPlayer={handleReplaceQueuedPlayer}
+      />
+      <span className="rounded-full border border-amber-200 bg-white px-2 py-1 text-xs font-semibold text-amber-700">
+        Next
+      </span>
+      <TeamPlayers
+        players={[queuedMatch.team2User1, queuedMatch.team2User2]}
+        align="right"
+        canReshuffleQueuedPlayers={canReshuffleQueuedPlayers}
+        activeActionPlayerId={activeActionPlayerId}
+        reshufflingQueuedPlayerId={reshufflingQueuedPlayerId}
+        replacingQueuedPlayerId={replacingQueuedPlayerId}
+        queueActionDisabled={queueActionDisabled}
+        onTogglePlayerAction={togglePlayerAction}
+        onReshuffleQueuedPlayer={handleReshuffleQueuedPlayer}
+        onReplaceQueuedPlayer={handleReplaceQueuedPlayer}
+      />
+    </div>
+  ) : null;
 
   return (
     <div className="flex min-w-0 flex-col overflow-visible rounded-xl border border-amber-200 bg-white shadow-sm">
@@ -270,49 +300,32 @@ export function QueuedMatchCard({
             <div
               ref={promotionSurfaceRef}
               data-queued-promotion-surface="true"
-              className={`relative rounded-xl border border-amber-200 bg-amber-50/70 p-3 transition-all md:p-3.5 ${
-                canShowMatchReason ? "pr-10 md:pr-11" : ""
-              }`}
+              className="rounded-xl border border-amber-200 bg-amber-50/70 p-3 transition-all md:p-3.5"
             >
               {canShowMatchReason ? (
-                <button
-                  type="button"
-                  onClick={() => setMatchReasonOpen(true)}
-                  className="absolute right-2 top-2 z-10 flex h-7 w-7 items-center justify-center rounded-lg border border-amber-200 bg-white/90 text-amber-700 shadow-sm transition hover:border-amber-300 hover:bg-white hover:text-amber-800 active:scale-95"
-                  aria-label="Show match reasoning"
-                  title="Match reasoning"
+                <div
+                  data-queued-match-reason-layout="right-rail"
+                  className="grid grid-cols-[minmax(0,1fr)_1.75rem] items-stretch gap-2 md:grid-cols-[minmax(0,1fr)_2rem] md:gap-3"
                 >
-                  <Info aria-hidden="true" size={14} strokeWidth={2.3} />
-                </button>
-              ) : null}
-              <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2.5 sm:gap-3 md:gap-4 xl:gap-3">
-                <TeamPlayers
-                  players={[queuedMatch.team1User1, queuedMatch.team1User2]}
-                  canReshuffleQueuedPlayers={canReshuffleQueuedPlayers}
-                  activeActionPlayerId={activeActionPlayerId}
-                  reshufflingQueuedPlayerId={reshufflingQueuedPlayerId}
-                  replacingQueuedPlayerId={replacingQueuedPlayerId}
-                  queueActionDisabled={queueActionDisabled}
-                  onTogglePlayerAction={togglePlayerAction}
-                  onReshuffleQueuedPlayer={handleReshuffleQueuedPlayer}
-                  onReplaceQueuedPlayer={handleReplaceQueuedPlayer}
-                />
-                <span className="rounded-full border border-amber-200 bg-white px-2 py-1 text-xs font-semibold text-amber-700">
-                  Next
-                </span>
-                <TeamPlayers
-                  players={[queuedMatch.team2User1, queuedMatch.team2User2]}
-                  align="right"
-                  canReshuffleQueuedPlayers={canReshuffleQueuedPlayers}
-                  activeActionPlayerId={activeActionPlayerId}
-                  reshufflingQueuedPlayerId={reshufflingQueuedPlayerId}
-                  replacingQueuedPlayerId={replacingQueuedPlayerId}
-                  queueActionDisabled={queueActionDisabled}
-                  onTogglePlayerAction={togglePlayerAction}
-                  onReshuffleQueuedPlayer={handleReshuffleQueuedPlayer}
-                  onReplaceQueuedPlayer={handleReplaceQueuedPlayer}
-                />
-              </div>
+                  <div className="min-w-0">{queuedLineup}</div>
+                  <div
+                    data-queued-match-reason-rail="true"
+                    className="flex items-center justify-center"
+                  >
+                    <button
+                      type="button"
+                      onClick={() => setMatchReasonOpen(true)}
+                      className="flex h-7 w-7 items-center justify-center rounded-lg border border-amber-200 bg-white/90 text-amber-700 shadow-sm transition hover:border-amber-300 hover:bg-white hover:text-amber-800 active:scale-95"
+                      aria-label="Show match reasoning"
+                      title="Match reasoning"
+                    >
+                      <Info aria-hidden="true" size={14} strokeWidth={2.3} />
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                queuedLineup
+              )}
             </div>
 
             {canShowMatchReason && matchReasonOpen ? (

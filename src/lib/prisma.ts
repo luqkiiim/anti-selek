@@ -1,15 +1,31 @@
 import { PrismaClient } from "@prisma/client";
 import { PrismaLibSQL } from "@prisma/adapter-libsql";
 import { createClient } from "@libsql/client";
+import { parseBooleanEnv, resolvePrismaRuntimeMode } from "./prismaRuntime";
 
 const globalForPrisma = globalThis as unknown as { prisma: PrismaClient | undefined };
 
 function getPrisma() {
   const tursoUrl = process.env.TURSO_DATABASE_URL;
   const tursoToken = process.env.TURSO_AUTH_TOKEN;
+  const runtimeMode = resolvePrismaRuntimeMode({
+    nodeEnv: process.env.NODE_ENV,
+    useTurso: process.env.USE_TURSO,
+    tursoUrl,
+    tursoToken,
+  });
 
-  // 1. CLOUD MODE (Vercel)
-  if (tursoUrl && tursoToken) {
+  if (
+    parseBooleanEnv(process.env.USE_TURSO) === true &&
+    runtimeMode === "sqlite"
+  ) {
+    console.warn(
+      "USE_TURSO=true was requested, but TURSO_DATABASE_URL/TURSO_AUTH_TOKEN are incomplete. Falling back to local SQLite."
+    );
+  }
+
+  // 1. TURSO MODE
+  if (runtimeMode === "turso") {
     console.log("Initializing Prisma with LibSQL adapter (Turso Mode)...");
     try {
       const libsql = createClient({
@@ -27,7 +43,7 @@ function getPrisma() {
     }
   }
   
-  // 2. LOCAL MODE (Development)
+  // 2. LOCAL SQLITE MODE
   if (globalForPrisma.prisma) {
     return globalForPrisma.prisma;
   }

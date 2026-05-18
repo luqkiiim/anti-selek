@@ -500,77 +500,98 @@ export function LiveMatchCard({
     };
   }, [clearSavedScoreInputScrollPosition]);
 
+  const matchLineup = (
+    <div className="grid grid-cols-[minmax(0,1fr)_3.5rem_3.5rem_minmax(0,1fr)] items-center gap-3 sm:grid-cols-[minmax(0,1fr)_4rem_4rem_minmax(0,1fr)] md:gap-4 xl:grid-cols-[minmax(0,1fr)_3.5rem_3.5rem_minmax(0,1fr)]">
+      <TeamNames
+        matchId={match.id}
+        players={[match.team1User1, match.team1User2]}
+        canReshuffleWithoutPlayer={canReshuffleWithoutPlayer}
+        activeActionPlayerId={activeActionPlayerId}
+        reshufflingCourtPlayerId={reshufflingCourtPlayerId}
+        replacingCourtPlayerId={replacingCourtPlayerId}
+        actionDisabled={actionDisabled}
+        onTogglePlayerAction={handleTogglePlayerAction}
+        onReshuffleWithoutPlayer={handleReshuffleWithoutPlayer}
+        onReplacePlayer={handleReplacePlayer}
+      />
+      <ScoreSlot
+        matchId={match.id}
+        canEdit={canEditScores}
+        scoreValue={scores.team1}
+        readonlyScore={isConfirmingSubmission ? scores.team1 : undefined}
+        pendingScore={isPendingApproval ? match.team1Score : undefined}
+        inputRef={team1ScoreInputRef}
+        onScoreChange={handleTeam1ScoreChange}
+        onScoreFocus={handleScoreInputFocus}
+        onScoreBlur={handleScoreInputBlur}
+      />
+      <ScoreSlot
+        matchId={match.id}
+        canEdit={canEditScores}
+        scoreValue={scores.team2}
+        readonlyScore={isConfirmingSubmission ? scores.team2 : undefined}
+        pendingScore={isPendingApproval ? match.team2Score : undefined}
+        inputRef={team2ScoreInputRef}
+        onScoreChange={handleTeam2ScoreChange}
+        onScoreFocus={handleScoreInputFocus}
+        onScoreBlur={handleScoreInputBlur}
+      />
+      <TeamNames
+        matchId={match.id}
+        players={[match.team2User1, match.team2User2]}
+        align="right"
+        canReshuffleWithoutPlayer={canReshuffleWithoutPlayer}
+        activeActionPlayerId={activeActionPlayerId}
+        reshufflingCourtPlayerId={reshufflingCourtPlayerId}
+        replacingCourtPlayerId={replacingCourtPlayerId}
+        actionDisabled={actionDisabled}
+        onTogglePlayerAction={handleTogglePlayerAction}
+        onReshuffleWithoutPlayer={handleReshuffleWithoutPlayer}
+        onReplacePlayer={handleReplacePlayer}
+      />
+    </div>
+  );
+
   return (
     <div className="space-y-3">
       <div
         ref={lineupRef}
         data-court-promotion-surface={match.id}
-        className={`relative rounded-xl border p-3 transition-all md:p-4 ${
+        className={`rounded-xl border p-3 transition-all md:p-4 ${
           isPendingApproval
             ? "border-orange-200 bg-orange-50/80"
             : "border-blue-100 bg-[var(--accent-faint)]"
-        } ${canShowMatchReason ? "pr-10 md:pr-11" : ""}`}
+        }`}
       >
         {canShowMatchReason ? (
-          <button
-            type="button"
-            onClick={() => setMatchReasonOpen(true)}
-            className="absolute right-2 top-2 z-10 flex h-7 w-7 items-center justify-center rounded-lg border border-blue-200 bg-white/90 text-blue-700 shadow-sm transition hover:border-blue-300 hover:bg-white hover:text-blue-800 active:scale-95"
-            aria-label="Show match reasoning"
-            title="Match reasoning"
+          <div
+            data-live-match-reason-layout="balanced-rails"
+            className="grid grid-cols-[1.75rem_minmax(0,1fr)_1.75rem] items-stretch gap-2 md:grid-cols-[2rem_minmax(0,1fr)_2rem] md:gap-3"
           >
-            <Info aria-hidden="true" size={14} strokeWidth={2.3} />
-          </button>
-        ) : null}
-        <div className="grid grid-cols-[minmax(0,1fr)_3.5rem_3.5rem_minmax(0,1fr)] items-center gap-3 sm:grid-cols-[minmax(0,1fr)_4rem_4rem_minmax(0,1fr)] md:gap-4 xl:grid-cols-[minmax(0,1fr)_3.5rem_3.5rem_minmax(0,1fr)]">
-          <TeamNames
-            matchId={match.id}
-            players={[match.team1User1, match.team1User2]}
-            canReshuffleWithoutPlayer={canReshuffleWithoutPlayer}
-            activeActionPlayerId={activeActionPlayerId}
-            reshufflingCourtPlayerId={reshufflingCourtPlayerId}
-            replacingCourtPlayerId={replacingCourtPlayerId}
-            actionDisabled={actionDisabled}
-            onTogglePlayerAction={handleTogglePlayerAction}
-            onReshuffleWithoutPlayer={handleReshuffleWithoutPlayer}
-            onReplacePlayer={handleReplacePlayer}
-          />
-          <ScoreSlot
-            matchId={match.id}
-            canEdit={canEditScores}
-            scoreValue={scores.team1}
-            readonlyScore={isConfirmingSubmission ? scores.team1 : undefined}
-            pendingScore={isPendingApproval ? match.team1Score : undefined}
-            inputRef={team1ScoreInputRef}
-            onScoreChange={handleTeam1ScoreChange}
-            onScoreFocus={handleScoreInputFocus}
-            onScoreBlur={handleScoreInputBlur}
-          />
-          <ScoreSlot
-            matchId={match.id}
-            canEdit={canEditScores}
-            scoreValue={scores.team2}
-            readonlyScore={isConfirmingSubmission ? scores.team2 : undefined}
-            pendingScore={isPendingApproval ? match.team2Score : undefined}
-            inputRef={team2ScoreInputRef}
-            onScoreChange={handleTeam2ScoreChange}
-            onScoreFocus={handleScoreInputFocus}
-            onScoreBlur={handleScoreInputBlur}
-          />
-          <TeamNames
-            matchId={match.id}
-            players={[match.team2User1, match.team2User2]}
-            align="right"
-            canReshuffleWithoutPlayer={canReshuffleWithoutPlayer}
-            activeActionPlayerId={activeActionPlayerId}
-            reshufflingCourtPlayerId={reshufflingCourtPlayerId}
-            replacingCourtPlayerId={replacingCourtPlayerId}
-            actionDisabled={actionDisabled}
-            onTogglePlayerAction={handleTogglePlayerAction}
-            onReshuffleWithoutPlayer={handleReshuffleWithoutPlayer}
-            onReplacePlayer={handleReplacePlayer}
-          />
-        </div>
+            <div
+              aria-hidden="true"
+              data-live-match-reason-spacer="true"
+              className="pointer-events-none"
+            />
+            <div className="min-w-0">{matchLineup}</div>
+            <div
+              data-live-match-reason-rail="true"
+              className="flex items-center justify-center"
+            >
+              <button
+                type="button"
+                onClick={() => setMatchReasonOpen(true)}
+                className="flex h-7 w-7 items-center justify-center rounded-lg border border-blue-200 bg-white/90 text-blue-700 shadow-sm transition hover:border-blue-300 hover:bg-white hover:text-blue-800 active:scale-95"
+                aria-label="Show match reasoning"
+                title="Match reasoning"
+              >
+                <Info aria-hidden="true" size={14} strokeWidth={2.3} />
+              </button>
+            </div>
+          </div>
+        ) : (
+          matchLineup
+        )}
       </div>
 
       {canEdit ? (
