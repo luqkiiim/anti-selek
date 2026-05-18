@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
+import { Avatar } from "@/components/ui/Avatar";
 import { getSessionPoolOptions } from "@/lib/sessionPools";
 import { getSessionTypeLabel } from "@/lib/sessionModeLabels";
 import type { Player } from "./sessionTypes";
@@ -207,6 +208,11 @@ export function LiveStandingsTable({
                   <td className="border-y border-gray-100 bg-white px-2 py-2 align-middle sm:px-3">
                     <div className="space-y-1">
                       <div className="flex min-w-0 flex-wrap items-center gap-1.5 leading-tight sm:gap-2">
+                        <Avatar
+                          name={player.user.name}
+                          avatarUrl={player.user.avatarUrl}
+                          size="xs"
+                        />
                         <Link
                           href={getPlayerProfileHref(player)}
                           title={player.user.name}

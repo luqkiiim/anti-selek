@@ -2,6 +2,7 @@
 
 import { useEffect, useState, type Ref } from "react";
 import { Clock3, Info, Plus, RefreshCw, Undo2 } from "lucide-react";
+import { Avatar } from "@/components/ui/Avatar";
 import type { QueuedMatch } from "./sessionTypes";
 import { MatchReasonModal } from "./MatchReasonModal";
 
@@ -49,6 +50,8 @@ function TeamPlayers({
   onReshuffleQueuedPlayer: (userId: string) => void;
   onReplaceQueuedPlayer: (userId: string) => void;
 }) {
+  const rowDirectionClass = align === "right" ? "flex-row-reverse" : "flex-row";
+
   return (
     <div className="min-w-0 space-y-2">
       {players.map((player) => {
@@ -70,16 +73,20 @@ function TeamPlayers({
                 onClick={() => onTogglePlayerAction(player.id)}
                 disabled={queueActionDisabled}
                 aria-expanded={actionOpen}
-                className={`min-w-0 max-w-full whitespace-normal break-words text-base font-semibold leading-tight text-gray-900 transition hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-50 md:text-[1.35rem] xl:text-base ${textAlignClass}`}
+                className={`flex min-w-0 w-full items-start gap-2 whitespace-normal break-words text-base font-semibold leading-tight text-gray-900 transition hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-50 md:text-[1.35rem] xl:text-base ${textAlignClass} ${rowDirectionClass}`}
               >
-                {player.name}
+                <Avatar name={player.name} avatarUrl={player.avatarUrl} size="xs" />
+                <span className="min-w-0 flex-1">{player.name}</span>
               </button>
             ) : (
-              <p
-                className={`min-w-0 whitespace-normal break-words text-base font-semibold leading-tight text-gray-900 md:text-[1.35rem] xl:text-base ${textAlignClass}`}
-              >
-                {player.name}
-              </p>
+              <div className={`flex min-w-0 items-start gap-2 ${rowDirectionClass}`}>
+                <Avatar name={player.name} avatarUrl={player.avatarUrl} size="xs" />
+                <p
+                  className={`min-w-0 flex-1 whitespace-normal break-words text-base font-semibold leading-tight text-gray-900 md:text-[1.35rem] xl:text-base ${textAlignClass}`}
+                >
+                  {player.name}
+                </p>
+              </div>
             )}
 
             {canReshuffleQueuedPlayers && actionOpen ? (

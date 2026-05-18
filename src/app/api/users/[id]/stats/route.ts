@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
+import { serializeAvatarEntity } from "@/lib/avatar";
 import { prisma } from "@/lib/prisma";
 import { buildProfileCommunityRankWindow } from "@/lib/profileCommunityRank";
 import { buildPlayerProfileDerivedData } from "@/lib/profileStats";
@@ -36,6 +37,7 @@ async function getUserStatsRoute(
     select: {
       id: true,
       name: true,
+      avatarKey: true,
       elo: true,
       createdAt: true,
     },
@@ -149,14 +151,23 @@ async function getUserStatsRoute(
     },
     orderBy: { completedAt: "desc" },
     include: {
-      team1User1: { select: { id: true, name: true } },
-      team1User2: { select: { id: true, name: true } },
-      team2User1: { select: { id: true, name: true } },
-      team2User2: { select: { id: true, name: true } },
+      team1User1: { select: { id: true, name: true, avatarKey: true } },
+      team1User2: { select: { id: true, name: true, avatarKey: true } },
+      team2User1: { select: { id: true, name: true, avatarKey: true } },
+      team2User2: { select: { id: true, name: true, avatarKey: true } },
       session: { select: { id: true, code: true, name: true } },
     },
   });
-  const profileData = buildPlayerProfileDerivedData(id, matches);
+  const profileData = buildPlayerProfileDerivedData(
+    id,
+    matches.map((match) => ({
+      ...match,
+      team1User1: serializeAvatarEntity(match.team1User1),
+      team1User2: serializeAvatarEntity(match.team1User2),
+      team2User1: serializeAvatarEntity(match.team2User1),
+      team2User2: serializeAvatarEntity(match.team2User2),
+    }))
+  );
 
   if (communityId) {
     const recentSessionIds = profileData.recentSessions.map((session) => session.id);
@@ -201,7 +212,7 @@ async function getUserStatsRoute(
 
   return NextResponse.json({
     user: {
-      ...user,
+      ...serializeAvatarEntity(user),
       elo: effectiveElo,
     },
     context,

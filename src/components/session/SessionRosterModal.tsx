@@ -1,5 +1,6 @@
 "use client";
 
+import { Avatar } from "@/components/ui/Avatar";
 import { PlayerPickerSheet } from "@/components/ui/PlayerPickerSheet";
 import { SearchField } from "@/components/ui/SearchField";
 import { getMixedSideOverrideOptionForGender } from "@/lib/mixedSide";
@@ -218,22 +219,25 @@ export function SessionRosterModal({
               key={player.id}
               className="app-touch-pan-y flex items-center justify-between gap-3 rounded-xl border border-gray-200 bg-gray-50/70 px-3 py-3 transition"
             >
-              <div className="min-w-0 space-y-1">
-                <p className="truncate text-sm font-semibold text-gray-900">
-                  {player.name}
-                </p>
-                <div className="flex flex-wrap items-center gap-2">
-                  <p className="text-xs text-gray-500">Rating {player.elo}</p>
-                  {player.status === CommunityPlayerStatus.OCCASIONAL ? (
-                    <span className="app-chip app-chip-success px-2 py-0.5 text-[10px]">
-                      Occasional
-                    </span>
-                  ) : null}
-                  {poolsEnabled ? (
-                    <span className="app-chip app-chip-accent px-2 py-0.5 text-[10px]">
-                      Add to {rosterPool === SessionPool.A ? poolAName ?? "Open" : poolBName ?? "Regular"}
-                    </span>
-                  ) : null}
+              <div className="min-w-0 flex items-center gap-3">
+                <Avatar name={player.name} avatarUrl={player.avatarUrl} size="sm" />
+                <div className="min-w-0 space-y-1">
+                  <p className="truncate text-sm font-semibold text-gray-900">
+                    {player.name}
+                  </p>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="text-xs text-gray-500">Rating {player.elo}</p>
+                    {player.status === CommunityPlayerStatus.OCCASIONAL ? (
+                      <span className="app-chip app-chip-success px-2 py-0.5 text-[10px]">
+                        Occasional
+                      </span>
+                    ) : null}
+                    {poolsEnabled ? (
+                      <span className="app-chip app-chip-accent px-2 py-0.5 text-[10px]">
+                        Add to {rosterPool === SessionPool.A ? poolAName ?? "Open" : poolBName ?? "Regular"}
+                      </span>
+                    ) : null}
+                  </div>
                 </div>
               </div>
 

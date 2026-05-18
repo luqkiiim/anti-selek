@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { Avatar } from "@/components/ui/Avatar";
 import { EmptyState, SectionCard } from "@/components/ui/chrome";
 import {
   CommunityAdminClaimPill,
@@ -99,13 +100,6 @@ export function CommunityPlayersPanel({
       ) : (
         <div className="space-y-3">
           {filteredPlayers.map((player) => {
-            const initials = player.name
-              .split(/\s+/)
-              .filter(Boolean)
-              .slice(0, 2)
-              .map((part) => part[0]?.toUpperCase())
-              .join("");
-
             return (
               <div
                 key={player.id}
@@ -113,9 +107,12 @@ export function CommunityPlayersPanel({
               >
                 <div className="flex flex-col gap-4 lg:grid lg:grid-cols-[minmax(0,1.8fr)_120px_minmax(0,1.3fr)_auto] lg:items-center">
                   <div className="min-w-0 flex items-center gap-3">
-                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[linear-gradient(135deg,rgba(22,119,242,0.16),rgba(25,154,97,0.14))] text-sm font-black text-blue-700">
-                      {initials || player.name.slice(0, 1).toUpperCase()}
-                    </div>
+                    <Avatar
+                      name={player.name}
+                      avatarUrl={player.avatarUrl}
+                      size="md"
+                      className="rounded-2xl"
+                    />
                     <div className="min-w-0">
                       <p className="truncate text-base font-semibold text-gray-900">
                         {player.name}

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
+import { serializeAvatarEntity } from "@/lib/avatar";
 import { prisma } from "@/lib/prisma";
 import { getCommunityEloByUserId, withCommunityElo } from "@/lib/communityElo";
 import {
@@ -59,10 +60,10 @@ async function getSessionRoute(
               completedAt: true,
               scoreSubmittedByUserId: true,
               matchmakingReasonJson: true,
-              team1User1: { select: { id: true, name: true } },
-              team1User2: { select: { id: true, name: true } },
-              team2User1: { select: { id: true, name: true } },
-              team2User2: { select: { id: true, name: true } },
+              team1User1: { select: { id: true, name: true, avatarKey: true } },
+              team1User2: { select: { id: true, name: true, avatarKey: true } },
+              team2User1: { select: { id: true, name: true, avatarKey: true } },
+              team2User2: { select: { id: true, name: true, avatarKey: true } },
             },
           },
         },
@@ -78,6 +79,7 @@ async function getSessionRoute(
             select: {
               id: true,
               name: true,
+              avatarKey: true,
               elo: true,
               gender: true,
               partnerPreference: true,
@@ -155,11 +157,15 @@ async function getSessionRoute(
             await getCommunityEloByUserId(sessionData.communityId, playerIds)
           )
         : sessionData.players;
+  const serializedPlayers = players.map((player) => ({
+    ...player,
+    user: serializeAvatarEntity(player.user),
+  }));
 
   const queuedMatch = sessionData.queuedMatch
     ? (() => {
         const playerById = new Map(
-          players.map((player) => [player.userId, player.user])
+          serializedPlayers.map((player) => [player.userId, player.user])
         );
         const [team1User1Id, team1User2Id, team2User1Id, team2User2Id] =
           getQueuedMatchUserIds(sessionData.queuedMatch);
@@ -197,6 +203,10 @@ async function getSessionRoute(
       ...court,
       currentMatch: {
         ...currentMatch,
+        team1User1: serializeAvatarEntity(currentMatch.team1User1),
+        team1User2: serializeAvatarEntity(currentMatch.team1User2),
+        team2User1: serializeAvatarEntity(currentMatch.team2User1),
+        team2User2: serializeAvatarEntity(currentMatch.team2User2),
         matchmakingReason: parseMatchmakingReasonJson(matchmakingReasonJson),
       },
     };
@@ -205,7 +215,7 @@ async function getSessionRoute(
   return NextResponse.json({
     ...sessionData,
     courts,
-    players,
+    players: serializedPlayers,
     queuedMatch,
     viewerCommunityRole: communityRole,
     viewerCanManage:

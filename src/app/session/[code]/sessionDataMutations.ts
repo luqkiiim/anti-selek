@@ -18,6 +18,7 @@ type LiveMatch = NonNullable<SessionData["courts"][number]["currentMatch"]>;
 interface MatchParticipant {
   id: string;
   name: string;
+  avatarUrl?: string | null;
 }
 
 export interface MatchPayload {
@@ -64,6 +65,7 @@ export interface SessionSnapshotLike {
 export interface GuestPayload {
   id: string;
   name: string;
+  avatarUrl?: string | null;
   elo: number;
   isGuest: boolean;
   ladderEntryAt?: string;
@@ -108,10 +110,47 @@ function buildLiveMatch(
     return null;
   }
 
-  const team1User1 = payload.team1User1 ?? fallbackMatch?.team1User1 ?? playerById.get(team1User1Id);
-  const team1User2 = payload.team1User2 ?? fallbackMatch?.team1User2 ?? playerById.get(team1User2Id);
-  const team2User1 = payload.team2User1 ?? fallbackMatch?.team2User1 ?? playerById.get(team2User1Id);
-  const team2User2 = payload.team2User2 ?? fallbackMatch?.team2User2 ?? playerById.get(team2User2Id);
+  const mergeParticipant = (
+    payloadParticipant: MatchParticipant | undefined,
+    fallbackParticipant: MatchParticipant | undefined,
+    playerParticipant: MatchParticipant | undefined
+  ) => {
+    if (!payloadParticipant) {
+      return fallbackParticipant ?? playerParticipant;
+    }
+
+    return {
+      ...playerParticipant,
+      ...fallbackParticipant,
+      ...payloadParticipant,
+      avatarUrl:
+        payloadParticipant.avatarUrl ??
+        fallbackParticipant?.avatarUrl ??
+        playerParticipant?.avatarUrl ??
+        null,
+    };
+  };
+
+  const team1User1 = mergeParticipant(
+    payload.team1User1,
+    fallbackMatch?.team1User1,
+    playerById.get(team1User1Id)
+  );
+  const team1User2 = mergeParticipant(
+    payload.team1User2,
+    fallbackMatch?.team1User2,
+    playerById.get(team1User2Id)
+  );
+  const team2User1 = mergeParticipant(
+    payload.team2User1,
+    fallbackMatch?.team2User1,
+    playerById.get(team2User1Id)
+  );
+  const team2User2 = mergeParticipant(
+    payload.team2User2,
+    fallbackMatch?.team2User2,
+    playerById.get(team2User2Id)
+  );
 
   if (!team1User1 || !team1User2 || !team2User1 || !team2User2) {
     return null;
@@ -169,14 +208,24 @@ function buildQueuedMatch(
     return null;
   }
 
+  const playerById = new Map(
+    sessionData.players.map((player) => [player.userId, player.user])
+  );
+  const withAvatar = (participant: MatchParticipant) => ({
+    ...playerById.get(participant.id),
+    ...participant,
+    avatarUrl:
+      participant.avatarUrl ?? playerById.get(participant.id)?.avatarUrl ?? null,
+  });
+
   return {
     id: queuedMatch.id,
     createdAt: normalizeOptionalDate(queuedMatch.createdAt),
     targetPool: queuedMatch.targetPool ?? null,
-    team1User1: queuedMatch.team1User1,
-    team1User2: queuedMatch.team1User2,
-    team2User1: queuedMatch.team2User1,
-    team2User2: queuedMatch.team2User2,
+    team1User1: withAvatar(queuedMatch.team1User1),
+    team1User2: withAvatar(queuedMatch.team1User2),
+    team2User1: withAvatar(queuedMatch.team2User1),
+    team2User2: withAvatar(queuedMatch.team2User2),
     matchmakingReason: queuedMatch.matchmakingReason ?? null,
   };
 }
@@ -491,6 +540,7 @@ export function applyGuestAdded(current: SessionData, guest: GuestPayload) {
         user: {
           id: guest.id,
           name: guest.name,
+          avatarUrl: guest.avatarUrl ?? null,
           elo: guest.elo,
         },
       },

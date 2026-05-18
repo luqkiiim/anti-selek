@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
+import { serializeAvatarEntity } from "@/lib/avatar";
 import { logError, safeErrorResponse } from "@/lib/errors";
 import { prisma } from "@/lib/prisma";
 import {
@@ -77,6 +78,7 @@ export async function GET(
             id: true,
             name: true,
             email: true,
+            avatarKey: true,
             gender: true,
             partnerPreference: true,
             mixedSideOverride: true,
@@ -131,6 +133,7 @@ export async function GET(
             id: user.id,
             name: user.name,
             email: user.email,
+            avatarUrl: serializeAvatarEntity(user).avatarUrl,
             status:
               preferred.status === CommunityPlayerStatus.OCCASIONAL
                 ? CommunityPlayerStatus.OCCASIONAL

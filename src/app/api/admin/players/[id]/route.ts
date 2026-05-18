@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
+import { resolveAvatarUrl } from "@/lib/avatar";
+import { cleanupSupersededAvatar } from "@/lib/avatarStorage";
 import { prisma } from "@/lib/prisma";
 import { logAuditEvent } from "@/lib/serverAudit";
 import { logError, safeErrorResponse } from "@/lib/errors";
@@ -84,6 +86,7 @@ export async function PATCH(
         id: true,
         name: true,
         email: true,
+        avatarKey: true,
         elo: true,
         isActive: true,
         isClaimed: true,
@@ -91,7 +94,11 @@ export async function PATCH(
       },
     });
 
-    return NextResponse.json(updated);
+    const { avatarKey, ...rest } = updated;
+    return NextResponse.json({
+      ...rest,
+      avatarUrl: resolveAvatarUrl(avatarKey),
+    });
   } catch (error) {
     logError("Admin update player error details", error);
     return safeErrorResponse();
@@ -129,6 +136,11 @@ export async function DELETE(
     // Check if user exists
     const user = await prisma.user.findUnique({
       where: { id },
+      select: {
+        id: true,
+        name: true,
+        avatarKey: true,
+      },
     });
 
     if (!user) {
@@ -138,6 +150,11 @@ export async function DELETE(
     // Delete the user (cascades will handle SessionPlayer and Match records)
     await prisma.user.delete({
       where: { id },
+    });
+
+    await cleanupSupersededAvatar({
+      previousAvatarKey: user.avatarKey,
+      nextAvatarKey: null,
     });
 
     logAuditEvent({

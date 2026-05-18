@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState, type Ref } from "react";
 import { Info } from "lucide-react";
+import { Avatar } from "@/components/ui/Avatar";
 import { canApprovePendingSubmission } from "@/lib/matchApprovalRules";
 import { MatchStatus } from "@/types/enums";
 import type { Match, MatchScores } from "./sessionTypes";
@@ -64,6 +65,7 @@ function TeamNames({
 }: TeamNamesProps) {
   const textAlignClass = align === "right" ? "text-right" : "text-left";
   const popoverPositionClass = align === "right" ? "right-0" : "left-0";
+  const rowDirectionClass = align === "right" ? "flex-row-reverse" : "flex-row";
 
   return (
     <div className={`min-w-0 space-y-2 ${textAlignClass}`}>
@@ -85,14 +87,18 @@ function TeamNames({
                 onClick={() => onTogglePlayerAction(actionKey)}
                 disabled={actionDisabled}
                 aria-expanded={actionOpen}
-                className={`min-w-0 max-w-full whitespace-normal break-words text-[0.95rem] font-semibold leading-tight text-gray-900 transition hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-50 sm:text-base md:text-[1.35rem] xl:text-base ${textAlignClass}`}
+                className={`flex min-w-0 w-full items-start gap-2 whitespace-normal break-words text-[0.95rem] font-semibold leading-tight text-gray-900 transition hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-50 sm:text-base md:text-[1.35rem] xl:text-base ${textAlignClass} ${rowDirectionClass}`}
               >
-                {player.name}
+                <Avatar name={player.name} avatarUrl={player.avatarUrl} size="xs" />
+                <span className="min-w-0 flex-1">{player.name}</span>
               </button>
             ) : (
-              <p className="whitespace-normal break-words text-[0.95rem] font-semibold leading-tight text-gray-900 sm:text-base md:text-[1.35rem] xl:text-base">
-                {player.name}
-              </p>
+              <div className={`flex min-w-0 items-start gap-2 ${rowDirectionClass}`}>
+                <Avatar name={player.name} avatarUrl={player.avatarUrl} size="xs" />
+                <p className="min-w-0 flex-1 whitespace-normal break-words text-[0.95rem] font-semibold leading-tight text-gray-900 sm:text-base md:text-[1.35rem] xl:text-base">
+                  {player.name}
+                </p>
+              </div>
             )}
 
             {canReshuffleWithoutPlayer && actionOpen ? (

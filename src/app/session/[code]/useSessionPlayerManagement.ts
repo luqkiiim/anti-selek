@@ -65,6 +65,7 @@ function parseCommunityPlayers(data: unknown): CommunityUser[] {
       const candidate = player as {
         id?: unknown;
         name?: unknown;
+        avatarUrl?: unknown;
         elo?: unknown;
         gender?: unknown;
         partnerPreference?: unknown;
@@ -99,6 +100,8 @@ function parseCommunityPlayers(data: unknown): CommunityUser[] {
       players.push({
         id: candidate.id,
         name: candidate.name,
+        avatarUrl:
+          typeof candidate.avatarUrl === "string" ? candidate.avatarUrl : null,
         elo: candidate.elo,
         status:
           candidate.status === CommunityPlayerStatus.OCCASIONAL

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
+import { serializeAvatarEntity } from "@/lib/avatar";
 import { prisma } from "@/lib/prisma";
 import {
   isValidMixedSide,
@@ -233,6 +234,7 @@ export async function PATCH(
       select: {
         name: true,
         email: true,
+        avatarKey: true,
         isClaimed: true,
         gender: true,
         partnerPreference: true,
@@ -309,6 +311,7 @@ export async function PATCH(
         id: true,
         name: true,
         email: true,
+        avatarKey: true,
         gender: true,
         partnerPreference: true,
         mixedSideOverride: true,
@@ -347,7 +350,16 @@ export async function PATCH(
           });
 
     return NextResponse.json({
-      ...updatedUser,
+      id: updatedUser.id,
+      name: updatedUser.name,
+      email: updatedUser.email,
+      gender: updatedUser.gender,
+      partnerPreference: updatedUser.partnerPreference,
+      mixedSideOverride: updatedUser.mixedSideOverride,
+      isActive: updatedUser.isActive,
+      isClaimed: updatedUser.isClaimed,
+      createdAt: updatedUser.createdAt,
+      avatarUrl: serializeAvatarEntity(updatedUser).avatarUrl,
       role: updatedMembership?.role ?? membership.role,
       elo: updatedMembership?.elo ?? membership.elo,
       status:

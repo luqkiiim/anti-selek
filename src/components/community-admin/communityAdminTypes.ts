@@ -21,6 +21,7 @@ export interface CommunityAdminPlayer {
   id: string;
   name: string;
   email: string | null;
+  avatarUrl?: string | null;
   status: CommunityPlayerStatus;
   gender: PlayerGender;
   partnerPreference: PartnerPreference;

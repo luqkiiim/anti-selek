@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { AvatarUploader } from "@/components/ui/AvatarUploader";
 import { ModalFrame } from "@/components/ui/chrome";
 import {
   getMixedSideDisplayLabel,
@@ -46,6 +47,8 @@ interface CommunityPlayerEditorModalProps {
   onPromotePlayer: (player: CommunityAdminPlayer) => void;
   onOpenPasswordReset: (player: CommunityAdminPlayer) => void;
   onOpenMergeDuplicate: (player: CommunityAdminPlayer) => void;
+  onUploadAvatar: (player: CommunityAdminPlayer, file: File) => Promise<void>;
+  onRemoveAvatar: (player: CommunityAdminPlayer) => Promise<void>;
 }
 
 export function CommunityPlayerEditorModal({
@@ -68,6 +71,8 @@ export function CommunityPlayerEditorModal({
   onPromotePlayer,
   onOpenPasswordReset,
   onOpenMergeDuplicate,
+  onUploadAvatar,
+  onRemoveAvatar,
 }: CommunityPlayerEditorModalProps) {
   if (!player) return null;
 
@@ -102,16 +107,26 @@ export function CommunityPlayerEditorModal({
       <div className="space-y-5 px-4 py-4 sm:px-5">
         <div className="app-panel-muted space-y-3 p-4">
           <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">
-                Current profile
-              </p>
-              <p className="mt-1 text-lg font-semibold text-gray-900">
-                {player.name}
-              </p>
-              <p className="text-sm text-gray-600">
-                {player.email || "No email on file"}
-              </p>
+            <div className="space-y-3">
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">
+                  Current profile
+                </p>
+                <p className="mt-1 text-lg font-semibold text-gray-900">
+                  {player.name}
+                </p>
+                <p className="text-sm text-gray-600">
+                  {player.email || "No email on file"}
+                </p>
+              </div>
+              <AvatarUploader
+                name={player.name}
+                avatarUrl={player.avatarUrl}
+                size="lg"
+                helperText="Community admins can manage photos for claimed members and placeholders."
+                onUpload={(file) => onUploadAvatar(player, file)}
+                onRemove={() => onRemoveAvatar(player)}
+              />
             </div>
             <div className="flex flex-wrap gap-2">
               <CommunityAdminRolePill role={player.role} />

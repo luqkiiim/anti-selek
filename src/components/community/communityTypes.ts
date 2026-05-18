@@ -13,6 +13,7 @@ export interface CommunityPageUser {
   id: string;
   name: string;
   email: string | null;
+  avatarUrl?: string | null;
   isAdmin?: boolean;
   elo: number;
   gender: PlayerGender;
@@ -33,6 +34,7 @@ export interface CommunityPageMember {
   id: string;
   name: string;
   email?: string | null;
+  avatarUrl?: string | null;
   status: CommunityPlayerStatus;
   gender: PlayerGender;
   partnerPreference: PartnerPreference;
@@ -55,7 +57,7 @@ export interface CommunityPageSession {
   sourceSessionId?: string | null;
   createdAt: string;
   endedAt?: string | null;
-  players: { user: { id: string; name: string } }[];
+  players: { user: { id: string; name: string; avatarUrl?: string | null } }[];
   collabStatus?: "PENDING" | "ACCEPTED" | "REJECTED";
   communities?: Array<{
     id: string;

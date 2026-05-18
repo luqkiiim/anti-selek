@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { Avatar } from "@/components/ui/Avatar";
 import { PlayerPickerSheet } from "@/components/ui/PlayerPickerSheet";
 import { SearchField } from "@/components/ui/SearchField";
 import { SessionPool } from "@/types/enums";
@@ -147,7 +148,13 @@ export function SessionPlayersModal({
                 key={player.userId}
                 className="app-touch-pan-y flex items-center justify-between gap-3 rounded-xl border border-gray-200 bg-gray-50/70 px-3 py-3"
               >
-                <div className="min-w-0 space-y-1">
+                <div className="min-w-0 flex items-center gap-3">
+                  <Avatar
+                    name={player.user.name}
+                    avatarUrl={player.user.avatarUrl}
+                    size="sm"
+                  />
+                  <div className="min-w-0 space-y-1">
                   <div className="flex min-w-0 flex-wrap items-center gap-1.5">
                     <p className="truncate text-sm font-semibold text-gray-900">
                       {player.user.name}
@@ -176,6 +183,7 @@ export function SessionPlayersModal({
                     ) : null}
                   </div>
                   <p className="text-xs text-gray-500">Rating {player.user.elo}</p>
+                  </div>
                 </div>
 
                 <div className="flex shrink-0 items-center gap-2">

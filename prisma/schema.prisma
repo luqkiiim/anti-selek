@@ -13,6 +13,7 @@ model User {
   email        String?  @unique
   passwordHash String?
   name         String
+  avatarKey    String?
   isClaimed    Boolean  @default(false)
   gender       String   @default("UNSPECIFIED") // MALE, FEMALE, UNSPECIFIED
   partnerPreference String @default("OPEN") // legacy MIXICANO preference fallback: OPEN, FEMALE_FLEX

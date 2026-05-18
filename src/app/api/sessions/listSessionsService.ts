@@ -1,3 +1,4 @@
+import { serializeAvatarEntity } from "@/lib/avatar";
 import { prisma } from "@/lib/prisma";
 import { getCommunityEloByUserId, withCommunityElo } from "@/lib/communityElo";
 import {
@@ -54,7 +55,9 @@ export async function listSessionsForCommunity({
       },
       courts: true,
       players: {
-        include: { user: { select: { id: true, name: true, elo: true } } },
+        include: {
+          user: { select: { id: true, name: true, avatarKey: true, elo: true } },
+        },
       },
     },
   });
@@ -92,13 +95,18 @@ export async function listSessionsForCommunity({
     return {
       ...session,
       players:
-        session.sessionCommunities.length > 1
-          ? withPlayerCommunityBadges(
-              session.players,
-              badgesByUserId,
-              communityId
-            )
-          : withCommunityElo(session.players, communityEloByUserId),
+        (
+          session.sessionCommunities.length > 1
+            ? withPlayerCommunityBadges(
+                session.players,
+                badgesByUserId,
+                communityId
+              )
+            : withCommunityElo(session.players, communityEloByUserId)
+        ).map((player) => ({
+          ...player,
+          user: serializeAvatarEntity(player.user),
+        })),
       collabStatus:
         currentCommunityLink?.role === "PARTNER"
           ? currentCommunityLink.status

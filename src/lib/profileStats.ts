@@ -5,6 +5,7 @@ const PREFERRED_CONNECTION_MIN_MATCHES = 2;
 interface ProfileParticipant {
   id: string;
   name: string;
+  avatarUrl?: string | null;
 }
 
 export interface ProfileMatchSource {

@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef } from "react";
+import { Avatar } from "@/components/ui/Avatar";
 import { PlayerPickerSheet } from "@/components/ui/PlayerPickerSheet";
 import { SearchField } from "@/components/ui/SearchField";
 import type { CommunityPageMember } from "./communityTypes";
@@ -134,40 +135,43 @@ export function CommunityPlayersModal({
                   }}
                   className="flex w-full min-w-0 items-center justify-between gap-3 text-left"
                 >
-                  <div className="min-w-0 space-y-1">
-                    <div className="flex min-w-0 flex-wrap items-center gap-2">
-                      <p className="truncate text-sm font-semibold text-gray-900">
-                        {player.name}
-                      </p>
-                      {player.status === CommunityPlayerStatus.OCCASIONAL ? (
-                        <span className="app-chip app-chip-success px-2 py-0.5 text-[10px]">
-                          Occasional
-                        </span>
-                      ) : null}
-                      {poolsEnabled && isSelected ? (
-                        <span className="app-chip app-chip-accent px-2 py-0.5 text-[10px]">
-                          {selectedPool === SessionPool.A ? poolAName : poolBName}
-                        </span>
-                      ) : null}
-                    </div>
-                    <p className="text-xs text-gray-500">Rating {player.elo}</p>
-                    {player.communityBadges && player.communityBadges.length > 0 ? (
-                      <div className="flex flex-wrap gap-1.5">
-                        {player.communityBadges.map((badge) => (
-                          <span
-                            key={badge.id}
-                            className="rounded-full border border-gray-200 bg-white px-2 py-0.5 text-[10px] font-semibold text-gray-600"
-                          >
-                            {badge.name} {badge.elo}
+                  <div className="min-w-0 flex items-center gap-3">
+                    <Avatar name={player.name} avatarUrl={player.avatarUrl} size="sm" />
+                    <div className="min-w-0 space-y-1">
+                      <div className="flex min-w-0 flex-wrap items-center gap-2">
+                        <p className="truncate text-sm font-semibold text-gray-900">
+                          {player.name}
+                        </p>
+                        {player.status === CommunityPlayerStatus.OCCASIONAL ? (
+                          <span className="app-chip app-chip-success px-2 py-0.5 text-[10px]">
+                            Occasional
                           </span>
-                        ))}
-                        {!player.isClaimed ? (
-                          <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
-                            Unclaimed
+                        ) : null}
+                        {poolsEnabled && isSelected ? (
+                          <span className="app-chip app-chip-accent px-2 py-0.5 text-[10px]">
+                            {selectedPool === SessionPool.A ? poolAName : poolBName}
                           </span>
                         ) : null}
                       </div>
-                    ) : null}
+                      <p className="text-xs text-gray-500">Rating {player.elo}</p>
+                      {player.communityBadges && player.communityBadges.length > 0 ? (
+                        <div className="flex flex-wrap gap-1.5">
+                          {player.communityBadges.map((badge) => (
+                            <span
+                              key={badge.id}
+                              className="rounded-full border border-gray-200 bg-white px-2 py-0.5 text-[10px] font-semibold text-gray-600"
+                            >
+                              {badge.name} {badge.elo}
+                            </span>
+                          ))}
+                          {!player.isClaimed ? (
+                            <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
+                              Unclaimed
+                            </span>
+                          ) : null}
+                        </div>
+                      ) : null}
+                    </div>
                   </div>
 
                   <span

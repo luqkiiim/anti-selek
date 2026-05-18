@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
+import { serializeAvatarEntity } from "@/lib/avatar";
 import { getCommunityEloByUserId, withCommunityElo } from "@/lib/communityElo";
 import { prisma } from "@/lib/prisma";
 import { MatchStatus, SessionStatus } from "@/types/enums";
@@ -121,10 +122,10 @@ export async function POST(
                   team2Score: true,
                   completedAt: true,
                   scoreSubmittedByUserId: true,
-                  team1User1: { select: { id: true, name: true } },
-                  team1User2: { select: { id: true, name: true } },
-                  team2User1: { select: { id: true, name: true } },
-                  team2User2: { select: { id: true, name: true } },
+                  team1User1: { select: { id: true, name: true, avatarKey: true } },
+                  team1User2: { select: { id: true, name: true, avatarKey: true } },
+                  team2User1: { select: { id: true, name: true, avatarKey: true } },
+                  team2User2: { select: { id: true, name: true, avatarKey: true } },
                 },
               },
             },
@@ -135,6 +136,7 @@ export async function POST(
                 select: {
                   id: true,
                   name: true,
+                  avatarKey: true,
                   elo: true,
                   gender: true,
                   partnerPreference: true,
@@ -178,10 +180,27 @@ export async function POST(
             )
           )
         : updatedSession.players;
+    const serializedPlayers = players.map((player) => ({
+      ...player,
+      user: serializeAvatarEntity(player.user),
+    }));
+    const courts = updatedSession.courts.map((court) => ({
+      ...court,
+      currentMatch: court.currentMatch
+        ? {
+            ...court.currentMatch,
+            team1User1: serializeAvatarEntity(court.currentMatch.team1User1),
+            team1User2: serializeAvatarEntity(court.currentMatch.team1User2),
+            team2User1: serializeAvatarEntity(court.currentMatch.team2User1),
+            team2User2: serializeAvatarEntity(court.currentMatch.team2User2),
+          }
+        : null,
+    }));
 
     return NextResponse.json({
       ...updatedSession,
-      players,
+      courts,
+      players: serializedPlayers,
       matches: [],
       queuedMatch: null,
     });

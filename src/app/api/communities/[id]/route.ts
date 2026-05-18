@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { auth } from "@/lib/auth";
+import { serializeAvatarEntity } from "@/lib/avatar";
 import { buildCommunityPulse } from "@/lib/communityPulse";
 import { prisma } from "@/lib/prisma";
 import { listSessionsForCommunity } from "@/app/api/sessions/listSessionsService";
@@ -85,6 +86,7 @@ export async function GET(
           id: true,
           name: true,
           email: true,
+          avatarKey: true,
           elo: true,
           gender: true,
           partnerPreference: true,
@@ -140,6 +142,7 @@ export async function GET(
               id: true,
               name: true,
               email: true,
+              avatarKey: true,
               gender: true,
               partnerPreference: true,
               mixedSideOverride: true,
@@ -181,10 +184,10 @@ export async function GET(
           team2Score: true,
           team1EloChange: true,
           team2EloChange: true,
-          team1User1: { select: { id: true, name: true } },
-          team1User2: { select: { id: true, name: true } },
-          team2User1: { select: { id: true, name: true } },
-          team2User2: { select: { id: true, name: true } },
+          team1User1: { select: { id: true, name: true, avatarKey: true } },
+          team1User2: { select: { id: true, name: true, avatarKey: true } },
+          team2User1: { select: { id: true, name: true, avatarKey: true } },
+          team2User2: { select: { id: true, name: true, avatarKey: true } },
           session: {
             select: {
               id: true,
@@ -264,6 +267,7 @@ export async function GET(
       id: member.user.id,
       name: member.user.name,
       email: member.user.email,
+      avatarUrl: serializeAvatarEntity(member.user).avatarUrl,
       status:
         member.status === CommunityPlayerStatus.OCCASIONAL
           ? CommunityPlayerStatus.OCCASIONAL
@@ -291,10 +295,17 @@ export async function GET(
       members: communityMembers.map((member) => ({
         id: member.id,
         name: member.name,
+        avatarUrl: member.avatarUrl,
         elo: member.elo,
       })),
       sessions,
-      completedMatches,
+      completedMatches: completedMatches.map((match) => ({
+        ...match,
+        team1User1: serializeAvatarEntity(match.team1User1),
+        team1User2: serializeAvatarEntity(match.team1User2),
+        team2User1: serializeAvatarEntity(match.team2User1),
+        team2User2: serializeAvatarEntity(match.team2User2),
+      })),
     });
 
     return NextResponse.json({
@@ -302,6 +313,7 @@ export async function GET(
         id: viewer.id,
         name: viewer.name,
         email: viewer.email,
+        avatarUrl: serializeAvatarEntity(viewer).avatarUrl,
         isAdmin: viewerIsAdmin,
         elo: membership?.elo ?? viewer.elo,
         gender:

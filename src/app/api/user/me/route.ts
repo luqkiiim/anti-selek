@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
+import { serializeAvatarEntity } from "@/lib/avatar";
 import { prisma } from "@/lib/prisma";
 import { isGlobalAdminEmail } from "@/lib/globalAdmin";
 import { logError, safeErrorResponse } from "@/lib/errors";
@@ -22,6 +23,7 @@ async function getCurrentUserRoute(_request: Request) {
       id: true,
       email: true,
       name: true,
+      avatarKey: true,
       isClaimed: true,
       gender: true,
       partnerPreference: true,
@@ -37,7 +39,7 @@ async function getCurrentUserRoute(_request: Request) {
 
   return NextResponse.json({
     user: {
-      ...user,
+      ...serializeAvatarEntity(user),
       isAdmin:
         !session.user.isQuickAccess &&
         (!!session.user.isAdmin || isGlobalAdminEmail(user.email)),

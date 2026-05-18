@@ -28,6 +28,8 @@ import {
   Users,
   type LucideIcon,
 } from "lucide-react";
+import { Avatar } from "@/components/ui/Avatar";
+import { AvatarUploader } from "@/components/ui/AvatarUploader";
 import type {
   PlayerProfileConnectionSummary,
   PlayerProfileMatchHistoryEntry,
@@ -36,12 +38,14 @@ import type {
   PlayerProfileStatsSummary,
   PlayerProfileTrendSummary,
 } from "@/lib/profileStats";
+import { deleteUserAvatar, uploadUserAvatar } from "@/lib/avatarClient";
 import { EmptyState, FlashMessage } from "@/components/ui/chrome";
 
 interface UserProfileResponse {
   user: {
     id: string;
     name: string;
+    avatarUrl: string | null;
     elo: number;
     createdAt: string;
   };
@@ -70,6 +74,14 @@ interface UserProfileResponse {
     best: PlayerProfileSessionSummary | null;
   };
   matchHistory: PlayerProfileMatchHistoryEntry[];
+}
+
+interface CurrentProfileViewer {
+  id: string;
+  isAdmin?: boolean;
+  isClaimed?: boolean;
+  isQuickAccess?: boolean;
+  avatarUrl?: string | null;
 }
 
 type RankContext = NonNullable<
@@ -264,18 +276,6 @@ function getEloChangeClass(value: number | null) {
   }
 
   return value > 0 ? "text-emerald-600" : "text-rose-600";
-}
-
-function getInitials(name: string) {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  if (parts.length === 0) {
-    return "P";
-  }
-
-  return parts
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase())
-    .join("");
 }
 
 function getTierLabel(elo: number) {
@@ -708,6 +708,9 @@ function ProfileHero({
   recentStreakSummary,
   ratingSeries,
   onBack,
+  canManageAvatar,
+  onUploadAvatar,
+  onRemoveAvatar,
 }: {
   data: UserProfileResponse;
   rankContext: RankContext | null;
@@ -715,6 +718,9 @@ function ProfileHero({
   recentStreakSummary: string;
   ratingSeries: RatingSeriesPoint[];
   onBack?: () => void;
+  canManageAvatar: boolean;
+  onUploadAvatar: (file: File) => Promise<void>;
+  onRemoveAvatar: () => Promise<void>;
 }) {
   const ratingDelta = data.trend.ratingChange;
   const tier = getTierLabel(data.user.elo);
@@ -747,14 +753,31 @@ function ProfileHero({
 
         <div className="relative mt-5 grid gap-4 lg:grid-cols-[minmax(0,1fr)_21rem] lg:items-end">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
-            <div className="relative h-28 w-28 shrink-0 rounded-full border-4 border-emerald-400 bg-[#17201f] shadow-[0_10px_32px_rgba(0,0,0,0.22)]">
-              <div className="flex h-full w-full items-center justify-center rounded-full bg-[linear-gradient(145deg,#1d302d,#101918)] text-4xl font-semibold text-emerald-100">
-                {getInitials(data.user.name)}
-              </div>
-              <span className="absolute -bottom-1 -right-2 inline-flex items-center gap-1 rounded-full bg-emerald-500 px-3 py-1.5 text-sm font-semibold text-white shadow-lg">
-                <TrendingUp aria-hidden="true" size={15} strokeWidth={2.4} />
-                {data.user.elo}
-              </span>
+            <div className="shrink-0">
+              {canManageAvatar ? (
+                <AvatarUploader
+                  name={data.user.name}
+                  avatarUrl={data.user.avatarUrl}
+                  size="hero"
+                  helperText="JPG, PNG, or WebP up to 5MB."
+                  onUpload={onUploadAvatar}
+                  onRemove={onRemoveAvatar}
+                />
+              ) : (
+                <div className="relative h-28 w-28">
+                  <Avatar
+                    name={data.user.name}
+                    avatarUrl={data.user.avatarUrl}
+                    size="hero"
+                    className="h-full w-full border-4 border-emerald-400 bg-[#17201f] shadow-[0_10px_32px_rgba(0,0,0,0.22)]"
+                    fallbackClassName="text-emerald-100"
+                  />
+                  <span className="absolute -bottom-1 -right-2 inline-flex items-center gap-1 rounded-full bg-emerald-500 px-3 py-1.5 text-sm font-semibold text-white shadow-lg">
+                    <TrendingUp aria-hidden="true" size={15} strokeWidth={2.4} />
+                    {data.user.elo}
+                  </span>
+                </div>
+              )}
             </div>
 
             <div className="min-w-0">
@@ -1023,6 +1046,7 @@ function ConnectionRow({
       <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-[rgba(15,118,110,0.18)] bg-[var(--accent-faint)] text-xs font-semibold text-[var(--accent-strong)]">
         #{rank}
       </span>
+      <Avatar name={summary.user.name} avatarUrl={summary.user.avatarUrl} size="sm" />
       <div className="min-w-0 flex-1">
         <div className="truncate text-sm">
           <ProfileLink href={getPlayerProfileHref(summary.user.id, communityId)}>
@@ -1291,31 +1315,32 @@ function MatchCard({
       <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2.5">
         <div className="min-w-0">
           <div className="flex min-w-0 items-baseline justify-between gap-2">
-            <p className="min-w-0 truncate text-sm font-semibold text-gray-900 sm:text-base">
-              <span>{userName}</span>
-              <span className="px-1 text-gray-400">/</span>
-              <ProfileLink href={getPlayerProfileHref(match.partner.id, communityId)}>
-                {match.partner.name}
-              </ProfileLink>
-            </p>
+            <div className="flex min-w-0 items-center gap-2">
+              <Avatar name={match.partner.name} avatarUrl={match.partner.avatarUrl} size="sm" />
+              <p className="min-w-0 truncate text-sm font-semibold text-gray-900 sm:text-base">
+                <span>{userName}</span>
+                <span className="px-1 text-gray-400">/</span>
+                <ProfileLink href={getPlayerProfileHref(match.partner.id, communityId)}>
+                  {match.partner.name}
+                </ProfileLink>
+              </p>
+            </div>
             <p className="shrink-0 text-sm font-semibold text-gray-950 sm:text-base">
               {formatMatchScore(match.score)}
             </p>
           </div>
 
-          <p className="mt-0.5 min-w-0 truncate text-xs text-gray-600 sm:text-sm">
-            <span className="text-gray-500">vs </span>
-            {match.opponents.map((opponent, index) => (
-              <span key={opponent.id}>
+          <div className="mt-1 flex min-w-0 flex-wrap items-center gap-2 text-xs text-gray-600 sm:text-sm">
+            <span className="text-gray-500">vs</span>
+            {match.opponents.map((opponent) => (
+              <span key={opponent.id} className="inline-flex items-center gap-1.5">
+                <Avatar name={opponent.name} avatarUrl={opponent.avatarUrl} size="xs" />
                 <ProfileLink href={getPlayerProfileHref(opponent.id, communityId)}>
                   {opponent.name}
                 </ProfileLink>
-                {index === match.opponents.length - 1 ? null : (
-                  <span className="text-gray-400"> / </span>
-                )}
               </span>
             ))}
-          </p>
+          </div>
         </div>
 
         <div className="flex items-center gap-1">
@@ -1628,6 +1653,9 @@ export function PlayerProfileView({
   const isEmbedded = mode === "embedded";
 
   const [data, setData] = useState<UserProfileResponse | null>(null);
+  const [currentUser, setCurrentUser] = useState<CurrentProfileViewer | null>(
+    null
+  );
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [activeTab, setActiveTab] = useState<ProfileTab>("overview");
@@ -1648,13 +1676,23 @@ export function PlayerProfileView({
         const query = communityId
           ? `?communityId=${encodeURIComponent(communityId)}`
           : "";
-        const res = await fetch(`/api/users/${userId}/stats${query}`);
+        const [res, meRes] = await Promise.all([
+          fetch(`/api/users/${userId}/stats${query}`),
+          fetch("/api/user/me"),
+        ]);
         if (!res.ok) {
           throw new Error("Failed to load profile");
         }
 
-        const json = (await res.json()) as UserProfileResponse;
+        const [json, meJson] = (await Promise.all([
+          res.json(),
+          meRes.ok ? meRes.json() : Promise.resolve({}),
+        ])) as [
+          UserProfileResponse,
+          { user?: CurrentProfileViewer }
+        ];
         setData(json);
+        setCurrentUser(meJson.user ?? null);
       } catch (err) {
         console.error(err);
         setError("Failed to load profile");
@@ -1667,6 +1705,65 @@ export function PlayerProfileView({
       void fetchData();
     }
   }, [userId, session, communityId]);
+
+  const handleUploadAvatar = async (file: File) => {
+    const canUseCommunityAdminRoute =
+      communityId.length > 0 && data?.context?.viewerCanManageCommunity;
+    const response = await uploadUserAvatar(
+      userId,
+      file,
+      canUseCommunityAdminRoute ? communityId : undefined
+    );
+
+    setData((current) =>
+      current
+        ? {
+            ...current,
+            user: {
+              ...current.user,
+              avatarUrl: response.avatarUrl,
+            },
+          }
+        : current
+    );
+    setCurrentUser((current) =>
+      current && current.id === userId
+        ? {
+            ...current,
+            avatarUrl: response.avatarUrl,
+          }
+        : current
+    );
+  };
+
+  const handleRemoveAvatar = async () => {
+    const canUseCommunityAdminRoute =
+      communityId.length > 0 && data?.context?.viewerCanManageCommunity;
+    await deleteUserAvatar(
+      userId,
+      canUseCommunityAdminRoute ? communityId : undefined
+    );
+
+    setData((current) =>
+      current
+        ? {
+            ...current,
+            user: {
+              ...current.user,
+              avatarUrl: null,
+            },
+          }
+        : current
+    );
+    setCurrentUser((current) =>
+      current && current.id === userId
+        ? {
+            ...current,
+            avatarUrl: null,
+          }
+        : current
+    );
+  };
 
   const fallbackBackHref = communityId ? `/community/${communityId}` : "/";
 
@@ -1765,6 +1862,13 @@ export function PlayerProfileView({
     data.recentForm.currentStreak.result === null
       ? "No streak yet"
       : `${data.recentForm.currentStreak.result === "WIN" ? "W" : "L"}${data.recentForm.currentStreak.count}`;
+  const canManageAvatar =
+    !!currentUser &&
+    (currentUser.isAdmin === true ||
+      (currentUser.id === userId &&
+        currentUser.isClaimed === true &&
+        currentUser.isQuickAccess !== true) ||
+      (!!data.context?.viewerCanManageCommunity && communityId.length > 0));
 
   const content = (
     <div
@@ -1779,6 +1883,9 @@ export function PlayerProfileView({
         recentFormSummary={recentFormSummary}
         recentStreakSummary={recentStreakSummary}
         ratingSeries={ratingSeries}
+        canManageAvatar={canManageAvatar}
+        onUploadAvatar={handleUploadAvatar}
+        onRemoveAvatar={handleRemoveAvatar}
         onBack={isEmbedded ? undefined : handleBack}
       />
 

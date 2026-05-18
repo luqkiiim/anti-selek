@@ -13,6 +13,7 @@ import {
   Trophy,
   Users,
 } from "lucide-react";
+import { Avatar } from "@/components/ui/Avatar";
 import { getSessionTypeLabel } from "@/lib/sessionModeLabels";
 import type {
   CommunityPageMember,
@@ -207,13 +208,20 @@ export function CommunityOverviewPulsePanel({
             onClick={() => onOpenPlayerProfile(topRankedPlayer.id)}
             className="flex w-full items-center justify-between gap-3 rounded-lg border border-[var(--line)] bg-[var(--surface-muted)] px-4 py-3 text-left transition hover:border-[var(--accent)] hover:bg-[var(--accent-faint)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgba(15,118,110,0.24)]"
           >
-            <div className="min-w-0">
-              <p className="text-xs font-semibold text-gray-500">
-                Current player to catch
-              </p>
-              <p className="mt-1 truncate text-sm font-semibold text-gray-900">
-                {topRankedPlayer.name}
-              </p>
+            <div className="flex min-w-0 items-center gap-3">
+              <Avatar
+                name={topRankedPlayer.name}
+                avatarUrl={topRankedPlayer.avatarUrl}
+                size="md"
+              />
+              <div className="min-w-0">
+                <p className="text-xs font-semibold text-gray-500">
+                  Current player to catch
+                </p>
+                <p className="mt-1 truncate text-sm font-semibold text-gray-900">
+                  {topRankedPlayer.name}
+                </p>
+              </div>
             </div>
             <div className="shrink-0 text-right">
               <p className="text-lg font-semibold text-gray-900">
@@ -317,6 +325,11 @@ export function CommunityOverviewPulsePanel({
                     <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[var(--success-soft)] text-sm font-semibold text-[var(--success)]">
                       {index + 1}
                     </span>
+                    <Avatar
+                      name={player.user.name}
+                      avatarUrl={player.user.avatarUrl}
+                      size="sm"
+                    />
                     <div className="min-w-0">
                       <p className="truncate text-sm font-semibold text-gray-900">
                         {player.user.name}
@@ -429,13 +442,20 @@ export function CommunityOverviewPulsePanel({
                   }
                   className="mt-4 flex w-full items-center justify-between gap-3 rounded-lg bg-[var(--accent-faint)] px-4 py-3 text-left transition hover:bg-[var(--accent-soft)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgba(15,118,110,0.24)]"
                 >
-                  <div className="min-w-0">
-                    <p className="text-xs font-semibold text-gray-500">
-                      Standout player
-                    </p>
-                    <p className="mt-1 truncate text-sm font-semibold text-gray-900">
-                      {latestStory.topPerformer.user.name}
-                    </p>
+                  <div className="flex min-w-0 items-center gap-3">
+                    <Avatar
+                      name={latestStory.topPerformer.user.name}
+                      avatarUrl={latestStory.topPerformer.user.avatarUrl}
+                      size="sm"
+                    />
+                    <div className="min-w-0">
+                      <p className="text-xs font-semibold text-gray-500">
+                        Standout player
+                      </p>
+                      <p className="mt-1 truncate text-sm font-semibold text-gray-900">
+                        {latestStory.topPerformer.user.name}
+                      </p>
+                    </div>
                   </div>
                   <div className="shrink-0 text-right">
                     <p className="text-sm font-semibold text-[var(--success)]">
@@ -491,6 +511,7 @@ export function CommunityOverviewPulsePanel({
                     <span className="w-7 shrink-0 text-xs font-semibold text-[var(--accent)]">
                       #{index + 1}
                     </span>
+                    <Avatar name={player.name} avatarUrl={player.avatarUrl} size="sm" />
                     <div className="min-w-0">
                       <p className="truncate text-sm font-semibold text-gray-900">
                         {player.name}

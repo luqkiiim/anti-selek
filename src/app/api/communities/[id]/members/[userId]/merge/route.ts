@@ -4,6 +4,7 @@ import {
   CommunityPlayerMergeError,
   mergeDuplicateUnclaimedCommunityPlayer,
 } from "@/lib/communityPlayerMerge";
+import { cleanupSupersededAvatar } from "@/lib/avatarStorage";
 import { logError, safeErrorResponse } from "@/lib/errors";
 import { isGlobalAdminEmail } from "@/lib/globalAdmin";
 import { prisma } from "@/lib/prisma";
@@ -115,7 +116,21 @@ export async function POST(
       })
     );
 
-    return NextResponse.json(result);
+    await cleanupSupersededAvatar({
+      previousAvatarKey:
+        typeof result.discardedAvatarKey === "string"
+          ? result.discardedAvatarKey
+          : null,
+      nextAvatarKey: null,
+    });
+
+    return NextResponse.json({
+      sourceUserId: result.sourceUserId,
+      sourceName: result.sourceName,
+      targetUserId: result.targetUserId,
+      targetName: result.targetName,
+      deletedSourceUser: result.deletedSourceUser,
+    });
   } catch (error) {
     if (error instanceof CommunityPlayerMergeError) {
       return NextResponse.json(

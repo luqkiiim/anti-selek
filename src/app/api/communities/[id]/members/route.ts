@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
+import { serializeAvatarEntity } from "@/lib/avatar";
 import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
 import { logError, safeErrorResponse } from "@/lib/errors";
@@ -112,6 +113,7 @@ export async function GET(
             id: true,
             name: true,
             email: true,
+            avatarKey: true,
             gender: true,
             partnerPreference: true,
             mixedSideOverride: true,
@@ -181,6 +183,7 @@ export async function GET(
         id: m.user.id,
         name: m.user.name,
         email: m.user.email,
+        avatarUrl: serializeAvatarEntity(m.user).avatarUrl,
         status:
           m.status === CommunityPlayerStatus.OCCASIONAL
             ? CommunityPlayerStatus.OCCASIONAL
@@ -331,6 +334,7 @@ export async function POST(
       id: string;
       name: string;
       email: string | null;
+      avatarKey: string | null;
       gender: string;
       partnerPreference: string;
       mixedSideOverride: string | null;
@@ -346,6 +350,7 @@ export async function POST(
           id: true,
           name: true,
           email: true,
+          avatarKey: true,
           gender: true,
           partnerPreference: true,
           mixedSideOverride: true,
@@ -370,6 +375,7 @@ export async function POST(
             id: true,
             name: true,
             email: true,
+            avatarKey: true,
             gender: true,
             partnerPreference: true,
             mixedSideOverride: true,
@@ -389,11 +395,12 @@ export async function POST(
           isClaimed: false,
         },
         select: {
-          id: true,
-          name: true,
-          email: true,
-          gender: true,
-          partnerPreference: true,
+            id: true,
+            name: true,
+            email: true,
+            avatarKey: true,
+            gender: true,
+            partnerPreference: true,
           mixedSideOverride: true,
           isActive: true,
           isClaimed: true,
@@ -471,6 +478,7 @@ export async function POST(
       id: user.id,
       name: user.name,
       email: user.email,
+      avatarUrl: serializeAvatarEntity(user).avatarUrl,
       status:
         membership.status === CommunityPlayerStatus.OCCASIONAL
           ? CommunityPlayerStatus.OCCASIONAL

@@ -58,6 +58,14 @@ USE_TURSO="false"
 # Cloud runtime database
 TURSO_DATABASE_URL="libsql://..."
 TURSO_AUTH_TOKEN="..."
+
+# Optional avatar storage (required only when enabling profile photos)
+AVATAR_S3_ENDPOINT="https://..."
+AVATAR_S3_REGION="auto"
+AVATAR_S3_BUCKET="avatars"
+AVATAR_S3_ACCESS_KEY_ID="..."
+AVATAR_S3_SECRET_ACCESS_KEY="..."
+AVATAR_PUBLIC_BASE_URL="https://cdn.example.com"
 ```
 
 Runtime database selection:
@@ -67,6 +75,7 @@ Runtime database selection:
 - Set `USE_TURSO=false` to force SQLite explicitly in any environment
 - Production uses Turso automatically when `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN` are present and `USE_TURSO` is not set to `false`
 - Prisma schema and `prisma migrate dev` still use the SQLite datasource from `DATABASE_URL`
+- Profile photos require the six `AVATAR_*` variables above and use S3-compatible object storage
 
 ## Local Setup
 

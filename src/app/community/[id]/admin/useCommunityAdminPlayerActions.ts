@@ -9,6 +9,7 @@ import {
   type SetStateAction,
 } from "react";
 import type { CommunityAdminPlayer } from "@/components/community-admin/communityAdminTypes";
+import { deleteUserAvatar, uploadUserAvatar } from "@/lib/avatarClient";
 import {
   CommunityPlayerStatus,
   MixedSide,
@@ -614,6 +615,45 @@ export function useCommunityAdminPlayerActions({
     }
   };
 
+  const handleUploadPlayerAvatar = async (
+    player: CommunityAdminPlayer,
+    file: File
+  ) => {
+    setError("");
+    setSuccess("");
+
+    const { avatarUrl } = await uploadUserAvatar(player.id, file, communityId);
+    setPlayers((prev) =>
+      prev.map((item) =>
+        item.id === player.id
+          ? {
+              ...item,
+              avatarUrl,
+            }
+          : item
+      )
+    );
+    setSuccess(`${player.name}'s profile photo updated.`);
+  };
+
+  const handleRemovePlayerAvatar = async (player: CommunityAdminPlayer) => {
+    setError("");
+    setSuccess("");
+
+    await deleteUserAvatar(player.id, communityId);
+    setPlayers((prev) =>
+      prev.map((item) =>
+        item.id === player.id
+          ? {
+              ...item,
+              avatarUrl: null,
+            }
+          : item
+      )
+    );
+    setSuccess(`${player.name}'s profile photo removed.`);
+  };
+
   return {
     isCreatePlayerOpen,
     name,
@@ -674,5 +714,7 @@ export function useCommunityAdminPlayerActions({
     confirmPendingPlayerAction,
     handleResetPlayerPassword,
     handleUpdatePreferences,
+    handleUploadPlayerAvatar,
+    handleRemovePlayerAvatar,
   };
 }

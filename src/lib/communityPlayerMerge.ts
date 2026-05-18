@@ -127,6 +127,7 @@ export async function mergeDuplicateUnclaimedCommunityPlayer(
               name: true,
               email: true,
               isClaimed: true,
+              avatarKey: true,
             },
           },
         },
@@ -138,6 +139,7 @@ export async function mergeDuplicateUnclaimedCommunityPlayer(
           name: true,
           email: true,
           isClaimed: true,
+          avatarKey: true,
         },
       }),
       tx.communityMember.findUnique({
@@ -240,6 +242,23 @@ export async function mergeDuplicateUnclaimedCommunityPlayer(
   }
 
   const reviewedAt = new Date();
+  const targetKeepsExistingAvatar = !!targetUser.avatarKey;
+  const shouldTransferAvatar =
+    !targetKeepsExistingAvatar && !!sourceMembership.user.avatarKey;
+
+  if (shouldTransferAvatar) {
+    await tx.user.update({
+      where: { id: targetUserId },
+      data: { avatarKey: sourceMembership.user.avatarKey },
+    });
+  }
+
+  if (shouldTransferAvatar || sourceMembership.user.avatarKey) {
+    await tx.user.update({
+      where: { id: sourceUserId },
+      data: { avatarKey: null },
+    });
+  }
 
   await tx.communityMember.update({
     where: {
@@ -321,5 +340,9 @@ export async function mergeDuplicateUnclaimedCommunityPlayer(
     targetUserId,
     targetName: targetUser.name,
     deletedSourceUser: deletedSourceUsers > 0,
+    discardedAvatarKey:
+      targetKeepsExistingAvatar && sourceMembership.user.avatarKey
+        ? sourceMembership.user.avatarKey
+        : null,
   };
 }

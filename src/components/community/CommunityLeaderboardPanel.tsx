@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import type { KeyboardEvent, MouseEvent, ReactNode } from "react";
+import { Avatar } from "@/components/ui/Avatar";
 import {
   doClaimNamesMatch,
   type ClaimRequesterEligibility,
@@ -173,6 +174,7 @@ export function CommunityLeaderboardPanel({
                   <span className="w-6 shrink-0 text-xs font-semibold text-blue-600">
                     #{index + 1}
                   </span>
+                  <Avatar name={player.name} avatarUrl={player.avatarUrl} size="sm" />
                   <div className="min-w-0">
                     <Link
                       href={`/profile/${player.id}?communityId=${communityId}`}

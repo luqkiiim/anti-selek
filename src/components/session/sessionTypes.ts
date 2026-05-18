@@ -22,6 +22,7 @@ export interface Player {
   user: {
     id: string;
     name: string;
+    avatarUrl?: string | null;
     elo: number;
   };
   communityBadges?: Array<{ id: string; name: string; elo: number }>;
@@ -31,10 +32,10 @@ export interface Match {
   id: string;
   status: string;
   scoreSubmittedByUserId?: string | null;
-  team1User1: { id: string; name: string };
-  team1User2: { id: string; name: string };
-  team2User1: { id: string; name: string };
-  team2User2: { id: string; name: string };
+  team1User1: { id: string; name: string; avatarUrl?: string | null };
+  team1User2: { id: string; name: string; avatarUrl?: string | null };
+  team2User1: { id: string; name: string; avatarUrl?: string | null };
+  team2User2: { id: string; name: string; avatarUrl?: string | null };
   team1Score?: number;
   team2Score?: number;
   completedAt?: string;
@@ -45,10 +46,10 @@ export interface QueuedMatch {
   id: string;
   createdAt?: string;
   targetPool?: SessionPool | null;
-  team1User1: { id: string; name: string };
-  team1User2: { id: string; name: string };
-  team2User1: { id: string; name: string };
-  team2User2: { id: string; name: string };
+  team1User1: { id: string; name: string; avatarUrl?: string | null };
+  team1User2: { id: string; name: string; avatarUrl?: string | null };
+  team2User1: { id: string; name: string; avatarUrl?: string | null };
+  team2User2: { id: string; name: string; avatarUrl?: string | null };
   matchmakingReason?: MatchmakingReason | null;
 }
 
@@ -75,6 +76,7 @@ export interface Court {
 export interface CommunityUser {
   id: string;
   name: string;
+  avatarUrl?: string | null;
   elo: number;
   status: CommunityPlayerStatus;
   gender: PlayerGender;
@@ -119,6 +121,7 @@ export interface CurrentUser {
   id: string;
   isAdmin?: boolean;
   isClaimed?: boolean;
+  avatarUrl?: string | null;
 }
 
 export type ManualMatchSlot =

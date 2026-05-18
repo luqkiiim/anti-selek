@@ -5,6 +5,7 @@ type MatchResult = "WIN" | "LOSS";
 export interface CommunityPulseParticipant {
   id: string;
   name: string;
+  avatarUrl?: string | null;
 }
 
 export interface CommunityPulseMemberSource extends CommunityPulseParticipant {

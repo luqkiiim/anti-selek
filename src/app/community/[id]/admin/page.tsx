@@ -211,6 +211,8 @@ export default function CommunityAdminPage() {
     handleSavePlayerName,
     handleSavePlayerRating,
     handleRemovePlayer,
+    handleUploadPlayerAvatar,
+    handleRemovePlayerAvatar,
     handleResetPlayerPassword,
     handlePromotePlayer,
     handleUpdatePreferences,
@@ -442,6 +444,8 @@ export default function CommunityAdminPage() {
         onPromotePlayer={handlePromotePlayer}
         onOpenPasswordReset={openPasswordResetModal}
         onOpenMergeDuplicate={openMergeDuplicateModal}
+        onUploadAvatar={handleUploadPlayerAvatar}
+        onRemoveAvatar={handleRemovePlayerAvatar}
       />
 
       <CommunityPlayerMergeModal
