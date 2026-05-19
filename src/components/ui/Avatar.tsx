@@ -7,10 +7,10 @@ function cx(...values: Array<string | false | null | undefined>) {
 }
 
 const AVATAR_SIZE_CLASSES = {
-  court: "h-8 w-8 text-[11px]",
-  xs: "h-7 w-7 text-[10px]",
-  sm: "h-9 w-9 text-xs",
-  md: "h-11 w-11 text-sm",
+  court: "h-9 w-9 text-xs",
+  xs: "h-8 w-8 text-[11px]",
+  sm: "h-10 w-10 text-[13px]",
+  md: "h-12 w-12 text-sm",
   lg: "h-14 w-14 text-base",
   xl: "h-20 w-20 text-2xl",
   hero: "h-28 w-28 text-4xl",
