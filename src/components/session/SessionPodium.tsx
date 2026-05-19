@@ -1,19 +1,12 @@
 "use client";
 
+import type { Player } from "@/components/session/sessionTypes";
+import { Avatar } from "@/components/ui/Avatar";
 import { SessionType } from "@/types/enums";
-
-interface PodiumPlayer {
-  userId: string;
-  sessionPoints: number;
-  isGuest: boolean;
-  user: {
-    name: string;
-  };
-}
 
 interface SessionPodiumProps {
   sessionType: string;
-  players: PodiumPlayer[];
+  players: Player[];
   pointDiffByUserId: Map<string, number>;
   playerStatsByUserId: Map<
     string,
@@ -46,6 +39,12 @@ const RANK_STYLES: Record<
   },
 };
 
+const EMPTY_PLAYER_STATS = {
+  played: 0,
+  wins: 0,
+  losses: 0,
+};
+
 export function SessionPodium({
   sessionType,
   players,
@@ -76,16 +75,12 @@ export function SessionPodium({
         {orderedPlayers.map((player) => {
           const rank = players.findIndex((entry) => entry.userId === player.userId) + 1;
           const pointDiff = pointDiffByUserId.get(player.userId) ?? 0;
-          const stats = playerStatsByUserId.get(player.userId) ?? {
-            played: 0,
-            wins: 0,
-            losses: 0,
-          };
+          const stats = playerStatsByUserId.get(player.userId) ?? EMPTY_PLAYER_STATS;
           const styles = RANK_STYLES[rank] ?? RANK_STYLES[3];
 
           return (
             <article key={player.userId} className="flex flex-col items-center justify-end text-center">
-              <div className="mb-3 min-h-[3.75rem] space-y-1">
+              <div className="mb-3 flex min-h-[4.5rem] flex-col justify-end space-y-1 sm:min-h-[5rem]">
                 <p className="text-xl font-semibold leading-tight text-gray-900 sm:text-2xl md:text-3xl">
                   {player.user.name}
                 </p>
@@ -94,6 +89,15 @@ export function SessionPodium({
                     Guest
                   </p>
                 ) : null}
+              </div>
+
+              <div className="mb-3 flex min-h-[5.5rem] items-end justify-center sm:min-h-[6rem]">
+                <Avatar
+                  name={player.user.name}
+                  avatarUrl={player.user.avatarUrl}
+                  size="xl"
+                  className="ring-4 ring-white shadow-[0_14px_30px_rgba(15,23,42,0.18)]"
+                />
               </div>
 
               <div
