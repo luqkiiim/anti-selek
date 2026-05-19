@@ -66,7 +66,7 @@ export default function SignupPage() {
               <p className="app-eyebrow">Player setup</p>
               <h1 className="mt-3 app-title text-gray-900">Create a player account that can claim your community profile.</h1>
               <p className="mt-4 max-w-xl text-sm text-gray-600 sm:text-base">
-                Sign up with your own email. If a community already created a placeholder for you, join that community and request the claim from its leaderboard.
+                Sign up with your own email. If a community already created a placeholder for you, join that community and request the claim from its leaderboard so an admin can verify and approve it.
               </p>
 
               <div className="mt-8 space-y-3">
@@ -89,7 +89,7 @@ export default function SignupPage() {
           <section className="app-panel px-6 py-8 sm:px-8">
             <p className="app-eyebrow">Create account</p>
             <h2 className="mt-3 text-2xl font-semibold text-gray-900">New player access</h2>
-            <p className="mt-2 text-sm text-gray-600">Use a real name so community admins can match you to the correct placeholder profile.</p>
+            <p className="mt-2 text-sm text-gray-600">Use a real name so community admins can verify the correct placeholder profile more easily.</p>
 
             {error ? <FlashMessage tone="error" className="mt-6">{error}</FlashMessage> : null}
 

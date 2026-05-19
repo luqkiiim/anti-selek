@@ -64,7 +64,7 @@ function renderClaimControls({
   const existingRequest = pendingClaimByTargetId.get(player.id);
   const canShowClaimControls =
     existingRequest?.requesterUserId === currentUser?.id ||
-    (isNameMatch && currentUserClaimEligibility.canRequest);
+    currentUserClaimEligibility.canRequest;
 
   if (!canShowClaimControls) {
     return null;
@@ -82,8 +82,12 @@ function renderClaimControls({
       ? "Claim request submitted"
       : existingRequest
         ? "Awaiting admin review"
-        : currentUserClaimEligibility.reason ??
-          "Request ownership of this placeholder";
+        : !currentUserClaimEligibility.canRequest
+          ? currentUserClaimEligibility.reason ??
+            "Request ownership of this placeholder"
+          : currentUser && !isNameMatch
+            ? "Admin will verify this claim manually."
+            : "Request ownership of this placeholder";
 
   const buttonLabel =
     existingRequest?.requesterUserId === currentUser?.id

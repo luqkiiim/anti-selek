@@ -2,10 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { isClaimableCommunityPlaceholder } from "@/lib/communityClaims";
-import {
-  doClaimNamesMatch,
-  getClaimRequesterEligibility,
-} from "@/lib/communityClaimRules";
+import { getClaimRequesterEligibility } from "@/lib/communityClaimRules";
 import { isQuickAccessSession } from "@/lib/quickAccess";
 import { ClaimRequestStatus } from "@/types/enums";
 import { logError, safeErrorResponse } from "@/lib/errors";
@@ -273,10 +270,6 @@ export async function POST(
 
       if (!isClaimableCommunityPlaceholder(targetMembership.user)) {
         throw new Error("Only unclaimed placeholder profiles without email can be claimed");
-      }
-
-      if (!doClaimNamesMatch(requester.name, targetMembership.user.name)) {
-        throw new Error("You can only request placeholders that match your account name");
       }
 
       if (existingRequesterRequest) {
