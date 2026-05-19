@@ -216,7 +216,6 @@ export async function approveCommunityClaimRequest(
   await tx.user.update({
     where: { id: claimRequest.requesterUserId },
     data: {
-      name: claimRequest.target.name,
       gender: claimRequest.target.gender,
       partnerPreference: claimRequest.target.partnerPreference,
       mixedSideOverride: claimRequest.target.mixedSideOverride,
