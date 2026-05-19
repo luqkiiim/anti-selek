@@ -404,12 +404,38 @@ export async function PATCH(
       return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
     }
 
-    const { name, password } = body as { name?: unknown; password?: unknown };
+    const {
+      name,
+      password,
+      isPasswordProtected,
+    } = body as {
+      name?: unknown;
+      password?: unknown;
+      isPasswordProtected?: unknown;
+    };
     const updates: {
       name?: string;
       isPasswordProtected?: boolean;
       passwordHash?: string | null;
     } = {};
+
+    if (
+      isPasswordProtected !== undefined &&
+      typeof isPasswordProtected !== "boolean"
+    ) {
+      return NextResponse.json(
+        { error: "Invalid password protection setting" },
+        { status: 400 }
+      );
+    }
+
+    const existing = await prisma.community.findUnique({
+      where: { id },
+      select: { id: true, isPasswordProtected: true },
+    });
+    if (!existing) {
+      return invalidTargetResponse(request, "api:communities:id");
+    }
 
     if (name !== undefined) {
       if (typeof name !== "string" || name.trim().length < 3) {
@@ -455,22 +481,30 @@ export async function PATCH(
           { status: 400 }
         );
       }
-      if (password.length > 0) {
+      if (password.length > 0 && isPasswordProtected !== false) {
         updates.passwordHash = await bcrypt.hash(password, 10);
         updates.isPasswordProtected = true;
       }
     }
 
-    if (Object.keys(updates).length === 0) {
-      return NextResponse.json({ error: "Nothing to update" }, { status: 400 });
+    if (isPasswordProtected === false) {
+      updates.isPasswordProtected = false;
+      updates.passwordHash = null;
     }
 
-    const existing = await prisma.community.findUnique({
-      where: { id },
-      select: { id: true },
-    });
-    if (!existing) {
-      return invalidTargetResponse(request, "api:communities:id");
+    if (
+      isPasswordProtected === true &&
+      !existing.isPasswordProtected &&
+      (typeof password !== "string" || password.length === 0)
+    ) {
+      return NextResponse.json(
+        { error: "Password is required to protect the community" },
+        { status: 400 }
+      );
+    }
+
+    if (Object.keys(updates).length === 0) {
+      return NextResponse.json({ error: "Nothing to update" }, { status: 400 });
     }
 
     const updatedCommunity = await prisma.community.update({

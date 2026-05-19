@@ -7,6 +7,8 @@ interface CommunitySettingsPanelProps {
   onCommunityNameChange: (value: string) => void;
   communityPassword: string;
   onCommunityPasswordChange: (value: string) => void;
+  passwordProtectionEnabled: boolean;
+  onPasswordProtectionEnabledChange: (value: boolean) => void;
   isPasswordProtected: boolean;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   saving: boolean;
@@ -17,6 +19,8 @@ export function CommunitySettingsPanel({
   onCommunityNameChange,
   communityPassword,
   onCommunityPasswordChange,
+  passwordProtectionEnabled,
+  onPasswordProtectionEnabledChange,
   isPasswordProtected,
   onSubmit,
   saving,
@@ -29,7 +33,7 @@ export function CommunitySettingsPanel({
             Community Settings
           </h3>
           <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">
-            Rename the community or set a new password.
+            Rename the community, update its password, or make it public.
           </p>
         </div>
         <span
@@ -52,13 +56,44 @@ export function CommunitySettingsPanel({
           placeholder="Community name"
           required
         />
-        <input
-          type="password"
-          value={communityPassword}
-          onChange={(e) => onCommunityPasswordChange(e.target.value)}
-          className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl px-4 py-3 font-bold focus:outline-none focus:border-blue-500 transition-all"
-          placeholder="New password (leave blank to keep current)"
-        />
+        <label className="flex items-center justify-between gap-3 rounded-2xl border-2 border-gray-100 bg-gray-50 px-4 py-3">
+          <div className="min-w-0">
+            <p className="text-xs font-black uppercase tracking-wider text-gray-900">
+              Password Protected
+            </p>
+            <p className="text-[11px] text-gray-500">
+              {passwordProtectionEnabled
+                ? isPasswordProtected
+                  ? "Members currently need a password to join."
+                  : "Set a password below to lock this community."
+                : isPasswordProtected
+                  ? "Saving will remove the password and make the community public."
+                  : "Anyone can join without a password."}
+            </p>
+          </div>
+          <input
+            type="checkbox"
+            checked={passwordProtectionEnabled}
+            onChange={(e) =>
+              onPasswordProtectionEnabledChange(e.target.checked)
+            }
+            className="h-5 w-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+            aria-label="Password protected"
+          />
+        </label>
+        {passwordProtectionEnabled ? (
+          <input
+            type="password"
+            value={communityPassword}
+            onChange={(e) => onCommunityPasswordChange(e.target.value)}
+            className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl px-4 py-3 font-bold focus:outline-none focus:border-blue-500 transition-all"
+            placeholder={
+              isPasswordProtected
+                ? "New password (leave blank to keep current)"
+                : "Set a password (min 4 characters)"
+            }
+          />
+        ) : null}
         <button
           type="submit"
           disabled={saving}

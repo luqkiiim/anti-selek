@@ -5,6 +5,8 @@ const mocks = vi.hoisted(() => ({
   userFindUnique: vi.fn(),
   communityMemberFindUnique: vi.fn(),
   communityFindUnique: vi.fn(),
+  communityFindMany: vi.fn(),
+  communityUpdate: vi.fn(),
   communityMemberFindMany: vi.fn(),
   matchFindMany: vi.fn(),
   claimRequestFindMany: vi.fn(),
@@ -27,6 +29,8 @@ vi.mock("@/lib/prisma", () => ({
     },
     community: {
       findUnique: mocks.communityFindUnique,
+      findMany: mocks.communityFindMany,
+      update: mocks.communityUpdate,
     },
     match: {
       findMany: mocks.matchFindMany,
@@ -60,7 +64,7 @@ vi.mock("@/lib/rateLimit", () => ({
   rateLimit: vi.fn(async () => null),
 }));
 
-import { GET } from "./route";
+import { GET, PATCH } from "./route";
 
 describe("community snapshot route", () => {
   beforeEach(() => {
@@ -88,6 +92,13 @@ describe("community snapshot route", () => {
       name: "Community One",
       isPasswordProtected: false,
       _count: { members: 2, sessions: 1 },
+    });
+    mocks.communityFindMany.mockResolvedValue([]);
+    mocks.communityUpdate.mockResolvedValue({
+      id: "community-1",
+      name: "Community One",
+      isPasswordProtected: false,
+      updatedAt: new Date("2026-05-19T00:00:00.000Z"),
     });
     mocks.communityMemberFindMany.mockResolvedValue([
       {
@@ -180,5 +191,74 @@ describe("community snapshot route", () => {
     expect(body.sessions[0].players[0].user.avatarUrl).toBe(
       "https://blob.vercel-storage.com/avatars/viewer-1/avatar.jpg"
     );
+  });
+
+  it("allows admins to remove a community password and make it public", async () => {
+    mocks.communityMemberFindUnique.mockResolvedValueOnce({
+      role: "ADMIN",
+    });
+    mocks.communityFindUnique.mockResolvedValueOnce({
+      id: "community-1",
+      isPasswordProtected: true,
+    });
+    mocks.communityUpdate.mockResolvedValueOnce({
+      id: "community-1",
+      name: "Community One",
+      isPasswordProtected: false,
+      updatedAt: new Date("2026-05-19T00:00:00.000Z"),
+    });
+
+    const response = await PATCH(
+      new Request("http://localhost/api/communities/community-1", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ isPasswordProtected: false }),
+      }),
+      {
+        params: Promise.resolve({ id: "community-1" }),
+      }
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(mocks.communityUpdate).toHaveBeenCalledWith({
+      where: { id: "community-1" },
+      data: {
+        isPasswordProtected: false,
+        passwordHash: null,
+      },
+      select: {
+        id: true,
+        name: true,
+        isPasswordProtected: true,
+        updatedAt: true,
+      },
+    });
+    expect(body.isPasswordProtected).toBe(false);
+  });
+
+  it("requires a password when enabling protection for an open community", async () => {
+    mocks.communityMemberFindUnique.mockResolvedValueOnce({
+      role: "ADMIN",
+    });
+    mocks.communityFindUnique.mockResolvedValueOnce({
+      id: "community-1",
+      isPasswordProtected: false,
+    });
+
+    const response = await PATCH(
+      new Request("http://localhost/api/communities/community-1", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ isPasswordProtected: true }),
+      }),
+      {
+        params: Promise.resolve({ id: "community-1" }),
+      }
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(body.error).toBe("Password is required to protect the community");
   });
 });

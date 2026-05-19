@@ -141,6 +141,8 @@ export default function CommunityAdminPage() {
     setCommunityNameInput,
     communityPasswordInput,
     setCommunityPasswordInput,
+    communityPasswordProtectionEnabled,
+    setCommunityPasswordProtectionEnabled,
     savingCommunitySettings,
     activeSection,
     setActiveSection,
@@ -387,6 +389,10 @@ export default function CommunityAdminPage() {
               onCommunityNameChange={setCommunityNameInput}
               communityPassword={communityPasswordInput}
               onCommunityPasswordChange={setCommunityPasswordInput}
+              passwordProtectionEnabled={communityPasswordProtectionEnabled}
+              onPasswordProtectionEnabledChange={
+                setCommunityPasswordProtectionEnabled
+              }
               isPasswordProtected={community?.isPasswordProtected ?? false}
               onSubmit={handleUpdateCommunitySettings}
               saving={savingCommunitySettings}

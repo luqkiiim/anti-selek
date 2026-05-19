@@ -32,6 +32,8 @@ export function useCommunityAdminCommunityActions({
 }) {
   const [communityNameInput, setCommunityNameInput] = useState("");
   const [communityPasswordInput, setCommunityPasswordInput] = useState("");
+  const [communityPasswordProtectionEnabled, setCommunityPasswordProtectionEnabled] =
+    useState(false);
   const [savingCommunitySettings, setSavingCommunitySettings] = useState(false);
   const [reviewingClaimRequestId, setReviewingClaimRequestId] = useState<
     string | null
@@ -50,6 +52,11 @@ export function useCommunityAdminCommunityActions({
     );
   }, [community]);
 
+  useEffect(() => {
+    if (!community) return;
+    setCommunityPasswordProtectionEnabled(community.isPasswordProtected);
+  }, [community]);
+
   const handleUpdateCommunitySettings = async (
     event: FormEvent<HTMLFormElement>
   ) => {
@@ -58,9 +65,12 @@ export function useCommunityAdminCommunityActions({
 
     const trimmedName = communityNameInput.trim();
     const nextPassword = communityPasswordInput;
+    const nextPasswordProtection = communityPasswordProtectionEnabled;
     const hasNameChange =
       trimmedName.length > 0 && trimmedName !== community.name;
     const hasPasswordChange = nextPassword.length > 0;
+    const hasPasswordProtectionChange =
+      nextPasswordProtection !== community.isPasswordProtected;
 
     setError("");
     setSuccess("");
@@ -69,11 +79,23 @@ export function useCommunityAdminCommunityActions({
       setError("Community name must be at least 3 characters.");
       return;
     }
+    if (!nextPasswordProtection && hasPasswordChange) {
+      setError("Turn password protection back on before setting a password.");
+      return;
+    }
     if (hasPasswordChange && nextPassword.length < 4) {
       setError("Password must be at least 4 characters.");
       return;
     }
-    if (!hasNameChange && !hasPasswordChange) {
+    if (
+      nextPasswordProtection &&
+      !community.isPasswordProtected &&
+      !hasPasswordChange
+    ) {
+      setError("Set a password before turning protection on.");
+      return;
+    }
+    if (!hasNameChange && !hasPasswordChange && !hasPasswordProtectionChange) {
       setSuccess("No changes to save.");
       return;
     }
@@ -81,9 +103,18 @@ export function useCommunityAdminCommunityActions({
     setSavingCommunitySettings(true);
 
     try {
-      const body: { name?: string; password?: string } = {};
+      const body: {
+        name?: string;
+        password?: string;
+        isPasswordProtected?: boolean;
+      } = {};
       if (hasNameChange) body.name = trimmedName;
-      if (hasPasswordChange) body.password = nextPassword;
+      if (hasPasswordProtectionChange) {
+        body.isPasswordProtected = nextPasswordProtection;
+      }
+      if (nextPasswordProtection && hasPasswordChange) {
+        body.password = nextPassword;
+      }
 
       const res = await fetch(`/api/communities/${communityId}`, {
         method: "PATCH",
@@ -229,6 +260,8 @@ export function useCommunityAdminCommunityActions({
     setCommunityNameInput,
     communityPasswordInput,
     setCommunityPasswordInput,
+    communityPasswordProtectionEnabled,
+    setCommunityPasswordProtectionEnabled,
     savingCommunitySettings,
     reviewingClaimRequestId,
     resettingCommunity,
