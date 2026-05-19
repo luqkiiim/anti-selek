@@ -610,7 +610,7 @@ export function LiveCourtsPanel({
     <SectionCard
       eyebrow={sessionStatus === SessionStatus.ACTIVE ? "Court board" : "Court layout"}
       eyebrowClassName="app-section-eyebrow"
-      className="p-3 sm:p-6"
+      className="!p-3 sm:!p-6"
       action={
         <div className="flex w-full min-w-0 flex-wrap items-center justify-between gap-2 sm:w-auto sm:justify-end">
           <span className="app-chip app-chip-accent">
