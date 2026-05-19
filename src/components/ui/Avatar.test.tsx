@@ -25,4 +25,13 @@ describe("Avatar", () => {
     expect(markup).toContain('src="https://cdn.test/avatars/alex.jpg"');
     expect(markup).toContain('data-avatar-state="image"');
   });
+
+  it("supports the court avatar treatment", () => {
+    const markup = renderToStaticMarkup(
+      <Avatar name="Alex Lee" avatarUrl={null} size="court" appearance="court" />
+    );
+
+    expect(markup).toContain('data-avatar-size="court"');
+    expect(markup).toContain('data-avatar-appearance="court"');
+  });
 });

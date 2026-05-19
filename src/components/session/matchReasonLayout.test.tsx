@@ -77,6 +77,36 @@ function renderLiveCard(match: Match, matchScores: MatchScores = {}) {
   );
 }
 
+function renderConfirmingLiveCard(
+  match: Match,
+  matchScores: MatchScores = {
+    "match-1": { team1: "21", team2: "18" },
+  }
+) {
+  return renderToStaticMarkup(
+    <LiveMatchCard
+      match={match}
+      currentUserId="admin-user"
+      isAdmin={true}
+      isClaimedUser={true}
+      confirmingScoreMatchId={match.id}
+      reshufflingCourtPlayerId={null}
+      replacingCourtPlayerId={null}
+      reopeningMatchId={null}
+      submittingMatchId={null}
+      matchScores={matchScores}
+      onReshuffleWithoutPlayer={vi.fn()}
+      onReplacePlayer={vi.fn()}
+      onHandleScoreChange={vi.fn()}
+      onRequestScoreSubmitConfirmation={vi.fn()}
+      onCancelScoreSubmitConfirmation={vi.fn()}
+      onSubmitScore={vi.fn()}
+      onApproveScore={vi.fn()}
+      onReopenScoreForEdit={vi.fn()}
+    />
+  );
+}
+
 function renderQueuedCard(queuedMatch: QueuedMatch | null) {
   return renderToStaticMarkup(
     <QueuedMatchCard
@@ -100,35 +130,33 @@ function renderQueuedCard(queuedMatch: QueuedMatch | null) {
 }
 
 describe("match reason layout", () => {
-  it("uses a live top-row reason control when reasoning is available", () => {
+  it("uses a live footer reason control when reasoning is available", () => {
     const markup = renderLiveCard(
       createLiveMatch({ matchmakingReason: matchReason })
     );
 
-    expect(markup).toContain('data-live-match-reason-layout="top-row"');
-    expect(markup).toContain('data-live-match-reason-row="true"');
+    expect(markup).toContain('data-live-match-reason-button="footer-leading"');
     expect(markup).toContain('aria-label="Show match reasoning"');
-    expect(markup).not.toContain("data-live-match-reason-spacer");
-    expect(markup).not.toContain("data-live-match-reason-rail");
+    expect(markup).not.toContain('data-live-match-reason-layout="top-row"');
+    expect(markup).not.toContain('data-live-match-reason-row="true"');
   });
 
   it("omits live match reason controls when no reasoning is available", () => {
     const markup = renderLiveCard(createLiveMatch({ matchmakingReason: null }));
 
-    expect(markup).not.toContain("data-live-match-reason-layout");
-    expect(markup).not.toContain("data-live-match-reason-row");
+    expect(markup).not.toContain("data-live-match-reason-button");
     expect(markup).not.toContain('aria-label="Show match reasoning"');
   });
 
-  it("uses a queued top-row reason control when reasoning is available", () => {
+  it("uses a queued footer reason control when reasoning is available", () => {
     const markup = renderQueuedCard(
       createQueuedMatch({ matchmakingReason: matchReason })
     );
 
-    expect(markup).toContain('data-queued-match-reason-layout="top-row"');
-    expect(markup).toContain('data-queued-match-reason-row="true"');
+    expect(markup).toContain('data-queued-match-reason-layout="footer-leading"');
+    expect(markup).toContain('data-queued-match-reason-button="footer-leading"');
     expect(markup).toContain('aria-label="Show match reasoning"');
-    expect(markup).not.toContain("data-queued-match-reason-rail");
+    expect(markup).not.toContain('data-queued-match-reason-row="true"');
   });
 
   it("omits queued match reason controls when no reasoning is available", () => {
@@ -137,11 +165,21 @@ describe("match reason layout", () => {
     );
 
     expect(markup).not.toContain("data-queued-match-reason-layout");
-    expect(markup).not.toContain("data-queued-match-reason-row");
+    expect(markup).not.toContain("data-queued-match-reason-button");
     expect(markup).not.toContain('aria-label="Show match reasoning"');
   });
 
-  it("keeps the live top-row layout with eight-character names", () => {
+  it("hides the live footer reason control during confirm/edit state", () => {
+    const markup = renderConfirmingLiveCard(
+      createLiveMatch({ matchmakingReason: matchReason })
+    );
+
+    expect(markup).not.toContain("data-live-match-reason-button");
+    expect(markup).toContain(">Edit<");
+    expect(markup).toContain(">Confirm<");
+  });
+
+  it("keeps the live footer layout with eight-character names", () => {
     const markup = renderLiveCard(
       createLiveMatch({
         team1User1: { id: "u1", name: "Marcella" },
@@ -156,11 +194,12 @@ describe("match reason layout", () => {
     expect(markup).toContain("Patricia");
     expect(markup).toContain("Dominick");
     expect(markup).toContain("Shantell");
-    expect(markup).toContain('data-live-match-reason-layout="top-row"');
-    expect(markup).not.toContain("data-live-match-reason-rail");
+    expect(markup).toContain('data-live-match-reason-button="footer-leading"');
+    expect(markup).toContain('data-avatar-size="court"');
+    expect(markup).toContain('data-avatar-appearance="court"');
   });
 
-  it("keeps the queued top-row layout with eight-character names", () => {
+  it("keeps the queued footer layout with eight-character names", () => {
     const markup = renderQueuedCard(
       createQueuedMatch({
         team1User1: { id: "u1", name: "Marcella" },
@@ -175,7 +214,8 @@ describe("match reason layout", () => {
     expect(markup).toContain("Patricia");
     expect(markup).toContain("Dominick");
     expect(markup).toContain("Shantell");
-    expect(markup).toContain('data-queued-match-reason-layout="top-row"');
-    expect(markup).not.toContain("data-queued-match-reason-rail");
+    expect(markup).toContain('data-queued-match-reason-layout="footer-leading"');
+    expect(markup).toContain('data-avatar-size="court"');
+    expect(markup).toContain('data-avatar-appearance="court"');
   });
 });

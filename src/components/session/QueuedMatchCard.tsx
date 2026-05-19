@@ -73,14 +73,24 @@ function TeamPlayers({
                 onClick={() => onTogglePlayerAction(player.id)}
                 disabled={queueActionDisabled}
                 aria-expanded={actionOpen}
-                className={`flex min-w-0 w-full items-start gap-2 whitespace-normal break-words text-base font-semibold leading-tight text-gray-900 transition hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-50 md:text-[1.35rem] xl:text-base ${textAlignClass} ${rowDirectionClass}`}
+                className={`flex min-w-0 w-full items-center gap-1.5 whitespace-normal break-words text-base font-semibold leading-tight text-gray-900 transition hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-50 sm:gap-2 md:text-[1.35rem] xl:text-base ${textAlignClass} ${rowDirectionClass}`}
               >
-                <Avatar name={player.name} avatarUrl={player.avatarUrl} size="xs" />
+                <Avatar
+                  name={player.name}
+                  avatarUrl={player.avatarUrl}
+                  size="court"
+                  appearance="court"
+                />
                 <span className="min-w-0 flex-1">{player.name}</span>
               </button>
             ) : (
-              <div className={`flex min-w-0 items-start gap-2 ${rowDirectionClass}`}>
-                <Avatar name={player.name} avatarUrl={player.avatarUrl} size="xs" />
+              <div className={`flex min-w-0 items-center gap-1.5 sm:gap-2 ${rowDirectionClass}`}>
+                <Avatar
+                  name={player.name}
+                  avatarUrl={player.avatarUrl}
+                  size="court"
+                  appearance="court"
+                />
                 <p
                   className={`min-w-0 flex-1 whitespace-normal break-words text-base font-semibold leading-tight text-gray-900 md:text-[1.35rem] xl:text-base ${textAlignClass}`}
                 >
@@ -277,6 +287,18 @@ export function QueuedMatchCard({
       />
     </div>
   ) : null;
+  const queuedMatchReasonButton = canShowMatchReason ? (
+    <button
+      type="button"
+      onClick={() => setMatchReasonOpen(true)}
+      className="flex min-h-12 min-w-12 items-center justify-center rounded-xl border border-amber-200 bg-white/95 text-amber-700 shadow-sm transition hover:border-amber-300 hover:bg-white hover:text-amber-800 active:scale-95"
+      aria-label="Show match reasoning"
+      title="Match reasoning"
+      data-queued-match-reason-button="footer-leading"
+    >
+      <Info aria-hidden="true" size={16} strokeWidth={2.3} />
+    </button>
+  ) : null;
 
   return (
     <div className="flex min-w-0 flex-col overflow-visible rounded-xl border border-amber-200 bg-white shadow-sm">
@@ -309,30 +331,7 @@ export function QueuedMatchCard({
               data-queued-promotion-surface="true"
               className="rounded-xl border border-amber-200 bg-amber-50/70 p-2.5 transition-all md:p-3.5"
             >
-              {canShowMatchReason ? (
-                <div
-                  data-queued-match-reason-layout="top-row"
-                  className="space-y-2.5"
-                >
-                  <div
-                    data-queued-match-reason-row="true"
-                    className="flex items-center justify-end"
-                  >
-                    <button
-                      type="button"
-                      onClick={() => setMatchReasonOpen(true)}
-                      className="flex h-7 w-7 items-center justify-center rounded-lg border border-amber-200 bg-white/90 text-amber-700 shadow-sm transition hover:border-amber-300 hover:bg-white hover:text-amber-800 active:scale-95"
-                      aria-label="Show match reasoning"
-                      title="Match reasoning"
-                    >
-                      <Info aria-hidden="true" size={14} strokeWidth={2.3} />
-                    </button>
-                  </div>
-                  <div className="min-w-0">{queuedLineup}</div>
-                </div>
-              ) : (
-                queuedLineup
-              )}
+              {queuedLineup}
             </div>
 
             {canShowMatchReason && matchReasonOpen ? (
@@ -342,15 +341,31 @@ export function QueuedMatchCard({
               />
             ) : null}
 
-            <div className="pt-2">
-              <button
-                type="button"
-                disabled
-                className="app-button-secondary min-h-12 w-full py-3"
+            {canShowMatchReason ? (
+              <div
+                data-queued-match-reason-layout="footer-leading"
+                className="grid grid-cols-[auto_minmax(0,1fr)] gap-2 pt-2"
               >
-                Waiting for Court
-              </button>
-            </div>
+                {queuedMatchReasonButton}
+                <button
+                  type="button"
+                  disabled
+                  className="app-button-secondary min-h-12 w-full py-3"
+                >
+                  Waiting for Court
+                </button>
+              </div>
+            ) : (
+              <div className="pt-2">
+                <button
+                  type="button"
+                  disabled
+                  className="app-button-secondary min-h-12 w-full py-3"
+                >
+                  Waiting for Court
+                </button>
+              </div>
+            )}
           </div>
         ) : (
           <div className="rounded-xl border border-dashed border-amber-200 bg-amber-50/70 px-3 py-10 text-center">
