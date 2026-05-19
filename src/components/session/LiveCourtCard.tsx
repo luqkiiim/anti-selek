@@ -23,7 +23,7 @@ function PromotionArrivalPlaceholder({
       <div
         ref={surfaceRef}
         data-live-court-promotion-surface={surfaceId}
-        className="rounded-xl border border-blue-100 bg-blue-50/20 p-3 md:p-3.5"
+        className="rounded-xl border border-blue-100 bg-blue-50/20 p-2.5 md:p-3.5"
       >
         <div className="grid grid-cols-[minmax(0,1fr)_2.5rem_2.5rem_minmax(0,1fr)] items-center gap-2.5 sm:grid-cols-[minmax(0,1fr)_2.75rem_2.75rem_minmax(0,1fr)] sm:gap-3 md:grid-cols-[minmax(0,1fr)_3.5rem_3.5rem_minmax(0,1fr)] md:gap-4 xl:grid-cols-[minmax(0,1fr)_2.75rem_2.75rem_minmax(0,1fr)] xl:gap-3">
           <div className="space-y-1">
@@ -294,7 +294,7 @@ export function LiveCourtCard({
         isPromotionTarget ? "app-court-promotion-target" : ""
       }`}
     >
-      <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 rounded-t-xl border-b border-gray-200 bg-gray-50 px-3 py-3 md:px-4 md:py-3.5">
+      <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 rounded-t-xl border-b border-gray-200 bg-gray-50 px-2.5 py-3 md:px-4 md:py-3.5">
         <div className="flex min-w-0 justify-start">
           {leftAction}
         </div>
@@ -307,12 +307,12 @@ export function LiveCourtCard({
       </div>
 
       {poolLabel ? (
-        <div className="border-b border-gray-100 bg-indigo-50 px-3 py-2 text-center text-xs font-semibold text-indigo-700 md:px-4">
+        <div className="border-b border-gray-100 bg-indigo-50 px-2.5 py-2 text-center text-xs font-semibold text-indigo-700 md:px-4">
           {poolLabel}
         </div>
       ) : null}
 
-      <div className="flex flex-1 flex-col justify-center p-3 md:p-4">
+      <div className="flex flex-1 flex-col justify-center p-2.5 md:p-4">
         {currentMatch ? (
           promotionState === "suppressed" ? (
             <PromotionArrivalPlaceholder
@@ -355,7 +355,7 @@ export function LiveCourtCard({
             </div>
           )
         ) : (
-          <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 px-4 py-10 text-center">
+          <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 px-3 py-10 text-center">
             <p className="text-sm font-semibold text-gray-500">
               {sessionStatus === SessionStatus.ACTIVE
                 ? "Next match soon"

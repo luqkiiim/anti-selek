@@ -219,7 +219,7 @@ function QueuePromotionGhost({ ghost }: { ghost: PromotionGhostState }) {
           `transform ${GHOST_MOVE_MS}ms cubic-bezier(0.22, 1, 0.36, 1), opacity ${GHOST_FADE_MS}ms ease`,
       }}
     >
-      <div className="h-full rounded-xl border border-blue-100 bg-[var(--accent-faint)] p-3 shadow-[0_18px_44px_-28px_rgba(15,118,110,0.5)] md:p-3.5">
+      <div className="h-full rounded-xl border border-blue-100 bg-[var(--accent-faint)] p-2.5 shadow-[0_18px_44px_-28px_rgba(15,118,110,0.5)] md:p-3.5">
         <div className="grid h-full grid-cols-[minmax(0,1fr)_2.5rem_2.5rem_minmax(0,1fr)] items-center gap-2.5 sm:grid-cols-[minmax(0,1fr)_2.75rem_2.75rem_minmax(0,1fr)] sm:gap-3 md:grid-cols-[minmax(0,1fr)_3.5rem_3.5rem_minmax(0,1fr)] md:gap-4 xl:grid-cols-[minmax(0,1fr)_2.75rem_2.75rem_minmax(0,1fr)] xl:gap-3">
           <QueuePromotionGhostTeamNames
             players={[ghost.match.team1User1, ghost.match.team1User2]}
@@ -610,6 +610,7 @@ export function LiveCourtsPanel({
     <SectionCard
       eyebrow={sessionStatus === SessionStatus.ACTIVE ? "Court board" : "Court layout"}
       eyebrowClassName="app-section-eyebrow"
+      className="p-3 sm:p-6"
       action={
         <div className="flex w-full min-w-0 flex-wrap items-center justify-between gap-2 sm:w-auto sm:justify-end">
           <span className="app-chip app-chip-accent">
@@ -641,7 +642,7 @@ export function LiveCourtsPanel({
         </div>
       }
     >
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:gap-4 xl:grid-cols-3">
+      <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 md:gap-4 xl:grid-cols-3">
         {orderedCourts.map((court) => (
           <LiveCourtCard
             key={court.id}

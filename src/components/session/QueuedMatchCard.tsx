@@ -280,7 +280,7 @@ export function QueuedMatchCard({
 
   return (
     <div className="flex min-w-0 flex-col overflow-visible rounded-xl border border-amber-200 bg-white shadow-sm">
-      <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 rounded-t-xl border-b border-amber-200 bg-amber-50 px-3 py-3 md:px-4 md:py-3.5">
+      <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 rounded-t-xl border-b border-amber-200 bg-amber-50 px-2.5 py-3 md:px-4 md:py-3.5">
         <div className="flex min-w-0 justify-start">
           {leftAction}
         </div>
@@ -294,20 +294,20 @@ export function QueuedMatchCard({
       </div>
 
       {poolLabel ? (
-        <div className="border-b border-gray-100 bg-indigo-50 px-3 py-2 text-center text-xs font-semibold text-indigo-700 md:px-4">
+        <div className="border-b border-gray-100 bg-indigo-50 px-2.5 py-2 text-center text-xs font-semibold text-indigo-700 md:px-4">
           {poolLabel}
         </div>
       ) : null}
 
       <div
-        className={`flex flex-1 flex-col justify-center p-3 transition-[opacity,transform] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] md:p-4 ${contentVisibilityClass}`}
+        className={`flex flex-1 flex-col justify-center p-2.5 transition-[opacity,transform] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] md:p-4 ${contentVisibilityClass}`}
       >
         {queuedMatch ? (
           <div className="space-y-3">
             <div
               ref={promotionSurfaceRef}
               data-queued-promotion-surface="true"
-              className="rounded-xl border border-amber-200 bg-amber-50/70 p-3 transition-all md:p-3.5"
+              className="rounded-xl border border-amber-200 bg-amber-50/70 p-2.5 transition-all md:p-3.5"
             >
               {canShowMatchReason ? (
                 <div
@@ -353,7 +353,7 @@ export function QueuedMatchCard({
             </div>
           </div>
         ) : (
-          <div className="rounded-xl border border-dashed border-amber-200 bg-amber-50/70 px-4 py-10 text-center">
+          <div className="rounded-xl border border-dashed border-amber-200 bg-amber-50/70 px-3 py-10 text-center">
             <p className="text-sm font-semibold text-amber-700">
               Queue slot ready
             </p>

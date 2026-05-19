@@ -563,7 +563,7 @@ export function LiveMatchCard({
       <div
         ref={lineupRef}
         data-court-promotion-surface={match.id}
-        className={`rounded-xl border p-3 transition-all md:p-4 ${
+        className={`rounded-xl border p-2.5 transition-all md:p-4 ${
           isPendingApproval
             ? "border-orange-200 bg-orange-50/80"
             : "border-blue-100 bg-[var(--accent-faint)]"
