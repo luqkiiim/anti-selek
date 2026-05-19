@@ -72,6 +72,7 @@ export function useCommunityAdminPage() {
   return {
     status,
     currentUserId: session?.user?.id,
+    isGlobalAdmin: !!session?.user?.isAdmin,
     communityId,
     activeSection,
     setActiveSection,

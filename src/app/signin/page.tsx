@@ -22,6 +22,7 @@ function SigninForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const registered = searchParams.get("registered");
+  const passwordReset = searchParams.get("passwordReset");
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -147,6 +148,11 @@ function SigninForm() {
 
             <div className="mt-6 space-y-4">
               {registered ? <FlashMessage tone="success">Account created. Please sign in.</FlashMessage> : null}
+              {passwordReset ? (
+                <FlashMessage tone="success">
+                  Password updated. Sign in with your new password.
+                </FlashMessage>
+              ) : null}
               {error ? <FlashMessage tone="error">{error}</FlashMessage> : null}
             </div>
 
@@ -173,6 +179,15 @@ function SigninForm() {
                     required
                   />
                 </label>
+
+                <div className="flex justify-end">
+                  <Link
+                    href="/forgot-password"
+                    className="text-sm font-semibold text-blue-600 hover:underline"
+                  >
+                    Forgot password?
+                  </Link>
+                </div>
 
                 <button type="submit" disabled={loading} className="app-button-primary w-full">
                   <LogIn aria-hidden="true" size={17} />

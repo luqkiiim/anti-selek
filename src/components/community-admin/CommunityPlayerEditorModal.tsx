@@ -46,6 +46,7 @@ interface CommunityPlayerEditorModalProps {
   ) => Promise<void>;
   onPromotePlayer: (player: CommunityAdminPlayer) => void;
   onOpenPasswordReset: (player: CommunityAdminPlayer) => void;
+  canOpenEmergencyPasswordReset: boolean;
   onOpenMergeDuplicate: (player: CommunityAdminPlayer) => void;
   onUploadAvatar: (player: CommunityAdminPlayer, file: File) => Promise<void>;
   onRemoveAvatar: (player: CommunityAdminPlayer) => Promise<void>;
@@ -70,6 +71,7 @@ export function CommunityPlayerEditorModal({
   onUpdatePreferences,
   onPromotePlayer,
   onOpenPasswordReset,
+  canOpenEmergencyPasswordReset,
   onOpenMergeDuplicate,
   onUploadAvatar,
   onRemoveAvatar,
@@ -78,6 +80,7 @@ export function CommunityPlayerEditorModal({
 
   const mixedSideOption = getMixedSideOverrideOptionForGender(player.gender);
   const canMergeDuplicate = !player.isClaimed && player.email === null;
+  const canEditName = !player.isClaimed;
 
   return (
     <ModalFrame
@@ -163,12 +166,24 @@ export function CommunityPlayerEditorModal({
                 value={editorName}
                 onChange={(event) => onEditorNameChange(event.target.value)}
                 className="field"
+                disabled={!canEditName}
               />
             </label>
+            {canEditName ? (
+              <p className="text-sm text-gray-600">
+                Community admins can rename unclaimed placeholder profiles.
+              </p>
+            ) : (
+              <p className="text-sm text-gray-600">
+                Claimed members manage their own account name.
+              </p>
+            )}
             <button
               type="button"
               onClick={() => void onSavePlayerName(player)}
-              disabled={savingName || editorName.trim() === player.name}
+              disabled={
+                !canEditName || savingName || editorName.trim() === player.name
+              }
               className="app-button-primary px-4 py-2"
             >
               {savingName ? "Saving..." : "Save name"}
@@ -309,18 +324,23 @@ export function CommunityPlayerEditorModal({
                 </p>
               )}
 
-              {player.isClaimed && player.email ? (
+              {player.isClaimed && player.email && canOpenEmergencyPasswordReset ? (
                 <button
                   type="button"
                   onClick={() => onOpenPasswordReset(player)}
                   className="app-button-secondary px-4 py-2"
                 >
-                  Reset password
+                  Emergency password reset
                 </button>
+              ) : player.isClaimed && player.email ? (
+                <p className="text-sm text-gray-600">
+                  Claimed members recover passwords from the sign-in screen by
+                  email.
+                </p>
               ) : (
                 <p className="text-sm text-gray-600">
-                  Password resets are only available for claimed members with an
-                  email.
+                  Emergency password resets are only available for claimed
+                  members with an email.
                 </p>
               )}
             </div>

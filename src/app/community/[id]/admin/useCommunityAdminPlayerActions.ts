@@ -361,6 +361,11 @@ export function useCommunityAdminPlayerActions({
   };
 
   const handleSavePlayerName = async (player: CommunityAdminPlayer) => {
+    if (player.isClaimed) {
+      setError("Claimed members manage their own account name.");
+      return;
+    }
+
     const nextName = editorName.trim();
     if (!nextName || nextName === player.name) {
       setEditorName(player.name);
@@ -532,7 +537,7 @@ export function useCommunityAdminPlayerActions({
       }
 
       setSuccess(
-        `Password reset for ${passwordResetTarget.name}. Share the new password with them directly.`
+        `Emergency password reset for ${passwordResetTarget.name}. Share the new password securely.`
       );
       closePasswordResetModal();
     } catch (err: unknown) {

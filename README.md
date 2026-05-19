@@ -5,6 +5,7 @@ Community-based badminton tournament web app for running live sessions, managing
 ## Highlights
 
 - Email/password authentication with NextAuth credentials
+- Self-service password recovery for claimed accounts by email
 - Dashboard for creating, joining, and opening badminton communities
 - Community leaderboard, player profiles, and claim-request flow for placeholder profiles
 - Host tournaments with configurable court count, selected members, and guests
@@ -61,6 +62,11 @@ TURSO_AUTH_TOKEN="..."
 
 # Optional avatar storage (required only when enabling profile photos)
 BLOB_READ_WRITE_TOKEN="vercel_blob_rw_token"
+
+# Password reset email delivery
+RESEND_API_KEY="re_..."
+RESEND_FROM_EMAIL="Anti-Selek <noreply@antiselek.com>"
+APP_BASE_URL="https://antiselek.com"
 ```
 
 Runtime database selection:
@@ -71,6 +77,7 @@ Runtime database selection:
 - Production uses Turso automatically when `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN` are present and `USE_TURSO` is not set to `false`
 - Prisma schema and `prisma migrate dev` still use the SQLite datasource from `DATABASE_URL`
 - Profile photos use Vercel Blob and require `BLOB_READ_WRITE_TOKEN`
+- Password reset emails use Resend and require `RESEND_API_KEY`, `RESEND_FROM_EMAIL`, and `APP_BASE_URL`
 
 ## Local Setup
 
@@ -163,8 +170,7 @@ Notes:
    - reopen a past tournament by clicking its card
 4. Community admins can:
    - add or remove member profiles
-   - edit member names and ratings
-   - reset member passwords and ratings
+   - edit placeholder names and member ratings
    - approve or reject claim requests
    - create, start, and end tournaments
    - generate, reshuffle, or manually assign matches
@@ -172,6 +178,8 @@ Notes:
    - queue the next match while all courts are occupied
    - rollback the latest completed tournament
    - reset or delete the community
+5. Global admins can:
+   - perform emergency password resets for claimed members when email recovery is unavailable
 
 ## Session Formats and Rules
 
@@ -259,10 +267,11 @@ Shared constraints:
 - `Match`: teams, scores, approval state, and rating deltas
 - `QueuedMatch`: reserved next-up pairing while all courts are occupied
 - `ClaimRequest`: request to merge a claimed account with a placeholder community profile
+- `PasswordResetToken`: single-use claimed-account password reset token
 
 ## Deployment Notes
 
-- Set `AUTH_SECRET`, `ADMIN_EMAILS`, `TURSO_DATABASE_URL`, and `TURSO_AUTH_TOKEN` in production
+- Set `AUTH_SECRET`, `ADMIN_EMAILS`, `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN`, `RESEND_API_KEY`, `RESEND_FROM_EMAIL`, and `APP_BASE_URL` in production
 - Create a public Vercel Blob store for the project so Vercel provisions `BLOB_READ_WRITE_TOKEN`
 - The app uses Turso in production when the Turso environment variables are present, unless `USE_TURSO=false` is explicitly set
 - Prisma migrations still target the local SQLite datasource from `DATABASE_URL`

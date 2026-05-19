@@ -252,6 +252,16 @@ export async function PATCH(
         { status: 400 }
       );
     }
+    if (
+      typeof name === "string" &&
+      currentUser.isClaimed &&
+      nextName !== currentUser.name
+    ) {
+      return NextResponse.json(
+        { error: "Claimed members manage their own account name" },
+        { status: 403 }
+      );
+    }
 
     const nextEmail =
       email !== undefined

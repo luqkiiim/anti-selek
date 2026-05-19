@@ -9,27 +9,6 @@ import { logError, safeErrorResponse } from "@/lib/errors";
 import { rateLimit, checkInvalidTargetRateLimit, invalidTargetResponse } from "@/lib/rateLimit";
 
 export const dynamic = "force-dynamic";
-
-async function requireCommunityAdmin(
-  communityId: string,
-  requesterId: string,
-  isGlobalAdmin: boolean
-) {
-  if (isGlobalAdmin) return true;
-
-  const membership = await prisma.communityMember.findUnique({
-    where: {
-      communityId_userId: {
-        communityId,
-        userId: requesterId,
-      },
-    },
-    select: { role: true },
-  });
-
-  return membership?.role === "ADMIN";
-}
-
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string; userId: string }> }
@@ -58,13 +37,7 @@ export async function POST(
     const invalidTargetLimitResponse = await checkInvalidTargetRateLimit(request, "api:communities:id:members:userId:password");
 
     if (invalidTargetLimitResponse) return invalidTargetLimitResponse;
-    const canManage = await requireCommunityAdmin(
-      communityId,
-      session.user.id,
-      !!session.user.isAdmin
-    );
-
-    if (!canManage) {
+    if (!session.user.isAdmin) {
       return invalidTargetResponse(request, "api:communities:id:members:userId:password");
     }
 

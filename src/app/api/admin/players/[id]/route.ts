@@ -73,6 +73,16 @@ export async function PATCH(
     if (!user) {
       return invalidTargetResponse(request, "api:admin:players:id");
     }
+    if (
+      typeof name === "string" &&
+      user.isClaimed &&
+      name.trim() !== user.name
+    ) {
+      return NextResponse.json(
+        { error: "Claimed members manage their own account name" },
+        { status: 403 }
+      );
+    }
 
     const updated = await prisma.user.update({
       where: { id },

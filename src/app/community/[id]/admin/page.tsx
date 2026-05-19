@@ -129,6 +129,7 @@ export default function CommunityAdminPage() {
   const {
     status,
     currentUserId,
+    isGlobalAdmin,
     communityId,
     community,
     players,
@@ -443,6 +444,7 @@ export default function CommunityAdminPage() {
         onUpdatePreferences={handleUpdatePreferences}
         onPromotePlayer={handlePromotePlayer}
         onOpenPasswordReset={openPasswordResetModal}
+        canOpenEmergencyPasswordReset={isGlobalAdmin}
         onOpenMergeDuplicate={openMergeDuplicateModal}
         onUploadAvatar={handleUploadPlayerAvatar}
         onRemoveAvatar={handleRemovePlayerAvatar}

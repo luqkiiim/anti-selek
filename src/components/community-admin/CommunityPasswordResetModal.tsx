@@ -31,8 +31,8 @@ export function CommunityPasswordResetModal({
 
   return (
     <ModalFrame
-      title="Reset member password"
-      subtitle="Set a new sign-in password here, then share it with the player manually."
+      title="Emergency password reset"
+      subtitle="Use this only when the member cannot complete the normal email recovery flow."
       onClose={onClose}
       footer={
         <div className="flex flex-wrap justify-end gap-3">
@@ -50,7 +50,7 @@ export function CommunityPasswordResetModal({
             className="app-button-primary px-4 py-2"
             disabled={savingPasswordReset}
           >
-            {savingPasswordReset ? "Saving..." : "Save password"}
+            {savingPasswordReset ? "Saving..." : "Set emergency password"}
           </button>
         </div>
       }
@@ -101,7 +101,8 @@ export function CommunityPasswordResetModal({
         </label>
 
         <p className="text-sm text-gray-600">
-          This replaces the player&apos;s existing sign-in password immediately.
+          This replaces the player&apos;s existing sign-in password immediately
+          and bypasses the normal email reset flow.
         </p>
       </form>
     </ModalFrame>
