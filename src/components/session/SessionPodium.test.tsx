@@ -156,4 +156,17 @@ describe("SessionPodium", () => {
     expect(markup).toContain("+9 diff");
     expect(markup).toContain('data-avatar-size="xl"');
   });
+
+  it("adds larger tablet-specific podium avatar sizing", () => {
+    const markup = renderPodium({
+      players: [
+        createPlayer({ userId: "u1", name: "Alex Lee", sessionPoints: 18 }),
+        createPlayer({ userId: "u2", name: "Bianca Tan", sessionPoints: 15 }),
+        createPlayer({ userId: "u3", name: "Chris Ong", sessionPoints: 12 }),
+      ],
+    });
+
+    expect(markup).toContain("md:h-24");
+    expect(markup).toContain("xl:h-20");
+  });
 });

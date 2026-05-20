@@ -73,7 +73,7 @@ function TeamPlayers({
                 onClick={() => onTogglePlayerAction(player.id)}
                 disabled={queueActionDisabled}
                 aria-expanded={actionOpen}
-                className={`flex min-w-0 w-full items-center gap-1.5 whitespace-normal break-words text-base font-semibold leading-tight text-gray-900 transition hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-50 sm:gap-2 md:text-[1.35rem] xl:text-base ${textAlignClass} ${rowDirectionClass}`}
+                className={`flex min-w-0 w-full items-center gap-1.5 whitespace-normal break-words text-[0.95rem] font-semibold leading-tight text-gray-900 transition hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-50 sm:gap-2 sm:text-base md:text-lg xl:text-base ${textAlignClass} ${rowDirectionClass}`}
               >
                 <Avatar
                   name={player.name}
@@ -92,7 +92,7 @@ function TeamPlayers({
                   appearance="court"
                 />
                 <p
-                  className={`min-w-0 flex-1 whitespace-normal break-words text-base font-semibold leading-tight text-gray-900 md:text-[1.35rem] xl:text-base ${textAlignClass}`}
+                  className={`min-w-0 flex-1 whitespace-normal break-words text-[0.95rem] font-semibold leading-tight text-gray-900 sm:text-base md:text-lg xl:text-base ${textAlignClass}`}
                 >
                   {player.name}
                 </p>

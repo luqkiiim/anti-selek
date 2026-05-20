@@ -7,7 +7,8 @@ function cx(...values: Array<string | false | null | undefined>) {
 }
 
 const AVATAR_SIZE_CLASSES = {
-  court: "h-9 w-9 text-xs",
+  court:
+    "h-9 w-9 text-xs sm:h-10 sm:w-10 sm:text-[13px] md:h-12 md:w-12 md:text-sm xl:h-10 xl:w-10 xl:text-[13px]",
   xs: "h-8 w-8 text-[11px]",
   sm: "h-10 w-10 text-[13px]",
   md: "h-12 w-12 text-sm",

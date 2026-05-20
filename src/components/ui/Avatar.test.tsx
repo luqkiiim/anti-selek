@@ -33,5 +33,7 @@ describe("Avatar", () => {
 
     expect(markup).toContain('data-avatar-size="court"');
     expect(markup).toContain('data-avatar-appearance="court"');
+    expect(markup).toContain("md:h-12");
+    expect(markup).toContain("xl:h-10");
   });
 });
