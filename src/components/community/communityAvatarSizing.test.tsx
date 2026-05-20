@@ -17,7 +17,7 @@ import {
 } from "@/types/enums";
 
 function countMdAvatars(markup: string) {
-  return markup.match(/h-12 w-12 text-sm/g)?.length ?? 0;
+  return markup.match(/h-14 w-14 text-base xl:h-12 xl:w-12 xl:text-sm/g)?.length ?? 0;
 }
 
 const member: CommunityPageMember = {

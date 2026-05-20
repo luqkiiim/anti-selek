@@ -91,12 +91,12 @@ export function SessionPodium({
                 ) : null}
               </div>
 
-              <div className="mb-3 flex min-h-[5.5rem] items-end justify-center sm:min-h-[6rem] md:min-h-[6.75rem] xl:min-h-[6rem]">
+              <div className="mb-3 flex min-h-[5.5rem] items-end justify-center sm:min-h-[6rem]">
                 <Avatar
                   name={player.user.name}
                   avatarUrl={player.user.avatarUrl}
                   size="xl"
-                  className="ring-4 ring-white shadow-[0_14px_30px_rgba(15,23,42,0.18)] md:h-24 md:w-24 md:text-[1.75rem] xl:h-20 xl:w-20 xl:text-2xl"
+                  className="ring-4 ring-white shadow-[0_14px_30px_rgba(15,23,42,0.18)]"
                 />
               </div>
 
