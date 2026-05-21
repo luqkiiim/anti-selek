@@ -99,7 +99,6 @@ describe("ManualMatchModal", () => {
     });
 
     expect(markup).toContain("Tap 4 players");
-    expect(markup).toContain("Picks 1-2 form Team 1. Picks 3-4 form Team 2. Tap again to remove.");
     expect(markup).toContain("sticky top-0");
     expect(markup).toContain("grid grid-cols-2 gap-2");
     expect(markup).toContain("border-x-0 sm:border-x sm:max-w-4xl lg:max-w-5xl");
@@ -135,11 +134,13 @@ describe("ManualMatchModal", () => {
     expect(markup).toContain("Alice + Bianca");
     expect(markup).toContain("Cara + Dinesh");
     expect(markup).toContain("Rating 1000");
-    expect(markup).toContain("Remove one to change the lineup.");
     expect(markup).toContain("Team 1 - 1");
     expect(markup).toContain("Team 1 - 2");
     expect(markup).toContain("Team 2 - 1");
     expect(markup).toContain("Team 2 - 2");
+    expect(markup).not.toContain("Admin override");
+    expect(markup).not.toContain("Picks 1-2 form Team 1. Picks 3-4 form Team 2. Tap again to remove.");
+    expect(markup).not.toContain("Remove one to change the lineup.");
     expect(markup.match(/disabled=""/g)?.length ?? 0).toBe(1);
   });
 });

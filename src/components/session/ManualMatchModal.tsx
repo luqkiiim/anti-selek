@@ -16,7 +16,6 @@ interface ManualMatchModalProps {
   court: Court | null;
   title?: string;
   locationLabel?: string;
-  note?: string;
   submitLabel?: string;
   manualMatchForm: ManualMatchFormState;
   manualMatchPlayerOptions: Player[];
@@ -35,7 +34,6 @@ export function ManualMatchModal({
   court,
   title = "Manual Match",
   locationLabel,
-  note = "This is an admin override for one match only. Pool and mixed-format restrictions are skipped, but normal safety checks still apply.",
   submitLabel = "Create Match",
   manualMatchForm,
   manualMatchPlayerOptions,
@@ -128,18 +126,6 @@ export function ManualMatchModal({
               {renderSelectedTeamSummary("T1", team1Players, [1, 2])}
               {renderSelectedTeamSummary("T2", team2Players, [3, 4])}
             </div>
-
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <p className="text-xs text-gray-500">
-                Picks 1-2 form Team 1. Picks 3-4 form Team 2. Tap again to
-                remove.
-              </p>
-              {selectedPlayersCount >= 4 ? (
-                <span className="text-xs font-semibold text-gray-500">
-                  Remove one to change the lineup.
-                </span>
-              ) : null}
-            </div>
           </div>
 
           <div className="space-y-2 p-3 sm:p-4">
@@ -196,11 +182,6 @@ export function ManualMatchModal({
               );
             })}
           </div>
-        </div>
-
-        <div className="app-alert app-alert-warning text-sm">
-          <p className="font-semibold text-gray-900">Admin override</p>
-          <p className="mt-1 text-sm text-[var(--warning)]">{note}</p>
         </div>
 
         {manualMatchPlayerOptions.length < 4 ? (

@@ -1568,11 +1568,6 @@ export default function SessionPage() {
         }
         title={courtActions.manualQueueOpen ? "Manual Queue" : undefined}
         locationLabel={courtActions.manualQueueOpen ? "Next Up" : undefined}
-        note={
-          courtActions.manualQueueOpen
-            ? "This sets the exact quartet waiting next. The queued match will still promote automatically when a court opens."
-            : undefined
-        }
         submitLabel={courtActions.manualQueueOpen ? "Queue Match" : undefined}
         manualMatchForm={courtActions.manualMatchForm}
         manualMatchPlayerOptions={sessionView.manualMatchPlayerOptions}
