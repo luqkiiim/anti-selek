@@ -1,3 +1,8 @@
+import {
+  getWeightedRecordScore,
+  PREFERRED_CONNECTION_MIN_MATCHES,
+} from "./connectionRanking";
+
 export const COMMUNITY_PULSE_RECENT_MATCH_LIMIT = 24;
 
 type MatchResult = "WIN" | "LOSS";
@@ -79,6 +84,19 @@ export interface CommunityPulseRivalry {
   } | null;
 }
 
+export interface CommunityPulsePartnership {
+  players: [CommunityPulseParticipant, CommunityPulseParticipant];
+  matches: number;
+  wins: number;
+  losses: number;
+  winRate: number;
+  lastPlayedAt: string | null;
+  lastSession: {
+    code: string;
+    name: string;
+  } | null;
+}
+
 export interface CommunityPulseLatestStory {
   session: {
     id: string;
@@ -109,6 +127,7 @@ export interface CommunityPulseSnapshot {
   };
   hotPlayers: CommunityPulseHotPlayer[];
   rivalries: CommunityPulseRivalry[];
+  partnerships: CommunityPulsePartnership[];
   latestStory: CommunityPulseLatestStory | null;
 }
 
@@ -131,6 +150,20 @@ interface RivalryAggregate {
   matches: number;
   playerOneWins: number;
   playerTwoWins: number;
+  lastPlayedAtMs: number;
+  lastPlayedAt: string | null;
+  lastSession: {
+    code: string;
+    name: string;
+  } | null;
+}
+
+interface PartnershipAggregate {
+  players: [CommunityPulseParticipant, CommunityPulseParticipant];
+  matches: number;
+  wins: number;
+  losses: number;
+  pointDifferential: number;
   lastPlayedAtMs: number;
   lastPlayedAt: string | null;
   lastSession: {
@@ -315,14 +348,14 @@ function buildHotPlayers(matches: CommunityPulseMatchSource[]) {
     .slice(0, 3);
 }
 
-function getRivalryKey(
+function getPlayerPairKey(
   left: CommunityPulseParticipant,
   right: CommunityPulseParticipant
 ) {
   return [left.id, right.id].sort().join(":");
 }
 
-function getOrderedRivalryPlayers(
+function getOrderedPairPlayers(
   left: CommunityPulseParticipant,
   right: CommunityPulseParticipant
 ): [CommunityPulseParticipant, CommunityPulseParticipant] {
@@ -336,8 +369,8 @@ function updateRivalry(
   winnerIds: Set<string>,
   match: CommunityPulseMatchSource
 ) {
-  const key = getRivalryKey(left, right);
-  const players = getOrderedRivalryPlayers(left, right);
+  const key = getPlayerPairKey(left, right);
+  const players = getOrderedPairPlayers(left, right);
   const aggregate = aggregates.get(key) ?? {
     players,
     matches: 0,
@@ -406,6 +439,117 @@ function buildRivalries(matches: CommunityPulseMatchSource[]) {
       playerTwoWins: rivalry.playerTwoWins,
       lastPlayedAt: rivalry.lastPlayedAt,
       lastSession: rivalry.lastSession,
+    }));
+}
+
+function updatePartnership(
+  aggregates: Map<string, PartnershipAggregate>,
+  left: CommunityPulseParticipant,
+  right: CommunityPulseParticipant,
+  {
+    result,
+    pointDifferential,
+  }: {
+    result: MatchResult;
+    pointDifferential: number;
+  },
+  match: CommunityPulseMatchSource
+) {
+  const key = getPlayerPairKey(left, right);
+  const players = getOrderedPairPlayers(left, right);
+  const aggregate = aggregates.get(key) ?? {
+    players,
+    matches: 0,
+    wins: 0,
+    losses: 0,
+    pointDifferential: 0,
+    lastPlayedAtMs: 0,
+    lastPlayedAt: null,
+    lastSession: null,
+  };
+  const completedAtMs = getTime(match.completedAt);
+
+  aggregate.matches += 1;
+  aggregate.pointDifferential += pointDifferential;
+
+  if (result === "WIN") {
+    aggregate.wins += 1;
+  } else {
+    aggregate.losses += 1;
+  }
+
+  if (completedAtMs >= aggregate.lastPlayedAtMs) {
+    aggregate.lastPlayedAtMs = completedAtMs;
+    aggregate.lastPlayedAt = toIsoString(match.completedAt);
+    aggregate.lastSession = {
+      code: match.session.code,
+      name: match.session.name,
+    };
+  }
+
+  aggregates.set(key, aggregate);
+}
+
+function buildPartnerships(matches: CommunityPulseMatchSource[]) {
+  const aggregates = new Map<string, PartnershipAggregate>();
+
+  for (const match of matches) {
+    const { team1, team2 } = getMatchTeams(match);
+    const team1Score = match.team1Score ?? 0;
+    const team2Score = match.team2Score ?? 0;
+    const team1Result = match.winnerTeam === 1 ? "WIN" : "LOSS";
+    const team2Result = match.winnerTeam === 2 ? "WIN" : "LOSS";
+
+    updatePartnership(
+      aggregates,
+      team1[0],
+      team1[1],
+      {
+        result: team1Result,
+        pointDifferential: team1Score - team2Score,
+      },
+      match
+    );
+    updatePartnership(
+      aggregates,
+      team2[0],
+      team2[1],
+      {
+        result: team2Result,
+        pointDifferential: team2Score - team1Score,
+      },
+      match
+    );
+  }
+
+  return Array.from(aggregates.values())
+    .filter(
+      (partnership) =>
+        partnership.matches >= PREFERRED_CONNECTION_MIN_MATCHES
+    )
+    .sort(
+      (left, right) =>
+        getWeightedRecordScore(right.wins, right.losses) -
+          getWeightedRecordScore(left.wins, left.losses) ||
+        right.matches - left.matches ||
+        right.pointDifferential - left.pointDifferential ||
+        right.lastPlayedAtMs - left.lastPlayedAtMs ||
+        left.players[0].name.localeCompare(right.players[0].name, undefined, {
+          sensitivity: "base",
+        }) ||
+        left.players[1].name.localeCompare(right.players[1].name, undefined, {
+          sensitivity: "base",
+        })
+    )
+    .slice(0, 3)
+    .map((partnership) => ({
+      players: partnership.players,
+      matches: partnership.matches,
+      wins: partnership.wins,
+      losses: partnership.losses,
+      winRate: getWinRate(partnership.wins, partnership.matches),
+      lastPlayedAt: partnership.lastPlayedAt,
+      lastSession: partnership.lastSession,
     }));
 }
 
@@ -548,6 +692,7 @@ export function buildCommunityPulse({
     },
     hotPlayers: buildHotPlayers(recentMatches),
     rivalries: buildRivalries(sortedCompletedMatches),
+    partnerships: buildPartnerships(sortedCompletedMatches),
     latestStory: buildLatestStory(completedSessions, sortedCompletedMatches),
   };
 }

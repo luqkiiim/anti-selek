@@ -33,12 +33,18 @@ interface CommunityOverviewPulsePanelProps {
   onOpenPlayerProfile: (playerId: string) => void;
 }
 
+type OverviewPlayerPair = CommunityPagePulse["rivalries"][number]["players"];
+
 function formatDate(value: string | null) {
   if (!value) return "No date";
   return new Date(value).toLocaleDateString(undefined, {
     month: "short",
     day: "numeric",
   });
+}
+
+function formatGameCount(value: number) {
+  return `${value} ${value === 1 ? "game" : "games"}`;
 }
 
 function formatSigned(value: number) {
@@ -78,6 +84,12 @@ function getRivalryDetail(rivalry: CommunityPagePulse["rivalries"][number]) {
   const trailingWins = Math.min(rivalry.playerOneWins, rivalry.playerTwoWins);
 
   return `${leader.name} leads ${leaderWins}-${trailingWins}`;
+}
+
+function getPartnershipDetail(
+  partnership: CommunityPagePulse["partnerships"][number]
+) {
+  return `${partnership.wins}-${partnership.losses} together`;
 }
 
 function isTournamentParticipant(
@@ -148,6 +160,22 @@ function EmptyPulseState({ children }: { children: ReactNode }) {
   );
 }
 
+function PlayerPairAvatars({ players }: { players: OverviewPlayerPair }) {
+  return (
+    <div className="flex shrink-0 -space-x-3" aria-hidden="true">
+      {players.map((player) => (
+        <Avatar
+          key={player.id}
+          name={player.name}
+          avatarUrl={player.avatarUrl}
+          size="md"
+          className="ring-2 ring-white"
+        />
+      ))}
+    </div>
+  );
+}
+
 export function CommunityOverviewPulsePanel({
   communityPulse,
   activeTournaments,
@@ -170,6 +198,7 @@ export function CommunityOverviewPulsePanel({
   const topRankedPlayer = leaderboardPreview[0] ?? null;
   const hotPlayers = communityPulse?.hotPlayers ?? [];
   const rivalries = communityPulse?.rivalries ?? [];
+  const partnerships = communityPulse?.partnerships ?? [];
   const latestStory = communityPulse?.latestStory ?? null;
 
   return (
@@ -305,7 +334,7 @@ export function CommunityOverviewPulsePanel({
         )}
       </section>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 lg:gap-6">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 xl:grid-cols-3 lg:gap-6">
         <section className="app-panel space-y-4 p-5 sm:p-6">
           <SectionHeader
             icon={<Flame aria-hidden="true" size={20} />}
@@ -360,7 +389,7 @@ export function CommunityOverviewPulsePanel({
         <section className="app-panel space-y-4 p-5 sm:p-6">
           <SectionHeader
             icon={<Swords aria-hidden="true" size={20} />}
-            title="Rivalry watch"
+            title="Top rivalry"
             detail="Repeated close matchups"
           />
           {rivalries.length > 0 ? (
@@ -371,16 +400,19 @@ export function CommunityOverviewPulsePanel({
                   className="rounded-lg border border-[var(--line)] bg-white px-4 py-3"
                 >
                   <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-semibold text-gray-900">
-                        {rivalry.players[0].name} vs {rivalry.players[1].name}
-                      </p>
-                      <p className="mt-1 text-xs font-semibold text-gray-500">
-                        {getRivalryDetail(rivalry)}
-                      </p>
+                    <div className="flex min-w-0 items-start gap-3">
+                      <PlayerPairAvatars players={rivalry.players} />
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-semibold text-gray-900">
+                          {rivalry.players[0].name} vs {rivalry.players[1].name}
+                        </p>
+                        <p className="mt-1 text-xs font-semibold text-gray-500">
+                          {getRivalryDetail(rivalry)}
+                        </p>
+                      </div>
                     </div>
                     <span className="shrink-0 rounded-md bg-[var(--accent-faint)] px-2 py-1 text-xs font-semibold text-[var(--accent)]">
-                      {rivalry.matches} games
+                      {formatGameCount(rivalry.matches)}
                     </span>
                   </div>
                   {rivalry.lastSession ? (
@@ -394,7 +426,58 @@ export function CommunityOverviewPulsePanel({
             </div>
           ) : (
             <EmptyPulseState>
-              Rivalries unlock after players face each other a few times
+              Top rivalries unlock after players face each other a few times
+            </EmptyPulseState>
+          )}
+        </section>
+
+        <section className="app-panel space-y-4 p-5 sm:p-6">
+          <SectionHeader
+            icon={<Users aria-hidden="true" size={20} />}
+            title="Partner chemistry"
+            detail="Duos with the strongest record together"
+          />
+          {partnerships.length > 0 ? (
+            <div className="space-y-2">
+              {partnerships.map((partnership) => (
+                <div
+                  key={`${partnership.players[0].id}:${partnership.players[1].id}`}
+                  className="rounded-lg border border-[var(--line)] bg-white px-4 py-3"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex min-w-0 items-start gap-3">
+                      <PlayerPairAvatars players={partnership.players} />
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-semibold text-gray-900">
+                          {partnership.players[0].name} &{" "}
+                          {partnership.players[1].name}
+                        </p>
+                        <p className="mt-1 text-xs font-semibold text-gray-500">
+                          {getPartnershipDetail(partnership)}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="shrink-0 text-right">
+                      <p className="text-sm font-semibold text-[var(--success)]">
+                        {partnership.winRate}%
+                      </p>
+                      <p className="text-xs font-semibold text-gray-500">
+                        {formatGameCount(partnership.matches)}
+                      </p>
+                    </div>
+                  </div>
+                  {partnership.lastSession ? (
+                    <p className="mt-3 truncate text-xs font-semibold text-gray-500">
+                      Last teamed {formatDate(partnership.lastPlayedAt)} in{" "}
+                      {partnership.lastSession.name}
+                    </p>
+                  ) : null}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <EmptyPulseState>
+              Partner chemistry appears after duos play together a few times
             </EmptyPulseState>
           )}
         </section>

@@ -55,7 +55,39 @@ const pulse: CommunityPagePulse = {
       heatScore: 99,
     },
   ],
-  rivalries: [],
+  rivalries: [
+    {
+      players: [
+        { id: "rival-1", name: "Ari Stone", avatarUrl: null },
+        { id: "rival-2", name: "Sam Wong", avatarUrl: null },
+      ],
+      matches: 4,
+      playerOneWins: 2,
+      playerTwoWins: 2,
+      lastPlayedAt: "2026-05-18",
+      lastSession: {
+        code: "RIV1",
+        name: "Rival Night",
+      },
+    },
+  ],
+  partnerships: [
+    {
+      players: [
+        { id: "partner-1", name: "June Park", avatarUrl: null },
+        { id: "partner-2", name: "Leo Ong", avatarUrl: null },
+      ],
+      matches: 11,
+      wins: 10,
+      losses: 1,
+      winRate: 91,
+      lastPlayedAt: "2026-05-20",
+      lastSession: {
+        code: "PAIR1",
+        name: "Chemistry Cup",
+      },
+    },
+  ],
   latestStory: {
     session: {
       id: "session-1",
@@ -135,7 +167,9 @@ describe("community avatar sizing", () => {
       );
     });
 
-    expect(countMdAvatars(container.innerHTML)).toBe(4);
+    expect(container.textContent).toContain("Top rivalry");
+    expect(container.textContent).toContain("Partner chemistry");
+    expect(countMdAvatars(container.innerHTML)).toBe(8);
   });
 
   it("uses md avatars in the community player picker rows", async () => {

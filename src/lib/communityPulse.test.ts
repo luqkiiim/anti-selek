@@ -13,6 +13,8 @@ const players = {
   dan: { id: "dan", name: "Dan" },
   eli: { id: "eli", name: "Eli" },
   farah: { id: "farah", name: "Farah" },
+  gina: { id: "gina", name: "Gina" },
+  hugo: { id: "hugo", name: "Hugo" },
 };
 
 function createMember(
@@ -118,6 +120,7 @@ describe("communityPulse", () => {
       },
       hotPlayers: [],
       rivalries: [],
+      partnerships: [],
       latestStory: null,
     });
   });
@@ -241,6 +244,83 @@ describe("communityPulse", () => {
         name: "Session rivalry",
       },
     });
+  });
+
+  it("ranks strong partner chemistry above a higher-volume .500 duo", () => {
+    const session = createSession("partnerships");
+    const result = buildCommunityPulse({
+      members: Object.values(players).map((player) => createMember(player)),
+      sessions: [session],
+      completedMatches: [
+        ...Array.from({ length: 11 }, (_, index) =>
+          createMatch(`strong-${index + 1}`, {
+            session,
+            completedAt: `2026-05-${String(index + 1).padStart(2, "0")}T10:00:00.000Z`,
+            team1: [players.alice, players.ben],
+            team2: [players.eli, players.farah],
+            team1Score: index < 10 ? 21 : 18,
+            team2Score: index < 10 ? 16 : 21,
+            winnerTeam: index < 10 ? 1 : 2,
+          })
+        ),
+        ...Array.from({ length: 26 }, (_, index) =>
+          createMatch(`balanced-${index + 1}`, {
+            session,
+            completedAt: `2026-06-${String(index + 1).padStart(2, "0")}T10:00:00.000Z`,
+            team1: [players.cara, players.dan],
+            team2: [players.gina, players.hugo],
+            team1Score: index < 13 ? 21 : 18,
+            team2Score: index < 13 ? 18 : 21,
+            winnerTeam: index < 13 ? 1 : 2,
+          })
+        ),
+      ],
+    });
+
+    expect(result.partnerships[0]).toMatchObject({
+      players: [players.alice, players.ben],
+      matches: 11,
+      wins: 10,
+      losses: 1,
+      winRate: 91,
+    });
+    expect(result.partnerships[1]).toMatchObject({
+      players: [players.cara, players.dan],
+      matches: 26,
+      wins: 13,
+      losses: 13,
+      winRate: 50,
+    });
+  });
+
+  it("requires at least two matches together before a partnership appears", () => {
+    const session = createSession("single-pairs");
+    const result = buildCommunityPulse({
+      members: Object.values(players).map((player) => createMember(player)),
+      sessions: [session],
+      completedMatches: [
+        createMatch("m1", {
+          session,
+          completedAt: "2026-05-01T10:00:00.000Z",
+          team1: [players.alice, players.ben],
+          team2: [players.cara, players.dan],
+          team1Score: 21,
+          team2Score: 17,
+          winnerTeam: 1,
+        }),
+        createMatch("m2", {
+          session,
+          completedAt: "2026-05-02T10:00:00.000Z",
+          team1: [players.alice, players.cara],
+          team2: [players.ben, players.dan],
+          team1Score: 21,
+          team2Score: 19,
+          winnerTeam: 1,
+        }),
+      ],
+    });
+
+    expect(result.partnerships).toEqual([]);
   });
 
   it("summarizes the latest completed tournament story", () => {

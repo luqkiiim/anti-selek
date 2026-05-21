@@ -1,6 +1,10 @@
+import {
+  getWeightedRecordScore,
+  PREFERRED_CONNECTION_MIN_MATCHES,
+} from "./connectionRanking";
+
 export const PROFILE_RECENT_FORM_MATCH_COUNT = 10;
 export const PROFILE_RECENT_SESSION_COUNT = 5;
-const PREFERRED_CONNECTION_MIN_MATCHES = 2;
 
 interface ProfileParticipant {
   id: string;
@@ -259,14 +263,8 @@ function compareBestPartnerConnections(
   left: PlayerProfileConnectionSummary,
   right: PlayerProfileConnectionSummary
 ) {
-  const leftTotalMatches = left.wins + left.losses;
-  const rightTotalMatches = right.wins + right.losses;
-  const leftBayesianWinRate = (left.wins + 1) / (leftTotalMatches + 2);
-  const rightBayesianWinRate = (right.wins + 1) / (rightTotalMatches + 2);
-  const leftWeight = Math.log(leftTotalMatches + 1);
-  const rightWeight = Math.log(rightTotalMatches + 1);
-  const leftPartnerScore = leftBayesianWinRate * leftWeight;
-  const rightPartnerScore = rightBayesianWinRate * rightWeight;
+  const leftPartnerScore = getWeightedRecordScore(left.wins, left.losses);
+  const rightPartnerScore = getWeightedRecordScore(right.wins, right.losses);
 
   return (
     rightPartnerScore - leftPartnerScore ||
@@ -282,16 +280,8 @@ function compareToughestOpponents(
   left: PlayerProfileConnectionSummary,
   right: PlayerProfileConnectionSummary
 ) {
-  const leftTotalMatches = left.wins + left.losses;
-  const rightTotalMatches = right.wins + right.losses;
-  const leftLosses = left.losses;
-  const rightLosses = right.losses;
-  const leftBayesianWinRate = (leftLosses + 1) / (leftTotalMatches + 2);
-  const rightBayesianWinRate = (rightLosses + 1) / (rightTotalMatches + 2);
-  const leftWeight = Math.log(leftTotalMatches + 1);
-  const rightWeight = Math.log(rightTotalMatches + 1);
-  const leftToughness = leftBayesianWinRate * leftWeight;
-  const rightToughness = rightBayesianWinRate * rightWeight;
+  const leftToughness = getWeightedRecordScore(left.losses, left.wins);
+  const rightToughness = getWeightedRecordScore(right.losses, right.wins);
 
   return (
     rightToughness - leftToughness ||

@@ -168,6 +168,7 @@ describe("community snapshot route", () => {
       },
       hotPlayers: [],
       rivalries: [],
+      partnerships: [],
       latestStory: null,
     });
   });
