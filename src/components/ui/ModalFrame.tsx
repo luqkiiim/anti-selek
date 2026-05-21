@@ -71,6 +71,7 @@ interface ModalFrameProps {
   footer?: ReactNode;
   bodyScroll?: boolean;
   bodyClassName?: string;
+  frameClassName?: string;
   fullscreenUntilDesktop?: boolean;
 }
 
@@ -82,6 +83,7 @@ export function ModalFrame({
   footer,
   bodyScroll = true,
   bodyClassName,
+  frameClassName,
   fullscreenUntilDesktop = false,
 }: ModalFrameProps) {
   const frameRef = useRef<HTMLDivElement | null>(null);
@@ -202,6 +204,7 @@ export function ModalFrame({
         aria-label={title}
         className={cx(
           "app-modal-frame",
+          frameClassName,
           fullscreenUntilDesktop && "app-modal-frame-fullscreen-tablet"
         )}
       >

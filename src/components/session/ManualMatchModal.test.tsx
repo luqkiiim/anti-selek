@@ -18,13 +18,15 @@ vi.mock("@/components/ui/chrome", () => ({
     subtitle,
     children,
     footer,
+    frameClassName,
   }: {
     title: string;
     subtitle?: string;
     children: ReactNode;
     footer?: ReactNode;
+    frameClassName?: string;
   }) => (
-    <div>
+    <div data-frame-class={frameClassName}>
       <h1>{title}</h1>
       {subtitle ? <p>{subtitle}</p> : null}
       <div>{children}</div>
@@ -100,6 +102,8 @@ describe("ManualMatchModal", () => {
     expect(markup).toContain("Picks 1-2 form Team 1. Picks 3-4 form Team 2. Tap again to remove.");
     expect(markup).toContain("sticky top-0");
     expect(markup).toContain("grid grid-cols-2 gap-2");
+    expect(markup).toContain("border-x-0 sm:border-x sm:max-w-4xl lg:max-w-5xl");
+    expect(markup).toContain("space-y-3 px-2 py-3 sm:space-y-4 sm:px-5 sm:py-4");
     expect(markup).toContain("T1");
     expect(markup).toContain("Alice + Bianca");
     expect(markup).toContain("T2");

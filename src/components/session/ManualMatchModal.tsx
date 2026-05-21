@@ -93,6 +93,7 @@ export function ManualMatchModal({
       title={title}
       subtitle={subtitle}
       onClose={onClose}
+      frameClassName="border-x-0 sm:border-x sm:max-w-4xl lg:max-w-5xl"
       footer={
         <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
           <button
@@ -113,9 +114,9 @@ export function ManualMatchModal({
         </div>
       }
     >
-      <div className="space-y-4 px-4 py-4 sm:px-5">
+      <div className="space-y-3 px-2 py-3 sm:space-y-4 sm:px-5 sm:py-4">
         <div className="app-popup-card">
-          <div className="sticky top-0 z-10 space-y-3 border-b border-gray-200 bg-[var(--surface-strong)] px-4 py-3 shadow-[0_10px_24px_rgba(23,32,31,0.06)]">
+          <div className="sticky top-0 z-10 space-y-2.5 border-b border-gray-200 bg-[var(--surface-strong)] px-3 py-3 shadow-[0_10px_24px_rgba(23,32,31,0.06)] sm:space-y-3 sm:px-4">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <p className="text-sm font-semibold text-gray-900">Tap 4 players</p>
               <span className="app-chip app-chip-accent px-2 py-1 text-[11px]">
@@ -141,7 +142,7 @@ export function ManualMatchModal({
             </div>
           </div>
 
-          <div className="space-y-2 p-4">
+          <div className="space-y-2 p-3 sm:p-4">
             {manualMatchPlayerOptions.map((player) => {
               const selectionIndex = selectedPlayerIdsInOrder.indexOf(
                 player.userId
@@ -155,7 +156,7 @@ export function ManualMatchModal({
                   type="button"
                   onClick={() => onTogglePlayer(player.userId)}
                   disabled={isDisabled}
-                  className={`app-touch-pan-y flex w-full items-center justify-between gap-3 rounded-xl border px-3 py-3 text-left transition ${
+                  className={`app-touch-pan-y flex w-full items-center justify-between gap-2 rounded-xl border px-2.5 py-2.5 text-left transition sm:gap-3 sm:px-3 sm:py-3 ${
                     isSelected
                       ? "border-blue-200 bg-blue-50"
                       : isDisabled
@@ -163,7 +164,7 @@ export function ManualMatchModal({
                         : "border-gray-200 bg-gray-50/70 hover:border-blue-200 hover:bg-white"
                   }`}
                 >
-                  <div className="min-w-0 flex items-center gap-3">
+                  <div className="min-w-0 flex items-center gap-2 sm:gap-3">
                     <Avatar
                       name={player.user.name}
                       avatarUrl={player.user.avatarUrl}
