@@ -9,11 +9,9 @@ import {
   postGenerateMatchAction,
   postSessionActionTyped,
 } from "./sessionCourtActionApi";
-import type {
-  ManualMatchFormState,
-  ManualMatchSlot,
-} from "@/components/session/sessionTypes";
+import type { ManualMatchFormState } from "@/components/session/sessionTypes";
 import type { UseSessionMatchActionsDependencies } from "./sessionMatchActionTypes";
+import { toggleManualMatchPlayer } from "./manualMatchSelection";
 
 const emptyManualMatchForm = (): ManualMatchFormState => ({
   team1User1Id: "",
@@ -196,11 +194,8 @@ export function useSessionCourtMatchCreation({
     setManualMatchForm(emptyManualMatchForm());
   };
 
-  const updateManualMatchSlot = (slot: ManualMatchSlot, value: string) => {
-    setManualMatchForm((prev) => ({
-      ...prev,
-      [slot]: value,
-    }));
+  const toggleManualMatchPlayerSelection = (userId: string) => {
+    setManualMatchForm((prev) => toggleManualMatchPlayer(prev, userId));
   };
 
   const createManualMatch = async () => {
@@ -467,7 +462,7 @@ export function useSessionCourtMatchCreation({
     openManualMatchModal,
     openManualQueuedMatchModal,
     closeManualMatchModal,
-    updateManualMatchSlot,
+    toggleManualMatchPlayerSelection,
     createManualMatch,
     createManualQueuedMatch,
   };

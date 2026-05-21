@@ -1542,7 +1542,7 @@ export default function SessionPage() {
         poolAName={sessionData.poolAName}
         poolBName={sessionData.poolBName}
         onClose={courtActions.closeManualMatchModal}
-        onUpdateSlot={courtActions.updateManualMatchSlot}
+        onTogglePlayer={courtActions.toggleManualMatchPlayerSelection}
         onCreateMatch={
           courtActions.manualQueueOpen
             ? courtActions.createManualQueuedMatch
