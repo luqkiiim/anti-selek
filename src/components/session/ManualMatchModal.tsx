@@ -95,7 +95,7 @@ export function ManualMatchModal({
       onClose={onClose}
       frameClassName="border-x-0 sm:border-x sm:max-w-4xl lg:max-w-5xl"
       footer={
-        <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+        <div className="flex items-center justify-end gap-2">
           <button
             type="button"
             onClick={onClose}
