@@ -1,9 +1,9 @@
 "use client";
 
+import { getManualMatchSelectionOrder } from "@/app/session/[code]/manualMatchSelection";
 import { Avatar } from "@/components/ui/Avatar";
 import { ModalFrame } from "@/components/ui/chrome";
 import { getCourtDisplayLabel } from "@/lib/courtLabels";
-import { getManualMatchSelectionOrder } from "@/app/session/[code]/manualMatchSelection";
 import { SessionPool } from "@/types/enums";
 import type {
   Court,
@@ -64,56 +64,26 @@ export function ManualMatchModal({
   const team1Players = selectedPlayersInOrder.slice(0, 2);
   const team2Players = selectedPlayersInOrder.slice(2, 4);
 
-  function renderSelectedTeam(
+  function renderSelectedTeamSummary(
     label: string,
     players: Player[],
-    startIndex: number
+    slots: [number, number]
   ) {
-    return (
-      <div className="app-popup-card space-y-3 p-4">
-        <p className="text-sm font-semibold text-gray-900">{label}</p>
-        {[0, 1].map((offset) => {
-          const order = startIndex + offset + 1;
-          const player = players[offset] ?? null;
+    const summary =
+      players.length === 0
+        ? `Pick ${slots[0]} + ${slots[1]}`
+        : players.length === 1
+          ? `${players[0].user.name} + Pick ${slots[1]}`
+          : `${players[0].user.name} + ${players[1].user.name}`;
 
-          return (
-            <div
-              key={`${label}-${order}`}
-              className="flex items-center gap-3 rounded-xl border border-dashed border-gray-200 bg-white/80 px-3 py-3"
-            >
-              <span className="app-chip app-chip-neutral min-w-[2.5rem] justify-center px-2 py-1 text-[11px]">
-                {order}
-              </span>
-              {player ? (
-                <>
-                  <Avatar
-                    name={player.user.name}
-                    avatarUrl={player.user.avatarUrl}
-                    size="sm"
-                  />
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-semibold text-gray-900">
-                      {player.user.name}
-                    </p>
-                    <p className="text-xs text-gray-500">
-                      {poolsEnabled ? `${getPoolLabel(player.pool)} - ` : ""}
-                      {`Rating ${player.user.elo}`}
-                    </p>
-                  </div>
-                </>
-              ) : (
-                <div className="min-w-0">
-                  <p className="text-sm font-medium text-gray-500">
-                    Tap player {order}
-                  </p>
-                  <p className="text-xs text-gray-400">
-                    {order <= 2 ? "Team 1" : "Team 2"}
-                  </p>
-                </div>
-              )}
-            </div>
-          );
-        })}
+    return (
+      <div className="min-w-0 flex-1 basis-[14rem] rounded-full border border-gray-200 bg-white/90 px-3 py-2 shadow-sm">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.01em] text-gray-500">
+          {label}
+        </p>
+        <p className="mt-0.5 break-words text-sm font-semibold leading-5 text-gray-900">
+          {summary}
+        </p>
       </div>
     );
   }
@@ -144,44 +114,40 @@ export function ManualMatchModal({
       }
     >
       <div className="space-y-4 px-4 py-4 sm:px-5">
-        <div className="app-popup-card space-y-3 p-4">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <p className="text-sm font-semibold text-gray-900">Tap 4 players</p>
-            <span className="app-chip app-chip-accent px-2 py-1 text-[11px]">
-              {selectedPlayersCount}/4 selected
-            </span>
-          </div>
-          <p className="text-sm text-gray-600">
-            First 2 selected are Team 1. Last 2 selected are Team 2. Tap a
-            selected player again to remove them.
-          </p>
-        </div>
-
-        <div className="grid gap-4 lg:grid-cols-2">
-          {renderSelectedTeam("Team 1", team1Players, 0)}
-          {renderSelectedTeam("Team 2", team2Players, 2)}
-        </div>
-
-        <div className="app-popup-card space-y-3 p-4">
-          <div className="flex items-center justify-between gap-2">
-            <p className="text-sm font-semibold text-gray-900">
-              Eligible players
-            </p>
-            {selectedPlayersCount >= 4 ? (
-              <span className="text-xs font-semibold text-gray-500">
-                Remove one to change the lineup.
+        <div className="app-popup-card max-h-[28rem] overflow-y-auto">
+          <div className="sticky top-0 z-10 space-y-3 border-b border-gray-200 bg-[var(--surface-strong)] px-4 py-3 shadow-[0_10px_24px_rgba(23,32,31,0.06)]">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-sm font-semibold text-gray-900">Tap 4 players</p>
+              <span className="app-chip app-chip-accent px-2 py-1 text-[11px]">
+                {selectedPlayersCount}/4 selected
               </span>
-            ) : null}
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              {renderSelectedTeamSummary("T1", team1Players, [1, 2])}
+              {renderSelectedTeamSummary("T2", team2Players, [3, 4])}
+            </div>
+
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-xs text-gray-500">
+                Picks 1-2 form Team 1. Picks 3-4 form Team 2. Tap again to
+                remove.
+              </p>
+              {selectedPlayersCount >= 4 ? (
+                <span className="text-xs font-semibold text-gray-500">
+                  Remove one to change the lineup.
+                </span>
+              ) : null}
+            </div>
           </div>
 
-          <div className="max-h-[24rem] space-y-2 overflow-y-auto pr-1">
+          <div className="space-y-2 p-4">
             {manualMatchPlayerOptions.map((player) => {
               const selectionIndex = selectedPlayerIdsInOrder.indexOf(
                 player.userId
               );
               const isSelected = selectedManualPlayerIds.has(player.userId);
-              const isDisabled =
-                !isSelected && selectedPlayersCount >= 4;
+              const isDisabled = !isSelected && selectedPlayersCount >= 4;
 
               return (
                 <button
@@ -217,8 +183,8 @@ export function ManualMatchModal({
                   {isSelected ? (
                     <span className="app-chip app-chip-accent shrink-0 px-2 py-1 text-[11px]">
                       {selectionIndex < 2
-                        ? `Team 1 • ${selectionIndex + 1}`
-                        : `Team 2 • ${selectionIndex - 1}`}
+                        ? `Team 1 - ${selectionIndex + 1}`
+                        : `Team 2 - ${selectionIndex - 1}`}
                     </span>
                   ) : (
                     <span className="app-chip app-chip-neutral shrink-0 px-2 py-1 text-[11px]">

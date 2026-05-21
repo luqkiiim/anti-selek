@@ -80,7 +80,7 @@ function renderModal({
 }
 
 describe("ManualMatchModal", () => {
-  it("renders a tap-to-pick list instead of dropdowns", () => {
+  it("renders a sticky compact summary instead of the old tall team cards", () => {
     const markup = renderModal({
       manualMatchForm: {
         team1User1Id: "u1",
@@ -97,14 +97,17 @@ describe("ManualMatchModal", () => {
     });
 
     expect(markup).toContain("Tap 4 players");
-    expect(markup).toContain(
-      "First 2 selected are Team 1. Last 2 selected are Team 2. Tap a selected player again to remove them."
-    );
-    expect(markup).toContain("Eligible players");
+    expect(markup).toContain("Picks 1-2 form Team 1. Picks 3-4 form Team 2. Tap again to remove.");
+    expect(markup).toContain("sticky top-0");
+    expect(markup).toContain("T1");
+    expect(markup).toContain("Alice + Bianca");
+    expect(markup).toContain("T2");
+    expect(markup).toContain("Pick 3 + 4");
+    expect(markup).not.toContain("Tap player 1");
     expect(markup).not.toContain("<select");
   });
 
-  it("shows ordered team assignments and blocks a fifth add until someone is removed", () => {
+  it("keeps detailed player rows, shows both team pills, and blocks a fifth add until someone is removed", () => {
     const markup = renderModal({
       manualMatchForm: {
         team1User1Id: "u1",
@@ -121,12 +124,15 @@ describe("ManualMatchModal", () => {
       ],
     });
 
-    expect(markup).toContain("1/4 selected".replace("1/4", "4/4"));
-    expect(markup).toContain("Team 1 • 1");
-    expect(markup).toContain("Team 1 • 2");
-    expect(markup).toContain("Team 2 • 1");
-    expect(markup).toContain("Team 2 • 2");
+    expect(markup).toContain("4/4 selected");
+    expect(markup).toContain("Alice + Bianca");
+    expect(markup).toContain("Cara + Dinesh");
+    expect(markup).toContain("Rating 1000");
     expect(markup).toContain("Remove one to change the lineup.");
+    expect(markup).toContain("Team 1 - 1");
+    expect(markup).toContain("Team 1 - 2");
+    expect(markup).toContain("Team 2 - 1");
+    expect(markup).toContain("Team 2 - 2");
     expect(markup.match(/disabled=""/g)?.length ?? 0).toBe(1);
   });
 });
