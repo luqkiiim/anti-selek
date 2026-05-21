@@ -99,10 +99,13 @@ describe("ManualMatchModal", () => {
     expect(markup).toContain("Tap 4 players");
     expect(markup).toContain("Picks 1-2 form Team 1. Picks 3-4 form Team 2. Tap again to remove.");
     expect(markup).toContain("sticky top-0");
+    expect(markup).toContain("grid grid-cols-2 gap-2");
     expect(markup).toContain("T1");
     expect(markup).toContain("Alice + Bianca");
     expect(markup).toContain("T2");
     expect(markup).toContain("Pick 3 + 4");
+    expect(markup).not.toContain("max-h-[28rem] overflow-y-auto");
+    expect(markup).not.toContain("basis-[14rem]");
     expect(markup).not.toContain("Tap player 1");
     expect(markup).not.toContain("<select");
   });

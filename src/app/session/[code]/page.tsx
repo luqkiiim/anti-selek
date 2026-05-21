@@ -147,13 +147,19 @@ export default function SessionPage() {
     }
   }, []);
 
-  const { sessionData, patchSessionData, scheduleSessionRefresh } =
-    useSessionData({
-      code,
-      enabled: !!session?.user?.id,
-      safeJson,
-      setError,
-    });
+  const {
+    sessionData,
+    isInitialLoadPending,
+    initialLoadError,
+    patchSessionData,
+    retryInitialLoad,
+    scheduleSessionRefresh,
+  } = useSessionData({
+    code,
+    enabled: !!session?.user?.id,
+    safeJson,
+    setError,
+  });
 
   const { court: courtActions, score: scoreActions } = useSessionMatchActions({
     code,
@@ -992,12 +998,46 @@ export default function SessionPage() {
     settleMobilePagerFromSwipe(null);
   }, [isPlayerPickerOpen, settleMobilePagerFromSwipe]);
 
-  if (status === "loading" || !sessionData || !sessionView) {
+  if (
+    status === "loading" ||
+    status === "unauthenticated" ||
+    (isInitialLoadPending && !sessionData)
+  ) {
     return (
       <div className="app-page flex items-center justify-center px-6">
         <div className="app-panel flex flex-col items-center gap-4 px-8 py-8">
           <div className="h-12 w-12 animate-spin rounded-full border-4 border-blue-600 border-t-transparent"></div>
           <p className="app-eyebrow">Loading session</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!sessionData || !sessionView) {
+    return (
+      <div className="app-page flex items-center justify-center px-6">
+        <div className="app-panel w-full max-w-lg px-6 py-8 text-center">
+          <p className="app-eyebrow">Unable to load session</p>
+          <p className="mt-3 text-sm text-gray-600">
+            {initialLoadError ??
+              "The session could not be loaded right now. Try again."}
+          </p>
+          <div className="mt-6 flex flex-col gap-2 sm:flex-row sm:justify-center">
+            <button
+              type="button"
+              onClick={retryInitialLoad}
+              className="app-button-primary"
+            >
+              Retry
+            </button>
+            <button
+              type="button"
+              onClick={handleBack}
+              className="app-button-secondary"
+            >
+              Back
+            </button>
+          </div>
         </div>
       </div>
     );

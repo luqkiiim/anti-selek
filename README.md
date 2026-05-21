@@ -56,6 +56,11 @@ ADMIN_EMAILS="you@example.com"
 # - Set to false to force SQLite explicitly
 USE_TURSO="false"
 
+# Optional local-only verification helper
+# - Set to true when you need to disable rate limits during repeated browser checks
+# - Ignored in production
+LOCAL_DISABLE_RATE_LIMITS="false"
+
 # Cloud runtime database
 TURSO_DATABASE_URL="libsql://..."
 TURSO_AUTH_TOKEN="..."
@@ -134,6 +139,16 @@ npm run dev
 ```
 
 Open `http://localhost:3000`.
+
+If you are doing repeated in-app browser verification against local routes and
+run into `429 Rate limit exceeded`, you can temporarily add this to
+`.env.local`:
+
+```bash
+LOCAL_DISABLE_RATE_LIMITS="true"
+```
+
+This bypass is local-only and is ignored in production.
 
 ## Scripts
 

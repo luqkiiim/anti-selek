@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import {
   applyRateLimit,
+  areRateLimitsDisabled,
   buildRateLimitStorageKey,
   buildRateLimitKey,
   clearRateLimitStore,
@@ -8,8 +9,33 @@ import {
 } from "@/lib/rateLimit";
 
 describe("rate limiting", () => {
+  const env = process.env as Record<string, string | undefined>;
+  const originalNodeEnv = process.env.NODE_ENV;
+  const originalLocalDisableRateLimits = process.env.LOCAL_DISABLE_RATE_LIMITS;
+  const originalE2EDisableRateLimits = process.env.E2E_DISABLE_RATE_LIMITS;
+  const originalEnableRateLimitTests = process.env.ENABLE_RATE_LIMIT_TESTS;
+
   afterEach(() => {
     clearRateLimitStore();
+    env.NODE_ENV = originalNodeEnv;
+
+    if (typeof originalLocalDisableRateLimits === "undefined") {
+      delete process.env.LOCAL_DISABLE_RATE_LIMITS;
+    } else {
+      process.env.LOCAL_DISABLE_RATE_LIMITS = originalLocalDisableRateLimits;
+    }
+
+    if (typeof originalE2EDisableRateLimits === "undefined") {
+      delete process.env.E2E_DISABLE_RATE_LIMITS;
+    } else {
+      process.env.E2E_DISABLE_RATE_LIMITS = originalE2EDisableRateLimits;
+    }
+
+    if (typeof originalEnableRateLimitTests === "undefined") {
+      delete process.env.ENABLE_RATE_LIMIT_TESTS;
+    } else {
+      process.env.ENABLE_RATE_LIMIT_TESTS = originalEnableRateLimitTests;
+    }
   });
 
   it("allows requests until the configured limit", () => {
@@ -156,5 +182,17 @@ describe("rate limiting", () => {
 
     expect(result.allowed).toBe(true);
     expect(blocked.allowed).toBe(false);
+  });
+
+  it("supports a local-only env switch for disabling rate limits during verification", () => {
+    env.NODE_ENV = "development";
+    process.env.LOCAL_DISABLE_RATE_LIMITS = "true";
+    process.env.ENABLE_RATE_LIMIT_TESTS = "true";
+    delete process.env.E2E_DISABLE_RATE_LIMITS;
+
+    expect(areRateLimitsDisabled()).toBe(true);
+
+    env.NODE_ENV = "production";
+    expect(areRateLimitsDisabled()).toBe(false);
   });
 });

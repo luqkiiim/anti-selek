@@ -72,9 +72,11 @@ function getRateLimitStore(): RateLimitStore {
   return globalForRateLimit.__antiSelekRateLimitStore;
 }
 
-function shouldDisableRateLimits() {
+export function areRateLimitsDisabled() {
   return (
     process.env.E2E_DISABLE_RATE_LIMITS === "true" ||
+    (process.env.NODE_ENV !== "production" &&
+      process.env.LOCAL_DISABLE_RATE_LIMITS === "true") ||
     (process.env.NODE_ENV === "test" &&
       process.env.ENABLE_RATE_LIMIT_TESTS !== "true")
   );
@@ -324,7 +326,7 @@ export async function checkRateLimit(
   const windowMs = options.windowMs ?? DEFAULT_WINDOW_MS;
   const now = options.now ?? Date.now();
 
-  if (shouldDisableRateLimits()) {
+  if (areRateLimitsDisabled()) {
     return {
       allowed: true,
       remaining: limit,

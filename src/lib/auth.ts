@@ -3,7 +3,7 @@ import Credentials from "next-auth/providers/credentials";
 import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
 import { isGlobalAdminEmail, normalizeAuthEmail } from "@/lib/globalAdmin";
-import { checkRateLimit } from "@/lib/rateLimit";
+import { areRateLimitsDisabled, checkRateLimit } from "@/lib/rateLimit";
 import { normalizeNameLookupKey } from "@/lib/quickAccess";
 import { logAuditEvent } from "@/lib/serverAudit";
 
@@ -11,7 +11,6 @@ const SIGN_IN_MAX_ATTEMPTS = 10;
 const SIGN_IN_WINDOW_MS = 15 * 60 * 1000;
 const QUICK_ACCESS_MAX_ATTEMPTS = 20;
 const QUICK_ACCESS_WINDOW_MS = 15 * 60 * 1000;
-const DISABLE_RATE_LIMITS = process.env.E2E_DISABLE_RATE_LIMITS === "true";
 
 function getCredentialString(value: unknown): string | null {
   return typeof value === "string" ? value : null;
@@ -109,7 +108,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           }
 
           try {
-            const rateLimit = DISABLE_RATE_LIMITS
+            const rateLimit = areRateLimitsDisabled()
               ? null
               : await checkRateLimit(request, "auth:quick_access", {
                   applyHighRiskBucket: false,
@@ -218,7 +217,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         }
 
         try {
-          const rateLimit = DISABLE_RATE_LIMITS
+          const rateLimit = areRateLimitsDisabled()
             ? null
             : await checkRateLimit(request, "auth:signin", {
                 applyHighRiskBucket: false,

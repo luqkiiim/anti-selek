@@ -21,6 +21,9 @@ export function useSessionData({
   setError,
 }: UseSessionDataArgs) {
   const [sessionData, setSessionData] = useState<SessionData | null>(null);
+  const [isInitialLoadPending, setIsInitialLoadPending] = useState(false);
+  const [initialLoadError, setInitialLoadError] = useState<string | null>(null);
+  const hasLoadedSessionRef = useRef(false);
   const revalidateTimeoutRef = useRef<number | null>(null);
 
   const fetchSession = useCallback(
@@ -32,18 +35,37 @@ export function useSessionData({
         const data = await safeJson<SessionData | { error?: string }>(res);
         if (!res.ok) {
           if (!silent) {
-            setError(getErrorMessage(data, "Failed to load session"));
+            const message = getErrorMessage(data, "Failed to load session");
+
+            if (hasLoadedSessionRef.current) {
+              setError(message);
+            } else {
+              startTransition(() => {
+                setInitialLoadError(message);
+                setIsInitialLoadPending(false);
+              });
+            }
           }
           return;
         }
 
+        hasLoadedSessionRef.current = true;
         startTransition(() => {
           setSessionData(data as SessionData);
+          setInitialLoadError(null);
+          setIsInitialLoadPending(false);
         });
       } catch (err) {
         console.error(err);
         if (!silent) {
-          setError("Failed to load session");
+          if (hasLoadedSessionRef.current) {
+            setError("Failed to load session");
+          } else {
+            startTransition(() => {
+              setInitialLoadError("Failed to load session");
+              setIsInitialLoadPending(false);
+            });
+          }
         }
       }
     },
@@ -73,6 +95,19 @@ export function useSessionData({
     [fetchSession]
   );
 
+  const retryInitialLoad = useCallback(() => {
+    if (!enabled || !code) {
+      return;
+    }
+
+    startTransition(() => {
+      setInitialLoadError(null);
+      setIsInitialLoadPending(true);
+    });
+
+    void fetchSession();
+  }, [code, enabled, fetchSession]);
+
   useEffect(() => {
     return () => {
       if (revalidateTimeoutRef.current !== null) {
@@ -82,8 +117,22 @@ export function useSessionData({
   }, []);
 
   useEffect(() => {
-    if (!enabled || !code) return;
+    if (!enabled || !code) {
+      hasLoadedSessionRef.current = false;
+      startTransition(() => {
+        setSessionData(null);
+        setInitialLoadError(null);
+        setIsInitialLoadPending(false);
+      });
+      return;
+    }
 
+    hasLoadedSessionRef.current = false;
+    startTransition(() => {
+      setSessionData(null);
+      setInitialLoadError(null);
+      setIsInitialLoadPending(true);
+    });
     void fetchSession();
     const interval = window.setInterval(() => {
       void fetchSession({ silent: true });
@@ -96,7 +145,10 @@ export function useSessionData({
 
   return {
     sessionData,
+    isInitialLoadPending,
+    initialLoadError,
     fetchSession,
+    retryInitialLoad,
     patchSessionData,
     scheduleSessionRefresh,
   };

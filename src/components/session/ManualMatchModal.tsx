@@ -77,11 +77,11 @@ export function ManualMatchModal({
           : `${players[0].user.name} + ${players[1].user.name}`;
 
     return (
-      <div className="min-w-0 flex-1 basis-[14rem] rounded-full border border-gray-200 bg-white/90 px-3 py-2 shadow-sm">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.01em] text-gray-500">
+      <div className="flex min-w-0 items-center gap-2 rounded-full border border-gray-200 bg-white/90 px-2.5 py-2 shadow-sm">
+        <p className="app-chip app-chip-neutral shrink-0 px-2 py-1 text-[11px]">
           {label}
         </p>
-        <p className="mt-0.5 break-words text-sm font-semibold leading-5 text-gray-900">
+        <p className="min-w-0 truncate text-sm font-semibold text-gray-900">
           {summary}
         </p>
       </div>
@@ -114,7 +114,7 @@ export function ManualMatchModal({
       }
     >
       <div className="space-y-4 px-4 py-4 sm:px-5">
-        <div className="app-popup-card max-h-[28rem] overflow-y-auto">
+        <div className="app-popup-card">
           <div className="sticky top-0 z-10 space-y-3 border-b border-gray-200 bg-[var(--surface-strong)] px-4 py-3 shadow-[0_10px_24px_rgba(23,32,31,0.06)]">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <p className="text-sm font-semibold text-gray-900">Tap 4 players</p>
@@ -123,7 +123,7 @@ export function ManualMatchModal({
               </span>
             </div>
 
-            <div className="flex flex-wrap gap-2">
+            <div className="grid grid-cols-2 gap-2">
               {renderSelectedTeamSummary("T1", team1Players, [1, 2])}
               {renderSelectedTeamSummary("T2", team2Players, [3, 4])}
             </div>
