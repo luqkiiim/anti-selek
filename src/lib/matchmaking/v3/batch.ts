@@ -1,6 +1,7 @@
 import { SessionMode, SessionType } from "../../../types/enums";
 import { evaluateBalancedPartitions } from "./balance";
 import { buildCandidatePool } from "./candidatePool";
+import { getEmptyConsecutivePlayMetrics } from "./consecutive";
 import { DEFAULT_MATCH_DURATION_MS } from "./fairness";
 import {
   buildExactRematchHistory,
@@ -305,6 +306,7 @@ function buildQuartetSelections<T extends MatchmakerV3Player>(
           evaluation.partition,
           rematchHistory
         ),
+        ...getEmptyConsecutivePlayMetrics(),
         randomScore,
       });
     }

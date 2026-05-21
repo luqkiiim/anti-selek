@@ -94,6 +94,9 @@ export interface V3SingleCourtSelection<
   partnerRepeatPenalty: number;
   opponentRepeatPenalty: number;
   exactRematchPenalty: number;
+  consecutivePlayCount: number;
+  consecutivePlayMaxBurden: number;
+  consecutivePlayTotalBurden: number;
   randomScore: number;
 }
 
@@ -112,6 +115,9 @@ export interface V3SingleCourtDebug {
   chosenPartnerRepeatPenalty: number | null;
   chosenOpponentRepeatPenalty: number | null;
   chosenExactRematchPenalty: number | null;
+  chosenConsecutivePlayCount: number | null;
+  chosenConsecutivePlayMaxBurden: number | null;
+  chosenConsecutivePlayTotalBurden: number | null;
 }
 
 export interface V3SingleCourtResult<

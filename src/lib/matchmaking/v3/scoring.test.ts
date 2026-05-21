@@ -41,6 +41,9 @@ function createSelection(
     partnerRepeatPenalty = 0,
     opponentRepeatPenalty = 0,
     exactRematchPenalty,
+    consecutivePlayCount = 0,
+    consecutivePlayMaxBurden = 0,
+    consecutivePlayTotalBurden = 0,
     randomScore = 0,
   }: {
     waitMs?: number[];
@@ -51,6 +54,9 @@ function createSelection(
     partnerRepeatPenalty?: number;
     opponentRepeatPenalty?: number;
     exactRematchPenalty: number;
+    consecutivePlayCount?: number;
+    consecutivePlayMaxBurden?: number;
+    consecutivePlayTotalBurden?: number;
     randomScore?: number;
   }
 ): V3SingleCourtSelection {
@@ -78,6 +84,9 @@ function createSelection(
     partnerRepeatPenalty,
     opponentRepeatPenalty,
     exactRematchPenalty,
+    consecutivePlayCount,
+    consecutivePlayMaxBurden,
+    consecutivePlayTotalBurden,
     randomScore,
   };
 }
@@ -414,6 +423,83 @@ describe("matchmaking v3 scoring", () => {
         freshPartners,
         repeatedPartners,
         SessionType.SOCIAL_MIX
+      )
+    ).toBeLessThan(0);
+  });
+
+  it("prefers lower back-to-back burden before social mix coverage", () => {
+    const lowerBurden = createSelection({
+      balanceGap: 10,
+      sharedCourtRepeatPenalty: 3,
+      exactRematchPenalty: 0,
+      consecutivePlayCount: 1,
+      consecutivePlayMaxBurden: 0,
+      consecutivePlayTotalBurden: 0,
+    });
+    const repeatedStayer = createSelection({
+      balanceGap: 0,
+      sharedCourtRepeatPenalty: 0,
+      exactRematchPenalty: 0,
+      consecutivePlayCount: 1,
+      consecutivePlayMaxBurden: 1,
+      consecutivePlayTotalBurden: 1,
+    });
+
+    expect(
+      compareSingleCourtSelections(
+        lowerBurden,
+        repeatedStayer,
+        SessionType.SOCIAL_MIX
+      )
+    ).toBeLessThan(0);
+  });
+
+  it("prefers lower back-to-back burden before points balance", () => {
+    const lowerBurden = createSelection({
+      balanceGap: 10,
+      exactRematchPenalty: 0,
+      consecutivePlayCount: 1,
+      consecutivePlayMaxBurden: 0,
+      consecutivePlayTotalBurden: 0,
+    });
+    const repeatedStayer = createSelection({
+      balanceGap: 0,
+      exactRematchPenalty: 0,
+      consecutivePlayCount: 1,
+      consecutivePlayMaxBurden: 1,
+      consecutivePlayTotalBurden: 1,
+    });
+
+    expect(
+      compareSingleCourtSelections(
+        lowerBurden,
+        repeatedStayer,
+        SessionType.POINTS
+      )
+    ).toBeLessThan(0);
+  });
+
+  it("ignores back-to-back burden in Elo sessions", () => {
+    const lowerBurden = createSelection({
+      balanceGap: 10,
+      exactRematchPenalty: 0,
+      consecutivePlayCount: 1,
+      consecutivePlayMaxBurden: 0,
+      consecutivePlayTotalBurden: 0,
+    });
+    const betterBalancedRepeatedStayer = createSelection({
+      balanceGap: 0,
+      exactRematchPenalty: 0,
+      consecutivePlayCount: 1,
+      consecutivePlayMaxBurden: 1,
+      consecutivePlayTotalBurden: 1,
+    });
+
+    expect(
+      compareSingleCourtSelections(
+        betterBalancedRepeatedStayer,
+        lowerBurden,
+        SessionType.ELO
       )
     ).toBeLessThan(0);
   });

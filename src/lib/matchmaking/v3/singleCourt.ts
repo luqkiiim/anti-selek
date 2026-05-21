@@ -1,5 +1,9 @@
 import { SessionMode, SessionType } from "../../../types/enums";
 import { buildCandidatePool } from "./candidatePool";
+import {
+  buildConsecutivePlayHistory,
+  getConsecutivePlayMetrics,
+} from "./consecutive";
 import { evaluateBalancedPartitions } from "./balance";
 import { DEFAULT_MATCH_DURATION_MS } from "./fairness";
 import {
@@ -175,6 +179,7 @@ function searchCandidatePool<T extends MatchmakerV3Player>({
   partnerHistory,
   opponentHistory,
   socialMixHistory,
+  consecutivePlayHistory,
 }: {
   candidatePool: V3CandidatePool<ActiveMatchmakerV3Player<T>>;
   sessionMode: SessionMode;
@@ -188,6 +193,7 @@ function searchCandidatePool<T extends MatchmakerV3Player>({
   partnerHistory: ReturnType<typeof buildPartnerRepeatHistory>;
   opponentHistory: ReturnType<typeof buildOpponentRepeatHistory>;
   socialMixHistory: ReturnType<typeof buildSocialMixHistory>;
+  consecutivePlayHistory: ReturnType<typeof buildConsecutivePlayHistory>;
 }) {
   const remainingSlots = 4 - candidatePool.lockedPlayers.length;
   const quartetGroups =
@@ -242,6 +248,10 @@ function searchCandidatePool<T extends MatchmakerV3Player>({
 
     const waitSummary = buildWaitSummary(quartetPlayers);
     const randomScore = getQuartetRandomScore(quartetPlayers);
+    const consecutivePlayMetrics = getConsecutivePlayMetrics(
+      ids,
+      consecutivePlayHistory
+    );
 
     for (const evaluation of evaluateBalancedPartitions(
       ids,
@@ -287,6 +297,7 @@ function searchCandidatePool<T extends MatchmakerV3Player>({
           evaluation.partition,
           rematchHistory
         ),
+        ...consecutivePlayMetrics,
         randomScore,
       };
 
@@ -381,6 +392,9 @@ export function findBestSingleCourtSelectionV3<T extends MatchmakerV3Player>(
         chosenPartnerRepeatPenalty: null,
         chosenOpponentRepeatPenalty: null,
         chosenExactRematchPenalty: null,
+        chosenConsecutivePlayCount: null,
+        chosenConsecutivePlayMaxBurden: null,
+        chosenConsecutivePlayTotalBurden: null,
       },
     };
   }
@@ -390,6 +404,7 @@ export function findBestSingleCourtSelectionV3<T extends MatchmakerV3Player>(
   const partnerHistory = buildPartnerRepeatHistory(completedMatches);
   const opponentHistory = buildOpponentRepeatHistory(completedMatches);
   const socialMixHistory = buildSocialMixHistory(completedMatches);
+  const consecutivePlayHistory = buildConsecutivePlayHistory(completedMatches);
   let searchedCandidatePool = initialCandidatePool;
   let totalQuartetCount = 0;
   let totalValidPartitionCount = 0;
@@ -413,6 +428,7 @@ export function findBestSingleCourtSelectionV3<T extends MatchmakerV3Player>(
       partnerHistory,
       opponentHistory,
       socialMixHistory,
+      consecutivePlayHistory,
     });
     totalQuartetCount += candidatePoolSearch.quartetCount;
     totalValidPartitionCount += candidatePoolSearch.validPartitionCount;
@@ -434,6 +450,7 @@ export function findBestSingleCourtSelectionV3<T extends MatchmakerV3Player>(
           partnerHistory,
           opponentHistory,
           socialMixHistory,
+          consecutivePlayHistory,
         });
         totalQuartetCount += candidatePoolSearch.quartetCount;
         totalValidPartitionCount += candidatePoolSearch.validPartitionCount;
@@ -468,6 +485,9 @@ export function findBestSingleCourtSelectionV3<T extends MatchmakerV3Player>(
     chosenPartnerRepeatPenalty: null,
     chosenOpponentRepeatPenalty: null,
     chosenExactRematchPenalty: null,
+    chosenConsecutivePlayCount: null,
+    chosenConsecutivePlayMaxBurden: null,
+    chosenConsecutivePlayTotalBurden: null,
   };
 
   if (bestSelection) {
@@ -476,6 +496,11 @@ export function findBestSingleCourtSelectionV3<T extends MatchmakerV3Player>(
     debug.chosenPartnerRepeatPenalty = bestSelection.partnerRepeatPenalty;
     debug.chosenOpponentRepeatPenalty = bestSelection.opponentRepeatPenalty;
     debug.chosenExactRematchPenalty = bestSelection.exactRematchPenalty;
+    debug.chosenConsecutivePlayCount = bestSelection.consecutivePlayCount;
+    debug.chosenConsecutivePlayMaxBurden =
+      bestSelection.consecutivePlayMaxBurden;
+    debug.chosenConsecutivePlayTotalBurden =
+      bestSelection.consecutivePlayTotalBurden;
   }
 
   return {

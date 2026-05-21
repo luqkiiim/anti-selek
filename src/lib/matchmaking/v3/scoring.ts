@@ -48,6 +48,13 @@ function usesPointsWaitTolerance(sessionType: SessionType) {
   );
 }
 
+function usesConsecutivePlayPreference(sessionType: SessionType) {
+  return (
+    sessionType === SessionType.POINTS ||
+    sessionType === SessionType.SOCIAL_MIX
+  );
+}
+
 function getPartnerRepeatBalanceTolerance(sessionType: SessionType) {
   return sessionType === SessionType.POINTS
     ? POINTS_PARTNER_REPEAT_BALANCE_TOLERANCE
@@ -111,6 +118,27 @@ export function compareWaitSummaries(
   return 0;
 }
 
+function compareConsecutivePlayFairness<T extends ActiveMatchmakerV3Player>(
+  left: V3SingleCourtSelection<T>,
+  right: V3SingleCourtSelection<T>
+) {
+  const countDiff =
+    left.consecutivePlayCount - right.consecutivePlayCount;
+  if (countDiff !== 0) {
+    return countDiff;
+  }
+
+  const maxBurdenDiff =
+    left.consecutivePlayMaxBurden - right.consecutivePlayMaxBurden;
+  if (maxBurdenDiff !== 0) {
+    return maxBurdenDiff;
+  }
+
+  return (
+    left.consecutivePlayTotalBurden - right.consecutivePlayTotalBurden
+  );
+}
+
 export function compareSingleCourtSelections<
   T extends ActiveMatchmakerV3Player,
 >(
@@ -125,6 +153,13 @@ export function compareSingleCourtSelections<
   );
   if (waitCompare !== 0) {
     return waitCompare;
+  }
+
+  if (usesConsecutivePlayPreference(sessionType)) {
+    const consecutivePlayCompare = compareConsecutivePlayFairness(left, right);
+    if (consecutivePlayCompare !== 0) {
+      return consecutivePlayCompare;
+    }
   }
 
   if (sessionType === SessionType.SOCIAL_MIX) {

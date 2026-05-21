@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { SessionMode, SessionType } from "../../../types/enums";
+import { buildConsecutivePlayHistory } from "./consecutive";
 import {
   addLateJoiner,
   createSimulationPlayers,
@@ -105,6 +106,32 @@ describe("matchmaking v3 simulation", () => {
     const matchCounts = Object.values(getMatchCounts(state.players));
 
     expect(Math.max(...matchCounts) - Math.min(...matchCounts)).toBeLessThanOrEqual(1);
+  });
+
+  it("spreads one-court seven-player social mix back-to-back burden before repeating a stayer", () => {
+    const state = createSimulationState(
+      createSimulationPlayers(7, { strengthStep: 0 }),
+      {
+        matchDurationMs: 10 * 60 * 1000,
+      }
+    );
+
+    for (let round = 0; round < 8; round++) {
+      playRound(state, {
+        courtCount: 1,
+        sessionMode: SessionMode.MEXICANO,
+        sessionType: SessionType.SOCIAL_MIX,
+        randomFn: () => 0,
+      });
+    }
+
+    const history = buildConsecutivePlayHistory(state.completedMatches);
+    const burdens = state.players.map(
+      (player) => history.burdenByUserId.get(player.userId) ?? 0
+    );
+
+    expect(Math.min(...burdens)).toBe(1);
+    expect(Math.max(...burdens)).toBe(1);
   });
 
   it("assigns a neutral baseline to late joiners in the live simulation state", () => {

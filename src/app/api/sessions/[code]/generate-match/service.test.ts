@@ -271,6 +271,9 @@ function createV3Selection(
     partnerRepeatPenalty: 0,
     opponentRepeatPenalty: 0,
     exactRematchPenalty: 0,
+    consecutivePlayCount: 0,
+    consecutivePlayMaxBurden: 0,
+    consecutivePlayTotalBurden: 0,
     randomScore: 0,
   };
 }

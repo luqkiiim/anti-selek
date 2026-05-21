@@ -60,6 +60,9 @@ function createSelection(
     partnerRepeatPenalty: 1,
     opponentRepeatPenalty: 2,
     exactRematchPenalty: 0,
+    consecutivePlayCount: 0,
+    consecutivePlayMaxBurden: 0,
+    consecutivePlayTotalBurden: 0,
     randomScore: 0,
     ...overrides,
   };
@@ -112,6 +115,9 @@ describe("matchmaking reason", () => {
         opponentCoveragePenalty: 2,
         partnerRepeatPenalty: 0,
         opponentRepeatPenalty: 0,
+        consecutivePlayCount: 1,
+        consecutivePlayMaxBurden: 2,
+        consecutivePlayTotalBurden: 2,
       }),
       {
         sessionType: SessionType.SOCIAL_MIX,
@@ -123,9 +129,13 @@ describe("matchmaking reason", () => {
     expect(reason.metrics.sharedCourtRepeatPenalty).toBe(1);
     expect(reason.metrics.partnerCoveragePenalty).toBe(0);
     expect(reason.metrics.opponentCoveragePenalty).toBe(2);
+    expect(reason.metrics.consecutivePlayCount).toBe(1);
+    expect(reason.metrics.consecutivePlayMaxBurden).toBe(2);
+    expect(reason.metrics.consecutivePlayTotalBurden).toBe(2);
     expect(reason.summary.join(" ")).toContain("Shared-court repeat penalty");
     expect(reason.summary.join(" ")).toContain("Both partner pairings are new");
     expect(reason.summary.join(" ")).toContain("Opponent coverage");
+    expect(reason.summary.join(" ")).toContain("previous match");
   });
 
   it("parses valid reason JSON and ignores invalid JSON", () => {

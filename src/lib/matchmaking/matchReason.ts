@@ -24,6 +24,9 @@ export interface MatchmakingReason {
     partnerRepeatPenalty: number;
     opponentRepeatPenalty: number;
     exactRematchPenalty: number;
+    consecutivePlayCount?: number;
+    consecutivePlayMaxBurden?: number;
+    consecutivePlayTotalBurden?: number;
     waitRangeSeconds: number;
     minimumWaitSeconds: number;
     totalWaitSeconds: number;
@@ -107,6 +110,21 @@ function buildReasonSummary({
       `Wait differences within ${formatMetric(
         metrics.waitToleranceSeconds
       )} seconds were treated as tied.`
+    );
+  }
+
+  if (
+    metrics.consecutivePlayCount !== undefined &&
+    metrics.consecutivePlayCount > 0
+  ) {
+    summary.push(
+      `${formatMetric(
+        metrics.consecutivePlayCount
+      )} selected player${
+        metrics.consecutivePlayCount === 1 ? "" : "s"
+      } also played the previous match; highest prior back-to-back burden is ${formatMetric(
+        metrics.consecutivePlayMaxBurden ?? 0
+      )}.`
     );
   }
 
@@ -197,6 +215,16 @@ export function buildV3MatchmakingReason<
     missedPool: context.missedPool ?? null,
     mixedMode: context.sessionMode === SessionMode.MIXICANO,
   };
+
+  if (
+    selection.consecutivePlayCount > 0 ||
+    selection.consecutivePlayMaxBurden > 0 ||
+    selection.consecutivePlayTotalBurden > 0
+  ) {
+    metrics.consecutivePlayCount = selection.consecutivePlayCount;
+    metrics.consecutivePlayMaxBurden = selection.consecutivePlayMaxBurden;
+    metrics.consecutivePlayTotalBurden = selection.consecutivePlayTotalBurden;
+  }
 
   if (
     context.sessionType === SessionType.POINTS ||
@@ -310,6 +338,27 @@ export function parseMatchmakingReasonJson(
     return null;
   }
 
+  if (
+    metrics.consecutivePlayCount !== undefined &&
+    typeof metrics.consecutivePlayCount !== "number"
+  ) {
+    return null;
+  }
+
+  if (
+    metrics.consecutivePlayMaxBurden !== undefined &&
+    typeof metrics.consecutivePlayMaxBurden !== "number"
+  ) {
+    return null;
+  }
+
+  if (
+    metrics.consecutivePlayTotalBurden !== undefined &&
+    typeof metrics.consecutivePlayTotalBurden !== "number"
+  ) {
+    return null;
+  }
+
   return {
     version: 1,
     source: "v3",
@@ -329,6 +378,9 @@ export function parseMatchmakingReasonJson(
       partnerRepeatPenalty: metrics.partnerRepeatPenalty,
       opponentRepeatPenalty: metrics.opponentRepeatPenalty,
       exactRematchPenalty: metrics.exactRematchPenalty,
+      consecutivePlayCount: metrics.consecutivePlayCount,
+      consecutivePlayMaxBurden: metrics.consecutivePlayMaxBurden,
+      consecutivePlayTotalBurden: metrics.consecutivePlayTotalBurden,
       waitRangeSeconds: metrics.waitRangeSeconds,
       minimumWaitSeconds: metrics.minimumWaitSeconds,
       totalWaitSeconds: metrics.totalWaitSeconds,

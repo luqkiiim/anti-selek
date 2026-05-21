@@ -61,6 +61,22 @@ function buildMetricRows(reason: MatchmakingReason) {
           },
         ]
       : []),
+    ...(metrics.consecutivePlayCount !== undefined
+      ? [
+          {
+            label: "Back-to-back players",
+            value: formatNumber(metrics.consecutivePlayCount),
+          },
+        ]
+      : []),
+    ...(metrics.consecutivePlayMaxBurden !== undefined
+      ? [
+          {
+            label: "Back-to-back max",
+            value: formatNumber(metrics.consecutivePlayMaxBurden),
+          },
+        ]
+      : []),
     {
       label: "Partner repeats",
       value: formatNumber(metrics.partnerRepeatPenalty),
