@@ -8,21 +8,14 @@ import {
   MixedSide,
   PlayerGender,
 } from "@/types/enums";
-import type { LinkableCommunityPlayer } from "@/app/community/[id]/admin/useCommunityAdminPlayerActions";
 
 interface CreateCommunityPlayerModalProps {
   open: boolean;
   name: string;
-  linkSearch: string;
-  linkCandidates: LinkableCommunityPlayer[];
-  loadingLinkCandidates: boolean;
-  linkingPlayerId: string | null;
   newPlayerGender: PlayerGender;
   newPlayerMixedSideOverride: MixedSide | null;
   newPlayerStatus: CommunityPlayerStatus;
   onNameChange: (value: string) => void;
-  onLinkSearchChange: (value: string) => void;
-  onLinkExistingPlayer: (player: LinkableCommunityPlayer) => void;
   onNewPlayerGenderChange: (value: PlayerGender) => void;
   onNewPlayerMixedSideOverrideChange: (value: MixedSide | null) => void;
   onNewPlayerStatusChange: (value: CommunityPlayerStatus) => void;
@@ -33,16 +26,10 @@ interface CreateCommunityPlayerModalProps {
 export function CreateCommunityPlayerModal({
   open,
   name,
-  linkSearch,
-  linkCandidates,
-  loadingLinkCandidates,
-  linkingPlayerId,
   newPlayerGender,
   newPlayerMixedSideOverride,
   newPlayerStatus,
   onNameChange,
-  onLinkSearchChange,
-  onLinkExistingPlayer,
   onNewPlayerGenderChange,
   onNewPlayerMixedSideOverrideChange,
   onNewPlayerStatusChange,
@@ -56,7 +43,7 @@ export function CreateCommunityPlayerModal({
   return (
     <ModalFrame
       title="Create player profile"
-      subtitle="Add a new member or placeholder profile to this community."
+      subtitle="Create a brand-new placeholder profile for this community."
       onClose={onClose}
       footer={
         <div className="flex flex-wrap justify-end gap-3">
@@ -84,59 +71,11 @@ export function CreateCommunityPlayerModal({
       >
         <div className="rounded-xl border border-blue-100 bg-blue-50/60 p-3">
           <p className="text-sm font-semibold text-gray-900">
-            Link existing unclaimed player
+            Local placeholder only
           </p>
           <p className="mt-1 text-xs text-gray-600">
-            Use this when the same unsigned-up person already exists in another
-            community. Names are only display text; linking uses the player ID.
-          </p>
-          <input
-            type="search"
-            value={linkSearch}
-            onChange={(event) => onLinkSearchChange(event.target.value)}
-            className="field mt-3"
-            placeholder="Search existing placeholders"
-          />
-          <div className="mt-3 space-y-2">
-            {loadingLinkCandidates ? (
-              <p className="text-xs font-semibold text-gray-500">Loading...</p>
-            ) : linkCandidates.length === 0 ? (
-              <p className="text-xs font-semibold text-gray-500">
-                No linkable placeholders found.
-              </p>
-            ) : (
-              linkCandidates.slice(0, 5).map((player) => (
-                <div
-                  key={player.id}
-                  className="flex items-center justify-between gap-3 rounded-lg border border-blue-100 bg-white px-3 py-2"
-                >
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-semibold text-gray-900">
-                      {player.name}
-                    </p>
-                    <p className="truncate text-xs text-gray-500">
-                      {player.communities
-                        .map((community) => `${community.name} ${community.elo}`)
-                        .join(" | ")}
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => onLinkExistingPlayer(player)}
-                    disabled={linkingPlayerId !== null}
-                    className="app-button-secondary shrink-0 px-3 py-1.5 text-xs disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    {linkingPlayerId === player.id ? "Linking..." : "Link"}
-                  </button>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-
-        <div className="border-t border-gray-200 pt-4">
-          <p className="text-sm font-semibold text-gray-900">
-            Or create a new placeholder
+            Players who already belong in this community should join it
+            themselves and request a claim on their placeholder profile.
           </p>
         </div>
 

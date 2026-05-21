@@ -1,7 +1,6 @@
 "use client";
 
 import {
-  useEffect,
   useMemo,
   useState,
   type Dispatch,
@@ -22,19 +21,6 @@ interface PendingPlayerAction {
   player: CommunityAdminPlayer;
 }
 
-export interface LinkableCommunityPlayer {
-  id: string;
-  name: string;
-  email: string | null;
-  communities: Array<{ id: string; name: string; elo: number }>;
-}
-
-export interface MergeDuplicateCandidate {
-  id: string;
-  name: string;
-  communities: Array<{ id: string; name: string; elo: number }>;
-}
-
 export function useCommunityAdminPlayerActions({
   communityId,
   players,
@@ -52,20 +38,6 @@ export function useCommunityAdminPlayerActions({
 }) {
   const [isCreatePlayerOpen, setIsCreatePlayerOpen] = useState(false);
   const [name, setName] = useState("");
-  const [linkSearch, setLinkSearch] = useState("");
-  const [linkCandidates, setLinkCandidates] = useState<LinkableCommunityPlayer[]>(
-    []
-  );
-  const [loadingLinkCandidates, setLoadingLinkCandidates] = useState(false);
-  const [linkingPlayerId, setLinkingPlayerId] = useState<string | null>(null);
-  const [mergeSourcePlayer, setMergeSourcePlayer] =
-    useState<CommunityAdminPlayer | null>(null);
-  const [mergeSearch, setMergeSearch] = useState("");
-  const [mergeCandidates, setMergeCandidates] = useState<
-    MergeDuplicateCandidate[]
-  >([]);
-  const [loadingMergeCandidates, setLoadingMergeCandidates] = useState(false);
-  const [mergingPlayerId, setMergingPlayerId] = useState<string | null>(null);
   const [newPlayerGender, setNewPlayerGender] = useState<PlayerGender>(
     PlayerGender.MALE
   );
@@ -102,97 +74,8 @@ export function useCommunityAdminPlayerActions({
     [editingPlayerId, players]
   );
 
-  useEffect(() => {
-    if (!isCreatePlayerOpen || !communityId) return;
-
-    let cancelled = false;
-    const timeout = setTimeout(() => {
-      void (async () => {
-        setLoadingLinkCandidates(true);
-        try {
-          const res = await fetch(
-            `/api/communities/${communityId}/members/link?search=${encodeURIComponent(
-              linkSearch
-            )}`
-          );
-          const data = await safeJson(res);
-          if (!res.ok) {
-            throw new Error(data.error || "Failed to load link candidates");
-          }
-          if (!cancelled) {
-            setLinkCandidates(Array.isArray(data) ? data : []);
-          }
-        } catch {
-          if (!cancelled) {
-            setLinkCandidates([]);
-          }
-        } finally {
-          if (!cancelled) {
-            setLoadingLinkCandidates(false);
-          }
-        }
-      })();
-    }, 180);
-
-    return () => {
-      cancelled = true;
-      clearTimeout(timeout);
-    };
-  }, [communityId, isCreatePlayerOpen, linkSearch]);
-
-  useEffect(() => {
-    if (!mergeSourcePlayer || !communityId) {
-      setMergeCandidates([]);
-      setLoadingMergeCandidates(false);
-      return;
-    }
-
-    const search = mergeSearch.trim();
-    if (search.length < 2) {
-      setMergeCandidates([]);
-      setLoadingMergeCandidates(false);
-      return;
-    }
-
-    let cancelled = false;
-    const timeout = setTimeout(() => {
-      void (async () => {
-        setLoadingMergeCandidates(true);
-        try {
-          const res = await fetch(
-            `/api/communities/${communityId}/members/${mergeSourcePlayer.id}/merge-candidates?search=${encodeURIComponent(
-              search
-            )}`
-          );
-          const data = await safeJson(res);
-          if (!res.ok) {
-            throw new Error(data.error || "Failed to load merge candidates");
-          }
-          if (!cancelled) {
-            setMergeCandidates(Array.isArray(data) ? data : []);
-          }
-        } catch {
-          if (!cancelled) {
-            setMergeCandidates([]);
-          }
-        } finally {
-          if (!cancelled) {
-            setLoadingMergeCandidates(false);
-          }
-        }
-      })();
-    }, 180);
-
-    return () => {
-      cancelled = true;
-      clearTimeout(timeout);
-    };
-  }, [communityId, mergeSearch, mergeSourcePlayer]);
-
   const openCreatePlayerModal = () => {
     setName("");
-    setLinkSearch("");
-    setLinkCandidates([]);
     setNewPlayerGender(PlayerGender.MALE);
     setNewPlayerMixedSideOverride(null);
     setNewPlayerStatus(CommunityPlayerStatus.CORE);
@@ -201,7 +84,6 @@ export function useCommunityAdminPlayerActions({
 
   const closeCreatePlayerModal = () => {
     setIsCreatePlayerOpen(false);
-    setLinkingPlayerId(null);
   };
 
   const openPlayerEditor = (player: CommunityAdminPlayer) => {
@@ -220,25 +102,6 @@ export function useCommunityAdminPlayerActions({
     setSavingRating(false);
     setSavingRole(false);
     setSavingPreferences(false);
-  };
-
-  const openMergeDuplicateModal = (player: CommunityAdminPlayer) => {
-    setMergeSourcePlayer(player);
-    setMergeSearch(player.name);
-    setMergeCandidates([]);
-    setLoadingMergeCandidates(false);
-    setMergingPlayerId(null);
-    closePlayerEditor();
-    setError("");
-    setSuccess("");
-  };
-
-  const closeMergeDuplicateModal = () => {
-    if (mergingPlayerId) return;
-    setMergeSourcePlayer(null);
-    setMergeSearch("");
-    setMergeCandidates([]);
-    setLoadingMergeCandidates(false);
   };
 
   const openPasswordResetModal = (player: CommunityAdminPlayer) => {
@@ -289,74 +152,6 @@ export function useCommunityAdminPlayerActions({
       await refreshCommunityData();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Failed to add player");
-    }
-  };
-
-  const handleLinkExistingPlayer = async (player: LinkableCommunityPlayer) => {
-    setLinkingPlayerId(player.id);
-    setError("");
-    setSuccess("");
-
-    try {
-      const res = await fetch(`/api/communities/${communityId}/members/link`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          userId: player.id,
-          status: newPlayerStatus,
-        }),
-      });
-      const data = await safeJson(res);
-      if (!res.ok) {
-        throw new Error(data.error || "Failed to link player");
-      }
-
-      setSuccess(`${player.name} linked into this community.`);
-      setIsCreatePlayerOpen(false);
-      setLinkSearch("");
-      setLinkCandidates([]);
-      await refreshCommunityData();
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Failed to link player");
-    } finally {
-      setLinkingPlayerId(null);
-    }
-  };
-
-  const handleMergeDuplicatePlayer = async (
-    candidate: MergeDuplicateCandidate
-  ) => {
-    if (!mergeSourcePlayer) return;
-
-    setMergingPlayerId(candidate.id);
-    setError("");
-    setSuccess("");
-
-    try {
-      const res = await fetch(
-        `/api/communities/${communityId}/members/${mergeSourcePlayer.id}/merge`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ targetUserId: candidate.id }),
-        }
-      );
-      const data = await safeJson(res);
-      if (!res.ok) {
-        throw new Error(data.error || "Failed to merge duplicate player");
-      }
-
-      setSuccess(`${mergeSourcePlayer.name} merged into ${candidate.name}.`);
-      setMergeSourcePlayer(null);
-      setMergeSearch("");
-      setMergeCandidates([]);
-      await refreshCommunityData();
-    } catch (err: unknown) {
-      setError(
-        err instanceof Error ? err.message : "Failed to merge duplicate player"
-      );
-    } finally {
-      setMergingPlayerId(null);
     }
   };
 
@@ -663,17 +458,6 @@ export function useCommunityAdminPlayerActions({
     isCreatePlayerOpen,
     name,
     setName,
-    linkSearch,
-    setLinkSearch,
-    linkCandidates,
-    loadingLinkCandidates,
-    linkingPlayerId,
-    mergeSourcePlayer,
-    mergeSearch,
-    setMergeSearch,
-    mergeCandidates,
-    loadingMergeCandidates,
-    mergingPlayerId,
     newPlayerGender,
     setNewPlayerGender,
     newPlayerMixedSideOverride,
@@ -702,13 +486,9 @@ export function useCommunityAdminPlayerActions({
     closeCreatePlayerModal,
     openPlayerEditor,
     closePlayerEditor,
-    openMergeDuplicateModal,
-    closeMergeDuplicateModal,
     openPasswordResetModal,
     closePasswordResetModal,
     handleAddPlayer,
-    handleLinkExistingPlayer,
-    handleMergeDuplicatePlayer,
     handleSavePlayerName,
     handleSavePlayerRating,
     handleRemovePlayer: requestRemovePlayer,

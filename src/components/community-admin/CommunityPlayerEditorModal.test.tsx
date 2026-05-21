@@ -73,7 +73,6 @@ function renderModal(player: CommunityAdminPlayer) {
       onPromotePlayer={vi.fn()}
       onOpenPasswordReset={vi.fn()}
       canOpenEmergencyPasswordReset={false}
-      onOpenMergeDuplicate={vi.fn()}
       onUploadAvatar={vi.fn(async () => {})}
       onRemoveAvatar={vi.fn(async () => {})}
     />
@@ -105,5 +104,11 @@ describe("CommunityPlayerEditorModal", () => {
       "Community admins can rename unclaimed placeholder profiles."
     );
     expect(markup).not.toContain('type="text" disabled=""');
+  });
+
+  it("does not show the merge duplicate action for placeholders", () => {
+    const markup = renderModal(buildPlayer());
+
+    expect(markup).not.toContain("Merge duplicate");
   });
 });

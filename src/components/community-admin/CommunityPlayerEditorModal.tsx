@@ -47,7 +47,6 @@ interface CommunityPlayerEditorModalProps {
   onPromotePlayer: (player: CommunityAdminPlayer) => void;
   onOpenPasswordReset: (player: CommunityAdminPlayer) => void;
   canOpenEmergencyPasswordReset: boolean;
-  onOpenMergeDuplicate: (player: CommunityAdminPlayer) => void;
   onUploadAvatar: (player: CommunityAdminPlayer, file: File) => Promise<void>;
   onRemoveAvatar: (player: CommunityAdminPlayer) => Promise<void>;
 }
@@ -72,14 +71,12 @@ export function CommunityPlayerEditorModal({
   onPromotePlayer,
   onOpenPasswordReset,
   canOpenEmergencyPasswordReset,
-  onOpenMergeDuplicate,
   onUploadAvatar,
   onRemoveAvatar,
 }: CommunityPlayerEditorModalProps) {
   if (!player) return null;
 
   const mixedSideOption = getMixedSideOverrideOptionForGender(player.gender);
-  const canMergeDuplicate = !player.isClaimed && player.email === null;
   const canEditName = !player.isClaimed;
 
   return (
@@ -145,15 +142,6 @@ export function CommunityPlayerEditorModal({
             >
               View profile
             </Link>
-            {canMergeDuplicate ? (
-              <button
-                type="button"
-                onClick={() => onOpenMergeDuplicate(player)}
-                className="app-button-secondary px-4 py-2"
-              >
-                Merge duplicate
-              </button>
-            ) : null}
           </div>
         </div>
 

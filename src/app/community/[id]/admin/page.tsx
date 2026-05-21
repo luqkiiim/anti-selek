@@ -9,7 +9,6 @@ import { CommunityAdminActionConfirmModal } from "@/components/community-admin/C
 import { CommunityDangerZonePanel } from "@/components/community-admin/CommunityDangerZonePanel";
 import { CommunityPasswordResetModal } from "@/components/community-admin/CommunityPasswordResetModal";
 import { CommunityPlayerEditorModal } from "@/components/community-admin/CommunityPlayerEditorModal";
-import { CommunityPlayerMergeModal } from "@/components/community-admin/CommunityPlayerMergeModal";
 import { CommunityPlayersPanel } from "@/components/community-admin/CommunityPlayersPanel";
 import { CommunitySettingsPanel } from "@/components/community-admin/CommunitySettingsPanel";
 import { CreateCommunityPlayerModal } from "@/components/community-admin/CreateCommunityPlayerModal";
@@ -151,17 +150,6 @@ export default function CommunityAdminPage() {
     isCreatePlayerOpen,
     name,
     setName,
-    linkSearch,
-    setLinkSearch,
-    linkCandidates,
-    loadingLinkCandidates,
-    linkingPlayerId,
-    mergeSourcePlayer,
-    mergeSearch,
-    setMergeSearch,
-    mergeCandidates,
-    loadingMergeCandidates,
-    mergingPlayerId,
     newPlayerGender,
     setNewPlayerGender,
     newPlayerMixedSideOverride,
@@ -204,13 +192,9 @@ export default function CommunityAdminPage() {
     closeCreatePlayerModal,
     openPlayerEditor,
     closePlayerEditor,
-    openMergeDuplicateModal,
-    closeMergeDuplicateModal,
     openPasswordResetModal,
     closePasswordResetModal,
     handleAddPlayer,
-    handleLinkExistingPlayer,
-    handleMergeDuplicatePlayer,
     handleSavePlayerName,
     handleSavePlayerRating,
     handleRemovePlayer,
@@ -411,16 +395,10 @@ export default function CommunityAdminPage() {
       <CreateCommunityPlayerModal
         open={isCreatePlayerOpen}
         name={name}
-        linkSearch={linkSearch}
-        linkCandidates={linkCandidates}
-        loadingLinkCandidates={loadingLinkCandidates}
-        linkingPlayerId={linkingPlayerId}
         newPlayerGender={newPlayerGender}
         newPlayerMixedSideOverride={newPlayerMixedSideOverride}
         newPlayerStatus={newPlayerStatus}
         onNameChange={setName}
-        onLinkSearchChange={setLinkSearch}
-        onLinkExistingPlayer={handleLinkExistingPlayer}
         onNewPlayerGenderChange={(value) => {
           setNewPlayerGender(value);
           setNewPlayerMixedSideOverride(null);
@@ -451,20 +429,8 @@ export default function CommunityAdminPage() {
         onPromotePlayer={handlePromotePlayer}
         onOpenPasswordReset={openPasswordResetModal}
         canOpenEmergencyPasswordReset={isGlobalAdmin}
-        onOpenMergeDuplicate={openMergeDuplicateModal}
         onUploadAvatar={handleUploadPlayerAvatar}
         onRemoveAvatar={handleRemovePlayerAvatar}
-      />
-
-      <CommunityPlayerMergeModal
-        sourcePlayer={mergeSourcePlayer}
-        search={mergeSearch}
-        candidates={mergeCandidates}
-        loadingCandidates={loadingMergeCandidates}
-        mergingPlayerId={mergingPlayerId}
-        onSearchChange={setMergeSearch}
-        onMerge={handleMergeDuplicatePlayer}
-        onClose={closeMergeDuplicateModal}
       />
 
       <CommunityPasswordResetModal
