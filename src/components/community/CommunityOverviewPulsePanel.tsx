@@ -52,6 +52,18 @@ function formatSigned(value: number) {
   return `${value}`;
 }
 
+function getCompactPlayerName(name: string) {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+
+  if (parts.length <= 1) {
+    return name;
+  }
+
+  const secondInitial = parts[1]?.[0]?.toUpperCase();
+
+  return secondInitial ? `${parts[0]} ${secondInitial}.` : parts[0];
+}
+
 function getHotPlayerDetail(player: CommunityPagePulse["hotPlayers"][number]) {
   if (
     player.currentStreak.result === "WIN" &&
@@ -160,7 +172,7 @@ function EmptyPulseState({ children }: { children: ReactNode }) {
   );
 }
 
-function PlayerPairAvatars({ players }: { players: OverviewPlayerPair }) {
+function PartnerPairAvatars({ players }: { players: OverviewPlayerPair }) {
   return (
     <div className="flex shrink-0 -space-x-3" aria-hidden="true">
       {players.map((player) => (
@@ -399,28 +411,57 @@ export function CommunityOverviewPulsePanel({
                   key={`${rivalry.players[0].id}:${rivalry.players[1].id}`}
                   className="rounded-lg border border-[var(--line)] bg-white px-4 py-3"
                 >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex min-w-0 items-start gap-3">
-                      <PlayerPairAvatars players={rivalry.players} />
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-semibold text-gray-900">
-                          {rivalry.players[0].name} vs {rivalry.players[1].name}
-                        </p>
-                        <p className="mt-1 text-xs font-semibold text-gray-500">
-                          {getRivalryDetail(rivalry)}
-                        </p>
+                  <div className="flex flex-col gap-3">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex min-w-0 items-center gap-2 sm:gap-3">
+                        <div className="flex min-w-0 flex-1 items-center gap-2.5 sm:gap-3">
+                          <Avatar
+                            name={rivalry.players[0].name}
+                            avatarUrl={rivalry.players[0].avatarUrl}
+                            size="xs"
+                            className="ring-2 ring-white"
+                          />
+                          <p
+                            className="min-w-0 truncate text-[13px] font-semibold text-gray-900 sm:text-sm"
+                            title={rivalry.players[0].name}
+                          >
+                            {getCompactPlayerName(rivalry.players[0].name)}
+                          </p>
+                        </div>
+                        <span className="shrink-0 rounded-full border border-[var(--line)] bg-[var(--surface-muted)] px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-gray-500">
+                          vs
+                        </span>
+                        <div className="flex min-w-0 flex-1 items-center justify-end gap-2.5 sm:gap-3">
+                          <p
+                            className="min-w-0 truncate text-right text-[13px] font-semibold text-gray-900 sm:text-sm"
+                            title={rivalry.players[1].name}
+                          >
+                            {getCompactPlayerName(rivalry.players[1].name)}
+                          </p>
+                          <Avatar
+                            name={rivalry.players[1].name}
+                            avatarUrl={rivalry.players[1].avatarUrl}
+                            size="xs"
+                            className="ring-2 ring-white"
+                          />
+                        </div>
                       </div>
+                      <p className="mt-3 text-xs font-semibold text-gray-500">
+                        {getRivalryDetail(rivalry)}
+                      </p>
+                      {rivalry.lastSession ? (
+                        <p className="mt-2 truncate text-xs font-semibold text-gray-500">
+                          Last met {formatDate(rivalry.lastPlayedAt)} in{" "}
+                          {rivalry.lastSession.name}
+                        </p>
+                      ) : null}
                     </div>
-                    <span className="shrink-0 rounded-md bg-[var(--accent-faint)] px-2 py-1 text-xs font-semibold text-[var(--accent)]">
-                      {formatGameCount(rivalry.matches)}
-                    </span>
+                    <div className="flex justify-end">
+                      <span className="shrink-0 rounded-md bg-[var(--accent-faint)] px-2 py-1 text-xs font-semibold text-[var(--accent)]">
+                        {formatGameCount(rivalry.matches)}
+                      </span>
+                    </div>
                   </div>
-                  {rivalry.lastSession ? (
-                    <p className="mt-3 truncate text-xs font-semibold text-gray-500">
-                      Last met {formatDate(rivalry.lastPlayedAt)} in{" "}
-                      {rivalry.lastSession.name}
-                    </p>
-                  ) : null}
                 </div>
               ))}
             </div>
@@ -446,7 +487,7 @@ export function CommunityOverviewPulsePanel({
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex min-w-0 items-start gap-3">
-                      <PlayerPairAvatars players={partnership.players} />
+                      <PartnerPairAvatars players={partnership.players} />
                       <div className="min-w-0">
                         <p className="truncate text-sm font-semibold text-gray-900">
                           {partnership.players[0].name} &{" "}

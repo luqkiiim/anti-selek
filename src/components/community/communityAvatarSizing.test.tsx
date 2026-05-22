@@ -20,6 +20,10 @@ function countMdAvatars(markup: string) {
   return markup.match(/h-14 w-14 text-base xl:h-12 xl:w-12 xl:text-sm/g)?.length ?? 0;
 }
 
+function countXsAvatars(markup: string) {
+  return markup.match(/h-10 w-10 text-\[13px\] xl:h-8 xl:w-8 xl:text-\[11px\]/g)?.length ?? 0;
+}
+
 const member: CommunityPageMember = {
   id: "player-1",
   name: "Alex Lee",
@@ -169,7 +173,8 @@ describe("community avatar sizing", () => {
 
     expect(container.textContent).toContain("Top rivalry");
     expect(container.textContent).toContain("Partner chemistry");
-    expect(countMdAvatars(container.innerHTML)).toBe(8);
+    expect(countMdAvatars(container.innerHTML)).toBe(6);
+    expect(countXsAvatars(container.innerHTML)).toBe(2);
   });
 
   it("uses md avatars in the community player picker rows", async () => {
