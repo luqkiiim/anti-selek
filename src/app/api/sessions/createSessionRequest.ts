@@ -214,7 +214,7 @@ export function parseCreateSessionRequest(
     partnerCommunityId,
     courtCount = 3,
     isTest = false,
-    autoQueueEnabled = true,
+    autoQueueEnabled = false,
     poolsEnabled = false,
     poolAName = DEFAULT_SESSION_POOL_A_NAME,
     poolBName = DEFAULT_SESSION_POOL_B_NAME,
@@ -265,7 +265,7 @@ export function parseCreateSessionRequest(
   const requestedPlayerIds = Array.isArray(playerIds)
     ? playerIds.filter((id): id is string => typeof id === "string")
     : [];
-  const normalizedAutoQueueEnabled = autoQueueEnabled !== false;
+  const normalizedAutoQueueEnabled = autoQueueEnabled === true;
   const normalizedPoolsEnabled = poolsEnabled === true;
   const normalizedPoolAName = normalizeSessionPoolName(
     typeof poolAName === "string" ? poolAName : null,

@@ -49,7 +49,7 @@ describe("parseCreateSessionRequest", () => {
     expect(parsed.type).toBe(SessionType.ELO);
     expect(parsed.mode).toBe(SessionMode.MIXICANO);
     expect(parsed.courtCount).toBe(4);
-    expect(parsed.autoQueueEnabled).toBe(true);
+    expect(parsed.autoQueueEnabled).toBe(false);
     expect(parsed.requestedPlayerIds).toEqual(["user-1", "user-2"]);
     expect(parsed.playerConfigMap.get("user-1")).toEqual({
       gender: PlayerGender.FEMALE,
@@ -228,6 +228,16 @@ describe("parseCreateSessionRequest", () => {
     });
 
     expect(parsed.autoQueueEnabled).toBe(false);
+  });
+
+  it("allows auto queue to be enabled explicitly", () => {
+    const parsed = parseCreateSessionRequest({
+      name: "Queue Night",
+      communityId: "community-1",
+      autoQueueEnabled: true,
+    });
+
+    expect(parsed.autoQueueEnabled).toBe(true);
   });
 
   it("accepts a distinct partner community for collab sessions", () => {
