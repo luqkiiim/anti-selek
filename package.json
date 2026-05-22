@@ -10,7 +10,7 @@
     "predev": "node scripts/ensure-node-lts.mjs",
     "dev": "next dev",
     "prebuild": "node scripts/ensure-node-lts.mjs",
-    "build": "node scripts/apply-turso-migrations.mjs && next build",
+    "build": "node scripts/apply-turso-migrations.mjs && node scripts/run-next-build.mjs",
     "prestart": "node scripts/ensure-node-lts.mjs",
     "db:migrate:turso": "node scripts/apply-turso-migrations.mjs --force",
     "start": "next start",
