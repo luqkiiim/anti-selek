@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { signOut } from "next-auth/react";
-import { LogIn, LogOut, Plus } from "lucide-react";
+import { LogIn, LogOut, Plus, Settings } from "lucide-react";
 import { EmptyState, FlashMessage, SectionCard } from "@/components/ui/chrome";
 import { CreateCommunityModal } from "@/components/dashboard/CreateCommunityModal";
 import { JoinCommunityModal } from "@/components/dashboard/JoinCommunityModal";
@@ -61,6 +61,15 @@ export default function Home() {
                   {accountName}
                 </p>
               </div>
+            ) : null}
+            {!isQuickAccess ? (
+              <Link
+                href="/settings"
+                className="app-button-secondary px-4 py-2"
+              >
+                <Settings aria-hidden="true" size={16} />
+                Settings
+              </Link>
             ) : null}
             <button
               type="button"

@@ -356,10 +356,13 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     }),
   ],
   callbacks: {
-    async jwt({ token, user }) {
+    async jwt({ token, user, trigger, session }) {
       if (user) {
         if (typeof user.id === "string") {
           token.id = user.id;
+        }
+        if (typeof user.name === "string") {
+          token.name = user.name;
         }
         token.email = typeof user.email === "string" ? user.email : null;
         token.isQuickAccess = !!user.isQuickAccess;
@@ -368,6 +371,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             ? user.quickAccessCommunityId
             : null;
         token.isAdmin = token.isQuickAccess ? false : !!user.isAdmin;
+      } else if (trigger === "update" && typeof session?.name === "string") {
+        token.name = session.name;
       } else if (typeof token.email === "string") {
         token.isAdmin = token.isQuickAccess ? false : isGlobalAdminEmail(token.email);
       }
@@ -381,6 +386,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     async session({ session, token }) {
       if (session.user) {
         session.user.id = token.id as string;
+        session.user.name =
+          typeof token.name === "string" ? token.name : session.user.name ?? "";
         session.user.email =
           typeof token.email === "string" ? token.email : "";
         session.user.isAdmin = !!token.isAdmin;
