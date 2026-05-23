@@ -1,11 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
 import {
-  AVATAR_CROP_OUTPUT_SIZE,
+  AVATAR_CROP_OUTPUT_MAX_DIMENSION,
   createCroppedAvatarFile,
 } from "@/lib/avatarCrop";
 
 describe("avatar crop utility", () => {
-  it("renders a cropped square avatar file as webp by default", async () => {
+  it("renders a cropped avatar file as webp while preserving aspect ratio", async () => {
     const drawImage = vi.fn();
     const clearRect = vi.fn();
     const toBlob = vi.fn((callback: BlobCallback, type?: string) => {
@@ -26,30 +26,25 @@ describe("avatar crop utility", () => {
 
     const file = await createCroppedAvatarFile({
       src: "blob:avatar",
-      crop: { x: 16, y: 24, width: 220, height: 220 },
+      crop: { x: 16, y: 24, width: 220, height: 110 },
       fileName: "profile.png",
       imageLoader: async () => fakeImage,
       createCanvas: () => canvas,
     });
 
-    expect(canvas.width).toBe(AVATAR_CROP_OUTPUT_SIZE);
-    expect(canvas.height).toBe(AVATAR_CROP_OUTPUT_SIZE);
-    expect(clearRect).toHaveBeenCalledWith(
-      0,
-      0,
-      AVATAR_CROP_OUTPUT_SIZE,
-      AVATAR_CROP_OUTPUT_SIZE
-    );
+    expect(canvas.width).toBe(AVATAR_CROP_OUTPUT_MAX_DIMENSION);
+    expect(canvas.height).toBe(256);
+    expect(clearRect).toHaveBeenCalledWith(0, 0, 512, 256);
     expect(drawImage).toHaveBeenCalledWith(
       fakeImage,
       16,
       24,
       220,
-      220,
+      110,
       0,
       0,
-      AVATAR_CROP_OUTPUT_SIZE,
-      AVATAR_CROP_OUTPUT_SIZE
+      512,
+      256
     );
     expect(toBlob).toHaveBeenCalledWith(
       expect.any(Function),
@@ -83,7 +78,7 @@ describe("avatar crop utility", () => {
 
     const file = await createCroppedAvatarFile({
       src: "blob:avatar",
-      crop: { x: 0, y: 0, width: 100, height: 100 },
+      crop: { x: 0, y: 0, width: 100, height: 200 },
       fileName: "profile.png",
       imageLoader: async () => ({} as CanvasImageSource),
       createCanvas: () => canvas,
@@ -101,6 +96,8 @@ describe("avatar crop utility", () => {
       "image/jpeg",
       0.86
     );
+    expect(canvas.width).toBe(100);
+    expect(canvas.height).toBe(200);
     expect(file.name).toBe("profile.jpg");
     expect(file.type).toBe("image/jpeg");
   });

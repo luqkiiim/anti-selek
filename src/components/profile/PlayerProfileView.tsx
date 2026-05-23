@@ -762,7 +762,7 @@ function ProfileHero({
                   name={data.user.name}
                   avatarUrl={data.user.avatarUrl}
                   size="hero"
-                  helperText="Choose a JPG, PNG, or WebP photo, then drag and zoom to crop it. We compress the final avatar before saving."
+                  helperText="Choose a JPG, PNG, or WebP photo, then adjust the framing if needed. We keep the photo's shape and compress the final upload before saving."
                   onPreviewAvatar={onPreviewAvatar}
                   previewAvatarLabel={`View profile photo of ${data.user.name}`}
                   onUpload={onUploadAvatar}

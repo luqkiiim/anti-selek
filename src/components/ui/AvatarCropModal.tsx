@@ -3,7 +3,10 @@
 import { useEffect, useState } from "react";
 import Cropper, { type Area } from "react-easy-crop";
 import { Minus, Plus } from "lucide-react";
-import { createCroppedAvatarFile } from "@/lib/avatarCrop";
+import {
+  createCroppedAvatarFile,
+  loadAvatarCropImage,
+} from "@/lib/avatarCrop";
 import { ModalFrame } from "@/components/ui/chrome";
 
 function cx(...values: Array<string | false | null | undefined>) {
@@ -37,6 +40,7 @@ export function AvatarCropModal({
   const [crop, setCrop] = useState({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(1);
   const [croppedAreaPixels, setCroppedAreaPixels] = useState<Area | null>(null);
+  const [imageAspect, setImageAspect] = useState(1);
   const [processing, setProcessing] = useState(false);
   const [error, setError] = useState("");
 
@@ -48,9 +52,38 @@ export function AvatarCropModal({
     setCrop({ x: 0, y: 0 });
     setZoom(1);
     setCroppedAreaPixels(null);
+    setImageAspect(1);
     setProcessing(false);
     setError("");
   }, [file, imageUrl]);
+
+  useEffect(() => {
+    if (!imageUrl) {
+      return;
+    }
+
+    let cancelled = false;
+
+    void loadAvatarCropImage(imageUrl)
+      .then((image) => {
+        if (cancelled) {
+          return;
+        }
+
+        if (image.naturalWidth > 0 && image.naturalHeight > 0) {
+          setImageAspect(image.naturalWidth / image.naturalHeight);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setImageAspect(1);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [imageUrl]);
 
   if (!file || !imageUrl) {
     return null;
@@ -89,7 +122,7 @@ export function AvatarCropModal({
   return (
     <ModalFrame
       title="Crop photo"
-      subtitle="Drag and zoom to frame the circular avatar exactly how you want it."
+      subtitle="Adjust the framing if you want to, and we will keep the photo in its original shape."
       onClose={processing ? () => undefined : onClose}
       bodyScroll={false}
       bodyClassName="flex min-h-0 flex-1 flex-col"
@@ -121,10 +154,10 @@ export function AvatarCropModal({
             image={imageUrl}
             crop={crop}
             zoom={zoom}
-            aspect={1}
-            cropShape="round"
+            aspect={imageAspect}
+            cropShape="rect"
             showGrid={false}
-            objectFit="cover"
+            objectFit="contain"
             onCropChange={setCrop}
             onZoomChange={setZoom}
             onCropComplete={(_, areaPixels) => {
@@ -132,7 +165,7 @@ export function AvatarCropModal({
             }}
           />
           <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-[rgba(7,10,10,0.58)] to-transparent px-4 pb-4 pt-12 text-center text-xs text-white/82">
-            The circular frame is the visible avatar. We save a square image behind it for consistent display across the app.
+            The visible frame keeps your photo's original shape. Zooming in will crop more tightly, but wide and tall photos stay wide or tall when we save them.
           </div>
         </div>
 

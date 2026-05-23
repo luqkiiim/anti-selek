@@ -1,4 +1,5 @@
-export const AVATAR_CROP_OUTPUT_SIZE = 512;
+export const AVATAR_CROP_OUTPUT_MAX_DIMENSION = 512;
+export const AVATAR_CROP_OUTPUT_SIZE = AVATAR_CROP_OUTPUT_MAX_DIMENSION;
 const AVATAR_CROP_OUTPUT_QUALITY = 0.86;
 
 export interface AvatarCropArea {
@@ -49,14 +50,14 @@ export async function createCroppedAvatarFile({
   src,
   crop,
   fileName,
-  outputSize = AVATAR_CROP_OUTPUT_SIZE,
+  outputMaxDimension = AVATAR_CROP_OUTPUT_MAX_DIMENSION,
   imageLoader = loadAvatarCropImage,
   createCanvas = () => document.createElement("canvas"),
 }: {
   src: string;
   crop: AvatarCropArea;
   fileName: string;
-  outputSize?: number;
+  outputMaxDimension?: number;
   imageLoader?: (src: string) => Promise<CanvasImageSource>;
   createCanvas?: () => HTMLCanvasElement;
 }) {
@@ -68,22 +69,32 @@ export async function createCroppedAvatarFile({
     throw new Error("Image cropping is not supported in this browser.");
   }
 
-  canvas.width = outputSize;
-  canvas.height = outputSize;
+  const sourceWidth = Math.max(1, crop.width);
+  const sourceHeight = Math.max(1, crop.height);
+  const longestSourceSide = Math.max(sourceWidth, sourceHeight);
+  const scale =
+    longestSourceSide > outputMaxDimension
+      ? outputMaxDimension / longestSourceSide
+      : 1;
+  const outputWidth = Math.max(1, Math.round(sourceWidth * scale));
+  const outputHeight = Math.max(1, Math.round(sourceHeight * scale));
+
+  canvas.width = outputWidth;
+  canvas.height = outputHeight;
 
   context.imageSmoothingEnabled = true;
   context.imageSmoothingQuality = "high";
-  context.clearRect(0, 0, outputSize, outputSize);
+  context.clearRect(0, 0, outputWidth, outputHeight);
   context.drawImage(
     image,
     crop.x,
     crop.y,
-    crop.width,
-    crop.height,
+    sourceWidth,
+    sourceHeight,
     0,
     0,
-    outputSize,
-    outputSize
+    outputWidth,
+    outputHeight
   );
 
   let blob: Blob | null = null;

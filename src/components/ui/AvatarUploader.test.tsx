@@ -11,6 +11,7 @@ import {
 
 const mocks = vi.hoisted(() => ({
   createCroppedAvatarFile: vi.fn(),
+  loadAvatarCropImage: vi.fn(),
 }));
 
 vi.mock("react-easy-crop", async () => {
@@ -46,6 +47,7 @@ vi.mock("react-easy-crop", async () => {
 
 vi.mock("@/lib/avatarCrop", () => ({
   createCroppedAvatarFile: mocks.createCroppedAvatarFile,
+  loadAvatarCropImage: mocks.loadAvatarCropImage,
 }));
 
 function getButtonByText(text: string) {
@@ -85,6 +87,10 @@ describe("AvatarUploader", () => {
         type: "image/webp",
       })
     );
+    mocks.loadAvatarCropImage.mockResolvedValue({
+      naturalWidth: 1600,
+      naturalHeight: 900,
+    });
   });
 
   afterEach(async () => {
@@ -142,7 +148,7 @@ describe("AvatarUploader", () => {
 
     expect(document.body.textContent).toContain("Crop photo");
     expect(document.body.textContent).toContain(
-      "Drag and zoom to frame the circular avatar exactly how you want it."
+      "Adjust the framing if you want to, and we will keep the photo in its original shape."
     );
   });
 
