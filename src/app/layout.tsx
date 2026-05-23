@@ -28,6 +28,7 @@ export const metadata: Metadata = {
 
 export const viewport: Viewport = {
   themeColor: "#102236",
+  viewportFit: "cover",
 };
 
 export default function RootLayout({
@@ -38,7 +39,7 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body className={`${headingFont.variable} ${monoFont.variable} antialiased`}>
-        <div className="relative min-h-screen overflow-x-hidden">
+        <div className="app-root-shell">
           <Providers>{children}</Providers>
         </div>
       </body>

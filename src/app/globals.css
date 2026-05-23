@@ -41,9 +41,19 @@ html {
 
 body {
   min-height: 100vh;
+  min-height: 100svh;
+  min-height: 100dvh;
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-heading), "Segoe UI", Tahoma, sans-serif;
+}
+
+.app-root-shell {
+  position: relative;
+  min-height: 100vh;
+  min-height: 100svh;
+  min-height: 100dvh;
+  overflow-x: hidden;
 }
 
 ::selection {
@@ -60,7 +70,9 @@ h4 {
 
 .app-page {
   min-height: 100vh;
-  padding-bottom: 7rem;
+  min-height: 100svh;
+  min-height: 100dvh;
+  padding-bottom: calc(7rem + env(safe-area-inset-bottom));
 }
 
 .app-shell {
@@ -68,7 +80,7 @@ h4 {
   margin: 0 auto;
   width: 100%;
   max-width: 80rem;
-  padding: 1.5rem 0.5rem 7rem;
+  padding: 1.5rem 0.5rem calc(7rem + env(safe-area-inset-bottom));
 }
 
 .app-shell-narrow {
@@ -76,7 +88,7 @@ h4 {
   margin: 0 auto;
   width: 100%;
   max-width: 72rem;
-  padding: 1.5rem 0.5rem 7rem;
+  padding: 1.5rem 0.5rem calc(7rem + env(safe-area-inset-bottom));
 }
 
 .app-topbar {
@@ -485,12 +497,12 @@ h4 {
 
 @media (min-width: 640px) {
   .app-page {
-    padding-bottom: 5rem;
+    padding-bottom: calc(5rem + env(safe-area-inset-bottom));
   }
 
   .app-shell,
   .app-shell-narrow {
-    padding-bottom: 5rem;
+    padding-bottom: calc(5rem + env(safe-area-inset-bottom));
     padding-right: 1.5rem;
     padding-left: 1.5rem;
   }
