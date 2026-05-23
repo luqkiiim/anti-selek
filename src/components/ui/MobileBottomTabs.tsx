@@ -32,9 +32,9 @@ export function MobileBottomTabs<T extends string>({
   return (
     <nav
       aria-label={ariaLabel}
-      className={`fixed inset-x-0 bottom-0 z-40 bg-[linear-gradient(to_bottom,transparent_0%,var(--background)_1.25rem,var(--background)_100%)] px-3 pb-[calc(env(safe-area-inset-bottom)+0.65rem)] pt-2 ${visibilityClassName}`}
+      className={`fixed inset-x-0 bottom-0 z-40 rounded-t-2xl border-t border-gray-200 bg-white/95 px-3 pb-[calc(env(safe-area-inset-bottom)+0.65rem)] pt-2 shadow-[0_-12px_28px_rgba(23,32,31,0.12)] backdrop-blur-md ${visibilityClassName}`}
     >
-      <div className="mx-auto flex max-w-md items-center justify-around gap-1 rounded-xl border border-gray-200 bg-white/95 px-2 py-2 shadow-[0_12px_28px_rgba(23,32,31,0.14)] backdrop-blur-md">
+      <div className="mx-auto flex max-w-md items-center justify-around gap-1 px-2 py-2">
         {items.map((item) => {
           const Icon = item.icon;
           const isActive = activeId === item.id;

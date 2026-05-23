@@ -67,12 +67,23 @@ describe("MobileBottomTabs", () => {
     expect(nav?.getAttribute("aria-label")).toBe("Community navigation");
     expect(nav?.className).toContain("fixed");
     expect(nav?.className).toContain("bottom-0");
+    expect(nav?.className).toContain("rounded-t-2xl");
+    expect(nav?.className).toContain("border-t");
+    expect(nav?.className).toContain("bg-white/95");
     expect(nav?.className).toContain(
-      "bg-[linear-gradient(to_bottom,transparent_0%,var(--background)_1.25rem,var(--background)_100%)]"
+      "shadow-[0_-12px_28px_rgba(23,32,31,0.12)]"
     );
+    expect(nav?.className).toContain("backdrop-blur-md");
     expect(nav?.className).toContain(
       "pb-[calc(env(safe-area-inset-bottom)+0.65rem)]"
     );
+
+    const tabContent = nav?.querySelector("div");
+    expect(tabContent?.className).toContain("mx-auto");
+    expect(tabContent?.className).toContain("max-w-md");
+    expect(tabContent?.className).not.toContain("rounded-xl");
+    expect(tabContent?.className).not.toContain("bg-white/95");
+    expect(tabContent?.className).not.toContain("shadow-[0_12px");
 
     const activeTab = container.querySelector(
       'button[aria-label="Tournaments"]'
