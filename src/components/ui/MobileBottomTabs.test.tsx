@@ -75,7 +75,7 @@ describe("MobileBottomTabs", () => {
     );
     expect(nav?.className).toContain("backdrop-blur-md");
     expect(nav?.className).toContain(
-      "pb-[calc(env(safe-area-inset-bottom)+0.65rem)]"
+      "pb-[calc(env(safe-area-inset-bottom)+0.25rem)]"
     );
 
     const tabContent = nav?.querySelector("div");
