@@ -74,13 +74,13 @@ describe("MobileBottomTabs", () => {
       "shadow-[0_-12px_28px_rgba(23,32,31,0.12)]"
     );
     expect(nav?.className).toContain("backdrop-blur-md");
-    expect(nav?.className).toContain(
-      "pb-[calc(env(safe-area-inset-bottom)+0.25rem)]"
-    );
+    expect(nav?.className).toContain("pb-[env(safe-area-inset-bottom)]");
+    expect(nav?.className).toContain("pt-1");
 
     const tabContent = nav?.querySelector("div");
     expect(tabContent?.className).toContain("mx-auto");
     expect(tabContent?.className).toContain("max-w-md");
+    expect(tabContent?.className).toContain("py-1.5");
     expect(tabContent?.className).not.toContain("rounded-xl");
     expect(tabContent?.className).not.toContain("bg-white/95");
     expect(tabContent?.className).not.toContain("shadow-[0_12px");
