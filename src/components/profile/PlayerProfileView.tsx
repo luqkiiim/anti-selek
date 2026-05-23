@@ -29,6 +29,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { Avatar } from "@/components/ui/Avatar";
+import { AvatarPreviewModal } from "@/components/ui/AvatarPreviewModal";
 import { AvatarUploader } from "@/components/ui/AvatarUploader";
 import type {
   PlayerProfileConnectionSummary,
@@ -709,6 +710,7 @@ function ProfileHero({
   ratingSeries,
   onBack,
   canManageAvatar,
+  onPreviewAvatar,
   onUploadAvatar,
   onRemoveAvatar,
 }: {
@@ -719,6 +721,7 @@ function ProfileHero({
   ratingSeries: RatingSeriesPoint[];
   onBack?: () => void;
   canManageAvatar: boolean;
+  onPreviewAvatar: (avatarUrl: string) => void;
   onUploadAvatar: (file: File) => Promise<void>;
   onRemoveAvatar: () => Promise<void>;
 }) {
@@ -760,18 +763,37 @@ function ProfileHero({
                   avatarUrl={data.user.avatarUrl}
                   size="hero"
                   helperText="Choose a JPG, PNG, or WebP photo, then drag and zoom to crop it. We compress the final avatar before saving."
+                  onPreviewAvatar={onPreviewAvatar}
+                  previewAvatarLabel={`View profile photo of ${data.user.name}`}
                   onUpload={onUploadAvatar}
                   onRemove={onRemoveAvatar}
                 />
               ) : (
                 <div className="relative h-28 w-28">
-                  <Avatar
-                    name={data.user.name}
-                    avatarUrl={data.user.avatarUrl}
-                    size="hero"
-                    className="h-full w-full border-4 border-emerald-400 bg-[#17201f] shadow-[0_10px_32px_rgba(0,0,0,0.22)]"
-                    fallbackClassName="text-emerald-100"
-                  />
+                  {data.user.avatarUrl ? (
+                    <button
+                      type="button"
+                      onClick={() => onPreviewAvatar(data.user.avatarUrl as string)}
+                      className="rounded-full transition hover:scale-[1.02] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-200"
+                      aria-label={`View profile photo of ${data.user.name}`}
+                    >
+                      <Avatar
+                        name={data.user.name}
+                        avatarUrl={data.user.avatarUrl}
+                        size="hero"
+                        className="h-full w-full border-4 border-emerald-400 bg-[#17201f] shadow-[0_10px_32px_rgba(0,0,0,0.22)]"
+                        fallbackClassName="text-emerald-100"
+                      />
+                    </button>
+                  ) : (
+                    <Avatar
+                      name={data.user.name}
+                      avatarUrl={data.user.avatarUrl}
+                      size="hero"
+                      className="h-full w-full border-4 border-emerald-400 bg-[#17201f] shadow-[0_10px_32px_rgba(0,0,0,0.22)]"
+                      fallbackClassName="text-emerald-100"
+                    />
+                  )}
                   <span className="absolute -bottom-1 -right-2 inline-flex items-center gap-1 rounded-full bg-emerald-500 px-3 py-1.5 text-sm font-semibold text-white shadow-lg">
                     <TrendingUp aria-hidden="true" size={15} strokeWidth={2.4} />
                     {data.user.elo}
@@ -1656,6 +1678,7 @@ export function PlayerProfileView({
   const [currentUser, setCurrentUser] = useState<CurrentProfileViewer | null>(
     null
   );
+  const [previewAvatarUrl, setPreviewAvatarUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [activeTab, setActiveTab] = useState<ProfileTab>("overview");
@@ -1734,6 +1757,9 @@ export function PlayerProfileView({
           }
         : current
     );
+    setPreviewAvatarUrl((current) =>
+      current ? response.avatarUrl ?? current : current
+    );
   };
 
   const handleRemoveAvatar = async () => {
@@ -1763,6 +1789,7 @@ export function PlayerProfileView({
           }
         : current
     );
+    setPreviewAvatarUrl(null);
   };
 
   const fallbackBackHref = communityId ? `/community/${communityId}` : "/";
@@ -1869,6 +1896,9 @@ export function PlayerProfileView({
         currentUser.isClaimed === true &&
         currentUser.isQuickAccess !== true) ||
       (!!data.context?.viewerCanManageCommunity && communityId.length > 0));
+  const handlePreviewAvatar = (avatarUrl: string) => {
+    setPreviewAvatarUrl(avatarUrl);
+  };
 
   const content = (
     <div
@@ -1884,9 +1914,16 @@ export function PlayerProfileView({
         recentStreakSummary={recentStreakSummary}
         ratingSeries={ratingSeries}
         canManageAvatar={canManageAvatar}
+        onPreviewAvatar={handlePreviewAvatar}
         onUploadAvatar={handleUploadAvatar}
         onRemoveAvatar={handleRemoveAvatar}
         onBack={isEmbedded ? undefined : handleBack}
+      />
+
+      <AvatarPreviewModal
+        name={data.user.name}
+        avatarUrl={previewAvatarUrl}
+        onClose={() => setPreviewAvatarUrl(null)}
       />
 
       <ProfileTabs activeTab={activeTab} onChange={setActiveTab} />

@@ -24,6 +24,8 @@ export function AvatarUploader({
   size = "xl",
   editable = true,
   helperText,
+  onPreviewAvatar,
+  previewAvatarLabel,
   onUpload,
   onRemove,
 }: {
@@ -32,6 +34,8 @@ export function AvatarUploader({
   size?: "lg" | "xl" | "hero";
   editable?: boolean;
   helperText?: string;
+  onPreviewAvatar?: (avatarUrl: string) => void;
+  previewAvatarLabel?: string;
   onUpload: (file: File) => Promise<void>;
   onRemove: () => Promise<void>;
 }) {
@@ -42,6 +46,8 @@ export function AvatarUploader({
   const [error, setError] = useState("");
   const [uploading, setUploading] = useState(false);
   const [removing, setRemoving] = useState(false);
+  const currentAvatarUrl = previewUrl ?? avatarUrl ?? null;
+  const canPreviewAvatar = !!currentAvatarUrl && !!onPreviewAvatar;
 
   useEffect(() => {
     return () => {
@@ -151,7 +157,18 @@ export function AvatarUploader({
   return (
     <div className="space-y-3">
       <div className="flex flex-col items-center gap-3 sm:flex-row sm:items-end">
-        <Avatar name={name} avatarUrl={previewUrl ?? avatarUrl} size={size} />
+        {canPreviewAvatar ? (
+          <button
+            type="button"
+            onClick={() => onPreviewAvatar(currentAvatarUrl)}
+            className="rounded-full transition hover:scale-[1.02] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]"
+            aria-label={previewAvatarLabel ?? `View profile photo of ${name}`}
+          >
+            <Avatar name={name} avatarUrl={currentAvatarUrl} size={size} />
+          </button>
+        ) : (
+          <Avatar name={name} avatarUrl={currentAvatarUrl} size={size} />
+        )}
         {editable ? (
           <div className="flex flex-wrap items-center justify-center gap-2 sm:justify-start">
             <input

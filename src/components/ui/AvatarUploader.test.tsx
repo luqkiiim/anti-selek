@@ -105,6 +105,8 @@ describe("AvatarUploader", () => {
           name="Alex Lee"
           avatarUrl={props?.avatarUrl}
           helperText={props?.helperText}
+          onPreviewAvatar={props?.onPreviewAvatar}
+          previewAvatarLabel={props?.previewAvatarLabel}
           onUpload={onUpload}
           onRemove={onRemove}
         />
@@ -226,6 +228,56 @@ describe("AvatarUploader", () => {
     });
 
     expect(onRemove).toHaveBeenCalledTimes(1);
+  });
+
+  it("supports avatar preview without blocking other actions when enabled", async () => {
+    const onPreviewAvatar = vi.fn();
+    const { onRemove } = await renderUploader({
+      avatarUrl: "https://blob.vercel-storage.com/avatars/alex.webp",
+      onPreviewAvatar,
+    });
+
+    const previewButton = container.querySelector(
+      'button[aria-label="View profile photo of Alex Lee"]'
+    ) as HTMLButtonElement | null;
+    expect(previewButton).toBeTruthy();
+
+    await act(async () => {
+      previewButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    const removeButton = getButtonByText("Remove photo");
+    expect(removeButton).toBeTruthy();
+
+    await act(async () => {
+      removeButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    expect(onPreviewAvatar).toHaveBeenCalledWith(
+      "https://blob.vercel-storage.com/avatars/alex.webp"
+    );
+    expect(onRemove).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not render a preview trigger unless preview support is enabled", async () => {
+    await renderUploader({
+      avatarUrl: "https://blob.vercel-storage.com/avatars/alex.webp",
+    });
+
+    expect(
+      container.querySelector('button[aria-label="View profile photo of Alex Lee"]')
+    ).toBeNull();
+  });
+
+  it("does not render a preview trigger when there is no uploaded photo", async () => {
+    await renderUploader({
+      onPreviewAvatar: vi.fn(),
+    });
+
+    expect(
+      container.querySelector('button[aria-label="View profile photo of Alex Lee"]')
+    ).toBeNull();
   });
 
   it("rejects invalid file types before opening the crop modal", async () => {
