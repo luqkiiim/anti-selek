@@ -1,5 +1,6 @@
 import { randomBytes } from "node:crypto";
 
+export const AVATAR_MAX_SOURCE_FILE_BYTES = 20 * 1024 * 1024;
 export const AVATAR_MAX_FILE_BYTES = 4 * 1024 * 1024;
 export const AVATAR_ALLOWED_MIME_TYPES = [
   "image/jpeg",
@@ -21,7 +22,7 @@ export function isSupportedAvatarMimeType(
   return (AVATAR_ALLOWED_MIME_TYPES as readonly string[]).includes(value);
 }
 
-export function getAvatarValidationError({
+function getAvatarBaseValidationError({
   mimeType,
   size,
 }: {
@@ -36,8 +37,42 @@ export function getAvatarValidationError({
     return "Choose an image file to upload.";
   }
 
+  return null;
+}
+
+export function getAvatarSourceValidationError({
+  mimeType,
+  size,
+}: {
+  mimeType: string;
+  size: number;
+}) {
+  const validationError = getAvatarBaseValidationError({ mimeType, size });
+  if (validationError) {
+    return validationError;
+  }
+
+  if (size > AVATAR_MAX_SOURCE_FILE_BYTES) {
+    return "Choose an image smaller than 20MB before cropping.";
+  }
+
+  return null;
+}
+
+export function getAvatarUploadValidationError({
+  mimeType,
+  size,
+}: {
+  mimeType: string;
+  size: number;
+}) {
+  const validationError = getAvatarBaseValidationError({ mimeType, size });
+  if (validationError) {
+    return validationError;
+  }
+
   if (size > AVATAR_MAX_FILE_BYTES) {
-    return "Avatar images must be 4MB or smaller.";
+    return "Avatar images must be 4MB or smaller after cropping.";
   }
 
   return null;

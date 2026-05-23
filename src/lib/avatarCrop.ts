@@ -1,4 +1,5 @@
 export const AVATAR_CROP_OUTPUT_SIZE = 512;
+const AVATAR_CROP_OUTPUT_QUALITY = 0.86;
 
 export interface AvatarCropArea {
   x: number;
@@ -15,17 +16,11 @@ const MIME_EXTENSION_MAP: Record<SupportedAvatarMimeType, string> = {
   "image/webp": "webp",
 };
 
-function normalizeAvatarOutputType(type: string): SupportedAvatarMimeType {
-  if (
-    type === "image/jpeg" ||
-    type === "image/png" ||
-    type === "image/webp"
-  ) {
-    return type;
-  }
-
-  return "image/png";
-}
+const AVATAR_CROP_OUTPUT_TYPES: readonly SupportedAvatarMimeType[] = [
+  "image/webp",
+  "image/jpeg",
+  "image/png",
+];
 
 function replaceFileExtension(fileName: string, nextExtension: string) {
   const trimmedName = fileName.trim();
@@ -54,7 +49,6 @@ export async function createCroppedAvatarFile({
   src,
   crop,
   fileName,
-  mimeType,
   outputSize = AVATAR_CROP_OUTPUT_SIZE,
   imageLoader = loadAvatarCropImage,
   createCanvas = () => document.createElement("canvas"),
@@ -62,13 +56,10 @@ export async function createCroppedAvatarFile({
   src: string;
   crop: AvatarCropArea;
   fileName: string;
-  mimeType: string;
   outputSize?: number;
   imageLoader?: (src: string) => Promise<CanvasImageSource>;
   createCanvas?: () => HTMLCanvasElement;
 }) {
-  const normalizedType = normalizeAvatarOutputType(mimeType);
-  const extension = MIME_EXTENSION_MAP[normalizedType];
   const image = await imageLoader(src);
   const canvas = createCanvas();
   const context = canvas.getContext("2d");
@@ -95,23 +86,36 @@ export async function createCroppedAvatarFile({
     outputSize
   );
 
-  const blob = await new Promise<Blob>((resolve, reject) => {
-    canvas.toBlob(
-      (result) => {
-        if (result) {
+  let blob: Blob | null = null;
+  let outputType: SupportedAvatarMimeType | null = null;
+
+  for (const nextOutputType of AVATAR_CROP_OUTPUT_TYPES) {
+    blob = await new Promise<Blob | null>((resolve) => {
+      canvas.toBlob(
+        (result) => {
           resolve(result);
-          return;
-        }
+        },
+        nextOutputType,
+        nextOutputType === "image/png" ? undefined : AVATAR_CROP_OUTPUT_QUALITY
+      );
+    });
 
-        reject(new Error("Failed to prepare the cropped avatar."));
-      },
-      normalizedType,
-      normalizedType === "image/png" ? undefined : 0.92
-    );
-  });
+    if (blob) {
+      outputType = nextOutputType;
+      break;
+    }
+  }
 
-  return new File([blob], replaceFileExtension(fileName, extension), {
-    type: normalizedType,
-    lastModified: Date.now(),
-  });
+  if (!blob || !outputType) {
+    throw new Error("Failed to prepare the cropped avatar.");
+  }
+
+  return new File(
+    [blob],
+    replaceFileExtension(fileName, MIME_EXTENSION_MAP[outputType]),
+    {
+      type: outputType,
+      lastModified: Date.now(),
+    }
+  );
 }

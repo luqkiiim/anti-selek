@@ -1,8 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   AVATAR_MAX_FILE_BYTES,
+  AVATAR_MAX_SOURCE_FILE_BYTES,
   buildAvatarObjectKey,
-  getAvatarValidationError,
+  getAvatarSourceValidationError,
+  getAvatarUploadValidationError,
   isAvatarStorageConfigured,
   resolveAvatarUrl,
 } from "@/lib/avatar";
@@ -32,23 +34,39 @@ describe("avatar helpers", () => {
     expect(resolveAvatarUrl(null)).toBeNull();
   });
 
-  it("validates image type and max size", () => {
+  it("validates source files before cropping", () => {
     expect(
-      getAvatarValidationError({
+      getAvatarSourceValidationError({
         mimeType: "image/gif",
         size: 128,
       })
     ).toBe("Only JPG, PNG, and WebP images are supported.");
 
     expect(
-      getAvatarValidationError({
+      getAvatarSourceValidationError({
         mimeType: "image/png",
         size: AVATAR_MAX_FILE_BYTES + 1,
       })
-    ).toBe("Avatar images must be 4MB or smaller.");
+    ).toBeNull();
 
     expect(
-      getAvatarValidationError({
+      getAvatarSourceValidationError({
+        mimeType: "image/png",
+        size: AVATAR_MAX_SOURCE_FILE_BYTES + 1,
+      })
+    ).toBe("Choose an image smaller than 20MB before cropping.");
+  });
+
+  it("validates final upload size after cropping", () => {
+    expect(
+      getAvatarUploadValidationError({
+        mimeType: "image/png",
+        size: AVATAR_MAX_FILE_BYTES + 1,
+      })
+    ).toBe("Avatar images must be 4MB or smaller after cropping.");
+
+    expect(
+      getAvatarUploadValidationError({
         mimeType: "image/png",
         size: 1024,
       })

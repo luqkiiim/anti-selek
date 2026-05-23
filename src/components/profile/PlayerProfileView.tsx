@@ -759,7 +759,7 @@ function ProfileHero({
                   name={data.user.name}
                   avatarUrl={data.user.avatarUrl}
                   size="hero"
-                  helperText="JPG, PNG, or WebP up to 4MB. Drag and zoom to crop before saving."
+                  helperText="Choose a JPG, PNG, or WebP photo, then drag and zoom to crop it. We compress the final avatar before saving."
                   onUpload={onUploadAvatar}
                   onRemove={onRemoveAvatar}
                 />

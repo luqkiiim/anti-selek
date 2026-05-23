@@ -134,7 +134,7 @@ describe("user avatar route", () => {
     const body = await response.json();
 
     expect(response.status).toBe(400);
-    expect(body.error).toBe("Avatar images must be 4MB or smaller.");
+    expect(body.error).toBe("Avatar images must be 4MB or smaller after cropping.");
     expect(mocks.uploadAvatarObject).not.toHaveBeenCalled();
   });
 

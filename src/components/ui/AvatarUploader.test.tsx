@@ -4,6 +4,10 @@ import { act, type ComponentProps } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AvatarUploader } from "@/components/ui/AvatarUploader";
+import {
+  AVATAR_MAX_FILE_BYTES,
+  AVATAR_MAX_SOURCE_FILE_BYTES,
+} from "@/lib/avatar";
 
 const mocks = vi.hoisted(() => ({
   createCroppedAvatarFile: vi.fn(),
@@ -140,6 +144,20 @@ describe("AvatarUploader", () => {
     );
   });
 
+  it("allows an 8MB source image to reach the crop modal", async () => {
+    const { input, onUpload } = await renderUploader();
+
+    await chooseFile(
+      input,
+      new File([new Uint8Array(8 * 1024 * 1024)], "avatar.png", {
+        type: "image/png",
+      })
+    );
+
+    expect(document.body.textContent).toContain("Crop photo");
+    expect(onUpload).not.toHaveBeenCalled();
+  });
+
   it("closes the crop modal without uploading when canceled", async () => {
     const { input, onUpload } = await renderUploader();
 
@@ -227,20 +245,56 @@ describe("AvatarUploader", () => {
     expect(onUpload).not.toHaveBeenCalled();
   });
 
-  it("rejects oversize files before opening the crop modal", async () => {
+  it("rejects source files above 20MB before opening the crop modal", async () => {
     const { input, onUpload } = await renderUploader();
 
     await chooseFile(
       input,
-      new File([new Uint8Array(4 * 1024 * 1024 + 1)], "avatar.png", {
+      new File([new Uint8Array(AVATAR_MAX_SOURCE_FILE_BYTES + 1)], "avatar.png", {
         type: "image/png",
       })
     );
 
     expect(document.body.textContent).toContain(
-      "Avatar images must be 4MB or smaller."
+      "Choose an image smaller than 20MB before cropping."
     );
     expect(document.body.textContent).not.toContain("Crop photo");
     expect(onUpload).not.toHaveBeenCalled();
+  });
+
+  it("rejects cropped files above 4MB before upload", async () => {
+    mocks.createCroppedAvatarFile.mockResolvedValueOnce(
+      new File([new Uint8Array(AVATAR_MAX_FILE_BYTES + 1)], "cropped.webp", {
+        type: "image/webp",
+      })
+    );
+
+    const { input, onUpload } = await renderUploader();
+
+    await chooseFile(
+      input,
+      new File([new Uint8Array([1, 2, 3])], "avatar.png", {
+        type: "image/png",
+      })
+    );
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const confirmButton = getButtonByText("Use this crop");
+    expect(confirmButton).toBeTruthy();
+
+    await act(async () => {
+      confirmButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(onUpload).not.toHaveBeenCalled();
+    expect(document.body.textContent).toContain(
+      "Avatar images must be 4MB or smaller after cropping."
+    );
   });
 });

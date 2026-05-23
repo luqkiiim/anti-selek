@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import {
   buildAvatarObjectKey,
-  getAvatarValidationError,
+  getAvatarUploadValidationError,
   isAvatarStorageConfigured,
   resolveAvatarUrl,
 } from "@/lib/avatar";
@@ -158,7 +158,7 @@ export async function POST(
       );
     }
 
-    const validationError = getAvatarValidationError({
+    const validationError = getAvatarUploadValidationError({
       mimeType: avatarFile.type,
       size: avatarFile.size,
     });

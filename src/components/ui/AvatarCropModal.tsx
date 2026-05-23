@@ -76,7 +76,6 @@ export function AvatarCropModal({
         src: imageUrl,
         crop: croppedAreaPixels,
         fileName: file.name,
-        mimeType: file.type,
       });
       onConfirm(croppedFile);
       onClose();

@@ -5,7 +5,10 @@ import { useEffect, useRef, useState } from "react";
 import { Upload, X } from "lucide-react";
 import { Avatar } from "@/components/ui/Avatar";
 import { AvatarCropModal } from "@/components/ui/AvatarCropModal";
-import { getAvatarValidationError } from "@/lib/avatar";
+import {
+  getAvatarSourceValidationError,
+  getAvatarUploadValidationError,
+} from "@/lib/avatar";
 
 function getErrorMessage(error: unknown) {
   if (error instanceof Error && error.message.trim().length > 0) {
@@ -72,7 +75,7 @@ export function AvatarUploader({
       return;
     }
 
-    const validationError = getAvatarValidationError({
+    const validationError = getAvatarSourceValidationError({
       mimeType: file.type,
       size: file.size,
     });
@@ -101,6 +104,15 @@ export function AvatarUploader({
   };
 
   const handleConfirmCrop = async (file: File) => {
+    const validationError = getAvatarUploadValidationError({
+      mimeType: file.type,
+      size: file.size,
+    });
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
+
     const nextPreviewUrl = URL.createObjectURL(file);
     if (previewUrl) {
       URL.revokeObjectURL(previewUrl);
