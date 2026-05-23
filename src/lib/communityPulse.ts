@@ -362,6 +362,36 @@ function getOrderedPairPlayers(
   return left.id.localeCompare(right.id) <= 0 ? [left, right] : [right, left];
 }
 
+function selectUniquePlayerPairs<
+  T extends {
+    players: [CommunityPulseParticipant, CommunityPulseParticipant];
+  },
+>(pairs: T[]) {
+  const selected: T[] = [];
+  const usedPlayerIds = new Set<string>();
+
+  for (const pair of pairs) {
+    const [leftPlayer, rightPlayer] = pair.players;
+
+    if (
+      usedPlayerIds.has(leftPlayer.id) ||
+      usedPlayerIds.has(rightPlayer.id)
+    ) {
+      continue;
+    }
+
+    selected.push(pair);
+    usedPlayerIds.add(leftPlayer.id);
+    usedPlayerIds.add(rightPlayer.id);
+
+    if (selected.length === 3) {
+      break;
+    }
+  }
+
+  return selected;
+}
+
 function updateRivalry(
   aggregates: Map<string, RivalryAggregate>,
   left: CommunityPulseParticipant,
@@ -419,7 +449,8 @@ function buildRivalries(matches: CommunityPulseMatchSource[]) {
     }
   }
 
-  return Array.from(aggregates.values())
+  return selectUniquePlayerPairs(
+    Array.from(aggregates.values())
     .filter((rivalry) => rivalry.matches >= 2)
     .sort(
       (left, right) =>
@@ -431,7 +462,7 @@ function buildRivalries(matches: CommunityPulseMatchSource[]) {
           sensitivity: "base",
         })
     )
-    .slice(0, 3)
+  )
     .map((rivalry) => ({
       players: rivalry.players,
       matches: rivalry.matches,
@@ -522,7 +553,8 @@ function buildPartnerships(matches: CommunityPulseMatchSource[]) {
     );
   }
 
-  return Array.from(aggregates.values())
+  return selectUniquePlayerPairs(
+    Array.from(aggregates.values())
     .filter(
       (partnership) =>
         partnership.matches >= PREFERRED_CONNECTION_MIN_MATCHES
@@ -541,7 +573,7 @@ function buildPartnerships(matches: CommunityPulseMatchSource[]) {
           sensitivity: "base",
         })
     )
-    .slice(0, 3)
+  )
     .map((partnership) => ({
       players: partnership.players,
       matches: partnership.matches,

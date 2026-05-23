@@ -246,6 +246,147 @@ describe("communityPulse", () => {
     });
   });
 
+  it("keeps only the top-ranked unique rivalry per player", () => {
+    const session = createSession("unique-rivalries");
+    const result = buildCommunityPulse({
+      members: Object.values(players).map((player) => createMember(player)),
+      sessions: [session],
+      completedMatches: [
+        createMatch("m1", {
+          session,
+          completedAt: "2026-05-01T10:00:00.000Z",
+          team1: [players.alice, players.ben],
+          team2: [players.dan, players.eli],
+          team1Score: 21,
+          team2Score: 18,
+          winnerTeam: 1,
+        }),
+        createMatch("m2", {
+          session,
+          completedAt: "2026-05-02T10:00:00.000Z",
+          team1: [players.alice, players.cara],
+          team2: [players.dan, players.farah],
+          team1Score: 17,
+          team2Score: 21,
+          winnerTeam: 2,
+        }),
+        createMatch("m3", {
+          session,
+          completedAt: "2026-05-03T10:00:00.000Z",
+          team1: [players.alice, players.gina],
+          team2: [players.dan, players.hugo],
+          team1Score: 21,
+          team2Score: 19,
+          winnerTeam: 1,
+        }),
+        createMatch("m4", {
+          session,
+          completedAt: "2026-05-04T10:00:00.000Z",
+          team1: [players.alice, players.ben],
+          team2: [players.dan, players.farah],
+          team1Score: 18,
+          team2Score: 21,
+          winnerTeam: 2,
+        }),
+        createMatch("m5", {
+          session,
+          completedAt: "2026-05-05T10:00:00.000Z",
+          team1: [players.alice, players.cara],
+          team2: [players.eli, players.gina],
+          team1Score: 21,
+          team2Score: 17,
+          winnerTeam: 1,
+        }),
+        createMatch("m6", {
+          session,
+          completedAt: "2026-05-06T10:00:00.000Z",
+          team1: [players.alice, players.hugo],
+          team2: [players.eli, players.farah],
+          team1Score: 18,
+          team2Score: 21,
+          winnerTeam: 2,
+        }),
+        createMatch("m7", {
+          session,
+          completedAt: "2026-05-01T08:00:00.000Z",
+          team1: [players.ben, players.gina],
+          team2: [players.farah, players.hugo],
+          team1Score: 21,
+          team2Score: 18,
+          winnerTeam: 1,
+        }),
+        createMatch("m8", {
+          session,
+          completedAt: "2026-05-02T08:00:00.000Z",
+          team1: [players.ben, players.cara],
+          team2: [players.farah, players.dan],
+          team1Score: 18,
+          team2Score: 21,
+          winnerTeam: 2,
+        }),
+        createMatch("m9", {
+          session,
+          completedAt: "2026-05-03T08:00:00.000Z",
+          team1: [players.ben, players.eli],
+          team2: [players.farah, players.gina],
+          team1Score: 21,
+          team2Score: 16,
+          winnerTeam: 1,
+        }),
+      ],
+    });
+
+    expect(result.rivalries[0]).toMatchObject({
+      players: [players.alice, players.dan],
+      matches: 4,
+      playerOneWins: 2,
+      playerTwoWins: 2,
+    });
+    expect(
+      result.rivalries.filter((rivalry) =>
+        rivalry.players.some((player) => player.id === players.alice.id)
+      )
+    ).toHaveLength(1);
+    expect(result.rivalries).not.toContainEqual(
+      expect.objectContaining({
+        players: [players.alice, players.eli],
+      })
+    );
+  });
+
+  it("allows rivalry results to stay short when only repeat players remain", () => {
+    const session = createSession("short-rivalries");
+    const result = buildCommunityPulse({
+      members: Object.values(players).map((player) => createMember(player)),
+      sessions: [session],
+      completedMatches: [
+        createMatch("m1", {
+          session,
+          completedAt: "2026-05-01T10:00:00.000Z",
+          team1: [players.alice, players.ben],
+          team2: [players.cara, players.dan],
+          team1Score: 21,
+          team2Score: 18,
+          winnerTeam: 1,
+        }),
+        createMatch("m2", {
+          session,
+          completedAt: "2026-05-02T10:00:00.000Z",
+          team1: [players.alice, players.eli],
+          team2: [players.cara, players.farah],
+          team1Score: 18,
+          team2Score: 21,
+          winnerTeam: 2,
+        }),
+      ],
+    });
+
+    expect(result.rivalries).toHaveLength(1);
+    expect(result.rivalries.map((rivalry) => rivalry.players)).toEqual([
+      [players.alice, players.cara],
+    ]);
+  });
+
   it("ranks strong partner chemistry above a higher-volume .500 duo", () => {
     const session = createSession("partnerships");
     const result = buildCommunityPulse({
@@ -291,6 +432,141 @@ describe("communityPulse", () => {
       losses: 13,
       winRate: 50,
     });
+  });
+
+  it("keeps only the top-ranked unique partnership per player", () => {
+    const session = createSession("unique-partnerships");
+    const result = buildCommunityPulse({
+      members: Object.values(players).map((player) => createMember(player)),
+      sessions: [session],
+      completedMatches: [
+        ...Array.from({ length: 9 }, (_, index) =>
+          createMatch(`alice-ben-${index + 1}`, {
+            session,
+            completedAt: `2026-05-${String(index + 1).padStart(2, "0")}T10:00:00.000Z`,
+            team1: [players.alice, players.ben],
+            team2: [players.eli, players.farah],
+            team1Score: index < 8 ? 21 : 18,
+            team2Score: index < 8 ? 15 : 21,
+            winnerTeam: index < 8 ? 1 : 2,
+          })
+        ),
+        ...Array.from({ length: 8 }, (_, index) =>
+          createMatch(`alice-cara-${index + 1}`, {
+            session,
+            completedAt: `2026-06-${String(index + 1).padStart(2, "0")}T10:00:00.000Z`,
+            team1: [players.alice, players.cara],
+            team2: [players.gina, players.hugo],
+            team1Score: index < 7 ? 21 : 17,
+            team2Score: index < 7 ? 16 : 21,
+            winnerTeam: index < 7 ? 1 : 2,
+          })
+        ),
+        ...Array.from({ length: 7 }, (_, index) =>
+          createMatch(`dan-eli-${index + 1}`, {
+            session,
+            completedAt: `2026-07-${String(index + 1).padStart(2, "0")}T10:00:00.000Z`,
+            team1: [players.dan, players.eli],
+            team2: [players.ben, players.farah],
+            team1Score: index < 6 ? 21 : 18,
+            team2Score: index < 6 ? 14 : 21,
+            winnerTeam: index < 6 ? 1 : 2,
+          })
+        ),
+        ...Array.from({ length: 6 }, (_, index) =>
+          createMatch(`farah-gina-${index + 1}`, {
+            session,
+            completedAt: `2026-08-${String(index + 1).padStart(2, "0")}T10:00:00.000Z`,
+            team1: [players.farah, players.gina],
+            team2: [players.cara, players.hugo],
+            team1Score: index < 5 ? 21 : 19,
+            team2Score: index < 5 ? 18 : 21,
+            winnerTeam: index < 5 ? 1 : 2,
+          })
+        ),
+      ],
+    });
+
+    expect(result.partnerships.map((partnership) => partnership.players)).toEqual([
+      [players.alice, players.ben],
+      [players.dan, players.eli],
+      [players.farah, players.gina],
+    ]);
+    expect(result.partnerships).not.toContainEqual(
+      expect.objectContaining({
+        players: [players.alice, players.cara],
+      })
+    );
+  });
+
+  it("allows partnership results to stay short when only repeat players remain", () => {
+    const session = createSession("short-partnerships");
+    const result = buildCommunityPulse({
+      members: Object.values(players).map((player) => createMember(player)),
+      sessions: [session],
+      completedMatches: [
+        createMatch("m1", {
+          session,
+          completedAt: "2026-05-01T10:00:00.000Z",
+          team1: [players.alice, players.ben],
+          team2: [players.eli, players.farah],
+          team1Score: 21,
+          team2Score: 10,
+          winnerTeam: 1,
+        }),
+        createMatch("m2", {
+          session,
+          completedAt: "2026-05-02T10:00:00.000Z",
+          team1: [players.alice, players.ben],
+          team2: [players.gina, players.hugo],
+          team1Score: 21,
+          team2Score: 11,
+          winnerTeam: 1,
+        }),
+        createMatch("m3", {
+          session,
+          completedAt: "2026-05-03T10:00:00.000Z",
+          team1: [players.cara, players.dan],
+          team2: [players.eli, players.gina],
+          team1Score: 21,
+          team2Score: 15,
+          winnerTeam: 1,
+        }),
+        createMatch("m4", {
+          session,
+          completedAt: "2026-05-04T10:00:00.000Z",
+          team1: [players.cara, players.dan],
+          team2: [players.ben, players.hugo],
+          team1Score: 21,
+          team2Score: 16,
+          winnerTeam: 1,
+        }),
+        createMatch("m5", {
+          session,
+          completedAt: "2026-05-05T10:00:00.000Z",
+          team1: [players.alice, players.cara],
+          team2: [players.ben, players.eli],
+          team1Score: 21,
+          team2Score: 19,
+          winnerTeam: 1,
+        }),
+        createMatch("m6", {
+          session,
+          completedAt: "2026-05-06T10:00:00.000Z",
+          team1: [players.alice, players.cara],
+          team2: [players.dan, players.farah],
+          team1Score: 21,
+          team2Score: 18,
+          winnerTeam: 1,
+        }),
+      ],
+    });
+
+    expect(result.partnerships).toHaveLength(2);
+    expect(result.partnerships.map((partnership) => partnership.players)).toEqual([
+      [players.alice, players.ben],
+      [players.cara, players.dan],
+    ]);
   });
 
   it("requires at least two matches together before a partnership appears", () => {
