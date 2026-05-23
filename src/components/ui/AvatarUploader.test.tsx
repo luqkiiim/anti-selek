@@ -148,8 +148,11 @@ describe("AvatarUploader", () => {
 
     expect(document.body.textContent).toContain("Crop photo");
     expect(document.body.textContent).toContain(
-      "Adjust the framing if you want to, and we will keep the photo in its original shape."
+      "Adjust the framing if you want to, and use the circle guide to preview how the avatar will look."
     );
+    expect(
+      container.querySelector('[data-testid="avatar-circle-guide"]')
+    ).not.toBeNull();
   });
 
   it("allows an 8MB source image to reach the crop modal", async () => {

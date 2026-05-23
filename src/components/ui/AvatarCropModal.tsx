@@ -122,7 +122,7 @@ export function AvatarCropModal({
   return (
     <ModalFrame
       title="Crop photo"
-      subtitle="Adjust the framing if you want to, and we will keep the photo in its original shape."
+      subtitle="Adjust the framing if you want to, and use the circle guide to preview how the avatar will look."
       onClose={processing ? () => undefined : onClose}
       bodyScroll={false}
       bodyClassName="flex min-h-0 flex-1 flex-col"
@@ -164,8 +164,15 @@ export function AvatarCropModal({
               setCroppedAreaPixels(areaPixels);
             }}
           />
+          <div className="pointer-events-none absolute inset-0 flex items-center justify-center px-6 py-6">
+            <div
+              aria-hidden="true"
+              data-testid="avatar-circle-guide"
+              className="aspect-square w-full max-w-[17rem] rounded-full border-2 border-white/90 shadow-[0_0_0_9999px_rgba(7,10,10,0.34)] sm:max-w-[19rem]"
+            />
+          </div>
           <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-[rgba(7,10,10,0.58)] to-transparent px-4 pb-4 pt-12 text-center text-xs text-white/82">
-            The visible frame keeps your photo's original shape. Zooming in will crop more tightly, but wide and tall photos stay wide or tall when we save them.
+            The circle shows how the avatar will look in the app. We still save the full photo crop in its original shape, so wide and tall photos stay wide or tall.
           </div>
         </div>
 
