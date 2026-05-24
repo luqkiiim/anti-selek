@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "engines": {
-    "node": ">=20 <23",
+    "node": ">=24 <25",
     "npm": ">=10"
   },
   "scripts": {
@@ -42,7 +42,7 @@
     "@playwright/test": "^1.55.1",
     "@tailwindcss/postcss": "^4",
     "@types/bcryptjs": "^2.4.6",
-    "@types/node": "^20",
+    "@types/node": "^24",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@vitest/ui": "^4.0.18",

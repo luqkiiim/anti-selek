@@ -86,8 +86,8 @@ Runtime database selection:
 
 ## Local Setup
 
-Use Node.js `20` or `22` LTS. Node `24` is intentionally blocked because
-Prisma `5.22` and the local Next.js dev server are unreliable there.
+Use Node.js `24`. The repo pins Node `24` locally so development matches the
+production runtime.
 
 If you use `nvm`, run:
 
