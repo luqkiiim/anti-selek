@@ -94,6 +94,18 @@ export function ClaimRequestsPanel({
                     <p className="text-xs text-gray-600 mt-1">{claimRequest.note}</p>
                   </div>
                 ) : null}
+                {claimRequest.linkedCommunityNames &&
+                claimRequest.linkedCommunityNames.length > 1 ? (
+                  <div className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-blue-700">
+                      Linked offline identity
+                    </p>
+                    <p className="mt-1 text-xs font-semibold text-blue-800">
+                      Approval also transfers this player in{" "}
+                      {claimRequest.linkedCommunityNames.join(", ")}.
+                    </p>
+                  </div>
+                ) : null}
                 <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">
                   Requested {new Date(claimRequest.createdAt).toLocaleDateString()}
                 </p>

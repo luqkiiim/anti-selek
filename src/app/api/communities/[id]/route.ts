@@ -3,6 +3,10 @@ import bcrypt from "bcryptjs";
 import { auth } from "@/lib/auth";
 import { serializeAvatarEntity } from "@/lib/avatar";
 import { buildCommunityPulse } from "@/lib/communityPulse";
+import {
+  getCommunityStatUserResolver,
+  getOfflineIdentityInfoByUserId,
+} from "@/lib/offlineIdentities";
 import { prisma } from "@/lib/prisma";
 import { listSessionsForCommunity } from "@/app/api/sessions/listSessionsService";
 import { logAuditEvent } from "@/lib/serverAudit";
@@ -32,6 +36,7 @@ function toClaimRequestResponse(request: {
   reviewedAt: Date | null;
   requester: { id: string; name: string; email: string | null };
   target: { id: string; name: string; email: string | null };
+  linkedCommunityNames?: string[];
 }) {
   return {
     id: request.id,
@@ -44,6 +49,7 @@ function toClaimRequestResponse(request: {
     targetEmail: request.target.email,
     status: request.status,
     note: request.note,
+    linkedCommunityNames: request.linkedCommunityNames ?? [],
     createdAt: request.createdAt,
     reviewedAt: request.reviewedAt,
   };
@@ -238,17 +244,29 @@ export async function GET(
     ]);
 
     const statsByUserId = new Map<string, { wins: number; losses: number }>();
+    const offlineIdentityInfoByUserId = await getOfflineIdentityInfoByUserId(
+      prisma,
+      members.map((member) => member.user.id)
+    );
     for (const member of members) {
       statsByUserId.set(member.user.id, { wins: 0, losses: 0 });
     }
+    const resolveStatUserId = await getCommunityStatUserResolver(prisma, {
+      communityId: id,
+      memberUserIds: members.map((member) => member.user.id),
+    });
 
     for (const match of completedMatches) {
       if (match.winnerTeam !== 1 && match.winnerTeam !== 2) {
         continue;
       }
 
-      const team1Ids = [match.team1User1Id, match.team1User2Id];
-      const team2Ids = [match.team2User1Id, match.team2User2Id];
+      const team1Ids = [match.team1User1Id, match.team1User2Id].map(
+        resolveStatUserId
+      );
+      const team2Ids = [match.team2User1Id, match.team2User2Id].map(
+        resolveStatUserId
+      );
       const winners = match.winnerTeam === 1 ? team1Ids : team2Ids;
       const losers = match.winnerTeam === 1 ? team2Ids : team1Ids;
 
@@ -263,34 +281,40 @@ export async function GET(
       }
     }
 
-    const communityMembers = members.map((member) => ({
-      id: member.user.id,
-      name: member.user.name,
-      email: member.user.email,
-      avatarUrl: serializeAvatarEntity(member.user).avatarUrl,
-      status:
-        member.status === CommunityPlayerStatus.OCCASIONAL
-          ? CommunityPlayerStatus.OCCASIONAL
-          : CommunityPlayerStatus.CORE,
-      gender:
-        [PlayerGender.MALE, PlayerGender.FEMALE].includes(
-          member.user.gender as PlayerGender
-        )
-          ? member.user.gender
-          : PlayerGender.MALE,
-      partnerPreference: member.user.partnerPreference,
-      mixedSideOverride:
-        typeof member.user.mixedSideOverride === "string"
-          ? member.user.mixedSideOverride
-          : null,
-      elo: member.elo,
-      isActive: member.user.isActive,
-      isClaimed: member.user.isClaimed,
-      createdAt: member.user.createdAt,
-      wins: statsByUserId.get(member.user.id)?.wins ?? 0,
-      losses: statsByUserId.get(member.user.id)?.losses ?? 0,
-      role: member.role,
-    }));
+    const communityMembers = members.map((member) => {
+      const offlineIdentityInfo = offlineIdentityInfoByUserId.get(member.user.id);
+
+      return {
+        id: member.user.id,
+        name: member.user.name,
+        email: member.user.email,
+        avatarUrl: serializeAvatarEntity(member.user).avatarUrl,
+        status:
+          member.status === CommunityPlayerStatus.OCCASIONAL
+            ? CommunityPlayerStatus.OCCASIONAL
+            : CommunityPlayerStatus.CORE,
+        gender:
+          [PlayerGender.MALE, PlayerGender.FEMALE].includes(
+            member.user.gender as PlayerGender
+          )
+            ? member.user.gender
+            : PlayerGender.MALE,
+        partnerPreference: member.user.partnerPreference,
+        mixedSideOverride:
+          typeof member.user.mixedSideOverride === "string"
+            ? member.user.mixedSideOverride
+            : null,
+        elo: member.elo,
+        isActive: member.user.isActive,
+        isClaimed: member.user.isClaimed,
+        createdAt: member.user.createdAt,
+        wins: statsByUserId.get(member.user.id)?.wins ?? 0,
+        losses: statsByUserId.get(member.user.id)?.losses ?? 0,
+        role: member.role,
+        offlineIdentityId: offlineIdentityInfo?.offlineIdentityId ?? null,
+        linkedCommunityBadges: offlineIdentityInfo?.linkedCommunityBadges ?? [],
+      };
+    });
     const communityPulse = buildCommunityPulse({
       members: communityMembers.map((member) => ({
         id: member.id,
@@ -346,7 +370,15 @@ export async function GET(
       communityMembers,
       sessions,
       communityPulse,
-      claimRequests: claimRequests.map(toClaimRequestResponse),
+      claimRequests: claimRequests.map((claimRequest) =>
+        toClaimRequestResponse({
+          ...claimRequest,
+          linkedCommunityNames:
+            offlineIdentityInfoByUserId
+              .get(claimRequest.targetUserId)
+              ?.linkedCommunityBadges.map((badge) => badge.name) ?? [],
+        })
+      ),
     });
   } catch (error) {
     logError("Get community snapshot error", error);

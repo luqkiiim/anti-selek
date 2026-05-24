@@ -1,6 +1,7 @@
 import { randomUUID } from "crypto";
 import { prisma } from "@/lib/prisma";
 import { getCommunityEloByUserId, withCommunityElo } from "@/lib/communityElo";
+import { getOfflineIdentityInfoByUserId } from "@/lib/offlineIdentities";
 import {
   getPlayerCommunityBadges,
   withPlayerCommunityBadges,
@@ -139,6 +140,19 @@ export async function createSessionForUser({
   const uniquePlayerIds = Array.from(new Set(input.requestedPlayerIds)).filter(
     (id) => memberSet.has(id)
   );
+  const offlineIdentityInfoByUserId = await getOfflineIdentityInfoByUserId(
+    prisma,
+    uniquePlayerIds
+  );
+  const selectedOfflineIdentityIds = uniquePlayerIds
+    .map((userId) => offlineIdentityInfoByUserId.get(userId)?.offlineIdentityId)
+    .filter((id): id is string => typeof id === "string");
+  if (new Set(selectedOfflineIdentityIds).size !== selectedOfflineIdentityIds.length) {
+    throw new SessionRouteError(
+      "A linked offline player was selected more than once",
+      400
+    );
+  }
 
   if (uniquePlayerIds.length + input.normalizedGuests.length < 2) {
     throw new SessionRouteError(

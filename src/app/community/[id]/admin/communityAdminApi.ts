@@ -3,6 +3,7 @@
 import type {
   CommunityAdminClaimRequest,
   CommunityAdminCommunity,
+  CommunityAdminOfflineIdentityLink,
   CommunityAdminPlayer,
 } from "@/components/community-admin/communityAdminTypes";
 
@@ -31,13 +32,15 @@ export async function fetchCommunityAdminSnapshot(communityId: string) {
     throw new Error("Community not found or access denied");
   }
 
-  const [playersRes, claimRequestsRes] = await Promise.all([
+  const [playersRes, claimRequestsRes, offlineIdentityLinksRes] = await Promise.all([
     fetch(`/api/communities/${communityId}/members`),
     fetch(`/api/communities/${communityId}/claim-requests`),
+    fetch(`/api/communities/${communityId}/offline-identity-links`),
   ]);
-  const [playersData, claimRequestsData] = await Promise.all([
+  const [playersData, claimRequestsData, offlineIdentityLinksData] = await Promise.all([
     safeJson(playersRes),
     safeJson(claimRequestsRes),
+    safeJson(offlineIdentityLinksRes),
   ]);
 
   if (!playersRes.ok) {
@@ -45,6 +48,11 @@ export async function fetchCommunityAdminSnapshot(communityId: string) {
   }
   if (!claimRequestsRes.ok) {
     throw new Error(claimRequestsData.error || "Failed to load claim requests");
+  }
+  if (!offlineIdentityLinksRes.ok) {
+    throw new Error(
+      offlineIdentityLinksData.error || "Failed to load offline identity links"
+    );
   }
 
   return {
@@ -54,6 +62,9 @@ export async function fetchCommunityAdminSnapshot(communityId: string) {
       : [],
     claimRequests: Array.isArray(claimRequestsData)
       ? (claimRequestsData as CommunityAdminClaimRequest[])
+      : [],
+    offlineIdentityLinks: Array.isArray(offlineIdentityLinksData)
+      ? (offlineIdentityLinksData as CommunityAdminOfflineIdentityLink[])
       : [],
   };
 }

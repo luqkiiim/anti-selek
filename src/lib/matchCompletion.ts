@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { isValidMatchScore } from "@/lib/matchRules";
+import { getLinkedCommunityUserResolver } from "@/lib/offlineIdentities";
 import { getAcceptedSessionCommunityIds } from "@/lib/sessionCollab";
 import { getStandingPointsForTeam } from "@/lib/sessionStandings";
 import { MatchStatus, SessionStatus, SessionType } from "@/types/enums";
@@ -136,6 +137,7 @@ interface EloAdjustmentInput {
   matchId: string;
   communityId: string;
   userId: string;
+  sourceUserId?: string;
   delta: number;
   beforeElo: number;
   afterElo: number;
@@ -232,9 +234,10 @@ function getDisplayPlayerEloChanges({
 }) {
   const byUserId = new Map<string, EloAdjustmentInput[]>();
   for (const adjustment of adjustments) {
-    const current = byUserId.get(adjustment.userId) ?? [];
-    current.push(adjustment);
-    byUserId.set(adjustment.userId, current);
+    const displayUserId = adjustment.sourceUserId ?? adjustment.userId;
+    const displayCurrent = byUserId.get(displayUserId) ?? [];
+    displayCurrent.push(adjustment);
+    byUserId.set(displayUserId, displayCurrent);
   }
 
   return Array.from(byUserId.entries()).map(([userId, userAdjustments]) => {
@@ -289,10 +292,19 @@ async function buildCommunityEloAdjustments({
     };
   }
 
+  const linkedUserResolver = await getLinkedCommunityUserResolver(tx, {
+    userIds: playerIds,
+    communityIds,
+  });
+  const membershipUserIds = Array.from(
+    new Set(
+      playerIds.flatMap((userId) => linkedUserResolver.getLinkedUserIds(userId))
+    )
+  );
   const memberships = await tx.communityMember.findMany({
     where: {
       communityId: { in: communityIds },
-      userId: { in: playerIds },
+      userId: { in: membershipUserIds },
     },
     select: {
       communityId: true,
@@ -301,27 +313,34 @@ async function buildCommunityEloAdjustments({
     },
   });
   const membershipByCommunityAndUser = new Map<string, number>();
-  const communityIdsByUserId = new Map<string, string[]>();
   for (const membership of memberships) {
     membershipByCommunityAndUser.set(
       `${membership.communityId}:${membership.userId}`,
       membership.elo
     );
-    const current = communityIdsByUserId.get(membership.userId) ?? [];
-    current.push(membership.communityId);
-    communityIdsByUserId.set(membership.userId, current);
   }
 
   const hostCommunityId = match.session.communityId;
   const sourceEloByUserId = new Map<string, number>();
   for (const userId of playerIds) {
-    const playerCommunityIds = communityIdsByUserId.get(userId) ?? [];
+    const playerCommunityIds = communityIds.filter((communityId) => {
+      const linkedUserId = linkedUserResolver.getUserIdForCommunity(
+        userId,
+        communityId
+      );
+      return membershipByCommunityAndUser.has(`${communityId}:${linkedUserId}`);
+    });
     const sourceCommunityId =
       (hostCommunityId && playerCommunityIds.includes(hostCommunityId)
         ? hostCommunityId
         : playerCommunityIds[0]) ?? null;
+    const sourceCommunityUserId = sourceCommunityId
+      ? linkedUserResolver.getUserIdForCommunity(userId, sourceCommunityId)
+      : userId;
     const sourceElo = sourceCommunityId
-      ? membershipByCommunityAndUser.get(`${sourceCommunityId}:${userId}`)
+      ? membershipByCommunityAndUser.get(
+          `${sourceCommunityId}:${sourceCommunityUserId}`
+        )
       : undefined;
 
     sourceEloByUserId.set(
@@ -338,11 +357,18 @@ async function buildCommunityEloAdjustments({
   const adjustments: EloAdjustmentInput[] = [];
 
   for (const communityId of communityIds) {
-    const getRating = (userId: string) =>
-      membershipByCommunityAndUser.get(`${communityId}:${userId}`) ??
-      sourceEloByUserId.get(userId) ??
-      userEloByUserId.get(userId) ??
-      getPlayerSnapshotElo(match, userId);
+    const getRating = (userId: string) => {
+      const linkedUserId = linkedUserResolver.getUserIdForCommunity(
+        userId,
+        communityId
+      );
+      return (
+        membershipByCommunityAndUser.get(`${communityId}:${linkedUserId}`) ??
+        sourceEloByUserId.get(userId) ??
+        userEloByUserId.get(userId) ??
+        getPlayerSnapshotElo(match, userId)
+      );
+    };
 
     const team1AvgElo = (getRating(team1Ids[0]) + getRating(team1Ids[1])) / 2;
     const team2AvgElo = (getRating(team2Ids[0]) + getRating(team2Ids[1])) / 2;
@@ -357,8 +383,12 @@ async function buildCommunityEloAdjustments({
     teamDeltasByCommunityId.set(communityId, deltas);
 
     for (const userId of team1Ids) {
+      const linkedUserId = linkedUserResolver.getUserIdForCommunity(
+        userId,
+        communityId
+      );
       const beforeElo = membershipByCommunityAndUser.get(
-        `${communityId}:${userId}`
+        `${communityId}:${linkedUserId}`
       );
       if (beforeElo === undefined || isGuestByUserId.get(userId) === true) {
         continue;
@@ -367,7 +397,8 @@ async function buildCommunityEloAdjustments({
       adjustments.push({
         matchId: match.id,
         communityId,
-        userId,
+        userId: linkedUserId,
+        sourceUserId: userId,
         delta: deltas.team1Delta,
         beforeElo,
         afterElo: beforeElo + deltas.team1Delta,
@@ -375,8 +406,12 @@ async function buildCommunityEloAdjustments({
     }
 
     for (const userId of team2Ids) {
+      const linkedUserId = linkedUserResolver.getUserIdForCommunity(
+        userId,
+        communityId
+      );
       const beforeElo = membershipByCommunityAndUser.get(
-        `${communityId}:${userId}`
+        `${communityId}:${linkedUserId}`
       );
       if (beforeElo === undefined || isGuestByUserId.get(userId) === true) {
         continue;
@@ -385,7 +420,8 @@ async function buildCommunityEloAdjustments({
       adjustments.push({
         matchId: match.id,
         communityId,
-        userId,
+        userId: linkedUserId,
+        sourceUserId: userId,
         delta: deltas.team2Delta,
         beforeElo,
         afterElo: beforeElo + deltas.team2Delta,
@@ -598,7 +634,9 @@ export async function finalizeMatchResultInTransaction(
     }
 
     await getMatchEloAdjustmentDelegate(tx)?.createMany?.({
-      data: communityEloResult.adjustments,
+      data: communityEloResult.adjustments.map(
+        ({ sourceUserId: _sourceUserId, ...adjustment }) => adjustment
+      ),
     });
   } else if (!match.session.isTest && match.session.communityId) {
     const team1Ids = [match.team1User1Id, match.team1User2Id];

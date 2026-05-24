@@ -1,4 +1,5 @@
 import type { Prisma, PrismaClient } from "@prisma/client";
+import { getLinkedCommunityUserResolver } from "@/lib/offlineIdentities";
 import {
   SessionCommunityRole,
   SessionCommunityStatus,
@@ -338,6 +339,16 @@ export async function getPlayerCommunityBadges(
     return new Map<string, Array<{ id: string; name: string; elo: number }>>();
   }
 
+  const linkedUserResolver = await getLinkedCommunityUserResolver(tx, {
+    userIds: uniqueUserIds,
+    communityIds: uniqueCommunityIds,
+  });
+  const candidateUserIds = Array.from(
+    new Set(
+      uniqueUserIds.flatMap((userId) => linkedUserResolver.getLinkedUserIds(userId))
+    )
+  );
+
   const communityMemberDelegate = (
     tx as unknown as {
       communityMember?: {
@@ -377,7 +388,7 @@ export async function getPlayerCommunityBadges(
   const rows = await communityMemberDelegate.findMany({
     where: {
       communityId: { in: uniqueCommunityIds },
-      userId: { in: uniqueUserIds },
+      userId: { in: candidateUserIds },
     },
     select: {
       userId: true,
@@ -391,18 +402,32 @@ export async function getPlayerCommunityBadges(
     },
   });
 
+  const rowByCommunityAndUser = new Map(
+    rows.map((row) => [`${row.community.id}:${row.userId}`, row])
+  );
   const badgesByUserId = new Map<
     string,
     Array<{ id: string; name: string; elo: number }>
   >();
-  for (const row of rows) {
-    const current = badgesByUserId.get(row.userId) ?? [];
-    current.push({
-      id: row.community.id,
-      name: row.community.name,
-      elo: row.elo,
-    });
-    badgesByUserId.set(row.userId, current);
+  for (const sourceUserId of uniqueUserIds) {
+    const badges: Array<{ id: string; name: string; elo: number }> = [];
+    for (const communityId of uniqueCommunityIds) {
+      const linkedUserId = linkedUserResolver.getUserIdForCommunity(
+        sourceUserId,
+        communityId
+      );
+      const row = rowByCommunityAndUser.get(`${communityId}:${linkedUserId}`);
+      if (!row) continue;
+
+      badges.push({
+        id: row.community.id,
+        name: row.community.name,
+        elo: row.elo,
+      });
+    }
+    if (badges.length > 0) {
+      badgesByUserId.set(sourceUserId, badges);
+    }
   }
 
   for (const badges of badgesByUserId.values()) {

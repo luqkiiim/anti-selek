@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { isClaimableCommunityPlaceholder } from "@/lib/communityClaims";
 import { getClaimRequesterEligibility } from "@/lib/communityClaimRules";
+import { getOfflineIdentityInfoByUserId } from "@/lib/offlineIdentities";
 import { isQuickAccessSession } from "@/lib/quickAccess";
 import { ClaimRequestStatus } from "@/types/enums";
 import { logError, safeErrorResponse } from "@/lib/errors";
@@ -21,6 +22,7 @@ function toClaimRequestResponse(request: {
   reviewedAt: Date | null;
   requester: { id: string; name: string; email: string | null };
   target: { id: string; name: string; email: string | null };
+  linkedCommunityNames?: string[];
 }) {
   return {
     id: request.id,
@@ -33,6 +35,7 @@ function toClaimRequestResponse(request: {
     targetEmail: request.target.email,
     status: request.status,
     note: request.note,
+    linkedCommunityNames: request.linkedCommunityNames ?? [],
     createdAt: request.createdAt,
     reviewedAt: request.reviewedAt,
   };
@@ -107,7 +110,22 @@ export async function GET(
       orderBy: { createdAt: "asc" },
     });
 
-    return NextResponse.json(requests.map(toClaimRequestResponse));
+    const offlineIdentityInfoByUserId = await getOfflineIdentityInfoByUserId(
+      prisma,
+      requests.map((item) => item.targetUserId)
+    );
+
+    return NextResponse.json(
+      requests.map((requestItem) =>
+        toClaimRequestResponse({
+          ...requestItem,
+          linkedCommunityNames:
+            offlineIdentityInfoByUserId
+              .get(requestItem.targetUserId)
+              ?.linkedCommunityBadges.map((badge) => badge.name) ?? [],
+        })
+      )
+    );
   } catch (error) {
     logError("List community claim requests error", error);
     return safeErrorResponse();

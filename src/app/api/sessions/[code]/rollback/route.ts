@@ -136,6 +136,7 @@ export async function POST(
           status: MatchStatus.COMPLETED,
         },
         select: {
+          id: true,
           team1User1Id: true,
           team1User2Id: true,
           team2User1Id: true,
@@ -145,30 +146,75 @@ export async function POST(
         },
       });
 
-      const eloReverseDeltaByUserId = computeRollbackEloDeltas(
-        completedMatches,
-        isGuestByUserId
-      );
+      const ledgerAdjustments = await tx.matchEloAdjustment.findMany({
+        where: {
+          matchId: { in: completedMatches.map((match) => match.id) },
+        },
+        select: {
+          communityId: true,
+          userId: true,
+          delta: true,
+        },
+      });
 
-      for (const [userId, delta] of eloReverseDeltaByUserId.entries()) {
-        if (delta === 0) continue;
-        if (freshTarget.communityId) {
+      const reversedPlayerKeys = new Set<string>();
+      if (ledgerAdjustments.length > 0) {
+        const reverseDeltaByCommunityAndUserId = new Map<
+          string,
+          { communityId: string; userId: string; delta: number }
+        >();
+        for (const adjustment of ledgerAdjustments) {
+          const key = `${adjustment.communityId}:${adjustment.userId}`;
+          const current = reverseDeltaByCommunityAndUserId.get(key) ?? {
+            communityId: adjustment.communityId,
+            userId: adjustment.userId,
+            delta: 0,
+          };
+          current.delta -= adjustment.delta;
+          reverseDeltaByCommunityAndUserId.set(key, current);
+        }
+
+        for (const item of reverseDeltaByCommunityAndUserId.values()) {
+          if (item.delta === 0) continue;
           await tx.communityMember.updateMany({
             where: {
-              communityId: freshTarget.communityId,
-              userId,
+              communityId: item.communityId,
+              userId: item.userId,
             },
             data: {
-              elo: { increment: delta },
+              elo: { increment: item.delta },
             },
           });
-        } else {
-          await tx.user.updateMany({
-            where: { id: userId },
-            data: {
-              elo: { increment: delta },
-            },
-          });
+          reversedPlayerKeys.add(`${item.communityId}:${item.userId}`);
+        }
+      } else {
+        const eloReverseDeltaByUserId = computeRollbackEloDeltas(
+          completedMatches,
+          isGuestByUserId
+        );
+
+        for (const [userId, delta] of eloReverseDeltaByUserId.entries()) {
+          if (delta === 0) continue;
+          if (freshTarget.communityId) {
+            await tx.communityMember.updateMany({
+              where: {
+                communityId: freshTarget.communityId,
+                userId,
+              },
+              data: {
+                elo: { increment: delta },
+              },
+            });
+            reversedPlayerKeys.add(`${freshTarget.communityId}:${userId}`);
+          } else {
+            await tx.user.updateMany({
+              where: { id: userId },
+              data: {
+                elo: { increment: delta },
+              },
+            });
+            reversedPlayerKeys.add(userId);
+          }
         }
       }
 
@@ -191,7 +237,7 @@ export async function POST(
       return {
         sessionCode: freshTarget.code,
         sessionName: freshTarget.name,
-        reversedPlayers: eloReverseDeltaByUserId.size,
+        reversedPlayers: reversedPlayerKeys.size,
       };
     });
 

@@ -8,6 +8,7 @@ import { getCommunityAdminGenderPillLabel } from "@/components/community-admin/c
 import { CommunityPlayerStatus } from "@/types/enums";
 import { useCommunityAdminCommunityActions } from "./useCommunityAdminCommunityActions";
 import { useCommunityAdminData } from "./useCommunityAdminData";
+import { useCommunityAdminOfflineIdentityLinks } from "./useCommunityAdminOfflineIdentityLinks";
 import { useCommunityAdminPlayerActions } from "./useCommunityAdminPlayerActions";
 
 export function useCommunityAdminPage() {
@@ -40,6 +41,14 @@ export function useCommunityAdminPage() {
     community: adminData.community,
     refreshCommunityData: adminData.fetchCommunityAndPlayers,
     router,
+    setError: adminData.setError,
+    setSuccess: adminData.setSuccess,
+  });
+
+  const offlineIdentityLinkActions = useCommunityAdminOfflineIdentityLinks({
+    communityId,
+    players: adminData.players,
+    refreshCommunityData: adminData.fetchCommunityAndPlayers,
     setError: adminData.setError,
     setSuccess: adminData.setSuccess,
   });
@@ -85,5 +94,6 @@ export function useCommunityAdminPage() {
     ...adminData,
     ...playerActions,
     ...communityActions,
+    ...offlineIdentityLinkActions,
   };
 }

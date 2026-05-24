@@ -66,3 +66,9 @@ export enum SessionCommunityStatus {
   ACCEPTED = "ACCEPTED",
   REJECTED = "REJECTED",
 }
+
+export enum OfflineIdentityLinkStatus {
+  PENDING = "PENDING",
+  ACCEPTED = "ACCEPTED",
+  REJECTED = "REJECTED",
+}

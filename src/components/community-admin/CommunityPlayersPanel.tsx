@@ -143,6 +143,11 @@ export function CommunityPlayersPanel({
                     <CommunityAdminStatusPill status={player.status} />
                     <CommunityAdminClaimPill isClaimed={player.isClaimed} />
                     <CommunityAdminGenderPill player={player} />
+                    {player.offlineIdentityId ? (
+                      <span className="app-chip app-chip-accent">
+                        Linked {player.linkedCommunityBadges?.length ?? 0}
+                      </span>
+                    ) : null}
                   </div>
 
                   <div className="flex items-center justify-end">

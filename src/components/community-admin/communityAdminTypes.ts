@@ -31,6 +31,8 @@ export interface CommunityAdminPlayer {
   isClaimed: boolean;
   role: "ADMIN" | "MEMBER";
   createdAt: string;
+  offlineIdentityId?: string | null;
+  linkedCommunityBadges?: Array<{ id: string; name: string; userId: string }>;
 }
 
 export interface CommunityAdminClaimRequest {
@@ -43,7 +45,30 @@ export interface CommunityAdminClaimRequest {
   targetEmail: string | null;
   status: ClaimRequestStatus;
   note?: string | null;
+  linkedCommunityNames?: string[];
   createdAt: string;
 }
 
-export type CommunityAdminSection = "players" | "claims" | "settings";
+export interface CommunityAdminOfflineIdentityLink {
+  id: string;
+  offlineIdentityId: string | null;
+  sourceCommunityId: string;
+  sourceCommunityName: string;
+  sourceUserId: string;
+  sourceUserName: string;
+  sourceUserEmail: string | null;
+  targetCommunityId: string;
+  targetCommunityName: string;
+  targetUserId: string;
+  targetUserName: string;
+  targetUserEmail: string | null;
+  status: "PENDING" | "ACCEPTED" | "REJECTED";
+  requestedById: string | null;
+  requestedByName: string | null;
+  reviewedById: string | null;
+  reviewedByName: string | null;
+  reviewedAt?: string | null;
+  createdAt: string;
+}
+
+export type CommunityAdminSection = "players" | "links" | "claims" | "settings";

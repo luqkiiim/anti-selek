@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { serializeAvatarEntity } from "@/lib/avatar";
+import {
+  getCommunityStatUserResolver,
+  getOfflineIdentityInfoByUserId,
+} from "@/lib/offlineIdentities";
 import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
 import { logError, safeErrorResponse } from "@/lib/errors";
@@ -153,17 +157,29 @@ export async function GET(
     });
 
     const statsByUserId = new Map<string, { wins: number; losses: number }>();
+    const offlineIdentityInfoByUserId = await getOfflineIdentityInfoByUserId(
+      prisma,
+      members.map((member) => member.user.id)
+    );
     for (const member of members) {
       statsByUserId.set(member.user.id, { wins: 0, losses: 0 });
     }
+    const resolveStatUserId = await getCommunityStatUserResolver(prisma, {
+      communityId: id,
+      memberUserIds: members.map((member) => member.user.id),
+    });
 
     for (const match of completedMatches) {
       if (match.winnerTeam !== 1 && match.winnerTeam !== 2) {
         continue;
       }
 
-      const team1Ids = [match.team1User1Id, match.team1User2Id];
-      const team2Ids = [match.team2User1Id, match.team2User2Id];
+      const team1Ids = [match.team1User1Id, match.team1User2Id].map(
+        resolveStatUserId
+      );
+      const team2Ids = [match.team2User1Id, match.team2User2Id].map(
+        resolveStatUserId
+      );
       const winners = match.winnerTeam === 1 ? team1Ids : team2Ids;
       const losers = match.winnerTeam === 1 ? team2Ids : team1Ids;
 
@@ -179,32 +195,39 @@ export async function GET(
     }
 
     return NextResponse.json(
-      members.map((m) => ({
-        id: m.user.id,
-        name: m.user.name,
-        email: m.user.email,
-        avatarUrl: serializeAvatarEntity(m.user).avatarUrl,
-        status:
-          m.status === CommunityPlayerStatus.OCCASIONAL
-            ? CommunityPlayerStatus.OCCASIONAL
-            : CommunityPlayerStatus.CORE,
-        gender:
-          [PlayerGender.MALE, PlayerGender.FEMALE].includes(m.user.gender as PlayerGender)
-            ? m.user.gender
-            : PlayerGender.MALE,
-        partnerPreference: m.user.partnerPreference,
-        mixedSideOverride:
-          typeof m.user.mixedSideOverride === "string"
-            ? m.user.mixedSideOverride
-            : null,
-        elo: m.elo,
-        isActive: m.user.isActive,
-        isClaimed: m.user.isClaimed,
-        createdAt: m.user.createdAt,
-        wins: statsByUserId.get(m.user.id)?.wins ?? 0,
-        losses: statsByUserId.get(m.user.id)?.losses ?? 0,
-        role: m.role,
-      }))
+      members.map((m) => {
+        const offlineIdentityInfo = offlineIdentityInfoByUserId.get(m.user.id);
+
+        return {
+          id: m.user.id,
+          name: m.user.name,
+          email: m.user.email,
+          avatarUrl: serializeAvatarEntity(m.user).avatarUrl,
+          status:
+            m.status === CommunityPlayerStatus.OCCASIONAL
+              ? CommunityPlayerStatus.OCCASIONAL
+              : CommunityPlayerStatus.CORE,
+          gender:
+            [PlayerGender.MALE, PlayerGender.FEMALE].includes(m.user.gender as PlayerGender)
+              ? m.user.gender
+              : PlayerGender.MALE,
+          partnerPreference: m.user.partnerPreference,
+          mixedSideOverride:
+            typeof m.user.mixedSideOverride === "string"
+              ? m.user.mixedSideOverride
+              : null,
+          elo: m.elo,
+          isActive: m.user.isActive,
+          isClaimed: m.user.isClaimed,
+          createdAt: m.user.createdAt,
+          wins: statsByUserId.get(m.user.id)?.wins ?? 0,
+          losses: statsByUserId.get(m.user.id)?.losses ?? 0,
+          role: m.role,
+          offlineIdentityId: offlineIdentityInfo?.offlineIdentityId ?? null,
+          linkedCommunityBadges:
+            offlineIdentityInfo?.linkedCommunityBadges ?? [],
+        };
+      })
     );
   } catch (error) {
     logError("List community members error", error);

@@ -41,6 +41,39 @@ interface ApproveCommunityClaimArgs {
   reviewerUserId: string;
 }
 
+interface ClaimTransferMember {
+  communityId: string;
+  userId: string;
+}
+
+async function getClaimTransferMembers(
+  tx: Prisma.TransactionClient,
+  targetUserId: string,
+  fallbackCommunityId: string
+): Promise<ClaimTransferMember[]> {
+  const offlineIdentityMember = await tx.offlineIdentityMember.findUnique({
+    where: { userId: targetUserId },
+    include: {
+      offlineIdentity: {
+        include: {
+          members: {
+            select: {
+              communityId: true,
+              userId: true,
+            },
+          },
+        },
+      },
+    },
+  });
+
+  if (!offlineIdentityMember) {
+    return [{ communityId: fallbackCommunityId, userId: targetUserId }];
+  }
+
+  return offlineIdentityMember.offlineIdentity.members;
+}
+
 export async function approveCommunityClaimRequest(
   tx: Prisma.TransactionClient,
   { communityId, requestId, reviewerUserId }: ApproveCommunityClaimArgs
@@ -89,7 +122,19 @@ export async function approveCommunityClaimRequest(
     );
   }
 
-  const [requesterMembership, targetMembership, communitySessions] = await Promise.all([
+  const transferMembers = await getClaimTransferMembers(
+    tx,
+    claimRequest.targetUserId,
+    communityId
+  );
+  const transferCommunityIds = Array.from(
+    new Set(transferMembers.map((member) => member.communityId))
+  );
+  const transferTargetUserIds = Array.from(
+    new Set(transferMembers.map((member) => member.userId))
+  );
+
+  const [requesterMembership, targetMemberships, communitySessions] = await Promise.all([
     tx.communityMember.findUnique({
       where: {
         communityId_userId: {
@@ -102,19 +147,33 @@ export async function approveCommunityClaimRequest(
         elo: true,
       },
     }),
-    tx.communityMember.findUnique({
+    tx.communityMember.findMany({
       where: {
-        communityId_userId: {
-          communityId,
-          userId: claimRequest.targetUserId,
-        },
+        OR: transferMembers.map((member) => ({
+          communityId: member.communityId,
+          userId: member.userId,
+        })),
       },
       select: {
+        communityId: true,
+        userId: true,
         role: true,
       },
     }),
     tx.session.findMany({
-      where: { communityId },
+      where: {
+        OR: [
+          { communityId: { in: transferCommunityIds } },
+          {
+            sessionCommunities: {
+              some: {
+                communityId: { in: transferCommunityIds },
+                status: "ACCEPTED",
+              },
+            },
+          },
+        ],
+      },
       select: {
         id: true,
         name: true,
@@ -129,15 +188,41 @@ export async function approveCommunityClaimRequest(
     );
   }
 
-  if (!targetMembership) {
+  if (targetMemberships.length !== transferMembers.length) {
     throw new CommunityClaimError("Target profile is no longer in this community", 409);
   }
 
   const communitySessionIds = communitySessions.map((session) => session.id);
+  const targetMembershipByCommunityAndUser = new Map(
+    targetMemberships.map((membership) => [
+      `${membership.communityId}:${membership.userId}`,
+      membership,
+    ])
+  );
 
   if (requesterMembership.elo !== 1000) {
     throw new CommunityClaimError(
       "Requester already has community rating changes. Manual merge required.",
+      409
+    );
+  }
+
+  const requesterExistingMemberships = await tx.communityMember.findMany({
+    where: {
+      communityId: { in: transferCommunityIds },
+      userId: claimRequest.requesterUserId,
+    },
+    select: {
+      communityId: true,
+      elo: true,
+    },
+  });
+  const unexpectedRequesterMembership = requesterExistingMemberships.find(
+    (membership) => membership.communityId !== communityId
+  );
+  if (unexpectedRequesterMembership) {
+    throw new CommunityClaimError(
+      "Requester already belongs to a linked community. Manual merge required.",
       409
     );
   }
@@ -176,24 +261,37 @@ export async function approveCommunityClaimRequest(
     },
   });
 
-  await tx.communityMember.update({
-    where: {
-      communityId_userId: {
-        communityId,
-        userId: claimRequest.targetUserId,
+  for (const member of transferMembers) {
+    const targetMembership = targetMembershipByCommunityAndUser.get(
+      `${member.communityId}:${member.userId}`
+    );
+    if (!targetMembership) continue;
+
+    await tx.communityMember.update({
+      where: {
+        communityId_userId: {
+          communityId: member.communityId,
+          userId: member.userId,
+        },
       },
-    },
-    data: {
-      userId: claimRequest.requesterUserId,
-      role: mergeCommunityRoles(requesterMembership.role as CommunityRole, targetMembership.role as CommunityRole),
-    },
-  });
+      data: {
+        userId: claimRequest.requesterUserId,
+        role:
+          member.communityId === communityId
+            ? mergeCommunityRoles(
+                requesterMembership.role as CommunityRole,
+                targetMembership.role as CommunityRole
+              )
+            : targetMembership.role,
+      },
+    });
+  }
 
   if (communitySessionIds.length > 0) {
     await tx.sessionPlayer.updateMany({
       where: {
         sessionId: { in: communitySessionIds },
-        userId: claimRequest.targetUserId,
+        userId: { in: transferTargetUserIds },
       },
       data: {
         userId: claimRequest.requesterUserId,
@@ -204,14 +302,34 @@ export async function approveCommunityClaimRequest(
       await tx.match.updateMany({
         where: {
           sessionId: { in: communitySessionIds },
-          [field]: claimRequest.targetUserId,
+          [field]: { in: transferTargetUserIds },
         },
         data: {
           [field]: claimRequest.requesterUserId,
         },
       });
     }
+
+    await tx.match.updateMany({
+      where: {
+        sessionId: { in: communitySessionIds },
+        scoreSubmittedByUserId: { in: transferTargetUserIds },
+      },
+      data: {
+        scoreSubmittedByUserId: claimRequest.requesterUserId,
+      },
+    });
   }
+
+  await tx.matchEloAdjustment.updateMany({
+    where: {
+      communityId: { in: transferCommunityIds },
+      userId: { in: transferTargetUserIds },
+    },
+    data: {
+      userId: claimRequest.requesterUserId,
+    },
+  });
 
   await tx.user.update({
     where: { id: claimRequest.requesterUserId },
@@ -238,7 +356,7 @@ export async function approveCommunityClaimRequest(
       NOT: { id: claimRequest.id },
       OR: [
         { requesterUserId: claimRequest.requesterUserId },
-        { targetUserId: claimRequest.targetUserId },
+        { targetUserId: { in: transferTargetUserIds } },
       ],
     },
     data: {
@@ -248,7 +366,27 @@ export async function approveCommunityClaimRequest(
     },
   });
 
-  await deleteDisposableUnclaimedUsers(tx, [claimRequest.targetUserId]);
+  const offlineIdentityMembers = await tx.offlineIdentityMember.findMany({
+    where: { userId: { in: transferTargetUserIds } },
+    select: { offlineIdentityId: true },
+  });
+  const offlineIdentityIds = Array.from(
+    new Set(offlineIdentityMembers.map((member) => member.offlineIdentityId))
+  );
+  if (offlineIdentityIds.length > 0) {
+    await tx.offlineIdentity.updateMany({
+      where: { id: { in: offlineIdentityIds } },
+      data: {
+        resolvedUserId: claimRequest.requesterUserId,
+        resolvedAt: reviewedAt,
+      },
+    });
+    await tx.offlineIdentityMember.deleteMany({
+      where: { offlineIdentityId: { in: offlineIdentityIds } },
+    });
+  }
+
+  await deleteDisposableUnclaimedUsers(tx, transferTargetUserIds);
 
   return {
     id: claimRequest.id,

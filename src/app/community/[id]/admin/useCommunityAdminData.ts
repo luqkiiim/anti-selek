@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import type {
   CommunityAdminClaimRequest,
   CommunityAdminCommunity,
+  CommunityAdminOfflineIdentityLink,
   CommunityAdminPlayer,
 } from "@/components/community-admin/communityAdminTypes";
 import { fetchCommunityAdminSnapshot } from "./communityAdminApi";
@@ -29,6 +30,9 @@ export function useCommunityAdminData({
   const [claimRequests, setClaimRequests] = useState<
     CommunityAdminClaimRequest[]
   >([]);
+  const [offlineIdentityLinks, setOfflineIdentityLinks] = useState<
+    CommunityAdminOfflineIdentityLink[]
+  >([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -45,6 +49,7 @@ export function useCommunityAdminData({
     setCommunity(snapshot.community);
     setPlayers(snapshot.players);
     setClaimRequests(snapshot.claimRequests);
+    setOfflineIdentityLinks(snapshot.offlineIdentityLinks);
   }, [communityId, router]);
 
   useEffect(() => {
@@ -75,6 +80,8 @@ export function useCommunityAdminData({
     setPlayers,
     claimRequests,
     setClaimRequests,
+    offlineIdentityLinks,
+    setOfflineIdentityLinks,
     loading,
     error,
     setError,

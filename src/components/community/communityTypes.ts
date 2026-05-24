@@ -44,7 +44,9 @@ export interface CommunityPageMember {
   losses: number;
   isClaimed: boolean;
   role: "ADMIN" | "MEMBER";
-  communityBadges?: Array<{ id: string; name: string; elo: number }>;
+  offlineIdentityId?: string | null;
+  communityBadges?: Array<{ id: string; name: string; elo: number; userId?: string }>;
+  linkedCommunityBadges?: Array<{ id: string; name: string; elo?: number; userId: string }>;
 }
 
 export interface CommunityPageSession {
@@ -93,6 +95,7 @@ export interface CommunityClaimRequest {
   targetEmail: string | null;
   status: ClaimRequestStatus;
   note?: string | null;
+  linkedCommunityNames?: string[];
   createdAt: string;
   reviewedAt?: string | null;
 }

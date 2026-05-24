@@ -9,54 +9,64 @@ datasource db {
 }
 
 model User {
-  id           String   @id @default(cuid())
-  email        String?  @unique
-  passwordHash String?
-  name         String
-  avatarKey    String?
+  id                String    @id @default(cuid())
+  email             String?   @unique
+  passwordHash      String?
+  name              String
+  avatarKey         String?
   selfNameChangedAt DateTime?
-  isClaimed    Boolean  @default(false)
-  gender       String   @default("UNSPECIFIED") // MALE, FEMALE, UNSPECIFIED
-  partnerPreference String @default("OPEN") // legacy MIXICANO preference fallback: OPEN, FEMALE_FLEX
+  isClaimed         Boolean   @default(false)
+  gender            String    @default("UNSPECIFIED") // MALE, FEMALE, UNSPECIFIED
+  partnerPreference String    @default("OPEN") // legacy MIXICANO preference fallback: OPEN, FEMALE_FLEX
   mixedSideOverride String? // UPPER, LOWER
-  elo          Int      @default(1000)
-  isActive     Boolean  @default(true)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  elo               Int       @default(1000)
+  isActive          Boolean   @default(true)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
 
-  sessionPlayers SessionPlayer[]
-  communities    CommunityMember[]
-  createdCommunities Community[] @relation("CommunityCreator")
-  requestedSessionCommunities SessionCommunity[] @relation("SessionCommunityRequester")
-  reviewedSessionCommunities SessionCommunity[] @relation("SessionCommunityReviewer")
-  matchEloAdjustments MatchEloAdjustment[]
-  claimRequestsMade ClaimRequest[] @relation("ClaimRequester")
-  claimRequestsTargeted ClaimRequest[] @relation("ClaimTarget")
-  reviewedClaimRequests ClaimRequest[] @relation("ClaimReviewer")
-  passwordResetTokens PasswordResetToken[]
+  sessionPlayers                SessionPlayer[]
+  communities                   CommunityMember[]
+  createdCommunities            Community[]                  @relation("CommunityCreator")
+  requestedSessionCommunities   SessionCommunity[]           @relation("SessionCommunityRequester")
+  reviewedSessionCommunities    SessionCommunity[]           @relation("SessionCommunityReviewer")
+  matchEloAdjustments           MatchEloAdjustment[]
+  claimRequestsMade             ClaimRequest[]               @relation("ClaimRequester")
+  claimRequestsTargeted         ClaimRequest[]               @relation("ClaimTarget")
+  reviewedClaimRequests         ClaimRequest[]               @relation("ClaimReviewer")
+  offlineIdentityMembers        OfflineIdentityMember[]
+  createdOfflineIdentities      OfflineIdentity[]            @relation("OfflineIdentityCreator")
+  resolvedOfflineIdentities     OfflineIdentity[]            @relation("OfflineIdentityResolver")
+  offlineIdentityLinksAsSource  OfflineIdentityLinkRequest[] @relation("OfflineIdentityLinkSourceUser")
+  offlineIdentityLinksAsTarget  OfflineIdentityLinkRequest[] @relation("OfflineIdentityLinkTargetUser")
+  requestedOfflineIdentityLinks OfflineIdentityLinkRequest[] @relation("OfflineIdentityLinkRequester")
+  reviewedOfflineIdentityLinks  OfflineIdentityLinkRequest[] @relation("OfflineIdentityLinkReviewer")
+  passwordResetTokens           PasswordResetToken[]
 
   // Match relations (team memberships)
-  matchesAsTeam1Player1   Match[] @relation("Team1Player1")
-  matchesAsTeam1Player2   Match[] @relation("Team1Player2")
-  matchesAsTeam2Player1   Match[] @relation("Team2Player1")
-  matchesAsTeam2Player2   Match[] @relation("Team2Player2")
+  matchesAsTeam1Player1 Match[] @relation("Team1Player1")
+  matchesAsTeam1Player2 Match[] @relation("Team1Player2")
+  matchesAsTeam2Player1 Match[] @relation("Team2Player1")
+  matchesAsTeam2Player2 Match[] @relation("Team2Player2")
 }
 
 model Community {
-  id                 String   @id @default(cuid())
-  name               String   @unique
-  isPasswordProtected Boolean @default(false)
-  passwordHash       String?
-  createdById        String
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
+  id                  String   @id @default(cuid())
+  name                String   @unique
+  isPasswordProtected Boolean  @default(false)
+  passwordHash        String?
+  createdById         String
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
 
-  createdBy User @relation("CommunityCreator", fields: [createdById], references: [id], onDelete: Cascade)
-  members   CommunityMember[]
-  sessions  Session[]
-  sessionCommunities SessionCommunity[]
-  matchEloAdjustments MatchEloAdjustment[]
-  claimRequests ClaimRequest[]
+  createdBy                       User                         @relation("CommunityCreator", fields: [createdById], references: [id], onDelete: Cascade)
+  members                         CommunityMember[]
+  sessions                        Session[]
+  sessionCommunities              SessionCommunity[]
+  matchEloAdjustments             MatchEloAdjustment[]
+  claimRequests                   ClaimRequest[]
+  offlineIdentityMembers          OfflineIdentityMember[]
+  offlineIdentityLinkRequestsFrom OfflineIdentityLinkRequest[] @relation("OfflineIdentityLinkSourceCommunity")
+  offlineIdentityLinkRequestsTo   OfflineIdentityLinkRequest[] @relation("OfflineIdentityLinkTargetCommunity")
 }
 
 model CommunityMember {
@@ -75,46 +85,46 @@ model CommunityMember {
 }
 
 model Session {
-  id        String   @id @default(cuid())
-  code      String   @unique
-  communityId String?
-  name      String
-  type      String   @default("POINTS") // POINTS or ELO
-  mode      String   @default("MEXICANO") // MEXICANO or MIXICANO
-  status    String   @default("WAITING") // WAITING, ACTIVE, COMPLETED
-  isTest    Boolean  @default(false)
-  sourceSessionId String?
-  autoQueueEnabled Boolean @default(true)
-  poolsEnabled Boolean @default(false)
-  poolAName  String?
-  poolBName  String?
-  poolACourtAssignments Int @default(0)
-  poolBCourtAssignments Int @default(0)
-  poolAMissedTurns Int @default(0)
-  poolBMissedTurns Int @default(0)
-  crossoverMissThreshold Int @default(1)
-  createdAt DateTime @default(now())
-  endedAt   DateTime?
+  id                     String    @id @default(cuid())
+  code                   String    @unique
+  communityId            String?
+  name                   String
+  type                   String    @default("POINTS") // POINTS or ELO
+  mode                   String    @default("MEXICANO") // MEXICANO or MIXICANO
+  status                 String    @default("WAITING") // WAITING, ACTIVE, COMPLETED
+  isTest                 Boolean   @default(false)
+  sourceSessionId        String?
+  autoQueueEnabled       Boolean   @default(true)
+  poolsEnabled           Boolean   @default(false)
+  poolAName              String?
+  poolBName              String?
+  poolACourtAssignments  Int       @default(0)
+  poolBCourtAssignments  Int       @default(0)
+  poolAMissedTurns       Int       @default(0)
+  poolBMissedTurns       Int       @default(0)
+  crossoverMissThreshold Int       @default(1)
+  createdAt              DateTime  @default(now())
+  endedAt                DateTime?
 
-  community Community? @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  community          Community?         @relation(fields: [communityId], references: [id], onDelete: Cascade)
   sessionCommunities SessionCommunity[]
-  players SessionPlayer[]
-  courts  Court[]
-  matches Match[]
-  queuedMatch QueuedMatch?
+  players            SessionPlayer[]
+  courts             Court[]
+  matches            Match[]
+  queuedMatch        QueuedMatch?
 }
 
 model SessionCommunity {
-  id            String   @id @default(cuid())
+  id            String    @id @default(cuid())
   sessionId     String
   communityId   String
-  role          String   @default("PARTNER") // HOST or PARTNER
-  status        String   @default("PENDING") // PENDING, ACCEPTED, or REJECTED
+  role          String    @default("PARTNER") // HOST or PARTNER
+  status        String    @default("PENDING") // PENDING, ACCEPTED, or REJECTED
   requestedById String?
   reviewedById  String?
   reviewedAt    DateTime?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
   session     Session   @relation(fields: [sessionId], references: [id], onDelete: Cascade)
   community   Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
@@ -127,51 +137,51 @@ model SessionCommunity {
 }
 
 model Court {
-  id            String   @id @default(cuid())
-  sessionId     String
-  courtNumber   Int      // 1, 2, or 3
-  label         String?
+  id             String  @id @default(cuid())
+  sessionId      String
+  courtNumber    Int // 1, 2, or 3
+  label          String?
   currentMatchId String? @unique
 
-  session      Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  currentMatch Match?   @relation("CourtCurrentMatch", fields: [currentMatchId], references: [id])
+  session      Session @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  currentMatch Match?  @relation("CourtCurrentMatch", fields: [currentMatchId], references: [id])
   matches      Match[]
 }
 
 model SessionPlayer {
-  id           String   @id @default(cuid())
-  sessionId    String
-  userId       String
-  isGuest      Boolean  @default(false)
-  gender       String   @default("UNSPECIFIED") // MALE, FEMALE, UNSPECIFIED
-  partnerPreference String @default("OPEN") // legacy MIXICANO preference fallback: OPEN, FEMALE_FLEX
+  id                String  @id @default(cuid())
+  sessionId         String
+  userId            String
+  isGuest           Boolean @default(false)
+  gender            String  @default("UNSPECIFIED") // MALE, FEMALE, UNSPECIFIED
+  partnerPreference String  @default("OPEN") // legacy MIXICANO preference fallback: OPEN, FEMALE_FLEX
   mixedSideOverride String? // UPPER, LOWER
-  pool         String   @default("A") // A, B
-  sessionPoints Int     @default(0)
-  lastPartnerId String? // player ID of last partner (for repeat-partner penalty)
-  isPaused     Boolean  @default(false)
+  pool              String  @default("A") // A, B
+  sessionPoints     Int     @default(0)
+  lastPartnerId     String? // player ID of last partner (for repeat-partner penalty)
+  isPaused          Boolean @default(false)
 
   // Persisted matchmaking state
-  matchesPlayed  Int      @default(0)
-  matchmakingMatchesCredit Int @default(0)
-  availableSince DateTime @default(now())
-  lastPlayedAt   DateTime?
-  pausedAt       DateTime?
-  joinedAt       DateTime @default(now())
-  ladderEntryAt  DateTime @default(now())
-  inactiveSeconds Int      @default(0)
+  matchesPlayed            Int       @default(0)
+  matchmakingMatchesCredit Int       @default(0)
+  availableSince           DateTime  @default(now())
+  lastPlayedAt             DateTime?
+  pausedAt                 DateTime?
+  joinedAt                 DateTime  @default(now())
+  ladderEntryAt            DateTime  @default(now())
+  inactiveSeconds          Int       @default(0)
 
-  session     Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  session Session @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([sessionId, userId])
 }
 
 model Match {
-  id           String   @id @default(cuid())
-  sessionId    String
-  courtId      String
-  status       String   @default("PENDING") // PENDING, IN_PROGRESS, COMPLETED, PENDING_APPROVAL
+  id                     String  @id @default(cuid())
+  sessionId              String
+  courtId                String
+  status                 String  @default("PENDING") // PENDING, IN_PROGRESS, COMPLETED, PENDING_APPROVAL
   scoreSubmittedByUserId String?
 
   // Team 1
@@ -184,22 +194,22 @@ model Match {
   team2User2Id String
   team2Score   Int?
 
-  winnerTeam   Int?     // 1 or 2
-  team1EloChange Int?
-  team2EloChange Int?
+  winnerTeam            Int? // 1 or 2
+  team1EloChange        Int?
+  team2EloChange        Int?
   matchmakingReasonJson String?
 
-  createdAt    DateTime @default(now())
-  completedAt  DateTime?
+  createdAt   DateTime  @default(now())
+  completedAt DateTime?
 
-  session      Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  court        Court    @relation(fields: [courtId], references: [id], onDelete: Cascade)
-  courtAsCurrentMatch Court? @relation("CourtCurrentMatch")
-  eloAdjustments MatchEloAdjustment[]
-  team1User1   User     @relation("Team1Player1", fields: [team1User1Id], references: [id], onDelete: Cascade)
-  team1User2   User     @relation("Team1Player2", fields: [team1User2Id], references: [id], onDelete: Cascade)
-  team2User1   User     @relation("Team2Player1", fields: [team2User1Id], references: [id], onDelete: Cascade)
-  team2User2   User     @relation("Team2Player2", fields: [team2User2Id], references: [id], onDelete: Cascade)
+  session             Session              @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  court               Court                @relation(fields: [courtId], references: [id], onDelete: Cascade)
+  courtAsCurrentMatch Court?               @relation("CourtCurrentMatch")
+  eloAdjustments      MatchEloAdjustment[]
+  team1User1          User                 @relation("Team1Player1", fields: [team1User1Id], references: [id], onDelete: Cascade)
+  team1User2          User                 @relation("Team1Player2", fields: [team1User2Id], references: [id], onDelete: Cascade)
+  team2User1          User                 @relation("Team2Player1", fields: [team2User1Id], references: [id], onDelete: Cascade)
+  team2User2          User                 @relation("Team2Player2", fields: [team2User2Id], references: [id], onDelete: Cascade)
 }
 
 model MatchEloAdjustment {
@@ -222,39 +232,99 @@ model MatchEloAdjustment {
 }
 
 model QueuedMatch {
-  id           String   @id @default(cuid())
-  sessionId     String   @unique
-  team1User1Id  String
-  team1User2Id  String
-  team2User1Id  String
-  team2User2Id  String
-  targetPool    String? // A, B
+  id                    String   @id @default(cuid())
+  sessionId             String   @unique
+  team1User1Id          String
+  team1User2Id          String
+  team2User1Id          String
+  team2User2Id          String
+  targetPool            String? // A, B
   matchmakingReasonJson String?
-  createdAt     DateTime @default(now())
+  createdAt             DateTime @default(now())
 
   session Session @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 }
 
 model ClaimRequest {
-  id              String   @id @default(cuid())
+  id              String    @id @default(cuid())
   communityId     String
   requesterUserId String
   targetUserId    String
-  status          String   @default("PENDING") // PENDING, APPROVED, REJECTED
+  status          String    @default("PENDING") // PENDING, APPROVED, REJECTED
   note            String?
   reviewedById    String?
   reviewedAt      DateTime?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
-  community   Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
-  requester   User      @relation("ClaimRequester", fields: [requesterUserId], references: [id], onDelete: Cascade)
-  target      User      @relation("ClaimTarget", fields: [targetUserId], references: [id], onDelete: Cascade)
-  reviewedBy  User?     @relation("ClaimReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+  community  Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  requester  User      @relation("ClaimRequester", fields: [requesterUserId], references: [id], onDelete: Cascade)
+  target     User      @relation("ClaimTarget", fields: [targetUserId], references: [id], onDelete: Cascade)
+  reviewedBy User?     @relation("ClaimReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
 
   @@index([communityId, status])
   @@index([requesterUserId, status])
   @@index([targetUserId, status])
+}
+
+model OfflineIdentity {
+  id             String    @id @default(cuid())
+  createdById    String?
+  resolvedUserId String?
+  resolvedAt     DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  createdBy    User?                        @relation("OfflineIdentityCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  resolvedUser User?                        @relation("OfflineIdentityResolver", fields: [resolvedUserId], references: [id], onDelete: SetNull)
+  members      OfflineIdentityMember[]
+  linkRequests OfflineIdentityLinkRequest[]
+}
+
+model OfflineIdentityMember {
+  id                String   @id @default(cuid())
+  offlineIdentityId String
+  communityId       String
+  userId            String
+  addedById         String?
+  createdAt         DateTime @default(now())
+
+  offlineIdentity OfflineIdentity @relation(fields: [offlineIdentityId], references: [id], onDelete: Cascade)
+  community       Community       @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([offlineIdentityId, communityId])
+  @@unique([communityId, userId])
+  @@unique([userId])
+  @@index([communityId])
+}
+
+model OfflineIdentityLinkRequest {
+  id                String    @id @default(cuid())
+  offlineIdentityId String?
+  sourceCommunityId String
+  sourceUserId      String
+  targetCommunityId String
+  targetUserId      String
+  status            String    @default("PENDING") // PENDING, ACCEPTED, or REJECTED
+  requestedById     String?
+  reviewedById      String?
+  reviewedAt        DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  offlineIdentity OfflineIdentity? @relation(fields: [offlineIdentityId], references: [id], onDelete: SetNull)
+  sourceCommunity Community        @relation("OfflineIdentityLinkSourceCommunity", fields: [sourceCommunityId], references: [id], onDelete: Cascade)
+  targetCommunity Community        @relation("OfflineIdentityLinkTargetCommunity", fields: [targetCommunityId], references: [id], onDelete: Cascade)
+  sourceUser      User             @relation("OfflineIdentityLinkSourceUser", fields: [sourceUserId], references: [id], onDelete: Cascade)
+  targetUser      User             @relation("OfflineIdentityLinkTargetUser", fields: [targetUserId], references: [id], onDelete: Cascade)
+  requestedBy     User?            @relation("OfflineIdentityLinkRequester", fields: [requestedById], references: [id], onDelete: SetNull)
+  reviewedBy      User?            @relation("OfflineIdentityLinkReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+
+  @@unique([sourceCommunityId, sourceUserId, targetCommunityId, targetUserId])
+  @@index([sourceCommunityId, status])
+  @@index([targetCommunityId, status])
+  @@index([offlineIdentityId])
 }
 
 model RateLimitBucket {
@@ -270,13 +340,13 @@ model RateLimitBucket {
 }
 
 model PasswordResetToken {
-  id        String   @id @default(cuid())
+  id        String    @id @default(cuid())
   userId    String
-  tokenHash String   @unique
+  tokenHash String    @unique
   expiresAt DateTime
   usedAt    DateTime?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 

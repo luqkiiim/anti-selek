@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { serializeAvatarEntity } from "@/lib/avatar";
 import { logError, safeErrorResponse } from "@/lib/errors";
+import { getOfflineIdentityInfoByUserId } from "@/lib/offlineIdentities";
 import { prisma } from "@/lib/prisma";
 import {
   checkInvalidTargetRateLimit,
@@ -91,13 +92,20 @@ export async function GET(
       orderBy: { createdAt: "asc" },
     });
 
-    const byUserId = new Map<
+    const offlineIdentityInfoByUserId = await getOfflineIdentityInfoByUserId(
+      prisma,
+      memberships.map((membership) => membership.userId)
+    );
+
+    const byIdentityKey = new Map<
       string,
       {
         user: (typeof memberships)[number]["user"];
+        offlineIdentityId: string | null;
         memberships: Array<{
           id: string;
           name: string;
+          userId: string;
           elo: number;
           status: string;
           role: string;
@@ -106,24 +114,33 @@ export async function GET(
     >();
 
     for (const membership of memberships) {
+      const offlineIdentityInfo = offlineIdentityInfoByUserId.get(
+        membership.userId
+      );
+      const groupKey = offlineIdentityInfo?.offlineIdentityId ?? membership.userId;
       const current =
-        byUserId.get(membership.userId) ??
+        byIdentityKey.get(groupKey) ??
         {
           user: membership.user,
+          offlineIdentityId: offlineIdentityInfo?.offlineIdentityId ?? null,
           memberships: [],
         };
       current.memberships.push({
         id: membership.community.id,
         name: membership.community.name,
+        userId: membership.userId,
         elo: membership.elo,
         status: membership.status,
         role: membership.role,
       });
-      byUserId.set(membership.userId, current);
+      if (membership.community.id === hostCommunityId) {
+        current.user = membership.user;
+      }
+      byIdentityKey.set(groupKey, current);
     }
 
     return NextResponse.json(
-      Array.from(byUserId.values())
+      Array.from(byIdentityKey.values())
         .map(({ user, memberships: userMemberships }) => {
           const preferred =
             userMemberships.find((membership) => membership.id === hostCommunityId) ??
@@ -155,6 +172,8 @@ export async function GET(
             wins: 0,
             losses: 0,
             role: preferred.role,
+            offlineIdentityId:
+              offlineIdentityInfoByUserId.get(user.id)?.offlineIdentityId ?? null,
             communityBadges: userMemberships
               .slice()
               .sort((left, right) =>
@@ -167,8 +186,15 @@ export async function GET(
               .map((membership) => ({
                 id: membership.id,
                 name: membership.name,
+                userId: membership.userId,
                 elo: membership.elo,
               })),
+            linkedCommunityBadges: userMemberships.map((membership) => ({
+              id: membership.id,
+              name: membership.name,
+              userId: membership.userId,
+              elo: membership.elo,
+            })),
           };
         })
         .sort((left, right) =>

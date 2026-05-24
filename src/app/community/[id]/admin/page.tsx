@@ -12,18 +12,24 @@ import { CommunityPlayerEditorModal } from "@/components/community-admin/Communi
 import { CommunityPlayersPanel } from "@/components/community-admin/CommunityPlayersPanel";
 import { CommunitySettingsPanel } from "@/components/community-admin/CommunitySettingsPanel";
 import { CreateCommunityPlayerModal } from "@/components/community-admin/CreateCommunityPlayerModal";
+import { OfflineIdentityLinksPanel } from "@/components/community-admin/OfflineIdentityLinksPanel";
 import type { CommunityAdminSection } from "@/components/community-admin/communityAdminTypes";
 import { useCommunityAdminPage } from "./useCommunityAdminPage";
 
 const tabs: Array<{
   key: CommunityAdminSection;
   label: string;
-  detail: (counts: { players: number; claims: number }) => string;
+  detail: (counts: { players: number; claims: number; links: number }) => string;
 }> = [
   {
     key: "players",
     label: "Players",
     detail: ({ players }) => `${players} total`,
+  },
+  {
+    key: "links",
+    label: "Links",
+    detail: ({ links }) => `${links} active`,
   },
   {
     key: "claims",
@@ -133,6 +139,7 @@ export default function CommunityAdminPage() {
     community,
     players,
     claimRequests,
+    offlineIdentityLinks,
     loading,
     error,
     success,
@@ -167,6 +174,25 @@ export default function CommunityAdminPage() {
     savingPreferences,
     removingPlayer,
     reviewingClaimRequestId,
+    linkSourceUserId,
+    setLinkSourceUserId,
+    targetCommunitySearch,
+    setTargetCommunitySearch,
+    selectedTargetCommunity,
+    targetCommunityCandidates,
+    loadingTargetCommunities,
+    loadingTargetRoster,
+    linkTargetUserId,
+    setLinkTargetUserId,
+    sourcePlaceholderOptions,
+    targetPlaceholderOptions,
+    submittingOfflineIdentityLink,
+    reviewingOfflineIdentityLinkId,
+    selectTargetCommunity,
+    clearTargetCommunity,
+    submitOfflineIdentityLink,
+    reviewOfflineIdentityLink,
+    unlinkOfflineIdentity,
     resettingCommunity,
     deletingCommunity,
     passwordResetTarget,
@@ -314,7 +340,7 @@ export default function CommunityAdminPage() {
         {success ? <FlashMessage tone="success">{success}</FlashMessage> : null}
 
         <section className="app-panel-soft p-2">
-          <div className="grid gap-2 sm:grid-cols-3">
+          <div className="grid gap-2 sm:grid-cols-4">
             {tabs.map((tab) => {
               const isActive = activeSection === tab.key;
               return (
@@ -335,6 +361,9 @@ export default function CommunityAdminPage() {
                     {tab.detail({
                       players: players.length,
                       claims: claimRequests.length,
+                      links: offlineIdentityLinks.filter(
+                        (link) => link.status === "ACCEPTED"
+                      ).length,
                     })}
                   </p>
                 </button>
@@ -363,6 +392,35 @@ export default function CommunityAdminPage() {
             reviewingClaimRequestId={reviewingClaimRequestId}
             currentUserId={currentUserId}
             onReviewClaimRequest={handleReviewClaimRequest}
+          />
+        ) : null}
+
+        {activeSection === "links" ? (
+          <OfflineIdentityLinksPanel
+            links={offlineIdentityLinks}
+            currentCommunityId={communityId}
+            currentUserId={currentUserId}
+            sourcePlaceholderOptions={sourcePlaceholderOptions}
+            sourceUserId={linkSourceUserId}
+            onSourceUserIdChange={setLinkSourceUserId}
+            targetCommunitySearch={targetCommunitySearch}
+            onTargetCommunitySearchChange={setTargetCommunitySearch}
+            selectedTargetCommunity={selectedTargetCommunity}
+            targetCommunityCandidates={targetCommunityCandidates}
+            loadingTargetCommunities={loadingTargetCommunities}
+            loadingTargetRoster={loadingTargetRoster}
+            targetPlaceholderOptions={targetPlaceholderOptions}
+            targetUserId={linkTargetUserId}
+            onTargetUserIdChange={setLinkTargetUserId}
+            submitting={submittingOfflineIdentityLink}
+            reviewingLinkId={reviewingOfflineIdentityLinkId}
+            onSelectTargetCommunity={selectTargetCommunity}
+            onClearTargetCommunity={clearTargetCommunity}
+            onSubmitLink={() => {
+              void submitOfflineIdentityLink();
+            }}
+            onReviewLink={reviewOfflineIdentityLink}
+            onUnlink={unlinkOfflineIdentity}
           />
         ) : null}
 
