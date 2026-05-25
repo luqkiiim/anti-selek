@@ -6,6 +6,8 @@ import { LogIn, LogOut, Plus, Settings } from "lucide-react";
 import { EmptyState, FlashMessage, SectionCard } from "@/components/ui/chrome";
 import { CreateCommunityModal } from "@/components/dashboard/CreateCommunityModal";
 import { JoinCommunityModal } from "@/components/dashboard/JoinCommunityModal";
+import { AdminOnboardingChecklist } from "@/components/onboarding/AdminOnboardingChecklist";
+import { useAdminOnboardingProgress } from "@/components/onboarding/useAdminOnboardingProgress";
 import { useDashboardPage } from "./useDashboardPage";
 
 export default function Home() {
@@ -35,6 +37,9 @@ export default function Home() {
     createCommunity,
     joinCommunity,
   } = useDashboardPage();
+  const adminOnboarding = useAdminOnboardingProgress(
+    status === "authenticated" && !isQuickAccess
+  );
 
   if (status === "loading" || loading) {
     return (
@@ -119,6 +124,14 @@ export default function Home() {
             ) : null}
           </div>
         </section>
+
+        <AdminOnboardingChecklist
+          progress={adminOnboarding.progress}
+          loading={adminOnboarding.loading}
+          onDismiss={adminOnboarding.dismiss}
+          onReopen={adminOnboarding.reopen}
+          onCompleteStep={adminOnboarding.completeStep}
+        />
 
         {error ? <FlashMessage tone="error">{error}</FlashMessage> : null}
 

@@ -41,6 +41,7 @@ model User {
   requestedOfflineIdentityLinks OfflineIdentityLinkRequest[] @relation("OfflineIdentityLinkRequester")
   reviewedOfflineIdentityLinks  OfflineIdentityLinkRequest[] @relation("OfflineIdentityLinkReviewer")
   passwordResetTokens           PasswordResetToken[]
+  tutorialProgress              TutorialProgress[]
 
   // Match relations (team memberships)
   matchesAsTeam1Player1 Match[] @relation("Team1Player1")
@@ -352,4 +353,19 @@ model PasswordResetToken {
 
   @@index([userId])
   @@index([expiresAt])
+}
+
+model TutorialProgress {
+  id                   String    @id @default(cuid())
+  userId               String
+  tutorialKey          String
+  completedStepIdsJson String    @default("[]")
+  dismissedAt          DateTime?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, tutorialKey])
+  @@index([tutorialKey])
 }

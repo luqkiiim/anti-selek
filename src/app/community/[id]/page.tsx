@@ -24,6 +24,8 @@ import { CurrentTournamentsPanel } from "@/components/community/CurrentTournamen
 import { HostTournamentPanel } from "@/components/community/HostTournamentPanel";
 import { PastTournamentsPanel } from "@/components/community/PastTournamentsPanel";
 import { TestSessionsPanel } from "@/components/community/TestSessionsPanel";
+import { AdminOnboardingChecklist } from "@/components/onboarding/AdminOnboardingChecklist";
+import { useAdminOnboardingProgress } from "@/components/onboarding/useAdminOnboardingProgress";
 import type { CommunityPageSection } from "@/components/community/communityTypes";
 import { useCommunityPage } from "./useCommunityPage";
 
@@ -191,6 +193,9 @@ export default function CommunityPage() {
     openCommunityPlayerProfile,
     openTournament,
   } = useCommunityPage();
+  const adminOnboarding = useAdminOnboardingProgress(
+    status === "authenticated" && canManageCommunity && !loading
+  );
 
   const mobileSections = useMemo(() => {
     const sections: CommunityPageSection[] = [
@@ -876,6 +881,14 @@ export default function CommunityPage() {
         />
 
         {success ? <FlashMessage tone="success">{success}</FlashMessage> : null}
+
+        <AdminOnboardingChecklist
+          progress={adminOnboarding.progress}
+          loading={adminOnboarding.loading}
+          onDismiss={adminOnboarding.dismiss}
+          onReopen={adminOnboarding.reopen}
+          onCompleteStep={adminOnboarding.completeStep}
+        />
 
         <section className="app-panel-soft hidden p-2 sm:block">
           <div

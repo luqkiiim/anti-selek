@@ -13,6 +13,8 @@ import { CommunityPlayersPanel } from "@/components/community-admin/CommunityPla
 import { CommunitySettingsPanel } from "@/components/community-admin/CommunitySettingsPanel";
 import { CreateCommunityPlayerModal } from "@/components/community-admin/CreateCommunityPlayerModal";
 import { OfflineIdentityLinksPanel } from "@/components/community-admin/OfflineIdentityLinksPanel";
+import { AdminOnboardingChecklist } from "@/components/onboarding/AdminOnboardingChecklist";
+import { useAdminOnboardingProgress } from "@/components/onboarding/useAdminOnboardingProgress";
 import type { CommunityAdminSection } from "@/components/community-admin/communityAdminTypes";
 import { useCommunityAdminPage } from "./useCommunityAdminPage";
 
@@ -234,6 +236,9 @@ export default function CommunityAdminPage() {
     handleDeleteCommunity,
     handleReviewClaimRequest,
   } = useCommunityAdminPage();
+  const adminOnboarding = useAdminOnboardingProgress(
+    status === "authenticated" && community?.role === "ADMIN" && !loading
+  );
 
   const handleBack = useCallback(() => {
     if (typeof window !== "undefined" && window.history.length > 1) {
@@ -338,6 +343,14 @@ export default function CommunityAdminPage() {
 
         {error ? <FlashMessage tone="error">{error}</FlashMessage> : null}
         {success ? <FlashMessage tone="success">{success}</FlashMessage> : null}
+
+        <AdminOnboardingChecklist
+          progress={adminOnboarding.progress}
+          loading={adminOnboarding.loading}
+          onDismiss={adminOnboarding.dismiss}
+          onReopen={adminOnboarding.reopen}
+          onCompleteStep={adminOnboarding.completeStep}
+        />
 
         <section className="app-panel-soft p-2">
           <div className="grid gap-2 sm:grid-cols-4">

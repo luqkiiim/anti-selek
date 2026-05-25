@@ -110,13 +110,7 @@ export function SessionPodium({
         </div>
       ) : null}
 
-      <div className="relative z-[1] mb-4 flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <p className="app-eyebrow">Final podium</p>
-          <h2 className="mt-1 text-2xl font-semibold leading-tight text-gray-900 sm:text-3xl">
-            Winners circle
-          </h2>
-        </div>
+      <div className="relative z-[1] mb-4 flex justify-end">
         {onReplayCelebration ? (
           <button
             type="button"
