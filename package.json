@@ -18,7 +18,8 @@
     "smoke:production": "node scripts/production-smoke.mjs",
     "lint": "eslint",
     "pretest": "node scripts/ensure-node-lts.mjs",
-    "test": "vitest run --pool=threads src",
+    "test": "vitest run src",
+    "test:file": "vitest run",
     "pretest:e2e": "node scripts/ensure-node-lts.mjs",
     "test:e2e": "playwright test",
     "postinstall": "prisma generate"

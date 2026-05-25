@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
   communityMemberFindMany: vi.fn(),
   matchFindMany: vi.fn(),
   claimRequestFindMany: vi.fn(),
+  offlineIdentityMemberFindMany: vi.fn(),
   listSessionsForCommunity: vi.fn(),
   buildCommunityPulse: vi.fn(),
 }));
@@ -37,6 +38,9 @@ vi.mock("@/lib/prisma", () => ({
     },
     claimRequest: {
       findMany: mocks.claimRequestFindMany,
+    },
+    offlineIdentityMember: {
+      findMany: mocks.offlineIdentityMemberFindMany,
     },
   },
 }));
@@ -158,6 +162,7 @@ describe("community snapshot route", () => {
       },
     ]);
     mocks.claimRequestFindMany.mockResolvedValue([]);
+    mocks.offlineIdentityMemberFindMany.mockResolvedValue([]);
     mocks.buildCommunityPulse.mockReturnValue({
       metrics: {
         members: 2,

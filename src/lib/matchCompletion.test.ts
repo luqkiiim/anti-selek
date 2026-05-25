@@ -63,6 +63,9 @@ function createTransactionMock(storedMatch: unknown) {
       findMany: vi.fn().mockResolvedValue([]),
       updateMany: vi.fn().mockResolvedValue({ count: 0 }),
     },
+    offlineIdentityMember: {
+      findMany: vi.fn().mockResolvedValue([]),
+    },
     user: {
       findMany: vi.fn().mockResolvedValue([
         { id: "a1", elo: 1000 },

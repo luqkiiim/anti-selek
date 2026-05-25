@@ -78,8 +78,24 @@ describe("community claim helpers", () => {
           .fn()
           .mockResolvedValueOnce({ role: "MEMBER", elo: 1000 })
           .mockResolvedValueOnce({ role: "MEMBER" }),
+        findMany: vi.fn().mockResolvedValue([
+          {
+            communityId: "community-1",
+            userId: "placeholder-1",
+            role: "MEMBER",
+            elo: 1000,
+          },
+        ]),
         delete: vi.fn().mockResolvedValue({}),
         update: vi.fn().mockResolvedValue({}),
+      },
+      offlineIdentityMember: {
+        findUnique: vi.fn().mockResolvedValue(null),
+        findMany: vi.fn().mockResolvedValue([]),
+        deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
+      },
+      offlineIdentity: {
+        updateMany: vi.fn().mockResolvedValue({ count: 0 }),
       },
       session: {
         findMany: vi.fn().mockResolvedValue([]),
@@ -89,6 +105,9 @@ describe("community claim helpers", () => {
         updateMany: vi.fn().mockResolvedValue({ count: 0 }),
       },
       match: {
+        updateMany: vi.fn().mockResolvedValue({ count: 0 }),
+      },
+      matchEloAdjustment: {
         updateMany: vi.fn().mockResolvedValue({ count: 0 }),
       },
       user: {

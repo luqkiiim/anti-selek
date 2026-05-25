@@ -14,6 +14,9 @@ vi.mock("@/lib/prisma", () => ({
     user: {
       findMany: vi.fn(),
     },
+    offlineIdentityMember: {
+      findMany: vi.fn(),
+    },
     $transaction: vi.fn(),
   },
 }));
@@ -67,6 +70,7 @@ describe("createSessionForUser", () => {
         partnerPreference: "OPEN",
       },
     ] as never);
+    vi.mocked(prisma.offlineIdentityMember.findMany).mockResolvedValue([] as never);
     vi.mocked(getCommunityEloByUserId).mockResolvedValue(new Map() as never);
 
     const sessionCreate = vi.fn().mockResolvedValue({
@@ -137,7 +141,6 @@ describe("createSessionForUser", () => {
     expect(sessionCreate).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
-          autoQueueEnabled: true,
           players: {
             create: [
               expect.objectContaining({

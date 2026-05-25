@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   auth: vi.fn(),
   communityMemberFindUnique: vi.fn(),
   communityMemberFindMany: vi.fn(),
+  offlineIdentityMemberFindMany: vi.fn(),
 }));
 
 vi.mock("@/lib/auth", () => ({
@@ -20,6 +21,9 @@ vi.mock("@/lib/prisma", () => ({
     communityMember: {
       findUnique: mocks.communityMemberFindUnique,
       findMany: mocks.communityMemberFindMany,
+    },
+    offlineIdentityMember: {
+      findMany: mocks.offlineIdentityMemberFindMany,
     },
   },
 }));
@@ -52,6 +56,7 @@ describe("collab roster route", () => {
     mocks.communityMemberFindUnique.mockResolvedValue({
       role: "ADMIN",
     });
+    mocks.offlineIdentityMemberFindMany.mockResolvedValue([]);
   });
 
   it("de-duplicates shared unclaimed players by user id and keeps duplicate names separate", async () => {

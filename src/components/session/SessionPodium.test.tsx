@@ -102,7 +102,7 @@ describe("SessionPodium", () => {
     expect(markup).toContain('<img');
     expect(markup).toContain('src="https://cdn.test/avatars/alex.jpg"');
     expect(markup.match(/loading="eager"/g) ?? []).toHaveLength(3);
-    expect(markup.match(/fetchPriority="high"/g) ?? []).toHaveLength(3);
+    expect(markup.match(/<img[^>]*fetchPriority="high"/g) ?? []).toHaveLength(3);
     expect(markup.match(/data-avatar-size="xl"/g) ?? []).toHaveLength(3);
   });
 

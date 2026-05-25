@@ -26,7 +26,7 @@ describe("avatar crop utility", () => {
 
     const file = await createCroppedAvatarFile({
       src: "blob:avatar",
-      crop: { x: 16, y: 24, width: 220, height: 110 },
+      crop: { x: 16, y: 24, width: 1024, height: 512 },
       fileName: "profile.png",
       imageLoader: async () => fakeImage,
       createCanvas: () => canvas,
@@ -39,8 +39,8 @@ describe("avatar crop utility", () => {
       fakeImage,
       16,
       24,
-      220,
-      110,
+      1024,
+      512,
       0,
       0,
       512,
