@@ -50,10 +50,12 @@ const EMPTY_PLAYER_STATS = {
   losses: 0,
 };
 
+const CELEBRATION_TRIGGER_DELAY_MS = 500;
+
 function getRevealDelayMs(rank: number, podiumSize: number) {
-  if (rank === 3 || podiumSize === 1) return 0;
-  if (rank === 2) return podiumSize === 2 ? 0 : 500;
-  return podiumSize === 2 ? 500 : 1000;
+  if (rank === 3 || podiumSize === 1) return CELEBRATION_TRIGGER_DELAY_MS;
+  if (rank === 2) return podiumSize === 2 ? CELEBRATION_TRIGGER_DELAY_MS : CELEBRATION_TRIGGER_DELAY_MS + 500;
+  return podiumSize === 2 ? CELEBRATION_TRIGGER_DELAY_MS + 500 : CELEBRATION_TRIGGER_DELAY_MS + 1000;
 }
 
 export function SessionPodium({
