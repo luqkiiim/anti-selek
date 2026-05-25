@@ -52,8 +52,8 @@ const EMPTY_PLAYER_STATS = {
 
 function getRevealDelayMs(rank: number, podiumSize: number) {
   if (rank === 3 || podiumSize === 1) return 0;
-  if (rank === 2) return podiumSize === 2 ? 0 : 180;
-  return podiumSize === 2 ? 180 : 360;
+  if (rank === 2) return podiumSize === 2 ? 0 : 500;
+  return podiumSize === 2 ? 500 : 1000;
 }
 
 export function SessionPodium({
@@ -96,10 +96,15 @@ export function SessionPodium({
           }
         >
           <span className="app-podium-burst-shuttle app-podium-burst-particle" />
+          <span className="app-podium-burst-shuttle app-podium-burst-shuttle-two" />
           <span className="app-podium-burst-ribbon app-podium-burst-ribbon-one" />
           <span className="app-podium-burst-ribbon app-podium-burst-ribbon-two" />
+          <span className="app-podium-burst-ribbon app-podium-burst-ribbon-three" />
+          <span className="app-podium-burst-ribbon app-podium-burst-ribbon-four" />
           <span className="app-podium-burst-spark app-podium-burst-spark-one" />
           <span className="app-podium-burst-spark app-podium-burst-spark-two" />
+          <span className="app-podium-burst-spark app-podium-burst-spark-three" />
+          <span className="app-podium-burst-spark app-podium-burst-spark-four" />
         </div>
       ) : null}
 

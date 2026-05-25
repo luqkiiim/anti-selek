@@ -193,10 +193,12 @@ describe("SessionPodium", () => {
     });
 
     expect(markup).toContain('data-testid="podium-burst-particles"');
-    expect(markup).toContain("--podium-finale-delay:620ms");
+    expect(markup).toContain("--podium-finale-delay:1260ms");
     expect(markup).toContain("app-podium-burst-entrant");
     expect(markup).toContain("app-podium-burst-champion");
     expect(markup).toContain("app-podium-burst-crown");
+    expect(markup).toContain("app-podium-burst-ribbon-four");
+    expect(markup).toContain("app-podium-burst-spark-four");
   });
 
   it("reveals podium players in rank order from third to champion", () => {
@@ -209,8 +211,8 @@ describe("SessionPodium", () => {
       ],
     });
 
-    const secondPlaceDelay = markup.indexOf("--podium-reveal-delay:180ms");
-    const championDelay = markup.indexOf("--podium-reveal-delay:360ms");
+    const secondPlaceDelay = markup.indexOf("--podium-reveal-delay:500ms");
+    const championDelay = markup.indexOf("--podium-reveal-delay:1000ms");
     const thirdPlaceDelay = markup.indexOf("--podium-reveal-delay:0ms");
 
     expect(secondPlaceDelay).toBeGreaterThan(-1);
