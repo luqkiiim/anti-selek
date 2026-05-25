@@ -44,6 +44,8 @@ export function Avatar({
   className,
   imageClassName,
   fallbackClassName,
+  imageLoading,
+  imageFetchPriority,
 }: {
   name: string;
   avatarUrl?: string | null;
@@ -52,6 +54,8 @@ export function Avatar({
   className?: string;
   imageClassName?: string;
   fallbackClassName?: string;
+  imageLoading?: "eager" | "lazy";
+  imageFetchPriority?: "high" | "low" | "auto";
 }) {
   const [failedImageUrl, setFailedImageUrl] = useState<string | null>(null);
   const shouldShowImage = !!avatarUrl && failedImageUrl !== avatarUrl;
@@ -74,6 +78,9 @@ export function Avatar({
           src={avatarUrl}
           alt={`${name} avatar`}
           className={cx("h-full w-full object-cover", imageClassName)}
+          loading={imageLoading}
+          fetchPriority={imageFetchPriority}
+          decoding="async"
           onError={() => setFailedImageUrl(avatarUrl)}
         />
       ) : (

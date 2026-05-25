@@ -1,0 +1,144 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const mocks = vi.hoisted(() => ({
+  auth: vi.fn(),
+  rateLimit: vi.fn(),
+  checkInvalidTargetRateLimit: vi.fn(),
+  invalidTargetResponse: vi.fn(),
+  sessionFindUnique: vi.fn(),
+  sessionUpdate: vi.fn(),
+  queuedMatchDeleteMany: vi.fn(),
+  courtUpdateMany: vi.fn(),
+  matchDeleteMany: vi.fn(),
+  transaction: vi.fn(),
+  getSessionAdminMembership: vi.fn(),
+  getAcceptedSessionCommunityIds: vi.fn(),
+  getPlayerCommunityBadges: vi.fn(),
+  withPlayerCommunityBadges: vi.fn(),
+  getCommunityEloByUserId: vi.fn(),
+  withCommunityElo: vi.fn(),
+}));
+
+vi.mock("@/lib/auth", () => ({
+  auth: mocks.auth,
+}));
+
+vi.mock("@/lib/prisma", () => ({
+  prisma: {
+    session: {
+      findUnique: mocks.sessionFindUnique,
+    },
+    $transaction: mocks.transaction,
+  },
+}));
+
+vi.mock("@/lib/sessionCollab", () => ({
+  getAcceptedSessionCommunityIds: mocks.getAcceptedSessionCommunityIds,
+  getPlayerCommunityBadges: mocks.getPlayerCommunityBadges,
+  getSessionAdminMembership: mocks.getSessionAdminMembership,
+  withPlayerCommunityBadges: mocks.withPlayerCommunityBadges,
+}));
+
+vi.mock("@/lib/communityElo", () => ({
+  getCommunityEloByUserId: mocks.getCommunityEloByUserId,
+  withCommunityElo: mocks.withCommunityElo,
+}));
+
+vi.mock("@/lib/rateLimit", () => ({
+  rateLimit: mocks.rateLimit,
+  checkInvalidTargetRateLimit: mocks.checkInvalidTargetRateLimit,
+  invalidTargetResponse: mocks.invalidTargetResponse,
+}));
+
+import { POST } from "./route";
+
+describe("session end route", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+
+    mocks.auth.mockResolvedValue({
+      user: { id: "admin-1", isAdmin: true },
+    });
+    mocks.rateLimit.mockResolvedValue(null);
+    mocks.checkInvalidTargetRateLimit.mockResolvedValue(null);
+    mocks.invalidTargetResponse.mockResolvedValue(
+      Response.json({ error: "Unauthorized" }, { status: 403 })
+    );
+    mocks.getSessionAdminMembership.mockResolvedValue({ role: "ADMIN" });
+    mocks.getAcceptedSessionCommunityIds.mockResolvedValue(["community-1"]);
+    mocks.getCommunityEloByUserId.mockResolvedValue(new Map());
+    mocks.withCommunityElo.mockImplementation((players) => players);
+    mocks.getPlayerCommunityBadges.mockResolvedValue(new Map());
+    mocks.withPlayerCommunityBadges.mockImplementation((players) => players);
+
+    mocks.sessionFindUnique.mockResolvedValue({
+      id: "session-1",
+      communityId: "community-1",
+      endedAt: null,
+    });
+
+    const updatedSession = {
+      id: "session-1",
+      code: "ABC123",
+      communityId: "community-1",
+      name: "Evening Session",
+      status: "COMPLETED",
+      type: "POINTS",
+      mode: "MEXICANO",
+      endedAt: new Date("2026-05-25T12:00:00.000Z"),
+      courts: [],
+      players: [
+        {
+          userId: "u1",
+          sessionPoints: 18,
+          isPaused: false,
+          isGuest: false,
+          gender: "UNSPECIFIED",
+          partnerPreference: "OPEN",
+          pool: "A",
+          user: {
+            id: "u1",
+            name: "Alex Lee",
+            avatarKey: "https://blob.vercel-storage.com/avatars/u1/photo.jpg",
+            elo: 1200,
+          },
+        },
+      ],
+    };
+
+    mocks.queuedMatchDeleteMany.mockResolvedValue({ count: 1 });
+    mocks.courtUpdateMany.mockResolvedValue({ count: 2 });
+    mocks.matchDeleteMany.mockResolvedValue({ count: 3 });
+    mocks.sessionUpdate.mockResolvedValue(updatedSession);
+    mocks.transaction.mockImplementation(async (callback) =>
+      callback({
+        queuedMatch: {
+          deleteMany: mocks.queuedMatchDeleteMany,
+        },
+        court: {
+          updateMany: mocks.courtUpdateMany,
+        },
+        match: {
+          deleteMany: mocks.matchDeleteMany,
+        },
+        session: {
+          update: mocks.sessionUpdate,
+        },
+      })
+    );
+  });
+
+  it("returns players with avatarUrl in the immediate completion payload", async () => {
+    const response = await POST(new Request("http://localhost/api/sessions/ABC123/end"), {
+      params: Promise.resolve({ code: "ABC123" }),
+    });
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.players[0].user.avatarUrl).toBe(
+      "https://blob.vercel-storage.com/avatars/u1/photo.jpg"
+    );
+    expect(body.players[0].user.avatarKey).toBeUndefined();
+    expect(body.queuedMatch).toBeNull();
+  });
+});

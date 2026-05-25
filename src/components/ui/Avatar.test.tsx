@@ -26,6 +26,22 @@ describe("Avatar", () => {
     expect(markup).toContain('data-avatar-state="image"');
   });
 
+  it("passes through optional image loading hints", () => {
+    const markup = renderToStaticMarkup(
+      <Avatar
+        name="Alex Lee"
+        avatarUrl="https://cdn.test/avatars/alex.jpg"
+        size="sm"
+        imageLoading="eager"
+        imageFetchPriority="high"
+      />
+    );
+
+    expect(markup).toContain('loading="eager"');
+    expect(markup).toContain('fetchPriority="high"');
+    expect(markup).toContain('decoding="async"');
+  });
+
   it("supports the court avatar treatment", () => {
     const markup = renderToStaticMarkup(
       <Avatar name="Alex Lee" avatarUrl={null} size="court" appearance="court" />

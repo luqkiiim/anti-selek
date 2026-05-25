@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
+import { serializeAvatarEntity } from "@/lib/avatar";
 import { prisma } from "@/lib/prisma";
 import { getCommunityEloByUserId, withCommunityElo } from "@/lib/communityElo";
 import {
@@ -88,7 +89,11 @@ export async function POST(
         include: {
           courts: { include: { currentMatch: true } },
           players: {
-            include: { user: { select: { id: true, name: true, elo: true } } },
+            include: {
+              user: {
+                select: { id: true, name: true, avatarKey: true, elo: true },
+              },
+            },
           },
         },
       });
@@ -113,7 +118,14 @@ export async function POST(
             )
           : updated.players;
 
-    return NextResponse.json({ ...updated, players, queuedMatch: null });
+    return NextResponse.json({
+      ...updated,
+      players: players.map((player) => ({
+        ...player,
+        user: serializeAvatarEntity(player.user),
+      })),
+      queuedMatch: null,
+    });
   } catch (error) {
     logError("End session error", error);
     return safeErrorResponse();
