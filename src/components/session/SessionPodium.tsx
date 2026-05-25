@@ -16,6 +16,8 @@ interface SessionPodiumProps {
       losses: number;
     }
   >;
+  celebrationRunId?: number;
+  onReplayCelebration?: () => void;
 }
 
 const RANK_STYLES: Record<
@@ -50,10 +52,13 @@ export function SessionPodium({
   players,
   pointDiffByUserId,
   playerStatsByUserId,
+  celebrationRunId = 0,
+  onReplayCelebration,
 }: SessionPodiumProps) {
   const topThree = players.slice(0, 3);
   const isLadderSession = sessionType === SessionType.LADDER;
   const isRaceSession = sessionType === SessionType.RACE;
+  const isCelebrating = celebrationRunId > 0;
 
   if (topThree.length === 0) {
     return null;
@@ -67,19 +72,62 @@ export function SessionPodium({
         : topThree;
 
   return (
-    <section className="app-panel px-4 pb-4 pt-6 sm:px-6 sm:pb-5">
+    <section className="app-panel app-podium-burst-panel relative overflow-hidden px-4 pb-4 pt-6 sm:px-6 sm:pb-5">
+      {isCelebrating ? (
+        <div
+          key={`podium-burst-${celebrationRunId}`}
+          className="app-podium-burst-particles"
+          aria-hidden="true"
+          data-testid="podium-burst-particles"
+        >
+          <span className="app-podium-burst-shuttle app-podium-burst-particle" />
+          <span className="app-podium-burst-ribbon app-podium-burst-ribbon-one" />
+          <span className="app-podium-burst-ribbon app-podium-burst-ribbon-two" />
+          <span className="app-podium-burst-spark app-podium-burst-spark-one" />
+          <span className="app-podium-burst-spark app-podium-burst-spark-two" />
+        </div>
+      ) : null}
+
+      <div className="relative z-[1] mb-4 flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className="app-eyebrow">Final podium</p>
+          <h2 className="mt-1 text-2xl font-semibold leading-tight text-gray-900 sm:text-3xl">
+            Winners circle
+          </h2>
+        </div>
+        {onReplayCelebration ? (
+          <button
+            type="button"
+            onClick={onReplayCelebration}
+            className="app-button-secondary px-3 py-2 text-xs"
+          >
+            Replay celebration
+          </button>
+        ) : null}
+      </div>
+
       <div
-        className="grid items-end gap-3"
+        className="relative z-[1] grid items-end gap-3"
         style={{ gridTemplateColumns: `repeat(${orderedPlayers.length}, minmax(0, 1fr))` }}
       >
-        {orderedPlayers.map((player) => {
+        {orderedPlayers.map((player, index) => {
           const rank = players.findIndex((entry) => entry.userId === player.userId) + 1;
           const pointDiff = pointDiffByUserId.get(player.userId) ?? 0;
           const stats = playerStatsByUserId.get(player.userId) ?? EMPTY_PLAYER_STATS;
           const styles = RANK_STYLES[rank] ?? RANK_STYLES[3];
 
           return (
-            <article key={player.userId} className="flex flex-col items-center justify-end text-center">
+            <article
+              key={`${player.userId}-${celebrationRunId}`}
+              className={`flex flex-col items-center justify-end text-center ${
+                isCelebrating ? "app-podium-burst-entrant" : ""
+              } ${isCelebrating && rank === 1 ? "app-podium-burst-champion" : ""}`}
+              style={
+                isCelebrating
+                  ? { animationDelay: `${index * 120}ms` }
+                  : undefined
+              }
+            >
               <div className="mb-3 flex min-h-[4.5rem] flex-col justify-end space-y-1 sm:min-h-[5rem]">
                 <p className="text-xl font-semibold leading-tight text-gray-900 sm:text-2xl md:text-3xl">
                   {player.user.name}
@@ -105,6 +153,12 @@ export function SessionPodium({
               <div
                 className={`flex w-full flex-col items-center justify-center rounded-t-[1.75rem] border border-b-0 px-3 pb-4 pt-3 shadow-sm sm:px-4 ${styles.block} ${styles.height}`}
               >
+                {rank === 1 ? (
+                  <span
+                    className="app-podium-burst-crown mb-2"
+                    aria-hidden="true"
+                  />
+                ) : null}
                 <span
                   className={`inline-flex h-8 w-8 items-center justify-center rounded-full border text-sm font-black ${styles.rank}`}
                 >

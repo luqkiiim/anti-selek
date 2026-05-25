@@ -51,6 +51,8 @@ function renderPodium({
       losses: number;
     }
   >(),
+  celebrationRunId,
+  onReplayCelebration,
 }: {
   sessionType?: SessionType;
   players: Player[];
@@ -63,6 +65,8 @@ function renderPodium({
       losses: number;
     }
   >;
+  celebrationRunId?: number;
+  onReplayCelebration?: () => void;
 }) {
   return renderToStaticMarkup(
     <SessionPodium
@@ -70,6 +74,8 @@ function renderPodium({
       players={players}
       pointDiffByUserId={pointDiffByUserId}
       playerStatsByUserId={playerStatsByUserId}
+      celebrationRunId={celebrationRunId}
+      onReplayCelebration={onReplayCelebration}
     />
   );
 }
@@ -157,5 +163,35 @@ describe("SessionPodium", () => {
     expect(markup).toContain(">Record<");
     expect(markup).toContain("+9 diff");
     expect(markup).toContain('data-avatar-size="xl"');
+  });
+
+  it("renders a replay celebration action when provided", () => {
+    const markup = renderPodium({
+      players: [
+        createPlayer({ userId: "u1", name: "Alex Lee", sessionPoints: 18 }),
+        createPlayer({ userId: "u2", name: "Bianca Tan", sessionPoints: 15 }),
+      ],
+      onReplayCelebration: () => undefined,
+    });
+
+    expect(markup).toContain("Replay celebration");
+    expect(markup).not.toContain('data-testid="podium-burst-particles"');
+  });
+
+  it("renders celebration burst markup when a celebration run is active", () => {
+    const markup = renderPodium({
+      celebrationRunId: 2,
+      onReplayCelebration: () => undefined,
+      players: [
+        createPlayer({ userId: "u1", name: "Alex Lee", sessionPoints: 18 }),
+        createPlayer({ userId: "u2", name: "Bianca Tan", sessionPoints: 15 }),
+        createPlayer({ userId: "u3", name: "Chris Ong", sessionPoints: 12 }),
+      ],
+    });
+
+    expect(markup).toContain('data-testid="podium-burst-particles"');
+    expect(markup).toContain("app-podium-burst-entrant");
+    expect(markup).toContain("app-podium-burst-champion");
+    expect(markup).toContain("app-podium-burst-crown");
   });
 });

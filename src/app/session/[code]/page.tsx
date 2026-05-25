@@ -132,6 +132,11 @@ export default function SessionPage() {
   const [savingSettings, setSavingSettings] = useState(false);
   const [mobileSection, setMobileSection] =
     useState<SessionMobileSection>("session");
+  const [celebrationRunId, setCelebrationRunId] = useState(0);
+
+  const replayWinnerCelebration = useCallback(() => {
+    setCelebrationRunId((currentRunId) => currentRunId + 1);
+  }, []);
 
   const fetchUser = useCallback(async () => {
     try {
@@ -826,7 +831,9 @@ export default function SessionPage() {
     const previousStatus = previousSessionStatusRef.current;
     const isInitialEntry = previousStatus === null;
     const becameCompleted =
-      previousStatus !== SessionStatus.COMPLETED && sessionView.isCompletedSession;
+      previousStatus !== null &&
+      previousStatus !== SessionStatus.COMPLETED &&
+      sessionView.isCompletedSession;
     const becameActive =
       previousStatus === SessionStatus.WAITING &&
       sessionData.status === SessionStatus.ACTIVE;
@@ -834,6 +841,10 @@ export default function SessionPage() {
     if (isInitialEntry || becameCompleted || becameActive) {
       setMobileSection(preferredMobileSection);
       scrollMobilePagerToSection(preferredMobileSection, "auto");
+    }
+
+    if (becameCompleted) {
+      setCelebrationRunId((currentRunId) => currentRunId + 1);
     }
 
     previousSessionStatusRef.current = sessionData.status;
@@ -1187,6 +1198,8 @@ export default function SessionPage() {
                     players={sessionView.sortedPlayers}
                     pointDiffByUserId={sessionView.pointDiffByUserId}
                     playerStatsByUserId={sessionView.playerStatsByUserId}
+                    celebrationRunId={celebrationRunId}
+                    onReplayCelebration={replayWinnerCelebration}
                   />
                 ) : null}
 
