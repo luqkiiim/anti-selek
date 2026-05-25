@@ -1,5 +1,8 @@
 "use client";
 
+import { Sparkles } from "lucide-react";
+import type { CSSProperties } from "react";
+
 import type { Player } from "@/components/session/sessionTypes";
 import { Avatar } from "@/components/ui/Avatar";
 import { SessionType } from "@/types/enums";
@@ -47,6 +50,12 @@ const EMPTY_PLAYER_STATS = {
   losses: 0,
 };
 
+function getRevealDelayMs(rank: number, podiumSize: number) {
+  if (rank === 3 || podiumSize === 1) return 0;
+  if (rank === 2) return podiumSize === 2 ? 0 : 180;
+  return podiumSize === 2 ? 180 : 360;
+}
+
 export function SessionPodium({
   sessionType,
   players,
@@ -70,6 +79,7 @@ export function SessionPodium({
       : topThree.length === 2
         ? [topThree[1], topThree[0]]
         : topThree;
+  const championRevealDelayMs = getRevealDelayMs(1, topThree.length);
 
   return (
     <section className="app-panel app-podium-burst-panel relative overflow-hidden px-4 pb-4 pt-6 sm:px-6 sm:pb-5">
@@ -79,6 +89,11 @@ export function SessionPodium({
           className="app-podium-burst-particles"
           aria-hidden="true"
           data-testid="podium-burst-particles"
+          style={
+            {
+              "--podium-finale-delay": `${championRevealDelayMs + 260}ms`,
+            } as CSSProperties
+          }
         >
           <span className="app-podium-burst-shuttle app-podium-burst-particle" />
           <span className="app-podium-burst-ribbon app-podium-burst-ribbon-one" />
@@ -99,9 +114,11 @@ export function SessionPodium({
           <button
             type="button"
             onClick={onReplayCelebration}
-            className="app-button-secondary px-3 py-2 text-xs"
+            className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-amber-200/80 bg-white/80 text-amber-700 shadow-sm backdrop-blur transition hover:-translate-y-0.5 hover:border-amber-300 hover:bg-amber-50 hover:text-amber-800 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-amber-300 focus:ring-offset-2"
+            aria-label="Replay winner celebration"
+            title="Replay winner celebration"
           >
-            Replay celebration
+            <Sparkles aria-hidden="true" size={17} strokeWidth={2.4} />
           </button>
         ) : null}
       </div>
@@ -110,11 +127,12 @@ export function SessionPodium({
         className="relative z-[1] grid items-end gap-3"
         style={{ gridTemplateColumns: `repeat(${orderedPlayers.length}, minmax(0, 1fr))` }}
       >
-        {orderedPlayers.map((player, index) => {
+        {orderedPlayers.map((player) => {
           const rank = players.findIndex((entry) => entry.userId === player.userId) + 1;
           const pointDiff = pointDiffByUserId.get(player.userId) ?? 0;
           const stats = playerStatsByUserId.get(player.userId) ?? EMPTY_PLAYER_STATS;
           const styles = RANK_STYLES[rank] ?? RANK_STYLES[3];
+          const revealDelayMs = getRevealDelayMs(rank, topThree.length);
 
           return (
             <article
@@ -124,7 +142,9 @@ export function SessionPodium({
               } ${isCelebrating && rank === 1 ? "app-podium-burst-champion" : ""}`}
               style={
                 isCelebrating
-                  ? { animationDelay: `${index * 120}ms` }
+                  ? ({
+                      "--podium-reveal-delay": `${revealDelayMs}ms`,
+                    } as CSSProperties)
                   : undefined
               }
             >

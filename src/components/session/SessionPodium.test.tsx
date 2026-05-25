@@ -174,7 +174,10 @@ describe("SessionPodium", () => {
       onReplayCelebration: () => undefined,
     });
 
-    expect(markup).toContain("Replay celebration");
+    expect(markup).toContain('aria-label="Replay winner celebration"');
+    expect(markup).toContain('title="Replay winner celebration"');
+    expect(markup).toContain("<svg");
+    expect(markup).not.toContain(">Replay celebration<");
     expect(markup).not.toContain('data-testid="podium-burst-particles"');
   });
 
@@ -190,8 +193,28 @@ describe("SessionPodium", () => {
     });
 
     expect(markup).toContain('data-testid="podium-burst-particles"');
+    expect(markup).toContain("--podium-finale-delay:620ms");
     expect(markup).toContain("app-podium-burst-entrant");
     expect(markup).toContain("app-podium-burst-champion");
     expect(markup).toContain("app-podium-burst-crown");
+  });
+
+  it("reveals podium players in rank order from third to champion", () => {
+    const markup = renderPodium({
+      celebrationRunId: 1,
+      players: [
+        createPlayer({ userId: "u1", name: "Alex Lee", sessionPoints: 18 }),
+        createPlayer({ userId: "u2", name: "Bianca Tan", sessionPoints: 15 }),
+        createPlayer({ userId: "u3", name: "Chris Ong", sessionPoints: 12 }),
+      ],
+    });
+
+    const secondPlaceDelay = markup.indexOf("--podium-reveal-delay:180ms");
+    const championDelay = markup.indexOf("--podium-reveal-delay:360ms");
+    const thirdPlaceDelay = markup.indexOf("--podium-reveal-delay:0ms");
+
+    expect(secondPlaceDelay).toBeGreaterThan(-1);
+    expect(championDelay).toBeGreaterThan(secondPlaceDelay);
+    expect(thirdPlaceDelay).toBeGreaterThan(championDelay);
   });
 });

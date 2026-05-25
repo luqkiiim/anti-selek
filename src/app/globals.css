@@ -473,6 +473,7 @@ h4 {
   bottom: 2rem;
   left: 50%;
   animation: app-podium-burst-float 1400ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: var(--podium-finale-delay, 0ms);
 }
 
 .app-podium-burst-shuttle {
@@ -511,7 +512,7 @@ h4 {
   --burst-rotate-start: 22deg;
   --burst-rotate-end: 220deg;
   background: linear-gradient(180deg, #f59e0b, #fde68a);
-  animation-delay: 120ms;
+  animation-delay: calc(var(--podium-finale-delay, 0ms) + 120ms);
 }
 
 .app-podium-burst-ribbon-two {
@@ -520,7 +521,7 @@ h4 {
   --burst-rotate-start: -24deg;
   --burst-rotate-end: -210deg;
   background: linear-gradient(180deg, #0f766e, #99f6e4);
-  animation-delay: 210ms;
+  animation-delay: calc(var(--podium-finale-delay, 0ms) + 210ms);
 }
 
 .app-podium-burst-spark {
@@ -535,7 +536,7 @@ h4 {
   --burst-end-x: -2rem;
   --burst-rotate-start: 0deg;
   --burst-rotate-end: 90deg;
-  animation-delay: 70ms;
+  animation-delay: calc(var(--podium-finale-delay, 0ms) + 70ms);
 }
 
 .app-podium-burst-spark-two {
@@ -544,18 +545,18 @@ h4 {
   --burst-rotate-start: 0deg;
   --burst-rotate-end: -90deg;
   background: #14b8a6;
-  animation-delay: 170ms;
+  animation-delay: calc(var(--podium-finale-delay, 0ms) + 170ms);
 }
 
 .app-podium-burst-entrant {
   opacity: 0;
-  animation: app-podium-burst-rise 720ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  animation: app-podium-burst-rise 720ms cubic-bezier(0.22, 1, 0.36, 1) var(--podium-reveal-delay, 0ms) forwards;
 }
 
 .app-podium-burst-champion {
   animation:
-    app-podium-burst-rise 720ms cubic-bezier(0.22, 1, 0.36, 1) forwards,
-    app-podium-burst-champion-glow 1250ms ease-out 180ms both;
+    app-podium-burst-rise 720ms cubic-bezier(0.22, 1, 0.36, 1) var(--podium-reveal-delay, 0ms) forwards,
+    app-podium-burst-champion-glow 1250ms ease-out calc(var(--podium-reveal-delay, 0ms) + 180ms) both;
 }
 
 .app-podium-burst-crown {
@@ -569,7 +570,7 @@ h4 {
 
 .app-podium-burst-champion .app-podium-burst-crown {
   opacity: 0;
-  animation: app-podium-burst-crown 760ms cubic-bezier(0.22, 1, 0.36, 1) 260ms forwards;
+  animation: app-podium-burst-crown 760ms cubic-bezier(0.22, 1, 0.36, 1) calc(var(--podium-reveal-delay, 0ms) + 260ms) forwards;
 }
 
 @media (prefers-reduced-motion: reduce) {
