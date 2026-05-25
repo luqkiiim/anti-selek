@@ -230,6 +230,7 @@ export function LiveCourtCard({
         disabled={createActionDisabled}
         aria-expanded={createMenuOpen}
         className="inline-flex min-h-9 items-center gap-1.5 rounded-lg bg-gray-900 px-2.5 py-1.5 text-xs font-semibold text-white transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-50 md:px-3"
+        data-tutorial-target="admin-onboarding-score-input"
       >
         <Plus aria-hidden="true" size={14} />
         Create

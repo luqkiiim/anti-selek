@@ -51,18 +51,42 @@ async function getAdminOnboardingProgress(userId: string, isGlobalAdmin: boolean
   ]);
 
   const adminCommunityIds = memberships.map((membership) => membership.communityId);
-  const hasRosteredSession =
+  const [latestSession, rosteredSession, scoredMatch, completedSession] =
     adminCommunityIds.length > 0
-      ? Boolean(
-          await prisma.session.findFirst({
+      ? await Promise.all([
+          prisma.session.findFirst({
+            where: {
+              communityId: { in: adminCommunityIds },
+            },
+            orderBy: { createdAt: "desc" },
+            select: { code: true },
+          }),
+          prisma.session.findFirst({
             where: {
               communityId: { in: adminCommunityIds },
               players: { some: {} },
             },
             select: { id: true },
-          })
-        )
-      : false;
+          }),
+          prisma.match.findFirst({
+            where: {
+              session: {
+                communityId: { in: adminCommunityIds },
+              },
+              team1Score: { not: null },
+              team2Score: { not: null },
+            },
+            select: { id: true },
+          }),
+          prisma.session.findFirst({
+            where: {
+              communityId: { in: adminCommunityIds },
+              status: "COMPLETED",
+            },
+            select: { id: true },
+          }),
+        ])
+      : [null, null, null, null];
 
   return buildAdminOnboardingProgress({
     completedStepIds: parseAdminOnboardingStepIds(
@@ -70,6 +94,7 @@ async function getAdminOnboardingProgress(userId: string, isGlobalAdmin: boolean
     ),
     dismissedAt: progress?.dismissedAt ?? null,
     primaryCommunityId: memberships[0]?.communityId ?? null,
+    primarySessionCode: latestSession?.code ?? null,
     hasAdminCommunity: memberships.length > 0,
     hasRosterPlayers: memberships.some(
       (membership) => membership.community._count.members > 1
@@ -77,7 +102,9 @@ async function getAdminOnboardingProgress(userId: string, isGlobalAdmin: boolean
     hasAnySession: memberships.some(
       (membership) => membership.community._count.sessions > 0
     ),
-    hasRosteredSession,
+    hasRosteredSession: Boolean(rosteredSession),
+    hasScoredMatch: Boolean(scoredMatch),
+    hasCompletedSession: Boolean(completedSession),
   });
 }
 
@@ -105,6 +132,9 @@ export async function GET(request: Request) {
           hasRosterPlayers: false,
           hasAnySession: false,
           hasRosteredSession: false,
+          hasScoredMatch: false,
+          hasCompletedSession: false,
+          primarySessionCode: null,
         })
       );
     }

@@ -32,6 +32,8 @@ import { SessionPreferenceEditorPortal } from "@/components/session/SessionPrefe
 import { SessionGuestRenameModal } from "@/components/session/SessionGuestRenameModal";
 import { SessionRosterModal } from "@/components/session/SessionRosterModal";
 import { SessionSettingsModal } from "@/components/session/SessionSettingsModal";
+import { AdminOnboardingChecklist } from "@/components/onboarding/AdminOnboardingChecklist";
+import { useAdminOnboardingProgress } from "@/components/onboarding/useAdminOnboardingProgress";
 import type { CurrentUser } from "@/components/session/sessionTypes";
 import { MatchStatus, SessionStatus } from "@/types/enums";
 import {
@@ -427,6 +429,12 @@ export default function SessionPage() {
     isAdmin &&
     (sessionData?.status !== SessionStatus.COMPLETED || sessionData?.isTest);
   const isPlayerPickerOpen = showPlayersModal || showRosterModal;
+  const adminOnboarding = useAdminOnboardingProgress(
+    status === "authenticated" &&
+      isAdmin &&
+      !!sessionData &&
+      sessionData.status !== SessionStatus.COMPLETED
+  );
 
   useEffect(() => {
     if (!canOpenSettings) {
@@ -1078,6 +1086,14 @@ export default function SessionPage() {
       <main className="app-shell max-w-7xl space-y-4 sm:space-y-6">
         {error ? <FlashMessage tone="error">{error}</FlashMessage> : null}
 
+        <AdminOnboardingChecklist
+          progress={adminOnboarding.progress}
+          loading={adminOnboarding.loading}
+          onDismiss={adminOnboarding.dismiss}
+          onReopen={adminOnboarding.reopen}
+          onCompleteStep={adminOnboarding.completeStep}
+        />
+
         <div
           ref={mobilePagerRef}
           onScroll={handleMobilePagerScroll}
@@ -1342,6 +1358,7 @@ export default function SessionPage() {
             </div>
           }
           confirmLabel="Confirm End Session"
+          confirmTutorialTarget="admin-onboarding-end-session"
           cancelLabel="Keep Session Live"
           isSubmitting={endingSession}
           onClose={closeEndSessionConfirm}

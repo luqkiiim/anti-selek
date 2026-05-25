@@ -180,6 +180,7 @@ function ScoreSlot({
         step={1}
         data-live-score-input="true"
         data-score-input-match-id={matchId}
+        data-tutorial-target="admin-onboarding-score-input"
         value={scoreValue}
         onChange={(event) => onScoreChange(event.target.value)}
         onFocus={onScoreFocus}

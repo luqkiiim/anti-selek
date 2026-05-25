@@ -171,6 +171,9 @@ function RosterRow({
         type="button"
         onClick={onClick}
         className="app-button-secondary shrink-0 px-3 py-2 text-sm"
+        data-tutorial-target={
+          label === "Players" ? "admin-onboarding-host-players" : undefined
+        }
       >
         {actionLabel}
       </button>
@@ -608,6 +611,7 @@ export function HostTournamentPanel({
           onClick={onCreateSession}
           disabled={!canCreateSession}
           className="app-button-primary flex-1 px-4 py-2.5"
+          data-tutorial-target="admin-onboarding-create-session"
         >
           {creatingSession
             ? "Creating..."

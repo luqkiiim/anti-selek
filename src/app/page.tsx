@@ -116,6 +116,7 @@ export default function Home() {
                   type="button"
                   onClick={openCreateCommunityModal}
                   className="app-button-primary"
+                  data-tutorial-target="admin-onboarding-create-community"
                 >
                   <Plus aria-hidden="true" size={17} />
                   Create Community
@@ -156,6 +157,11 @@ export default function Home() {
                   key={community.id}
                   href={`/community/${community.id}`}
                   className="app-subcard block p-4 transition hover:-translate-y-0.5 hover:border-blue-300 hover:bg-blue-50"
+                  data-tutorial-target={
+                    community.role === "ADMIN"
+                      ? "admin-onboarding-dashboard-community"
+                      : undefined
+                  }
                 >
                   <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                     <div className="min-w-0">

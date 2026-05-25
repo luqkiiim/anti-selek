@@ -44,6 +44,7 @@ export function CommunityPlayersPanel({
           type="button"
           onClick={onOpenCreatePlayer}
           className="app-button-primary px-4 py-2"
+          data-tutorial-target="admin-onboarding-add-player"
         >
           Add player
         </button>
@@ -91,6 +92,7 @@ export function CommunityPlayersPanel({
                 type="button"
                 onClick={onOpenCreatePlayer}
                 className="app-button-primary px-4 py-2"
+                data-tutorial-target="admin-onboarding-add-player"
               >
                 Create first player
               </button>

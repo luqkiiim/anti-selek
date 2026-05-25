@@ -102,10 +102,11 @@ export function SessionSettingsModal({
             ) : null}
             {canEndSession ? (
               <button
-                type="button"
-                onClick={onEndSession}
-                className="app-button-danger justify-center"
-              >
+              type="button"
+              onClick={onEndSession}
+              className="app-button-danger justify-center"
+              data-tutorial-target="admin-onboarding-end-session"
+            >
                 End Session
               </button>
             ) : null}

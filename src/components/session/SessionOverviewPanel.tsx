@@ -83,7 +83,12 @@ export function SessionOverviewPanel({
 
         <div className="flex flex-wrap gap-3 xl:max-w-[28rem] xl:justify-end">
           {canStartSession ? (
-            <button type="button" onClick={onStartSession} className="app-button-primary">
+            <button
+              type="button"
+              onClick={onStartSession}
+              className="app-button-primary"
+              data-tutorial-target="admin-onboarding-start-session"
+            >
               <Play aria-hidden="true" size={17} />
               Start Session
             </button>
@@ -93,6 +98,7 @@ export function SessionOverviewPanel({
               type="button"
               onClick={onOpenSettings}
               className="app-button-secondary"
+              data-tutorial-target="admin-onboarding-end-session"
             >
               <Settings aria-hidden="true" size={17} />
               Settings

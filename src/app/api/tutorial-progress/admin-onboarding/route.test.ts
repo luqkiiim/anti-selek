@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   tutorialProgressUpsert: vi.fn(),
   communityMemberFindMany: vi.fn(),
   sessionFindFirst: vi.fn(),
+  matchFindFirst: vi.fn(),
 }));
 
 vi.mock("@/lib/auth", () => ({
@@ -24,6 +25,9 @@ vi.mock("@/lib/prisma", () => ({
     },
     session: {
       findFirst: mocks.sessionFindFirst,
+    },
+    match: {
+      findFirst: mocks.matchFindFirst,
     },
   },
 }));
@@ -85,7 +89,8 @@ describe("admin onboarding progress route", () => {
     mocks.tutorialProgressFindUnique.mockResolvedValue(null);
     mocks.tutorialProgressUpsert.mockResolvedValue({});
     mocks.communityMemberFindMany.mockResolvedValue([buildMembership()]);
-    mocks.sessionFindFirst.mockResolvedValue({ id: "session-1" });
+    mocks.sessionFindFirst.mockResolvedValue({ id: "session-1", code: "ABC123" });
+    mocks.matchFindFirst.mockResolvedValue({ id: "match-1" });
   });
 
   it("returns inferred admin onboarding progress", async () => {
@@ -99,12 +104,31 @@ describe("admin onboarding progress route", () => {
     expect(response.status).toBe(200);
     expect(body.visible).toBe(true);
     expect(body.primaryCommunityId).toBe("community-1");
+    expect(body.primarySessionCode).toBe("ABC123");
     expect(body.completedStepIds).toEqual([
       "admin-community",
       "players",
       "host-session",
       "session-workflow",
+      "score-match",
+      "end-session",
     ]);
+  });
+
+  it("keeps reset cleanup as a manual optional step", async () => {
+    mocks.auth.mockResolvedValue(buildSession());
+
+    const response = await GET(
+      new Request("http://localhost/api/tutorial-progress/admin-onboarding")
+    );
+    const body = await response.json();
+    const cleanupStep = body.steps.find(
+      (step: { id: string }) => step.id === "reset-cleanup"
+    );
+
+    expect(cleanupStep.manual).toBe(true);
+    expect(cleanupStep.completed).toBe(false);
+    expect(body.completedStepIds).not.toContain("reset-cleanup");
   });
 
   it("hides onboarding for quick-access users", async () => {
@@ -137,7 +161,7 @@ describe("admin onboarding progress route", () => {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          completedStepIds: ["followups"],
+          completedStepIds: ["reset-cleanup"],
           dismissed: true,
         }),
       })
@@ -147,11 +171,11 @@ describe("admin onboarding progress route", () => {
     expect(mocks.tutorialProgressUpsert).toHaveBeenCalledWith(
       expect.objectContaining({
         create: expect.objectContaining({
-          completedStepIdsJson: JSON.stringify(["followups"]),
+          completedStepIdsJson: JSON.stringify(["reset-cleanup"]),
           dismissedAt: expect.any(Date),
         }),
         update: expect.objectContaining({
-          completedStepIdsJson: JSON.stringify(["followups"]),
+          completedStepIdsJson: JSON.stringify(["reset-cleanup"]),
           dismissedAt: expect.any(Date),
         }),
       })

@@ -40,6 +40,7 @@ export function CommunityDangerZonePanel({
             onClick={onResetCommunity}
             disabled={resettingCommunity || deletingCommunity}
             className="app-button-dark mt-4 px-4 py-2"
+            data-tutorial-target="admin-onboarding-reset-community"
           >
             {resettingCommunity ? "Resetting..." : "Reset community"}
           </button>

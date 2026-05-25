@@ -625,6 +625,7 @@ export function LiveCourtsPanel({
               onClick={() => onCreateMatchesForCourts(creatableOpenCourtIds)}
               disabled={!canCreateMatches}
               className="app-button-primary shrink-0 whitespace-nowrap px-4 py-2.5"
+              data-tutorial-target="admin-onboarding-score-input"
             >
               {creatingOpenMatches ? "Creating..." : "Create Matches"}
             </button>

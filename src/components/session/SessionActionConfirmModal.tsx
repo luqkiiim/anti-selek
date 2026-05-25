@@ -8,6 +8,7 @@ interface SessionActionConfirmModalProps {
   subtitle: ReactNode;
   details?: ReactNode;
   confirmLabel: string;
+  confirmTutorialTarget?: string;
   cancelLabel?: string;
   isSubmitting: boolean;
   onClose: () => void;
@@ -19,6 +20,7 @@ export function SessionActionConfirmModal({
   subtitle,
   details,
   confirmLabel,
+  confirmTutorialTarget,
   cancelLabel = "Cancel",
   isSubmitting,
   onClose,
@@ -44,6 +46,7 @@ export function SessionActionConfirmModal({
             onClick={onConfirm}
             disabled={isSubmitting}
             className="app-button-danger"
+            data-tutorial-target={confirmTutorialTarget}
           >
             {isSubmitting ? "Working..." : confirmLabel}
           </button>

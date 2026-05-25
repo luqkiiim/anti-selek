@@ -37,6 +37,7 @@ export function ScoreEntryControls({
           onClick={onConfirm}
           disabled={isSubmitting}
           className="app-button-primary min-h-12 py-3"
+          data-tutorial-target="admin-onboarding-submit-score"
         >
           {isSubmitting ? "Saving..." : "Confirm"}
         </button>
@@ -53,6 +54,7 @@ export function ScoreEntryControls({
           onClick={onSubmit}
           disabled={isSubmitting || !canSubmit}
           className="app-button-primary min-h-12 w-full py-3"
+          data-tutorial-target="admin-onboarding-submit-score"
         >
           {isSubmitting ? "Saving..." : "Submit Score"}
         </button>
@@ -67,6 +69,7 @@ export function ScoreEntryControls({
         onClick={onSubmit}
         disabled={isSubmitting || !canSubmit}
         className="app-button-primary min-h-12 w-full py-3"
+        data-tutorial-target="admin-onboarding-submit-score"
       >
         {isSubmitting ? "Saving..." : "Submit Score"}
       </button>

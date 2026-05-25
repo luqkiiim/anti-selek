@@ -5,7 +5,9 @@ export const ADMIN_ONBOARDING_STEP_IDS = [
   "players",
   "host-session",
   "session-workflow",
-  "followups",
+  "score-match",
+  "end-session",
+  "reset-cleanup",
 ] as const;
 
 export type AdminOnboardingStepId = (typeof ADMIN_ONBOARDING_STEP_IDS)[number];
@@ -16,6 +18,8 @@ export interface AdminOnboardingStep {
   detail: string;
   actionLabel: string;
   href: string;
+  targetId: string;
+  coachmark: string;
   completed: boolean;
   autoCompleted: boolean;
   manual: boolean;
@@ -27,6 +31,7 @@ export interface AdminOnboardingProgressPayload {
   dismissed: boolean;
   completedStepIds: AdminOnboardingStepId[];
   primaryCommunityId: string | null;
+  primarySessionCode: string | null;
   steps: AdminOnboardingStep[];
 }
 
@@ -66,29 +71,43 @@ export function buildAdminOnboardingProgress({
   hasRosterPlayers,
   hasAnySession,
   hasRosteredSession,
+  hasScoredMatch,
+  hasCompletedSession,
+  primarySessionCode,
 }: {
   completedStepIds: AdminOnboardingStepId[];
   dismissedAt: Date | string | null;
   primaryCommunityId: string | null;
+  primarySessionCode: string | null;
   hasAdminCommunity: boolean;
   hasRosterPlayers: boolean;
   hasAnySession: boolean;
   hasRosteredSession: boolean;
+  hasScoredMatch: boolean;
+  hasCompletedSession: boolean;
 }): AdminOnboardingProgressPayload {
   const manualCompletions = new Set(completedStepIds);
   const communityHref = primaryCommunityId ? `/community/${primaryCommunityId}` : "/";
-  const adminHref = primaryCommunityId
-    ? `/community/${primaryCommunityId}/admin`
+  const adminPlayersHref = primaryCommunityId
+    ? `/community/${primaryCommunityId}/admin?tab=players`
+    : "/";
+  const adminSettingsHref = primaryCommunityId
+    ? `/community/${primaryCommunityId}/admin?tab=settings`
     : "/";
   const hostHref = primaryCommunityId
     ? `/community/${primaryCommunityId}?tab=host`
     : "/";
+  const sessionHref = primarySessionCode
+    ? `/session/${primarySessionCode}`
+    : hostHref;
   const inferredCompletions: Record<AdminOnboardingStepId, boolean> = {
     "admin-community": hasAdminCommunity,
     players: hasRosterPlayers,
     "host-session": hasAnySession,
     "session-workflow": hasRosteredSession,
-    followups: false,
+    "score-match": hasScoredMatch,
+    "end-session": hasCompletedSession,
+    "reset-cleanup": false,
   };
 
   const stepDefinitions: Array<
@@ -97,17 +116,25 @@ export function buildAdminOnboardingProgress({
     {
       id: "admin-community",
       title: "Open your community",
-      detail: "Use an admin community as the home base for players and tournaments.",
+      detail: "Start from an admin community so the tutorial can use real controls.",
       actionLabel: primaryCommunityId ? "Open" : "Create",
       href: communityHref,
+      targetId: primaryCommunityId
+        ? "admin-onboarding-dashboard-community"
+        : "admin-onboarding-create-community",
+      coachmark: primaryCommunityId
+        ? "Open your admin community to continue the setup flow."
+        : "Press Create Community to make your admin workspace.",
       manual: false,
     },
     {
       id: "players",
-      title: "Build the roster",
-      detail: "Add players, review placeholders, and keep community profiles tidy.",
+      title: "Create players",
+      detail: "Go to the admin roster and add the first player profiles.",
       actionLabel: "Players",
-      href: adminHref,
+      href: adminPlayersHref,
+      targetId: "admin-onboarding-add-player",
+      coachmark: "Press Add player to create roster profiles for the session.",
       manual: false,
     },
     {
@@ -116,22 +143,52 @@ export function buildAdminOnboardingProgress({
       detail: "Try the Host flow with safe settings before a real court night.",
       actionLabel: "Host",
       href: hostHref,
+      targetId: "admin-onboarding-create-session",
+      coachmark: "Name the tournament, keep it as a test if you want rehearsal mode, then create it.",
       manual: false,
     },
     {
       id: "session-workflow",
       title: "Run the session flow",
       detail: "Choose the roster, create courts, and get familiar with match scoring.",
-      actionLabel: "Host",
-      href: hostHref,
+      actionLabel: primarySessionCode ? "Open session" : "Host",
+      href: sessionHref,
+      targetId: primarySessionCode
+        ? "admin-onboarding-start-session"
+        : "admin-onboarding-host-players",
+      coachmark: primarySessionCode
+        ? "Start the session and create the first court match."
+        : "Press Choose to select players for the tournament.",
       manual: false,
     },
     {
-      id: "followups",
-      title: "Review admin follow-ups",
-      detail: "Know where claims, linked identities, and community settings live.",
-      actionLabel: "Admin",
-      href: adminHref,
+      id: "score-match",
+      title: "Input a score",
+      detail: "Enter both team scores and submit the result from a live match.",
+      actionLabel: "Open session",
+      href: sessionHref,
+      targetId: "admin-onboarding-score-input",
+      coachmark: "Create a live court match if needed, then type both team scores and press Submit Score.",
+      manual: false,
+    },
+    {
+      id: "end-session",
+      title: "End the session",
+      detail: "Close the test session once scoring is done to see final standings.",
+      actionLabel: "Open session",
+      href: sessionHref,
+      targetId: "admin-onboarding-end-session",
+      coachmark: "Open session settings and press End Session when rehearsal is complete.",
+      manual: false,
+    },
+    {
+      id: "reset-cleanup",
+      title: "Optional cleanup",
+      detail: "Return to settings and review Reset community if this was only a test setup.",
+      actionLabel: "Settings",
+      href: adminSettingsHref,
+      targetId: "admin-onboarding-reset-community",
+      coachmark: "This reset is optional. Use it only when you want to clear test history and ratings.",
       manual: true,
     },
   ];
@@ -144,6 +201,7 @@ export function buildAdminOnboardingProgress({
       (id) => inferredCompletions[id] || manualCompletions.has(id)
     ),
     primaryCommunityId,
+    primarySessionCode,
     steps: stepDefinitions.map((step) => {
       const autoCompleted = inferredCompletions[step.id];
 

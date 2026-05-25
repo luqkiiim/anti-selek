@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback } from "react";
-import { useRouter } from "next/navigation";
+import { useCallback, useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { FlashMessage } from "@/components/ui/chrome";
 import { ClaimRequestsPanel } from "@/components/community-admin/ClaimRequestsPanel";
@@ -133,6 +133,7 @@ function getCommunityActionDialogCopy(
 
 export default function CommunityAdminPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const {
     status,
     currentUserId,
@@ -238,6 +239,30 @@ export default function CommunityAdminPage() {
   } = useCommunityAdminPage();
   const adminOnboarding = useAdminOnboardingProgress(
     status === "authenticated" && community?.role === "ADMIN" && !loading
+  );
+
+  useEffect(() => {
+    const requestedTab = searchParams.get("tab");
+    if (
+      requestedTab === "players" ||
+      requestedTab === "links" ||
+      requestedTab === "claims" ||
+      requestedTab === "settings"
+    ) {
+      setActiveSection(requestedTab);
+    }
+  }, [searchParams, setActiveSection]);
+
+  const switchAdminSection = useCallback(
+    (section: CommunityAdminSection) => {
+      setActiveSection(section);
+      if (communityId) {
+        router.replace(`/community/${communityId}/admin?tab=${section}`, {
+          scroll: false,
+        });
+      }
+    },
+    [communityId, router, setActiveSection]
   );
 
   const handleBack = useCallback(() => {
@@ -360,12 +385,19 @@ export default function CommunityAdminPage() {
                 <button
                   key={tab.key}
                   type="button"
-                  onClick={() => setActiveSection(tab.key)}
+                  onClick={() => switchAdminSection(tab.key)}
                   className={`rounded-2xl px-4 py-3 text-left transition ${
                     isActive
                       ? "bg-white shadow-sm ring-1 ring-blue-100"
                       : "bg-transparent text-gray-600 hover:bg-white"
                   }`}
+                  data-tutorial-target={
+                    tab.key === "players"
+                      ? "admin-onboarding-players-tab"
+                      : tab.key === "settings"
+                        ? "admin-onboarding-settings-tab"
+                        : undefined
+                  }
                 >
                   <p className="text-sm font-semibold text-gray-900">
                     {tab.label}

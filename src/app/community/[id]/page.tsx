@@ -866,6 +866,7 @@ export default function CommunityPage() {
                 <Link
                   href={`/community/${communityId}/admin`}
                   className="app-button-secondary px-3 py-2 text-sm"
+                  data-tutorial-target="admin-onboarding-community-admin"
                 >
                   <Shield aria-hidden="true" size={15} />
                   <span>{communityRoleLabel}</span>
@@ -908,6 +909,9 @@ export default function CommunityPage() {
                       ? "bg-white shadow-sm ring-1 ring-[rgba(15,118,110,0.16)]"
                       : "bg-transparent text-gray-600 hover:bg-white"
                   }`}
+                  data-tutorial-target={
+                    tab.key === "host" ? "admin-onboarding-host-tab" : undefined
+                  }
                 >
                   <p className="text-sm font-semibold text-gray-900">
                     {tab.label}

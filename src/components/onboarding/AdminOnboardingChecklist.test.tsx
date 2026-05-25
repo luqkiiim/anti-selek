@@ -12,6 +12,7 @@ function createProgress(
     dismissed: false,
     completedStepIds: ["admin-community"],
     primaryCommunityId: "community-1",
+    primarySessionCode: "ABC123",
     steps: [
       {
         id: "admin-community",
@@ -19,16 +20,20 @@ function createProgress(
         detail: "Use an admin community as the home base.",
         actionLabel: "Open",
         href: "/community/community-1",
+        targetId: "admin-onboarding-dashboard-community",
+        coachmark: "Open your admin community to continue.",
         completed: true,
         autoCompleted: true,
         manual: false,
       },
       {
-        id: "followups",
-        title: "Review admin follow-ups",
-        detail: "Know where claims, linked identities, and settings live.",
-        actionLabel: "Admin",
-        href: "/community/community-1/admin",
+        id: "reset-cleanup",
+        title: "Optional cleanup",
+        detail: "Know where reset community lives.",
+        actionLabel: "Settings",
+        href: "/community/community-1/admin?tab=settings",
+        targetId: "admin-onboarding-reset-community",
+        coachmark: "Use reset only when you want to clear test history.",
         completed: false,
         autoCompleted: false,
         manual: true,
@@ -51,10 +56,11 @@ describe("AdminOnboardingChecklist", () => {
 
     expect(markup).toContain("Getting started");
     expect(markup).toContain("1/2 admin steps");
+    expect(markup).toContain("Press here next");
     expect(markup).toContain("Open your community");
-    expect(markup).toContain("Review admin follow-ups");
+    expect(markup).toContain("Optional cleanup");
     expect(markup).toContain("Mark reviewed");
-    expect(markup).toContain('href="/community/community-1/admin"');
+    expect(markup).toContain('href="/community/community-1/admin?tab=settings"');
   });
 
   it("renders a small reopen action when dismissed", () => {
