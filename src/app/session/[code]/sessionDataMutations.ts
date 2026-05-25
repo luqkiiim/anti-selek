@@ -92,6 +92,37 @@ function normalizeOptionalDate(value: string | Date | null | undefined) {
   return typeof value === "string" ? value : value.toISOString();
 }
 
+function mergeSnapshotPlayers(
+  currentPlayers: SessionData["players"],
+  snapshotPlayers: SessionData["players"] | undefined
+) {
+  if (!snapshotPlayers) {
+    return currentPlayers;
+  }
+
+  const currentPlayerByUserId = new Map(
+    currentPlayers.map((player) => [player.userId, player])
+  );
+
+  return snapshotPlayers.map((player) => {
+    const currentPlayer = currentPlayerByUserId.get(player.userId);
+    if (!currentPlayer) {
+      return player;
+    }
+
+    return {
+      ...currentPlayer,
+      ...player,
+      user: {
+        ...currentPlayer.user,
+        ...player.user,
+        avatarUrl: player.user.avatarUrl ?? currentPlayer.user.avatarUrl ?? null,
+      },
+      communityBadges: player.communityBadges ?? currentPlayer.communityBadges,
+    };
+  });
+}
+
 function buildLiveMatch(
   sessionData: SessionData,
   payload: MatchPayload,
@@ -329,7 +360,7 @@ export function mergeSessionSnapshot(
   current: SessionData,
   snapshot: SessionSnapshotLike
 ): SessionData {
-  const nextPlayers = snapshot.players ?? current.players;
+  const nextPlayers = mergeSnapshotPlayers(current.players, snapshot.players);
   const matchContext = {
     ...current,
     players: nextPlayers,

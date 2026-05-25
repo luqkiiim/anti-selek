@@ -125,6 +125,45 @@ describe("sessionDataMutations", () => {
     expect(merged.matches).toHaveLength(1);
   });
 
+  it("preserves existing avatarUrl when incoming players omit it", () => {
+    const current = {
+      ...createSessionData(),
+      players: [
+        {
+          ...createSessionData().players[0],
+          user: {
+            ...createSessionData().players[0].user,
+            avatarUrl: "https://cdn.test/avatars/p1.jpg",
+          },
+        },
+        ...createSessionData().players.slice(1),
+      ],
+    };
+
+    const merged = mergeSessionSnapshot(current, {
+      status: "COMPLETED",
+      players: [
+        {
+          ...current.players[0],
+          sessionPoints: 18,
+          user: {
+            ...current.players[0].user,
+            elo: 1212,
+            avatarUrl: undefined,
+          },
+        },
+        ...current.players.slice(1),
+      ],
+    });
+
+    expect(merged.status).toBe("COMPLETED");
+    expect(merged.players[0].sessionPoints).toBe(18);
+    expect(merged.players[0].user.elo).toBe(1212);
+    expect(merged.players[0].user.avatarUrl).toBe(
+      "https://cdn.test/avatars/p1.jpg"
+    );
+  });
+
   it("applies generated matches directly to the target court", () => {
     const updated = applyGeneratedMatches(createSessionData(), [
       {
@@ -241,10 +280,18 @@ describe("sessionDataMutations", () => {
 
     expect(updated.courts[0].currentMatch).toBeNull();
     expect(updated.matches?.[0].status).toBe("COMPLETED");
-    expect(updated.players.find((player) => player.userId === "p1")?.sessionPoints).toBe(3);
-    expect(updated.players.find((player) => player.userId === "p3")?.sessionPoints).toBe(0);
-    expect(updated.players.find((player) => player.userId === "p1")?.user.elo).toBe(1010);
-    expect(updated.players.find((player) => player.userId === "p3")?.user.elo).toBe(990);
+    expect(
+      updated.players.find((player) => player.userId === "p1")?.sessionPoints
+    ).toBe(3);
+    expect(
+      updated.players.find((player) => player.userId === "p3")?.sessionPoints
+    ).toBe(0);
+    expect(updated.players.find((player) => player.userId === "p1")?.user.elo).toBe(
+      1010
+    );
+    expect(updated.players.find((player) => player.userId === "p3")?.user.elo).toBe(
+      990
+    );
   });
 
   it("keeps persistent ratings unchanged in test sessions", () => {
@@ -294,8 +341,12 @@ describe("sessionDataMutations", () => {
       team2User2Id: "p4",
     });
 
-    expect(updated.players.find((player) => player.userId === "p1")?.user.elo).toBe(1000);
-    expect(updated.players.find((player) => player.userId === "p3")?.user.elo).toBe(1000);
+    expect(updated.players.find((player) => player.userId === "p1")?.user.elo).toBe(
+      1000
+    );
+    expect(updated.players.find((player) => player.userId === "p3")?.user.elo).toBe(
+      1000
+    );
   });
 
   it("can reopen a pending match and remove it from history", () => {
@@ -351,8 +402,12 @@ describe("sessionDataMutations", () => {
 
     const withoutGuest = applyPlayerRemoval(withGuest, "guest-1");
 
-    expect(withGuest.players.some((player) => player.userId === "guest-1")).toBe(true);
-    expect(withoutGuest.players.some((player) => player.userId === "guest-1")).toBe(false);
+    expect(withGuest.players.some((player) => player.userId === "guest-1")).toBe(
+      true
+    );
+    expect(
+      withoutGuest.players.some((player) => player.userId === "guest-1")
+    ).toBe(false);
   });
 
   it("applies a queued next match without disturbing live courts", () => {
@@ -459,20 +514,17 @@ describe("sessionDataMutations", () => {
     });
 
     const updated = applyQueuedMatch(
-      applyGeneratedMatches(
-        applyUndoneCourtMatch(withQueue, "court-1"),
-        [
-          {
-            id: "match-2",
-            courtId: "court-1",
-            status: "IN_PROGRESS",
-            team1User1: { id: "p1", name: "Player 1" },
-            team1User2: { id: "p2", name: "Player 2" },
-            team2User1: { id: "p3", name: "Player 3" },
-            team2User2: { id: "p4", name: "Player 4" },
-          },
-        ]
-      ),
+      applyGeneratedMatches(applyUndoneCourtMatch(withQueue, "court-1"), [
+        {
+          id: "match-2",
+          courtId: "court-1",
+          status: "IN_PROGRESS",
+          team1User1: { id: "p1", name: "Player 1" },
+          team1User2: { id: "p2", name: "Player 2" },
+          team2User1: { id: "p3", name: "Player 3" },
+          team2User2: { id: "p4", name: "Player 4" },
+        },
+      ]),
       null
     );
 
@@ -527,9 +579,15 @@ describe("sessionDataMutations", () => {
       }
     );
 
-    expect(updated.players.find((player) => player.userId === "p1")?.sessionPoints).toBe(0);
-    expect(updated.players.find((player) => player.userId === "p3")?.sessionPoints).toBe(0);
-    expect(updated.players.find((player) => player.userId === "p1")?.user.elo).toBe(1010);
+    expect(
+      updated.players.find((player) => player.userId === "p1")?.sessionPoints
+    ).toBe(0);
+    expect(
+      updated.players.find((player) => player.userId === "p3")?.sessionPoints
+    ).toBe(0);
+    expect(updated.players.find((player) => player.userId === "p1")?.user.elo).toBe(
+      1010
+    );
   });
 
   it("awards session points and ratings when approving a social mix match", () => {
@@ -579,11 +637,21 @@ describe("sessionDataMutations", () => {
       }
     );
 
-    expect(updated.players.find((player) => player.userId === "p1")?.sessionPoints).toBe(3);
-    expect(updated.players.find((player) => player.userId === "p2")?.sessionPoints).toBe(3);
-    expect(updated.players.find((player) => player.userId === "p3")?.sessionPoints).toBe(0);
-    expect(updated.players.find((player) => player.userId === "p1")?.user.elo).toBe(1010);
-    expect(updated.players.find((player) => player.userId === "p3")?.user.elo).toBe(990);
+    expect(
+      updated.players.find((player) => player.userId === "p1")?.sessionPoints
+    ).toBe(3);
+    expect(
+      updated.players.find((player) => player.userId === "p2")?.sessionPoints
+    ).toBe(3);
+    expect(
+      updated.players.find((player) => player.userId === "p3")?.sessionPoints
+    ).toBe(0);
+    expect(updated.players.find((player) => player.userId === "p1")?.user.elo).toBe(
+      1010
+    );
+    expect(updated.players.find((player) => player.userId === "p3")?.user.elo).toBe(
+      990
+    );
   });
 
   it("does not award session points when approving a race match", () => {
@@ -633,8 +701,14 @@ describe("sessionDataMutations", () => {
       }
     );
 
-    expect(updated.players.find((player) => player.userId === "p1")?.sessionPoints).toBe(0);
-    expect(updated.players.find((player) => player.userId === "p3")?.sessionPoints).toBe(0);
-    expect(updated.players.find((player) => player.userId === "p1")?.user.elo).toBe(1010);
+    expect(
+      updated.players.find((player) => player.userId === "p1")?.sessionPoints
+    ).toBe(0);
+    expect(
+      updated.players.find((player) => player.userId === "p3")?.sessionPoints
+    ).toBe(0);
+    expect(updated.players.find((player) => player.userId === "p1")?.user.elo).toBe(
+      1010
+    );
   });
 });
