@@ -85,4 +85,18 @@ describe("HostTournamentPanel", () => {
       "Still records scores, session points, and rating updates."
     );
   });
+
+  it("exposes tutorial targets for name, roster choice, and creation", () => {
+    const markup = renderPanel(SessionType.POINTS);
+
+    expect(markup).toContain(
+      'data-tutorial-target="admin-onboarding-session-name"'
+    );
+    expect(markup).toContain(
+      'data-tutorial-target="admin-onboarding-host-players"'
+    );
+    expect(markup).toContain(
+      'data-tutorial-target="admin-onboarding-create-session"'
+    );
+  });
 });

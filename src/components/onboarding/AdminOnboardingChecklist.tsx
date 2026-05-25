@@ -13,6 +13,7 @@ import {
 import type {
   AdminOnboardingProgressPayload,
   AdminOnboardingStep,
+  AdminOnboardingStepOverride,
   AdminOnboardingStepId,
 } from "@/lib/adminOnboarding";
 
@@ -22,6 +23,7 @@ interface AdminOnboardingChecklistProps {
   onDismiss: () => void;
   onReopen: () => void;
   onCompleteStep: (stepId: AdminOnboardingStepId) => void;
+  activeStepOverride?: AdminOnboardingStepOverride | null;
 }
 
 interface SpotlightRect {
@@ -166,6 +168,7 @@ export function AdminOnboardingChecklist({
   onDismiss,
   onReopen,
   onCompleteStep,
+  activeStepOverride = null,
 }: AdminOnboardingChecklistProps) {
   if (loading || !progress?.visible) {
     return null;
@@ -188,12 +191,16 @@ export function AdminOnboardingChecklist({
 
   const completedCount = progress.steps.filter((step) => step.completed).length;
   const activeStep = progress.steps.find((step) => !step.completed) ?? null;
+  const displayedActiveStep =
+    activeStep && activeStepOverride?.stepId === activeStep.id
+      ? { ...activeStep, ...activeStepOverride }
+      : activeStep;
 
   return (
     <section className="app-panel p-4 sm:p-5">
-      {activeStep ? (
+      {displayedActiveStep ? (
         <AdminOnboardingSpotlight
-          step={activeStep}
+          step={displayedActiveStep}
           onCompleteStep={onCompleteStep}
         />
       ) : null}
@@ -225,7 +232,7 @@ export function AdminOnboardingChecklist({
         </button>
       </div>
 
-      {activeStep ? (
+      {displayedActiveStep ? (
         <div className="mt-4 rounded-2xl border border-teal-100 bg-teal-50/70 p-3">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="min-w-0">
@@ -233,24 +240,24 @@ export function AdminOnboardingChecklist({
                 Press here next
               </p>
               <p className="mt-1 text-sm font-semibold text-gray-900">
-                {activeStep.title}
+                {displayedActiveStep.title}
               </p>
               <p className="mt-1 text-xs leading-5 text-gray-600">
-                {activeStep.coachmark}
+                {displayedActiveStep.coachmark}
               </p>
             </div>
             <div className="flex shrink-0 flex-wrap gap-2 sm:justify-end">
-              {activeStep.manual ? (
+              {displayedActiveStep.manual ? (
                 <button
                   type="button"
-                  onClick={() => onCompleteStep(activeStep.id)}
+                  onClick={() => onCompleteStep(displayedActiveStep.id)}
                   className="app-button-secondary px-3 py-2 text-xs"
                 >
                   Mark reviewed
                 </button>
               ) : null}
               <Link
-                href={activeStep.href}
+                href={displayedActiveStep.href}
                 className="app-button-primary px-3 py-2 text-xs"
               >
                 Go there

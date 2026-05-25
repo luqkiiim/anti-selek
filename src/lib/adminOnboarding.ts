@@ -35,6 +35,49 @@ export interface AdminOnboardingProgressPayload {
   steps: AdminOnboardingStep[];
 }
 
+export interface AdminOnboardingStepOverride {
+  stepId: AdminOnboardingStepId;
+  targetId?: string;
+  coachmark?: string;
+  href?: string;
+  actionLabel?: string;
+}
+
+export function getHostSessionOnboardingOverride({
+  newSessionName,
+  selectedPlayerCount,
+  guestCount,
+}: {
+  newSessionName: string;
+  selectedPlayerCount: number;
+  guestCount: number;
+}): AdminOnboardingStepOverride {
+  if (!newSessionName.trim()) {
+    return {
+      stepId: "host-session",
+      targetId: "admin-onboarding-session-name",
+      coachmark: "First, type a simple tournament name so the create button can unlock.",
+      actionLabel: "Name it",
+    };
+  }
+
+  if (selectedPlayerCount + guestCount === 0) {
+    return {
+      stepId: "host-session",
+      targetId: "admin-onboarding-host-players",
+      coachmark: "Next, press Choose and select the players for this test tournament.",
+      actionLabel: "Choose players",
+    };
+  }
+
+  return {
+    stepId: "host-session",
+    targetId: "admin-onboarding-create-session",
+    coachmark: "Now the setup is ready. Press Create Test Session to open the live session.",
+    actionLabel: "Create",
+  };
+}
+
 export function parseAdminOnboardingStepIds(value: string | null | undefined) {
   if (!value) return [];
 

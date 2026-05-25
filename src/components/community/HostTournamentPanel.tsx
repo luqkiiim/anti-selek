@@ -319,6 +319,7 @@ export function HostTournamentPanel({
               value={newSessionName}
               onChange={(event) => onNewSessionNameChange(event.target.value)}
               className="field"
+              data-tutorial-target="admin-onboarding-session-name"
             />
           </label>
 

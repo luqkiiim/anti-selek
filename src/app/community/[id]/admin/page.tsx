@@ -264,6 +264,13 @@ export default function CommunityAdminPage() {
     },
     [communityId, router, setActiveSection]
   );
+  const handleAddPlayerWithOnboardingRefresh = useCallback(
+    async (event: Parameters<typeof handleAddPlayer>[0]) => {
+      await handleAddPlayer(event);
+      void adminOnboarding.refresh();
+    },
+    [adminOnboarding, handleAddPlayer]
+  );
 
   const handleBack = useCallback(() => {
     if (typeof window !== "undefined" && window.history.length > 1) {
@@ -509,7 +516,7 @@ export default function CommunityAdminPage() {
         onNewPlayerMixedSideOverrideChange={setNewPlayerMixedSideOverride}
         onNewPlayerStatusChange={setNewPlayerStatus}
         onClose={closeCreatePlayerModal}
-        onSubmit={handleAddPlayer}
+        onSubmit={handleAddPlayerWithOnboardingRefresh}
       />
 
       <CommunityPlayerEditorModal

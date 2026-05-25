@@ -11,6 +11,7 @@ import {
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowLeft, Shield } from "lucide-react";
+import { getHostSessionOnboardingOverride } from "@/lib/adminOnboarding";
 import { getSessionTypeLabel } from "@/lib/sessionModeLabels";
 import { FlashMessage, HeroCard } from "@/components/ui/chrome";
 import { CommunityActionConfirmModal } from "@/components/community/CommunityActionConfirmModal";
@@ -196,6 +197,19 @@ export default function CommunityPage() {
   const adminOnboarding = useAdminOnboardingProgress(
     status === "authenticated" && canManageCommunity && !loading
   );
+  const hostOnboardingOverride = useMemo(
+    () =>
+      getHostSessionOnboardingOverride({
+        newSessionName,
+        selectedPlayerCount: selectedPlayerIds.length,
+        guestCount: guestConfigs.length,
+      }),
+    [guestConfigs.length, newSessionName, selectedPlayerIds.length]
+  );
+  const createSessionWithOnboardingRefresh = useCallback(async () => {
+    await createSession();
+    void adminOnboarding.refresh();
+  }, [adminOnboarding, createSession]);
 
   const mobileSections = useMemo(() => {
     const sections: CommunityPageSection[] = [
@@ -756,7 +770,7 @@ export default function CommunityPage() {
       guestCount={guestConfigs.length}
       onOpenPlayers={openPlayersModal}
       onOpenGuests={openGuestsModal}
-      onCreateSession={createSession}
+      onCreateSession={createSessionWithOnboardingRefresh}
       onExitHostMode={exitCommunityHostMode}
       exitHostModeLabel="Back"
       creatingSession={creatingSession}
@@ -889,6 +903,9 @@ export default function CommunityPage() {
           onDismiss={adminOnboarding.dismiss}
           onReopen={adminOnboarding.reopen}
           onCompleteStep={adminOnboarding.completeStep}
+          activeStepOverride={
+            activeSection === "host" ? hostOnboardingOverride : null
+          }
         />
 
         <section className="app-panel-soft hidden p-2 sm:block">

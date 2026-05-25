@@ -78,6 +78,43 @@ describe("AdminOnboardingChecklist", () => {
     expect(markup).not.toContain("Mark reviewed");
   });
 
+  it("uses an active step override for local page prerequisites", () => {
+    const markup = renderToStaticMarkup(
+      <AdminOnboardingChecklist
+        progress={createProgress({
+          completedStepIds: ["admin-community"],
+          steps: [
+            createProgress().steps[0],
+            {
+              id: "host-session",
+              title: "Create a test tournament",
+              detail: "Try the Host flow.",
+              actionLabel: "Host",
+              href: "/community/community-1?tab=host",
+              targetId: "admin-onboarding-create-session",
+              coachmark: "Create it.",
+              completed: false,
+              autoCompleted: false,
+              manual: false,
+            },
+          ],
+        })}
+        activeStepOverride={{
+          stepId: "host-session",
+          targetId: "admin-onboarding-session-name",
+          coachmark: "First, type a tournament name.",
+          actionLabel: "Name it",
+        }}
+        onDismiss={() => undefined}
+        onReopen={() => undefined}
+        onCompleteStep={() => undefined}
+      />
+    );
+
+    expect(markup).toContain("First, type a tournament name.");
+    expect(markup).not.toContain("Create it.");
+  });
+
   it("does not render when hidden or loading", () => {
     const hiddenMarkup = renderToStaticMarkup(
       <AdminOnboardingChecklist

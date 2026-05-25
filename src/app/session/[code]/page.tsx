@@ -237,7 +237,7 @@ export default function SessionPage() {
     }
   }, [session, code, fetchUser]);
 
-  const startSession = async () => {
+  const startSession = useCallback(async () => {
     try {
       const res = await fetch(`/api/sessions/${code}/start`, { method: "POST" });
       if (res.ok) {
@@ -251,7 +251,7 @@ export default function SessionPage() {
     } catch (err) {
       console.error(err);
     }
-  };
+  }, [code, patchSessionData, scheduleSessionRefresh]);
 
   const openEndSessionConfirm = () => {
     setError("");
@@ -264,7 +264,7 @@ export default function SessionPage() {
     setShowEndSessionConfirm(false);
   };
 
-  const endSession = async () => {
+  const endSession = useCallback(async () => {
     setEndingSession(true);
     setError("");
 
@@ -285,7 +285,7 @@ export default function SessionPage() {
     } finally {
       setEndingSession(false);
     }
-  };
+  }, [code, patchSessionData, scheduleSessionRefresh]);
 
   const openResetTestConfirm = useCallback(() => {
     setError("");
@@ -435,6 +435,35 @@ export default function SessionPage() {
       !!sessionData &&
       sessionData.status !== SessionStatus.COMPLETED
   );
+  const startSessionWithOnboardingRefresh = useCallback(async () => {
+    await startSession();
+    void adminOnboarding.refresh();
+  }, [adminOnboarding, startSession]);
+  const createMatchesForCourtsWithOnboardingRefresh = useCallback(
+    async (...args: Parameters<typeof courtActions.createMatchesForCourts>) => {
+      await courtActions.createMatchesForCourts(...args);
+      void adminOnboarding.refresh();
+    },
+    [adminOnboarding, courtActions]
+  );
+  const createMatchForCourtWithOnboardingRefresh = useCallback(
+    async (...args: Parameters<typeof courtActions.createMatchForCourt>) => {
+      await courtActions.createMatchForCourt(...args);
+      void adminOnboarding.refresh();
+    },
+    [adminOnboarding, courtActions]
+  );
+  const submitScoreWithOnboardingRefresh = useCallback(
+    async (...args: Parameters<typeof scoreActions.submitScore>) => {
+      await scoreActions.submitScore(...args);
+      void adminOnboarding.refresh();
+    },
+    [adminOnboarding, scoreActions]
+  );
+  const endSessionWithOnboardingRefresh = useCallback(async () => {
+    await endSession();
+    void adminOnboarding.refresh();
+  }, [adminOnboarding, endSession]);
 
   useEffect(() => {
     if (!canOpenSettings) {
@@ -1120,7 +1149,7 @@ export default function SessionPage() {
                 }
                 canOpenPlayerManager={Boolean(canOpenPlayerManager)}
                 canOpenSettings={Boolean(canOpenSettings)}
-                onStartSession={startSession}
+                onStartSession={startSessionWithOnboardingRefresh}
                 onOpenPlayerManager={() => setShowPlayersModal(true)}
                 onOpenSettings={openSettingsModal}
                 onOpenMatchHistory={() =>
@@ -1168,8 +1197,10 @@ export default function SessionPage() {
                   submittingMatchId={scoreActions.submittingMatchId}
                   matchScores={scoreActions.matchScores}
                   queuePromotionAnimation={scoreActions.queuePromotionAnimation}
-                  onCreateMatchesForCourts={courtActions.createMatchesForCourts}
-                  onCreateCourtMatch={courtActions.createMatchForCourt}
+                  onCreateMatchesForCourts={
+                    createMatchesForCourtsWithOnboardingRefresh
+                  }
+                  onCreateCourtMatch={createMatchForCourtWithOnboardingRefresh}
                   onQueueNextMatch={courtActions.queueNextMatch}
                   onClearQueuedMatch={courtActions.clearQueuedMatch}
                   onOpenManualQueuedMatchModal={
@@ -1196,7 +1227,7 @@ export default function SessionPage() {
                   onCancelScoreSubmitConfirmation={
                     scoreActions.cancelScoreSubmitConfirmation
                   }
-                  onSubmitScore={scoreActions.submitScore}
+                  onSubmitScore={submitScoreWithOnboardingRefresh}
                   onApproveScore={scoreActions.approveScore}
                   onReopenScoreForEdit={scoreActions.reopenScoreForEdit}
                   onQueuePromotionAnimationComplete={
@@ -1362,7 +1393,7 @@ export default function SessionPage() {
           cancelLabel="Keep Session Live"
           isSubmitting={endingSession}
           onClose={closeEndSessionConfirm}
-          onConfirm={() => void endSession()}
+          onConfirm={() => void endSessionWithOnboardingRefresh()}
         />
       ) : null}
 
