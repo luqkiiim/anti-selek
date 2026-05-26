@@ -55,7 +55,7 @@ export async function GET(
     const [hostCommunity, hostMembership] = await Promise.all([
       prisma.community.findUnique({
         where: { id: hostCommunityId },
-        select: { id: true },
+        select: { id: true, isTutorial: true },
       }),
       isGlobalAdmin
         ? Promise.resolve(null)
@@ -72,6 +72,7 @@ export async function GET(
 
     if (
       !hostCommunity ||
+      hostCommunity.isTutorial ||
       (!isGlobalAdmin && hostMembership?.role !== "ADMIN")
     ) {
       return invalidTargetResponse(
@@ -89,6 +90,7 @@ export async function GET(
     const candidates = await prisma.community.findMany({
       where: {
         id: { not: hostCommunityId },
+        isTutorial: false,
         name: { contains: search },
       },
       select: {

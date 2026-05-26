@@ -94,9 +94,30 @@ function getPlayerActionDialogCopy(action: {
 
 function getCommunityActionDialogCopy(
   action: { kind: "reset" | "delete" },
-  communityName: string
+  communityName: string,
+  isTutorial: boolean
 ) {
   if (action.kind === "reset") {
+    if (isTutorial) {
+      return {
+        title: "Reset playground?",
+        subtitle:
+          "This restores the practice players, ongoing session, and tutorial progress.",
+        confirmLabel: "Reset Playground",
+        confirmationKeyword: "RESET",
+        details: (
+          <div className="app-panel-muted space-y-2 p-4">
+            <p className="text-sm font-semibold text-gray-900">
+              {communityName}
+            </p>
+            <p className="text-sm text-gray-600">
+              The playground will return to its original seeded state.
+            </p>
+          </div>
+        ),
+      };
+    }
+
     return {
       title: "Reset community history?",
       subtitle:
@@ -237,9 +258,18 @@ export default function CommunityAdminPage() {
     handleDeleteCommunity,
     handleReviewClaimRequest,
   } = useCommunityAdminPage();
+  const isTutorialPlayground =
+    community?.isTutorial === true &&
+    community.tutorialOwnerId === currentUserId;
   const adminOnboarding = useAdminOnboardingProgress(
-    status === "authenticated" && community?.role === "ADMIN" && !loading
+    status === "authenticated" &&
+      community?.role === "ADMIN" &&
+      isTutorialPlayground &&
+      !loading
   );
+  const visibleTabs = isTutorialPlayground
+    ? tabs.filter((tab) => tab.key === "players" || tab.key === "settings")
+    : tabs;
 
   useEffect(() => {
     const requestedTab = searchParams.get("tab");
@@ -252,6 +282,15 @@ export default function CommunityAdminPage() {
       setActiveSection(requestedTab);
     }
   }, [searchParams, setActiveSection]);
+
+  useEffect(() => {
+    if (
+      isTutorialPlayground &&
+      (activeSection === "claims" || activeSection === "links")
+    ) {
+      setActiveSection("players");
+    }
+  }, [activeSection, isTutorialPlayground, setActiveSection]);
 
   const switchAdminSection = useCallback(
     (section: CommunityAdminSection) => {
@@ -287,7 +326,8 @@ export default function CommunityAdminPage() {
   const pendingCommunityActionDialog = pendingCommunityAction
     ? getCommunityActionDialogCopy(
         pendingCommunityAction,
-        community?.name || "Community"
+        community?.name || "Community",
+        isTutorialPlayground
       )
     : null;
 
@@ -324,6 +364,11 @@ export default function CommunityAdminPage() {
           </div>
 
           <div className="flex items-center gap-2">
+            {isTutorialPlayground ? (
+              <span className="app-chip app-chip-accent">
+                Tutorial playground
+              </span>
+            ) : null}
             <span className="app-chip app-chip-danger">Admin only</span>
             <span
               className={`app-chip ${
@@ -376,17 +421,19 @@ export default function CommunityAdminPage() {
         {error ? <FlashMessage tone="error">{error}</FlashMessage> : null}
         {success ? <FlashMessage tone="success">{success}</FlashMessage> : null}
 
-        <AdminOnboardingChecklist
-          progress={adminOnboarding.progress}
-          loading={adminOnboarding.loading}
-          onDismiss={adminOnboarding.dismiss}
-          onReopen={adminOnboarding.reopen}
-          onCompleteStep={adminOnboarding.completeStep}
-        />
+        {isTutorialPlayground ? (
+          <AdminOnboardingChecklist
+            progress={adminOnboarding.progress}
+            loading={adminOnboarding.loading}
+            onDismiss={adminOnboarding.dismiss}
+            onReopen={adminOnboarding.reopen}
+            onCompleteStep={adminOnboarding.completeStep}
+          />
+        ) : null}
 
         <section className="app-panel-soft p-2">
           <div className="grid gap-2 sm:grid-cols-4">
-            {tabs.map((tab) => {
+            {visibleTabs.map((tab) => {
               const isActive = activeSection === tab.key;
               return (
                 <button
@@ -399,9 +446,9 @@ export default function CommunityAdminPage() {
                       : "bg-transparent text-gray-600 hover:bg-white"
                   }`}
                   data-tutorial-target={
-                    tab.key === "players"
+                    isTutorialPlayground && tab.key === "players"
                       ? "admin-onboarding-players-tab"
-                      : tab.key === "settings"
+                      : isTutorialPlayground && tab.key === "settings"
                         ? "admin-onboarding-settings-tab"
                         : undefined
                   }
@@ -438,7 +485,7 @@ export default function CommunityAdminPage() {
           />
         ) : null}
 
-        {activeSection === "claims" ? (
+        {!isTutorialPlayground && activeSection === "claims" ? (
           <ClaimRequestsPanel
             claimRequests={claimRequests}
             reviewingClaimRequestId={reviewingClaimRequestId}
@@ -447,7 +494,7 @@ export default function CommunityAdminPage() {
           />
         ) : null}
 
-        {activeSection === "links" ? (
+        {!isTutorialPlayground && activeSection === "links" ? (
           <OfflineIdentityLinksPanel
             links={offlineIdentityLinks}
             currentCommunityId={communityId}
@@ -493,6 +540,7 @@ export default function CommunityAdminPage() {
             />
 
             <CommunityDangerZonePanel
+              isTutorial={isTutorialPlayground}
               resettingCommunity={resettingCommunity}
               deletingCommunity={deletingCommunity}
               onResetCommunity={handleResetCommunity}

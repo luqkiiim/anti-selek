@@ -55,16 +55,32 @@ export async function GET(
     );
     if (invalidTargetLimitResponse) return invalidTargetLimitResponse;
 
-    const hostMembership = await prisma.communityMember.findUnique({
-      where: {
-        communityId_userId: {
-          communityId: hostCommunityId,
-          userId: session.user.id,
+    const [hostCommunity, partnerCommunity, hostMembership] = await Promise.all([
+      prisma.community.findUnique({
+        where: { id: hostCommunityId },
+        select: { isTutorial: true },
+      }),
+      prisma.community.findUnique({
+        where: { id: partnerCommunityId },
+        select: { isTutorial: true },
+      }),
+      prisma.communityMember.findUnique({
+        where: {
+          communityId_userId: {
+            communityId: hostCommunityId,
+            userId: session.user.id,
+          },
         },
-      },
-      select: { role: true },
-    });
-    if (!session.user.isAdmin && hostMembership?.role !== "ADMIN") {
+        select: { role: true },
+      }),
+    ]);
+    if (
+      !hostCommunity ||
+      !partnerCommunity ||
+      hostCommunity.isTutorial ||
+      partnerCommunity.isTutorial ||
+      (!session.user.isAdmin && hostMembership?.role !== "ADMIN")
+    ) {
       return invalidTargetResponse(request, "api:communities:id:collab-roster");
     }
 

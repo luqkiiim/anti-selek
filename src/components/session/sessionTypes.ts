@@ -105,6 +105,8 @@ export interface SessionData {
   crossoverMissThreshold: number;
   viewerCanManage?: boolean;
   viewerCommunityRole?: string | null;
+  isTutorialCommunity?: boolean;
+  tutorialOwnerId?: string | null;
   communities?: Array<{
     id: string;
     name: string;

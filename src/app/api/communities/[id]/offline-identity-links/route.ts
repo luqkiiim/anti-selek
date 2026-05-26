@@ -49,6 +49,14 @@ export async function GET(
     );
     if (invalidTargetLimitResponse) return invalidTargetLimitResponse;
 
+    const community = await prisma.community.findUnique({
+      where: { id: communityId },
+      select: { isTutorial: true },
+    });
+    if (community?.isTutorial) {
+      return NextResponse.json([]);
+    }
+
     const canManage = await isCommunityAdmin(
       prisma,
       communityId,
@@ -108,6 +116,17 @@ export async function POST(
     );
     if (invalidTargetLimitResponse) return invalidTargetLimitResponse;
 
+    const sourceCommunity = await prisma.community.findUnique({
+      where: { id: sourceCommunityId },
+      select: { isTutorial: true },
+    });
+    if (sourceCommunity?.isTutorial) {
+      return NextResponse.json(
+        { error: "Tutorial playground profiles cannot be linked" },
+        { status: 403 }
+      );
+    }
+
     const canManageSource = await isCommunityAdmin(
       prisma,
       sourceCommunityId,
@@ -138,6 +157,17 @@ export async function POST(
       targetUserId.length === 0
     ) {
       return NextResponse.json({ error: "Invalid link target" }, { status: 400 });
+    }
+
+    const targetCommunity = await prisma.community.findUnique({
+      where: { id: targetCommunityId },
+      select: { isTutorial: true },
+    });
+    if (targetCommunity?.isTutorial) {
+      return NextResponse.json(
+        { error: "Tutorial playground profiles cannot be linked" },
+        { status: 403 }
+      );
     }
 
     const canManageTarget = await isCommunityAdmin(

@@ -5,6 +5,7 @@ export interface DashboardCommunity {
   name: string;
   role: "ADMIN" | "MEMBER";
   isPasswordProtected: boolean;
+  isTutorial?: boolean;
   membersCount: number;
   sessionsCount: number;
 }

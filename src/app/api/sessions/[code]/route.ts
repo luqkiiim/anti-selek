@@ -49,6 +49,13 @@ async function getSessionRoute(
   const sessionData = await prisma.session.findUnique({
     where: { code },
     include: {
+      community: {
+        select: {
+          id: true,
+          isTutorial: true,
+          tutorialOwnerId: true,
+        },
+      },
       courts: {
         include: {
           currentMatch: {
@@ -109,6 +116,12 @@ async function getSessionRoute(
   });
 
   if (!sessionData) {
+    return invalidTargetResponse(request, "api:sessions:code");
+  }
+  if (
+    sessionData.community?.isTutorial &&
+    sessionData.community.tutorialOwnerId !== session.user.id
+  ) {
     return invalidTargetResponse(request, "api:sessions:code");
   }
   if (!canQuickAccessCommunity(session, sessionData.communityId)) {
@@ -220,6 +233,8 @@ async function getSessionRoute(
     viewerCommunityRole: communityRole,
     viewerCanManage:
       !isQuickAccess && (session.user.isAdmin || !!adminMembership),
+    isTutorialCommunity: sessionData.community?.isTutorial === true,
+    tutorialOwnerId: sessionData.community?.tutorialOwnerId ?? null,
     communities: sessionData.sessionCommunities.map((link) => ({
       id: link.community.id,
       name: link.community.name,

@@ -38,10 +38,13 @@ async function findQuickAccessProfile({
     select: {
       id: true,
       name: true,
+      isTutorial: true,
     },
   });
   const matchingCommunities = communities.filter(
-    (community) => normalizeNameLookupKey(community.name) === communityKey
+    (community) =>
+      !community.isTutorial &&
+      normalizeNameLookupKey(community.name) === communityKey
   );
 
   if (matchingCommunities.length !== 1) {

@@ -2,12 +2,10 @@
 
 import Link from "next/link";
 import { signOut } from "next-auth/react";
-import { LogIn, LogOut, Plus, Settings } from "lucide-react";
+import { LogIn, LogOut, Plus, Settings, Sparkles } from "lucide-react";
 import { EmptyState, FlashMessage, SectionCard } from "@/components/ui/chrome";
 import { CreateCommunityModal } from "@/components/dashboard/CreateCommunityModal";
 import { JoinCommunityModal } from "@/components/dashboard/JoinCommunityModal";
-import { AdminOnboardingChecklist } from "@/components/onboarding/AdminOnboardingChecklist";
-import { useAdminOnboardingProgress } from "@/components/onboarding/useAdminOnboardingProgress";
 import { useDashboardPage } from "./useDashboardPage";
 
 export default function Home() {
@@ -28,6 +26,8 @@ export default function Home() {
     isJoinCommunityOpen,
     creatingCommunity,
     joiningCommunity,
+    openingTutorialPlayground,
+    tutorialPlayground,
     loading,
     error,
     openCreateCommunityModal,
@@ -36,10 +36,8 @@ export default function Home() {
     closeJoinCommunityModal,
     createCommunity,
     joinCommunity,
+    openTutorialPlayground,
   } = useDashboardPage();
-  const adminOnboarding = useAdminOnboardingProgress(
-    status === "authenticated" && !isQuickAccess
-  );
 
   if (status === "loading" || loading) {
     return (
@@ -116,7 +114,6 @@ export default function Home() {
                   type="button"
                   onClick={openCreateCommunityModal}
                   className="app-button-primary"
-                  data-tutorial-target="admin-onboarding-create-community"
                 >
                   <Plus aria-hidden="true" size={17} />
                   Create Community
@@ -126,13 +123,43 @@ export default function Home() {
           </div>
         </section>
 
-        <AdminOnboardingChecklist
-          progress={adminOnboarding.progress}
-          loading={adminOnboarding.loading}
-          onDismiss={adminOnboarding.dismiss}
-          onReopen={adminOnboarding.reopen}
-          onCompleteStep={adminOnboarding.completeStep}
-        />
+        {!isQuickAccess ? (
+          <section className="app-panel p-5 sm:p-6">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="min-w-0 space-y-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="flex h-9 w-9 items-center justify-center rounded-xl border border-teal-200 bg-teal-50 text-teal-700">
+                    <Sparkles aria-hidden="true" size={17} />
+                  </span>
+                  <span className="app-chip app-chip-accent">
+                    Tutorial playground
+                  </span>
+                </div>
+                <div>
+                  <h2 className="text-lg font-semibold text-gray-900">
+                    Practice with a private sandbox
+                  </h2>
+                  <p className="mt-1 text-sm text-gray-600">
+                    {tutorialPlayground
+                      ? `${tutorialPlayground.playersCount} practice players, ${tutorialPlayground.courtsCount} courts, and a live test session are ready.`
+                      : "Open a resettable tutorial community with practice players, courts, and a live test session."}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={openTutorialPlayground}
+                disabled={openingTutorialPlayground}
+                className="app-button-primary shrink-0 px-4 py-2.5"
+              >
+                <Sparkles aria-hidden="true" size={17} />
+                {openingTutorialPlayground
+                  ? "Opening..."
+                  : "Open tutorial playground"}
+              </button>
+            </div>
+          </section>
+        ) : null}
 
         {error ? <FlashMessage tone="error">{error}</FlashMessage> : null}
 
@@ -157,11 +184,6 @@ export default function Home() {
                   key={community.id}
                   href={`/community/${community.id}`}
                   className="app-subcard block p-4 transition hover:-translate-y-0.5 hover:border-blue-300 hover:bg-blue-50"
-                  data-tutorial-target={
-                    community.role === "ADMIN"
-                      ? "admin-onboarding-dashboard-community"
-                      : undefined
-                  }
                 >
                   <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                     <div className="min-w-0">

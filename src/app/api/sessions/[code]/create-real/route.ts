@@ -87,6 +87,11 @@ export async function POST(
           },
           orderBy: [{ completedAt: "asc" }, { createdAt: "asc" }],
         },
+        community: {
+          select: {
+            isTutorial: true,
+          },
+        },
       },
     });
 
@@ -115,6 +120,13 @@ export async function POST(
     if (!sourceSession.isTest) {
       return NextResponse.json(
         { error: "Only test sessions can create a real session copy" },
+        { status: 400 }
+      );
+    }
+
+    if (sourceSession.community?.isTutorial) {
+      return NextResponse.json(
+        { error: "Tutorial playground sessions cannot create real sessions" },
         { status: 400 }
       );
     }

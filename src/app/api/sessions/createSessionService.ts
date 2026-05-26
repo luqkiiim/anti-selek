@@ -106,6 +106,11 @@ export async function createSessionForUser({
         userId: requesterId,
       },
     },
+    include: {
+      community: {
+        select: { isTutorial: true, tutorialOwnerId: true },
+      },
+    },
   });
 
   if (!requesterMembership && !requesterIsAdmin) {
@@ -117,6 +122,21 @@ export async function createSessionForUser({
       403
     );
   }
+  const hostCommunity =
+    requesterMembership?.community ??
+    (await prisma.community.findUnique({
+      where: { id: input.communityId },
+      select: { isTutorial: true, tutorialOwnerId: true },
+    }));
+  if (hostCommunity?.isTutorial && hostCommunity.tutorialOwnerId !== requesterId) {
+    throw new SessionRouteError("Tutorial playground not found", 404);
+  }
+  if (hostCommunity?.isTutorial && input.partnerCommunityId) {
+    throw new SessionRouteError(
+      "Tutorial playground sessions cannot invite collab communities",
+      400
+    );
+  }
 
   const involvedCommunityIds = input.partnerCommunityId
     ? [input.communityId, input.partnerCommunityId]
@@ -124,11 +144,17 @@ export async function createSessionForUser({
   if (input.partnerCommunityId) {
     const partnerCommunity = await prisma.community.findUnique({
       where: { id: input.partnerCommunityId },
-      select: { id: true },
+      select: { id: true, isTutorial: true },
     });
 
     if (!partnerCommunity) {
       throw new SessionRouteError("Partner community not found", 404);
+    }
+    if (partnerCommunity.isTutorial) {
+      throw new SessionRouteError(
+        "Tutorial playgrounds cannot be used for collab tournaments",
+        400
+      );
     }
   }
 

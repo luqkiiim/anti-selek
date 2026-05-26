@@ -57,7 +57,7 @@ export function getHostSessionOnboardingOverride({
       stepId: "host-session",
       targetId: "admin-onboarding-session-name",
       coachmark: "First, type a simple tournament name so the create button can unlock.",
-      actionLabel: "Name it",
+      actionLabel: "Name tournament",
     };
   }
 
@@ -74,7 +74,7 @@ export function getHostSessionOnboardingOverride({
     stepId: "host-session",
     targetId: "admin-onboarding-create-session",
     coachmark: "Now the setup is ready. Press Create Test Session to open the live session.",
-    actionLabel: "Create",
+    actionLabel: "Create test session",
   };
 }
 
@@ -158,80 +158,82 @@ export function buildAdminOnboardingProgress({
   > = [
     {
       id: "admin-community",
-      title: "Open your community",
-      detail: "Start from an admin community so the tutorial can use real controls.",
-      actionLabel: primaryCommunityId ? "Open" : "Create",
+      title: "Open playground",
+      detail: "Start in your private tutorial community so practice data stays separate.",
+      actionLabel: primaryCommunityId
+        ? "Open tutorial playground"
+        : "Open tutorial playground",
       href: communityHref,
       targetId: primaryCommunityId
         ? "admin-onboarding-dashboard-community"
         : "admin-onboarding-create-community",
       coachmark: primaryCommunityId
-        ? "Open your admin community to continue the setup flow."
-        : "Press Create Community to make your admin workspace.",
+        ? "Open your tutorial playground to practice the admin flow."
+        : "Open the tutorial playground to create a safe practice community.",
       manual: false,
     },
     {
       id: "players",
-      title: "Create players",
-      detail: "Go to the admin roster and add the first player profiles.",
-      actionLabel: "Players",
+      title: "Review practice players",
+      detail: "Open the prefilled roster and scan the 13 practice players.",
+      actionLabel: "Open players",
       href: adminPlayersHref,
-      targetId: "admin-onboarding-add-player",
-      coachmark: "Press Add player to create roster profiles for the session.",
+      targetId: "admin-onboarding-players-tab",
+      coachmark: "Open Players to review the short practice roster before hosting.",
       manual: false,
     },
     {
       id: "host-session",
       title: "Create a test tournament",
-      detail: "Try the Host flow with safe settings before a real court night.",
-      actionLabel: "Host",
+      detail: "Try the Host flow inside the playground before a real court night.",
+      actionLabel: "Open host setup",
       href: hostHref,
       targetId: "admin-onboarding-create-session",
-      coachmark: "Name the tournament, keep it as a test if you want rehearsal mode, then create it.",
+      coachmark: "Name a practice tournament, keep it as a test session, then create it.",
       manual: false,
     },
     {
       id: "session-workflow",
-      title: "Run the session flow",
-      detail: "Choose the roster, create courts, and get familiar with match scoring.",
-      actionLabel: primarySessionCode ? "Open session" : "Host",
+      title: "Explore the ongoing session",
+      detail: "Open the seeded live session and get familiar with the session controls.",
+      actionLabel: primarySessionCode ? "Open live session" : "Open host setup",
       href: sessionHref,
       targetId: primarySessionCode
-        ? "admin-onboarding-start-session"
+        ? "admin-onboarding-session-panel"
         : "admin-onboarding-host-players",
       coachmark: primarySessionCode
-        ? "Start the session and create the first court match."
+        ? "Review the live practice session, player count, active courts, and settings."
         : "Press Choose to select players for the tournament.",
       manual: false,
     },
     {
       id: "score-match",
-      title: "Input a score",
-      detail: "Enter both team scores and submit the result from a live match.",
-      actionLabel: "Open session",
+      title: "Score a practice match",
+      detail: "Enter both team scores and submit a result from a live practice court.",
+      actionLabel: "Open scoring",
       href: sessionHref,
       targetId: "admin-onboarding-score-input",
-      coachmark: "Create a live court match if needed, then type both team scores and press Submit Score.",
+      coachmark: "Use a live practice court to type both team scores and submit the score.",
       manual: false,
     },
     {
       id: "end-session",
-      title: "End the session",
-      detail: "Close the test session once scoring is done to see final standings.",
-      actionLabel: "Open session",
+      title: "End the test session",
+      detail: "Close the practice session once scoring is done to see final standings.",
+      actionLabel: "Open session settings",
       href: sessionHref,
       targetId: "admin-onboarding-end-session",
-      coachmark: "Open session settings and press End Session when rehearsal is complete.",
+      coachmark: "Open session settings and press End Session when practice is complete.",
       manual: false,
     },
     {
       id: "reset-cleanup",
-      title: "Optional cleanup",
-      detail: "Return to settings and review Reset community if this was only a test setup.",
-      actionLabel: "Settings",
+      title: "Reset playground",
+      detail: "Restore the playground to the original players, courts, matches, and progress.",
+      actionLabel: "Reset playground",
       href: adminSettingsHref,
       targetId: "admin-onboarding-reset-community",
-      coachmark: "This reset is optional. Use it only when you want to clear test history and ratings.",
+      coachmark: "Reset the playground whenever you want a fresh practice run.",
       manual: true,
     },
   ];

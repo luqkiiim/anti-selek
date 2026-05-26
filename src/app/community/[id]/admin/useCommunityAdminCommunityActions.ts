@@ -167,24 +167,39 @@ export function useCommunityAdminCommunityActions({
     if (pendingCommunityAction.kind === "reset") {
       setResettingCommunity(true);
       try {
-        const res = await fetch(`/api/communities/${communityId}/reset`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ confirmation: "RESET" }),
-        });
+        const res = community?.isTutorial
+          ? await fetch("/api/tutorial-playground/reset", { method: "POST" })
+          : await fetch(`/api/communities/${communityId}/reset`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ confirmation: "RESET" }),
+            });
         const data = await safeJson(res);
         if (!res.ok) {
-          throw new Error(data.error || "Failed to reset community");
+          throw new Error(
+            data.error ||
+              (community?.isTutorial
+                ? "Failed to reset playground"
+                : "Failed to reset community")
+          );
         }
 
-        setSuccess("Community reset successful.");
+        setSuccess(
+          community?.isTutorial
+            ? "Playground reset successful."
+            : "Community reset successful."
+        );
         setPendingCommunityAction(null);
         setCommunityActionConfirmationValue("");
         await refreshCommunityData();
         return true;
       } catch (err: unknown) {
         setError(
-          err instanceof Error ? err.message : "Failed to reset community"
+          err instanceof Error
+            ? err.message
+            : community?.isTutorial
+              ? "Failed to reset playground"
+              : "Failed to reset community"
         );
         return false;
       } finally {

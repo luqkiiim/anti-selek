@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   rateLimit: vi.fn(),
   checkInvalidTargetRateLimit: vi.fn(),
   invalidTargetResponse: vi.fn(),
+  communityFindUnique: vi.fn(),
   communityMemberFindUnique: vi.fn(),
   txUserFindUnique: vi.fn(),
   txCommunityMemberFindUnique: vi.fn(),
@@ -31,6 +32,9 @@ vi.mock("@/lib/rateLimit", () => ({
 
 vi.mock("@/lib/prisma", () => ({
   prisma: {
+    community: {
+      findUnique: mocks.communityFindUnique,
+    },
     communityMember: {
       findUnique: mocks.communityMemberFindUnique,
     },
@@ -101,6 +105,7 @@ describe("community claim request route", () => {
     mocks.invalidTargetResponse.mockImplementation(() =>
       Response.json({ error: "Unauthorized" }, { status: 403 })
     );
+    mocks.communityFindUnique.mockResolvedValue({ isTutorial: false });
 
     mocks.communityMemberFindUnique.mockResolvedValue({
       userId: "requester-1",

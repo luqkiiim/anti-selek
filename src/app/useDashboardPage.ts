@@ -5,6 +5,15 @@ import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import type { DashboardCommunity } from "@/components/dashboard/dashboardTypes";
 
+interface TutorialPlaygroundSummary {
+  communityId: string;
+  communityName: string;
+  sessionCode: string | null;
+  playersCount: number;
+  courtsCount: number;
+  isTutorial: true;
+}
+
 export function useDashboardPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
@@ -19,6 +28,10 @@ export function useDashboardPage() {
   const [isJoinCommunityOpen, setIsJoinCommunityOpen] = useState(false);
   const [creatingCommunity, setCreatingCommunity] = useState(false);
   const [joiningCommunity, setJoiningCommunity] = useState(false);
+  const [openingTutorialPlayground, setOpeningTutorialPlayground] =
+    useState(false);
+  const [tutorialPlayground, setTutorialPlayground] =
+    useState<TutorialPlaygroundSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -41,6 +54,23 @@ export function useDashboardPage() {
     setCommunities(Array.isArray(data) ? (data as DashboardCommunity[]) : []);
   }, [safeJson]);
 
+  const fetchTutorialPlayground = useCallback(async () => {
+    if (isQuickAccess) {
+      setTutorialPlayground(null);
+      return;
+    }
+
+    const res = await fetch("/api/tutorial-playground");
+    const data = await safeJson(res);
+    if (!res.ok) {
+      throw new Error(data.error || "Failed to load tutorial playground");
+    }
+
+    setTutorialPlayground(
+      data?.playground ? (data.playground as TutorialPlaygroundSummary) : null
+    );
+  }, [isQuickAccess, safeJson]);
+
   useEffect(() => {
     if (status === "unauthenticated") {
       router.push("/signin");
@@ -54,7 +84,7 @@ export function useDashboardPage() {
     void (async () => {
       try {
         setError("");
-        await fetchCommunities();
+        await Promise.all([fetchCommunities(), fetchTutorialPlayground()]);
       } catch (err: unknown) {
         setError(
           err instanceof Error ? err.message : "Failed to load dashboard"
@@ -63,7 +93,7 @@ export function useDashboardPage() {
         setLoading(false);
       }
     })();
-  }, [fetchCommunities, router, status]);
+  }, [fetchCommunities, fetchTutorialPlayground, router, status]);
 
   const openCreateCommunityModal = () => {
     setError("");
@@ -159,6 +189,36 @@ export function useDashboardPage() {
     }
   };
 
+  const openTutorialPlayground = async () => {
+    setOpeningTutorialPlayground(true);
+    setError("");
+    try {
+      const res = await fetch("/api/tutorial-playground", { method: "POST" });
+      const data = await safeJson(res);
+      if (!res.ok) {
+        setError(data.error || "Failed to open tutorial playground");
+        return;
+      }
+
+      const playground = data?.playground as TutorialPlaygroundSummary | null;
+      if (!playground?.communityId) {
+        setError("Failed to open tutorial playground");
+        return;
+      }
+
+      setTutorialPlayground(playground);
+      router.push(`/community/${playground.communityId}`);
+    } catch (err: unknown) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Failed to open tutorial playground"
+      );
+    } finally {
+      setOpeningTutorialPlayground(false);
+    }
+  };
+
   return {
     status,
     isQuickAccess,
@@ -176,6 +236,8 @@ export function useDashboardPage() {
     isJoinCommunityOpen,
     creatingCommunity,
     joiningCommunity,
+    openingTutorialPlayground,
+    tutorialPlayground,
     loading,
     error,
     setError,
@@ -185,5 +247,6 @@ export function useDashboardPage() {
     closeJoinCommunityModal,
     createCommunity,
     joinCommunity,
+    openTutorialPlayground,
   };
 }

@@ -63,6 +63,14 @@ export async function GET(
     const invalidTargetLimitResponse = await checkInvalidTargetRateLimit(request, "api:communities:id:claim-requests");
 
     if (invalidTargetLimitResponse) return invalidTargetLimitResponse;
+    const community = await prisma.community.findUnique({
+      where: { id: communityId },
+      select: { isTutorial: true },
+    });
+    if (community?.isTutorial) {
+      return NextResponse.json([]);
+    }
+
     const membership = await prisma.communityMember.findUnique({
       where: {
         communityId_userId: {
@@ -160,6 +168,17 @@ export async function POST(
     const invalidTargetLimitResponse = await checkInvalidTargetRateLimit(request, "api:communities:id:claim-requests");
 
     if (invalidTargetLimitResponse) return invalidTargetLimitResponse;
+    const community = await prisma.community.findUnique({
+      where: { id: communityId },
+      select: { isTutorial: true },
+    });
+    if (community?.isTutorial) {
+      return NextResponse.json(
+        { error: "Tutorial playground profiles cannot be claimed" },
+        { status: 403 }
+      );
+    }
+
     const requesterMembership = await prisma.communityMember.findUnique({
       where: {
         communityId_userId: {

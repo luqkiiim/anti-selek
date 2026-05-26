@@ -4,6 +4,11 @@ import { History, Play, Settings, Users } from "lucide-react";
 import { SessionStatus } from "@/types/enums";
 import { StatCard } from "@/components/ui/chrome";
 
+interface SessionTutorialHint {
+  title: string;
+  detail: string;
+}
+
 interface SessionOverviewPanelProps {
   sessionTypeLabel: string;
   sessionModeLabel: string;
@@ -17,6 +22,7 @@ interface SessionOverviewPanelProps {
   canStartSession: boolean;
   canOpenPlayerManager: boolean;
   canOpenSettings: boolean;
+  tutorialHint?: SessionTutorialHint | null;
   onStartSession: () => void;
   onOpenPlayerManager: () => void;
   onOpenSettings: () => void;
@@ -36,6 +42,7 @@ export function SessionOverviewPanel({
   canStartSession,
   canOpenPlayerManager,
   canOpenSettings,
+  tutorialHint = null,
   onStartSession,
   onOpenPlayerManager,
   onOpenSettings,
@@ -61,7 +68,10 @@ export function SessionOverviewPanel({
   );
 
   return (
-    <section className="app-panel p-5 sm:p-6">
+    <section
+      className="app-panel p-5 sm:p-6"
+      data-tutorial-target="admin-onboarding-session-panel"
+    >
       <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
         <div className="flex flex-wrap items-center gap-2.5">
           <p className="app-section-eyebrow">
@@ -124,6 +134,20 @@ export function SessionOverviewPanel({
           ) : null}
         </div>
       </div>
+
+      {tutorialHint ? (
+        <div className="mt-5 rounded-xl border border-teal-100 bg-teal-50/70 px-3 py-3">
+          <p className="text-xs font-black uppercase tracking-[0.18em] text-teal-700">
+            Tutorial hint
+          </p>
+          <p className="mt-1 text-sm font-semibold text-gray-900">
+            {tutorialHint.title}
+          </p>
+          <p className="mt-1 text-xs leading-5 text-gray-600">
+            {tutorialHint.detail}
+          </p>
+        </div>
+      ) : null}
 
       <div className="mt-5 grid grid-cols-2 gap-3 xl:grid-cols-4">
         <StatCard

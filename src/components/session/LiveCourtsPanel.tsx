@@ -56,6 +56,10 @@ interface LiveCourtsPanelProps {
   submittingMatchId: string | null;
   matchScores: MatchScores;
   queuePromotionAnimation: QueuePromotionAnimation | null;
+  tutorialHint?: {
+    title: string;
+    detail: string;
+  } | null;
   onCreateMatchesForCourts: (courtIds: string[]) => void;
   onCreateCourtMatch: (
     courtId: string,
@@ -270,6 +274,7 @@ export function LiveCourtsPanel({
   submittingMatchId,
   matchScores,
   queuePromotionAnimation,
+  tutorialHint = null,
   onCreateMatchesForCourts,
   onCreateCourtMatch,
   onQueueNextMatch,
@@ -643,6 +648,19 @@ export function LiveCourtsPanel({
         </div>
       }
     >
+      {tutorialHint ? (
+        <div className="mb-3 rounded-xl border border-teal-100 bg-teal-50/70 px-3 py-3">
+          <p className="text-xs font-black uppercase tracking-[0.18em] text-teal-700">
+            Tutorial hint
+          </p>
+          <p className="mt-1 text-sm font-semibold text-gray-900">
+            {tutorialHint.title}
+          </p>
+          <p className="mt-1 text-xs leading-5 text-gray-600">
+            {tutorialHint.detail}
+          </p>
+        </div>
+      ) : null}
       <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 md:gap-4 xl:grid-cols-3">
         {orderedCourts.map((court) => (
           <LiveCourtCard

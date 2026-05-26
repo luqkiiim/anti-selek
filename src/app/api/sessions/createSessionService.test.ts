@@ -11,6 +11,9 @@ vi.mock("@/lib/prisma", () => ({
       findUnique: vi.fn(),
       findMany: vi.fn(),
     },
+    community: {
+      findUnique: vi.fn(),
+    },
     user: {
       findMany: vi.fn(),
     },
@@ -50,6 +53,10 @@ describe("createSessionForUser", () => {
       communityId: "community-1",
       userId: "host-1",
       role: "ADMIN",
+    } as never);
+    vi.mocked(prisma.community.findUnique).mockResolvedValue({
+      isTutorial: false,
+      tutorialOwnerId: null,
     } as never);
     vi.mocked(prisma.communityMember.findMany).mockResolvedValue([
       { userId: "host-1" },

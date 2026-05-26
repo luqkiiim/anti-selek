@@ -134,6 +134,7 @@ export async function GET(
       where: {
         status: "COMPLETED",
         session: {
+          isTest: false,
           OR: [
             { communityId: id },
             {

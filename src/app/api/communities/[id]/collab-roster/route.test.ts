@@ -7,6 +7,7 @@ import {
 
 const mocks = vi.hoisted(() => ({
   auth: vi.fn(),
+  communityFindUnique: vi.fn(),
   communityMemberFindUnique: vi.fn(),
   communityMemberFindMany: vi.fn(),
   offlineIdentityMemberFindMany: vi.fn(),
@@ -18,6 +19,9 @@ vi.mock("@/lib/auth", () => ({
 
 vi.mock("@/lib/prisma", () => ({
   prisma: {
+    community: {
+      findUnique: mocks.communityFindUnique,
+    },
     communityMember: {
       findUnique: mocks.communityMemberFindUnique,
       findMany: mocks.communityMemberFindMany,
@@ -56,6 +60,7 @@ describe("collab roster route", () => {
     mocks.communityMemberFindUnique.mockResolvedValue({
       role: "ADMIN",
     });
+    mocks.communityFindUnique.mockResolvedValue({ isTutorial: false });
     mocks.offlineIdentityMemberFindMany.mockResolvedValue([]);
   });
 

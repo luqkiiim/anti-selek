@@ -11,6 +11,7 @@ import { prisma } from "@/lib/prisma";
 import { listSessionsForCommunity } from "@/app/api/sessions/listSessionsService";
 import { logAuditEvent } from "@/lib/serverAudit";
 import { logError, safeErrorResponse } from "@/lib/errors";
+import { deleteTutorialPlayground } from "@/lib/tutorialPlayground";
 import { rateLimit, checkInvalidTargetRateLimit, invalidTargetResponse } from "@/lib/rateLimit";
 import {
   canQuickAccessCommunity,
@@ -116,6 +117,8 @@ export async function GET(
         select: {
           id: true,
           name: true,
+          isTutorial: true,
+          tutorialOwnerId: true,
           isPasswordProtected: true,
           _count: {
             select: {
@@ -128,6 +131,10 @@ export async function GET(
     ]);
 
     if (!community) {
+      return invalidTargetResponse(request, "api:communities:id");
+    }
+
+    if (community.isTutorial && community.tutorialOwnerId !== viewerId) {
       return invalidTargetResponse(request, "api:communities:id");
     }
 
@@ -358,6 +365,8 @@ export async function GET(
       community: {
         id: community.id,
         name: community.name,
+        isTutorial: community.isTutorial,
+        tutorialOwnerId: community.tutorialOwnerId,
         role: viewerIsQuickAccess
           ? "MEMBER"
           : viewerIsAdmin
@@ -621,13 +630,20 @@ export async function DELETE(
 
     const existing = await prisma.community.findUnique({
       where: { id },
-      select: { id: true },
+      select: { id: true, isTutorial: true, tutorialOwnerId: true },
     });
     if (!existing) {
       return invalidTargetResponse(request, "api:communities:id");
     }
 
-    await prisma.community.delete({ where: { id } });
+    if (existing.isTutorial) {
+      if (existing.tutorialOwnerId !== session.user.id) {
+        return invalidTargetResponse(request, "api:communities:id");
+      }
+      await deleteTutorialPlayground(session.user.id, id);
+    } else {
+      await prisma.community.delete({ where: { id } });
+    }
 
     logAuditEvent({
       action: "community.delete",

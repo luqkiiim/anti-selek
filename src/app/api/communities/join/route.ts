@@ -49,12 +49,15 @@ export async function POST(request: Request) {
         select: {
           id: true,
           name: true,
+          isTutorial: true,
           isPasswordProtected: true,
           passwordHash: true,
         },
       })
     ).filter(
-      (community) => normalizeNameLookupKey(community.name) === normalizedLookupName
+      (community) =>
+        !community.isTutorial &&
+        normalizeNameLookupKey(community.name) === normalizedLookupName
     );
 
     if (matchingCommunities.length > 1) {

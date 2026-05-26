@@ -26,6 +26,8 @@ export interface CommunityPageCommunity {
   name: string;
   role: "ADMIN" | "MEMBER";
   isPasswordProtected: boolean;
+  isTutorial: boolean;
+  tutorialOwnerId?: string | null;
   membersCount: number;
   sessionsCount: number;
 }

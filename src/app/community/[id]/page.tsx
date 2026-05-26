@@ -194,8 +194,13 @@ export default function CommunityPage() {
     openCommunityPlayerProfile,
     openTournament,
   } = useCommunityPage();
+  const isTutorialPlayground =
+    community?.isTutorial === true && community.tutorialOwnerId === user?.id;
   const adminOnboarding = useAdminOnboardingProgress(
-    status === "authenticated" && canManageCommunity && !loading
+    status === "authenticated" &&
+      canManageCommunity &&
+      isTutorialPlayground &&
+      !loading
   );
   const hostOnboardingOverride = useMemo(
     () =>
@@ -876,37 +881,50 @@ export default function CommunityPage() {
                   Back
                 </button>
               </div>
-              {canManageCommunity ? (
-                <Link
-                  href={`/community/${communityId}/admin`}
-                  className="app-button-secondary px-3 py-2 text-sm"
-                  data-tutorial-target="admin-onboarding-community-admin"
-                >
-                  <Shield aria-hidden="true" size={15} />
-                  <span>{communityRoleLabel}</span>
-                </Link>
-              ) : (
-                <div className="flex items-center gap-2 text-sm font-medium text-gray-600">
-                  <Shield aria-hidden="true" size={15} className="text-gray-500" />
-                  <span>{communityRoleLabel}</span>
-                </div>
-              )}
+              <div className="flex flex-wrap items-center justify-end gap-2">
+                {isTutorialPlayground ? (
+                  <span className="app-chip app-chip-accent">
+                    Tutorial playground
+                  </span>
+                ) : null}
+                {canManageCommunity ? (
+                  <Link
+                    href={`/community/${communityId}/admin`}
+                    className="app-button-secondary px-3 py-2 text-sm"
+                    data-tutorial-target={
+                      isTutorialPlayground
+                        ? "admin-onboarding-community-admin"
+                        : undefined
+                    }
+                  >
+                    <Shield aria-hidden="true" size={15} />
+                    <span>{communityRoleLabel}</span>
+                  </Link>
+                ) : (
+                  <div className="flex items-center gap-2 text-sm font-medium text-gray-600">
+                    <Shield aria-hidden="true" size={15} className="text-gray-500" />
+                    <span>{communityRoleLabel}</span>
+                  </div>
+                )}
+              </div>
             </div>
           }
         />
 
         {success ? <FlashMessage tone="success">{success}</FlashMessage> : null}
 
-        <AdminOnboardingChecklist
-          progress={adminOnboarding.progress}
-          loading={adminOnboarding.loading}
-          onDismiss={adminOnboarding.dismiss}
-          onReopen={adminOnboarding.reopen}
-          onCompleteStep={adminOnboarding.completeStep}
-          activeStepOverride={
-            activeSection === "host" ? hostOnboardingOverride : null
-          }
-        />
+        {isTutorialPlayground ? (
+          <AdminOnboardingChecklist
+            progress={adminOnboarding.progress}
+            loading={adminOnboarding.loading}
+            onDismiss={adminOnboarding.dismiss}
+            onReopen={adminOnboarding.reopen}
+            onCompleteStep={adminOnboarding.completeStep}
+            activeStepOverride={
+              activeSection === "host" ? hostOnboardingOverride : null
+            }
+          />
+        ) : null}
 
         <section className="app-panel-soft hidden p-2 sm:block">
           <div
@@ -927,7 +945,9 @@ export default function CommunityPage() {
                       : "bg-transparent text-gray-600 hover:bg-white"
                   }`}
                   data-tutorial-target={
-                    tab.key === "host" ? "admin-onboarding-host-tab" : undefined
+                    isTutorialPlayground && tab.key === "host"
+                      ? "admin-onboarding-host-tab"
+                      : undefined
                   }
                 >
                   <p className="text-sm font-semibold text-gray-900">

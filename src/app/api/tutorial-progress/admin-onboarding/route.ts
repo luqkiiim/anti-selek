@@ -7,7 +7,6 @@ import {
   parseAdminOnboardingStepIds,
 } from "@/lib/adminOnboarding";
 import { logError, safeErrorResponse } from "@/lib/errors";
-import { isGlobalAdminEmail } from "@/lib/globalAdmin";
 import { prisma } from "@/lib/prisma";
 import {
   getQuickAccessDeniedMessage,
@@ -17,8 +16,8 @@ import { rateLimit } from "@/lib/rateLimit";
 
 export const dynamic = "force-dynamic";
 
-async function getAdminOnboardingProgress(userId: string, isGlobalAdmin: boolean) {
-  const [progress, memberships] = await Promise.all([
+async function getAdminOnboardingProgress(userId: string) {
+  const [progress, playground] = await Promise.all([
     prisma.tutorialProgress.findUnique({
       where: {
         userId_tutorialKey: {
@@ -27,81 +26,87 @@ async function getAdminOnboardingProgress(userId: string, isGlobalAdmin: boolean
         },
       },
     }),
-    prisma.communityMember.findMany({
-      where: {
-        userId,
-        ...(isGlobalAdmin ? {} : { role: "ADMIN" }),
-      },
-      include: {
-        community: {
+    prisma.community.findUnique({
+      where: { tutorialOwnerId: userId },
+      select: {
+        id: true,
+        isTutorial: true,
+        _count: {
           select: {
-            id: true,
-            createdAt: true,
-            _count: {
-              select: {
-                members: true,
-                sessions: true,
-              },
-            },
+            members: true,
+            sessions: true,
           },
         },
       },
-      orderBy: { createdAt: "asc" },
     }),
   ]);
 
-  const adminCommunityIds = memberships.map((membership) => membership.communityId);
+  if (!playground?.isTutorial) {
+    return buildAdminOnboardingProgress({
+      completedStepIds: parseAdminOnboardingStepIds(
+        progress?.completedStepIdsJson
+      ),
+      dismissedAt: progress?.dismissedAt ?? null,
+      primaryCommunityId: null,
+      primarySessionCode: null,
+      hasAdminCommunity: false,
+      hasRosterPlayers: false,
+      hasAnySession: false,
+      hasRosteredSession: false,
+      hasScoredMatch: false,
+      hasCompletedSession: false,
+    });
+  }
+
   const [latestSession, rosteredSession, scoredMatch, completedSession] =
-    adminCommunityIds.length > 0
-      ? await Promise.all([
-          prisma.session.findFirst({
-            where: {
-              communityId: { in: adminCommunityIds },
-            },
-            orderBy: { createdAt: "desc" },
-            select: { code: true },
-          }),
-          prisma.session.findFirst({
-            where: {
-              communityId: { in: adminCommunityIds },
-              players: { some: {} },
-            },
-            select: { id: true },
-          }),
-          prisma.match.findFirst({
-            where: {
-              session: {
-                communityId: { in: adminCommunityIds },
-              },
-              team1Score: { not: null },
-              team2Score: { not: null },
-            },
-            select: { id: true },
-          }),
-          prisma.session.findFirst({
-            where: {
-              communityId: { in: adminCommunityIds },
-              status: "COMPLETED",
-            },
-            select: { id: true },
-          }),
-        ])
-      : [null, null, null, null];
+    await Promise.all([
+      prisma.session.findFirst({
+        where: {
+          communityId: playground.id,
+          isTest: true,
+        },
+        orderBy: { createdAt: "asc" },
+        select: { code: true },
+      }),
+      prisma.session.findFirst({
+        where: {
+          communityId: playground.id,
+          isTest: true,
+          players: { some: {} },
+        },
+        select: { id: true },
+      }),
+      prisma.match.findFirst({
+        where: {
+          session: {
+            communityId: playground.id,
+            isTest: true,
+          },
+          team1Score: { not: null },
+          team2Score: { not: null },
+        },
+        select: { id: true },
+      }),
+      prisma.session.findFirst({
+        where: {
+          communityId: playground.id,
+          isTest: true,
+          status: "COMPLETED",
+        },
+        select: { id: true },
+      }),
+    ]);
 
   return buildAdminOnboardingProgress({
     completedStepIds: parseAdminOnboardingStepIds(
       progress?.completedStepIdsJson
     ),
     dismissedAt: progress?.dismissedAt ?? null,
-    primaryCommunityId: memberships[0]?.communityId ?? null,
+    primaryCommunityId: playground.id,
     primarySessionCode: latestSession?.code ?? null,
-    hasAdminCommunity: memberships.length > 0,
-    hasRosterPlayers: memberships.some(
-      (membership) => membership.community._count.members > 1
-    ),
-    hasAnySession: memberships.some(
-      (membership) => membership.community._count.sessions > 0
-    ),
+    hasAdminCommunity: true,
+    hasRosterPlayers: playground._count.members > 1,
+    hasAnySession: playground._count.sessions > 0,
     hasRosteredSession: Boolean(rosteredSession),
     hasScoredMatch: Boolean(scoredMatch),
     hasCompletedSession: Boolean(completedSession),
@@ -139,12 +144,7 @@ export async function GET(request: Request) {
       );
     }
 
-    return NextResponse.json(
-      await getAdminOnboardingProgress(
-        session.user.id,
-        !!session.user.isAdmin || isGlobalAdminEmail(session.user.email ?? null)
-      )
-    );
+    return NextResponse.json(await getAdminOnboardingProgress(session.user.id));
   } catch (error) {
     logError("Load admin onboarding progress error", error);
     return safeErrorResponse();
@@ -236,12 +236,7 @@ export async function PATCH(request: Request) {
       },
     });
 
-    return NextResponse.json(
-      await getAdminOnboardingProgress(
-        session.user.id,
-        !!session.user.isAdmin || isGlobalAdminEmail(session.user.email ?? null)
-      )
-    );
+    return NextResponse.json(await getAdminOnboardingProgress(session.user.id));
   } catch (error) {
     logError("Update admin onboarding progress error", error);
     return safeErrorResponse();

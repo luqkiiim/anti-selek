@@ -423,6 +423,9 @@ export default function SessionPage() {
     !!sessionData?.viewerCanManage || !!user?.isAdmin || !!session?.user?.isAdmin;
   const isClaimedUser = user?.isClaimed === true;
   const currentUserId = session?.user?.id || "";
+  const isTutorialPlayground =
+    sessionData?.isTutorialCommunity === true &&
+    sessionData.tutorialOwnerId === currentUserId;
   const canOpenPlayerManager =
     isAdmin && sessionData?.status !== SessionStatus.COMPLETED;
   const canOpenSettings =
@@ -432,6 +435,7 @@ export default function SessionPage() {
   const adminOnboarding = useAdminOnboardingProgress(
     status === "authenticated" &&
       isAdmin &&
+      isTutorialPlayground &&
       !!sessionData &&
       sessionData.status !== SessionStatus.COMPLETED
   );
@@ -464,6 +468,26 @@ export default function SessionPage() {
     await endSession();
     void adminOnboarding.refresh();
   }, [adminOnboarding, endSession]);
+  const activeAdminOnboardingStep =
+    adminOnboarding.progress?.steps.find((step) => !step.completed) ?? null;
+  const shouldShowSessionTutorialHint =
+    isTutorialPlayground &&
+    (activeAdminOnboardingStep?.id === "session-workflow" ||
+      activeAdminOnboardingStep?.id === "end-session");
+  const sessionTutorialHint =
+    shouldShowSessionTutorialHint && activeAdminOnboardingStep
+      ? {
+          title: activeAdminOnboardingStep.title,
+          detail: activeAdminOnboardingStep.coachmark,
+        }
+      : null;
+  const courtsTutorialHint =
+    isTutorialPlayground && activeAdminOnboardingStep?.id === "score-match"
+      ? {
+          title: activeAdminOnboardingStep.title,
+          detail: activeAdminOnboardingStep.coachmark,
+        }
+      : null;
 
   useEffect(() => {
     if (!canOpenSettings) {
@@ -781,6 +805,20 @@ export default function SessionPage() {
     },
     [scrollMobilePagerToSection]
   );
+
+  useEffect(() => {
+    if (
+      activeAdminOnboardingStep?.id === "session-workflow" ||
+      activeAdminOnboardingStep?.id === "end-session"
+    ) {
+      updateMobileSection("session", "auto");
+      return;
+    }
+
+    if (activeAdminOnboardingStep?.id === "score-match") {
+      updateMobileSection("courts", "auto");
+    }
+  }, [activeAdminOnboardingStep?.id, updateMobileSection]);
 
   const settleMobilePagerToNearestSection = useCallback(
     (behavior: ScrollBehavior = "smooth") => {
@@ -1107,6 +1145,11 @@ export default function SessionPage() {
               <h1 className="whitespace-normal break-words text-base font-semibold leading-tight text-gray-900 sm:text-xl">
                 {sessionData.name}
               </h1>
+              {isTutorialPlayground ? (
+                <span className="mt-1 w-fit app-chip app-chip-accent">
+                  Tutorial playground
+                </span>
+              ) : null}
             </div>
           </div>
         </div>
@@ -1115,13 +1158,15 @@ export default function SessionPage() {
       <main className="app-shell max-w-7xl space-y-4 sm:space-y-6">
         {error ? <FlashMessage tone="error">{error}</FlashMessage> : null}
 
-        <AdminOnboardingChecklist
-          progress={adminOnboarding.progress}
-          loading={adminOnboarding.loading}
-          onDismiss={adminOnboarding.dismiss}
-          onReopen={adminOnboarding.reopen}
-          onCompleteStep={adminOnboarding.completeStep}
-        />
+        {isTutorialPlayground ? (
+          <AdminOnboardingChecklist
+            progress={adminOnboarding.progress}
+            loading={adminOnboarding.loading}
+            onDismiss={adminOnboarding.dismiss}
+            onReopen={adminOnboarding.reopen}
+            onCompleteStep={adminOnboarding.completeStep}
+          />
+        ) : null}
 
         <div
           ref={mobilePagerRef}
@@ -1149,6 +1194,7 @@ export default function SessionPage() {
                 }
                 canOpenPlayerManager={Boolean(canOpenPlayerManager)}
                 canOpenSettings={Boolean(canOpenSettings)}
+                tutorialHint={sessionTutorialHint}
                 onStartSession={startSessionWithOnboardingRefresh}
                 onOpenPlayerManager={() => setShowPlayersModal(true)}
                 onOpenSettings={openSettingsModal}
@@ -1197,6 +1243,7 @@ export default function SessionPage() {
                   submittingMatchId={scoreActions.submittingMatchId}
                   matchScores={scoreActions.matchScores}
                   queuePromotionAnimation={scoreActions.queuePromotionAnimation}
+                  tutorialHint={courtsTutorialHint}
                   onCreateMatchesForCourts={
                     createMatchesForCourtsWithOnboardingRefresh
                   }
@@ -1287,7 +1334,7 @@ export default function SessionPage() {
         canOpenRoster={isAdmin && !sessionView.isCompletedSession}
         canEndSession={isAdmin && sessionData.status === SessionStatus.ACTIVE}
         canResetTestSession={sessionData.isTest}
-        canCreateRealSession={sessionData.isTest}
+        canCreateRealSession={sessionData.isTest && !isTutorialPlayground}
         canDeleteTestSession={sessionData.isTest}
         courtLabelDrafts={courtLabelDrafts}
         hasAutoQueueChange={hasAutoQueueChange}

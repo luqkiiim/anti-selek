@@ -395,6 +395,8 @@ export function mergeSessionSnapshot(
         : current.queuedMatch,
     viewerCanManage: current.viewerCanManage,
     viewerCommunityRole: current.viewerCommunityRole,
+    isTutorialCommunity: current.isTutorialCommunity,
+    tutorialOwnerId: current.tutorialOwnerId,
   };
 }
 

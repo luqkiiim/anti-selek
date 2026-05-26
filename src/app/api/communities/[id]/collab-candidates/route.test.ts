@@ -48,7 +48,10 @@ describe("collab community candidate search route", () => {
     mocks.auth.mockResolvedValue({
       user: { id: "admin-1", isAdmin: false, email: "admin@example.com" },
     });
-    mocks.communityFindUnique.mockResolvedValue({ id: "community-1" });
+    mocks.communityFindUnique.mockResolvedValue({
+      id: "community-1",
+      isTutorial: false,
+    });
     mocks.communityMemberFindUnique.mockResolvedValue({ role: "ADMIN" });
     mocks.communityFindMany.mockResolvedValue([
       {
@@ -105,6 +108,7 @@ describe("collab community candidate search route", () => {
     expect(mocks.communityFindMany).toHaveBeenCalledWith({
       where: {
         id: { not: "community-1" },
+        isTutorial: false,
         name: { contains: "partner" },
       },
       select: {

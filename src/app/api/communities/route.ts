@@ -37,12 +37,14 @@ export async function GET(request: Request) {
         ...(isQuickAccess
           ? { communityId: session.user.quickAccessCommunityId ?? "" }
           : {}),
+        community: { isTutorial: false },
       },
       include: {
         community: {
           select: {
             id: true,
             name: true,
+            isTutorial: true,
             isPasswordProtected: true,
             createdAt: true,
             _count: {

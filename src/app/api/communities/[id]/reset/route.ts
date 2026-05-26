@@ -5,6 +5,7 @@ import { getQuickAccessDeniedMessage, isQuickAccessSession } from "@/lib/quickAc
 import { logAuditEvent } from "@/lib/serverAudit";
 import { logError, safeErrorResponse } from "@/lib/errors";
 import { rateLimit, checkInvalidTargetRateLimit, invalidTargetResponse } from "@/lib/rateLimit";
+import { resetTutorialPlayground } from "@/lib/tutorialPlayground";
 import {
   collectGuestUserIds,
   deleteEphemeralGuestUsers,
@@ -54,6 +55,19 @@ export async function POST(
     const canReset = membership?.role === "ADMIN" || session.user.isAdmin;
     if (!canReset) {
       return invalidTargetResponse(request, "api:communities:id:reset");
+    }
+
+    const targetCommunity = await prisma.community.findUnique({
+      where: { id },
+      select: { isTutorial: true, tutorialOwnerId: true },
+    });
+    if (targetCommunity?.isTutorial) {
+      if (targetCommunity.tutorialOwnerId !== session.user.id) {
+        return invalidTargetResponse(request, "api:communities:id:reset");
+      }
+
+      await resetTutorialPlayground(session.user.id);
+      return NextResponse.json({ success: true });
     }
 
     const body = await request.json().catch(() => null);

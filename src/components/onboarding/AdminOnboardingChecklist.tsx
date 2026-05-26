@@ -33,6 +33,17 @@ interface SpotlightRect {
   height: number;
 }
 
+const SPOTLIGHT_MARGIN = 12;
+const COACHMARK_MARGIN = 16;
+const COACHMARK_WIDTH = 320;
+const COACHMARK_MAX_HEIGHT = 220;
+const COACHMARK_GAP = 14;
+const SCROLL_SETTLE_MS = 360;
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(Math.max(value, min), max);
+}
+
 function AdminOnboardingSpotlight({
   step,
   onCompleteStep,
@@ -45,6 +56,7 @@ function AdminOnboardingSpotlight({
 
   useEffect(() => {
     let frameId: number | null = null;
+    let scrollSettleTimeoutId: number | null = null;
     const selector = `[data-tutorial-target="${step.targetId}"]`;
 
     const updateRect = (shouldScroll = false) => {
@@ -66,8 +78,8 @@ function AdminOnboardingSpotlight({
 
       const bounds = target.getBoundingClientRect();
       setRect({
-        top: Math.max(12, bounds.top - 8),
-        left: Math.max(12, bounds.left - 8),
+        top: Math.max(SPOTLIGHT_MARGIN, bounds.top - 8),
+        left: Math.max(SPOTLIGHT_MARGIN, bounds.left - 8),
         width: bounds.width + 16,
         height: bounds.height + 16,
       });
@@ -76,6 +88,10 @@ function AdminOnboardingSpotlight({
     frameId = window.requestAnimationFrame(() => {
       frameId = null;
       updateRect(true);
+      scrollSettleTimeoutId = window.setTimeout(() => {
+        scrollSettleTimeoutId = null;
+        updateRect(false);
+      }, SCROLL_SETTLE_MS);
     });
 
     const scheduleUpdate = () => {
@@ -93,6 +109,9 @@ function AdminOnboardingSpotlight({
       if (frameId !== null) {
         window.cancelAnimationFrame(frameId);
       }
+      if (scrollSettleTimeoutId !== null) {
+        window.clearTimeout(scrollSettleTimeoutId);
+      }
       window.removeEventListener("resize", scheduleUpdate);
       window.removeEventListener("scroll", scheduleUpdate, true);
     };
@@ -101,13 +120,27 @@ function AdminOnboardingSpotlight({
   const coachmarkStyle = useMemo(() => {
     if (!rect) return undefined;
 
-    const preferBelow = rect.top + rect.height + 168 < window.innerHeight;
-    const top = preferBelow
-      ? rect.top + rect.height + 14
-      : Math.max(16, rect.top - 152);
-    const left = Math.min(
-      Math.max(16, rect.left + rect.width / 2 - 160),
-      Math.max(16, window.innerWidth - 336)
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+    const maxLeft = Math.max(
+      COACHMARK_MARGIN,
+      viewportWidth - COACHMARK_WIDTH - COACHMARK_MARGIN
+    );
+    const maxTop = Math.max(
+      COACHMARK_MARGIN,
+      viewportHeight - COACHMARK_MAX_HEIGHT - COACHMARK_MARGIN
+    );
+    const hasRoomBelow =
+      rect.top + rect.height + COACHMARK_GAP + COACHMARK_MAX_HEIGHT <=
+      viewportHeight - COACHMARK_MARGIN;
+    const preferredTop = hasRoomBelow
+      ? rect.top + rect.height + COACHMARK_GAP
+      : rect.top - COACHMARK_MAX_HEIGHT - COACHMARK_GAP;
+    const top = clamp(preferredTop, COACHMARK_MARGIN, maxTop);
+    const left = clamp(
+      rect.left + rect.width / 2 - COACHMARK_WIDTH / 2,
+      COACHMARK_MARGIN,
+      maxLeft
     );
 
     return {
@@ -124,10 +157,12 @@ function AdminOnboardingSpotlight({
     <>
       <div
         aria-hidden="true"
+        data-testid="admin-onboarding-spotlight"
         className="pointer-events-none fixed z-[60] rounded-2xl border-2 border-teal-300 bg-transparent shadow-[0_0_0_9999px_rgba(15,23,42,0.56),0_18px_44px_rgba(15,118,110,0.35)] transition-all"
         style={rect}
       />
       <div
+        data-testid="admin-onboarding-coachmark"
         className="fixed z-[61] w-[min(20rem,calc(100vw-2rem))] rounded-2xl border border-teal-100 bg-white p-4 shadow-[0_24px_70px_rgba(15,23,42,0.24)]"
         style={coachmarkStyle}
       >
@@ -153,7 +188,7 @@ function AdminOnboardingSpotlight({
             </button>
           ) : null}
           <Link href={step.href} className="app-button-primary px-3 py-2 text-xs">
-            Go there
+            {step.actionLabel}
             <ChevronRight aria-hidden="true" size={14} />
           </Link>
         </div>
@@ -195,6 +230,62 @@ export function AdminOnboardingChecklist({
     activeStep && activeStepOverride?.stepId === activeStep.id
       ? { ...activeStep, ...activeStepOverride }
       : activeStep;
+  const completedSteps = progress.steps.filter((step) => step.completed);
+  const incompleteSteps = progress.steps.filter((step) => !step.completed);
+
+  const renderStep = (step: AdminOnboardingStep) => {
+    const Icon = step.completed ? CheckCircle2 : Circle;
+
+    return (
+      <div
+        key={step.id}
+        className={`grid gap-3 rounded-xl border px-3 py-3 sm:grid-cols-[1fr_auto] sm:items-center ${
+          step.completed
+            ? "border-teal-100 bg-teal-50/50"
+            : "border-gray-200 bg-white"
+        }`}
+      >
+        <div className="flex min-w-0 gap-3">
+          <Icon
+            aria-hidden="true"
+            size={18}
+            className={
+              step.completed
+                ? "mt-0.5 shrink-0 text-teal-700"
+                : "mt-0.5 shrink-0 text-gray-400"
+            }
+          />
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-gray-900">
+              {step.title}
+            </p>
+            <p className="mt-1 text-xs leading-5 text-gray-600">
+              {step.detail}
+            </p>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap gap-2 sm:justify-end">
+          {!step.completed && step.manual ? (
+            <button
+              type="button"
+              onClick={() => onCompleteStep(step.id)}
+              className="app-button-secondary px-3 py-2 text-xs"
+            >
+              Mark reviewed
+            </button>
+          ) : null}
+          <Link
+            href={step.href}
+            className="app-button-secondary px-3 py-2 text-xs"
+          >
+            {step.actionLabel}
+            <ChevronRight aria-hidden="true" size={14} />
+          </Link>
+        </div>
+      </div>
+    );
+  };
 
   return (
     <section className="app-panel p-4 sm:p-5">
@@ -237,7 +328,7 @@ export function AdminOnboardingChecklist({
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="min-w-0">
               <p className="text-xs font-black uppercase tracking-[0.18em] text-teal-700">
-                Press here next
+                Next step
               </p>
               <p className="mt-1 text-sm font-semibold text-gray-900">
                 {displayedActiveStep.title}
@@ -260,7 +351,7 @@ export function AdminOnboardingChecklist({
                 href={displayedActiveStep.href}
                 className="app-button-primary px-3 py-2 text-xs"
               >
-                Go there
+                {displayedActiveStep.actionLabel}
                 <ChevronRight aria-hidden="true" size={14} />
               </Link>
             </div>
@@ -268,56 +359,22 @@ export function AdminOnboardingChecklist({
         </div>
       ) : null}
 
-      <div className="mt-4 grid gap-2">
-        {progress.steps.map((step) => {
-          const Icon = step.completed ? CheckCircle2 : Circle;
-
-          return (
-            <div
-              key={step.id}
-              className={`grid gap-3 rounded-xl border px-3 py-3 sm:grid-cols-[1fr_auto] sm:items-center ${
-                step.completed
-                  ? "border-teal-100 bg-teal-50/50"
-                  : "border-gray-200 bg-white"
-              }`}
-            >
-              <div className="flex min-w-0 gap-3">
-                <Icon
-                  aria-hidden="true"
-                  size={18}
-                  className={step.completed ? "mt-0.5 shrink-0 text-teal-700" : "mt-0.5 shrink-0 text-gray-400"}
-                />
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold text-gray-900">
-                    {step.title}
-                  </p>
-                  <p className="mt-1 text-xs leading-5 text-gray-600">
-                    {step.detail}
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex flex-wrap gap-2 sm:justify-end">
-                {!step.completed && step.manual ? (
-                  <button
-                    type="button"
-                    onClick={() => onCompleteStep(step.id)}
-                    className="app-button-secondary px-3 py-2 text-xs"
-                  >
-                    Mark reviewed
-                  </button>
-                ) : null}
-                <Link
-                  href={step.href}
-                  className="app-button-secondary px-3 py-2 text-xs"
-                >
-                  {step.actionLabel}
-                  <ChevronRight aria-hidden="true" size={14} />
-                </Link>
-              </div>
+      <div className="mt-4 grid gap-2 sm:hidden">
+        {incompleteSteps.map(renderStep)}
+        {completedSteps.length > 0 ? (
+          <details className="rounded-xl border border-teal-100 bg-teal-50/40">
+            <summary className="cursor-pointer px-3 py-3 text-sm font-semibold text-teal-800">
+              Completed steps ({completedSteps.length})
+            </summary>
+            <div className="grid gap-2 border-t border-teal-100 p-2">
+              {completedSteps.map(renderStep)}
             </div>
-          );
-        })}
+          </details>
+        ) : null}
+      </div>
+
+      <div className="mt-4 hidden gap-2 sm:grid">
+        {progress.steps.map(renderStep)}
       </div>
     </section>
   );

@@ -30,7 +30,7 @@ function createProgress(
         id: "reset-cleanup",
         title: "Optional cleanup",
         detail: "Know where reset community lives.",
-        actionLabel: "Settings",
+        actionLabel: "Review cleanup",
         href: "/community/community-1/admin?tab=settings",
         targetId: "admin-onboarding-reset-community",
         coachmark: "Use reset only when you want to clear test history.",
@@ -56,11 +56,14 @@ describe("AdminOnboardingChecklist", () => {
 
     expect(markup).toContain("Getting started");
     expect(markup).toContain("1/2 admin steps");
-    expect(markup).toContain("Press here next");
+    expect(markup).toContain("Next step");
     expect(markup).toContain("Open your community");
     expect(markup).toContain("Optional cleanup");
     expect(markup).toContain("Mark reviewed");
+    expect(markup).toContain("Completed steps (1)");
+    expect(markup).toContain("Review cleanup");
     expect(markup).toContain('href="/community/community-1/admin?tab=settings"');
+    expect(markup).not.toContain("Go there");
   });
 
   it("renders a small reopen action when dismissed", () => {
