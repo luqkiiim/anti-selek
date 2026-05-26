@@ -19,6 +19,11 @@ import {
 
 export const TUTORIAL_PLAYGROUND_LABEL = "Tutorial playground";
 export const TUTORIAL_PLAYGROUND_SESSION_NAME = "Practice rally";
+export const TUTORIAL_HISTORY_SESSION_NAMES = [
+  "Warm-up Cup",
+  "Evening Rally",
+  "Weekend Cup",
+] as const;
 
 export const TUTORIAL_FAKE_PLAYERS = [
   {
@@ -102,6 +107,29 @@ export const TUTORIAL_FAKE_PLAYERS = [
 ] as const;
 
 type TutorialTx = Prisma.TransactionClient;
+type TutorialFakePlayerName = (typeof TUTORIAL_FAKE_PLAYERS)[number]["name"];
+type TutorialSeedUser = {
+  id: string;
+  name: string;
+  gender: string;
+  partnerPreference: string;
+  elo: number;
+};
+
+interface TutorialPracticeMatchSeed {
+  team1: [TutorialFakePlayerName, TutorialFakePlayerName];
+  team2: [TutorialFakePlayerName, TutorialFakePlayerName];
+  team1Score: number;
+  team2Score: number;
+  team1Delta: number;
+  team2Delta: number;
+}
+
+interface TutorialPracticeSessionSeed {
+  name: (typeof TUTORIAL_HISTORY_SESSION_NAMES)[number];
+  daysAgo: number;
+  matches: TutorialPracticeMatchSeed[];
+}
 
 export interface TutorialPlaygroundSummary {
   communityId: string;
@@ -115,6 +143,178 @@ export interface TutorialPlaygroundSummary {
 function getTutorialCommunityName(userId: string) {
   return `${TUTORIAL_PLAYGROUND_LABEL} ${userId.slice(-8)}`;
 }
+
+export function getTutorialCommunityDisplayName(community: {
+  name: string;
+  isTutorial?: boolean | null;
+}) {
+  return community.isTutorial ? TUTORIAL_PLAYGROUND_LABEL : community.name;
+}
+
+const TUTORIAL_PRACTICE_SESSIONS: TutorialPracticeSessionSeed[] = [
+  {
+    name: "Warm-up Cup",
+    daysAgo: 6,
+    matches: [
+      {
+        team1: ["Aiman", "Siti"],
+        team2: ["Haziq", "Aina"],
+        team1Score: 21,
+        team2Score: 17,
+        team1Delta: 12,
+        team2Delta: -12,
+      },
+      {
+        team1: ["Farah", "Danish"],
+        team2: ["Amir", "Mira"],
+        team1Score: 21,
+        team2Score: 14,
+        team1Delta: 14,
+        team2Delta: -14,
+      },
+      {
+        team1: ["Irfan", "Yana"],
+        team2: ["Zul", "Rafi"],
+        team1Score: 21,
+        team2Score: 19,
+        team1Delta: 8,
+        team2Delta: -8,
+      },
+      {
+        team1: ["Haziq", "Mira"],
+        team2: ["Aiman", "Zul"],
+        team1Score: 21,
+        team2Score: 18,
+        team1Delta: 11,
+        team2Delta: -11,
+      },
+      {
+        team1: ["Farah", "Danish"],
+        team2: ["Aina", "Nadia"],
+        team1Score: 21,
+        team2Score: 12,
+        team1Delta: 13,
+        team2Delta: -13,
+      },
+      {
+        team1: ["Amir", "Siti"],
+        team2: ["Irfan", "Rafi"],
+        team1Score: 21,
+        team2Score: 16,
+        team1Delta: 10,
+        team2Delta: -10,
+      },
+    ],
+  },
+  {
+    name: "Evening Rally",
+    daysAgo: 3,
+    matches: [
+      {
+        team1: ["Aiman", "Amir"],
+        team2: ["Haziq", "Rafi"],
+        team1Score: 21,
+        team2Score: 18,
+        team1Delta: 11,
+        team2Delta: -11,
+      },
+      {
+        team1: ["Farah", "Danish"],
+        team2: ["Irfan", "Yana"],
+        team1Score: 21,
+        team2Score: 15,
+        team1Delta: 13,
+        team2Delta: -13,
+      },
+      {
+        team1: ["Siti", "Mira"],
+        team2: ["Nadia", "Zul"],
+        team1Score: 21,
+        team2Score: 19,
+        team1Delta: 9,
+        team2Delta: -9,
+      },
+      {
+        team1: ["Haziq", "Nadia"],
+        team2: ["Aiman", "Yana"],
+        team1Score: 22,
+        team2Score: 20,
+        team1Delta: 12,
+        team2Delta: -12,
+      },
+      {
+        team1: ["Farah", "Danish"],
+        team2: ["Amir", "Siti"],
+        team1Score: 21,
+        team2Score: 17,
+        team1Delta: 12,
+        team2Delta: -12,
+      },
+      {
+        team1: ["Aina", "Rafi"],
+        team2: ["Mira", "Zul"],
+        team1Score: 21,
+        team2Score: 18,
+        team1Delta: 8,
+        team2Delta: -8,
+      },
+    ],
+  },
+  {
+    name: "Weekend Cup",
+    daysAgo: 1,
+    matches: [
+      {
+        team1: ["Farah", "Danish"],
+        team2: ["Zul", "Rafi"],
+        team1Score: 21,
+        team2Score: 11,
+        team1Delta: 15,
+        team2Delta: -15,
+      },
+      {
+        team1: ["Aiman", "Siti"],
+        team2: ["Amir", "Mira"],
+        team1Score: 21,
+        team2Score: 19,
+        team1Delta: 10,
+        team2Delta: -10,
+      },
+      {
+        team1: ["Amir", "Siti"],
+        team2: ["Haziq", "Aina"],
+        team1Score: 21,
+        team2Score: 16,
+        team1Delta: 11,
+        team2Delta: -11,
+      },
+      {
+        team1: ["Farah", "Danish"],
+        team2: ["Irfan", "Nadia"],
+        team1Score: 21,
+        team2Score: 13,
+        team1Delta: 14,
+        team2Delta: -14,
+      },
+      {
+        team1: ["Aiman", "Amir"],
+        team2: ["Zul", "Yana"],
+        team1Score: 21,
+        team2Score: 18,
+        team1Delta: 9,
+        team2Delta: -9,
+      },
+      {
+        team1: ["Mira", "Rafi"],
+        team2: ["Haziq", "Nadia"],
+        team1Score: 21,
+        team2Score: 20,
+        team1Delta: 7,
+        team2Delta: -7,
+      },
+    ],
+  },
+];
 
 async function summarizeTutorialPlayground(
   tx: TutorialTx,
@@ -150,7 +350,7 @@ async function summarizeTutorialPlayground(
 
   return {
     communityId: community.id,
-    communityName: community.name,
+    communityName: TUTORIAL_PLAYGROUND_LABEL,
     sessionCode: session?.code ?? null,
     playersCount: session?._count.players ?? 0,
     courtsCount: session?._count.courts ?? 0,
@@ -217,6 +417,7 @@ async function seedTutorialPlaygroundData(
       },
       select: {
         id: true,
+        name: true,
         gender: true,
         partnerPreference: true,
         elo: true,
@@ -238,6 +439,207 @@ async function seedTutorialPlaygroundData(
     })),
   });
 
+  await seedCompletedPracticeSessions(tx, communityId, fakeUsers);
+  await seedActiveTutorialSession(tx, communityId, ownerUserId, fakeUsers);
+}
+
+function addDays(date: Date, days: number) {
+  const nextDate = new Date(date);
+  nextDate.setDate(nextDate.getDate() + days);
+  return nextDate;
+}
+
+function getSeedPlayer(
+  playerByName: Map<string, TutorialSeedUser>,
+  name: TutorialFakePlayerName
+) {
+  const player = playerByName.get(name);
+  if (!player) {
+    throw new Error(`Tutorial fake player missing: ${name}`);
+  }
+  return player;
+}
+
+async function seedCompletedPracticeSessions(
+  tx: TutorialTx,
+  communityId: string,
+  fakeUsers: TutorialSeedUser[]
+) {
+  const now = new Date();
+  const playerByName = new Map(fakeUsers.map((user) => [user.name, user]));
+  const ratingByUserId = new Map(
+    fakeUsers.map((user) => [user.id, user.elo])
+  );
+
+  for (const practiceSession of TUTORIAL_PRACTICE_SESSIONS) {
+    const sessionId = randomUUID();
+    const courtIds = [randomUUID(), randomUUID()];
+    const createdAt = addDays(now, -practiceSession.daysAgo);
+    createdAt.setHours(19, 0, 0, 0);
+    const endedAt = new Date(createdAt);
+    endedAt.setHours(21, 30, 0, 0);
+    const sessionPointsByUserId = new Map(
+      fakeUsers.map((user) => [user.id, 0])
+    );
+    const matchesPlayedByUserId = new Map(
+      fakeUsers.map((user) => [user.id, 0])
+    );
+    const lastPartnerByUserId = new Map<string, string>();
+
+    await tx.session.create({
+      data: {
+        id: sessionId,
+        code: sessionId,
+        communityId,
+        name: practiceSession.name,
+        type: SessionType.POINTS,
+        mode: SessionMode.MEXICANO,
+        status: SessionStatus.COMPLETED,
+        isTest: false,
+        autoQueueEnabled: true,
+        createdAt,
+        endedAt,
+        courts: {
+          create: courtIds.map((id, index) => ({
+            id,
+            courtNumber: index + 1,
+          })),
+        },
+        sessionCommunities: {
+          create: {
+            communityId,
+            role: SessionCommunityRole.HOST,
+            status: SessionCommunityStatus.ACCEPTED,
+            reviewedAt: endedAt,
+          },
+        },
+        players: {
+          create: fakeUsers.map((user) => ({
+            userId: user.id,
+            isGuest: false,
+            gender: user.gender,
+            partnerPreference: user.partnerPreference,
+            pool: SessionPool.A,
+            sessionPoints: 0,
+            joinedAt: createdAt,
+            availableSince: endedAt,
+            ladderEntryAt: createdAt,
+            lastPlayedAt: endedAt,
+          })),
+        },
+      },
+    });
+
+    for (const [matchIndex, seed] of practiceSession.matches.entries()) {
+      const team1 = seed.team1.map((name) => getSeedPlayer(playerByName, name));
+      const team2 = seed.team2.map((name) => getSeedPlayer(playerByName, name));
+      const completedAt = new Date(createdAt);
+      completedAt.setMinutes(15 + matchIndex * 18);
+      const team1Won = seed.team1Score > seed.team2Score;
+      const matchId = randomUUID();
+
+      await tx.match.create({
+        data: {
+          id: matchId,
+          sessionId,
+          courtId: courtIds[matchIndex % courtIds.length],
+          status: MatchStatus.COMPLETED,
+          team1User1Id: team1[0].id,
+          team1User2Id: team1[1].id,
+          team2User1Id: team2[0].id,
+          team2User2Id: team2[1].id,
+          team1Score: seed.team1Score,
+          team2Score: seed.team2Score,
+          winnerTeam: team1Won ? 1 : 2,
+          team1EloChange: seed.team1Delta,
+          team2EloChange: seed.team2Delta,
+          createdAt,
+          completedAt,
+        },
+      });
+
+      const teams = [
+        { players: team1, score: seed.team1Score, delta: seed.team1Delta },
+        { players: team2, score: seed.team2Score, delta: seed.team2Delta },
+      ];
+
+      for (const team of teams) {
+        for (const player of team.players) {
+          sessionPointsByUserId.set(
+            player.id,
+            (sessionPointsByUserId.get(player.id) ?? 0) + team.score
+          );
+          matchesPlayedByUserId.set(
+            player.id,
+            (matchesPlayedByUserId.get(player.id) ?? 0) + 1
+          );
+        }
+        lastPartnerByUserId.set(team.players[0].id, team.players[1].id);
+        lastPartnerByUserId.set(team.players[1].id, team.players[0].id);
+      }
+
+      await tx.matchEloAdjustment.createMany({
+        data: teams.flatMap((team) =>
+          team.players.map((player) => {
+            const beforeElo = ratingByUserId.get(player.id) ?? player.elo;
+            const afterElo = beforeElo + team.delta;
+            ratingByUserId.set(player.id, afterElo);
+            return {
+              matchId,
+              communityId,
+              userId: player.id,
+              delta: team.delta,
+              beforeElo,
+              afterElo,
+              createdAt: completedAt,
+            };
+          })
+        ),
+      });
+    }
+
+    for (const user of fakeUsers) {
+      await tx.sessionPlayer.update({
+        where: {
+          sessionId_userId: {
+            sessionId,
+            userId: user.id,
+          },
+        },
+        data: {
+          sessionPoints: sessionPointsByUserId.get(user.id) ?? 0,
+          matchesPlayed: matchesPlayedByUserId.get(user.id) ?? 0,
+          matchmakingMatchesCredit: matchesPlayedByUserId.get(user.id) ?? 0,
+          lastPartnerId: lastPartnerByUserId.get(user.id) ?? null,
+          lastPlayedAt:
+            (matchesPlayedByUserId.get(user.id) ?? 0) > 0 ? endedAt : null,
+          availableSince: endedAt,
+        },
+      });
+    }
+  }
+
+  for (const user of fakeUsers) {
+    await tx.communityMember.update({
+      where: {
+        communityId_userId: {
+          communityId,
+          userId: user.id,
+        },
+      },
+      data: {
+        elo: ratingByUserId.get(user.id) ?? user.elo,
+      },
+    });
+  }
+}
+
+async function seedActiveTutorialSession(
+  tx: TutorialTx,
+  communityId: string,
+  ownerUserId: string,
+  fakeUsers: TutorialSeedUser[]
+) {
   const now = new Date();
   const sessionId = randomUUID();
   const courtIds = [randomUUID(), randomUUID()];
@@ -315,6 +717,169 @@ async function seedTutorialPlaygroundData(
       data: { currentMatchId: match.id },
     });
   }
+}
+
+async function getSeededFakeUsers(tx: TutorialTx, communityId: string) {
+  const members = await tx.communityMember.findMany({
+    where: {
+      communityId,
+      user: {
+        email: null,
+        isClaimed: false,
+        name: {
+          in: TUTORIAL_FAKE_PLAYERS.map((player) => player.name),
+        },
+      },
+    },
+    include: {
+      user: {
+        select: {
+          id: true,
+          name: true,
+          gender: true,
+          partnerPreference: true,
+        },
+      },
+    },
+  });
+  const memberByName = new Map(
+    members.map((member) => [member.user.name, member.user])
+  );
+
+  const fakeUsers: TutorialSeedUser[] = [];
+
+  for (const player of TUTORIAL_FAKE_PLAYERS) {
+    const user = memberByName.get(player.name);
+    if (!user) continue;
+    fakeUsers.push({
+      id: user.id,
+      name: user.name,
+      gender: user.gender,
+      partnerPreference: user.partnerPreference,
+      elo: player.elo,
+    });
+  }
+
+  return fakeUsers;
+}
+
+async function deleteNamedPracticeSessions(
+  tx: TutorialTx,
+  communityId: string
+) {
+  const sessionRows = await tx.session.findMany({
+    where: {
+      communityId,
+      isTest: false,
+      name: { in: [...TUTORIAL_HISTORY_SESSION_NAMES] },
+    },
+    select: { id: true },
+  });
+  const sessionIds = sessionRows.map((session) => session.id);
+
+  if (sessionIds.length === 0) {
+    return;
+  }
+
+  const matchRows = await tx.match.findMany({
+    where: { sessionId: { in: sessionIds } },
+    select: { id: true },
+  });
+  const matchIds = matchRows.map((match) => match.id);
+
+  if (matchIds.length > 0) {
+    await tx.matchEloAdjustment.deleteMany({
+      where: { matchId: { in: matchIds } },
+    });
+  }
+  await tx.court.updateMany({
+    where: { sessionId: { in: sessionIds } },
+    data: { currentMatchId: null },
+  });
+  await tx.queuedMatch.deleteMany({ where: { sessionId: { in: sessionIds } } });
+  await tx.match.deleteMany({ where: { sessionId: { in: sessionIds } } });
+  await tx.sessionPlayer.deleteMany({
+    where: { sessionId: { in: sessionIds } },
+  });
+  await tx.sessionCommunity.deleteMany({
+    where: { sessionId: { in: sessionIds } },
+  });
+  await tx.court.deleteMany({ where: { sessionId: { in: sessionIds } } });
+  await tx.session.deleteMany({ where: { id: { in: sessionIds } } });
+}
+
+async function hasCompletedPracticeHistory(
+  tx: TutorialTx,
+  communityId: string
+) {
+  const [sessionCount, matchCount] = await Promise.all([
+    tx.session.count({
+      where: {
+        communityId,
+        isTest: false,
+        status: SessionStatus.COMPLETED,
+        name: { in: [...TUTORIAL_HISTORY_SESSION_NAMES] },
+      },
+    }),
+    tx.match.count({
+      where: {
+        status: MatchStatus.COMPLETED,
+        session: {
+          communityId,
+          isTest: false,
+          name: { in: [...TUTORIAL_HISTORY_SESSION_NAMES] },
+        },
+      },
+    }),
+  ]);
+
+  return (
+    sessionCount === TUTORIAL_HISTORY_SESSION_NAMES.length &&
+    matchCount === TUTORIAL_PRACTICE_SESSIONS.reduce(
+      (total, session) => total + session.matches.length,
+      0
+    )
+  );
+}
+
+async function ensureCompletedPracticeHistory(
+  tx: TutorialTx,
+  communityId: string
+) {
+  if (await hasCompletedPracticeHistory(tx, communityId)) {
+    return true;
+  }
+
+  const fakeUsers = await getSeededFakeUsers(tx, communityId);
+  if (fakeUsers.length !== TUTORIAL_FAKE_PLAYERS.length) {
+    return false;
+  }
+
+  await deleteNamedPracticeSessions(tx, communityId);
+  await tx.communityMember.updateMany({
+    where: {
+      communityId,
+      userId: { in: fakeUsers.map((user) => user.id) },
+    },
+    data: { elo: 1000 },
+  });
+
+  for (const player of TUTORIAL_FAKE_PLAYERS) {
+    const user = fakeUsers.find((item) => item.name === player.name);
+    if (!user) continue;
+    await tx.communityMember.update({
+      where: {
+        communityId_userId: {
+          communityId,
+          userId: user.id,
+        },
+      },
+      data: { elo: player.elo },
+    });
+  }
+
+  await seedCompletedPracticeSessions(tx, communityId, fakeUsers);
+  return true;
 }
 
 async function clearTutorialPlaygroundData(
@@ -437,6 +1002,9 @@ export async function ensureTutorialPlayground(userId: string) {
       await seedTutorialPlaygroundData(tx, playground.id, userId);
     } else if (!playground.isTutorial) {
       throw new Error("Tutorial owner is attached to a non-tutorial community");
+    } else if (!(await ensureCompletedPracticeHistory(tx, playground.id))) {
+      await clearTutorialPlaygroundData(tx, playground.id, userId);
+      await seedTutorialPlaygroundData(tx, playground.id, userId);
     }
 
     return summarizeTutorialPlayground(tx, playground.id);

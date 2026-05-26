@@ -44,6 +44,12 @@ export async function POST(
         status: true,
         communityId: true,
         isTest: true,
+        community: {
+          select: {
+            isTutorial: true,
+            tutorialOwnerId: true,
+          },
+        },
       },
     });
 
@@ -53,6 +59,15 @@ export async function POST(
     if (targetSession.isTest) {
       return NextResponse.json(
         { error: "Test sessions use reset or delete instead of rollback" },
+        { status: 400 }
+      );
+    }
+    if (targetSession.community?.isTutorial) {
+      if (targetSession.community.tutorialOwnerId !== session.user.id) {
+        return invalidTargetResponse(_request, "api:sessions:code:rollback");
+      }
+      return NextResponse.json(
+        { error: "Tutorial playground history is restored with reset." },
         { status: 400 }
       );
     }
@@ -93,6 +108,11 @@ export async function POST(
           endedAt: true,
           createdAt: true,
           isTest: true,
+          community: {
+            select: {
+              isTutorial: true,
+            },
+          },
         },
       });
 
@@ -101,6 +121,9 @@ export async function POST(
       }
       if (freshTarget.isTest) {
         throw new Error("IS_TEST");
+      }
+      if (freshTarget.community?.isTutorial) {
+        throw new Error("IS_TUTORIAL");
       }
       if (freshTarget.status !== SessionStatus.COMPLETED) {
         throw new Error("NOT_COMPLETED");
@@ -279,6 +302,12 @@ export async function POST(
     if (message === "IS_TEST") {
       return NextResponse.json(
         { error: "Test sessions use reset or delete instead of rollback" },
+        { status: 400 }
+      );
+    }
+    if (message === "IS_TUTORIAL") {
+      return NextResponse.json(
+        { error: "Tutorial playground history is restored with reset." },
         { status: 400 }
       );
     }

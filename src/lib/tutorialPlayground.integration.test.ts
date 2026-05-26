@@ -13,6 +13,7 @@ import {
 import {
   ADMIN_ONBOARDING_TUTORIAL_KEY,
 } from "./adminOnboarding";
+import { buildCommunityPulse } from "./communityPulse";
 import {
   MatchStatus,
   PartnerPreference,
@@ -95,6 +96,85 @@ function expectSeededNames(expectFn: typeof expect, names: string[]) {
   expectFn(names.every((name) => name.length < 9)).toBe(true);
 }
 
+async function buildSeededCommunityPulse(communityId: string) {
+  const [members, sessions, completedMatches] = await Promise.all([
+    prisma.communityMember.findMany({
+      where: { communityId },
+      include: { user: { select: { id: true, name: true } } },
+    }),
+    prisma.session.findMany({
+      where: { communityId },
+      include: {
+        players: { include: { user: { select: { id: true, name: true } } } },
+      },
+    }),
+    prisma.match.findMany({
+      where: {
+        status: MatchStatus.COMPLETED,
+        session: { communityId, isTest: false },
+      },
+      include: {
+        team1User1: { select: { id: true, name: true } },
+        team1User2: { select: { id: true, name: true } },
+        team2User1: { select: { id: true, name: true } },
+        team2User2: { select: { id: true, name: true } },
+        session: {
+          select: {
+            id: true,
+            code: true,
+            name: true,
+            type: true,
+            createdAt: true,
+            endedAt: true,
+          },
+        },
+      },
+    }),
+  ]);
+
+  return buildCommunityPulse({
+    members: members.map((member) => ({
+      id: member.user.id,
+      name: member.user.name,
+      elo: member.elo,
+    })),
+    sessions: sessions.map((session) => ({
+      id: session.id,
+      code: session.code,
+      name: session.name,
+      type: session.type,
+      status: session.status,
+      isTest: session.isTest,
+      createdAt: session.createdAt,
+      endedAt: session.endedAt,
+      players: session.players.map((player) => ({
+        user: {
+          id: player.user.id,
+          name: player.user.name,
+        },
+      })),
+    })),
+    completedMatches: completedMatches.map((match) => ({
+      id: match.id,
+      completedAt: match.completedAt,
+      session: match.session,
+      winnerTeam: match.winnerTeam,
+      team1User1Id: match.team1User1Id,
+      team1User2Id: match.team1User2Id,
+      team2User1Id: match.team2User1Id,
+      team2User2Id: match.team2User2Id,
+      team1User1: match.team1User1,
+      team1User2: match.team1User2,
+      team2User1: match.team2User1,
+      team2User2: match.team2User2,
+      team1Score: match.team1Score,
+      team2Score: match.team2Score,
+      team1EloChange: match.team1EloChange,
+      team2EloChange: match.team2EloChange,
+    })),
+  });
+}
+
 beforeAll(async () => {
   mutableEnv.DATABASE_URL = tempDatabaseUrl;
   mutableEnv.TURSO_DATABASE_URL = "";
@@ -143,11 +223,14 @@ afterAll(async () => {
 });
 
 describe("tutorial playground service", () => {
-  it("creates a private seeded playground with 13 fake players and a live two-court session", async () => {
+  it("creates a private seeded playground with history, fake players, and a live two-court session", async () => {
     const owner = await createOwner();
 
     const summary = await tutorialPlayground.ensureTutorialPlayground(owner.id);
 
+    expect(summary.communityName).toBe(
+      tutorialPlayground.TUTORIAL_PLAYGROUND_LABEL
+    );
     expect(summary.playersCount).toBe(13);
     expect(summary.courtsCount).toBe(2);
     expect(summary.sessionCode).toEqual(expect.any(String));
@@ -171,6 +254,8 @@ describe("tutorial playground service", () => {
 
     expect(community?.isTutorial).toBe(true);
     expect(community?.tutorialOwnerId).toBe(owner.id);
+    expect(community?.name).not.toBe(summary.communityName);
+    expect(community?.name).toContain(summary.communityName);
     expect(
       community?.members.find((member) => member.userId === owner.id)?.role
     ).toBe("ADMIN");
@@ -188,7 +273,9 @@ describe("tutorial playground service", () => {
       )
     ).toBe(true);
 
-    const practiceSession = community?.sessions[0];
+    const practiceSession = community?.sessions.find(
+      (session) => session.isTest
+    );
     expect(practiceSession?.status).toBe(SessionStatus.ACTIVE);
     expect(practiceSession?.isTest).toBe(true);
     expect(practiceSession?.players).toHaveLength(13);
@@ -201,6 +288,61 @@ describe("tutorial playground service", () => {
         (match) => match.status === MatchStatus.IN_PROGRESS
       )
     ).toHaveLength(2);
+
+    const completedPracticeSessions =
+      community?.sessions.filter(
+        (session) =>
+          !session.isTest && session.status === SessionStatus.COMPLETED
+      ) ?? [];
+    expect(completedPracticeSessions).toHaveLength(3);
+    expect(completedPracticeSessions.map((session) => session.name).sort()).toEqual(
+      [...tutorialPlayground.TUTORIAL_HISTORY_SESSION_NAMES].sort()
+    );
+    expect(
+      completedPracticeSessions.flatMap((session) =>
+        session.matches.filter((match) => match.status === MatchStatus.COMPLETED)
+      )
+    ).toHaveLength(18);
+    expect(
+      await prisma.matchEloAdjustment.count({
+        where: { communityId: summary.communityId },
+      })
+    ).toBe(72);
+
+    const rankedNames =
+      community?.members
+        .filter((member) => member.userId !== owner.id)
+        .slice()
+        .sort((left, right) => right.elo - left.elo)
+        .slice(0, 5)
+        .map((member) => member.user.name) ?? [];
+    expect(rankedNames).toEqual([
+      "Danish",
+      "Farah",
+      "Amir",
+      "Aiman",
+      "Siti",
+    ]);
+
+    const pulse = await buildSeededCommunityPulse(summary.communityId);
+    expect(pulse.metrics.completedTournaments).toBe(3);
+    expect(pulse.metrics.recentMatches).toBe(18);
+    expect(pulse.hotPlayers.length).toBeGreaterThan(0);
+    expect(pulse.hotPlayers.map((player) => player.user.name)).toContain(
+      "Farah"
+    );
+    expect(pulse.rivalries[0].players.map((player) => player.name).sort()).toEqual([
+      "Aiman",
+      "Haziq",
+    ]);
+    expect(pulse.rivalries[0].matches).toBe(4);
+    expect(pulse.rivalries[0].playerOneWins).toBe(2);
+    expect(pulse.rivalries[0].playerTwoWins).toBe(2);
+    expect(
+      pulse.partnerships[0].players.map((player) => player.name).sort()
+    ).toEqual(["Danish", "Farah"]);
+    expect(pulse.partnerships[0].wins).toBe(6);
+    expect(pulse.latestStory?.session.name).toBe("Weekend Cup");
   });
 
   it("resets seeded sessions, fake users, and tutorial progress", async () => {
@@ -230,6 +372,9 @@ describe("tutorial playground service", () => {
     expect(resetSummary.sessionCode).not.toBe(firstSummary.sessionCode);
     expect(resetSummary.playersCount).toBe(13);
     expect(resetSummary.courtsCount).toBe(2);
+    expect(resetSummary.communityName).toBe(
+      tutorialPlayground.TUTORIAL_PLAYGROUND_LABEL
+    );
     expect(
       await prisma.tutorialProgress.findUnique({
         where: {
@@ -258,5 +403,25 @@ describe("tutorial playground service", () => {
       .map((member) => member.user.name)
       .sort();
     expectSeededNames(expect, fakeNames);
+    expect(
+      await prisma.session.count({
+        where: {
+          communityId: resetSummary.communityId,
+          isTest: false,
+          status: SessionStatus.COMPLETED,
+        },
+      })
+    ).toBe(3);
+    expect(
+      await prisma.match.count({
+        where: {
+          status: MatchStatus.COMPLETED,
+          session: {
+            communityId: resetSummary.communityId,
+            isTest: false,
+          },
+        },
+      })
+    ).toBe(18);
   });
 });

@@ -94,6 +94,8 @@ describe("community snapshot route", () => {
     mocks.communityFindUnique.mockResolvedValue({
       id: "community-1",
       name: "Community One",
+      isTutorial: false,
+      tutorialOwnerId: null,
       isPasswordProtected: false,
       _count: { members: 2, sessions: 1 },
     });
@@ -199,6 +201,28 @@ describe("community snapshot route", () => {
     );
   });
 
+  it("masks tutorial community backend names in the snapshot", async () => {
+    mocks.communityFindUnique.mockResolvedValueOnce({
+      id: "community-1",
+      name: "Tutorial playground viewer-1",
+      isTutorial: true,
+      tutorialOwnerId: "viewer-1",
+      isPasswordProtected: false,
+      _count: { members: 2, sessions: 1 },
+    });
+
+    const response = await GET(
+      new Request("http://localhost/api/communities/community-1"),
+      {
+        params: Promise.resolve({ id: "community-1" }),
+      }
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.community.name).toBe("Tutorial playground");
+  });
+
   it("allows admins to remove a community password and make it public", async () => {
     mocks.communityMemberFindUnique.mockResolvedValueOnce({
       role: "ADMIN",
@@ -206,6 +230,8 @@ describe("community snapshot route", () => {
     mocks.communityFindUnique.mockResolvedValueOnce({
       id: "community-1",
       isPasswordProtected: true,
+      isTutorial: false,
+      tutorialOwnerId: null,
     });
     mocks.communityUpdate.mockResolvedValueOnce({
       id: "community-1",
@@ -250,6 +276,8 @@ describe("community snapshot route", () => {
     mocks.communityFindUnique.mockResolvedValueOnce({
       id: "community-1",
       isPasswordProtected: false,
+      isTutorial: false,
+      tutorialOwnerId: null,
     });
 
     const response = await PATCH(
@@ -266,5 +294,33 @@ describe("community snapshot route", () => {
 
     expect(response.status).toBe(400);
     expect(body.error).toBe("Password is required to protect the community");
+  });
+
+  it("rejects direct settings updates for tutorial playgrounds", async () => {
+    mocks.communityMemberFindUnique.mockResolvedValueOnce({
+      role: "ADMIN",
+    });
+    mocks.communityFindUnique.mockResolvedValueOnce({
+      id: "community-1",
+      isPasswordProtected: false,
+      isTutorial: true,
+      tutorialOwnerId: "viewer-1",
+    });
+
+    const response = await PATCH(
+      new Request("http://localhost/api/communities/community-1", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: "New Tutorial Name" }),
+      }),
+      {
+        params: Promise.resolve({ id: "community-1" }),
+      }
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(body.error).toBe("Tutorial playground settings are managed by reset.");
+    expect(mocks.communityUpdate).not.toHaveBeenCalled();
   });
 });

@@ -11,7 +11,10 @@ import { prisma } from "@/lib/prisma";
 import { listSessionsForCommunity } from "@/app/api/sessions/listSessionsService";
 import { logAuditEvent } from "@/lib/serverAudit";
 import { logError, safeErrorResponse } from "@/lib/errors";
-import { deleteTutorialPlayground } from "@/lib/tutorialPlayground";
+import {
+  deleteTutorialPlayground,
+  getTutorialCommunityDisplayName,
+} from "@/lib/tutorialPlayground";
 import { rateLimit, checkInvalidTargetRateLimit, invalidTargetResponse } from "@/lib/rateLimit";
 import {
   canQuickAccessCommunity,
@@ -364,7 +367,7 @@ export async function GET(
       },
       community: {
         id: community.id,
-        name: community.name,
+        name: getTutorialCommunityDisplayName(community),
         isTutorial: community.isTutorial,
         tutorialOwnerId: community.tutorialOwnerId,
         role: viewerIsQuickAccess
@@ -472,10 +475,24 @@ export async function PATCH(
 
     const existing = await prisma.community.findUnique({
       where: { id },
-      select: { id: true, isPasswordProtected: true },
+      select: {
+        id: true,
+        isPasswordProtected: true,
+        isTutorial: true,
+        tutorialOwnerId: true,
+      },
     });
     if (!existing) {
       return invalidTargetResponse(request, "api:communities:id");
+    }
+    if (existing.isTutorial) {
+      if (existing.tutorialOwnerId !== session.user.id) {
+        return invalidTargetResponse(request, "api:communities:id");
+      }
+      return NextResponse.json(
+        { error: "Tutorial playground settings are managed by reset." },
+        { status: 400 }
+      );
     }
 
     if (name !== undefined) {

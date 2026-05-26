@@ -164,4 +164,40 @@ describe("session route GET", () => {
       "https://blob.vercel-storage.com/avatars/u1/photo.jpg"
     );
   });
+
+  it("masks tutorial community names in linked session communities", async () => {
+    const sessionData = await mocks.sessionFindUnique();
+    mocks.sessionFindUnique.mockClear();
+    mocks.sessionFindUnique.mockResolvedValueOnce({
+      ...sessionData,
+      community: {
+        id: "community-1",
+        isTutorial: true,
+        tutorialOwnerId: "u1",
+      },
+      sessionCommunities: [
+        {
+          communityId: "community-1",
+          role: "HOST",
+          status: "ACCEPTED",
+          community: {
+            id: "community-1",
+            name: "Tutorial playground u1",
+            isTutorial: true,
+          },
+        },
+      ],
+    });
+
+    const response = await GET(
+      new Request("http://localhost/api/sessions/ABC123"),
+      {
+        params: Promise.resolve({ code: "ABC123" }),
+      }
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.communities[0].name).toBe("Tutorial playground");
+  });
 });

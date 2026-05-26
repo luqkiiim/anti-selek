@@ -21,12 +21,36 @@ async function getPlaygroundSummary(page: Page) {
     return response.json() as Promise<{
       playground: {
         communityId: string;
+        communityName: string;
         sessionCode: string;
         playersCount: number;
         courtsCount: number;
       };
     }>;
   });
+}
+
+async function getCommunitySnapshot(page: Page, communityId: string) {
+  return page.evaluate(async (targetCommunityId) => {
+    const response = await fetch(`/api/communities/${targetCommunityId}`);
+    if (!response.ok) {
+      throw new Error(`Failed to load community: ${response.status}`);
+    }
+
+    return response.json() as Promise<{
+      community: { name: string };
+      communityPulse: {
+        metrics: {
+          completedTournaments: number;
+          recentMatches: number;
+        };
+        hotPlayers: unknown[];
+        rivalries: unknown[];
+        partnerships: unknown[];
+        latestStory: { session: { name: string } } | null;
+      };
+    }>;
+  }, communityId);
 }
 
 async function getCommunityMembers(page: Page, communityId: string) {
@@ -55,6 +79,27 @@ async function getSessionSnapshot(page: Page, sessionCode: string) {
       isTutorialCommunity: boolean;
     }>;
   }, sessionCode);
+}
+
+async function resetPlayground(page: Page) {
+  return page.evaluate(async () => {
+    const response = await fetch("/api/tutorial-playground/reset", {
+      method: "POST",
+    });
+    if (!response.ok) {
+      throw new Error(`Failed to reset playground: ${response.status}`);
+    }
+
+    return response.json() as Promise<{
+      playground: {
+        communityId: string;
+        communityName: string;
+        sessionCode: string;
+        playersCount: number;
+        courtsCount: number;
+      };
+    }>;
+  });
 }
 
 async function expectCoachmarkInViewport(page: Page) {
@@ -101,7 +146,9 @@ test.describe("tutorial playground mobile walkthrough", () => {
 
     await page.getByRole("button", { name: "Open tutorial playground" }).click();
     await expect(page).toHaveURL(/\/community\/.+/);
-    await expect(page.getByText("Tutorial playground").first()).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Tutorial playground" })
+    ).toBeVisible();
     await expect(page.getByText("Getting started", { exact: true })).toBeVisible();
     await expect(page.getByRole("link", { name: "Go there" })).toHaveCount(0);
     await expect(page.getByRole("link", { name: "Open scoring" }).first())
@@ -110,8 +157,33 @@ test.describe("tutorial playground mobile walkthrough", () => {
     await expectNoHorizontalOverflow(page);
 
     const { playground } = await getPlaygroundSummary(page);
+    expect(playground.communityName).toBe("Tutorial playground");
     expect(playground.playersCount).toBe(13);
     expect(playground.courtsCount).toBe(2);
+    const communitySnapshot = await getCommunitySnapshot(
+      page,
+      playground.communityId
+    );
+    expect(communitySnapshot.community.name).toBe("Tutorial playground");
+    expect(communitySnapshot.communityPulse.metrics.completedTournaments).toBe(3);
+    expect(communitySnapshot.communityPulse.metrics.recentMatches).toBe(18);
+    expect(communitySnapshot.communityPulse.hotPlayers.length).toBeGreaterThan(0);
+    expect(communitySnapshot.communityPulse.rivalries.length).toBeGreaterThan(0);
+    expect(communitySnapshot.communityPulse.partnerships.length).toBeGreaterThan(0);
+    expect(communitySnapshot.communityPulse.latestStory?.session.name).toBe(
+      "Weekend Cup"
+    );
+
+    await expect(page.getByText("Hot players").first()).toBeVisible();
+    await expect(page.getByText("Top rivalry").first()).toBeVisible();
+    await expect(page.getByText("Partner chemistry").first()).toBeVisible();
+    await expect(page.getByText("Latest story").first()).toBeVisible();
+    await expect(page.getByText("Power rankings").first()).toBeVisible();
+    await expect(page.getByText("Farah").first()).toBeVisible();
+    await expect(page.getByText("Danish").first()).toBeVisible();
+    await expect(page.getByText("Aiman").first()).toBeVisible();
+    await expect(page.getByText("Haziq").first()).toBeVisible();
+    await expect(page.getByText("Weekend Cup").first()).toBeVisible();
 
     const members = await getCommunityMembers(page, playground.communityId);
     const fakeMembers = members.filter(
@@ -134,6 +206,13 @@ test.describe("tutorial playground mobile walkthrough", () => {
     ]);
     expect(fakeMembers.every((member) => member.name.length < 9)).toBe(true);
 
+    await page.getByRole("button", { name: "Tournaments" }).click();
+    await expect(page.getByText("Past Tournaments").first()).toBeVisible();
+    await expect(page.getByText("Warm-up Cup").first()).toBeVisible();
+    await expect(page.getByText("Evening Rally").first()).toBeVisible();
+    await expect(page.getByText("Weekend Cup").first()).toBeVisible();
+    await expect(page.getByRole("button", { name: "Rollback" })).toHaveCount(0);
+
     await page.goto(`/session/${playground.sessionCode}`);
     await expect(page.getByText("Practice rally")).toBeVisible();
     await expect(page.getByText("Tutorial playground").first()).toBeVisible();
@@ -151,6 +230,18 @@ test.describe("tutorial playground mobile walkthrough", () => {
       "Score a practice match"
     );
     await expect(page.getByText("Tutorial hint")).toBeVisible();
+
+    const resetResult = await resetPlayground(page);
+    expect(resetResult.playground.communityName).toBe("Tutorial playground");
+    expect(resetResult.playground.playersCount).toBe(13);
+    expect(resetResult.playground.courtsCount).toBe(2);
+    const resetCommunitySnapshot = await getCommunitySnapshot(
+      page,
+      resetResult.playground.communityId
+    );
+    expect(resetCommunitySnapshot.community.name).toBe("Tutorial playground");
+    expect(resetCommunitySnapshot.communityPulse.metrics.completedTournaments).toBe(3);
+    expect(resetCommunitySnapshot.communityPulse.metrics.recentMatches).toBe(18);
 
     await page.goto(`/community/${hostCommunityId}`);
     await expect(page.getByRole("heading", { name: "E2E Host Club" }))

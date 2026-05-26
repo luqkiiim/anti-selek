@@ -814,7 +814,7 @@ export default function CommunityPage() {
       />
       <PastTournamentsPanel
         tournaments={pastTournaments}
-        canManageCommunity={canManageCommunity}
+        canManageCommunity={canManageCommunity && !isTutorialPlayground}
         latestPastTournamentId={latestPastTournamentId}
         rollingBackTournamentCode={rollingBackTournamentCode}
         onOpenTournament={openTournament}

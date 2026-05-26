@@ -49,4 +49,16 @@ describe("CommunitySettingsPanel", () => {
 
     expect(markup).toContain('placeholder="Set a password (min 4 characters)"');
   });
+
+  it("shows read-only tutorial identity instead of rename controls", () => {
+    const markup = renderPanel({
+      communityName: "Tutorial playground",
+      isTutorial: true,
+    });
+
+    expect(markup).toContain("Tutorial Settings");
+    expect(markup).toContain("Tutorial playground");
+    expect(markup).not.toContain("Community name");
+    expect(markup).not.toContain("Save Settings");
+  });
 });

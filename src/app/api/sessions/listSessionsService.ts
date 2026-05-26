@@ -5,6 +5,7 @@ import {
   getPlayerCommunityBadges,
   withPlayerCommunityBadges,
 } from "@/lib/sessionCollab";
+import { getTutorialCommunityDisplayName } from "@/lib/tutorialPlayground";
 import { SessionCommunityStatus } from "@/types/enums";
 import { SessionRouteError } from "./sessionRouteShared";
 
@@ -51,7 +52,9 @@ export async function listSessionsForCommunity({
     orderBy: { createdAt: "desc" },
     include: {
       sessionCommunities: {
-        include: { community: { select: { id: true, name: true } } },
+        include: {
+          community: { select: { id: true, name: true, isTutorial: true } },
+        },
       },
       courts: true,
       players: {
@@ -113,7 +116,7 @@ export async function listSessionsForCommunity({
           : partnerLink?.status ?? SessionCommunityStatus.ACCEPTED,
       communities: session.sessionCommunities.map((link) => ({
         id: link.community.id,
-        name: link.community.name,
+        name: getTutorialCommunityDisplayName(link.community),
         role: link.role,
         status: link.status,
       })),

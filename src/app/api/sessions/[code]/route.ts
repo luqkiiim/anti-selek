@@ -20,6 +20,7 @@ import {
 import { tryRebuildQueuedMatchForSessionId } from "./queue-match/shared";
 import { logError, safeErrorResponse } from "@/lib/errors";
 import { rateLimit, checkInvalidTargetRateLimit, invalidTargetResponse } from "@/lib/rateLimit";
+import { getTutorialCommunityDisplayName } from "@/lib/tutorialPlayground";
 
 export const dynamic = "force-dynamic";
 
@@ -77,7 +78,7 @@ async function getSessionRoute(
       },
       sessionCommunities: {
         include: {
-          community: { select: { id: true, name: true } },
+          community: { select: { id: true, name: true, isTutorial: true } },
         },
       },
       players: {
@@ -237,7 +238,7 @@ async function getSessionRoute(
     tutorialOwnerId: sessionData.community?.tutorialOwnerId ?? null,
     communities: sessionData.sessionCommunities.map((link) => ({
       id: link.community.id,
-      name: link.community.name,
+      name: getTutorialCommunityDisplayName(link.community),
       role: link.role,
       status: link.status,
     })),

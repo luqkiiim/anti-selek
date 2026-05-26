@@ -525,9 +525,10 @@ export default function CommunityAdminPage() {
 
         {activeSection === "settings" ? (
           <div className="grid gap-6 xl:grid-cols-[minmax(0,1.25fr)_minmax(0,0.9fr)]">
-            <CommunitySettingsPanel
-              communityName={communityNameInput}
-              onCommunityNameChange={setCommunityNameInput}
+              <CommunitySettingsPanel
+                isTutorial={isTutorialPlayground}
+                communityName={communityNameInput}
+                onCommunityNameChange={setCommunityNameInput}
               communityPassword={communityPasswordInput}
               onCommunityPasswordChange={setCommunityPasswordInput}
               passwordProtectionEnabled={communityPasswordProtectionEnabled}

@@ -10,6 +10,7 @@ interface CommunitySettingsPanelProps {
   passwordProtectionEnabled: boolean;
   onPasswordProtectionEnabledChange: (value: boolean) => void;
   isPasswordProtected: boolean;
+  isTutorial?: boolean;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   saving: boolean;
 }
@@ -22,9 +23,43 @@ export function CommunitySettingsPanel({
   passwordProtectionEnabled,
   onPasswordProtectionEnabledChange,
   isPasswordProtected,
+  isTutorial = false,
   onSubmit,
   saving,
 }: CommunitySettingsPanelProps) {
+  if (isTutorial) {
+    return (
+      <div className="space-y-4 rounded-3xl border border-gray-100 bg-white p-6 shadow-md">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h3 className="text-sm font-black uppercase tracking-widest text-gray-900">
+              Tutorial Settings
+            </h3>
+            <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">
+              This sandbox resets instead of being renamed or password protected.
+            </p>
+          </div>
+          <span className="rounded-lg bg-blue-100 px-2 py-1 text-[10px] font-black uppercase tracking-widest text-blue-700">
+            Sandbox
+          </span>
+        </div>
+
+        <div className="rounded-2xl border-2 border-gray-100 bg-gray-50 px-4 py-3">
+          <p className="text-xs font-black uppercase tracking-wider text-gray-900">
+            Display name
+          </p>
+          <p className="mt-2 text-base font-bold text-gray-900">
+            {communityName}
+          </p>
+          <p className="mt-1 text-[11px] text-gray-500">
+            The private backend name stays hidden so your tutorial always feels
+            like the same playground.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="bg-white p-6 rounded-3xl shadow-md border border-gray-100 space-y-4">
       <div className="flex items-start justify-between gap-3">
