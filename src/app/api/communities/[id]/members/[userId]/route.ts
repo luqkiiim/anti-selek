@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { serializeAvatarEntity } from "@/lib/avatar";
+import { getCommunityAdminAccess } from "@/lib/communityAdminPermissions";
 import { isValidCommunityRole } from "@/lib/communityRoles";
 import { prisma } from "@/lib/prisma";
 import {
@@ -28,26 +29,6 @@ function isValidCommunityPlayerStatus(
 }
 
 export const dynamic = "force-dynamic";
-
-async function requireCommunityAdmin(
-  communityId: string,
-  requesterId: string,
-  isGlobalAdmin: boolean
-) {
-  if (isGlobalAdmin) return true;
-
-  const membership = await prisma.communityMember.findUnique({
-    where: {
-      communityId_userId: {
-        communityId,
-        userId: requesterId,
-      },
-    },
-    select: { role: true },
-  });
-
-  return membership?.role === "ADMIN";
-}
 
 async function findDuplicateUnclaimedMemberName({
   communityId,
@@ -114,12 +95,12 @@ export async function PATCH(
     const invalidTargetLimitResponse = await checkInvalidTargetRateLimit(request, "api:communities:id:members:userId");
 
     if (invalidTargetLimitResponse) return invalidTargetLimitResponse;
-    const canManage = await requireCommunityAdmin(
+    const adminAccess = await getCommunityAdminAccess(prisma, {
       communityId,
-      session.user.id,
-      !!session.user.isAdmin
-    );
-    if (!canManage) {
+      userId: session.user.id,
+      isGlobalAdmin: !!session.user.isAdmin,
+    });
+    if (!adminAccess?.canAdmin) {
       return invalidTargetResponse(request, "api:communities:id:members:userId");
     }
 
@@ -211,27 +192,45 @@ export async function PATCH(
     const shouldPromoteToAdmin = nextRole === CommunityRole.ADMIN;
     const shouldGrantStaff = nextRole === CommunityRole.STAFF;
     const shouldRevokeStaff = nextRole === CommunityRole.MEMBER;
+    const targetIsOwner = adminAccess.createdById === userId;
+    const requesterCanDemoteAdmin =
+      adminAccess.isOwner || adminAccess.isGlobalAdmin;
 
-    if (shouldGrantStaff && membership.role === CommunityRole.ADMIN) {
+    if (targetIsOwner && nextRole) {
       return NextResponse.json(
-        { error: "Admins cannot be changed to staff here" },
+        { error: "The community owner role cannot be changed" },
         { status: 400 }
       );
     }
-    if (shouldRevokeStaff && membership.role === CommunityRole.ADMIN) {
+    if (userId === session.user.id && nextRole) {
       return NextResponse.json(
-        { error: "Admins cannot be demoted here" },
+        { error: "Cannot change your own community role" },
         { status: 400 }
+      );
+    }
+    if (
+      membership.role === CommunityRole.ADMIN &&
+      (shouldGrantStaff || shouldRevokeStaff) &&
+      !requesterCanDemoteAdmin
+    ) {
+      return NextResponse.json(
+        { error: "Only the community owner can demote admins" },
+        { status: 403 }
       );
     }
     if (shouldRevokeStaff && membership.role !== CommunityRole.STAFF) {
-      return NextResponse.json(
-        { error: "Only staff members can be changed back to member here" },
-        { status: 400 }
-      );
+      if (membership.role !== CommunityRole.ADMIN) {
+        return NextResponse.json(
+          { error: "Only staff members can be changed back to member here" },
+          { status: 400 }
+        );
+      }
     }
 
-    if (shouldPromoteToAdmin || shouldGrantStaff) {
+    if (
+      shouldPromoteToAdmin ||
+      (shouldGrantStaff && membership.role !== CommunityRole.ADMIN)
+    ) {
       const targetUser = await prisma.user.findUnique({
         where: { id: userId },
         select: { isClaimed: true },
@@ -402,6 +401,7 @@ export async function PATCH(
       createdAt: updatedUser.createdAt,
       avatarUrl: serializeAvatarEntity(updatedUser).avatarUrl,
       role: updatedMembership?.role ?? membership.role,
+      isOwner: targetIsOwner,
       elo: updatedMembership?.elo ?? membership.elo,
       status:
         updatedMembership?.status === CommunityPlayerStatus.OCCASIONAL
@@ -442,12 +442,12 @@ export async function DELETE(
     const invalidTargetLimitResponse = await checkInvalidTargetRateLimit(request, "api:communities:id:members:userId");
 
     if (invalidTargetLimitResponse) return invalidTargetLimitResponse;
-    const canManage = await requireCommunityAdmin(
+    const adminAccess = await getCommunityAdminAccess(prisma, {
       communityId,
-      session.user.id,
-      !!session.user.isAdmin
-    );
-    if (!canManage) {
+      userId: session.user.id,
+      isGlobalAdmin: !!session.user.isAdmin,
+    });
+    if (!adminAccess?.canAdmin) {
       return invalidTargetResponse(request, "api:communities:id:members:userId");
     }
     if (userId === session.user.id) {
@@ -461,10 +461,22 @@ export async function DELETE(
           userId,
         },
       },
-      select: { id: true },
+      select: { id: true, role: true },
     });
     if (!membership) {
       return invalidTargetResponse(request, "api:communities:id:members:userId");
+    }
+    if (adminAccess.createdById === userId) {
+      return NextResponse.json(
+        { error: "The community owner cannot be removed" },
+        { status: 400 }
+      );
+    }
+    if (membership.role === CommunityRole.ADMIN) {
+      return NextResponse.json(
+        { error: "Demote admins before removing them" },
+        { status: 400 }
+      );
     }
 
     const sessionRows = await prisma.session.findMany({

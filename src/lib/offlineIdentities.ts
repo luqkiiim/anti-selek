@@ -1,5 +1,5 @@
 import type { Prisma, PrismaClient } from "@prisma/client";
-import { OfflineIdentityLinkStatus } from "@/types/enums";
+import { CommunityRole, OfflineIdentityLinkStatus } from "@/types/enums";
 
 type DbClient = Prisma.TransactionClient | PrismaClient;
 
@@ -34,18 +34,30 @@ export async function getCommunityAdminMembership(
   isGlobalAdmin = false
 ) {
   if (isGlobalAdmin) {
-    return { role: "ADMIN" };
+    return { role: CommunityRole.ADMIN };
   }
 
-  return tx.communityMember.findUnique({
-    where: {
-      communityId_userId: {
-        communityId,
-        userId,
+  const [community, membership] = await Promise.all([
+    tx.community.findUnique({
+      where: { id: communityId },
+      select: { createdById: true },
+    }),
+    tx.communityMember.findUnique({
+      where: {
+        communityId_userId: {
+          communityId,
+          userId,
+        },
       },
-    },
-    select: { role: true },
-  });
+      select: { role: true },
+    }),
+  ]);
+
+  if (community?.createdById === userId) {
+    return { role: CommunityRole.ADMIN };
+  }
+
+  return membership;
 }
 
 export async function isCommunityAdmin(

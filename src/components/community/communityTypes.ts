@@ -25,6 +25,7 @@ export interface CommunityPageCommunity {
   id: string;
   name: string;
   role: "ADMIN" | "STAFF" | "MEMBER";
+  viewerIsOwner?: boolean;
   isPasswordProtected: boolean;
   isTutorial: boolean;
   tutorialOwnerId?: string | null;
@@ -46,6 +47,7 @@ export interface CommunityPageMember {
   losses: number;
   isClaimed: boolean;
   role: "ADMIN" | "STAFF" | "MEMBER";
+  isOwner?: boolean;
   offlineIdentityId?: string | null;
   communityBadges?: Array<{ id: string; name: string; elo: number; userId?: string }>;
   linkedCommunityBadges?: Array<{ id: string; name: string; elo?: number; userId: string }>;

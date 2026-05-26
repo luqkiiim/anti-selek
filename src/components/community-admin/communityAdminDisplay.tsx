@@ -27,11 +27,23 @@ export function getCommunityAdminGenderPillLabel(
 
 export function CommunityAdminRolePill({
   role,
+  isOwner = false,
 }: {
   role: CommunityAdminPlayer["role"];
+  isOwner?: boolean;
 }) {
   const baseClassName =
     "inline-flex items-center rounded-full border px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.16em]";
+
+  if (isOwner) {
+    return (
+      <span
+        className={`${baseClassName} border-[#bbf7d0] bg-[#dcfce7] text-[#166534]`}
+      >
+        Owner
+      </span>
+    );
+  }
 
   if (role === "ADMIN") {
     return (

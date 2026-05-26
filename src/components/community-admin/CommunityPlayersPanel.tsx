@@ -141,7 +141,10 @@ export function CommunityPlayersPanel({
                   </div>
 
                   <div className="flex flex-wrap gap-2 lg:justify-end">
-                    <CommunityAdminRolePill role={player.role} />
+                    <CommunityAdminRolePill
+                      role={player.role}
+                      isOwner={player.isOwner}
+                    />
                     <CommunityAdminStatusPill status={player.status} />
                     <CommunityAdminClaimPill isClaimed={player.isClaimed} />
                     <CommunityAdminGenderPill player={player} />

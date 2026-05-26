@@ -44,6 +44,7 @@ export async function GET(request: Request) {
           select: {
             id: true,
             name: true,
+            createdById: true,
             isTutorial: true,
             isPasswordProtected: true,
             createdAt: true,
@@ -60,15 +61,25 @@ export async function GET(request: Request) {
     });
 
     return NextResponse.json(
-      memberships.map((m) => ({
-        id: m.community.id,
-        name: m.community.name,
-        role: isQuickAccess ? "MEMBER" : isGlobalAdmin ? "ADMIN" : m.role,
-        isPasswordProtected: m.community.isPasswordProtected,
-        createdAt: m.community.createdAt,
-        membersCount: m.community._count.members,
-        sessionsCount: m.community._count.sessions,
-      }))
+      memberships.map((m) => {
+        const viewerIsOwner = m.community.createdById === session.user.id;
+
+        return {
+          id: m.community.id,
+          name: m.community.name,
+          role:
+            isQuickAccess
+              ? "MEMBER"
+              : isGlobalAdmin || viewerIsOwner
+                ? "ADMIN"
+                : m.role,
+          viewerIsOwner,
+          isPasswordProtected: m.community.isPasswordProtected,
+          createdAt: m.community.createdAt,
+          membersCount: m.community._count.members,
+          sessionsCount: m.community._count.sessions,
+        };
+      })
     );
   } catch (error) {
     logError("List communities error", error);
@@ -149,7 +160,10 @@ export async function POST(request: Request) {
       },
     });
 
-    return NextResponse.json({ ...created, role: "ADMIN" }, { status: 201 });
+    return NextResponse.json(
+      { ...created, role: "ADMIN", viewerIsOwner: true },
+      { status: 201 }
+    );
   } catch (error: unknown) {
     const code =
       typeof error === "object" && error !== null && "code" in error

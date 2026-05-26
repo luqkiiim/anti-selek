@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
+import { getCommunityAdminAccess } from "@/lib/communityAdminPermissions";
 import { prisma } from "@/lib/prisma";
 import { isClaimableCommunityPlaceholder } from "@/lib/communityClaims";
 import { getClaimRequesterEligibility } from "@/lib/communityClaimRules";
@@ -71,20 +72,15 @@ export async function GET(
       return NextResponse.json([]);
     }
 
-    const membership = await prisma.communityMember.findUnique({
-      where: {
-        communityId_userId: {
-          communityId,
-          userId: session.user.id,
-        },
-      },
-      select: { role: true },
+    const adminAccess = await getCommunityAdminAccess(prisma, {
+      communityId,
+      userId: session.user.id,
+      isGlobalAdmin: !!session.user.isAdmin,
     });
 
     const isQuickAccess = isQuickAccessSession(session);
-    const isCommunityAdmin =
-      !isQuickAccess && (membership?.role === "ADMIN" || !!session.user.isAdmin);
-    if (!membership && !session.user.isAdmin) {
+    const isCommunityAdmin = !isQuickAccess && adminAccess?.canAdmin === true;
+    if (!adminAccess || (!adminAccess.membershipRole && !isCommunityAdmin)) {
       return invalidTargetResponse(request, "api:communities:id:claim-requests");
     }
 

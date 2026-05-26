@@ -24,6 +24,7 @@ import {
   isQuickAccessSession,
   normalizeNameLookupKey,
 } from "@/lib/quickAccess";
+import { getCommunityAdminAccess } from "@/lib/communityAdminPermissions";
 
 function isValidCommunityPlayerStatus(
   value: unknown
@@ -96,16 +97,27 @@ export async function GET(
 
     if (invalidTargetLimitResponse) return invalidTargetLimitResponse;
 
-    const membership = await prisma.communityMember.findUnique({
-      where: {
-        communityId_userId: {
-          communityId: id,
-          userId: session.user.id,
+    const [membership, community] = await Promise.all([
+      prisma.communityMember.findUnique({
+        where: {
+          communityId_userId: {
+            communityId: id,
+            userId: session.user.id,
+          },
         },
-      },
-    });
+      }),
+      prisma.community.findUnique({
+        where: { id },
+        select: { createdById: true },
+      }),
+    ]);
 
-    if (!membership) {
+    if (
+      !community ||
+      (!membership &&
+        community.createdById !== session.user.id &&
+        !session.user.isAdmin)
+    ) {
       return invalidTargetResponse(request, "api:communities:id:members");
     }
 
@@ -224,6 +236,7 @@ export async function GET(
           wins: statsByUserId.get(m.user.id)?.wins ?? 0,
           losses: statsByUserId.get(m.user.id)?.losses ?? 0,
           role: m.role,
+          isOwner: m.user.id === community.createdById,
           offlineIdentityId: offlineIdentityInfo?.offlineIdentityId ?? null,
           linkedCommunityBadges:
             offlineIdentityInfo?.linkedCommunityBadges ?? [],
@@ -265,18 +278,13 @@ export async function POST(
 
     if (invalidTargetLimitResponse) return invalidTargetLimitResponse;
 
-    const requesterMembership = await prisma.communityMember.findUnique({
-      where: {
-        communityId_userId: {
-          communityId: id,
-          userId: session.user.id,
-        },
-      },
-      select: { role: true },
+    const adminAccess = await getCommunityAdminAccess(prisma, {
+      communityId: id,
+      userId: session.user.id,
+      isGlobalAdmin: !!session.user.isAdmin,
     });
 
-    const canManage = requesterMembership?.role === "ADMIN" || session.user.isAdmin;
-    if (!canManage) {
+    if (!adminAccess?.canAdmin) {
       return invalidTargetResponse(request, "api:communities:id:members");
     }
 
@@ -515,6 +523,7 @@ export async function POST(
       isClaimed: user.isClaimed,
       createdAt: user.createdAt,
       role: membership.role,
+      isOwner: user.id === adminAccess.createdById,
     });
   } catch (error) {
     logError("Add community member error", error);

@@ -24,6 +24,7 @@ import {
 } from "@/lib/quickAccess";
 import {
   ClaimRequestStatus,
+  CommunityRole,
   CommunityPlayerStatus,
   PartnerPreference,
   PlayerGender,
@@ -120,6 +121,7 @@ export async function GET(
         select: {
           id: true,
           name: true,
+          createdById: true,
           isTutorial: true,
           tutorialOwnerId: true,
           isPasswordProtected: true,
@@ -137,11 +139,15 @@ export async function GET(
       return invalidTargetResponse(request, "api:communities:id");
     }
 
+    const viewerIsOwner = community.createdById === viewerId;
+    const viewerCanAdminCommunity =
+      viewerIsAdmin || viewerIsOwner || membership?.role === CommunityRole.ADMIN;
+
     if (community.isTutorial && community.tutorialOwnerId !== viewerId) {
       return invalidTargetResponse(request, "api:communities:id");
     }
 
-    if (!membership && !viewerIsAdmin) {
+    if (!membership && !viewerIsAdmin && !viewerIsOwner) {
       return invalidTargetResponse(request, "api:communities:id");
     }
 
@@ -219,11 +225,11 @@ export async function GET(
       listSessionsForCommunity({
         communityId: id,
         viewerId,
-        viewerIsAdmin,
+        viewerIsAdmin: viewerCanAdminCommunity,
       }),
       prisma.claimRequest.findMany({
         where:
-          membership?.role === "ADMIN" || viewerIsAdmin
+          viewerCanAdminCommunity
             ? {
                 communityId: id,
                 status: ClaimRequestStatus.PENDING,
@@ -321,6 +327,7 @@ export async function GET(
         wins: statsByUserId.get(member.user.id)?.wins ?? 0,
         losses: statsByUserId.get(member.user.id)?.losses ?? 0,
         role: member.role,
+        isOwner: member.user.id === community.createdById,
         offlineIdentityId: offlineIdentityInfo?.offlineIdentityId ?? null,
         linkedCommunityBadges: offlineIdentityInfo?.linkedCommunityBadges ?? [],
       };
@@ -370,10 +377,11 @@ export async function GET(
         name: getTutorialCommunityDisplayName(community),
         isTutorial: community.isTutorial,
         tutorialOwnerId: community.tutorialOwnerId,
+        viewerIsOwner,
         role: viewerIsQuickAccess
-          ? "MEMBER"
-          : viewerIsAdmin
-            ? "ADMIN"
+          ? CommunityRole.MEMBER
+          : viewerCanAdminCommunity
+            ? CommunityRole.ADMIN
             : membership?.role ?? "MEMBER",
         isPasswordProtected: community.isPasswordProtected,
         membersCount: community._count.members,
@@ -429,17 +437,37 @@ export async function PATCH(
 
     if (invalidTargetLimitResponse) return invalidTargetLimitResponse;
 
-    const membership = await prisma.communityMember.findUnique({
-      where: {
-        communityId_userId: {
-          communityId: id,
-          userId: session.user.id,
+    const [membership, existing] = await Promise.all([
+      prisma.communityMember.findUnique({
+        where: {
+          communityId_userId: {
+            communityId: id,
+            userId: session.user.id,
+          },
         },
-      },
-      select: { role: true },
-    });
+        select: { role: true },
+      }),
+      prisma.community.findUnique({
+        where: { id },
+        select: {
+          id: true,
+          createdById: true,
+          isPasswordProtected: true,
+          isTutorial: true,
+          tutorialOwnerId: true,
+        },
+      }),
+    ]);
 
-    if (!membership || (membership.role !== "ADMIN" && !session.user.isAdmin)) {
+    if (!existing) {
+      return invalidTargetResponse(request, "api:communities:id");
+    }
+    const viewerIsOwner = existing.createdById === session.user.id;
+    if (
+      !viewerIsOwner &&
+      membership?.role !== CommunityRole.ADMIN &&
+      !session.user.isAdmin
+    ) {
       return invalidTargetResponse(request, "api:communities:id");
     }
 
@@ -473,18 +501,6 @@ export async function PATCH(
       );
     }
 
-    const existing = await prisma.community.findUnique({
-      where: { id },
-      select: {
-        id: true,
-        isPasswordProtected: true,
-        isTutorial: true,
-        tutorialOwnerId: true,
-      },
-    });
-    if (!existing) {
-      return invalidTargetResponse(request, "api:communities:id");
-    }
     if (existing.isTutorial) {
       if (existing.tutorialOwnerId !== session.user.id) {
         return invalidTargetResponse(request, "api:communities:id");
@@ -619,20 +635,36 @@ export async function DELETE(
 
     if (invalidTargetLimitResponse) return invalidTargetLimitResponse;
 
-    const membership = await prisma.communityMember.findUnique({
-      where: {
-        communityId_userId: {
-          communityId: id,
-          userId: session.user.id,
+    const [membership, existing] = await Promise.all([
+      prisma.communityMember.findUnique({
+        where: {
+          communityId_userId: {
+            communityId: id,
+            userId: session.user.id,
+          },
         },
-      },
-      select: { role: true },
-    });
+        select: { role: true },
+      }),
+      prisma.community.findUnique({
+        where: { id },
+        select: {
+          id: true,
+          createdById: true,
+          isTutorial: true,
+          tutorialOwnerId: true,
+        },
+      }),
+    ]);
 
-    if (!membership) {
+    if (!existing) {
       return invalidTargetResponse(request, "api:communities:id");
     }
-    if (membership.role !== "ADMIN" && !session.user.isAdmin) {
+    const viewerIsOwner = existing.createdById === session.user.id;
+    if (
+      !viewerIsOwner &&
+      membership?.role !== CommunityRole.ADMIN &&
+      !session.user.isAdmin
+    ) {
       return invalidTargetResponse(request, "api:communities:id");
     }
 
@@ -643,14 +675,6 @@ export async function DELETE(
         : undefined;
     if (confirmation !== "DELETE") {
       return NextResponse.json({ error: "Invalid confirmation text" }, { status: 400 });
-    }
-
-    const existing = await prisma.community.findUnique({
-      where: { id },
-      select: { id: true, isTutorial: true, tutorialOwnerId: true },
-    });
-    if (!existing) {
-      return invalidTargetResponse(request, "api:communities:id");
     }
 
     if (existing.isTutorial) {

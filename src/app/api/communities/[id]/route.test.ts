@@ -94,6 +94,7 @@ describe("community snapshot route", () => {
     mocks.communityFindUnique.mockResolvedValue({
       id: "community-1",
       name: "Community One",
+      createdById: "viewer-1",
       isTutorial: false,
       tutorialOwnerId: null,
       isPasswordProtected: false,
@@ -201,10 +202,30 @@ describe("community snapshot route", () => {
     );
   });
 
+  it("includes owner flags in the community and roster snapshot", async () => {
+    const response = await GET(
+      new Request("http://localhost/api/communities/community-1"),
+      {
+        params: Promise.resolve({ id: "community-1" }),
+      }
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.community.viewerIsOwner).toBe(true);
+    expect(body.communityMembers).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: "viewer-1", isOwner: true }),
+        expect.objectContaining({ id: "player-2", isOwner: false }),
+      ])
+    );
+  });
+
   it("masks tutorial community backend names in the snapshot", async () => {
     mocks.communityFindUnique.mockResolvedValueOnce({
       id: "community-1",
       name: "Tutorial playground viewer-1",
+      createdById: "viewer-1",
       isTutorial: true,
       tutorialOwnerId: "viewer-1",
       isPasswordProtected: false,

@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => ({
   communityMemberFindUnique: vi.fn(),
   communityMemberFindMany: vi.fn(),
   communityMemberUpdate: vi.fn(),
+  communityFindUnique: vi.fn(),
   userFindUnique: vi.fn(),
   userUpdate: vi.fn(),
   resolveMixedSideState: vi.fn(),
@@ -30,6 +31,9 @@ vi.mock("@/lib/prisma", () => ({
       findUnique: mocks.communityMemberFindUnique,
       findMany: mocks.communityMemberFindMany,
       update: mocks.communityMemberUpdate,
+    },
+    community: {
+      findUnique: mocks.communityFindUnique,
     },
     user: {
       findUnique: mocks.userFindUnique,
@@ -66,16 +70,25 @@ vi.mock("@/lib/quickAccess", () => ({
     value.trim().toLowerCase().replace(/\s+/g, " "),
 }));
 
-import { PATCH } from "./route";
+import { DELETE, PATCH } from "./route";
 
-function patchMember(body: unknown) {
+function patchMember(body: unknown, userId = "user-1") {
   return PATCH(
-    new Request("http://localhost/api/communities/community-1/members/user-1", {
+    new Request(`http://localhost/api/communities/community-1/members/${userId}`, {
       method: "PATCH",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(body),
     }),
-    { params: Promise.resolve({ id: "community-1", userId: "user-1" }) }
+    { params: Promise.resolve({ id: "community-1", userId }) }
+  );
+}
+
+function deleteMember(userId = "user-1") {
+  return DELETE(
+    new Request(`http://localhost/api/communities/community-1/members/${userId}`, {
+      method: "DELETE",
+    }),
+    { params: Promise.resolve({ id: "community-1", userId }) }
   );
 }
 
@@ -92,6 +105,9 @@ describe("community admin update member route", () => {
     mocks.invalidTargetResponse.mockImplementation(() =>
       Response.json({ error: "Unauthorized" }, { status: 403 })
     );
+    mocks.communityFindUnique.mockResolvedValue({
+      createdById: "owner-1",
+    });
     mocks.resolveMixedSideState.mockReturnValue({
       partnerPreference: PartnerPreference.OPEN,
       mixedSideOverride: null,
@@ -289,6 +305,249 @@ describe("community admin update member route", () => {
 
     expect(response.status).toBe(200);
     expect(body.role).toBe("MEMBER");
+  });
+
+  it("allows the community owner to demote another admin to staff", async () => {
+    const createdAt = new Date("2026-05-19T00:00:00.000Z");
+    mocks.auth.mockResolvedValue({
+      user: { id: "owner-1", isAdmin: false },
+    });
+    mocks.communityFindUnique.mockResolvedValue({ createdById: "owner-1" });
+    mocks.communityMemberFindUnique
+      .mockResolvedValueOnce({ role: "ADMIN" })
+      .mockResolvedValueOnce({
+        id: "membership-1",
+        role: "ADMIN",
+        elo: 1000,
+        status: CommunityPlayerStatus.CORE,
+      });
+    mocks.userFindUnique.mockResolvedValue({
+      name: "Other Admin",
+      email: "admin@example.com",
+      avatarKey: null,
+      isClaimed: true,
+      gender: PlayerGender.MALE,
+      partnerPreference: PartnerPreference.OPEN,
+      mixedSideOverride: null,
+    });
+    mocks.userUpdate.mockResolvedValue({
+      id: "user-1",
+      name: "Other Admin",
+      email: "admin@example.com",
+      avatarKey: null,
+      gender: PlayerGender.MALE,
+      partnerPreference: PartnerPreference.OPEN,
+      mixedSideOverride: null,
+      isActive: true,
+      isClaimed: true,
+      createdAt,
+    });
+    mocks.communityMemberUpdate.mockResolvedValue({
+      role: "STAFF",
+      elo: 1000,
+      status: CommunityPlayerStatus.CORE,
+    });
+
+    const response = await patchMember({ role: "STAFF" });
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(mocks.communityMemberUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ role: "STAFF" }),
+      })
+    );
+    expect(body.role).toBe("STAFF");
+  });
+
+  it("allows the community owner to demote another admin to member", async () => {
+    const createdAt = new Date("2026-05-19T00:00:00.000Z");
+    mocks.auth.mockResolvedValue({
+      user: { id: "owner-1", isAdmin: false },
+    });
+    mocks.communityFindUnique.mockResolvedValue({ createdById: "owner-1" });
+    mocks.communityMemberFindUnique
+      .mockResolvedValueOnce({ role: "ADMIN" })
+      .mockResolvedValueOnce({
+        id: "membership-1",
+        role: "ADMIN",
+        elo: 1000,
+        status: CommunityPlayerStatus.CORE,
+      });
+    mocks.userFindUnique.mockResolvedValue({
+      name: "Other Admin",
+      email: "admin@example.com",
+      avatarKey: null,
+      isClaimed: true,
+      gender: PlayerGender.MALE,
+      partnerPreference: PartnerPreference.OPEN,
+      mixedSideOverride: null,
+    });
+    mocks.userUpdate.mockResolvedValue({
+      id: "user-1",
+      name: "Other Admin",
+      email: "admin@example.com",
+      avatarKey: null,
+      gender: PlayerGender.MALE,
+      partnerPreference: PartnerPreference.OPEN,
+      mixedSideOverride: null,
+      isActive: true,
+      isClaimed: true,
+      createdAt,
+    });
+    mocks.communityMemberUpdate.mockResolvedValue({
+      role: "MEMBER",
+      elo: 1000,
+      status: CommunityPlayerStatus.CORE,
+    });
+
+    const response = await patchMember({ role: "MEMBER" });
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(mocks.communityMemberUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ role: "MEMBER" }),
+      })
+    );
+    expect(body.role).toBe("MEMBER");
+  });
+
+  it("allows global admins to demote community admins", async () => {
+    const createdAt = new Date("2026-05-19T00:00:00.000Z");
+    mocks.auth.mockResolvedValue({
+      user: { id: "global-1", isAdmin: true },
+    });
+    mocks.communityFindUnique.mockResolvedValue({ createdById: "owner-1" });
+    mocks.communityMemberFindUnique
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({
+        id: "membership-1",
+        role: "ADMIN",
+        elo: 1000,
+        status: CommunityPlayerStatus.CORE,
+      });
+    mocks.userFindUnique.mockResolvedValue({
+      name: "Other Admin",
+      email: "admin@example.com",
+      avatarKey: null,
+      isClaimed: true,
+      gender: PlayerGender.MALE,
+      partnerPreference: PartnerPreference.OPEN,
+      mixedSideOverride: null,
+    });
+    mocks.userUpdate.mockResolvedValue({
+      id: "user-1",
+      name: "Other Admin",
+      email: "admin@example.com",
+      avatarKey: null,
+      gender: PlayerGender.MALE,
+      partnerPreference: PartnerPreference.OPEN,
+      mixedSideOverride: null,
+      isActive: true,
+      isClaimed: true,
+      createdAt,
+    });
+    mocks.communityMemberUpdate.mockResolvedValue({
+      role: "MEMBER",
+      elo: 1000,
+      status: CommunityPlayerStatus.CORE,
+    });
+
+    const response = await patchMember({ role: "MEMBER" });
+
+    expect(response.status).toBe(200);
+    expect(mocks.communityMemberUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ role: "MEMBER" }),
+      })
+    );
+  });
+
+  it("rejects regular admin attempts to demote another admin", async () => {
+    mocks.communityFindUnique.mockResolvedValue({ createdById: "owner-1" });
+    mocks.communityMemberFindUnique
+      .mockResolvedValueOnce({ role: "ADMIN" })
+      .mockResolvedValueOnce({
+        id: "membership-1",
+        role: "ADMIN",
+        elo: 1000,
+        status: CommunityPlayerStatus.CORE,
+      });
+
+    const response = await patchMember({ role: "STAFF" });
+    const body = await response.json();
+
+    expect(response.status).toBe(403);
+    expect(body.error).toBe("Only the community owner can demote admins");
+    expect(mocks.userUpdate).not.toHaveBeenCalled();
+    expect(mocks.communityMemberUpdate).not.toHaveBeenCalled();
+  });
+
+  it("rejects attempts to demote the community owner", async () => {
+    mocks.auth.mockResolvedValue({
+      user: { id: "global-1", isAdmin: true },
+    });
+    mocks.communityFindUnique.mockResolvedValue({ createdById: "owner-1" });
+    mocks.communityMemberFindUnique
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({
+        id: "membership-1",
+        role: "ADMIN",
+        elo: 1000,
+        status: CommunityPlayerStatus.CORE,
+      });
+
+    const response = await patchMember({ role: "STAFF" }, "owner-1");
+    const body = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(body.error).toBe("The community owner role cannot be changed");
+    expect(mocks.communityMemberUpdate).not.toHaveBeenCalled();
+  });
+
+  it("rejects self-demotion", async () => {
+    mocks.communityFindUnique.mockResolvedValue({ createdById: "owner-1" });
+    mocks.communityMemberFindUnique
+      .mockResolvedValueOnce({ role: "ADMIN" })
+      .mockResolvedValueOnce({
+        id: "membership-1",
+        role: "ADMIN",
+        elo: 1000,
+        status: CommunityPlayerStatus.CORE,
+      });
+
+    const response = await patchMember({ role: "MEMBER" }, "admin-1");
+    const body = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(body.error).toBe("Cannot change your own community role");
+    expect(mocks.communityMemberUpdate).not.toHaveBeenCalled();
+  });
+
+  it("rejects direct removal of admins and owners", async () => {
+    mocks.communityFindUnique.mockResolvedValue({ createdById: "owner-1" });
+    mocks.communityMemberFindUnique
+      .mockResolvedValueOnce({ role: "ADMIN" })
+      .mockResolvedValueOnce({
+        id: "membership-1",
+        role: "ADMIN",
+      })
+      .mockResolvedValueOnce({ role: "ADMIN" })
+      .mockResolvedValueOnce({
+        id: "owner-membership",
+        role: "ADMIN",
+      });
+
+    const adminResponse = await deleteMember("user-1");
+    const adminBody = await adminResponse.json();
+    const ownerResponse = await deleteMember("owner-1");
+    const ownerBody = await ownerResponse.json();
+
+    expect(adminResponse.status).toBe(400);
+    expect(adminBody.error).toBe("Demote admins before removing them");
+    expect(ownerResponse.status).toBe(400);
+    expect(ownerBody.error).toBe("The community owner cannot be removed");
   });
 
   it("rejects staff attempts to edit player profiles", async () => {

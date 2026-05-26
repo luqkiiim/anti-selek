@@ -16,6 +16,7 @@ import {
 import type { CommunityAdminPlayer } from "./communityAdminTypes";
 import {
   CommunityPlayerStatus,
+  CommunityRole,
   MixedSide,
   PlayerGender,
 } from "@/types/enums";
@@ -45,9 +46,14 @@ interface CommunityPlayerEditorModalProps {
     }
   ) => Promise<void>;
   onPromotePlayer: (player: CommunityAdminPlayer) => void;
+  onDemoteAdmin: (
+    player: CommunityAdminPlayer,
+    role: CommunityRole.STAFF | CommunityRole.MEMBER
+  ) => void;
   onGrantStaff: (player: CommunityAdminPlayer) => Promise<void>;
   onRevokeStaff: (player: CommunityAdminPlayer) => Promise<void>;
   onOpenPasswordReset: (player: CommunityAdminPlayer) => void;
+  canDemoteAdmins: boolean;
   canOpenEmergencyPasswordReset: boolean;
   onUploadAvatar: (player: CommunityAdminPlayer, file: File) => Promise<void>;
   onRemoveAvatar: (player: CommunityAdminPlayer) => Promise<void>;
@@ -71,9 +77,11 @@ export function CommunityPlayerEditorModal({
   onSavePlayerRating,
   onUpdatePreferences,
   onPromotePlayer,
+  onDemoteAdmin,
   onGrantStaff,
   onRevokeStaff,
   onOpenPasswordReset,
+  canDemoteAdmins,
   canOpenEmergencyPasswordReset,
   onUploadAvatar,
   onRemoveAvatar,
@@ -82,6 +90,7 @@ export function CommunityPlayerEditorModal({
 
   const mixedSideOption = getMixedSideOverrideOptionForGender(player.gender);
   const canEditName = !player.isClaimed;
+  const canRemovePlayer = !player.isOwner && player.role !== "ADMIN";
 
   return (
     <ModalFrame
@@ -90,14 +99,22 @@ export function CommunityPlayerEditorModal({
       onClose={onClose}
       footer={
         <div className="flex flex-wrap justify-between gap-3">
-          <button
-            type="button"
-            onClick={() => onRemovePlayer(player)}
-            disabled={removingPlayer}
-            className="app-button-danger px-4 py-2"
-          >
-            {removingPlayer ? "Removing..." : "Remove player"}
-          </button>
+          {canRemovePlayer ? (
+            <button
+              type="button"
+              onClick={() => onRemovePlayer(player)}
+              disabled={removingPlayer}
+              className="app-button-danger px-4 py-2"
+            >
+              {removingPlayer ? "Removing..." : "Remove player"}
+            </button>
+          ) : (
+            <p className="text-sm font-medium text-gray-600">
+              {player.isOwner
+                ? "The owner cannot be removed."
+                : "Demote admins before removing them."}
+            </p>
+          )}
           <button
             type="button"
             onClick={onClose}
@@ -133,7 +150,10 @@ export function CommunityPlayerEditorModal({
               />
             </div>
             <div className="flex flex-wrap gap-2">
-              <CommunityAdminRolePill role={player.role} />
+              <CommunityAdminRolePill
+                role={player.role}
+                isOwner={player.isOwner}
+              />
               <CommunityAdminStatusPill status={player.status} />
               <CommunityAdminClaimPill isClaimed={player.isClaimed} />
               <CommunityAdminGenderPill player={player} />
@@ -297,10 +317,35 @@ export function CommunityPlayerEditorModal({
                 </p>
               </div>
 
-              {player.role === "ADMIN" ? (
+              {player.isOwner ? (
                 <p className="text-sm text-gray-600">
-                  This player already has admin access.
+                  The community owner keeps permanent admin access.
                 </p>
+              ) : player.role === "ADMIN" ? (
+                canDemoteAdmins ? (
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => onDemoteAdmin(player, CommunityRole.STAFF)}
+                      disabled={savingRole}
+                      className="app-button-secondary px-4 py-2"
+                    >
+                      {savingRole ? "Updating..." : "Change to staff"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onDemoteAdmin(player, CommunityRole.MEMBER)}
+                      disabled={savingRole}
+                      className="app-button-secondary px-4 py-2"
+                    >
+                      {savingRole ? "Updating..." : "Change to member"}
+                    </button>
+                  </div>
+                ) : (
+                  <p className="text-sm text-gray-600">
+                    Only the community owner can change another admin role.
+                  </p>
+                )
               ) : player.isClaimed ? (
                 <div className="flex flex-wrap gap-2">
                   {player.role === "STAFF" ? (

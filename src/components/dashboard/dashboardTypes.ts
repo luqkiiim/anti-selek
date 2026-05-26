@@ -4,6 +4,7 @@ export interface DashboardCommunity {
   id: string;
   name: string;
   role: "ADMIN" | "STAFF" | "MEMBER";
+  viewerIsOwner?: boolean;
   isPasswordProtected: boolean;
   isTutorial?: boolean;
   membersCount: number;

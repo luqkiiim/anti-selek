@@ -16,6 +16,7 @@ import { OfflineIdentityLinksPanel } from "@/components/community-admin/OfflineI
 import { AdminOnboardingChecklist } from "@/components/onboarding/AdminOnboardingChecklist";
 import { useAdminOnboardingProgress } from "@/components/onboarding/useAdminOnboardingProgress";
 import type { CommunityAdminSection } from "@/components/community-admin/communityAdminTypes";
+import { CommunityRole } from "@/types/enums";
 import { useCommunityAdminPage } from "./useCommunityAdminPage";
 
 const tabs: Array<{
@@ -46,8 +47,9 @@ const tabs: Array<{
 ];
 
 function getPlayerActionDialogCopy(action: {
-  kind: "remove" | "promote";
+  kind: "remove" | "promote" | "demote-admin";
   player: { name: string; email: string | null };
+  role?: CommunityRole.STAFF | CommunityRole.MEMBER;
 }) {
   if (action.kind === "remove") {
     return {
@@ -65,6 +67,37 @@ function getPlayerActionDialogCopy(action: {
           </p>
           <p className="text-sm text-gray-600">
             They will no longer appear in this community unless added again.
+          </p>
+        </div>
+      ),
+    };
+  }
+
+  if (action.kind === "demote-admin") {
+    const targetRole =
+      action.role === CommunityRole.STAFF ? "staff" : "member";
+
+    return {
+      title: `Change ${action.player.name} to ${targetRole}?`,
+      subtitle:
+        action.role === CommunityRole.STAFF
+          ? "They will keep live session controls, but lose community admin access."
+          : "They will lose community admin access and live session operator controls.",
+      confirmLabel:
+        action.role === CommunityRole.STAFF
+          ? "Change to Staff"
+          : "Change to Member",
+      confirmTone: "danger" as const,
+      details: (
+        <div className="app-panel-muted space-y-2 p-4">
+          <p className="text-sm font-semibold text-gray-900">
+            {action.player.name}
+          </p>
+          <p className="text-sm text-gray-600">
+            {action.player.email || "No email on file"}
+          </p>
+          <p className="text-sm text-gray-600">
+            Owner access stays protected; only this admin role will change.
           </p>
         </div>
       ),
@@ -252,6 +285,7 @@ export default function CommunityAdminPage() {
     handleRemovePlayerAvatar,
     handleResetPlayerPassword,
     handlePromotePlayer,
+    handleDemoteAdmin,
     handleGrantStaff,
     handleRevokeStaff,
     handleUpdatePreferences,
@@ -588,9 +622,14 @@ export default function CommunityAdminPage() {
         onSavePlayerRating={handleSavePlayerRating}
         onUpdatePreferences={handleUpdatePreferences}
         onPromotePlayer={handlePromotePlayer}
+        onDemoteAdmin={handleDemoteAdmin}
         onGrantStaff={handleGrantStaff}
         onRevokeStaff={handleRevokeStaff}
         onOpenPasswordReset={openPasswordResetModal}
+        canDemoteAdmins={
+          (community?.viewerIsOwner === true || isGlobalAdmin) &&
+          editingPlayer?.id !== currentUserId
+        }
         canOpenEmergencyPasswordReset={isGlobalAdmin}
         onUploadAvatar={handleUploadPlayerAvatar}
         onRemoveAvatar={handleRemovePlayerAvatar}

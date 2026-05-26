@@ -18,8 +18,9 @@ import {
 import { safeJson } from "./communityAdminApi";
 
 interface PendingPlayerAction {
-  kind: "remove" | "promote";
+  kind: "remove" | "promote" | "demote-admin";
   player: CommunityAdminPlayer;
+  role?: CommunityRole.STAFF | CommunityRole.MEMBER;
 }
 
 export function useCommunityAdminPlayerActions({
@@ -236,6 +237,15 @@ export function useCommunityAdminPlayerActions({
     setPendingPlayerAction({ kind: "promote", player });
   };
 
+  const requestDemoteAdmin = (
+    player: CommunityAdminPlayer,
+    role: CommunityRole.STAFF | CommunityRole.MEMBER
+  ) => {
+    setError("");
+    setSuccess("");
+    setPendingPlayerAction({ kind: "demote-admin", player, role });
+  };
+
   const updatePlayerRole = async (
     player: CommunityAdminPlayer,
     role: CommunityRole.STAFF | CommunityRole.MEMBER,
@@ -322,6 +332,39 @@ export function useCommunityAdminPlayerActions({
         return false;
       } finally {
         setRemovingPlayer(false);
+      }
+    }
+
+    if (kind === "demote-admin") {
+      if (!pendingPlayerAction.role) return false;
+
+      setSavingRole(true);
+      try {
+        const res = await fetch(`/api/communities/${communityId}/members/${player.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ role: pendingPlayerAction.role }),
+        });
+        const data = await safeJson(res);
+        if (!res.ok) {
+          throw new Error(data.error || "Failed to change admin role");
+        }
+
+        setSuccess(
+          pendingPlayerAction.role === CommunityRole.STAFF
+            ? `${player.name} changed to staff.`
+            : `${player.name} changed to member.`
+        );
+        setPendingPlayerAction(null);
+        await refreshCommunityData();
+        return true;
+      } catch (err: unknown) {
+        setError(
+          err instanceof Error ? err.message : "Failed to change admin role"
+        );
+        return false;
+      } finally {
+        setSavingRole(false);
       }
     }
 
@@ -548,6 +591,7 @@ export function useCommunityAdminPlayerActions({
     handleRemovePlayer: requestRemovePlayer,
     requestRemovePlayer,
     handlePromotePlayer: requestPromotePlayer,
+    handleDemoteAdmin: requestDemoteAdmin,
     handleGrantStaff,
     handleRevokeStaff,
     requestPromotePlayer,

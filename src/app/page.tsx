@@ -194,14 +194,18 @@ export default function Home() {
                         </h3>
                         <span
                           className={`app-chip ${
-                            community.role === "ADMIN"
+                            community.viewerIsOwner
+                              ? "app-chip-accent"
+                              : community.role === "ADMIN"
                               ? "app-chip-accent"
                               : community.role === "STAFF"
                                 ? "app-chip-warning"
                               : "app-chip-neutral"
                           }`}
                         >
-                          {getCommunityRoleLabel(community.role)}
+                          {community.viewerIsOwner
+                            ? "Owner"
+                            : getCommunityRoleLabel(community.role)}
                         </span>
                         {community.isPasswordProtected ? (
                           <span className="app-chip app-chip-warning">

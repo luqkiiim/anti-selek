@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
+import { getCommunityAdminAccess } from "@/lib/communityAdminPermissions";
 import { prisma } from "@/lib/prisma";
 import {
   approveCommunityClaimRequest,
@@ -40,17 +41,13 @@ export async function PATCH(
     const invalidTargetLimitResponse = await checkInvalidTargetRateLimit(request, "api:communities:id:claim-requests:requestId");
 
     if (invalidTargetLimitResponse) return invalidTargetLimitResponse;
-    const membership = await prisma.communityMember.findUnique({
-      where: {
-        communityId_userId: {
-          communityId,
-          userId: session.user.id,
-        },
-      },
-      select: { role: true },
+    const adminAccess = await getCommunityAdminAccess(prisma, {
+      communityId,
+      userId: session.user.id,
+      isGlobalAdmin: !!session.user.isAdmin,
     });
 
-    if (membership?.role !== "ADMIN" && !session.user.isAdmin) {
+    if (!adminAccess?.canAdmin) {
       return invalidTargetResponse(request, "api:communities:id:claim-requests:requestId");
     }
 

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
+import { getCommunityAdminAccess } from "@/lib/communityAdminPermissions";
 import { prisma } from "@/lib/prisma";
 import { getQuickAccessDeniedMessage, isQuickAccessSession } from "@/lib/quickAccess";
 import { logError, safeErrorResponse } from "@/lib/errors";
@@ -36,17 +37,13 @@ export async function POST(
 
     if (invalidTargetLimitResponse) return invalidTargetLimitResponse;
 
-    const requesterMembership = await prisma.communityMember.findUnique({
-      where: {
-        communityId_userId: {
-          communityId,
-          userId: session.user.id,
-        },
-      },
-      select: { role: true },
+    const adminAccess = await getCommunityAdminAccess(prisma, {
+      communityId,
+      userId: session.user.id,
+      isGlobalAdmin: !!session.user.isAdmin,
     });
 
-    if (requesterMembership?.role !== "ADMIN" && !session.user.isAdmin) {
+    if (!adminAccess?.canAdmin) {
       return invalidTargetResponse(request, "api:communities:id:members:userId:reset-elo");
     }
 

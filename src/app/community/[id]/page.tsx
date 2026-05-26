@@ -728,7 +728,9 @@ export default function CommunityPage() {
   }
 
   const communityName = community?.name || "Community";
-  const communityRoleLabel = getCommunityRoleLabel(community?.role);
+  const communityRoleLabel = community?.viewerIsOwner
+    ? "Owner"
+    : getCommunityRoleLabel(community?.role);
   const sectionTabs = canManageCommunity
     ? [
         baseSectionTabs[0],

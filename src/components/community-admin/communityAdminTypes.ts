@@ -12,6 +12,7 @@ export interface CommunityAdminCommunity {
   id: string;
   name: string;
   role: "ADMIN" | "STAFF" | "MEMBER";
+  viewerIsOwner?: boolean;
   isPasswordProtected: boolean;
   isTutorial: boolean;
   tutorialOwnerId?: string | null;
@@ -32,6 +33,7 @@ export interface CommunityAdminPlayer {
   isActive: boolean;
   isClaimed: boolean;
   role: "ADMIN" | "STAFF" | "MEMBER";
+  isOwner?: boolean;
   createdAt: string;
   offlineIdentityId?: string | null;
   linkedCommunityBadges?: Array<{ id: string; name: string; userId: string }>;

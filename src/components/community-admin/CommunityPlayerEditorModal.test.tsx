@@ -51,7 +51,10 @@ function buildPlayer(
   };
 }
 
-function renderModal(player: CommunityAdminPlayer) {
+function renderModal(
+  player: CommunityAdminPlayer,
+  { canDemoteAdmins = false }: { canDemoteAdmins?: boolean } = {}
+) {
   return renderToStaticMarkup(
     <CommunityPlayerEditorModal
       player={player}
@@ -71,9 +74,11 @@ function renderModal(player: CommunityAdminPlayer) {
       onSavePlayerRating={vi.fn(async () => {})}
       onUpdatePreferences={vi.fn(async () => {})}
       onPromotePlayer={vi.fn()}
+      onDemoteAdmin={vi.fn()}
       onGrantStaff={vi.fn(async () => {})}
       onRevokeStaff={vi.fn(async () => {})}
       onOpenPasswordReset={vi.fn()}
+      canDemoteAdmins={canDemoteAdmins}
       canOpenEmergencyPasswordReset={false}
       onUploadAvatar={vi.fn(async () => {})}
       onRemoveAvatar={vi.fn(async () => {})}
@@ -130,5 +135,43 @@ describe("CommunityPlayerEditorModal", () => {
     expect(memberMarkup).toContain("Promote to admin");
     expect(staffMarkup).toContain("Change to member");
     expect(staffMarkup).toContain("Staff");
+  });
+
+  it("shows owner protection and the Owner pill", () => {
+    const markup = renderModal(
+      buildPlayer({
+        isClaimed: true,
+        email: "owner@example.com",
+        role: "ADMIN",
+        isOwner: true,
+      }),
+      { canDemoteAdmins: true }
+    );
+
+    expect(markup).toContain("Owner");
+    expect(markup).toContain("The community owner keeps permanent admin access.");
+    expect(markup).toContain("The owner cannot be removed.");
+    expect(markup).not.toContain("Change to staff");
+    expect(markup).not.toContain("Change to member");
+    expect(markup).not.toContain("Remove player");
+  });
+
+  it("shows admin demotion controls only when allowed", () => {
+    const admin = buildPlayer({
+      isClaimed: true,
+      email: "admin@example.com",
+      role: "ADMIN",
+    });
+    const ownerMarkup = renderModal(admin, { canDemoteAdmins: true });
+    const regularAdminMarkup = renderModal(admin);
+
+    expect(ownerMarkup).toContain("Change to staff");
+    expect(ownerMarkup).toContain("Change to member");
+    expect(ownerMarkup).toContain("Demote admins before removing them.");
+    expect(regularAdminMarkup).not.toContain("Change to staff");
+    expect(regularAdminMarkup).not.toContain("Change to member");
+    expect(regularAdminMarkup).toContain(
+      "Only the community owner can change another admin role."
+    );
   });
 });
