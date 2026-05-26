@@ -2,6 +2,7 @@
 
 import { ModalFrame } from "@/components/ui/chrome";
 import type { MatchmakingReason } from "@/lib/matchmaking/matchReason";
+import { SessionType } from "@/types/enums";
 
 function formatNumber(value: number) {
   return Number.isInteger(value) ? value.toString() : value.toFixed(1);
@@ -29,6 +30,14 @@ function buildMetricRows(reason: MatchmakingReason) {
       label: "Balance gap",
       value: formatNumber(metrics.balanceGap),
     },
+    ...(metrics.pointDiffGap !== undefined
+      ? [
+          {
+            label: "Point-diff gap",
+            value: formatNumber(metrics.pointDiffGap),
+          },
+        ]
+      : []),
     {
       label: "Wait range",
       value: formatSeconds(metrics.waitRangeSeconds),
@@ -77,14 +86,18 @@ function buildMetricRows(reason: MatchmakingReason) {
           },
         ]
       : []),
-    {
-      label: "Partner repeats",
-      value: formatNumber(metrics.partnerRepeatPenalty),
-    },
-    {
-      label: "Opponent repeats",
-      value: formatNumber(metrics.opponentRepeatPenalty),
-    },
+    ...(reason.sessionType !== SessionType.POINTS
+      ? [
+          {
+            label: "Partner repeats",
+            value: formatNumber(metrics.partnerRepeatPenalty),
+          },
+          {
+            label: "Opponent repeats",
+            value: formatNumber(metrics.opponentRepeatPenalty),
+          },
+        ]
+      : []),
   ];
 
   if (metrics.waitToleranceSeconds !== undefined) {
@@ -94,7 +107,10 @@ function buildMetricRows(reason: MatchmakingReason) {
     });
   }
 
-  if (metrics.exactRematchPenalty > 0) {
+  if (
+    reason.sessionType !== SessionType.POINTS &&
+    metrics.exactRematchPenalty > 0
+  ) {
     rows.push({
       label: "Exact rematch",
       value: formatNumber(metrics.exactRematchPenalty),

@@ -172,6 +172,13 @@ function summarizeBatch<T extends ActiveMatchmakerV3Player>(
       (sum, selection) => sum + selection.balanceGap,
       0
     ),
+    maxPointDiffGap: Math.max(
+      ...selections.map((selection) => selection.pointDiffGap)
+    ),
+    totalPointDiffGap: selections.reduce(
+      (sum, selection) => sum + selection.pointDiffGap,
+      0
+    ),
     totalSharedCourtRepeatPenalty: selections.reduce(
       (sum, selection) => sum + selection.sharedCourtRepeatPenalty,
       0
@@ -282,6 +289,7 @@ function buildQuartetSelections<T extends MatchmakerV3Player>(
         partition: evaluation.partition,
         waitSummary,
         balanceGap: evaluation.balanceGap,
+        pointDiffGap: evaluation.pointDiffGap,
         sharedCourtRepeatPenalty: getSharedCourtRepeatPenalty(
           evaluation.partition,
           socialMixHistory
@@ -382,9 +390,17 @@ function compressQuartetSelections<T extends ActiveMatchmakerV3Player>(
 
     compressedSelections.push(firstSelection);
 
-    const bestBalanceSelection = [...group].sort(
-      (left, right) => left.balanceGap - right.balanceGap
-    )[0];
+    const bestBalanceSelection =
+      sessionType === SessionType.POINTS
+        ? [...group].sort(
+            (left, right) =>
+              left.balanceGap - right.balanceGap ||
+              left.pointDiffGap - right.pointDiffGap ||
+              left.randomScore - right.randomScore
+          )[0]
+        : [...group].sort(
+            (left, right) => left.balanceGap - right.balanceGap
+          )[0];
 
     if (
       bestBalanceSelection &&
@@ -409,9 +425,9 @@ function compressQuartetSelections<T extends ActiveMatchmakerV3Player>(
         : sessionType === SessionType.POINTS
         ? [...group].sort(
             (left, right) =>
-              left.partnerRepeatPenalty - right.partnerRepeatPenalty ||
-              left.opponentRepeatPenalty - right.opponentRepeatPenalty ||
+              left.sharedCourtRepeatPenalty - right.sharedCourtRepeatPenalty ||
               left.balanceGap - right.balanceGap ||
+              left.pointDiffGap - right.pointDiffGap ||
               left.randomScore - right.randomScore
           )[0]
         : sessionType === SessionType.ELO
@@ -741,6 +757,8 @@ export function findBestBatchSelectionV3<T extends MatchmakerV3Player>(
     chosenQuartets: [],
     chosenMaxBalanceGap: null,
     chosenTotalBalanceGap: null,
+    chosenMaxPointDiffGap: null,
+    chosenTotalPointDiffGap: null,
     chosenTotalPartnerRepeatPenalty: null,
     chosenTotalOpponentRepeatPenalty: null,
     chosenTotalExactRematchPenalty: null,
@@ -885,6 +903,8 @@ export function findBestBatchSelectionV3<T extends MatchmakerV3Player>(
     );
     debug.chosenMaxBalanceGap = finalSelection.maxBalanceGap;
     debug.chosenTotalBalanceGap = finalSelection.totalBalanceGap;
+    debug.chosenMaxPointDiffGap = finalSelection.maxPointDiffGap;
+    debug.chosenTotalPointDiffGap = finalSelection.totalPointDiffGap;
     debug.chosenTotalPartnerRepeatPenalty =
       finalSelection.totalPartnerRepeatPenalty;
     debug.chosenTotalOpponentRepeatPenalty =

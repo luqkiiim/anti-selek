@@ -289,6 +289,63 @@ describe("matchmaking v3 batch selection", () => {
     expect(quartetKeys).not.toContain("E|F|G|H");
   });
 
+  it("avoids repeating whole court groups in points batches before balance", () => {
+    const result = findBestBatchSelectionV3(
+      Array.from({ length: 10 }, (_, index) =>
+        createPlayer(String.fromCharCode(65 + index), { strength: 1000 })
+      ),
+      {
+        courtCount: 2,
+        sessionMode: SessionMode.MEXICANO,
+        sessionType: SessionType.POINTS,
+        completedMatches: [
+          {
+            team1: ["A", "B"],
+            team2: ["C", "D"],
+            completedAt: new Date("2026-03-18T00:00:00Z"),
+          },
+          {
+            team1: ["E", "F"],
+            team2: ["G", "H"],
+            completedAt: new Date("2026-03-18T00:10:00Z"),
+          },
+        ],
+        now: new Date("2026-03-18T01:00:00Z").getTime(),
+        randomFn: () => 0,
+      }
+    );
+
+    expect([...getBatchSelectedIds(result.selection)]).toEqual(
+      expect.arrayContaining(["I", "J"])
+    );
+    expect(result.selection?.totalSharedCourtRepeatPenalty).toBeLessThan(12);
+  });
+
+  it("uses point difference after points batch balance ties", () => {
+    const result = findBestBatchSelectionV3(
+      [
+        createPlayer("A", { strength: 10, pointDiff: 4 }),
+        createPlayer("B", { strength: 10, pointDiff: 4 }),
+        createPlayer("C", { strength: 10, pointDiff: -4 }),
+        createPlayer("D", { strength: 10, pointDiff: -4 }),
+      ],
+      {
+        courtCount: 1,
+        sessionMode: SessionMode.MEXICANO,
+        sessionType: SessionType.POINTS,
+        now: new Date("2026-03-18T01:00:00Z").getTime(),
+        randomFn: () => 0,
+      }
+    );
+
+    expect(result.selection?.maxBalanceGap).toBe(0);
+    expect(result.selection?.maxPointDiffGap).toBe(0);
+    expect(result.selection?.selections[0]?.partition).not.toEqual({
+      team1: ["A", "B"],
+      team2: ["C", "D"],
+    });
+  });
+
   it("widens mixed batch candidates when the capped fair pool cannot fill two legal courts", () => {
     const result = findBestBatchSelectionV3(
       [

@@ -54,6 +54,7 @@ function createSelection(
     },
     waitSummary: buildWaitSummary(players),
     balanceGap: 1.5,
+    pointDiffGap: 0.5,
     sharedCourtRepeatPenalty: 0,
     partnerCoveragePenalty: 0,
     opponentCoveragePenalty: 0,
@@ -69,7 +70,7 @@ function createSelection(
 }
 
 describe("matchmaking reason", () => {
-  it("builds compact points reasons with wait tolerance and repeat penalties", () => {
+  it("builds compact points reasons with wait tolerance and shared-court metrics", () => {
     const reason = buildV3MatchmakingReason(createSelection(), {
       sessionType: SessionType.POINTS,
       sessionMode: SessionMode.MIXICANO,
@@ -81,11 +82,17 @@ describe("matchmaking reason", () => {
     expect(reason.metrics.waitToleranceSeconds).toBe(120);
     expect(reason.metrics.selectedMatchCounts).toEqual([2, 2, 2, 2]);
     expect(reason.metrics.balanceGap).toBe(1.5);
+    expect(reason.metrics.pointDiffGap).toBe(0.5);
+    expect(reason.metrics.sharedCourtRepeatPenalty).toBe(0);
     expect(reason.metrics.partnerRepeatPenalty).toBe(1);
     expect(reason.metrics.opponentRepeatPenalty).toBe(2);
     expect(reason.metrics.targetPool).toBe(SessionPool.A);
     expect(reason.metrics.missedPool).toBe(SessionPool.B);
     expect(reason.summary.join(" ")).toContain("Wait differences within 120");
+    expect(reason.summary.join(" ")).toContain("shared-court pairings");
+    expect(reason.summary.join(" ")).toContain("Point-difference balance");
+    expect(reason.summary.join(" ")).not.toContain("Partner repeat penalty");
+    expect(reason.summary.join(" ")).not.toContain("Opponent repeat penalty");
     expect(reason.summary.join(" ")).toContain("Mixed court legality");
   });
 
@@ -152,5 +159,35 @@ describe("matchmaking reason", () => {
     ]);
     expect(parseMatchmakingReasonJson("{not-json")).toBeNull();
     expect(parseMatchmakingReasonJson(JSON.stringify({ version: 1 }))).toBeNull();
+  });
+
+  it("parses older reason JSON without point-difference metrics", () => {
+    const parsed = parseMatchmakingReasonJson(
+      JSON.stringify({
+        version: 1,
+        source: "v3",
+        sessionType: SessionType.POINTS,
+        sessionMode: SessionMode.MEXICANO,
+        selectedUserIds: ["A", "B", "C", "D"],
+        team1UserIds: ["A", "B"],
+        team2UserIds: ["C", "D"],
+        summary: ["Older reason"],
+        metrics: {
+          fairnessBand: 0,
+          selectedMatchCounts: [0, 0, 0, 0],
+          balanceGap: 0,
+          partnerRepeatPenalty: 0,
+          opponentRepeatPenalty: 0,
+          exactRematchPenalty: 0,
+          waitRangeSeconds: 0,
+          minimumWaitSeconds: 0,
+          totalWaitSeconds: 0,
+          mixedMode: false,
+        },
+      })
+    );
+
+    expect(parsed?.metrics.pointDiffGap).toBeUndefined();
+    expect(parsed?.selectedUserIds).toEqual(["A", "B", "C", "D"]);
   });
 });

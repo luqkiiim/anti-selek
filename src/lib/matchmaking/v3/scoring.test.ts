@@ -35,6 +35,7 @@ function createSelection(
   {
     waitMs = [10, 10, 10, 10],
     balanceGap,
+    pointDiffGap = 0,
     sharedCourtRepeatPenalty = 0,
     partnerCoveragePenalty = 0,
     opponentCoveragePenalty = 0,
@@ -48,6 +49,7 @@ function createSelection(
   }: {
     waitMs?: number[];
     balanceGap: number;
+    pointDiffGap?: number;
     sharedCourtRepeatPenalty?: number;
     partnerCoveragePenalty?: number;
     opponentCoveragePenalty?: number;
@@ -78,6 +80,7 @@ function createSelection(
     },
     waitSummary: buildWaitSummary(players),
     balanceGap,
+    pointDiffGap,
     sharedCourtRepeatPenalty,
     partnerCoveragePenalty,
     opponentCoveragePenalty,
@@ -95,6 +98,8 @@ function createBatchSelection({
   waitMs = [10, 10, 10, 10],
   maxBalanceGap,
   totalBalanceGap,
+  maxPointDiffGap = 0,
+  totalPointDiffGap = 0,
   totalSharedCourtRepeatPenalty = 0,
   totalPartnerCoveragePenalty = 0,
   totalOpponentCoveragePenalty = 0,
@@ -106,6 +111,8 @@ function createBatchSelection({
   waitMs?: number[];
   maxBalanceGap: number;
   totalBalanceGap: number;
+  maxPointDiffGap?: number;
+  totalPointDiffGap?: number;
   totalSharedCourtRepeatPenalty?: number;
   totalPartnerCoveragePenalty?: number;
   totalOpponentCoveragePenalty?: number;
@@ -117,6 +124,7 @@ function createBatchSelection({
   const selection = createSelection({
     waitMs,
     balanceGap: maxBalanceGap,
+    pointDiffGap: maxPointDiffGap,
     sharedCourtRepeatPenalty: totalSharedCourtRepeatPenalty,
     partnerCoveragePenalty: totalPartnerCoveragePenalty,
     opponentCoveragePenalty: totalOpponentCoveragePenalty,
@@ -131,6 +139,8 @@ function createBatchSelection({
     waitSummary: selection.waitSummary,
     maxBalanceGap,
     totalBalanceGap,
+    maxPointDiffGap,
+    totalPointDiffGap,
     totalSharedCourtRepeatPenalty,
     totalPartnerCoveragePenalty,
     totalOpponentCoveragePenalty,
@@ -270,112 +280,91 @@ describe("matchmaking v3 scoring", () => {
     ).toBeLessThan(0);
   });
 
-  it("prefers a new partner over a slightly better-balanced repeated partner in points sessions", () => {
-    const repeatedPartner = createSelection({
+  it("prefers fewer shared-court repeats before points balance", () => {
+    const repeatedCourt = createSelection({
       balanceGap: 0,
-      partnerRepeatPenalty: 1,
+      sharedCourtRepeatPenalty: 1,
       exactRematchPenalty: 0,
     });
-    const freshPartner = createSelection({
-      balanceGap: 1.5,
-      partnerRepeatPenalty: 0,
+    const freshCourt = createSelection({
+      balanceGap: 10,
+      sharedCourtRepeatPenalty: 0,
       exactRematchPenalty: 0,
     });
 
     expect(
       compareSingleCourtSelections(
-        freshPartner,
-        repeatedPartner,
+        freshCourt,
+        repeatedCourt,
         SessionType.POINTS
       )
     ).toBeLessThan(0);
   });
 
-  it("keeps the repeated partner in points sessions when the fresh option is a full win step worse", () => {
-    const repeatedPartner = createSelection({
+  it("uses points balance after shared-court repeats tie", () => {
+    const lowerBalanceGap = createSelection({
       balanceGap: 0,
-      partnerRepeatPenalty: 1,
+      pointDiffGap: 8,
+      sharedCourtRepeatPenalty: 1,
       exactRematchPenalty: 0,
     });
-    const farWorseFreshPartner = createSelection({
-      balanceGap: 3,
-      partnerRepeatPenalty: 0,
+    const higherBalanceGap = createSelection({
+      balanceGap: 1,
+      pointDiffGap: 0,
+      sharedCourtRepeatPenalty: 1,
       exactRematchPenalty: 0,
     });
 
     expect(
       compareSingleCourtSelections(
-        repeatedPartner,
-        farWorseFreshPartner,
+        lowerBalanceGap,
+        higherBalanceGap,
         SessionType.POINTS
       )
     ).toBeLessThan(0);
   });
 
-  it("prefers fresher opponents in points sessions when partner repeats and balance are close", () => {
-    const repeatedOpponent = createSelection({
+  it("uses point-difference balance after points balance ties", () => {
+    const lowerPointDiffGap = createSelection({
       balanceGap: 0,
-      partnerRepeatPenalty: 0,
-      opponentRepeatPenalty: 1,
+      pointDiffGap: 0,
       exactRematchPenalty: 0,
     });
-    const freshOpponent = createSelection({
-      balanceGap: 1.5,
-      partnerRepeatPenalty: 0,
-      opponentRepeatPenalty: 0,
+    const higherPointDiffGap = createSelection({
+      balanceGap: 0,
+      pointDiffGap: 2,
       exactRematchPenalty: 0,
     });
 
     expect(
       compareSingleCourtSelections(
-        freshOpponent,
-        repeatedOpponent,
+        lowerPointDiffGap,
+        higherPointDiffGap,
         SessionType.POINTS
       )
     ).toBeLessThan(0);
   });
 
-  it("does not let opponent variety override a full win-step balance difference", () => {
-    const repeatedOpponent = createSelection({
+  it("ignores partner, opponent, and exact-rematch penalties in points sessions", () => {
+    const repeatPenalizedLowerRandom = createSelection({
       balanceGap: 0,
-      partnerRepeatPenalty: 0,
-      opponentRepeatPenalty: 1,
-      exactRematchPenalty: 0,
-    });
-    const freshOpponent = createSelection({
-      balanceGap: 3,
-      partnerRepeatPenalty: 0,
-      opponentRepeatPenalty: 0,
-      exactRematchPenalty: 0,
-    });
-
-    expect(
-      compareSingleCourtSelections(
-        repeatedOpponent,
-        freshOpponent,
-        SessionType.POINTS
-      )
-    ).toBeLessThan(0);
-  });
-
-  it("ignores exact rematch differences for points when partner repeats are equal", () => {
-    const lowerRandom = createSelection({
-      balanceGap: 0,
-      partnerRepeatPenalty: 0,
-      exactRematchPenalty: 1,
+      partnerRepeatPenalty: 10,
+      opponentRepeatPenalty: 10,
+      exactRematchPenalty: 10,
       randomScore: 0,
     });
-    const higherRandom = createSelection({
+    const cleanHigherRandom = createSelection({
       balanceGap: 0,
       partnerRepeatPenalty: 0,
+      opponentRepeatPenalty: 0,
       exactRematchPenalty: 0,
       randomScore: 1,
     });
 
     expect(
       compareSingleCourtSelections(
-        lowerRandom,
-        higherRandom,
+        repeatPenalizedLowerRandom,
+        cleanHigherRandom,
         SessionType.POINTS
       )
     ).toBeLessThan(0);
@@ -504,22 +493,22 @@ describe("matchmaking v3 scoring", () => {
     ).toBeLessThan(0);
   });
 
-  it("prefers the lower total partner-repeat batch when points balance is close", () => {
-    const repeatedPartnerBatch = createBatchSelection({
+  it("prefers lower total shared-court repeats before points batch balance", () => {
+    const repeatedCourtBatch = createBatchSelection({
       maxBalanceGap: 0,
       totalBalanceGap: 0,
-      totalPartnerRepeatPenalty: 1,
+      totalSharedCourtRepeatPenalty: 1,
     });
-    const freshPartnerBatch = createBatchSelection({
-      maxBalanceGap: 1.5,
-      totalBalanceGap: 1.5,
-      totalPartnerRepeatPenalty: 0,
+    const freshCourtBatch = createBatchSelection({
+      maxBalanceGap: 10,
+      totalBalanceGap: 10,
+      totalSharedCourtRepeatPenalty: 0,
     });
 
     expect(
       compareBatchSelections(
-        freshPartnerBatch,
-        repeatedPartnerBatch,
+        freshCourtBatch,
+        repeatedCourtBatch,
         SessionType.POINTS
       )
     ).toBeLessThan(0);
@@ -567,24 +556,24 @@ describe("matchmaking v3 scoring", () => {
     ).toBeLessThan(0);
   });
 
-  it("prefers the lower total opponent-repeat batch when points partners and balance are close", () => {
-    const repeatedOpponentBatch = createBatchSelection({
+  it("uses point-difference balance after points batch balance ties", () => {
+    const lowerPointDiffBatch = createBatchSelection({
       maxBalanceGap: 0,
       totalBalanceGap: 0,
-      totalPartnerRepeatPenalty: 0,
-      totalOpponentRepeatPenalty: 1,
+      maxPointDiffGap: 0,
+      totalPointDiffGap: 0,
     });
-    const freshOpponentBatch = createBatchSelection({
-      maxBalanceGap: 1.5,
-      totalBalanceGap: 1.5,
-      totalPartnerRepeatPenalty: 0,
-      totalOpponentRepeatPenalty: 0,
+    const higherPointDiffBatch = createBatchSelection({
+      maxBalanceGap: 0,
+      totalBalanceGap: 0,
+      maxPointDiffGap: 1,
+      totalPointDiffGap: 1,
     });
 
     expect(
       compareBatchSelections(
-        freshOpponentBatch,
-        repeatedOpponentBatch,
+        lowerPointDiffBatch,
+        higherPointDiffBatch,
         SessionType.POINTS
       )
     ).toBeLessThan(0);

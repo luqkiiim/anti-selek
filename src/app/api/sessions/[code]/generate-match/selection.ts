@@ -102,6 +102,7 @@ function isV3Selection(
     Array.isArray(selection.players) &&
     "waitSummary" in selection &&
     typeof selection.balanceGap === "number" &&
+    typeof selection.pointDiffGap === "number" &&
     typeof selection.partnerRepeatPenalty === "number" &&
     typeof selection.opponentRepeatPenalty === "number" &&
     typeof selection.exactRematchPenalty === "number"
@@ -280,6 +281,7 @@ function buildV3Players(
       sessionData.type === SessionType.SOCIAL_MIX
         ? player.sessionPoints
         : player.user.elo),
+    pointDiff: playersById.get(player.userId)?.pointDiff ?? 0,
     isBusy: !player.isPaused && !availableUserIds.has(player.userId),
     isPaused: player.isPaused,
     gender: player.gender,

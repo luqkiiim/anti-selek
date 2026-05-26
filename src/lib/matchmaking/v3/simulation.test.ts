@@ -34,23 +34,6 @@ function getPairKey(playerA: string, playerB: string) {
   return [playerA, playerB].sort().join("|");
 }
 
-function getOpponentPairCounts(
-  matches: Array<{ team1: [string, string]; team2: [string, string] }>
-) {
-  const counts = new Map<string, number>();
-
-  for (const match of matches) {
-    for (const team1Player of match.team1) {
-      for (const team2Player of match.team2) {
-        const key = getPairKey(team1Player, team2Player);
-        counts.set(key, (counts.get(key) ?? 0) + 1);
-      }
-    }
-  }
-
-  return counts;
-}
-
 function getSharedCourtPairCounts(
   matches: Array<{ team1: [string, string]; team2: [string, string] }>
 ) {
@@ -237,22 +220,14 @@ describe("matchmaking v3 simulation", () => {
     }
 
     const matchCounts = Object.values(getMatchCounts(state.players));
-    const opponentCounts = [...getOpponentPairCounts(state.completedMatches).values()];
-
     expect(Math.max(...matchCounts) - Math.min(...matchCounts)).toBeLessThanOrEqual(1);
     expect(Math.min(...matchCounts)).toBe(6);
     expect(Math.max(...matchCounts)).toBe(7);
-    expect(Math.max(...opponentCounts)).toBeLessThanOrEqual(2);
+    expect(getUnseenSharedCourtPairs(state.players, state.completedMatches)).toBe(0);
   });
 
-  it("produces fewer unseen shared-court pairs than points in a 13-player social session", () => {
-    const socialMixState = createSimulationState(
-      createSimulationPlayers(13, { strengthStep: 0 }),
-      {
-        matchDurationMs: 10 * 60 * 1000,
-      }
-    );
-    const pointsState = createSimulationState(
+  it("drives points sessions toward shared-court coverage while preserving fair turns", () => {
+    const state = createSimulationState(
       createSimulationPlayers(13, { strengthStep: 0 }),
       {
         matchDurationMs: 10 * 60 * 1000,
@@ -260,13 +235,7 @@ describe("matchmaking v3 simulation", () => {
     );
 
     for (let round = 0; round < 10; round += 1) {
-      playRound(socialMixState, {
-        courtCount: 2,
-        sessionMode: SessionMode.MEXICANO,
-        sessionType: SessionType.SOCIAL_MIX,
-        randomFn: () => 0,
-      });
-      playRound(pointsState, {
+      playRound(state, {
         courtCount: 2,
         sessionMode: SessionMode.MEXICANO,
         sessionType: SessionType.POINTS,
@@ -274,14 +243,12 @@ describe("matchmaking v3 simulation", () => {
       });
     }
 
+    const matchCounts = Object.values(getMatchCounts(state.players));
+
+    expect(Math.max(...matchCounts) - Math.min(...matchCounts)).toBeLessThanOrEqual(1);
     expect(
-      getUnseenSharedCourtPairs(
-        socialMixState.players,
-        socialMixState.completedMatches
-      )
-    ).toBeLessThan(
-      getUnseenSharedCourtPairs(pointsState.players, pointsState.completedMatches)
-    );
+      getUnseenSharedCourtPairs(state.players, state.completedMatches)
+    ).toBeLessThanOrEqual(2);
   });
 
   it("can reach full shared-court coverage in an ideal 13-player social mix run", () => {

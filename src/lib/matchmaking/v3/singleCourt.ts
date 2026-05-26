@@ -273,6 +273,7 @@ function searchCandidatePool<T extends MatchmakerV3Player>({
         partition: evaluation.partition,
         waitSummary,
         balanceGap: evaluation.balanceGap,
+        pointDiffGap: evaluation.pointDiffGap,
         sharedCourtRepeatPenalty: getSharedCourtRepeatPenalty(
           evaluation.partition,
           socialMixHistory
@@ -389,6 +390,7 @@ export function findBestSingleCourtSelectionV3<T extends MatchmakerV3Player>(
         validPartitionCount: 0,
         chosenIds: null,
         chosenBalanceGap: null,
+        chosenPointDiffGap: null,
         chosenPartnerRepeatPenalty: null,
         chosenOpponentRepeatPenalty: null,
         chosenExactRematchPenalty: null,
@@ -482,6 +484,7 @@ export function findBestSingleCourtSelectionV3<T extends MatchmakerV3Player>(
     validPartitionCount: totalValidPartitionCount,
     chosenIds: null,
     chosenBalanceGap: null,
+    chosenPointDiffGap: null,
     chosenPartnerRepeatPenalty: null,
     chosenOpponentRepeatPenalty: null,
     chosenExactRematchPenalty: null,
@@ -493,6 +496,7 @@ export function findBestSingleCourtSelectionV3<T extends MatchmakerV3Player>(
   if (bestSelection) {
     debug.chosenIds = bestSelection.ids;
     debug.chosenBalanceGap = bestSelection.balanceGap;
+    debug.chosenPointDiffGap = bestSelection.pointDiffGap;
     debug.chosenPartnerRepeatPenalty = bestSelection.partnerRepeatPenalty;
     debug.chosenOpponentRepeatPenalty = bestSelection.opponentRepeatPenalty;
     debug.chosenExactRematchPenalty = bestSelection.exactRematchPenalty;

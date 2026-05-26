@@ -44,6 +44,7 @@ describe("matchmaking v3 balance", () => {
         team2: ["C", "D"],
       },
       balanceGap: 0,
+      pointDiffGap: 0,
       mixedSideGap: 0,
     });
   });

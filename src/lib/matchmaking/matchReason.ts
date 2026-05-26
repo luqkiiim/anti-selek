@@ -18,6 +18,7 @@ export interface MatchmakingReason {
     fairnessBand: number | null;
     selectedMatchCounts: number[];
     balanceGap: number;
+    pointDiffGap?: number;
     sharedCourtRepeatPenalty?: number;
     partnerCoveragePenalty?: number;
     opponentCoveragePenalty?: number;
@@ -100,10 +101,31 @@ function buildReasonSummary({
     uniqueMatchCounts.length === 1
       ? `All selected players are in fairness band ${uniqueMatchCounts[0]}.`
       : `Selected across fairness bands ${uniqueMatchCounts.join(", ")} after legal-match filtering.`,
+  ];
+
+  if (sessionType === SessionType.POINTS) {
+    summary.push(
+      metrics.sharedCourtRepeatPenalty === 0
+        ? "All six shared-court pairings are first-time contacts this session."
+        : `Shared-court repeat penalty is ${formatMetric(
+            metrics.sharedCourtRepeatPenalty ?? 0
+          )} of 6 possible pairings.`
+    );
+  }
+
+  summary.push(
     `Team balance gap is ${formatMetric(metrics.balanceGap)} ${balanceUnit}${
       metrics.balanceGap === 1 ? "" : "s"
-    }.`,
-  ];
+    }.`
+  );
+
+  if (sessionType === SessionType.POINTS) {
+    summary.push(
+      `Point-difference balance gap is ${formatMetric(
+        metrics.pointDiffGap ?? 0
+      )} point${metrics.pointDiffGap === 1 ? "" : "s"}.`
+    );
+  }
 
   if (metrics.waitToleranceSeconds !== undefined) {
     summary.push(
@@ -150,7 +172,7 @@ function buildReasonSummary({
             metrics.opponentCoveragePenalty ?? 0
           )} of 4 pairings.`
     );
-  } else {
+  } else if (sessionType !== SessionType.POINTS) {
     summary.push(
       metrics.partnerRepeatPenalty === 0
         ? "No recent partner repeat penalty on this selection."
@@ -202,6 +224,7 @@ export function buildV3MatchmakingReason<
       selectedMatchCounts.length > 0 ? Math.min(...selectedMatchCounts) : null,
     selectedMatchCounts,
     balanceGap: roundMetric(selection.balanceGap),
+    pointDiffGap: roundMetric(selection.pointDiffGap),
     sharedCourtRepeatPenalty: selection.sharedCourtRepeatPenalty,
     partnerCoveragePenalty: selection.partnerCoveragePenalty,
     opponentCoveragePenalty: selection.opponentCoveragePenalty,
@@ -304,6 +327,13 @@ export function parseMatchmakingReasonJson(
   }
 
   if (
+    metrics.pointDiffGap !== undefined &&
+    typeof metrics.pointDiffGap !== "number"
+  ) {
+    return null;
+  }
+
+  if (
     metrics.sharedCourtRepeatPenalty !== undefined &&
     typeof metrics.sharedCourtRepeatPenalty !== "number"
   ) {
@@ -372,6 +402,7 @@ export function parseMatchmakingReasonJson(
       fairnessBand: metrics.fairnessBand,
       selectedMatchCounts: metrics.selectedMatchCounts,
       balanceGap: metrics.balanceGap,
+      pointDiffGap: metrics.pointDiffGap,
       sharedCourtRepeatPenalty: metrics.sharedCourtRepeatPenalty,
       partnerCoveragePenalty: metrics.partnerCoveragePenalty,
       opponentCoveragePenalty: metrics.opponentCoveragePenalty,

@@ -4,6 +4,7 @@ export interface MatchmakerV3Player {
   matchmakingBaseline: number;
   availableSince: Date;
   strength: number;
+  pointDiff?: number;
   isBusy?: boolean;
   isPaused?: boolean;
   gender?: string;
@@ -52,6 +53,7 @@ export interface V3DoublesPartition {
 export interface V3BalancedPartition {
   partition: V3DoublesPartition;
   balanceGap: number;
+  pointDiffGap: number;
   mixedSideGap: number;
 }
 
@@ -88,6 +90,7 @@ export interface V3SingleCourtSelection<
   partition: V3DoublesPartition;
   waitSummary: V3WaitSummary;
   balanceGap: number;
+  pointDiffGap: number;
   sharedCourtRepeatPenalty: number;
   partnerCoveragePenalty: number;
   opponentCoveragePenalty: number;
@@ -112,6 +115,7 @@ export interface V3SingleCourtDebug {
   validPartitionCount: number;
   chosenIds: [string, string, string, string] | null;
   chosenBalanceGap: number | null;
+  chosenPointDiffGap: number | null;
   chosenPartnerRepeatPenalty: number | null;
   chosenOpponentRepeatPenalty: number | null;
   chosenExactRematchPenalty: number | null;
@@ -134,6 +138,8 @@ export interface V3BatchSelection<
   waitSummary: V3WaitSummary;
   maxBalanceGap: number;
   totalBalanceGap: number;
+  maxPointDiffGap: number;
+  totalPointDiffGap: number;
   totalSharedCourtRepeatPenalty: number;
   totalPartnerCoveragePenalty: number;
   totalOpponentCoveragePenalty: number;
@@ -168,6 +174,8 @@ export interface V3BatchDebug {
   chosenQuartets: Array<[string, string, string, string]>;
   chosenMaxBalanceGap: number | null;
   chosenTotalBalanceGap: number | null;
+  chosenMaxPointDiffGap: number | null;
+  chosenTotalPointDiffGap: number | null;
   chosenTotalPartnerRepeatPenalty: number | null;
   chosenTotalOpponentRepeatPenalty: number | null;
   chosenTotalExactRematchPenalty: number | null;

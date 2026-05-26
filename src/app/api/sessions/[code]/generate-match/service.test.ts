@@ -192,6 +192,7 @@ function createActiveV3Player(
     matchmakingBaseline: 0,
     availableSince: new Date("2026-01-01T00:00:00Z"),
     strength: 1000,
+    pointDiff: 0,
     effectiveMatchCount: 0,
     waitMs: 0,
     randomScore: 0,
@@ -265,6 +266,7 @@ function createV3Selection(
       waitVector: [],
     },
     balanceGap: 0,
+    pointDiffGap: 0,
     sharedCourtRepeatPenalty: 0,
     partnerCoveragePenalty: 0,
     opponentCoveragePenalty: 0,
@@ -778,6 +780,64 @@ describe("generate match service", () => {
       });
     });
 
+    it("passes completed-score point difference into points v3 players", () => {
+      const selection = createV3Selection(["A", "B", "C", "D"], {
+        team1: ["A", "B"],
+        team2: ["C", "D"],
+      });
+      vi.mocked(findBestSingleCourtSelectionV3).mockReturnValueOnce({
+        selection,
+        debug: {} as never,
+      });
+
+      const players = [
+        createSessionPlayer("A", { sessionPoints: 6 }),
+        createSessionPlayer("B", { sessionPoints: 4 }),
+        createSessionPlayer("C", { sessionPoints: 2 }),
+        createSessionPlayer("D", { sessionPoints: 0 }),
+      ];
+      const playersById = createPlayersById(players);
+      playersById.get("A")!.elo = 6;
+      playersById.get("A")!.pointDiff = 9;
+      playersById.get("B")!.elo = 4;
+      playersById.get("B")!.pointDiff = 3;
+      playersById.get("C")!.elo = 2;
+      playersById.get("C")!.pointDiff = -3;
+      playersById.get("D")!.elo = 0;
+      playersById.get("D")!.pointDiff = -9;
+      const sessionData = createSessionData({
+        type: SessionType.POINTS,
+        players,
+      });
+      const { rankedCandidates } = getRankedCandidates(sessionData, new Set());
+
+      selectSingleCourtMatch({
+        rankedCandidates,
+        playersById,
+        sessionData,
+        rotationHistory: buildRotationHistory([]),
+        reshuffleSource: null,
+      });
+
+      expect(findBestSingleCourtSelectionV3).toHaveBeenCalledWith(
+        expect.arrayContaining([
+          expect.objectContaining({
+            userId: "A",
+            strength: 6,
+            pointDiff: 9,
+          }),
+          expect.objectContaining({
+            userId: "D",
+            strength: 0,
+            pointDiff: -9,
+          }),
+        ]),
+        expect.objectContaining({
+          sessionType: SessionType.POINTS,
+        })
+      );
+    });
+
     it("uses the ladder selector for ladder sessions", () => {
       const selection = createLadderSelection(["A", "B", "C", "D"], {
         team1: ["A", "B"],
@@ -1149,6 +1209,8 @@ describe("generate match service", () => {
         },
         maxBalanceGap: 0,
         totalBalanceGap: 0,
+        maxPointDiffGap: 0,
+        totalPointDiffGap: 0,
         totalSharedCourtRepeatPenalty: 0,
         totalPartnerCoveragePenalty: 0,
         totalOpponentCoveragePenalty: 0,
@@ -1211,6 +1273,8 @@ describe("generate match service", () => {
         },
         maxBalanceGap: 0,
         totalBalanceGap: 0,
+        maxPointDiffGap: 0,
+        totalPointDiffGap: 0,
         totalSharedCourtRepeatPenalty: 0,
         totalPartnerCoveragePenalty: 0,
         totalOpponentCoveragePenalty: 0,

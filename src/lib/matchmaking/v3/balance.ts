@@ -196,6 +196,26 @@ export function getPartitionBalanceGap<
   return Math.abs(team1AverageStrength - team2AverageStrength);
 }
 
+export function getPartitionPointDiffGap<
+  T extends Pick<MatchmakerV3Player, "pointDiff">,
+>(partition: V3DoublesPartition, playersById: Map<string, T>) {
+  const player1 = playersById.get(partition.team1[0]);
+  const player2 = playersById.get(partition.team1[1]);
+  const player3 = playersById.get(partition.team2[0]);
+  const player4 = playersById.get(partition.team2[1]);
+
+  if (!player1 || !player2 || !player3 || !player4) {
+    return null;
+  }
+
+  const team1AveragePointDiff =
+    ((player1.pointDiff ?? 0) + (player2.pointDiff ?? 0)) / 2;
+  const team2AveragePointDiff =
+    ((player3.pointDiff ?? 0) + (player4.pointDiff ?? 0)) / 2;
+
+  return Math.abs(team1AveragePointDiff - team2AveragePointDiff);
+}
+
 export function evaluateBalancedPartitions<T extends MatchmakerV3Player>(
   playerIds: [string, string, string, string],
   playersById: Map<string, T>,
@@ -212,10 +232,15 @@ export function evaluateBalancedPartitions<T extends MatchmakerV3Player>(
     if (balanceGap === null) {
       continue;
     }
+    const pointDiffGap = getPartitionPointDiffGap(partition, playersById);
+    if (pointDiffGap === null) {
+      continue;
+    }
 
     evaluations.push({
       partition,
       balanceGap,
+      pointDiffGap,
       mixedSideGap:
         sessionMode === SessionMode.MIXICANO
           ? getPartitionMixedSideGap(partition, playersById)
