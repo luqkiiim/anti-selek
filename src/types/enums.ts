@@ -50,6 +50,12 @@ export enum CommunityPlayerStatus {
   OCCASIONAL = "OCCASIONAL",
 }
 
+export enum CommunityRole {
+  MEMBER = "MEMBER",
+  STAFF = "STAFF",
+  ADMIN = "ADMIN",
+}
+
 export enum ClaimRequestStatus {
   PENDING = "PENDING",
   APPROVED = "APPROVED",

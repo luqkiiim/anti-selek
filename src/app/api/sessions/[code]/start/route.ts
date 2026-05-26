@@ -5,7 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { getCommunityEloByUserId, withCommunityElo } from "@/lib/communityElo";
 import {
   getPlayerCommunityBadges,
-  getSessionAdminMembership,
+  getSessionOperatorMembership,
   getSessionCommunityLinks,
   withPlayerCommunityBadges,
 } from "@/lib/sessionCollab";
@@ -47,13 +47,13 @@ export async function POST(
       return invalidTargetResponse(request, "api:sessions:code:start");
     }
 
-    const adminMembership = await getSessionAdminMembership(prisma, {
+    const operatorMembership = await getSessionOperatorMembership(prisma, {
       session: sessionData,
       userId: session.user.id,
-      acceptedOnly: false,
+      acceptedOnly: true,
     });
-    if (!session.user.isAdmin && !adminMembership) {
-      return NextResponse.json({ error: "Admin only" }, { status: 403 });
+    if (!session.user.isAdmin && !operatorMembership) {
+      return NextResponse.json({ error: "Admin or staff only" }, { status: 403 });
     }
 
     if (sessionData.status !== SessionStatus.WAITING) {

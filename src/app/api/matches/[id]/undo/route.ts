@@ -6,7 +6,7 @@ import {
 } from "@/lib/matchCompletion";
 import { prisma } from "@/lib/prisma";
 import { isQuickAccessSession } from "@/lib/quickAccess";
-import { getSessionAdminMembership } from "@/lib/sessionCollab";
+import { getSessionOperatorMembership } from "@/lib/sessionCollab";
 import { MatchStatus, SessionStatus } from "@/types/enums";
 import { logError, safeErrorResponse } from "@/lib/errors";
 import {
@@ -75,7 +75,7 @@ export async function POST(
       );
     }
 
-    const adminMembership = await getSessionAdminMembership(prisma, {
+    const operatorMembership = await getSessionOperatorMembership(prisma, {
       session: { id: match.sessionId, communityId: match.session.communityId },
       userId: session.user.id,
       acceptedOnly: true,
@@ -83,7 +83,7 @@ export async function POST(
 
     const canManage =
       !isQuickAccessSession(session) &&
-      (!!session.user.isAdmin || !!adminMembership);
+      (!!session.user.isAdmin || !!operatorMembership);
 
     if (!canManage) {
       return invalidTargetResponse(_request, "api:matches:id:undo");

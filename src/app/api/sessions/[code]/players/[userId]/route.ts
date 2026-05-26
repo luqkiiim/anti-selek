@@ -3,7 +3,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { hasQueuedMatchUser } from "@/lib/sessionQueue";
 import { deleteEphemeralGuestUsers } from "@/lib/sessionLifecycle";
-import { getSessionAdminMembership } from "@/lib/sessionCollab";
+import { getSessionOperatorMembership } from "@/lib/sessionCollab";
 import { MatchStatus, SessionStatus } from "@/types/enums";
 import { logError, safeErrorResponse } from "@/lib/errors";
 import { rateLimit, checkInvalidTargetRateLimit, invalidTargetResponse } from "@/lib/rateLimit";
@@ -64,13 +64,13 @@ export async function PATCH(
       );
     }
 
-    const adminMembership = await getSessionAdminMembership(prisma, {
+    const operatorMembership = await getSessionOperatorMembership(prisma, {
       session: sessionData,
       userId: session.user.id,
       acceptedOnly: true,
     });
 
-    if (!session.user.isAdmin && !adminMembership) {
+    if (!session.user.isAdmin && !operatorMembership) {
       return invalidTargetResponse(request, "api:sessions:code:players:userId");
     }
 
@@ -160,13 +160,13 @@ export async function DELETE(
       );
     }
 
-    const adminMembership = await getSessionAdminMembership(prisma, {
+    const operatorMembership = await getSessionOperatorMembership(prisma, {
       session: sessionData,
       userId: session.user.id,
       acceptedOnly: true,
     });
 
-    if (!session.user.isAdmin && !adminMembership) {
+    if (!session.user.isAdmin && !operatorMembership) {
       return invalidTargetResponse(_request, "api:sessions:code:players:userId");
     }
 

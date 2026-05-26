@@ -74,6 +74,24 @@ describe("matchApprovalRules", () => {
     ).toBe(false);
   });
 
+  it("lets a playing admin or staff operator submit without extra approval", () => {
+    const claimedByUserId = new Map([
+      ["a1", true],
+      ["a2", true],
+      ["b1", true],
+      ["b2", true],
+    ]);
+
+    expect(
+      shouldRequireOpponentApproval({
+        match,
+        submitterUserId: "a1",
+        submitterIsAdmin: true,
+        claimedByUserId,
+      })
+    ).toBe(false);
+  });
+
   it("allows a claimed opponent or admin to confirm pending results", () => {
     expect(
       canApprovePendingSubmission({

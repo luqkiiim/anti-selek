@@ -4,6 +4,10 @@ import { useMemo } from "react";
 import { useSession } from "next-auth/react";
 import { useParams, useRouter } from "next/navigation";
 import { getClaimRequesterEligibility } from "@/lib/communityClaimRules";
+import {
+  isCommunityAdminRole,
+  isCommunityOperatorRole,
+} from "@/lib/communityRoles";
 import { getSessionModeLabel } from "@/lib/sessionModeLabels";
 import {
   ClaimRequestStatus,
@@ -80,8 +84,12 @@ export function useCommunityPage() {
   const latestPastTournamentId = pastTournaments[0]?.id ?? null;
   const latestPastTournament = pastTournaments[0] ?? null;
   const leaderboardPreview = leaderboard.slice(0, 5);
+  const canAdminCommunity =
+    (!!data.community && isCommunityAdminRole(data.community.role)) ||
+    !!data.user?.isAdmin;
   const canManageCommunity =
-    (!!data.community && data.community.role === "ADMIN") || !!data.user?.isAdmin;
+    (!!data.community && isCommunityOperatorRole(data.community.role)) ||
+    !!data.user?.isAdmin;
   const baseSelectablePlayers = useMemo(
     () =>
       data.communityMembers
@@ -142,6 +150,7 @@ export function useCommunityPage() {
   const actions = useCommunityPageActions({
     communityId,
     canManageCommunity,
+    canAdminCommunity,
     router,
     refreshCommunityData: data.refreshCommunityData,
     setError: data.setError,
@@ -160,6 +169,7 @@ export function useCommunityPage() {
     latestPastTournament,
     leaderboardPreview,
     canManageCommunity,
+    canAdminCommunity,
     testSessions,
     filteredSelectablePlayers,
     currentUserClaimEligibility,

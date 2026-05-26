@@ -7,6 +7,7 @@ import {
   getPlayerCommunityBadges,
   getSessionAdminMembership,
   getSessionMembership,
+  getSessionOperatorMembership,
   withPlayerCommunityBadges,
 } from "@/lib/sessionCollab";
 import { MatchStatus } from "@/types/enums";
@@ -139,6 +140,11 @@ async function getSessionRoute(
     userId: session.user.id,
     acceptedOnly: false,
   });
+  const operatorMembership = await getSessionOperatorMembership(prisma, {
+    session: sessionData,
+    userId: session.user.id,
+    acceptedOnly: true,
+  });
   const communityRole = membership?.role ?? null;
 
   const isSessionPlayer = sessionData.players.some((p) => p.userId === session.user.id);
@@ -233,6 +239,8 @@ async function getSessionRoute(
     queuedMatch,
     viewerCommunityRole: communityRole,
     viewerCanManage:
+      !isQuickAccess && (session.user.isAdmin || !!operatorMembership),
+    viewerCanUseAdminSessionControls:
       !isQuickAccess && (session.user.isAdmin || !!adminMembership),
     isTutorialCommunity: sessionData.community?.isTutorial === true,
     tutorialOwnerId: sessionData.community?.tutorialOwnerId ?? null,
@@ -306,12 +314,12 @@ export async function PATCH(
       return invalidTargetResponse(request, "api:sessions:code");
     }
 
-    const adminMembership = await getSessionAdminMembership(prisma, {
+    const operatorMembership = await getSessionOperatorMembership(prisma, {
       session: sessionData,
       userId: session.user.id,
-      acceptedOnly: false,
+      acceptedOnly: true,
     });
-    const canManage = session.user.isAdmin || !!adminMembership;
+    const canManage = session.user.isAdmin || !!operatorMembership;
     if (!canManage) {
       return invalidTargetResponse(request, "api:sessions:code");
     }

@@ -128,6 +128,42 @@ describe("score match route", () => {
     );
   });
 
+  it("lets staff submit scores for matches they are not playing", async () => {
+    const completedMatch = {
+      id: "match-1",
+      status: MatchStatus.COMPLETED,
+      team1Score: 11,
+      team2Score: 7,
+      winnerTeam: 1,
+    };
+    mocks.auth.mockResolvedValue({
+      user: { id: "staff-1", isAdmin: false },
+    });
+    mocks.matchFindUnique.mockResolvedValue({
+      ...createMatch(),
+      session: {
+        communityId: "community-1",
+        type: SessionType.POINTS,
+        isTest: false,
+      },
+    });
+    mocks.communityMemberFindUnique.mockResolvedValue({ role: "STAFF" });
+    mocks.shouldRequireOpponentApproval.mockReturnValue(false);
+    mocks.finalizeMatchResult.mockResolvedValue(completedMatch);
+
+    const response = await postScore({ team1Score: 11, team2Score: 7 });
+
+    expect(response.status).toBe(200);
+    expect(mocks.finalizeMatchResult).toHaveBeenCalledWith(
+      expect.objectContaining({
+        expectedStatus: MatchStatus.IN_PROGRESS,
+        finalTeam1Score: 11,
+        finalTeam2Score: 7,
+        scoreSubmittedByUserId: "staff-1",
+      })
+    );
+  });
+
   it("submits a close below-21 score for opponent approval", async () => {
     const pendingMatch = {
       id: "match-1",

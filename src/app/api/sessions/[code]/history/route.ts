@@ -3,6 +3,10 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { canQuickAccessCommunity, isQuickAccessSession } from "@/lib/quickAccess";
+import {
+  getSessionMembership,
+  getSessionOperatorMembership,
+} from "@/lib/sessionCollab";
 import { MatchStatus, SessionStatus } from "@/types/enums";
 import { logError, safeErrorResponse } from "@/lib/errors";
 import { rateLimit, checkInvalidTargetRateLimit, invalidTargetResponse } from "@/lib/rateLimit";
@@ -84,24 +88,22 @@ async function getSessionHistory(
     return invalidTargetResponse(_request, "api:sessions:code:history");
   }
 
-  let communityRole: string | null = null;
-  if (sessionData.communityId) {
-    const membership = await prisma.communityMember.findUnique({
-      where: {
-        communityId_userId: {
-          communityId: sessionData.communityId,
-          userId: session.user.id,
-        },
-      },
-      select: { role: true },
-    });
-    communityRole = membership?.role ?? null;
-  }
+  const membership = await getSessionMembership(prisma, {
+    session: sessionData,
+    userId: session.user.id,
+    acceptedOnly: true,
+  });
+  const operatorMembership = await getSessionOperatorMembership(prisma, {
+    session: sessionData,
+    userId: session.user.id,
+    acceptedOnly: true,
+  });
+  const communityRole = membership?.role ?? null;
 
   const isSessionPlayer = sessionData.players.some((player) => player.userId === session.user.id);
   const viewerCanManage =
     !isQuickAccessSession(session) &&
-    (!!session.user.isAdmin || communityRole === "ADMIN");
+    (!!session.user.isAdmin || !!operatorMembership);
   const canView =
     viewerCanManage ||
     !!communityRole ||

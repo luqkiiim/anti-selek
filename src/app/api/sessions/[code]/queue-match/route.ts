@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { getSessionAdminMembership } from "@/lib/sessionCollab";
+import { getSessionOperatorMembership } from "@/lib/sessionCollab";
 import {
   buildSessionPoolMap,
   summarizeSessionPoolMembership,
@@ -48,7 +48,7 @@ async function ensureManagePermission(
     return;
   }
 
-  const membership = await getSessionAdminMembership(prisma, {
+  const membership = await getSessionOperatorMembership(prisma, {
     session: { id: sessionId, communityId },
     userId,
     acceptedOnly: true,

@@ -29,10 +29,14 @@ export function shouldRequireOpponentApproval({
   submitterIsAdmin: boolean;
   claimedByUserId: ReadonlyMap<string, boolean>;
 }): boolean {
+  if (submitterIsAdmin) {
+    return false;
+  }
+
   const submitterTeam = getTeamNumberForUserId(match, submitterUserId);
 
   if (!submitterTeam) {
-    return !submitterIsAdmin;
+    return true;
   }
 
   const opposingTeamUserIds =

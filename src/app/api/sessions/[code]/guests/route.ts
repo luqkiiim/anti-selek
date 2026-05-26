@@ -9,7 +9,7 @@ import {
 } from "@/lib/mixedSide";
 import { isValidSessionPool } from "@/lib/sessionPools";
 import { prisma } from "@/lib/prisma";
-import { getSessionAdminMembership } from "@/lib/sessionCollab";
+import { getSessionOperatorMembership } from "@/lib/sessionCollab";
 import { getSessionModeLabel } from "@/lib/sessionModeLabels";
 import { logError, safeErrorResponse } from "@/lib/errors";
 import { rateLimit, checkInvalidTargetRateLimit, invalidTargetResponse } from "@/lib/rateLimit";
@@ -123,7 +123,7 @@ export async function POST(
 
     let canManage = !!session.user.isAdmin;
     if (sessionData.communityId) {
-      const membership = await getSessionAdminMembership(prisma, {
+      const membership = await getSessionOperatorMembership(prisma, {
         session: sessionData,
         userId: session.user.id,
         acceptedOnly: true,
@@ -143,7 +143,7 @@ export async function POST(
     }
 
     if (!canManage) {
-      return NextResponse.json({ error: "Only admins can add guests" }, { status: 403 });
+      return NextResponse.json({ error: "Only admins or staff can add guests" }, { status: 403 });
     }
 
     const guestName = name.trim();

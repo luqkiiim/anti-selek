@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { getCourtDisplayLabel } from "@/lib/courtLabels";
 import { prisma } from "@/lib/prisma";
+import { getSessionOperatorMembership } from "@/lib/sessionCollab";
 import { SessionPool } from "@/types/enums";
 import { tryRebuildQueuedMatchForSessionId } from "../shared";
 import { createQueuedMatchAssignment } from "../../generate-match/assignments";
@@ -18,6 +19,7 @@ import { logError, safeErrorResponse } from "@/lib/errors";
 import { rateLimit, checkInvalidTargetRateLimit, invalidTargetResponse } from "@/lib/rateLimit";
 
 async function ensureManagePermission(
+  sessionId: string,
   communityId: string | null | undefined,
   userId: string,
   requesterIsAdmin: boolean
@@ -26,21 +28,13 @@ async function ensureManagePermission(
     return;
   }
 
-  if (!communityId) {
-    throw new GenerateMatchError(403, "Unauthorized");
-  }
-
-  const membership = await prisma.communityMember.findUnique({
-    where: {
-      communityId_userId: {
-        communityId,
-        userId,
-      },
-    },
-    select: { role: true },
+  const membership = await getSessionOperatorMembership(prisma, {
+    session: { id: sessionId, communityId },
+    userId,
+    acceptedOnly: true,
   });
 
-  if (membership?.role !== "ADMIN") {
+  if (!membership) {
     throw new GenerateMatchError(403, "Unauthorized");
   }
 }
@@ -74,6 +68,7 @@ export async function POST(
     }
 
     await ensureManagePermission(
+      sessionData.id,
       sessionData.communityId,
       session.user.id,
       !!session.user.isAdmin

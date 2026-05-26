@@ -78,7 +78,7 @@ model CommunityMember {
   id          String   @id @default(cuid())
   communityId String
   userId      String
-  role        String   @default("MEMBER") // MEMBER or ADMIN
+  role        String   @default("MEMBER") // MEMBER, STAFF, or ADMIN
   status      String   @default("CORE") // CORE or OCCASIONAL
   elo         Int      @default(1000)
   createdAt   DateTime @default(now())

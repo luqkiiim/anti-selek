@@ -4,7 +4,7 @@ import { finalizeMatchResult } from "@/lib/matchCompletion";
 import { shouldRequireOpponentApproval } from "@/lib/matchApprovalRules";
 import { prisma } from "@/lib/prisma";
 import { canQuickAccessCommunity, isQuickAccessSession } from "@/lib/quickAccess";
-import { getSessionAdminMembership } from "@/lib/sessionCollab";
+import { getSessionOperatorMembership } from "@/lib/sessionCollab";
 import { MATCH_SCORE_ERROR_MESSAGE, isValidMatchScore } from "@/lib/matchRules";
 import { MatchStatus } from "@/types/enums";
 import { reconcileSessionQueueAfterCourtChange } from "../../_lib/reconcileSessionQueue";
@@ -85,14 +85,15 @@ export async function POST(
       return invalidTargetResponse(request, "api:matches:id:score");
     }
 
-    const adminMembership = await getSessionAdminMembership(prisma, {
+    const operatorMembership = await getSessionOperatorMembership(prisma, {
       session: { id: match.sessionId, communityId: match.session.communityId },
       userId: session.user.id,
       acceptedOnly: true,
     });
 
-    const isAdmin =
-      !isQuickAccessSession(session) && (!!session.user.isAdmin || !!adminMembership);
+    const isOperator =
+      !isQuickAccessSession(session) &&
+      (!!session.user.isAdmin || !!operatorMembership);
     const isParticipant = [
       match.team1User1Id,
       match.team1User2Id,
@@ -100,7 +101,7 @@ export async function POST(
       match.team2User2Id,
     ].includes(session.user.id);
 
-    if (!isAdmin && !isParticipant) {
+    if (!isOperator && !isParticipant) {
       return invalidTargetResponse(request, "api:matches:id:score");
     }
 
@@ -124,7 +125,7 @@ export async function POST(
     const requiresApproval = shouldRequireOpponentApproval({
       match,
       submitterUserId: session.user.id,
-      submitterIsAdmin: isAdmin,
+      submitterIsAdmin: isOperator,
       claimedByUserId,
     });
 

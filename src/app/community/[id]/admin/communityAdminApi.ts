@@ -29,6 +29,14 @@ export async function fetchCommunityAdminSnapshot(communityId: string) {
   if (!currentCommunity) {
     throw new Error("Community not found or access denied");
   }
+  if (currentCommunity.role !== "ADMIN") {
+    return {
+      community: currentCommunity,
+      players: [],
+      claimRequests: [],
+      offlineIdentityLinks: [],
+    };
+  }
 
   const [playersRes, claimRequestsRes, offlineIdentityLinksRes] =
     await Promise.all([

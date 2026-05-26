@@ -45,6 +45,8 @@ interface CommunityPlayerEditorModalProps {
     }
   ) => Promise<void>;
   onPromotePlayer: (player: CommunityAdminPlayer) => void;
+  onGrantStaff: (player: CommunityAdminPlayer) => Promise<void>;
+  onRevokeStaff: (player: CommunityAdminPlayer) => Promise<void>;
   onOpenPasswordReset: (player: CommunityAdminPlayer) => void;
   canOpenEmergencyPasswordReset: boolean;
   onUploadAvatar: (player: CommunityAdminPlayer, file: File) => Promise<void>;
@@ -69,6 +71,8 @@ export function CommunityPlayerEditorModal({
   onSavePlayerRating,
   onUpdatePreferences,
   onPromotePlayer,
+  onGrantStaff,
+  onRevokeStaff,
   onOpenPasswordReset,
   canOpenEmergencyPasswordReset,
   onUploadAvatar,
@@ -285,11 +289,11 @@ export function CommunityPlayerEditorModal({
             <div className="border-t border-gray-200 pt-4">
               <div>
                 <p className="text-sm font-semibold text-gray-900">
-                  Admin access
+                  Community role
                 </p>
                 <p className="mt-1 text-sm text-gray-600">
-                  Promote claimed members to admin when they need community
-                  control.
+                  Staff can host and run live sessions. Admins keep community
+                  settings, player editing, claims, and resets.
                 </p>
               </div>
 
@@ -298,17 +302,38 @@ export function CommunityPlayerEditorModal({
                   This player already has admin access.
                 </p>
               ) : player.isClaimed ? (
-                <button
-                  type="button"
-                  onClick={() => onPromotePlayer(player)}
-                  disabled={savingRole}
-                  className="app-button-secondary px-4 py-2"
-                >
-                  {savingRole ? "Promoting..." : "Promote to admin"}
-                </button>
+                <div className="flex flex-wrap gap-2">
+                  {player.role === "STAFF" ? (
+                    <button
+                      type="button"
+                      onClick={() => void onRevokeStaff(player)}
+                      disabled={savingRole}
+                      className="app-button-secondary px-4 py-2"
+                    >
+                      {savingRole ? "Updating..." : "Change to member"}
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => void onGrantStaff(player)}
+                      disabled={savingRole}
+                      className="app-button-secondary px-4 py-2"
+                    >
+                      {savingRole ? "Updating..." : "Make staff"}
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => onPromotePlayer(player)}
+                    disabled={savingRole}
+                    className="app-button-secondary px-4 py-2"
+                  >
+                    {savingRole ? "Promoting..." : "Promote to admin"}
+                  </button>
+                </div>
               ) : (
                 <p className="text-sm text-gray-600">
-                  Only claimed members can be promoted to admin.
+                  Only claimed members can be made staff or admin.
                 </p>
               )}
 

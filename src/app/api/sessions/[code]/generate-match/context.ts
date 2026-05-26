@@ -1,6 +1,6 @@
 import { reconcileSessionQueueAfterCourtChange } from "@/app/api/matches/_lib/reconcileSessionQueue";
 import { prisma } from "@/lib/prisma";
-import { getSessionAdminMembership } from "@/lib/sessionCollab";
+import { getSessionOperatorMembership } from "@/lib/sessionCollab";
 import { MatchStatus, SessionStatus } from "@/types/enums";
 import {
   GenerateMatchError,
@@ -19,7 +19,7 @@ async function ensureManagePermission(
 ) {
   if (requesterIsAdmin) return;
 
-  const membership = await getSessionAdminMembership(prisma, {
+  const membership = await getSessionOperatorMembership(prisma, {
     session: { id: sessionId, communityId },
     userId,
     acceptedOnly: true,

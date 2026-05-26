@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { serializeAvatarEntity } from "@/lib/avatar";
+import { isCommunityOperatorRole } from "@/lib/communityRoles";
 import { logError, safeErrorResponse } from "@/lib/errors";
 import { getOfflineIdentityInfoByUserId } from "@/lib/offlineIdentities";
 import { prisma } from "@/lib/prisma";
@@ -79,7 +80,7 @@ export async function GET(
       !partnerCommunity ||
       hostCommunity.isTutorial ||
       partnerCommunity.isTutorial ||
-      (!session.user.isAdmin && hostMembership?.role !== "ADMIN")
+      (!session.user.isAdmin && !isCommunityOperatorRole(hostMembership?.role))
     ) {
       return invalidTargetResponse(request, "api:communities:id:collab-roster");
     }

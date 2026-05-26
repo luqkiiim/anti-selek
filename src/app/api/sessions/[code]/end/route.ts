@@ -6,7 +6,7 @@ import { getCommunityEloByUserId, withCommunityElo } from "@/lib/communityElo";
 import {
   getAcceptedSessionCommunityIds,
   getPlayerCommunityBadges,
-  getSessionAdminMembership,
+  getSessionOperatorMembership,
   withPlayerCommunityBadges,
 } from "@/lib/sessionCollab";
 import { MatchStatus, SessionStatus } from "@/types/enums";
@@ -50,13 +50,13 @@ export async function POST(
       return invalidTargetResponse(_request, "api:sessions:code:end");
     }
 
-    const adminMembership = await getSessionAdminMembership(prisma, {
+    const operatorMembership = await getSessionOperatorMembership(prisma, {
       session: sessionData,
       userId: session.user.id,
       acceptedOnly: true,
     });
-    if (!session.user.isAdmin && !adminMembership) {
-      return NextResponse.json({ error: "Admin only" }, { status: 403 });
+    if (!session.user.isAdmin && !operatorMembership) {
+      return NextResponse.json({ error: "Admin or staff only" }, { status: 403 });
     }
 
     const endedAt = sessionData.endedAt ?? new Date();

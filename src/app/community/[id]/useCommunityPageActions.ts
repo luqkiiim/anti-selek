@@ -20,6 +20,7 @@ interface CommunityPageRouter {
 export function useCommunityPageActions({
   communityId,
   canManageCommunity,
+  canAdminCommunity,
   router,
   refreshCommunityData,
   setError,
@@ -27,6 +28,7 @@ export function useCommunityPageActions({
 }: {
   communityId: string;
   canManageCommunity: boolean;
+  canAdminCommunity: boolean;
   router: CommunityPageRouter;
   refreshCommunityData: () => Promise<void>;
   setError: Dispatch<SetStateAction<string>>;
@@ -63,7 +65,7 @@ export function useCommunityPageActions({
   };
 
   const requestRollbackTournament = (tournament: CommunityPageSession) => {
-    if (!canManageCommunity) return;
+    if (!canAdminCommunity) return;
     setError("");
     setSuccess("");
     setPendingRollbackTournament(tournament);
@@ -75,7 +77,7 @@ export function useCommunityPageActions({
   };
 
   const confirmRollbackTournament = async () => {
-    if (!canManageCommunity || !pendingRollbackTournament) return false;
+    if (!canAdminCommunity || !pendingRollbackTournament) return false;
 
     const tournament = pendingRollbackTournament;
     setRollingBackTournamentCode(tournament.code);
@@ -142,7 +144,7 @@ export function useCommunityPageActions({
     code: string,
     status: "ACCEPTED" | "REJECTED"
   ) => {
-    if (!canManageCommunity) return;
+    if (!canAdminCommunity) return;
 
     setError("");
     setSuccess("");

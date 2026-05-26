@@ -10,6 +10,7 @@ import {
 import type { CommunityAdminPlayer } from "@/components/community-admin/communityAdminTypes";
 import { deleteUserAvatar, uploadUserAvatar } from "@/lib/avatarClient";
 import {
+  CommunityRole,
   CommunityPlayerStatus,
   MixedSide,
   PlayerGender,
@@ -234,6 +235,59 @@ export function useCommunityAdminPlayerActions({
     setSuccess("");
     setPendingPlayerAction({ kind: "promote", player });
   };
+
+  const updatePlayerRole = async (
+    player: CommunityAdminPlayer,
+    role: CommunityRole.STAFF | CommunityRole.MEMBER,
+    successMessage: string
+  ) => {
+    setSavingRole(true);
+    setError("");
+    setSuccess("");
+
+    try {
+      const res = await fetch(`/api/communities/${communityId}/members/${player.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ role }),
+      });
+      const data = await safeJson(res);
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to update role");
+      }
+
+      setPlayers((prev) =>
+        prev.map((item) =>
+          item.id === player.id
+            ? {
+                ...item,
+                role: data.role === CommunityRole.STAFF ? "STAFF" : "MEMBER",
+              }
+            : item
+        )
+      );
+      setSuccess(successMessage);
+      await refreshCommunityData();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to update role");
+    } finally {
+      setSavingRole(false);
+    }
+  };
+
+  const handleGrantStaff = (player: CommunityAdminPlayer) =>
+    updatePlayerRole(
+      player,
+      CommunityRole.STAFF,
+      `${player.name} can now host and run live sessions.`
+    );
+
+  const handleRevokeStaff = (player: CommunityAdminPlayer) =>
+    updatePlayerRole(
+      player,
+      CommunityRole.MEMBER,
+      `${player.name} is back to member access.`
+    );
 
   const closePendingPlayerAction = () => {
     if (removingPlayer || savingRole) return;
@@ -494,6 +548,8 @@ export function useCommunityAdminPlayerActions({
     handleRemovePlayer: requestRemovePlayer,
     requestRemovePlayer,
     handlePromotePlayer: requestPromotePlayer,
+    handleGrantStaff,
+    handleRevokeStaff,
     requestPromotePlayer,
     closePendingPlayerAction,
     confirmPendingPlayerAction,

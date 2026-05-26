@@ -119,7 +119,14 @@ export async function createStartedHostSession(
     page.getByRole("heading", { name: "E2E Host Club" })
   ).toBeVisible();
 
-  await page.getByRole("button", { name: "Open Host Setup" }).click();
+  const hostSetupButton = page.getByRole("button", {
+    name: "Host Setup desk",
+  });
+  if (await hostSetupButton.isVisible()) {
+    await hostSetupButton.click();
+  } else {
+    await page.getByRole("button", { name: "Open Host Setup" }).click();
+  }
   const hostPanel = page
     .locator("section.app-panel")
     .filter({ has: page.getByText("New tournament") })
@@ -127,12 +134,17 @@ export async function createStartedHostSession(
   await expect(hostPanel).toBeVisible();
 
   await hostPanel.getByLabel("Name", { exact: true }).fill(sessionName);
-  await hostPanel
-    .getByRole("button", {
-      name: getSessionTypeButtonName(sessionType),
-      exact: true,
-    })
-    .click();
+  const formatSelect = hostPanel.locator("select").first();
+  if ((await formatSelect.count()) > 0) {
+    await formatSelect.selectOption({ label: getSessionTypeButtonName(sessionType) });
+  } else {
+    await hostPanel
+      .getByRole("button", {
+        name: getSessionTypeButtonName(sessionType),
+        exact: true,
+      })
+      .click();
+  }
   await hostPanel
     .getByRole("button", {
       name: getSessionModeButtonName(sessionMode),
@@ -156,11 +168,11 @@ export async function createStartedHostSession(
 
   if (playerNamesToSelect) {
     for (const playerName of playerNamesToSelect) {
-      await playersModal
-        .getByRole("button", {
-          name: new RegExp(`^${escapeRegex(playerName)}\\b`),
-        })
-        .click();
+      const playerButton = playersModal
+        .getByRole("button")
+        .filter({ hasText: playerName });
+      await expect(playerButton).toBeVisible();
+      await playerButton.click();
     }
   } else {
     await playersModal.getByRole("button", { name: "Select All" }).click();
@@ -369,8 +381,19 @@ export async function createManualMatchWithPlayers(
   const manualModal = await openManualMatchModal(page);
 
   const selects = manualModal.locator("select");
-  for (const [index, label] of playerLabels.entries()) {
-    await selects.nth(index).selectOption({ label });
+  if ((await selects.count()) > 0) {
+    for (const [index, label] of playerLabels.entries()) {
+      await selects.nth(index).selectOption({ label });
+    }
+  } else {
+    for (const label of playerLabels) {
+      const playerName = label.replace(/\s+\(\d+\)$/, "");
+      const playerButton = manualModal
+        .getByRole("button")
+        .filter({ hasText: playerName });
+      await expect(playerButton).toBeVisible();
+      await playerButton.click();
+    }
   }
 
   await manualModal.getByRole("button", { name: "Create Match" }).click();
@@ -403,6 +426,8 @@ export async function openManualMatchModal(page: Page) {
 
 function getSessionTypeButtonName(sessionType: SessionType) {
   switch (sessionType) {
+    case SessionType.SOCIAL_MIX:
+      return "Social Mix";
     case SessionType.ELO:
       return "Ratings";
     case SessionType.LADDER:
@@ -416,8 +441,4 @@ function getSessionTypeButtonName(sessionType: SessionType) {
 
 function getSessionModeButtonName(sessionMode: SessionMode) {
   return sessionMode === SessionMode.MIXICANO ? "Mixed" : "Open";
-}
-
-function escapeRegex(value: string) {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }

@@ -14,8 +14,16 @@ vi.mock("./sessionLifecycle", () => ({
 describe("community claim helpers", () => {
   it("keeps admin role if either side is admin", () => {
     expect(mergeCommunityRoles("ADMIN", "MEMBER")).toBe("ADMIN");
+    expect(mergeCommunityRoles("ADMIN", "STAFF")).toBe("ADMIN");
+    expect(mergeCommunityRoles("STAFF", "ADMIN")).toBe("ADMIN");
     expect(mergeCommunityRoles("MEMBER", "ADMIN")).toBe("ADMIN");
     expect(mergeCommunityRoles("ADMIN", "ADMIN")).toBe("ADMIN");
+  });
+
+  it("keeps staff role if neither side is admin but either side is staff", () => {
+    expect(mergeCommunityRoles("STAFF", "MEMBER")).toBe("STAFF");
+    expect(mergeCommunityRoles("MEMBER", "STAFF")).toBe("STAFF");
+    expect(mergeCommunityRoles("STAFF", "STAFF")).toBe("STAFF");
   });
 
   it("keeps member role when neither side is admin", () => {

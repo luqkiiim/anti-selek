@@ -6,6 +6,7 @@ import { LogIn, LogOut, Plus, Settings, Sparkles } from "lucide-react";
 import { EmptyState, FlashMessage, SectionCard } from "@/components/ui/chrome";
 import { CreateCommunityModal } from "@/components/dashboard/CreateCommunityModal";
 import { JoinCommunityModal } from "@/components/dashboard/JoinCommunityModal";
+import { getCommunityRoleLabel } from "@/lib/communityRoles";
 import { useDashboardPage } from "./useDashboardPage";
 
 export default function Home() {
@@ -195,10 +196,12 @@ export default function Home() {
                           className={`app-chip ${
                             community.role === "ADMIN"
                               ? "app-chip-accent"
+                              : community.role === "STAFF"
+                                ? "app-chip-warning"
                               : "app-chip-neutral"
                           }`}
                         >
-                          {community.role}
+                          {getCommunityRoleLabel(community.role)}
                         </span>
                         {community.isPasswordProtected ? (
                           <span className="app-chip app-chip-warning">

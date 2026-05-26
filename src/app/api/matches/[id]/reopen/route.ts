@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { getSessionAdminMembership } from "@/lib/sessionCollab";
+import { getSessionOperatorMembership } from "@/lib/sessionCollab";
 import { MatchStatus } from "@/types/enums";
 import { logError, safeErrorResponse } from "@/lib/errors";
 import { rateLimit, checkInvalidTargetRateLimit, invalidTargetResponse } from "@/lib/rateLimit";
@@ -53,15 +53,15 @@ export async function POST(
       return NextResponse.json({ error: "Match is not pending approval" }, { status: 400 });
     }
 
-    const adminMembership = await getSessionAdminMembership(prisma, {
+    const operatorMembership = await getSessionOperatorMembership(prisma, {
       session: { id: match.sessionId, communityId: match.session.communityId },
       userId: session.user.id,
       acceptedOnly: true,
     });
 
-    const isAdmin = !!session.user.isAdmin || !!adminMembership;
-    if (!isAdmin) {
-      return NextResponse.json({ error: "Only admins can reopen score entry" }, { status: 403 });
+    const canOperate = !!session.user.isAdmin || !!operatorMembership;
+    if (!canOperate) {
+      return NextResponse.json({ error: "Only admins or staff can reopen score entry" }, { status: 403 });
     }
 
     const updatedResult = await prisma.match.updateMany({

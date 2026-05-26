@@ -1,6 +1,7 @@
 import { randomUUID } from "crypto";
 import { prisma } from "@/lib/prisma";
 import { getCommunityEloByUserId, withCommunityElo } from "@/lib/communityElo";
+import { isCommunityOperatorRole } from "@/lib/communityRoles";
 import { getOfflineIdentityInfoByUserId } from "@/lib/offlineIdentities";
 import {
   getPlayerCommunityBadges,
@@ -116,9 +117,12 @@ export async function createSessionForUser({
   if (!requesterMembership && !requesterIsAdmin) {
     throw new SessionRouteError("Not a community member", 403);
   }
-  if (!requesterIsAdmin && requesterMembership?.role !== "ADMIN") {
+  if (
+    !requesterIsAdmin &&
+    !isCommunityOperatorRole(requesterMembership?.role)
+  ) {
     throw new SessionRouteError(
-      "Only community admins can create tournaments",
+      "Only community admins or staff can create tournaments",
       403
     );
   }

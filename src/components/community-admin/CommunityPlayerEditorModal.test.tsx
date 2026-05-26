@@ -71,6 +71,8 @@ function renderModal(player: CommunityAdminPlayer) {
       onSavePlayerRating={vi.fn(async () => {})}
       onUpdatePreferences={vi.fn(async () => {})}
       onPromotePlayer={vi.fn()}
+      onGrantStaff={vi.fn(async () => {})}
+      onRevokeStaff={vi.fn(async () => {})}
       onOpenPasswordReset={vi.fn()}
       canOpenEmergencyPasswordReset={false}
       onUploadAvatar={vi.fn(async () => {})}
@@ -110,5 +112,23 @@ describe("CommunityPlayerEditorModal", () => {
     const markup = renderModal(buildPlayer());
 
     expect(markup).not.toContain("Merge duplicate");
+  });
+
+  it("shows staff controls for claimed non-admin members", () => {
+    const memberMarkup = renderModal(
+      buildPlayer({ isClaimed: true, email: "member@example.com" })
+    );
+    const staffMarkup = renderModal(
+      buildPlayer({
+        isClaimed: true,
+        email: "staff@example.com",
+        role: "STAFF",
+      })
+    );
+
+    expect(memberMarkup).toContain("Make staff");
+    expect(memberMarkup).toContain("Promote to admin");
+    expect(staffMarkup).toContain("Change to member");
+    expect(staffMarkup).toContain("Staff");
   });
 });

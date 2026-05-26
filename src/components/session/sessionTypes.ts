@@ -104,6 +104,7 @@ export interface SessionData {
   poolBMissedTurns: number;
   crossoverMissThreshold: number;
   viewerCanManage?: boolean;
+  viewerCanUseAdminSessionControls?: boolean;
   viewerCommunityRole?: string | null;
   isTutorialCommunity?: boolean;
   tutorialOwnerId?: string | null;

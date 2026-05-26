@@ -5,6 +5,7 @@ const mocks = vi.hoisted(() => ({
   sessionFindUnique: vi.fn(),
   getSessionMembership: vi.fn(),
   getSessionAdminMembership: vi.fn(),
+  getSessionOperatorMembership: vi.fn(),
   getCommunityEloByUserId: vi.fn(),
   withCommunityElo: vi.fn(),
   getQueuedMatchUserIds: vi.fn(),
@@ -27,6 +28,7 @@ vi.mock("@/lib/sessionCollab", () => ({
   getPlayerCommunityBadges: vi.fn(),
   getSessionAdminMembership: mocks.getSessionAdminMembership,
   getSessionMembership: mocks.getSessionMembership,
+  getSessionOperatorMembership: mocks.getSessionOperatorMembership,
   withPlayerCommunityBadges: vi.fn(),
 }));
 
@@ -68,6 +70,7 @@ describe("session route GET", () => {
     });
     mocks.getSessionMembership.mockResolvedValue({ role: "MEMBER" });
     mocks.getSessionAdminMembership.mockResolvedValue(null);
+    mocks.getSessionOperatorMembership.mockResolvedValue(null);
     mocks.getCommunityEloByUserId.mockResolvedValue(new Map());
     mocks.withCommunityElo.mockImplementation((players) => players);
     mocks.getQueuedMatchUserIds.mockReturnValue(["u1", "u2", "u3", "u4"]);
@@ -162,6 +165,29 @@ describe("session route GET", () => {
     );
     expect(body.queuedMatch.team1User1.avatarUrl).toBe(
       "https://blob.vercel-storage.com/avatars/u1/photo.jpg"
+    );
+  });
+
+  it("marks staff as session operators without admin-only controls", async () => {
+    mocks.getSessionMembership.mockResolvedValue({ role: "STAFF" });
+    mocks.getSessionOperatorMembership.mockResolvedValue({ role: "STAFF" });
+    mocks.getSessionAdminMembership.mockResolvedValue(null);
+
+    const response = await GET(
+      new Request("http://localhost/api/sessions/ABC123"),
+      {
+        params: Promise.resolve({ code: "ABC123" }),
+      }
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.viewerCommunityRole).toBe("STAFF");
+    expect(body.viewerCanManage).toBe(true);
+    expect(body.viewerCanUseAdminSessionControls).toBe(false);
+    expect(mocks.getSessionOperatorMembership).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ acceptedOnly: true })
     );
   });
 

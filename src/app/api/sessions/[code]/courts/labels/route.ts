@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { getSessionOperatorMembership } from "@/lib/sessionCollab";
 import { logError, safeErrorResponse } from "@/lib/errors";
 import { rateLimit, checkInvalidTargetRateLimit, invalidTargetResponse } from "@/lib/rateLimit";
 
@@ -58,21 +59,17 @@ export async function PATCH(
       return invalidTargetResponse(request, "api:sessions:code:courts:labels");
     }
 
-    let isCommunityAdmin = false;
-    if (sessionData.communityId) {
-      const membership = await prisma.communityMember.findUnique({
-        where: {
-          communityId_userId: {
-            communityId: sessionData.communityId,
-            userId: session.user.id,
-          },
-        },
-        select: { role: true },
+    let isCommunityOperator = false;
+    if (!session.user.isAdmin) {
+      const membership = await getSessionOperatorMembership(prisma, {
+        session: sessionData,
+        userId: session.user.id,
+        acceptedOnly: true,
       });
-      isCommunityAdmin = membership?.role === "ADMIN";
+      isCommunityOperator = !!membership;
     }
 
-    if (!session.user.isAdmin && !isCommunityAdmin) {
+    if (!session.user.isAdmin && !isCommunityOperator) {
       return invalidTargetResponse(request, "api:sessions:code:courts:labels");
     }
 

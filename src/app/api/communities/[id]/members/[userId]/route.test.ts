@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
   invalidTargetResponse: vi.fn(),
   communityMemberFindUnique: vi.fn(),
   communityMemberFindMany: vi.fn(),
+  communityMemberUpdate: vi.fn(),
   userFindUnique: vi.fn(),
   userUpdate: vi.fn(),
   resolveMixedSideState: vi.fn(),
@@ -28,6 +29,7 @@ vi.mock("@/lib/prisma", () => ({
     communityMember: {
       findUnique: mocks.communityMemberFindUnique,
       findMany: mocks.communityMemberFindMany,
+      update: mocks.communityMemberUpdate,
     },
     user: {
       findUnique: mocks.userFindUnique,
@@ -192,5 +194,110 @@ describe("community admin update member route", () => {
       },
     });
     expect(body.name).toBe("Renamed Placeholder");
+  });
+
+  it("allows admins to grant staff to claimed members", async () => {
+    const createdAt = new Date("2026-05-19T00:00:00.000Z");
+    mocks.communityMemberFindUnique
+      .mockResolvedValueOnce({ role: "ADMIN" })
+      .mockResolvedValueOnce({
+        id: "membership-1",
+        role: "MEMBER",
+        elo: 1000,
+        status: CommunityPlayerStatus.CORE,
+      });
+    mocks.userFindUnique
+      .mockResolvedValueOnce({ isClaimed: true })
+      .mockResolvedValueOnce({
+        name: "Claimed Player",
+        email: "claimed@example.com",
+        avatarKey: null,
+        isClaimed: true,
+        gender: PlayerGender.MALE,
+        partnerPreference: PartnerPreference.OPEN,
+        mixedSideOverride: null,
+      });
+    mocks.userUpdate.mockResolvedValue({
+      id: "user-1",
+      name: "Claimed Player",
+      email: "claimed@example.com",
+      avatarKey: null,
+      gender: PlayerGender.MALE,
+      partnerPreference: PartnerPreference.OPEN,
+      mixedSideOverride: null,
+      isActive: true,
+      isClaimed: true,
+      createdAt,
+    });
+    mocks.communityMemberUpdate.mockResolvedValue({
+      role: "STAFF",
+      elo: 1000,
+      status: CommunityPlayerStatus.CORE,
+    });
+
+    const response = await patchMember({ role: "STAFF" });
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(mocks.communityMemberUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ role: "STAFF" }),
+      })
+    );
+    expect(body.role).toBe("STAFF");
+  });
+
+  it("allows admins to revoke staff back to member", async () => {
+    const createdAt = new Date("2026-05-19T00:00:00.000Z");
+    mocks.communityMemberFindUnique
+      .mockResolvedValueOnce({ role: "ADMIN" })
+      .mockResolvedValueOnce({
+        id: "membership-1",
+        role: "STAFF",
+        elo: 1000,
+        status: CommunityPlayerStatus.CORE,
+      });
+    mocks.userFindUnique.mockResolvedValue({
+      name: "Staff Player",
+      email: "staff@example.com",
+      avatarKey: null,
+      isClaimed: true,
+      gender: PlayerGender.MALE,
+      partnerPreference: PartnerPreference.OPEN,
+      mixedSideOverride: null,
+    });
+    mocks.userUpdate.mockResolvedValue({
+      id: "user-1",
+      name: "Staff Player",
+      email: "staff@example.com",
+      avatarKey: null,
+      gender: PlayerGender.MALE,
+      partnerPreference: PartnerPreference.OPEN,
+      mixedSideOverride: null,
+      isActive: true,
+      isClaimed: true,
+      createdAt,
+    });
+    mocks.communityMemberUpdate.mockResolvedValue({
+      role: "MEMBER",
+      elo: 1000,
+      status: CommunityPlayerStatus.CORE,
+    });
+
+    const response = await patchMember({ role: "MEMBER" });
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.role).toBe("MEMBER");
+  });
+
+  it("rejects staff attempts to edit player profiles", async () => {
+    mocks.communityMemberFindUnique.mockResolvedValueOnce({ role: "STAFF" });
+
+    const response = await patchMember({ name: "Nope" });
+
+    expect(response.status).toBe(403);
+    expect(mocks.userUpdate).not.toHaveBeenCalled();
+    expect(mocks.communityMemberUpdate).not.toHaveBeenCalled();
   });
 });

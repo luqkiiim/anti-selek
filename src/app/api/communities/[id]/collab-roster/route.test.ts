@@ -58,13 +58,13 @@ describe("collab roster route", () => {
       user: { id: "admin-1", isAdmin: false },
     });
     mocks.communityMemberFindUnique.mockResolvedValue({
-      role: "ADMIN",
+      role: "STAFF",
     });
     mocks.communityFindUnique.mockResolvedValue({ isTutorial: false });
     mocks.offlineIdentityMemberFindMany.mockResolvedValue([]);
   });
 
-  it("de-duplicates shared unclaimed players by user id and keeps duplicate names separate", async () => {
+  it("allows staff to load outgoing collab rosters and de-duplicates shared unclaimed players", async () => {
     const createdAt = new Date("2026-05-14T10:00:00.000Z");
     mocks.communityMemberFindMany.mockResolvedValue([
       {

@@ -394,6 +394,7 @@ export function mergeSessionSnapshot(
         ? buildQueuedMatch(matchContext, snapshot.queuedMatch)
         : current.queuedMatch,
     viewerCanManage: current.viewerCanManage,
+    viewerCanUseAdminSessionControls: current.viewerCanUseAdminSessionControls,
     viewerCommunityRole: current.viewerCommunityRole,
     isTutorialCommunity: current.isTutorialCommunity,
     tutorialOwnerId: current.tutorialOwnerId,

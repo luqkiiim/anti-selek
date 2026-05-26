@@ -12,6 +12,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowLeft, Shield } from "lucide-react";
 import { getHostSessionOnboardingOverride } from "@/lib/adminOnboarding";
+import { getCommunityRoleLabel } from "@/lib/communityRoles";
 import { getSessionTypeLabel } from "@/lib/sessionModeLabels";
 import { FlashMessage, HeroCard } from "@/components/ui/chrome";
 import { CommunityActionConfirmModal } from "@/components/community/CommunityActionConfirmModal";
@@ -167,6 +168,7 @@ export default function CommunityPage() {
     leaderboardPreview,
     communityPulse,
     canManageCommunity,
+    canAdminCommunity,
     selectablePlayers,
     filteredSelectablePlayers,
     currentUserClaimEligibility,
@@ -726,7 +728,7 @@ export default function CommunityPage() {
   }
 
   const communityName = community?.name || "Community";
-  const communityRoleLabel = canManageCommunity ? "Admin" : community?.role || "Member";
+  const communityRoleLabel = getCommunityRoleLabel(community?.role);
   const sectionTabs = canManageCommunity
     ? [
         baseSectionTabs[0],
@@ -803,7 +805,7 @@ export default function CommunityPage() {
         tournaments={activeTournaments}
         currentUserId={user?.id}
         currentCommunityId={communityId}
-        canManageCommunity={canManageCommunity}
+        canManageCommunity={canAdminCommunity}
         onJoinTournament={joinTournament}
         onReviewCollabTournament={reviewCollabTournament}
       />
@@ -814,7 +816,7 @@ export default function CommunityPage() {
       />
       <PastTournamentsPanel
         tournaments={pastTournaments}
-        canManageCommunity={canManageCommunity && !isTutorialPlayground}
+        canManageCommunity={canAdminCommunity && !isTutorialPlayground}
         latestPastTournamentId={latestPastTournamentId}
         rollingBackTournamentCode={rollingBackTournamentCode}
         onOpenTournament={openTournament}
@@ -887,7 +889,7 @@ export default function CommunityPage() {
                     Tutorial playground
                   </span>
                 ) : null}
-                {canManageCommunity ? (
+                {canAdminCommunity ? (
                   <Link
                     href={`/community/${communityId}/admin`}
                     className="app-button-secondary px-3 py-2 text-sm"

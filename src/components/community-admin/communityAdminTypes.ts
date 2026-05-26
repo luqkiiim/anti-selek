@@ -11,7 +11,7 @@ import {
 export interface CommunityAdminCommunity {
   id: string;
   name: string;
-  role: "ADMIN" | "MEMBER";
+  role: "ADMIN" | "STAFF" | "MEMBER";
   isPasswordProtected: boolean;
   isTutorial: boolean;
   tutorialOwnerId?: string | null;
@@ -31,7 +31,7 @@ export interface CommunityAdminPlayer {
   elo: number;
   isActive: boolean;
   isClaimed: boolean;
-  role: "ADMIN" | "MEMBER";
+  role: "ADMIN" | "STAFF" | "MEMBER";
   createdAt: string;
   offlineIdentityId?: string | null;
   linkedCommunityBadges?: Array<{ id: string; name: string; userId: string }>;

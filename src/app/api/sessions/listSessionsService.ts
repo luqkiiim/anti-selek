@@ -1,4 +1,5 @@
 import { serializeAvatarEntity } from "@/lib/avatar";
+import { isCommunityAdminRole } from "@/lib/communityRoles";
 import { prisma } from "@/lib/prisma";
 import { getCommunityEloByUserId, withCommunityElo } from "@/lib/communityElo";
 import {
@@ -32,7 +33,7 @@ export async function listSessionsForCommunity({
   }
 
   const visibleCollabStatuses =
-    viewerIsAdmin || membership?.role === "ADMIN"
+    viewerIsAdmin || isCommunityAdminRole(membership?.role)
       ? [SessionCommunityStatus.ACCEPTED, SessionCommunityStatus.PENDING]
       : [SessionCommunityStatus.ACCEPTED];
   const sessions = await prisma.session.findMany({

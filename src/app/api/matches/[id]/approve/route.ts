@@ -5,7 +5,7 @@ import { canApprovePendingSubmission } from "@/lib/matchApprovalRules";
 import { MATCH_SCORE_ERROR_MESSAGE, isValidMatchScore } from "@/lib/matchRules";
 import { prisma } from "@/lib/prisma";
 import { canQuickAccessCommunity, isQuickAccessSession } from "@/lib/quickAccess";
-import { getSessionAdminMembership } from "@/lib/sessionCollab";
+import { getSessionOperatorMembership } from "@/lib/sessionCollab";
 import { MatchStatus } from "@/types/enums";
 import { reconcileSessionQueueAfterCourtChange } from "../../_lib/reconcileSessionQueue";
 import { logError, safeErrorResponse } from "@/lib/errors";
@@ -61,13 +61,14 @@ export async function POST(
     }
 
     // Check if admin or one of the players
-    const adminMembership = await getSessionAdminMembership(prisma, {
+    const operatorMembership = await getSessionOperatorMembership(prisma, {
       session: { id: match.sessionId, communityId: match.session.communityId },
       userId: session.user.id,
       acceptedOnly: true,
     });
-    const isAdmin =
-      !isQuickAccessSession(session) && (!!session.user.isAdmin || !!adminMembership);
+    const isOperator =
+      !isQuickAccessSession(session) &&
+      (!!session.user.isAdmin || !!operatorMembership);
     const isPlayer = [
       match.team1User1Id,
       match.team1User2Id,
@@ -75,12 +76,12 @@ export async function POST(
       match.team2User2Id,
     ].includes(session.user.id);
 
-    if (!isAdmin && !isPlayer) {
+    if (!isOperator && !isPlayer) {
       return invalidTargetResponse(request, "api:matches:id:approve");
     }
 
     let approverIsClaimed = false;
-    if (!isAdmin) {
+    if (!isOperator) {
       const approver = await prisma.user.findUnique({
         where: { id: session.user.id },
         select: { isClaimed: true },
@@ -90,11 +91,11 @@ export async function POST(
 
     const isLegacyPendingMatch = !match.scoreSubmittedByUserId;
     const canApprove = isLegacyPendingMatch
-      ? isAdmin || isPlayer
+      ? isOperator || isPlayer
       : canApprovePendingSubmission({
           match,
           approverUserId: session.user.id,
-          approverIsAdmin: isAdmin,
+          approverIsAdmin: isOperator,
           approverIsClaimed,
           scoreSubmittedByUserId: match.scoreSubmittedByUserId,
         });
@@ -115,7 +116,7 @@ export async function POST(
     let finalTeam1Score = match.team1Score;
     let finalTeam2Score = match.team2Score;
 
-    if (isAdmin && typeof team1Score === "number" && typeof team2Score === "number") {
+    if (isOperator && typeof team1Score === "number" && typeof team2Score === "number") {
       finalTeam1Score = team1Score;
       finalTeam2Score = team2Score;
     }

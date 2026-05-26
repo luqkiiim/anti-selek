@@ -82,7 +82,7 @@ describe("undo completed match route", () => {
       user: { id: "admin-1", isAdmin: false },
     });
     mocks.matchFindUnique.mockResolvedValue(createMatch());
-    mocks.communityMemberFindUnique.mockResolvedValue({ role: "ADMIN" });
+    mocks.communityMemberFindUnique.mockResolvedValue({ role: "STAFF" });
     mocks.undoCompletedMatchResult.mockResolvedValue({
       ok: true,
       undoneMatchId: "match-1",
@@ -90,7 +90,7 @@ describe("undo completed match route", () => {
     });
   });
 
-  it("allows a community admin to undo a latest completed match", async () => {
+  it("allows community staff to undo a latest completed match in an active session", async () => {
     const response = await postUndo();
 
     expect(response.status).toBe(200);

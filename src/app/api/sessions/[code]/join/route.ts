@@ -12,8 +12,8 @@ import { getCommunityEloByUserId, withCommunityElo } from "@/lib/communityElo";
 import {
   getAcceptedSessionCommunityIds,
   getPlayerCommunityBadges,
-  getSessionAdminMembership,
   getSessionMembership,
+  getSessionOperatorMembership,
   withPlayerCommunityBadges,
 } from "@/lib/sessionCollab";
 import { canQuickAccessCommunity, isQuickAccessSession } from "@/lib/quickAccess";
@@ -90,7 +90,7 @@ export async function POST(
       userId: session.user.id,
       acceptedOnly: true,
     });
-    const requesterAdminMembership = await getSessionAdminMembership(prisma, {
+    const requesterOperatorMembership = await getSessionOperatorMembership(prisma, {
       session: sessionData,
       userId: session.user.id,
       acceptedOnly: true,
@@ -106,8 +106,8 @@ export async function POST(
       if (isQuickAccessSession(session)) {
         return invalidTargetResponse(request, "api:sessions:code:join");
       }
-      if (!session.user.isAdmin && !requesterAdminMembership) {
-        return NextResponse.json({ error: "Only community admins can add other players" }, { status: 403 });
+      if (!session.user.isAdmin && !requesterOperatorMembership) {
+        return NextResponse.json({ error: "Only community admins or staff can add other players" }, { status: 403 });
       }
       userIdToJoin = targetUserId;
     }

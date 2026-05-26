@@ -8,7 +8,7 @@ import {
 } from "@/lib/mixedSide";
 import { isValidSessionPool } from "@/lib/sessionPools";
 import { prisma } from "@/lib/prisma";
-import { getSessionAdminMembership } from "@/lib/sessionCollab";
+import { getSessionOperatorMembership } from "@/lib/sessionCollab";
 import { getSessionModeLabel } from "@/lib/sessionModeLabels";
 import { PlayerGender, SessionMode, SessionPool, SessionStatus } from "@/types/enums";
 import { logError, safeErrorResponse } from "@/lib/errors";
@@ -89,14 +89,14 @@ export async function PATCH(
       return NextResponse.json({ error: "Session already completed" }, { status: 400 });
     }
 
-    const adminMembership = await getSessionAdminMembership(prisma, {
+    const operatorMembership = await getSessionOperatorMembership(prisma, {
       session: sessionData,
       userId: session.user.id,
       acceptedOnly: true,
     });
 
-    if (!session.user.isAdmin && !adminMembership) {
-      return NextResponse.json({ error: "Only admins can update preferences" }, { status: 403 });
+    if (!session.user.isAdmin && !operatorMembership) {
+      return NextResponse.json({ error: "Only admins or staff can update preferences" }, { status: 403 });
     }
 
     const existing = await prisma.sessionPlayer.findUnique({

@@ -1,8 +1,11 @@
 import type { Prisma } from "@prisma/client";
+import {
+  getHighestCommunityRole,
+  normalizeCommunityRole,
+  type CommunityRoleValue,
+} from "./communityRoles";
 import { deleteDisposableUnclaimedUsers } from "./sessionLifecycle";
 import { ClaimRequestStatus } from "../types/enums";
-
-type CommunityRole = "ADMIN" | "MEMBER";
 
 const COMMUNITY_MATCH_USER_FIELDS = [
   "team1User1Id",
@@ -22,10 +25,10 @@ export class CommunityClaimError extends Error {
 }
 
 export function mergeCommunityRoles(
-  requesterRole: CommunityRole,
-  targetRole: CommunityRole
-): CommunityRole {
-  return requesterRole === "ADMIN" || targetRole === "ADMIN" ? "ADMIN" : "MEMBER";
+  requesterRole: CommunityRoleValue,
+  targetRole: CommunityRoleValue
+): CommunityRoleValue {
+  return getHighestCommunityRole(requesterRole, targetRole);
 }
 
 export function isClaimableCommunityPlaceholder(user: {
@@ -279,8 +282,8 @@ export async function approveCommunityClaimRequest(
         role:
           member.communityId === communityId
             ? mergeCommunityRoles(
-                requesterMembership.role as CommunityRole,
-                targetMembership.role as CommunityRole
+                normalizeCommunityRole(requesterMembership.role),
+                normalizeCommunityRole(targetMembership.role)
               )
             : targetMembership.role,
       },

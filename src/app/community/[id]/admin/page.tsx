@@ -252,6 +252,8 @@ export default function CommunityAdminPage() {
     handleRemovePlayerAvatar,
     handleResetPlayerPassword,
     handlePromotePlayer,
+    handleGrantStaff,
+    handleRevokeStaff,
     handleUpdatePreferences,
     handleResetCommunity,
     handleUpdateCommunitySettings,
@@ -586,6 +588,8 @@ export default function CommunityAdminPage() {
         onSavePlayerRating={handleSavePlayerRating}
         onUpdatePreferences={handleUpdatePreferences}
         onPromotePlayer={handlePromotePlayer}
+        onGrantStaff={handleGrantStaff}
+        onRevokeStaff={handleRevokeStaff}
         onOpenPasswordReset={openPasswordResetModal}
         canOpenEmergencyPasswordReset={isGlobalAdmin}
         onUploadAvatar={handleUploadPlayerAvatar}

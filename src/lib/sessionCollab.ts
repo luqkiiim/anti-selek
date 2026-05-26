@@ -1,8 +1,14 @@
 import type { Prisma, PrismaClient } from "@prisma/client";
+import {
+  COMMUNITY_OPERATOR_ROLES,
+  isCommunityAdminRole,
+  isCommunityOperatorRole,
+} from "@/lib/communityRoles";
 import { getLinkedCommunityUserResolver } from "@/lib/offlineIdentities";
 import {
   SessionCommunityRole,
   SessionCommunityStatus,
+  CommunityRole,
 } from "@/types/enums";
 
 type DbClient = Prisma.TransactionClient | PrismaClient;
@@ -173,7 +179,7 @@ function getCommunityMemberDelegate(tx: DbClient) {
           where: {
             communityId: { in: string[] };
             userId: string;
-            role?: string;
+            role?: string | { in: string[] };
           };
           select: {
             communityId: true;
@@ -211,6 +217,48 @@ export async function getSessionAdminMembership(
     acceptedOnly?: boolean;
   }
 ) {
+  return getSessionRoleMembership(tx, {
+    session,
+    userId,
+    acceptedOnly,
+    roles: [CommunityRole.ADMIN],
+  });
+}
+
+export async function getSessionOperatorMembership(
+  tx: DbClient,
+  {
+    session,
+    userId,
+    acceptedOnly = false,
+  }: {
+    session: SessionIdentity;
+    userId: string;
+    acceptedOnly?: boolean;
+  }
+) {
+  return getSessionRoleMembership(tx, {
+    session,
+    userId,
+    acceptedOnly,
+    roles: [...COMMUNITY_OPERATOR_ROLES],
+  });
+}
+
+async function getSessionRoleMembership(
+  tx: DbClient,
+  {
+    session,
+    userId,
+    acceptedOnly = false,
+    roles,
+  }: {
+    session: SessionIdentity;
+    userId: string;
+    acceptedOnly?: boolean;
+    roles: CommunityRole[];
+  }
+) {
   const communityIds = acceptedOnly
     ? await getAcceptedSessionCommunityIds(tx, session)
     : await getSessionCommunityIdsForAccess(tx, session);
@@ -225,7 +273,7 @@ export async function getSessionAdminMembership(
       where: {
         communityId: { in: communityIds },
         userId,
-        role: "ADMIN",
+        role: roles.length === 1 ? roles[0] : { in: roles },
       },
       select: {
         communityId: true,
@@ -252,7 +300,11 @@ export async function getSessionAdminMembership(
       },
     });
 
-    if (membership?.role === "ADMIN") {
+    const hasRole =
+      roles.length === 1 && roles[0] === CommunityRole.ADMIN
+        ? isCommunityAdminRole(membership?.role)
+        : isCommunityOperatorRole(membership?.role);
+    if (membership && hasRole) {
       return {
         ...membership,
         communityId: membership.communityId ?? communityId,

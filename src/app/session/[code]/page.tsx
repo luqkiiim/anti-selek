@@ -421,6 +421,10 @@ export default function SessionPage() {
 
   const isAdmin =
     !!sessionData?.viewerCanManage || !!user?.isAdmin || !!session?.user?.isAdmin;
+  const canUseAdminSessionControls =
+    !!sessionData?.viewerCanUseAdminSessionControls ||
+    !!user?.isAdmin ||
+    !!session?.user?.isAdmin;
   const isClaimedUser = user?.isClaimed === true;
   const currentUserId = session?.user?.id || "";
   const isTutorialPlayground =
@@ -1333,9 +1337,11 @@ export default function SessionPage() {
         autoQueueDraft={autoQueueDraft}
         canOpenRoster={isAdmin && !sessionView.isCompletedSession}
         canEndSession={isAdmin && sessionData.status === SessionStatus.ACTIVE}
-        canResetTestSession={sessionData.isTest}
-        canCreateRealSession={sessionData.isTest && !isTutorialPlayground}
-        canDeleteTestSession={sessionData.isTest}
+        canResetTestSession={canUseAdminSessionControls && sessionData.isTest}
+        canCreateRealSession={
+          canUseAdminSessionControls && sessionData.isTest && !isTutorialPlayground
+        }
+        canDeleteTestSession={canUseAdminSessionControls && sessionData.isTest}
         courtLabelDrafts={courtLabelDrafts}
         hasAutoQueueChange={hasAutoQueueChange}
         hasCourtLabelChanges={hasCourtLabelChanges}

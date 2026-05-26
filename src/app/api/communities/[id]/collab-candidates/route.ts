@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
+import { isCommunityOperatorRole } from "@/lib/communityRoles";
 import { logError, safeErrorResponse } from "@/lib/errors";
 import { isGlobalAdminEmail } from "@/lib/globalAdmin";
 import { prisma } from "@/lib/prisma";
@@ -73,7 +74,7 @@ export async function GET(
     if (
       !hostCommunity ||
       hostCommunity.isTutorial ||
-      (!isGlobalAdmin && hostMembership?.role !== "ADMIN")
+      (!isGlobalAdmin && !isCommunityOperatorRole(hostMembership?.role))
     ) {
       return invalidTargetResponse(
         request,

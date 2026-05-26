@@ -1,6 +1,7 @@
 "use client";
 
 import type { CommunityAdminPlayer } from "./communityAdminTypes";
+import { getCommunityRoleLabel } from "@/lib/communityRoles";
 import { getMixedSideDisplayLabel } from "@/lib/mixedSide";
 import { CommunityPlayerStatus, PlayerGender } from "@/types/enums";
 
@@ -37,7 +38,17 @@ export function CommunityAdminRolePill({
       <span
         className={`${baseClassName} border-[#ddd6fe] bg-[#ede9fe] text-[#5b21b6]`}
       >
-        {role}
+        {getCommunityRoleLabel(role)}
+      </span>
+    );
+  }
+
+  if (role === "STAFF") {
+    return (
+      <span
+        className={`${baseClassName} border-[#fde68a] bg-[#fef3c7] text-[#92400e]`}
+      >
+        {getCommunityRoleLabel(role)}
       </span>
     );
   }
@@ -46,7 +57,7 @@ export function CommunityAdminRolePill({
     <span
       className={`${baseClassName} border-[#bfdbfe] bg-[#dbeafe] text-[#1e40af]`}
     >
-      {role}
+      {getCommunityRoleLabel(role)}
     </span>
   );
 }

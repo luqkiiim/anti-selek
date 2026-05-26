@@ -82,13 +82,22 @@ describe("collab community candidate search route", () => {
     expect(mocks.communityFindMany).not.toHaveBeenCalled();
   });
 
-  it("requires a host community admin", async () => {
+  it("requires a host community admin or staff member", async () => {
     mocks.communityMemberFindUnique.mockResolvedValue({ role: "MEMBER" });
 
     const response = await getCandidates("pa");
 
     expect(response.status).toBe(403);
     expect(mocks.communityFindMany).not.toHaveBeenCalled();
+  });
+
+  it("allows staff to search outgoing collab candidates", async () => {
+    mocks.communityMemberFindUnique.mockResolvedValue({ role: "STAFF" });
+
+    const response = await getCandidates("partner");
+
+    expect(response.status).toBe(200);
+    expect(mocks.communityFindMany).toHaveBeenCalled();
   });
 
   it("returns an empty result without querying all communities for short searches", async () => {

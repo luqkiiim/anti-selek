@@ -39,7 +39,7 @@ describe("createSessionForUser", () => {
     vi.clearAllMocks();
   });
 
-  it("does not auto-add the requester to the tournament player list", async () => {
+  it("allows staff to host without auto-adding the requester to the tournament player list", async () => {
     const input = parseCreateSessionRequest({
       name: "Friday Night",
       communityId: "community-1",
@@ -52,7 +52,7 @@ describe("createSessionForUser", () => {
     vi.mocked(prisma.communityMember.findUnique).mockResolvedValue({
       communityId: "community-1",
       userId: "host-1",
-      role: "ADMIN",
+      role: "STAFF",
     } as never);
     vi.mocked(prisma.community.findUnique).mockResolvedValue({
       isTutorial: false,

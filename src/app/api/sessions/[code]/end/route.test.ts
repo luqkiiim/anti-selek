@@ -11,7 +11,7 @@ const mocks = vi.hoisted(() => ({
   courtUpdateMany: vi.fn(),
   matchDeleteMany: vi.fn(),
   transaction: vi.fn(),
-  getSessionAdminMembership: vi.fn(),
+  getSessionOperatorMembership: vi.fn(),
   getAcceptedSessionCommunityIds: vi.fn(),
   getPlayerCommunityBadges: vi.fn(),
   withPlayerCommunityBadges: vi.fn(),
@@ -35,7 +35,7 @@ vi.mock("@/lib/prisma", () => ({
 vi.mock("@/lib/sessionCollab", () => ({
   getAcceptedSessionCommunityIds: mocks.getAcceptedSessionCommunityIds,
   getPlayerCommunityBadges: mocks.getPlayerCommunityBadges,
-  getSessionAdminMembership: mocks.getSessionAdminMembership,
+  getSessionOperatorMembership: mocks.getSessionOperatorMembership,
   withPlayerCommunityBadges: mocks.withPlayerCommunityBadges,
 }));
 
@@ -57,14 +57,14 @@ describe("session end route", () => {
     vi.clearAllMocks();
 
     mocks.auth.mockResolvedValue({
-      user: { id: "admin-1", isAdmin: true },
+      user: { id: "staff-1", isAdmin: false },
     });
     mocks.rateLimit.mockResolvedValue(null);
     mocks.checkInvalidTargetRateLimit.mockResolvedValue(null);
     mocks.invalidTargetResponse.mockResolvedValue(
       Response.json({ error: "Unauthorized" }, { status: 403 })
     );
-    mocks.getSessionAdminMembership.mockResolvedValue({ role: "ADMIN" });
+    mocks.getSessionOperatorMembership.mockResolvedValue({ role: "STAFF" });
     mocks.getAcceptedSessionCommunityIds.mockResolvedValue(["community-1"]);
     mocks.getCommunityEloByUserId.mockResolvedValue(new Map());
     mocks.withCommunityElo.mockImplementation((players) => players);
@@ -128,7 +128,7 @@ describe("session end route", () => {
     );
   });
 
-  it("returns players with avatarUrl in the immediate completion payload", async () => {
+  it("allows staff to end sessions and returns avatarUrl in the immediate completion payload", async () => {
     const response = await POST(new Request("http://localhost/api/sessions/ABC123/end"), {
       params: Promise.resolve({ code: "ABC123" }),
     });

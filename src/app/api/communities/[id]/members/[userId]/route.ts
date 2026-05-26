@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { serializeAvatarEntity } from "@/lib/avatar";
+import { isValidCommunityRole } from "@/lib/communityRoles";
 import { prisma } from "@/lib/prisma";
 import {
   isValidMixedSide,
@@ -8,7 +9,7 @@ import {
   isValidPlayerGender,
   resolveMixedSideState,
 } from "@/lib/mixedSide";
-import { CommunityPlayerStatus, PlayerGender } from "@/types/enums";
+import { CommunityPlayerStatus, CommunityRole, PlayerGender } from "@/types/enums";
 import { logError, safeErrorResponse } from "@/lib/errors";
 import { rateLimit, checkInvalidTargetRateLimit, invalidTargetResponse } from "@/lib/rateLimit";
 import {
@@ -199,21 +200,49 @@ export async function PATCH(
     if (status !== undefined && !isValidCommunityPlayerStatus(status)) {
       return NextResponse.json({ error: "Invalid roster status" }, { status: 400 });
     }
-    if (role !== undefined && role !== "ADMIN") {
+    if (role !== undefined && !isValidCommunityRole(role)) {
       return NextResponse.json({ error: "Invalid role update" }, { status: 400 });
     }
 
     const normalizedEmail = typeof email === "string" ? email.trim().toLowerCase() : email;
-    const shouldPromoteToAdmin = role === "ADMIN" && membership.role !== "ADMIN";
+    const requestedRole = isValidCommunityRole(role) ? role : undefined;
+    const nextRole =
+      requestedRole && requestedRole !== membership.role ? requestedRole : undefined;
+    const shouldPromoteToAdmin = nextRole === CommunityRole.ADMIN;
+    const shouldGrantStaff = nextRole === CommunityRole.STAFF;
+    const shouldRevokeStaff = nextRole === CommunityRole.MEMBER;
 
-    if (shouldPromoteToAdmin) {
+    if (shouldGrantStaff && membership.role === CommunityRole.ADMIN) {
+      return NextResponse.json(
+        { error: "Admins cannot be changed to staff here" },
+        { status: 400 }
+      );
+    }
+    if (shouldRevokeStaff && membership.role === CommunityRole.ADMIN) {
+      return NextResponse.json(
+        { error: "Admins cannot be demoted here" },
+        { status: 400 }
+      );
+    }
+    if (shouldRevokeStaff && membership.role !== CommunityRole.STAFF) {
+      return NextResponse.json(
+        { error: "Only staff members can be changed back to member here" },
+        { status: 400 }
+      );
+    }
+
+    if (shouldPromoteToAdmin || shouldGrantStaff) {
       const targetUser = await prisma.user.findUnique({
         where: { id: userId },
         select: { isClaimed: true },
       });
       if (!targetUser?.isClaimed) {
         return NextResponse.json(
-          { error: "Only claimed members can be promoted to admin" },
+          {
+            error: shouldPromoteToAdmin
+              ? "Only claimed members can be promoted to admin"
+              : "Only claimed members can be made staff",
+          },
           { status: 400 }
         );
       }
@@ -334,6 +363,8 @@ export async function PATCH(
     const updatedMembership =
       typeof elo === "number" ||
       shouldPromoteToAdmin ||
+      shouldGrantStaff ||
+      shouldRevokeStaff ||
       isValidCommunityPlayerStatus(status)
         ? await prisma.communityMember.update({
             where: {
@@ -345,7 +376,7 @@ export async function PATCH(
             data: {
               ...(typeof elo === "number" ? { elo } : {}),
               ...(isValidCommunityPlayerStatus(status) ? { status } : {}),
-              ...(shouldPromoteToAdmin ? { role: "ADMIN" } : {}),
+              ...(nextRole ? { role: nextRole } : {}),
             },
             select: { role: true, elo: true, status: true },
           })

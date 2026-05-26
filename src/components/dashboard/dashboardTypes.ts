@@ -3,7 +3,7 @@
 export interface DashboardCommunity {
   id: string;
   name: string;
-  role: "ADMIN" | "MEMBER";
+  role: "ADMIN" | "STAFF" | "MEMBER";
   isPasswordProtected: boolean;
   isTutorial?: boolean;
   membersCount: number;
