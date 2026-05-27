@@ -301,6 +301,28 @@ describe("matchmaking v3 scoring", () => {
     ).toBeLessThan(0);
   });
 
+  it("ignores wait preference when player rest is disabled", () => {
+    const longerWaiting = createSelection({
+      waitMs: Array(4).fill(POINTS_WAIT_TOLERANCE_MS + 1),
+      balanceGap: 5,
+      exactRematchPenalty: 0,
+    });
+    const betterBalanced = createSelection({
+      waitMs: [0, 0, 0, 0],
+      balanceGap: 0,
+      exactRematchPenalty: 0,
+    });
+
+    expect(
+      compareSingleCourtSelections(
+        betterBalanced,
+        longerWaiting,
+        SessionType.POINTS,
+        { respectPlayerRest: false }
+      )
+    ).toBeLessThan(0);
+  });
+
   it("uses points balance after shared-court repeats tie", () => {
     const lowerBalanceGap = createSelection({
       balanceGap: 0,
@@ -510,6 +532,32 @@ describe("matchmaking v3 scoring", () => {
         freshCourtBatch,
         repeatedCourtBatch,
         SessionType.POINTS
+      )
+    ).toBeLessThan(0);
+  });
+
+  it("ignores back-to-back burden when player rest is disabled", () => {
+    const lowerBurden = createSelection({
+      balanceGap: 10,
+      exactRematchPenalty: 0,
+      consecutivePlayCount: 1,
+      consecutivePlayMaxBurden: 0,
+      consecutivePlayTotalBurden: 0,
+    });
+    const betterBalancedRepeatedStayer = createSelection({
+      balanceGap: 0,
+      exactRematchPenalty: 0,
+      consecutivePlayCount: 1,
+      consecutivePlayMaxBurden: 1,
+      consecutivePlayTotalBurden: 1,
+    });
+
+    expect(
+      compareSingleCourtSelections(
+        betterBalancedRepeatedStayer,
+        lowerBurden,
+        SessionType.POINTS,
+        { respectPlayerRest: false }
       )
     ).toBeLessThan(0);
   });

@@ -16,6 +16,8 @@ interface HostTournamentPanelProps {
   onIsTestSessionChange: (value: boolean) => void;
   autoQueueEnabled: boolean;
   onAutoQueueEnabledChange: (value: boolean) => void;
+  respectPlayerRest: boolean;
+  onRespectPlayerRestChange: (value: boolean) => void;
   partnerCommunityId: string;
   partnerCommunitySearch: string;
   onPartnerCommunitySearchChange: (value: string) => void;
@@ -237,6 +239,8 @@ export function HostTournamentPanel({
   onIsTestSessionChange,
   autoQueueEnabled,
   onAutoQueueEnabledChange,
+  respectPlayerRest,
+  onRespectPlayerRestChange,
   partnerCommunityId,
   partnerCommunitySearch,
   onPartnerCommunitySearchChange,
@@ -274,6 +278,7 @@ export function HostTournamentPanel({
   const advancedSummaryItems = [
     isTestSession ? "Test session" : null,
     autoQueueEnabled ? null : "Auto queue off",
+    respectPlayerRest ? null : "Rest ignored",
     poolsEnabled ? "Pools enabled" : null,
     selectedPartnerCommunity
       ? `Collab: ${selectedPartnerCommunity.name}`
@@ -461,6 +466,12 @@ export function HostTournamentPanel({
                   description="Lock the next quartet automatically once all courts are full."
                   checked={autoQueueEnabled}
                   onChange={onAutoQueueEnabledChange}
+                />
+                <SwitchRow
+                  label="Respect player rest"
+                  description="Prefer longer-waiting players and avoid immediate back-to-back matches."
+                  checked={respectPlayerRest}
+                  onChange={onRespectPlayerRestChange}
                 />
                 <SwitchRow
                   label="Pools"

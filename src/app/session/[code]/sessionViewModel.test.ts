@@ -50,6 +50,7 @@ function createSessionData(overrides: Partial<SessionData> = {}): SessionData {
     status: SessionStatus.ACTIVE,
     isTest: false,
     autoQueueEnabled: true,
+    respectPlayerRest: true,
     poolsEnabled: false,
     poolAName: "Open",
     poolBName: "Regular",

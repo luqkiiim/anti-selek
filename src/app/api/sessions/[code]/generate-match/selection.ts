@@ -119,16 +119,17 @@ function withMatchmakingReason<
     };
   }
 
-  return {
-    ...selection,
-    matchmakingReasonJson: buildV3MatchmakingReasonJson(selection, {
-      sessionType: sessionData.type as SessionType,
-      sessionMode: sessionData.mode as SessionMode,
-      targetPool: "targetPool" in selection ? selection.targetPool ?? null : null,
-      missedPool: "missedPool" in selection ? selection.missedPool ?? null : null,
-    }),
-  };
-}
+    return {
+      ...selection,
+      matchmakingReasonJson: buildV3MatchmakingReasonJson(selection, {
+        sessionType: sessionData.type as SessionType,
+        sessionMode: sessionData.mode as SessionMode,
+        targetPool: "targetPool" in selection ? selection.targetPool ?? null : null,
+        missedPool: "missedPool" in selection ? selection.missedPool ?? null : null,
+        respectPlayerRest: sessionData.respectPlayerRest,
+      }),
+    };
+  }
 
 function getPlayerBalanceInput({
   sessionType,
@@ -763,6 +764,7 @@ function buildPoolSelectionPlanner({
         : ladderPlayers;
       const result = findBestSingleCourtSelectionLadder(sourcePlayers, {
         sessionMode: sessionData.mode as SessionMode,
+        respectPlayerRest: sessionData.respectPlayerRest,
         excludedQuartetKey,
         excludedQuartetKeys,
         excludedPartitionKey,
@@ -789,6 +791,7 @@ function buildPoolSelectionPlanner({
     const result = findBestSingleCourtSelectionV3(sourcePlayers, {
       sessionMode: sessionData.mode as SessionMode,
       sessionType: sessionData.type as SessionType,
+      respectPlayerRest: sessionData.respectPlayerRest,
       completedMatches,
       excludedQuartetKey,
       excludedQuartetKeys,
@@ -1119,17 +1122,19 @@ export function selectSingleCourtMatch({
     sessionData.type === SessionType.LADDER ||
     sessionData.type === SessionType.RACE;
   const initialResult = usesCompetitiveGrouping
-    ? findBestSingleCourtSelectionLadder(
-        buildLadderPlayers(sessionData, playersById, rankedCandidates),
-        {
-          sessionMode: sessionData.mode as SessionMode,
-        }
-      )
+      ? findBestSingleCourtSelectionLadder(
+          buildLadderPlayers(sessionData, playersById, rankedCandidates),
+          {
+            sessionMode: sessionData.mode as SessionMode,
+            respectPlayerRest: sessionData.respectPlayerRest,
+          }
+        )
     : findBestSingleCourtSelectionV3(
         buildV3Players(sessionData, playersById, rankedCandidates),
         {
           sessionMode: sessionData.mode as SessionMode,
           sessionType: sessionData.type as SessionType,
+          respectPlayerRest: sessionData.respectPlayerRest,
           completedMatches,
         }
       );
@@ -1168,6 +1173,7 @@ export function selectSingleCourtMatch({
       competitivePlayers,
       {
         sessionMode: sessionData.mode as SessionMode,
+        respectPlayerRest: sessionData.respectPlayerRest,
         excludedQuartetKey: previousQuartetKey,
       }
     );
@@ -1184,6 +1190,7 @@ export function selectSingleCourtMatch({
       competitivePlayers,
       {
         sessionMode: sessionData.mode as SessionMode,
+        respectPlayerRest: sessionData.respectPlayerRest,
         excludedPartitionKey: previousPartitionKey,
       }
     );
@@ -1213,6 +1220,7 @@ export function selectSingleCourtMatch({
   const alternativeQuartet = findBestSingleCourtSelectionV3(v3Players, {
     sessionMode: sessionData.mode as SessionMode,
     sessionType: sessionData.type as SessionType,
+    respectPlayerRest: sessionData.respectPlayerRest,
     completedMatches,
     excludedQuartetKey: previousQuartetKey,
   });
@@ -1228,6 +1236,7 @@ export function selectSingleCourtMatch({
   const alternativePartition = findBestSingleCourtSelectionV3(v3Players, {
     sessionMode: sessionData.mode as SessionMode,
     sessionType: sessionData.type as SessionType,
+    respectPlayerRest: sessionData.respectPlayerRest,
     completedMatches,
     excludedPartitionKey: previousPartitionKey,
   });
@@ -1271,6 +1280,7 @@ function selectExactQuartetMatch({
       buildLadderPlayers(sessionData, playersById, exactRankedCandidates),
       {
         sessionMode: sessionData.mode as SessionMode,
+        respectPlayerRest: sessionData.respectPlayerRest,
       }
     );
 
@@ -1290,6 +1300,7 @@ function selectExactQuartetMatch({
     {
       sessionMode: sessionData.mode as SessionMode,
       sessionType: sessionData.type as SessionType,
+      respectPlayerRest: sessionData.respectPlayerRest,
       completedMatches: buildCompletedMatches(sessionData),
     }
   );
@@ -1440,6 +1451,7 @@ export function selectBatchMatches({
       {
         courtCount: requestedMatchCount,
         sessionMode: sessionData.mode as SessionMode,
+        respectPlayerRest: sessionData.respectPlayerRest,
       }
     );
 
@@ -1466,6 +1478,7 @@ export function selectBatchMatches({
       courtCount: requestedMatchCount,
       sessionMode: sessionData.mode as SessionMode,
       sessionType: sessionData.type as SessionType,
+      respectPlayerRest: sessionData.respectPlayerRest,
       completedMatches: buildCompletedMatches(sessionData),
       randomFn,
     }

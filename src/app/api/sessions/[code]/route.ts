@@ -27,6 +27,7 @@ export const dynamic = "force-dynamic";
 
 interface UpdateSessionSettingsRequest {
   autoQueueEnabled?: unknown;
+  respectPlayerRest?: unknown;
 }
 
 async function getSessionRoute(
@@ -286,9 +287,16 @@ export async function PATCH(
 
     const body =
       (await request.json().catch(() => null)) as UpdateSessionSettingsRequest | null;
-    if (!body || typeof body.autoQueueEnabled !== "boolean") {
+    if (
+      !body ||
+      typeof body.autoQueueEnabled !== "boolean" ||
+      typeof body.respectPlayerRest !== "boolean"
+    ) {
       return NextResponse.json(
-        { error: "autoQueueEnabled must be true or false" },
+        {
+          error:
+            "autoQueueEnabled and respectPlayerRest must be true or false",
+        },
         { status: 400 }
       );
     }
@@ -328,7 +336,10 @@ export async function PATCH(
       await prisma.$transaction([
         prisma.session.update({
           where: { id: sessionData.id },
-          data: { autoQueueEnabled: false },
+          data: {
+            autoQueueEnabled: false,
+            respectPlayerRest: body.respectPlayerRest,
+          },
         }),
         prisma.queuedMatch.deleteMany({
           where: { sessionId: sessionData.id },
@@ -337,17 +348,22 @@ export async function PATCH(
 
       return NextResponse.json({
         autoQueueEnabled: false,
+        respectPlayerRest: body.respectPlayerRest,
         queuedMatch: null,
       });
     }
 
     await prisma.session.update({
       where: { id: sessionData.id },
-      data: { autoQueueEnabled: true },
+      data: {
+        autoQueueEnabled: true,
+        respectPlayerRest: body.respectPlayerRest,
+      },
     });
 
     return NextResponse.json({
       autoQueueEnabled: true,
+      respectPlayerRest: body.respectPlayerRest,
       queuedMatch: await tryRebuildQueuedMatchForSessionId(sessionData.id),
     });
   } catch (error) {

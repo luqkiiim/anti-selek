@@ -96,6 +96,26 @@ describe("matchmaking reason", () => {
     expect(reason.summary.join(" ")).toContain("Mixed court legality");
   });
 
+  it("omits rest-specific wording when rest is disabled", () => {
+    const reason = buildV3MatchmakingReason(
+      createSelection({
+        consecutivePlayCount: 1,
+        consecutivePlayMaxBurden: 2,
+        consecutivePlayTotalBurden: 2,
+      }),
+      {
+        sessionType: SessionType.POINTS,
+        sessionMode: SessionMode.MEXICANO,
+        respectPlayerRest: false,
+      }
+    );
+
+    expect(reason.metrics.waitToleranceSeconds).toBeUndefined();
+    expect(reason.metrics.consecutivePlayCount).toBeUndefined();
+    expect(reason.summary.join(" ")).not.toContain("Wait differences within");
+    expect(reason.summary.join(" ")).not.toContain("previous match");
+  });
+
   it("omits points wait tolerance for rating reasons", () => {
     const reason = buildV3MatchmakingReason(
       createSelection({

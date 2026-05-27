@@ -10,6 +10,8 @@ interface SessionSettingsModalProps {
   isTestSession: boolean;
   autoQueueEnabled: boolean;
   autoQueueDraft: boolean;
+  respectPlayerRest: boolean;
+  respectPlayerRestDraft: boolean;
   canOpenRoster: boolean;
   canEndSession: boolean;
   canResetTestSession: boolean;
@@ -17,6 +19,7 @@ interface SessionSettingsModalProps {
   canDeleteTestSession: boolean;
   courtLabelDrafts: Record<string, string>;
   hasAutoQueueChange: boolean;
+  hasRespectPlayerRestChange: boolean;
   hasCourtLabelChanges: boolean;
   hasSettingsChanges: boolean;
   savingSettings: boolean;
@@ -27,6 +30,7 @@ interface SessionSettingsModalProps {
   onCreateRealSession: () => void;
   onDeleteTestSession: () => void;
   onAutoQueueChange: (enabled: boolean) => void;
+  onRespectPlayerRestChange: (enabled: boolean) => void;
   onCourtLabelChange: (courtId: string, value: string) => void;
   onSaveSettings: () => void;
 }
@@ -37,6 +41,8 @@ export function SessionSettingsModal({
   isTestSession,
   autoQueueEnabled,
   autoQueueDraft,
+  respectPlayerRest,
+  respectPlayerRestDraft,
   canOpenRoster,
   canEndSession,
   canResetTestSession,
@@ -44,6 +50,7 @@ export function SessionSettingsModal({
   canDeleteTestSession,
   courtLabelDrafts,
   hasAutoQueueChange,
+  hasRespectPlayerRestChange,
   hasCourtLabelChanges,
   hasSettingsChanges,
   savingSettings,
@@ -54,6 +61,7 @@ export function SessionSettingsModal({
   onCreateRealSession,
   onDeleteTestSession,
   onAutoQueueChange,
+  onRespectPlayerRestChange,
   onCourtLabelChange,
   onSaveSettings,
 }: SessionSettingsModalProps) {
@@ -173,9 +181,39 @@ export function SessionSettingsModal({
               {autoQueueDraft ? "On" : "Off"}
             </button>
           </div>
-          {hasAutoQueueChange && !hasCourtLabelChanges ? (
+          <div className="flex items-start justify-between gap-4 rounded-xl border border-gray-200 bg-gray-50/80 px-4 py-4">
+            <div className="space-y-1">
+              <h3 className="text-sm font-semibold text-gray-900">
+                Respect player rest
+              </h3>
+              <p className="text-sm text-gray-500">
+                When on, matchmaking prefers longer-waiting players and avoids
+                immediate back-to-back play.
+              </p>
+              {!respectPlayerRest && respectPlayerRestDraft ? (
+                <p className="text-xs font-medium text-blue-700">
+                  Turning this back on restores rest-aware matchmaking.
+                </p>
+              ) : null}
+            </div>
+            <button
+              type="button"
+              onClick={() =>
+                onRespectPlayerRestChange(!respectPlayerRestDraft)
+              }
+              className={`shrink-0 rounded-lg border px-3 py-2 text-sm font-semibold transition ${
+                respectPlayerRestDraft
+                  ? "border-blue-200 bg-blue-50 text-blue-700"
+                  : "border-gray-200 bg-white text-gray-500"
+              }`}
+            >
+              {respectPlayerRestDraft ? "On" : "Off"}
+            </button>
+          </div>
+          {(hasAutoQueueChange || hasRespectPlayerRestChange) &&
+          !hasCourtLabelChanges ? (
             <p className="text-xs text-gray-500">
-              Queue behavior will update when you save.
+              Matchmaking settings will update when you save.
             </p>
           ) : null}
         </section>

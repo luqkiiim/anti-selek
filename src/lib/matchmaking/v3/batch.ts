@@ -360,7 +360,8 @@ function getMaxBatchCandidateCount(
 
 function compressQuartetSelections<T extends ActiveMatchmakerV3Player>(
   selections: V3SingleCourtSelection<T>[],
-  sessionType: SessionType
+  sessionType: SessionType,
+  respectPlayerRest: boolean
 ) {
   const groupedSelections = new Map<string, V3SingleCourtSelection<T>[]>();
 
@@ -380,7 +381,9 @@ function compressQuartetSelections<T extends ActiveMatchmakerV3Player>(
 
   for (const group of groupedSelections.values()) {
     const sortedGroup = [...group].sort((left, right) =>
-      compareSingleCourtSelections(left, right, sessionType)
+      compareSingleCourtSelections(left, right, sessionType, {
+        respectPlayerRest,
+      })
     );
     const firstSelection = sortedGroup[0];
 
@@ -456,7 +459,9 @@ function compressQuartetSelections<T extends ActiveMatchmakerV3Player>(
   }
 
   return compressedSelections.sort((left, right) =>
-    compareSingleCourtSelections(left, right, sessionType)
+    compareSingleCourtSelections(left, right, sessionType, {
+      respectPlayerRest,
+    })
   );
 }
 
@@ -523,6 +528,7 @@ function searchBatchCandidatePlayers<T extends MatchmakerV3Player>({
   courtCount,
   sessionMode,
   sessionType,
+  respectPlayerRest,
   completedMatches,
 }: {
   candidatePlayers: ActiveMatchmakerV3Player<T>[];
@@ -530,6 +536,7 @@ function searchBatchCandidatePlayers<T extends MatchmakerV3Player>({
   courtCount: number;
   sessionMode: SessionMode;
   sessionType: SessionType;
+  respectPlayerRest: boolean;
   completedMatches: Array<{
     team1: [string, string];
     team2: [string, string];
@@ -561,7 +568,8 @@ function searchBatchCandidatePlayers<T extends MatchmakerV3Player>({
       sessionMode,
       completedMatches,
     }),
-    sessionType
+    sessionType,
+    respectPlayerRest
   );
 
   if (quartetSelections.length < courtCount) {
@@ -628,7 +636,9 @@ function searchBatchCandidatePlayers<T extends MatchmakerV3Player>({
         !bestSelection ||
         fairnessCompare < 0 ||
         (fairnessCompare === 0 &&
-          compareBatchSelections(batchSelection, bestSelection, sessionType) < 0)
+          compareBatchSelections(batchSelection, bestSelection, sessionType, {
+            respectPlayerRest,
+          }) < 0)
       ) {
         bestSelection = batchSelection;
       }
@@ -708,6 +718,7 @@ export function findBestBatchSelectionV3<T extends MatchmakerV3Player>(
     courtCount,
     sessionMode,
     sessionType,
+    respectPlayerRest = true,
     completedMatches = [],
     now = Date.now(),
     matchDurationMs = DEFAULT_MATCH_DURATION_MS,
@@ -716,6 +727,7 @@ export function findBestBatchSelectionV3<T extends MatchmakerV3Player>(
     courtCount: number;
     sessionMode: SessionMode;
     sessionType: SessionType;
+    respectPlayerRest?: boolean;
     completedMatches?: Array<{
       team1: [string, string];
       team2: [string, string];
@@ -733,8 +745,9 @@ export function findBestBatchSelectionV3<T extends MatchmakerV3Player>(
     matchDurationMs,
     randomFn,
     waitToleranceMs:
-      sessionType === SessionType.POINTS ||
-      sessionType === SessionType.SOCIAL_MIX
+      respectPlayerRest &&
+      (sessionType === SessionType.POINTS ||
+        sessionType === SessionType.SOCIAL_MIX)
         ? POINTS_WAIT_TOLERANCE_MS
         : 0,
   });
@@ -811,6 +824,7 @@ export function findBestBatchSelectionV3<T extends MatchmakerV3Player>(
       courtCount,
       sessionMode,
       sessionType,
+      respectPlayerRest,
       completedMatches,
     });
 

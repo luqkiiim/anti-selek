@@ -34,6 +34,7 @@ interface CreateSessionBody {
   mode?: unknown;
   isTest?: unknown;
   autoQueueEnabled?: unknown;
+  respectPlayerRest?: unknown;
   playerIds?: unknown;
   guestNames?: unknown;
   playerConfigs?: unknown;
@@ -215,6 +216,7 @@ export function parseCreateSessionRequest(
     courtCount = 3,
     isTest = false,
     autoQueueEnabled = false,
+    respectPlayerRest = true,
     poolsEnabled = false,
     poolAName = DEFAULT_SESSION_POOL_A_NAME,
     poolBName = DEFAULT_SESSION_POOL_B_NAME,
@@ -266,6 +268,7 @@ export function parseCreateSessionRequest(
     ? playerIds.filter((id): id is string => typeof id === "string")
     : [];
   const normalizedAutoQueueEnabled = autoQueueEnabled === true;
+  const normalizedRespectPlayerRest = respectPlayerRest !== false;
   const normalizedPoolsEnabled = poolsEnabled === true;
   const normalizedPoolAName = normalizeSessionPoolName(
     typeof poolAName === "string" ? poolAName : null,
@@ -298,6 +301,7 @@ export function parseCreateSessionRequest(
       normalizedPoolsEnabled
     ),
     autoQueueEnabled: normalizedAutoQueueEnabled,
+    respectPlayerRest: normalizedRespectPlayerRest,
     poolsEnabled: normalizedPoolsEnabled,
     poolAName: normalizedPoolAName,
     poolBName: normalizedPoolBName,

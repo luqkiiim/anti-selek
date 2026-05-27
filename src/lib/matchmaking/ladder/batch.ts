@@ -305,12 +305,14 @@ export function findBestBatchSelectionLadder<T extends MatchmakerLadderPlayer>(
   {
     courtCount,
     sessionMode,
+    respectPlayerRest = true,
     now = Date.now(),
     matchDurationMs = DEFAULT_MATCH_DURATION_MS,
     randomFn = Math.random,
   }: {
     courtCount: number;
     sessionMode: SessionMode;
+    respectPlayerRest?: boolean;
     now?: number;
     matchDurationMs?: number;
     randomFn?: () => number;
@@ -382,7 +384,9 @@ export function findBestBatchSelectionLadder<T extends MatchmakerLadderPlayer>(
       batchCandidatePlayers,
       sessionMode
     ).sort((left, right) =>
-      compareSingleCourtSelections(left, right, sessionMode)
+      compareSingleCourtSelections(left, right, sessionMode, {
+        respectPlayerRest,
+      })
     );
 
     debug.includedBandValues = candidatePool.includedBandValues;
@@ -467,7 +471,9 @@ export function findBestBatchSelectionLadder<T extends MatchmakerLadderPlayer>(
         const batchSelection = summarizeBatch(chosen);
         if (
           !bestSelection ||
-          compareBatchSelections(batchSelection, bestSelection, sessionMode) < 0
+          compareBatchSelections(batchSelection, bestSelection, sessionMode, {
+            respectPlayerRest,
+          }) < 0
         ) {
           bestSelection = batchSelection;
         }

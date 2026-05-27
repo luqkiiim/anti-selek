@@ -128,6 +128,7 @@ export default function SessionPage() {
   const [showPlayersModal, setShowPlayersModal] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [autoQueueDraft, setAutoQueueDraft] = useState(true);
+  const [respectPlayerRestDraft, setRespectPlayerRestDraft] = useState(true);
   const [courtLabelDrafts, setCourtLabelDrafts] = useState<
     Record<string, string>
   >({});
@@ -566,7 +567,15 @@ export default function SessionPage() {
 
     return autoQueueDraft !== sessionData.autoQueueEnabled;
   }, [autoQueueDraft, sessionData]);
-  const hasSettingsChanges = hasCourtLabelChanges || hasAutoQueueChange;
+  const hasRespectPlayerRestChange = useMemo(() => {
+    if (!sessionData) {
+      return false;
+    }
+
+    return respectPlayerRestDraft !== sessionData.respectPlayerRest;
+  }, [respectPlayerRestDraft, sessionData]);
+  const hasSettingsChanges =
+    hasCourtLabelChanges || hasAutoQueueChange || hasRespectPlayerRestChange;
   const completedScoredTestMatchesCount = useMemo(
     () =>
       (sessionData?.matches ?? []).filter(
@@ -585,6 +594,7 @@ export default function SessionPage() {
 
     setError("");
     setAutoQueueDraft(sessionData.autoQueueEnabled);
+    setRespectPlayerRestDraft(sessionData.respectPlayerRest);
     setCourtLabelDrafts(
       Object.fromEntries(
         sessionData.courts.map((court) => [court.id, court.label ?? ""])
@@ -655,18 +665,21 @@ export default function SessionPage() {
         );
       }
 
-      if (hasAutoQueueChange) {
+      if (hasAutoQueueChange || hasRespectPlayerRestChange) {
         const res = await fetch(`/api/sessions/${code}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             autoQueueEnabled: autoQueueDraft,
+            respectPlayerRest: respectPlayerRestDraft,
           }),
         });
         const data = await safeJson<SessionSnapshotResponse>(res);
 
         if (!res.ok) {
-          setError(getErrorMessage(data, "Failed to update auto queue"));
+          setError(
+            getErrorMessage(data, "Failed to update matchmaking settings")
+          );
           return;
         }
 
@@ -687,8 +700,10 @@ export default function SessionPage() {
     courtLabelDrafts,
     hasAutoQueueChange,
     hasCourtLabelChanges,
+    hasRespectPlayerRestChange,
     hasSettingsChanges,
     patchSessionData,
+    respectPlayerRestDraft,
     scheduleSessionRefresh,
     sessionData,
   ]);
@@ -1335,6 +1350,8 @@ export default function SessionPage() {
         isTestSession={sessionData.isTest}
         autoQueueEnabled={sessionData.autoQueueEnabled}
         autoQueueDraft={autoQueueDraft}
+        respectPlayerRest={sessionData.respectPlayerRest}
+        respectPlayerRestDraft={respectPlayerRestDraft}
         canOpenRoster={isAdmin && !sessionView.isCompletedSession}
         canEndSession={isAdmin && sessionData.status === SessionStatus.ACTIVE}
         canResetTestSession={canUseAdminSessionControls && sessionData.isTest}
@@ -1344,6 +1361,7 @@ export default function SessionPage() {
         canDeleteTestSession={canUseAdminSessionControls && sessionData.isTest}
         courtLabelDrafts={courtLabelDrafts}
         hasAutoQueueChange={hasAutoQueueChange}
+        hasRespectPlayerRestChange={hasRespectPlayerRestChange}
         hasCourtLabelChanges={hasCourtLabelChanges}
         hasSettingsChanges={hasSettingsChanges}
         savingSettings={savingSettings}
@@ -1354,6 +1372,7 @@ export default function SessionPage() {
         onCreateRealSession={openCreateRealSessionConfirm}
         onDeleteTestSession={openDeleteTestConfirm}
         onAutoQueueChange={setAutoQueueDraft}
+        onRespectPlayerRestChange={setRespectPlayerRestDraft}
         onCourtLabelChange={handleCourtLabelChange}
         onSaveSettings={() => void saveSessionSettings()}
       />

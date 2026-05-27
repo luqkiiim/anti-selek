@@ -54,6 +54,7 @@ describe("session settings route", () => {
         },
         body: JSON.stringify({
           autoQueueEnabled: false,
+          respectPlayerRest: false,
         }),
       }),
       {
@@ -64,6 +65,7 @@ describe("session settings route", () => {
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({
       autoQueueEnabled: false,
+      respectPlayerRest: false,
       queuedMatch: null,
     });
     expect(prisma.$transaction).toHaveBeenCalledTimes(1);
@@ -95,6 +97,7 @@ describe("session settings route", () => {
         },
         body: JSON.stringify({
           autoQueueEnabled: true,
+          respectPlayerRest: true,
         }),
       }),
       {
@@ -105,13 +108,14 @@ describe("session settings route", () => {
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toMatchObject({
       autoQueueEnabled: true,
+      respectPlayerRest: true,
       queuedMatch: {
         id: "queue-1",
       },
     });
     expect(prisma.session.update).toHaveBeenCalledWith({
       where: { id: "session-1" },
-      data: { autoQueueEnabled: true },
+      data: { autoQueueEnabled: true, respectPlayerRest: true },
     });
     expect(tryRebuildQueuedMatchForSessionId).toHaveBeenCalledWith("session-1");
   });

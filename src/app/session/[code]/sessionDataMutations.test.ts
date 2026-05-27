@@ -33,6 +33,7 @@ function createSessionData(): SessionData {
     status: "ACTIVE",
     isTest: false,
     autoQueueEnabled: true,
+    respectPlayerRest: true,
     poolsEnabled: false,
     poolAName: "Open",
     poolBName: "Regular",

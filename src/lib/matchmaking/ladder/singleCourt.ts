@@ -127,6 +127,7 @@ export function findBestSingleCourtSelectionLadder<
     excludedPartitionKey,
     targetPool,
     minimumTargetPoolPlayers,
+    respectPlayerRest = true,
     now = Date.now(),
     matchDurationMs = DEFAULT_MATCH_DURATION_MS,
     randomFn = Math.random,
@@ -137,6 +138,7 @@ export function findBestSingleCourtSelectionLadder<
     excludedPartitionKey?: string;
     targetPool?: string;
     minimumTargetPoolPlayers?: number;
+    respectPlayerRest?: boolean;
     now?: number;
     matchDurationMs?: number;
     randomFn?: () => number;
@@ -287,7 +289,8 @@ export function findBestSingleCourtSelectionLadder<
             compareSingleCourtSelections(
               selection,
               candidatePoolBestSelection,
-              sessionMode
+              sessionMode,
+              { respectPlayerRest }
             ) < 0)
         ) {
           candidatePoolBestSelection = selection;

@@ -103,6 +103,7 @@ describe("session route GET", () => {
       isTest: false,
       sourceSessionId: null,
       autoQueueEnabled: true,
+      respectPlayerRest: true,
       poolsEnabled: false,
       poolAName: null,
       poolBName: null,
@@ -166,6 +167,7 @@ describe("session route GET", () => {
     expect(body.queuedMatch.team1User1.avatarUrl).toBe(
       "https://blob.vercel-storage.com/avatars/u1/photo.jpg"
     );
+    expect(body.respectPlayerRest).toBe(true);
   });
 
   it("marks staff as session operators without admin-only controls", async () => {

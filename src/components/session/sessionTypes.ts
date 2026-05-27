@@ -95,6 +95,7 @@ export interface SessionData {
   isTest: boolean;
   sourceSessionId?: string | null;
   autoQueueEnabled: boolean;
+  respectPlayerRest: boolean;
   poolsEnabled: boolean;
   poolAName?: string | null;
   poolBName?: string | null;

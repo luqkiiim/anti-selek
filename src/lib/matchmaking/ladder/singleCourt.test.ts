@@ -2,7 +2,13 @@ import { describe, expect, it } from "vitest";
 
 import { PartnerPreference, PlayerGender, SessionMode } from "../../../types/enums";
 import { findBestSingleCourtSelectionLadder } from "./singleCourt";
-import type { MatchmakerLadderPlayer } from "./types";
+import { buildLadderGroupingSummary } from "./ladderGrouping";
+import { buildWaitSummary, compareSingleCourtSelections } from "./scoring";
+import type {
+  ActiveMatchmakerLadderPlayer,
+  LadderSingleCourtSelection,
+  MatchmakerLadderPlayer,
+} from "./types";
 
 function createPlayer(
   userId: string,
@@ -172,6 +178,84 @@ describe("ladder single-court selection", () => {
 
     expect(result.selection?.ids).toEqual(["A", "B", "C", "D"]);
     expect(result.selection?.groupingSummary.maxLadderGap).toBe(0);
+  });
+
+  it("ignores wait preference in ladder when player rest is disabled", () => {
+    const createSelection = (
+      userIds: [string, string, string, string],
+      waitMs: number[],
+      randomScore: number
+    ): LadderSingleCourtSelection<ActiveMatchmakerLadderPlayer> => {
+      const players = userIds.map((userId, index) =>
+        ({
+          userId,
+          matchesPlayed: 5,
+          matchmakingBaseline: 5,
+          availableSince: new Date("2026-03-18T00:00:00Z"),
+          strength: 1000,
+          wins: 1,
+          losses: 1,
+          pointDiff: 0,
+          ladderScore: 0,
+          gender: PlayerGender.MALE,
+          partnerPreference: PartnerPreference.OPEN,
+          isBusy: false,
+          isPaused: false,
+          effectiveMatchCount: 5,
+          waitMs: waitMs[index],
+          randomScore,
+          rank: index,
+        }) satisfies ActiveMatchmakerLadderPlayer
+      ) as [
+        ActiveMatchmakerLadderPlayer,
+        ActiveMatchmakerLadderPlayer,
+        ActiveMatchmakerLadderPlayer,
+        ActiveMatchmakerLadderPlayer,
+      ];
+
+      return {
+        ids: userIds,
+        players,
+        partition: {
+          team1: [userIds[0], userIds[3]],
+          team2: [userIds[1], userIds[2]],
+        },
+        waitSummary: buildWaitSummary(players),
+        groupingSummary: buildLadderGroupingSummary(players),
+        balanceGap: 0,
+        pointDiffGap: 0,
+        strengthGap: 0,
+        randomScore,
+      };
+    };
+
+    const shorterWait = createSelection(
+      ["A", "B", "C", "D"],
+      [0, 0, 0, 0],
+      0
+    );
+    const longerWait = createSelection(
+      ["E", "F", "G", "H"],
+      [300000, 300000, 300000, 300000],
+      1
+    );
+
+    expect(
+      compareSingleCourtSelections(
+        longerWait,
+        shorterWait,
+        SessionMode.MEXICANO
+      )
+    ).toBeLessThan(0);
+
+    expect(
+      compareSingleCourtSelections(
+        shorterWait,
+        longerWait,
+        SessionMode.MEXICANO,
+        { respectPlayerRest: false }
+      )
+    ).toBeLessThan(0);
   });
 
   it("returns no selection when fewer than four active players are available", () => {

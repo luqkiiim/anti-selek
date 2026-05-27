@@ -148,6 +148,7 @@ describe("createSessionForUser", () => {
     expect(sessionCreate).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
+          respectPlayerRest: true,
           players: {
             create: [
               expect.objectContaining({

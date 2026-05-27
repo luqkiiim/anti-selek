@@ -117,6 +117,8 @@ export default function CommunityPage() {
     setIsTestSession,
     autoQueueEnabled,
     setAutoQueueEnabled,
+    respectPlayerRest,
+    setRespectPlayerRest,
     partnerCommunityId,
     partnerCommunitySearch,
     setPartnerCommunitySearch,
@@ -754,6 +756,8 @@ export default function CommunityPage() {
       onIsTestSessionChange={setIsTestSession}
       autoQueueEnabled={autoQueueEnabled}
       onAutoQueueEnabledChange={setAutoQueueEnabled}
+      respectPlayerRest={respectPlayerRest}
+      onRespectPlayerRestChange={setRespectPlayerRest}
       partnerCommunityId={partnerCommunityId}
       partnerCommunitySearch={partnerCommunitySearch}
       onPartnerCommunitySearchChange={setPartnerCommunitySearch}

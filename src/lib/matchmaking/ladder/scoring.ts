@@ -116,7 +116,8 @@ export function compareSingleCourtSelections<
 >(
   left: LadderSingleCourtSelection<T>,
   right: LadderSingleCourtSelection<T>,
-  sessionMode: SessionMode
+  sessionMode: SessionMode,
+  options?: { respectPlayerRest?: boolean }
 ) {
   const groupingCompare = compareLadderGroupingSummaries(
     left.groupingSummary,
@@ -147,9 +148,11 @@ export function compareSingleCourtSelections<
     return left.strengthGap - right.strengthGap;
   }
 
-  const waitCompare = compareWaitSummaries(left.waitSummary, right.waitSummary);
-  if (waitCompare !== 0) {
-    return waitCompare;
+  if (options?.respectPlayerRest !== false) {
+    const waitCompare = compareWaitSummaries(left.waitSummary, right.waitSummary);
+    if (waitCompare !== 0) {
+      return waitCompare;
+    }
   }
 
   return left.randomScore - right.randomScore;
@@ -158,7 +161,8 @@ export function compareSingleCourtSelections<
 export function compareBatchSelections<T extends ActiveMatchmakerLadderPlayer>(
   left: LadderBatchSelection<T>,
   right: LadderBatchSelection<T>,
-  sessionMode: SessionMode
+  sessionMode: SessionMode,
+  options?: { respectPlayerRest?: boolean }
 ) {
   if (left.maxLadderGap !== right.maxLadderGap) {
     return left.maxLadderGap - right.maxLadderGap;
@@ -205,9 +209,11 @@ export function compareBatchSelections<T extends ActiveMatchmakerLadderPlayer>(
     return left.totalStrengthGap - right.totalStrengthGap;
   }
 
-  const waitCompare = compareWaitSummaries(left.waitSummary, right.waitSummary);
-  if (waitCompare !== 0) {
-    return waitCompare;
+  if (options?.respectPlayerRest !== false) {
+    const waitCompare = compareWaitSummaries(left.waitSummary, right.waitSummary);
+    if (waitCompare !== 0) {
+      return waitCompare;
+    }
   }
 
   return left.totalRandomScore - right.totalRandomScore;

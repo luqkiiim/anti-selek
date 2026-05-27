@@ -16,6 +16,8 @@ function renderPanel(sessionType: SessionType) {
       onIsTestSessionChange={vi.fn()}
       autoQueueEnabled={true}
       onAutoQueueEnabledChange={vi.fn()}
+      respectPlayerRest={true}
+      onRespectPlayerRestChange={vi.fn()}
       partnerCommunityId=""
       partnerCommunitySearch=""
       onPartnerCommunitySearchChange={vi.fn()}

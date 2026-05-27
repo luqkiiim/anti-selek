@@ -100,6 +100,7 @@ model Session {
   isTest                 Boolean   @default(false)
   sourceSessionId        String?
   autoQueueEnabled       Boolean   @default(true)
+  respectPlayerRest      Boolean   @default(true)
   poolsEnabled           Boolean   @default(false)
   poolAName              String?
   poolBName              String?

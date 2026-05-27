@@ -50,6 +50,7 @@ describe("parseCreateSessionRequest", () => {
     expect(parsed.mode).toBe(SessionMode.MIXICANO);
     expect(parsed.courtCount).toBe(4);
     expect(parsed.autoQueueEnabled).toBe(false);
+    expect(parsed.respectPlayerRest).toBe(true);
     expect(parsed.requestedPlayerIds).toEqual(["user-1", "user-2"]);
     expect(parsed.playerConfigMap.get("user-1")).toEqual({
       gender: PlayerGender.FEMALE,
@@ -238,6 +239,16 @@ describe("parseCreateSessionRequest", () => {
     });
 
     expect(parsed.autoQueueEnabled).toBe(true);
+  });
+
+  it("allows player rest to be disabled explicitly", () => {
+    const parsed = parseCreateSessionRequest({
+      name: "No Rest Night",
+      communityId: "community-1",
+      respectPlayerRest: false,
+    });
+
+    expect(parsed.respectPlayerRest).toBe(false);
   });
 
   it("accepts a distinct partner community for collab sessions", () => {

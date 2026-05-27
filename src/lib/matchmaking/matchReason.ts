@@ -43,6 +43,7 @@ type V3ReasonContext = {
   sessionMode: SessionMode | string;
   targetPool?: string | null;
   missedPool?: string | null;
+  respectPlayerRest?: boolean;
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -240,9 +241,10 @@ export function buildV3MatchmakingReason<
   };
 
   if (
-    selection.consecutivePlayCount > 0 ||
-    selection.consecutivePlayMaxBurden > 0 ||
-    selection.consecutivePlayTotalBurden > 0
+    context.respectPlayerRest !== false &&
+    (selection.consecutivePlayCount > 0 ||
+      selection.consecutivePlayMaxBurden > 0 ||
+      selection.consecutivePlayTotalBurden > 0)
   ) {
     metrics.consecutivePlayCount = selection.consecutivePlayCount;
     metrics.consecutivePlayMaxBurden = selection.consecutivePlayMaxBurden;
@@ -250,8 +252,9 @@ export function buildV3MatchmakingReason<
   }
 
   if (
-    context.sessionType === SessionType.POINTS ||
-    context.sessionType === SessionType.SOCIAL_MIX
+    context.respectPlayerRest !== false &&
+    (context.sessionType === SessionType.POINTS ||
+      context.sessionType === SessionType.SOCIAL_MIX)
   ) {
     metrics.waitToleranceSeconds = secondsFromMs(POINTS_WAIT_TOLERANCE_MS);
   }

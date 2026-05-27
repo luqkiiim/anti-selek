@@ -57,6 +57,10 @@ function getWaitToleranceMs(sessionType: SessionType) {
   return usesPointsWaitTolerance(sessionType) ? POINTS_WAIT_TOLERANCE_MS : 0;
 }
 
+function shouldRespectPlayerRest(options?: { respectPlayerRest?: boolean }) {
+  return options?.respectPlayerRest !== false;
+}
+
 function compareWaitValues(left: number, right: number, toleranceMs: number) {
   const diff = right - left;
 
@@ -136,21 +140,24 @@ export function compareSingleCourtSelections<
 >(
   left: V3SingleCourtSelection<T>,
   right: V3SingleCourtSelection<T>,
-  sessionType: SessionType
+  sessionType: SessionType,
+  options?: { respectPlayerRest?: boolean }
 ) {
-  const waitCompare = compareWaitSummaries(
-    left.waitSummary,
-    right.waitSummary,
-    getWaitToleranceMs(sessionType)
-  );
-  if (waitCompare !== 0) {
-    return waitCompare;
-  }
+  if (shouldRespectPlayerRest(options)) {
+    const waitCompare = compareWaitSummaries(
+      left.waitSummary,
+      right.waitSummary,
+      getWaitToleranceMs(sessionType)
+    );
+    if (waitCompare !== 0) {
+      return waitCompare;
+    }
 
-  if (usesConsecutivePlayPreference(sessionType)) {
-    const consecutivePlayCompare = compareConsecutivePlayFairness(left, right);
-    if (consecutivePlayCompare !== 0) {
-      return consecutivePlayCompare;
+    if (usesConsecutivePlayPreference(sessionType)) {
+      const consecutivePlayCompare = compareConsecutivePlayFairness(left, right);
+      if (consecutivePlayCompare !== 0) {
+        return consecutivePlayCompare;
+      }
     }
   }
 
@@ -258,15 +265,18 @@ export function compareSingleCourtSelections<
 export function compareBatchSelections<T extends ActiveMatchmakerV3Player>(
   left: V3BatchSelection<T>,
   right: V3BatchSelection<T>,
-  sessionType: SessionType
+  sessionType: SessionType,
+  options?: { respectPlayerRest?: boolean }
 ) {
-  const waitCompare = compareWaitSummaries(
-    left.waitSummary,
-    right.waitSummary,
-    getWaitToleranceMs(sessionType)
-  );
-  if (waitCompare !== 0) {
-    return waitCompare;
+  if (shouldRespectPlayerRest(options)) {
+    const waitCompare = compareWaitSummaries(
+      left.waitSummary,
+      right.waitSummary,
+      getWaitToleranceMs(sessionType)
+    );
+    if (waitCompare !== 0) {
+      return waitCompare;
+    }
   }
 
   if (sessionType === SessionType.SOCIAL_MIX) {
