@@ -1,6 +1,6 @@
 "use client";
 
-import { History, Play, Settings, Users } from "lucide-react";
+import { History, Play, Settings, Share2, Users } from "lucide-react";
 import { SessionStatus } from "@/types/enums";
 import { StatCard } from "@/components/ui/chrome";
 
@@ -22,11 +22,14 @@ interface SessionOverviewPanelProps {
   canStartSession: boolean;
   canOpenPlayerManager: boolean;
   canOpenSettings: boolean;
+  canShareResults?: boolean;
+  sharingResults?: boolean;
   tutorialHint?: SessionTutorialHint | null;
   onStartSession: () => void;
   onOpenPlayerManager: () => void;
   onOpenSettings: () => void;
   onOpenMatchHistory: () => void;
+  onShareResults?: () => void;
 }
 
 export function SessionOverviewPanel({
@@ -42,11 +45,14 @@ export function SessionOverviewPanel({
   canStartSession,
   canOpenPlayerManager,
   canOpenSettings,
+  canShareResults = false,
+  sharingResults = false,
   tutorialHint = null,
   onStartSession,
   onOpenPlayerManager,
   onOpenSettings,
   onOpenMatchHistory,
+  onShareResults,
 }: SessionOverviewPanelProps) {
   const isCompleted = sessionStatus === SessionStatus.COMPLETED;
   const isWaiting = sessionStatus === SessionStatus.WAITING;
@@ -122,6 +128,17 @@ export function SessionOverviewPanel({
             <History aria-hidden="true" size={17} />
             Match History
           </button>
+          {canShareResults && onShareResults ? (
+            <button
+              type="button"
+              onClick={onShareResults}
+              disabled={sharingResults}
+              className="app-button-secondary"
+            >
+              <Share2 aria-hidden="true" size={17} />
+              {sharingResults ? "Preparing..." : "Share"}
+            </button>
+          ) : null}
           {canOpenPlayerManager ? (
             <button
               type="button"

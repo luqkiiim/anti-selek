@@ -27,6 +27,7 @@ import { ManualMatchModal } from "@/components/session/ManualMatchModal";
 import { SessionActionConfirmModal } from "@/components/session/SessionActionConfirmModal";
 import { SessionOverviewPanel } from "@/components/session/SessionOverviewPanel";
 import { SessionPodium } from "@/components/session/SessionPodium";
+import { SessionShareCard } from "@/components/session/SessionShareCard";
 import { SessionPlayersModal } from "@/components/session/SessionPlayersModal";
 import { SessionPreferenceEditorPortal } from "@/components/session/SessionPreferenceEditorPortal";
 import { SessionGuestRenameModal } from "@/components/session/SessionGuestRenameModal";
@@ -36,6 +37,7 @@ import { AdminOnboardingChecklist } from "@/components/onboarding/AdminOnboardin
 import { useAdminOnboardingProgress } from "@/components/onboarding/useAdminOnboardingProgress";
 import type { CurrentUser } from "@/components/session/sessionTypes";
 import { MatchStatus, SessionStatus } from "@/types/enums";
+import { shareSessionStandingsCard } from "@/lib/sessionShare";
 import {
   applyCourtLabelUpdates,
   mergeSessionSnapshot,
@@ -110,6 +112,7 @@ export default function SessionPage() {
   const pagerTouchStartXRef = useRef<number | null>(null);
   const pagerTouchStartIndexRef = useRef<number | null>(null);
   const pagerIsDraggingRef = useRef(false);
+  const shareCardRef = useRef<HTMLDivElement | null>(null);
   const [user, setUser] = useState<CurrentUser | null>(null);
   const [error, setError] = useState("");
   const [endingSession, setEndingSession] = useState(false);
@@ -136,6 +139,7 @@ export default function SessionPage() {
   const [mobileSection, setMobileSection] =
     useState<SessionMobileSection>("session");
   const [celebrationRunId, setCelebrationRunId] = useState(0);
+  const [sharingResults, setSharingResults] = useState(false);
 
   const replayWinnerCelebration = useCallback(() => {
     setCelebrationRunId((currentRunId) => currentRunId + 1);
@@ -527,6 +531,30 @@ export default function SessionPage() {
     rosterSearch,
     sessionData,
   ]);
+  const handleShareResults = useCallback(async () => {
+    if (!shareCardRef.current || !sessionData || !sessionView) {
+      setError("Results are not ready to share yet");
+      return;
+    }
+
+    setSharingResults(true);
+    setError("");
+
+    try {
+      await shareSessionStandingsCard({
+        node: shareCardRef.current,
+        fileName: `${sessionData.name}-standings`,
+        shareTitle: `${sessionData.name} final standings`,
+      });
+    } catch (err) {
+      console.error(err);
+      if (!(err instanceof DOMException && err.name === "AbortError")) {
+        setError("Failed to share standings");
+      }
+    } finally {
+      setSharingResults(false);
+    }
+  }, [sessionData, sessionView]);
   const mobileSections = useMemo(
     () =>
       sessionView?.isCompletedSession
@@ -1213,6 +1241,11 @@ export default function SessionPage() {
                 }
                 canOpenPlayerManager={Boolean(canOpenPlayerManager)}
                 canOpenSettings={Boolean(canOpenSettings)}
+                canShareResults={
+                  sessionView.isCompletedSession &&
+                  sessionView.sortedPlayers.length > 0
+                }
+                sharingResults={sharingResults}
                 tutorialHint={sessionTutorialHint}
                 onStartSession={startSessionWithOnboardingRefresh}
                 onOpenPlayerManager={() => setShowPlayersModal(true)}
@@ -1220,6 +1253,7 @@ export default function SessionPage() {
                 onOpenMatchHistory={() =>
                   router.push(`/session/${code}/history?from=session`)
                 }
+                onShareResults={() => void handleShareResults()}
               />
             </section>
 
@@ -1717,6 +1751,29 @@ export default function SessionPage() {
             : courtActions.createManualMatch
         }
       />
+
+      {sessionView.isCompletedSession && sessionView.sortedPlayers.length > 0 ? (
+        <div
+          aria-hidden="true"
+          className="pointer-events-none fixed -left-[200vw] top-0"
+        >
+          <div ref={shareCardRef}>
+            <SessionShareCard
+              sessionName={sessionData.name}
+              communityName={
+                isTutorialPlayground
+                  ? "Tutorial playground"
+                  : sessionData.communities?.[0]?.name ?? "Community"
+              }
+              sessionType={sessionData.type}
+              sessionTypeLabel={sessionView.sessionTypeLabel}
+              players={sessionView.sortedPlayers}
+              pointDiffByUserId={sessionView.pointDiffByUserId}
+              playerStatsByUserId={sessionView.playerStatsByUserId}
+            />
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
