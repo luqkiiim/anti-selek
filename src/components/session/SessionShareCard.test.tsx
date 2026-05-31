@@ -66,8 +66,8 @@ function renderShareCard(players: Player[]) {
 }
 
 describe("SessionShareCard", () => {
-  it("renders podium ranks 1-3 and standings rows 4-10 only", () => {
-    const players = Array.from({ length: 10 }, (_, index) =>
+  it("renders podium ranks 1-3 and standings rows 4-11 only", () => {
+    const players = Array.from({ length: 11 }, (_, index) =>
       createPlayer({
         userId: `u${index + 1}`,
         name: `Player ${index + 1}`,
@@ -78,12 +78,13 @@ describe("SessionShareCard", () => {
     const markup = renderShareCard(players);
 
     expect(markup).toContain("Final standings");
-    expect(markup).toContain("Positions 4-10");
+    expect(markup).toContain("Positions 4-11");
     expect(markup).toContain(">1<");
     expect(markup).toContain(">2<");
     expect(markup).toContain(">3<");
     expect(markup).toContain(">4<");
-    expect(markup).toContain(">10<");
+    expect(markup).toContain(">11<");
+    expect(markup).toContain("6W / 0L");
   });
 
   it("does not repeat the podium names in the positions 4-10 list", () => {
@@ -98,6 +99,7 @@ describe("SessionShareCard", () => {
       createPlayer({ userId: "u8", name: "Nadia", sessionPoints: 33 }),
       createPlayer({ userId: "u9", name: "Rafi", sessionPoints: 32 }),
       createPlayer({ userId: "u10", name: "Zul", sessionPoints: 29 }),
+      createPlayer({ userId: "u11", name: "Yana", sessionPoints: 18 }),
     ];
 
     const markup = renderShareCard(players);
@@ -126,6 +128,7 @@ describe("SessionShareCard", () => {
       createPlayer({ userId: "u8", name: "Nadia", sessionPoints: 35 }),
       createPlayer({ userId: "u9", name: "Rafi", sessionPoints: 34 }),
       createPlayer({ userId: "u10", name: "Zul", sessionPoints: 33 }),
+      createPlayer({ userId: "u11", name: "Yana", sessionPoints: 32 }),
     ];
 
     const markup = renderShareCard(players);
