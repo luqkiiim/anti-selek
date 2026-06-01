@@ -91,8 +91,8 @@ export function SessionShareCard({
   const isLadderSession = sessionType === SessionType.LADDER;
 
   return (
-    <section className="flex h-[960px] w-[540px] flex-col overflow-hidden rounded-[40px] border border-slate-200 bg-[linear-gradient(180deg,#f8fbff_0%,#edf4ff_42%,#ffffff_100%)] p-7 text-slate-950 shadow-[0_28px_80px_rgba(15,23,42,0.16)]">
-      <div className="rounded-[26px] border border-white/80 bg-white/72 px-6 py-5 shadow-sm backdrop-blur">
+    <section className="flex h-[960px] w-[540px] flex-col overflow-hidden rounded-[40px] border border-slate-200 bg-[linear-gradient(180deg,#f8fbff_0%,#edf4ff_42%,#ffffff_100%)] p-7 text-slate-950">
+      <div className="rounded-[26px] border border-slate-100 bg-white px-6 py-5">
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">
             <p className="text-[11px] font-black uppercase tracking-[0.28em] text-sky-700">
@@ -130,7 +130,8 @@ export function SessionShareCard({
                 name={player.user.name}
                 avatarUrl={player.user.avatarUrl}
                 size="md"
-                className="ring-4 ring-white shadow-[0_14px_30px_rgba(15,23,42,0.12)]"
+                appearance="court"
+                className="border-2 border-white shadow-none"
                 imageLoading="eager"
                 imageFetchPriority="high"
               />
@@ -166,7 +167,7 @@ export function SessionShareCard({
         })}
       </div>
 
-      <div className="mt-5 flex min-h-0 flex-1 flex-col rounded-[26px] border border-slate-200 bg-white/90 p-5 shadow-sm">
+      <div className="mt-5 flex min-h-0 flex-1 flex-col rounded-[26px] border border-slate-200 bg-white p-5">
         <div className="flex items-center justify-between gap-3">
           <p className="text-[11px] font-black uppercase tracking-[0.24em] text-slate-500">
             Positions 4-11
@@ -194,6 +195,8 @@ export function SessionShareCard({
                     name={player.user.name}
                     avatarUrl={player.user.avatarUrl}
                     size="xs"
+                    appearance="court"
+                    className="shadow-none"
                     imageLoading="eager"
                   />
                   <div className="min-w-0">

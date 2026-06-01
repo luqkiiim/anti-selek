@@ -137,4 +137,22 @@ describe("SessionShareCard", () => {
     expect(markup).toContain("Guest");
     expect(markup).toContain("Nurul Aisyah Long");
   });
+
+  it("avoids Safari-fragile raster effects in the share-only card", () => {
+    const players = Array.from({ length: 11 }, (_, index) =>
+      createPlayer({
+        userId: `u${index + 1}`,
+        name: `Player ${index + 1}`,
+        sessionPoints: 40 - index,
+      })
+    );
+
+    const markup = renderShareCard(players);
+
+    expect(markup).not.toContain("backdrop-blur");
+    expect(markup).not.toContain("ring-4");
+    expect(markup).not.toContain("shadow-sm");
+    expect(markup).not.toContain("shadow-[");
+    expect(markup).toContain("shadow-none");
+  });
 });
