@@ -13,6 +13,7 @@ describe("shareSessionStandingsCard", () => {
   beforeEach(() => {
     toBlobMock.mockReset();
     toBlobMock.mockResolvedValue(new Blob(["image"], { type: "image/png" }));
+    document.body.innerHTML = "";
 
     Object.defineProperty(document, "fonts", {
       configurable: true,
@@ -38,6 +39,50 @@ describe("shareSessionStandingsCard", () => {
     expect(canShare).toHaveBeenCalled();
     expect(share).toHaveBeenCalled();
     expect(result).toEqual({ method: "native-share" });
+  });
+
+  it("waits for avatar images and inlines them before exporting", async () => {
+    const image = document.createElement("img");
+    Object.defineProperty(image, "complete", {
+      configurable: true,
+      value: false,
+    });
+    image.src = "https://cdn.test/avatar.jpg";
+    document.body.append(image);
+
+    const fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      blob: () => Promise.resolve(new Blob(["avatar"], { type: "image/jpeg" })),
+    });
+    vi.stubGlobal("fetch", fetch);
+    Object.defineProperty(globalThis, "navigator", {
+      configurable: true,
+      value: { share: vi.fn().mockResolvedValue(undefined) },
+    });
+
+    const sharePromise = shareSessionStandingsCard({
+      node: document.body,
+      fileName: "Weekend Cup",
+      shareTitle: "Weekend Cup final standings",
+    });
+
+    await Promise.resolve();
+    expect(toBlobMock).not.toHaveBeenCalled();
+
+    Object.defineProperty(image, "complete", {
+      configurable: true,
+      value: true,
+    });
+    image.dispatchEvent(new Event("load"));
+
+    await sharePromise;
+
+    expect(fetch).toHaveBeenCalledWith("https://cdn.test/avatar.jpg", {
+      cache: "force-cache",
+      signal: expect.any(AbortSignal),
+    });
+    expect(toBlobMock).toHaveBeenCalled();
+    expect(image.src).toBe("https://cdn.test/avatar.jpg");
   });
 
   it("falls back to download when native sharing is unavailable", async () => {
