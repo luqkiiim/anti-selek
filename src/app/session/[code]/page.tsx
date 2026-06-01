@@ -39,6 +39,10 @@ import type { CurrentUser } from "@/components/session/sessionTypes";
 import { MatchStatus, SessionStatus } from "@/types/enums";
 import { shareSessionStandingsCard } from "@/lib/sessionShare";
 import {
+  prepareShareAvatarDataUrls,
+  waitForShareCardRender,
+} from "@/lib/shareAvatar";
+import {
   applyCourtLabelUpdates,
   mergeSessionSnapshot,
   type SessionSnapshotLike,
@@ -140,6 +144,8 @@ export default function SessionPage() {
     useState<SessionMobileSection>("session");
   const [celebrationRunId, setCelebrationRunId] = useState(0);
   const [sharingResults, setSharingResults] = useState(false);
+  const [preparedShareAvatarUrlsByUserId, setPreparedShareAvatarUrlsByUserId] =
+    useState<Map<string, string> | null>(null);
 
   const replayWinnerCelebration = useCallback(() => {
     setCelebrationRunId((currentRunId) => currentRunId + 1);
@@ -532,7 +538,7 @@ export default function SessionPage() {
     sessionData,
   ]);
   const handleShareResults = useCallback(async () => {
-    if (!shareCardRef.current || !sessionData || !sessionView) {
+    if (!sessionData || !sessionView) {
       setError("Results are not ready to share yet");
       return;
     }
@@ -541,6 +547,16 @@ export default function SessionPage() {
     setError("");
 
     try {
+      const preparedAvatarUrlsByUserId = await prepareShareAvatarDataUrls(
+        sessionView.sortedPlayers
+      );
+      setPreparedShareAvatarUrlsByUserId(preparedAvatarUrlsByUserId);
+      await waitForShareCardRender();
+
+      if (!shareCardRef.current) {
+        throw new Error("Results are not ready to share yet");
+      }
+
       await shareSessionStandingsCard({
         node: shareCardRef.current,
         fileName: `${sessionData.name}-standings`,
@@ -549,9 +565,14 @@ export default function SessionPage() {
     } catch (err) {
       console.error(err);
       if (!(err instanceof DOMException && err.name === "AbortError")) {
-        setError("Failed to share standings");
+        setError(
+          err instanceof Error && err.message.trim().length > 0
+            ? err.message
+            : "Failed to share standings"
+        );
       }
     } finally {
+      setPreparedShareAvatarUrlsByUserId(null);
       setSharingResults(false);
     }
   }, [sessionData, sessionView]);
@@ -1752,7 +1773,9 @@ export default function SessionPage() {
         }
       />
 
-      {sessionView.isCompletedSession && sessionView.sortedPlayers.length > 0 ? (
+      {sessionView.isCompletedSession &&
+      sessionView.sortedPlayers.length > 0 &&
+      preparedShareAvatarUrlsByUserId ? (
         <div
           aria-hidden="true"
           className="pointer-events-none fixed -left-[200vw] top-0"
@@ -1768,6 +1791,7 @@ export default function SessionPage() {
               sessionType={sessionData.type}
               sessionTypeLabel={sessionView.sessionTypeLabel}
               players={sessionView.sortedPlayers}
+              preparedAvatarUrlsByUserId={preparedShareAvatarUrlsByUserId}
               pointDiffByUserId={sessionView.pointDiffByUserId}
               playerStatsByUserId={sessionView.playerStatsByUserId}
             />

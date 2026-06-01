@@ -39,7 +39,10 @@ function createPlayer({
   };
 }
 
-function renderShareCard(players: Player[]) {
+function renderShareCard(
+  players: Player[],
+  preparedAvatarUrlsByUserId = new Map<string, string>()
+) {
   const pointDiffByUserId = new Map(
     players.map((player, index) => [player.userId, 12 - index] as const)
   );
@@ -61,6 +64,7 @@ function renderShareCard(players: Player[]) {
       sessionType={SessionType.POINTS}
       sessionTypeLabel="Points"
       players={players}
+      preparedAvatarUrlsByUserId={preparedAvatarUrlsByUserId}
       pointDiffByUserId={pointDiffByUserId}
       playerStatsByUserId={playerStatsByUserId}
     />
@@ -158,7 +162,7 @@ describe("SessionShareCard", () => {
     expect(markup).toContain("shadow-none");
   });
 
-  it("routes share-only avatars through the same-origin image proxy", () => {
+  it("renders uploaded photos only from prepared data URLs", () => {
     const players = [
       createPlayer({
         userId: "u1",
@@ -168,13 +172,24 @@ describe("SessionShareCard", () => {
       }),
     ];
 
-    const markup = renderShareCard(players);
-
-    expect(markup).toContain(
-      "/api/share-avatar?source=https%3A%2F%2Fstore.public.blob.vercel-storage.com%2Favatars%2Fu1%2Fphoto.png"
+    const markup = renderShareCard(
+      players,
+      new Map([["u1", "data:image/png;base64,YXZhdGFy"]])
     );
+
+    expect(markup).toContain("data:image/png;base64,YXZhdGFy");
     expect(markup).not.toContain(
       'src="https://store.public.blob.vercel-storage.com/avatars/u1/photo.png"'
     );
+    expect(markup).not.toContain("/api/share-avatar");
+  });
+
+  it("renders initials when a player has no uploaded photo", () => {
+    const markup = renderShareCard([
+      createPlayer({ userId: "u1", name: "Amir" }),
+    ]);
+
+    expect(markup).toContain(">A<");
+    expect(markup).not.toContain("<img");
   });
 });
