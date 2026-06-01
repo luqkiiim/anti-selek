@@ -56,6 +56,29 @@ function waitForImageReady(image: HTMLImageElement) {
   });
 }
 
+async function waitForImageDecode(image: HTMLImageElement) {
+  await waitForImageReady(image);
+
+  if (typeof image.decode !== "function") {
+    return;
+  }
+
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+
+  try {
+    await Promise.race([
+      image.decode(),
+      new Promise<void>((resolve) => {
+        timeoutId = setTimeout(resolve, IMAGE_READY_TIMEOUT_MS);
+      }),
+    ]);
+  } catch {
+    // A failed decode still allows the export fallback to render initials.
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
 function readBlobAsDataUrl(blob: Blob) {
   return new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
@@ -83,7 +106,8 @@ async function inlineExportImage(image: HTMLImageElement) {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), IMAGE_READY_TIMEOUT_MS);
     const response = await fetch(source, {
-      cache: "force-cache",
+      cache: "no-store",
+      mode: "cors",
       signal: controller.signal,
     }).finally(() => clearTimeout(timeoutId));
     if (!response.ok) {
@@ -94,7 +118,7 @@ async function inlineExportImage(image: HTMLImageElement) {
     const previousSrcset = image.srcset;
     image.srcset = "";
     image.src = await readBlobAsDataUrl(await response.blob());
-    await waitForImageReady(image);
+    await waitForImageDecode(image);
 
     return () => {
       image.src = previousSrc;
@@ -108,7 +132,7 @@ async function inlineExportImage(image: HTMLImageElement) {
 
 async function prepareExportImages(node: HTMLElement) {
   const images = Array.from(node.querySelectorAll("img"));
-  await Promise.all(images.map((image) => waitForImageReady(image)));
+  await Promise.all(images.map((image) => waitForImageDecode(image)));
 
   const restoreImages = await Promise.all(images.map(inlineExportImage));
   return () => restoreImages.reverse().forEach((restoreImage) => restoreImage());
