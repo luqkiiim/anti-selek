@@ -14,11 +14,13 @@ function createPlayer({
   name,
   sessionPoints = 0,
   isGuest = false,
+  avatarUrl = null,
 }: {
   userId: string;
   name: string;
   sessionPoints?: number;
   isGuest?: boolean;
+  avatarUrl?: string | null;
 }): Player {
   return {
     userId,
@@ -31,7 +33,7 @@ function createPlayer({
     user: {
       id: userId,
       name,
-      avatarUrl: null,
+      avatarUrl,
       elo: 1000,
     },
   };
@@ -154,5 +156,25 @@ describe("SessionShareCard", () => {
     expect(markup).not.toContain("shadow-sm");
     expect(markup).not.toContain("shadow-[");
     expect(markup).toContain("shadow-none");
+  });
+
+  it("routes share-only avatars through the same-origin image proxy", () => {
+    const players = [
+      createPlayer({
+        userId: "u1",
+        name: "Amir",
+        avatarUrl:
+          "https://store.public.blob.vercel-storage.com/avatars/u1/photo.png",
+      }),
+    ];
+
+    const markup = renderShareCard(players);
+
+    expect(markup).toContain(
+      "/api/share-avatar?source=https%3A%2F%2Fstore.public.blob.vercel-storage.com%2Favatars%2Fu1%2Fphoto.png"
+    );
+    expect(markup).not.toContain(
+      'src="https://store.public.blob.vercel-storage.com/avatars/u1/photo.png"'
+    );
   });
 });

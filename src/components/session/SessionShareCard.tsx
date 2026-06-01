@@ -1,6 +1,7 @@
 "use client";
 
 import { Avatar } from "@/components/ui/Avatar";
+import { buildShareAvatarUrl } from "@/lib/shareAvatar";
 import { SessionType } from "@/types/enums";
 import type { Player } from "./sessionTypes";
 
@@ -128,7 +129,7 @@ export function SessionShareCard({
               </p>
               <Avatar
                 name={player.user.name}
-                avatarUrl={player.user.avatarUrl}
+                avatarUrl={buildShareAvatarUrl(player.user.avatarUrl)}
                 size="md"
                 appearance="court"
                 className="border-2 border-white shadow-none"
@@ -193,7 +194,7 @@ export function SessionShareCard({
                 <div className="flex min-w-0 items-center gap-2">
                   <Avatar
                     name={player.user.name}
-                    avatarUrl={player.user.avatarUrl}
+                    avatarUrl={buildShareAvatarUrl(player.user.avatarUrl)}
                     size="xs"
                     appearance="court"
                     className="shadow-none"
