@@ -1,7 +1,12 @@
 // @vitest-environment jsdom
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { shareSessionStandingsCard } from "./sessionShare";
+import {
+  exportSessionStandingsBlob,
+  readShareBlobAsDataUrl,
+  shareSessionStandingsBlob,
+  shareSessionStandingsCard,
+} from "./sessionShare";
 
 const toBlobMock = vi.fn();
 
@@ -39,6 +44,71 @@ describe("shareSessionStandingsCard", () => {
     expect(canShare).toHaveBeenCalled();
     expect(share).toHaveBeenCalled();
     expect(result).toEqual({ method: "native-share" });
+  });
+
+  it("exports a PNG blob without triggering native share or download", async () => {
+    const share = vi.fn().mockResolvedValue(undefined);
+    const anchor = document.createElement("a");
+    const click = vi.spyOn(anchor, "click").mockImplementation(() => undefined);
+
+    Object.defineProperty(globalThis, "navigator", {
+      configurable: true,
+      value: { share },
+    });
+
+    const blob = await exportSessionStandingsBlob(document.body);
+
+    expect(blob.type).toBe("image/png");
+    expect(toBlobMock).toHaveBeenCalled();
+    expect(share).not.toHaveBeenCalled();
+    expect(click).not.toHaveBeenCalled();
+    click.mockRestore();
+  });
+
+  it("shares an already exported PNG blob without recapturing", async () => {
+    const share = vi.fn().mockResolvedValue(undefined);
+    const canShare = vi.fn().mockReturnValue(true);
+
+    Object.defineProperty(globalThis, "navigator", {
+      configurable: true,
+      value: { share, canShare },
+    });
+
+    const result = await shareSessionStandingsBlob({
+      blob: new Blob(["existing"], { type: "image/png" }),
+      fileName: "Weekend Cup",
+      shareTitle: "Weekend Cup final standings",
+    });
+
+    expect(result).toEqual({ method: "native-share" });
+    expect(share).toHaveBeenCalled();
+    expect(toBlobMock).not.toHaveBeenCalled();
+  });
+
+  it("can block download fallback for native-share debugging", async () => {
+    Object.defineProperty(globalThis, "navigator", {
+      configurable: true,
+      value: {},
+    });
+
+    await expect(
+      shareSessionStandingsBlob({
+        blob: new Blob(["existing"], { type: "image/png" }),
+        fileName: "Weekend Cup",
+        shareTitle: "Weekend Cup final standings",
+        fallbackToDownload: false,
+      })
+    ).rejects.toThrow("Native file sharing is unavailable in this browser.");
+
+    expect(toBlobMock).not.toHaveBeenCalled();
+  });
+
+  it("converts an exported PNG blob to a preview data URL", async () => {
+    const dataUrl = await readShareBlobAsDataUrl(
+      new Blob(["image"], { type: "image/png" })
+    );
+
+    expect(dataUrl).toMatch(/^data:image\/png;base64,/);
   });
 
   it("waits for avatar images and inlines them before exporting", async () => {

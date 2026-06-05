@@ -25,7 +25,7 @@ function buildDownloadName(fileName: string) {
   return `${slugifyFileName(fileName)}.png`;
 }
 
-function downloadBlob(blob: Blob, fileName: string) {
+export function downloadSessionStandingsBlob(blob: Blob, fileName: string) {
   const link = document.createElement("a");
   const url = URL.createObjectURL(blob);
 
@@ -79,7 +79,7 @@ async function waitForImageDecode(image: HTMLImageElement) {
   }
 }
 
-function readBlobAsDataUrl(blob: Blob) {
+export function readShareBlobAsDataUrl(blob: Blob) {
   return new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
 
@@ -117,7 +117,7 @@ async function inlineExportImage(image: HTMLImageElement) {
     const previousSrc = image.src;
     const previousSrcset = image.srcset;
     image.srcset = "";
-    image.src = await readBlobAsDataUrl(await response.blob());
+    image.src = await readShareBlobAsDataUrl(await response.blob());
     await waitForImageDecode(image);
 
     return () => {
@@ -138,7 +138,7 @@ async function prepareExportImages(node: HTMLElement) {
   return () => restoreImages.reverse().forEach((restoreImage) => restoreImage());
 }
 
-async function exportShareBlob(node: HTMLElement) {
+export async function exportSessionStandingsBlob(node: HTMLElement) {
   if (typeof document !== "undefined" && "fonts" in document) {
     await document.fonts.ready;
   }
@@ -163,12 +163,17 @@ async function exportShareBlob(node: HTMLElement) {
   return blob;
 }
 
-export async function shareSessionStandingsCard({
-  node,
+export async function shareSessionStandingsBlob({
+  blob,
   fileName,
   shareTitle,
-}: SessionShareOptions): Promise<SessionShareResult> {
-  const blob = await exportShareBlob(node);
+  fallbackToDownload = true,
+}: {
+  blob: Blob;
+  fileName: string;
+  shareTitle: string;
+  fallbackToDownload?: boolean;
+}): Promise<SessionShareResult> {
   const exportName = buildDownloadName(fileName);
   const file = new File([blob], exportName, { type: "image/png" });
   const navigatorWithShare = navigator as Navigator & {
@@ -190,15 +195,29 @@ export async function shareSessionStandingsCard({
       });
       return { method: "native-share" };
     } catch (error) {
-      if (
-        error instanceof DOMException &&
-        error.name === "AbortError"
-      ) {
+      if (error instanceof DOMException && error.name === "AbortError") {
+        throw error;
+      }
+
+      if (!fallbackToDownload) {
         throw error;
       }
     }
   }
 
-  downloadBlob(blob, fileName);
+  if (!fallbackToDownload) {
+    throw new Error("Native file sharing is unavailable in this browser.");
+  }
+
+  downloadSessionStandingsBlob(blob, fileName);
   return { method: "download" };
+}
+
+export async function shareSessionStandingsCard({
+  node,
+  fileName,
+  shareTitle,
+}: SessionShareOptions): Promise<SessionShareResult> {
+  const blob = await exportSessionStandingsBlob(node);
+  return shareSessionStandingsBlob({ blob, fileName, shareTitle });
 }

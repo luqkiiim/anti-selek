@@ -4,6 +4,7 @@ const SHARE_CARD_PLAYER_LIMIT = 11;
 interface ShareAvatarPlayer {
   userId: string;
   user: {
+    name?: string;
     avatarUrl?: string | null;
   };
 }
@@ -11,6 +12,36 @@ interface ShareAvatarPlayer {
 interface PrepareShareAvatarOptions {
   fetchImpl?: typeof fetch;
   timeoutMs?: number;
+}
+
+export interface ShareAvatarDiagnostic {
+  userId: string;
+  name: string;
+  rank: number;
+  status: "prepared-photo" | "initials" | "failed-photo";
+  dataUrlBytes?: number;
+  dataUrlLength?: number;
+  mimeType?: string;
+}
+
+export interface ShareAvatarPreparationWithDiagnostics {
+  avatarUrlsByUserId: Map<string, string>;
+  diagnostics: ShareAvatarDiagnostic[];
+  displayedPlayerCount: number;
+  uploadedPhotoCount: number;
+  preparedPhotoCount: number;
+  initialsOnlyCount: number;
+  failedPhotoCount: number;
+}
+
+export class ShareAvatarPreparationError extends Error {
+  diagnostics: ShareAvatarDiagnostic[];
+
+  constructor(message: string, diagnostics: ShareAvatarDiagnostic[]) {
+    super(message);
+    this.name = "ShareAvatarPreparationError";
+    this.diagnostics = diagnostics;
+  }
 }
 
 export function buildShareAvatarUrl(avatarUrl: string | null | undefined) {
@@ -78,30 +109,55 @@ async function fetchShareAvatarDataUrl({
       throw new Error("Failed to load profile picture");
     }
 
-    return await readBlobAsDataUrl(await response.blob());
+    const blob = await response.blob();
+    const dataUrl = await readBlobAsDataUrl(blob);
+
+    return {
+      dataUrl,
+      byteSize: blob.size,
+      dataUrlLength: dataUrl.length,
+      mimeType: blob.type || "unknown",
+    };
   } finally {
     clearTimeout(timeoutId);
   }
 }
 
-export async function prepareShareAvatarDataUrls(
+export async function prepareShareAvatarDataUrlsWithDiagnostics(
   players: ShareAvatarPlayer[],
   {
     fetchImpl = fetch,
     timeoutMs = SHARE_AVATAR_PREPARE_TIMEOUT_MS,
   }: PrepareShareAvatarOptions = {}
 ) {
-  const avatarDataUrlBySource = new Map<string, Promise<string>>();
+  const displayedPlayers = players.slice(0, SHARE_CARD_PLAYER_LIMIT);
+  const avatarDataUrlBySource = new Map<
+    string,
+    Promise<{
+      dataUrl: string;
+      byteSize: number;
+      dataUrlLength: number;
+      mimeType: string;
+    }>
+  >();
   const avatarDataUrlByUserId = new Map<string, string>();
+  const diagnostics = await Promise.all(
+    displayedPlayers.map(async (player, index) => {
+      const avatarUrl = player.user.avatarUrl;
+      const diagnosticBase = {
+        userId: player.userId,
+        name: player.user.name ?? `Player ${index + 1}`,
+        rank: index + 1,
+      };
 
-  try {
-    await Promise.all(
-      players.slice(0, SHARE_CARD_PLAYER_LIMIT).map(async (player) => {
-        const avatarUrl = player.user.avatarUrl;
-        if (!avatarUrl) {
-          return;
-        }
+      if (!avatarUrl) {
+        return {
+          ...diagnosticBase,
+          status: "initials" as const,
+        };
+      }
 
+      try {
         let avatarDataUrl = avatarDataUrlBySource.get(avatarUrl);
         if (!avatarDataUrl) {
           avatarDataUrl = fetchShareAvatarDataUrl({
@@ -112,14 +168,67 @@ export async function prepareShareAvatarDataUrls(
           avatarDataUrlBySource.set(avatarUrl, avatarDataUrl);
         }
 
-        avatarDataUrlByUserId.set(player.userId, await avatarDataUrl);
-      })
+        const preparedAvatar = await avatarDataUrl;
+        avatarDataUrlByUserId.set(player.userId, preparedAvatar.dataUrl);
+
+        return {
+          ...diagnosticBase,
+          status: "prepared-photo" as const,
+          dataUrlBytes: preparedAvatar.byteSize,
+          dataUrlLength: preparedAvatar.dataUrlLength,
+          mimeType: preparedAvatar.mimeType,
+        };
+      } catch {
+        return {
+          ...diagnosticBase,
+          status: "failed-photo" as const,
+        };
+      }
+    })
+  );
+
+  const failedPhotoCount = diagnostics.filter(
+    (diagnostic) => diagnostic.status === "failed-photo"
+  ).length;
+
+  if (failedPhotoCount > 0) {
+    throw new ShareAvatarPreparationError(
+      "Could not prepare profile pictures. Try again.",
+      diagnostics
     );
+  }
+
+  return {
+    avatarUrlsByUserId: avatarDataUrlByUserId,
+    diagnostics,
+    displayedPlayerCount: displayedPlayers.length,
+    uploadedPhotoCount: diagnostics.filter(
+      (diagnostic) => diagnostic.status !== "initials"
+    ).length,
+    preparedPhotoCount: diagnostics.filter(
+      (diagnostic) => diagnostic.status === "prepared-photo"
+    ).length,
+    initialsOnlyCount: diagnostics.filter(
+      (diagnostic) => diagnostic.status === "initials"
+    ).length,
+    failedPhotoCount,
+  };
+}
+
+export async function prepareShareAvatarDataUrls(
+  players: ShareAvatarPlayer[],
+  options: PrepareShareAvatarOptions = {}
+) {
+  try {
+    const result = await prepareShareAvatarDataUrlsWithDiagnostics(
+      players,
+      options
+    );
+
+    return result.avatarUrlsByUserId;
   } catch {
     throw new Error("Could not prepare profile pictures. Try again.");
   }
-
-  return avatarDataUrlByUserId;
 }
 
 export function waitForShareCardRender() {

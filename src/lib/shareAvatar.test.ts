@@ -5,6 +5,8 @@ import {
   buildShareAvatarUrl,
   isAllowedShareAvatarSource,
   prepareShareAvatarDataUrls,
+  prepareShareAvatarDataUrlsWithDiagnostics,
+  ShareAvatarPreparationError,
   waitForShareCardRender,
 } from "./shareAvatar";
 
@@ -83,6 +85,50 @@ describe("share avatar helpers", () => {
     expect(prepared.has("u2")).toBe(false);
   });
 
+  it("returns privacy-safe preparation diagnostics for debug mode", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: true,
+      blob: () =>
+        Promise.resolve(
+          new Blob([new Uint8Array([1, 2, 3, 4])], { type: "image/png" })
+        ),
+    });
+
+    const result = await prepareShareAvatarDataUrlsWithDiagnostics(
+      [
+        {
+          userId: "u1",
+          user: { name: "Lina", avatarUrl: "https://cdn.test/lina.png" },
+        },
+        { userId: "u2", user: { name: "Amir", avatarUrl: null } },
+      ],
+      { fetchImpl: fetchImpl as unknown as typeof fetch }
+    );
+
+    expect(result.displayedPlayerCount).toBe(2);
+    expect(result.uploadedPhotoCount).toBe(1);
+    expect(result.preparedPhotoCount).toBe(1);
+    expect(result.initialsOnlyCount).toBe(1);
+    expect(result.failedPhotoCount).toBe(0);
+    expect(result.diagnostics).toEqual([
+      expect.objectContaining({
+        userId: "u1",
+        name: "Lina",
+        rank: 1,
+        status: "prepared-photo",
+        dataUrlBytes: 4,
+        mimeType: "image/png",
+      }),
+      expect.objectContaining({
+        userId: "u2",
+        name: "Amir",
+        rank: 2,
+        status: "initials",
+      }),
+    ]);
+    expect(JSON.stringify(result.diagnostics)).not.toContain("cdn.test");
+  });
+
   it("prepares only the top 11 displayed players", async () => {
     const fetchImpl = vi.fn().mockImplementation(() =>
       Promise.resolve({
@@ -105,6 +151,31 @@ describe("share avatar helpers", () => {
     expect(prepared.has("u12")).toBe(false);
   });
 
+  it("limits debug diagnostics to the top 11 displayed players", async () => {
+    const fetchImpl = vi.fn().mockImplementation(() =>
+      Promise.resolve({
+        ok: true,
+        blob: () =>
+          Promise.resolve(new Blob([new Uint8Array([1])], { type: "image/png" })),
+      })
+    );
+    const players = Array.from({ length: 12 }, (_, index) => ({
+      userId: `u${index + 1}`,
+      user: {
+        name: `Player ${index + 1}`,
+        avatarUrl: `https://cdn.test/avatar-${index + 1}.png`,
+      },
+    }));
+
+    const result = await prepareShareAvatarDataUrlsWithDiagnostics(players, {
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    });
+
+    expect(result.diagnostics).toHaveLength(11);
+    expect(result.diagnostics.map((entry) => entry.userId)).not.toContain("u12");
+    expect(fetchImpl).toHaveBeenCalledTimes(11);
+  });
+
   it("rejects sharing when an uploaded photo cannot be prepared", async () => {
     const fetchImpl = vi.fn().mockResolvedValue(new Response(null, { status: 404 }));
 
@@ -114,6 +185,51 @@ describe("share avatar helpers", () => {
         { fetchImpl }
       )
     ).rejects.toThrow("Could not prepare profile pictures. Try again.");
+  });
+
+  it("throws diagnostics when a debug photo preparation fails", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(new Response(null, { status: 404 }));
+
+    await expect(
+      prepareShareAvatarDataUrlsWithDiagnostics(
+        [
+          {
+            userId: "u1",
+            user: { name: "Zaim", avatarUrl: "https://cdn.test/missing.png" },
+          },
+          { userId: "u2", user: { name: "Agiq", avatarUrl: null } },
+        ],
+        { fetchImpl }
+      )
+    ).rejects.toMatchObject({
+      name: "ShareAvatarPreparationError",
+      diagnostics: [
+        expect.objectContaining({
+          userId: "u1",
+          name: "Zaim",
+          status: "failed-photo",
+        }),
+        expect.objectContaining({
+          userId: "u2",
+          name: "Agiq",
+          status: "initials",
+        }),
+      ],
+    });
+
+    try {
+      await prepareShareAvatarDataUrlsWithDiagnostics(
+        [
+          {
+            userId: "u1",
+            user: { name: "Zaim", avatarUrl: "https://cdn.test/missing.png" },
+          },
+        ],
+        { fetchImpl }
+      );
+    } catch (error) {
+      expect(error).toBeInstanceOf(ShareAvatarPreparationError);
+    }
   });
 
   it("rejects sharing when avatar preparation times out", async () => {

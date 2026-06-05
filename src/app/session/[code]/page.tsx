@@ -9,7 +9,7 @@ import {
   useState,
 } from "react";
 import { useSession } from "next-auth/react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import {
   ArrowLeft,
   ClipboardList,
@@ -27,6 +27,7 @@ import { ManualMatchModal } from "@/components/session/ManualMatchModal";
 import { SessionActionConfirmModal } from "@/components/session/SessionActionConfirmModal";
 import { SessionOverviewPanel } from "@/components/session/SessionOverviewPanel";
 import { SessionPodium } from "@/components/session/SessionPodium";
+import { SessionShareDebugModal } from "@/components/session/SessionShareDebugModal";
 import { SessionShareCard } from "@/components/session/SessionShareCard";
 import { SessionPlayersModal } from "@/components/session/SessionPlayersModal";
 import { SessionPreferenceEditorPortal } from "@/components/session/SessionPreferenceEditorPortal";
@@ -38,6 +39,7 @@ import { useAdminOnboardingProgress } from "@/components/onboarding/useAdminOnbo
 import type { CurrentUser } from "@/components/session/sessionTypes";
 import { MatchStatus, SessionStatus } from "@/types/enums";
 import { shareSessionStandingsCard } from "@/lib/sessionShare";
+import { isSessionShareDebugEnabled } from "@/lib/sessionShareDebug";
 import {
   prepareShareAvatarDataUrls,
   waitForShareCardRender,
@@ -105,7 +107,9 @@ export default function SessionPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
   const params = useParams();
+  const searchParams = useSearchParams();
   const code = params?.code as string;
+  const shareDebugEnabled = isSessionShareDebugEnabled(searchParams);
 
   const mobilePagerRef = useRef<HTMLDivElement | null>(null);
   const previousSessionStatusRef = useRef<string | null>(null);
@@ -144,6 +148,7 @@ export default function SessionPage() {
     useState<SessionMobileSection>("session");
   const [celebrationRunId, setCelebrationRunId] = useState(0);
   const [sharingResults, setSharingResults] = useState(false);
+  const [shareDebugModalOpen, setShareDebugModalOpen] = useState(false);
   const [preparedShareAvatarUrlsByUserId, setPreparedShareAvatarUrlsByUserId] =
     useState<Map<string, string> | null>(null);
 
@@ -543,6 +548,11 @@ export default function SessionPage() {
       return;
     }
 
+    if (shareDebugEnabled) {
+      setShareDebugModalOpen(true);
+      return;
+    }
+
     setSharingResults(true);
     setError("");
 
@@ -575,7 +585,7 @@ export default function SessionPage() {
       setPreparedShareAvatarUrlsByUserId(null);
       setSharingResults(false);
     }
-  }, [sessionData, sessionView]);
+  }, [sessionData, sessionView, shareDebugEnabled]);
   const mobileSections = useMemo(
     () =>
       sessionView?.isCompletedSession
@@ -1771,6 +1781,24 @@ export default function SessionPage() {
             ? courtActions.createManualQueuedMatch
             : courtActions.createManualMatch
         }
+      />
+
+      <SessionShareDebugModal
+        open={shareDebugModalOpen}
+        sessionName={sessionData.name}
+        communityName={
+          isTutorialPlayground
+            ? "Tutorial playground"
+            : sessionData.communities?.[0]?.name ?? "Community"
+        }
+        sessionType={sessionData.type}
+        sessionTypeLabel={sessionView.sessionTypeLabel}
+        players={sessionView.sortedPlayers}
+        pointDiffByUserId={sessionView.pointDiffByUserId}
+        playerStatsByUserId={sessionView.playerStatsByUserId}
+        fileName={`${sessionData.name}-standings`}
+        shareTitle={`${sessionData.name} final standings`}
+        onClose={() => setShareDebugModalOpen(false)}
       />
 
       {sessionView.isCompletedSession &&
