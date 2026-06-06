@@ -9,7 +9,7 @@ import {
   useState,
 } from "react";
 import { useSession } from "next-auth/react";
-import { useParams, useRouter, useSearchParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import {
   ArrowLeft,
   ClipboardList,
@@ -27,8 +27,6 @@ import { ManualMatchModal } from "@/components/session/ManualMatchModal";
 import { SessionActionConfirmModal } from "@/components/session/SessionActionConfirmModal";
 import { SessionOverviewPanel } from "@/components/session/SessionOverviewPanel";
 import { SessionPodium } from "@/components/session/SessionPodium";
-import { SessionShareDebugModal } from "@/components/session/SessionShareDebugModal";
-import { SessionShareCard } from "@/components/session/SessionShareCard";
 import { SessionPlayersModal } from "@/components/session/SessionPlayersModal";
 import { SessionPreferenceEditorPortal } from "@/components/session/SessionPreferenceEditorPortal";
 import { SessionGuestRenameModal } from "@/components/session/SessionGuestRenameModal";
@@ -38,12 +36,7 @@ import { AdminOnboardingChecklist } from "@/components/onboarding/AdminOnboardin
 import { useAdminOnboardingProgress } from "@/components/onboarding/useAdminOnboardingProgress";
 import type { CurrentUser } from "@/components/session/sessionTypes";
 import { MatchStatus, SessionStatus } from "@/types/enums";
-import { shareSessionStandingsCard } from "@/lib/sessionShare";
-import { isSessionShareDebugEnabled } from "@/lib/sessionShareDebug";
-import {
-  prepareShareAvatarDataUrls,
-  waitForShareCardRender,
-} from "@/lib/shareAvatar";
+import { shareSessionStandingsImage } from "@/lib/sessionShareImageClient";
 import {
   applyCourtLabelUpdates,
   mergeSessionSnapshot,
@@ -107,9 +100,7 @@ export default function SessionPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
   const params = useParams();
-  const searchParams = useSearchParams();
   const code = params?.code as string;
-  const shareDebugEnabled = isSessionShareDebugEnabled(searchParams);
 
   const mobilePagerRef = useRef<HTMLDivElement | null>(null);
   const previousSessionStatusRef = useRef<string | null>(null);
@@ -120,7 +111,6 @@ export default function SessionPage() {
   const pagerTouchStartXRef = useRef<number | null>(null);
   const pagerTouchStartIndexRef = useRef<number | null>(null);
   const pagerIsDraggingRef = useRef(false);
-  const shareCardRef = useRef<HTMLDivElement | null>(null);
   const [user, setUser] = useState<CurrentUser | null>(null);
   const [error, setError] = useState("");
   const [endingSession, setEndingSession] = useState(false);
@@ -148,9 +138,6 @@ export default function SessionPage() {
     useState<SessionMobileSection>("session");
   const [celebrationRunId, setCelebrationRunId] = useState(0);
   const [sharingResults, setSharingResults] = useState(false);
-  const [shareDebugModalOpen, setShareDebugModalOpen] = useState(false);
-  const [preparedShareAvatarUrlsByUserId, setPreparedShareAvatarUrlsByUserId] =
-    useState<Map<string, string> | null>(null);
 
   const replayWinnerCelebration = useCallback(() => {
     setCelebrationRunId((currentRunId) => currentRunId + 1);
@@ -548,27 +535,12 @@ export default function SessionPage() {
       return;
     }
 
-    if (shareDebugEnabled) {
-      setShareDebugModalOpen(true);
-      return;
-    }
-
     setSharingResults(true);
     setError("");
 
     try {
-      const preparedAvatarUrlsByUserId = await prepareShareAvatarDataUrls(
-        sessionView.sortedPlayers
-      );
-      setPreparedShareAvatarUrlsByUserId(preparedAvatarUrlsByUserId);
-      await waitForShareCardRender();
-
-      if (!shareCardRef.current) {
-        throw new Error("Results are not ready to share yet");
-      }
-
-      await shareSessionStandingsCard({
-        node: shareCardRef.current,
+      await shareSessionStandingsImage({
+        code,
         fileName: `${sessionData.name}-standings`,
         shareTitle: `${sessionData.name} final standings`,
       });
@@ -582,10 +554,9 @@ export default function SessionPage() {
         );
       }
     } finally {
-      setPreparedShareAvatarUrlsByUserId(null);
       setSharingResults(false);
     }
-  }, [sessionData, sessionView, shareDebugEnabled]);
+  }, [code, sessionData, sessionView]);
   const mobileSections = useMemo(
     () =>
       sessionView?.isCompletedSession
@@ -1783,49 +1754,6 @@ export default function SessionPage() {
         }
       />
 
-      <SessionShareDebugModal
-        open={shareDebugModalOpen}
-        sessionName={sessionData.name}
-        communityName={
-          isTutorialPlayground
-            ? "Tutorial playground"
-            : sessionData.communities?.[0]?.name ?? "Community"
-        }
-        sessionType={sessionData.type}
-        sessionTypeLabel={sessionView.sessionTypeLabel}
-        players={sessionView.sortedPlayers}
-        pointDiffByUserId={sessionView.pointDiffByUserId}
-        playerStatsByUserId={sessionView.playerStatsByUserId}
-        fileName={`${sessionData.name}-standings`}
-        shareTitle={`${sessionData.name} final standings`}
-        onClose={() => setShareDebugModalOpen(false)}
-      />
-
-      {sessionView.isCompletedSession &&
-      sessionView.sortedPlayers.length > 0 &&
-      preparedShareAvatarUrlsByUserId ? (
-        <div
-          aria-hidden="true"
-          className="pointer-events-none fixed -left-[200vw] top-0"
-        >
-          <div ref={shareCardRef}>
-            <SessionShareCard
-              sessionName={sessionData.name}
-              communityName={
-                isTutorialPlayground
-                  ? "Tutorial playground"
-                  : sessionData.communities?.[0]?.name ?? "Community"
-              }
-              sessionType={sessionData.type}
-              sessionTypeLabel={sessionView.sessionTypeLabel}
-              players={sessionView.sortedPlayers}
-              preparedAvatarUrlsByUserId={preparedShareAvatarUrlsByUserId}
-              pointDiffByUserId={sessionView.pointDiffByUserId}
-              playerStatsByUserId={sessionView.playerStatsByUserId}
-            />
-          </div>
-        </div>
-      ) : null}
     </div>
   );
 }
