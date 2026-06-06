@@ -1243,11 +1243,6 @@ export default function SessionPage() {
                 }
                 canOpenPlayerManager={Boolean(canOpenPlayerManager)}
                 canOpenSettings={Boolean(canOpenSettings)}
-                canShareResults={
-                  sessionView.isCompletedSession &&
-                  sessionView.sortedPlayers.length > 0
-                }
-                sharingResults={sharingResults}
                 tutorialHint={sessionTutorialHint}
                 onStartSession={startSessionWithOnboardingRefresh}
                 onOpenPlayerManager={() => setShowPlayersModal(true)}
@@ -1255,7 +1250,6 @@ export default function SessionPage() {
                 onOpenMatchHistory={() =>
                   router.push(`/session/${code}/history?from=session`)
                 }
-                onShareResults={() => void handleShareResults()}
               />
             </section>
 
@@ -1349,6 +1343,12 @@ export default function SessionPage() {
                     playerStatsByUserId={sessionView.playerStatsByUserId}
                     celebrationRunId={celebrationRunId}
                     onReplayCelebration={replayWinnerCelebration}
+                    onShareResults={
+                      sessionView.sortedPlayers.length > 0
+                        ? () => void handleShareResults()
+                        : undefined
+                    }
+                    sharingResults={sharingResults}
                   />
                 ) : null}
 

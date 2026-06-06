@@ -53,6 +53,8 @@ function renderPodium({
   >(),
   celebrationRunId,
   onReplayCelebration,
+  onShareResults,
+  sharingResults,
 }: {
   sessionType?: SessionType;
   players: Player[];
@@ -67,6 +69,8 @@ function renderPodium({
   >;
   celebrationRunId?: number;
   onReplayCelebration?: () => void;
+  onShareResults?: () => void;
+  sharingResults?: boolean;
 }) {
   return renderToStaticMarkup(
     <SessionPodium
@@ -76,6 +80,8 @@ function renderPodium({
       playerStatsByUserId={playerStatsByUserId}
       celebrationRunId={celebrationRunId}
       onReplayCelebration={onReplayCelebration}
+      onShareResults={onShareResults}
+      sharingResults={sharingResults}
     />
   );
 }
@@ -179,6 +185,32 @@ describe("SessionPodium", () => {
     expect(markup).toContain("<svg");
     expect(markup).not.toContain(">Replay celebration<");
     expect(markup).not.toContain('data-testid="podium-burst-particles"');
+  });
+
+  it("renders the share action in the podium controls when provided", () => {
+    const markup = renderPodium({
+      players: [
+        createPlayer({ userId: "u1", name: "Alex Lee", sessionPoints: 18 }),
+        createPlayer({ userId: "u2", name: "Bianca Tan", sessionPoints: 15 }),
+      ],
+      onShareResults: () => undefined,
+    });
+
+    expect(markup).toContain(">Share<");
+    expect(markup).toContain("<svg");
+  });
+
+  it("shows preparing copy while podium share is in progress", () => {
+    const markup = renderPodium({
+      players: [
+        createPlayer({ userId: "u1", name: "Alex Lee", sessionPoints: 18 }),
+        createPlayer({ userId: "u2", name: "Bianca Tan", sessionPoints: 15 }),
+      ],
+      onShareResults: () => undefined,
+      sharingResults: true,
+    });
+
+    expect(markup).toContain("Preparing...");
   });
 
   it("renders celebration burst markup when a celebration run is active", () => {

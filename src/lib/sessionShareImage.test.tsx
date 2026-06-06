@@ -42,6 +42,35 @@ describe("session share image", () => {
     expect(markup.match(/P03/g) ?? []).toHaveLength(1);
   });
 
+  it("uses one wide lower column until more than seven players are shown", () => {
+    const sevenPlayerMarkup = renderToStaticMarkup(
+      renderSessionShareImage(
+        buildSessionShareImageViewModel({
+          sessionName: "Weekend Cup",
+          communityName: "Badminton Usuals",
+          sessionType: SessionType.POINTS,
+          players: createPlayers(7),
+          matches: [],
+        })
+      )
+    );
+    const eightPlayerMarkup = renderToStaticMarkup(
+      renderSessionShareImage(
+        buildSessionShareImageViewModel({
+          sessionName: "Weekend Cup",
+          communityName: "Badminton Usuals",
+          sessionType: SessionType.POINTS,
+          players: createPlayers(8),
+          matches: [],
+        })
+      )
+    );
+
+    expect(sevenPlayerMarkup).toContain("width:864px");
+    expect(sevenPlayerMarkup).not.toContain("width:420px");
+    expect(eightPlayerMarkup).toContain("width:420px");
+  });
+
   it("uses session points, wins, losses, and point diff for points standings", () => {
     const viewModel = buildSessionShareImageViewModel({
       sessionName: "Weekend Cup",

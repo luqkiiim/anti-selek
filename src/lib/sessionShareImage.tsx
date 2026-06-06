@@ -595,6 +595,9 @@ const styles: Record<string, CSSProperties> = {
     gap: 24,
     width: 420,
   },
+  standingsColumnWide: {
+    width: 864,
+  },
   rowCard: {
     display: "flex",
     flexDirection: "row",
@@ -605,6 +608,9 @@ const styles: Record<string, CSSProperties> = {
     border: "2px solid #e2e8f0",
     borderRadius: 36,
     background: "#f8fafc",
+  },
+  rowCardWide: {
+    width: 864,
   },
   rowRank: {
     display: "flex",
@@ -810,12 +816,14 @@ function PodiumCard({
 function StandingRow({
   standing,
   avatarDataUrlsByUserId,
+  wide = false,
 }: {
   standing: SessionShareImageStanding;
   avatarDataUrlsByUserId: Map<string, string>;
+  wide?: boolean;
 }) {
   return (
-    <div style={styles.rowCard}>
+    <div style={wide ? { ...styles.rowCard, ...styles.rowCardWide } : styles.rowCard}>
       <div style={styles.rowRank}>{standing.rank}</div>
       <AvatarImage
         standing={standing}
@@ -857,10 +865,13 @@ export function renderSessionShareImage(
         ? [topThree[1], topThree[0]]
         : topThree;
   const rowStandings = viewModel.standings.slice(3, 11);
-  const standingsColumns = [
-    rowStandings.slice(0, 4),
-    rowStandings.slice(4, 8),
-  ].filter((column) => column.length > 0);
+  const useWideLowerRows = rowStandings.length <= 4;
+  const standingsColumns = useWideLowerRows
+    ? [rowStandings]
+    : [
+        rowStandings.slice(0, 4),
+        rowStandings.slice(4, 8),
+      ].filter((column) => column.length > 0);
 
   return (
     <div style={styles.frame}>
@@ -886,12 +897,20 @@ export function renderSessionShareImage(
       <div style={styles.standingsPanel}>
         <div style={styles.standingsColumns}>
           {standingsColumns.map((column, columnIndex) => (
-            <div key={columnIndex} style={styles.standingsColumn}>
+            <div
+              key={columnIndex}
+              style={
+                useWideLowerRows
+                  ? { ...styles.standingsColumn, ...styles.standingsColumnWide }
+                  : styles.standingsColumn
+              }
+            >
               {column.map((standing) => (
                 <StandingRow
                   key={standing.userId}
                   standing={standing}
                   avatarDataUrlsByUserId={avatarDataUrlsByUserId}
+                  wide={useWideLowerRows}
                 />
               ))}
             </div>

@@ -1,6 +1,6 @@
 "use client";
 
-import { Sparkles } from "lucide-react";
+import { Share2, Sparkles } from "lucide-react";
 import type { CSSProperties } from "react";
 
 import type { Player } from "@/components/session/sessionTypes";
@@ -21,6 +21,8 @@ interface SessionPodiumProps {
   >;
   celebrationRunId?: number;
   onReplayCelebration?: () => void;
+  onShareResults?: () => void;
+  sharingResults?: boolean;
 }
 
 const RANK_STYLES: Record<
@@ -65,6 +67,8 @@ export function SessionPodium({
   playerStatsByUserId,
   celebrationRunId = 0,
   onReplayCelebration,
+  onShareResults,
+  sharingResults = false,
 }: SessionPodiumProps) {
   const topThree = players.slice(0, 3);
   const isLadderSession = sessionType === SessionType.LADDER;
@@ -110,8 +114,21 @@ export function SessionPodium({
         </div>
       ) : null}
 
-      <div className="relative z-[1] mb-4 flex justify-end">
-        {onReplayCelebration ? (
+      <div className="relative z-[1] mb-4 flex items-center gap-3">
+        {onShareResults ? (
+          <button
+            type="button"
+            onClick={onShareResults}
+            disabled={sharingResults}
+            className="inline-flex h-10 items-center gap-2 rounded-full border border-sky-200/80 bg-white/85 px-4 text-sm font-bold text-sky-700 shadow-sm backdrop-blur transition hover:-translate-y-0.5 hover:border-sky-300 hover:bg-sky-50 hover:text-sky-800 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-sky-300 focus:ring-offset-2 disabled:cursor-wait disabled:opacity-70 disabled:hover:translate-y-0"
+          >
+            <Share2 aria-hidden="true" size={16} strokeWidth={2.4} />
+            {sharingResults ? "Preparing..." : "Share"}
+          </button>
+        ) : null}
+
+        <div className="ml-auto">
+          {onReplayCelebration ? (
           <button
             type="button"
             onClick={onReplayCelebration}
@@ -121,7 +138,8 @@ export function SessionPodium({
           >
             <Sparkles aria-hidden="true" size={17} strokeWidth={2.4} />
           </button>
-        ) : null}
+          ) : null}
+        </div>
       </div>
 
       <div
