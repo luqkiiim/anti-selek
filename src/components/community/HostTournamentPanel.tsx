@@ -67,41 +67,36 @@ const SESSION_TYPE_INFO: Record<
   [SessionType.POINTS]: {
     label: "Points",
     lines: [
-      "Balances by current session points.",
-      "Everyone starts at 0.",
-      "Best for groups still finding their level.",
+      "Matchmaking tries to provide variety and balance",
     ],
   },
   [SessionType.SOCIAL_MIX]: {
     label: "Social Mix",
     lines: [
-      "Pushes for first-time partners and opponents across the session.",
-      "Still records scores, session points, and rating updates.",
-      "Best for social nights where mixing matters most.",
+      "Matchmaking tries to provide even more variety.",
+      "Expect less balanced games.",
     ],
   },
   [SessionType.ELO]: {
     label: "Ratings",
     lines: [
-      "Balances by established community ratings.",
-      "Best when ratings are already reliable.",
-      "Best with established community members.",
+      "Matchmaking provides variety and balance based on ratings instead of session points.",
+      "Points are still counted for leaderboard display."
     ],
   },
   [SessionType.LADDER]: {
     label: "Ladder",
     lines: [
-      "Groups by current session performance.",
-      "Similar-performing players face each other more often.",
-      "Best for competitive sessions.",
+      "Win = +1",
+      "Loss = -1",
+      "Similar level players face each other more often.",
     ],
   },
   [SessionType.RACE]: {
     label: "Race",
     lines: [
-      "Groups by accumulated session race points.",
-      "Wins add 3. Losses do not remove points.",
-      "Best for competitive sessions with a climb.",
+      "Even less variety, more balance",
+      "Similar level players face each other more often.",
     ],
   },
 };
