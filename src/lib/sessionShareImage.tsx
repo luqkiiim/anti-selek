@@ -582,34 +582,18 @@ const styles: Record<string, CSSProperties> = {
     borderRadius: 54,
     background: "#ffffff",
   },
-  standingsHeader: {
+  standingsColumns: {
     display: "flex",
     flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    width: "100%",
-  },
-  standingsHeading: {
-    display: "flex",
-    fontSize: 25,
-    fontWeight: 900,
-    letterSpacing: 4,
-    textTransform: "uppercase",
-    color: "#64748b",
-  },
-  standingsSubheading: {
-    display: "flex",
-    fontSize: 31,
-    fontWeight: 800,
-    color: "#64748b",
-  },
-  standingsRows: {
-    display: "flex",
-    flexDirection: "row",
-    flexWrap: "wrap",
+    alignItems: "flex-start",
     gap: 24,
     width: "100%",
-    marginTop: 32,
+  },
+  standingsColumn: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 24,
+    width: 420,
   },
   rowCard: {
     display: "flex",
@@ -873,6 +857,10 @@ export function renderSessionShareImage(
         ? [topThree[1], topThree[0]]
         : topThree;
   const rowStandings = viewModel.standings.slice(3, 11);
+  const standingsColumns = [
+    rowStandings.slice(0, 4),
+    rowStandings.slice(4, 8),
+  ].filter((column) => column.length > 0);
 
   return (
     <div style={styles.frame}>
@@ -896,17 +884,17 @@ export function renderSessionShareImage(
       </div>
 
       <div style={styles.standingsPanel}>
-        <div style={styles.standingsHeader}>
-          <div style={styles.standingsHeading}>Positions 4-11</div>
-          <div style={styles.standingsSubheading}>Top 11 snapshot</div>
-        </div>
-        <div style={styles.standingsRows}>
-          {rowStandings.map((standing) => (
-            <StandingRow
-              key={standing.userId}
-              standing={standing}
-              avatarDataUrlsByUserId={avatarDataUrlsByUserId}
-            />
+        <div style={styles.standingsColumns}>
+          {standingsColumns.map((column, columnIndex) => (
+            <div key={columnIndex} style={styles.standingsColumn}>
+              {column.map((standing) => (
+                <StandingRow
+                  key={standing.userId}
+                  standing={standing}
+                  avatarDataUrlsByUserId={avatarDataUrlsByUserId}
+                />
+              ))}
+            </div>
           ))}
         </div>
       </div>

@@ -32,8 +32,8 @@ describe("session share image", () => {
 
     expect(viewModel.standings).toHaveLength(11);
     expect(markup).toContain("Final standings");
-    expect(markup).toContain("Positions 4-11");
-    expect(markup).toContain("Top 11 snapshot");
+    expect(markup).not.toContain("Positions 4-11");
+    expect(markup).not.toContain("Top 11 snapshot");
     expect(markup).toContain(">1<");
     expect(markup).toContain(">11<");
     expect(markup).not.toContain("P12");
