@@ -20,40 +20,29 @@ function createPlayers(count: number) {
 }
 
 describe("session share image", () => {
-  it("renders top 11 with podium ranks 1-3 and rows 4-11 only", () => {
+  it("renders top 13 with podium ranks 1-3 and rows 4-13 only", () => {
     const viewModel = buildSessionShareImageViewModel({
       sessionName: "Weekend Cup",
       communityName: "Badminton Usuals",
       sessionType: SessionType.POINTS,
-      players: createPlayers(12),
+      players: createPlayers(14),
       matches: [],
     });
     const markup = renderToStaticMarkup(renderSessionShareImage(viewModel));
 
-    expect(viewModel.standings).toHaveLength(11);
+    expect(viewModel.standings).toHaveLength(13);
     expect(markup).toContain("Final standings");
     expect(markup).not.toContain("Positions 4-11");
     expect(markup).not.toContain("Top 11 snapshot");
     expect(markup).toContain(">1<");
-    expect(markup).toContain(">11<");
-    expect(markup).not.toContain("P12");
+    expect(markup).toContain(">13<");
+    expect(markup).not.toContain("P14");
     expect(markup.match(/P01/g) ?? []).toHaveLength(1);
     expect(markup.match(/P02/g) ?? []).toHaveLength(1);
     expect(markup.match(/P03/g) ?? []).toHaveLength(1);
   });
 
-  it("uses one wide lower column until more than seven players are shown", () => {
-    const sevenPlayerMarkup = renderToStaticMarkup(
-      renderSessionShareImage(
-        buildSessionShareImageViewModel({
-          sessionName: "Weekend Cup",
-          communityName: "Badminton Usuals",
-          sessionType: SessionType.POINTS,
-          players: createPlayers(7),
-          matches: [],
-        })
-      )
-    );
+  it("uses one wide lower column until more than eight players are shown", () => {
     const eightPlayerMarkup = renderToStaticMarkup(
       renderSessionShareImage(
         buildSessionShareImageViewModel({
@@ -65,10 +54,21 @@ describe("session share image", () => {
         })
       )
     );
+    const ninePlayerMarkup = renderToStaticMarkup(
+      renderSessionShareImage(
+        buildSessionShareImageViewModel({
+          sessionName: "Weekend Cup",
+          communityName: "Badminton Usuals",
+          sessionType: SessionType.POINTS,
+          players: createPlayers(9),
+          matches: [],
+        })
+      )
+    );
 
-    expect(sevenPlayerMarkup).toContain("width:864px");
-    expect(sevenPlayerMarkup).not.toContain("width:420px");
-    expect(eightPlayerMarkup).toContain("width:420px");
+    expect(eightPlayerMarkup).toContain("width:864px");
+    expect(eightPlayerMarkup).not.toContain("width:420px");
+    expect(ninePlayerMarkup).toContain("width:420px");
   });
 
   it("uses session points, wins, losses, and point diff for points standings", () => {

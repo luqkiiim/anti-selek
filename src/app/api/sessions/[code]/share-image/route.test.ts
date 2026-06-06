@@ -64,7 +64,7 @@ function createSessionData({
   status?: string;
   communityIsTutorial?: boolean;
 } = {}) {
-  const players = Array.from({ length: 11 }, (_, index) => ({
+  const players = Array.from({ length: 13 }, (_, index) => ({
     userId: `u${index + 1}`,
     sessionPoints: 30 - index,
     joinedAt: new Date("2026-05-01T00:00:00.000Z"),
@@ -155,9 +155,11 @@ describe("session share image route", () => {
       width: SESSION_SHARE_IMAGE_WIDTH,
       height: SESSION_SHARE_IMAGE_HEIGHT,
     });
-    expect(
-      renderToStaticMarkup(mocks.imageResponses[0].element as ReactElement)
-    ).toContain("Badminton 29/5/26");
+    const markup = renderToStaticMarkup(
+      mocks.imageResponses[0].element as ReactElement
+    );
+    expect(markup).toContain("Badminton 29/5/26");
+    expect(markup).toContain(">13<");
   });
 
   it("rejects unauthenticated users", async () => {

@@ -17,7 +17,7 @@ import { MatchStatus, SessionType } from "@/types/enums";
 
 export const SESSION_SHARE_IMAGE_WIDTH = 1080;
 export const SESSION_SHARE_IMAGE_HEIGHT = 1920;
-export const SESSION_SHARE_IMAGE_PLAYER_LIMIT = 11;
+export const SESSION_SHARE_IMAGE_PLAYER_LIMIT = 13;
 
 const SHARE_AVATAR_FETCH_TIMEOUT_MS = 4_000;
 
@@ -864,13 +864,13 @@ export function renderSessionShareImage(
       : topThree.length === 2
         ? [topThree[1], topThree[0]]
         : topThree;
-  const rowStandings = viewModel.standings.slice(3, 11);
-  const useWideLowerRows = rowStandings.length <= 4;
+  const rowStandings = viewModel.standings.slice(3, 13);
+  const useWideLowerRows = rowStandings.length <= 5;
   const standingsColumns = useWideLowerRows
     ? [rowStandings]
     : [
-        rowStandings.slice(0, 4),
-        rowStandings.slice(4, 8),
+        rowStandings.slice(0, 5),
+        rowStandings.slice(5, 10),
       ].filter((column) => column.length > 0);
 
   return (
