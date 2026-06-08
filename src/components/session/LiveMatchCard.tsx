@@ -87,7 +87,9 @@ function TeamNames({
                 onClick={() => onTogglePlayerAction(actionKey)}
                 disabled={actionDisabled}
                 aria-expanded={actionOpen}
-                className={`flex min-w-0 w-full items-center gap-1.5 whitespace-normal break-words text-[0.95rem] font-semibold leading-tight text-gray-900 transition hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-50 sm:gap-2 sm:text-base md:text-lg xl:text-base ${textAlignClass} ${rowDirectionClass}`}
+                aria-label={`Open actions for ${player.name}`}
+                title={player.name}
+                className={`flex min-w-0 w-full items-center gap-1.5 text-[0.95rem] font-semibold leading-tight text-gray-900 transition hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-50 sm:gap-2 sm:text-base md:text-lg xl:text-base ${textAlignClass} ${rowDirectionClass}`}
               >
                 <Avatar
                   name={player.name}
@@ -95,7 +97,7 @@ function TeamNames({
                   size="court"
                   appearance="court"
                 />
-                <span className="min-w-0 flex-1">{player.name}</span>
+                <span className="min-w-0 flex-1 truncate">{player.name}</span>
               </button>
             ) : (
               <div className={`flex min-w-0 items-center gap-1.5 sm:gap-2 ${rowDirectionClass}`}>
@@ -105,7 +107,10 @@ function TeamNames({
                   size="court"
                   appearance="court"
                 />
-                <p className="min-w-0 flex-1 whitespace-normal break-words text-[0.95rem] font-semibold leading-tight text-gray-900 sm:text-base md:text-lg xl:text-base">
+                <p
+                  className="min-w-0 flex-1 truncate text-[0.95rem] font-semibold leading-tight text-gray-900 sm:text-base md:text-lg xl:text-base"
+                  title={player.name}
+                >
                   {player.name}
                 </p>
               </div>

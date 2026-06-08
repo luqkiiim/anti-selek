@@ -218,4 +218,32 @@ describe("match reason layout", () => {
     expect(markup).toContain('data-avatar-size="court"');
     expect(markup).toContain('data-avatar-appearance="court"');
   });
+
+  it("truncates long live court names while preserving full-name access", () => {
+    const longName = "Alexandria Catherine Longlastname";
+    const markup = renderLiveCard(
+      createLiveMatch({
+        team1User1: { id: "u1", name: longName },
+      })
+    );
+
+    expect(markup).toContain(`title="${longName}"`);
+    expect(markup).toContain(`aria-label="Open actions for ${longName}"`);
+    expect(markup).toContain("min-w-0 flex-1 truncate");
+    expect(markup).not.toContain("whitespace-normal break-words");
+  });
+
+  it("truncates long queued match names while preserving full-name access", () => {
+    const longName = "Alexandria Catherine Longlastname";
+    const markup = renderQueuedCard(
+      createQueuedMatch({
+        team1User1: { id: "u1", name: longName },
+      })
+    );
+
+    expect(markup).toContain(`title="${longName}"`);
+    expect(markup).toContain(`aria-label="Open actions for ${longName}"`);
+    expect(markup).toContain("min-w-0 flex-1 truncate");
+    expect(markup).not.toContain("whitespace-normal break-words");
+  });
 });
