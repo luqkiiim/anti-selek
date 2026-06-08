@@ -8,7 +8,12 @@ import { createClient } from "@libsql/client";
 const MIGRATION_TABLE = "_turso_sql_migrations";
 
 function shouldRunMigrations() {
-  return process.argv.includes("--force") || process.env.VERCEL === "1";
+  return (
+    process.argv.includes("--force") ||
+    (process.env.VERCEL === "1" &&
+      process.env.VERCEL_ENV === "production" &&
+      process.env.RUN_DB_MIGRATIONS === "1")
+  );
 }
 
 function getBaselineThroughName() {
@@ -33,7 +38,9 @@ function escapeSqlString(value) {
 
 async function main() {
   if (!shouldRunMigrations()) {
-    console.log("Skipping Turso SQL migrations outside Vercel build.");
+    console.log(
+      "Skipping Turso SQL migrations; use --force locally or set RUN_DB_MIGRATIONS=1 on production Vercel builds."
+    );
     return;
   }
 

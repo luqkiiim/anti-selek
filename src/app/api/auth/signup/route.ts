@@ -4,6 +4,7 @@ import bcrypt from "bcryptjs";
 import { checkRateLimit, rateLimit } from "@/lib/rateLimit";
 import { logAuditEvent } from "@/lib/serverAudit";
 import { logError, safeErrorResponse } from "@/lib/errors";
+import { isGlobalAdminEmail } from "@/lib/globalAdmin";
 
 export const dynamic = "force-dynamic";
 
@@ -90,6 +91,31 @@ export async function POST(request: Request) {
           },
           status: 429,
         }
+      );
+    }
+
+    if (isGlobalAdminEmail(normalizedEmail)) {
+      logAuditEvent({
+        action: "auth.sign_up",
+        actor: {
+          email: normalizedEmail,
+        },
+        details: {
+          reason: "admin_email_public_signup_blocked",
+        },
+        outcome: "denied",
+        request,
+        scope: {
+          route: "/api/auth/signup",
+        },
+        target: {
+          id: normalizedEmail,
+          type: "user",
+        },
+      });
+      return NextResponse.json(
+        { error: "This account must be provisioned by an administrator." },
+        { status: 403 }
       );
     }
 

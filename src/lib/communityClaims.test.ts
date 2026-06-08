@@ -140,4 +140,58 @@ describe("community claim helpers", () => {
     expect(result.requesterName).toBe("New Signup");
     expect(deleteDisposableUnclaimedUsers).toHaveBeenCalledWith(tx, ["placeholder-1"]);
   });
+
+  it("requires manual merge for linked profiles spanning multiple communities", async () => {
+    const tx = {
+      claimRequest: {
+        findUnique: vi.fn().mockResolvedValue({
+          id: "claim-1",
+          communityId: "community-1",
+          requesterUserId: "requester-1",
+          targetUserId: "placeholder-1",
+          status: ClaimRequestStatus.PENDING,
+          requester: {
+            id: "requester-1",
+            name: "New Signup",
+            email: "new@example.com",
+            isClaimed: true,
+          },
+          target: {
+            id: "placeholder-1",
+            name: "Old Member",
+            email: null,
+            isClaimed: false,
+            gender: PlayerGender.FEMALE,
+            partnerPreference: PartnerPreference.OPEN,
+            mixedSideOverride: null,
+          },
+        }),
+      },
+      offlineIdentityMember: {
+        findUnique: vi.fn().mockResolvedValue({
+          offlineIdentity: {
+            members: [
+              { communityId: "community-1", userId: "placeholder-1" },
+              { communityId: "community-2", userId: "placeholder-2" },
+            ],
+          },
+        }),
+      },
+      communityMember: {
+        update: vi.fn(),
+      },
+    } as unknown as Parameters<typeof approveCommunityClaimRequest>[0];
+
+    await expect(
+      approveCommunityClaimRequest(tx, {
+        communityId: "community-1",
+        requestId: "claim-1",
+        reviewerUserId: "admin-1",
+      })
+    ).rejects.toMatchObject({
+      message: "Linked profiles span multiple communities. Manual merge required.",
+      statusCode: 409,
+    });
+    expect(tx.communityMember.update).not.toHaveBeenCalled();
+  });
 });

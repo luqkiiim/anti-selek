@@ -3,6 +3,7 @@ import {
   AVATAR_MAX_FILE_BYTES,
   AVATAR_MAX_SOURCE_FILE_BYTES,
   buildAvatarObjectKey,
+  getAvatarFileSignatureValidationError,
   getAvatarSourceValidationError,
   getAvatarUploadValidationError,
   isAvatarStorageConfigured,
@@ -71,6 +72,24 @@ describe("avatar helpers", () => {
         size: 1024,
       })
     ).toBeNull();
+  });
+
+  it("validates avatar file signatures against the declared image type", () => {
+    expect(
+      getAvatarFileSignatureValidationError({
+        mimeType: "image/png",
+        bytes: new Uint8Array([
+          0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
+        ]),
+      })
+    ).toBeNull();
+
+    expect(
+      getAvatarFileSignatureValidationError({
+        mimeType: "image/png",
+        bytes: new Uint8Array([0x3c, 0x73, 0x76, 0x67]),
+      })
+    ).toBe("Uploaded avatar content is not a valid image.");
   });
 
   it("detects blob storage only when the token exists", () => {

@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
   communityFindUnique: vi.fn(),
   communityMemberFindUnique: vi.fn(),
   communityMemberFindMany: vi.fn(),
+  offlineIdentityLinkRequestFindFirst: vi.fn(),
   offlineIdentityMemberFindMany: vi.fn(),
 }));
 
@@ -25,6 +26,9 @@ vi.mock("@/lib/prisma", () => ({
     communityMember: {
       findUnique: mocks.communityMemberFindUnique,
       findMany: mocks.communityMemberFindMany,
+    },
+    offlineIdentityLinkRequest: {
+      findFirst: mocks.offlineIdentityLinkRequestFindFirst,
     },
     offlineIdentityMember: {
       findMany: mocks.offlineIdentityMemberFindMany,
@@ -57,10 +61,9 @@ describe("collab roster route", () => {
     mocks.auth.mockResolvedValue({
       user: { id: "admin-1", isAdmin: false },
     });
-    mocks.communityMemberFindUnique.mockResolvedValue({
-      role: "STAFF",
-    });
+    mocks.communityMemberFindUnique.mockResolvedValue({ role: "STAFF" });
     mocks.communityFindUnique.mockResolvedValue({ isTutorial: false });
+    mocks.offlineIdentityLinkRequestFindFirst.mockResolvedValue(null);
     mocks.offlineIdentityMemberFindMany.mockResolvedValue([]);
   });
 
@@ -156,5 +159,29 @@ describe("collab roster route", () => {
         { id: "community-2", name: "Partner Club", elo: 980 },
       ],
     });
+  });
+
+  it("requires operator access to the partner community before exposing its roster", async () => {
+    mocks.communityMemberFindUnique
+      .mockResolvedValueOnce({ role: "STAFF" })
+      .mockResolvedValueOnce({ role: "MEMBER" });
+
+    const response = await getCollabRoster();
+
+    expect(response.status).toBe(403);
+    expect(mocks.communityMemberFindMany).not.toHaveBeenCalled();
+  });
+
+  it("allows host operators to load rosters for already linked communities", async () => {
+    mocks.communityMemberFindUnique
+      .mockResolvedValueOnce({ role: "STAFF" })
+      .mockResolvedValueOnce({ role: "MEMBER" });
+    mocks.offlineIdentityLinkRequestFindFirst.mockResolvedValue({ id: "link-1" });
+    mocks.communityMemberFindMany.mockResolvedValue([]);
+
+    const response = await getCollabRoster();
+
+    expect(response.status).toBe(200);
+    expect(mocks.communityMemberFindMany).toHaveBeenCalled();
   });
 });

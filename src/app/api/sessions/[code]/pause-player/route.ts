@@ -4,6 +4,7 @@ import { calculateNoCatchUpMatchmakingCredit } from "@/lib/matchmaking/matchmaki
 import { prisma } from "@/lib/prisma";
 import { getSessionOperatorMembership } from "@/lib/sessionCollab";
 import { hasQueuedMatchUser } from "@/lib/sessionQueue";
+import { isQuickAccessSession } from "@/lib/quickAccess";
 import { tryRebuildQueuedMatchForCode } from "../queue-match/shared";
 import { logError, safeErrorResponse } from "@/lib/errors";
 import { rateLimit, checkInvalidTargetRateLimit, invalidTargetResponse } from "@/lib/rateLimit";
@@ -49,6 +50,9 @@ export async function POST(
     });
 
     if (!sessionData) {
+      return invalidTargetResponse(request, "api:sessions:code:pause-player");
+    }
+    if (isQuickAccessSession(session)) {
       return invalidTargetResponse(request, "api:sessions:code:pause-player");
     }
 

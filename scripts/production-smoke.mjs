@@ -1,6 +1,7 @@
 import { chromium } from "@playwright/test";
 
 const DEFAULT_BASE_URL = "https://antiselek.com";
+const DEFAULT_ALLOWED_HOSTS = ["antiselek.com", "www.antiselek.com"];
 
 function normalizeBaseUrl(value) {
   const url = new URL(value || DEFAULT_BASE_URL);
@@ -16,6 +17,8 @@ const smokePassword = process.env.PRODUCTION_SMOKE_PASSWORD ?? "";
 const smokeCommunityId = process.env.PRODUCTION_SMOKE_COMMUNITY_ID ?? "";
 const smokeSessionCode = process.env.PRODUCTION_SMOKE_SESSION_CODE ?? "";
 const allowMutation = process.env.PRODUCTION_SMOKE_MUTATE === "1";
+const allowNonProductionTarget =
+  process.env.ALLOW_NON_PROD_SMOKE_TARGET === "1";
 
 function log(message) {
   console.log(`[production-smoke] ${message}`);
@@ -66,6 +69,25 @@ async function signIn(page) {
 }
 
 function validateSmokeConfiguration() {
+  const targetHost = new URL(baseURL).hostname.toLowerCase();
+  const allowedHosts = (
+    process.env.PRODUCTION_SMOKE_ALLOWED_HOSTS?.split(",") ??
+    DEFAULT_ALLOWED_HOSTS
+  )
+    .map((host) => host.trim().toLowerCase())
+    .filter(Boolean);
+  const usesCredentials = !!smokeEmail || !!smokePassword || allowMutation;
+
+  if (
+    usesCredentials &&
+    !allowNonProductionTarget &&
+    !allowedHosts.includes(targetHost)
+  ) {
+    throw new Error(
+      `Refusing to submit production smoke credentials to ${targetHost}. Set PRODUCTION_SMOKE_ALLOWED_HOSTS or ALLOW_NON_PROD_SMOKE_TARGET=1 for non-production credentials.`
+    );
+  }
+
   if (!allowMutation) {
     return;
   }

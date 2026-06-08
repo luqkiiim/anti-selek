@@ -11,7 +11,11 @@ import {
   rateLimit,
 } from "@/lib/rateLimit";
 import { isQuickAccessSession } from "@/lib/quickAccess";
-import { CommunityPlayerStatus, PlayerGender } from "@/types/enums";
+import {
+  CommunityPlayerStatus,
+  OfflineIdentityLinkStatus,
+  PlayerGender,
+} from "@/types/enums";
 
 export const dynamic = "force-dynamic";
 
@@ -56,7 +60,13 @@ export async function GET(
     );
     if (invalidTargetLimitResponse) return invalidTargetLimitResponse;
 
-    const [hostCommunity, partnerCommunity, hostMembership] = await Promise.all([
+    const [
+      hostCommunity,
+      partnerCommunity,
+      hostMembership,
+      partnerMembership,
+      acceptedIdentityLink,
+    ] = await Promise.all([
       prisma.community.findUnique({
         where: { id: hostCommunityId },
         select: { isTutorial: true },
@@ -74,13 +84,47 @@ export async function GET(
         },
         select: { role: true },
       }),
+      session.user.isAdmin
+        ? Promise.resolve(null)
+        : prisma.communityMember.findUnique({
+            where: {
+              communityId_userId: {
+                communityId: partnerCommunityId,
+                userId: session.user.id,
+              },
+            },
+            select: { role: true },
+          }),
+      prisma.offlineIdentityLinkRequest.findFirst({
+        where: {
+          status: OfflineIdentityLinkStatus.ACCEPTED,
+          OR: [
+            {
+              sourceCommunityId: hostCommunityId,
+              targetCommunityId: partnerCommunityId,
+            },
+            {
+              sourceCommunityId: partnerCommunityId,
+              targetCommunityId: hostCommunityId,
+            },
+          ],
+        },
+        select: { id: true },
+      }),
     ]);
+    const hasPartnerRosterAccess =
+      session.user.isAdmin ||
+      isCommunityOperatorRole(partnerMembership?.role) ||
+      !!acceptedIdentityLink;
+
     if (
       !hostCommunity ||
       !partnerCommunity ||
       hostCommunity.isTutorial ||
       partnerCommunity.isTutorial ||
-      (!session.user.isAdmin && !isCommunityOperatorRole(hostMembership?.role))
+      (!session.user.isAdmin &&
+        (!isCommunityOperatorRole(hostMembership?.role) ||
+          !hasPartnerRosterAccess))
     ) {
       return invalidTargetResponse(request, "api:communities:id:collab-roster");
     }

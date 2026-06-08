@@ -80,6 +80,9 @@ export async function POST(
     if (!canQuickAccessCommunity(session, sessionData.communityId)) {
       return invalidTargetResponse(request, "api:sessions:code:join");
     }
+    if (isQuickAccessSession(session)) {
+      return invalidTargetResponse(request, "api:sessions:code:join");
+    }
 
     if (sessionData.status === SessionStatus.COMPLETED) {
       return NextResponse.json({ error: "Session already ended" }, { status: 400 });
@@ -103,9 +106,6 @@ export async function POST(
 
     // If admin is trying to add someone else
     if (typeof targetUserId === "string" && targetUserId !== session.user.id) {
-      if (isQuickAccessSession(session)) {
-        return invalidTargetResponse(request, "api:sessions:code:join");
-      }
       if (!session.user.isAdmin && !requesterOperatorMembership) {
         return NextResponse.json({ error: "Only community admins or staff can add other players" }, { status: 403 });
       }

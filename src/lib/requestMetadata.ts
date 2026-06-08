@@ -26,7 +26,15 @@ function firstForwardedAddress(value: string | null): string | null {
   return firstValue ?? null;
 }
 
+function canTrustProxyIpHeaders(env: NodeJS.ProcessEnv = process.env) {
+  return env.VERCEL === "1" || env.TRUST_PROXY_HEADERS === "true";
+}
+
 export function getRequestIp(request: HeaderCarrier | undefined): string | null {
+  if (!canTrustProxyIpHeaders()) {
+    return null;
+  }
+
   return (
     firstForwardedAddress(getHeaderValue(request, "x-forwarded-for")) ??
     getHeaderValue(request, "x-real-ip") ??

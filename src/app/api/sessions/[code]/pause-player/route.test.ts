@@ -99,6 +99,20 @@ describe("pause player route", () => {
     );
   });
 
+  it("blocks quick-access users from pausing players", async () => {
+    vi.mocked(auth).mockResolvedValue({
+      user: { id: "active-player", isAdmin: false, isQuickAccess: true },
+    } as never);
+
+    const response = await POST(createRequest("active-player", true), {
+      params: Promise.resolve({ code: "ABC" }),
+    });
+
+    expect(response.status).toBe(403);
+    expect(prisma.sessionPlayer.findUnique).not.toHaveBeenCalled();
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
   it("does not reset queue time or credit for an instant pause/unpause toggle", async () => {
     const now = new Date("2026-05-08T04:10:00.000Z");
     vi.useFakeTimers();

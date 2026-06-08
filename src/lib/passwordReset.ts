@@ -28,6 +28,10 @@ export function getAppBaseUrl(request?: Request) {
     return configured.replace(/\/+$/, "");
   }
 
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("APP_BASE_URL is not configured");
+  }
+
   if (request) {
     return new URL(request.url).origin;
   }

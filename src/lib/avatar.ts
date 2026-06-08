@@ -16,6 +16,28 @@ const MIME_TYPE_TO_EXTENSION: Record<AvatarMimeType, string> = {
   "image/webp": "webp",
 };
 
+function hasPngSignature(bytes: Uint8Array) {
+  const signature = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+  return signature.every((value, index) => bytes[index] === value);
+}
+
+function hasJpegSignature(bytes: Uint8Array) {
+  return bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
+}
+
+function hasWebpSignature(bytes: Uint8Array) {
+  return (
+    bytes[0] === 0x52 &&
+    bytes[1] === 0x49 &&
+    bytes[2] === 0x46 &&
+    bytes[3] === 0x46 &&
+    bytes[8] === 0x57 &&
+    bytes[9] === 0x45 &&
+    bytes[10] === 0x42 &&
+    bytes[11] === 0x50
+  );
+}
+
 export function isSupportedAvatarMimeType(
   value: string
 ): value is AvatarMimeType {
@@ -76,6 +98,25 @@ export function getAvatarUploadValidationError({
   }
 
   return null;
+}
+
+export function getAvatarFileSignatureValidationError({
+  bytes,
+  mimeType,
+}: {
+  bytes: Uint8Array;
+  mimeType: string;
+}) {
+  if (!isSupportedAvatarMimeType(mimeType)) {
+    return "Only JPG, PNG, and WebP images are supported.";
+  }
+
+  const hasExpectedSignature =
+    (mimeType === "image/jpeg" && hasJpegSignature(bytes)) ||
+    (mimeType === "image/png" && hasPngSignature(bytes)) ||
+    (mimeType === "image/webp" && hasWebpSignature(bytes));
+
+  return hasExpectedSignature ? null : "Uploaded avatar content is not a valid image.";
 }
 
 export function buildAvatarObjectKey({

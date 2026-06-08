@@ -264,6 +264,7 @@ export async function PATCH(
         email: true,
         avatarKey: true,
         isClaimed: true,
+        isActive: true,
         gender: true,
         partnerPreference: true,
         mixedSideOverride: true,
@@ -274,6 +275,12 @@ export async function PATCH(
     }
 
     const nextName = typeof name === "string" ? name.trim() : currentUser.name;
+    const nextEmail =
+      email !== undefined
+        ? typeof normalizedEmail === "string" && normalizedEmail.length > 0
+          ? normalizedEmail
+          : null
+        : currentUser.email;
     if (!normalizeNameLookupKey(nextName)) {
       return NextResponse.json(
         { error: "Player name must include letters or numbers" },
@@ -290,13 +297,27 @@ export async function PATCH(
         { status: 403 }
       );
     }
+    if (
+      currentUser.isClaimed &&
+      email !== undefined &&
+      nextEmail !== currentUser.email
+    ) {
+      return NextResponse.json(
+        { error: "Claimed members manage their own account email" },
+        { status: 403 }
+      );
+    }
+    if (
+      currentUser.isClaimed &&
+      typeof isActive === "boolean" &&
+      isActive !== currentUser.isActive
+    ) {
+      return NextResponse.json(
+        { error: "Claimed members manage their own account status" },
+        { status: 403 }
+      );
+    }
 
-    const nextEmail =
-      email !== undefined
-        ? typeof normalizedEmail === "string" && normalizedEmail.length > 0
-          ? normalizedEmail
-          : null
-        : currentUser.email;
     if (!currentUser.isClaimed && nextEmail === null) {
       const duplicate = await findDuplicateUnclaimedMemberName({
         communityId,

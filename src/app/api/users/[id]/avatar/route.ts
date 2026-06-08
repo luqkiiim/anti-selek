@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import {
   buildAvatarObjectKey,
+  getAvatarFileSignatureValidationError,
   getAvatarUploadValidationError,
   isAvatarStorageConfigured,
   resolveAvatarUrl,
@@ -164,6 +165,17 @@ export async function POST(
     });
     if (validationError) {
       return NextResponse.json({ error: validationError }, { status: 400 });
+    }
+
+    const signatureValidationError = getAvatarFileSignatureValidationError({
+      bytes: new Uint8Array(await avatarFile.slice(0, 16).arrayBuffer()),
+      mimeType: avatarFile.type,
+    });
+    if (signatureValidationError) {
+      return NextResponse.json(
+        { error: signatureValidationError },
+        { status: 400 }
+      );
     }
 
     const avatarPathname = buildAvatarObjectKey({

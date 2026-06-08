@@ -4,7 +4,6 @@ const mocks = vi.hoisted(() => ({
   rateLimit: vi.fn(),
   passwordResetTokenFindUnique: vi.fn(),
   txUserUpdate: vi.fn(),
-  txPasswordResetTokenUpdate: vi.fn(),
   txPasswordResetTokenUpdateMany: vi.fn(),
   bcryptHash: vi.fn(),
   logAuditEvent: vi.fn(),
@@ -27,7 +26,6 @@ vi.mock("@/lib/prisma", () => ({
           update: typeof mocks.txUserUpdate;
         };
         passwordResetToken: {
-          update: typeof mocks.txPasswordResetTokenUpdate;
           updateMany: typeof mocks.txPasswordResetTokenUpdateMany;
         };
       }) => Promise<unknown>
@@ -37,7 +35,6 @@ vi.mock("@/lib/prisma", () => ({
           update: mocks.txUserUpdate,
         },
         passwordResetToken: {
-          update: mocks.txPasswordResetTokenUpdate,
           updateMany: mocks.txPasswordResetTokenUpdateMany,
         },
       }),
@@ -72,8 +69,9 @@ describe("reset password route", () => {
     mocks.rateLimit.mockResolvedValue(null);
     mocks.bcryptHash.mockResolvedValue("new-password-hash");
     mocks.txUserUpdate.mockResolvedValue({});
-    mocks.txPasswordResetTokenUpdate.mockResolvedValue({});
-    mocks.txPasswordResetTokenUpdateMany.mockResolvedValue({ count: 2 });
+    mocks.txPasswordResetTokenUpdateMany
+      .mockResolvedValueOnce({ count: 1 })
+      .mockResolvedValue({ count: 2 });
   });
 
   it("rejects already-used tokens", async () => {
@@ -151,13 +149,19 @@ describe("reset password route", () => {
       where: { id: "user-1" },
       data: { passwordHash: "new-password-hash" },
     });
-    expect(mocks.txPasswordResetTokenUpdate).toHaveBeenCalledWith({
-      where: { id: "token-1" },
+    expect(mocks.txPasswordResetTokenUpdateMany).toHaveBeenNthCalledWith(1, {
+      where: {
+        id: "token-1",
+        usedAt: null,
+        expiresAt: {
+          gt: expect.any(Date),
+        },
+      },
       data: {
         usedAt: expect.any(Date),
       },
     });
-    expect(mocks.txPasswordResetTokenUpdateMany).toHaveBeenCalledWith({
+    expect(mocks.txPasswordResetTokenUpdateMany).toHaveBeenNthCalledWith(2, {
       where: {
         userId: "user-1",
         usedAt: null,
@@ -169,5 +173,32 @@ describe("reset password route", () => {
         usedAt: expect.any(Date),
       },
     });
+  });
+
+  it("rejects a token when a concurrent request already consumed it", async () => {
+    mocks.passwordResetTokenFindUnique.mockResolvedValue({
+      id: "token-1",
+      tokenHash: "hash",
+      expiresAt: new Date("2099-05-19T18:00:00.000Z"),
+      usedAt: null,
+      user: {
+        id: "user-1",
+        email: "player@example.com",
+        name: "Player One",
+        isClaimed: true,
+      },
+    });
+    mocks.txPasswordResetTokenUpdateMany.mockReset();
+    mocks.txPasswordResetTokenUpdateMany.mockResolvedValueOnce({ count: 0 });
+
+    const response = await postResetPassword({
+      token: "plain-token",
+      password: "password123",
+    });
+    const body = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(body.error).toBe("Reset link is invalid or expired");
+    expect(mocks.txUserUpdate).not.toHaveBeenCalled();
   });
 });

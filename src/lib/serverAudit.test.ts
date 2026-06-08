@@ -3,11 +3,19 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { logAuditEvent } from "@/lib/serverAudit";
 
 describe("server audit logging", () => {
+  const originalVercel = process.env.VERCEL;
+
   afterEach(() => {
     vi.restoreAllMocks();
+    if (typeof originalVercel === "undefined") {
+      delete process.env.VERCEL;
+    } else {
+      process.env.VERCEL = originalVercel;
+    }
   });
 
   it("emits a structured audit payload with request metadata", () => {
+    process.env.VERCEL = "1";
     const infoSpy = vi.spyOn(console, "info").mockImplementation(() => undefined);
     const headers = new Headers({
       "user-agent": "Vitest Agent",

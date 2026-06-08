@@ -133,6 +133,16 @@ export async function approveCommunityClaimRequest(
   const transferCommunityIds = Array.from(
     new Set(transferMembers.map((member) => member.communityId))
   );
+  if (
+    transferCommunityIds.length !== 1 ||
+    transferCommunityIds[0] !== communityId
+  ) {
+    throw new CommunityClaimError(
+      "Linked profiles span multiple communities. Manual merge required.",
+      409
+    );
+  }
+
   const transferTargetUserIds = Array.from(
     new Set(transferMembers.map((member) => member.userId))
   );

@@ -84,6 +84,9 @@ export async function POST(
     if (!canQuickAccessCommunity(session, match.session.communityId)) {
       return invalidTargetResponse(request, "api:matches:id:score");
     }
+    if (isQuickAccessSession(session)) {
+      return invalidTargetResponse(request, "api:matches:id:score");
+    }
 
     const operatorMembership = await getSessionOperatorMembership(prisma, {
       session: { id: match.sessionId, communityId: match.session.communityId },
@@ -92,8 +95,7 @@ export async function POST(
     });
 
     const isOperator =
-      !isQuickAccessSession(session) &&
-      (!!session.user.isAdmin || !!operatorMembership);
+      !!session.user.isAdmin || !!operatorMembership;
     const isParticipant = [
       match.team1User1Id,
       match.team1User2Id,

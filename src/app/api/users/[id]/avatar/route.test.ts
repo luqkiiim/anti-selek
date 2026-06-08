@@ -43,9 +43,13 @@ vi.mock("@/lib/rateLimit", () => ({
 
 import { DELETE, POST } from "./route";
 
+const PNG_BYTES = new Uint8Array([
+  0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
+]);
+
 function createAvatarRequest({
   url = "http://localhost/api/users/user-1/avatar",
-  file = new File([new Uint8Array([1, 2, 3])], "avatar.png", {
+  file = new File([PNG_BYTES], "avatar.png", {
     type: "image/png",
   }),
 }: {
@@ -135,6 +139,34 @@ describe("user avatar route", () => {
 
     expect(response.status).toBe(400);
     expect(body.error).toBe("Avatar images must be 4MB or smaller after cropping.");
+    expect(mocks.uploadAvatarObject).not.toHaveBeenCalled();
+  });
+
+  it("rejects files whose bytes do not match the declared image type", async () => {
+    mocks.auth.mockResolvedValue({
+      user: { id: "user-1", isAdmin: false, isQuickAccess: false },
+    });
+    mocks.userFindUnique.mockResolvedValue({
+      id: "user-1",
+      avatarKey: null,
+      isClaimed: true,
+      name: "Owner",
+    });
+
+    const response = await POST(
+      createAvatarRequest({
+        file: new File([new Uint8Array([0x3c, 0x73, 0x76, 0x67])], "avatar.png", {
+          type: "image/png",
+        }),
+      }),
+      {
+        params: Promise.resolve({ id: "user-1" }),
+      }
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(body.error).toBe("Uploaded avatar content is not a valid image.");
     expect(mocks.uploadAvatarObject).not.toHaveBeenCalled();
   });
 

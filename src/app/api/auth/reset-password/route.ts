@@ -68,18 +68,30 @@ export async function POST(request: Request) {
 
     const now = new Date();
     const passwordHash = await bcrypt.hash(password, 10);
+    let consumedToken = false;
 
     await prisma.$transaction(async (tx) => {
-      await tx.user.update({
-        where: { id: resetToken.user.id },
-        data: { passwordHash },
-      });
-
-      await tx.passwordResetToken.update({
-        where: { id: resetToken.id },
+      const consumeResult = await tx.passwordResetToken.updateMany({
+        where: {
+          id: resetToken.id,
+          usedAt: null,
+          expiresAt: {
+            gt: now,
+          },
+        },
         data: {
           usedAt: now,
         },
+      });
+
+      if (consumeResult.count !== 1) {
+        return;
+      }
+      consumedToken = true;
+
+      await tx.user.update({
+        where: { id: resetToken.user.id },
+        data: { passwordHash },
       });
 
       await tx.passwordResetToken.updateMany({
@@ -95,6 +107,10 @@ export async function POST(request: Request) {
         },
       });
     });
+
+    if (!consumedToken) {
+      return NextResponse.json({ error: INVALID_TOKEN_ERROR }, { status: 400 });
+    }
 
     logAuditEvent({
       action: "auth.reset_password",

@@ -5,6 +5,7 @@ const mocks = vi.hoisted(() => ({
   rateLimit: vi.fn(async () => null),
   tutorialProgressFindUnique: vi.fn(),
   tutorialProgressUpsert: vi.fn(),
+  communityFindUnique: vi.fn(),
   communityMemberFindMany: vi.fn(),
   sessionFindFirst: vi.fn(),
   matchFindFirst: vi.fn(),
@@ -19,6 +20,9 @@ vi.mock("@/lib/prisma", () => ({
     tutorialProgress: {
       findUnique: mocks.tutorialProgressFindUnique,
       upsert: mocks.tutorialProgressUpsert,
+    },
+    community: {
+      findUnique: mocks.communityFindUnique,
     },
     communityMember: {
       findMany: mocks.communityMemberFindMany,
@@ -82,12 +86,37 @@ function buildMembership(overrides?: Partial<{
   };
 }
 
+function buildTutorialCommunity(overrides?: Partial<{
+  id: string;
+  isTutorial: boolean;
+  members: number;
+  sessions: number;
+}>) {
+  const values = {
+    id: "community-1",
+    isTutorial: true,
+    members: 2,
+    sessions: 1,
+    ...overrides,
+  };
+
+  return {
+    id: values.id,
+    isTutorial: values.isTutorial,
+    _count: {
+      members: values.members,
+      sessions: values.sessions,
+    },
+  };
+}
+
 describe("admin onboarding progress route", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.rateLimit.mockResolvedValue(null);
     mocks.tutorialProgressFindUnique.mockResolvedValue(null);
     mocks.tutorialProgressUpsert.mockResolvedValue({});
+    mocks.communityFindUnique.mockResolvedValue(buildTutorialCommunity());
     mocks.communityMemberFindMany.mockResolvedValue([buildMembership()]);
     mocks.sessionFindFirst.mockResolvedValue({ id: "session-1", code: "ABC123" });
     mocks.matchFindFirst.mockResolvedValue({ id: "match-1" });

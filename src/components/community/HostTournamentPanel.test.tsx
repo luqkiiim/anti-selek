@@ -80,12 +80,8 @@ describe("HostTournamentPanel", () => {
   it("shows the selected social mix helper copy", () => {
     const markup = renderPanel(SessionType.SOCIAL_MIX);
 
-    expect(markup).toContain(
-      "Pushes for first-time partners and opponents across the session."
-    );
-    expect(markup).toContain(
-      "Still records scores, session points, and rating updates."
-    );
+    expect(markup).toContain("Matchmaking tries to provide even more variety.");
+    expect(markup).toContain("Expect less balanced games.");
   });
 
   it("exposes tutorial targets for name, roster choice, and creation", () => {

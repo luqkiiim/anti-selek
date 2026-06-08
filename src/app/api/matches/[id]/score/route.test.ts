@@ -103,6 +103,18 @@ describe("score match route", () => {
     expect(mocks.matchUpdateMany).not.toHaveBeenCalled();
   });
 
+  it("blocks quick-access participants from submitting scores", async () => {
+    mocks.auth.mockResolvedValue({
+      user: { id: "a1", isAdmin: false, isQuickAccess: true },
+    });
+
+    const response = await postScore({ team1Score: 11, team2Score: 9 });
+
+    expect(response.status).toBe(403);
+    expect(mocks.finalizeMatchResult).not.toHaveBeenCalled();
+    expect(mocks.matchUpdateMany).not.toHaveBeenCalled();
+  });
+
   it("submits a below-21 score for immediate completion", async () => {
     const completedMatch = {
       id: "match-1",

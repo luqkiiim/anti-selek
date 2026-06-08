@@ -144,6 +144,62 @@ describe("community admin update member route", () => {
     expect(mocks.userUpdate).not.toHaveBeenCalled();
   });
 
+  it("rejects changing claimed member account emails", async () => {
+    mocks.communityMemberFindUnique
+      .mockResolvedValueOnce({ role: "ADMIN" })
+      .mockResolvedValueOnce({
+        id: "membership-1",
+        role: "MEMBER",
+        elo: 1000,
+        status: CommunityPlayerStatus.CORE,
+      });
+    mocks.userFindUnique.mockResolvedValueOnce(null).mockResolvedValueOnce({
+      name: "Claimed Player",
+      email: "claimed@example.com",
+      avatarKey: null,
+      isActive: true,
+      isClaimed: true,
+      gender: PlayerGender.MALE,
+      partnerPreference: PartnerPreference.OPEN,
+      mixedSideOverride: null,
+    });
+
+    const response = await patchMember({ email: "attacker@example.com" });
+    const body = await response.json();
+
+    expect(response.status).toBe(403);
+    expect(body.error).toBe("Claimed members manage their own account email");
+    expect(mocks.userUpdate).not.toHaveBeenCalled();
+  });
+
+  it("rejects changing claimed member account status", async () => {
+    mocks.communityMemberFindUnique
+      .mockResolvedValueOnce({ role: "ADMIN" })
+      .mockResolvedValueOnce({
+        id: "membership-1",
+        role: "MEMBER",
+        elo: 1000,
+        status: CommunityPlayerStatus.CORE,
+      });
+    mocks.userFindUnique.mockResolvedValue({
+      name: "Claimed Player",
+      email: "claimed@example.com",
+      avatarKey: null,
+      isActive: true,
+      isClaimed: true,
+      gender: PlayerGender.MALE,
+      partnerPreference: PartnerPreference.OPEN,
+      mixedSideOverride: null,
+    });
+
+    const response = await patchMember({ isActive: false });
+    const body = await response.json();
+
+    expect(response.status).toBe(403);
+    expect(body.error).toBe("Claimed members manage their own account status");
+    expect(mocks.userUpdate).not.toHaveBeenCalled();
+  });
+
   it("still allows renaming unclaimed placeholders", async () => {
     const createdAt = new Date("2026-05-19T00:00:00.000Z");
     mocks.communityMemberFindUnique
