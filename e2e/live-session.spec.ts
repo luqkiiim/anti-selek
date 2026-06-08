@@ -228,6 +228,7 @@ test("admin can add a community player into an active session", async ({
   const rosterModal = await openSessionRoster(page);
   await rosterModal.getByPlaceholder("Search players...").fill("Host Player 4");
   await expect(rosterModal.getByText("Host Player 4")).toBeVisible();
+  await expect(rosterModal.getByPlaceholder("Guest name")).toHaveCount(0);
   const playerRow = rosterModal
     .locator("div.app-touch-pan-y")
     .filter({ hasText: "Host Player 4" });
@@ -257,8 +258,11 @@ test("admin can add a guest into an active session", async ({ page }) => {
   });
 
   const rosterModal = await openSessionRoster(page);
+  await rosterModal.getByRole("button", { name: "Add guest instead" }).click();
   await rosterModal.getByPlaceholder("Guest name").fill("Late Guest");
-  await rosterModal.getByRole("button", { name: "Add Guest" }).click();
+  await rosterModal
+    .getByRole("button", { name: "Add Guest", exact: true })
+    .click();
 
   await expect
     .poll(async () => {

@@ -31,6 +31,7 @@ export function SessionActionConfirmModal({
       title={title}
       subtitle={subtitle}
       onClose={onClose}
+      backdropClassName="app-modal-backdrop-above-sheet"
       footer={
         <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
           <button

@@ -69,6 +69,7 @@ interface ModalFrameProps {
   onClose: () => void;
   children: ReactNode;
   footer?: ReactNode;
+  backdropClassName?: string;
   bodyScroll?: boolean;
   bodyClassName?: string;
   frameClassName?: string;
@@ -81,6 +82,7 @@ export function ModalFrame({
   onClose,
   children,
   footer,
+  backdropClassName,
   bodyScroll = true,
   bodyClassName,
   frameClassName,
@@ -194,6 +196,7 @@ export function ModalFrame({
     <div
       className={cx(
         "app-modal-backdrop fixed inset-0",
+        backdropClassName,
         fullscreenUntilDesktop && "app-modal-backdrop-fullscreen-tablet"
       )}
     >
