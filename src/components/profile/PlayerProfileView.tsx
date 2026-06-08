@@ -16,7 +16,6 @@ import {
   ArrowLeft,
   Award,
   BarChart3,
-  CalendarDays,
   ChevronRight,
   Flame,
   Medal,
@@ -25,7 +24,6 @@ import {
   Target,
   TrendingUp,
   Trophy,
-  Users,
   type LucideIcon,
 } from "lucide-react";
 import { Avatar } from "@/components/ui/Avatar";
@@ -33,6 +31,7 @@ import { AvatarPreviewModal } from "@/components/ui/AvatarPreviewModal";
 import { AvatarUploader } from "@/components/ui/AvatarUploader";
 import type {
   PlayerProfileConnectionSummary,
+  PlayerProfileAchievement,
   PlayerProfileMatchHistoryEntry,
   PlayerProfileRecentFormSummary,
   PlayerProfileSessionSummary,
@@ -74,6 +73,7 @@ interface UserProfileResponse {
     latest: PlayerProfileSessionSummary | null;
     best: PlayerProfileSessionSummary | null;
   };
+  achievements: PlayerProfileAchievement[];
   matchHistory: PlayerProfileMatchHistoryEntry[];
 }
 
@@ -91,13 +91,26 @@ type RankContext = NonNullable<
 
 type ProfileTab = "overview" | "matches" | "stats" | "achievements";
 
-interface DerivedAchievement {
-  icon: LucideIcon;
-  title: string;
-  detail: string;
-  unlocked: boolean;
-  tone: "accent" | "success" | "warning" | "danger" | "neutral";
-}
+type AchievementTone = "accent" | "success" | "warning" | "danger" | "neutral";
+
+const ACHIEVEMENT_PRESENTATION: Record<
+  PlayerProfileAchievement["id"],
+  { icon: LucideIcon; tone: AchievementTone }
+> = {
+  "strong-start": { icon: Flame, tone: "success" },
+  "clutch-finish": { icon: Target, tone: "warning" },
+  "perfect-session": { icon: Star, tone: "success" },
+  "podium-finish": { icon: Trophy, tone: "warning" },
+  "clean-sweep": { icon: Award, tone: "success" },
+  "bounce-back": { icon: TrendingUp, tone: "accent" },
+  "close-battle-tested": { icon: Shield, tone: "neutral" },
+  "narrow-survivor": { icon: Medal, tone: "warning" },
+  "dominant-day": { icon: Flame, tone: "danger" },
+  "big-differential": { icon: BarChart3, tone: "accent" },
+  "podium-regular": { icon: Trophy, tone: "warning" },
+  "podium-mainstay": { icon: Trophy, tone: "warning" },
+  "podium-legend": { icon: Trophy, tone: "danger" },
+};
 
 interface StyleTrait {
   label: string;
@@ -370,100 +383,6 @@ function buildRatingSeries(data: UserProfileResponse) {
     ...point,
     index,
   }));
-}
-
-function buildAchievements(
-  data: UserProfileResponse,
-  rankContext: RankContext | null
-): DerivedAchievement[] {
-  const winStreak =
-    data.recentForm.currentStreak.result === "WIN"
-      ? data.recentForm.currentStreak.count
-      : 0;
-  const bestPartner = data.partners.best[0] ?? null;
-  const toughestOpponent = data.opponents.toughest[0] ?? null;
-  const hasPartnerChemistry =
-    (bestPartner?.matches ?? 0) >= 2 && (bestPartner?.winRate ?? 0) >= 60;
-
-  return [
-    {
-      icon: Flame,
-      title: "Hot streak",
-      detail:
-        winStreak >= 3
-          ? `${winStreak} wins in a row`
-          : "Win 3 straight matches to unlock",
-      unlocked: winStreak >= 3,
-      tone: "success",
-    },
-    {
-      icon: TrendingUp,
-      title: "Rising form",
-      detail:
-        data.trend.ratingChange > 0
-          ? `${formatSignedNumber(data.trend.ratingChange)} rating recently`
-          : "Gain rating in recent sessions",
-      unlocked: data.trend.direction === "RISING" && data.trend.ratingChange > 0,
-      tone: "accent",
-    },
-    {
-      icon: Users,
-      title: "Partner chemistry",
-      detail: bestPartner
-        ? `${bestPartner.winRate}% with ${bestPartner.user.name}`
-        : "Build a winning partner record",
-      unlocked: hasPartnerChemistry,
-      tone: "accent",
-    },
-    {
-      icon: Shield,
-      title: "Rival tested",
-      detail: toughestOpponent
-        ? `${toughestOpponent.matches} matches vs ${toughestOpponent.user.name}`
-        : "Face opponents multiple times",
-      unlocked: !!toughestOpponent,
-      tone: "warning",
-    },
-    {
-      icon: Medal,
-      title: "Consistent",
-      detail:
-        data.stats.totalMatches >= 10
-          ? `${data.stats.winRate}% win rate over ${data.stats.totalMatches} matches`
-          : "Play 10 completed matches",
-      unlocked: data.stats.totalMatches >= 10 && data.stats.winRate >= 60,
-      tone: "success",
-    },
-    {
-      icon: Trophy,
-      title: "Leaderboard threat",
-      detail: rankContext?.currentRank
-        ? `Rank #${rankContext.currentRank} of ${rankContext.leaderboardSize}`
-        : "Enter the ranked community board",
-      unlocked: !!rankContext?.currentRank && rankContext.currentRank <= 5,
-      tone: "warning",
-    },
-    {
-      icon: CalendarDays,
-      title: "Frequent competitor",
-      detail:
-        data.stats.sessionsPlayed >= 10
-          ? `${data.stats.sessionsPlayed} sessions played`
-          : "Play 10 completed sessions",
-      unlocked: data.stats.sessionsPlayed >= 10,
-      tone: "neutral",
-    },
-    {
-      icon: Target,
-      title: "Point pressure",
-      detail:
-        data.stats.pointDifferential > 0
-          ? `${formatSignedNumber(data.stats.pointDifferential)} total point diff`
-          : "Finish positive on point differential",
-      unlocked: data.stats.pointDifferential > 0,
-      tone: "danger",
-    },
-  ];
 }
 
 function buildStyleTraits(data: UserProfileResponse): StyleTrait[] {
@@ -1193,8 +1112,13 @@ function RatingProgressCard({
   );
 }
 
-function AchievementBadge({ achievement }: { achievement: DerivedAchievement }) {
-  const Icon = achievement.icon;
+function AchievementBadge({
+  achievement,
+}: {
+  achievement: PlayerProfileAchievement;
+}) {
+  const presentation = ACHIEVEMENT_PRESENTATION[achievement.id];
+  const Icon = presentation.icon;
   const toneClass = achievement.unlocked
     ? {
         accent: "border-[rgba(15,118,110,0.2)] bg-[var(--accent-faint)] text-[var(--accent-strong)]",
@@ -1202,8 +1126,9 @@ function AchievementBadge({ achievement }: { achievement: DerivedAchievement }) 
         warning: "border-[rgba(180,83,9,0.18)] bg-[var(--warning-soft)] text-[var(--warning)]",
         danger: "border-[rgba(220,38,38,0.18)] bg-[var(--danger-soft)] text-[var(--danger)]",
         neutral: "border-[var(--line)] bg-[var(--surface-muted)] text-gray-600",
-      }[achievement.tone]
+      }[presentation.tone]
     : "border-[var(--line)] bg-[var(--surface-muted)] text-gray-400";
+  const progressText = `${achievement.progress}/${achievement.target} ${achievement.progressLabel}`;
 
   return (
     <div
@@ -1220,10 +1145,18 @@ function AchievementBadge({ achievement }: { achievement: DerivedAchievement }) 
         <div className="min-w-0">
           <p className="font-semibold text-gray-900">{achievement.title}</p>
           <p className="mt-1 text-xs leading-snug text-gray-600">
-            {achievement.detail}
+            {achievement.description}
           </p>
+          <span className="mt-3 inline-flex rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-gray-600">
+            {progressText}
+          </span>
+          {achievement.unlocked && achievement.earnedFromSession ? (
+            <p className="mt-2 truncate text-xs text-gray-500">
+              Unlocked in {achievement.earnedFromSession.name}
+            </p>
+          ) : null}
           {!achievement.unlocked ? (
-            <span className="mt-3 inline-flex rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-gray-500">
+            <span className="mt-2 inline-flex rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-gray-500">
               Locked
             </span>
           ) : null}
@@ -1236,7 +1169,7 @@ function AchievementBadge({ achievement }: { achievement: DerivedAchievement }) 
 function AchievementPreview({
   achievements,
 }: {
-  achievements: DerivedAchievement[];
+  achievements: PlayerProfileAchievement[];
 }) {
   return (
     <ProfileSection
@@ -1442,7 +1375,7 @@ function OverviewTab({
   rankContext: RankContext | null;
   communityId: string;
   ratingSeries: RatingSeriesPoint[];
-  achievements: DerivedAchievement[];
+  achievements: PlayerProfileAchievement[];
 }) {
   return (
     <div className="space-y-5">
@@ -1643,12 +1576,12 @@ function StatsTab({
 function AchievementsTab({
   achievements,
 }: {
-  achievements: DerivedAchievement[];
+  achievements: PlayerProfileAchievement[];
 }) {
   return (
     <ProfileSection
       eyebrow="Achievements"
-      title="Derived badges"
+      title="Permanent session feats"
       action={
         <span className="app-chip app-chip-neutral">
           {achievements.filter((achievement) => achievement.unlocked).length} unlocked
@@ -1823,10 +1756,7 @@ export function PlayerProfileView({
           ],
     [data]
   );
-  const achievements = useMemo(
-    () => (data ? buildAchievements(data, rankContext) : []),
-    [data, rankContext]
-  );
+  const achievements = data?.achievements ?? [];
   const styleTraits = useMemo(
     () => (data ? buildStyleTraits(data) : []),
     [data]

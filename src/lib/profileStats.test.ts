@@ -19,6 +19,8 @@ function createMatch(
     winnerTeam,
     team1EloChange = null,
     team2EloChange = null,
+    sessionPlayers,
+    sessionMatches,
   }: {
     sessionId: string;
     sessionCode: string;
@@ -31,6 +33,21 @@ function createMatch(
     winnerTeam: number;
     team1EloChange?: number | null;
     team2EloChange?: number | null;
+    sessionPlayers?: Array<{
+      userId: string;
+      sessionPoints: number;
+      user: { id: string; name: string };
+    }>;
+    sessionMatches?: Array<{
+      id: string;
+      team1User1Id: string;
+      team1User2Id: string;
+      team2User1Id: string;
+      team2User2Id: string;
+      team1Score: number | null;
+      team2Score: number | null;
+      winnerTeam: number | null;
+    }>;
   }
 ): ProfileMatchSource {
   return {
@@ -40,6 +57,8 @@ function createMatch(
       id: sessionId,
       code: sessionCode,
       name: sessionName,
+      players: sessionPlayers,
+      matches: sessionMatches,
     },
     team1User1Id: team1[0].id,
     team1User2Id: team1[1].id,
@@ -55,6 +74,17 @@ function createMatch(
     team1EloChange,
     team2EloChange,
   };
+}
+
+function getAchievement(
+  result: ReturnType<typeof buildPlayerProfileDerivedData>,
+  id: NonNullable<
+    ReturnType<typeof buildPlayerProfileDerivedData>["achievements"][number]
+  >["id"]
+) {
+  const achievement = result.achievements.find((entry) => entry.id === id);
+  expect(achievement).toBeDefined();
+  return achievement!;
 }
 
 describe("profileStats", () => {
@@ -646,6 +676,255 @@ describe("profileStats", () => {
       ratingChange: 0,
       pointDifferential: 0,
       direction: "FLAT",
+    });
+  });
+
+  it("unlocks permanent session-feat achievements at their minimum thresholds", () => {
+    const user = { id: "u1", name: "Alice" };
+    const partner = { id: "u2", name: "Ben" };
+    const opponent1 = { id: "u3", name: "Cara" };
+    const opponent2 = { id: "u4", name: "Dan" };
+    const scores = [
+      [21, 19],
+      [22, 20],
+      [21, 18],
+      [21, 8],
+      [21, 5],
+    ] as const;
+    const matches = scores.map(([team1Score, team2Score], index) =>
+      createMatch(`feat-${index + 1}`, {
+        sessionId: "feat-session",
+        sessionCode: "feat-session",
+        sessionName: "Feat Session",
+        completedAt: `2026-04-1${index}T12:00:00.000Z`,
+        team1: [user, partner],
+        team2: [opponent1, opponent2],
+        team1Score,
+        team2Score,
+        winnerTeam: 1,
+      })
+    );
+
+    const result = buildPlayerProfileDerivedData(user.id, matches);
+
+    expect(getAchievement(result, "strong-start")).toMatchObject({
+      unlocked: true,
+      progress: 2,
+      target: 2,
+    });
+    expect(getAchievement(result, "clutch-finish")).toMatchObject({
+      unlocked: true,
+      progress: 2,
+    });
+    expect(getAchievement(result, "perfect-session")).toMatchObject({
+      unlocked: true,
+      progress: 3,
+    });
+    expect(getAchievement(result, "clean-sweep")).toMatchObject({
+      unlocked: true,
+      progress: 5,
+    });
+    expect(getAchievement(result, "close-battle-tested")).toMatchObject({
+      unlocked: true,
+      progress: 3,
+    });
+    expect(getAchievement(result, "narrow-survivor")).toMatchObject({
+      unlocked: true,
+      progress: 2,
+    });
+    expect(getAchievement(result, "dominant-day")).toMatchObject({
+      unlocked: true,
+      progress: 5,
+    });
+    expect(getAchievement(result, "big-differential")).toMatchObject({
+      unlocked: true,
+      progress: 25,
+    });
+  });
+
+  it("keeps session-feat achievements locked when one short of the threshold", () => {
+    const user = { id: "u1", name: "Alice" };
+    const partner = { id: "u2", name: "Ben" };
+    const opponent1 = { id: "u3", name: "Cara" };
+    const opponent2 = { id: "u4", name: "Dan" };
+    const matches = [
+      createMatch("short-1", {
+        sessionId: "short-session",
+        sessionCode: "short-session",
+        sessionName: "Short Session",
+        completedAt: "2026-04-10T12:00:00.000Z",
+        team1: [user, partner],
+        team2: [opponent1, opponent2],
+        team1Score: 18,
+        team2Score: 21,
+        winnerTeam: 2,
+      }),
+      createMatch("short-2", {
+        sessionId: "short-session",
+        sessionCode: "short-session",
+        sessionName: "Short Session",
+        completedAt: "2026-04-11T12:00:00.000Z",
+        team1: [user, partner],
+        team2: [opponent1, opponent2],
+        team1Score: 21,
+        team2Score: 19,
+        winnerTeam: 1,
+      }),
+      createMatch("short-3", {
+        sessionId: "short-session",
+        sessionCode: "short-session",
+        sessionName: "Short Session",
+        completedAt: "2026-04-12T12:00:00.000Z",
+        team1: [user, partner],
+        team2: [opponent1, opponent2],
+        team1Score: 21,
+        team2Score: 18,
+        winnerTeam: 1,
+      }),
+      createMatch("short-4", {
+        sessionId: "short-session",
+        sessionCode: "short-session",
+        sessionName: "Short Session",
+        completedAt: "2026-04-13T12:00:00.000Z",
+        team1: [user, partner],
+        team2: [opponent1, opponent2],
+        team1Score: 21,
+        team2Score: 20,
+        winnerTeam: 1,
+      }),
+    ];
+
+    const result = buildPlayerProfileDerivedData(user.id, matches);
+
+    expect(getAchievement(result, "strong-start")).toMatchObject({
+      unlocked: false,
+      progress: 1,
+    });
+    expect(getAchievement(result, "perfect-session")).toMatchObject({
+      unlocked: false,
+      progress: 2,
+    });
+    expect(getAchievement(result, "clean-sweep")).toMatchObject({
+      unlocked: false,
+      progress: 3,
+    });
+    expect(getAchievement(result, "dominant-day")).toMatchObject({
+      unlocked: false,
+      progress: 3,
+    });
+    expect(getAchievement(result, "big-differential")).toMatchObject({
+      unlocked: false,
+      progress: 3,
+    });
+  });
+
+  it("unlocks bounce back after a first-match loss and winning session record", () => {
+    const user = { id: "u1", name: "Alice" };
+    const partner = { id: "u2", name: "Ben" };
+    const opponent1 = { id: "u3", name: "Cara" };
+    const opponent2 = { id: "u4", name: "Dan" };
+
+    const result = buildPlayerProfileDerivedData(user.id, [
+      createMatch("bounce-1", {
+        sessionId: "bounce-session",
+        sessionCode: "bounce-session",
+        sessionName: "Bounce Session",
+        completedAt: "2026-04-10T12:00:00.000Z",
+        team1: [user, partner],
+        team2: [opponent1, opponent2],
+        team1Score: 18,
+        team2Score: 21,
+        winnerTeam: 2,
+      }),
+      createMatch("bounce-2", {
+        sessionId: "bounce-session",
+        sessionCode: "bounce-session",
+        sessionName: "Bounce Session",
+        completedAt: "2026-04-11T12:00:00.000Z",
+        team1: [user, partner],
+        team2: [opponent1, opponent2],
+        team1Score: 21,
+        team2Score: 19,
+        winnerTeam: 1,
+      }),
+      createMatch("bounce-3", {
+        sessionId: "bounce-session",
+        sessionCode: "bounce-session",
+        sessionName: "Bounce Session",
+        completedAt: "2026-04-12T12:00:00.000Z",
+        team1: [user, partner],
+        team2: [opponent1, opponent2],
+        team1Score: 21,
+        team2Score: 18,
+        winnerTeam: 1,
+      }),
+    ]);
+
+    expect(getAchievement(result, "bounce-back")).toMatchObject({
+      unlocked: true,
+      progress: 1,
+    });
+  });
+
+  it("counts podium achievement chains at 1, 3, 5, and 10 top-three finishes", () => {
+    const user = { id: "u1", name: "Alice" };
+    const partner = { id: "u2", name: "Ben" };
+    const opponent1 = { id: "u3", name: "Cara" };
+    const opponent2 = { id: "u4", name: "Dan" };
+    const sessionPlayers = [
+      { userId: user.id, sessionPoints: 9, user },
+      { userId: partner.id, sessionPoints: 6, user: partner },
+      { userId: opponent1.id, sessionPoints: 3, user: opponent1 },
+      { userId: opponent2.id, sessionPoints: 0, user: opponent2 },
+    ];
+    const matches = Array.from({ length: 10 }, (_, index) =>
+      createMatch(`podium-${index + 1}`, {
+        sessionId: `podium-session-${index + 1}`,
+        sessionCode: `podium-session-${index + 1}`,
+        sessionName: `Podium Session ${index + 1}`,
+        completedAt: `2026-04-${String(index + 1).padStart(2, "0")}T12:00:00.000Z`,
+        team1: [user, partner],
+        team2: [opponent1, opponent2],
+        team1Score: 21,
+        team2Score: 18,
+        winnerTeam: 1,
+        sessionPlayers,
+        sessionMatches: [
+          {
+            id: `podium-session-match-${index + 1}`,
+            team1User1Id: user.id,
+            team1User2Id: partner.id,
+            team2User1Id: opponent1.id,
+            team2User2Id: opponent2.id,
+            team1Score: 21,
+            team2Score: 18,
+            winnerTeam: 1,
+          },
+        ],
+      })
+    );
+
+    const result = buildPlayerProfileDerivedData(user.id, matches);
+
+    expect(getAchievement(result, "podium-finish")).toMatchObject({
+      unlocked: true,
+      progress: 1,
+      target: 1,
+    });
+    expect(getAchievement(result, "podium-regular")).toMatchObject({
+      unlocked: true,
+      progress: 3,
+      target: 3,
+    });
+    expect(getAchievement(result, "podium-mainstay")).toMatchObject({
+      unlocked: true,
+      progress: 5,
+      target: 5,
+    });
+    expect(getAchievement(result, "podium-legend")).toMatchObject({
+      unlocked: true,
+      progress: 10,
+      target: 10,
     });
   });
 });

@@ -2,6 +2,7 @@ import {
   getWeightedRecordScore,
   PREFERRED_CONNECTION_MIN_MATCHES,
 } from "./connectionRanking";
+import { compareSessionStandings } from "./sessionStandings";
 
 export const PROFILE_RECENT_FORM_MATCH_COUNT = 10;
 export const PROFILE_RECENT_SESSION_COUNT = 5;
@@ -12,6 +13,23 @@ interface ProfileParticipant {
   avatarUrl?: string | null;
 }
 
+interface ProfileSessionPlayerSource {
+  userId: string;
+  sessionPoints: number;
+  user: ProfileParticipant;
+}
+
+interface ProfileSessionMatchSource {
+  id: string;
+  team1User1Id: string;
+  team1User2Id: string;
+  team2User1Id: string;
+  team2User2Id: string;
+  team1Score: number | null;
+  team2Score: number | null;
+  winnerTeam: number | null;
+}
+
 export interface ProfileMatchSource {
   id: string;
   completedAt: Date | null;
@@ -19,6 +37,8 @@ export interface ProfileMatchSource {
     id: string;
     code: string;
     name: string;
+    players?: ProfileSessionPlayerSource[];
+    matches?: ProfileSessionMatchSource[];
   };
   team1User1Id: string;
   team1User2Id: string;
@@ -113,6 +133,34 @@ export interface PlayerProfileMatchHistoryEntry {
   pointDifferential: number;
 }
 
+export interface PlayerProfileAchievement {
+  id:
+    | "strong-start"
+    | "clutch-finish"
+    | "perfect-session"
+    | "clean-sweep"
+    | "bounce-back"
+    | "close-battle-tested"
+    | "narrow-survivor"
+    | "dominant-day"
+    | "big-differential"
+    | "podium-finish"
+    | "podium-regular"
+    | "podium-mainstay"
+    | "podium-legend";
+  title: string;
+  description: string;
+  progress: number;
+  target: number;
+  progressLabel: string;
+  unlocked: boolean;
+  earnedFromSession?: {
+    id: string;
+    code: string;
+    name: string;
+  };
+}
+
 export interface PlayerProfileDerivedData {
   stats: PlayerProfileStatsSummary;
   recentForm: PlayerProfileRecentFormSummary;
@@ -128,6 +176,7 @@ export interface PlayerProfileDerivedData {
     latest: PlayerProfileSessionSummary | null;
     best: PlayerProfileSessionSummary | null;
   };
+  achievements: PlayerProfileAchievement[];
   matchHistory: PlayerProfileMatchHistoryEntry[];
 }
 
@@ -152,6 +201,31 @@ interface SessionAggregate {
   ratingChange: number;
 }
 
+interface SessionAchievementMatch {
+  id: string;
+  completedAtMs: number;
+  result: "WIN" | "LOSS";
+  pointDifferential: number;
+  scoreDifference: number;
+}
+
+interface SessionAchievementSummary {
+  id: string;
+  code: string;
+  name: string;
+  latestCompletedAtMs: number;
+  matches: SessionAchievementMatch[];
+  wins: number;
+  losses: number;
+  pointDifferential: number;
+  podiumRank: number | null;
+}
+
+interface AchievementProgress {
+  progress: number;
+  earnedFromSession?: PlayerProfileAchievement["earnedFromSession"];
+}
+
 function getTimeOrZero(value: Date | null) {
   return value?.getTime() ?? 0;
 }
@@ -162,6 +236,10 @@ function toIsoString(value: Date | null) {
 
 function getWinRate(wins: number, matches: number) {
   return matches > 0 ? Math.round((wins / matches) * 100) : 0;
+}
+
+function clampProgress(value: number, target: number) {
+  return Math.min(value, target);
 }
 
 function toConnectionSummary(
@@ -361,6 +439,286 @@ function getTrendDirection({
   return "FLAT";
 }
 
+function getSessionPodiumRank(
+  userId: string,
+  session: ProfileMatchSource["session"]
+) {
+  if (!session.players || session.players.length === 0) {
+    return null;
+  }
+
+  const sessionMatches = session.matches ?? [];
+  const pointDiffByUserId = new Map<string, number>();
+
+  for (const match of sessionMatches) {
+    if (
+      match.team1Score === null ||
+      match.team2Score === null ||
+      match.winnerTeam === null
+    ) {
+      continue;
+    }
+
+    const team1Diff = match.team1Score - match.team2Score;
+    const team2Diff = match.team2Score - match.team1Score;
+
+    for (const playerId of [match.team1User1Id, match.team1User2Id]) {
+      pointDiffByUserId.set(
+        playerId,
+        (pointDiffByUserId.get(playerId) ?? 0) + team1Diff
+      );
+    }
+
+    for (const playerId of [match.team2User1Id, match.team2User2Id]) {
+      pointDiffByUserId.set(
+        playerId,
+        (pointDiffByUserId.get(playerId) ?? 0) + team2Diff
+      );
+    }
+  }
+
+  const standings = session.players
+    .map((player) => ({
+      userId: player.userId,
+      name: player.user.name,
+      sessionPoints: player.sessionPoints,
+      pointDiff: pointDiffByUserId.get(player.userId) ?? 0,
+    }))
+    .sort(compareSessionStandings);
+
+  const rankIndex = standings.findIndex((entry) => entry.userId === userId);
+
+  return rankIndex >= 0 ? rankIndex + 1 : null;
+}
+
+function buildAchievement({
+  id,
+  title,
+  description,
+  target,
+  progressLabel,
+  progress,
+  earnedFromSession,
+}: Omit<PlayerProfileAchievement, "unlocked">): PlayerProfileAchievement {
+  const unlocked = progress >= target;
+
+  return {
+    id,
+    title,
+    description,
+    progress: clampProgress(progress, target),
+    target,
+    progressLabel,
+    unlocked,
+    earnedFromSession: unlocked ? earnedFromSession : undefined,
+  };
+}
+
+function getBestSessionProgress(
+  sessions: SessionAchievementSummary[],
+  getProgress: (session: SessionAchievementSummary) => number
+): AchievementProgress {
+  let best: AchievementProgress = {
+    progress: 0,
+  };
+
+  for (const session of sessions) {
+    const progress = getProgress(session);
+
+    if (progress > best.progress) {
+      best = {
+        progress,
+        earnedFromSession: {
+          id: session.id,
+          code: session.code,
+          name: session.name,
+        },
+      };
+    }
+  }
+
+  return best;
+}
+
+function countCompletedSessionPodiums(sessions: SessionAchievementSummary[]) {
+  return sessions.filter(
+    (session) => session.podiumRank !== null && session.podiumRank <= 3
+  ).length;
+}
+
+function buildAchievementsFromSessions(
+  sessions: SessionAchievementSummary[]
+): PlayerProfileAchievement[] {
+  const orderedSessions = sessions
+    .slice()
+    .sort((left, right) => right.latestCompletedAtMs - left.latestCompletedAtMs);
+  const strongStart = getBestSessionProgress(orderedSessions, (session) => {
+    const firstTwo = session.matches.slice(0, 2);
+    return firstTwo.length >= 2 && firstTwo.every((match) => match.result === "WIN")
+      ? 2
+      : firstTwo.filter((match) => match.result === "WIN").length;
+  });
+  const clutchFinish = getBestSessionProgress(orderedSessions, (session) => {
+    const finalTwo = session.matches.slice(-2);
+    return finalTwo.length >= 2 && finalTwo.every((match) => match.result === "WIN")
+      ? 2
+      : finalTwo.filter((match) => match.result === "WIN").length;
+  });
+  const perfectSession = getBestSessionProgress(orderedSessions, (session) =>
+    session.matches.length >= 3 && session.losses === 0
+      ? 3
+      : Math.min(session.wins, 2)
+  );
+  const cleanSweep = getBestSessionProgress(orderedSessions, (session) =>
+    session.matches.length >= 5 && session.losses === 0
+      ? 5
+      : Math.min(session.wins, 4)
+  );
+  const bounceBack = getBestSessionProgress(orderedSessions, (session) =>
+    session.matches[0]?.result === "LOSS" && session.wins > session.losses
+      ? 1
+      : 0
+  );
+  const closeBattleTested = getBestSessionProgress(orderedSessions, (session) =>
+    session.matches.filter((match) => match.scoreDifference <= 3).length
+  );
+  const narrowSurvivor = getBestSessionProgress(orderedSessions, (session) =>
+    session.matches.filter(
+      (match) => match.result === "WIN" && match.scoreDifference <= 2
+    ).length
+  );
+  const dominantDay = getBestSessionProgress(orderedSessions, (session) =>
+    session.wins >= 5 && getWinRate(session.wins, session.matches.length) >= 80
+      ? 5
+      : Math.min(session.wins, 4)
+  );
+  const bigDifferential = getBestSessionProgress(orderedSessions, (session) =>
+    Math.max(0, session.pointDifferential)
+  );
+  const podiums = countCompletedSessionPodiums(orderedSessions);
+  const firstPodiumSession = orderedSessions.find(
+    (session) => session.podiumRank !== null && session.podiumRank <= 3
+  );
+  const podiumEarnedFrom = firstPodiumSession
+    ? {
+        id: firstPodiumSession.id,
+        code: firstPodiumSession.code,
+        name: firstPodiumSession.name,
+      }
+    : undefined;
+
+  return [
+    buildAchievement({
+      id: "strong-start",
+      title: "Strong Start",
+      description: "Win your first 2 matches in a completed session.",
+      progressLabel: "wins",
+      target: 2,
+      ...strongStart,
+    }),
+    buildAchievement({
+      id: "clutch-finish",
+      title: "Clutch Finish",
+      description: "Win your final 2 matches in a completed session.",
+      progressLabel: "wins",
+      target: 2,
+      ...clutchFinish,
+    }),
+    buildAchievement({
+      id: "perfect-session",
+      title: "Perfect Session",
+      description: "Finish a completed session unbeaten with at least 3 matches played.",
+      progressLabel: "wins",
+      target: 3,
+      ...perfectSession,
+    }),
+    buildAchievement({
+      id: "podium-finish",
+      title: "Podium Finish",
+      description: "Finish top 3 in a completed session once.",
+      progressLabel: "podium",
+      target: 1,
+      progress: podiums,
+      earnedFromSession: podiumEarnedFrom,
+    }),
+    buildAchievement({
+      id: "clean-sweep",
+      title: "Clean Sweep",
+      description: "Win all 5+ matches you played in a completed session.",
+      progressLabel: "wins",
+      target: 5,
+      ...cleanSweep,
+    }),
+    buildAchievement({
+      id: "bounce-back",
+      title: "Bounce Back",
+      description: "Lose your first match, then finish that session with a winning record.",
+      progressLabel: "bounce back",
+      target: 1,
+      ...bounceBack,
+    }),
+    buildAchievement({
+      id: "close-battle-tested",
+      title: "Close Battle Tested",
+      description: "Play 3 matches in one session decided by 3 points or less.",
+      progressLabel: "close matches",
+      target: 3,
+      ...closeBattleTested,
+    }),
+    buildAchievement({
+      id: "narrow-survivor",
+      title: "Narrow Survivor",
+      description: "Win 2 matches in one session by 2 points or less.",
+      progressLabel: "narrow wins",
+      target: 2,
+      ...narrowSurvivor,
+    }),
+    buildAchievement({
+      id: "dominant-day",
+      title: "Dominant Day",
+      description: "Finish a session with 5+ wins and at least 80% win rate.",
+      progressLabel: "wins",
+      target: 5,
+      ...dominantDay,
+    }),
+    buildAchievement({
+      id: "big-differential",
+      title: "Big Differential",
+      description: "Finish a session with +25 or better point differential.",
+      progressLabel: "point diff",
+      target: 25,
+      ...bigDifferential,
+    }),
+    buildAchievement({
+      id: "podium-regular",
+      title: "Podium Regular",
+      description: "Finish top 3 in completed sessions 3 times.",
+      progressLabel: "podiums",
+      target: 3,
+      progress: podiums,
+      earnedFromSession: podiumEarnedFrom,
+    }),
+    buildAchievement({
+      id: "podium-mainstay",
+      title: "Podium Mainstay",
+      description: "Finish top 3 in completed sessions 5 times.",
+      progressLabel: "podiums",
+      target: 5,
+      progress: podiums,
+      earnedFromSession: podiumEarnedFrom,
+    }),
+    buildAchievement({
+      id: "podium-legend",
+      title: "Podium Legend",
+      description: "Finish top 3 in completed sessions 10 times.",
+      progressLabel: "podiums",
+      target: 10,
+      progress: podiums,
+      earnedFromSession: podiumEarnedFrom,
+    }),
+  ];
+}
+
 export function buildPlayerProfileDerivedData(
   userId: string,
   matches: ProfileMatchSource[]
@@ -372,6 +730,10 @@ export function buildPlayerProfileDerivedData(
   const partnerAggregates = new Map<string, ConnectionAggregate>();
   const opponentAggregates = new Map<string, ConnectionAggregate>();
   const sessionAggregates = new Map<string, SessionAggregate>();
+  const achievementSessionAggregates = new Map<
+    string,
+    SessionAchievementSummary
+  >();
   const matchHistory: PlayerProfileMatchHistoryEntry[] = [];
 
   let wins = 0;
@@ -389,6 +751,7 @@ export function buildPlayerProfileDerivedData(
     const ratingChange =
       (isTeam1 ? match.team1EloChange : match.team2EloChange) ?? 0;
     const pointDifferential = myScore - opponentScore;
+    const scoreDifference = Math.abs(myScore - opponentScore);
     const partner = isTeam1
       ? match.team1User1Id === userId
         ? match.team1User2
@@ -449,6 +812,43 @@ export function buildPlayerProfileDerivedData(
 
     sessionAggregates.set(match.session.id, existingSession);
 
+    const existingAchievementSession =
+      achievementSessionAggregates.get(match.session.id) ?? {
+        id: match.session.id,
+        code: match.session.code,
+        name: match.session.name,
+        latestCompletedAtMs: 0,
+        matches: [],
+        wins: 0,
+        losses: 0,
+        pointDifferential: 0,
+        podiumRank: getSessionPodiumRank(userId, match.session),
+      };
+
+    existingAchievementSession.latestCompletedAtMs = Math.max(
+      existingAchievementSession.latestCompletedAtMs,
+      getTimeOrZero(match.completedAt)
+    );
+    existingAchievementSession.matches.push({
+      id: match.id,
+      completedAtMs: getTimeOrZero(match.completedAt),
+      result,
+      pointDifferential,
+      scoreDifference,
+    });
+    existingAchievementSession.pointDifferential += pointDifferential;
+
+    if (result === "WIN") {
+      existingAchievementSession.wins += 1;
+    } else {
+      existingAchievementSession.losses += 1;
+    }
+
+    achievementSessionAggregates.set(
+      match.session.id,
+      existingAchievementSession
+    );
+
     matchHistory.push({
       id: match.id,
       date: toIsoString(match.completedAt),
@@ -505,6 +905,14 @@ export function buildPlayerProfileDerivedData(
     toConnectionSummary
   );
   const sessionSummaries = [...sessionAggregates.values()].map(toSessionSummary);
+  const achievementSessions = [...achievementSessionAggregates.values()].map(
+    (session) => ({
+      ...session,
+      matches: session.matches
+        .slice()
+        .sort((left, right) => left.completedAtMs - right.completedAtMs),
+    })
+  );
   const recentSessions = sessionSummaries
     .slice()
     .sort(compareLatestSessions)
@@ -594,6 +1002,7 @@ export function buildPlayerProfileDerivedData(
       latest: recentSessions[0] ?? null,
       best: sessionSummaries.slice().sort(compareBestSessions)[0] ?? null,
     },
+    achievements: buildAchievementsFromSessions(achievementSessions),
     matchHistory,
   };
 }

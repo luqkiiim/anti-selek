@@ -121,6 +121,31 @@ function buildProfileResponse(overrides?: Partial<{
       latest: null,
       best: null,
     },
+    achievements: [
+      {
+        id: "strong-start" as const,
+        title: "Strong Start",
+        description: "Win your first 2 matches in a completed session.",
+        progress: 2,
+        target: 2,
+        progressLabel: "wins",
+        unlocked: true,
+        earnedFromSession: {
+          id: "session-1",
+          code: "session-1",
+          name: "Friday Session",
+        },
+      },
+      {
+        id: "close-battle-tested" as const,
+        title: "Close Battle Tested",
+        description: "Play 3 matches in one session decided by 3 points or less.",
+        progress: 2,
+        target: 3,
+        progressLabel: "close matches",
+        unlocked: false,
+      },
+    ],
     matchHistory: [],
   };
 }
@@ -259,5 +284,18 @@ describe("PlayerProfileView", () => {
     expect(
       container.querySelector('button[aria-label="View profile photo of Alex Lee"]')
     ).toBeNull();
+  });
+
+  it("renders concrete permanent achievement badges with exact progress", async () => {
+    await renderView();
+
+    expect(document.body.textContent).toContain("Strong Start");
+    expect(document.body.textContent).toContain("2/2 wins");
+    expect(document.body.textContent).toContain("Unlocked in Friday Session");
+    expect(document.body.textContent).toContain("Close Battle Tested");
+    expect(document.body.textContent).toContain("2/3 close matches");
+    expect(document.body.textContent).not.toContain("Hot streak");
+    expect(document.body.textContent).not.toContain("Rival tested");
+    expect(document.body.textContent).not.toContain("Partner chemistry");
   });
 });

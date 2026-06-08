@@ -155,7 +155,33 @@ async function getUserStatsRoute(
       team1User2: { select: { id: true, name: true, avatarKey: true } },
       team2User1: { select: { id: true, name: true, avatarKey: true } },
       team2User2: { select: { id: true, name: true, avatarKey: true } },
-      session: { select: { id: true, code: true, name: true } },
+      session: {
+        select: {
+          id: true,
+          code: true,
+          name: true,
+          players: {
+            select: {
+              userId: true,
+              sessionPoints: true,
+              user: { select: { id: true, name: true, avatarKey: true } },
+            },
+          },
+          matches: {
+            where: { status: MatchStatus.COMPLETED },
+            select: {
+              id: true,
+              team1User1Id: true,
+              team1User2Id: true,
+              team2User1Id: true,
+              team2User2Id: true,
+              team1Score: true,
+              team2Score: true,
+              winnerTeam: true,
+            },
+          },
+        },
+      },
     },
   });
   const profileData = buildPlayerProfileDerivedData(
@@ -166,6 +192,13 @@ async function getUserStatsRoute(
       team1User2: serializeAvatarEntity(match.team1User2),
       team2User1: serializeAvatarEntity(match.team2User1),
       team2User2: serializeAvatarEntity(match.team2User2),
+      session: {
+        ...match.session,
+        players: match.session.players.map((player) => ({
+          ...player,
+          user: serializeAvatarEntity(player.user),
+        })),
+      },
     }))
   );
 

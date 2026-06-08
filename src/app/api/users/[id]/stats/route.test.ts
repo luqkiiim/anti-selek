@@ -102,6 +102,7 @@ describe("user stats route", () => {
       partners: { best: [] },
       opponents: { toughest: [] },
       sessions: { latest: null, best: null },
+      achievements: [],
       matchHistory: [],
     });
   });
