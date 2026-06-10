@@ -307,11 +307,6 @@ export function HostTournamentPanel({
 
       <div className="mt-4 grid gap-5">
         <div className="grid gap-3">
-          <SectionIntro
-            title="Tournament basics"
-            description="Name it, then choose the matchmaking style and court count."
-          />
-
           <label className="block space-y-1.5 text-sm font-medium text-gray-900">
             <span>Name</span>
             <input
