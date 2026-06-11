@@ -213,7 +213,7 @@ export function parseCreateSessionRequest(
     guestConfigs = [],
     communityId,
     partnerCommunityId,
-    courtCount = 3,
+    courtCount = 2,
     isTest = false,
     autoQueueEnabled = false,
     respectPlayerRest = true,

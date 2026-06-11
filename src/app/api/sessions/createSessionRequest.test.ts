@@ -106,6 +106,15 @@ describe("parseCreateSessionRequest", () => {
     ]);
   });
 
+  it("defaults to two courts when court count is omitted", () => {
+    const parsed = parseCreateSessionRequest({
+      name: "Default Courts",
+      communityId: "community-1",
+    });
+
+    expect(parsed.courtCount).toBe(2);
+  });
+
   it("maps legacy female open preferences to an upper-side override", () => {
     const parsed = parseCreateSessionRequest({
       name: "Legacy Mix",

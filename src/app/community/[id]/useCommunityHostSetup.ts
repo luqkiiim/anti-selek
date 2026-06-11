@@ -19,6 +19,7 @@ import {
 } from "@/types/enums";
 
 const DEFAULT_GUEST_INITIAL_ELO = 1000;
+const DEFAULT_COURT_COUNT = 2;
 
 interface CommunityPageRouter {
   push: (href: string) => void;
@@ -49,7 +50,7 @@ export function useCommunityHostSetup({
   const [isTestSession, setIsTestSession] = useState(false);
   const [autoQueueEnabled, setAutoQueueEnabled] = useState(false);
   const [respectPlayerRest, setRespectPlayerRest] = useState(true);
-  const [courtCount, setCourtCount] = useState(3);
+  const [courtCount, setCourtCount] = useState(DEFAULT_COURT_COUNT);
   const [poolsEnabled, setPoolsEnabled] = useState(false);
   const [poolAName, setPoolAName] = useState("Open");
   const [poolBName, setPoolBName] = useState("Regular");
@@ -89,7 +90,7 @@ export function useCommunityHostSetup({
     setIsTestSession(false);
     setAutoQueueEnabled(false);
     setRespectPlayerRest(true);
-    setCourtCount(3);
+    setCourtCount(DEFAULT_COURT_COUNT);
     setPoolsEnabled(false);
     setPoolAName("Open");
     setPoolBName("Regular");
@@ -278,7 +279,7 @@ export function useCommunityHostSetup({
       setGuestPoolInput(SessionPool.A);
       setAutoQueueEnabled(false);
       setRespectPlayerRest(true);
-      setCourtCount(3);
+      setCourtCount(DEFAULT_COURT_COUNT);
       setPartnerCommunityId("");
       setPartnerCommunitySearch("");
       setSelectedPartnerCommunity(null);
