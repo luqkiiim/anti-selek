@@ -276,7 +276,10 @@ export default function SessionPage() {
       if (res.ok) {
         const data = await safeJson<SessionSnapshotResponse>(res);
         setShowEndSessionConfirm(false);
-        patchSessionData((current) => mergeSessionSnapshot(current, data));
+        setMobileSection("results");
+        patchSessionData((current) => mergeSessionSnapshot(current, data), {
+          urgent: true,
+        });
         scheduleSessionRefresh();
       } else {
         const data = await safeJson<SessionSnapshotResponse>(res);

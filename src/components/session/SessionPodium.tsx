@@ -52,7 +52,7 @@ const EMPTY_PLAYER_STATS = {
   losses: 0,
 };
 
-const CELEBRATION_TRIGGER_DELAY_MS = 500;
+const CELEBRATION_TRIGGER_DELAY_MS = 0;
 
 function getRevealDelayMs(rank: number, podiumSize: number) {
   if (rank === 3 || podiumSize === 1) return CELEBRATION_TRIGGER_DELAY_MS;

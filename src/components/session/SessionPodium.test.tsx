@@ -225,7 +225,7 @@ describe("SessionPodium", () => {
     });
 
     expect(markup).toContain('data-testid="podium-burst-particles"');
-    expect(markup).toContain("--podium-finale-delay:1760ms");
+    expect(markup).toContain("--podium-finale-delay:1260ms");
     expect(markup).toContain("app-podium-burst-entrant");
     expect(markup).toContain("app-podium-burst-champion");
     expect(markup).toContain("app-podium-burst-crown");
@@ -243,8 +243,8 @@ describe("SessionPodium", () => {
       ],
     });
 
+    expect(markup).toContain("--podium-reveal-delay:0ms");
     expect(markup).toContain("--podium-reveal-delay:500ms");
     expect(markup).toContain("--podium-reveal-delay:1000ms");
-    expect(markup).toContain("--podium-reveal-delay:1500ms");
   });
 });

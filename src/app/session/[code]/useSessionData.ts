@@ -11,6 +11,10 @@ interface UseSessionDataArgs {
   setError: (message: string) => void;
 }
 
+interface PatchSessionDataOptions {
+  urgent?: boolean;
+}
+
 const POLL_INTERVAL_MS = 8000;
 const DEFAULT_REVALIDATE_DELAY_MS = 1200;
 
@@ -73,10 +77,20 @@ export function useSessionData({
   );
 
   const patchSessionData = useCallback(
-    (updater: (current: SessionData) => SessionData) => {
-      startTransition(() => {
+    (
+      updater: (current: SessionData) => SessionData,
+      options: PatchSessionDataOptions = {}
+    ) => {
+      const applyPatch = () => {
         setSessionData((current) => (current ? updater(current) : current));
-      });
+      };
+
+      if (options.urgent) {
+        applyPatch();
+        return;
+      }
+
+      startTransition(applyPatch);
     },
     []
   );

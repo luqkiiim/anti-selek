@@ -35,6 +35,7 @@ function HookHarness({
     sessionData,
     isInitialLoadPending,
     initialLoadError,
+    patchSessionData,
     retryInitialLoad,
   } = useSessionData({
     code,
@@ -48,6 +49,20 @@ function HookHarness({
       <p data-testid="pending">{isInitialLoadPending ? "yes" : "no"}</p>
       <p data-testid="error">{initialLoadError ?? ""}</p>
       <p data-testid="name">{sessionData?.name ?? ""}</p>
+      <button
+        type="button"
+        onClick={() =>
+          patchSessionData(
+            (current) => ({
+              ...current,
+              name: "Urgent Patch Applied",
+            }),
+            { urgent: true }
+          )
+        }
+      >
+        Urgent patch
+      </button>
       <button type="button" onClick={retryInitialLoad}>
         Retry
       </button>
@@ -133,7 +148,9 @@ describe("useSessionData", () => {
 
     await renderHarness();
 
-    const retryButton = container.querySelector("button");
+    const retryButton = Array.from(container.querySelectorAll("button")).find(
+      (button) => button.textContent === "Retry"
+    );
     expect(retryButton).toBeTruthy();
 
     await act(async () => {
@@ -144,5 +161,28 @@ describe("useSessionData", () => {
     expect(readTestText(container, "pending")).toBe("no");
     expect(readTestText(container, "error")).toBe("");
     expect(readTestText(container, "name")).toBe("Court Card Layout Check");
+  });
+
+  it("can apply an urgent session patch without scheduling another fetch", async () => {
+    const fetchMock = vi.fn(async () =>
+      createJsonResponse({ name: "Original Session" })
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await renderHarness();
+
+    const urgentPatchButton = Array.from(
+      container.querySelectorAll("button")
+    ).find((button) => button.textContent === "Urgent patch");
+    expect(urgentPatchButton).toBeTruthy();
+
+    await act(async () => {
+      urgentPatchButton?.dispatchEvent(
+        new MouseEvent("click", { bubbles: true })
+      );
+    });
+
+    expect(readTestText(container, "name")).toBe("Urgent Patch Applied");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });
