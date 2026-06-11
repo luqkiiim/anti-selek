@@ -90,7 +90,7 @@ describe("avatar helpers", () => {
         bytes: new Uint8Array([0x3c, 0x73, 0x76, 0x67]),
       })
     ).toBe(
-      "This avatar does not look like a valid PNG file. Choose a JPG, PNG, or WebP image exported from your photo app."
+      "The prepared avatar does not contain valid PNG image data. Try selecting the image again, or export it as JPG, PNG, or WebP."
     );
   });
 
@@ -101,7 +101,7 @@ describe("avatar helpers", () => {
         bytes: new Uint8Array([0xff, 0xd8, 0xff, 0xdb]),
       })
     ).toBe(
-      "This avatar was uploaded as PNG, but its contents look like JPG. Export it again as PNG, or choose the matching image file."
+      "The prepared avatar is labeled as PNG, but the image data looks like JPG. Try selecting the image again, or export it as JPG, PNG, or WebP."
     );
   });
 

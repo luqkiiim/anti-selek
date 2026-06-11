@@ -23,6 +23,12 @@ const AVATAR_CROP_OUTPUT_TYPES: readonly SupportedAvatarMimeType[] = [
   "image/png",
 ];
 
+function isSupportedAvatarOutputType(
+  value: string
+): value is SupportedAvatarMimeType {
+  return (AVATAR_CROP_OUTPUT_TYPES as readonly string[]).includes(value);
+}
+
 function replaceFileExtension(fileName: string, nextExtension: string) {
   const trimmedName = fileName.trim();
   const baseName =
@@ -112,7 +118,9 @@ export async function createCroppedAvatarFile({
     });
 
     if (blob) {
-      outputType = nextOutputType;
+      outputType = isSupportedAvatarOutputType(blob.type)
+        ? blob.type
+        : nextOutputType;
       break;
     }
   }

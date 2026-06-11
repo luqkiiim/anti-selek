@@ -146,10 +146,10 @@ export function getAvatarFileSignatureValidationError({
   const expectedLabel = MIME_TYPE_TO_LABEL[mimeType];
 
   if (detectedMimeType) {
-    return `This avatar was uploaded as ${expectedLabel}, but its contents look like ${MIME_TYPE_TO_LABEL[detectedMimeType]}. Export it again as ${expectedLabel}, or choose the matching image file.`;
+    return `The prepared avatar is labeled as ${expectedLabel}, but the image data looks like ${MIME_TYPE_TO_LABEL[detectedMimeType]}. Try selecting the image again, or export it as JPG, PNG, or WebP.`;
   }
 
-  return `This avatar does not look like a valid ${expectedLabel} file. Choose a JPG, PNG, or WebP image exported from your photo app.`;
+  return `The prepared avatar does not contain valid ${expectedLabel} image data. Try selecting the image again, or export it as JPG, PNG, or WebP.`;
 }
 
 export function buildAvatarObjectKey({

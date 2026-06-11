@@ -101,4 +101,37 @@ describe("avatar crop utility", () => {
     expect(file.name).toBe("profile.jpg");
     expect(file.type).toBe("image/jpeg");
   });
+
+  it("uses the actual blob type when the browser returns a different image format", async () => {
+    const toBlob = vi.fn((callback: BlobCallback) => {
+      callback(new Blob(["avatar"], { type: "image/png" }));
+    });
+    const canvas = {
+      width: 0,
+      height: 0,
+      getContext: vi.fn(() => ({
+        clearRect: vi.fn(),
+        drawImage: vi.fn(),
+        imageSmoothingEnabled: false,
+        imageSmoothingQuality: "low",
+      })),
+      toBlob,
+    } as unknown as HTMLCanvasElement;
+
+    const file = await createCroppedAvatarFile({
+      src: "blob:avatar",
+      crop: { x: 0, y: 0, width: 100, height: 100 },
+      fileName: "profile.png",
+      imageLoader: async () => ({} as CanvasImageSource),
+      createCanvas: () => canvas,
+    });
+
+    expect(toBlob).toHaveBeenCalledWith(
+      expect.any(Function),
+      "image/webp",
+      0.86
+    );
+    expect(file.name).toBe("profile.png");
+    expect(file.type).toBe("image/png");
+  });
 });
