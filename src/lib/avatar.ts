@@ -16,6 +16,12 @@ const MIME_TYPE_TO_EXTENSION: Record<AvatarMimeType, string> = {
   "image/webp": "webp",
 };
 
+const MIME_TYPE_TO_LABEL: Record<AvatarMimeType, string> = {
+  "image/jpeg": "JPG",
+  "image/png": "PNG",
+  "image/webp": "WebP",
+};
+
 function hasPngSignature(bytes: Uint8Array) {
   const signature = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
   return signature.every((value, index) => bytes[index] === value);
@@ -42,6 +48,22 @@ export function isSupportedAvatarMimeType(
   value: string
 ): value is AvatarMimeType {
   return (AVATAR_ALLOWED_MIME_TYPES as readonly string[]).includes(value);
+}
+
+function detectAvatarMimeType(bytes: Uint8Array): AvatarMimeType | null {
+  if (hasJpegSignature(bytes)) {
+    return "image/jpeg";
+  }
+
+  if (hasPngSignature(bytes)) {
+    return "image/png";
+  }
+
+  if (hasWebpSignature(bytes)) {
+    return "image/webp";
+  }
+
+  return null;
 }
 
 function getAvatarBaseValidationError({
@@ -111,12 +133,23 @@ export function getAvatarFileSignatureValidationError({
     return "Only JPG, PNG, and WebP images are supported.";
   }
 
-  const hasExpectedSignature =
-    (mimeType === "image/jpeg" && hasJpegSignature(bytes)) ||
-    (mimeType === "image/png" && hasPngSignature(bytes)) ||
-    (mimeType === "image/webp" && hasWebpSignature(bytes));
+  if (bytes.length === 0) {
+    return "The uploaded avatar file is empty.";
+  }
 
-  return hasExpectedSignature ? null : "Uploaded avatar content is not a valid image.";
+  const detectedMimeType = detectAvatarMimeType(bytes);
+
+  if (detectedMimeType === mimeType) {
+    return null;
+  }
+
+  const expectedLabel = MIME_TYPE_TO_LABEL[mimeType];
+
+  if (detectedMimeType) {
+    return `This avatar was uploaded as ${expectedLabel}, but its contents look like ${MIME_TYPE_TO_LABEL[detectedMimeType]}. Export it again as ${expectedLabel}, or choose the matching image file.`;
+  }
+
+  return `This avatar does not look like a valid ${expectedLabel} file. Choose a JPG, PNG, or WebP image exported from your photo app.`;
 }
 
 export function buildAvatarObjectKey({

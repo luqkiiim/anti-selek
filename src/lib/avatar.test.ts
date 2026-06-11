@@ -89,7 +89,29 @@ describe("avatar helpers", () => {
         mimeType: "image/png",
         bytes: new Uint8Array([0x3c, 0x73, 0x76, 0x67]),
       })
-    ).toBe("Uploaded avatar content is not a valid image.");
+    ).toBe(
+      "This avatar does not look like a valid PNG file. Choose a JPG, PNG, or WebP image exported from your photo app."
+    );
+  });
+
+  it("explains when avatar file contents do not match the declared type", () => {
+    expect(
+      getAvatarFileSignatureValidationError({
+        mimeType: "image/png",
+        bytes: new Uint8Array([0xff, 0xd8, 0xff, 0xdb]),
+      })
+    ).toBe(
+      "This avatar was uploaded as PNG, but its contents look like JPG. Export it again as PNG, or choose the matching image file."
+    );
+  });
+
+  it("explains when uploaded avatar content is empty", () => {
+    expect(
+      getAvatarFileSignatureValidationError({
+        mimeType: "image/webp",
+        bytes: new Uint8Array([]),
+      })
+    ).toBe("The uploaded avatar file is empty.");
   });
 
   it("detects blob storage only when the token exists", () => {
