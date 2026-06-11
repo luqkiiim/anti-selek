@@ -141,6 +141,55 @@ describe("matchmaking v3 simulation", () => {
     expect(lateJoiner?.availableSince).toEqual(new Date(state.now));
   });
 
+  it("prioritizes a late joiner once and preserves the real match gap", () => {
+    const state = createSimulationState(createSimulationPlayers(6), {
+      matchDurationMs: 10 * 60 * 1000,
+    });
+
+    for (let round = 0; round < 6; round++) {
+      playRound(state, {
+        courtCount: 1,
+        sessionMode: SessionMode.MEXICANO,
+        sessionType: SessionType.POINTS,
+        randomFn: () => 0,
+      });
+    }
+
+    addLateJoiner(state, createLateJoiner("Late"), {
+      randomFn: () => 0,
+    });
+
+    const firstRoundAfterArrival = playRound(state, {
+      courtCount: 1,
+      sessionMode: SessionMode.MEXICANO,
+      sessionType: SessionType.POINTS,
+      randomFn: () => 0,
+    });
+
+    expect(firstRoundAfterArrival.selections[0]?.ids).toContain("Late");
+    expect(
+      state.players.find((player) => player.userId === "Late")?.arrivalPriorityAt
+    ).toBeNull();
+
+    for (let round = 0; round < 6; round++) {
+      playRound(state, {
+        courtCount: 1,
+        sessionMode: SessionMode.MEXICANO,
+        sessionType: SessionType.POINTS,
+        randomFn: () => 0,
+      });
+    }
+
+    const matchCounts = getMatchCounts(state.players);
+    const lateCount = matchCounts.Late;
+    const onTimeCounts = Object.entries(matchCounts)
+      .filter(([userId]) => userId !== "Late")
+      .map(([, count]) => count);
+
+    expect(Math.min(...onTimeCounts) - lateCount).toBeGreaterThanOrEqual(3);
+    expect(Math.max(...onTimeCounts) - lateCount).toBeLessThanOrEqual(5);
+  });
+
   it("assigns a neutral baseline to resumed players in the live simulation state", () => {
     const state = createSimulationState(createSimulationPlayers(7), {
       matchDurationMs: 10 * 60 * 1000,

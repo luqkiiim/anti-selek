@@ -115,6 +115,7 @@ export function resumePlayers<T extends V3SimulationPlayer>(
             neutralBaseline
           ),
           availableSince: new Date(state.now),
+          arrivalPriorityAt: new Date(state.now),
         }
       : player
   );
@@ -147,6 +148,7 @@ export function addLateJoiner<T extends V3SimulationPlayer>(
       ),
       availableSince: new Date(state.now),
       joinedAt: new Date(state.now),
+      arrivalPriorityAt: new Date(state.now),
     },
   ];
 }
@@ -209,12 +211,21 @@ export function applyRoundSelections<T extends V3SimulationPlayer>(
 
   state.players = state.players.map((player) =>
     selectedIds.has(player.userId)
-      ? {
-          ...player,
-          matchesPlayed: player.matchesPlayed + 1,
-          availableSince: roundEnd,
-          lastPartnerId: partnerByUserId.get(player.userId) ?? null,
-        }
+      ? (() => {
+          const hasPersistentCredit =
+            player.matchmakingBaseline > player.matchesPlayed;
+
+          return {
+            ...player,
+            matchesPlayed: player.matchesPlayed + 1,
+            matchmakingBaseline: hasPersistentCredit
+              ? player.matchmakingBaseline + 1
+              : player.matchmakingBaseline,
+            availableSince: roundEnd,
+            arrivalPriorityAt: null,
+            lastPartnerId: partnerByUserId.get(player.userId) ?? null,
+          };
+        })()
       : player
   );
 

@@ -35,6 +35,37 @@ function createPlayer(
 }
 
 describe("ladder batch selection", () => {
+  it("includes an arrival-priority late player in a legal ladder batch", () => {
+    const players = ["A", "B", "C", "D", "E", "F", "G", "H"].map(
+      (userId, index) =>
+        createPlayer(userId, {
+          matchesPlayed: 4,
+          matchmakingBaseline: 4,
+          ladderScore: 8 - index,
+        })
+    );
+    players.push(
+      createPlayer("Late", {
+        matchesPlayed: 0,
+        matchmakingBaseline: 4,
+        availableSince: new Date("2026-03-18T00:59:00Z"),
+        arrivalPriorityAt: new Date("2026-03-18T00:58:00Z"),
+        ladderScore: -5,
+      })
+    );
+
+    const result = findBestBatchSelectionLadder(players, {
+      courtCount: 2,
+      sessionMode: SessionMode.MEXICANO,
+      now: new Date("2026-03-18T01:00:00Z").getTime(),
+      randomFn: () => 0,
+    });
+
+    expect(
+      result.selection?.selections.flatMap((selection) => selection.ids)
+    ).toContain("Late");
+  });
+
   it("builds a full global batch and uses all locked lower-band players", () => {
     const players = [
       createPlayer("A", { matchesPlayed: 4, wins: 3, losses: 0, pointDiff: 18 }),

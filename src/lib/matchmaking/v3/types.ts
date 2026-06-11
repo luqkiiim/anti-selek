@@ -3,6 +3,7 @@ export interface MatchmakerV3Player {
   matchesPlayed: number;
   matchmakingBaseline: number;
   availableSince: Date;
+  arrivalPriorityAt?: Date | string | null;
   strength: number;
   pointDiff?: number;
   isBusy?: boolean;

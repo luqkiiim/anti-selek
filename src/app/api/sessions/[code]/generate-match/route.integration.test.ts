@@ -19,6 +19,8 @@ vi.mock("@/lib/auth", () => ({
 
 type RouteHandler = typeof import("./route")["POST"];
 type PrismaInstance = typeof import("@/lib/prisma")["prisma"];
+type RebuildAutomaticQueuedMatchForSessionId =
+  typeof import("../queue-match/shared")["tryRebuildAutomaticQueuedMatchForSessionId"];
 
 const tempDatabaseFile = path.resolve(
   process.cwd(),
@@ -37,6 +39,7 @@ const previousEnv = {
 let prisma: PrismaInstance;
 let POST: RouteHandler;
 let mockedAuth: MockedFunction<typeof import("@/lib/auth")["auth"]>;
+let rebuildAutomaticQueuedMatchForSessionId: RebuildAutomaticQueuedMatchForSessionId;
 
 function getPrismaBinary() {
   return path.join(
@@ -202,8 +205,10 @@ async function createSessionWithCourtsAndPlayers({
     partnerPreference?: PartnerPreference;
     mixedSideOverride?: MixedSide | null;
     matchesPlayed?: number;
+    matchmakingMatchesCredit?: number;
     availableSince?: Date;
     joinedAt?: Date;
+    arrivalPriorityAt?: Date | null;
   }>;
   courtIds: string[];
 }) {
@@ -229,9 +234,11 @@ async function createSessionWithCourtsAndPlayers({
             player.partnerPreference ?? PartnerPreference.OPEN,
           mixedSideOverride: player.mixedSideOverride ?? null,
           matchesPlayed: player.matchesPlayed ?? 0,
+          matchmakingMatchesCredit: player.matchmakingMatchesCredit ?? 0,
           availableSince:
             player.availableSince ?? new Date("2026-04-04T00:00:00Z"),
           joinedAt: player.joinedAt ?? new Date("2026-04-04T00:00:00Z"),
+          arrivalPriorityAt: player.arrivalPriorityAt ?? null,
         })),
       },
       courts: {
@@ -299,6 +306,10 @@ beforeAll(async () => {
 
   const routeModule = await import("./route");
   POST = routeModule.POST;
+
+  const queueModule = await import("../queue-match/shared");
+  rebuildAutomaticQueuedMatchForSessionId =
+    queueModule.tryRebuildAutomaticQueuedMatchForSessionId;
 });
 
 beforeEach(() => {
@@ -409,6 +420,110 @@ describe("generate match route integration", () => {
     expect(storedMatch?.matchmakingReasonJson).toBeNull();
   });
 
+  it("clears arrival priority when an automatic live match is created", async () => {
+    const prefix = `arrival-clear-${randomUUID().slice(0, 8)}`;
+    const { communityId } = await createCommunityAdmin(prefix);
+    const playerKeys = ["p1", "p2", "p3", "p4", "p5", "p6", "late"];
+    const playerIds = playerKeys.map((key) => `${prefix}-${key}`);
+    const latePlayerId = `${prefix}-late`;
+    const courtId = `${prefix}-court-1`;
+    const arrivalPriorityAt = new Date("2026-04-04T00:59:00.000Z");
+
+    await createUsers(
+      prefix,
+      playerKeys.map((key) => ({ key }))
+    );
+
+    await createSessionWithCourtsAndPlayers({
+      prefix,
+      communityId,
+      type: SessionType.POINTS,
+      mode: SessionMode.MEXICANO,
+      players: playerIds.map((userId) =>
+        userId === latePlayerId
+          ? {
+              userId,
+              matchesPlayed: 0,
+              matchmakingMatchesCredit: 4,
+              availableSince: new Date("2026-04-04T00:58:00.000Z"),
+              arrivalPriorityAt,
+            }
+          : {
+              userId,
+              matchesPlayed: 4,
+              availableSince: new Date("2026-04-04T00:00:00.000Z"),
+            }
+      ),
+      courtIds: [courtId],
+    });
+
+    const response = await postGenerateMatch(`${prefix}-code`, { courtId });
+    const payload = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(getSelectedIds(payload)).toContain(latePlayerId);
+
+    const latePlayer = await prisma.sessionPlayer.findUnique({
+      where: {
+        sessionId_userId: {
+          sessionId: `${prefix}-session`,
+          userId: latePlayerId,
+        },
+      },
+    });
+
+    expect(latePlayer?.arrivalPriorityAt).toBeNull();
+    expect(latePlayer?.matchmakingMatchesCredit).toBe(4);
+  });
+
+  it("keeps arrival priority when a manual live match is created", async () => {
+    const prefix = `arrival-manual-${randomUUID().slice(0, 8)}`;
+    const { communityId } = await createCommunityAdmin(prefix);
+    const playerKeys = ["p1", "p2", "p3", "late"];
+    const playerIds = playerKeys.map((key) => `${prefix}-${key}`);
+    const latePlayerId = `${prefix}-late`;
+    const courtId = `${prefix}-court-1`;
+    const arrivalPriorityAt = new Date("2026-04-04T00:59:00.000Z");
+
+    await createUsers(
+      prefix,
+      playerKeys.map((key) => ({ key }))
+    );
+
+    await createSessionWithCourtsAndPlayers({
+      prefix,
+      communityId,
+      type: SessionType.POINTS,
+      mode: SessionMode.MEXICANO,
+      players: playerIds.map((userId) => ({
+        userId,
+        arrivalPriorityAt: userId === latePlayerId ? arrivalPriorityAt : null,
+      })),
+      courtIds: [courtId],
+    });
+
+    const response = await postGenerateMatch(`${prefix}-code`, {
+      courtId,
+      manualTeams: {
+        team1: [playerIds[0], latePlayerId],
+        team2: [playerIds[1], playerIds[2]],
+      },
+    });
+
+    expect(response.status).toBe(200);
+
+    const latePlayer = await prisma.sessionPlayer.findUnique({
+      where: {
+        sessionId_userId: {
+          sessionId: `${prefix}-session`,
+          userId: latePlayerId,
+        },
+      },
+    });
+
+    expect(latePlayer?.arrivalPriorityAt).toEqual(arrivalPriorityAt);
+  });
+
   it("does not auto-queue the next match for a single-court session with exactly eight active players", async () => {
     const prefix = `single-eight-${randomUUID().slice(0, 8)}`;
     const { communityId } = await createCommunityAdmin(prefix);
@@ -515,6 +630,137 @@ describe("generate match route integration", () => {
     expect(queuedIds.every((userId) => !selectedIds.includes(userId))).toBe(true);
     expect(storedQueuedMatch).not.toBeNull();
     expect(storedQueuedMatch?.matchmakingReasonJson).toEqual(expect.any(String));
+  });
+
+  it("rebuilds an automatic queued match to include an arrival-priority player", async () => {
+    const prefix = `arrival-queue-${randomUUID().slice(0, 8)}`;
+    const { communityId } = await createCommunityAdmin(prefix);
+    const playerKeys = ["p1", "p2", "p3", "p4", "p5", "p6", "p7", "p8", "late"];
+    const playerIds = playerKeys.map((key) => `${prefix}-${key}`);
+    const courtId = `${prefix}-court-1`;
+    const sessionId = `${prefix}-session`;
+    const latePlayerId = `${prefix}-late`;
+
+    await createUsers(
+      prefix,
+      playerKeys.map((key) => ({ key }))
+    );
+
+    await createSessionWithCourtsAndPlayers({
+      prefix,
+      communityId,
+      type: SessionType.POINTS,
+      mode: SessionMode.MEXICANO,
+      players: playerIds.map((userId) => ({
+        userId,
+        matchesPlayed: userId === latePlayerId ? 0 : 4,
+        matchmakingMatchesCredit: userId === latePlayerId ? 4 : 0,
+        arrivalPriorityAt:
+          userId === latePlayerId
+            ? new Date("2026-04-04T00:59:00.000Z")
+            : null,
+      })),
+      courtIds: [courtId],
+    });
+
+    const currentMatch = await prisma.match.create({
+      data: {
+        sessionId,
+        courtId,
+        status: MatchStatus.IN_PROGRESS,
+        team1User1Id: playerIds[0],
+        team1User2Id: playerIds[1],
+        team2User1Id: playerIds[2],
+        team2User2Id: playerIds[3],
+      },
+    });
+    await prisma.court.update({
+      where: { id: courtId },
+      data: { currentMatchId: currentMatch.id },
+    });
+    await prisma.queuedMatch.create({
+      data: {
+        sessionId,
+        team1User1Id: playerIds[4],
+        team1User2Id: playerIds[5],
+        team2User1Id: playerIds[6],
+        team2User2Id: playerIds[7],
+        matchmakingReasonJson: createReasonJson({
+          selectedIds: [playerIds[4], playerIds[5], playerIds[6], playerIds[7]],
+          team1: [playerIds[4], playerIds[5]],
+          team2: [playerIds[6], playerIds[7]],
+        }),
+      },
+    });
+
+    const queuedMatch = await rebuildAutomaticQueuedMatchForSessionId(sessionId);
+    const queuedIds = getSelectedIds(queuedMatch!);
+
+    expect(queuedIds).toContain(latePlayerId);
+    expect(new Set(queuedIds).size).toBe(4);
+  });
+
+  it("preserves a manual queued match when an arrival-priority player appears", async () => {
+    const prefix = `arrival-manual-queue-${randomUUID().slice(0, 8)}`;
+    const { communityId } = await createCommunityAdmin(prefix);
+    const playerKeys = ["p1", "p2", "p3", "p4", "p5", "p6", "p7", "p8", "late"];
+    const playerIds = playerKeys.map((key) => `${prefix}-${key}`);
+    const courtId = `${prefix}-court-1`;
+    const sessionId = `${prefix}-session`;
+    const latePlayerId = `${prefix}-late`;
+    const manualQueuedIds = [playerIds[4], playerIds[5], playerIds[6], playerIds[7]];
+
+    await createUsers(
+      prefix,
+      playerKeys.map((key) => ({ key }))
+    );
+
+    await createSessionWithCourtsAndPlayers({
+      prefix,
+      communityId,
+      type: SessionType.POINTS,
+      mode: SessionMode.MEXICANO,
+      players: playerIds.map((userId) => ({
+        userId,
+        matchesPlayed: userId === latePlayerId ? 0 : 4,
+        matchmakingMatchesCredit: userId === latePlayerId ? 4 : 0,
+        arrivalPriorityAt:
+          userId === latePlayerId
+            ? new Date("2026-04-04T00:59:00.000Z")
+            : null,
+      })),
+      courtIds: [courtId],
+    });
+
+    const currentMatch = await prisma.match.create({
+      data: {
+        sessionId,
+        courtId,
+        status: MatchStatus.IN_PROGRESS,
+        team1User1Id: playerIds[0],
+        team1User2Id: playerIds[1],
+        team2User1Id: playerIds[2],
+        team2User2Id: playerIds[3],
+      },
+    });
+    await prisma.court.update({
+      where: { id: courtId },
+      data: { currentMatchId: currentMatch.id },
+    });
+    await prisma.queuedMatch.create({
+      data: {
+        sessionId,
+        team1User1Id: manualQueuedIds[0],
+        team1User2Id: manualQueuedIds[1],
+        team2User1Id: manualQueuedIds[2],
+        team2User2Id: manualQueuedIds[3],
+        matchmakingReasonJson: null,
+      },
+    });
+
+    const queuedMatch = await rebuildAutomaticQueuedMatchForSessionId(sessionId);
+
+    expect(getSelectedIds(queuedMatch!).sort()).toEqual([...manualQueuedIds].sort());
   });
 
   it("does not auto-queue when the session auto-queue toggle is off", async () => {

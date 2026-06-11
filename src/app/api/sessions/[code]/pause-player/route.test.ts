@@ -15,11 +15,13 @@ vi.mock("@/lib/prisma", () => ({
 }));
 
 vi.mock("../queue-match/shared", () => ({
+  tryRebuildAutomaticQueuedMatchForCode: vi.fn(),
   tryRebuildQueuedMatchForCode: vi.fn(),
 }));
 
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { tryRebuildAutomaticQueuedMatchForCode } from "../queue-match/shared";
 import { POST } from "./route";
 
 function createRequest(userId: string, isPaused: boolean) {
@@ -53,7 +55,9 @@ describe("pause player route", () => {
       id: "session-1",
       communityId: null,
       type: "POINTS",
+      status: "ACTIVE",
     } as never);
+    vi.mocked(tryRebuildAutomaticQueuedMatchForCode).mockResolvedValue(null);
   });
 
   afterEach(() => {
@@ -92,11 +96,13 @@ describe("pause player route", () => {
           pausedAt: null,
           availableSince: now,
           ladderEntryAt: now,
+          arrivalPriorityAt: now,
           inactiveSeconds: { increment: 600 },
           matchmakingMatchesCredit: 2,
         }),
       })
     );
+    expect(tryRebuildAutomaticQueuedMatchForCode).toHaveBeenCalledWith("ABC");
   });
 
   it("blocks quick-access users from pausing players", async () => {
@@ -141,10 +147,51 @@ describe("pause player route", () => {
           pausedAt: null,
           availableSince: undefined,
           ladderEntryAt: undefined,
+          arrivalPriorityAt: undefined,
           inactiveSeconds: { increment: 0 },
           matchmakingMatchesCredit: 4,
         }),
       })
     );
+    expect(tryRebuildAutomaticQueuedMatchForCode).not.toHaveBeenCalled();
+  });
+
+  it("does not set arrival priority for a long resume before the session is active", async () => {
+    const now = new Date("2026-05-08T04:10:00.000Z");
+    vi.useFakeTimers();
+    vi.setSystemTime(now);
+
+    vi.mocked(prisma.session.findUnique).mockResolvedValue({
+      id: "session-1",
+      communityId: null,
+      type: "POINTS",
+      status: "WAITING",
+    } as never);
+    vi.mocked(prisma.sessionPlayer.findUnique).mockResolvedValue({
+      pausedAt: new Date("2026-05-08T04:00:00.000Z"),
+      inactiveSeconds: 0,
+      matchesPlayed: 0,
+      matchmakingMatchesCredit: 0,
+    } as never);
+    vi.mocked(prisma.sessionPlayer.findMany).mockResolvedValue([
+      { matchesPlayed: 2, matchmakingMatchesCredit: 0 },
+    ] as never);
+
+    const updateSpy = vi.fn(async ({ data }) => ({ id: "session-player-1", ...data }));
+    mockTransaction(updateSpy);
+
+    const response = await POST(createRequest("late-player", false), {
+      params: Promise.resolve({ code: "ABC" }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(updateSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          arrivalPriorityAt: undefined,
+        }),
+      })
+    );
+    expect(tryRebuildAutomaticQueuedMatchForCode).not.toHaveBeenCalled();
   });
 });

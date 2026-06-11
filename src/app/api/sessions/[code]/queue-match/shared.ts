@@ -130,6 +130,31 @@ async function createQueuedMatchRecord(
   }
 }
 
+async function selectQueuedMatchForSession(sessionData: QueueSessionRecord) {
+  const { busyPlayerIds, playersById, rotationHistory } =
+    await buildMatchmakingState(sessionData);
+  const { availableCandidates, rankedCandidates } = getRankedCandidates(
+    sessionData,
+    busyPlayerIds
+  );
+
+  ensureEnoughPlayers(availableCandidates.length, rankedCandidates.length, 1);
+
+  const selection = selectSingleCourtMatch({
+    rankedCandidates,
+    playersById,
+    sessionData,
+    rotationHistory,
+    reshuffleSource: null,
+  });
+
+  return {
+    partition: selection.partition,
+    targetPool: "targetPool" in selection ? selection.targetPool : null,
+    matchmakingReasonJson: selection.matchmakingReasonJson ?? null,
+  };
+}
+
 async function updateQueuedMatchRecord({
   queuedMatchId,
   partition,
@@ -182,27 +207,11 @@ function getQueuedReshuffleSource(sessionData: QueueSessionRecord): ReshuffleSou
 export async function createQueuedMatchForSession(sessionData: QueueSessionRecord) {
   await ensureQueueSlotAvailable(sessionData);
 
-  const { busyPlayerIds, playersById, rotationHistory } =
-    await buildMatchmakingState(sessionData);
-  const { availableCandidates, rankedCandidates } = getRankedCandidates(
-    sessionData,
-    busyPlayerIds
-  );
-
-  ensureEnoughPlayers(availableCandidates.length, rankedCandidates.length, 1);
-
-  const selection = selectSingleCourtMatch({
-    rankedCandidates,
-    playersById,
-    sessionData,
-    rotationHistory,
-    reshuffleSource: null,
-  });
-
+  const selection = await selectQueuedMatchForSession(sessionData);
   const queuedMatch = await createQueuedMatchRecord(
     sessionData.id,
     selection.partition,
-    "targetPool" in selection ? selection.targetPool : null,
+    selection.targetPool,
     selection.matchmakingReasonJson ?? null
   );
 
@@ -362,6 +371,51 @@ export async function createManualQueuedMatchForSession(
   return buildQueuedMatchResponse(sessionData, queuedMatch);
 }
 
+async function tryRebuildAutomaticQueuedMatch(
+  loadSessionData: () => Promise<QueueSessionRecord | null>
+) {
+  const sessionData = await loadSessionData();
+  if (!sessionData) {
+    return null;
+  }
+
+  if (!sessionData.queuedMatch) {
+    return tryRebuildQueuedMatch(loadSessionData);
+  }
+
+  if (sessionData.queuedMatch.matchmakingReasonJson === null) {
+    return buildQueuedMatchResponse(sessionData, sessionData.queuedMatch);
+  }
+
+  if (await shouldSuppressAutomaticQueueCreation(sessionData)) {
+    return buildQueuedMatchResponse(sessionData, sessionData.queuedMatch);
+  }
+
+  const rebuildSessionData = {
+    ...sessionData,
+    queuedMatch: null,
+  };
+
+  try {
+    await ensureQueueSlotAvailable(rebuildSessionData);
+    const selection = await selectQueuedMatchForSession(rebuildSessionData);
+    const queuedMatch = await updateQueuedMatchRecord({
+      queuedMatchId: sessionData.queuedMatch.id,
+      partition: selection.partition,
+      targetPool: selection.targetPool,
+      matchmakingReasonJson: selection.matchmakingReasonJson,
+    });
+
+    return buildQueuedMatchResponse(sessionData, queuedMatch);
+  } catch (error) {
+    if (error instanceof GenerateMatchError) {
+      return buildQueuedMatchResponse(sessionData, sessionData.queuedMatch);
+    }
+
+    throw error;
+  }
+}
+
 async function tryRebuildQueuedMatch(
   loadSessionData: () => Promise<QueueSessionRecord | null>
 ) {
@@ -405,4 +459,14 @@ export async function tryRebuildQueuedMatchForCode(code: string) {
 
 export async function tryRebuildQueuedMatchForSessionId(sessionId: string) {
   return tryRebuildQueuedMatch(() => loadSessionRecordById(sessionId));
+}
+
+export async function tryRebuildAutomaticQueuedMatchForCode(code: string) {
+  return tryRebuildAutomaticQueuedMatch(() => loadSessionRecord(code));
+}
+
+export async function tryRebuildAutomaticQueuedMatchForSessionId(
+  sessionId: string
+) {
+  return tryRebuildAutomaticQueuedMatch(() => loadSessionRecordById(sessionId));
 }

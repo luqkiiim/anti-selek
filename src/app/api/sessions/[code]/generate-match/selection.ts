@@ -63,6 +63,7 @@ type AvailableCandidate = {
   matchmakingMatchesCredit: number;
   matchmakingBaseline: number;
   availableSince: Date;
+  arrivalPriorityAt: Date | null;
   strength: number;
   pool?: string | null;
   isBusy: false;
@@ -276,6 +277,7 @@ function buildV3Players(
     matchmakingBaseline:
       player.matchesPlayed + Math.max(0, player.matchmakingMatchesCredit ?? 0),
     availableSince: player.availableSince,
+    arrivalPriorityAt: player.arrivalPriorityAt ?? null,
     strength:
       playersById.get(player.userId)?.elo ??
       (sessionData.type === SessionType.POINTS ||
@@ -332,6 +334,7 @@ function buildLadderPlayers(
       matchmakingBaseline:
         player.matchesPlayed + Math.max(0, player.matchmakingMatchesCredit ?? 0),
       availableSince: player.availableSince,
+      arrivalPriorityAt: player.arrivalPriorityAt ?? null,
       strength: playersById.get(player.userId)?.elo ?? 0,
       wins: record.wins,
       losses: record.losses,
@@ -489,6 +492,7 @@ export function getRankedCandidates(
       matchmakingBaseline:
         player.matchesPlayed + Math.max(0, player.matchmakingMatchesCredit ?? 0),
       availableSince: player.availableSince,
+      arrivalPriorityAt: player.arrivalPriorityAt ?? null,
       strength: 0,
       pool: player.pool,
       isBusy: false,

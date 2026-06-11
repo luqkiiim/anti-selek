@@ -454,14 +454,24 @@ export function useSessionPlayerManagement({
           pool: sessionData?.poolsEnabled ? rosterPool : SessionPool.A,
         }),
       });
-      const data = await safeJson<GuestPayload & { error?: string }>(res);
+      const data = await safeJson<
+        GuestPayload & {
+          error?: string;
+          queuedMatch?: SessionData["queuedMatch"];
+        }
+      >(res);
       if (!res.ok) {
         setError(getErrorMessage(data, "Failed to add guest"));
         return;
       }
 
       resetGuestInputs();
-      patchSessionData((current) => applyGuestAdded(current, data));
+      patchSessionData((current) => {
+        const updated = applyGuestAdded(current, data);
+        return "queuedMatch" in data
+          ? applyQueuedMatch(updated, data.queuedMatch ?? null)
+          : updated;
+      });
       scheduleSessionRefresh();
     } catch (err) {
       console.error(err);

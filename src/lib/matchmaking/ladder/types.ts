@@ -10,6 +10,7 @@ export interface MatchmakerLadderPlayer extends LadderRecord {
   matchesPlayed: number;
   matchmakingBaseline: number;
   availableSince: Date;
+  arrivalPriorityAt?: Date | string | null;
   strength: number;
   isBusy?: boolean;
   isPaused?: boolean;

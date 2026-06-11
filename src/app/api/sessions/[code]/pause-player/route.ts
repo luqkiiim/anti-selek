@@ -5,9 +5,13 @@ import { prisma } from "@/lib/prisma";
 import { getSessionOperatorMembership } from "@/lib/sessionCollab";
 import { hasQueuedMatchUser } from "@/lib/sessionQueue";
 import { isQuickAccessSession } from "@/lib/quickAccess";
-import { tryRebuildQueuedMatchForCode } from "../queue-match/shared";
+import {
+  tryRebuildAutomaticQueuedMatchForCode,
+  tryRebuildQueuedMatchForCode,
+} from "../queue-match/shared";
 import { logError, safeErrorResponse } from "@/lib/errors";
 import { rateLimit, checkInvalidTargetRateLimit, invalidTargetResponse } from "@/lib/rateLimit";
+import { SessionStatus } from "@/types/enums";
 
 export const dynamic = "force-dynamic";
 
@@ -46,7 +50,7 @@ export async function POST(
 
     const sessionData = await prisma.session.findUnique({
       where: { code },
-      select: { id: true, communityId: true, type: true },
+      select: { id: true, communityId: true, type: true, status: true },
     });
 
     if (!sessionData) {
@@ -119,6 +123,8 @@ export async function POST(
         });
       }
     }
+    const shouldSetArrivalPriority =
+      shouldResetResumeQueue && sessionData.status === SessionStatus.ACTIVE;
 
     const { nextPlayer, queuedMatchAffected } = await prisma.$transaction(async (tx) => {
       const nextPlayer = await tx.sessionPlayer.update({
@@ -133,6 +139,7 @@ export async function POST(
           pausedAt: isPaused ? now : null,
           availableSince: shouldResetResumeQueue ? now : undefined,
           ladderEntryAt: shouldResetResumeQueue ? now : undefined,
+          arrivalPriorityAt: shouldSetArrivalPriority ? now : undefined,
           inactiveSeconds: { increment: inactiveSecondsToIncrement },
           matchmakingMatchesCredit: nextMatchmakingMatchesCredit,
         },
@@ -157,11 +164,13 @@ export async function POST(
 
     const queuedMatch = queuedMatchAffected
       ? await tryRebuildQueuedMatchForCode(code)
+      : shouldSetArrivalPriority
+        ? await tryRebuildAutomaticQueuedMatchForCode(code)
       : null;
 
     return NextResponse.json({
       ...nextPlayer,
-      queuedMatchAffected,
+      queuedMatchAffected: queuedMatchAffected || shouldSetArrivalPriority,
       queuedMatch,
     });
   } catch (error) {

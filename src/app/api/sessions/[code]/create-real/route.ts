@@ -329,6 +329,7 @@ export async function POST(
           pausedAt: includeResults ? player.pausedAt : null,
           joinedAt: includeResults ? player.joinedAt : createdAt,
           ladderEntryAt: includeResults ? player.ladderEntryAt : createdAt,
+          arrivalPriorityAt: includeResults ? player.arrivalPriorityAt : null,
           inactiveSeconds: includeResults ? player.inactiveSeconds : 0,
         })),
       });

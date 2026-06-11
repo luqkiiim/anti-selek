@@ -63,6 +63,7 @@ async function createMatchAssignment(
     courtId: string;
     partition: ManualMatchTeams;
     matchmakingReasonJson?: string | null;
+    clearArrivalPriority?: boolean;
   }
 ) {
   const match = await tx.match.create({
@@ -96,6 +97,23 @@ async function createMatchAssignment(
     );
   }
 
+  if (assignment.clearArrivalPriority) {
+    await tx.sessionPlayer.updateMany({
+      where: {
+        sessionId,
+        userId: {
+          in: [
+            assignment.partition.team1[0],
+            assignment.partition.team1[1],
+            assignment.partition.team2[0],
+            assignment.partition.team2[1],
+          ],
+        },
+      },
+      data: { arrivalPriorityAt: null },
+    });
+  }
+
   const { matchmakingReasonJson, ...matchResponse } = match;
 
   return {
@@ -111,6 +129,7 @@ export async function createMatchesForAssignments(
     selectedIds: string[];
     partition: ManualMatchTeams;
     matchmakingReasonJson?: string | null;
+    clearArrivalPriority?: boolean;
   }>
 ) {
   return prisma.$transaction(async (tx) => {
@@ -134,6 +153,7 @@ export async function replaceCurrentCourtMatchAssignment({
   selectedIds,
   partition,
   matchmakingReasonJson,
+  clearArrivalPriority,
 }: {
   sessionId: string;
   courtId: string;
@@ -141,6 +161,7 @@ export async function replaceCurrentCourtMatchAssignment({
   selectedIds: string[];
   partition: ManualMatchTeams;
   matchmakingReasonJson?: string | null;
+  clearArrivalPriority?: boolean;
 }) {
   return prisma.$transaction(async (tx) => {
     const deletedMatch = await tx.match.deleteMany({
@@ -181,6 +202,7 @@ export async function replaceCurrentCourtMatchAssignment({
       courtId,
       partition,
       matchmakingReasonJson,
+      clearArrivalPriority,
     });
   });
 }
@@ -214,6 +236,7 @@ export async function createQueuedMatchAssignment({
       courtId,
       partition,
       matchmakingReasonJson,
+      clearArrivalPriority: matchmakingReasonJson != null,
     });
 
     await tx.queuedMatch.deleteMany({

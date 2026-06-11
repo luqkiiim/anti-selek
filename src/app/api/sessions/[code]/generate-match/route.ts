@@ -205,6 +205,7 @@ export async function POST(
           selectedIds: [...replacementSelection.ids],
           partition: replacementSelection.partition,
           matchmakingReasonJson: replacementSelection.matchmakingReasonJson ?? null,
+          clearArrivalPriority: true,
         })
       );
     }
@@ -268,6 +269,7 @@ export async function POST(
         selectedIds: [...bestSelection.ids],
         partition: bestSelection.partition,
         matchmakingReasonJson: bestSelection.matchmakingReasonJson ?? null,
+        clearArrivalPriority: true,
       });
 
       if (sessionData.poolsEnabled && "targetPool" in bestSelection) {
@@ -327,6 +329,7 @@ export async function POST(
           selectedIds: [...bestSelection.ids],
           partition: bestSelection.partition,
           matchmakingReasonJson: bestSelection.matchmakingReasonJson ?? null,
+          clearArrivalPriority: true,
         },
       ]);
 
@@ -366,6 +369,7 @@ export async function POST(
           selectedIds: [...selection.ids],
           partition: selection.partition,
           matchmakingReasonJson: selection.matchmakingReasonJson ?? null,
+          clearArrivalPriority: true,
         };
       })
     );

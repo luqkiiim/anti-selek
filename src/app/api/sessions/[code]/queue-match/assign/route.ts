@@ -122,6 +122,7 @@ export async function POST(
       queuedMatchId: sessionData.queuedMatch.id,
       courtId: targetCourt.id,
       partition,
+      matchmakingReasonJson: sessionData.queuedMatch.matchmakingReasonJson,
     });
 
     if (sessionData.poolsEnabled && sessionData.queuedMatch.targetPool) {

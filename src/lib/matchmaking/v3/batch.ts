@@ -1,4 +1,8 @@
 import { SessionMode, SessionType } from "../../../types/enums";
+import {
+  mergeUniquePlayersById,
+  sortArrivalPriorityPlayers,
+} from "../arrivalPriority";
 import { evaluateBalancedPartitions } from "./balance";
 import { buildCandidatePool } from "./candidatePool";
 import { getEmptyConsecutivePlayMetrics } from "./consecutive";
@@ -356,6 +360,55 @@ function getMaxBatchCandidateCount(
     (sessionType === SessionType.SOCIAL_MIX
       ? SOCIAL_MIX_BATCH_EXTRA_CANDIDATES
       : MAX_BATCH_EXTRA_CANDIDATES);
+}
+
+function buildArrivalPriorityBatchCandidatePool<T extends MatchmakerV3Player>(
+  candidatePool: V3CandidatePool<ActiveMatchmakerV3Player<T>>,
+  priorityPlayers: ActiveMatchmakerV3Player<T>[],
+  requiredPlayerCount: number,
+  sessionType: SessionType
+): V3CandidatePool<ActiveMatchmakerV3Player<T>> {
+  const priorityIds = new Set(priorityPlayers.map((player) => player.userId));
+  const maxCandidateCount = Math.max(
+    requiredPlayerCount,
+    MAX_BATCH_FALLBACK_CANDIDATE_PLAYERS,
+    priorityPlayers.length
+  );
+  const fallbackCandidates = limitBatchCandidatePlayers(
+    candidatePool,
+    requiredPlayerCount,
+    Math.max(
+      MAX_BATCH_FALLBACK_CANDIDATE_PLAYERS,
+      getMaxBatchCandidateCount(sessionType, requiredPlayerCount)
+    )
+  );
+  const candidatePlayers = mergeUniquePlayersById(
+    [
+      priorityPlayers,
+      fallbackCandidates.filter((player) => !priorityIds.has(player.userId)),
+      candidatePool.activePlayers.filter((player) => !priorityIds.has(player.userId)),
+    ],
+    maxCandidateCount
+  );
+  const selectablePlayers = candidatePlayers.filter(
+    (player) => !priorityIds.has(player.userId)
+  );
+
+  return {
+    ...candidatePool,
+    lockedPlayers: priorityPlayers,
+    requiredSelectableCount: Math.max(0, requiredPlayerCount - priorityPlayers.length),
+    selectablePlayers,
+    candidatePlayers,
+    tieZone: null,
+    widened: true,
+    includedBandValues: [
+      ...new Set([
+        ...candidatePool.includedBandValues,
+        ...priorityPlayers.map((player) => player.effectiveMatchCount),
+      ]),
+    ].sort((left, right) => left - right),
+  };
 }
 
 function compressQuartetSelections<T extends ActiveMatchmakerV3Player>(
@@ -832,21 +885,53 @@ export function findBestBatchSelectionV3<T extends MatchmakerV3Player>(
     return attempt;
   };
 
-  const strictLockedIds = new Set(
-    candidatePool.lockedPlayers.map((player) => player.userId)
-  );
-  const strictAttempt = runAttempt({
-    pool: candidatePool,
-    candidatePlayers: limitBatchCandidatePlayers(
-      candidatePool,
-      requiredPlayerCount,
-      getMaxBatchCandidateCount(sessionType, requiredPlayerCount)
-    ),
-    lockedIds: strictLockedIds,
-  });
+  const priorityPlayers = sortArrivalPriorityPlayers(candidatePool.activePlayers);
+  if (priorityPlayers.length > 0) {
+    const maxPriorityCount = Math.min(priorityPlayers.length, requiredPlayerCount);
 
-  if (strictAttempt?.selection) {
-    finalSelection = strictAttempt.selection;
+    for (
+      let priorityCount = maxPriorityCount;
+      priorityCount >= 1 && !finalSelection;
+      priorityCount--
+    ) {
+      const requiredPriorityPlayers = priorityPlayers.slice(0, priorityCount);
+      const priorityPool = buildArrivalPriorityBatchCandidatePool(
+        candidatePool,
+        requiredPriorityPlayers,
+        requiredPlayerCount,
+        sessionType
+      );
+      const priorityAttempt = runAttempt({
+        pool: priorityPool,
+        candidatePlayers: priorityPool.candidatePlayers,
+        lockedIds: new Set(
+          requiredPriorityPlayers.map((player) => player.userId)
+        ),
+      });
+
+      if (priorityAttempt?.selection) {
+        finalSelection = priorityAttempt.selection;
+      }
+    }
+  }
+
+  if (!finalSelection) {
+    const strictLockedIds = new Set(
+      candidatePool.lockedPlayers.map((player) => player.userId)
+    );
+    const strictAttempt = runAttempt({
+      pool: candidatePool,
+      candidatePlayers: limitBatchCandidatePlayers(
+        candidatePool,
+        requiredPlayerCount,
+        getMaxBatchCandidateCount(sessionType, requiredPlayerCount)
+      ),
+      lockedIds: strictLockedIds,
+    });
+
+    if (strictAttempt?.selection) {
+      finalSelection = strictAttempt.selection;
+    }
   }
 
   if (!finalSelection && sessionMode === SessionMode.MIXICANO) {

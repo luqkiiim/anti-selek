@@ -1,5 +1,6 @@
 import { SessionMode } from "../../../types/enums";
 import { getExactPartitionKey } from "../v3/rematch";
+import { sortArrivalPriorityPlayers } from "../arrivalPriority";
 import { evaluateBalancedPartitions } from "./balance";
 import { buildCandidatePool } from "./candidatePool";
 import { DEFAULT_MATCH_DURATION_MS } from "./fairness";
@@ -116,6 +117,34 @@ function buildFeasibilityCandidatePools<T extends MatchmakerLadderPlayer>(
   return variants;
 }
 
+function buildArrivalPriorityCandidatePools<T extends MatchmakerLadderPlayer>(
+  initialPool: LadderCandidatePool<ActiveMatchmakerLadderPlayer<T>>
+) {
+  return sortArrivalPriorityPlayers(initialPool.activePlayers).map(
+    (priorityPlayer) => {
+      const selectablePlayers = initialPool.activePlayers.filter(
+        (player) => player.userId !== priorityPlayer.userId
+      );
+
+      return {
+        ...initialPool,
+        lockedPlayers: [priorityPlayer],
+        requiredSelectableCount: 3,
+        selectablePlayers,
+        candidatePlayers: [priorityPlayer, ...selectablePlayers],
+        tieZone: null,
+        widened: true,
+        includedBandValues: [
+          ...new Set([
+            ...initialPool.includedBandValues,
+            priorityPlayer.effectiveMatchCount,
+          ]),
+        ].sort((left, right) => left - right),
+      };
+    }
+  );
+}
+
 export function findBestSingleCourtSelectionLadder<
   T extends MatchmakerLadderPlayer,
 >(
@@ -183,7 +212,10 @@ export function findBestSingleCourtSelectionLadder<
     };
   }
 
-  const candidatePools = buildFeasibilityCandidatePools(initialCandidatePool);
+  const candidatePools = [
+    ...buildArrivalPriorityCandidatePools(initialCandidatePool),
+    ...buildFeasibilityCandidatePools(initialCandidatePool),
+  ];
   let searchedCandidatePool = initialCandidatePool;
   let totalQuartetCount = 0;
   let totalValidPartitionCount = 0;

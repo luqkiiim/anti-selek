@@ -36,6 +36,56 @@ function createPlayer(
 }
 
 describe("ladder single-court selection", () => {
+  it("includes an arrival-priority late player before normal ladder grouping", () => {
+    const players = [
+      createPlayer("A", {
+        matchesPlayed: 4,
+        matchmakingBaseline: 4,
+        ladderScore: 5,
+      }),
+      createPlayer("B", {
+        matchesPlayed: 4,
+        matchmakingBaseline: 4,
+        ladderScore: 4,
+      }),
+      createPlayer("C", {
+        matchesPlayed: 4,
+        matchmakingBaseline: 4,
+        ladderScore: 3,
+      }),
+      createPlayer("D", {
+        matchesPlayed: 4,
+        matchmakingBaseline: 4,
+        ladderScore: 2,
+      }),
+      createPlayer("E", {
+        matchesPlayed: 4,
+        matchmakingBaseline: 4,
+        ladderScore: 1,
+      }),
+      createPlayer("F", {
+        matchesPlayed: 4,
+        matchmakingBaseline: 4,
+        ladderScore: 0,
+      }),
+      createPlayer("Late", {
+        matchesPlayed: 0,
+        matchmakingBaseline: 4,
+        availableSince: new Date("2026-03-18T00:59:00Z"),
+        arrivalPriorityAt: new Date("2026-03-18T00:58:00Z"),
+        ladderScore: -5,
+      }),
+    ];
+
+    const result = findBestSingleCourtSelectionLadder(players, {
+      sessionMode: SessionMode.MEXICANO,
+      now: new Date("2026-03-18T01:00:00Z").getTime(),
+      randomFn: () => 0,
+    });
+
+    expect(result.selection?.ids).toContain("Late");
+  });
+
   it("prefers closer ladder-score quartets inside the fair pool", () => {
     const players = [
       createPlayer("A", {

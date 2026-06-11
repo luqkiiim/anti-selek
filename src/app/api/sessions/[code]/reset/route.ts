@@ -97,6 +97,7 @@ export async function POST(
           pausedAt: null,
           joinedAt: resetAt,
           ladderEntryAt: resetAt,
+          arrivalPriorityAt: null,
           inactiveSeconds: 0,
         },
       });

@@ -19,6 +19,7 @@ import {
 import { canQuickAccessCommunity, isQuickAccessSession } from "@/lib/quickAccess";
 import { logError, safeErrorResponse } from "@/lib/errors";
 import { rateLimit, checkInvalidTargetRateLimit, invalidTargetResponse } from "@/lib/rateLimit";
+import { tryRebuildAutomaticQueuedMatchForSessionId } from "../queue-match/shared";
 import {
   PlayerGender,
   SessionMode,
@@ -189,6 +190,9 @@ export async function POST(
               })),
           })
         : 0;
+    const joinedAt = new Date();
+    const arrivalPriorityAt =
+      sessionData.status === SessionStatus.ACTIVE ? joinedAt : null;
 
     const updatedSession = await prisma.session.update({
       where: { id: sessionData.id },
@@ -206,9 +210,10 @@ export async function POST(
                 : SessionPool.A,
             sessionPoints: 0,
             matchmakingMatchesCredit,
-            joinedAt: new Date(),
-            ladderEntryAt: new Date(),
-            availableSince: new Date(),
+            joinedAt,
+            ladderEntryAt: joinedAt,
+            availableSince: joinedAt,
+            arrivalPriorityAt,
           },
         },
       },
@@ -249,8 +254,12 @@ export async function POST(
               await getCommunityEloByUserId(updatedSession.communityId, playerIds)
             )
           : updatedSession.players;
+    const queuedMatch =
+      sessionData.status === SessionStatus.ACTIVE
+        ? await tryRebuildAutomaticQueuedMatchForSessionId(sessionData.id)
+        : undefined;
 
-    return NextResponse.json({ ...updatedSession, players });
+    return NextResponse.json({ ...updatedSession, players, queuedMatch });
   } catch (error) {
     logError("Join session error", error);
     return safeErrorResponse();

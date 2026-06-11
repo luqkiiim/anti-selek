@@ -1,5 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { SessionStatus } from "@/types/enums";
+import {
+  PartnerPreference,
+  PlayerGender,
+  SessionMode,
+  SessionStatus,
+} from "@/types/enums";
 
 const mocks = vi.hoisted(() => ({
   auth: vi.fn(),
@@ -10,6 +15,7 @@ const mocks = vi.hoisted(() => ({
   sessionUpdate: vi.fn(),
   sessionPlayerFindUnique: vi.fn(),
   userFindUnique: vi.fn(),
+  tryRebuildAutomaticQueuedMatchForSessionId: vi.fn(),
 }));
 
 vi.mock("@/lib/auth", () => ({
@@ -41,6 +47,11 @@ vi.mock("@/lib/rateLimit", () => ({
   rateLimit: mocks.rateLimit,
 }));
 
+vi.mock("../queue-match/shared", () => ({
+  tryRebuildAutomaticQueuedMatchForSessionId:
+    mocks.tryRebuildAutomaticQueuedMatchForSessionId,
+}));
+
 import { POST } from "./route";
 
 function postJoin(body: unknown = {}) {
@@ -61,6 +72,7 @@ describe("join session route", () => {
     Object.values(mocks).forEach((mock) => mock.mockReset());
     mocks.rateLimit.mockResolvedValue(null);
     mocks.checkInvalidTargetRateLimit.mockResolvedValue(null);
+    mocks.tryRebuildAutomaticQueuedMatchForSessionId.mockResolvedValue(null);
     mocks.invalidTargetResponse.mockImplementation(() =>
       Response.json({ error: "Unauthorized" }, { status: 403 })
     );
@@ -88,5 +100,146 @@ describe("join session route", () => {
     expect(mocks.sessionPlayerFindUnique).not.toHaveBeenCalled();
     expect(mocks.userFindUnique).not.toHaveBeenCalled();
     expect(mocks.sessionUpdate).not.toHaveBeenCalled();
+  });
+
+  it("sets no-catch-up credit and arrival priority for active-session joins", async () => {
+    const now = new Date("2026-05-08T04:10:00.000Z");
+    vi.useFakeTimers();
+    vi.setSystemTime(now);
+
+    mocks.auth.mockResolvedValue({
+      user: {
+        id: "late-player",
+        isAdmin: false,
+      },
+    });
+    mocks.sessionFindUnique.mockResolvedValue({
+      id: "session-1",
+      communityId: null,
+      status: SessionStatus.ACTIVE,
+      mode: SessionMode.MEXICANO,
+      poolsEnabled: false,
+      players: [
+        { isPaused: false, matchesPlayed: 4, matchmakingMatchesCredit: 0 },
+        { isPaused: false, matchesPlayed: 5, matchmakingMatchesCredit: 0 },
+      ],
+    });
+    mocks.sessionPlayerFindUnique.mockResolvedValue(null);
+    mocks.userFindUnique.mockResolvedValue({
+      gender: PlayerGender.MALE,
+      partnerPreference: PartnerPreference.OPEN,
+      mixedSideOverride: null,
+    });
+    mocks.sessionUpdate.mockImplementation(async (args) => ({
+      id: "session-1",
+      communityId: null,
+      courts: [],
+      players: [
+        {
+          userId: "late-player",
+          ...args.data.players.create,
+          user: {
+            id: "late-player",
+            name: "Late Player",
+            elo: 1000,
+            gender: PlayerGender.MALE,
+            partnerPreference: PartnerPreference.OPEN,
+            mixedSideOverride: null,
+          },
+        },
+      ],
+    }));
+
+    const response = await postJoin();
+
+    expect(response.status).toBe(200);
+    expect(mocks.sessionUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: {
+          players: {
+            create: expect.objectContaining({
+              userId: "late-player",
+              matchmakingMatchesCredit: 4,
+              joinedAt: now,
+              ladderEntryAt: now,
+              availableSince: now,
+              arrivalPriorityAt: now,
+            }),
+          },
+        },
+      })
+    );
+    expect(mocks.tryRebuildAutomaticQueuedMatchForSessionId).toHaveBeenCalledWith(
+      "session-1"
+    );
+
+    vi.useRealTimers();
+  });
+
+  it("does not set arrival priority for waiting-session joins", async () => {
+    const now = new Date("2026-05-08T04:10:00.000Z");
+    vi.useFakeTimers();
+    vi.setSystemTime(now);
+
+    mocks.auth.mockResolvedValue({
+      user: {
+        id: "early-player",
+        isAdmin: false,
+      },
+    });
+    mocks.sessionFindUnique.mockResolvedValue({
+      id: "session-1",
+      communityId: null,
+      status: SessionStatus.WAITING,
+      mode: SessionMode.MEXICANO,
+      poolsEnabled: false,
+      players: [],
+    });
+    mocks.sessionPlayerFindUnique.mockResolvedValue(null);
+    mocks.userFindUnique.mockResolvedValue({
+      gender: PlayerGender.MALE,
+      partnerPreference: PartnerPreference.OPEN,
+      mixedSideOverride: null,
+    });
+    mocks.sessionUpdate.mockImplementation(async (args) => ({
+      id: "session-1",
+      communityId: null,
+      courts: [],
+      players: [
+        {
+          userId: "early-player",
+          ...args.data.players.create,
+          user: {
+            id: "early-player",
+            name: "Early Player",
+            elo: 1000,
+            gender: PlayerGender.MALE,
+            partnerPreference: PartnerPreference.OPEN,
+            mixedSideOverride: null,
+          },
+        },
+      ],
+    }));
+
+    const response = await postJoin();
+
+    expect(response.status).toBe(200);
+    expect(mocks.sessionUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: {
+          players: {
+            create: expect.objectContaining({
+              matchmakingMatchesCredit: 0,
+              arrivalPriorityAt: null,
+            }),
+          },
+        },
+      })
+    );
+    expect(
+      mocks.tryRebuildAutomaticQueuedMatchForSessionId
+    ).not.toHaveBeenCalled();
+
+    vi.useRealTimers();
   });
 });

@@ -147,6 +147,51 @@ describe("matchmaking v3 single-court selection", () => {
     expect(result.selection?.partnerRepeatPenalty).toBeGreaterThan(0);
   });
 
+  it("includes an arrival-priority late player before normal rest scoring", () => {
+    const now = new Date("2026-03-18T01:00:00Z").getTime();
+    const players = [
+      createPlayer("A", {
+        matchesPlayed: 4,
+        matchmakingBaseline: 4,
+      }),
+      createPlayer("B", {
+        matchesPlayed: 4,
+        matchmakingBaseline: 4,
+      }),
+      createPlayer("C", {
+        matchesPlayed: 4,
+        matchmakingBaseline: 4,
+      }),
+      createPlayer("D", {
+        matchesPlayed: 4,
+        matchmakingBaseline: 4,
+      }),
+      createPlayer("E", {
+        matchesPlayed: 4,
+        matchmakingBaseline: 4,
+      }),
+      createPlayer("F", {
+        matchesPlayed: 4,
+        matchmakingBaseline: 4,
+      }),
+      createPlayer("Late", {
+        matchesPlayed: 0,
+        matchmakingBaseline: 4,
+        availableSince: new Date("2026-03-18T00:59:00Z"),
+        arrivalPriorityAt: new Date("2026-03-18T00:58:00Z"),
+      }),
+    ];
+
+    const result = findBestSingleCourtSelectionV3(players, {
+      sessionMode: SessionMode.MEXICANO,
+      sessionType: SessionType.POINTS,
+      now,
+      randomFn: () => 0,
+    });
+
+    expect(result.selection?.ids).toContain("Late");
+  });
+
   it("uses point difference after points balance ties", () => {
     const result = findBestSingleCourtSelectionV3(
       [

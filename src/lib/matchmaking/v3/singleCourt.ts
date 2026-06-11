@@ -1,4 +1,5 @@
 import { SessionMode, SessionType } from "../../../types/enums";
+import { sortArrivalPriorityPlayers } from "../arrivalPriority";
 import { buildCandidatePool } from "./candidatePool";
 import {
   buildConsecutivePlayHistory,
@@ -148,6 +149,34 @@ function buildFeasibilityCandidatePools<T extends MatchmakerV3Player>(
   }
 
   return variants;
+}
+
+function buildArrivalPriorityCandidatePools<T extends MatchmakerV3Player>(
+  initialPool: V3CandidatePool<ActiveMatchmakerV3Player<T>>
+) {
+  return sortArrivalPriorityPlayers(initialPool.activePlayers).map(
+    (priorityPlayer) => {
+      const selectablePlayers = initialPool.activePlayers.filter(
+        (player) => player.userId !== priorityPlayer.userId
+      );
+
+      return {
+        ...initialPool,
+        lockedPlayers: [priorityPlayer],
+        requiredSelectableCount: 3,
+        selectablePlayers,
+        candidatePlayers: [priorityPlayer, ...selectablePlayers],
+        tieZone: null,
+        widened: true,
+        includedBandValues: [
+          ...new Set([
+            ...initialPool.includedBandValues,
+            priorityPlayer.effectiveMatchCount,
+          ]),
+        ].sort((left, right) => left - right),
+      };
+    }
+  );
 }
 
 function relaxLockedPlayersForMixedFeasibility<T extends MatchmakerV3Player>(
@@ -408,7 +437,20 @@ export function findBestSingleCourtSelectionV3<T extends MatchmakerV3Player>(
     };
   }
 
-  const candidatePools = buildFeasibilityCandidatePools(initialCandidatePool);
+  const candidatePoolEntries = [
+    ...buildArrivalPriorityCandidatePools(initialCandidatePool).map(
+      (candidatePool) => ({
+        candidatePool,
+        requiresArrivalPriority: true,
+      })
+    ),
+    ...buildFeasibilityCandidatePools(initialCandidatePool).map(
+      (candidatePool) => ({
+        candidatePool,
+        requiresArrivalPriority: false,
+      })
+    ),
+  ];
   const rematchHistory = buildExactRematchHistory(completedMatches);
   const partnerHistory = buildPartnerRepeatHistory(completedMatches);
   const opponentHistory = buildOpponentRepeatHistory(completedMatches);
@@ -421,7 +463,7 @@ export function findBestSingleCourtSelectionV3<T extends MatchmakerV3Player>(
   let bestSelection: V3SingleCourtSelection<ActiveMatchmakerV3Player<T>> | null =
     null;
 
-  for (const candidatePool of candidatePools) {
+  for (const { candidatePool, requiresArrivalPriority } of candidatePoolEntries) {
     searchedCandidatePool = candidatePool;
 
     let candidatePoolSearch = searchCandidatePool({
@@ -443,7 +485,11 @@ export function findBestSingleCourtSelectionV3<T extends MatchmakerV3Player>(
     totalQuartetCount += candidatePoolSearch.quartetCount;
     totalValidPartitionCount += candidatePoolSearch.validPartitionCount;
 
-    if (!candidatePoolSearch.bestSelection && sessionMode === SessionMode.MIXICANO) {
+    if (
+      !requiresArrivalPriority &&
+      !candidatePoolSearch.bestSelection &&
+      sessionMode === SessionMode.MIXICANO
+    ) {
       const relaxedCandidatePool = relaxLockedPlayersForMixedFeasibility(candidatePool);
 
       if (relaxedCandidatePool) {

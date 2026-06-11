@@ -13,6 +13,7 @@ import { getSessionOperatorMembership } from "@/lib/sessionCollab";
 import { getSessionModeLabel } from "@/lib/sessionModeLabels";
 import { logError, safeErrorResponse } from "@/lib/errors";
 import { rateLimit, checkInvalidTargetRateLimit, invalidTargetResponse } from "@/lib/rateLimit";
+import { tryRebuildAutomaticQueuedMatchForSessionId } from "../queue-match/shared";
 import {
   PlayerGender,
   SessionMode,
@@ -167,6 +168,9 @@ export async function POST(
             activePlayers,
           })
         : 0;
+    const joinedAt = new Date();
+    const arrivalPriorityAt =
+      sessionData.status === SessionStatus.ACTIVE ? joinedAt : null;
 
     const createdGuest = await prisma.$transaction(async (tx) => {
       const user = await tx.user.create({
@@ -204,14 +208,19 @@ export async function POST(
               : SessionPool.A,
           sessionPoints: 0,
           matchmakingMatchesCredit,
-          joinedAt: new Date(),
-          ladderEntryAt: new Date(),
-          availableSince: new Date(),
+          joinedAt,
+          ladderEntryAt: joinedAt,
+          availableSince: joinedAt,
+          arrivalPriorityAt,
         },
       });
 
       return user;
     });
+    const queuedMatch =
+      sessionData.status === SessionStatus.ACTIVE
+        ? await tryRebuildAutomaticQueuedMatchForSessionId(sessionData.id)
+        : undefined;
 
     return NextResponse.json({
       id: createdGuest.id,
@@ -225,7 +234,8 @@ export async function POST(
         sessionData.poolsEnabled && isValidSessionPool(pool)
           ? pool
           : SessionPool.A,
-      ladderEntryAt: new Date().toISOString(),
+      ladderEntryAt: joinedAt.toISOString(),
+      queuedMatch,
     });
   } catch (error) {
     logError("Create guest error", error);

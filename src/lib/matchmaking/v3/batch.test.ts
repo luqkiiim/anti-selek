@@ -87,6 +87,33 @@ function expectLegalMixedBatch(
 }
 
 describe("matchmaking v3 batch selection", () => {
+  it("includes an arrival-priority late player in a legal batch", () => {
+    const players = ["A", "B", "C", "D", "E", "F", "G", "H"].map((userId) =>
+      createPlayer(userId, {
+        matchesPlayed: 4,
+        matchmakingBaseline: 4,
+      })
+    );
+    players.push(
+      createPlayer("Late", {
+        matchesPlayed: 0,
+        matchmakingBaseline: 4,
+        availableSince: new Date("2026-03-18T00:59:00Z"),
+        arrivalPriorityAt: new Date("2026-03-18T00:58:00Z"),
+      })
+    );
+
+    const result = findBestBatchSelectionV3(players, {
+      courtCount: 2,
+      sessionMode: SessionMode.MEXICANO,
+      sessionType: SessionType.POINTS,
+      now: new Date("2026-03-18T01:00:00Z").getTime(),
+      randomFn: () => 0,
+    });
+
+    expect(getBatchSelectedIds(result.selection)).toContain("Late");
+  });
+
   it("uses random tie-breaks instead of insertion order for tied points batches", () => {
     const players = Array.from({ length: 10 }, (_, index) =>
       createPlayer(String.fromCharCode(65 + index), { strength: 0 })
