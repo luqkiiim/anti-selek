@@ -166,7 +166,9 @@ describe("user avatar route", () => {
     const body = await response.json();
 
     expect(response.status).toBe(400);
-    expect(body.error).toBe("Uploaded avatar content is not a valid image.");
+    expect(body.error).toBe(
+      "The prepared avatar does not contain valid PNG image data. Try selecting the image again, or export it as JPG, PNG, or WebP."
+    );
     expect(mocks.uploadAvatarObject).not.toHaveBeenCalled();
   });
 
