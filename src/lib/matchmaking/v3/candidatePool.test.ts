@@ -9,10 +9,11 @@ function createPlayer(
     matchesPlayed = 0,
     matchmakingBaseline = matchesPlayed,
     availableSince = new Date("2026-03-18T00:00:00Z"),
+    restTurns = 0,
   }: Partial<
     Pick<
       MatchmakerV3Player,
-      "matchesPlayed" | "matchmakingBaseline" | "availableSince"
+      "matchesPlayed" | "matchmakingBaseline" | "availableSince" | "restTurns"
     >
   > = {}
 ): MatchmakerV3Player {
@@ -21,6 +22,7 @@ function createPlayer(
     matchesPlayed,
     matchmakingBaseline,
     availableSince,
+    restTurns,
     strength: 1000,
     isBusy: false,
     isPaused: false,
@@ -40,7 +42,6 @@ describe("matchmaking v3 candidate pool", () => {
       ],
       {
         requiredPlayerCount: 4,
-        now: new Date("2026-03-18T01:00:00Z").getTime(),
         randomFn: () => 0,
       }
     );
@@ -63,20 +64,19 @@ describe("matchmaking v3 candidate pool", () => {
         createPlayer("C", { matchesPlayed: 4 }),
         createPlayer("D", {
           matchesPlayed: 5,
-          availableSince: new Date("2026-03-18T00:10:00Z"),
+          restTurns: 2,
         }),
         createPlayer("E", {
           matchesPlayed: 5,
-          availableSince: new Date("2026-03-18T00:20:00Z"),
+          restTurns: 1,
         }),
         createPlayer("F", {
           matchesPlayed: 5,
-          availableSince: new Date("2026-03-18T00:30:00Z"),
+          restTurns: 0,
         }),
       ],
       {
         requiredPlayerCount: 4,
-        now: new Date("2026-03-18T01:00:00Z").getTime(),
         randomFn: () => 0,
       }
     );
@@ -105,7 +105,6 @@ describe("matchmaking v3 candidate pool", () => {
       ],
       {
         requiredPlayerCount: 5,
-        now: new Date("2026-03-18T01:00:00Z").getTime(),
         randomFn: () => 0,
       }
     );
@@ -118,31 +117,30 @@ describe("matchmaking v3 candidate pool", () => {
     ]);
   });
 
-  it("expands the final selection band by waiting-time tie zone", () => {
+  it("expands the final selection band by rest-turn tie zone", () => {
     const pool = buildCandidatePool(
       [
         createPlayer("A", { matchesPlayed: 4 }),
         createPlayer("B", { matchesPlayed: 4 }),
         createPlayer("C", {
           matchesPlayed: 5,
-          availableSince: new Date("2026-03-18T00:00:00Z"),
+          restTurns: 5,
         }),
         createPlayer("D", {
           matchesPlayed: 5,
-          availableSince: new Date("2026-03-18T00:08:00Z"),
+          restTurns: 4,
         }),
         createPlayer("E", {
           matchesPlayed: 5,
-          availableSince: new Date("2026-03-18T00:13:00Z"),
+          restTurns: 4,
         }),
         createPlayer("F", {
           matchesPlayed: 5,
-          availableSince: new Date("2026-03-18T00:50:00Z"),
+          restTurns: 3,
         }),
       ],
       {
         requiredPlayerCount: 4,
-        now: new Date("2026-03-18T01:00:00Z").getTime(),
         randomFn: () => 0,
       }
     );
@@ -179,7 +177,6 @@ describe("matchmaking v3 candidate pool", () => {
       ],
       {
         requiredPlayerCount: 4,
-        now: new Date("2026-03-18T01:00:00Z").getTime(),
         randomFn: () => 0,
       }
     );
@@ -202,7 +199,6 @@ describe("matchmaking v3 candidate pool", () => {
       [createPlayer("A"), createPlayer("B"), createPlayer("C")],
       {
         requiredPlayerCount: 4,
-        now: new Date("2026-03-18T01:00:00Z").getTime(),
         randomFn: () => 0,
       }
     );

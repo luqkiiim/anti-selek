@@ -6,7 +6,6 @@ import {
 import { evaluateBalancedPartitions } from "./balance";
 import { buildCandidatePool } from "./candidatePool";
 import { getEmptyConsecutivePlayMetrics } from "./consecutive";
-import { DEFAULT_MATCH_DURATION_MS } from "./fairness";
 import {
   buildExactRematchHistory,
   buildOpponentRepeatHistory,
@@ -20,8 +19,7 @@ import {
   getSharedCourtRepeatPenalty,
 } from "./rematch";
 import {
-  POINTS_WAIT_TOLERANCE_MS,
-  buildWaitSummary,
+  buildRestSummary,
   compareBatchSelections,
   compareSingleCourtSelections,
   getQuartetRandomScore,
@@ -168,7 +166,7 @@ function summarizeBatch<T extends ActiveMatchmakerV3Player>(
 
   return {
     selections,
-    waitSummary: buildWaitSummary(flattenedPlayers),
+    restSummary: buildRestSummary(flattenedPlayers),
     maxBalanceGap: Math.max(
       ...selections.map((selection) => selection.balanceGap)
     ),
@@ -279,7 +277,7 @@ function buildQuartetSelections<T extends MatchmakerV3Player>(
       string,
       string,
     ];
-    const waitSummary = buildWaitSummary(quartetPlayers);
+    const restSummary = buildRestSummary(quartetPlayers);
     const randomScore = getQuartetRandomScore(quartetPlayers);
 
     for (const evaluation of evaluateBalancedPartitions(
@@ -291,7 +289,7 @@ function buildQuartetSelections<T extends MatchmakerV3Player>(
         ids,
         players: quartetPlayers,
         partition: evaluation.partition,
-        waitSummary,
+        restSummary,
         balanceGap: evaluation.balanceGap,
         pointDiffGap: evaluation.pointDiffGap,
         sharedCourtRepeatPenalty: getSharedCourtRepeatPenalty(
@@ -773,8 +771,6 @@ export function findBestBatchSelectionV3<T extends MatchmakerV3Player>(
     sessionType,
     respectPlayerRest = true,
     completedMatches = [],
-    now = Date.now(),
-    matchDurationMs = DEFAULT_MATCH_DURATION_MS,
     randomFn = Math.random,
   }: {
     courtCount: number;
@@ -786,23 +782,13 @@ export function findBestBatchSelectionV3<T extends MatchmakerV3Player>(
       team2: [string, string];
       completedAt?: Date | null;
     }>;
-    now?: number;
-    matchDurationMs?: number;
     randomFn?: () => number;
   }
 ): V3BatchResult<ActiveMatchmakerV3Player<T>> {
   const requiredPlayerCount = courtCount * 4;
   const candidatePool = buildCandidatePool(players, {
     requiredPlayerCount,
-    now,
-    matchDurationMs,
     randomFn,
-    waitToleranceMs:
-      respectPlayerRest &&
-      (sessionType === SessionType.POINTS ||
-        sessionType === SessionType.SOCIAL_MIX)
-        ? POINTS_WAIT_TOLERANCE_MS
-        : 0,
   });
   const debug: V3BatchDebug = {
     eligiblePlayerIds: candidatePool.activePlayers.map((player) => player.userId),

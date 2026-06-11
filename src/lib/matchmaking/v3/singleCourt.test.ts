@@ -46,7 +46,6 @@ describe("matchmaking v3 single-court selection", () => {
             completedAt: new Date("2026-03-18T00:00:00Z"),
           },
         ],
-        now: new Date("2026-03-18T01:00:00Z").getTime(),
         randomFn: () => 0,
       }
     );
@@ -76,7 +75,6 @@ describe("matchmaking v3 single-court selection", () => {
             completedAt: new Date("2026-03-18T00:00:00Z"),
           },
         ],
-        now: new Date("2026-03-18T01:00:00Z").getTime(),
         randomFn: () => 0,
       }
     );
@@ -107,7 +105,6 @@ describe("matchmaking v3 single-court selection", () => {
             completedAt: new Date("2026-03-18T00:00:00Z"),
           },
         ],
-        now: new Date("2026-03-18T01:00:00Z").getTime(),
         randomFn: () => 0,
       }
     );
@@ -134,7 +131,6 @@ describe("matchmaking v3 single-court selection", () => {
             completedAt: new Date("2026-03-18T00:00:00Z"),
           },
         ],
-        now: new Date("2026-03-18T01:00:00Z").getTime(),
         randomFn: () => 0,
       }
     );
@@ -148,7 +144,6 @@ describe("matchmaking v3 single-court selection", () => {
   });
 
   it("includes an arrival-priority late player before normal rest scoring", () => {
-    const now = new Date("2026-03-18T01:00:00Z").getTime();
     const players = [
       createPlayer("A", {
         matchesPlayed: 4,
@@ -185,7 +180,6 @@ describe("matchmaking v3 single-court selection", () => {
     const result = findBestSingleCourtSelectionV3(players, {
       sessionMode: SessionMode.MEXICANO,
       sessionType: SessionType.POINTS,
-      now,
       randomFn: () => 0,
     });
 
@@ -203,7 +197,6 @@ describe("matchmaking v3 single-court selection", () => {
       {
         sessionMode: SessionMode.MEXICANO,
         sessionType: SessionType.POINTS,
-        now: new Date("2026-03-18T01:00:00Z").getTime(),
         randomFn: () => 0,
       }
     );
@@ -235,7 +228,6 @@ describe("matchmaking v3 single-court selection", () => {
             completedAt: new Date("2026-03-18T00:00:00Z"),
           },
         ],
-        now: new Date("2026-03-18T01:00:00Z").getTime(),
         randomFn: () => 0,
       }
     );
@@ -254,7 +246,6 @@ describe("matchmaking v3 single-court selection", () => {
       {
         sessionMode: SessionMode.MEXICANO,
         sessionType: SessionType.ELO,
-        now: new Date("2026-03-18T01:00:00Z").getTime(),
         randomFn: () => 0,
       }
     );
@@ -307,7 +298,6 @@ describe("matchmaking v3 single-court selection", () => {
       {
         sessionMode: SessionMode.MIXICANO,
         sessionType: SessionType.POINTS,
-        now: new Date("2026-03-18T01:00:00Z").getTime(),
         randomFn: () => 0,
       }
     );
@@ -362,7 +352,6 @@ describe("matchmaking v3 single-court selection", () => {
       {
         sessionMode: SessionMode.MIXICANO,
         sessionType: SessionType.POINTS,
-        now: new Date("2026-03-18T01:00:00Z").getTime(),
         randomFn: () => 0,
       }
     );
@@ -420,7 +409,6 @@ describe("matchmaking v3 single-court selection", () => {
       {
         sessionMode: SessionMode.MIXICANO,
         sessionType: SessionType.POINTS,
-        now: new Date("2026-03-18T01:00:00Z").getTime(),
         randomFn: () => 0,
       }
     );

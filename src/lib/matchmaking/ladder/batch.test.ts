@@ -57,7 +57,6 @@ describe("ladder batch selection", () => {
     const result = findBestBatchSelectionLadder(players, {
       courtCount: 2,
       sessionMode: SessionMode.MEXICANO,
-      now: new Date("2026-03-18T01:00:00Z").getTime(),
       randomFn: () => 0,
     });
 
@@ -114,44 +113,43 @@ describe("ladder batch selection", () => {
     ]);
   });
 
-  it("keeps full top and bottom ladder clusters together even when one low player finished recently", () => {
-    const now = new Date("2026-03-18T01:00:00Z").getTime();
+  it("keeps full top and bottom ladder clusters together when rest turns tie", () => {
     const players = [
       createPlayer("P1", {
         matchesPlayed: 5,
         wins: 2,
         losses: 0,
         pointDiff: 12,
-        availableSince: new Date("2026-03-18T00:35:00Z"),
+        restTurns: 1,
       }),
       createPlayer("P2", {
         matchesPlayed: 5,
         wins: 2,
         losses: 0,
         pointDiff: 10,
-        availableSince: new Date("2026-03-18T00:35:00Z"),
+        restTurns: 1,
       }),
       createPlayer("P3", {
         matchesPlayed: 5,
         wins: 2,
         losses: 0,
         pointDiff: 8,
-        availableSince: new Date("2026-03-18T00:35:00Z"),
+        restTurns: 1,
       }),
       createPlayer("P4", {
         matchesPlayed: 5,
         wins: 2,
         losses: 0,
         pointDiff: 6,
-        availableSince: new Date("2026-03-18T00:35:00Z"),
+        restTurns: 1,
       }),
-      ...Array.from({ length: 10 }, (_, index) =>
+      ...Array.from({ length: 4 }, (_, index) =>
         createPlayer(`Z${index + 1}`, {
           matchesPlayed: 5,
           wins: 1,
           losses: 1,
           pointDiff: 4 - index,
-          availableSince: new Date("2026-03-18T00:40:00Z"),
+          restTurns: 1,
         })
       ),
       createPlayer("N1", {
@@ -159,35 +157,34 @@ describe("ladder batch selection", () => {
         wins: 0,
         losses: 2,
         pointDiff: -6,
-        availableSince: new Date("2026-03-18T00:35:00Z"),
+        restTurns: 1,
       }),
       createPlayer("N2", {
         matchesPlayed: 5,
         wins: 0,
         losses: 2,
         pointDiff: -8,
-        availableSince: new Date("2026-03-18T00:35:00Z"),
+        restTurns: 1,
       }),
       createPlayer("N3", {
         matchesPlayed: 5,
         wins: 0,
         losses: 2,
         pointDiff: -10,
-        availableSince: new Date("2026-03-18T00:35:00Z"),
+        restTurns: 1,
       }),
       createPlayer("N4", {
         matchesPlayed: 5,
         wins: 0,
         losses: 2,
         pointDiff: -12,
-        availableSince: new Date("2026-03-18T00:58:00Z"),
+        restTurns: 1,
       }),
     ];
 
     const result = findBestBatchSelectionLadder(players, {
       courtCount: 3,
       sessionMode: SessionMode.MEXICANO,
-      now,
       randomFn: () => 0,
     });
 

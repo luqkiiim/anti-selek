@@ -99,10 +99,9 @@ function createReasonJson({
       partnerRepeatPenalty: 0,
       opponentRepeatPenalty: 0,
       exactRematchPenalty: 0,
-      waitRangeSeconds: 0,
-      minimumWaitSeconds: 0,
-      totalWaitSeconds: 0,
-      waitToleranceSeconds: 120,
+      restTurnRange: 0,
+      minimumRestTurns: 0,
+      totalRestTurns: 0,
       targetPool: null,
       missedPool: null,
       mixedMode: false,
@@ -362,7 +361,9 @@ describe("generate match route integration", () => {
         source: "v3",
         sessionType: SessionType.POINTS,
         metrics: expect.objectContaining({
-          waitToleranceSeconds: 120,
+          restTurnRange: 0,
+          minimumRestTurns: 0,
+          totalRestTurns: 0,
         }),
       })
     );

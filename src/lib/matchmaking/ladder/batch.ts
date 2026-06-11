@@ -2,10 +2,9 @@ import { SessionMode } from "../../../types/enums";
 import { sortArrivalPriorityPlayers } from "../arrivalPriority";
 import { findBestBalancedPartition } from "./balance";
 import { buildCandidatePool } from "./candidatePool";
-import { DEFAULT_MATCH_DURATION_MS } from "./fairness";
 import { buildLadderGroupingSummary } from "./ladderGrouping";
 import {
-  buildWaitSummary,
+  buildRestSummary,
   compareBatchSelections,
   compareSingleCourtSelections,
   getQuartetRandomScore,
@@ -105,7 +104,7 @@ function summarizeBatch<T extends ActiveMatchmakerLadderPlayer>(
 
   return {
     selections,
-    waitSummary: buildWaitSummary(flattenedPlayers),
+    restSummary: buildRestSummary(flattenedPlayers),
     maxLadderGap: Math.max(
       ...selections.map((selection) => selection.groupingSummary.maxLadderGap)
     ),
@@ -178,7 +177,7 @@ function buildQuartetSelections<T extends MatchmakerLadderPlayer>(
       ids,
       players: quartetPlayers,
       partition: bestPartition.partition,
-      waitSummary: buildWaitSummary(quartetPlayers),
+      restSummary: buildRestSummary(quartetPlayers),
       groupingSummary: buildLadderGroupingSummary(quartetPlayers),
       balanceGap: bestPartition.balanceGap,
       pointDiffGap: bestPartition.pointDiffGap,
@@ -511,25 +510,18 @@ export function findBestBatchSelectionLadder<T extends MatchmakerLadderPlayer>(
     courtCount,
     sessionMode,
     respectPlayerRest = true,
-    now = Date.now(),
-    matchDurationMs = DEFAULT_MATCH_DURATION_MS,
     randomFn = Math.random,
   }: {
     courtCount: number;
     sessionMode: SessionMode;
     respectPlayerRest?: boolean;
-    now?: number;
-    matchDurationMs?: number;
     randomFn?: () => number;
   }
 ): LadderBatchResult<ActiveMatchmakerLadderPlayer<T>> {
   const requiredPlayerCount = courtCount * 4;
   const initialCandidatePool = buildCandidatePool(players, {
     requiredPlayerCount,
-    now,
-    matchDurationMs,
     randomFn,
-    useWaitingTimeTieZone: false,
   });
   let searchedCandidatePool = initialCandidatePool;
   const debug: LadderBatchDebug = {

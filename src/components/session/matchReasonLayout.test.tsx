@@ -22,9 +22,9 @@ const matchReason: MatchmakingReason = {
     partnerRepeatPenalty: 0,
     opponentRepeatPenalty: 0,
     exactRematchPenalty: 0,
-    waitRangeSeconds: 0,
-    minimumWaitSeconds: 0,
-    totalWaitSeconds: 0,
+    restTurnRange: 0,
+    minimumRestTurns: 0,
+    totalRestTurns: 0,
     mixedMode: false,
   },
 };

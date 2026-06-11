@@ -22,6 +22,7 @@ import {
 } from "@/lib/sessionPools";
 import { getBusyPlayerIds } from "@/lib/matchmaking/busyFilter";
 import { buildV3MatchmakingReasonJson } from "@/lib/matchmaking/matchReason";
+import { buildRestTurnsByUserId } from "@/lib/matchmaking/restTurns";
 import {
   getCompetitiveEntryAt,
   deriveLadderRecordsByEntryTime,
@@ -63,6 +64,7 @@ type AvailableCandidate = {
   matchmakingMatchesCredit: number;
   matchmakingBaseline: number;
   availableSince: Date;
+  restTurns: number;
   arrivalPriorityAt: Date | null;
   strength: number;
   pool?: string | null;
@@ -101,7 +103,7 @@ function isV3Selection(
   return (
     "players" in selection &&
     Array.isArray(selection.players) &&
-    "waitSummary" in selection &&
+    "restSummary" in selection &&
     typeof selection.balanceGap === "number" &&
     typeof selection.pointDiffGap === "number" &&
     typeof selection.partnerRepeatPenalty === "number" &&
@@ -259,6 +261,10 @@ function buildV3Players(
   const availableUserIds = new Set(
     rankedCandidates.map((candidate) => candidate.userId)
   );
+  const restTurnsByUserId = buildRestTurnsByUserId(
+    sessionData.players,
+    buildCompletedMatches(sessionData)
+  );
 
   const orderedPlayers = [
     ...rankedCandidates
@@ -277,6 +283,7 @@ function buildV3Players(
     matchmakingBaseline:
       player.matchesPlayed + Math.max(0, player.matchmakingMatchesCredit ?? 0),
     availableSince: player.availableSince,
+    restTurns: restTurnsByUserId.get(player.userId) ?? 0,
     arrivalPriorityAt: player.arrivalPriorityAt ?? null,
     strength:
       playersById.get(player.userId)?.elo ??
@@ -303,6 +310,11 @@ function buildLadderPlayers(
   const availableUserIds = new Set(
     rankedCandidates.map((candidate) => candidate.userId)
   );
+  const completedMatches = buildCompletedMatches(sessionData);
+  const restTurnsByUserId = buildRestTurnsByUserId(
+    sessionData.players,
+    completedMatches
+  );
   const ladderEntryAtByUserId = new Map(
     sessionData.players.map((player) => [
       player.userId,
@@ -313,11 +325,11 @@ function buildLadderPlayers(
     sessionData.type === SessionType.RACE
       ? deriveRaceRecordsByEntryTime(
           ladderEntryAtByUserId,
-          buildCompletedMatches(sessionData)
+          completedMatches
         )
       : deriveLadderRecordsByEntryTime(
           ladderEntryAtByUserId,
-          buildCompletedMatches(sessionData)
+          completedMatches
         );
 
   return sessionData.players.map((player) => {
@@ -334,6 +346,7 @@ function buildLadderPlayers(
       matchmakingBaseline:
         player.matchesPlayed + Math.max(0, player.matchmakingMatchesCredit ?? 0),
       availableSince: player.availableSince,
+      restTurns: restTurnsByUserId.get(player.userId) ?? 0,
       arrivalPriorityAt: player.arrivalPriorityAt ?? null,
       strength: playersById.get(player.userId)?.elo ?? 0,
       wins: record.wins,
@@ -480,6 +493,10 @@ export function getRankedCandidates(
   sessionData: GenerateMatchSession,
   busyPlayerIds: Set<string>
 ) {
+  const restTurnsByUserId = buildRestTurnsByUserId(
+    sessionData.players,
+    buildCompletedMatches(sessionData)
+  );
   const availableCandidates: AvailableCandidate[] = sessionData.players
     .filter((player) => !busyPlayerIds.has(player.userId) && !player.isPaused)
     .map((player) => ({
@@ -492,6 +509,7 @@ export function getRankedCandidates(
       matchmakingBaseline:
         player.matchesPlayed + Math.max(0, player.matchmakingMatchesCredit ?? 0),
       availableSince: player.availableSince,
+      restTurns: restTurnsByUserId.get(player.userId) ?? 0,
       arrivalPriorityAt: player.arrivalPriorityAt ?? null,
       strength: 0,
       pool: player.pool,

@@ -107,7 +107,6 @@ describe("matchmaking v3 batch selection", () => {
       courtCount: 2,
       sessionMode: SessionMode.MEXICANO,
       sessionType: SessionType.POINTS,
-      now: new Date("2026-03-18T01:00:00Z").getTime(),
       randomFn: () => 0,
     });
 
@@ -123,7 +122,6 @@ describe("matchmaking v3 batch selection", () => {
       courtCount: 2,
       sessionMode: SessionMode.MEXICANO,
       sessionType: SessionType.POINTS,
-      now: new Date("2026-03-18T01:00:00Z").getTime(),
       randomFn: createSequenceRandom([
         0.9, 0.8, 0.7, 0.6, 0.1, 0.2, 0.3, 0.4, 0.5, 0,
       ]),
@@ -143,7 +141,6 @@ describe("matchmaking v3 batch selection", () => {
       courtCount: 2,
       sessionMode: SessionMode.MEXICANO,
       sessionType: SessionType.POINTS,
-      now: new Date("2026-03-18T01:00:00Z").getTime(),
       randomFn: createSequenceRandom([
         0.9, 0.8, 0.7, 0.6, 0.1, 0.2, 0.3, 0.4, 0.5, 0,
       ]),
@@ -152,7 +149,6 @@ describe("matchmaking v3 batch selection", () => {
       courtCount: 2,
       sessionMode: SessionMode.MEXICANO,
       sessionType: SessionType.POINTS,
-      now: new Date("2026-03-18T01:00:00Z").getTime(),
       randomFn: createSequenceRandom([
         0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.9, 0.8,
       ]),
@@ -182,7 +178,6 @@ describe("matchmaking v3 batch selection", () => {
       courtCount: 2,
       sessionMode: SessionMode.MEXICANO,
       sessionType: SessionType.POINTS,
-      now: new Date("2026-03-18T01:00:00Z").getTime(),
       randomFn: createSequenceRandom([
         0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3, 0.2, 0, 0.1,
       ]),
@@ -204,26 +199,25 @@ describe("matchmaking v3 batch selection", () => {
         createPlayer("F", { matchesPlayed: 4 }),
         createPlayer("G", {
           matchesPlayed: 5,
-          availableSince: new Date("2026-03-18T00:00:00Z"),
+          restTurns: 3,
         }),
         createPlayer("H", {
           matchesPlayed: 5,
-          availableSince: new Date("2026-03-18T00:05:00Z"),
+          restTurns: 2,
         }),
         createPlayer("I", {
           matchesPlayed: 5,
-          availableSince: new Date("2026-03-18T00:10:00Z"),
+          restTurns: 1,
         }),
         createPlayer("J", {
           matchesPlayed: 5,
-          availableSince: new Date("2026-03-18T00:12:00Z"),
+          restTurns: 1,
         }),
       ],
       {
         courtCount: 2,
         sessionMode: SessionMode.MEXICANO,
         sessionType: SessionType.ELO,
-        now: new Date("2026-03-18T01:00:00Z").getTime(),
         randomFn: () => 0,
       }
     );
@@ -264,7 +258,6 @@ describe("matchmaking v3 batch selection", () => {
             completedAt: new Date("2026-03-18T00:10:00Z"),
           },
         ],
-        now: new Date("2026-03-18T01:00:00Z").getTime(),
         randomFn: () => 0,
       }
     );
@@ -301,7 +294,6 @@ describe("matchmaking v3 batch selection", () => {
             completedAt: new Date("2026-03-18T00:10:00Z"),
           },
         ],
-        now: new Date("2026-03-18T01:00:00Z").getTime(),
         randomFn: () => 0,
       }
     );
@@ -337,7 +329,6 @@ describe("matchmaking v3 batch selection", () => {
             completedAt: new Date("2026-03-18T00:10:00Z"),
           },
         ],
-        now: new Date("2026-03-18T01:00:00Z").getTime(),
         randomFn: () => 0,
       }
     );
@@ -360,7 +351,6 @@ describe("matchmaking v3 batch selection", () => {
         courtCount: 1,
         sessionMode: SessionMode.MEXICANO,
         sessionType: SessionType.POINTS,
-        now: new Date("2026-03-18T01:00:00Z").getTime(),
         randomFn: () => 0,
       }
     );
@@ -394,7 +384,6 @@ describe("matchmaking v3 batch selection", () => {
         courtCount: 2,
         sessionMode: SessionMode.MIXICANO,
         sessionType: SessionType.POINTS,
-        now: new Date("2026-03-18T01:00:00Z").getTime(),
         randomFn: () => 0,
       }
     );
@@ -422,7 +411,6 @@ describe("matchmaking v3 batch selection", () => {
         courtCount: 2,
         sessionMode: SessionMode.MIXICANO,
         sessionType: SessionType.POINTS,
-        now: new Date("2026-03-18T01:00:00Z").getTime(),
         randomFn: () => 0,
       }
     );
@@ -443,7 +431,6 @@ describe("matchmaking v3 batch selection", () => {
         courtCount: 2,
         sessionMode: SessionMode.MIXICANO,
         sessionType: SessionType.POINTS,
-        now: new Date("2026-03-18T01:00:00Z").getTime(),
         randomFn: () => 0,
       }
     );
@@ -467,7 +454,6 @@ describe("matchmaking v3 batch selection", () => {
         courtCount: 2,
         sessionMode: SessionMode.MEXICANO,
         sessionType: SessionType.ELO,
-        now: new Date("2026-03-18T01:00:00Z").getTime(),
         randomFn: () => 0,
       }
     );

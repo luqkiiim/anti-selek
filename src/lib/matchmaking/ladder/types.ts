@@ -10,6 +10,7 @@ export interface MatchmakerLadderPlayer extends LadderRecord {
   matchesPlayed: number;
   matchmakingBaseline: number;
   availableSince: Date;
+  restTurns?: number;
   arrivalPriorityAt?: Date | string | null;
   strength: number;
   isBusy?: boolean;
@@ -34,7 +35,7 @@ export type ActiveMatchmakerLadderPlayer<
   T extends MatchmakerLadderPlayer = MatchmakerLadderPlayer,
 > = T & {
   effectiveMatchCount: number;
-  waitMs: number;
+  restTurns: number;
   randomScore: number;
   rank: number;
 };
@@ -46,12 +47,11 @@ export interface LadderFairnessBand<
   players: T[];
 }
 
-export interface LadderWaitingTimeTieZone<
+export interface LadderRestTurnTieZone<
   T extends ActiveMatchmakerLadderPlayer = ActiveMatchmakerLadderPlayer,
 > {
   requiredSlots: number;
-  cutoffWaitMs: number;
-  minimumIncludedWaitMs: number;
+  cutoffRestTurns: number;
   players: T[];
 }
 
@@ -71,7 +71,7 @@ export interface LadderCandidatePool<
   requiredSelectableCount: number;
   selectablePlayers: T[];
   candidatePlayers: T[];
-  tieZone: LadderWaitingTimeTieZone<T> | null;
+  tieZone: LadderRestTurnTieZone<T> | null;
 }
 
 export interface LadderDoublesPartition {
@@ -93,10 +93,10 @@ export interface LadderGroupingSummary {
   totalPointDiffGap: number;
 }
 
-export interface LadderWaitSummary {
-  totalWaitMs: number;
-  minimumWaitMs: number;
-  waitVector: number[];
+export interface LadderRestSummary {
+  totalRestTurns: number;
+  minimumRestTurns: number;
+  restTurnVector: number[];
 }
 
 export interface LadderSingleCourtSelection<
@@ -105,7 +105,7 @@ export interface LadderSingleCourtSelection<
   ids: [string, string, string, string];
   players: [T, T, T, T];
   partition: LadderDoublesPartition;
-  waitSummary: LadderWaitSummary;
+  restSummary: LadderRestSummary;
   groupingSummary: LadderGroupingSummary;
   balanceGap: number;
   pointDiffGap: number;
@@ -139,7 +139,7 @@ export interface LadderBatchSelection<
   T extends ActiveMatchmakerLadderPlayer = ActiveMatchmakerLadderPlayer,
 > {
   selections: LadderSingleCourtSelection<T>[];
-  waitSummary: LadderWaitSummary;
+  restSummary: LadderRestSummary;
   maxLadderGap: number;
   totalLadderGap: number;
   totalPointDiffGap: number;

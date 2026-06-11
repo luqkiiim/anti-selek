@@ -30,8 +30,7 @@ describe("matchmaking v3 entry", () => {
         createPlayer("B", { matchesPlayed: 4, isPaused: true }),
         createPlayer("C", { matchesPlayed: 2, matchmakingBaseline: 5 }),
         createPlayer("D", { matchesPlayed: 3, isBusy: true }),
-      ],
-      { now: new Date("2026-03-18T01:00:00Z").getTime() }
+      ]
     );
 
     expect(baseline).toBe(4);

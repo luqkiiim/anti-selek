@@ -1,5 +1,4 @@
 import { SessionMode, SessionType } from "@/types/enums";
-import { POINTS_WAIT_TOLERANCE_MS } from "./v3/scoring";
 import type {
   ActiveMatchmakerV3Player,
   V3SingleCourtSelection,
@@ -28,9 +27,12 @@ export interface MatchmakingReason {
     consecutivePlayCount?: number;
     consecutivePlayMaxBurden?: number;
     consecutivePlayTotalBurden?: number;
-    waitRangeSeconds: number;
-    minimumWaitSeconds: number;
-    totalWaitSeconds: number;
+    restTurnRange: number;
+    minimumRestTurns: number;
+    totalRestTurns: number;
+    waitRangeSeconds?: number;
+    minimumWaitSeconds?: number;
+    totalWaitSeconds?: number;
     waitToleranceSeconds?: number;
     targetPool?: string | null;
     missedPool?: string | null;
@@ -70,10 +72,6 @@ function roundMetric(value: number) {
   return Math.round(value * 10) / 10;
 }
 
-function secondsFromMs(value: number) {
-  return roundMetric(value / 1000);
-}
-
 function formatMetric(value: number) {
   return Number.isInteger(value) ? value.toString() : value.toFixed(1);
 }
@@ -89,10 +87,12 @@ function buildReasonSummary({
   sessionMode,
   sessionType,
   metrics,
+  respectPlayerRest,
 }: {
   sessionMode: SessionMode | string;
   sessionType: SessionType | string;
   metrics: MatchmakingReason["metrics"];
+  respectPlayerRest?: boolean;
 }) {
   const uniqueMatchCounts = [...new Set(metrics.selectedMatchCounts)].sort(
     (left, right) => left - right
@@ -128,11 +128,13 @@ function buildReasonSummary({
     );
   }
 
-  if (metrics.waitToleranceSeconds !== undefined) {
+  if (respectPlayerRest !== false && metrics.totalRestTurns > 0) {
     summary.push(
-      `Wait differences within ${formatMetric(
-        metrics.waitToleranceSeconds
-      )} seconds were treated as tied.`
+      `Rest priority used completed-match turns: selected players had ${formatMetric(
+        metrics.totalRestTurns
+      )} total rest turn${
+        metrics.totalRestTurns === 1 ? "" : "s"
+      }, with minimum ${formatMetric(metrics.minimumRestTurns)}.`
     );
   }
 
@@ -217,9 +219,9 @@ export function buildV3MatchmakingReason<
   const selectedMatchCounts = selection.players.map(
     (player) => player.effectiveMatchCount
   );
-  const waitValues = selection.waitSummary.waitVector;
-  const maxWaitMs = waitValues[0] ?? 0;
-  const minWaitMs = waitValues[waitValues.length - 1] ?? 0;
+  const restTurnValues = selection.restSummary.restTurnVector;
+  const maxRestTurns = restTurnValues[0] ?? 0;
+  const minRestTurns = restTurnValues[restTurnValues.length - 1] ?? 0;
   const metrics: MatchmakingReason["metrics"] = {
     fairnessBand:
       selectedMatchCounts.length > 0 ? Math.min(...selectedMatchCounts) : null,
@@ -232,9 +234,9 @@ export function buildV3MatchmakingReason<
     partnerRepeatPenalty: selection.partnerRepeatPenalty,
     opponentRepeatPenalty: selection.opponentRepeatPenalty,
     exactRematchPenalty: selection.exactRematchPenalty,
-    waitRangeSeconds: secondsFromMs(maxWaitMs - minWaitMs),
-    minimumWaitSeconds: secondsFromMs(selection.waitSummary.minimumWaitMs),
-    totalWaitSeconds: secondsFromMs(selection.waitSummary.totalWaitMs),
+    restTurnRange: maxRestTurns - minRestTurns,
+    minimumRestTurns: selection.restSummary.minimumRestTurns,
+    totalRestTurns: selection.restSummary.totalRestTurns,
     targetPool: context.targetPool ?? null,
     missedPool: context.missedPool ?? null,
     mixedMode: context.sessionMode === SessionMode.MIXICANO,
@@ -251,14 +253,6 @@ export function buildV3MatchmakingReason<
     metrics.consecutivePlayTotalBurden = selection.consecutivePlayTotalBurden;
   }
 
-  if (
-    context.respectPlayerRest !== false &&
-    (context.sessionType === SessionType.POINTS ||
-      context.sessionType === SessionType.SOCIAL_MIX)
-  ) {
-    metrics.waitToleranceSeconds = secondsFromMs(POINTS_WAIT_TOLERANCE_MS);
-  }
-
   return {
     version: 1,
     source: "v3",
@@ -271,6 +265,7 @@ export function buildV3MatchmakingReason<
       sessionMode: context.sessionMode,
       sessionType: context.sessionType,
       metrics,
+      respectPlayerRest: context.respectPlayerRest,
     }),
     metrics,
   };
@@ -308,6 +303,17 @@ export function parseMatchmakingReasonJson(
   }
 
   const metrics = parsed.metrics;
+  const hasRestTurnMetrics =
+    isRecord(metrics) &&
+    typeof metrics.restTurnRange === "number" &&
+    typeof metrics.minimumRestTurns === "number" &&
+    typeof metrics.totalRestTurns === "number";
+  const hasLegacyWaitMetrics =
+    isRecord(metrics) &&
+    typeof metrics.waitRangeSeconds === "number" &&
+    typeof metrics.minimumWaitSeconds === "number" &&
+    typeof metrics.totalWaitSeconds === "number";
+
   if (
     typeof parsed.sessionType !== "string" ||
     typeof parsed.sessionMode !== "string" ||
@@ -321,9 +327,7 @@ export function parseMatchmakingReasonJson(
     typeof metrics.partnerRepeatPenalty !== "number" ||
     typeof metrics.opponentRepeatPenalty !== "number" ||
     typeof metrics.exactRematchPenalty !== "number" ||
-    typeof metrics.waitRangeSeconds !== "number" ||
-    typeof metrics.minimumWaitSeconds !== "number" ||
-    typeof metrics.totalWaitSeconds !== "number" ||
+    (!hasRestTurnMetrics && !hasLegacyWaitMetrics) ||
     typeof metrics.mixedMode !== "boolean"
   ) {
     return null;
@@ -392,6 +396,25 @@ export function parseMatchmakingReasonJson(
     return null;
   }
 
+  const restTurnRange = hasRestTurnMetrics
+    ? (metrics.restTurnRange as number)
+    : 0;
+  const minimumRestTurns = hasRestTurnMetrics
+    ? (metrics.minimumRestTurns as number)
+    : 0;
+  const totalRestTurns = hasRestTurnMetrics
+    ? (metrics.totalRestTurns as number)
+    : 0;
+  const waitRangeSeconds = hasLegacyWaitMetrics
+    ? (metrics.waitRangeSeconds as number)
+    : undefined;
+  const minimumWaitSeconds = hasLegacyWaitMetrics
+    ? (metrics.minimumWaitSeconds as number)
+    : undefined;
+  const totalWaitSeconds = hasLegacyWaitMetrics
+    ? (metrics.totalWaitSeconds as number)
+    : undefined;
+
   return {
     version: 1,
     source: "v3",
@@ -415,9 +438,12 @@ export function parseMatchmakingReasonJson(
       consecutivePlayCount: metrics.consecutivePlayCount,
       consecutivePlayMaxBurden: metrics.consecutivePlayMaxBurden,
       consecutivePlayTotalBurden: metrics.consecutivePlayTotalBurden,
-      waitRangeSeconds: metrics.waitRangeSeconds,
-      minimumWaitSeconds: metrics.minimumWaitSeconds,
-      totalWaitSeconds: metrics.totalWaitSeconds,
+      restTurnRange,
+      minimumRestTurns,
+      totalRestTurns,
+      waitRangeSeconds,
+      minimumWaitSeconds,
+      totalWaitSeconds,
       waitToleranceSeconds: metrics.waitToleranceSeconds,
       targetPool:
         typeof metrics.targetPool === "string" ? metrics.targetPool : null,

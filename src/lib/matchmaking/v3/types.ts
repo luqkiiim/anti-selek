@@ -3,6 +3,7 @@ export interface MatchmakerV3Player {
   matchesPlayed: number;
   matchmakingBaseline: number;
   availableSince: Date;
+  restTurns?: number;
   arrivalPriorityAt?: Date | string | null;
   strength: number;
   pointDiff?: number;
@@ -25,7 +26,7 @@ export type ActiveMatchmakerV3Player<
   T extends MatchmakerV3Player = MatchmakerV3Player,
 > = T & {
   effectiveMatchCount: number;
-  waitMs: number;
+  restTurns: number;
   randomScore: number;
   rank: number;
 };
@@ -37,12 +38,11 @@ export interface V3FairnessBand<
   players: T[];
 }
 
-export interface V3WaitingTimeTieZone<
+export interface V3RestTurnTieZone<
   T extends ActiveMatchmakerV3Player = ActiveMatchmakerV3Player,
 > {
   requiredSlots: number;
-  cutoffWaitMs: number;
-  minimumIncludedWaitMs: number;
+  cutoffRestTurns: number;
   players: T[];
 }
 
@@ -58,10 +58,10 @@ export interface V3BalancedPartition {
   mixedSideGap: number;
 }
 
-export interface V3WaitSummary {
-  totalWaitMs: number;
-  minimumWaitMs: number;
-  waitVector: number[];
+export interface V3RestSummary {
+  totalRestTurns: number;
+  minimumRestTurns: number;
+  restTurnVector: number[];
 }
 
 export interface V3CandidatePool<
@@ -80,7 +80,7 @@ export interface V3CandidatePool<
   requiredSelectableCount: number;
   selectablePlayers: T[];
   candidatePlayers: T[];
-  tieZone: V3WaitingTimeTieZone<T> | null;
+  tieZone: V3RestTurnTieZone<T> | null;
 }
 
 export interface V3SingleCourtSelection<
@@ -89,7 +89,7 @@ export interface V3SingleCourtSelection<
   ids: [string, string, string, string];
   players: [T, T, T, T];
   partition: V3DoublesPartition;
-  waitSummary: V3WaitSummary;
+  restSummary: V3RestSummary;
   balanceGap: number;
   pointDiffGap: number;
   sharedCourtRepeatPenalty: number;
@@ -136,7 +136,7 @@ export interface V3BatchSelection<
   T extends ActiveMatchmakerV3Player = ActiveMatchmakerV3Player,
 > {
   selections: V3SingleCourtSelection<T>[];
-  waitSummary: V3WaitSummary;
+  restSummary: V3RestSummary;
   maxBalanceGap: number;
   totalBalanceGap: number;
   maxPointDiffGap: number;

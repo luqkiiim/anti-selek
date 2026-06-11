@@ -2,10 +2,8 @@ import type {
   ActiveMatchmakerV3Player,
   MatchmakerV3Player,
   V3FairnessBand,
-  V3WaitingTimeTieZone,
+  V3RestTurnTieZone,
 } from "./types";
-
-export const DEFAULT_MATCH_DURATION_MS = 15 * 60 * 1000;
 
 export function getEffectiveMatchCount(
   player: Pick<MatchmakerV3Player, "matchesPlayed" | "matchmakingBaseline">
@@ -16,13 +14,9 @@ export function getEffectiveMatchCount(
 export function buildActivePlayers<T extends MatchmakerV3Player>(
   players: T[],
   {
-    now = Date.now(),
     randomFn = Math.random,
-    waitToleranceMs = 0,
   }: {
-    now?: number;
     randomFn?: () => number;
-    waitToleranceMs?: number;
   } = {}
 ): ActiveMatchmakerV3Player<T>[] {
   return players
@@ -30,7 +24,7 @@ export function buildActivePlayers<T extends MatchmakerV3Player>(
     .map((player) => ({
       ...player,
       effectiveMatchCount: getEffectiveMatchCount(player),
-      waitMs: Math.max(0, now - player.availableSince.getTime()),
+      restTurns: Math.max(0, player.restTurns ?? 0),
       randomScore: randomFn(),
       rank: 0,
     }))
@@ -39,9 +33,8 @@ export function buildActivePlayers<T extends MatchmakerV3Player>(
         return left.effectiveMatchCount - right.effectiveMatchCount;
       }
 
-      const waitDiff = right.waitMs - left.waitMs;
-      if (Math.abs(waitDiff) > waitToleranceMs) {
-        return waitDiff;
+      if (left.restTurns !== right.restTurns) {
+        return right.restTurns - left.restTurns;
       }
 
       return left.randomScore - right.randomScore;
@@ -75,17 +68,12 @@ export function buildFairnessBands<
     }));
 }
 
-export function buildWaitingTimeTieZone<
+export function buildRestTurnTieZone<
   T extends ActiveMatchmakerV3Player,
 >(
   players: T[],
-  requiredSlots: number,
-  {
-    matchDurationMs = DEFAULT_MATCH_DURATION_MS,
-  }: {
-    matchDurationMs?: number;
-  } = {}
-): V3WaitingTimeTieZone<T> | null {
+  requiredSlots: number
+): V3RestTurnTieZone<T> | null {
   if (requiredSlots <= 0 || players.length <= requiredSlots) {
     return null;
   }
@@ -95,18 +83,13 @@ export function buildWaitingTimeTieZone<
     return null;
   }
 
-  const minimumIncludedWaitMs = Math.max(
-    0,
-    cutoffPlayer.waitMs - matchDurationMs
-  );
   const tieZonePlayers = players.filter(
-    (player) => player.waitMs >= minimumIncludedWaitMs
+    (player) => player.restTurns >= cutoffPlayer.restTurns
   );
 
   return {
     requiredSlots,
-    cutoffWaitMs: cutoffPlayer.waitMs,
-    minimumIncludedWaitMs,
+    cutoffRestTurns: cutoffPlayer.restTurns,
     players: tieZonePlayers,
   };
 }

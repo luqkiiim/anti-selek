@@ -1,7 +1,6 @@
 import { SessionMode, SessionType } from "../../../types/enums";
 import { getNeutralMatchmakingBaseline } from "./entry";
 import { findBestBatchSelectionV3 } from "./batch";
-import { DEFAULT_MATCH_DURATION_MS } from "./fairness";
 import { findBestSingleCourtSelectionV3 } from "./singleCourt";
 
 import type {
@@ -10,6 +9,8 @@ import type {
   V3CompletedMatch,
   V3SingleCourtSelection,
 } from "./types";
+
+const DEFAULT_SIMULATION_MATCH_DURATION_MS = 15 * 60 * 1000;
 
 export interface V3SimulationPlayer extends MatchmakerV3Player {
   joinedAt: Date;
@@ -48,6 +49,7 @@ export function createSimulationPlayers(
     matchesPlayed: 0,
     matchmakingBaseline: 0,
     availableSince: joinedAt,
+    restTurns: 0,
     strength: baseStrength + (count - index) * strengthStep,
     isBusy: false,
     isPaused: false,
@@ -62,7 +64,7 @@ export function createSimulationState<T extends V3SimulationPlayer>(
   players: T[],
   {
     now = players[0]?.availableSince.getTime() ?? Date.now(),
-    matchDurationMs = DEFAULT_MATCH_DURATION_MS,
+    matchDurationMs = DEFAULT_SIMULATION_MATCH_DURATION_MS,
   }: {
     now?: number;
     matchDurationMs?: number;
@@ -101,7 +103,6 @@ export function resumePlayers<T extends V3SimulationPlayer>(
     (player) => !player.isPaused && !player.isBusy && !resumedUserIds.has(player.userId)
   );
   const neutralBaseline = getNeutralMatchmakingBaseline(activePlayers, {
-    now: state.now,
     randomFn,
   });
 
@@ -115,6 +116,7 @@ export function resumePlayers<T extends V3SimulationPlayer>(
             neutralBaseline
           ),
           availableSince: new Date(state.now),
+          restTurns: 0,
           arrivalPriorityAt: new Date(state.now),
         }
       : player
@@ -134,7 +136,6 @@ export function addLateJoiner<T extends V3SimulationPlayer>(
     (candidate) => !candidate.isPaused && !candidate.isBusy
   );
   const neutralBaseline = getNeutralMatchmakingBaseline(activePlayers, {
-    now: state.now,
     randomFn,
   });
 
@@ -147,6 +148,7 @@ export function addLateJoiner<T extends V3SimulationPlayer>(
         neutralBaseline
       ),
       availableSince: new Date(state.now),
+      restTurns: 0,
       joinedAt: new Date(state.now),
       arrivalPriorityAt: new Date(state.now),
     },
@@ -172,8 +174,6 @@ export function chooseRoundSelections<T extends V3SimulationPlayer>(
       sessionMode,
       sessionType,
       completedMatches: state.completedMatches,
-      now: state.now,
-      matchDurationMs: state.matchDurationMs,
       randomFn,
     });
 
@@ -185,8 +185,6 @@ export function chooseRoundSelections<T extends V3SimulationPlayer>(
     sessionMode,
     sessionType,
     completedMatches: state.completedMatches,
-    now: state.now,
-    matchDurationMs: state.matchDurationMs,
     randomFn,
   });
 
@@ -209,25 +207,33 @@ export function applyRoundSelections<T extends V3SimulationPlayer>(
 
   const selectedIds = new Set(selections.flatMap((selection) => selection.ids));
 
-  state.players = state.players.map((player) =>
-    selectedIds.has(player.userId)
-      ? (() => {
-          const hasPersistentCredit =
-            player.matchmakingBaseline > player.matchesPlayed;
+  state.players = state.players.map((player) => {
+    if (selectedIds.has(player.userId)) {
+      const hasPersistentCredit =
+        player.matchmakingBaseline > player.matchesPlayed;
 
-          return {
-            ...player,
-            matchesPlayed: player.matchesPlayed + 1,
-            matchmakingBaseline: hasPersistentCredit
-              ? player.matchmakingBaseline + 1
-              : player.matchmakingBaseline,
-            availableSince: roundEnd,
-            arrivalPriorityAt: null,
-            lastPartnerId: partnerByUserId.get(player.userId) ?? null,
-          };
-        })()
-      : player
-  );
+      return {
+        ...player,
+        matchesPlayed: player.matchesPlayed + 1,
+        matchmakingBaseline: hasPersistentCredit
+          ? player.matchmakingBaseline + 1
+          : player.matchmakingBaseline,
+        availableSince: roundEnd,
+        restTurns: 0,
+        arrivalPriorityAt: null,
+        lastPartnerId: partnerByUserId.get(player.userId) ?? null,
+      };
+    }
+
+    if (!player.isPaused && !player.isBusy && selections.length > 0) {
+      return {
+        ...player,
+        restTurns: Math.max(0, player.restTurns ?? 0) + selections.length,
+      };
+    }
+
+    return player;
+  });
 
   state.completedMatches.push(
     ...selections.map((selection) => ({

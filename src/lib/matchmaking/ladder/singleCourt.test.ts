@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { PartnerPreference, PlayerGender, SessionMode } from "../../../types/enums";
 import { findBestSingleCourtSelectionLadder } from "./singleCourt";
 import { buildLadderGroupingSummary } from "./ladderGrouping";
-import { buildWaitSummary, compareSingleCourtSelections } from "./scoring";
+import { buildRestSummary, compareSingleCourtSelections } from "./scoring";
 import type {
   ActiveMatchmakerLadderPlayer,
   LadderSingleCourtSelection,
@@ -79,7 +79,6 @@ describe("ladder single-court selection", () => {
 
     const result = findBestSingleCourtSelectionLadder(players, {
       sessionMode: SessionMode.MEXICANO,
-      now: new Date("2026-03-18T01:00:00Z").getTime(),
       randomFn: () => 0,
     });
 
@@ -174,55 +173,54 @@ describe("ladder single-court selection", () => {
     expect(result.selection?.pointDiffGap).toBe(11.5);
   });
 
-  it("does not let longer wait time override a cleaner ladder grouping inside one fairness band", () => {
+  it("does not let higher rest turns override a cleaner ladder grouping inside one fairness band", () => {
     const players = [
       createPlayer("A", {
         matchesPlayed: 5,
         wins: 1,
         losses: 1,
         pointDiff: 4,
-        availableSince: new Date("2026-03-18T00:55:00Z"),
+        restTurns: 0,
       }),
       createPlayer("B", {
         matchesPlayed: 5,
         wins: 1,
         losses: 1,
         pointDiff: 3,
-        availableSince: new Date("2026-03-18T00:55:00Z"),
+        restTurns: 0,
       }),
       createPlayer("C", {
         matchesPlayed: 5,
         wins: 1,
         losses: 1,
         pointDiff: 2,
-        availableSince: new Date("2026-03-18T00:55:00Z"),
+        restTurns: 0,
       }),
       createPlayer("D", {
         matchesPlayed: 5,
         wins: 1,
         losses: 1,
         pointDiff: 1,
-        availableSince: new Date("2026-03-18T00:55:00Z"),
+        restTurns: 0,
       }),
       createPlayer("E", {
         matchesPlayed: 5,
         wins: 3,
         losses: 1,
         pointDiff: 11,
-        availableSince: new Date("2026-03-18T00:00:00Z"),
+        restTurns: 3,
       }),
       createPlayer("F", {
         matchesPlayed: 5,
         wins: 0,
         losses: 2,
         pointDiff: -9,
-        availableSince: new Date("2026-03-18T00:00:00Z"),
+        restTurns: 3,
       }),
     ];
 
     const result = findBestSingleCourtSelectionLadder(players, {
       sessionMode: SessionMode.MEXICANO,
-      now: new Date("2026-03-18T01:00:00Z").getTime(),
       randomFn: () => 0,
     });
 
@@ -230,10 +228,10 @@ describe("ladder single-court selection", () => {
     expect(result.selection?.groupingSummary.maxLadderGap).toBe(0);
   });
 
-  it("ignores wait preference in ladder when player rest is disabled", () => {
+  it("ignores rest-turn preference in ladder when player rest is disabled", () => {
     const createSelection = (
       userIds: [string, string, string, string],
-      waitMs: number[],
+      restTurns: number[],
       randomScore: number
     ): LadderSingleCourtSelection<ActiveMatchmakerLadderPlayer> => {
       const players = userIds.map((userId, index) =>
@@ -252,7 +250,7 @@ describe("ladder single-court selection", () => {
           isBusy: false,
           isPaused: false,
           effectiveMatchCount: 5,
-          waitMs: waitMs[index],
+          restTurns: restTurns[index],
           randomScore,
           rank: index,
         }) satisfies ActiveMatchmakerLadderPlayer
@@ -270,7 +268,7 @@ describe("ladder single-court selection", () => {
           team1: [userIds[0], userIds[3]],
           team2: [userIds[1], userIds[2]],
         },
-        waitSummary: buildWaitSummary(players),
+        restSummary: buildRestSummary(players),
         groupingSummary: buildLadderGroupingSummary(players),
         balanceGap: 0,
         pointDiffGap: 0,
@@ -279,29 +277,29 @@ describe("ladder single-court selection", () => {
       };
     };
 
-    const shorterWait = createSelection(
+    const lowerRest = createSelection(
       ["A", "B", "C", "D"],
       [0, 0, 0, 0],
       0
     );
-    const longerWait = createSelection(
+    const higherRest = createSelection(
       ["E", "F", "G", "H"],
-      [300000, 300000, 300000, 300000],
+      [3, 3, 3, 3],
       1
     );
 
     expect(
       compareSingleCourtSelections(
-        longerWait,
-        shorterWait,
+        higherRest,
+        lowerRest,
         SessionMode.MEXICANO
       )
     ).toBeLessThan(0);
 
     expect(
       compareSingleCourtSelections(
-        shorterWait,
-        longerWait,
+        lowerRest,
+        higherRest,
         SessionMode.MEXICANO,
         { respectPlayerRest: false }
       )

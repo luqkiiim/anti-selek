@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  MatchStatus,
   MixedSide,
   PartnerPreference,
   PlayerGender,
@@ -194,7 +195,7 @@ function createActiveV3Player(
     strength: 1000,
     pointDiff: 0,
     effectiveMatchCount: 0,
-    waitMs: 0,
+    restTurns: 0,
     randomScore: 0,
     rank: 0,
   };
@@ -214,7 +215,7 @@ function createActiveLadderPlayer(
     pointDiff: 0,
     ladderScore: 0,
     effectiveMatchCount: 0,
-    waitMs: 0,
+    restTurns: 0,
     randomScore: 0,
     rank: 0,
   };
@@ -260,10 +261,10 @@ function createV3Selection(
     ids,
     players: createV3PlayersTuple(ids),
     partition,
-    waitSummary: {
-      totalWaitMs: 0,
-      minimumWaitMs: 0,
-      waitVector: [],
+    restSummary: {
+      totalRestTurns: 0,
+      minimumRestTurns: 0,
+      restTurnVector: [],
     },
     balanceGap: 0,
     pointDiffGap: 0,
@@ -290,10 +291,10 @@ function createLadderSelection(
     ids,
     players: createLadderPlayersTuple(ids),
     partition,
-    waitSummary: {
-      totalWaitMs: 0,
-      minimumWaitMs: 0,
-      waitVector: [],
+    restSummary: {
+      totalRestTurns: 0,
+      minimumRestTurns: 0,
+      restTurnVector: [],
     },
     groupingSummary: {
       maxLadderGap: 0,
@@ -640,16 +641,39 @@ describe("generate match service", () => {
           availableSince: new Date("2025-12-31T23:49:00Z"),
         }),
       ];
+      const completedMatch = {
+        id: "completed-1",
+        team1User1Id: "A",
+        team1User2Id: "A-partner",
+        team2User1Id: "A-opponent-1",
+        team2User2Id: "A-opponent-2",
+        team1Score: 21,
+        team2Score: 18,
+        status: MatchStatus.COMPLETED,
+        completedAt: new Date("2025-12-31T23:55:00Z"),
+      } as GenerateMatchSession["matches"][number];
 
       const { availableCandidates, rankedCandidates } =
-        getRankedCandidates(createSessionData({ players }), new Set());
+        getRankedCandidates(
+          createSessionData({ players, matches: [completedMatch] }),
+          new Set()
+        );
 
       expect(
         availableCandidates.find((candidate) => candidate.userId === "resumed")
           ?.matchmakingBaseline
       ).toBe(5);
-      expect(rankedCandidates[rankedCandidates.length - 1]?.userId).toBe(
-        "resumed"
+      expect(
+        availableCandidates.find((candidate) => candidate.userId === "B")
+          ?.restTurns
+      ).toBe(1);
+      expect(
+        rankedCandidates.find((candidate) => candidate.userId === "resumed")
+          ?.effectiveMatchCount
+      ).toBe(5);
+      expect(rankedCandidates[0]?.userId).toBe("B");
+      expect(rankedCandidates.map((candidate) => candidate.userId)).toEqual(
+        expect.arrayContaining(["resumed", "A"])
       );
     });
   });
@@ -1202,10 +1226,10 @@ describe("generate match service", () => {
             team2: ["C", "D"],
           }),
         ],
-        waitSummary: {
-          totalWaitMs: 0,
-          minimumWaitMs: 0,
-          waitVector: [],
+        restSummary: {
+          totalRestTurns: 0,
+          minimumRestTurns: 0,
+          restTurnVector: [],
         },
         maxBalanceGap: 0,
         totalBalanceGap: 0,
@@ -1266,10 +1290,10 @@ describe("generate match service", () => {
             team2: ["C", "D"],
           }),
         ],
-        waitSummary: {
-          totalWaitMs: 0,
-          minimumWaitMs: 0,
-          waitVector: [],
+        restSummary: {
+          totalRestTurns: 0,
+          minimumRestTurns: 0,
+          restTurnVector: [],
         },
         maxBalanceGap: 0,
         totalBalanceGap: 0,
@@ -1329,10 +1353,10 @@ describe("generate match service", () => {
             team2: ["C", "D"],
           }),
         ],
-        waitSummary: {
-          totalWaitMs: 0,
-          minimumWaitMs: 0,
-          waitVector: [],
+        restSummary: {
+          totalRestTurns: 0,
+          minimumRestTurns: 0,
+          restTurnVector: [],
         },
         maxLadderGap: 0,
         totalLadderGap: 0,
@@ -1390,10 +1414,10 @@ describe("generate match service", () => {
             team2: ["C", "D"],
           }),
         ],
-        waitSummary: {
-          totalWaitMs: 0,
-          minimumWaitMs: 0,
-          waitVector: [],
+        restSummary: {
+          totalRestTurns: 0,
+          minimumRestTurns: 0,
+          restTurnVector: [],
         },
         maxLadderGap: 0,
         totalLadderGap: 0,

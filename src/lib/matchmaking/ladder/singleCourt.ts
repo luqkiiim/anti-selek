@@ -3,10 +3,9 @@ import { getExactPartitionKey } from "../v3/rematch";
 import { sortArrivalPriorityPlayers } from "../arrivalPriority";
 import { evaluateBalancedPartitions } from "./balance";
 import { buildCandidatePool } from "./candidatePool";
-import { DEFAULT_MATCH_DURATION_MS } from "./fairness";
 import { buildLadderGroupingSummary } from "./ladderGrouping";
 import {
-  buildWaitSummary,
+  buildRestSummary,
   compareSingleCourtSelections,
   getQuartetRandomScore,
 } from "./scoring";
@@ -157,8 +156,6 @@ export function findBestSingleCourtSelectionLadder<
     targetPool,
     minimumTargetPoolPlayers,
     respectPlayerRest = true,
-    now = Date.now(),
-    matchDurationMs = DEFAULT_MATCH_DURATION_MS,
     randomFn = Math.random,
   }: {
     sessionMode: SessionMode;
@@ -168,17 +165,12 @@ export function findBestSingleCourtSelectionLadder<
     targetPool?: string;
     minimumTargetPoolPlayers?: number;
     respectPlayerRest?: boolean;
-    now?: number;
-    matchDurationMs?: number;
     randomFn?: () => number;
   }
 ): LadderSingleCourtResult<ActiveMatchmakerLadderPlayer<T>> {
   const initialCandidatePool = buildCandidatePool(players, {
     requiredPlayerCount: 4,
-    now,
-    matchDurationMs,
     randomFn,
-    useWaitingTimeTieZone: false,
   });
 
   if (
@@ -276,7 +268,7 @@ export function findBestSingleCourtSelectionLadder<
         continue;
       }
 
-      const waitSummary = buildWaitSummary(quartetPlayers);
+      const restSummary = buildRestSummary(quartetPlayers);
       const groupingSummary = buildLadderGroupingSummary(quartetPlayers);
       const randomScore = getQuartetRandomScore(quartetPlayers);
 
@@ -300,7 +292,7 @@ export function findBestSingleCourtSelectionLadder<
           ids,
           players: quartetPlayers,
           partition: evaluation.partition,
-          waitSummary,
+          restSummary,
           groupingSummary,
           balanceGap: evaluation.balanceGap,
           pointDiffGap: evaluation.pointDiffGap,

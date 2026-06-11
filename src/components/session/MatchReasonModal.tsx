@@ -8,8 +8,8 @@ function formatNumber(value: number) {
   return Number.isInteger(value) ? value.toString() : value.toFixed(1);
 }
 
-function formatSeconds(value: number) {
-  return `${formatNumber(value)}s`;
+function formatTurns(value: number) {
+  return `${formatNumber(value)} turn${value === 1 ? "" : "s"}`;
 }
 
 function buildMetricRows(reason: MatchmakingReason) {
@@ -39,12 +39,16 @@ function buildMetricRows(reason: MatchmakingReason) {
         ]
       : []),
     {
-      label: "Wait range",
-      value: formatSeconds(metrics.waitRangeSeconds),
+      label: "Rest range",
+      value: formatTurns(metrics.restTurnRange),
     },
     {
-      label: "Minimum wait",
-      value: formatSeconds(metrics.minimumWaitSeconds),
+      label: "Minimum rest",
+      value: formatTurns(metrics.minimumRestTurns),
+    },
+    {
+      label: "Total rest",
+      value: formatTurns(metrics.totalRestTurns),
     },
     ...(metrics.sharedCourtRepeatPenalty !== undefined
       ? [
@@ -99,13 +103,6 @@ function buildMetricRows(reason: MatchmakingReason) {
         ]
       : []),
   ];
-
-  if (metrics.waitToleranceSeconds !== undefined) {
-    rows.splice(5, 0, {
-      label: "Wait tolerance",
-      value: formatSeconds(metrics.waitToleranceSeconds),
-    });
-  }
 
   if (
     reason.sessionType !== SessionType.POINTS &&

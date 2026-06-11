@@ -6,7 +6,6 @@ import {
   getConsecutivePlayMetrics,
 } from "./consecutive";
 import { evaluateBalancedPartitions } from "./balance";
-import { DEFAULT_MATCH_DURATION_MS } from "./fairness";
 import {
   buildExactRematchHistory,
   buildOpponentRepeatHistory,
@@ -21,8 +20,7 @@ import {
   getSharedCourtRepeatPenalty,
 } from "./rematch";
 import {
-  POINTS_WAIT_TOLERANCE_MS,
-  buildWaitSummary,
+  buildRestSummary,
   compareSingleCourtSelections,
   getQuartetRandomScore,
 } from "./scoring";
@@ -277,7 +275,7 @@ function searchCandidatePool<T extends MatchmakerV3Player>({
       continue;
     }
 
-    const waitSummary = buildWaitSummary(quartetPlayers);
+    const restSummary = buildRestSummary(quartetPlayers);
     const randomScore = getQuartetRandomScore(quartetPlayers);
     const consecutivePlayMetrics = getConsecutivePlayMetrics(
       ids,
@@ -302,7 +300,7 @@ function searchCandidatePool<T extends MatchmakerV3Player>({
         ids,
         players: quartetPlayers,
         partition: evaluation.partition,
-        waitSummary,
+        restSummary,
         balanceGap: evaluation.balanceGap,
         pointDiffGap: evaluation.pointDiffGap,
         sharedCourtRepeatPenalty: getSharedCourtRepeatPenalty(
@@ -365,8 +363,6 @@ export function findBestSingleCourtSelectionV3<T extends MatchmakerV3Player>(
     targetPool,
     minimumTargetPoolPlayers,
     respectPlayerRest = true,
-    now = Date.now(),
-    matchDurationMs = DEFAULT_MATCH_DURATION_MS,
     randomFn = Math.random,
   }: {
     sessionMode: SessionMode;
@@ -382,22 +378,12 @@ export function findBestSingleCourtSelectionV3<T extends MatchmakerV3Player>(
     targetPool?: string;
     minimumTargetPoolPlayers?: number;
     respectPlayerRest?: boolean;
-    now?: number;
-    matchDurationMs?: number;
     randomFn?: () => number;
   }
 ): V3SingleCourtResult<ActiveMatchmakerV3Player<T>> {
   const initialCandidatePool = buildCandidatePool(players, {
     requiredPlayerCount: 4,
-    now,
-    matchDurationMs,
     randomFn,
-    waitToleranceMs:
-      respectPlayerRest &&
-      (sessionType === SessionType.POINTS ||
-        sessionType === SessionType.SOCIAL_MIX)
-        ? POINTS_WAIT_TOLERANCE_MS
-        : 0,
   });
 
   if (

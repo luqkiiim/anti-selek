@@ -139,6 +139,7 @@ describe("matchmaking v3 simulation", () => {
 
     expect(lateJoiner?.matchmakingBaseline).toBe(4);
     expect(lateJoiner?.availableSince).toEqual(new Date(state.now));
+    expect(lateJoiner?.restTurns).toBe(0);
   });
 
   it("prioritizes a late joiner once and preserves the real match gap", () => {
@@ -190,6 +191,60 @@ describe("matchmaking v3 simulation", () => {
     expect(Math.max(...onTimeCounts) - lateCount).toBeLessThanOrEqual(5);
   });
 
+  it("keeps a resumed late player behind with instant score submissions", () => {
+    const state = createSimulationState(createSimulationPlayers(7), {
+      matchDurationMs: 0,
+    });
+
+    pausePlayers(state, ["P7"]);
+
+    for (let round = 0; round < 6; round++) {
+      playRound(state, {
+        courtCount: 1,
+        sessionMode: SessionMode.MEXICANO,
+        sessionType: SessionType.POINTS,
+        randomFn: () => 0,
+      });
+    }
+
+    expect(
+      Object.entries(getMatchCounts(state.players))
+        .filter(([userId]) => userId !== "P7")
+        .map(([, count]) => count)
+    ).toEqual([4, 4, 4, 4, 4, 4]);
+
+    resumePlayers(state, ["P7"], {
+      randomFn: () => 0,
+    });
+
+    const firstRoundAfterResume = playRound(state, {
+      courtCount: 1,
+      sessionMode: SessionMode.MEXICANO,
+      sessionType: SessionType.POINTS,
+      randomFn: () => 0,
+    });
+
+    expect(firstRoundAfterResume.selections[0]?.ids).toContain("P7");
+
+    for (let round = 0; round < 6; round++) {
+      playRound(state, {
+        courtCount: 1,
+        sessionMode: SessionMode.MEXICANO,
+        sessionType: SessionType.POINTS,
+        randomFn: () => 0,
+      });
+    }
+
+    const matchCounts = getMatchCounts(state.players);
+    const lateCount = matchCounts.P7;
+    const onTimeCounts = Object.entries(matchCounts)
+      .filter(([userId]) => userId !== "P7")
+      .map(([, count]) => count);
+
+    expect(Math.min(...onTimeCounts) - lateCount).toBeGreaterThanOrEqual(3);
+    expect(Math.max(...onTimeCounts) - lateCount).toBeLessThanOrEqual(5);
+  });
+
   it("assigns a neutral baseline to resumed players in the live simulation state", () => {
     const state = createSimulationState(createSimulationPlayers(7), {
       matchDurationMs: 10 * 60 * 1000,
@@ -214,6 +269,7 @@ describe("matchmaking v3 simulation", () => {
 
     expect(resumedPlayer?.matchmakingBaseline).toBe(4);
     expect(resumedPlayer?.availableSince).toEqual(new Date(state.now));
+    expect(resumedPlayer?.restTurns).toBe(0);
   });
 
   it("captures resumed-quartet court grouping in a deterministic 12-player batch", () => {

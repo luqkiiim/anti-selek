@@ -3,10 +3,9 @@ import { describe, expect, it } from "vitest";
 import {
   buildActivePlayers,
   buildFairnessBands,
-  buildWaitingTimeTieZone,
+  buildRestTurnTieZone,
   getEffectiveMatchCount,
 } from "./fairness";
-import { POINTS_WAIT_TOLERANCE_MS } from "./scoring";
 import type { MatchmakerV3Player } from "./types";
 
 function createPlayer(
@@ -43,95 +42,89 @@ describe("matchmaking v3 fairness", () => {
   });
 
   it("filters paused and busy players before ranking", () => {
-    const now = new Date("2026-03-18T01:00:00Z").getTime();
     const ranked = buildActivePlayers(
       [
         createPlayer("A"),
         createPlayer("B", { isPaused: true }),
         createPlayer("C", { isBusy: true }),
       ],
-      { now, randomFn: () => 0 }
+      { randomFn: () => 0 }
     );
 
     expect(ranked.map((player) => player.userId)).toEqual(["A"]);
   });
 
-  it("ranks by effective match count before waiting time", () => {
-    const now = new Date("2026-03-18T01:00:00Z").getTime();
+  it("ranks by effective match count before rest turns", () => {
     const ranked = buildActivePlayers(
       [
         createPlayer("A", {
           matchesPlayed: 3,
-          availableSince: new Date("2026-03-18T00:00:00Z"),
+          restTurns: 5,
         }),
         createPlayer("B", {
           matchesPlayed: 2,
-          availableSince: new Date("2026-03-18T00:30:00Z"),
+          restTurns: 0,
         }),
         createPlayer("C", {
           matchesPlayed: 3,
-          availableSince: new Date("2026-03-18T00:15:00Z"),
+          restTurns: 2,
         }),
       ],
-      { now, randomFn: () => 0 }
+      { randomFn: () => 0 }
     );
 
     expect(ranked.map((player) => player.userId)).toEqual(["B", "A", "C"]);
     expect(ranked.map((player) => player.rank)).toEqual([0, 1, 2]);
   });
 
-  it("keeps match-count priority while treating waits inside tolerance as tied", () => {
-    const now = new Date("2026-03-18T01:00:00Z").getTime();
+  it("uses rest turns before randomness inside the same effective-match band", () => {
     const randomValues = [0.5, 0.9, 0.1];
     let randomIndex = 0;
     const ranked = buildActivePlayers(
       [
         createPlayer("LowerMatchCount", {
           matchesPlayed: 0,
-          availableSince: new Date("2026-03-18T00:59:00Z"),
+          restTurns: 0,
         }),
-        createPlayer("LongerWait", {
+        createPlayer("SameRestLowerRandom", {
           matchesPlayed: 1,
-          availableSince: new Date("2026-03-18T00:00:00Z"),
+          restTurns: 2,
         }),
-        createPlayer("ShorterWait", {
+        createPlayer("HigherRest", {
           matchesPlayed: 1,
-          availableSince: new Date("2026-03-18T00:01:00Z"),
+          restTurns: 3,
         }),
       ],
       {
-        now,
         randomFn: () => randomValues[randomIndex++] ?? 0,
-        waitToleranceMs: POINTS_WAIT_TOLERANCE_MS,
       }
     );
 
     expect(ranked.map((player) => player.userId)).toEqual([
       "LowerMatchCount",
-      "ShorterWait",
-      "LongerWait",
+      "HigherRest",
+      "SameRestLowerRandom",
     ]);
   });
 
   it("does not let neutral resume credit outrank lower effective-match players", () => {
-    const now = new Date("2026-03-18T01:00:00Z").getTime();
     const ranked = buildActivePlayers(
       [
         createPlayer("Resumed", {
           matchesPlayed: 0,
           matchmakingBaseline: 2,
-          availableSince: new Date("2026-03-18T01:00:00Z"),
+          restTurns: 0,
         }),
         createPlayer("Behind", {
           matchesPlayed: 1,
-          availableSince: new Date("2026-03-18T00:30:00Z"),
+          restTurns: 0,
         }),
         createPlayer("Current", {
           matchesPlayed: 2,
-          availableSince: new Date("2026-03-18T00:00:00Z"),
+          restTurns: 4,
         }),
       ],
-      { now, randomFn: () => 0 }
+      { randomFn: () => 0 }
     );
 
     expect(ranked.map((player) => player.userId)).toEqual([
@@ -142,7 +135,6 @@ describe("matchmaking v3 fairness", () => {
   });
 
   it("groups ranked players into strict effective-match bands", () => {
-    const now = new Date("2026-03-18T01:00:00Z").getTime();
     const activePlayers = buildActivePlayers(
       [
         createPlayer("A", { matchesPlayed: 2 }),
@@ -150,7 +142,7 @@ describe("matchmaking v3 fairness", () => {
         createPlayer("C", { matchesPlayed: 3 }),
         createPlayer("D", { matchesPlayed: 5, matchmakingBaseline: 6 }),
       ],
-      { now, randomFn: () => 0 }
+      { randomFn: () => 0 }
     );
 
     const bands = buildFairnessBands(activePlayers);
@@ -167,32 +159,30 @@ describe("matchmaking v3 fairness", () => {
     ]);
   });
 
-  it("expands the waiting-time tie zone within one match duration of the cutoff", () => {
-    const now = new Date("2026-03-18T01:00:00Z").getTime();
+  it("expands the rest-turn tie zone to players tied at the cutoff", () => {
     const players = buildActivePlayers(
       [
         createPlayer("A", {
-          availableSince: new Date("2026-03-18T00:10:00Z"),
+          restTurns: 5,
         }),
         createPlayer("B", {
-          availableSince: new Date("2026-03-18T00:18:00Z"),
+          restTurns: 4,
         }),
         createPlayer("C", {
-          availableSince: new Date("2026-03-18T00:24:00Z"),
+          restTurns: 4,
         }),
         createPlayer("D", {
-          availableSince: new Date("2026-03-18T00:46:00Z"),
+          restTurns: 3,
         }),
       ],
-      { now, randomFn: () => 0 }
+      { randomFn: () => 0 }
     );
 
-    const tieZone = buildWaitingTimeTieZone(players, 2);
+    const tieZone = buildRestTurnTieZone(players, 2);
 
     expect(tieZone).toMatchObject({
       requiredSlots: 2,
-      cutoffWaitMs: 42 * 60 * 1000,
-      minimumIncludedWaitMs: 27 * 60 * 1000,
+      cutoffRestTurns: 4,
     });
     expect(tieZone?.players.map((player) => player.userId)).toEqual([
       "A",
@@ -202,12 +192,11 @@ describe("matchmaking v3 fairness", () => {
   });
 
   it("does not create a tie zone when the band already fits all required slots", () => {
-    const now = new Date("2026-03-18T01:00:00Z").getTime();
     const players = buildActivePlayers(
       [createPlayer("A"), createPlayer("B"), createPlayer("C")],
-      { now, randomFn: () => 0 }
+      { randomFn: () => 0 }
     );
 
-    expect(buildWaitingTimeTieZone(players, 3)).toBeNull();
+    expect(buildRestTurnTieZone(players, 3)).toBeNull();
   });
 });

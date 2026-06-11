@@ -24,14 +24,12 @@ export function getCompetitiveEntryAt(
 export function getNeutralMatchmakingBaseline<T extends MatchmakerLadderPlayer>(
   players: T[],
   {
-    now = Date.now(),
     randomFn = () => 0,
   }: {
-    now?: number;
     randomFn?: () => number;
   } = {}
 ) {
-  const activePlayers = buildActivePlayers(players, { now, randomFn });
+  const activePlayers = buildActivePlayers(players, { randomFn });
   const lowestBand = buildFairnessBands(activePlayers)[0];
 
   return lowestBand?.effectiveMatchCount ?? 0;
@@ -55,8 +53,9 @@ export function applyNeutralLadderEntry<T extends MatchmakerLadderPlayer>(
     ...neutralRecord,
     matchmakingBaseline: Math.max(
       player.matchmakingBaseline,
-      getNeutralMatchmakingBaseline(activePlayers, { now, randomFn })
+      getNeutralMatchmakingBaseline(activePlayers, { randomFn })
     ),
     availableSince: new Date(now),
+    restTurns: 0,
   };
 }

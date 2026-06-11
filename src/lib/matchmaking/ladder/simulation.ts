@@ -1,7 +1,6 @@
 import { SessionMode } from "../../../types/enums";
 import { applyNeutralLadderEntry } from "./entry";
 import { findBestBatchSelectionLadder } from "./batch";
-import { DEFAULT_MATCH_DURATION_MS } from "./fairness";
 import { findBestSingleCourtSelectionLadder } from "./singleCourt";
 
 import type {
@@ -10,6 +9,8 @@ import type {
   LadderSingleCourtSelection,
   MatchmakerLadderPlayer,
 } from "./types";
+
+const DEFAULT_SIMULATION_MATCH_DURATION_MS = 15 * 60 * 1000;
 
 export interface LadderSimulationPlayer extends MatchmakerLadderPlayer {
   joinedAt: Date;
@@ -48,6 +49,7 @@ export function createSimulationPlayers(
     matchesPlayed: 0,
     matchmakingBaseline: 0,
     availableSince: joinedAt,
+    restTurns: 0,
     strength: baseStrength + (count - index) * strengthStep,
     wins: 0,
     losses: 0,
@@ -66,7 +68,7 @@ export function createSimulationState<T extends LadderSimulationPlayer>(
   players: T[],
   {
     now = players[0]?.availableSince.getTime() ?? Date.now(),
-    matchDurationMs = DEFAULT_MATCH_DURATION_MS,
+    matchDurationMs = DEFAULT_SIMULATION_MATCH_DURATION_MS,
   }: {
     now?: number;
     matchDurationMs?: number;
@@ -181,8 +183,6 @@ export function chooseRoundSelections<T extends LadderSimulationPlayer>(
   if (courtCount <= 1) {
     const result = findBestSingleCourtSelectionLadder(state.players, {
       sessionMode,
-      now: state.now,
-      matchDurationMs: state.matchDurationMs,
       randomFn,
     });
 
@@ -192,8 +192,6 @@ export function chooseRoundSelections<T extends LadderSimulationPlayer>(
   const result = findBestBatchSelectionLadder(state.players, {
     courtCount,
     sessionMode,
-    now: state.now,
-    matchDurationMs: state.matchDurationMs,
     randomFn,
   });
 
@@ -253,6 +251,13 @@ export function applyRoundSelections<T extends LadderSimulationPlayer>(
 
   state.players = state.players.map((player) => {
     if (!selectedIds.has(player.userId)) {
+      if (!player.isPaused && !player.isBusy && selections.length > 0) {
+        return {
+          ...player,
+          restTurns: Math.max(0, player.restTurns ?? 0) + selections.length,
+        };
+      }
+
       return player;
     }
 
@@ -272,6 +277,7 @@ export function applyRoundSelections<T extends LadderSimulationPlayer>(
       pointDiff: player.pointDiff + updates.pointDiff,
       ladderScore: wins - losses,
       availableSince: roundEnd,
+      restTurns: 0,
       lastPartnerId: partnerByUserId.get(player.userId) ?? null,
     };
   });

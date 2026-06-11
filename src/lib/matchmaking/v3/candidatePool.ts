@@ -1,8 +1,7 @@
 import {
   buildActivePlayers,
   buildFairnessBands,
-  buildWaitingTimeTieZone,
-  DEFAULT_MATCH_DURATION_MS,
+  buildRestTurnTieZone,
 } from "./fairness";
 
 import type {
@@ -10,30 +9,20 @@ import type {
   MatchmakerV3Player,
   V3CandidatePool,
   V3FairnessBand,
-  V3WaitingTimeTieZone,
+  V3RestTurnTieZone,
 } from "./types";
 
 export function buildCandidatePool<T extends MatchmakerV3Player>(
   players: T[],
   {
     requiredPlayerCount,
-    now = Date.now(),
-    matchDurationMs = DEFAULT_MATCH_DURATION_MS,
     randomFn = Math.random,
-    waitToleranceMs = 0,
   }: {
     requiredPlayerCount: number;
-    now?: number;
-    matchDurationMs?: number;
     randomFn?: () => number;
-    waitToleranceMs?: number;
   }
 ): V3CandidatePool<ActiveMatchmakerV3Player<T>> {
-  const activePlayers = buildActivePlayers(players, {
-    now,
-    randomFn,
-    waitToleranceMs,
-  });
+  const activePlayers = buildActivePlayers(players, { randomFn });
   const fairnessBands = buildFairnessBands(activePlayers);
   const lowestBand = fairnessBands[0]?.effectiveMatchCount ?? null;
 
@@ -61,7 +50,7 @@ export function buildCandidatePool<T extends MatchmakerV3Player>(
   let selectionBand: V3FairnessBand<ActiveMatchmakerV3Player<T>> | null = null;
   let requiredSelectableCount = 0;
   let selectablePlayers: ActiveMatchmakerV3Player<T>[] = [];
-  let tieZone: V3WaitingTimeTieZone<ActiveMatchmakerV3Player<T>> | null = null;
+  let tieZone: V3RestTurnTieZone<ActiveMatchmakerV3Player<T>> | null = null;
 
   for (const band of fairnessBands) {
     includedBandValues.push(band.effectiveMatchCount);
@@ -73,9 +62,7 @@ export function buildCandidatePool<T extends MatchmakerV3Player>(
 
     selectionBand = band;
     requiredSelectableCount = requiredPlayerCount - lockedPlayers.length;
-    tieZone = buildWaitingTimeTieZone(band.players, requiredSelectableCount, {
-      matchDurationMs,
-    });
+    tieZone = buildRestTurnTieZone(band.players, requiredSelectableCount);
     selectablePlayers = tieZone?.players ?? band.players;
     break;
   }

@@ -1,15 +1,14 @@
 import {
   buildActivePlayers,
   buildFairnessBands,
-  buildWaitingTimeTieZone,
-  DEFAULT_MATCH_DURATION_MS,
+  buildRestTurnTieZone,
 } from "./fairness";
 
 import type {
   ActiveMatchmakerLadderPlayer,
   LadderCandidatePool,
   LadderFairnessBand,
-  LadderWaitingTimeTieZone,
+  LadderRestTurnTieZone,
   MatchmakerLadderPlayer,
 } from "./types";
 
@@ -17,19 +16,13 @@ export function buildCandidatePool<T extends MatchmakerLadderPlayer>(
   players: T[],
   {
     requiredPlayerCount,
-    now = Date.now(),
-    matchDurationMs = DEFAULT_MATCH_DURATION_MS,
     randomFn = Math.random,
-    useWaitingTimeTieZone = true,
   }: {
     requiredPlayerCount: number;
-    now?: number;
-    matchDurationMs?: number;
     randomFn?: () => number;
-    useWaitingTimeTieZone?: boolean;
   }
 ): LadderCandidatePool<ActiveMatchmakerLadderPlayer<T>> {
-  const activePlayers = buildActivePlayers(players, { now, randomFn });
+  const activePlayers = buildActivePlayers(players, { randomFn });
   const fairnessBands = buildFairnessBands(activePlayers);
   const lowestBand = fairnessBands[0]?.effectiveMatchCount ?? null;
 
@@ -59,7 +52,7 @@ export function buildCandidatePool<T extends MatchmakerLadderPlayer>(
     | null = null;
   let requiredSelectableCount = 0;
   let selectablePlayers: ActiveMatchmakerLadderPlayer<T>[] = [];
-  let tieZone: LadderWaitingTimeTieZone<ActiveMatchmakerLadderPlayer<T>> | null =
+  let tieZone: LadderRestTurnTieZone<ActiveMatchmakerLadderPlayer<T>> | null =
     null;
 
   for (const band of fairnessBands) {
@@ -72,15 +65,8 @@ export function buildCandidatePool<T extends MatchmakerLadderPlayer>(
 
     selectionBand = band;
     requiredSelectableCount = requiredPlayerCount - lockedPlayers.length;
-    if (useWaitingTimeTieZone) {
-      tieZone = buildWaitingTimeTieZone(band.players, requiredSelectableCount, {
-        matchDurationMs,
-      });
-      selectablePlayers = tieZone?.players ?? band.players;
-    } else {
-      tieZone = null;
-      selectablePlayers = band.players;
-    }
+    tieZone = buildRestTurnTieZone(band.players, requiredSelectableCount);
+    selectablePlayers = tieZone?.players ?? band.players;
     break;
   }
 

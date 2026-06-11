@@ -73,6 +73,7 @@ describe("ladder simulation", () => {
 
     expect(lateJoiner?.matchmakingBaseline).toBe(4);
     expect(lateJoiner?.availableSince).toEqual(new Date(state.now));
+    expect(lateJoiner?.restTurns).toBe(0);
     expect(lateJoiner?.wins).toBe(0);
     expect(lateJoiner?.losses).toBe(0);
     expect(lateJoiner?.pointDiff).toBe(0);
@@ -114,6 +115,7 @@ describe("ladder simulation", () => {
 
     expect(resumedPlayer?.matchmakingBaseline).toBe(4);
     expect(resumedPlayer?.availableSince).toEqual(new Date(state.now));
+    expect(resumedPlayer?.restTurns).toBe(0);
     expect(resumedPlayer?.wins).toBe(0);
     expect(resumedPlayer?.losses).toBe(0);
     expect(resumedPlayer?.pointDiff).toBe(0);

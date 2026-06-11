@@ -2,8 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { SessionType } from "../../../types/enums";
 import {
-  POINTS_WAIT_TOLERANCE_MS,
-  buildWaitSummary,
+  buildRestSummary,
   compareBatchSelections,
   compareSingleCourtSelections,
 } from "./scoring";
@@ -15,7 +14,7 @@ import type {
 
 function createActivePlayer(
   userId: string,
-  waitMs: number,
+  restTurns: number,
   randomScore: number
 ): ActiveMatchmakerV3Player {
   return {
@@ -25,7 +24,7 @@ function createActivePlayer(
     availableSince: new Date("2026-03-18T00:00:00Z"),
     strength: 1000,
     effectiveMatchCount: 0,
-    waitMs,
+    restTurns,
     randomScore,
     rank: 0,
   };
@@ -33,7 +32,7 @@ function createActivePlayer(
 
 function createSelection(
   {
-    waitMs = [10, 10, 10, 10],
+    restTurns = [1, 1, 1, 1],
     balanceGap,
     pointDiffGap = 0,
     sharedCourtRepeatPenalty = 0,
@@ -47,7 +46,7 @@ function createSelection(
     consecutivePlayTotalBurden = 0,
     randomScore = 0,
   }: {
-    waitMs?: number[];
+    restTurns?: number[];
     balanceGap: number;
     pointDiffGap?: number;
     sharedCourtRepeatPenalty?: number;
@@ -62,7 +61,7 @@ function createSelection(
     randomScore?: number;
   }
 ): V3SingleCourtSelection {
-  const players = waitMs.map((value, index) =>
+  const players = restTurns.map((value, index) =>
     createActivePlayer(`P${index + 1}`, value, randomScore)
   ) as [
     ActiveMatchmakerV3Player,
@@ -78,7 +77,7 @@ function createSelection(
       team1: ["P1", "P2"],
       team2: ["P3", "P4"],
     },
-    waitSummary: buildWaitSummary(players),
+    restSummary: buildRestSummary(players),
     balanceGap,
     pointDiffGap,
     sharedCourtRepeatPenalty,
@@ -95,7 +94,7 @@ function createSelection(
 }
 
 function createBatchSelection({
-  waitMs = [10, 10, 10, 10],
+  restTurns = [1, 1, 1, 1],
   maxBalanceGap,
   totalBalanceGap,
   maxPointDiffGap = 0,
@@ -108,7 +107,7 @@ function createBatchSelection({
   totalExactRematchPenalty = 0,
   totalRandomScore = 0,
 }: {
-  waitMs?: number[];
+  restTurns?: number[];
   maxBalanceGap: number;
   totalBalanceGap: number;
   maxPointDiffGap?: number;
@@ -122,7 +121,7 @@ function createBatchSelection({
   totalRandomScore?: number;
 }): V3BatchSelection {
   const selection = createSelection({
-    waitMs,
+    restTurns,
     balanceGap: maxBalanceGap,
     pointDiffGap: maxPointDiffGap,
     sharedCourtRepeatPenalty: totalSharedCourtRepeatPenalty,
@@ -136,7 +135,7 @@ function createBatchSelection({
 
   return {
     selections: [selection],
-    waitSummary: selection.waitSummary,
+    restSummary: selection.restSummary,
     maxBalanceGap,
     totalBalanceGap,
     maxPointDiffGap,
@@ -152,63 +151,42 @@ function createBatchSelection({
 }
 
 describe("matchmaking v3 scoring", () => {
-  it("prefers the longer-waiting quartet before balance", () => {
-    const longerWaiting = createSelection({
-      waitMs: [20, 20, 20, 20],
+  it("prefers the higher-rest quartet before balance", () => {
+    const higherRest = createSelection({
+      restTurns: [4, 4, 4, 4],
       balanceGap: 20,
       exactRematchPenalty: 2,
     });
-    const shorterWaiting = createSelection({
-      waitMs: [15, 15, 15, 15],
+    const lowerRest = createSelection({
+      restTurns: [3, 3, 3, 3],
       balanceGap: 0,
       exactRematchPenalty: 0,
     });
 
     expect(
       compareSingleCourtSelections(
-        longerWaiting,
-        shorterWaiting,
+        higherRest,
+        lowerRest,
         SessionType.ELO
       )
     ).toBeLessThan(0);
   });
 
-  it("treats small wait differences as tied in points sessions", () => {
-    const slightlyLongerWaiting = createSelection({
-      waitMs: Array(4).fill(POINTS_WAIT_TOLERANCE_MS - 1),
+  it("keeps exact rest-turn differences ahead of points balance", () => {
+    const higherRest = createSelection({
+      restTurns: Array(4).fill(1),
       balanceGap: 5,
       exactRematchPenalty: 0,
     });
     const betterBalanced = createSelection({
-      waitMs: [0, 0, 0, 0],
+      restTurns: [0, 0, 0, 0],
       balanceGap: 0,
       exactRematchPenalty: 0,
     });
 
     expect(
       compareSingleCourtSelections(
-        betterBalanced,
-        slightlyLongerWaiting,
-        SessionType.POINTS
-      )
-    ).toBeLessThan(0);
-  });
-
-  it("keeps meaningful wait differences ahead of points balance", () => {
-    const longerWaiting = createSelection({
-      waitMs: Array(4).fill(POINTS_WAIT_TOLERANCE_MS + 1),
-      balanceGap: 5,
-      exactRematchPenalty: 0,
-    });
-    const betterBalanced = createSelection({
-      waitMs: [0, 0, 0, 0],
-      balanceGap: 0,
-      exactRematchPenalty: 0,
-    });
-
-    expect(
-      compareSingleCourtSelections(
-        longerWaiting,
+        higherRest,
         betterBalanced,
         SessionType.POINTS
       )
@@ -301,14 +279,14 @@ describe("matchmaking v3 scoring", () => {
     ).toBeLessThan(0);
   });
 
-  it("ignores wait preference when player rest is disabled", () => {
-    const longerWaiting = createSelection({
-      waitMs: Array(4).fill(POINTS_WAIT_TOLERANCE_MS + 1),
+  it("ignores rest-turn preference when player rest is disabled", () => {
+    const higherRest = createSelection({
+      restTurns: Array(4).fill(1),
       balanceGap: 5,
       exactRematchPenalty: 0,
     });
     const betterBalanced = createSelection({
-      waitMs: [0, 0, 0, 0],
+      restTurns: [0, 0, 0, 0],
       balanceGap: 0,
       exactRematchPenalty: 0,
     });
@@ -316,7 +294,7 @@ describe("matchmaking v3 scoring", () => {
     expect(
       compareSingleCourtSelections(
         betterBalanced,
-        longerWaiting,
+        higherRest,
         SessionType.POINTS,
         { respectPlayerRest: false }
       )
@@ -583,22 +561,22 @@ describe("matchmaking v3 scoring", () => {
     ).toBeLessThan(0);
   });
 
-  it("treats small batch wait differences as tied in points sessions", () => {
-    const slightlyLongerWaitingBatch = createBatchSelection({
-      waitMs: Array(4).fill(POINTS_WAIT_TOLERANCE_MS - 1),
+  it("keeps exact batch rest-turn differences ahead of points balance", () => {
+    const higherRestBatch = createBatchSelection({
+      restTurns: Array(4).fill(1),
       maxBalanceGap: 5,
       totalBalanceGap: 5,
     });
     const betterBalancedBatch = createBatchSelection({
-      waitMs: [0, 0, 0, 0],
+      restTurns: [0, 0, 0, 0],
       maxBalanceGap: 0,
       totalBalanceGap: 0,
     });
 
     expect(
       compareBatchSelections(
+        higherRestBatch,
         betterBalancedBatch,
-        slightlyLongerWaitingBatch,
         SessionType.POINTS
       )
     ).toBeLessThan(0);

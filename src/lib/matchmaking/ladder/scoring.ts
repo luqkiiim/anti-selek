@@ -4,8 +4,8 @@ import type {
   ActiveMatchmakerLadderPlayer,
   LadderBatchSelection,
   LadderGroupingSummary,
+  LadderRestSummary,
   LadderSingleCourtSelection,
-  LadderWaitSummary,
 } from "./types";
 import { compareLadderGroupingSummaries } from "./ladderGrouping";
 
@@ -63,17 +63,20 @@ function getMixicanoSameGenderBatchScore<T extends ActiveMatchmakerLadderPlayer>
   );
 }
 
-export function buildWaitSummary<
-  T extends Pick<ActiveMatchmakerLadderPlayer, "waitMs">,
->(players: T[]): LadderWaitSummary {
-  const waitVector = [...players]
-    .map((player) => player.waitMs)
+export function buildRestSummary<
+  T extends Pick<ActiveMatchmakerLadderPlayer, "restTurns">,
+>(players: T[]): LadderRestSummary {
+  const restTurnVector = [...players]
+    .map((player) => player.restTurns)
     .sort((left, right) => right - left);
 
   return {
-    totalWaitMs: waitVector.reduce((sum, waitMs) => sum + waitMs, 0),
-    minimumWaitMs: waitVector[waitVector.length - 1] ?? 0,
-    waitVector,
+    totalRestTurns: restTurnVector.reduce(
+      (sum, restTurns) => sum + restTurns,
+      0
+    ),
+    minimumRestTurns: restTurnVector[restTurnVector.length - 1] ?? 0,
+    restTurnVector,
   };
 }
 
@@ -83,28 +86,28 @@ export function getQuartetRandomScore<
   return players.reduce((sum, player) => sum + player.randomScore, 0);
 }
 
-export function compareWaitSummaries(
-  left: LadderWaitSummary,
-  right: LadderWaitSummary
+export function compareRestSummaries(
+  left: LadderRestSummary,
+  right: LadderRestSummary
 ) {
-  if (left.totalWaitMs !== right.totalWaitMs) {
-    return right.totalWaitMs - left.totalWaitMs;
+  if (left.totalRestTurns !== right.totalRestTurns) {
+    return right.totalRestTurns - left.totalRestTurns;
   }
 
-  if (left.minimumWaitMs !== right.minimumWaitMs) {
-    return right.minimumWaitMs - left.minimumWaitMs;
+  if (left.minimumRestTurns !== right.minimumRestTurns) {
+    return right.minimumRestTurns - left.minimumRestTurns;
   }
 
   for (
     let index = 0;
-    index < Math.max(left.waitVector.length, right.waitVector.length);
+    index < Math.max(left.restTurnVector.length, right.restTurnVector.length);
     index++
   ) {
-    const leftWaitMs = left.waitVector[index] ?? 0;
-    const rightWaitMs = right.waitVector[index] ?? 0;
+    const leftRestTurns = left.restTurnVector[index] ?? 0;
+    const rightRestTurns = right.restTurnVector[index] ?? 0;
 
-    if (leftWaitMs !== rightWaitMs) {
-      return rightWaitMs - leftWaitMs;
+    if (leftRestTurns !== rightRestTurns) {
+      return rightRestTurns - leftRestTurns;
     }
   }
 
@@ -149,9 +152,12 @@ export function compareSingleCourtSelections<
   }
 
   if (options?.respectPlayerRest !== false) {
-    const waitCompare = compareWaitSummaries(left.waitSummary, right.waitSummary);
-    if (waitCompare !== 0) {
-      return waitCompare;
+    const restCompare = compareRestSummaries(
+      left.restSummary,
+      right.restSummary
+    );
+    if (restCompare !== 0) {
+      return restCompare;
     }
   }
 
@@ -210,9 +216,12 @@ export function compareBatchSelections<T extends ActiveMatchmakerLadderPlayer>(
   }
 
   if (options?.respectPlayerRest !== false) {
-    const waitCompare = compareWaitSummaries(left.waitSummary, right.waitSummary);
-    if (waitCompare !== 0) {
-      return waitCompare;
+    const restCompare = compareRestSummaries(
+      left.restSummary,
+      right.restSummary
+    );
+    if (restCompare !== 0) {
+      return restCompare;
     }
   }
 

@@ -4,24 +4,26 @@ import type {
   ActiveMatchmakerV3Player,
   V3BatchSelection,
   V3SingleCourtSelection,
-  V3WaitSummary,
+  V3RestSummary,
 } from "./types";
 
 export const ELO_EXACT_REMATCH_BALANCE_TOLERANCE = 30;
 export const ELO_PARTNER_REPEAT_BALANCE_TOLERANCE = 1;
-export const POINTS_WAIT_TOLERANCE_MS = 120 * 1000;
 
-export function buildWaitSummary<
-  T extends Pick<ActiveMatchmakerV3Player, "waitMs">,
->(players: T[]): V3WaitSummary {
-  const waitVector = [...players]
-    .map((player) => player.waitMs)
+export function buildRestSummary<
+  T extends Pick<ActiveMatchmakerV3Player, "restTurns">,
+>(players: T[]): V3RestSummary {
+  const restTurnVector = [...players]
+    .map((player) => player.restTurns)
     .sort((left, right) => right - left);
 
   return {
-    totalWaitMs: waitVector.reduce((sum, waitMs) => sum + waitMs, 0),
-    minimumWaitMs: waitVector[waitVector.length - 1] ?? 0,
-    waitVector,
+    totalRestTurns: restTurnVector.reduce(
+      (sum, restTurns) => sum + restTurns,
+      0
+    ),
+    minimumRestTurns: restTurnVector[restTurnVector.length - 1] ?? 0,
+    restTurnVector,
   };
 }
 
@@ -35,13 +37,6 @@ function usesPartnerRepeatPreference(sessionType: SessionType) {
   return sessionType === SessionType.ELO;
 }
 
-function usesPointsWaitTolerance(sessionType: SessionType) {
-  return (
-    sessionType === SessionType.POINTS ||
-    sessionType === SessionType.SOCIAL_MIX
-  );
-}
-
 function usesConsecutivePlayPreference(sessionType: SessionType) {
   return (
     sessionType === SessionType.POINTS ||
@@ -53,61 +48,32 @@ function getPartnerRepeatBalanceTolerance() {
   return ELO_PARTNER_REPEAT_BALANCE_TOLERANCE;
 }
 
-function getWaitToleranceMs(sessionType: SessionType) {
-  return usesPointsWaitTolerance(sessionType) ? POINTS_WAIT_TOLERANCE_MS : 0;
-}
-
 function shouldRespectPlayerRest(options?: { respectPlayerRest?: boolean }) {
   return options?.respectPlayerRest !== false;
 }
 
-function compareWaitValues(left: number, right: number, toleranceMs: number) {
-  const diff = right - left;
-
-  return Math.abs(diff) > toleranceMs ? diff : 0;
-}
-
-export function compareWaitSummaries(
-  left: V3WaitSummary,
-  right: V3WaitSummary,
-  waitToleranceMs = 0
+export function compareRestSummaries(
+  left: V3RestSummary,
+  right: V3RestSummary
 ) {
-  const playerCount = Math.max(left.waitVector.length, right.waitVector.length);
-  const totalWaitCompare = compareWaitValues(
-    left.totalWaitMs,
-    right.totalWaitMs,
-    waitToleranceMs * playerCount
-  );
-
-  if (totalWaitCompare !== 0) {
-    return totalWaitCompare;
+  if (left.totalRestTurns !== right.totalRestTurns) {
+    return right.totalRestTurns - left.totalRestTurns;
   }
 
-  const minimumWaitCompare = compareWaitValues(
-    left.minimumWaitMs,
-    right.minimumWaitMs,
-    waitToleranceMs
-  );
-
-  if (minimumWaitCompare !== 0) {
-    return minimumWaitCompare;
+  if (left.minimumRestTurns !== right.minimumRestTurns) {
+    return right.minimumRestTurns - left.minimumRestTurns;
   }
 
   for (
     let index = 0;
-    index < Math.max(left.waitVector.length, right.waitVector.length);
+    index < Math.max(left.restTurnVector.length, right.restTurnVector.length);
     index++
   ) {
-    const leftWaitMs = left.waitVector[index] ?? 0;
-    const rightWaitMs = right.waitVector[index] ?? 0;
-    const waitCompare = compareWaitValues(
-      leftWaitMs,
-      rightWaitMs,
-      waitToleranceMs
-    );
+    const leftRestTurns = left.restTurnVector[index] ?? 0;
+    const rightRestTurns = right.restTurnVector[index] ?? 0;
 
-    if (waitCompare !== 0) {
-      return waitCompare;
+    if (leftRestTurns !== rightRestTurns) {
+      return rightRestTurns - leftRestTurns;
     }
   }
 
@@ -144,13 +110,12 @@ export function compareSingleCourtSelections<
   options?: { respectPlayerRest?: boolean }
 ) {
   if (shouldRespectPlayerRest(options)) {
-    const waitCompare = compareWaitSummaries(
-      left.waitSummary,
-      right.waitSummary,
-      getWaitToleranceMs(sessionType)
+    const restCompare = compareRestSummaries(
+      left.restSummary,
+      right.restSummary
     );
-    if (waitCompare !== 0) {
-      return waitCompare;
+    if (restCompare !== 0) {
+      return restCompare;
     }
 
     if (usesConsecutivePlayPreference(sessionType)) {
@@ -269,13 +234,12 @@ export function compareBatchSelections<T extends ActiveMatchmakerV3Player>(
   options?: { respectPlayerRest?: boolean }
 ) {
   if (shouldRespectPlayerRest(options)) {
-    const waitCompare = compareWaitSummaries(
-      left.waitSummary,
-      right.waitSummary,
-      getWaitToleranceMs(sessionType)
+    const restCompare = compareRestSummaries(
+      left.restSummary,
+      right.restSummary
     );
-    if (waitCompare !== 0) {
-      return waitCompare;
+    if (restCompare !== 0) {
+      return restCompare;
     }
   }
 
