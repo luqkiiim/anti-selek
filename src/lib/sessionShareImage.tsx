@@ -20,6 +20,8 @@ export const SESSION_SHARE_IMAGE_HEIGHT = 1920;
 export const SESSION_SHARE_IMAGE_PLAYER_LIMIT = 13;
 
 const SHARE_AVATAR_FETCH_TIMEOUT_MS = 4_000;
+const SHARE_PODIUM_AVATAR_SIZE = 136;
+const SHARE_ROW_AVATAR_SIZE = 92;
 
 export interface SessionShareImagePlayer {
   userId: string;
@@ -465,7 +467,7 @@ const styles: Record<string, CSSProperties> = {
     alignItems: "flex-end",
     gap: 30,
     width: "100%",
-    marginTop: 58,
+    marginTop: 42,
   },
   podiumColumn: {
     display: "flex",
@@ -488,8 +490,8 @@ const styles: Record<string, CSSProperties> = {
     textOverflow: "ellipsis",
   },
   podiumAvatar: {
-    width: 112,
-    height: 112,
+    width: SHARE_PODIUM_AVATAR_SIZE,
+    height: SHARE_PODIUM_AVATAR_SIZE,
     borderRadius: 999,
     border: "5px solid #ffffff",
     background: "#ecfdf5",
@@ -499,13 +501,13 @@ const styles: Record<string, CSSProperties> = {
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    width: 112,
-    height: 112,
+    width: SHARE_PODIUM_AVATAR_SIZE,
+    height: SHARE_PODIUM_AVATAR_SIZE,
     borderRadius: 999,
     border: "5px solid #ffffff",
     background: "#ecfdf5",
     color: "#0f766e",
-    fontSize: 38,
+    fontSize: 44,
     fontWeight: 900,
   },
   podiumBlock: {
@@ -513,8 +515,8 @@ const styles: Record<string, CSSProperties> = {
     flexDirection: "column",
     alignItems: "center",
     width: "100%",
-    marginTop: 24,
-    padding: "26px 22px 30px",
+    marginTop: 18,
+    padding: "22px 22px 26px",
     borderWidth: 2,
     borderStyle: "solid",
     borderBottomWidth: 0,
@@ -576,8 +578,8 @@ const styles: Record<string, CSSProperties> = {
     flex: 1,
     minHeight: 0,
     width: "100%",
-    marginTop: 52,
-    padding: 42,
+    marginTop: 44,
+    padding: 34,
     border: "2px solid #dbe4ef",
     borderRadius: 54,
     background: "#ffffff",
@@ -586,31 +588,31 @@ const styles: Record<string, CSSProperties> = {
     display: "flex",
     flexDirection: "row",
     alignItems: "flex-start",
-    gap: 24,
+    gap: 20,
     width: "100%",
   },
   standingsColumn: {
     display: "flex",
     flexDirection: "column",
-    gap: 24,
-    width: 420,
+    gap: 18,
+    width: 438,
   },
   standingsColumnWide: {
-    width: 864,
+    width: 896,
   },
   rowCard: {
     display: "flex",
     flexDirection: "row",
     alignItems: "center",
-    width: 420,
+    width: 438,
     minHeight: 108,
-    padding: "20px 24px",
+    padding: "14px 20px",
     border: "2px solid #e2e8f0",
     borderRadius: 36,
     background: "#f8fafc",
   },
   rowCardWide: {
-    width: 864,
+    width: 896,
   },
   rowRank: {
     display: "flex",
@@ -626,9 +628,9 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 900,
   },
   rowAvatar: {
-    width: 72,
-    height: 72,
-    marginLeft: 22,
+    width: SHARE_ROW_AVATAR_SIZE,
+    height: SHARE_ROW_AVATAR_SIZE,
+    marginLeft: 18,
     borderRadius: 999,
     border: "3px solid #c7f0e7",
     background: "#ecfdf5",
@@ -638,14 +640,14 @@ const styles: Record<string, CSSProperties> = {
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    width: 72,
-    height: 72,
-    marginLeft: 22,
+    width: SHARE_ROW_AVATAR_SIZE,
+    height: SHARE_ROW_AVATAR_SIZE,
+    marginLeft: 18,
     borderRadius: 999,
     border: "3px solid #c7f0e7",
     background: "#ecfdf5",
     color: "#0f766e",
-    fontSize: 25,
+    fontSize: 31,
     fontWeight: 900,
   },
   rowIdentity: {
@@ -653,7 +655,7 @@ const styles: Record<string, CSSProperties> = {
     flexDirection: "column",
     minWidth: 0,
     flex: 1,
-    marginLeft: 18,
+    marginLeft: 14,
   },
   rowName: {
     display: "flex",
@@ -675,7 +677,7 @@ const styles: Record<string, CSSProperties> = {
     display: "flex",
     flexDirection: "column",
     alignItems: "flex-end",
-    marginLeft: 16,
+    marginLeft: 12,
   },
   rowScoreValue: {
     display: "flex",
@@ -749,8 +751,16 @@ function AvatarImage({
       <img
         alt={`${standing.name} avatar`}
         src={avatarDataUrl}
-        width={variant === "podium" ? 112 : 72}
-        height={variant === "podium" ? 112 : 72}
+        width={
+          variant === "podium"
+            ? SHARE_PODIUM_AVATAR_SIZE
+            : SHARE_ROW_AVATAR_SIZE
+        }
+        height={
+          variant === "podium"
+            ? SHARE_PODIUM_AVATAR_SIZE
+            : SHARE_ROW_AVATAR_SIZE
+        }
         style={imageStyle}
       />
     );

@@ -66,9 +66,9 @@ describe("session share image", () => {
       )
     );
 
-    expect(eightPlayerMarkup).toContain("width:864px");
-    expect(eightPlayerMarkup).not.toContain("width:420px");
-    expect(ninePlayerMarkup).toContain("width:420px");
+    expect(eightPlayerMarkup).toContain("width:896px");
+    expect(eightPlayerMarkup).not.toContain("width:438px");
+    expect(ninePlayerMarkup).toContain("width:438px");
   });
 
   it("uses session points, wins, losses, and point diff for points standings", () => {
@@ -124,6 +124,34 @@ describe("session share image", () => {
 
     expect(markup).toContain(">LK<");
     expect(markup).not.toContain("<img");
+  });
+
+  it("renders enlarged podium and row avatar images when data URLs are available", () => {
+    const viewModel = buildSessionShareImageViewModel({
+      sessionName: "Weekend Cup",
+      communityName: "Badminton Usuals",
+      sessionType: SessionType.POINTS,
+      players: createPlayers(4),
+      matches: [],
+    });
+    const markup = renderToStaticMarkup(
+      renderSessionShareImage(
+        viewModel,
+        new Map([
+          ["u1", "data:image/png;base64,cG9kaXVt"],
+          ["u4", "data:image/png;base64,cm93"],
+        ])
+      )
+    );
+
+    expect(markup).toMatch(
+      /alt="P01 avatar"[^>]*width="136"[^>]*height="136"/
+    );
+    expect(markup).toMatch(
+      /alt="P04 avatar"[^>]*width="92"[^>]*height="92"/
+    );
+    expect(markup).toContain("width:136px;height:136px");
+    expect(markup).toContain("width:92px;height:92px");
   });
 
   it("fetches avatar data URLs best-effort and skips failures", async () => {
