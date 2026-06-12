@@ -53,12 +53,16 @@ function buildPlayer(
 
 function renderModal(
   player: CommunityAdminPlayer,
-  { canDemoteAdmins = false }: { canDemoteAdmins?: boolean } = {}
+  {
+    canDemoteAdmins = false,
+    currentUserId = null,
+  }: { canDemoteAdmins?: boolean; currentUserId?: string | null } = {}
 ) {
   return renderToStaticMarkup(
     <CommunityPlayerEditorModal
       player={player}
       communityId="community-1"
+      currentUserId={currentUserId}
       editorName={player.name}
       editorRating={String(player.elo)}
       savingName={false}
@@ -173,5 +177,20 @@ describe("CommunityPlayerEditorModal", () => {
     expect(regularAdminMarkup).toContain(
       "Only the community owner can change another admin role."
     );
+  });
+
+  it("shows leave community for the current admin", () => {
+    const markup = renderModal(
+      buildPlayer({
+        id: "admin-1",
+        isClaimed: true,
+        email: "admin@example.com",
+        role: "ADMIN",
+      }),
+      { currentUserId: "admin-1" }
+    );
+
+    expect(markup).toContain("Leave community");
+    expect(markup).not.toContain("Demote admins before removing them.");
   });
 });

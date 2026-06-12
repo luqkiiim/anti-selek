@@ -14,7 +14,11 @@ const mocks = vi.hoisted(() => ({
   communityMemberFindUnique: vi.fn(),
   communityMemberFindMany: vi.fn(),
   communityMemberUpdate: vi.fn(),
+  communityMemberDelete: vi.fn(),
   communityFindUnique: vi.fn(),
+  sessionFindMany: vi.fn(),
+  sessionPlayerDeleteMany: vi.fn(),
+  transaction: vi.fn(),
   userFindUnique: vi.fn(),
   userUpdate: vi.fn(),
   resolveMixedSideState: vi.fn(),
@@ -31,14 +35,22 @@ vi.mock("@/lib/prisma", () => ({
       findUnique: mocks.communityMemberFindUnique,
       findMany: mocks.communityMemberFindMany,
       update: mocks.communityMemberUpdate,
+      delete: mocks.communityMemberDelete,
     },
     community: {
       findUnique: mocks.communityFindUnique,
+    },
+    session: {
+      findMany: mocks.sessionFindMany,
+    },
+    sessionPlayer: {
+      deleteMany: mocks.sessionPlayerDeleteMany,
     },
     user: {
       findUnique: mocks.userFindUnique,
       update: mocks.userUpdate,
     },
+    $transaction: mocks.transaction,
   },
 }));
 
@@ -108,6 +120,17 @@ describe("community admin update member route", () => {
     mocks.communityFindUnique.mockResolvedValue({
       createdById: "owner-1",
     });
+    mocks.sessionFindMany.mockResolvedValue([]);
+    mocks.transaction.mockImplementation(async (callback) =>
+      callback({
+        sessionPlayer: {
+          deleteMany: mocks.sessionPlayerDeleteMany,
+        },
+        communityMember: {
+          delete: mocks.communityMemberDelete,
+        },
+      })
+    );
     mocks.resolveMixedSideState.mockReturnValue({
       partnerPreference: PartnerPreference.OPEN,
       mixedSideOverride: null,
@@ -604,6 +627,69 @@ describe("community admin update member route", () => {
     expect(adminBody.error).toBe("Demote admins before removing them");
     expect(ownerResponse.status).toBe(400);
     expect(ownerBody.error).toBe("The community owner cannot be removed");
+  });
+
+  it("allows an admin to leave when another admin remains", async () => {
+    mocks.communityFindUnique.mockResolvedValue({ createdById: "owner-1" });
+    mocks.communityMemberFindUnique
+      .mockResolvedValueOnce({ role: "ADMIN" })
+      .mockResolvedValueOnce({
+        id: "membership-1",
+        role: "ADMIN",
+      });
+    mocks.communityMemberFindMany.mockResolvedValueOnce([
+      { id: "other-admin-membership" },
+    ]);
+    mocks.sessionFindMany.mockResolvedValueOnce([{ id: "session-1" }]);
+
+    const response = await deleteMember("admin-1");
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body).toEqual({ success: true });
+    expect(mocks.communityMemberFindMany).toHaveBeenCalledWith({
+      where: {
+        communityId: "community-1",
+        role: "ADMIN",
+        userId: { not: "admin-1" },
+      },
+      select: { id: true },
+      take: 1,
+    });
+    expect(mocks.sessionPlayerDeleteMany).toHaveBeenCalledWith({
+      where: {
+        sessionId: { in: ["session-1"] },
+        userId: "admin-1",
+      },
+    });
+    expect(mocks.communityMemberDelete).toHaveBeenCalledWith({
+      where: {
+        communityId_userId: {
+          communityId: "community-1",
+          userId: "admin-1",
+        },
+      },
+    });
+  });
+
+  it("blocks an admin from leaving when no other admin remains", async () => {
+    mocks.communityFindUnique.mockResolvedValue({ createdById: "owner-1" });
+    mocks.communityMemberFindUnique
+      .mockResolvedValueOnce({ role: "ADMIN" })
+      .mockResolvedValueOnce({
+        id: "membership-1",
+        role: "ADMIN",
+      });
+    mocks.communityMemberFindMany.mockResolvedValueOnce([]);
+
+    const response = await deleteMember("admin-1");
+    const body = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(body.error).toBe(
+      "Make another member an admin before leaving this community"
+    );
+    expect(mocks.transaction).not.toHaveBeenCalled();
   });
 
   it("rejects staff attempts to edit player profiles", async () => {

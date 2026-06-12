@@ -24,6 +24,7 @@ import {
 interface CommunityPlayerEditorModalProps {
   player: CommunityAdminPlayer | null;
   communityId: string;
+  currentUserId?: string | null;
   editorName: string;
   editorRating: string;
   savingName: boolean;
@@ -62,6 +63,7 @@ interface CommunityPlayerEditorModalProps {
 export function CommunityPlayerEditorModal({
   player,
   communityId,
+  currentUserId,
   editorName,
   editorRating,
   savingName,
@@ -90,7 +92,11 @@ export function CommunityPlayerEditorModal({
 
   const mixedSideOption = getMixedSideOverrideOptionForGender(player.gender);
   const canEditName = !player.isClaimed;
-  const canRemovePlayer = !player.isOwner && player.role !== "ADMIN";
+  const isCurrentUser = player.id === currentUserId;
+  const canRemovePlayer =
+    !player.isOwner && (player.role !== "ADMIN" || isCurrentUser);
+  const removeButtonLabel = isCurrentUser ? "Leave community" : "Remove player";
+  const removingButtonLabel = isCurrentUser ? "Leaving..." : "Removing...";
 
   return (
     <ModalFrame
@@ -106,7 +112,7 @@ export function CommunityPlayerEditorModal({
               disabled={removingPlayer}
               className="app-button-danger px-4 py-2"
             >
-              {removingPlayer ? "Removing..." : "Remove player"}
+              {removingPlayer ? removingButtonLabel : removeButtonLabel}
             </button>
           ) : (
             <p className="text-sm font-medium text-gray-600">

@@ -471,9 +471,6 @@ export async function DELETE(
     if (!adminAccess?.canAdmin) {
       return invalidTargetResponse(request, "api:communities:id:members:userId");
     }
-    if (userId === session.user.id) {
-      return NextResponse.json({ error: "Cannot remove yourself from the community" }, { status: 400 });
-    }
 
     const membership = await prisma.communityMember.findUnique({
       where: {
@@ -493,7 +490,31 @@ export async function DELETE(
         { status: 400 }
       );
     }
-    if (membership.role === CommunityRole.ADMIN) {
+    const isSelfRemoval = userId === session.user.id;
+    if (isSelfRemoval) {
+      if (membership.role !== CommunityRole.ADMIN) {
+        return NextResponse.json(
+          { error: "Cannot remove yourself from the community" },
+          { status: 400 }
+        );
+      }
+
+      const otherAdmins = await prisma.communityMember.findMany({
+        where: {
+          communityId,
+          role: CommunityRole.ADMIN,
+          userId: { not: userId },
+        },
+        select: { id: true },
+        take: 1,
+      });
+      if (otherAdmins.length === 0) {
+        return NextResponse.json(
+          { error: "Make another member an admin before leaving this community" },
+          { status: 400 }
+        );
+      }
+    } else if (membership.role === CommunityRole.ADMIN) {
       return NextResponse.json(
         { error: "Demote admins before removing them" },
         { status: 400 }

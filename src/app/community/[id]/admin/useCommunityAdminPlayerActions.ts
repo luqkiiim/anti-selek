@@ -23,18 +23,26 @@ interface PendingPlayerAction {
   role?: CommunityRole.STAFF | CommunityRole.MEMBER;
 }
 
+interface CommunityAdminRouter {
+  replace: (href: string) => void;
+}
+
 export function useCommunityAdminPlayerActions({
   communityId,
+  currentUserId,
   players,
   setPlayers,
   refreshCommunityData,
+  router,
   setError,
   setSuccess,
 }: {
   communityId: string;
+  currentUserId?: string | null;
   players: CommunityAdminPlayer[];
   setPlayers: Dispatch<SetStateAction<CommunityAdminPlayer[]>>;
   refreshCommunityData: () => Promise<void>;
+  router: CommunityAdminRouter;
   setError: Dispatch<SetStateAction<string>>;
   setSuccess: Dispatch<SetStateAction<string>>;
 }) {
@@ -322,9 +330,19 @@ export function useCommunityAdminPlayerActions({
           throw new Error(data.error || "Failed to remove player");
         }
 
-        setSuccess(`${player.name} removed from community.`);
+        const isSelfRemoval = player.id === currentUserId;
+        setSuccess(
+          isSelfRemoval
+            ? "You left the community."
+            : `${player.name} removed from community.`
+        );
         setPendingPlayerAction(null);
         closePlayerEditor();
+        if (isSelfRemoval) {
+          router.replace(`/community/${communityId}`);
+          return true;
+        }
+
         await refreshCommunityData();
         return true;
       } catch (err: unknown) {

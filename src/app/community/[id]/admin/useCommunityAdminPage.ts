@@ -29,9 +29,11 @@ export function useCommunityAdminPage() {
 
   const playerActions = useCommunityAdminPlayerActions({
     communityId,
+    currentUserId: session?.user?.id,
     players: adminData.players,
     setPlayers: adminData.setPlayers,
     refreshCommunityData: adminData.fetchCommunityAndPlayers,
+    router,
     setError: adminData.setError,
     setSuccess: adminData.setSuccess,
   });

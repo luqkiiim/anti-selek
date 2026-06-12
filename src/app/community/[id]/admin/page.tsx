@@ -48,14 +48,20 @@ const tabs: Array<{
 
 function getPlayerActionDialogCopy(action: {
   kind: "remove" | "promote" | "demote-admin";
-  player: { name: string; email: string | null };
+  player: { id: string; name: string; email: string | null };
   role?: CommunityRole.STAFF | CommunityRole.MEMBER;
-}) {
+}, currentUserId?: string | null) {
   if (action.kind === "remove") {
+    const isSelfRemoval = action.player.id === currentUserId;
+
     return {
-      title: `Remove ${action.player.name}?`,
-      subtitle: "This takes the player out of the community roster.",
-      confirmLabel: "Remove Player",
+      title: isSelfRemoval
+        ? "Leave community?"
+        : `Remove ${action.player.name}?`,
+      subtitle: isSelfRemoval
+        ? "This removes your membership and admin access for this community."
+        : "This takes the player out of the community roster.",
+      confirmLabel: isSelfRemoval ? "Leave Community" : "Remove Player",
       confirmTone: "danger" as const,
       details: (
         <div className="app-panel-muted space-y-2 p-4">
@@ -66,7 +72,9 @@ function getPlayerActionDialogCopy(action: {
             {action.player.email || "No email on file"}
           </p>
           <p className="text-sm text-gray-600">
-            They will no longer appear in this community unless added again.
+            {isSelfRemoval
+              ? "You will no longer see this community in your admin tools unless another admin adds you again."
+              : "They will no longer appear in this community unless added again."}
           </p>
         </div>
       ),
@@ -357,7 +365,7 @@ export default function CommunityAdminPage() {
   }, [communityId, router]);
 
   const pendingPlayerActionDialog = pendingPlayerAction
-    ? getPlayerActionDialogCopy(pendingPlayerAction)
+    ? getPlayerActionDialogCopy(pendingPlayerAction, currentUserId)
     : null;
   const pendingCommunityActionDialog = pendingCommunityAction
     ? getCommunityActionDialogCopy(
@@ -607,6 +615,7 @@ export default function CommunityAdminPage() {
       <CommunityPlayerEditorModal
         player={editingPlayer}
         communityId={communityId}
+        currentUserId={currentUserId}
         editorName={editorName}
         editorRating={editorRating}
         savingName={savingName}
