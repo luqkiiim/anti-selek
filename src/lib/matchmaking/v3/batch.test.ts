@@ -363,6 +363,30 @@ describe("matchmaking v3 batch selection", () => {
     });
   });
 
+  it("uses point difference after social mix batch balance ties", () => {
+    const result = findBestBatchSelectionV3(
+      [
+        createPlayer("A", { strength: 10, pointDiff: 4 }),
+        createPlayer("B", { strength: 10, pointDiff: 4 }),
+        createPlayer("C", { strength: 10, pointDiff: -4 }),
+        createPlayer("D", { strength: 10, pointDiff: -4 }),
+      ],
+      {
+        courtCount: 1,
+        sessionMode: SessionMode.MEXICANO,
+        sessionType: SessionType.SOCIAL_MIX,
+        randomFn: () => 0,
+      }
+    );
+
+    expect(result.selection?.maxBalanceGap).toBe(0);
+    expect(result.selection?.maxPointDiffGap).toBe(0);
+    expect(result.selection?.selections[0]?.partition).not.toEqual({
+      team1: ["A", "B"],
+      team2: ["C", "D"],
+    });
+  });
+
   it("widens mixed batch candidates when the capped fair pool cannot fill two legal courts", () => {
     const result = findBestBatchSelectionV3(
       [

@@ -236,6 +236,29 @@ describe("matchmaking v3 single-court selection", () => {
     expect(result.selection?.sharedCourtRepeatPenalty).toBeLessThan(6);
   });
 
+  it("uses point difference after social mix points balance ties", () => {
+    const result = findBestSingleCourtSelectionV3(
+      [
+        createPlayer("A", { strength: 10, pointDiff: 4 }),
+        createPlayer("B", { strength: 10, pointDiff: 4 }),
+        createPlayer("C", { strength: 10, pointDiff: -4 }),
+        createPlayer("D", { strength: 10, pointDiff: -4 }),
+      ],
+      {
+        sessionMode: SessionMode.MEXICANO,
+        sessionType: SessionType.SOCIAL_MIX,
+        randomFn: () => 0,
+      }
+    );
+
+    expect(result.selection?.partition).not.toEqual({
+      team1: ["A", "B"],
+      team2: ["C", "D"],
+    });
+    expect(result.selection?.balanceGap).toBe(0);
+    expect(result.selection?.pointDiffGap).toBe(0);
+  });
+
   it("returns no selection when fewer than four active players are available", () => {
     const result = findBestSingleCourtSelectionV3(
       [

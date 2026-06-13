@@ -416,6 +416,29 @@ describe("matchmaking v3 scoring", () => {
     ).toBeLessThan(0);
   });
 
+  it("uses point-difference balance after social mix points balance ties", () => {
+    const lowerPointDiffGap = createSelection({
+      balanceGap: 0,
+      pointDiffGap: 0,
+      partnerRepeatPenalty: 1,
+      exactRematchPenalty: 0,
+    });
+    const lowerRepeatPenalty = createSelection({
+      balanceGap: 0,
+      pointDiffGap: 2,
+      partnerRepeatPenalty: 0,
+      exactRematchPenalty: 0,
+    });
+
+    expect(
+      compareSingleCourtSelections(
+        lowerPointDiffGap,
+        lowerRepeatPenalty,
+        SessionType.SOCIAL_MIX
+      )
+    ).toBeLessThan(0);
+  });
+
   it("prefers lower back-to-back burden before social mix coverage", () => {
     const lowerBurden = createSelection({
       balanceGap: 10,
@@ -556,6 +579,31 @@ describe("matchmaking v3 scoring", () => {
       compareBatchSelections(
         freshCourtBatch,
         repeatedCourtBatch,
+        SessionType.SOCIAL_MIX
+      )
+    ).toBeLessThan(0);
+  });
+
+  it("uses point-difference balance after social mix batch balance ties", () => {
+    const lowerPointDiffBatch = createBatchSelection({
+      maxBalanceGap: 0,
+      totalBalanceGap: 0,
+      maxPointDiffGap: 0,
+      totalPointDiffGap: 0,
+      totalPartnerRepeatPenalty: 1,
+    });
+    const lowerRepeatPenaltyBatch = createBatchSelection({
+      maxBalanceGap: 0,
+      totalBalanceGap: 0,
+      maxPointDiffGap: 1,
+      totalPointDiffGap: 1,
+      totalPartnerRepeatPenalty: 0,
+    });
+
+    expect(
+      compareBatchSelections(
+        lowerPointDiffBatch,
+        lowerRepeatPenaltyBatch,
         SessionType.SOCIAL_MIX
       )
     ).toBeLessThan(0);

@@ -445,7 +445,8 @@ function compressQuartetSelections<T extends ActiveMatchmakerV3Player>(
     compressedSelections.push(firstSelection);
 
     const bestBalanceSelection =
-      sessionType === SessionType.POINTS
+      sessionType === SessionType.POINTS ||
+      sessionType === SessionType.SOCIAL_MIX
         ? [...group].sort(
             (left, right) =>
               left.balanceGap - right.balanceGap ||
@@ -471,6 +472,7 @@ function compressQuartetSelections<T extends ActiveMatchmakerV3Player>(
               left.partnerCoveragePenalty - right.partnerCoveragePenalty ||
               left.opponentCoveragePenalty - right.opponentCoveragePenalty ||
               left.balanceGap - right.balanceGap ||
+              left.pointDiffGap - right.pointDiffGap ||
               left.partnerRepeatPenalty - right.partnerRepeatPenalty ||
               left.opponentRepeatPenalty - right.opponentRepeatPenalty ||
               left.exactRematchPenalty - right.exactRematchPenalty ||

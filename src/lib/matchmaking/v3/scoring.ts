@@ -150,6 +150,11 @@ export function compareSingleCourtSelections<
       return balanceDiff;
     }
 
+    const pointDiffGapDiff = left.pointDiffGap - right.pointDiffGap;
+    if (pointDiffGapDiff !== 0) {
+      return pointDiffGapDiff;
+    }
+
     const partnerDiff = left.partnerRepeatPenalty - right.partnerRepeatPenalty;
     if (partnerDiff !== 0) {
       return partnerDiff;
@@ -270,6 +275,17 @@ export function compareBatchSelections<T extends ActiveMatchmakerV3Player>(
     const totalBalanceDiff = left.totalBalanceGap - right.totalBalanceGap;
     if (totalBalanceDiff !== 0) {
       return totalBalanceDiff;
+    }
+
+    const maxPointDiffGapDiff = left.maxPointDiffGap - right.maxPointDiffGap;
+    if (maxPointDiffGapDiff !== 0) {
+      return maxPointDiffGapDiff;
+    }
+
+    const totalPointDiffGapDiff =
+      left.totalPointDiffGap - right.totalPointDiffGap;
+    if (totalPointDiffGapDiff !== 0) {
+      return totalPointDiffGapDiff;
     }
 
     const partnerDiff =
