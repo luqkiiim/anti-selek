@@ -39,12 +39,15 @@ interface SessionHistoryData {
     communityId?: string | null;
     name: string;
     status: string;
+    isTest?: boolean;
     type: string;
     mode: string;
     createdAt: string;
     endedAt?: string | null;
   };
   viewerCanManage?: boolean;
+  canCorrectCompletedScores?: boolean;
+  correctionBlockedReason?: string | null;
   undoableMatchId?: string | null;
   matches: HistoryMatch[];
 }
@@ -60,8 +63,19 @@ export default function SessionHistoryPage() {
   const [data, setData] = useState<SessionHistoryData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
   const [undoDraft, setUndoDraft] = useState<HistoryMatch | null>(null);
   const [undoingMatchId, setUndoingMatchId] = useState<string | null>(null);
+  const [correctionDraft, setCorrectionDraft] = useState<HistoryMatch | null>(
+    null
+  );
+  const [correctionScores, setCorrectionScores] = useState({
+    team1: "",
+    team2: "",
+  });
+  const [correctingMatchId, setCorrectingMatchId] = useState<string | null>(
+    null
+  );
 
   const fetchHistory = useCallback(
     async ({ showLoading = false }: { showLoading?: boolean } = {}) => {
@@ -71,6 +85,7 @@ export default function SessionHistoryPage() {
         setLoading(true);
       }
       setError("");
+      setSuccess("");
 
       try {
         const res = await fetch(`/api/sessions/${code}/history`);
@@ -124,6 +139,26 @@ export default function SessionHistoryPage() {
     setUndoDraft(null);
   };
 
+  const openCorrectionDraft = (match: HistoryMatch) => {
+    setCorrectionDraft(match);
+    setCorrectionScores({
+      team1:
+        typeof match.team1Score === "number" ? String(match.team1Score) : "",
+      team2:
+        typeof match.team2Score === "number" ? String(match.team2Score) : "",
+    });
+    setError("");
+    setSuccess("");
+  };
+
+  const closeCorrectionDraft = () => {
+    if (correctionDraft && correctingMatchId === correctionDraft.id) {
+      return;
+    }
+
+    setCorrectionDraft(null);
+  };
+
   const confirmUndoResult = async () => {
     if (!undoDraft) return;
 
@@ -143,11 +178,53 @@ export default function SessionHistoryPage() {
 
       setUndoDraft(null);
       await fetchHistory();
+      setSuccess("Result undone.");
     } catch (err) {
       console.error(err);
       setError("Network error undoing result");
     } finally {
       setUndoingMatchId(null);
+    }
+  };
+
+  const confirmScoreCorrection = async () => {
+    if (!correctionDraft) return;
+
+    const team1Score = Number(correctionScores.team1);
+    const team2Score = Number(correctionScores.team2);
+    if (
+      !Number.isInteger(team1Score) ||
+      !Number.isInteger(team2Score)
+    ) {
+      setError("Enter whole-number scores.");
+      return;
+    }
+
+    setCorrectingMatchId(correctionDraft.id);
+    setError("");
+    setSuccess("");
+
+    try {
+      const res = await fetch(`/api/matches/${correctionDraft.id}/correction`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ team1Score, team2Score }),
+      });
+      const payload = await res.json().catch(() => null);
+
+      if (!res.ok) {
+        setError(getErrorMessage(payload, "Failed to correct score"));
+        return;
+      }
+
+      setCorrectionDraft(null);
+      await fetchHistory();
+      setSuccess("Score corrected.");
+    } catch (err) {
+      console.error(err);
+      setError("Network error correcting score");
+    } finally {
+      setCorrectingMatchId(null);
     }
   };
 
@@ -201,6 +278,13 @@ export default function SessionHistoryPage() {
           }
         />
 
+        {success ? <FlashMessage tone="success">{success}</FlashMessage> : null}
+        {data.correctionBlockedReason ? (
+          <FlashMessage tone="warning">
+            {data.correctionBlockedReason}
+          </FlashMessage>
+        ) : null}
+
         <SectionCard
           title="Session matches"
           action={<span className="app-chip app-chip-neutral">{data.matches.length} matches</span>}
@@ -218,6 +302,9 @@ export default function SessionHistoryPage() {
                 const canUndoResult =
                   data.viewerCanManage === true &&
                   data.undoableMatchId === match.id &&
+                  match.status === MatchStatus.COMPLETED;
+                const canCorrectScore =
+                  data.canCorrectCompletedScores === true &&
                   match.status === MatchStatus.COMPLETED;
                 return (
                   <article key={match.id} className="app-subcard p-4 sm:p-5">
@@ -240,13 +327,24 @@ export default function SessionHistoryPage() {
                         </div>
                       ) : null}
                       {canUndoResult ? (
-                        <div className="flex justify-start lg:justify-end">
+                        <div className="flex flex-wrap justify-start gap-2 lg:justify-end">
                           <button
                             type="button"
                             onClick={() => setUndoDraft(match)}
                             className="app-button-danger min-h-10 px-3 py-2 text-xs"
                           >
                             Undo result
+                          </button>
+                        </div>
+                      ) : null}
+                      {canCorrectScore ? (
+                        <div className="flex flex-wrap justify-start gap-2 lg:justify-end">
+                          <button
+                            type="button"
+                            onClick={() => openCorrectionDraft(match)}
+                            className="app-button-secondary min-h-10 px-3 py-2 text-xs"
+                          >
+                            Correct score
                           </button>
                         </div>
                       ) : null}
@@ -341,6 +439,68 @@ export default function SessionHistoryPage() {
           isSubmitting={undoingMatchId === undoDraft.id}
           onClose={closeUndoDraft}
           onConfirm={() => void confirmUndoResult()}
+        />
+      ) : null}
+
+      {correctionDraft ? (
+        <SessionActionConfirmModal
+          title="Correct score?"
+          subtitle="This updates the ended session result and replays rating changes from this match onward."
+          details={
+            <div className="space-y-4">
+              <div className="app-panel-muted space-y-3 p-4">
+                <div className="space-y-1 text-sm text-gray-700">
+                  <p className="font-semibold text-gray-900">
+                    {correctionDraft.team1User1.name} &amp;{" "}
+                    {correctionDraft.team1User2.name}
+                  </p>
+                  <input
+                    type="number"
+                    min="0"
+                    step="1"
+                    value={correctionScores.team1}
+                    onChange={(event) =>
+                      setCorrectionScores((current) => ({
+                        ...current,
+                        team1: event.target.value,
+                      }))
+                    }
+                    className="field w-full px-3 py-2.5 text-sm"
+                    aria-label="Team 1 corrected score"
+                  />
+                </div>
+                <div className="space-y-1 text-sm text-gray-700">
+                  <p className="font-semibold text-gray-900">
+                    {correctionDraft.team2User1.name} &amp;{" "}
+                    {correctionDraft.team2User2.name}
+                  </p>
+                  <input
+                    type="number"
+                    min="0"
+                    step="1"
+                    value={correctionScores.team2}
+                    onChange={(event) =>
+                      setCorrectionScores((current) => ({
+                        ...current,
+                        team2: event.target.value,
+                      }))
+                    }
+                    className="field w-full px-3 py-2.5 text-sm"
+                    aria-label="Team 2 corrected score"
+                  />
+                </div>
+              </div>
+              <p className="text-sm text-gray-600">
+                Rankings, podium, profiles, and share images will use the
+                corrected result.
+              </p>
+            </div>
+          }
+          confirmLabel="Save Correction"
+          cancelLabel="Keep Result"
+          isSubmitting={correctingMatchId === correctionDraft.id}
+          onClose={closeCorrectionDraft}
+          onConfirm={() => void confirmScoreCorrection()}
         />
       ) : null}
     </main>

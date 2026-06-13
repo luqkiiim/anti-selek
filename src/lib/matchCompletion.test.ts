@@ -18,6 +18,8 @@ vi.mock("@/lib/prisma", () => ({
 }));
 
 import {
+  correctCompletedMatchScore,
+  CorrectCompletedMatchScoreError,
   finalizeMatchResult,
   undoCompletedMatchResult,
   UndoCompletedMatchError,
@@ -145,6 +147,126 @@ function createUndoTransactionMock({
 }
 
 type UndoTransactionMock = ReturnType<typeof createUndoTransactionMock>;
+
+function createReplayMatch({
+  id,
+  completedAt,
+  team1Score = 21,
+  team2Score = 18,
+  winnerTeam = 1,
+}: {
+  id: string;
+  completedAt: Date;
+  team1Score?: number;
+  team2Score?: number;
+  winnerTeam?: 1 | 2;
+}) {
+  return {
+    id,
+    sessionId: "session-1",
+    courtId: "court-1",
+    status: MatchStatus.COMPLETED,
+    team1User1Id: "a1",
+    team1User2Id: "a2",
+    team2User1Id: "b1",
+    team2User2Id: "b2",
+    team1Score,
+    team2Score,
+    winnerTeam,
+    team1EloChange: winnerTeam === 1 ? 10 : -10,
+    team2EloChange: winnerTeam === 1 ? -10 : 10,
+    createdAt: new Date(completedAt.getTime() - 60_000),
+    completedAt,
+    session: {
+      communityId: "community-1",
+      isTest: false,
+      status: SessionStatus.COMPLETED,
+      type: SessionType.POINTS,
+    },
+    team1User1: { id: "a1", name: "A1", elo: 1000 },
+    team1User2: { id: "a2", name: "A2", elo: 1000 },
+    team2User1: { id: "b1", name: "B1", elo: 1000 },
+    team2User2: { id: "b2", name: "B2", elo: 1000 },
+  };
+}
+
+function createCorrectionTransactionMock({
+  targetMatch = createReplayMatch({
+    id: "match-1",
+    completedAt: new Date("2026-05-02T10:00:00.000Z"),
+  }),
+  laterMatch = createReplayMatch({
+    id: "match-2",
+    completedAt: new Date("2026-05-02T10:30:00.000Z"),
+    team1Score: 18,
+    team2Score: 21,
+    winnerTeam: 2,
+  }),
+  newerOutsideMatch = null,
+}: {
+  targetMatch?: ReturnType<typeof createReplayMatch>;
+  laterMatch?: ReturnType<typeof createReplayMatch>;
+  newerOutsideMatch?: { id: string } | null;
+} = {}) {
+  return {
+    match: {
+      findUnique: vi.fn().mockResolvedValue(targetMatch),
+      findMany: vi.fn().mockResolvedValue([targetMatch, laterMatch]),
+      findFirst: vi.fn().mockResolvedValue(newerOutsideMatch),
+      update: vi.fn(async ({ where, data }) => ({
+        id: where.id,
+        ...data,
+      })),
+    },
+    sessionPlayer: {
+      findMany: vi.fn().mockResolvedValue([
+        { userId: "a1", isGuest: false },
+        { userId: "a2", isGuest: false },
+        { userId: "b1", isGuest: false },
+        { userId: "b2", isGuest: false },
+      ]),
+      updateMany: vi.fn().mockResolvedValue({ count: 2 }),
+    },
+    communityMember: {
+      findMany: vi.fn().mockResolvedValue([
+        { communityId: "community-1", userId: "a1", elo: 1000 },
+        { communityId: "community-1", userId: "a2", elo: 1000 },
+        { communityId: "community-1", userId: "b1", elo: 1000 },
+        { communityId: "community-1", userId: "b2", elo: 1000 },
+      ]),
+      update: vi.fn().mockResolvedValue({}),
+      updateMany: vi.fn().mockResolvedValue({ count: 2 }),
+    },
+    matchEloAdjustment: {
+      findMany: vi.fn().mockResolvedValue([
+        { matchId: "match-1", communityId: "community-1", userId: "a1", delta: 10 },
+        { matchId: "match-1", communityId: "community-1", userId: "a2", delta: 10 },
+        { matchId: "match-1", communityId: "community-1", userId: "b1", delta: -10 },
+        { matchId: "match-1", communityId: "community-1", userId: "b2", delta: -10 },
+        { matchId: "match-2", communityId: "community-1", userId: "a1", delta: -10 },
+        { matchId: "match-2", communityId: "community-1", userId: "a2", delta: -10 },
+        { matchId: "match-2", communityId: "community-1", userId: "b1", delta: 10 },
+        { matchId: "match-2", communityId: "community-1", userId: "b2", delta: 10 },
+      ]),
+      deleteMany: vi.fn().mockResolvedValue({ count: 8 }),
+      createMany: vi.fn().mockResolvedValue({ count: 4 }),
+    },
+    offlineIdentityMember: {
+      findMany: vi.fn().mockResolvedValue([]),
+    },
+    user: {
+      findMany: vi.fn().mockResolvedValue([
+        { id: "a1", elo: 1000 },
+        { id: "a2", elo: 1000 },
+        { id: "b1", elo: 1000 },
+        { id: "b2", elo: 1000 },
+      ]),
+      updateMany: vi.fn().mockResolvedValue({ count: 0 }),
+    },
+  };
+}
+
+type CorrectionTransactionMock = ReturnType<typeof createCorrectionTransactionMock>;
 
 describe("finalizeMatchResult", () => {
   beforeEach(() => {
@@ -576,5 +698,104 @@ describe("undoCompletedMatchResult", () => {
     } satisfies Partial<UndoCompletedMatchError>);
     expect(tx.match.deleteMany).not.toHaveBeenCalled();
     expect(tx.sessionPlayer.updateMany).not.toHaveBeenCalled();
+  });
+});
+
+describe("correctCompletedMatchScore", () => {
+  beforeEach(() => {
+    Object.values(mocks).forEach((mock) => mock.mockReset());
+  });
+
+  it("replays the corrected match and later same-session ELO changes", async () => {
+    const tx: CorrectionTransactionMock = createCorrectionTransactionMock();
+    mocks.transaction.mockImplementation(
+      (callback: (tx: CorrectionTransactionMock) => unknown) => callback(tx)
+    );
+
+    const result = await correctCompletedMatchScore({
+      matchId: "match-1",
+      finalTeam1Score: 21,
+      finalTeam2Score: 16,
+    });
+
+    expect(result).toMatchObject({
+      success: true,
+      replayedMatchIds: ["match-1", "match-2"],
+      oldScore: { team1Score: 21, team2Score: 18 },
+      newScore: { team1Score: 21, team2Score: 16 },
+    });
+    expect(tx.matchEloAdjustment.deleteMany).toHaveBeenCalledWith({
+      where: { matchId: { in: ["match-1", "match-2"] } },
+    });
+    expect(tx.match.update).toHaveBeenNthCalledWith(1, {
+      where: { id: "match-1" },
+      data: expect.objectContaining({
+        team1Score: 21,
+        team2Score: 16,
+        winnerTeam: 1,
+        team1EloChange: expect.any(Number),
+        team2EloChange: expect.any(Number),
+      }),
+    });
+    expect(tx.match.update).toHaveBeenNthCalledWith(2, {
+      where: { id: "match-2" },
+      data: expect.objectContaining({
+        team1Score: 18,
+        team2Score: 21,
+        winnerTeam: 2,
+        team1EloChange: expect.any(Number),
+        team2EloChange: expect.any(Number),
+      }),
+    });
+    expect(tx.matchEloAdjustment.createMany).toHaveBeenCalledTimes(2);
+  });
+
+  it("moves session points when the corrected winner changes", async () => {
+    const tx: CorrectionTransactionMock = createCorrectionTransactionMock();
+    mocks.transaction.mockImplementation(
+      (callback: (tx: CorrectionTransactionMock) => unknown) => callback(tx)
+    );
+
+    await correctCompletedMatchScore({
+      matchId: "match-1",
+      finalTeam1Score: 17,
+      finalTeam2Score: 21,
+    });
+
+    expect(tx.sessionPlayer.updateMany).toHaveBeenCalledWith({
+      where: {
+        sessionId: "session-1",
+        userId: { in: ["a1", "a2"] },
+      },
+      data: { sessionPoints: { increment: -3 } },
+    });
+    expect(tx.sessionPlayer.updateMany).toHaveBeenCalledWith({
+      where: {
+        sessionId: "session-1",
+        userId: { in: ["b1", "b2"] },
+      },
+      data: { sessionPoints: { increment: 3 } },
+    });
+  });
+
+  it("blocks correction when newer outside matches would require cross-session replay", async () => {
+    const tx: CorrectionTransactionMock = createCorrectionTransactionMock({
+      newerOutsideMatch: { id: "outside-match" },
+    });
+    mocks.transaction.mockImplementation(
+      (callback: (tx: CorrectionTransactionMock) => unknown) => callback(tx)
+    );
+
+    await expect(
+      correctCompletedMatchScore({
+        matchId: "match-1",
+        finalTeam1Score: 21,
+        finalTeam2Score: 16,
+      })
+    ).rejects.toMatchObject({
+      code: "NEWER_OUTSIDE_MATCHES",
+    } satisfies Partial<CorrectCompletedMatchScoreError>);
+    expect(tx.match.update).not.toHaveBeenCalled();
+    expect(tx.matchEloAdjustment.deleteMany).not.toHaveBeenCalled();
   });
 });
