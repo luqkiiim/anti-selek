@@ -19,6 +19,21 @@ import { getSessionAdminMembership } from "@/lib/sessionCollab";
 import { MatchStatus, SessionStatus } from "@/types/enums";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 30;
+
+function getUnknownCorrectionErrorDetails(error: unknown) {
+  if (error instanceof Error) {
+    const errorWithCode = error as Error & { code?: unknown };
+    return {
+      name: error.name,
+      message: error.message,
+      stack: error.stack,
+      code: typeof errorWithCode.code === "string" ? errorWithCode.code : undefined,
+    };
+  }
+
+  return { value: String(error) };
+}
 
 function correctionErrorResponse(error: CorrectCompletedMatchScoreError) {
   if (error.code === "MATCH_NOT_FOUND") {
@@ -195,6 +210,10 @@ export async function POST(
       );
     }
 
+    console.error(
+      "Correct completed match score error",
+      getUnknownCorrectionErrorDetails(error)
+    );
     logError("Correct completed match score error", error);
     return safeErrorResponse();
   }

@@ -1369,8 +1369,12 @@ export async function correctCompletedMatchScoreInTransaction(
 export async function correctCompletedMatchScore(
   args: CorrectCompletedMatchScoreArgs
 ) {
-  return prisma.$transaction((tx) =>
-    correctCompletedMatchScoreInTransaction(tx, args)
+  return prisma.$transaction(
+    (tx) => correctCompletedMatchScoreInTransaction(tx, args),
+    {
+      maxWait: 10_000,
+      timeout: 25_000,
+    }
   );
 }
 
