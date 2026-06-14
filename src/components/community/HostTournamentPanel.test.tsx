@@ -95,7 +95,7 @@ describe("HostTournamentPanel", () => {
 
     expect(markup).toContain("app-panel min-w-0 max-w-full overflow-hidden");
     expect(markup).toContain("min-w-0 rounded-lg border");
-    expect(markup).toContain("block truncate text-xs text-gray-500");
+    expect(markup).not.toContain("Regular tournament / Auto queue on");
   });
 
   it("exposes tutorial targets for name, roster choice, and creation", () => {

@@ -254,22 +254,6 @@ export function HostTournamentPanel({
   const canCreateSession = Boolean(newSessionName.trim()) && !creatingSession;
   const hasPartnerCommunity = Boolean(partnerCommunityId);
   const trimmedPartnerSearch = partnerCommunitySearch.trim();
-  const advancedSummaryItems = [
-    isTestSession ? "Test session" : null,
-    autoQueueEnabled ? null : "Auto queue off",
-    respectPlayerRest ? null : "Rest ignored",
-    balanceMetric === SessionBalanceMetric.RATING ? "Balance by rating" : null,
-    poolsEnabled ? "Pools enabled" : null,
-    selectedPartnerCommunity
-      ? `Collab: ${selectedPartnerCommunity.name}`
-      : hasPartnerCommunity
-        ? "Collab selected"
-        : null,
-  ].filter(Boolean);
-  const advancedSummary =
-    advancedSummaryItems.length > 0
-      ? advancedSummaryItems.join(" / ")
-      : "Regular tournament / Auto queue on";
   const selectedStyleInfo = MATCHMAKING_STYLE_INFO[matchmakingStyle];
 
   return (
@@ -416,9 +400,6 @@ export function HostTournamentPanel({
               <span className="min-w-0">
                 <span className="block text-sm font-semibold text-gray-900">
                   Advanced setup
-                </span>
-                <span className="block truncate text-xs text-gray-500">
-                  {advancedSummary}
                 </span>
               </span>
             </span>
