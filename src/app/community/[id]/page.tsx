@@ -1003,9 +1003,9 @@ export default function CommunityPage() {
                   communityPanelRefs.current[section] = node;
                 }}
                 data-community-section={section}
-                className="w-full shrink-0 snap-center px-1"
+                className="min-w-0 max-w-full basis-full shrink-0 snap-center px-1"
               >
-                <div className="space-y-8 pb-28">
+                <div className="min-w-0 space-y-8 pb-28">
                   {renderCommunitySection(section)}
                 </div>
               </section>

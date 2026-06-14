@@ -71,23 +71,15 @@ const MATCHMAKING_STYLE_INFO: Record<
 > = {
   [SessionMatchmakingStyle.BALANCED]: {
     label: "Balanced",
-    lines: [
-      "Matchmaking keeps fair teams while still rotating matchups.",
-    ],
+    lines: ["Fair games with some variety."],
   },
   [SessionMatchmakingStyle.SOCIAL]: {
     label: "Social",
-    lines: [
-      "Matchmaking prioritizes more partner and opponent variety.",
-      "Expect softer team balance.",
-    ],
+    lines: ["More variety, less focus on fairness."],
   },
   [SessionMatchmakingStyle.LEVEL_MATCH]: {
     label: "Level Match",
-    lines: [
-      "Matchmaking narrows selection to players near each other.",
-      "Similar level players face each other more often.",
-    ],
+    lines: ["Play mostly with people close to your level."],
   },
 };
 
@@ -104,7 +96,7 @@ function SegmentedOption({
     <button
       type="button"
       onClick={onClick}
-      className={`rounded-lg border px-3 py-2 text-sm font-semibold transition ${
+      className={`min-w-0 rounded-lg border px-3 py-2 text-center text-sm font-semibold transition ${
         selected
           ? "border-blue-300 bg-blue-50 text-blue-700 shadow-sm"
           : "border-gray-200 bg-white text-gray-700 hover:border-blue-200 hover:bg-blue-50/40"
@@ -185,13 +177,13 @@ function SwitchRow({
       role="switch"
       aria-checked={checked}
       onClick={() => onChange(!checked)}
-      className="flex w-full items-center justify-between gap-4 rounded-xl border border-gray-200 bg-white px-3 py-3 text-left transition hover:border-blue-200 hover:bg-blue-50/40 sm:px-4"
+      className="flex w-full min-w-0 max-w-full items-center justify-between gap-3 rounded-xl border border-gray-200 bg-white px-3 py-3 text-left transition hover:border-blue-200 hover:bg-blue-50/40 sm:gap-4 sm:px-4"
     >
       <span className="min-w-0">
-        <span className="block text-sm font-semibold text-gray-900">
+        <span className="block break-words text-sm font-semibold text-gray-900">
           {label}
         </span>
-        <span className="mt-0.5 block text-xs leading-5 text-gray-500">
+        <span className="mt-0.5 block break-words text-xs leading-5 text-gray-500">
           {description}
         </span>
       </span>
@@ -281,7 +273,7 @@ export function HostTournamentPanel({
   const selectedStyleInfo = MATCHMAKING_STYLE_INFO[matchmakingStyle];
 
   return (
-    <section className="app-panel p-3 sm:p-4">
+    <section className="app-panel min-w-0 max-w-full overflow-hidden p-3 sm:p-4">
       <div className="flex items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-2">
           <span className="app-chip app-chip-accent">Host</span>
@@ -440,10 +432,10 @@ export function HostTournamentPanel({
           </button>
 
           {advancedOpen ? (
-            <div className="space-y-3 border-t border-gray-200 px-3 py-3 sm:px-4">
-              <div className="space-y-1.5 rounded-xl border border-gray-200 bg-white p-3 sm:p-4">
+            <div className="min-w-0 space-y-3 border-t border-gray-200 px-3 py-3 sm:px-4">
+              <div className="min-w-0 space-y-1.5 rounded-xl border border-gray-200 bg-white p-3 sm:p-4">
                 <p className="text-sm font-medium text-gray-900">Balance by</p>
-                <div className="flex flex-wrap gap-2">
+                <div className="grid min-w-0 grid-cols-2 gap-2">
                   <SegmentedOption
                     label="Session points"
                     selected={
@@ -465,7 +457,7 @@ export function HostTournamentPanel({
                 </div>
               </div>
 
-              <div className="space-y-2">
+              <div className="min-w-0 space-y-2">
                 <SwitchRow
                   label="Test session"
                   description="Safe for rehearsal and can be reset later."

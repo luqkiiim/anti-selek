@@ -87,10 +87,15 @@ describe("HostTournamentPanel", () => {
   it("shows the selected social helper copy", () => {
     const markup = renderPanel(SessionMatchmakingStyle.SOCIAL);
 
-    expect(markup).toContain(
-      "Matchmaking prioritizes more partner and opponent variety."
-    );
-    expect(markup).toContain("Expect softer team balance.");
+    expect(markup).toContain("More variety, less focus on fairness.");
+  });
+
+  it("keeps advanced setup controls constrained on mobile", () => {
+    const markup = renderPanel();
+
+    expect(markup).toContain("app-panel min-w-0 max-w-full overflow-hidden");
+    expect(markup).toContain("min-w-0 rounded-lg border");
+    expect(markup).toContain("block truncate text-xs text-gray-500");
   });
 
   it("exposes tutorial targets for name, roster choice, and creation", () => {
