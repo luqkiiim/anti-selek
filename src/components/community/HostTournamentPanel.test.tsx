@@ -1,17 +1,26 @@
 import { describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import { HostTournamentPanel } from "./HostTournamentPanel";
-import { SessionMode, SessionPool, SessionType } from "@/types/enums";
+import {
+  SessionBalanceMetric,
+  SessionMatchmakingStyle,
+  SessionPairingMode,
+  SessionPool,
+} from "@/types/enums";
 
-function renderPanel(sessionType: SessionType) {
+function renderPanel(
+  matchmakingStyle: SessionMatchmakingStyle = SessionMatchmakingStyle.BALANCED
+) {
   return renderToStaticMarkup(
     <HostTournamentPanel
       newSessionName="Friday Night"
       onNewSessionNameChange={vi.fn()}
-      sessionType={sessionType}
-      onSessionTypeChange={vi.fn()}
-      sessionMode={SessionMode.MEXICANO}
-      onSessionModeChange={vi.fn()}
+      matchmakingStyle={matchmakingStyle}
+      onMatchmakingStyleChange={vi.fn()}
+      balanceMetric={SessionBalanceMetric.SESSION_POINTS}
+      onBalanceMetricChange={vi.fn()}
+      pairingMode={SessionPairingMode.OPEN}
+      onPairingModeChange={vi.fn()}
       isTestSession={false}
       onIsTestSessionChange={vi.fn()}
       autoQueueEnabled={true}
@@ -58,34 +67,34 @@ function renderPanel(sessionType: SessionType) {
 }
 
 describe("HostTournamentPanel", () => {
-  it("renders the format picker as a dropdown in the fixed order", () => {
-    const markup = renderPanel(SessionType.POINTS);
+  it("renders the matchmaking style picker as a dropdown in the fixed order", () => {
+    const markup = renderPanel();
 
     expect(markup).toContain("<select");
 
-    const pointsIndex = markup.indexOf(">Points<");
-    const socialMixIndex = markup.indexOf(">Social Mix<");
-    const ratingsIndex = markup.indexOf(">Ratings<");
-    const ladderIndex = markup.indexOf(">Ladder<");
-    const raceIndex = markup.indexOf(">Race<");
+    const balancedIndex = markup.indexOf(">Balanced<");
+    const socialIndex = markup.indexOf(">Social<");
+    const levelMatchIndex = markup.indexOf(">Level Match<");
 
-    expect(pointsIndex).toBeGreaterThan(-1);
-    expect(socialMixIndex).toBeGreaterThan(pointsIndex);
-    expect(ratingsIndex).toBeGreaterThan(socialMixIndex);
-    expect(ladderIndex).toBeGreaterThan(ratingsIndex);
-    expect(raceIndex).toBeGreaterThan(ladderIndex);
-    expect(markup).not.toContain("About Points format");
+    expect(balancedIndex).toBeGreaterThan(-1);
+    expect(socialIndex).toBeGreaterThan(balancedIndex);
+    expect(levelMatchIndex).toBeGreaterThan(socialIndex);
+    expect(markup).not.toContain(">Ratings<");
+    expect(markup).not.toContain(">Ladder<");
+    expect(markup).not.toContain(">Race<");
   });
 
-  it("shows the selected social mix helper copy", () => {
-    const markup = renderPanel(SessionType.SOCIAL_MIX);
+  it("shows the selected social helper copy", () => {
+    const markup = renderPanel(SessionMatchmakingStyle.SOCIAL);
 
-    expect(markup).toContain("Matchmaking tries to provide even more variety.");
-    expect(markup).toContain("Expect less balanced games.");
+    expect(markup).toContain(
+      "Matchmaking prioritizes more partner and opponent variety."
+    );
+    expect(markup).toContain("Expect softer team balance.");
   });
 
   it("exposes tutorial targets for name, roster choice, and creation", () => {
-    const markup = renderPanel(SessionType.POINTS);
+    const markup = renderPanel();
 
     expect(markup).toContain(
       'data-tutorial-target="admin-onboarding-session-name"'

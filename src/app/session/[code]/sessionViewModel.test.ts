@@ -196,7 +196,7 @@ describe("buildSessionViewModel", () => {
     expect(viewModel.pausedPlayersCount).toBe(1);
     expect(viewModel.guestPlayersCount).toBe(1);
     expect(viewModel.sessionModeLabel).toBe("Mixed");
-    expect(viewModel.sessionTypeLabel).toBe("Ratings");
+    expect(viewModel.sessionTypeLabel).toBe("Balanced");
     expect(viewModel.activeManualCourt?.id).toBe("court-2");
     expect([...viewModel.selectedManualPlayerIds]).toEqual(["u5", "u6"]);
     expect(viewModel.manualMatchPlayerOptions.map((player) => player.user.name)).toEqual([
@@ -299,7 +299,7 @@ describe("buildSessionViewModel", () => {
       openPreferenceEditor: null,
     });
 
-    expect(viewModel.sessionTypeLabel).toBe("Social Mix");
+    expect(viewModel.sessionTypeLabel).toBe("Social");
     expect(viewModel.sortedPlayers.map((player) => player.user.name)).toEqual([
       "Ben",
       "Alice",
@@ -359,7 +359,7 @@ describe("buildSessionViewModel", () => {
       openPreferenceEditor: null,
     });
 
-    expect(viewModel.sessionTypeLabel).toBe("Ladder");
+    expect(viewModel.sessionTypeLabel).toBe("Ladder (legacy)");
     expect(viewModel.playerStatsByUserId.get("u3")).toEqual({
       played: 1,
       wins: 1,
@@ -374,7 +374,7 @@ describe("buildSessionViewModel", () => {
     ]);
   });
 
-  it("sorts race standings by cumulative three-point wins and ignores matches before re-entry", () => {
+  it("labels level match sessions while keeping points-style ordering", () => {
     const players = [
       createPlayer("u1", "Alice"),
       createPlayer("u2", "Ben"),
@@ -425,17 +425,17 @@ describe("buildSessionViewModel", () => {
       openPreferenceEditor: null,
     });
 
-    expect(viewModel.sessionTypeLabel).toBe("Race");
+    expect(viewModel.sessionTypeLabel).toBe("Level Match");
     expect(viewModel.playerStatsByUserId.get("u3")).toEqual({
-      played: 1,
+      played: 2,
       wins: 1,
-      losses: 0,
+      losses: 1,
     });
-    expect(viewModel.pointDiffByUserId.get("u3")).toBe(2);
+    expect(viewModel.pointDiffByUserId.get("u3")).toBe(-1);
     expect(viewModel.sortedPlayers.map((player) => player.user.name)).toEqual([
       "Ben",
-      "Cara",
       "Alice",
+      "Cara",
       "Dan",
     ]);
   });
@@ -451,7 +451,7 @@ describe("buildSessionViewModel", () => {
     ];
 
     const sessionData = createSessionData({
-      type: SessionType.RACE,
+      type: SessionType.LADDER,
       mode: SessionMode.MEXICANO,
       players,
       matches: [

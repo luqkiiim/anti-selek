@@ -11,6 +11,26 @@ export enum SessionMode {
   MIXICANO = "MIXICANO",
 }
 
+export enum SessionScoringType {
+  POINTS = "POINTS",
+}
+
+export enum SessionMatchmakingStyle {
+  BALANCED = "BALANCED",
+  SOCIAL = "SOCIAL",
+  LEVEL_MATCH = "LEVEL_MATCH",
+}
+
+export enum SessionBalanceMetric {
+  SESSION_POINTS = "SESSION_POINTS",
+  RATING = "RATING",
+}
+
+export enum SessionPairingMode {
+  OPEN = "OPEN",
+  MIXED = "MIXED",
+}
+
 export enum SessionStatus {
   WAITING = "WAITING",
   ACTIVE = "ACTIVE",

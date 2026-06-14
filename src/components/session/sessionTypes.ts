@@ -3,8 +3,12 @@ import {
   MixedSide,
   PartnerPreference,
   PlayerGender,
+  SessionBalanceMetric,
+  SessionMatchmakingStyle,
   SessionMode,
+  SessionPairingMode,
   SessionPool,
+  SessionScoringType,
 } from "@/types/enums";
 import type { MatchmakingReason } from "@/lib/matchmaking/matchReason";
 
@@ -91,6 +95,10 @@ export interface SessionData {
   name: string;
   type: string;
   mode: SessionMode;
+  scoringType?: SessionScoringType;
+  matchmakingStyle?: SessionMatchmakingStyle;
+  balanceMetric?: SessionBalanceMetric;
+  pairingMode?: SessionPairingMode;
   status: string;
   isTest: boolean;
   sourceSessionId?: string | null;

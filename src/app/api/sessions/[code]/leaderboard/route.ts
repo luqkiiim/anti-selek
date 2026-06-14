@@ -223,8 +223,6 @@ async function getSessionLeaderboard(
     currentLeaderboard:
       sessionData.type === SessionType.LADDER
         ? ladderLeaderboard
-        : sessionData.type === SessionType.RACE
-          ? raceLeaderboard
         : sessionPointsLeaderboard,
   });
 }

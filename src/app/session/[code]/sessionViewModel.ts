@@ -3,7 +3,6 @@
 import {
   getCompetitiveEntryAt,
   deriveLadderRecordsByEntryTime,
-  deriveRaceRecordsByEntryTime,
 } from "@/lib/matchmaking/ladder";
 import { getCourtDisplayLabel } from "@/lib/courtLabels";
 import { getQueuedMatchUserIds } from "@/lib/sessionQueue";
@@ -103,10 +102,7 @@ function buildPlayerPerformanceMaps(sessionData: SessionData) {
     pointDiffByUserId.set(player.userId, 0);
   });
 
-  if (
-    sessionData.type === SessionType.LADDER ||
-    sessionData.type === SessionType.RACE
-  ) {
+  if (sessionData.type === SessionType.LADDER) {
     const entryMap = new Map(
       sessionData.players.map((player) => [
         player.userId,
@@ -121,10 +117,10 @@ function buildPlayerPerformanceMaps(sessionData: SessionData) {
       status: match.status,
       completedAt: match.completedAt ? new Date(match.completedAt) : null,
     }));
-    const ladderRecordByUserId =
-      sessionData.type === SessionType.RACE
-        ? deriveRaceRecordsByEntryTime(entryMap, historyMatches)
-        : deriveLadderRecordsByEntryTime(entryMap, historyMatches);
+    const ladderRecordByUserId = deriveLadderRecordsByEntryTime(
+      entryMap,
+      historyMatches
+    );
 
     sessionData.players.forEach((player) => {
       const record = ladderRecordByUserId.get(player.userId);
@@ -270,25 +266,20 @@ export function buildSessionViewModel({
     buildPlayerPerformanceMaps(sessionData);
 
   const sortedPlayers = sessionData.players.slice().sort((a, b) =>
-    sessionData.type === SessionType.LADDER ||
-    sessionData.type === SessionType.RACE
+    sessionData.type === SessionType.LADDER
       ? compareCompetitiveStandings(
           {
             name: a.user.name,
             score:
-              sessionData.type === SessionType.RACE
-                ? (playerStatsByUserId.get(a.userId)?.wins ?? 0) * 3
-                : (playerStatsByUserId.get(a.userId)?.wins ?? 0) -
-                  (playerStatsByUserId.get(a.userId)?.losses ?? 0),
+              (playerStatsByUserId.get(a.userId)?.wins ?? 0) -
+              (playerStatsByUserId.get(a.userId)?.losses ?? 0),
             pointDiff: pointDiffByUserId.get(a.userId) ?? 0,
           },
           {
             name: b.user.name,
             score:
-              sessionData.type === SessionType.RACE
-                ? (playerStatsByUserId.get(b.userId)?.wins ?? 0) * 3
-                : (playerStatsByUserId.get(b.userId)?.wins ?? 0) -
-                  (playerStatsByUserId.get(b.userId)?.losses ?? 0),
+              (playerStatsByUserId.get(b.userId)?.wins ?? 0) -
+              (playerStatsByUserId.get(b.userId)?.losses ?? 0),
             pointDiff: pointDiffByUserId.get(b.userId) ?? 0,
           }
         )

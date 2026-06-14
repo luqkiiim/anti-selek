@@ -10,6 +10,10 @@ import {
   getPlayerCommunityBadges,
 } from "@/lib/sessionCollab";
 import { getSessionModeLabel } from "@/lib/sessionModeLabels";
+import {
+  getEffectiveSessionMode,
+  getEffectiveSessionType,
+} from "@/lib/sessionSettings";
 import { getQueuedMatchUserIds } from "@/lib/sessionQueue";
 import { getEffectiveMixedSide } from "@/lib/mixedSide";
 import {
@@ -93,6 +97,14 @@ interface PoolAwareSelection {
 
 const MAX_POOL_SELECTION_OPTIONS_PER_PLAN = 64;
 
+function getMatchmakerSessionType(sessionData: GenerateMatchSession) {
+  return getEffectiveSessionType(sessionData);
+}
+
+function getMatchmakerSessionMode(sessionData: GenerateMatchSession) {
+  return getEffectiveSessionMode(sessionData);
+}
+
 function getV3QuartetKey(ids: readonly string[]) {
   return [...ids].sort().join("|");
 }
@@ -125,8 +137,8 @@ function withMatchmakingReason<
     return {
       ...selection,
       matchmakingReasonJson: buildV3MatchmakingReasonJson(selection, {
-        sessionType: sessionData.type as SessionType,
-        sessionMode: sessionData.mode as SessionMode,
+        sessionType: getMatchmakerSessionType(sessionData),
+        sessionMode: getMatchmakerSessionMode(sessionData),
         targetPool: "targetPool" in selection ? selection.targetPool ?? null : null,
         missedPool: "missedPool" in selection ? selection.missedPool ?? null : null,
         respectPlayerRest: sessionData.respectPlayerRest,
@@ -287,8 +299,8 @@ function buildV3Players(
     arrivalPriorityAt: player.arrivalPriorityAt ?? null,
     strength:
       playersById.get(player.userId)?.elo ??
-      (sessionData.type === SessionType.POINTS ||
-      sessionData.type === SessionType.SOCIAL_MIX
+      (getMatchmakerSessionType(sessionData) === SessionType.POINTS ||
+      getMatchmakerSessionType(sessionData) === SessionType.SOCIAL_MIX
         ? player.sessionPoints
         : player.user.elo),
     pointDiff: playersById.get(player.userId)?.pointDiff ?? 0,
@@ -322,7 +334,7 @@ function buildLadderPlayers(
     ])
   );
   const ladderRecordByUserId =
-    sessionData.type === SessionType.RACE
+    getMatchmakerSessionType(sessionData) === SessionType.RACE
       ? deriveRaceRecordsByEntryTime(
           ladderEntryAtByUserId,
           completedMatches
@@ -375,7 +387,7 @@ export async function buildMatchmakingState(
     }
   }
   const sessionCommunityIds =
-    sessionData.type === SessionType.ELO &&
+    getMatchmakerSessionType(sessionData) === SessionType.ELO &&
     sessionData.communityId &&
     sessionData.players.length > 0
       ? await getAcceptedSessionCommunityIds(prisma, sessionData)
@@ -436,7 +448,7 @@ export async function buildMatchmakingState(
       {
         userId: player.userId,
         elo: getPlayerBalanceInput({
-          sessionType: sessionData.type as SessionType,
+          sessionType: getMatchmakerSessionType(sessionData),
           sessionPoints: player.sessionPoints,
         communityElo:
           legacyCommunityEloByUserId.get(player.userId) ??
@@ -642,7 +654,7 @@ function getV3BatchFailureMessage({
   sessionData: GenerateMatchSession;
 }) {
   const requiredPlayerCount = requestedMatchCount * 4;
-  const modeLabel = getSessionModeLabel(sessionData.mode);
+  const modeLabel = getSessionModeLabel(getMatchmakerSessionMode(sessionData));
   const courtLabel = formatCountLabel(requestedMatchCount, "court");
   const candidateIds =
     Array.isArray(debug.candidatePlayerIds) && debug.candidatePlayerIds.length > 0
@@ -654,7 +666,7 @@ function getV3BatchFailureMessage({
   const validQuartetCount =
     typeof debug.validQuartetCount === "number" ? debug.validQuartetCount : 0;
   const sideSummary =
-    sessionData.mode === SessionMode.MIXICANO
+    getMatchmakerSessionMode(sessionData) === SessionMode.MIXICANO
       ? ` ${formatMixedSideCounts(
           getMixedSideCounts(sessionData, new Set(candidateIds))
         )}`
@@ -747,8 +759,8 @@ function buildPoolSelectionPlanner({
 }) {
   const completedMatches = buildCompletedMatches(sessionData);
   const usesCompetitiveGrouping =
-    sessionData.type === SessionType.LADDER ||
-    sessionData.type === SessionType.RACE;
+    getMatchmakerSessionType(sessionData) === SessionType.LADDER ||
+    getMatchmakerSessionType(sessionData) === SessionType.RACE;
   const waitingCounts = getPoolWaitingCounts(sessionData, rankedCandidates);
   const duePool = chooseDuePool(sessionData, rankedCandidates);
 
@@ -785,7 +797,7 @@ function buildPoolSelectionPlanner({
           )
         : ladderPlayers;
       const result = findBestSingleCourtSelectionLadder(sourcePlayers, {
-        sessionMode: sessionData.mode as SessionMode,
+        sessionMode: getMatchmakerSessionMode(sessionData),
         respectPlayerRest: sessionData.respectPlayerRest,
         excludedQuartetKey,
         excludedQuartetKeys,
@@ -811,8 +823,8 @@ function buildPoolSelectionPlanner({
         )
       : v3Players;
     const result = findBestSingleCourtSelectionV3(sourcePlayers, {
-      sessionMode: sessionData.mode as SessionMode,
-      sessionType: sessionData.type as SessionType,
+      sessionMode: getMatchmakerSessionMode(sessionData),
+      sessionType: getMatchmakerSessionType(sessionData),
       respectPlayerRest: sessionData.respectPlayerRest,
       completedMatches,
       excludedQuartetKey,
@@ -977,7 +989,7 @@ function selectPoolEnabledSingleCourtMatch({
     throw new GenerateMatchError(
       400,
       `No valid pairing found for current ${getSessionModeLabel(
-        sessionData.mode
+        getMatchmakerSessionMode(sessionData)
       )} session rules. Try changing player preferences.`
     );
   }
@@ -1076,7 +1088,7 @@ function selectPoolEnabledSingleCourtMatch({
   throw new GenerateMatchError(
     400,
     `No valid pairing found for current ${getSessionModeLabel(
-      sessionData.mode
+      getMatchmakerSessionMode(sessionData)
     )} session rules. Try changing player preferences.`
   );
 }
@@ -1141,21 +1153,21 @@ export function selectSingleCourtMatch({
 
   const completedMatches = buildCompletedMatches(sessionData);
   const usesCompetitiveGrouping =
-    sessionData.type === SessionType.LADDER ||
-    sessionData.type === SessionType.RACE;
+    getMatchmakerSessionType(sessionData) === SessionType.LADDER ||
+    getMatchmakerSessionType(sessionData) === SessionType.RACE;
   const initialResult = usesCompetitiveGrouping
       ? findBestSingleCourtSelectionLadder(
           buildLadderPlayers(sessionData, playersById, rankedCandidates),
           {
-            sessionMode: sessionData.mode as SessionMode,
+            sessionMode: getMatchmakerSessionMode(sessionData),
             respectPlayerRest: sessionData.respectPlayerRest,
           }
         )
     : findBestSingleCourtSelectionV3(
         buildV3Players(sessionData, playersById, rankedCandidates),
         {
-          sessionMode: sessionData.mode as SessionMode,
-          sessionType: sessionData.type as SessionType,
+          sessionMode: getMatchmakerSessionMode(sessionData),
+          sessionType: getMatchmakerSessionType(sessionData),
           respectPlayerRest: sessionData.respectPlayerRest,
           completedMatches,
         }
@@ -1165,7 +1177,7 @@ export function selectSingleCourtMatch({
     throw new GenerateMatchError(
       400,
       `No valid pairing found for current ${getSessionModeLabel(
-        sessionData.mode
+        getMatchmakerSessionMode(sessionData)
       )} session rules. Try changing player preferences.`
     );
   }
@@ -1194,7 +1206,7 @@ export function selectSingleCourtMatch({
     const alternativeQuartet = findBestSingleCourtSelectionLadder(
       competitivePlayers,
       {
-        sessionMode: sessionData.mode as SessionMode,
+        sessionMode: getMatchmakerSessionMode(sessionData),
         respectPlayerRest: sessionData.respectPlayerRest,
         excludedQuartetKey: previousQuartetKey,
       }
@@ -1211,7 +1223,7 @@ export function selectSingleCourtMatch({
     const alternativePartition = findBestSingleCourtSelectionLadder(
       competitivePlayers,
       {
-        sessionMode: sessionData.mode as SessionMode,
+        sessionMode: getMatchmakerSessionMode(sessionData),
         respectPlayerRest: sessionData.respectPlayerRest,
         excludedPartitionKey: previousPartitionKey,
       }
@@ -1240,8 +1252,8 @@ export function selectSingleCourtMatch({
   }
 
   const alternativeQuartet = findBestSingleCourtSelectionV3(v3Players, {
-    sessionMode: sessionData.mode as SessionMode,
-    sessionType: sessionData.type as SessionType,
+    sessionMode: getMatchmakerSessionMode(sessionData),
+    sessionType: getMatchmakerSessionType(sessionData),
     respectPlayerRest: sessionData.respectPlayerRest,
     completedMatches,
     excludedQuartetKey: previousQuartetKey,
@@ -1256,8 +1268,8 @@ export function selectSingleCourtMatch({
   }
 
   const alternativePartition = findBestSingleCourtSelectionV3(v3Players, {
-    sessionMode: sessionData.mode as SessionMode,
-    sessionType: sessionData.type as SessionType,
+    sessionMode: getMatchmakerSessionMode(sessionData),
+    sessionType: getMatchmakerSessionType(sessionData),
     respectPlayerRest: sessionData.respectPlayerRest,
     completedMatches,
     excludedPartitionKey: previousPartitionKey,
@@ -1294,14 +1306,14 @@ function selectExactQuartetMatch({
   }
 
   const usesCompetitiveGrouping =
-    sessionData.type === SessionType.LADDER ||
-    sessionData.type === SessionType.RACE;
+    getMatchmakerSessionType(sessionData) === SessionType.LADDER ||
+    getMatchmakerSessionType(sessionData) === SessionType.RACE;
 
   if (usesCompetitiveGrouping) {
     const result = findBestSingleCourtSelectionLadder(
       buildLadderPlayers(sessionData, playersById, exactRankedCandidates),
       {
-        sessionMode: sessionData.mode as SessionMode,
+        sessionMode: getMatchmakerSessionMode(sessionData),
         respectPlayerRest: sessionData.respectPlayerRest,
       }
     );
@@ -1320,8 +1332,8 @@ function selectExactQuartetMatch({
   const result = findBestSingleCourtSelectionV3(
     buildV3Players(sessionData, playersById, exactRankedCandidates),
     {
-      sessionMode: sessionData.mode as SessionMode,
-      sessionType: sessionData.type as SessionType,
+      sessionMode: getMatchmakerSessionMode(sessionData),
+      sessionType: getMatchmakerSessionType(sessionData),
       respectPlayerRest: sessionData.respectPlayerRest,
       completedMatches: buildCompletedMatches(sessionData),
     }
@@ -1456,7 +1468,7 @@ export function selectBatchMatches({
       throw new GenerateMatchError(
         400,
         `No valid set of matches found for current ${getSessionModeLabel(
-          sessionData.mode
+          getMatchmakerSessionMode(sessionData)
         )} session rules. Try changing player preferences.`
       );
     }
@@ -1465,14 +1477,14 @@ export function selectBatchMatches({
   }
 
   if (
-    sessionData.type === SessionType.LADDER ||
-    sessionData.type === SessionType.RACE
+    getMatchmakerSessionType(sessionData) === SessionType.LADDER ||
+    getMatchmakerSessionType(sessionData) === SessionType.RACE
   ) {
     const result = findBestBatchSelectionLadder(
       buildLadderPlayers(sessionData, playersById, rankedCandidates),
       {
         courtCount: requestedMatchCount,
-        sessionMode: sessionData.mode as SessionMode,
+        sessionMode: getMatchmakerSessionMode(sessionData),
         respectPlayerRest: sessionData.respectPlayerRest,
       }
     );
@@ -1481,7 +1493,7 @@ export function selectBatchMatches({
       throw new GenerateMatchError(
         400,
         `No valid set of matches found for current ${getSessionModeLabel(
-          sessionData.mode
+          getMatchmakerSessionMode(sessionData)
         )} session rules. Try changing player preferences.`
       );
     }
@@ -1498,8 +1510,8 @@ export function selectBatchMatches({
     buildV3Players(sessionData, playersById, rankedCandidates),
     {
       courtCount: requestedMatchCount,
-      sessionMode: sessionData.mode as SessionMode,
-      sessionType: sessionData.type as SessionType,
+      sessionMode: getMatchmakerSessionMode(sessionData),
+      sessionType: getMatchmakerSessionType(sessionData),
       respectPlayerRest: sessionData.respectPlayerRest,
       completedMatches: buildCompletedMatches(sessionData),
       randomFn,

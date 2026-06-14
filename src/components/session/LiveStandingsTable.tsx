@@ -36,10 +36,6 @@ function getStandingValue(
     return ladderScore > 0 ? `+${ladderScore}` : `${ladderScore}`;
   }
 
-  if (sessionType === SessionType.RACE) {
-    return `${stats.wins * 3}`;
-  }
-
   return `${player.sessionPoints}`;
 }
 

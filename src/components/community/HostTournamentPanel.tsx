@@ -3,15 +3,22 @@
 import { useState } from "react";
 import { ChevronDown, SlidersHorizontal, UserPlus, Users, X } from "lucide-react";
 import type { CommunityCollabCandidate } from "./communityTypes";
-import { SessionMode, SessionPool, SessionType } from "@/types/enums";
+import {
+  SessionBalanceMetric,
+  SessionMatchmakingStyle,
+  SessionPairingMode,
+  SessionPool,
+} from "@/types/enums";
 
 interface HostTournamentPanelProps {
   newSessionName: string;
   onNewSessionNameChange: (value: string) => void;
-  sessionType: SessionType;
-  onSessionTypeChange: (type: SessionType) => void;
-  sessionMode: SessionMode;
-  onSessionModeChange: (mode: SessionMode) => void;
+  matchmakingStyle: SessionMatchmakingStyle;
+  onMatchmakingStyleChange: (style: SessionMatchmakingStyle) => void;
+  balanceMetric: SessionBalanceMetric;
+  onBalanceMetricChange: (metric: SessionBalanceMetric) => void;
+  pairingMode: SessionPairingMode;
+  onPairingModeChange: (mode: SessionPairingMode) => void;
   isTestSession: boolean;
   onIsTestSessionChange: (value: boolean) => void;
   autoQueueEnabled: boolean;
@@ -49,53 +56,36 @@ interface HostTournamentPanelProps {
   creatingSession: boolean;
 }
 
-const SESSION_TYPE_ORDER: SessionType[] = [
-  SessionType.POINTS,
-  SessionType.SOCIAL_MIX,
-  SessionType.ELO,
-  SessionType.LADDER,
-  SessionType.RACE,
+const MATCHMAKING_STYLE_ORDER: SessionMatchmakingStyle[] = [
+  SessionMatchmakingStyle.BALANCED,
+  SessionMatchmakingStyle.SOCIAL,
+  SessionMatchmakingStyle.LEVEL_MATCH,
 ];
 
-const SESSION_TYPE_INFO: Record<
-  SessionType,
+const MATCHMAKING_STYLE_INFO: Record<
+  SessionMatchmakingStyle,
   {
     label: string;
     lines: string[];
   }
 > = {
-  [SessionType.POINTS]: {
-    label: "Points",
+  [SessionMatchmakingStyle.BALANCED]: {
+    label: "Balanced",
     lines: [
-      "Matchmaking tries to provide variety and balance",
+      "Matchmaking keeps fair teams while still rotating matchups.",
     ],
   },
-  [SessionType.SOCIAL_MIX]: {
-    label: "Social Mix",
+  [SessionMatchmakingStyle.SOCIAL]: {
+    label: "Social",
     lines: [
-      "Matchmaking tries to provide even more variety.",
-      "Expect less balanced games.",
+      "Matchmaking prioritizes more partner and opponent variety.",
+      "Expect softer team balance.",
     ],
   },
-  [SessionType.ELO]: {
-    label: "Ratings",
+  [SessionMatchmakingStyle.LEVEL_MATCH]: {
+    label: "Level Match",
     lines: [
-      "Matchmaking provides variety and balance based on ratings instead of session points.",
-      "Points are still counted for leaderboard display."
-    ],
-  },
-  [SessionType.LADDER]: {
-    label: "Ladder",
-    lines: [
-      "Win = +1",
-      "Loss = -1",
-      "Similar level players face each other more often.",
-    ],
-  },
-  [SessionType.RACE]: {
-    label: "Race",
-    lines: [
-      "Even less variety, more balance",
+      "Matchmaking narrows selection to players near each other.",
       "Similar level players face each other more often.",
     ],
   },
@@ -226,10 +216,12 @@ function SwitchRow({
 export function HostTournamentPanel({
   newSessionName,
   onNewSessionNameChange,
-  sessionType,
-  onSessionTypeChange,
-  sessionMode,
-  onSessionModeChange,
+  matchmakingStyle,
+  onMatchmakingStyleChange,
+  balanceMetric,
+  onBalanceMetricChange,
+  pairingMode,
+  onPairingModeChange,
   isTestSession,
   onIsTestSessionChange,
   autoQueueEnabled,
@@ -274,6 +266,7 @@ export function HostTournamentPanel({
     isTestSession ? "Test session" : null,
     autoQueueEnabled ? null : "Auto queue off",
     respectPlayerRest ? null : "Rest ignored",
+    balanceMetric === SessionBalanceMetric.RATING ? "Balance by rating" : null,
     poolsEnabled ? "Pools enabled" : null,
     selectedPartnerCommunity
       ? `Collab: ${selectedPartnerCommunity.name}`
@@ -285,7 +278,7 @@ export function HostTournamentPanel({
     advancedSummaryItems.length > 0
       ? advancedSummaryItems.join(" / ")
       : "Regular tournament / Auto queue on";
-  const selectedFormatInfo = SESSION_TYPE_INFO[sessionType];
+  const selectedStyleInfo = MATCHMAKING_STYLE_INFO[matchmakingStyle];
 
   return (
     <section className="app-panel p-3 sm:p-4">
@@ -320,23 +313,27 @@ export function HostTournamentPanel({
 
           <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_120px]">
             <div className="space-y-1.5">
-              <p className="text-sm font-medium text-gray-900">Format</p>
+              <p className="text-sm font-medium text-gray-900">
+                Matchmaking style
+              </p>
               <select
-                value={sessionType}
+                value={matchmakingStyle}
                 onChange={(event) =>
-                  onSessionTypeChange(event.target.value as SessionType)
+                  onMatchmakingStyleChange(
+                    event.target.value as SessionMatchmakingStyle
+                  )
                 }
                 className="field"
               >
-                {SESSION_TYPE_ORDER.map((type) => (
-                  <option key={type} value={type}>
-                    {SESSION_TYPE_INFO[type].label}
+                {MATCHMAKING_STYLE_ORDER.map((style) => (
+                  <option key={style} value={style}>
+                    {MATCHMAKING_STYLE_INFO[style].label}
                   </option>
                 ))}
               </select>
               <div className="rounded-xl border border-gray-200 bg-gray-50/80 px-3 py-3">
                 <div className="space-y-1.5">
-                  {selectedFormatInfo.lines.map((line) => (
+                  {selectedStyleInfo.lines.map((line) => (
                     <p key={line} className="text-sm leading-5 text-gray-700">
                       {line}
                     </p>
@@ -366,17 +363,17 @@ export function HostTournamentPanel({
           </div>
 
           <div className="space-y-1.5">
-            <p className="text-sm font-medium text-gray-900">Mode</p>
+            <p className="text-sm font-medium text-gray-900">Pairing</p>
             <div className="flex flex-wrap gap-2">
               <SegmentedOption
                 label={openModeLabel}
-                selected={sessionMode === SessionMode.MEXICANO}
-                onClick={() => onSessionModeChange(SessionMode.MEXICANO)}
+                selected={pairingMode === SessionPairingMode.OPEN}
+                onClick={() => onPairingModeChange(SessionPairingMode.OPEN)}
               />
               <SegmentedOption
                 label={mixedModeLabel}
-                selected={sessionMode === SessionMode.MIXICANO}
-                onClick={() => onSessionModeChange(SessionMode.MIXICANO)}
+                selected={pairingMode === SessionPairingMode.MIXED}
+                onClick={() => onPairingModeChange(SessionPairingMode.MIXED)}
               />
             </div>
           </div>
@@ -444,6 +441,30 @@ export function HostTournamentPanel({
 
           {advancedOpen ? (
             <div className="space-y-3 border-t border-gray-200 px-3 py-3 sm:px-4">
+              <div className="space-y-1.5 rounded-xl border border-gray-200 bg-white p-3 sm:p-4">
+                <p className="text-sm font-medium text-gray-900">Balance by</p>
+                <div className="flex flex-wrap gap-2">
+                  <SegmentedOption
+                    label="Session points"
+                    selected={
+                      balanceMetric === SessionBalanceMetric.SESSION_POINTS
+                    }
+                    onClick={() =>
+                      onBalanceMetricChange(
+                        SessionBalanceMetric.SESSION_POINTS
+                      )
+                    }
+                  />
+                  <SegmentedOption
+                    label="Rating"
+                    selected={balanceMetric === SessionBalanceMetric.RATING}
+                    onClick={() =>
+                      onBalanceMetricChange(SessionBalanceMetric.RATING)
+                    }
+                  />
+                </div>
+              </div>
+
               <div className="space-y-2">
                 <SwitchRow
                   label="Test session"

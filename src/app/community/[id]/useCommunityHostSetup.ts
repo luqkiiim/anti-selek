@@ -13,9 +13,12 @@ import { safeJson } from "./communityPageApi";
 import {
   MixedSide,
   PlayerGender,
+  SessionBalanceMetric,
+  SessionMatchmakingStyle,
   SessionMode,
+  SessionPairingMode,
   SessionPool,
-  SessionType,
+  SessionScoringType,
 } from "@/types/enums";
 
 const DEFAULT_GUEST_INITIAL_ELO = 1000;
@@ -41,12 +44,20 @@ export function useCommunityHostSetup({
   setSuccess: Dispatch<SetStateAction<string>>;
 }) {
   const [newSessionName, setNewSessionName] = useState("");
-  const [sessionType, setSessionType] = useState<SessionType>(
-    SessionType.POINTS
+  const [matchmakingStyle, setMatchmakingStyle] =
+    useState<SessionMatchmakingStyle>(
+      SessionMatchmakingStyle.BALANCED
+    );
+  const [balanceMetric, setBalanceMetric] = useState<SessionBalanceMetric>(
+    SessionBalanceMetric.SESSION_POINTS
   );
-  const [sessionMode, setSessionMode] = useState<SessionMode>(
-    SessionMode.MEXICANO
+  const [pairingMode, setPairingMode] = useState<SessionPairingMode>(
+    SessionPairingMode.OPEN
   );
+  const sessionMode =
+    pairingMode === SessionPairingMode.MIXED
+      ? SessionMode.MIXICANO
+      : SessionMode.MEXICANO;
   const [isTestSession, setIsTestSession] = useState(false);
   const [autoQueueEnabled, setAutoQueueEnabled] = useState(false);
   const [respectPlayerRest, setRespectPlayerRest] = useState(true);
@@ -85,8 +96,9 @@ export function useCommunityHostSetup({
 
   useEffect(() => {
     setNewSessionName("");
-    setSessionType(SessionType.POINTS);
-    setSessionMode(SessionMode.MEXICANO);
+    setMatchmakingStyle(SessionMatchmakingStyle.BALANCED);
+    setBalanceMetric(SessionBalanceMetric.SESSION_POINTS);
+    setPairingMode(SessionPairingMode.OPEN);
     setIsTestSession(false);
     setAutoQueueEnabled(false);
     setRespectPlayerRest(true);
@@ -243,8 +255,10 @@ export function useCommunityHostSetup({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: newSessionName,
-          type: sessionType,
-          mode: sessionMode,
+          scoringType: SessionScoringType.POINTS,
+          matchmakingStyle,
+          balanceMetric,
+          pairingMode,
           isTest: isTestSession,
           autoQueueEnabled,
           respectPlayerRest,
@@ -280,6 +294,9 @@ export function useCommunityHostSetup({
       setAutoQueueEnabled(false);
       setRespectPlayerRest(true);
       setCourtCount(DEFAULT_COURT_COUNT);
+      setMatchmakingStyle(SessionMatchmakingStyle.BALANCED);
+      setBalanceMetric(SessionBalanceMetric.SESSION_POINTS);
+      setPairingMode(SessionPairingMode.OPEN);
       setPartnerCommunityId("");
       setPartnerCommunitySearch("");
       setSelectedPartnerCommunity(null);
@@ -455,10 +472,13 @@ export function useCommunityHostSetup({
   return {
     newSessionName,
     setNewSessionName,
-    sessionType,
-    setSessionType,
+    matchmakingStyle,
+    setMatchmakingStyle,
+    balanceMetric,
+    setBalanceMetric,
+    pairingMode,
+    setPairingMode,
     sessionMode,
-    setSessionMode,
     isTestSession,
     setIsTestSession,
     autoQueueEnabled,

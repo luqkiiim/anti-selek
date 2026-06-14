@@ -307,8 +307,7 @@ function updatePlayersForCompletedMatch(
 
   const team1StandingPoints = getStandingPointsForTeam(payload.winnerTeam, 1);
   const team2StandingPoints = getStandingPointsForTeam(payload.winnerTeam, 2);
-  const awardsStandingPoints =
-    sessionType !== SessionType.LADDER && sessionType !== SessionType.RACE;
+  const awardsStandingPoints = sessionType !== SessionType.LADDER;
   const playerEloChangeByUserId = new Map(
     (payload.playerEloChanges ?? []).map((change) => [
       change.userId,

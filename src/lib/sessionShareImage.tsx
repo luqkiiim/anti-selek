@@ -2,7 +2,6 @@ import type { CSSProperties, ReactElement } from "react";
 import {
   getCompetitiveEntryAt,
   deriveLadderRecordsByEntryTime,
-  deriveRaceRecordsByEntryTime,
 } from "@/lib/matchmaking/ladder";
 import {
   compareCompetitiveStandings,
@@ -135,7 +134,7 @@ function buildPlayerPerformanceMaps({
     performanceByUserId.set(player.userId, createEmptyPerformance());
   }
 
-  if (sessionType === SessionType.LADDER || sessionType === SessionType.RACE) {
+  if (sessionType === SessionType.LADDER) {
     const entryMap = new Map(
       players.map((player) => [player.userId, getCompetitiveEntryAt(player)])
     );
@@ -147,10 +146,7 @@ function buildPlayerPerformanceMaps({
       status: match.status ?? undefined,
       completedAt: toHistoryDate(match.completedAt),
     }));
-    const records =
-      sessionType === SessionType.RACE
-        ? deriveRaceRecordsByEntryTime(entryMap, historyMatches)
-        : deriveLadderRecordsByEntryTime(entryMap, historyMatches);
+    const records = deriveLadderRecordsByEntryTime(entryMap, historyMatches);
 
     for (const player of players) {
       const record = records.get(player.userId);
@@ -237,10 +233,6 @@ function getStandingScore({
     return `${performance.wins}-${performance.losses}`;
   }
 
-  if (sessionType === SessionType.RACE) {
-    return performance.wins * 3;
-  }
-
   return player.sessionPoints;
 }
 
@@ -262,15 +254,9 @@ export function buildSessionShareImageViewModel({
     const rightPerformance =
       performanceByUserId.get(right.userId) ?? createEmptyPerformance();
 
-    if (sessionType === SessionType.LADDER || sessionType === SessionType.RACE) {
-      const leftScore =
-        sessionType === SessionType.RACE
-          ? leftPerformance.wins * 3
-          : leftPerformance.wins - leftPerformance.losses;
-      const rightScore =
-        sessionType === SessionType.RACE
-          ? rightPerformance.wins * 3
-          : rightPerformance.wins - rightPerformance.losses;
+    if (sessionType === SessionType.LADDER) {
+      const leftScore = leftPerformance.wins - leftPerformance.losses;
+      const rightScore = rightPerformance.wins - rightPerformance.losses;
 
       return compareCompetitiveStandings(
         {

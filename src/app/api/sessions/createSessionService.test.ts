@@ -1,6 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  SessionBalanceMetric,
+  SessionMatchmakingStyle,
   SessionMode,
+  SessionPairingMode,
+  SessionScoringType,
   SessionStatus,
   SessionType,
 } from "@/types/enums";
@@ -149,6 +153,10 @@ describe("createSessionForUser", () => {
       expect.objectContaining({
         data: expect.objectContaining({
           respectPlayerRest: true,
+          scoringType: SessionScoringType.POINTS,
+          matchmakingStyle: SessionMatchmakingStyle.BALANCED,
+          balanceMetric: SessionBalanceMetric.SESSION_POINTS,
+          pairingMode: SessionPairingMode.OPEN,
           players: {
             create: [
               expect.objectContaining({

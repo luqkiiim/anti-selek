@@ -11,6 +11,15 @@ import {
   normalizeSessionPoolName,
 } from "@/lib/sessionPools";
 import {
+  getLegacySessionModeForSettings,
+  getLegacySessionTypeForSettings,
+  getSessionSettings,
+  isValidSessionBalanceMetric,
+  isValidSessionMatchmakingStyle,
+  isValidSessionPairingMode,
+  isValidSessionScoringType,
+} from "@/lib/sessionSettings";
+import {
   MixedSide,
   PartnerPreference,
   PlayerGender,
@@ -32,6 +41,10 @@ interface CreateSessionBody {
   name?: unknown;
   type?: unknown;
   mode?: unknown;
+  scoringType?: unknown;
+  matchmakingStyle?: unknown;
+  balanceMetric?: unknown;
+  pairingMode?: unknown;
   isTest?: unknown;
   autoQueueEnabled?: unknown;
   respectPlayerRest?: unknown;
@@ -205,8 +218,12 @@ export function parseCreateSessionRequest(
 
   const {
     name,
-    type = SessionType.POINTS,
-    mode = SessionMode.MEXICANO,
+    type,
+    mode,
+    scoringType,
+    matchmakingStyle,
+    balanceMetric,
+    pairingMode,
     playerIds = [],
     guestNames = [],
     playerConfigs = [],
@@ -247,7 +264,14 @@ export function parseCreateSessionRequest(
       400
     );
   }
-  if (![SessionMode.MEXICANO, SessionMode.MIXICANO].includes(mode as SessionMode)) {
+  const legacyTypeInput = type ?? SessionType.POINTS;
+  const legacyModeInput = mode ?? SessionMode.MEXICANO;
+
+  if (
+    ![SessionMode.MEXICANO, SessionMode.MIXICANO].includes(
+      legacyModeInput as SessionMode
+    )
+  ) {
     throw new SessionRouteError("Invalid session mode", 400);
   }
   if (
@@ -258,10 +282,31 @@ export function parseCreateSessionRequest(
       SessionType.LADDER,
       SessionType.RACE,
     ].includes(
-      type as SessionType
+      legacyTypeInput as SessionType
     )
   ) {
     throw new SessionRouteError("Invalid session type", 400);
+  }
+  if (
+    scoringType !== undefined &&
+    !isValidSessionScoringType(scoringType)
+  ) {
+    throw new SessionRouteError("Invalid scoring type", 400);
+  }
+  if (
+    matchmakingStyle !== undefined &&
+    !isValidSessionMatchmakingStyle(matchmakingStyle)
+  ) {
+    throw new SessionRouteError("Invalid matchmaking style", 400);
+  }
+  if (
+    balanceMetric !== undefined &&
+    !isValidSessionBalanceMetric(balanceMetric)
+  ) {
+    throw new SessionRouteError("Invalid balance metric", 400);
+  }
+  if (pairingMode !== undefined && !isValidSessionPairingMode(pairingMode)) {
+    throw new SessionRouteError("Invalid pairing mode", 400);
   }
 
   const requestedPlayerIds = Array.isArray(playerIds)
@@ -282,11 +327,28 @@ export function parseCreateSessionRequest(
   if (normalizedPoolsEnabled && normalizedPoolAName === normalizedPoolBName) {
     throw new SessionRouteError("Pool names must be different", 400);
   }
+  const settings = getSessionSettings({
+    type: typeof type === "string" ? type : undefined,
+    mode: typeof mode === "string" ? mode : undefined,
+    scoringType: scoringType as string | undefined,
+    matchmakingStyle: matchmakingStyle as string | undefined,
+    balanceMetric: balanceMetric as string | undefined,
+    pairingMode: pairingMode as string | undefined,
+  });
+  const legacyType =
+    legacyTypeInput === SessionType.LADDER && matchmakingStyle === undefined
+      ? SessionType.RACE
+      : getLegacySessionTypeForSettings(settings);
+  const legacyMode = getLegacySessionModeForSettings(settings);
 
   return {
     name: name.trim(),
-    type: type as SessionType,
-    mode: mode as SessionMode,
+    type: legacyType,
+    mode: legacyMode,
+    scoringType: settings.scoringType,
+    matchmakingStyle: settings.matchmakingStyle,
+    balanceMetric: settings.balanceMetric,
+    pairingMode: settings.pairingMode,
     communityId,
     partnerCommunityId:
       typeof partnerCommunityId === "string" ? partnerCommunityId : null,
@@ -297,7 +359,7 @@ export function parseCreateSessionRequest(
     normalizedGuests: normalizeGuests(
       guestNames,
       guestConfigs,
-      mode as SessionMode,
+      legacyMode,
       normalizedPoolsEnabled
     ),
     autoQueueEnabled: normalizedAutoQueueEnabled,

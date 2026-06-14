@@ -72,7 +72,6 @@ export function SessionPodium({
 }: SessionPodiumProps) {
   const topThree = players.slice(0, 3);
   const isLadderSession = sessionType === SessionType.LADDER;
-  const isRaceSession = sessionType === SessionType.RACE;
   const isCelebrating = celebrationRunId > 0;
 
   if (topThree.length === 0) {
@@ -208,8 +207,6 @@ export function SessionPodium({
                   <p className="text-2xl font-semibold leading-none text-gray-900 sm:text-3xl">
                     {isLadderSession
                       ? `${stats.wins}-${stats.losses}`
-                      : isRaceSession
-                        ? stats.wins * 3
                       : player.sessionPoints}
                   </p>
                   <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500">

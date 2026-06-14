@@ -14,15 +14,15 @@ export function getSessionModeLabel(mode: SessionMode | string): string {
 export function getSessionTypeLabel(type: SessionType | string): string {
   switch (type) {
     case SessionType.POINTS:
-      return "Points";
+      return "Balanced";
     case SessionType.SOCIAL_MIX:
-      return "Social Mix";
+      return "Social";
     case SessionType.ELO:
-      return "Ratings";
+      return "Balanced";
     case SessionType.LADDER:
-      return "Ladder";
+      return "Ladder (legacy)";
     case SessionType.RACE:
-      return "Race";
+      return "Level Match";
     default:
       return type;
   }

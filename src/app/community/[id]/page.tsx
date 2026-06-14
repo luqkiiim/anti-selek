@@ -109,10 +109,13 @@ export default function CommunityPage() {
     community,
     newSessionName,
     setNewSessionName,
-    sessionType,
-    setSessionType,
+    matchmakingStyle,
+    setMatchmakingStyle,
+    balanceMetric,
+    setBalanceMetric,
+    pairingMode,
+    setPairingMode,
     sessionMode,
-    setSessionMode,
     isTestSession,
     setIsTestSession,
     autoQueueEnabled,
@@ -748,10 +751,12 @@ export default function CommunityPage() {
     <HostTournamentPanel
       newSessionName={newSessionName}
       onNewSessionNameChange={setNewSessionName}
-      sessionType={sessionType}
-      onSessionTypeChange={setSessionType}
-      sessionMode={sessionMode}
-      onSessionModeChange={setSessionMode}
+      matchmakingStyle={matchmakingStyle}
+      onMatchmakingStyleChange={setMatchmakingStyle}
+      balanceMetric={balanceMetric}
+      onBalanceMetricChange={setBalanceMetric}
+      pairingMode={pairingMode}
+      onPairingModeChange={setPairingMode}
       isTestSession={isTestSession}
       onIsTestSessionChange={setIsTestSession}
       autoQueueEnabled={autoQueueEnabled}

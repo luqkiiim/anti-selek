@@ -655,14 +655,14 @@ describe("sessionDataMutations", () => {
     );
   });
 
-  it("does not award session points when approving a race match", () => {
-    const raceSession = {
+  it("does not award session points when approving a legacy ladder match", () => {
+    const ladderSession = {
       ...createSessionData(),
-      type: SessionType.RACE,
+      type: SessionType.LADDER,
     };
     const updated = applyScoreApproval(
       applyScoreSubmission(
-        applyGeneratedMatches(raceSession, [
+        applyGeneratedMatches(ladderSession, [
           {
             id: "match-1",
             courtId: "court-1",

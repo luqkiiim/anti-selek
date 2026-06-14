@@ -488,9 +488,7 @@ async function buildMatchRatingOutcomeInTransaction(
   const winnerTeam = team1Points > team2Points ? 1 : 2;
   const team1StandingPoints = getStandingPointsForTeam(winnerTeam, 1);
   const team2StandingPoints = getStandingPointsForTeam(winnerTeam, 2);
-  const awardsStandingPoints =
-    match.session.type !== SessionType.LADDER &&
-    match.session.type !== SessionType.RACE;
+  const awardsStandingPoints = match.session.type !== SessionType.LADDER;
 
   const playerIds = [
     match.team1User1Id,
@@ -1141,10 +1139,7 @@ async function applySessionPointCorrectionInTransaction(
     newWinnerTeam: 1 | 2;
   }
 ) {
-  if (
-    targetMatch.session.type === SessionType.LADDER ||
-    targetMatch.session.type === SessionType.RACE
-  ) {
+  if (targetMatch.session.type === SessionType.LADDER) {
     return;
   }
 
@@ -1522,8 +1517,7 @@ export async function undoCompletedMatchResultInTransaction(
     : null;
   const awardsStandingPoints =
     winnerTeam !== null &&
-    match.session.type !== SessionType.LADDER &&
-    match.session.type !== SessionType.RACE;
+    match.session.type !== SessionType.LADDER;
   const team1StandingPoints = awardsStandingPoints
     ? getStandingPointsForTeam(winnerTeam, 1)
     : 0;

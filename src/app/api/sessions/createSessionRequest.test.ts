@@ -3,8 +3,12 @@ import {
   MixedSide,
   PartnerPreference,
   PlayerGender,
+  SessionBalanceMetric,
+  SessionMatchmakingStyle,
   SessionMode,
+  SessionPairingMode,
   SessionPool,
+  SessionScoringType,
   SessionType,
 } from "@/types/enums";
 import { parseCreateSessionRequest } from "./createSessionRequest";
@@ -48,6 +52,10 @@ describe("parseCreateSessionRequest", () => {
     expect(parsed.name).toBe("Friday Night");
     expect(parsed.type).toBe(SessionType.ELO);
     expect(parsed.mode).toBe(SessionMode.MIXICANO);
+    expect(parsed.scoringType).toBe(SessionScoringType.POINTS);
+    expect(parsed.matchmakingStyle).toBe(SessionMatchmakingStyle.BALANCED);
+    expect(parsed.balanceMetric).toBe(SessionBalanceMetric.RATING);
+    expect(parsed.pairingMode).toBe(SessionPairingMode.MIXED);
     expect(parsed.courtCount).toBe(4);
     expect(parsed.autoQueueEnabled).toBe(false);
     expect(parsed.respectPlayerRest).toBe(true);
@@ -194,7 +202,7 @@ describe("parseCreateSessionRequest", () => {
     ).toThrowError(new SessionRouteError("Invalid session mode", 400));
   });
 
-  it("accepts social mix, ladder, and race as valid session types", () => {
+  it("normalizes legacy social mix, ladder, and race session types", () => {
     const socialMixParsed = parseCreateSessionRequest({
       name: "Social Night",
       communityId: "community-1",
@@ -202,6 +210,9 @@ describe("parseCreateSessionRequest", () => {
     });
 
     expect(socialMixParsed.type).toBe(SessionType.SOCIAL_MIX);
+    expect(socialMixParsed.matchmakingStyle).toBe(
+      SessionMatchmakingStyle.SOCIAL
+    );
 
     const parsed = parseCreateSessionRequest({
       name: "Ladder Night",
@@ -209,7 +220,8 @@ describe("parseCreateSessionRequest", () => {
       type: SessionType.LADDER,
     });
 
-    expect(parsed.type).toBe(SessionType.LADDER);
+    expect(parsed.type).toBe(SessionType.RACE);
+    expect(parsed.matchmakingStyle).toBe(SessionMatchmakingStyle.LEVEL_MATCH);
 
     const raceParsed = parseCreateSessionRequest({
       name: "Race Night",
@@ -218,6 +230,27 @@ describe("parseCreateSessionRequest", () => {
     });
 
     expect(raceParsed.type).toBe(SessionType.RACE);
+    expect(raceParsed.matchmakingStyle).toBe(
+      SessionMatchmakingStyle.LEVEL_MATCH
+    );
+  });
+
+  it("accepts new matchmaking settings and derives legacy shadows", () => {
+    const parsed = parseCreateSessionRequest({
+      name: "Level Night",
+      communityId: "community-1",
+      scoringType: SessionScoringType.POINTS,
+      matchmakingStyle: SessionMatchmakingStyle.LEVEL_MATCH,
+      balanceMetric: SessionBalanceMetric.RATING,
+      pairingMode: SessionPairingMode.MIXED,
+    });
+
+    expect(parsed.scoringType).toBe(SessionScoringType.POINTS);
+    expect(parsed.matchmakingStyle).toBe(SessionMatchmakingStyle.LEVEL_MATCH);
+    expect(parsed.balanceMetric).toBe(SessionBalanceMetric.RATING);
+    expect(parsed.pairingMode).toBe(SessionPairingMode.MIXED);
+    expect(parsed.type).toBe(SessionType.RACE);
+    expect(parsed.mode).toBe(SessionMode.MIXICANO);
   });
 
   it("carries the test-session flag", () => {
@@ -278,5 +311,29 @@ describe("parseCreateSessionRequest", () => {
         type: "BAD_TYPE",
       })
     ).toThrowError(new SessionRouteError("Invalid session type", 400));
+  });
+
+  it("rejects invalid new matchmaking settings", () => {
+    expect(() =>
+      parseCreateSessionRequest({
+        name: "Session",
+        communityId: "community-1",
+        matchmakingStyle: "BAD_STYLE",
+      })
+    ).toThrowError(new SessionRouteError("Invalid matchmaking style", 400));
+    expect(() =>
+      parseCreateSessionRequest({
+        name: "Session",
+        communityId: "community-1",
+        balanceMetric: "BAD_METRIC",
+      })
+    ).toThrowError(new SessionRouteError("Invalid balance metric", 400));
+    expect(() =>
+      parseCreateSessionRequest({
+        name: "Session",
+        communityId: "community-1",
+        pairingMode: "BAD_PAIRING",
+      })
+    ).toThrowError(new SessionRouteError("Invalid pairing mode", 400));
   });
 });

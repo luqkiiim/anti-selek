@@ -7,8 +7,12 @@ import {
   MixedSide,
   PartnerPreference,
   PlayerGender,
+  SessionBalanceMetric,
+  SessionMatchmakingStyle,
   SessionMode,
+  SessionPairingMode,
   SessionPool,
+  SessionScoringType,
   SessionType,
 } from "@/types/enums";
 import {
@@ -47,6 +51,10 @@ export interface ParsedCreateSessionRequest {
   name: string;
   type: SessionType;
   mode: SessionMode;
+  scoringType: SessionScoringType;
+  matchmakingStyle: SessionMatchmakingStyle;
+  balanceMetric: SessionBalanceMetric;
+  pairingMode: SessionPairingMode;
   communityId: string;
   partnerCommunityId?: string | null;
   isTest: boolean;

@@ -96,6 +96,10 @@ model Session {
   name                   String
   type                   String    @default("POINTS") // POINTS or ELO
   mode                   String    @default("MEXICANO") // MEXICANO or MIXICANO
+  scoringType            String    @default("POINTS")
+  matchmakingStyle       String    @default("BALANCED")
+  balanceMetric          String    @default("SESSION_POINTS")
+  pairingMode            String    @default("OPEN")
   status                 String    @default("WAITING") // WAITING, ACTIVE, COMPLETED
   isTest                 Boolean   @default(false)
   sourceSessionId        String?
