@@ -411,48 +411,66 @@ describe("communityPulse", () => {
     });
   });
 
-  it("uses matches and win gap as rivalry strength tie-breakers", () => {
-    const session = createSession("rivalry-strength-ties");
-    const moreMatchesLeft = createPlayer("tie-a-more-left", "A More Left");
-    const moreMatchesRight = createPlayer("tie-a-more-right", "A More Right");
-    const smallerGapLeft = createPlayer("tie-b-gap-left", "B Gap Left");
-    const smallerGapRight = createPlayer("tie-b-gap-right", "B Gap Right");
-    const largerGapLeft = createPlayer("tie-c-gap-left", "C Gap Left");
-    const largerGapRight = createPlayer("tie-c-gap-right", "C Gap Right");
+  it("balances volume with closeness in the rivalry strength formula", () => {
+    const session = createSession("rivalry-strength-balance");
+    const perfectSplitLeft = createPlayer(
+      "balance-a-perfect-left",
+      "A Perfect Left"
+    );
+    const perfectSplitRight = createPlayer(
+      "balance-a-perfect-right",
+      "A Perfect Right"
+    );
+    const closeVolumeLeft = createPlayer(
+      "balance-b-volume-left",
+      "B Volume Left"
+    );
+    const closeVolumeRight = createPlayer(
+      "balance-b-volume-right",
+      "B Volume Right"
+    );
+    const lessCloseVolumeLeft = createPlayer(
+      "balance-c-less-close-left",
+      "C Less Close Left"
+    );
+    const lessCloseVolumeRight = createPlayer(
+      "balance-c-less-close-right",
+      "C Less Close Right"
+    );
     const result = buildCommunityPulse({
       members: [
-        moreMatchesLeft,
-        moreMatchesRight,
-        smallerGapLeft,
-        smallerGapRight,
-        largerGapLeft,
-        largerGapRight,
+        perfectSplitLeft,
+        perfectSplitRight,
+        closeVolumeLeft,
+        closeVolumeRight,
+        lessCloseVolumeLeft,
+        lessCloseVolumeRight,
       ].map((player) => createMember(player)),
       sessions: [session],
       completedMatches: [
         ...createRivalrySeries({
-          idPrefix: "tie-more-matches",
+          idPrefix: "balance-perfect",
           session,
-          left: moreMatchesLeft,
-          right: moreMatchesRight,
-          leftWins: 5,
-          rightWins: 3,
-        }),
-        ...createRivalrySeries({
-          idPrefix: "tie-smaller-gap",
-          session,
-          left: smallerGapLeft,
-          right: smallerGapRight,
+          left: perfectSplitLeft,
+          right: perfectSplitRight,
           leftWins: 3,
           rightWins: 3,
         }),
         ...createRivalrySeries({
-          idPrefix: "tie-larger-gap",
+          idPrefix: "balance-volume",
           session,
-          left: largerGapLeft,
-          right: largerGapRight,
-          leftWins: 4,
-          rightWins: 2,
+          left: closeVolumeLeft,
+          right: closeVolumeRight,
+          leftWins: 9,
+          rightWins: 7,
+        }),
+        ...createRivalrySeries({
+          idPrefix: "balance-less-close",
+          session,
+          left: lessCloseVolumeLeft,
+          right: lessCloseVolumeRight,
+          leftWins: 8,
+          rightWins: 4,
           startAtMs: Date.UTC(2026, 5, 1, 10, 0, 0),
         }),
       ],
@@ -460,13 +478,13 @@ describe("communityPulse", () => {
 
     expect(result.rivalries).toEqual([
       expect.objectContaining({
-        players: [moreMatchesLeft, moreMatchesRight],
+        players: [closeVolumeLeft, closeVolumeRight],
       }),
       expect.objectContaining({
-        players: [smallerGapLeft, smallerGapRight],
+        players: [perfectSplitLeft, perfectSplitRight],
       }),
       expect.objectContaining({
-        players: [largerGapLeft, largerGapRight],
+        players: [lessCloseVolumeLeft, lessCloseVolumeRight],
       }),
     ]);
   });

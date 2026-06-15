@@ -436,7 +436,12 @@ function getRivalryWinDifference(rivalry: RivalryAggregate) {
 }
 
 function getRivalryStrength(rivalry: RivalryAggregate) {
-  return rivalry.matches - getRivalryWinDifference(rivalry);
+  if (rivalry.matches <= 0) return 0;
+
+  return (
+    Math.sqrt(rivalry.matches) *
+    (1 - getRivalryWinDifference(rivalry) / rivalry.matches)
+  );
 }
 
 function buildRivalries(matches: CommunityPulseMatchSource[]) {
