@@ -407,52 +407,54 @@ export function CommunityOverviewPulsePanel({
                   key={`${rivalry.players[0].id}:${rivalry.players[1].id}`}
                   className="rounded-lg border border-[var(--line)] bg-white px-4 py-3"
                 >
-                  <div className="grid min-w-0 grid-cols-[auto_minmax(5.5rem,auto)_auto] items-center gap-3">
-                    <div className="shrink-0">
-                      <Avatar
-                        name={rivalry.players[0].name}
-                        avatarUrl={rivalry.players[0].avatarUrl}
-                        size="md"
-                        className="ring-2 ring-white"
-                      />
-                    </div>
-                    <div className="min-w-0 text-center">
-                      <p className="text-2xl font-semibold leading-none text-gray-900 sm:text-3xl">
-                        {getRivalryScore(rivalry)}
-                      </p>
-                      <div className="mt-1 flex min-w-0 items-center justify-center gap-1.5 text-[11px] font-semibold text-gray-500">
-                        <span className="min-w-0 truncate">
+                  <div className="space-y-3">
+                    <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 sm:gap-3">
+                      <div className="min-w-0 text-center">
+                        <div className="mx-auto flex w-fit max-w-full flex-col items-center gap-1.5">
+                          <Avatar
+                            name={rivalry.players[0].name}
+                            avatarUrl={rivalry.players[0].avatarUrl}
+                            size="md"
+                            className="ring-2 ring-white"
+                          />
+                          <p
+                            className="max-w-full truncate text-[12px] font-semibold text-gray-900 sm:text-sm"
+                            title={rivalry.players[0].name}
+                          >
+                            {getCompactPlayerName(rivalry.players[0].name)}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="min-w-[5.5rem] text-center sm:min-w-[6.5rem]">
+                        <p className="text-2xl font-semibold leading-none text-gray-900 sm:text-3xl">
+                          {getRivalryScore(rivalry)}
+                        </p>
+                        <p className="mt-1 text-[11px] font-semibold text-gray-500">
                           {getRivalryDetail(rivalry)}
-                        </span>
-                        <span aria-hidden="true" className="shrink-0">
-                          /
-                        </span>
-                        <span className="shrink-0">
-                          {formatGameCount(rivalry.matches)}
-                        </span>
+                        </p>
+                      </div>
+                      <div className="min-w-0 text-center">
+                        <div className="mx-auto flex w-fit max-w-full flex-col items-center gap-1.5">
+                          <Avatar
+                            name={rivalry.players[1].name}
+                            avatarUrl={rivalry.players[1].avatarUrl}
+                            size="md"
+                            className="ring-2 ring-white"
+                          />
+                          <p
+                            className="max-w-full truncate text-[12px] font-semibold text-gray-900 sm:text-sm"
+                            title={rivalry.players[1].name}
+                          >
+                            {getCompactPlayerName(rivalry.players[1].name)}
+                          </p>
+                        </div>
                       </div>
                     </div>
-                    <div className="shrink-0">
-                      <Avatar
-                        name={rivalry.players[1].name}
-                        avatarUrl={rivalry.players[1].avatarUrl}
-                        size="md"
-                        className="ring-2 ring-white"
-                      />
+                    <div className="flex justify-center">
+                      <span className="rounded-md bg-[var(--accent-faint)] px-2 py-1 text-xs font-semibold text-[var(--accent)]">
+                        {formatGameCount(rivalry.matches)}
+                      </span>
                     </div>
-                    <p
-                      className="min-w-0 truncate text-left text-[12px] font-semibold text-gray-900 sm:text-sm"
-                      title={rivalry.players[0].name}
-                    >
-                      {getCompactPlayerName(rivalry.players[0].name)}
-                    </p>
-                    <span aria-hidden="true" />
-                    <p
-                      className="min-w-0 truncate text-right text-[12px] font-semibold text-gray-900 sm:text-sm"
-                      title={rivalry.players[1].name}
-                    >
-                      {getCompactPlayerName(rivalry.players[1].name)}
-                    </p>
                   </div>
                 </div>
               ))}
