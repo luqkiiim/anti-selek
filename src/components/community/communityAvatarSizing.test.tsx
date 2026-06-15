@@ -61,9 +61,9 @@ const pulse: CommunityPagePulse = {
         { id: "rival-1", name: "Ari Stone", avatarUrl: null },
         { id: "rival-2", name: "Sam Wong", avatarUrl: null },
       ],
-      matches: 4,
-      playerOneWins: 2,
-      playerTwoWins: 2,
+      matches: 46,
+      playerOneWins: 24,
+      playerTwoWins: 22,
       lastPlayedAt: "2026-05-18",
       lastSession: {
         code: "RIV1",
@@ -169,6 +169,10 @@ describe("community avatar sizing", () => {
 
     expect(container.textContent).toContain("Top rivalry");
     expect(container.textContent).toContain("Partner chemistry");
+    expect(container.textContent).toContain("24 - 22");
+    expect(container.textContent).toContain("Ari Stone leads");
+    expect(container.textContent).toContain("46 games");
+    expect(container.textContent).not.toContain("vs");
     expect(countMdAvatars(container.innerHTML)).toBe(8);
   });
 
