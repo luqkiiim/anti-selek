@@ -102,6 +102,48 @@ function createMatch(
   };
 }
 
+function createPlayer(id: string, name = id) {
+  return { id, name };
+}
+
+function createRivalrySeries({
+  idPrefix,
+  session,
+  left,
+  right,
+  leftWins,
+  rightWins,
+  startAtMs = Date.UTC(2026, 4, 1, 10, 0, 0),
+}: {
+  idPrefix: string;
+  session: CommunityPulseSessionSource;
+  left: { id: string; name: string };
+  right: { id: string; name: string };
+  leftWins: number;
+  rightWins: number;
+  startAtMs?: number;
+}) {
+  const matches: CommunityPulseMatchSource[] = [];
+  const totalMatches = leftWins + rightWins;
+
+  for (let index = 0; index < totalMatches; index += 1) {
+    const leftWon = index < leftWins;
+    matches.push(
+      createMatch(`${idPrefix}-${index + 1}`, {
+        session,
+        completedAt: new Date(startAtMs + index * 60_000).toISOString(),
+        team1: [left, createPlayer(`${idPrefix}-left-partner-${index + 1}`)],
+        team2: [right, createPlayer(`${idPrefix}-right-partner-${index + 1}`)],
+        team1Score: leftWon ? 21 : 18,
+        team2Score: leftWon ? 18 : 21,
+        winnerTeam: leftWon ? 1 : 2,
+      })
+    );
+  }
+
+  return matches;
+}
+
 describe("communityPulse", () => {
   it("returns quiet empty-state data when a community has no matches", () => {
     const result = buildCommunityPulse({
@@ -243,6 +285,230 @@ describe("communityPulse", () => {
         code: "rivalry-code",
         name: "Session rivalry",
       },
+    });
+  });
+
+  it("ranks a long close rivalry above a short perfect split", () => {
+    const session = createSession("rivalry-strength-history");
+    const longLeft = createPlayer("long-left", "Long Left");
+    const longRight = createPlayer("long-right", "Long Right");
+    const shortLeft = createPlayer("short-left", "Short Left");
+    const shortRight = createPlayer("short-right", "Short Right");
+    const result = buildCommunityPulse({
+      members: [longLeft, longRight, shortLeft, shortRight].map((player) =>
+        createMember(player)
+      ),
+      sessions: [session],
+      completedMatches: [
+        ...createRivalrySeries({
+          idPrefix: "long-close",
+          session,
+          left: longLeft,
+          right: longRight,
+          leftWins: 24,
+          rightWins: 22,
+        }),
+        ...createRivalrySeries({
+          idPrefix: "short-split",
+          session,
+          left: shortLeft,
+          right: shortRight,
+          leftWins: 3,
+          rightWins: 3,
+          startAtMs: Date.UTC(2026, 5, 1, 10, 0, 0),
+        }),
+      ],
+    });
+
+    expect(result.rivalries[0]).toMatchObject({
+      players: [longLeft, longRight],
+      matches: 46,
+      playerOneWins: 24,
+      playerTwoWins: 22,
+    });
+  });
+
+  it("prefers the longer rivalry when close records have the same win gap", () => {
+    const session = createSession("rivalry-strength-same-gap");
+    const longLeft = createPlayer("same-gap-long-left", "Same Gap Long Left");
+    const longRight = createPlayer("same-gap-long-right", "Same Gap Long Right");
+    const shortLeft = createPlayer("same-gap-short-left", "Same Gap Short Left");
+    const shortRight = createPlayer(
+      "same-gap-short-right",
+      "Same Gap Short Right"
+    );
+    const result = buildCommunityPulse({
+      members: [longLeft, longRight, shortLeft, shortRight].map((player) =>
+        createMember(player)
+      ),
+      sessions: [session],
+      completedMatches: [
+        ...createRivalrySeries({
+          idPrefix: "same-gap-long",
+          session,
+          left: longLeft,
+          right: longRight,
+          leftWins: 22,
+          rightWins: 24,
+        }),
+        ...createRivalrySeries({
+          idPrefix: "same-gap-short",
+          session,
+          left: shortLeft,
+          right: shortRight,
+          leftWins: 12,
+          rightWins: 14,
+          startAtMs: Date.UTC(2026, 5, 1, 10, 0, 0),
+        }),
+      ],
+    });
+
+    expect(result.rivalries[0]).toMatchObject({
+      players: [longLeft, longRight],
+      matches: 46,
+      playerOneWins: 22,
+      playerTwoWins: 24,
+    });
+  });
+
+  it("does not let one-sided volume beat a genuinely competitive rivalry", () => {
+    const session = createSession("rivalry-strength-one-sided");
+    const oneSidedLeft = createPlayer("one-sided-left", "One Sided Left");
+    const oneSidedRight = createPlayer("one-sided-right", "One Sided Right");
+    const splitLeft = createPlayer("split-left", "Split Left");
+    const splitRight = createPlayer("split-right", "Split Right");
+    const result = buildCommunityPulse({
+      members: [oneSidedLeft, oneSidedRight, splitLeft, splitRight].map(
+        (player) => createMember(player)
+      ),
+      sessions: [session],
+      completedMatches: [
+        ...createRivalrySeries({
+          idPrefix: "one-sided",
+          session,
+          left: oneSidedLeft,
+          right: oneSidedRight,
+          leftWins: 10,
+          rightWins: 0,
+        }),
+        ...createRivalrySeries({
+          idPrefix: "split",
+          session,
+          left: splitLeft,
+          right: splitRight,
+          leftWins: 3,
+          rightWins: 3,
+          startAtMs: Date.UTC(2026, 5, 1, 10, 0, 0),
+        }),
+      ],
+    });
+
+    expect(result.rivalries[0]).toMatchObject({
+      players: [splitLeft, splitRight],
+      matches: 6,
+      playerOneWins: 3,
+      playerTwoWins: 3,
+    });
+  });
+
+  it("uses matches and win gap as rivalry strength tie-breakers", () => {
+    const session = createSession("rivalry-strength-ties");
+    const moreMatchesLeft = createPlayer("tie-a-more-left", "A More Left");
+    const moreMatchesRight = createPlayer("tie-a-more-right", "A More Right");
+    const smallerGapLeft = createPlayer("tie-b-gap-left", "B Gap Left");
+    const smallerGapRight = createPlayer("tie-b-gap-right", "B Gap Right");
+    const largerGapLeft = createPlayer("tie-c-gap-left", "C Gap Left");
+    const largerGapRight = createPlayer("tie-c-gap-right", "C Gap Right");
+    const result = buildCommunityPulse({
+      members: [
+        moreMatchesLeft,
+        moreMatchesRight,
+        smallerGapLeft,
+        smallerGapRight,
+        largerGapLeft,
+        largerGapRight,
+      ].map((player) => createMember(player)),
+      sessions: [session],
+      completedMatches: [
+        ...createRivalrySeries({
+          idPrefix: "tie-more-matches",
+          session,
+          left: moreMatchesLeft,
+          right: moreMatchesRight,
+          leftWins: 5,
+          rightWins: 3,
+        }),
+        ...createRivalrySeries({
+          idPrefix: "tie-smaller-gap",
+          session,
+          left: smallerGapLeft,
+          right: smallerGapRight,
+          leftWins: 3,
+          rightWins: 3,
+        }),
+        ...createRivalrySeries({
+          idPrefix: "tie-larger-gap",
+          session,
+          left: largerGapLeft,
+          right: largerGapRight,
+          leftWins: 4,
+          rightWins: 2,
+          startAtMs: Date.UTC(2026, 5, 1, 10, 0, 0),
+        }),
+      ],
+    });
+
+    expect(result.rivalries).toEqual([
+      expect.objectContaining({
+        players: [moreMatchesLeft, moreMatchesRight],
+      }),
+      expect.objectContaining({
+        players: [smallerGapLeft, smallerGapRight],
+      }),
+      expect.objectContaining({
+        players: [largerGapLeft, largerGapRight],
+      }),
+    ]);
+  });
+
+  it("uses recency when rivalry strength, matches, and win gap are tied", () => {
+    const session = createSession("rivalry-strength-recency");
+    const recentLeft = createPlayer("recency-recent-left", "Recent Left");
+    const recentRight = createPlayer("recency-recent-right", "Recent Right");
+    const olderLeft = createPlayer("recency-older-left", "Older Left");
+    const olderRight = createPlayer("recency-older-right", "Older Right");
+    const result = buildCommunityPulse({
+      members: [recentLeft, recentRight, olderLeft, olderRight].map((player) =>
+        createMember(player)
+      ),
+      sessions: [session],
+      completedMatches: [
+        ...createRivalrySeries({
+          idPrefix: "recency-older",
+          session,
+          left: olderLeft,
+          right: olderRight,
+          leftWins: 2,
+          rightWins: 2,
+          startAtMs: Date.UTC(2026, 6, 1, 10, 0, 0),
+        }),
+        ...createRivalrySeries({
+          idPrefix: "recency-recent",
+          session,
+          left: recentLeft,
+          right: recentRight,
+          leftWins: 2,
+          rightWins: 2,
+          startAtMs: Date.UTC(2026, 7, 1, 10, 0, 0),
+        }),
+      ],
+    });
+
+    expect(result.rivalries[0]).toMatchObject({
+      players: [recentLeft, recentRight],
+      matches: 4,
+      playerOneWins: 2,
+      playerTwoWins: 2,
     });
   });
 

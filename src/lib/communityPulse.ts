@@ -431,6 +431,14 @@ function updateRivalry(
   aggregates.set(key, aggregate);
 }
 
+function getRivalryWinDifference(rivalry: RivalryAggregate) {
+  return Math.abs(rivalry.playerOneWins - rivalry.playerTwoWins);
+}
+
+function getRivalryStrength(rivalry: RivalryAggregate) {
+  return rivalry.matches - getRivalryWinDifference(rivalry);
+}
+
 function buildRivalries(matches: CommunityPulseMatchSource[]) {
   const aggregates = new Map<string, RivalryAggregate>();
 
@@ -454,9 +462,9 @@ function buildRivalries(matches: CommunityPulseMatchSource[]) {
     .filter((rivalry) => rivalry.matches >= 2)
     .sort(
       (left, right) =>
-        Math.abs(left.playerOneWins - left.playerTwoWins) -
-          Math.abs(right.playerOneWins - right.playerTwoWins) ||
+        getRivalryStrength(right) - getRivalryStrength(left) ||
         right.matches - left.matches ||
+        getRivalryWinDifference(left) - getRivalryWinDifference(right) ||
         right.lastPlayedAtMs - left.lastPlayedAtMs ||
         left.players[0].name.localeCompare(right.players[0].name, undefined, {
           sensitivity: "base",
