@@ -336,6 +336,12 @@ export default function CommunityAdminPage() {
     }
   }, [activeSection, isTutorialPlayground, setActiveSection]);
 
+  useEffect(() => {
+    if (isTutorialPlayground && activeSection === "players") {
+      adminOnboarding.completeStep("players");
+    }
+  }, [activeSection, adminOnboarding, isTutorialPlayground]);
+
   const switchAdminSection = useCallback(
     (section: CommunityAdminSection) => {
       setActiveSection(section);

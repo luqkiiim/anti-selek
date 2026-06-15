@@ -119,11 +119,14 @@ describe("admin onboarding progress route", () => {
     mocks.communityFindUnique.mockResolvedValue(buildTutorialCommunity());
     mocks.communityMemberFindMany.mockResolvedValue([buildMembership()]);
     mocks.sessionFindFirst.mockResolvedValue({ id: "session-1", code: "ABC123" });
-    mocks.matchFindFirst.mockResolvedValue({ id: "match-1" });
+    mocks.matchFindFirst.mockResolvedValue(null);
   });
 
-  it("returns inferred admin onboarding progress", async () => {
+  it("only auto-completes the playground step for a seeded tutorial", async () => {
     mocks.auth.mockResolvedValue(buildSession());
+    mocks.sessionFindFirst
+      .mockResolvedValueOnce({ id: "session-1", code: "ABC123" })
+      .mockResolvedValueOnce(null);
 
     const response = await GET(
       new Request("http://localhost/api/tutorial-progress/admin-onboarding")
@@ -134,11 +137,47 @@ describe("admin onboarding progress route", () => {
     expect(body.visible).toBe(true);
     expect(body.primaryCommunityId).toBe("community-1");
     expect(body.primarySessionCode).toBe("ABC123");
+    expect(body.completedStepIds).toEqual(["admin-community"]);
+  });
+
+  it("preserves manually completed guided steps", async () => {
+    mocks.auth.mockResolvedValue(buildSession());
+    mocks.tutorialProgressFindUnique.mockResolvedValue({
+      completedStepIdsJson: JSON.stringify(["players", "host-session"]),
+      dismissedAt: null,
+    });
+    mocks.sessionFindFirst
+      .mockResolvedValueOnce({ id: "session-1", code: "ABC123" })
+      .mockResolvedValueOnce(null);
+
+    const response = await GET(
+      new Request("http://localhost/api/tutorial-progress/admin-onboarding")
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
     expect(body.completedStepIds).toEqual([
       "admin-community",
       "players",
       "host-session",
-      "session-workflow",
+    ]);
+  });
+
+  it("auto-completes scoring and ending only from tutorial session state", async () => {
+    mocks.auth.mockResolvedValue(buildSession());
+    mocks.sessionFindFirst
+      .mockResolvedValueOnce({ id: "session-1", code: "ABC123" })
+      .mockResolvedValueOnce({ id: "completed-session-1" });
+    mocks.matchFindFirst.mockResolvedValue({ id: "match-1" });
+
+    const response = await GET(
+      new Request("http://localhost/api/tutorial-progress/admin-onboarding")
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.completedStepIds).toEqual([
+      "admin-community",
       "score-match",
       "end-session",
     ]);
@@ -146,6 +185,9 @@ describe("admin onboarding progress route", () => {
 
   it("keeps reset cleanup as a manual optional step", async () => {
     mocks.auth.mockResolvedValue(buildSession());
+    mocks.sessionFindFirst
+      .mockResolvedValueOnce({ id: "session-1", code: "ABC123" })
+      .mockResolvedValueOnce(null);
 
     const response = await GET(
       new Request("http://localhost/api/tutorial-progress/admin-onboarding")

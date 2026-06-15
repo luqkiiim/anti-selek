@@ -231,7 +231,7 @@ export function useCommunityHostSetup({
   }, [effectiveSelectablePlayers]);
 
   const createSession = async () => {
-    if (!newSessionName.trim() || !communityId) return;
+    if (!newSessionName.trim() || !communityId) return false;
 
     if (sessionMode === SessionMode.MIXICANO) {
       const invalidGuest = guestConfigs.find(
@@ -242,7 +242,7 @@ export function useCommunityHostSetup({
         setError(
           `${mixedModeLabel} requires MALE/FEMALE gender for guest ${invalidGuest.name}`
         );
-        return;
+        return false;
       }
     }
 
@@ -281,7 +281,7 @@ export function useCommunityHostSetup({
       const data = await safeJson(res);
       if (!res.ok) {
         setError(data.error || "Failed to create tournament");
-        return;
+        return false;
       }
 
       setNewSessionName("");
@@ -304,10 +304,12 @@ export function useCommunityHostSetup({
       setCollabRoster([]);
       setLoadingCollabRoster(false);
       router.push(`/session/${data.code}`);
+      return true;
     } catch (err: unknown) {
       setError(
         err instanceof Error ? err.message : "Failed to create tournament"
       );
+      return false;
     } finally {
       setCreatingSession(false);
     }

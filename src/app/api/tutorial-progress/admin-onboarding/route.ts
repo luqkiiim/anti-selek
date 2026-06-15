@@ -31,12 +31,6 @@ async function getAdminOnboardingProgress(userId: string) {
       select: {
         id: true,
         isTutorial: true,
-        _count: {
-          select: {
-            members: true,
-            sessions: true,
-          },
-        },
       },
     }),
   ]);
@@ -50,15 +44,12 @@ async function getAdminOnboardingProgress(userId: string) {
       primaryCommunityId: null,
       primarySessionCode: null,
       hasAdminCommunity: false,
-      hasRosterPlayers: false,
-      hasAnySession: false,
-      hasRosteredSession: false,
       hasScoredMatch: false,
       hasCompletedSession: false,
     });
   }
 
-  const [latestSession, rosteredSession, scoredMatch, completedSession] =
+  const [latestSession, scoredMatch, completedSession] =
     await Promise.all([
       prisma.session.findFirst({
         where: {
@@ -67,14 +58,6 @@ async function getAdminOnboardingProgress(userId: string) {
         },
         orderBy: { createdAt: "asc" },
         select: { code: true },
-      }),
-      prisma.session.findFirst({
-        where: {
-          communityId: playground.id,
-          isTest: true,
-          players: { some: {} },
-        },
-        select: { id: true },
       }),
       prisma.match.findFirst({
         where: {
@@ -105,9 +88,6 @@ async function getAdminOnboardingProgress(userId: string) {
     primaryCommunityId: playground.id,
     primarySessionCode: latestSession?.code ?? null,
     hasAdminCommunity: true,
-    hasRosterPlayers: playground._count.members > 1,
-    hasAnySession: playground._count.sessions > 0,
-    hasRosteredSession: Boolean(rosteredSession),
     hasScoredMatch: Boolean(scoredMatch),
     hasCompletedSession: Boolean(completedSession),
   });
@@ -134,9 +114,6 @@ export async function GET(request: Request) {
           dismissedAt: null,
           primaryCommunityId: null,
           hasAdminCommunity: false,
-          hasRosterPlayers: false,
-          hasAnySession: false,
-          hasRosteredSession: false,
           hasScoredMatch: false,
           hasCompletedSession: false,
           primarySessionCode: null,

@@ -56,9 +56,6 @@ describe("buildAdminOnboardingProgress", () => {
       primaryCommunityId: "community-1",
       primarySessionCode: "SESSION1",
       hasAdminCommunity: true,
-      hasRosterPlayers: false,
-      hasAnySession: false,
-      hasRosteredSession: false,
       hasScoredMatch: false,
       hasCompletedSession: false,
     });
@@ -76,7 +73,7 @@ describe("buildAdminOnboardingProgress", () => {
       "Open playground",
       "Review practice players",
       "Create a test tournament",
-      "Explore the ongoing session",
+      "Explore a live practice session",
       "Score a practice match",
       "End the test session",
       "Reset playground",

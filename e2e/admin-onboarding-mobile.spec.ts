@@ -102,6 +102,20 @@ async function resetPlayground(page: Page) {
   });
 }
 
+async function getAdminOnboardingProgress(page: Page) {
+  return page.evaluate(async () => {
+    const response = await fetch("/api/tutorial-progress/admin-onboarding");
+    if (!response.ok) {
+      throw new Error(`Failed to load onboarding progress: ${response.status}`);
+    }
+
+    return response.json() as Promise<{
+      completedStepIds: string[];
+      steps: Array<{ id: string; title: string; completed: boolean }>;
+    }>;
+  });
+}
+
 async function expectCoachmarkInViewport(page: Page) {
   const coachmark = page.getByTestId("admin-onboarding-coachmark");
   await expect(coachmark).toBeVisible();
@@ -151,12 +165,16 @@ test.describe("tutorial playground mobile walkthrough", () => {
     ).toBeVisible();
     await expect(page.getByText("Getting started", { exact: true })).toBeVisible();
     await expect(page.getByRole("link", { name: "Go there" })).toHaveCount(0);
-    await expect(page.getByRole("link", { name: "Open scoring" }).first())
+    await expect(page.getByRole("link", { name: "Open players" }).first())
       .toBeVisible();
-    await expect(page.getByText("Completed steps (4)")).toBeVisible();
+    await expect(page.getByText("Completed steps (4)")).toHaveCount(0);
+    await expect(page.getByText("Review practice players").first()).toBeVisible();
     await expectNoHorizontalOverflow(page);
 
     const { playground } = await getPlaygroundSummary(page);
+    const onboardingProgress = await getAdminOnboardingProgress(page);
+    expect(onboardingProgress.completedStepIds).toEqual(["admin-community"]);
+
     expect(playground.communityName).toBe("Tutorial playground");
     expect(playground.playersCount).toBe(13);
     expect(playground.courtsCount).toBe(2);
@@ -213,6 +231,38 @@ test.describe("tutorial playground mobile walkthrough", () => {
     await expect(page.getByText("Weekend Cup").first()).toBeVisible();
     await expect(page.getByRole("button", { name: "Rollback" })).toHaveCount(0);
 
+    await page.goto(`/community/${playground.communityId}/admin?tab=players`);
+    await expect(page.getByRole("heading", { name: "Community controls" }))
+      .toBeVisible();
+    await expect
+      .poll(async () => (await getAdminOnboardingProgress(page)).completedStepIds)
+      .toContain("players");
+
+    await page.goto(`/community/${playground.communityId}?tab=host`);
+    await expect(page.getByText("Create a test tournament").first()).toBeVisible();
+    await page.locator('[data-tutorial-target="admin-onboarding-session-name"]')
+      .filter({ visible: true })
+      .fill("Tutorial Walkthrough Test");
+    await page.locator('[data-tutorial-target="admin-onboarding-host-players"]')
+      .filter({ visible: true })
+      .click();
+    const playersModal = page
+      .getByRole("dialog")
+      .filter({ has: page.getByRole("heading", { name: "Add Players" }) });
+    await expect(playersModal).toBeVisible();
+    await playersModal.getByRole("button", { name: "Select All" }).click();
+    await playersModal.getByRole("button", { name: "Done" }).click();
+    await page.locator('[data-tutorial-target="admin-onboarding-create-session"]')
+      .filter({ visible: true })
+      .click();
+    await expect(page).toHaveURL(/\/session\/.+/);
+    await expect
+      .poll(async () => (await getAdminOnboardingProgress(page)).completedStepIds)
+      .toContain("host-session");
+    await expect
+      .poll(async () => (await getAdminOnboardingProgress(page)).completedStepIds)
+      .toContain("session-workflow");
+
     await page.goto(`/session/${playground.sessionCode}`);
     await expect(page.getByText("Practice rally")).toBeVisible();
     await expect(page.getByText("Tutorial playground").first()).toBeVisible();
@@ -230,6 +280,23 @@ test.describe("tutorial playground mobile walkthrough", () => {
       "Score a practice match"
     );
     await expect(page.getByText("Tutorial hint")).toBeVisible();
+
+    const scoreInputs = page.locator('input[data-tutorial-target="admin-onboarding-score-input"]');
+    await expect(scoreInputs.first()).toBeVisible();
+    await scoreInputs.nth(0).fill("21");
+    await scoreInputs.nth(1).fill("15");
+    await page.getByRole("button", { name: "Submit Score" }).first().click();
+    await page.getByRole("button", { name: "Confirm", exact: true }).click();
+    await expect
+      .poll(async () => (await getAdminOnboardingProgress(page)).completedStepIds)
+      .toContain("score-match");
+
+    await page.getByRole("button", { name: "Settings" }).click();
+    await page.getByRole("button", { name: "End Session" }).click();
+    await page.getByRole("button", { name: "Confirm End Session" }).click();
+    await expect
+      .poll(async () => (await getAdminOnboardingProgress(page)).completedStepIds)
+      .toContain("end-session");
 
     const resetResult = await resetPlayground(page);
     expect(resetResult.playground.communityName).toBe("Tutorial playground");

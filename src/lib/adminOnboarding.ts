@@ -111,9 +111,6 @@ export function buildAdminOnboardingProgress({
   dismissedAt,
   primaryCommunityId,
   hasAdminCommunity,
-  hasRosterPlayers,
-  hasAnySession,
-  hasRosteredSession,
   hasScoredMatch,
   hasCompletedSession,
   primarySessionCode,
@@ -123,9 +120,6 @@ export function buildAdminOnboardingProgress({
   primaryCommunityId: string | null;
   primarySessionCode: string | null;
   hasAdminCommunity: boolean;
-  hasRosterPlayers: boolean;
-  hasAnySession: boolean;
-  hasRosteredSession: boolean;
   hasScoredMatch: boolean;
   hasCompletedSession: boolean;
 }): AdminOnboardingProgressPayload {
@@ -145,9 +139,9 @@ export function buildAdminOnboardingProgress({
     : hostHref;
   const inferredCompletions: Record<AdminOnboardingStepId, boolean> = {
     "admin-community": hasAdminCommunity,
-    players: hasRosterPlayers,
-    "host-session": hasAnySession,
-    "session-workflow": hasRosteredSession,
+    players: false,
+    "host-session": false,
+    "session-workflow": false,
     "score-match": hasScoredMatch,
     "end-session": hasCompletedSession,
     "reset-cleanup": false,
@@ -185,7 +179,7 @@ export function buildAdminOnboardingProgress({
     {
       id: "host-session",
       title: "Create a test tournament",
-      detail: "Try the Host flow inside the playground before a real court night.",
+      detail: "Use the Host flow to create your own test tournament inside the playground.",
       actionLabel: "Open host setup",
       href: hostHref,
       targetId: "admin-onboarding-create-session",
@@ -194,8 +188,8 @@ export function buildAdminOnboardingProgress({
     },
     {
       id: "session-workflow",
-      title: "Explore the ongoing session",
-      detail: "Open the seeded live session and get familiar with the session controls.",
+      title: "Explore a live practice session",
+      detail: "Open a live playground session and get familiar with the session controls.",
       actionLabel: primarySessionCode ? "Open live session" : "Open host setup",
       href: sessionHref,
       targetId: primarySessionCode

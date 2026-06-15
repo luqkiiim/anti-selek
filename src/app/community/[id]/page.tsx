@@ -219,7 +219,10 @@ export default function CommunityPage() {
     [guestConfigs.length, newSessionName, selectedPlayerIds.length]
   );
   const createSessionWithOnboardingRefresh = useCallback(async () => {
-    await createSession();
+    const created = await createSession();
+    if (created) {
+      adminOnboarding.completeStep("host-session");
+    }
     void adminOnboarding.refresh();
   }, [adminOnboarding, createSession]);
 

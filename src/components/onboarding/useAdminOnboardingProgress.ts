@@ -74,6 +74,7 @@ export function useAdminOnboardingProgress(enabled: boolean) {
   const completeStep = useCallback(
     (stepId: AdminOnboardingStepId) => {
       if (!progress) return;
+      if (progress.completedStepIds.includes(stepId)) return;
 
       void updateProgress({
         completedStepIds: Array.from(

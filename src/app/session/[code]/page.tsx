@@ -478,6 +478,11 @@ export default function SessionPage() {
     await endSession();
     void adminOnboarding.refresh();
   }, [adminOnboarding, endSession]);
+  useEffect(() => {
+    if (isTutorialPlayground && sessionData?.status !== SessionStatus.COMPLETED) {
+      adminOnboarding.completeStep("session-workflow");
+    }
+  }, [adminOnboarding, isTutorialPlayground, sessionData?.status]);
   const activeAdminOnboardingStep =
     adminOnboarding.progress?.steps.find((step) => !step.completed) ?? null;
   const shouldShowSessionTutorialHint =
