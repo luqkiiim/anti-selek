@@ -77,21 +77,20 @@ function getHotPlayerDetail(player: CommunityPagePulse["hotPlayers"][number]) {
   return `${player.wins}-${player.losses} recent`;
 }
 
-function getRivalryDetail(rivalry: CommunityPagePulse["rivalries"][number]) {
-  if (rivalry.playerOneWins === rivalry.playerTwoWins) {
-    return "Split record";
+function getRivalryDisplay(rivalry: CommunityPagePulse["rivalries"][number]) {
+  if (rivalry.playerTwoWins > rivalry.playerOneWins) {
+    return {
+      leftPlayer: rivalry.players[1],
+      rightPlayer: rivalry.players[0],
+      score: `${rivalry.playerTwoWins} - ${rivalry.playerOneWins}`,
+    };
   }
 
-  const leader =
-    rivalry.playerOneWins > rivalry.playerTwoWins
-      ? rivalry.players[0]
-      : rivalry.players[1];
-
-  return `${leader.name} leads`;
-}
-
-function getRivalryScore(rivalry: CommunityPagePulse["rivalries"][number]) {
-  return `${rivalry.playerOneWins} - ${rivalry.playerTwoWins}`;
+  return {
+    leftPlayer: rivalry.players[0],
+    rightPlayer: rivalry.players[1],
+    score: `${rivalry.playerOneWins} - ${rivalry.playerTwoWins}`,
+  };
 }
 
 function getPartnershipDetail(
@@ -402,62 +401,59 @@ export function CommunityOverviewPulsePanel({
           />
           {rivalries.length > 0 ? (
             <div className="space-y-2">
-              {rivalries.map((rivalry) => (
-                <div
-                  key={`${rivalry.players[0].id}:${rivalry.players[1].id}`}
-                  className="rounded-lg border border-[var(--line)] bg-white px-4 py-3"
-                >
-                  <div className="space-y-3">
+              {rivalries.map((rivalry) => {
+                const display = getRivalryDisplay(rivalry);
+
+                return (
+                  <div
+                    key={`${rivalry.players[0].id}:${rivalry.players[1].id}`}
+                    className="rounded-lg border border-[var(--line)] bg-white px-4 py-3"
+                  >
                     <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 sm:gap-3">
                       <div className="min-w-0 text-center">
                         <div className="mx-auto flex w-fit max-w-full flex-col items-center gap-1.5">
                           <Avatar
-                            name={rivalry.players[0].name}
-                            avatarUrl={rivalry.players[0].avatarUrl}
+                            name={display.leftPlayer.name}
+                            avatarUrl={display.leftPlayer.avatarUrl}
                             size="md"
                             className="ring-2 ring-white"
                           />
                           <p
                             className="max-w-full truncate text-[12px] font-semibold text-gray-900 sm:text-sm"
-                            title={rivalry.players[0].name}
+                            title={display.leftPlayer.name}
                           >
-                            {getCompactPlayerName(rivalry.players[0].name)}
+                            {getCompactPlayerName(display.leftPlayer.name)}
                           </p>
                         </div>
                       </div>
                       <div className="min-w-[5.5rem] text-center sm:min-w-[6.5rem]">
                         <p className="text-2xl font-semibold leading-none text-gray-900 sm:text-3xl">
-                          {getRivalryScore(rivalry)}
+                          {display.score}
                         </p>
                         <p className="mt-1 text-[11px] font-semibold text-gray-500">
-                          {getRivalryDetail(rivalry)}
+                          {formatGameCount(rivalry.matches)}
                         </p>
                       </div>
                       <div className="min-w-0 text-center">
                         <div className="mx-auto flex w-fit max-w-full flex-col items-center gap-1.5">
                           <Avatar
-                            name={rivalry.players[1].name}
-                            avatarUrl={rivalry.players[1].avatarUrl}
+                            name={display.rightPlayer.name}
+                            avatarUrl={display.rightPlayer.avatarUrl}
                             size="md"
                             className="ring-2 ring-white"
                           />
                           <p
                             className="max-w-full truncate text-[12px] font-semibold text-gray-900 sm:text-sm"
-                            title={rivalry.players[1].name}
+                            title={display.rightPlayer.name}
                           >
-                            {getCompactPlayerName(rivalry.players[1].name)}
+                            {getCompactPlayerName(display.rightPlayer.name)}
                           </p>
                         </div>
                       </div>
                     </div>
-                    <div className="flex justify-center">
-                      <span className="rounded-md bg-[var(--accent-faint)] px-2 py-1 text-xs font-semibold text-[var(--accent)]">
-                        {formatGameCount(rivalry.matches)}
-                      </span>
-                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           ) : (
             <EmptyPulseState>

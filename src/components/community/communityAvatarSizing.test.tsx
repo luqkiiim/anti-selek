@@ -62,8 +62,8 @@ const pulse: CommunityPagePulse = {
         { id: "rival-2", name: "Sam Wong", avatarUrl: null },
       ],
       matches: 46,
-      playerOneWins: 24,
-      playerTwoWins: 22,
+      playerOneWins: 22,
+      playerTwoWins: 24,
       lastPlayedAt: "2026-05-18",
       lastSession: {
         code: "RIV1",
@@ -167,12 +167,16 @@ describe("community avatar sizing", () => {
       );
     });
 
-    expect(container.textContent).toContain("Top rivalry");
-    expect(container.textContent).toContain("Partner chemistry");
-    expect(container.textContent).toContain("24 - 22");
-    expect(container.textContent).toContain("Ari Stone leads");
-    expect(container.textContent).toContain("46 games");
-    expect(container.textContent).not.toContain("vs");
+    const text = container.textContent ?? "";
+    expect(text).toContain("Top rivalry");
+    expect(text).toContain("Partner chemistry");
+    expect(text).toContain("24 - 22");
+    expect(text).toContain("46 games");
+    expect(text).not.toContain("Ari Stone leads");
+    expect(text).not.toContain("Sam Wong leads");
+    expect(text).not.toContain("vs");
+    expect(text.indexOf("Sam")).toBeLessThan(text.indexOf("24 - 22"));
+    expect(text.indexOf("24 - 22")).toBeLessThan(text.indexOf("Ari"));
     expect(countMdAvatars(container.innerHTML)).toBe(8);
   });
 
