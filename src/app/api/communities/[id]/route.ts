@@ -7,6 +7,7 @@ import {
   getCommunityStatUserResolver,
   getOfflineIdentityInfoByUserId,
 } from "@/lib/offlineIdentities";
+import { buildCommunityLeaderboardRankMovements } from "@/lib/profileCommunityRank";
 import { prisma } from "@/lib/prisma";
 import { listSessionsForCommunity } from "@/app/api/sessions/listSessionsService";
 import { logAuditEvent } from "@/lib/serverAudit";
@@ -28,6 +29,7 @@ import {
   CommunityPlayerStatus,
   PartnerPreference,
   PlayerGender,
+  SessionStatus,
 } from "@/types/enums";
 
 function toClaimRequestResponse(request: {
@@ -271,6 +273,32 @@ export async function GET(
       communityId: id,
       memberUserIds: members.map((member) => member.user.id),
     });
+    const latestCompletedSession = sessions
+      .filter(
+        (sessionItem) =>
+          !sessionItem.isTest && sessionItem.status === SessionStatus.COMPLETED
+      )
+      .sort((left, right) => {
+        const leftTime = new Date(left.endedAt ?? left.createdAt).getTime();
+        const rightTime = new Date(right.endedAt ?? right.createdAt).getTime();
+        return rightTime - leftTime;
+      })[0];
+    const latestCompletedSessionMatches = latestCompletedSession
+      ? completedMatches.filter(
+          (match) => match.session.id === latestCompletedSession.id
+        )
+      : [];
+    const rankMovements = buildCommunityLeaderboardRankMovements({
+      members: members.map((member) => ({
+        userId: member.user.id,
+        name: member.user.name,
+        elo: member.elo,
+        isLeaderboardEligible:
+          member.status !== CommunityPlayerStatus.OCCASIONAL,
+      })),
+      matchesSinceWindowStart: latestCompletedSessionMatches,
+      resolveUserId: resolveStatUserId,
+    });
 
     for (const match of completedMatches) {
       if (match.winnerTeam !== 1 && match.winnerTeam !== 2) {
@@ -299,6 +327,7 @@ export async function GET(
 
     const communityMembers = members.map((member) => {
       const offlineIdentityInfo = offlineIdentityInfoByUserId.get(member.user.id);
+      const rankMovement = rankMovements.get(member.user.id);
 
       return {
         id: member.user.id,
@@ -326,6 +355,8 @@ export async function GET(
         createdAt: member.user.createdAt,
         wins: statsByUserId.get(member.user.id)?.wins ?? 0,
         losses: statsByUserId.get(member.user.id)?.losses ?? 0,
+        previousRank: rankMovement?.previousRank ?? null,
+        rankDelta: rankMovement?.rankDelta ?? null,
         role: member.role,
         isOwner: member.user.id === community.createdById,
         offlineIdentityId: offlineIdentityInfo?.offlineIdentityId ?? null,

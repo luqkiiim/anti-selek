@@ -221,6 +221,131 @@ describe("community snapshot route", () => {
     );
   });
 
+  it("includes rank movement from the latest completed tournament", async () => {
+    mocks.communityMemberFindMany.mockResolvedValueOnce([
+      {
+        role: "ADMIN",
+        status: "CORE",
+        elo: 1030,
+        user: {
+          id: "viewer-1",
+          name: "Alice",
+          email: "viewer@example.com",
+          avatarKey: null,
+          gender: "MALE",
+          partnerPreference: "OPEN",
+          mixedSideOverride: null,
+          isActive: true,
+          isClaimed: true,
+          createdAt: new Date("2026-05-18T00:00:00.000Z"),
+        },
+      },
+      {
+        role: "MEMBER",
+        status: "CORE",
+        elo: 1020,
+        user: {
+          id: "player-2",
+          name: "Ben",
+          email: null,
+          avatarKey: null,
+          gender: "FEMALE",
+          partnerPreference: "OPEN",
+          mixedSideOverride: null,
+          isActive: true,
+          isClaimed: false,
+          createdAt: new Date("2026-05-17T00:00:00.000Z"),
+        },
+      },
+      {
+        role: "MEMBER",
+        status: "CORE",
+        elo: 1000,
+        user: {
+          id: "player-3",
+          name: "Cara",
+          email: null,
+          avatarKey: null,
+          gender: "FEMALE",
+          partnerPreference: "OPEN",
+          mixedSideOverride: null,
+          isActive: true,
+          isClaimed: false,
+          createdAt: new Date("2026-05-16T00:00:00.000Z"),
+        },
+      },
+    ]);
+    mocks.listSessionsForCommunity.mockResolvedValueOnce([
+      {
+        id: "session-1",
+        code: "ABC123",
+        name: "Morning",
+        type: "POINTS",
+        status: "COMPLETED",
+        isTest: false,
+        createdAt: new Date("2026-05-18T00:00:00.000Z"),
+        endedAt: new Date("2026-05-18T02:00:00.000Z"),
+        players: [],
+      },
+    ]);
+    mocks.matchFindMany.mockResolvedValueOnce([
+      {
+        id: "match-1",
+        completedAt: new Date("2026-05-18T01:00:00.000Z"),
+        winnerTeam: 1,
+        team1User1Id: "viewer-1",
+        team1User2Id: "guest-1",
+        team2User1Id: "player-2",
+        team2User2Id: "guest-2",
+        team1Score: 21,
+        team2Score: 18,
+        team1EloChange: 20,
+        team2EloChange: -20,
+        team1User1: { id: "viewer-1", name: "Alice", avatarKey: null },
+        team1User2: { id: "guest-1", name: "Guest One", avatarKey: null },
+        team2User1: { id: "player-2", name: "Ben", avatarKey: null },
+        team2User2: { id: "guest-2", name: "Guest Two", avatarKey: null },
+        session: {
+          id: "session-1",
+          code: "ABC123",
+          name: "Morning",
+          type: "POINTS",
+          createdAt: new Date("2026-05-18T00:00:00.000Z"),
+          endedAt: new Date("2026-05-18T02:00:00.000Z"),
+        },
+      },
+    ]);
+
+    const response = await GET(
+      new Request("http://localhost/api/communities/community-1"),
+      {
+        params: Promise.resolve({ id: "community-1" }),
+      }
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.communityMembers).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: "viewer-1",
+          previousRank: 2,
+          rankDelta: 1,
+        }),
+        expect.objectContaining({
+          id: "player-2",
+          previousRank: 1,
+          rankDelta: -1,
+        }),
+        expect.objectContaining({
+          id: "player-3",
+          previousRank: 3,
+          rankDelta: 0,
+        }),
+      ])
+    );
+  });
+
   it("masks tutorial community backend names in the snapshot", async () => {
     mocks.communityFindUnique.mockResolvedValueOnce({
       id: "community-1",

@@ -2,6 +2,7 @@ export interface ProfileCommunityRankMember {
   userId: string;
   name: string;
   elo: number;
+  isLeaderboardEligible?: boolean;
 }
 
 export interface ProfileCommunityRankMatch {
@@ -20,17 +21,17 @@ export interface ProfileCommunityRankWindow {
   rankDelta: number | null;
 }
 
+export interface CommunityLeaderboardRankMovement {
+  currentRank: number;
+  previousRank: number | null;
+  rankDelta: number | null;
+}
+
 function rankMembers(
   userId: string,
   membersById: Map<string, ProfileCommunityRankMember>
 ) {
-  const rankedMembers = [...membersById.values()].sort(
-    (left, right) =>
-      right.elo - left.elo ||
-      left.name.localeCompare(right.name, undefined, {
-        sensitivity: "base",
-      })
-  );
+  const rankedMembers = rankAllMembers(membersById);
   const rank =
     rankedMembers.findIndex((member) => member.userId === userId) + 1 || null;
 
@@ -38,6 +39,16 @@ function rankMembers(
     leaderboardSize: rankedMembers.length,
     rank,
   };
+}
+
+function rankAllMembers(membersById: Map<string, ProfileCommunityRankMember>) {
+  return [...membersById.values()].sort(
+    (left, right) =>
+      right.elo - left.elo ||
+      left.name.localeCompare(right.name, undefined, {
+        sensitivity: "base",
+      })
+  );
 }
 
 function applyRollbackDelta(
@@ -53,17 +64,47 @@ function applyRollbackDelta(
   member.elo -= delta;
 }
 
+function buildEligibleMemberMaps(members: ProfileCommunityRankMember[]) {
+  const eligibleMembers = members.filter(
+    (member) => member.isLeaderboardEligible !== false
+  );
+
+  return {
+    currentMembersById: new Map(
+      eligibleMembers.map((member) => [member.userId, { ...member }])
+    ),
+    previousMembersById: new Map(
+      eligibleMembers.map((member) => [member.userId, { ...member }])
+    ),
+  };
+}
+
+function rollbackRankWindow(
+  previousMembersById: Map<string, ProfileCommunityRankMember>,
+  matchesSinceWindowStart: ProfileCommunityRankMatch[],
+  resolveUserId: (userId: string) => string
+) {
+  for (const match of matchesSinceWindowStart) {
+    const team1Delta = match.team1EloChange ?? 0;
+    const team2Delta = match.team2EloChange ?? 0;
+
+    for (const participantId of [match.team1User1Id, match.team1User2Id]) {
+      applyRollbackDelta(previousMembersById, resolveUserId(participantId), team1Delta);
+    }
+
+    for (const participantId of [match.team2User1Id, match.team2User2Id]) {
+      applyRollbackDelta(previousMembersById, resolveUserId(participantId), team2Delta);
+    }
+  }
+}
+
 export function buildProfileCommunityRankWindow(
   userId: string,
   members: ProfileCommunityRankMember[],
   matchesSinceWindowStart: ProfileCommunityRankMatch[]
 ): ProfileCommunityRankWindow {
-  const currentMembersById = new Map(
-    members.map((member) => [member.userId, { ...member }])
-  );
-  const previousMembersById = new Map(
-    members.map((member) => [member.userId, { ...member }])
-  );
+  const { currentMembersById, previousMembersById } =
+    buildEligibleMemberMaps(members);
 
   const currentRanking = rankMembers(userId, currentMembersById);
 
@@ -76,18 +117,11 @@ export function buildProfileCommunityRankWindow(
     };
   }
 
-  for (const match of matchesSinceWindowStart) {
-    const team1Delta = match.team1EloChange ?? 0;
-    const team2Delta = match.team2EloChange ?? 0;
-
-    for (const participantId of [match.team1User1Id, match.team1User2Id]) {
-      applyRollbackDelta(previousMembersById, participantId, team1Delta);
-    }
-
-    for (const participantId of [match.team2User1Id, match.team2User2Id]) {
-      applyRollbackDelta(previousMembersById, participantId, team2Delta);
-    }
-  }
+  rollbackRankWindow(
+    previousMembersById,
+    matchesSinceWindowStart,
+    (participantId) => participantId
+  );
 
   const previousRanking = rankMembers(userId, previousMembersById);
 
@@ -100,4 +134,52 @@ export function buildProfileCommunityRankWindow(
         ? previousRanking.rank - currentRanking.rank
         : null,
   };
+}
+
+export function buildCommunityLeaderboardRankMovements({
+  members,
+  matchesSinceWindowStart,
+  resolveUserId = (userId) => userId,
+}: {
+  members: ProfileCommunityRankMember[];
+  matchesSinceWindowStart: ProfileCommunityRankMatch[];
+  resolveUserId?: (userId: string) => string;
+}) {
+  const { currentMembersById, previousMembersById } =
+    buildEligibleMemberMaps(members);
+
+  rollbackRankWindow(
+    previousMembersById,
+    matchesSinceWindowStart,
+    resolveUserId
+  );
+
+  const currentRankByUserId = new Map(
+    rankAllMembers(currentMembersById).map((member, index) => [
+      member.userId,
+      index + 1,
+    ])
+  );
+  const previousRankByUserId = new Map(
+    rankAllMembers(previousMembersById).map((member, index) => [
+      member.userId,
+      index + 1,
+    ])
+  );
+
+  return new Map(
+    [...currentRankByUserId.entries()].map(([userId, currentRank]) => {
+      const previousRank = previousRankByUserId.get(userId) ?? null;
+
+      return [
+        userId,
+        {
+          currentRank,
+          previousRank,
+          rankDelta:
+            previousRank === null ? null : previousRank - currentRank,
+        } satisfies CommunityLeaderboardRankMovement,
+      ];
+    })
+  );
 }

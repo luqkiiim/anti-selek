@@ -45,6 +45,8 @@ export interface CommunityPageMember {
   elo: number;
   wins: number;
   losses: number;
+  previousRank?: number | null;
+  rankDelta?: number | null;
   isClaimed: boolean;
   role: "ADMIN" | "STAFF" | "MEMBER";
   isOwner?: boolean;

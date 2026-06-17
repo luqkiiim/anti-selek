@@ -104,4 +104,46 @@ describe("CommunityLeaderboardPanel", () => {
 
     expect(markup).not.toContain("Request Claim");
   });
+
+  it("renders an up movement arrow with the number below it", () => {
+    const markup = renderPanel(
+      buildPlayer({ rankDelta: 2, previousRank: 3 }),
+      buildClaimState()
+    );
+
+    expect(markup).toContain('data-testid="rank-movement-up"');
+    expect(markup).toContain('aria-label="Moved up 2 ranks"');
+    expect(markup).toMatch(
+      /data-testid="rank-movement-up"[\s\S]*<svg[\s\S]*<\/svg>[\s\S]*>2<\/span>/
+    );
+  });
+
+  it("renders a down movement number with the arrow below it", () => {
+    const markup = renderPanel(
+      buildPlayer({ rankDelta: -1, previousRank: 1 }),
+      buildClaimState()
+    );
+
+    expect(markup).toContain('data-testid="rank-movement-down"');
+    expect(markup).toContain('aria-label="Moved down 1 rank"');
+    expect(markup).toMatch(
+      /data-testid="rank-movement-down"[\s\S]*>1<\/span>[\s\S]*<svg[\s\S]*<\/svg>/
+    );
+  });
+
+  it("hides the movement indicator when rank movement is unavailable or unchanged", () => {
+    const unavailableMarkup = renderPanel(
+      buildPlayer({ rankDelta: null, previousRank: null }),
+      buildClaimState()
+    );
+    const unchangedMarkup = renderPanel(
+      buildPlayer({ rankDelta: 0, previousRank: 1 }),
+      buildClaimState()
+    );
+
+    expect(unavailableMarkup).not.toContain("rank-movement-up");
+    expect(unavailableMarkup).not.toContain("rank-movement-down");
+    expect(unchangedMarkup).not.toContain("rank-movement-up");
+    expect(unchangedMarkup).not.toContain("rank-movement-down");
+  });
 });

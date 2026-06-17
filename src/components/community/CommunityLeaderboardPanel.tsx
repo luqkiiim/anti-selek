@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { ArrowDown, ArrowUp } from "lucide-react";
 import type { KeyboardEvent, MouseEvent, ReactNode } from "react";
 import { Avatar } from "@/components/ui/Avatar";
 import {
@@ -30,6 +31,38 @@ function shouldIgnoreCardNavigation(target: EventTarget | null) {
   return (
     target instanceof HTMLElement &&
     !!target.closest("button, a, select, input, option")
+  );
+}
+
+function RankMovementIndicator({ rankDelta }: { rankDelta?: number | null }) {
+  if (!rankDelta) {
+    return <span className="w-5 shrink-0" aria-hidden="true" />;
+  }
+
+  if (rankDelta > 0) {
+    return (
+      <span
+        className="flex w-5 shrink-0 flex-col items-center justify-center text-green-600"
+        aria-label={`Moved up ${rankDelta} ${rankDelta === 1 ? "rank" : "ranks"}`}
+        data-testid="rank-movement-up"
+      >
+        <ArrowUp aria-hidden="true" size={13} strokeWidth={3} />
+        <span className="text-[10px] font-black leading-none">{rankDelta}</span>
+      </span>
+    );
+  }
+
+  const movement = Math.abs(rankDelta);
+
+  return (
+    <span
+      className="flex w-5 shrink-0 flex-col items-center justify-center text-red-600"
+      aria-label={`Moved down ${movement} ${movement === 1 ? "rank" : "ranks"}`}
+      data-testid="rank-movement-down"
+    >
+      <span className="text-[10px] font-black leading-none">{movement}</span>
+      <ArrowDown aria-hidden="true" size={13} strokeWidth={3} />
+    </span>
   );
 }
 
@@ -175,9 +208,12 @@ export function CommunityLeaderboardPanel({
             >
               <div className="flex items-center justify-between gap-3">
                 <div className="flex min-w-0 items-center gap-3">
-                  <span className="w-6 shrink-0 text-xs font-semibold text-blue-600">
-                    #{index + 1}
-                  </span>
+                  <div className="flex w-12 shrink-0 items-center gap-1">
+                    <span className="w-6 text-xs font-semibold text-blue-600">
+                      #{index + 1}
+                    </span>
+                    <RankMovementIndicator rankDelta={player.rankDelta} />
+                  </div>
                   <Avatar name={player.name} avatarUrl={player.avatarUrl} size="md" />
                   <div className="min-w-0">
                     <Link
