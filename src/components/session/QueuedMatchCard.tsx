@@ -75,7 +75,7 @@ function TeamPlayers({
                 aria-expanded={actionOpen}
                 aria-label={`Open actions for ${player.name}`}
                 title={player.name}
-                className={`flex min-w-0 w-full items-center gap-1.5 text-[0.95rem] font-semibold leading-tight text-gray-900 transition hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-50 sm:gap-2 sm:text-base md:text-lg xl:text-base ${textAlignClass} ${rowDirectionClass}`}
+                className={`flex min-w-0 w-full items-center gap-1.5 text-[0.95rem] font-semibold leading-tight text-gray-900 transition hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-50 sm:gap-2 sm:text-base lg:text-lg xl:text-base ${textAlignClass} ${rowDirectionClass}`}
               >
                 <Avatar
                   name={player.name}
@@ -94,7 +94,7 @@ function TeamPlayers({
                   appearance="court"
                 />
                 <p
-                  className={`min-w-0 flex-1 truncate text-[0.95rem] font-semibold leading-tight text-gray-900 sm:text-base md:text-lg xl:text-base ${textAlignClass}`}
+                  className={`min-w-0 flex-1 truncate text-[0.95rem] font-semibold leading-tight text-gray-900 sm:text-base lg:text-lg xl:text-base ${textAlignClass}`}
                   title={player.name}
                 >
                   {player.name}
@@ -261,7 +261,7 @@ export function QueuedMatchCard({
     </button>
   ) : null;
   const queuedLineup = queuedMatch ? (
-    <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2.5 sm:gap-3 md:gap-4 xl:gap-3">
+    <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 sm:gap-2.5 lg:gap-3">
       <TeamPlayers
         players={[queuedMatch.team1User1, queuedMatch.team1User2]}
         canReshuffleQueuedPlayers={canReshuffleQueuedPlayers}

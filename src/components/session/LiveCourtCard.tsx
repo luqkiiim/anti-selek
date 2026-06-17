@@ -313,7 +313,7 @@ export function LiveCourtCard({
         </div>
       ) : null}
 
-      <div className="flex flex-1 flex-col justify-center p-2.5 md:p-4">
+      <div className="flex flex-1 flex-col justify-center p-2.5 md:p-3 lg:p-4">
         {currentMatch ? (
           promotionState === "suppressed" ? (
             <PromotionArrivalPlaceholder

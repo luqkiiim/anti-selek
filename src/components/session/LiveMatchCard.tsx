@@ -89,7 +89,7 @@ function TeamNames({
                 aria-expanded={actionOpen}
                 aria-label={`Open actions for ${player.name}`}
                 title={player.name}
-                className={`flex min-w-0 w-full items-center gap-1.5 text-[0.95rem] font-semibold leading-tight text-gray-900 transition hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-50 sm:gap-2 sm:text-base md:text-lg xl:text-base ${textAlignClass} ${rowDirectionClass}`}
+                className={`flex min-w-0 w-full items-center gap-1.5 text-[0.95rem] font-semibold leading-tight text-gray-900 transition hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-50 sm:gap-2 sm:text-base lg:text-lg xl:text-base ${textAlignClass} ${rowDirectionClass}`}
               >
                 <Avatar
                   name={player.name}
@@ -108,7 +108,7 @@ function TeamNames({
                   appearance="court"
                 />
                 <p
-                  className="min-w-0 flex-1 truncate text-[0.95rem] font-semibold leading-tight text-gray-900 sm:text-base md:text-lg xl:text-base"
+                  className="min-w-0 flex-1 truncate text-[0.95rem] font-semibold leading-tight text-gray-900 sm:text-base lg:text-lg xl:text-base"
                   title={player.name}
                 >
                   {player.name}
@@ -190,7 +190,7 @@ function ScoreSlot({
         onChange={(event) => onScoreChange(event.target.value)}
         onFocus={onScoreFocus}
         onBlur={onScoreBlur}
-        className="h-11 w-11 rounded-xl border border-blue-200 bg-white text-center text-[1.55rem] font-semibold tabular-nums text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 sm:h-16 sm:w-16 sm:text-3xl xl:h-14 xl:w-14 xl:text-2xl"
+        className="h-11 w-11 rounded-xl border border-blue-200 bg-white text-center text-[1.55rem] font-semibold tabular-nums text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 sm:h-12 sm:w-12 sm:text-2xl md:h-[3.25rem] md:w-[3.25rem] xl:h-14 xl:w-14"
         placeholder="0"
       />
     );
@@ -202,7 +202,7 @@ function ScoreSlot({
 
   return (
     <div
-      className={`flex h-11 w-11 items-center justify-center rounded-xl border bg-white text-[1.55rem] font-semibold tabular-nums sm:h-16 sm:w-16 sm:text-3xl xl:h-14 xl:w-14 xl:text-2xl ${
+      className={`flex h-11 w-11 items-center justify-center rounded-xl border bg-white text-[1.55rem] font-semibold tabular-nums sm:h-12 sm:w-12 sm:text-2xl md:h-[3.25rem] md:w-[3.25rem] xl:h-14 xl:w-14 ${
         displayScore !== null
           ? "border-gray-200 text-gray-900"
           : "border-gray-100 text-gray-300"
@@ -523,7 +523,7 @@ export function LiveMatchCard({
   }, [clearSavedScoreInputScrollPosition]);
 
   const matchLineup = (
-    <div className="grid grid-cols-[minmax(0,1fr)_2.75rem_2.75rem_minmax(0,1fr)] items-center gap-1.5 sm:grid-cols-[minmax(0,1fr)_4rem_4rem_minmax(0,1fr)] sm:gap-3 md:gap-4 xl:grid-cols-[minmax(0,1fr)_3.5rem_3.5rem_minmax(0,1fr)] xl:gap-3">
+    <div className="grid grid-cols-[minmax(0,1fr)_2.75rem_2.75rem_minmax(0,1fr)] items-center gap-1.5 sm:grid-cols-[minmax(0,1fr)_3rem_3rem_minmax(0,1fr)] sm:gap-2 md:grid-cols-[minmax(0,1fr)_3.25rem_3.25rem_minmax(0,1fr)] lg:gap-3 xl:grid-cols-[minmax(0,1fr)_3.5rem_3.5rem_minmax(0,1fr)]">
       <TeamNames
         matchId={match.id}
         players={[match.team1User1, match.team1User2]}
@@ -592,7 +592,7 @@ export function LiveMatchCard({
       <div
         ref={lineupRef}
         data-court-promotion-surface={match.id}
-        className={`rounded-xl border p-2.5 transition-all md:p-4 ${
+        className={`rounded-xl border p-2.5 transition-all md:p-3 lg:p-4 ${
           isPendingApproval
             ? "border-orange-200 bg-orange-50/80"
             : "border-blue-100 bg-[var(--accent-faint)]"
