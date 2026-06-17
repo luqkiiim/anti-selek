@@ -209,10 +209,10 @@ export function CommunityLeaderboardPanel({
               <div className="flex items-center justify-between gap-3">
                 <div className="flex min-w-0 items-center gap-3">
                   <div className="flex w-12 shrink-0 items-center gap-1">
+                    <RankMovementIndicator rankDelta={player.rankDelta} />
                     <span className="w-6 text-xs font-semibold text-blue-600">
                       #{index + 1}
                     </span>
-                    <RankMovementIndicator rankDelta={player.rankDelta} />
                   </div>
                   <Avatar name={player.name} avatarUrl={player.avatarUrl} size="md" />
                   <div className="min-w-0">

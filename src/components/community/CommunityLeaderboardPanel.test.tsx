@@ -116,6 +116,9 @@ describe("CommunityLeaderboardPanel", () => {
     expect(markup).toMatch(
       /data-testid="rank-movement-up"[\s\S]*<svg[\s\S]*<\/svg>[\s\S]*>2<\/span>/
     );
+    expect(markup.indexOf('data-testid="rank-movement-up"')).toBeLessThan(
+      markup.indexOf("#1")
+    );
   });
 
   it("renders a down movement number with the arrow below it", () => {
