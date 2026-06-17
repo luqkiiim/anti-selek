@@ -171,6 +171,7 @@ export function findBestSingleCourtSelectionLadder<
   const initialCandidatePool = buildCandidatePool(players, {
     requiredPlayerCount: 4,
     randomFn,
+    respectPlayerRest,
   });
 
   if (

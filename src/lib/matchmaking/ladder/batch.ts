@@ -522,6 +522,7 @@ export function findBestBatchSelectionLadder<T extends MatchmakerLadderPlayer>(
   const initialCandidatePool = buildCandidatePool(players, {
     requiredPlayerCount,
     randomFn,
+    respectPlayerRest,
   });
   let searchedCandidatePool = initialCandidatePool;
   const debug: LadderBatchDebug = {

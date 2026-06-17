@@ -384,6 +384,7 @@ export function findBestSingleCourtSelectionV3<T extends MatchmakerV3Player>(
   const initialCandidatePool = buildCandidatePool(players, {
     requiredPlayerCount: 4,
     randomFn,
+    respectPlayerRest,
   });
 
   if (

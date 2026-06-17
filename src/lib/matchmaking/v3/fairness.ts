@@ -15,8 +15,10 @@ export function buildActivePlayers<T extends MatchmakerV3Player>(
   players: T[],
   {
     randomFn = Math.random,
+    respectPlayerRest = true,
   }: {
     randomFn?: () => number;
+    respectPlayerRest?: boolean;
   } = {}
 ): ActiveMatchmakerV3Player<T>[] {
   return players
@@ -33,7 +35,7 @@ export function buildActivePlayers<T extends MatchmakerV3Player>(
         return left.effectiveMatchCount - right.effectiveMatchCount;
       }
 
-      if (left.restTurns !== right.restTurns) {
+      if (respectPlayerRest && left.restTurns !== right.restTurns) {
         return right.restTurns - left.restTurns;
       }
 

@@ -160,6 +160,79 @@ describe("matchmaking v3 candidate pool", () => {
     ]);
   });
 
+  it("uses the full final selection band when respect player rest is off", () => {
+    const pool = buildCandidatePool(
+      [
+        createPlayer("A", { matchesPlayed: 4 }),
+        createPlayer("B", { matchesPlayed: 4 }),
+        createPlayer("C", {
+          matchesPlayed: 5,
+          restTurns: 5,
+        }),
+        createPlayer("D", {
+          matchesPlayed: 5,
+          restTurns: 4,
+        }),
+        createPlayer("E", {
+          matchesPlayed: 5,
+          restTurns: 4,
+        }),
+        createPlayer("F", {
+          matchesPlayed: 5,
+          restTurns: 3,
+        }),
+      ],
+      {
+        requiredPlayerCount: 4,
+        randomFn: () => 0,
+        respectPlayerRest: false,
+      }
+    );
+
+    expect(pool.requiredSelectableCount).toBe(2);
+    expect(pool.tieZone).toBeNull();
+    expect(pool.candidatePlayers.map((player) => player.userId)).toEqual([
+      "A",
+      "B",
+      "C",
+      "D",
+      "E",
+      "F",
+    ]);
+  });
+
+  it("ignores rest turns for active player ordering when respect player rest is off", () => {
+    const randomValues = [0.6, 0.1, 0.4];
+    let index = 0;
+    const pool = buildCandidatePool(
+      [
+        createPlayer("HighRest", {
+          matchesPlayed: 4,
+          restTurns: 10,
+        }),
+        createPlayer("LowRest", {
+          matchesPlayed: 4,
+          restTurns: 0,
+        }),
+        createPlayer("MidRest", {
+          matchesPlayed: 4,
+          restTurns: 5,
+        }),
+      ],
+      {
+        requiredPlayerCount: 2,
+        randomFn: () => randomValues[index++] ?? 0,
+        respectPlayerRest: false,
+      }
+    );
+
+    expect(pool.activePlayers.map((player) => player.userId)).toEqual([
+      "LowRest",
+      "MidRest",
+      "HighRest",
+    ]);
+  });
+
   it("uses the matchmaking baseline for neutral late-join and resume positioning", () => {
     const pool = buildCandidatePool(
       [

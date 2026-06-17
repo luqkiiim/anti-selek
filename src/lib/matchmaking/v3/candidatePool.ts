@@ -17,12 +17,17 @@ export function buildCandidatePool<T extends MatchmakerV3Player>(
   {
     requiredPlayerCount,
     randomFn = Math.random,
+    respectPlayerRest = true,
   }: {
     requiredPlayerCount: number;
     randomFn?: () => number;
+    respectPlayerRest?: boolean;
   }
 ): V3CandidatePool<ActiveMatchmakerV3Player<T>> {
-  const activePlayers = buildActivePlayers(players, { randomFn });
+  const activePlayers = buildActivePlayers(players, {
+    randomFn,
+    respectPlayerRest,
+  });
   const fairnessBands = buildFairnessBands(activePlayers);
   const lowestBand = fairnessBands[0]?.effectiveMatchCount ?? null;
 
@@ -62,7 +67,9 @@ export function buildCandidatePool<T extends MatchmakerV3Player>(
 
     selectionBand = band;
     requiredSelectableCount = requiredPlayerCount - lockedPlayers.length;
-    tieZone = buildRestTurnTieZone(band.players, requiredSelectableCount);
+    tieZone = respectPlayerRest
+      ? buildRestTurnTieZone(band.players, requiredSelectableCount)
+      : null;
     selectablePlayers = tieZone?.players ?? band.players;
     break;
   }

@@ -801,6 +801,7 @@ export function findBestBatchSelectionV3<T extends MatchmakerV3Player>(
   const candidatePool = buildCandidatePool(players, {
     requiredPlayerCount,
     randomFn,
+    respectPlayerRest,
   });
   const debug: V3BatchDebug = {
     eligiblePlayerIds: candidatePool.activePlayers.map((player) => player.userId),

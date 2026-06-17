@@ -113,6 +113,83 @@ describe("matchmaking v3 single-court selection", () => {
     expect(result.selection?.sharedCourtRepeatPenalty).toBeLessThan(6);
   });
 
+  it("ignores rest-shaped candidate narrowing when rest is off in mixed points", () => {
+    const result = findBestSingleCourtSelectionV3(
+      [
+        createPlayer("M1", {
+          matchesPlayed: 2,
+          gender: PlayerGender.MALE,
+          restTurns: 0,
+        }),
+        createPlayer("M2", {
+          matchesPlayed: 2,
+          gender: PlayerGender.MALE,
+          restTurns: 0,
+        }),
+        createPlayer("M3", {
+          matchesPlayed: 2,
+          gender: PlayerGender.MALE,
+          restTurns: 0,
+        }),
+        createPlayer("F1", {
+          matchesPlayed: 2,
+          gender: PlayerGender.FEMALE,
+          partnerPreference: PartnerPreference.FEMALE_FLEX,
+          restTurns: 5,
+        }),
+        createPlayer("F2", {
+          matchesPlayed: 2,
+          gender: PlayerGender.FEMALE,
+          partnerPreference: PartnerPreference.FEMALE_FLEX,
+          restTurns: 5,
+        }),
+        createPlayer("F3", {
+          matchesPlayed: 2,
+          gender: PlayerGender.FEMALE,
+          partnerPreference: PartnerPreference.FEMALE_FLEX,
+          restTurns: 5,
+        }),
+        createPlayer("F4", {
+          matchesPlayed: 2,
+          gender: PlayerGender.FEMALE,
+          partnerPreference: PartnerPreference.FEMALE_FLEX,
+          restTurns: 5,
+        }),
+        createPlayer("F5", {
+          matchesPlayed: 2,
+          gender: PlayerGender.FEMALE,
+          partnerPreference: PartnerPreference.FEMALE_FLEX,
+          restTurns: 0,
+        }),
+        createPlayer("F6", {
+          matchesPlayed: 2,
+          gender: PlayerGender.FEMALE,
+          partnerPreference: PartnerPreference.FEMALE_FLEX,
+          restTurns: 0,
+        }),
+      ],
+      {
+        sessionMode: SessionMode.MIXICANO,
+        sessionType: SessionType.POINTS,
+        completedMatches: [
+          {
+            team1: ["F1", "F2"],
+            team2: ["F3", "F4"],
+            completedAt: new Date("2026-03-18T00:00:00Z"),
+          },
+        ],
+        randomFn: () => 0,
+        respectPlayerRest: false,
+      }
+    );
+
+    expect(result.debug.candidatePlayerIds).toHaveLength(9);
+    expect(new Set(result.selection?.ids)).not.toEqual(
+      new Set(["F1", "F2", "F3", "F4"])
+    );
+    expect(result.selection?.sharedCourtRepeatPenalty).toBeLessThan(6);
+  });
+
   it("uses points balance after shared-court repeats tie", () => {
     const result = findBestSingleCourtSelectionV3(
       [
