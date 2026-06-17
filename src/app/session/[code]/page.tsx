@@ -966,6 +966,8 @@ export default function SessionPage() {
       previousStatus !== null &&
       previousStatus !== SessionStatus.COMPLETED &&
       sessionView.isCompletedSession;
+    const enteredCompletedSession =
+      isInitialEntry && sessionView.isCompletedSession;
     const becameActive =
       previousStatus === SessionStatus.WAITING &&
       sessionData.status === SessionStatus.ACTIVE;
@@ -975,7 +977,7 @@ export default function SessionPage() {
       scrollMobilePagerToSection(preferredMobileSection, "auto");
     }
 
-    if (becameCompleted) {
+    if (enteredCompletedSession || becameCompleted) {
       setCelebrationRunId((currentRunId) => currentRunId + 1);
     }
 
