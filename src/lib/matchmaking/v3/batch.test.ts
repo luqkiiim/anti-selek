@@ -52,6 +52,12 @@ function getBatchSelectedIds(selection: V3BatchSelection | null | undefined) {
   );
 }
 
+function createPlayers(count: number, prefix = "P") {
+  return Array.from({ length: count }, (_, index) =>
+    createPlayer(`${prefix}${index + 1}`)
+  );
+}
+
 function expectLegalMixedBatch(
   selection: V3BatchSelection | null | undefined,
   expectedCourtCount: number
@@ -87,6 +93,148 @@ function expectLegalMixedBatch(
 }
 
 describe("matchmaking v3 batch selection", () => {
+  it("considers all 9 available points players for a single court", () => {
+    const result = findBestBatchSelectionV3(createPlayers(9), {
+      courtCount: 1,
+      sessionMode: SessionMode.MEXICANO,
+      sessionType: SessionType.POINTS,
+      randomFn: () => 0,
+    });
+
+    expect(result.debug.availableCandidateCount).toBe(9);
+    expect(result.debug.consideredCandidateCount).toBe(9);
+    expect(result.debug.candidatePlayerIds).toHaveLength(9);
+    expect(result.debug.candidateCap).toBe(24);
+  });
+
+  it("considers all 20 available points players for a single court", () => {
+    const result = findBestBatchSelectionV3(createPlayers(20), {
+      courtCount: 1,
+      sessionMode: SessionMode.MEXICANO,
+      sessionType: SessionType.POINTS,
+      randomFn: () => 0,
+    });
+
+    expect(result.debug.availableCandidateCount).toBe(20);
+    expect(result.debug.consideredCandidateCount).toBe(20);
+    expect(result.debug.candidatePlayerIds).toHaveLength(20);
+    expect(result.debug.candidateCap).toBe(24);
+  });
+
+  it("caps a 25-player single-court points pool at 24 candidates", () => {
+    const result = findBestBatchSelectionV3(createPlayers(25), {
+      courtCount: 1,
+      sessionMode: SessionMode.MEXICANO,
+      sessionType: SessionType.POINTS,
+      randomFn: () => 0,
+    });
+
+    expect(result.debug.availableCandidateCount).toBe(25);
+    expect(result.debug.consideredCandidateCount).toBe(24);
+    expect(result.debug.candidatePlayerIds).toHaveLength(24);
+    expect(result.debug.candidateCap).toBe(24);
+  });
+
+  it("considers all 20 available players for two courts", () => {
+    const result = findBestBatchSelectionV3(createPlayers(20), {
+      courtCount: 2,
+      sessionMode: SessionMode.MEXICANO,
+      sessionType: SessionType.POINTS,
+      randomFn: () => 0,
+    });
+
+    expect(result.debug.availableCandidateCount).toBe(20);
+    expect(result.debug.consideredCandidateCount).toBe(20);
+    expect(result.debug.candidatePlayerIds).toHaveLength(20);
+    expect(result.debug.candidateCap).toBe(20);
+  });
+
+  it("caps a 21-player two-court pool at 20 candidates", () => {
+    const result = findBestBatchSelectionV3(createPlayers(21), {
+      courtCount: 2,
+      sessionMode: SessionMode.MEXICANO,
+      sessionType: SessionType.POINTS,
+      randomFn: () => 0,
+    });
+
+    expect(result.debug.availableCandidateCount).toBe(21);
+    expect(result.debug.consideredCandidateCount).toBe(20);
+    expect(result.debug.candidatePlayerIds).toHaveLength(20);
+    expect(result.debug.candidateCap).toBe(20);
+  });
+
+  it("considers all 20 available players for three courts", () => {
+    const result = findBestBatchSelectionV3(createPlayers(20), {
+      courtCount: 3,
+      sessionMode: SessionMode.MEXICANO,
+      sessionType: SessionType.POINTS,
+      randomFn: () => 0,
+    });
+
+    expect(result.debug.availableCandidateCount).toBe(20);
+    expect(result.debug.consideredCandidateCount).toBe(20);
+    expect(result.debug.candidatePlayerIds).toHaveLength(20);
+    expect(result.debug.candidateCap).toBe(20);
+  });
+
+  it("caps a 30-player four-court pool at 24 candidates", () => {
+    const result = findBestBatchSelectionV3(createPlayers(30), {
+      courtCount: 4,
+      sessionMode: SessionMode.MEXICANO,
+      sessionType: SessionType.POINTS,
+      randomFn: () => 0,
+    });
+
+    expect(result.debug.availableCandidateCount).toBe(30);
+    expect(result.debug.consideredCandidateCount).toBe(24);
+    expect(result.debug.candidatePlayerIds).toHaveLength(24);
+    expect(result.debug.candidateCap).toBe(24);
+  });
+
+  it("uses the same candidate cap policy for social batches", () => {
+    const result = findBestBatchSelectionV3(createPlayers(20), {
+      courtCount: 2,
+      sessionMode: SessionMode.MEXICANO,
+      sessionType: SessionType.SOCIAL_MIX,
+      randomFn: () => 0,
+    });
+
+    expect(result.debug.availableCandidateCount).toBe(20);
+    expect(result.debug.consideredCandidateCount).toBe(20);
+    expect(result.debug.candidatePlayerIds).toHaveLength(20);
+    expect(result.debug.candidateCap).toBe(20);
+  });
+
+  it("returns the best found batch when the search limit is reached", () => {
+    const result = findBestBatchSelectionV3(createPlayers(12), {
+      courtCount: 2,
+      sessionMode: SessionMode.MEXICANO,
+      sessionType: SessionType.POINTS,
+      randomFn: () => 0,
+      searchLimits: {
+        maxBranches: 2,
+      },
+    });
+
+    expect(result.selection).not.toBeNull();
+    expect(result.debug.searchLimitReached).toBe(true);
+    expect(result.debug.failureReason).toBeNull();
+  });
+
+  it("keeps the dynamic cap policy when respectPlayerRest is false", () => {
+    const result = findBestBatchSelectionV3(createPlayers(9), {
+      courtCount: 1,
+      sessionMode: SessionMode.MEXICANO,
+      sessionType: SessionType.POINTS,
+      randomFn: () => 0,
+      respectPlayerRest: false,
+    });
+
+    expect(result.selection).not.toBeNull();
+    expect(result.debug.consideredCandidateCount).toBe(9);
+    expect(result.debug.candidateCap).toBe(24);
+  });
+
   it("includes an arrival-priority late player in a legal batch", () => {
     const players = ["A", "B", "C", "D", "E", "F", "G", "H"].map((userId) =>
       createPlayer(userId, {
@@ -387,7 +535,7 @@ describe("matchmaking v3 batch selection", () => {
     });
   });
 
-  it("widens mixed batch candidates when the capped fair pool cannot fill two legal courts", () => {
+  it("considers the full mixed candidate pool when it fits under the dynamic cap", () => {
     const result = findBestBatchSelectionV3(
       [
         createPlayer("M1", { matchesPlayed: 0 }),
@@ -413,8 +561,9 @@ describe("matchmaking v3 batch selection", () => {
     );
 
     expect(result.selection).not.toBeNull();
-    expect(result.debug.searchAttemptCount).toBeGreaterThan(1);
+    expect(result.debug.searchAttemptCount).toBe(1);
     expect(result.debug.candidatePlayerIds).toHaveLength(13);
+    expect(result.debug.candidateCap).toBe(20);
     expectLegalMixedBatch(result.selection, 2);
   });
 

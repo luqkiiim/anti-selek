@@ -36,11 +36,12 @@ import type {
   V3SingleCourtSelection,
 } from "./types";
 
-const MAX_BATCH_EXTRA_CANDIDATES = 2;
-const SOCIAL_MIX_BATCH_EXTRA_CANDIDATES = 5;
-const MAX_BATCH_FALLBACK_CANDIDATE_PLAYERS = 20;
-const MAX_BATCH_SEARCH_BRANCHES = 20000;
-const MAX_BATCH_SEARCH_MS = 750;
+const MAX_SINGLE_COURT_CANDIDATES = 24;
+const MAX_TWO_COURT_CANDIDATES = 20;
+const MAX_MULTI_COURT_CANDIDATES = 24;
+const MULTI_COURT_EXTRA_CANDIDATES = 8;
+const MAX_BATCH_SEARCH_BRANCHES = 50000;
+const MAX_BATCH_SEARCH_MS = 2000;
 
 function buildCombinations<T>(items: T[], size: number): T[][] {
   if (size === 0) {
@@ -325,14 +326,28 @@ function buildQuartetSelections<T extends MatchmakerV3Player>(
   return selections;
 }
 
+function getBatchCandidateCap(courtCount: number, requiredPlayerCount: number) {
+  if (courtCount <= 1) {
+    return MAX_SINGLE_COURT_CANDIDATES;
+  }
+
+  if (courtCount === 2) {
+    return MAX_TWO_COURT_CANDIDATES;
+  }
+
+  return Math.min(
+    requiredPlayerCount + MULTI_COURT_EXTRA_CANDIDATES,
+    MAX_MULTI_COURT_CANDIDATES
+  );
+}
+
 function limitBatchCandidatePlayers<T extends MatchmakerV3Player>(
   candidatePool: V3CandidatePool<ActiveMatchmakerV3Player<T>>,
-  requiredPlayerCount: number,
-  maxCandidateCount = requiredPlayerCount + MAX_BATCH_EXTRA_CANDIDATES
+  candidateCap: number
 ) {
   const boundedMaxCandidateCount = Math.max(
-    requiredPlayerCount,
-    maxCandidateCount
+    candidatePool.requiredPlayerCount,
+    candidateCap
   );
 
   if (candidatePool.candidatePlayers.length <= boundedMaxCandidateCount) {
@@ -350,35 +365,17 @@ function limitBatchCandidatePlayers<T extends MatchmakerV3Player>(
   ];
 }
 
-function getMaxBatchCandidateCount(
-  sessionType: SessionType,
-  requiredPlayerCount: number
-) {
-  return requiredPlayerCount +
-    (sessionType === SessionType.SOCIAL_MIX
-      ? SOCIAL_MIX_BATCH_EXTRA_CANDIDATES
-      : MAX_BATCH_EXTRA_CANDIDATES);
-}
-
 function buildArrivalPriorityBatchCandidatePool<T extends MatchmakerV3Player>(
   candidatePool: V3CandidatePool<ActiveMatchmakerV3Player<T>>,
   priorityPlayers: ActiveMatchmakerV3Player<T>[],
   requiredPlayerCount: number,
-  sessionType: SessionType
+  candidateCap: number
 ): V3CandidatePool<ActiveMatchmakerV3Player<T>> {
   const priorityIds = new Set(priorityPlayers.map((player) => player.userId));
-  const maxCandidateCount = Math.max(
-    requiredPlayerCount,
-    MAX_BATCH_FALLBACK_CANDIDATE_PLAYERS,
-    priorityPlayers.length
-  );
+  const maxCandidateCount = Math.max(requiredPlayerCount, candidateCap);
   const fallbackCandidates = limitBatchCandidatePlayers(
     candidatePool,
-    requiredPlayerCount,
-    Math.max(
-      MAX_BATCH_FALLBACK_CANDIDATE_PLAYERS,
-      getMaxBatchCandidateCount(sessionType, requiredPlayerCount)
-    )
+    candidateCap
   );
   const candidatePlayers = mergeUniquePlayersById(
     [
@@ -583,6 +580,7 @@ function searchBatchCandidatePlayers<T extends MatchmakerV3Player>({
   sessionType,
   respectPlayerRest,
   completedMatches,
+  searchLimits,
 }: {
   candidatePlayers: ActiveMatchmakerV3Player<T>[];
   lockedIds: Set<string>;
@@ -595,6 +593,10 @@ function searchBatchCandidatePlayers<T extends MatchmakerV3Player>({
     team2: [string, string];
     completedAt?: Date | null;
   }>;
+  searchLimits?: {
+    maxBranches?: number;
+    maxMs?: number;
+  };
 }): BatchSearchAttemptResult<ActiveMatchmakerV3Player<T>> {
   const requiredPlayerCount = courtCount * 4;
   const candidatePlayerIds = candidatePlayers.map((player) => player.userId);
@@ -655,7 +657,8 @@ function searchBatchCandidatePlayers<T extends MatchmakerV3Player>({
 
   let bestSelection: V3BatchSelection<ActiveMatchmakerV3Player<T>> | null =
     null;
-  const searchDeadline = Date.now() + MAX_BATCH_SEARCH_MS;
+  const maxBranches = searchLimits?.maxBranches ?? MAX_BATCH_SEARCH_BRANCHES;
+  const searchDeadline = Date.now() + (searchLimits?.maxMs ?? MAX_BATCH_SEARCH_MS);
   let searchLimitReached = false;
   let exploredBranches = 0;
   let prunedBranches = 0;
@@ -667,7 +670,7 @@ function searchBatchCandidatePlayers<T extends MatchmakerV3Player>({
     exploredBranches += 1;
 
     if (
-      exploredBranches >= MAX_BATCH_SEARCH_BRANCHES ||
+      exploredBranches >= maxBranches ||
       Date.now() >= searchDeadline
     ) {
       searchLimitReached = true;
@@ -774,6 +777,7 @@ export function findBestBatchSelectionV3<T extends MatchmakerV3Player>(
     respectPlayerRest = true,
     completedMatches = [],
     randomFn = Math.random,
+    searchLimits,
   }: {
     courtCount: number;
     sessionMode: SessionMode;
@@ -785,15 +789,24 @@ export function findBestBatchSelectionV3<T extends MatchmakerV3Player>(
       completedAt?: Date | null;
     }>;
     randomFn?: () => number;
+    searchLimits?: {
+      maxBranches?: number;
+      maxMs?: number;
+    };
   }
 ): V3BatchResult<ActiveMatchmakerV3Player<T>> {
   const requiredPlayerCount = courtCount * 4;
+  const candidateCap =
+    courtCount > 0 ? getBatchCandidateCap(courtCount, requiredPlayerCount) : null;
   const candidatePool = buildCandidatePool(players, {
     requiredPlayerCount,
     randomFn,
   });
   const debug: V3BatchDebug = {
     eligiblePlayerIds: candidatePool.activePlayers.map((player) => player.userId),
+    availableCandidateCount: candidatePool.candidatePlayers.length,
+    consideredCandidateCount: 0,
+    candidateCap,
     lowestBand: candidatePool.lowestBand,
     includedBandValues: candidatePool.includedBandValues,
     widened: candidatePool.widened,
@@ -867,6 +880,7 @@ export function findBestBatchSelectionV3<T extends MatchmakerV3Player>(
       sessionType,
       respectPlayerRest,
       completedMatches,
+      searchLimits,
     });
 
     attemptRecords.push({ pool, result: attempt });
@@ -887,7 +901,7 @@ export function findBestBatchSelectionV3<T extends MatchmakerV3Player>(
         candidatePool,
         requiredPriorityPlayers,
         requiredPlayerCount,
-        sessionType
+        candidateCap ?? requiredPlayerCount
       );
       const priorityAttempt = runAttempt({
         pool: priorityPool,
@@ -911,8 +925,7 @@ export function findBestBatchSelectionV3<T extends MatchmakerV3Player>(
       pool: candidatePool,
       candidatePlayers: limitBatchCandidatePlayers(
         candidatePool,
-        requiredPlayerCount,
-        getMaxBatchCandidateCount(sessionType, requiredPlayerCount)
+        candidateCap ?? requiredPlayerCount
       ),
       lockedIds: strictLockedIds,
     });
@@ -926,11 +939,7 @@ export function findBestBatchSelectionV3<T extends MatchmakerV3Player>(
     for (const fallbackPool of candidatePools) {
       const fallbackCandidatePlayers = limitBatchCandidatePlayers(
         fallbackPool,
-        requiredPlayerCount,
-        Math.max(
-          MAX_BATCH_FALLBACK_CANDIDATE_PLAYERS,
-          getMaxBatchCandidateCount(sessionType, requiredPlayerCount)
-        )
+        candidateCap ?? requiredPlayerCount
       );
       const fallbackLockedIds = new Set(
         fallbackPool.lockedPlayers.map((player) => player.userId)
@@ -975,6 +984,11 @@ export function findBestBatchSelectionV3<T extends MatchmakerV3Player>(
       finalAttemptRecord.pool.tieZone?.players.map((player) => player.userId) ??
       [];
     debug.candidatePlayerIds = finalAttemptRecord.result.candidatePlayerIds;
+    debug.availableCandidateCount =
+      finalAttemptRecord.pool.candidatePlayers.length;
+    debug.consideredCandidateCount =
+      finalAttemptRecord.result.candidatePlayerIds.length;
+    debug.candidateCap = candidateCap;
     debug.quartetCount = finalAttemptRecord.result.quartetCount;
     debug.validQuartetCount = finalAttemptRecord.result.validQuartetCount;
     debug.exploredBranches = finalAttemptRecord.result.exploredBranches;

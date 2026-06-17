@@ -159,6 +159,9 @@ export type V3BatchFailureReason =
 
 export interface V3BatchDebug {
   eligiblePlayerIds: string[];
+  availableCandidateCount: number;
+  consideredCandidateCount: number;
+  candidateCap: number | null;
   lowestBand: number | null;
   includedBandValues: number[];
   widened: boolean;
