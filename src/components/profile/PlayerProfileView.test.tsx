@@ -57,6 +57,16 @@ function createJsonResponse(body: unknown, status = 200) {
 
 function buildProfileResponse(overrides?: Partial<{
   avatarUrl: string | null;
+  context: {
+    communityId: string;
+    viewerCanManageCommunity: boolean;
+    rankContext: {
+      leaderboardSize: number;
+      currentRank: number | null;
+      previousRank: number | null;
+      rankDelta: number | null;
+    };
+  } | null;
   name: string;
 }>) {
   const avatarUrl =
@@ -73,7 +83,7 @@ function buildProfileResponse(overrides?: Partial<{
       elo: 1320,
       createdAt: "2026-05-01T00:00:00.000Z",
     },
-    context: null,
+    context: overrides?.context ?? null,
     stats: {
       totalMatches: 12,
       wins: 7,
@@ -244,6 +254,8 @@ describe("PlayerProfileView", () => {
       'button[aria-label="View profile photo of Alex Lee"]'
     ) as HTMLButtonElement | null;
     expect(previewButton).toBeTruthy();
+    expect(previewButton?.className).toContain("aspect-square");
+    expect(previewButton?.className).toContain("rounded-full");
 
     await act(async () => {
       previewButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
@@ -297,5 +309,52 @@ describe("PlayerProfileView", () => {
     expect(document.body.textContent).not.toContain("Hot streak");
     expect(document.body.textContent).not.toContain("Rival tested");
     expect(document.body.textContent).not.toContain("Partner chemistry");
+  });
+
+  it("uses a single rating snapshot without duplicating hero rating or rank chips", async () => {
+    await renderView({
+      profileResponse: buildProfileResponse({
+        context: {
+          communityId: "community-1",
+          viewerCanManageCommunity: false,
+          rankContext: {
+            leaderboardSize: 20,
+            currentRank: 4,
+            previousRank: 6,
+            rankDelta: 2,
+          },
+        },
+      }),
+    });
+
+    const snapshot = container.querySelector(
+      '[data-testid="profile-rating-snapshot"]'
+    );
+    expect(snapshot?.textContent).toContain("Community rating");
+    expect(snapshot?.textContent).toContain("1320");
+    expect(snapshot?.textContent).toContain("#4");
+    expect(snapshot?.textContent).toContain("Up 2");
+    expect(snapshot?.textContent).toContain("+10 recent rating");
+
+    expect(document.body.textContent).not.toContain("Rating story");
+    expect((document.body.textContent?.match(/Rank #4/g) ?? []).length).toBe(0);
+    expect((document.body.textContent?.match(/Community rating/g) ?? []).length).toBe(1);
+  });
+
+  it("does not show the long avatar upload helper text for admins", async () => {
+    await renderView({
+      currentUser: {
+        id: "viewer-1",
+        isAdmin: true,
+        isClaimed: true,
+        isQuickAccess: false,
+        avatarUrl: null,
+      },
+    });
+
+    expect(document.body.textContent).not.toContain(
+      "Choose a JPG, PNG, or WebP photo"
+    );
+    expect(document.body.textContent).toContain("Replace photo");
   });
 });

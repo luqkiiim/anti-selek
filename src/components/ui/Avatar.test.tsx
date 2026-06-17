@@ -24,6 +24,9 @@ describe("Avatar", () => {
     expect(markup).toContain('<img');
     expect(markup).toContain('src="https://cdn.test/avatars/alex.jpg"');
     expect(markup).toContain('data-avatar-state="image"');
+    expect(markup).toContain("aspect-square");
+    expect(markup).toContain("rounded-full");
+    expect(markup).toContain("object-cover");
   });
 
   it("passes through optional image loading hints", () => {

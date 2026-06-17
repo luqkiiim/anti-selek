@@ -651,13 +651,8 @@ function ProfileHero({
     <section className="overflow-hidden rounded-[1.35rem] border border-[rgba(255,255,255,0.08)] bg-[#111917] text-white shadow-[0_20px_54px_rgba(17,25,23,0.24)]">
       <div className="relative px-4 pb-5 pt-4 sm:px-6 sm:pb-6">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_15%_10%,rgba(15,118,110,0.34),transparent_38%),radial-gradient(circle_at_90%_8%,rgba(255,255,255,0.12),transparent_34%)]" />
-        <div
-          className={cx(
-            "relative flex items-center gap-3",
-            onBack ? "justify-between" : "justify-end"
-          )}
-        >
-          {onBack ? (
+        {onBack ? (
+          <div className="relative flex items-center gap-3">
             <button
               type="button"
               onClick={onBack}
@@ -666,12 +661,8 @@ function ProfileHero({
               <ArrowLeft aria-hidden="true" size={18} strokeWidth={2.2} />
               Back
             </button>
-          ) : null}
-          <span className="rounded-full border border-amber-300/30 bg-amber-300/14 px-3 py-1.5 text-xs font-semibold text-amber-100">
-            {data.context?.communityId ? "Community rating" : "Overall rating"}{" "}
-            {data.user.elo}
-          </span>
-        </div>
+          </div>
+        ) : null}
 
         <div className="relative mt-5 grid gap-4 lg:grid-cols-[minmax(0,1fr)_21rem] lg:items-end">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
@@ -681,20 +672,20 @@ function ProfileHero({
                   name={data.user.name}
                   avatarUrl={data.user.avatarUrl}
                   size="hero"
-                  helperText="Choose a JPG, PNG, or WebP photo, then adjust the framing if needed. We keep the photo's shape and compress the final upload before saving."
                   onPreviewAvatar={onPreviewAvatar}
                   previewAvatarLabel={`View profile photo of ${data.user.name}`}
                   onUpload={onUploadAvatar}
                   onRemove={onRemoveAvatar}
                 />
               ) : (
-                <div className="relative h-28 w-28">
+                <div className="relative aspect-square h-28 w-28">
                   {data.user.avatarUrl ? (
                     <button
                       type="button"
                       onClick={() => onPreviewAvatar(data.user.avatarUrl as string)}
-                      className="rounded-full transition hover:scale-[1.02] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-200"
+                      className="inline-flex aspect-square h-full w-full rounded-full transition hover:scale-[1.02] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-200"
                       aria-label={`View profile photo of ${data.user.name}`}
+                      data-testid="profile-hero-avatar-trigger"
                     >
                       <Avatar
                         name={data.user.name}
@@ -713,10 +704,6 @@ function ProfileHero({
                       fallbackClassName="text-emerald-100"
                     />
                   )}
-                  <span className="absolute -bottom-1 -right-2 inline-flex items-center gap-1 rounded-full bg-emerald-500 px-3 py-1.5 text-sm font-semibold text-white shadow-lg">
-                    <TrendingUp aria-hidden="true" size={15} strokeWidth={2.4} />
-                    {data.user.elo}
-                  </span>
                 </div>
               )}
             </div>
@@ -733,11 +720,6 @@ function ProfileHero({
                   <Award aria-hidden="true" size={16} strokeWidth={2.3} />
                   {tier}
                 </span>
-                {rankContext?.currentRank ? (
-                  <span className="rounded-full bg-white/10 px-3 py-1.5 text-sm font-semibold text-white">
-                    Rank #{rankContext.currentRank}
-                  </span>
-                ) : null}
                 <span className="rounded-full bg-white/10 px-3 py-1.5 text-sm font-semibold text-white">
                   {recentFormSummary}
                 </span>
@@ -769,11 +751,14 @@ function ProfileHero({
             </div>
           </div>
 
-          <div className="rounded-2xl border border-white/10 bg-white/10 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
+          <div
+            className="rounded-2xl border border-white/10 bg-white/10 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]"
+            data-testid="profile-rating-snapshot"
+          >
             <div className="flex items-start justify-between gap-3">
               <div>
                 <p className="text-sm font-semibold text-white/70">
-                  Rating story
+                  {data.context?.communityId ? "Community rating" : "Overall rating"}
                 </p>
                 <p className="mt-2 text-4xl font-semibold text-white">
                   {data.user.elo}
@@ -790,7 +775,30 @@ function ProfileHero({
                 {formatSignedNumber(ratingDelta)}
               </span>
             </div>
-            <p className="mt-2 text-sm text-white/62">
+            <div className="mt-4 grid grid-cols-2 gap-3">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-white/45">
+                  Rank
+                </p>
+                <p className="mt-1 text-lg font-semibold text-white">
+                  {rankContext?.currentRank
+                    ? `#${rankContext.currentRank}`
+                    : "Building"}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-white/45">
+                  Movement
+                </p>
+                <p className="mt-1 text-lg font-semibold text-white">
+                  {rankContext?.currentRank
+                    ? getRankMovementLabel(rankContext.rankDelta)
+                    : "Rank building"}
+                </p>
+              </div>
+            </div>
+            <p className="mt-3 text-sm text-white/62">
+              {formatSignedNumber(ratingDelta)} recent rating -{" "}
               {getRankContextLabel(rankContext)}
             </p>
             <RatingSparkline

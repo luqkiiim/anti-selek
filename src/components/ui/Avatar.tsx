@@ -63,7 +63,7 @@ export function Avatar({
   return (
     <span
       className={cx(
-        "relative inline-flex shrink-0 items-center justify-center overflow-hidden rounded-full font-semibold",
+        "relative inline-flex aspect-square shrink-0 items-center justify-center overflow-hidden rounded-full font-semibold",
         AVATAR_SIZE_CLASSES[size],
         AVATAR_APPEARANCE_CLASSES[appearance],
         className
