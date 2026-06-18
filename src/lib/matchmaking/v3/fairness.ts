@@ -74,7 +74,8 @@ export function buildRestTurnTieZone<
   T extends ActiveMatchmakerV3Player,
 >(
   players: T[],
-  requiredSlots: number
+  requiredSlots: number,
+  restTurnTolerance = 0
 ): V3RestTurnTieZone<T> | null {
   if (requiredSlots <= 0 || players.length <= requiredSlots) {
     return null;
@@ -85,13 +86,14 @@ export function buildRestTurnTieZone<
     return null;
   }
 
+  const minimumRestTurns = Math.max(0, cutoffPlayer.restTurns - restTurnTolerance);
   const tieZonePlayers = players.filter(
-    (player) => player.restTurns >= cutoffPlayer.restTurns
+    (player) => player.restTurns >= minimumRestTurns
   );
 
   return {
     requiredSlots,
-    cutoffRestTurns: cutoffPlayer.restTurns,
+    cutoffRestTurns: minimumRestTurns,
     players: tieZonePlayers,
   };
 }

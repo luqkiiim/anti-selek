@@ -160,6 +160,53 @@ describe("matchmaking v3 candidate pool", () => {
     ]);
   });
 
+  it("can expand the rest-turn tie zone by an explicit tolerance", () => {
+    const pool = buildCandidatePool(
+      [
+        createPlayer("A", { matchesPlayed: 4 }),
+        createPlayer("B", { matchesPlayed: 4 }),
+        createPlayer("C", {
+          matchesPlayed: 5,
+          restTurns: 5,
+        }),
+        createPlayer("D", {
+          matchesPlayed: 5,
+          restTurns: 4,
+        }),
+        createPlayer("E", {
+          matchesPlayed: 5,
+          restTurns: 4,
+        }),
+        createPlayer("F", {
+          matchesPlayed: 5,
+          restTurns: 3,
+        }),
+      ],
+      {
+        requiredPlayerCount: 4,
+        randomFn: () => 0,
+        restTurnTieZoneTolerance: 1,
+      }
+    );
+
+    expect(pool.requiredSelectableCount).toBe(2);
+    expect(pool.tieZone?.cutoffRestTurns).toBe(3);
+    expect(pool.tieZone?.players.map((player) => player.userId)).toEqual([
+      "C",
+      "D",
+      "E",
+      "F",
+    ]);
+    expect(pool.candidatePlayers.map((player) => player.userId)).toEqual([
+      "A",
+      "B",
+      "C",
+      "D",
+      "E",
+      "F",
+    ]);
+  });
+
   it("uses the full final selection band when respect player rest is off", () => {
     const pool = buildCandidatePool(
       [

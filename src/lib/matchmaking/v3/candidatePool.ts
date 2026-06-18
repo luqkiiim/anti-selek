@@ -18,10 +18,12 @@ export function buildCandidatePool<T extends MatchmakerV3Player>(
     requiredPlayerCount,
     randomFn = Math.random,
     respectPlayerRest = true,
+    restTurnTieZoneTolerance = 0,
   }: {
     requiredPlayerCount: number;
     randomFn?: () => number;
     respectPlayerRest?: boolean;
+    restTurnTieZoneTolerance?: number;
   }
 ): V3CandidatePool<ActiveMatchmakerV3Player<T>> {
   const activePlayers = buildActivePlayers(players, {
@@ -68,7 +70,11 @@ export function buildCandidatePool<T extends MatchmakerV3Player>(
     selectionBand = band;
     requiredSelectableCount = requiredPlayerCount - lockedPlayers.length;
     tieZone = respectPlayerRest
-      ? buildRestTurnTieZone(band.players, requiredSelectableCount)
+      ? buildRestTurnTieZone(
+          band.players,
+          requiredSelectableCount,
+          restTurnTieZoneTolerance
+        )
       : null;
     selectablePlayers = tieZone?.players ?? band.players;
     break;

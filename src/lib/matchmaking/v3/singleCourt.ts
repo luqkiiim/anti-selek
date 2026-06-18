@@ -22,6 +22,7 @@ import {
 import {
   buildRestSummary,
   compareSingleCourtSelections,
+  FULL_REPEAT_REST_TOLERANCE,
   getQuartetRandomScore,
 } from "./scoring";
 
@@ -191,6 +192,13 @@ function relaxLockedPlayersForMixedFeasibility<T extends MatchmakerV3Player>(
     selectablePlayers: [...candidatePool.candidatePlayers],
     tieZone: null,
   };
+}
+
+function getRestTurnTieZoneTolerance(sessionType: SessionType) {
+  return sessionType === SessionType.POINTS ||
+    sessionType === SessionType.SOCIAL_MIX
+    ? FULL_REPEAT_REST_TOLERANCE
+    : 0;
 }
 
 function searchCandidatePool<T extends MatchmakerV3Player>({
@@ -385,6 +393,7 @@ export function findBestSingleCourtSelectionV3<T extends MatchmakerV3Player>(
     requiredPlayerCount: 4,
     randomFn,
     respectPlayerRest,
+    restTurnTieZoneTolerance: getRestTurnTieZoneTolerance(sessionType),
   });
 
   if (

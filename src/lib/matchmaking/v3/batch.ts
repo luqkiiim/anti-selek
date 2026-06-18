@@ -22,6 +22,7 @@ import {
   buildRestSummary,
   compareBatchSelections,
   compareSingleCourtSelections,
+  FULL_REPEAT_REST_TOLERANCE,
   getQuartetRandomScore,
 } from "./scoring";
 
@@ -339,6 +340,13 @@ function getBatchCandidateCap(courtCount: number, requiredPlayerCount: number) {
     requiredPlayerCount + MULTI_COURT_EXTRA_CANDIDATES,
     MAX_MULTI_COURT_CANDIDATES
   );
+}
+
+function getRestTurnTieZoneTolerance(sessionType: SessionType) {
+  return sessionType === SessionType.POINTS ||
+    sessionType === SessionType.SOCIAL_MIX
+    ? FULL_REPEAT_REST_TOLERANCE
+    : 0;
 }
 
 function limitBatchCandidatePlayers<T extends MatchmakerV3Player>(
@@ -802,6 +810,7 @@ export function findBestBatchSelectionV3<T extends MatchmakerV3Player>(
     requiredPlayerCount,
     randomFn,
     respectPlayerRest,
+    restTurnTieZoneTolerance: getRestTurnTieZoneTolerance(sessionType),
   });
   const debug: V3BatchDebug = {
     eligiblePlayerIds: candidatePool.activePlayers.map((player) => player.userId),
