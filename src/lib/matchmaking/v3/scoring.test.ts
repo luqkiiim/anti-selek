@@ -150,6 +150,59 @@ function createBatchSelection({
   };
 }
 
+function createBatchFromSelections(
+  selections: V3SingleCourtSelection[]
+): V3BatchSelection {
+  const players = selections.flatMap((selection) => selection.players);
+
+  return {
+    selections,
+    restSummary: buildRestSummary(players),
+    maxBalanceGap: Math.max(
+      ...selections.map((selection) => selection.balanceGap)
+    ),
+    totalBalanceGap: selections.reduce(
+      (sum, selection) => sum + selection.balanceGap,
+      0
+    ),
+    maxPointDiffGap: Math.max(
+      ...selections.map((selection) => selection.pointDiffGap)
+    ),
+    totalPointDiffGap: selections.reduce(
+      (sum, selection) => sum + selection.pointDiffGap,
+      0
+    ),
+    totalSharedCourtRepeatPenalty: selections.reduce(
+      (sum, selection) => sum + selection.sharedCourtRepeatPenalty,
+      0
+    ),
+    totalPartnerCoveragePenalty: selections.reduce(
+      (sum, selection) => sum + selection.partnerCoveragePenalty,
+      0
+    ),
+    totalOpponentCoveragePenalty: selections.reduce(
+      (sum, selection) => sum + selection.opponentCoveragePenalty,
+      0
+    ),
+    totalPartnerRepeatPenalty: selections.reduce(
+      (sum, selection) => sum + selection.partnerRepeatPenalty,
+      0
+    ),
+    totalOpponentRepeatPenalty: selections.reduce(
+      (sum, selection) => sum + selection.opponentRepeatPenalty,
+      0
+    ),
+    totalExactRematchPenalty: selections.reduce(
+      (sum, selection) => sum + selection.exactRematchPenalty,
+      0
+    ),
+    totalRandomScore: selections.reduce(
+      (sum, selection) => sum + selection.randomScore,
+      0
+    ),
+  };
+}
+
 describe("matchmaking v3 scoring", () => {
   it("prefers the higher-rest quartet before balance", () => {
     const higherRest = createSelection({
@@ -188,6 +241,82 @@ describe("matchmaking v3 scoring", () => {
       compareSingleCourtSelections(
         higherRest,
         betterBalanced,
+        SessionType.POINTS
+      )
+    ).toBeLessThan(0);
+  });
+
+  it("avoids a full shared-court repeat when rest is within one turn", () => {
+    const fullRepeat = createSelection({
+      restTurns: [3, 3, 3, 3],
+      balanceGap: 0,
+      sharedCourtRepeatPenalty: 6,
+      exactRematchPenalty: 0,
+    });
+    const nearRestAlternative = createSelection({
+      restTurns: [3, 3, 2, 2],
+      balanceGap: 10,
+      sharedCourtRepeatPenalty: 2,
+      exactRematchPenalty: 0,
+    });
+
+    expect(
+      compareSingleCourtSelections(
+        nearRestAlternative,
+        fullRepeat,
+        SessionType.POINTS
+      )
+    ).toBeLessThan(0);
+    expect(
+      compareSingleCourtSelections(
+        nearRestAlternative,
+        fullRepeat,
+        SessionType.SOCIAL_MIX
+      )
+    ).toBeLessThan(0);
+  });
+
+  it("keeps a full repeat when the alternative is more than one rest turn worse", () => {
+    const fullRepeat = createSelection({
+      restTurns: [3, 3, 3, 3],
+      balanceGap: 10,
+      sharedCourtRepeatPenalty: 6,
+      exactRematchPenalty: 0,
+    });
+    const tooLowRestAlternative = createSelection({
+      restTurns: [3, 2, 1, 1],
+      balanceGap: 0,
+      sharedCourtRepeatPenalty: 0,
+      exactRematchPenalty: 0,
+    });
+
+    expect(
+      compareSingleCourtSelections(
+        fullRepeat,
+        tooLowRestAlternative,
+        SessionType.POINTS
+      )
+    ).toBeLessThan(0);
+  });
+
+  it("does not use the rest guardrail for heavy non-full repeats", () => {
+    const heavyRepeat = createSelection({
+      restTurns: [3, 3, 3, 3],
+      balanceGap: 10,
+      sharedCourtRepeatPenalty: 5,
+      exactRematchPenalty: 0,
+    });
+    const nearRestAlternative = createSelection({
+      restTurns: [3, 3, 2, 2],
+      balanceGap: 0,
+      sharedCourtRepeatPenalty: 0,
+      exactRematchPenalty: 0,
+    });
+
+    expect(
+      compareSingleCourtSelections(
+        heavyRepeat,
+        nearRestAlternative,
         SessionType.POINTS
       )
     ).toBeLessThan(0);
@@ -295,6 +424,30 @@ describe("matchmaking v3 scoring", () => {
       compareSingleCourtSelections(
         betterBalanced,
         higherRest,
+        SessionType.POINTS,
+        { respectPlayerRest: false }
+      )
+    ).toBeLessThan(0);
+  });
+
+  it("keeps shared-court repeat priority unchanged when player rest is disabled", () => {
+    const fullRepeat = createSelection({
+      restTurns: [3, 3, 3, 3],
+      balanceGap: 0,
+      sharedCourtRepeatPenalty: 6,
+      exactRematchPenalty: 0,
+    });
+    const lowRestAlternative = createSelection({
+      restTurns: [0, 0, 0, 0],
+      balanceGap: 10,
+      sharedCourtRepeatPenalty: 0,
+      exactRematchPenalty: 0,
+    });
+
+    expect(
+      compareSingleCourtSelections(
+        lowRestAlternative,
+        fullRepeat,
         SessionType.POINTS,
         { respectPlayerRest: false }
       )
@@ -532,6 +685,45 @@ describe("matchmaking v3 scoring", () => {
       compareBatchSelections(
         freshCourtBatch,
         repeatedCourtBatch,
+        SessionType.POINTS
+      )
+    ).toBeLessThan(0);
+  });
+
+  it("avoids a full-repeat court in a batch when batch rest is within one turn", () => {
+    const fullRepeatBatch = createBatchFromSelections([
+      createSelection({
+        restTurns: [3, 3, 3, 3],
+        balanceGap: 0,
+        sharedCourtRepeatPenalty: 6,
+        exactRematchPenalty: 0,
+      }),
+      createSelection({
+        restTurns: [3, 3, 3, 3],
+        balanceGap: 0,
+        sharedCourtRepeatPenalty: 0,
+        exactRematchPenalty: 0,
+      }),
+    ]);
+    const nearRestBatch = createBatchFromSelections([
+      createSelection({
+        restTurns: [3, 3, 2, 2],
+        balanceGap: 10,
+        sharedCourtRepeatPenalty: 2,
+        exactRematchPenalty: 0,
+      }),
+      createSelection({
+        restTurns: [3, 3, 3, 3],
+        balanceGap: 0,
+        sharedCourtRepeatPenalty: 0,
+        exactRematchPenalty: 0,
+      }),
+    ]);
+
+    expect(
+      compareBatchSelections(
+        nearRestBatch,
+        fullRepeatBatch,
         SessionType.POINTS
       )
     ).toBeLessThan(0);

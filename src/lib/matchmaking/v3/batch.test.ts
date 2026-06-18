@@ -487,6 +487,47 @@ describe("matchmaking v3 batch selection", () => {
     expect(result.selection?.totalSharedCourtRepeatPenalty).toBeLessThan(12);
   });
 
+  it("avoids a full-repeat court in points batches when alternatives are near-rested", () => {
+    const result = findBestBatchSelectionV3(
+      [
+        createPlayer("A", { restTurns: 5 }),
+        createPlayer("B", { restTurns: 5 }),
+        createPlayer("C", { restTurns: 5 }),
+        createPlayer("D", { restTurns: 5 }),
+        createPlayer("E", { restTurns: 4 }),
+        createPlayer("F", { restTurns: 4 }),
+        createPlayer("G", { restTurns: 4 }),
+        createPlayer("H", { restTurns: 4 }),
+        createPlayer("I", { restTurns: 4 }),
+        createPlayer("J", { restTurns: 4 }),
+        createPlayer("K", { restTurns: 4 }),
+        createPlayer("L", { restTurns: 4 }),
+      ],
+      {
+        courtCount: 2,
+        sessionMode: SessionMode.MEXICANO,
+        sessionType: SessionType.POINTS,
+        completedMatches: [
+          {
+            team1: ["A", "B"],
+            team2: ["C", "D"],
+            completedAt: new Date("2026-03-18T00:00:00Z"),
+          },
+        ],
+        randomFn: () => 0,
+      }
+    );
+
+    const quartetKeys = new Set(
+      result.selection?.selections.map((selection) =>
+        [...selection.ids].sort().join("|")
+      )
+    );
+
+    expect(quartetKeys).not.toContain("A|B|C|D");
+    expect(result.selection?.totalSharedCourtRepeatPenalty).toBeLessThan(6);
+  });
+
   it("uses point difference after points batch balance ties", () => {
     const result = findBestBatchSelectionV3(
       [

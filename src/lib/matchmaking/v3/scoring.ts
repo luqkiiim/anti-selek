@@ -9,6 +9,8 @@ import type {
 
 export const ELO_EXACT_REMATCH_BALANCE_TOLERANCE = 30;
 export const ELO_PARTNER_REPEAT_BALANCE_TOLERANCE = 1;
+export const FULL_SHARED_COURT_REPEAT_PENALTY = 6;
+export const FULL_REPEAT_REST_TOLERANCE = 1;
 
 export function buildRestSummary<
   T extends Pick<ActiveMatchmakerV3Player, "restTurns">,
@@ -44,12 +46,119 @@ function usesConsecutivePlayPreference(sessionType: SessionType) {
   );
 }
 
+function usesSharedCourtRepeatGuardrail(sessionType: SessionType) {
+  return (
+    sessionType === SessionType.POINTS ||
+    sessionType === SessionType.SOCIAL_MIX
+  );
+}
+
 function getPartnerRepeatBalanceTolerance() {
   return ELO_PARTNER_REPEAT_BALANCE_TOLERANCE;
 }
 
 function shouldRespectPlayerRest(options?: { respectPlayerRest?: boolean }) {
   return options?.respectPlayerRest !== false;
+}
+
+function isWithinFullRepeatRestTolerance(
+  alternative: V3RestSummary,
+  fullRepeat: V3RestSummary
+) {
+  for (
+    let index = 0;
+    index <
+    Math.max(
+      alternative.restTurnVector.length,
+      fullRepeat.restTurnVector.length
+    );
+    index++
+  ) {
+    const alternativeRestTurns = alternative.restTurnVector[index] ?? 0;
+    const fullRepeatRestTurns = fullRepeat.restTurnVector[index] ?? 0;
+
+    if (
+      fullRepeatRestTurns - alternativeRestTurns >
+      FULL_REPEAT_REST_TOLERANCE
+    ) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+function compareFullRepeatGuardrail({
+  leftRestSummary,
+  rightRestSummary,
+  leftRepeatPenalty,
+  rightRepeatPenalty,
+  sessionType,
+}: {
+  leftRestSummary: V3RestSummary;
+  rightRestSummary: V3RestSummary;
+  leftRepeatPenalty: number;
+  rightRepeatPenalty: number;
+  sessionType: SessionType;
+}) {
+  if (!usesSharedCourtRepeatGuardrail(sessionType)) {
+    return 0;
+  }
+
+  if (
+    leftRepeatPenalty === FULL_SHARED_COURT_REPEAT_PENALTY &&
+    rightRepeatPenalty < leftRepeatPenalty &&
+    isWithinFullRepeatRestTolerance(rightRestSummary, leftRestSummary)
+  ) {
+    return 1;
+  }
+
+  if (
+    rightRepeatPenalty === FULL_SHARED_COURT_REPEAT_PENALTY &&
+    leftRepeatPenalty < rightRepeatPenalty &&
+    isWithinFullRepeatRestTolerance(leftRestSummary, rightRestSummary)
+  ) {
+    return -1;
+  }
+
+  return 0;
+}
+
+function compareBatchFullRepeatGuardrail<T extends ActiveMatchmakerV3Player>(
+  left: V3BatchSelection<T>,
+  right: V3BatchSelection<T>,
+  sessionType: SessionType
+) {
+  if (!usesSharedCourtRepeatGuardrail(sessionType)) {
+    return 0;
+  }
+
+  const leftHasFullRepeat = left.selections.some(
+    (selection) =>
+      selection.sharedCourtRepeatPenalty === FULL_SHARED_COURT_REPEAT_PENALTY
+  );
+  const rightHasFullRepeat = right.selections.some(
+    (selection) =>
+      selection.sharedCourtRepeatPenalty === FULL_SHARED_COURT_REPEAT_PENALTY
+  );
+
+  if (
+    leftHasFullRepeat &&
+    right.totalSharedCourtRepeatPenalty < left.totalSharedCourtRepeatPenalty &&
+    isWithinFullRepeatRestTolerance(right.restSummary, left.restSummary)
+  ) {
+    return 1;
+  }
+
+  if (
+    rightHasFullRepeat &&
+    left.totalSharedCourtRepeatPenalty < right.totalSharedCourtRepeatPenalty &&
+    isWithinFullRepeatRestTolerance(left.restSummary, right.restSummary)
+  ) {
+    return -1;
+  }
+
+  return 0;
 }
 
 export function compareRestSummaries(
@@ -110,6 +219,17 @@ export function compareSingleCourtSelections<
   options?: { respectPlayerRest?: boolean }
 ) {
   if (shouldRespectPlayerRest(options)) {
+    const fullRepeatGuardrailCompare = compareFullRepeatGuardrail({
+      leftRestSummary: left.restSummary,
+      rightRestSummary: right.restSummary,
+      leftRepeatPenalty: left.sharedCourtRepeatPenalty,
+      rightRepeatPenalty: right.sharedCourtRepeatPenalty,
+      sessionType,
+    });
+    if (fullRepeatGuardrailCompare !== 0) {
+      return fullRepeatGuardrailCompare;
+    }
+
     const restCompare = compareRestSummaries(
       left.restSummary,
       right.restSummary
@@ -239,6 +359,15 @@ export function compareBatchSelections<T extends ActiveMatchmakerV3Player>(
   options?: { respectPlayerRest?: boolean }
 ) {
   if (shouldRespectPlayerRest(options)) {
+    const fullRepeatGuardrailCompare = compareBatchFullRepeatGuardrail(
+      left,
+      right,
+      sessionType
+    );
+    if (fullRepeatGuardrailCompare !== 0) {
+      return fullRepeatGuardrailCompare;
+    }
+
     const restCompare = compareRestSummaries(
       left.restSummary,
       right.restSummary
