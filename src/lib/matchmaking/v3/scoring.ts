@@ -8,7 +8,8 @@ import type {
 } from "./types";
 
 export const ELO_EXACT_REMATCH_BALANCE_TOLERANCE = 30;
-export const ELO_PARTNER_REPEAT_BALANCE_TOLERANCE = 1;
+export const ELO_BALANCE_VARIETY_TOLERANCE = 75;
+export const POINTS_BALANCE_VARIETY_TOLERANCE = 3;
 export const FULL_SHARED_COURT_REPEAT_PENALTY = 6;
 export const FULL_REPEAT_REST_TOLERANCE = 1;
 
@@ -35,10 +36,6 @@ export function getQuartetRandomScore<
   return players.reduce((sum, player) => sum + player.randomScore, 0);
 }
 
-function usesPartnerRepeatPreference(sessionType: SessionType) {
-  return sessionType === SessionType.ELO;
-}
-
 function usesConsecutivePlayPreference(sessionType: SessionType) {
   return (
     sessionType === SessionType.POINTS ||
@@ -53,12 +50,48 @@ function usesSharedCourtRepeatGuardrail(sessionType: SessionType) {
   );
 }
 
-function getPartnerRepeatBalanceTolerance() {
-  return ELO_PARTNER_REPEAT_BALANCE_TOLERANCE;
-}
-
 function shouldRespectPlayerRest(options?: { respectPlayerRest?: boolean }) {
   return options?.respectPlayerRest !== false;
+}
+
+export function getBalanceVarietyTolerance(sessionType: SessionType) {
+  if (sessionType === SessionType.POINTS) {
+    return POINTS_BALANCE_VARIETY_TOLERANCE;
+  }
+
+  if (sessionType === SessionType.ELO) {
+    return ELO_BALANCE_VARIETY_TOLERANCE;
+  }
+
+  return null;
+}
+
+function compareBalanceFirstVariety<T extends ActiveMatchmakerV3Player>(
+  left: V3SingleCourtSelection<T>,
+  right: V3SingleCourtSelection<T>
+) {
+  return (
+    left.sharedCourtRepeatPenalty - right.sharedCourtRepeatPenalty ||
+    left.partnerCoveragePenalty - right.partnerCoveragePenalty ||
+    left.opponentCoveragePenalty - right.opponentCoveragePenalty ||
+    left.partnerRepeatPenalty - right.partnerRepeatPenalty ||
+    left.opponentRepeatPenalty - right.opponentRepeatPenalty ||
+    left.exactRematchPenalty - right.exactRematchPenalty
+  );
+}
+
+function compareBalanceFirstBatchVariety<T extends ActiveMatchmakerV3Player>(
+  left: V3BatchSelection<T>,
+  right: V3BatchSelection<T>
+) {
+  return (
+    left.totalSharedCourtRepeatPenalty - right.totalSharedCourtRepeatPenalty ||
+    left.totalPartnerCoveragePenalty - right.totalPartnerCoveragePenalty ||
+    left.totalOpponentCoveragePenalty - right.totalOpponentCoveragePenalty ||
+    left.totalPartnerRepeatPenalty - right.totalPartnerRepeatPenalty ||
+    left.totalOpponentRepeatPenalty - right.totalOpponentRepeatPenalty ||
+    left.totalExactRematchPenalty - right.totalExactRematchPenalty
+  );
 }
 
 function isWithinFullRepeatRestTolerance(
@@ -218,6 +251,48 @@ export function compareSingleCourtSelections<
   sessionType: SessionType,
   options?: { respectPlayerRest?: boolean }
 ) {
+  const balanceDiff = left.balanceGap - right.balanceGap;
+  const balanceVarietyTolerance = getBalanceVarietyTolerance(sessionType);
+
+  if (balanceVarietyTolerance !== null) {
+    if (Math.abs(balanceDiff) > balanceVarietyTolerance) {
+      return balanceDiff;
+    }
+
+    const varietyDiff = compareBalanceFirstVariety(left, right);
+    if (varietyDiff !== 0) {
+      return varietyDiff;
+    }
+
+    if (balanceDiff !== 0) {
+      return balanceDiff;
+    }
+
+    if (sessionType === SessionType.POINTS) {
+      const pointDiffGapDiff = left.pointDiffGap - right.pointDiffGap;
+      if (pointDiffGapDiff !== 0) {
+        return pointDiffGapDiff;
+      }
+    }
+
+    if (shouldRespectPlayerRest(options)) {
+      const restCompare = compareRestSummaries(
+        left.restSummary,
+        right.restSummary
+      );
+      if (restCompare !== 0) {
+        return restCompare;
+      }
+
+      const consecutivePlayCompare = compareConsecutivePlayFairness(left, right);
+      if (consecutivePlayCompare !== 0) {
+        return consecutivePlayCompare;
+      }
+    }
+
+    return left.randomScore - right.randomScore;
+  }
+
   if (shouldRespectPlayerRest(options)) {
     const fullRepeatGuardrailCompare = compareFullRepeatGuardrail({
       leftRestSummary: left.restSummary,
@@ -294,44 +369,6 @@ export function compareSingleCourtSelections<
     return left.randomScore - right.randomScore;
   }
 
-  const balanceDiff = left.balanceGap - right.balanceGap;
-
-  if (sessionType === SessionType.POINTS) {
-    const sharedCourtDiff =
-      left.sharedCourtRepeatPenalty - right.sharedCourtRepeatPenalty;
-    if (sharedCourtDiff !== 0) {
-      return sharedCourtDiff;
-    }
-
-    if (balanceDiff !== 0) {
-      return balanceDiff;
-    }
-
-    const pointDiffGapDiff = left.pointDiffGap - right.pointDiffGap;
-    if (pointDiffGapDiff !== 0) {
-      return pointDiffGapDiff;
-    }
-
-    return left.randomScore - right.randomScore;
-  }
-
-  if (usesPartnerRepeatPreference(sessionType)) {
-    const partnerDiff = left.partnerRepeatPenalty - right.partnerRepeatPenalty;
-
-    if (
-      partnerDiff !== 0 &&
-      Math.abs(balanceDiff) <= getPartnerRepeatBalanceTolerance()
-    ) {
-      return partnerDiff;
-    }
-
-    if (balanceDiff !== 0) {
-      return balanceDiff;
-    }
-
-    return left.randomScore - right.randomScore;
-  }
-
   const rematchDiff = left.exactRematchPenalty - right.exactRematchPenalty;
 
   if (
@@ -358,6 +395,54 @@ export function compareBatchSelections<T extends ActiveMatchmakerV3Player>(
   sessionType: SessionType,
   options?: { respectPlayerRest?: boolean }
 ) {
+  const maxBalanceDiff = left.maxBalanceGap - right.maxBalanceGap;
+  const totalBalanceDiff = left.totalBalanceGap - right.totalBalanceGap;
+  const balanceVarietyTolerance = getBalanceVarietyTolerance(sessionType);
+
+  if (balanceVarietyTolerance !== null) {
+    if (Math.abs(maxBalanceDiff) > balanceVarietyTolerance) {
+      return maxBalanceDiff;
+    }
+
+    const varietyDiff = compareBalanceFirstBatchVariety(left, right);
+    if (varietyDiff !== 0) {
+      return varietyDiff;
+    }
+
+    if (maxBalanceDiff !== 0) {
+      return maxBalanceDiff;
+    }
+
+    if (totalBalanceDiff !== 0) {
+      return totalBalanceDiff;
+    }
+
+    if (sessionType === SessionType.POINTS) {
+      const maxPointDiffGapDiff = left.maxPointDiffGap - right.maxPointDiffGap;
+      if (maxPointDiffGapDiff !== 0) {
+        return maxPointDiffGapDiff;
+      }
+
+      const totalPointDiffGapDiff =
+        left.totalPointDiffGap - right.totalPointDiffGap;
+      if (totalPointDiffGapDiff !== 0) {
+        return totalPointDiffGapDiff;
+      }
+    }
+
+    if (shouldRespectPlayerRest(options)) {
+      const restCompare = compareRestSummaries(
+        left.restSummary,
+        right.restSummary
+      );
+      if (restCompare !== 0) {
+        return restCompare;
+      }
+    }
+
+    return left.totalRandomScore - right.totalRandomScore;
+  }
+
   if (shouldRespectPlayerRest(options)) {
     const fullRepeatGuardrailCompare = compareBatchFullRepeatGuardrail(
       left,
@@ -433,63 +518,6 @@ export function compareBatchSelections<T extends ActiveMatchmakerV3Player>(
       left.totalExactRematchPenalty - right.totalExactRematchPenalty;
     if (rematchDiff !== 0) {
       return rematchDiff;
-    }
-
-    return left.totalRandomScore - right.totalRandomScore;
-  }
-
-  const maxBalanceDiff = left.maxBalanceGap - right.maxBalanceGap;
-  const totalBalanceDiff = left.totalBalanceGap - right.totalBalanceGap;
-
-  if (sessionType === SessionType.POINTS) {
-    const sharedCourtDiff =
-      left.totalSharedCourtRepeatPenalty - right.totalSharedCourtRepeatPenalty;
-    if (sharedCourtDiff !== 0) {
-      return sharedCourtDiff;
-    }
-
-    if (maxBalanceDiff !== 0) {
-      return maxBalanceDiff;
-    }
-
-    if (totalBalanceDiff !== 0) {
-      return totalBalanceDiff;
-    }
-
-    const maxPointDiffGapDiff = left.maxPointDiffGap - right.maxPointDiffGap;
-    if (maxPointDiffGapDiff !== 0) {
-      return maxPointDiffGapDiff;
-    }
-
-    const totalPointDiffGapDiff =
-      left.totalPointDiffGap - right.totalPointDiffGap;
-    if (totalPointDiffGapDiff !== 0) {
-      return totalPointDiffGapDiff;
-    }
-
-    return left.totalRandomScore - right.totalRandomScore;
-  }
-
-  if (usesPartnerRepeatPreference(sessionType)) {
-    const partnerDiff =
-      left.totalPartnerRepeatPenalty - right.totalPartnerRepeatPenalty;
-    const partnerTolerance =
-      getPartnerRepeatBalanceTolerance() * left.selections.length;
-
-    if (
-      partnerDiff !== 0 &&
-      Math.abs(maxBalanceDiff) <= getPartnerRepeatBalanceTolerance() &&
-      Math.abs(totalBalanceDiff) <= partnerTolerance
-    ) {
-      return partnerDiff;
-    }
-
-    if (maxBalanceDiff !== 0) {
-      return maxBalanceDiff;
-    }
-
-    if (totalBalanceDiff !== 0) {
-      return totalBalanceDiff;
     }
 
     return left.totalRandomScore - right.totalRandomScore;

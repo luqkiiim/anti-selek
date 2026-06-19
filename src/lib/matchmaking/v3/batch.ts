@@ -23,6 +23,7 @@ import {
   compareBatchSelections,
   compareSingleCourtSelections,
   FULL_REPEAT_REST_TOLERANCE,
+  getBalanceVarietyTolerance,
   getQuartetRandomScore,
 } from "./scoring";
 
@@ -343,10 +344,11 @@ function getBatchCandidateCap(courtCount: number, requiredPlayerCount: number) {
 }
 
 function getRestTurnTieZoneTolerance(sessionType: SessionType) {
-  return sessionType === SessionType.POINTS ||
-    sessionType === SessionType.SOCIAL_MIX
-    ? FULL_REPEAT_REST_TOLERANCE
-    : 0;
+  if (getBalanceVarietyTolerance(sessionType) !== null) {
+    return Number.POSITIVE_INFINITY;
+  }
+
+  return sessionType === SessionType.SOCIAL_MIX ? FULL_REPEAT_REST_TOLERANCE : 0;
 }
 
 function limitBatchCandidatePlayers<T extends MatchmakerV3Player>(
@@ -487,6 +489,11 @@ function compressQuartetSelections<T extends ActiveMatchmakerV3Player>(
         ? [...group].sort(
             (left, right) =>
               left.sharedCourtRepeatPenalty - right.sharedCourtRepeatPenalty ||
+              left.partnerCoveragePenalty - right.partnerCoveragePenalty ||
+              left.opponentCoveragePenalty - right.opponentCoveragePenalty ||
+              left.partnerRepeatPenalty - right.partnerRepeatPenalty ||
+              left.opponentRepeatPenalty - right.opponentRepeatPenalty ||
+              left.exactRematchPenalty - right.exactRematchPenalty ||
               left.balanceGap - right.balanceGap ||
               left.pointDiffGap - right.pointDiffGap ||
               left.randomScore - right.randomScore
@@ -494,7 +501,12 @@ function compressQuartetSelections<T extends ActiveMatchmakerV3Player>(
         : sessionType === SessionType.ELO
           ? [...group].sort(
               (left, right) =>
+                left.sharedCourtRepeatPenalty - right.sharedCourtRepeatPenalty ||
+                left.partnerCoveragePenalty - right.partnerCoveragePenalty ||
+                left.opponentCoveragePenalty - right.opponentCoveragePenalty ||
                 left.partnerRepeatPenalty - right.partnerRepeatPenalty ||
+                left.opponentRepeatPenalty - right.opponentRepeatPenalty ||
+                left.exactRematchPenalty - right.exactRematchPenalty ||
                 left.balanceGap - right.balanceGap ||
                 left.randomScore - right.randomScore
             )[0]
@@ -567,6 +579,59 @@ function findGreedyBatchSelection<T extends ActiveMatchmakerV3Player>(
   }
 
   return summarizeBatch(chosen);
+}
+
+function chooseBestBatchSelection<T extends ActiveMatchmakerV3Player>(
+  selections: V3BatchSelection<T>[],
+  sessionType: SessionType,
+  respectPlayerRest: boolean
+) {
+  if (selections.length === 0) {
+    return null;
+  }
+
+  const bestFairnessSelection = [...selections].sort(compareBatchFairnessVectors)[0];
+
+  if (!bestFairnessSelection) {
+    return null;
+  }
+
+  const fairnessSafeSelections = selections.filter(
+    (selection) =>
+      compareBatchFairnessVectors(selection, bestFairnessSelection) === 0
+  );
+
+  const balanceSafeSelections =
+    getBalanceVarietyTolerance(sessionType) !== null
+      ? filterBalanceSafeBatches(fairnessSafeSelections, sessionType)
+      : fairnessSafeSelections;
+
+  return [...balanceSafeSelections].sort((left, right) =>
+    compareBatchSelections(left, right, sessionType, {
+      respectPlayerRest,
+    })
+  )[0] ?? null;
+}
+
+function filterBalanceSafeBatches<T extends ActiveMatchmakerV3Player>(
+  selections: V3BatchSelection<T>[],
+  sessionType: SessionType
+) {
+  const tolerance = getBalanceVarietyTolerance(sessionType);
+
+  if (tolerance === null) {
+    return selections;
+  }
+
+  const bestMaxBalanceGap = Math.min(
+    ...selections.map((selection) => selection.maxBalanceGap)
+  );
+
+  return selections.filter(
+    (selection) =>
+      selection.maxBalanceGap <=
+      bestMaxBalanceGap + tolerance
+  );
 }
 
 interface BatchSearchAttemptResult<T extends ActiveMatchmakerV3Player> {
@@ -663,8 +728,7 @@ function searchBatchCandidatePlayers<T extends MatchmakerV3Player>({
     }
   }
 
-  let bestSelection: V3BatchSelection<ActiveMatchmakerV3Player<T>> | null =
-    null;
+  const completedSelections: V3BatchSelection<ActiveMatchmakerV3Player<T>>[] = [];
   const maxBranches = searchLimits?.maxBranches ?? MAX_BATCH_SEARCH_BRANCHES;
   const searchDeadline = Date.now() + (searchLimits?.maxMs ?? MAX_BATCH_SEARCH_MS);
   let searchLimitReached = false;
@@ -693,19 +757,7 @@ function searchBatchCandidatePlayers<T extends MatchmakerV3Player>({
       }
 
       const batchSelection = summarizeBatch(chosen);
-      const fairnessCompare = bestSelection
-        ? compareBatchFairnessVectors(batchSelection, bestSelection)
-        : -1;
-      if (
-        !bestSelection ||
-        fairnessCompare < 0 ||
-        (fairnessCompare === 0 &&
-          compareBatchSelections(batchSelection, bestSelection, sessionType, {
-            respectPlayerRest,
-          }) < 0)
-      ) {
-        bestSelection = batchSelection;
-      }
+      completedSelections.push(batchSelection);
 
       return;
     }
@@ -746,6 +798,12 @@ function searchBatchCandidatePlayers<T extends MatchmakerV3Player>({
   };
 
   backtrack([], new Set<string>());
+
+  const bestSelection = chooseBestBatchSelection(
+    completedSelections,
+    sessionType,
+    respectPlayerRest
+  );
 
   const selection =
     bestSelection ??

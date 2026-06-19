@@ -487,6 +487,71 @@ describe("matchmaking v3 batch selection", () => {
     expect(result.selection?.totalSharedCourtRepeatPenalty).toBeLessThan(12);
   });
 
+  it("chooses fresher Elo batch variety inside the rating balance window", () => {
+    const result = findBestBatchSelectionV3(
+      [
+        ...Array.from({ length: 8 }, (_, index) =>
+          createPlayer(String.fromCharCode(65 + index), { strength: 1000 })
+        ),
+        createPlayer("I", { strength: 1150 }),
+      ],
+      {
+        courtCount: 2,
+        sessionMode: SessionMode.MEXICANO,
+        sessionType: SessionType.ELO,
+        completedMatches: [
+          {
+            team1: ["A", "B"],
+            team2: ["C", "D"],
+            completedAt: new Date("2026-03-18T00:00:00Z"),
+          },
+          {
+            team1: ["E", "F"],
+            team2: ["G", "H"],
+            completedAt: new Date("2026-03-18T00:10:00Z"),
+          },
+        ],
+        randomFn: () => 0,
+      }
+    );
+
+    expect(getBatchSelectedIds(result.selection)).toContain("I");
+    expect(result.selection?.maxBalanceGap).toBeLessThanOrEqual(75);
+    expect(result.selection?.totalSharedCourtRepeatPenalty).toBeLessThan(12);
+  });
+
+  it("rejects fresher Elo batch variety outside the rating balance window", () => {
+    const result = findBestBatchSelectionV3(
+      [
+        ...Array.from({ length: 8 }, (_, index) =>
+          createPlayer(String.fromCharCode(65 + index), { strength: 1000 })
+        ),
+        createPlayer("I", { strength: 1152 }),
+      ],
+      {
+        courtCount: 2,
+        sessionMode: SessionMode.MEXICANO,
+        sessionType: SessionType.ELO,
+        completedMatches: [
+          {
+            team1: ["A", "B"],
+            team2: ["C", "D"],
+            completedAt: new Date("2026-03-18T00:00:00Z"),
+          },
+          {
+            team1: ["E", "F"],
+            team2: ["G", "H"],
+            completedAt: new Date("2026-03-18T00:10:00Z"),
+          },
+        ],
+        randomFn: () => 0,
+      }
+    );
+
+    expect(getBatchSelectedIds(result.selection)).not.toContain("I");
+    expect(result.selection?.maxBalanceGap).toBe(0);
+  });
+
   it("avoids a full-repeat court in points batches when alternatives are near-rested", () => {
     const result = findBestBatchSelectionV3(
       [

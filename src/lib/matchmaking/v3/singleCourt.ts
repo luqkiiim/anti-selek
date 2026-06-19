@@ -23,6 +23,7 @@ import {
   buildRestSummary,
   compareSingleCourtSelections,
   FULL_REPEAT_REST_TOLERANCE,
+  getBalanceVarietyTolerance,
   getQuartetRandomScore,
 } from "./scoring";
 
@@ -195,10 +196,11 @@ function relaxLockedPlayersForMixedFeasibility<T extends MatchmakerV3Player>(
 }
 
 function getRestTurnTieZoneTolerance(sessionType: SessionType) {
-  return sessionType === SessionType.POINTS ||
-    sessionType === SessionType.SOCIAL_MIX
-    ? FULL_REPEAT_REST_TOLERANCE
-    : 0;
+  if (getBalanceVarietyTolerance(sessionType) !== null) {
+    return Number.POSITIVE_INFINITY;
+  }
+
+  return sessionType === SessionType.SOCIAL_MIX ? FULL_REPEAT_REST_TOLERANCE : 0;
 }
 
 function searchCandidatePool<T extends MatchmakerV3Player>({
@@ -247,9 +249,7 @@ function searchCandidatePool<T extends MatchmakerV3Player>({
   );
   let quartetCount = 0;
   let validPartitionCount = 0;
-  let bestSelection:
-    | V3SingleCourtSelection<ActiveMatchmakerV3Player<T>>
-    | null = null;
+  const selections: V3SingleCourtSelection<ActiveMatchmakerV3Player<T>>[] = [];
 
   for (const group of quartetGroups) {
     const quartetPlayers = toQuartet(group);
@@ -339,24 +339,76 @@ function searchCandidatePool<T extends MatchmakerV3Player>({
         randomScore,
       };
 
-      if (
-        !bestSelection ||
-        compareQuartetFairnessVectors(selection.players, bestSelection.players) < 0 ||
-        (compareQuartetFairnessVectors(selection.players, bestSelection.players) === 0 &&
-          compareSingleCourtSelections(selection, bestSelection, sessionType, {
-            respectPlayerRest,
-          }) < 0)
-      ) {
-        bestSelection = selection;
-      }
+      selections.push(selection);
     }
   }
 
   return {
-    bestSelection,
+    bestSelection: chooseBestSingleCourtSelection(
+      selections,
+      sessionType,
+      respectPlayerRest
+    ),
     quartetCount,
     validPartitionCount,
   };
+}
+
+function chooseBestSingleCourtSelection<T extends ActiveMatchmakerV3Player>(
+  selections: V3SingleCourtSelection<T>[],
+  sessionType: SessionType,
+  respectPlayerRest: boolean
+) {
+  if (selections.length === 0) {
+    return null;
+  }
+
+  const bestFairnessSelection = [...selections].sort((left, right) =>
+    compareQuartetFairnessVectors(left.players, right.players)
+  )[0];
+
+  if (!bestFairnessSelection) {
+    return null;
+  }
+
+  const fairnessSafeSelections = selections.filter(
+    (selection) =>
+      compareQuartetFairnessVectors(
+        selection.players,
+        bestFairnessSelection.players
+      ) === 0
+  );
+
+  const balanceSafeSelections =
+    getBalanceVarietyTolerance(sessionType) !== null
+      ? filterBalanceSafeSelections(fairnessSafeSelections, sessionType)
+      : fairnessSafeSelections;
+
+  return [...balanceSafeSelections].sort((left, right) =>
+    compareSingleCourtSelections(left, right, sessionType, {
+      respectPlayerRest,
+    })
+  )[0] ?? null;
+}
+
+function filterBalanceSafeSelections<T extends ActiveMatchmakerV3Player>(
+  selections: V3SingleCourtSelection<T>[],
+  sessionType: SessionType
+) {
+  const tolerance = getBalanceVarietyTolerance(sessionType);
+
+  if (tolerance === null) {
+    return selections;
+  }
+
+  const bestBalanceGap = Math.min(
+    ...selections.map((selection) => selection.balanceGap)
+  );
+
+  return selections.filter(
+    (selection) =>
+      selection.balanceGap <= bestBalanceGap + tolerance
+  );
 }
 
 export function findBestSingleCourtSelectionV3<T extends MatchmakerV3Player>(

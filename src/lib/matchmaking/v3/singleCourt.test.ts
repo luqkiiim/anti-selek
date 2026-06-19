@@ -60,10 +60,10 @@ describe("matchmaking v3 single-court selection", () => {
   it("keeps the repeated partner in Elo sessions when the fresh option is much less balanced", () => {
     const result = findBestSingleCourtSelectionV3(
       [
-        createPlayer("A", { strength: 15 }),
-        createPlayer("B", { strength: 5 }),
-        createPlayer("C", { strength: 11 }),
-        createPlayer("D", { strength: 9 }),
+        createPlayer("A", { strength: 1150 }),
+        createPlayer("B", { strength: 850 }),
+        createPlayer("C", { strength: 1050 }),
+        createPlayer("D", { strength: 950 }),
       ],
       {
         sessionMode: SessionMode.MEXICANO,
@@ -86,14 +86,147 @@ describe("matchmaking v3 single-court selection", () => {
     expect(result.selection?.partnerRepeatPenalty).toBeGreaterThan(0);
   });
 
-  it("prefers a fresher shared-court quartet before points balance", () => {
+  it("chooses fresh shared-court variety inside the Elo balance window", () => {
     const result = findBestSingleCourtSelectionV3(
       [
-        createPlayer("A", { strength: 20 }),
-        createPlayer("B", { strength: 0 }),
-        createPlayer("C", { strength: 20 }),
-        createPlayer("D", { strength: 0 }),
-        createPlayer("E", { strength: 15 }),
+        createPlayer("A", { strength: 1000 }),
+        createPlayer("B", { strength: 1000 }),
+        createPlayer("C", { strength: 1000 }),
+        createPlayer("D", { strength: 1000 }),
+        createPlayer("E", { strength: 1150 }),
+      ],
+      {
+        sessionMode: SessionMode.MEXICANO,
+        sessionType: SessionType.ELO,
+        completedMatches: [
+          {
+            team1: ["A", "B"],
+            team2: ["C", "D"],
+            completedAt: new Date("2026-03-18T00:00:00Z"),
+          },
+        ],
+        randomFn: () => 0,
+      }
+    );
+
+    expect(result.selection?.ids).toContain("E");
+    expect(result.selection?.balanceGap).toBe(75);
+    expect(result.selection?.sharedCourtRepeatPenalty).toBeLessThan(6);
+  });
+
+  it("keeps Elo balance ahead of fresh shared-court variety outside the safe window", () => {
+    const result = findBestSingleCourtSelectionV3(
+      [
+        createPlayer("A", { strength: 1000 }),
+        createPlayer("B", { strength: 1000 }),
+        createPlayer("C", { strength: 1000 }),
+        createPlayer("D", { strength: 1000 }),
+        createPlayer("E", { strength: 1152 }),
+      ],
+      {
+        sessionMode: SessionMode.MEXICANO,
+        sessionType: SessionType.ELO,
+        completedMatches: [
+          {
+            team1: ["A", "B"],
+            team2: ["C", "D"],
+            completedAt: new Date("2026-03-18T00:00:00Z"),
+          },
+        ],
+        randomFn: () => 0,
+      }
+    );
+
+    expect(result.selection?.ids).not.toContain("E");
+    expect(result.selection?.balanceGap).toBe(0);
+  });
+
+  it("does not chain Elo variety past the global balance window", () => {
+    const result = findBestSingleCourtSelectionV3(
+      [
+        createPlayer("A", { strength: 1000 }),
+        createPlayer("B", { strength: 1000 }),
+        createPlayer("C", { strength: 1000 }),
+        createPlayer("D", { strength: 1000 }),
+        createPlayer("E", { strength: 1150 }),
+        createPlayer("F", { strength: 1452 }),
+      ],
+      {
+        sessionMode: SessionMode.MEXICANO,
+        sessionType: SessionType.ELO,
+        completedMatches: [
+          {
+            team1: ["A", "B"],
+            team2: ["C", "D"],
+            completedAt: new Date("2026-03-18T00:00:00Z"),
+          },
+        ],
+        randomFn: () => 0,
+      }
+    );
+
+    expect(result.selection?.ids).toContain("E");
+    expect(result.selection?.ids).not.toContain("F");
+    expect(result.selection?.balanceGap).toBe(75);
+  });
+
+  it("keeps lower-rest players eligible when they create the best Elo balance", () => {
+    const result = findBestSingleCourtSelectionV3(
+      [
+        createPlayer("A", { strength: 1200, restTurns: 5 }),
+        createPlayer("B", { strength: 1200, restTurns: 5 }),
+        createPlayer("C", { strength: 1200, restTurns: 5 }),
+        createPlayer("D", { strength: 800, restTurns: 5 }),
+        createPlayer("E", { strength: 800, restTurns: 0 }),
+      ],
+      {
+        sessionMode: SessionMode.MEXICANO,
+        sessionType: SessionType.ELO,
+        randomFn: () => 0,
+        respectPlayerRest: true,
+      }
+    );
+
+    expect(result.debug.candidatePlayerIds).toContain("E");
+    expect(result.selection?.ids).toContain("E");
+    expect(result.selection?.balanceGap).toBe(0);
+  });
+
+  it("keeps points balance ahead of fresh shared-court variety outside the safe window", () => {
+    const result = findBestSingleCourtSelectionV3(
+      [
+        createPlayer("A", { strength: 10 }),
+        createPlayer("B", { strength: 10 }),
+        createPlayer("C", { strength: 10 }),
+        createPlayer("D", { strength: 10 }),
+        createPlayer("E", { strength: 18 }),
+      ],
+      {
+        sessionMode: SessionMode.MEXICANO,
+        sessionType: SessionType.POINTS,
+        completedMatches: [
+          {
+            team1: ["A", "B"],
+            team2: ["C", "D"],
+            completedAt: new Date("2026-03-18T00:00:00Z"),
+          },
+        ],
+        randomFn: () => 0,
+      }
+    );
+
+    expect(result.selection?.ids).not.toContain("E");
+    expect(result.selection?.balanceGap).toBe(0);
+  });
+
+  it("chooses fresh shared-court variety inside the points balance window", () => {
+    const result = findBestSingleCourtSelectionV3(
+      [
+        createPlayer("A", { strength: 10 }),
+        createPlayer("B", { strength: 10 }),
+        createPlayer("C", { strength: 10 }),
+        createPlayer("D", { strength: 10 }),
+        createPlayer("E", { strength: 16 }),
       ],
       {
         sessionMode: SessionMode.MEXICANO,
@@ -110,7 +243,59 @@ describe("matchmaking v3 single-court selection", () => {
     );
 
     expect(result.selection?.ids).toContain("E");
+    expect(result.selection?.balanceGap).toBe(3);
     expect(result.selection?.sharedCourtRepeatPenalty).toBeLessThan(6);
+  });
+
+  it("does not chain points variety past the global balance window", () => {
+    const result = findBestSingleCourtSelectionV3(
+      [
+        createPlayer("A", { strength: 10 }),
+        createPlayer("B", { strength: 10 }),
+        createPlayer("C", { strength: 10 }),
+        createPlayer("D", { strength: 10 }),
+        createPlayer("E", { strength: 16 }),
+        createPlayer("F", { strength: 28 }),
+      ],
+      {
+        sessionMode: SessionMode.MEXICANO,
+        sessionType: SessionType.POINTS,
+        completedMatches: [
+          {
+            team1: ["A", "B"],
+            team2: ["C", "D"],
+            completedAt: new Date("2026-03-18T00:00:00Z"),
+          },
+        ],
+        randomFn: () => 0,
+      }
+    );
+
+    expect(result.selection?.ids).toContain("E");
+    expect(result.selection?.ids).not.toContain("F");
+    expect(result.selection?.balanceGap).toBe(3);
+  });
+
+  it("keeps lower-rest players eligible when they create the best points balance", () => {
+    const result = findBestSingleCourtSelectionV3(
+      [
+        createPlayer("A", { strength: 20, restTurns: 5 }),
+        createPlayer("B", { strength: 20, restTurns: 5 }),
+        createPlayer("C", { strength: 20, restTurns: 5 }),
+        createPlayer("D", { strength: 0, restTurns: 5 }),
+        createPlayer("E", { strength: 0, restTurns: 0 }),
+      ],
+      {
+        sessionMode: SessionMode.MEXICANO,
+        sessionType: SessionType.POINTS,
+        randomFn: () => 0,
+        respectPlayerRest: true,
+      }
+    );
+
+    expect(result.debug.candidatePlayerIds).toContain("E");
+    expect(result.selection?.ids).toContain("E");
+    expect(result.selection?.balanceGap).toBe(0);
   });
 
   it("ignores rest-shaped candidate narrowing when rest is off in mixed points", () => {
@@ -267,7 +452,7 @@ describe("matchmaking v3 single-court selection", () => {
     expect(result.selection?.sharedCourtRepeatPenalty).toBeLessThan(6);
   });
 
-  it("uses points balance after shared-court repeats tie", () => {
+  it("avoids a repeated partner inside the points balance window", () => {
     const result = findBestSingleCourtSelectionV3(
       [
         createPlayer("A", { strength: 11 }),
@@ -289,12 +474,12 @@ describe("matchmaking v3 single-court selection", () => {
       }
     );
 
-    expect(result.selection?.partition).toEqual({
+    expect(result.selection?.partition).not.toEqual({
       team1: ["A", "B"],
       team2: ["C", "D"],
     });
-    expect(result.selection?.balanceGap).toBe(0);
-    expect(result.selection?.partnerRepeatPenalty).toBeGreaterThan(0);
+    expect(result.selection?.balanceGap).toBeLessThanOrEqual(3);
+    expect(result.selection?.partnerRepeatPenalty).toBe(0);
   });
 
   it("includes an arrival-priority late player before normal rest scoring", () => {
