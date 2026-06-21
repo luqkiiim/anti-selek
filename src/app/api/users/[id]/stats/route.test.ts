@@ -121,4 +121,85 @@ describe("user stats route", () => {
       "https://blob.vercel-storage.com/avatars/user-1/profile.webp"
     );
   });
+
+  it("passes session guest flags through to profile stats", async () => {
+    mocks.matchFindMany.mockResolvedValueOnce([
+      {
+        id: "match-1",
+        completedAt: new Date("2026-05-18T01:00:00.000Z"),
+        team1User1Id: "user-1",
+        team1User2Id: "guest-1",
+        team2User1Id: "player-2",
+        team2User2Id: "player-3",
+        team1Score: 21,
+        team2Score: 18,
+        winnerTeam: 1,
+        team1EloChange: 5,
+        team2EloChange: -5,
+        team1User1: { id: "user-1", name: "Alex Lee", avatarKey: null },
+        team1User2: { id: "guest-1", name: "Guest One", avatarKey: null },
+        team2User1: { id: "player-2", name: "Player Two", avatarKey: null },
+        team2User2: { id: "player-3", name: "Player Three", avatarKey: null },
+        session: {
+          id: "session-1",
+          code: "ABC123",
+          name: "Morning",
+          players: [
+            {
+              userId: "user-1",
+              isGuest: false,
+              sessionPoints: 3,
+              user: { id: "user-1", name: "Alex Lee", avatarKey: null },
+            },
+            {
+              userId: "guest-1",
+              isGuest: true,
+              sessionPoints: 3,
+              user: { id: "guest-1", name: "Guest One", avatarKey: null },
+            },
+          ],
+          matches: [],
+        },
+      },
+    ]);
+
+    const response = await GET(
+      new Request("http://localhost/api/users/user-1/stats"),
+      {
+        params: Promise.resolve({ id: "user-1" }),
+      }
+    );
+
+    expect(response.status).toBe(200);
+    expect(mocks.matchFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        include: expect.objectContaining({
+          session: expect.objectContaining({
+            select: expect.objectContaining({
+              players: {
+                select: expect.objectContaining({
+                  isGuest: true,
+                }),
+              },
+            }),
+          }),
+        }),
+      })
+    );
+    expect(mocks.buildPlayerProfileDerivedData).toHaveBeenCalledWith(
+      "user-1",
+      [
+        expect.objectContaining({
+          session: expect.objectContaining({
+            players: expect.arrayContaining([
+              expect.objectContaining({
+                userId: "guest-1",
+                isGuest: true,
+              }),
+            ]),
+          }),
+        }),
+      ]
+    );
+  });
 });

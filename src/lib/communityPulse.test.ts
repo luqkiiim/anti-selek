@@ -941,4 +941,104 @@ describe("communityPulse", () => {
       },
     });
   });
+
+  it("excludes guests from pulse people while keeping member match results", () => {
+    const guestAce = createPlayer("guest-ace", "Guest Ace");
+    const guestMate = createPlayer("guest-mate", "Guest Mate");
+    const session = createSession("guest-pulse", {
+      players: [
+        { user: players.alice },
+        { user: players.ben },
+        { user: players.cara },
+        { user: players.dan },
+        { user: guestAce, isGuest: true },
+        { user: guestMate, isGuest: true },
+      ],
+    });
+
+    const result = buildCommunityPulse({
+      members: [players.alice, players.ben, players.cara, players.dan].map(
+        (player) => createMember(player)
+      ),
+      sessions: [session],
+      completedMatches: [
+        createMatch("guest-win-1", {
+          session,
+          completedAt: "2026-05-01T10:00:00.000Z",
+          team1: [guestAce, guestMate],
+          team2: [players.alice, players.ben],
+          team1Score: 21,
+          team2Score: 10,
+          winnerTeam: 1,
+          team1EloChange: 20,
+          team2EloChange: -20,
+        }),
+        createMatch("guest-win-2", {
+          session,
+          completedAt: "2026-05-02T10:00:00.000Z",
+          team1: [guestAce, guestMate],
+          team2: [players.alice, players.ben],
+          team1Score: 21,
+          team2Score: 12,
+          winnerTeam: 1,
+          team1EloChange: 20,
+          team2EloChange: -20,
+        }),
+        createMatch("member-win-1", {
+          session,
+          completedAt: "2026-05-03T10:00:00.000Z",
+          team1: [players.alice, players.ben],
+          team2: [players.cara, players.dan],
+          team1Score: 21,
+          team2Score: 18,
+          winnerTeam: 1,
+          team1EloChange: 5,
+          team2EloChange: -5,
+        }),
+        createMatch("member-win-2", {
+          session,
+          completedAt: "2026-05-04T10:00:00.000Z",
+          team1: [players.alice, players.ben],
+          team2: [players.cara, players.dan],
+          team1Score: 21,
+          team2Score: 17,
+          winnerTeam: 1,
+          team1EloChange: 5,
+          team2EloChange: -5,
+        }),
+      ],
+    });
+
+    const guestIds = new Set([guestAce.id, guestMate.id]);
+
+    expect(result.metrics).toMatchObject({
+      recentMatches: 4,
+      activePlayers: 4,
+    });
+    const hotPlayerIds = result.hotPlayers.map((player) => player.user.id);
+    expect(hotPlayerIds).not.toContain(guestAce.id);
+    expect(hotPlayerIds).not.toContain(guestMate.id);
+    expect(result.latestStory).toMatchObject({
+      matches: 4,
+      session: {
+        playerCount: 4,
+      },
+      topPerformer: {
+        user: players.alice,
+      },
+    });
+    expect(result.rivalries.length).toBeGreaterThan(0);
+    expect(result.partnerships.length).toBeGreaterThan(0);
+    const rivalryPlayerIds = result.rivalries.flatMap((rivalry) =>
+      rivalry.players.map((player) => player.id)
+    );
+    const partnershipPlayerIds = result.partnerships.flatMap((partnership) =>
+      partnership.players.map((player) => player.id)
+    );
+
+    for (const guestId of guestIds) {
+      expect(rivalryPlayerIds).not.toContain(guestId);
+      expect(partnershipPlayerIds).not.toContain(guestId);
+    }
+  });
 });

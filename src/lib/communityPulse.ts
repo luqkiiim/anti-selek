@@ -27,6 +27,7 @@ export interface CommunityPulseSessionSource {
   createdAt: Date | string;
   endedAt?: Date | string | null;
   players: Array<{
+    isGuest?: boolean;
     user: CommunityPulseParticipant;
   }>;
 }
@@ -180,6 +181,8 @@ interface LatestStoryAggregate {
   pointDifferential: number;
 }
 
+type GuestIdsBySessionId = Map<string, Set<string>>;
+
 function getTime(value: Date | string | null | undefined) {
   if (!value) return 0;
   const time = value instanceof Date ? value.getTime() : new Date(value).getTime();
@@ -228,6 +231,44 @@ function getMatchTeams(match: CommunityPulseMatchSource) {
     team1: [match.team1User1, match.team1User2],
     team2: [match.team2User1, match.team2User2],
   };
+}
+
+function getGuestIdsBySessionId(
+  sessions: CommunityPulseSessionSource[]
+): GuestIdsBySessionId {
+  const guestIdsBySessionId = new Map<string, Set<string>>();
+
+  for (const session of sessions) {
+    const guestIds = new Set<string>();
+
+    for (const player of session.players) {
+      if (player.isGuest === true) {
+        guestIds.add(player.user.id);
+      }
+    }
+
+    guestIdsBySessionId.set(session.id, guestIds);
+  }
+
+  return guestIdsBySessionId;
+}
+
+function isMatchGuest(
+  guestIdsBySessionId: GuestIdsBySessionId,
+  match: CommunityPulseMatchSource,
+  userId: string
+) {
+  return guestIdsBySessionId.get(match.session.id)?.has(userId) === true;
+}
+
+function isTeamGuestFree(
+  guestIdsBySessionId: GuestIdsBySessionId,
+  match: CommunityPulseMatchSource,
+  team: CommunityPulseParticipant[]
+) {
+  return team.every(
+    (player) => !isMatchGuest(guestIdsBySessionId, match, player.id)
+  );
 }
 
 function updateHotPlayer(
@@ -281,7 +322,10 @@ function updateHotPlayer(
   aggregates.set(user.id, aggregate);
 }
 
-function buildHotPlayers(matches: CommunityPulseMatchSource[]) {
+function buildHotPlayers(
+  matches: CommunityPulseMatchSource[],
+  guestIdsBySessionId: GuestIdsBySessionId
+) {
   const aggregates = new Map<string, HotPlayerAggregate>();
 
   for (const match of matches) {
@@ -292,6 +336,8 @@ function buildHotPlayers(matches: CommunityPulseMatchSource[]) {
     const team2Result = match.winnerTeam === 2 ? "WIN" : "LOSS";
 
     for (const player of team1) {
+      if (isMatchGuest(guestIdsBySessionId, match, player.id)) continue;
+
       updateHotPlayer(aggregates, player, {
         result: team1Result,
         pointDifferential: team1Score - team2Score,
@@ -300,6 +346,8 @@ function buildHotPlayers(matches: CommunityPulseMatchSource[]) {
     }
 
     for (const player of team2) {
+      if (isMatchGuest(guestIdsBySessionId, match, player.id)) continue;
+
       updateHotPlayer(aggregates, player, {
         result: team2Result,
         pointDifferential: team2Score - team1Score,
@@ -444,19 +492,28 @@ function getRivalryStrength(rivalry: RivalryAggregate) {
   );
 }
 
-function buildRivalries(matches: CommunityPulseMatchSource[]) {
+function buildRivalries(
+  matches: CommunityPulseMatchSource[],
+  guestIdsBySessionId: GuestIdsBySessionId
+) {
   const aggregates = new Map<string, RivalryAggregate>();
 
   for (const match of matches) {
     const { team1, team2 } = getMatchTeams(match);
+    const eligibleTeam1 = team1.filter(
+      (player) => !isMatchGuest(guestIdsBySessionId, match, player.id)
+    );
+    const eligibleTeam2 = team2.filter(
+      (player) => !isMatchGuest(guestIdsBySessionId, match, player.id)
+    );
     const winnerIds = new Set(
       match.winnerTeam === 1
         ? [match.team1User1Id, match.team1User2Id]
         : [match.team2User1Id, match.team2User2Id]
     );
 
-    for (const team1Player of team1) {
-      for (const team2Player of team2) {
+    for (const team1Player of eligibleTeam1) {
+      for (const team2Player of eligibleTeam2) {
         updateRivalry(aggregates, team1Player, team2Player, winnerIds, match);
       }
     }
@@ -534,7 +591,10 @@ function updatePartnership(
   aggregates.set(key, aggregate);
 }
 
-function buildPartnerships(matches: CommunityPulseMatchSource[]) {
+function buildPartnerships(
+  matches: CommunityPulseMatchSource[],
+  guestIdsBySessionId: GuestIdsBySessionId
+) {
   const aggregates = new Map<string, PartnershipAggregate>();
 
   for (const match of matches) {
@@ -544,26 +604,31 @@ function buildPartnerships(matches: CommunityPulseMatchSource[]) {
     const team1Result = match.winnerTeam === 1 ? "WIN" : "LOSS";
     const team2Result = match.winnerTeam === 2 ? "WIN" : "LOSS";
 
-    updatePartnership(
-      aggregates,
-      team1[0],
-      team1[1],
-      {
-        result: team1Result,
-        pointDifferential: team1Score - team2Score,
-      },
-      match
-    );
-    updatePartnership(
-      aggregates,
-      team2[0],
-      team2[1],
-      {
-        result: team2Result,
-        pointDifferential: team2Score - team1Score,
-      },
-      match
-    );
+    if (isTeamGuestFree(guestIdsBySessionId, match, team1)) {
+      updatePartnership(
+        aggregates,
+        team1[0],
+        team1[1],
+        {
+          result: team1Result,
+          pointDifferential: team1Score - team2Score,
+        },
+        match
+      );
+    }
+
+    if (isTeamGuestFree(guestIdsBySessionId, match, team2)) {
+      updatePartnership(
+        aggregates,
+        team2[0],
+        team2[1],
+        {
+          result: team2Result,
+          pointDifferential: team2Score - team1Score,
+        },
+        match
+      );
+    }
   }
 
   return selectUniquePlayerPairs(
@@ -631,7 +696,8 @@ function updateLatestStoryAggregate(
 
 function buildLatestStory(
   completedSessions: CommunityPulseSessionSource[],
-  matches: CommunityPulseMatchSource[]
+  matches: CommunityPulseMatchSource[],
+  guestIdsBySessionId: GuestIdsBySessionId
 ): CommunityPulseLatestStory | null {
   const latestSession = completedSessions[0];
   if (!latestSession) return null;
@@ -649,6 +715,8 @@ function buildLatestStory(
     const team2Result = match.winnerTeam === 2 ? "WIN" : "LOSS";
 
     for (const player of team1) {
+      if (isMatchGuest(guestIdsBySessionId, match, player.id)) continue;
+
       updateLatestStoryAggregate(aggregates, player, {
         result: team1Result,
         pointDifferential: team1Score - team2Score,
@@ -657,6 +725,8 @@ function buildLatestStory(
     }
 
     for (const player of team2) {
+      if (isMatchGuest(guestIdsBySessionId, match, player.id)) continue;
+
       updateLatestStoryAggregate(aggregates, player, {
         result: team2Result,
         pointDifferential: team2Score - team1Score,
@@ -686,7 +756,9 @@ function buildLatestStory(
       name: latestSession.name,
       type: latestSession.type,
       date: toIsoString(latestSession.endedAt ?? latestSession.createdAt),
-      playerCount: latestSession.players.length,
+      playerCount: latestSession.players.filter(
+        (player) => player.isGuest !== true
+      ).length,
     },
     matches: sessionMatches.length,
     topPerformer: topPerformer
@@ -713,6 +785,7 @@ export function buildCommunityPulse({
 }): CommunityPulseSnapshot {
   const activeSessions = getActiveSessions(sessions);
   const completedSessions = getCompletedSessions(sessions);
+  const guestIdsBySessionId = getGuestIdsBySessionId(sessions);
   const sortedCompletedMatches = getSortedCompletedMatches(completedMatches);
   const recentMatches = sortedCompletedMatches.slice(
     0,
@@ -721,10 +794,16 @@ export function buildCommunityPulse({
   const activePlayerIds = new Set<string>();
 
   for (const match of recentMatches) {
-    activePlayerIds.add(match.team1User1Id);
-    activePlayerIds.add(match.team1User2Id);
-    activePlayerIds.add(match.team2User1Id);
-    activePlayerIds.add(match.team2User2Id);
+    for (const playerId of [
+      match.team1User1Id,
+      match.team1User2Id,
+      match.team2User1Id,
+      match.team2User2Id,
+    ]) {
+      if (!isMatchGuest(guestIdsBySessionId, match, playerId)) {
+        activePlayerIds.add(playerId);
+      }
+    }
   }
 
   return {
@@ -735,9 +814,16 @@ export function buildCommunityPulse({
       recentMatches: recentMatches.length,
       activePlayers: activePlayerIds.size,
     },
-    hotPlayers: buildHotPlayers(recentMatches),
-    rivalries: buildRivalries(sortedCompletedMatches),
-    partnerships: buildPartnerships(sortedCompletedMatches),
-    latestStory: buildLatestStory(completedSessions, sortedCompletedMatches),
+    hotPlayers: buildHotPlayers(recentMatches, guestIdsBySessionId),
+    rivalries: buildRivalries(sortedCompletedMatches, guestIdsBySessionId),
+    partnerships: buildPartnerships(
+      sortedCompletedMatches,
+      guestIdsBySessionId
+    ),
+    latestStory: buildLatestStory(
+      completedSessions,
+      sortedCompletedMatches,
+      guestIdsBySessionId
+    ),
   };
 }

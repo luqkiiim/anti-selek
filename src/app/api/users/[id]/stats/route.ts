@@ -163,6 +163,7 @@ async function getUserStatsRoute(
           players: {
             select: {
               userId: true,
+              isGuest: true,
               sessionPoints: true,
               user: { select: { id: true, name: true, avatarKey: true } },
             },

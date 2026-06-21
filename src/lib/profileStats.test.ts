@@ -35,6 +35,7 @@ function createMatch(
     team2EloChange?: number | null;
     sessionPlayers?: Array<{
       userId: string;
+      isGuest?: boolean;
       sessionPoints: number;
       user: { id: string; name: string };
     }>;
@@ -293,6 +294,85 @@ describe("profileStats", () => {
       result: "WIN",
       count: 1,
     });
+  });
+
+  it("excludes guests from connection rankings while preserving member stats", () => {
+    const user = { id: "u1", name: "Alice" };
+    const realPartner = { id: "u2", name: "Ben" };
+    const realOpponent = { id: "u3", name: "Cara" };
+    const guestPartner = { id: "guest-partner", name: "Guest Partner" };
+    const guestOpponent = { id: "guest-opponent", name: "Guest Opponent" };
+    const sessionPlayers = [
+      { userId: user.id, isGuest: false, sessionPoints: 6, user },
+      {
+        userId: realPartner.id,
+        isGuest: false,
+        sessionPoints: 3,
+        user: realPartner,
+      },
+      {
+        userId: realOpponent.id,
+        isGuest: false,
+        sessionPoints: 3,
+        user: realOpponent,
+      },
+      {
+        userId: guestPartner.id,
+        isGuest: true,
+        sessionPoints: 3,
+        user: guestPartner,
+      },
+      {
+        userId: guestOpponent.id,
+        isGuest: true,
+        sessionPoints: 0,
+        user: guestOpponent,
+      },
+    ];
+
+    const result = buildPlayerProfileDerivedData(user.id, [
+      createMatch("guest-connections-1", {
+        sessionId: "guest-session",
+        sessionCode: "guest-session",
+        sessionName: "Guest Session",
+        completedAt: "2026-04-10T12:00:00.000Z",
+        team1: [user, guestPartner],
+        team2: [realOpponent, guestOpponent],
+        team1Score: 21,
+        team2Score: 18,
+        winnerTeam: 1,
+        sessionPlayers,
+      }),
+      createMatch("guest-connections-2", {
+        sessionId: "guest-session",
+        sessionCode: "guest-session",
+        sessionName: "Guest Session",
+        completedAt: "2026-04-11T12:00:00.000Z",
+        team1: [user, realPartner],
+        team2: [realOpponent, guestOpponent],
+        team1Score: 18,
+        team2Score: 21,
+        winnerTeam: 2,
+        sessionPlayers,
+      }),
+    ]);
+
+    expect(result.stats.totalMatches).toBe(2);
+    expect(result.matchHistory).toHaveLength(2);
+    expect(result.partners.best.map((summary) => summary.user)).toEqual([
+      realPartner,
+    ]);
+    expect(result.opponents.toughest.map((summary) => summary.user)).toEqual([
+      realOpponent,
+    ]);
+    expect(
+      result.matchHistory.some((match) => match.partner.id === guestPartner.id)
+    ).toBe(true);
+    expect(
+      result.matchHistory
+        .flatMap((match) => match.opponents)
+        .some((opponent) => opponent.id === guestOpponent.id)
+    ).toBe(true);
   });
 
   it("weights toughest opponents so short raw-loss records do not dominate", () => {

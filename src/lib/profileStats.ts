@@ -15,6 +15,7 @@ interface ProfileParticipant {
 
 interface ProfileSessionPlayerSource {
   userId: string;
+  isGuest?: boolean;
   sessionPoints: number;
   user: ProfileParticipant;
 }
@@ -309,6 +310,16 @@ function updateConnectionAggregate(
   }
 
   aggregates.set(participant.id, existing);
+}
+
+function getSessionGuestUserIds(
+  session: ProfileMatchSource["session"]
+): Set<string> {
+  return new Set(
+    (session.players ?? [])
+      .filter((player) => player.isGuest === true)
+      .map((player) => player.userId)
+  );
 }
 
 function pickPreferredConnections(
@@ -762,6 +773,7 @@ export function buildPlayerProfileDerivedData(
     const opponents = isTeam1
       ? [match.team2User1, match.team2User2]
       : [match.team1User1, match.team1User2];
+    const sessionGuestUserIds = getSessionGuestUserIds(match.session);
 
     if (result === "WIN") {
       wins += 1;
@@ -770,13 +782,17 @@ export function buildPlayerProfileDerivedData(
     pointsScored += myScore;
     pointsConceded += opponentScore;
 
-    updateConnectionAggregate(partnerAggregates, partner, {
-      result,
-      pointDifferential,
-      ratingChange,
-    });
+    if (!sessionGuestUserIds.has(partner.id)) {
+      updateConnectionAggregate(partnerAggregates, partner, {
+        result,
+        pointDifferential,
+        ratingChange,
+      });
+    }
 
     for (const opponent of opponents) {
+      if (sessionGuestUserIds.has(opponent.id)) continue;
+
       updateConnectionAggregate(opponentAggregates, opponent, {
         result,
         pointDifferential,
