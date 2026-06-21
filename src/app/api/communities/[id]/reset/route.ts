@@ -1,4 +1,7 @@
+import { POST as resetClub } from "@/features/club-api/[id]/reset/route";
+import { withDeprecatedCommunityApiRoute } from "@/lib/deprecatedCommunityContracts";
+
 export const dynamic = "force-dynamic";
 
-export { POST } from "@/features/club-api/[id]/reset/route";
+export const POST = withDeprecatedCommunityApiRoute(resetClub);
 
