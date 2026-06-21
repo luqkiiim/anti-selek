@@ -7,7 +7,16 @@ import { withDeprecatedCommunityApiRoute } from "@/lib/deprecatedCommunityContra
 
 export const dynamic = "force-dynamic";
 
-export const GET = withDeprecatedCommunityApiRoute(getClub);
-export const PATCH = withDeprecatedCommunityApiRoute(updateClub);
-export const DELETE = withDeprecatedCommunityApiRoute(deleteClub);
+export const GET = withDeprecatedCommunityApiRoute(getClub, {
+  route: "/api/communities/[id]",
+  successorRoute: "/api/clubs/[id]",
+});
+export const PATCH = withDeprecatedCommunityApiRoute(updateClub, {
+  route: "/api/communities/[id]",
+  successorRoute: "/api/clubs/[id]",
+});
+export const DELETE = withDeprecatedCommunityApiRoute(deleteClub, {
+  route: "/api/communities/[id]",
+  successorRoute: "/api/clubs/[id]",
+});
 

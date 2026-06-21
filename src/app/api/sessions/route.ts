@@ -36,7 +36,11 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json().catch(() => null);
-    const input = parseCreateSessionRequest(body);
+    const input = parseCreateSessionRequest(body, {
+      canonicalRoute: "/api/sessions",
+      request,
+      surface: "api",
+    });
     const createdSession = await createSessionForUser({
       requesterId: session.user.id,
       requesterIsAdmin: !!session.user.isAdmin,
@@ -69,7 +73,12 @@ export async function GET(request: Request) {
       url.searchParams,
       "clubId",
       "communityId",
-      "club identifier"
+      "club identifier",
+      {
+        canonicalRoute: "/api/sessions",
+        request,
+        surface: "api",
+      }
     );
     if (!clubId) {
       return NextResponse.json([]);

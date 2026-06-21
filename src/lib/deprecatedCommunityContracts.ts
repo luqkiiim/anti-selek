@@ -1,3 +1,8 @@
+import {
+  LEGACY_COMMUNITY_ROUTE_USED_EVENT,
+  logTelemetryEvent,
+} from "@/lib/serverTelemetry";
+
 export const DEPRECATED_COMMUNITY_CONTRACT_MESSAGE =
   "Use club routes and club fields; community compatibility will be removed in a future phase.";
 
@@ -14,6 +19,11 @@ type RouteHandler<TRequest extends Request, TArgs extends unknown[]> = (
   request: TRequest,
   ...args: TArgs
 ) => Response | Promise<Response>;
+
+interface DeprecatedCommunityApiRouteOptions {
+  route: string;
+  successorRoute: string;
+}
 
 export function getDeprecatedCommunityContractHeaders(successorPath: string) {
   return {
@@ -60,15 +70,69 @@ export function getDeprecatedCommunityPageSuccessorPath(
 export function withDeprecatedCommunityApiRoute<
   TRequest extends Request,
   TArgs extends unknown[],
->(handler: RouteHandler<TRequest, TArgs>) {
+>(
+  handler: RouteHandler<TRequest, TArgs>,
+  options?: DeprecatedCommunityApiRouteOptions
+) {
   return async (request: TRequest, ...args: TArgs) => {
-    const response = await handler(request, ...args);
+    let response: Response | undefined;
 
-    return applyDeprecatedCommunityContractHeaders(
-      response,
-      getDeprecatedCommunityApiSuccessorPath(request)
-    );
+    try {
+      response = await handler(request, ...args);
+
+      return applyDeprecatedCommunityContractHeaders(
+        response,
+        getDeprecatedCommunityApiSuccessorPath(request)
+      );
+    } finally {
+      logDeprecatedCommunityRouteUsage(request, {
+        responseStatus: response?.status,
+        route: options?.route ?? getDeprecatedCommunityApiRoutePattern(request),
+        successorRoute:
+          options?.successorRoute ?? getDeprecatedCommunityApiSuccessorRoute(request),
+        surface: "api",
+      });
+    }
   };
+}
+
+export function logDeprecatedCommunityRouteUsage(
+  request: Request,
+  {
+    responseStatus,
+    route,
+    successorRoute,
+    surface,
+  }: {
+    responseStatus?: number;
+    route: string;
+    successorRoute: string;
+    surface: "api" | "page";
+  }
+) {
+  logTelemetryEvent({
+    details: {
+      method: request.method,
+      responseStatus,
+      route,
+      successorPath: successorRoute,
+      surface,
+    },
+    event: LEGACY_COMMUNITY_ROUTE_USED_EVENT,
+    request,
+  });
+}
+
+export function getDeprecatedCommunityPageRoutePattern(pathname: string) {
+  return replaceFirstDynamicPathSegment(pathname, LEGACY_PAGE_PREFIX);
+}
+
+export function getDeprecatedCommunityPageSuccessorRoute(pathname: string) {
+  return replacePathPrefix(
+    replaceFirstDynamicPathSegment(pathname, LEGACY_PAGE_PREFIX),
+    LEGACY_PAGE_PREFIX,
+    CANONICAL_PAGE_PREFIX
+  );
 }
 
 function replacePathPrefix(pathname: string, legacyPrefix: string, canonicalPrefix: string) {
@@ -81,6 +145,34 @@ function replacePathPrefix(pathname: string, legacyPrefix: string, canonicalPref
   }
 
   return pathname;
+}
+
+function getDeprecatedCommunityApiRoutePattern(request: Request) {
+  return replaceFirstDynamicPathSegment(new URL(request.url).pathname, LEGACY_API_PREFIX);
+}
+
+function getDeprecatedCommunityApiSuccessorRoute(request: Request) {
+  return replacePathPrefix(
+    getDeprecatedCommunityApiRoutePattern(request),
+    LEGACY_API_PREFIX,
+    CANONICAL_API_PREFIX
+  );
+}
+
+function replaceFirstDynamicPathSegment(pathname: string, prefix: string) {
+  if (pathname === prefix || !pathname.startsWith(`${prefix}/`)) {
+    return pathname;
+  }
+
+  const parts = pathname.split("/");
+  const prefixParts = prefix.split("/").filter(Boolean);
+  const dynamicIndex = prefixParts.length + 1;
+
+  if (parts[dynamicIndex]) {
+    parts[dynamicIndex] = "[id]";
+  }
+
+  return parts.join("/");
 }
 
 function normalizeSearch(search: string) {

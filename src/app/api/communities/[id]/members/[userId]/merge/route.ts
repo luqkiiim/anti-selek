@@ -3,5 +3,8 @@ import { withDeprecatedCommunityApiRoute } from "@/lib/deprecatedCommunityContra
 
 export const dynamic = "force-dynamic";
 
-export const POST = withDeprecatedCommunityApiRoute(mergeMember);
+export const POST = withDeprecatedCommunityApiRoute(mergeMember, {
+  route: "/api/communities/[id]/members/[userId]/merge",
+  successorRoute: "/api/clubs/[id]/members/[userId]/merge",
+});
 

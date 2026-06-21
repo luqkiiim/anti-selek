@@ -38,6 +38,7 @@ import {
 } from "./sessionRouteShared";
 import {
   ClubContractAliasConflictError,
+  type ClubContractAliasTelemetryContext,
   readAliasedValue,
 } from "@/lib/clubContractAliases";
 
@@ -216,7 +217,8 @@ function normalizeGuests(
 }
 
 export function parseCreateSessionRequest(
-  body: unknown
+  body: unknown,
+  telemetry?: ClubContractAliasTelemetryContext
 ): ParsedCreateSessionRequest {
   if (!body || typeof body !== "object") {
     throw new SessionRouteError("Invalid request body", 400);
@@ -250,13 +252,15 @@ export function parseCreateSessionRequest(
       bodyRecord,
       "clubId",
       "communityId",
-      "club identifier"
+      "club identifier",
+      telemetry
     );
     partnerClubId = readAliasedValue(
       bodyRecord,
       "partnerClubId",
       "partnerCommunityId",
-      "partner club identifier"
+      "partner club identifier",
+      telemetry
     );
   } catch (error) {
     if (error instanceof ClubContractAliasConflictError) {

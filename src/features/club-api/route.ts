@@ -120,7 +120,12 @@ export async function POST(request: Request) {
         bodyRecord,
         "clubName",
         "communityName",
-        "club name"
+        "club name",
+        {
+          canonicalRoute: "/api/clubs",
+          request,
+          surface: "api",
+        }
       );
     } catch (error) {
       if (error instanceof ClubContractAliasConflictError) {

@@ -39,7 +39,12 @@ async function getUserStatsRoute(
     url.searchParams,
     "clubId",
     "communityId",
-    "club identifier"
+    "club identifier",
+    {
+      canonicalRoute: "/api/users/[id]/stats",
+      request,
+      surface: "api",
+    }
   );
 
   const user = await prisma.user.findUnique({

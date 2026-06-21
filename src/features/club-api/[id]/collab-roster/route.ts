@@ -47,7 +47,12 @@ export async function GET(
       url.searchParams,
       "partnerClubId",
       "partnerCommunityId",
-      "partner club identifier"
+      "partner club identifier",
+      {
+        canonicalRoute: "/api/clubs/[id]/collab-roster",
+        request,
+        surface: "api",
+      }
     );
     if (
       typeof hostClubId !== "string" ||

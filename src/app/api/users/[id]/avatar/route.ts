@@ -131,7 +131,12 @@ export async function POST(
       url.searchParams,
       "clubId",
       "communityId",
-      "club identifier"
+      "club identifier",
+      {
+        canonicalRoute: "/api/users/[id]/avatar",
+        request,
+        surface: "api",
+      }
     );
 
     const targetUser = await getAvatarTargetUser(id);
@@ -259,7 +264,12 @@ export async function DELETE(
       url.searchParams,
       "clubId",
       "communityId",
-      "club identifier"
+      "club identifier",
+      {
+        canonicalRoute: "/api/users/[id]/avatar",
+        request,
+        surface: "api",
+      }
     );
 
     const targetUser = await getAvatarTargetUser(id);

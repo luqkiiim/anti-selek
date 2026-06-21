@@ -1,3 +1,16 @@
+import {
+  LEGACY_COMMUNITY_INPUT_ALIAS_USED_EVENT,
+  logTelemetryEvent,
+} from "@/lib/serverTelemetry";
+
+type ContractTelemetrySurface = "api" | "page";
+
+export interface ClubContractAliasTelemetryContext {
+  canonicalRoute: string;
+  request: Request;
+  surface: ContractTelemetrySurface;
+}
+
 export class ClubContractAliasConflictError extends Error {
   constructor(message: string) {
     super(message);
@@ -9,16 +22,26 @@ export function readAliasedValue(
   source: Record<string, unknown>,
   canonicalKey: string,
   legacyKey: string,
-  label: string
+  label: string,
+  telemetry?: ClubContractAliasTelemetryContext
 ) {
   const canonicalValue = source[canonicalKey];
   const legacyValue = source[legacyKey];
-
-  if (
+  const conflict =
     canonicalValue !== undefined &&
     legacyValue !== undefined &&
-    canonicalValue !== legacyValue
-  ) {
+    canonicalValue !== legacyValue;
+
+  if (legacyValue !== undefined) {
+    logLegacyCommunityInputAliasUsed({
+      canonicalKey,
+      conflict,
+      legacyKey,
+      telemetry,
+    });
+  }
+
+  if (conflict) {
     throw new ClubContractAliasConflictError(
       `Conflicting ${label}; use either ${canonicalKey} or ${legacyKey}.`
     );
@@ -31,16 +54,26 @@ export function readAliasedSearchParam(
   searchParams: URLSearchParams,
   canonicalKey: string,
   legacyKey: string,
-  label: string
+  label: string,
+  telemetry?: ClubContractAliasTelemetryContext
 ) {
   const canonicalValue = searchParams.get(canonicalKey);
   const legacyValue = searchParams.get(legacyKey);
-
-  if (
+  const conflict =
     canonicalValue !== null &&
     legacyValue !== null &&
-    canonicalValue !== legacyValue
-  ) {
+    canonicalValue !== legacyValue;
+
+  if (legacyValue !== null) {
+    logLegacyCommunityInputAliasUsed({
+      canonicalKey,
+      conflict,
+      legacyKey,
+      telemetry,
+    });
+  }
+
+  if (conflict) {
     throw new ClubContractAliasConflictError(
       `Conflicting ${label}; use either ${canonicalKey} or ${legacyKey}.`
     );
@@ -86,4 +119,50 @@ export function withLegacyClubAliases<
       ? { targetCommunityId: value.targetClubId }
       : {}),
   };
+}
+
+function logLegacyCommunityInputAliasUsed({
+  canonicalKey,
+  conflict,
+  legacyKey,
+  telemetry,
+}: {
+  canonicalKey: string;
+  conflict: boolean;
+  legacyKey: string;
+  telemetry?: ClubContractAliasTelemetryContext;
+}) {
+  if (!telemetry) {
+    return;
+  }
+
+  logTelemetryEvent({
+    details: {
+      canonicalKey,
+      conflict,
+      legacyKey,
+      method: telemetry.request.method,
+      route: getLegacyCompatibleRoutePattern(
+        telemetry.request,
+        telemetry.canonicalRoute
+      ),
+      surface: telemetry.surface,
+    },
+    event: LEGACY_COMMUNITY_INPUT_ALIAS_USED_EVENT,
+    request: telemetry.request,
+  });
+}
+
+function getLegacyCompatibleRoutePattern(request: Request, canonicalRoute: string) {
+  const pathname = new URL(request.url).pathname;
+
+  if (canonicalRoute.startsWith("/api/clubs") && pathname.startsWith("/api/communities")) {
+    return canonicalRoute.replace("/api/clubs", "/api/communities");
+  }
+
+  if (canonicalRoute.startsWith("/club") && pathname.startsWith("/community")) {
+    return canonicalRoute.replace("/club", "/community");
+  }
+
+  return canonicalRoute;
 }

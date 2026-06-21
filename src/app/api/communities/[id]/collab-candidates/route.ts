@@ -3,5 +3,8 @@ import { withDeprecatedCommunityApiRoute } from "@/lib/deprecatedCommunityContra
 
 export const dynamic = "force-dynamic";
 
-export const GET = withDeprecatedCommunityApiRoute(getCollabCandidates);
+export const GET = withDeprecatedCommunityApiRoute(getCollabCandidates, {
+  route: "/api/communities/[id]/collab-candidates",
+  successorRoute: "/api/clubs/[id]/collab-candidates",
+});
 

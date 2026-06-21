@@ -151,7 +151,12 @@ export async function POST(
         bodyRecord,
         "targetClubId",
         "targetCommunityId",
-        "target club identifier"
+        "target club identifier",
+        {
+          canonicalRoute: "/api/clubs/[id]/offline-identity-links",
+          request,
+          surface: "api",
+        }
       );
     } catch (error) {
       if (error instanceof ClubContractAliasConflictError) {

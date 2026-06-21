@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   ANTI_SELEK_DEPRECATED_HEADER,
@@ -7,6 +7,7 @@ import {
   DEPRECATION_HEADER,
   LINK_HEADER,
 } from "@/lib/deprecatedCommunityContracts";
+import { LEGACY_COMMUNITY_ROUTE_USED_EVENT } from "@/lib/serverTelemetry";
 import { config, proxy } from "@/proxy";
 
 const pageMocks = vi.hoisted(() => ({
@@ -23,6 +24,10 @@ vi.mock("@/features/club-admin-page/ClubAdminPage", () => ({
 }));
 
 describe("club page route wrappers", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it("routes canonical and legacy club pages through the shared page module", async () => {
     const [canonical, legacy] = await Promise.all([
       import("@/app/club/[id]/page"),
@@ -44,6 +49,7 @@ describe("club page route wrappers", () => {
   });
 
   it("adds deprecation headers to legacy community page routes", () => {
+    const infoSpy = vi.spyOn(console, "info").mockImplementation(() => undefined);
     const response = proxy(
       new NextRequest("http://localhost/community/club-1/admin?tab=members")
     );
@@ -55,6 +61,25 @@ describe("club page route wrappers", () => {
     expect(response.headers.get(ANTI_SELEK_DEPRECATED_HEADER)).toBe(
       DEPRECATED_COMMUNITY_CONTRACT_MESSAGE
     );
+    expect(infoSpy).toHaveBeenCalledTimes(1);
+    expect(infoSpy.mock.calls[0]?.[0]).toBe("[telemetry]");
+
+    const payload = JSON.parse(String(infoSpy.mock.calls[0]?.[1])) as {
+      details: Record<string, unknown>;
+      event: string;
+    };
+
+    expect(payload).toMatchObject({
+      details: {
+        method: "GET",
+        responseStatus: 200,
+        route: "/community/[id]/admin",
+        successorPath: "/club/[id]/admin",
+        surface: "page",
+      },
+      event: LEGACY_COMMUNITY_ROUTE_USED_EVENT,
+    });
+    expect(JSON.stringify(payload)).not.toContain("club-1");
   });
 
   it("scopes page deprecation middleware to legacy community routes", () => {

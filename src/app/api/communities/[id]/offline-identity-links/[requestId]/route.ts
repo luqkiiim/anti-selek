@@ -6,6 +6,12 @@ import { withDeprecatedCommunityApiRoute } from "@/lib/deprecatedCommunityContra
 
 export const dynamic = "force-dynamic";
 
-export const PATCH = withDeprecatedCommunityApiRoute(updateOfflineIdentityLink);
-export const DELETE = withDeprecatedCommunityApiRoute(deleteOfflineIdentityLink);
+export const PATCH = withDeprecatedCommunityApiRoute(updateOfflineIdentityLink, {
+  route: "/api/communities/[id]/offline-identity-links/[requestId]",
+  successorRoute: "/api/clubs/[id]/offline-identity-links/[requestId]",
+});
+export const DELETE = withDeprecatedCommunityApiRoute(deleteOfflineIdentityLink, {
+  route: "/api/communities/[id]/offline-identity-links/[requestId]",
+  successorRoute: "/api/clubs/[id]/offline-identity-links/[requestId]",
+});
 

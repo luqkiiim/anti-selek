@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   ANTI_SELEK_DEPRECATED_HEADER,
@@ -6,6 +6,7 @@ import {
   DEPRECATION_HEADER,
   LINK_HEADER,
 } from "@/lib/deprecatedCommunityContracts";
+import { LEGACY_COMMUNITY_ROUTE_USED_EVENT } from "@/lib/serverTelemetry";
 
 const handlerMocks = vi.hoisted(() => {
   const makeHandlers = <T extends string>(methods: T[]) =>
@@ -71,11 +72,17 @@ type RouteHandler = (
   request: Request,
   context: { params: Promise<Record<string, string>> }
 ) => Response | Promise<Response>;
+type TelemetryPayload = {
+  details: Record<string, unknown>;
+  event: string;
+};
 
 const routeCases: Array<{
   name: string;
   methods: string[];
   legacyPath: string;
+  legacyRoute: string;
+  successorRoute: string;
   feature: () => Promise<RouteModule>;
   canonical: () => Promise<RouteModule>;
   legacy: () => Promise<RouteModule>;
@@ -84,6 +91,8 @@ const routeCases: Array<{
     name: "club collection",
     methods: ["GET", "POST"],
     legacyPath: "/api/communities?includeArchived=false",
+    legacyRoute: "/api/communities",
+    successorRoute: "/api/clubs",
     feature: () => import("@/features/club-api/route"),
     canonical: () => import("@/app/api/clubs/route"),
     legacy: () => import("@/app/api/communities/route"),
@@ -92,6 +101,8 @@ const routeCases: Array<{
     name: "join",
     methods: ["POST"],
     legacyPath: "/api/communities/join",
+    legacyRoute: "/api/communities/join",
+    successorRoute: "/api/clubs/join",
     feature: () => import("@/features/club-api/join/route"),
     canonical: () => import("@/app/api/clubs/join/route"),
     legacy: () => import("@/app/api/communities/join/route"),
@@ -100,6 +111,8 @@ const routeCases: Array<{
     name: "club detail",
     methods: ["GET", "PATCH", "DELETE"],
     legacyPath: "/api/communities/club-1",
+    legacyRoute: "/api/communities/[id]",
+    successorRoute: "/api/clubs/[id]",
     feature: () => import("@/features/club-api/[id]/route"),
     canonical: () => import("@/app/api/clubs/[id]/route"),
     legacy: () => import("@/app/api/communities/[id]/route"),
@@ -108,6 +121,8 @@ const routeCases: Array<{
     name: "club reset",
     methods: ["POST"],
     legacyPath: "/api/communities/club-1/reset",
+    legacyRoute: "/api/communities/[id]/reset",
+    successorRoute: "/api/clubs/[id]/reset",
     feature: () => import("@/features/club-api/[id]/reset/route"),
     canonical: () => import("@/app/api/clubs/[id]/reset/route"),
     legacy: () => import("@/app/api/communities/[id]/reset/route"),
@@ -116,6 +131,8 @@ const routeCases: Array<{
     name: "collab candidates",
     methods: ["GET"],
     legacyPath: "/api/communities/club-1/collab-candidates",
+    legacyRoute: "/api/communities/[id]/collab-candidates",
+    successorRoute: "/api/clubs/[id]/collab-candidates",
     feature: () => import("@/features/club-api/[id]/collab-candidates/route"),
     canonical: () => import("@/app/api/clubs/[id]/collab-candidates/route"),
     legacy: () => import("@/app/api/communities/[id]/collab-candidates/route"),
@@ -124,6 +141,8 @@ const routeCases: Array<{
     name: "collab roster",
     methods: ["GET"],
     legacyPath: "/api/communities/club-1/collab-roster?partnerCommunityId=club-2",
+    legacyRoute: "/api/communities/[id]/collab-roster",
+    successorRoute: "/api/clubs/[id]/collab-roster",
     feature: () => import("@/features/club-api/[id]/collab-roster/route"),
     canonical: () => import("@/app/api/clubs/[id]/collab-roster/route"),
     legacy: () => import("@/app/api/communities/[id]/collab-roster/route"),
@@ -132,6 +151,8 @@ const routeCases: Array<{
     name: "claim requests",
     methods: ["GET", "POST"],
     legacyPath: "/api/communities/club-1/claim-requests",
+    legacyRoute: "/api/communities/[id]/claim-requests",
+    successorRoute: "/api/clubs/[id]/claim-requests",
     feature: () => import("@/features/club-api/[id]/claim-requests/route"),
     canonical: () => import("@/app/api/clubs/[id]/claim-requests/route"),
     legacy: () => import("@/app/api/communities/[id]/claim-requests/route"),
@@ -140,6 +161,8 @@ const routeCases: Array<{
     name: "claim request detail",
     methods: ["PATCH"],
     legacyPath: "/api/communities/club-1/claim-requests/request-1",
+    legacyRoute: "/api/communities/[id]/claim-requests/[requestId]",
+    successorRoute: "/api/clubs/[id]/claim-requests/[requestId]",
     feature: () => import("@/features/club-api/[id]/claim-requests/[requestId]/route"),
     canonical: () => import("@/app/api/clubs/[id]/claim-requests/[requestId]/route"),
     legacy: () => import("@/app/api/communities/[id]/claim-requests/[requestId]/route"),
@@ -148,6 +171,8 @@ const routeCases: Array<{
     name: "offline identity links",
     methods: ["GET", "POST"],
     legacyPath: "/api/communities/club-1/offline-identity-links",
+    legacyRoute: "/api/communities/[id]/offline-identity-links",
+    successorRoute: "/api/clubs/[id]/offline-identity-links",
     feature: () => import("@/features/club-api/[id]/offline-identity-links/route"),
     canonical: () => import("@/app/api/clubs/[id]/offline-identity-links/route"),
     legacy: () => import("@/app/api/communities/[id]/offline-identity-links/route"),
@@ -156,6 +181,8 @@ const routeCases: Array<{
     name: "offline identity link detail",
     methods: ["PATCH", "DELETE"],
     legacyPath: "/api/communities/club-1/offline-identity-links/request-1",
+    legacyRoute: "/api/communities/[id]/offline-identity-links/[requestId]",
+    successorRoute: "/api/clubs/[id]/offline-identity-links/[requestId]",
     feature: () =>
       import("@/features/club-api/[id]/offline-identity-links/[requestId]/route"),
     canonical: () =>
@@ -167,6 +194,8 @@ const routeCases: Array<{
     name: "members",
     methods: ["GET", "POST"],
     legacyPath: "/api/communities/club-1/members",
+    legacyRoute: "/api/communities/[id]/members",
+    successorRoute: "/api/clubs/[id]/members",
     feature: () => import("@/features/club-api/[id]/members/route"),
     canonical: () => import("@/app/api/clubs/[id]/members/route"),
     legacy: () => import("@/app/api/communities/[id]/members/route"),
@@ -175,6 +204,8 @@ const routeCases: Array<{
     name: "member link",
     methods: ["GET", "POST"],
     legacyPath: "/api/communities/club-1/members/link",
+    legacyRoute: "/api/communities/[id]/members/link",
+    successorRoute: "/api/clubs/[id]/members/link",
     feature: () => import("@/features/club-api/[id]/members/link/route"),
     canonical: () => import("@/app/api/clubs/[id]/members/link/route"),
     legacy: () => import("@/app/api/communities/[id]/members/link/route"),
@@ -183,6 +214,8 @@ const routeCases: Array<{
     name: "member detail",
     methods: ["PATCH", "DELETE"],
     legacyPath: "/api/communities/club-1/members/user-1",
+    legacyRoute: "/api/communities/[id]/members/[userId]",
+    successorRoute: "/api/clubs/[id]/members/[userId]",
     feature: () => import("@/features/club-api/[id]/members/[userId]/route"),
     canonical: () => import("@/app/api/clubs/[id]/members/[userId]/route"),
     legacy: () => import("@/app/api/communities/[id]/members/[userId]/route"),
@@ -191,6 +224,8 @@ const routeCases: Array<{
     name: "member reset elo",
     methods: ["POST"],
     legacyPath: "/api/communities/club-1/members/user-1/reset-elo",
+    legacyRoute: "/api/communities/[id]/members/[userId]/reset-elo",
+    successorRoute: "/api/clubs/[id]/members/[userId]/reset-elo",
     feature: () => import("@/features/club-api/[id]/members/[userId]/reset-elo/route"),
     canonical: () => import("@/app/api/clubs/[id]/members/[userId]/reset-elo/route"),
     legacy: () => import("@/app/api/communities/[id]/members/[userId]/reset-elo/route"),
@@ -199,6 +234,8 @@ const routeCases: Array<{
     name: "member password",
     methods: ["POST"],
     legacyPath: "/api/communities/club-1/members/user-1/password",
+    legacyRoute: "/api/communities/[id]/members/[userId]/password",
+    successorRoute: "/api/clubs/[id]/members/[userId]/password",
     feature: () => import("@/features/club-api/[id]/members/[userId]/password/route"),
     canonical: () => import("@/app/api/clubs/[id]/members/[userId]/password/route"),
     legacy: () => import("@/app/api/communities/[id]/members/[userId]/password/route"),
@@ -207,6 +244,8 @@ const routeCases: Array<{
     name: "member merge candidates",
     methods: ["GET"],
     legacyPath: "/api/communities/club-1/members/user-1/merge-candidates",
+    legacyRoute: "/api/communities/[id]/members/[userId]/merge-candidates",
+    successorRoute: "/api/clubs/[id]/members/[userId]/merge-candidates",
     feature: () =>
       import("@/features/club-api/[id]/members/[userId]/merge-candidates/route"),
     canonical: () =>
@@ -218,11 +257,20 @@ const routeCases: Array<{
     name: "member merge",
     methods: ["POST"],
     legacyPath: "/api/communities/club-1/members/user-1/merge",
+    legacyRoute: "/api/communities/[id]/members/[userId]/merge",
+    successorRoute: "/api/clubs/[id]/members/[userId]/merge",
     feature: () => import("@/features/club-api/[id]/members/[userId]/merge/route"),
     canonical: () => import("@/app/api/clubs/[id]/members/[userId]/merge/route"),
     legacy: () => import("@/app/api/communities/[id]/members/[userId]/merge/route"),
   },
 ];
+
+function getTelemetryPayload(infoSpy: ReturnType<typeof vi.spyOn>) {
+  expect(infoSpy).toHaveBeenCalledTimes(1);
+  expect(infoSpy.mock.calls[0]?.[0]).toBe("[telemetry]");
+
+  return JSON.parse(String(infoSpy.mock.calls[0]?.[1])) as TelemetryPayload;
+}
 
 describe("club API route wrappers", () => {
   const context = {
@@ -233,7 +281,12 @@ describe("club API route wrappers", () => {
     }),
   };
 
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it.each(routeCases)("routes $name through shared canonical handlers", async (routeCase) => {
+    const infoSpy = vi.spyOn(console, "info").mockImplementation(() => undefined);
     const [feature, canonical, legacy] = await Promise.all([
       routeCase.feature(),
       routeCase.canonical(),
@@ -251,17 +304,19 @@ describe("club API route wrappers", () => {
         "/api/communities",
         "/api/clubs"
       );
+      infoSpy.mockClear();
       const canonicalResponse = await (canonical[method] as RouteHandler)(
-        new Request(`http://localhost${canonicalPath}`),
+        new Request(`http://localhost${canonicalPath}`, { method }),
         context
       );
 
       expect(canonicalResponse.headers.get(DEPRECATION_HEADER)).toBeNull();
       expect(canonicalResponse.headers.get(LINK_HEADER)).toBeNull();
       expect(canonicalResponse.headers.get(ANTI_SELEK_DEPRECATED_HEADER)).toBeNull();
+      expect(infoSpy).not.toHaveBeenCalled();
 
       const legacyResponse = await (legacy[method] as RouteHandler)(
-        new Request(`http://localhost${routeCase.legacyPath}`),
+        new Request(`http://localhost${routeCase.legacyPath}`, { method }),
         context
       );
 
@@ -272,6 +327,21 @@ describe("club API route wrappers", () => {
       expect(legacyResponse.headers.get(ANTI_SELEK_DEPRECATED_HEADER)).toBe(
         DEPRECATED_COMMUNITY_CONTRACT_MESSAGE
       );
+
+      const telemetryPayload = getTelemetryPayload(infoSpy);
+      expect(telemetryPayload).toMatchObject({
+        details: {
+          method,
+          responseStatus: 200,
+          route: routeCase.legacyRoute,
+          successorPath: routeCase.successorRoute,
+          surface: "api",
+        },
+        event: LEGACY_COMMUNITY_ROUTE_USED_EVENT,
+      });
+      expect(JSON.stringify(telemetryPayload)).not.toContain("club-1");
+      expect(JSON.stringify(telemetryPayload)).not.toContain("user-1");
+      expect(JSON.stringify(telemetryPayload)).not.toContain("request-1");
     }
   });
 });

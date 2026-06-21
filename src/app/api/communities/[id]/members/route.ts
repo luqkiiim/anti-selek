@@ -6,6 +6,12 @@ import { withDeprecatedCommunityApiRoute } from "@/lib/deprecatedCommunityContra
 
 export const dynamic = "force-dynamic";
 
-export const GET = withDeprecatedCommunityApiRoute(getMembers);
-export const POST = withDeprecatedCommunityApiRoute(createMember);
+export const GET = withDeprecatedCommunityApiRoute(getMembers, {
+  route: "/api/communities/[id]/members",
+  successorRoute: "/api/clubs/[id]/members",
+});
+export const POST = withDeprecatedCommunityApiRoute(createMember, {
+  route: "/api/communities/[id]/members",
+  successorRoute: "/api/clubs/[id]/members",
+});
 
