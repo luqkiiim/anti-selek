@@ -15,7 +15,7 @@ export function CommunityProfilePanel({
       <SectionCard eyebrow="Profile" title="Player profile">
         <EmptyState
           title="Profile unavailable"
-          detail="Sign in again to load your community profile."
+          detail="Sign in again to load your club profile."
         />
       </SectionCard>
     );

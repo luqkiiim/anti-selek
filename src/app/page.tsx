@@ -91,13 +91,13 @@ export default function Home() {
             <div className="flex flex-wrap items-center justify-center gap-3">
               <p className="app-eyebrow">Dashboard</p>
               <span className="app-chip app-chip-neutral">
-                Community tournaments
+                Club tournaments
               </span>
             </div>
             <div className="space-y-3">
               <h1 className="app-title text-gray-900">Anti-Selek</h1>
               <p className="mx-auto max-w-3xl text-sm text-gray-600 sm:text-base">
-                Manage badminton communities, launch tournaments quickly, and
+                Manage badminton clubs, launch tournaments quickly, and
                 jump straight back into the sessions you already belong to.
               </p>
             </div>
@@ -109,7 +109,7 @@ export default function Home() {
                   className="app-button-secondary"
                 >
                   <LogIn aria-hidden="true" size={17} />
-                  Join Community
+                  Join Club
                 </button>
                 <button
                   type="button"
@@ -117,7 +117,7 @@ export default function Home() {
                   className="app-button-primary"
                 >
                   <Plus aria-hidden="true" size={17} />
-                  Create Community
+                  Create Club
                 </button>
               </div>
             ) : null}
@@ -143,7 +143,7 @@ export default function Home() {
                   <p className="mt-1 text-sm text-gray-600">
                     {tutorialPlayground
                       ? `${tutorialPlayground.playersCount} practice players, ${tutorialPlayground.courtsCount} courts, and a live test session are ready.`
-                      : "Open a resettable tutorial community with practice players, courts, and a live test session."}
+                      : "Open a resettable tutorial club with practice players, courts, and a live test session."}
                   </p>
                 </div>
               </div>
@@ -166,7 +166,7 @@ export default function Home() {
 
         <SectionCard
           eyebrow="Your spaces"
-          title="Communities"
+          title="Clubs"
           action={
             <span className="app-chip app-chip-neutral">
               {communities.length} listed
@@ -175,8 +175,8 @@ export default function Home() {
         >
           {communities.length === 0 ? (
             <EmptyState
-              title="No communities yet"
-              detail="Create your first group or join an existing one with its community name and password."
+              title="No clubs yet"
+              detail="Create your first group or join an existing one with its club name and password."
             />
           ) : (
             <div className="grid gap-4">

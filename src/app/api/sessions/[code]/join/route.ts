@@ -101,14 +101,14 @@ export async function POST(
     });
     if (sessionData.communityId) {
       if (!requesterMembership && !session.user.isAdmin) {
-        return NextResponse.json({ error: "Not a member of this community" }, { status: 403 });
+        return NextResponse.json({ error: "Not a member of this club" }, { status: 403 });
       }
     }
 
     // If admin is trying to add someone else
     if (typeof targetUserId === "string" && targetUserId !== session.user.id) {
       if (!session.user.isAdmin && !requesterOperatorMembership) {
-        return NextResponse.json({ error: "Only community admins or staff can add other players" }, { status: 403 });
+        return NextResponse.json({ error: "Only club admins or staff can add other players" }, { status: 403 });
       }
       userIdToJoin = targetUserId;
     }
@@ -120,7 +120,7 @@ export async function POST(
         acceptedOnly: true,
       });
       if (!targetMembership) {
-        return NextResponse.json({ error: "Target player is not a member of this community" }, { status: 400 });
+        return NextResponse.json({ error: "Target player is not a member of this club" }, { status: 400 });
       }
     }
 

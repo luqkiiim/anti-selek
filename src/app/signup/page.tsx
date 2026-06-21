@@ -64,9 +64,9 @@ export default function SignupPage() {
           <section className="app-panel relative overflow-hidden px-6 py-8 sm:px-8">
             <div className="relative">
               <p className="app-eyebrow">Player setup</p>
-              <h1 className="mt-3 app-title text-gray-900">Create a player account that can claim your community profile.</h1>
+              <h1 className="mt-3 app-title text-gray-900">Create a player account that can claim your club profile.</h1>
               <p className="mt-4 max-w-xl text-sm text-gray-600 sm:text-base">
-                Sign up with your own email. If a community already created a placeholder for you, join that community and request the claim from its leaderboard so an admin can verify and approve it.
+                Sign up with your own email. If a club already created a placeholder for you, join that club and request the claim from its leaderboard so an admin can verify and approve it.
               </p>
 
               <div className="mt-8 space-y-3">
@@ -79,7 +79,7 @@ export default function SignupPage() {
                 <div className="app-panel-muted p-4">
                   <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">What stays intact</p>
                   <p className="mt-2 text-sm font-semibold text-gray-900">
-                    Your session history, ratings, and tournament stats remain tied to the claimed community profile.
+                    Your session history, ratings, and tournament stats remain tied to the claimed club profile.
                   </p>
                 </div>
               </div>
@@ -89,7 +89,7 @@ export default function SignupPage() {
           <section className="app-panel px-6 py-8 sm:px-8">
             <p className="app-eyebrow">Create account</p>
             <h2 className="mt-3 text-2xl font-semibold text-gray-900">New player access</h2>
-            <p className="mt-2 text-sm text-gray-600">Use a real name so community admins can verify the correct placeholder profile more easily.</p>
+            <p className="mt-2 text-sm text-gray-600">Use a real name so club admins can verify the correct placeholder profile more easily.</p>
 
             {error ? <FlashMessage tone="error" className="mt-6">{error}</FlashMessage> : null}
 

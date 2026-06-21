@@ -65,7 +65,7 @@ export async function POST(
     );
     if (pendingPartner) {
       return NextResponse.json(
-        { error: "Partner community must approve this collab before it can start" },
+        { error: "Partner club must approve this collab before it can start" },
         { status: 409 }
       );
     }

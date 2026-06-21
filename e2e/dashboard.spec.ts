@@ -5,7 +5,7 @@ import {
   signInAsAdmin,
 } from "./helpers";
 
-test("dashboard lets an admin create a community and another member join it", async ({
+test("dashboard lets an admin create a club and another member join it", async ({
   page,
 }) => {
   const communityName = `E2E Dashboard Club ${Date.now()}`;
@@ -17,11 +17,11 @@ test("dashboard lets an admin create a community and another member join it", as
     page.getByRole("heading", { name: "Anti-Selek" })
   ).toBeVisible();
 
-  await page.getByRole("button", { name: "Create Community" }).click();
+  await page.getByRole("button", { name: "Create Club" }).click();
   await expect(
-    page.getByRole("heading", { name: "Create community" })
+    page.getByRole("heading", { name: "Create club" })
   ).toBeVisible();
-  await page.getByLabel("Community name").fill(communityName);
+  await page.getByLabel("Club name").fill(communityName);
   await page.getByLabel("Password").fill(communityPassword);
   await page.getByRole("button", { name: "Create", exact: true }).click();
 
@@ -31,11 +31,11 @@ test("dashboard lets an admin create a community and another member join it", as
 
   await signIn(page, getHostPlayerCredentials(1));
   await page.goto("/");
-  await page.getByRole("button", { name: "Join Community" }).click();
+  await page.getByRole("button", { name: "Join Club" }).click();
   await expect(
-    page.getByRole("heading", { name: "Join community" })
+    page.getByRole("heading", { name: "Join club" })
   ).toBeVisible();
-  await page.getByLabel("Community name").fill(communityName);
+  await page.getByLabel("Club name").fill(communityName);
   await page.getByLabel("Password").fill(communityPassword);
   await page.getByRole("button", { name: "Join", exact: true }).click();
 

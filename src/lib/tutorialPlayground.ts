@@ -1001,7 +1001,7 @@ export async function ensureTutorialPlayground(userId: string) {
       playground = await createTutorialCommunity(tx, userId);
       await seedTutorialPlaygroundData(tx, playground.id, userId);
     } else if (!playground.isTutorial) {
-      throw new Error("Tutorial owner is attached to a non-tutorial community");
+      throw new Error("Tutorial owner is attached to a non-tutorial club");
     } else if (!(await ensureCompletedPracticeHistory(tx, playground.id))) {
       await clearTutorialPlaygroundData(tx, playground.id, userId);
       await seedTutorialPlaygroundData(tx, playground.id, userId);
@@ -1021,7 +1021,7 @@ export async function resetTutorialPlayground(userId: string) {
     if (!playground) {
       playground = await createTutorialCommunity(tx, userId);
     } else if (!playground.isTutorial) {
-      throw new Error("Tutorial owner is attached to a non-tutorial community");
+      throw new Error("Tutorial owner is attached to a non-tutorial club");
     } else {
       await clearTutorialPlaygroundData(tx, playground.id, userId);
     }

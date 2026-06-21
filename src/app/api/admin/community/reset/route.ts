@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
   try {
-    const rateLimitResponse = await rateLimit(request, "api:admin:community:reset:post", { limit: 15, windowMs: 60_000 });
+    const rateLimitResponse = await rateLimit(request, "api:admin:club:reset:post", { limit: 15, windowMs: 60_000 });
     if (rateLimitResponse) return rateLimitResponse;
 
     const session = await auth();

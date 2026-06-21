@@ -66,7 +66,7 @@ export function useCommunityPageData({
         setSuccess("");
         await refreshCommunityData();
       } catch (err: unknown) {
-        setError(err instanceof Error ? err.message : "Failed to load community");
+        setError(err instanceof Error ? err.message : "Failed to load club");
       } finally {
         setLoading(false);
       }

@@ -42,7 +42,7 @@ test("owner gates admin demotion while staff/member access changes", async ({
     .locator(".app-modal-frame")
     .filter({ has: page.getByRole("heading", { name: "Admin E2E" }) });
   await expect(ownerEditor.getByText("Owner", { exact: true })).toBeVisible();
-  await expect(ownerEditor.getByText("The community owner keeps permanent admin access.")).toBeVisible();
+  await expect(ownerEditor.getByText("The club owner keeps permanent admin access.")).toBeVisible();
   await expect(ownerEditor.getByRole("button", { name: "Change to staff" })).toHaveCount(0);
 
   const demoteOwnerResponse = await page.evaluate(
@@ -59,7 +59,7 @@ test("owner gates admin demotion while staff/member access changes", async ({
   );
   expect(demoteOwnerResponse).toEqual({
     status: 400,
-    body: { error: "The community owner role cannot be changed" },
+    body: { error: "The club owner role cannot be changed" },
   });
 
   await signInAsAdmin(page);

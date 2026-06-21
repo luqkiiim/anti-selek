@@ -27,7 +27,7 @@ export function CreateCommunityModal({
 
   return (
     <ModalFrame
-      title="Create community"
+      title="Create club"
       subtitle="Set up a new club space with an optional password."
       onClose={onClose}
       footer={
@@ -52,12 +52,12 @@ export function CreateCommunityModal({
     >
       <div className="space-y-4 px-4 py-4 sm:px-5">
         <label className="block space-y-2 text-sm font-medium text-gray-900">
-          <span>Community name</span>
+          <span>Club name</span>
           <input
             type="text"
             value={communityName}
             onChange={(event) => onCommunityNameChange(event.target.value)}
-            placeholder="Unique community name"
+            placeholder="Unique club name"
             className="field"
           />
         </label>

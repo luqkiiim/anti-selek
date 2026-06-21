@@ -109,7 +109,7 @@ const pulse: CommunityPagePulse = {
   },
 };
 
-describe("community avatar sizing", () => {
+describe("club avatar sizing", () => {
   let container: HTMLDivElement;
   let root: Root;
 
@@ -135,7 +135,7 @@ describe("community avatar sizing", () => {
     document.documentElement.style.cssText = "";
   });
 
-  it("uses md avatars in the community leaderboard rows", async () => {
+  it("uses md avatars in the club leaderboard rows", async () => {
     await act(async () => {
       root.render(
         <CommunityLeaderboardPanel
@@ -151,7 +151,7 @@ describe("community avatar sizing", () => {
     expect(countMdAvatars(container.innerHTML)).toBe(1);
   });
 
-  it("uses md avatars across compact community overview player rows", async () => {
+  it("uses md avatars across compact club overview player rows", async () => {
     await act(async () => {
       root.render(
         <CommunityOverviewPulsePanel
@@ -180,7 +180,7 @@ describe("community avatar sizing", () => {
     expect(countMdAvatars(container.innerHTML)).toBe(8);
   });
 
-  it("uses md avatars in the community player picker rows", async () => {
+  it("uses md avatars in the club player picker rows", async () => {
     await act(async () => {
       root.render(
         <CommunityPlayersModal

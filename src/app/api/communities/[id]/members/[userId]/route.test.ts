@@ -104,7 +104,7 @@ function deleteMember(userId = "user-1") {
   );
 }
 
-describe("community admin update member route", () => {
+describe("club admin update member route", () => {
   beforeEach(() => {
     Object.values(mocks).forEach((mock) => mock.mockReset());
 
@@ -386,7 +386,7 @@ describe("community admin update member route", () => {
     expect(body.role).toBe("MEMBER");
   });
 
-  it("allows the community owner to demote another admin to staff", async () => {
+  it("allows the club owner to demote another admin to staff", async () => {
     const createdAt = new Date("2026-05-19T00:00:00.000Z");
     mocks.auth.mockResolvedValue({
       user: { id: "owner-1", isAdmin: false },
@@ -439,7 +439,7 @@ describe("community admin update member route", () => {
     expect(body.role).toBe("STAFF");
   });
 
-  it("allows the community owner to demote another admin to member", async () => {
+  it("allows the club owner to demote another admin to member", async () => {
     const createdAt = new Date("2026-05-19T00:00:00.000Z");
     mocks.auth.mockResolvedValue({
       user: { id: "owner-1", isAdmin: false },
@@ -492,7 +492,7 @@ describe("community admin update member route", () => {
     expect(body.role).toBe("MEMBER");
   });
 
-  it("allows global admins to demote community admins", async () => {
+  it("allows global admins to demote club admins", async () => {
     const createdAt = new Date("2026-05-19T00:00:00.000Z");
     mocks.auth.mockResolvedValue({
       user: { id: "global-1", isAdmin: true },
@@ -558,12 +558,12 @@ describe("community admin update member route", () => {
     const body = await response.json();
 
     expect(response.status).toBe(403);
-    expect(body.error).toBe("Only the community owner can demote admins");
+    expect(body.error).toBe("Only the club owner can demote admins");
     expect(mocks.userUpdate).not.toHaveBeenCalled();
     expect(mocks.communityMemberUpdate).not.toHaveBeenCalled();
   });
 
-  it("rejects attempts to demote the community owner", async () => {
+  it("rejects attempts to demote the club owner", async () => {
     mocks.auth.mockResolvedValue({
       user: { id: "global-1", isAdmin: true },
     });
@@ -581,7 +581,7 @@ describe("community admin update member route", () => {
     const body = await response.json();
 
     expect(response.status).toBe(400);
-    expect(body.error).toBe("The community owner role cannot be changed");
+    expect(body.error).toBe("The club owner role cannot be changed");
     expect(mocks.communityMemberUpdate).not.toHaveBeenCalled();
   });
 
@@ -600,7 +600,7 @@ describe("community admin update member route", () => {
     const body = await response.json();
 
     expect(response.status).toBe(400);
-    expect(body.error).toBe("Cannot change your own community role");
+    expect(body.error).toBe("Cannot change your own club role");
     expect(mocks.communityMemberUpdate).not.toHaveBeenCalled();
   });
 
@@ -626,7 +626,7 @@ describe("community admin update member route", () => {
     expect(adminResponse.status).toBe(400);
     expect(adminBody.error).toBe("Demote admins before removing them");
     expect(ownerResponse.status).toBe(400);
-    expect(ownerBody.error).toBe("The community owner cannot be removed");
+    expect(ownerBody.error).toBe("The club owner cannot be removed");
   });
 
   it("allows an admin to leave when another admin remains", async () => {
@@ -687,7 +687,7 @@ describe("community admin update member route", () => {
 
     expect(response.status).toBe(400);
     expect(body.error).toBe(
-      "Make another member an admin before leaving this community"
+      "Make another member an admin before leaving this club"
     );
     expect(mocks.transaction).not.toHaveBeenCalled();
   });

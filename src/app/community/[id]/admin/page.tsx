@@ -42,7 +42,7 @@ const tabs: Array<{
   {
     key: "settings",
     label: "Settings",
-    detail: () => "Community controls",
+    detail: () => "Club controls",
   },
 ];
 
@@ -56,12 +56,12 @@ function getPlayerActionDialogCopy(action: {
 
     return {
       title: isSelfRemoval
-        ? "Leave community?"
+        ? "Leave club?"
         : `Remove ${action.player.name}?`,
       subtitle: isSelfRemoval
-        ? "This removes your membership and admin access for this community."
-        : "This takes the player out of the community roster.",
-      confirmLabel: isSelfRemoval ? "Leave Community" : "Remove Player",
+        ? "This removes your membership and admin access for this club."
+        : "This takes the player out of the club roster.",
+      confirmLabel: isSelfRemoval ? "Leave Club" : "Remove Player",
       confirmTone: "danger" as const,
       details: (
         <div className="app-panel-muted space-y-2 p-4">
@@ -73,8 +73,8 @@ function getPlayerActionDialogCopy(action: {
           </p>
           <p className="text-sm text-gray-600">
             {isSelfRemoval
-              ? "You will no longer see this community in your admin tools unless another admin adds you again."
-              : "They will no longer appear in this community unless added again."}
+              ? "You will no longer see this club in your admin tools unless another admin adds you again."
+              : "They will no longer appear in this club unless added again."}
           </p>
         </div>
       ),
@@ -89,8 +89,8 @@ function getPlayerActionDialogCopy(action: {
       title: `Change ${action.player.name} to ${targetRole}?`,
       subtitle:
         action.role === CommunityRole.STAFF
-          ? "They will keep live session controls, but lose community admin access."
-          : "They will lose community admin access and live session operator controls.",
+          ? "They will keep live session controls, but lose club admin access."
+          : "They will lose club admin access and live session operator controls.",
       confirmLabel:
         action.role === CommunityRole.STAFF
           ? "Change to Staff"
@@ -114,7 +114,7 @@ function getPlayerActionDialogCopy(action: {
 
   return {
     title: `Promote ${action.player.name}?`,
-    subtitle: "This gives the player admin access for the whole community.",
+    subtitle: "This gives the player admin access for the whole club.",
     confirmLabel: "Promote to Admin",
     confirmTone: "primary" as const,
     details: (
@@ -126,7 +126,7 @@ function getPlayerActionDialogCopy(action: {
           {action.player.email || "No email on file"}
         </p>
         <p className="text-sm text-gray-600">
-          Admins can manage players, review claims, and change community settings.
+          Admins can manage players, review claims, and change club settings.
         </p>
       </div>
     ),
@@ -160,16 +160,16 @@ function getCommunityActionDialogCopy(
     }
 
     return {
-      title: "Reset community history?",
+      title: "Reset club history?",
       subtitle:
-        "This deletes all tournaments in the community and resets every member rating to 1000.",
-      confirmLabel: "Reset Community",
+        "This deletes all tournaments in the club and resets every member rating to 1000.",
+      confirmLabel: "Reset Club",
       confirmationKeyword: "RESET",
       details: (
         <div className="app-panel-muted space-y-2 p-4">
           <p className="text-sm font-semibold text-gray-900">{communityName}</p>
           <p className="text-sm text-gray-600">
-            Tournament history will be removed for this community. This cannot be undone.
+            Tournament history will be removed for this club. This cannot be undone.
           </p>
         </div>
       ),
@@ -177,16 +177,16 @@ function getCommunityActionDialogCopy(
   }
 
   return {
-    title: "Delete community permanently?",
+    title: "Delete club permanently?",
     subtitle:
-      "This removes the community, its members, and all related tournament data.",
-    confirmLabel: "Delete Community",
+      "This removes the club, its members, and all related tournament data.",
+    confirmLabel: "Delete Club",
     confirmationKeyword: "DELETE",
     details: (
       <div className="app-panel-muted space-y-2 p-4">
         <p className="text-sm font-semibold text-gray-900">{communityName}</p>
         <p className="text-sm text-gray-600">
-          This community cannot be recovered after deletion.
+          This club cannot be recovered after deletion.
         </p>
       </div>
     ),
@@ -376,7 +376,7 @@ export default function CommunityAdminPage() {
   const pendingCommunityActionDialog = pendingCommunityAction
     ? getCommunityActionDialogCopy(
         pendingCommunityAction,
-        community?.name || "Community",
+        community?.name || "Club",
         isTutorialPlayground
       )
     : null;
@@ -407,9 +407,9 @@ export default function CommunityAdminPage() {
             </button>
             <div>
               <h1 className="text-lg font-semibold leading-none tracking-tight text-gray-900">
-                {community?.name || "Community"}
+                {community?.name || "Club"}
               </h1>
-              <p className="text-[11px] text-gray-500">Community admin</p>
+              <p className="text-[11px] text-gray-500">Club admin</p>
             </div>
           </div>
 
@@ -439,7 +439,7 @@ export default function CommunityAdminPage() {
             <div className="max-w-3xl space-y-3">
               <p className="app-eyebrow">Admin workspace</p>
               <h2 className="text-2xl font-semibold text-gray-900 sm:text-3xl">
-                Community controls
+                Club controls
               </h2>
             </div>
             <div className="flex flex-wrap gap-2">

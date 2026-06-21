@@ -90,7 +90,7 @@ export function CommunityBottomTabs({
       items={items}
       activeId={activeTab}
       onSelect={handleSelect}
-      ariaLabel="Community navigation"
+      ariaLabel="Club navigation"
     />
   );
 }

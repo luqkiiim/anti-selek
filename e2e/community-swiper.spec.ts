@@ -15,7 +15,7 @@ test.use({
   deviceScaleFactor: 2,
 });
 
-test("community mobile swiper pages one tab at a time", async ({
+test("club mobile swiper pages one tab at a time", async ({
   context,
   page,
 }) => {
@@ -25,7 +25,7 @@ test("community mobile swiper pages one tab at a time", async ({
     page.getByRole("heading", { name: "E2E Host Club" })
   ).toBeVisible();
 
-  const nav = page.locator('nav[aria-label="Community navigation"]');
+  const nav = page.locator('nav[aria-label="Club navigation"]');
   const pager = page.locator("div.app-swipe-track.overflow-x-auto").first();
   await expect(nav).toBeVisible();
   await expect(pager).toBeVisible();
@@ -120,7 +120,7 @@ test("community mobile swiper pages one tab at a time", async ({
   ).toBeLessThan(4);
 });
 
-test("community mobile swiper handles fast flicks without skipping tabs", async ({
+test("club mobile swiper handles fast flicks without skipping tabs", async ({
   context,
   page,
 }) => {
@@ -130,7 +130,7 @@ test("community mobile swiper handles fast flicks without skipping tabs", async 
     page.getByRole("heading", { name: "E2E Host Club" })
   ).toBeVisible();
 
-  const nav = page.locator('nav[aria-label="Community navigation"]');
+  const nav = page.locator('nav[aria-label="Club navigation"]');
   const pager = page.locator("div.app-swipe-track.overflow-x-auto").first();
   await expect(nav).toBeVisible();
   await expect(pager).toBeVisible();
@@ -234,7 +234,7 @@ async function swipePager(
   await test.step(name, async () => {
     const box = await pager.boundingBox();
     if (!box) {
-      throw new Error("Community pager is not visible.");
+      throw new Error("Club pager is not visible.");
     }
 
     const viewport = page.viewportSize();
@@ -245,7 +245,7 @@ async function swipePager(
     const visibleTop = Math.max(box.y, 0);
     const visibleBottom = Math.min(box.y + box.height, viewport.height - 128);
     if (visibleBottom <= visibleTop) {
-      throw new Error("Community pager has no visible swipe area.");
+      throw new Error("Club pager has no visible swipe area.");
     }
 
     const startX = box.x + box.width * fromX;

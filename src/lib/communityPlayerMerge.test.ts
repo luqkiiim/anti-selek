@@ -356,7 +356,7 @@ describe("mergeDuplicateUnclaimedCommunityPlayer", () => {
       .toBeNull();
   });
 
-  it("does not delete the source placeholder when it is still referenced by another community", async () => {
+  it("does not delete the source placeholder when it is still referenced by another club", async () => {
     const prefix = `keep-${randomUUID().slice(0, 8)}`;
     const adminId = `${prefix}-admin`;
     const currentCommunityId = `${prefix}-current`;
@@ -462,7 +462,7 @@ describe("mergeDuplicateUnclaimedCommunityPlayer", () => {
         })
       )
     ).rejects.toMatchObject({
-      message: "Target player already appears in this community's session history",
+      message: "Target player already appears in this club's session history",
       statusCode: 409,
     });
 

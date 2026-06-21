@@ -8,7 +8,7 @@ import {
 } from "./communityRoles";
 import { CommunityRole } from "@/types/enums";
 
-describe("community roles", () => {
+describe("club roles", () => {
   it("normalizes unknown roles to member", () => {
     expect(normalizeCommunityRole("ADMIN")).toBe(CommunityRole.ADMIN);
     expect(normalizeCommunityRole("STAFF")).toBe(CommunityRole.STAFF);

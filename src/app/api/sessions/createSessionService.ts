@@ -115,14 +115,14 @@ export async function createSessionForUser({
   });
 
   if (!requesterMembership && !requesterIsAdmin) {
-    throw new SessionRouteError("Not a community member", 403);
+    throw new SessionRouteError("Not a club member", 403);
   }
   if (
     !requesterIsAdmin &&
     !isCommunityOperatorRole(requesterMembership?.role)
   ) {
     throw new SessionRouteError(
-      "Only community admins or staff can create tournaments",
+      "Only club admins or staff can create tournaments",
       403
     );
   }
@@ -137,7 +137,7 @@ export async function createSessionForUser({
   }
   if (hostCommunity?.isTutorial && input.partnerCommunityId) {
     throw new SessionRouteError(
-      "Tutorial playground sessions cannot invite collab communities",
+      "Tutorial playground sessions cannot invite collab clubs",
       400
     );
   }
@@ -152,7 +152,7 @@ export async function createSessionForUser({
     });
 
     if (!partnerCommunity) {
-      throw new SessionRouteError("Partner community not found", 404);
+      throw new SessionRouteError("Partner club not found", 404);
     }
     if (partnerCommunity.isTutorial) {
       throw new SessionRouteError(

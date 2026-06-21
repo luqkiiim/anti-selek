@@ -20,12 +20,12 @@ export function CommunityDangerZonePanel({
       <div className="space-y-2">
         <p className="app-eyebrow">Danger zone</p>
         <h3 className="text-xl font-semibold text-gray-900">
-          {isTutorial ? "Reset playground" : "Reset or delete community"}
+          {isTutorial ? "Reset playground" : "Reset or delete club"}
         </h3>
         <p className="text-sm text-gray-600">
           {isTutorial
             ? "Reset restores the original practice players, live session, and tutorial progress."
-            : "Reset clears tournament history and ratings. Delete removes the whole community permanently."}
+            : "Reset clears tournament history and ratings. Delete removes the whole club permanently."}
         </p>
       </div>
 
@@ -37,7 +37,7 @@ export function CommunityDangerZonePanel({
           <p className="mt-1 text-sm text-gray-600">
             {isTutorial
               ? "Recreates the 13 practice players, the ongoing two-court session, and clears tutorial progress."
-              : "Deletes all tournaments in this community and returns member ratings to 1000."}
+              : "Deletes all tournaments in this club and returns member ratings to 1000."}
           </p>
           <button
             type="button"
@@ -50,17 +50,17 @@ export function CommunityDangerZonePanel({
               ? "Resetting..."
               : isTutorial
                 ? "Reset playground"
-                : "Reset community"}
+                : "Reset club"}
           </button>
         </div>
 
         {!isTutorial ? (
           <div className="rounded-2xl border border-red-100 bg-red-50/70 p-4">
           <p className="text-sm font-semibold text-gray-900">
-            Delete this community
+            Delete this club
           </p>
           <p className="mt-1 text-sm text-gray-600">
-            Permanently removes this community and all related data.
+            Permanently removes this club and all related data.
           </p>
           <button
             type="button"
@@ -68,7 +68,7 @@ export function CommunityDangerZonePanel({
             disabled={deletingCommunity || resettingCommunity}
             className="app-button-danger mt-4 px-4 py-2"
           >
-            {deletingCommunity ? "Deleting..." : "Delete community"}
+            {deletingCommunity ? "Deleting..." : "Delete club"}
           </button>
           </div>
         ) : null}

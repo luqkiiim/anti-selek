@@ -765,7 +765,7 @@ function ProfileHero({
             <div className="flex items-start justify-between gap-3">
               <div>
                 <p className="text-sm font-semibold text-white/70">
-                  {data.context?.communityId ? "Community rating" : "Overall rating"}
+                  {data.context?.communityId ? "Club rating" : "Overall rating"}
                 </p>
                 <p className="mt-2 text-4xl font-semibold text-white">
                   {data.user.elo}
@@ -1543,7 +1543,7 @@ function StatsTab({
                 }
                 detail={
                   rankContext.currentRank === null
-                    ? "Only ranked community members appear on the leaderboard."
+                    ? "Only ranked club members appear on the leaderboard."
                     : rankContext.previousRank
                       ? `Started this window at #${rankContext.previousRank}.`
                       : "Previous rank is unavailable for this window."

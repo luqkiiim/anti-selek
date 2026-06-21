@@ -1,13 +1,13 @@
 # Anti-Selek
 
-Community-based badminton tournament web app for running live sessions, managing courts, and tracking community ratings.
+Club-based badminton tournament web app for running live sessions, managing courts, and tracking club ratings.
 
 ## Highlights
 
 - Email/password authentication with NextAuth credentials
 - Self-service password recovery for claimed accounts by email
-- Dashboard for creating, joining, and opening badminton communities
-- Community leaderboard, player profiles, and claim-request flow for placeholder profiles
+- Dashboard for creating, joining, and opening badminton clubs
+- Club leaderboard, player profiles, and claim-request flow for placeholder profiles
 - Host tournaments with configurable court count, selected members, and guests
 - Four session formats:
   - `Points`: matchmaking uses current session performance
@@ -20,7 +20,7 @@ Community-based badminton tournament web app for running live sessions, managing
 - Live court management with score submission, approval when required, and queued "next up" matches
 - Pause/resume players during active sessions
 - Late join support for admins during active sessions
-- Rollback for the latest completed tournament in a community
+- Rollback for the latest completed tournament in a club
 - Matchmaking fairness controls for rotation load, wait time, grouping strength, and exact rematch avoidance where applicable
 
 ## Tech Stack
@@ -189,13 +189,13 @@ Notes:
 ## Core Workflow
 
 1. Sign up or sign in.
-2. Create a community or join an existing one.
-3. Open a community dashboard to:
+2. Create a club or join an existing one.
+3. Open a club dashboard to:
    - review the leaderboard
    - host a tournament
    - join an active tournament
    - reopen a past tournament by clicking its card
-4. Community admins can:
+4. Club admins can:
    - add or remove member profiles
    - edit placeholder names and member ratings
    - approve or reject claim requests
@@ -204,7 +204,7 @@ Notes:
    - add players or guests into active sessions
    - queue the next match while all courts are occupied
    - rollback the latest completed tournament
-   - reset or delete the community
+   - reset or delete the club
 5. Global admins can:
    - perform emergency password resets for claimed members when email recovery is unavailable
 
@@ -248,7 +248,7 @@ Notes:
 - Margin of victory affects the rating delta
 - Both teammates receive the same rating delta
 - Guest participation reduces rating impact through a multiplier
-- In communities, persistent ratings are stored on `CommunityMember.elo`
+- In clubs, persistent ratings are stored on `CommunityMember.elo`
 
 Note: user-facing copy says `rating` or `Ratings`, but some internal code and database fields still use `elo`.
 
@@ -286,14 +286,14 @@ Shared constraints:
 ## Data Model
 
 - `User`: base account identity
-- `Community`: scoped badminton group
-- `CommunityMember`: community role plus community-specific rating
-- `Session`: tournament instance inside a community
+- `Community`: scoped badminton club
+- `CommunityMember`: club role plus club-specific rating
+- `Session`: tournament instance inside a club
 - `SessionPlayer`: per-session standings points and matchmaking state
 - `Court`: court slot and current match pointer
 - `Match`: teams, scores, approval state, and rating deltas
 - `QueuedMatch`: reserved next-up pairing while all courts are occupied
-- `ClaimRequest`: request to merge a claimed account with a placeholder community profile
+- `ClaimRequest`: request to merge a claimed account with a placeholder club profile
 - `PasswordResetToken`: single-use claimed-account password reset token
 
 ## Deployment Notes
@@ -308,6 +308,6 @@ Shared constraints:
 
 ## Safety Notes
 
-- Community reset is destructive: it deletes that community's tournaments and related session data, and resets member ratings
+- Club reset is destructive: it deletes that club's tournaments and related session data, and resets member ratings
 - Tournament rollback is intended for the latest completed tournament only
-- Admin actions are permission-checked against community role or platform admin status
+- Admin actions are permission-checked against club role or platform admin status

@@ -147,7 +147,7 @@ test.describe("tutorial playground mobile walkthrough", () => {
     hasTouch: true,
   });
 
-  test("opens the sandbox tutorial and keeps tutorial UI out of real communities", async ({
+  test("opens the sandbox tutorial and keeps tutorial UI out of real clubs", async ({
     page,
   }) => {
     await signInAsAdmin(page);
@@ -232,7 +232,7 @@ test.describe("tutorial playground mobile walkthrough", () => {
     await expect(page.getByRole("button", { name: "Rollback" })).toHaveCount(0);
 
     await page.goto(`/community/${playground.communityId}/admin?tab=players`);
-    await expect(page.getByRole("heading", { name: "Community controls" }))
+    await expect(page.getByRole("heading", { name: "Club controls" }))
       .toBeVisible();
     await expect
       .poll(async () => (await getAdminOnboardingProgress(page)).completedStepIds)

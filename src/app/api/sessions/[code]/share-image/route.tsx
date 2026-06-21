@@ -52,7 +52,7 @@ function getShareImageCommunityName(sessionData: {
 
   return sessionData.community
     ? getTutorialCommunityDisplayName(sessionData.community)
-    : "Community";
+    : "Club";
 }
 
 async function getSessionShareImageRoute(

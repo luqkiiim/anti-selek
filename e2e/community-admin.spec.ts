@@ -13,13 +13,13 @@ import {
   signInAsClaimRequester,
 } from "./helpers";
 
-test("admin can create and open a community player profile from admin page", async ({
+test("admin can create and open a club player profile from admin page", async ({
   page,
 }) => {
   await signInAsAdmin(page);
   await page.goto(`/community/${hostCommunityId}/admin`);
 
-  await expect(page.getByText("Community admin")).toBeVisible();
+  await expect(page.getByText("Club admin")).toBeVisible();
   await expect(page.getByRole("heading", { name: "E2E Host Club" })).toBeVisible();
 
   await page.getByRole("button", { name: "Add player" }).click();

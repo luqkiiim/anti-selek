@@ -308,7 +308,7 @@ afterAll(async () => {
 });
 
 describe("offline identity links", () => {
-  it("requires source and target community admin approval", async () => {
+  it("requires source and target club admin approval", async () => {
     const prefix = `approval-${randomUUID().slice(0, 8)}`;
     const communityAId = `${prefix}-community-a`;
     const communityBId = `${prefix}-community-b`;
@@ -376,7 +376,7 @@ describe("offline identity links", () => {
     expect(members).toHaveLength(2);
   });
 
-  it("dedupes linked placeholders in collab rosters and updates both community ratings", async () => {
+  it("dedupes linked placeholders in collab rosters and updates both club ratings", async () => {
     const prefix = `elo-${randomUUID().slice(0, 8)}`;
     const {
       communityAId,

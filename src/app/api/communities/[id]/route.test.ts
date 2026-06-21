@@ -70,7 +70,7 @@ vi.mock("@/lib/rateLimit", () => ({
 
 import { GET, PATCH } from "./route";
 
-describe("community snapshot route", () => {
+describe("club snapshot route", () => {
   beforeEach(() => {
     vi.clearAllMocks();
 
@@ -93,7 +93,7 @@ describe("community snapshot route", () => {
     });
     mocks.communityFindUnique.mockResolvedValue({
       id: "community-1",
-      name: "Community One",
+      name: "Club One",
       createdById: "viewer-1",
       isTutorial: false,
       tutorialOwnerId: null,
@@ -103,7 +103,7 @@ describe("community snapshot route", () => {
     mocks.communityFindMany.mockResolvedValue([]);
     mocks.communityUpdate.mockResolvedValue({
       id: "community-1",
-      name: "Community One",
+      name: "Club One",
       isPasswordProtected: false,
       updatedAt: new Date("2026-05-19T00:00:00.000Z"),
     });
@@ -202,7 +202,7 @@ describe("community snapshot route", () => {
     );
   });
 
-  it("includes owner flags in the community and roster snapshot", async () => {
+  it("includes owner flags in the club and roster snapshot", async () => {
     const response = await GET(
       new Request("http://localhost/api/communities/community-1"),
       {
@@ -346,7 +346,7 @@ describe("community snapshot route", () => {
     );
   });
 
-  it("masks tutorial community backend names in the snapshot", async () => {
+  it("masks tutorial club backend names in the snapshot", async () => {
     mocks.communityFindUnique.mockResolvedValueOnce({
       id: "community-1",
       name: "Tutorial playground viewer-1",
@@ -369,7 +369,7 @@ describe("community snapshot route", () => {
     expect(body.community.name).toBe("Tutorial playground");
   });
 
-  it("allows admins to remove a community password and make it public", async () => {
+  it("allows admins to remove a club password and make it public", async () => {
     mocks.communityMemberFindUnique.mockResolvedValueOnce({
       role: "ADMIN",
     });
@@ -381,7 +381,7 @@ describe("community snapshot route", () => {
     });
     mocks.communityUpdate.mockResolvedValueOnce({
       id: "community-1",
-      name: "Community One",
+      name: "Club One",
       isPasswordProtected: false,
       updatedAt: new Date("2026-05-19T00:00:00.000Z"),
     });
@@ -415,7 +415,7 @@ describe("community snapshot route", () => {
     expect(body.isPasswordProtected).toBe(false);
   });
 
-  it("requires a password when enabling protection for an open community", async () => {
+  it("requires a password when enabling protection for an open club", async () => {
     mocks.communityMemberFindUnique.mockResolvedValueOnce({
       role: "ADMIN",
     });
@@ -439,7 +439,7 @@ describe("community snapshot route", () => {
     const body = await response.json();
 
     expect(response.status).toBe(400);
-    expect(body.error).toBe("Password is required to protect the community");
+    expect(body.error).toBe("Password is required to protect the club");
   });
 
   it("rejects direct settings updates for tutorial playgrounds", async () => {

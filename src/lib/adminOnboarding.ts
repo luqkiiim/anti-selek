@@ -153,7 +153,7 @@ export function buildAdminOnboardingProgress({
     {
       id: "admin-community",
       title: "Open playground",
-      detail: "Start in your private tutorial community so practice data stays separate.",
+      detail: "Start in your private tutorial club so practice data stays separate.",
       actionLabel: primaryCommunityId
         ? "Open tutorial playground"
         : "Open tutorial playground",
@@ -163,7 +163,7 @@ export function buildAdminOnboardingProgress({
         : "admin-onboarding-create-community",
       coachmark: primaryCommunityId
         ? "Open your tutorial playground to practice the admin flow."
-        : "Open the tutorial playground to create a safe practice community.",
+        : "Open the tutorial playground to create a safe practice club.",
       manual: false,
     },
     {

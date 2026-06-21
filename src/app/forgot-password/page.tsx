@@ -62,7 +62,7 @@ export default function ForgotPasswordPage() {
                 Reset your account password by email.
               </h1>
               <p className="mt-4 max-w-xl text-sm text-gray-600 sm:text-base">
-                Claimed accounts use one global password across every community.
+                Claimed accounts use one global password across every club.
                 Enter your email and we&apos;ll send a recovery link if the
                 account exists.
               </p>
@@ -73,7 +73,7 @@ export default function ForgotPasswordPage() {
                     Recovery path
                   </p>
                   <p className="mt-2 text-sm font-semibold text-gray-900">
-                    Community admins do not manage normal password recovery for
+                    Club admins do not manage normal password recovery for
                     claimed accounts anymore.
                   </p>
                 </div>

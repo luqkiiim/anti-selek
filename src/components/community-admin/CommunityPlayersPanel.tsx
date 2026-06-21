@@ -37,7 +37,7 @@ export function CommunityPlayersPanel({
   return (
     <SectionCard
       eyebrow="Roster"
-      title="Community players"
+      title="Club players"
       description="A compact roster for quick review. Open a player when you need to edit details or admin access."
       action={
         <button
@@ -78,12 +78,12 @@ export function CommunityPlayersPanel({
         <EmptyState
           title={
             players.length === 0
-              ? "No players in the community yet."
+              ? "No players in the club yet."
               : "No players match that search."
           }
           detail={
             players.length === 0
-              ? "Create the first player profile to start building the community roster."
+              ? "Create the first player profile to start building the club roster."
               : "Try another name or clear the search to see the full roster."
           }
           action={

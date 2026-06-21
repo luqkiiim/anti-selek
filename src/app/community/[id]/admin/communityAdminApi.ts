@@ -20,14 +20,14 @@ export async function fetchCommunityAdminSnapshot(communityId: string) {
   const communityRes = await fetch(`/api/communities/${communityId}`);
   const communityData = await safeJson(communityRes);
   if (!communityRes.ok) {
-    throw new Error(communityData.error || "Failed to load community");
+    throw new Error(communityData.error || "Failed to load club");
   }
 
   const currentCommunity = communityData.community
     ? (communityData.community as CommunityAdminCommunity)
     : null;
   if (!currentCommunity) {
-    throw new Error("Community not found or access denied");
+    throw new Error("Club not found or access denied");
   }
   if (currentCommunity.role !== "ADMIN") {
     return {

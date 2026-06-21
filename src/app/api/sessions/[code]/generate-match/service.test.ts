@@ -679,7 +679,7 @@ describe("generate match service", () => {
   });
 
   describe("buildMatchmakingState", () => {
-    it("uses community elo only for ratings sessions", async () => {
+    it("uses club elo only for ratings sessions", async () => {
       vi.mocked(getCommunityEloByUserId).mockResolvedValue(
         new Map([
           ["A", 1440],

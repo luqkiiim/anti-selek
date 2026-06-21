@@ -86,7 +86,7 @@ export function OfflineIdentityLinksPanel({
               Link Offline Players
             </h3>
             <p className="mt-1 max-w-2xl text-xs font-semibold text-gray-500">
-              Connect unclaimed placeholders only after both communities agree they represent the same person.
+              Connect unclaimed placeholders only after both clubs agree they represent the same person.
             </p>
           </div>
           <span className="app-chip app-chip-neutral">
@@ -97,7 +97,7 @@ export function OfflineIdentityLinksPanel({
         <div className="mt-5 grid gap-3 lg:grid-cols-3">
           <label className="block">
             <span className="mb-1 block text-[10px] font-black uppercase tracking-widest text-gray-500">
-              This community
+              This club
             </span>
             <select
               value={sourceUserId}
@@ -115,7 +115,7 @@ export function OfflineIdentityLinksPanel({
 
           <div className="block">
             <span className="mb-1 block text-[10px] font-black uppercase tracking-widest text-gray-500">
-              Partner community
+              Partner club
             </span>
             {selectedTargetCommunity ? (
               <div className="flex min-h-11 items-center justify-between gap-3 rounded-xl border border-gray-200 bg-gray-50 px-3">
@@ -139,7 +139,7 @@ export function OfflineIdentityLinksPanel({
                     onTargetCommunitySearchChange(event.target.value)
                   }
                   className="field"
-                  placeholder="Search communities"
+                  placeholder="Search clubs"
                 />
                 {targetCommunityCandidates.length > 0 ||
                 loadingTargetCommunities ? (
@@ -210,7 +210,7 @@ export function OfflineIdentityLinksPanel({
               Link Requests
             </h3>
             <p className="mt-1 text-xs font-semibold text-gray-500">
-              Incoming requests need approval from this community.
+              Incoming requests need approval from this club.
             </p>
           </div>
           <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">

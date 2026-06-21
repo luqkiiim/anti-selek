@@ -36,7 +36,7 @@ describe("MobileBottomTabs", () => {
     await act(async () => {
       root.render(
         <MobileBottomTabs
-          ariaLabel="Community navigation"
+          ariaLabel="Club navigation"
           activeId="tournaments"
           onSelect={onSelect}
           items={[
@@ -64,7 +64,7 @@ describe("MobileBottomTabs", () => {
 
     const nav = container.querySelector("nav");
     expect(nav).not.toBeNull();
-    expect(nav?.getAttribute("aria-label")).toBe("Community navigation");
+    expect(nav?.getAttribute("aria-label")).toBe("Club navigation");
     expect(nav?.className).toContain("fixed");
     expect(nav?.className).toContain("bottom-0");
     expect(nav?.className).toContain("rounded-t-2xl");

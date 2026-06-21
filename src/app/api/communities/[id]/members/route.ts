@@ -356,7 +356,7 @@ export async function POST(
       });
       if (duplicate) {
         return NextResponse.json(
-          { error: "An unclaimed player with this name already exists in this community" },
+          { error: "An unclaimed player with this name already exists in this club" },
           { status: 409 }
         );
       }

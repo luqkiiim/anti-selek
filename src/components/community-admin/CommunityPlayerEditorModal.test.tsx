@@ -112,7 +112,7 @@ describe("CommunityPlayerEditorModal", () => {
     const markup = renderModal(buildPlayer());
 
     expect(markup).toContain(
-      "Community admins can rename unclaimed placeholder profiles."
+      "Club admins can rename unclaimed placeholder profiles."
     );
     expect(markup).not.toContain('type="text" disabled=""');
   });
@@ -153,7 +153,7 @@ describe("CommunityPlayerEditorModal", () => {
     );
 
     expect(markup).toContain("Owner");
-    expect(markup).toContain("The community owner keeps permanent admin access.");
+    expect(markup).toContain("The club owner keeps permanent admin access.");
     expect(markup).toContain("The owner cannot be removed.");
     expect(markup).not.toContain("Change to staff");
     expect(markup).not.toContain("Change to member");
@@ -175,11 +175,11 @@ describe("CommunityPlayerEditorModal", () => {
     expect(regularAdminMarkup).not.toContain("Change to staff");
     expect(regularAdminMarkup).not.toContain("Change to member");
     expect(regularAdminMarkup).toContain(
-      "Only the community owner can change another admin role."
+      "Only the club owner can change another admin role."
     );
   });
 
-  it("shows leave community for the current admin", () => {
+  it("shows leave club for the current admin", () => {
     const markup = renderModal(
       buildPlayer({
         id: "admin-1",
@@ -190,7 +190,7 @@ describe("CommunityPlayerEditorModal", () => {
       { currentUserId: "admin-1" }
     );
 
-    expect(markup).toContain("Leave community");
+    expect(markup).toContain("Leave club");
     expect(markup).not.toContain("Demote admins before removing them.");
   });
 });

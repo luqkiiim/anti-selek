@@ -358,7 +358,7 @@ export function HostTournamentPanel({
         <div className="grid gap-3">
           <SectionIntro
             title="Roster"
-            description="Choose community players and add any guests before creating."
+            description="Choose club players and add any guests before creating."
           />
           <div className="grid gap-2">
             <RosterRow
@@ -499,9 +499,9 @@ export function HostTournamentPanel({
               <div className="space-y-3 rounded-xl border border-gray-200 bg-white p-3 sm:p-4">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div className="min-w-0 flex-1 space-y-1.5 text-sm font-medium text-gray-900">
-                    <span>Collab community</span>
+                    <span>Collab club</span>
                     <p className="text-xs font-normal text-gray-500">
-                      Invite another community. Approval is required before the
+                      Invite another club. Approval is required before the
                       tournament can start.
                     </p>
                     {hasPartnerCommunity ? (
@@ -512,7 +512,7 @@ export function HostTournamentPanel({
                         <div className="min-w-0">
                           <p className="truncate text-sm font-semibold text-gray-900">
                             {selectedPartnerCommunity?.name ??
-                              "Selected community"}
+                              "Selected club"}
                           </p>
                           {selectedPartnerCommunity ? (
                             <p className="text-xs font-semibold text-amber-700">
@@ -527,7 +527,7 @@ export function HostTournamentPanel({
                             event.stopPropagation();
                             onClearPartnerCommunity();
                           }}
-                          aria-label="Clear collab community"
+                          aria-label="Clear collab club"
                           className="app-button-secondary shrink-0 px-2.5 py-1.5 text-xs"
                         >
                           <X aria-hidden="true" size={14} />
@@ -542,8 +542,8 @@ export function HostTournamentPanel({
                           onChange={(event) =>
                             onPartnerCommunitySearchChange(event.target.value)
                           }
-                          aria-label="Search collab community"
-                          placeholder="Search by community name"
+                          aria-label="Search collab club"
+                          placeholder="Search by club name"
                           className="field"
                         />
                         {partnerCommunitySearch.length > 0 ? (
@@ -554,7 +554,7 @@ export function HostTournamentPanel({
                               </p>
                             ) : loadingCollabCandidates ? (
                               <p className="px-2 py-1.5 text-xs font-semibold text-gray-500">
-                                Searching communities...
+                                Searching clubs...
                               </p>
                             ) : collabCandidates.length > 0 ? (
                               <div className="grid gap-1">
@@ -581,7 +581,7 @@ export function HostTournamentPanel({
                               </div>
                             ) : (
                               <p className="px-2 py-1.5 text-xs font-semibold text-gray-500">
-                                No communities found.
+                                No clubs found.
                               </p>
                             )}
                           </div>

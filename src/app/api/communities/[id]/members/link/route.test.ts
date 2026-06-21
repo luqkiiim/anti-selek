@@ -15,7 +15,7 @@ vi.mock("@/lib/rateLimit", () => ({
 
 import { GET, POST } from "./route";
 
-describe("link existing unclaimed community player route", () => {
+describe("link existing unclaimed club player route", () => {
   beforeEach(() => {
     Object.values(mocks).forEach((mock) => mock.mockReset());
     mocks.auth.mockResolvedValue({

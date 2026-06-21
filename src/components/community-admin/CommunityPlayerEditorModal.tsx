@@ -95,7 +95,7 @@ export function CommunityPlayerEditorModal({
   const isCurrentUser = player.id === currentUserId;
   const canRemovePlayer =
     !player.isOwner && (player.role !== "ADMIN" || isCurrentUser);
-  const removeButtonLabel = isCurrentUser ? "Leave community" : "Remove player";
+  const removeButtonLabel = isCurrentUser ? "Leave club" : "Remove player";
   const removingButtonLabel = isCurrentUser ? "Leaving..." : "Removing...";
 
   return (
@@ -150,7 +150,7 @@ export function CommunityPlayerEditorModal({
                 name={player.name}
                 avatarUrl={player.avatarUrl}
                 size="lg"
-                helperText="Community admins can manage photos for claimed members and placeholders, with drag-and-zoom cropping and final avatar compression before save."
+                helperText="Club admins can manage photos for claimed members and placeholders, with drag-and-zoom cropping and final avatar compression before save."
                 onUpload={(file) => onUploadAvatar(player, file)}
                 onRemove={() => onRemoveAvatar(player)}
               />
@@ -189,7 +189,7 @@ export function CommunityPlayerEditorModal({
             </label>
             {canEditName ? (
               <p className="text-sm text-gray-600">
-                Community admins can rename unclaimed placeholder profiles.
+                Club admins can rename unclaimed placeholder profiles.
               </p>
             ) : (
               <p className="text-sm text-gray-600">
@@ -307,25 +307,25 @@ export function CommunityPlayerEditorModal({
                 </select>
               </label>
               <p className="text-sm text-gray-600">
-                Occasional players stay in the community and session pickers, but
-                are hidden from the community leaderboard.
+                Occasional players stay in the club and session pickers, but
+                are hidden from the club leaderboard.
               </p>
             </div>
 
             <div className="border-t border-gray-200 pt-4">
               <div>
                 <p className="text-sm font-semibold text-gray-900">
-                  Community role
+                  Club role
                 </p>
                 <p className="mt-1 text-sm text-gray-600">
-                  Staff can host and run live sessions. Admins keep community
+                  Staff can host and run live sessions. Admins keep club
                   settings, player editing, claims, and resets.
                 </p>
               </div>
 
               {player.isOwner ? (
                 <p className="text-sm text-gray-600">
-                  The community owner keeps permanent admin access.
+                  The club owner keeps permanent admin access.
                 </p>
               ) : player.role === "ADMIN" ? (
                 canDemoteAdmins ? (
@@ -349,7 +349,7 @@ export function CommunityPlayerEditorModal({
                   </div>
                 ) : (
                   <p className="text-sm text-gray-600">
-                    Only the community owner can change another admin role.
+                    Only the club owner can change another admin role.
                   </p>
                 )
               ) : player.isClaimed ? (

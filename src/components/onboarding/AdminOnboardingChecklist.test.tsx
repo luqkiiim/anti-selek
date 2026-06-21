@@ -16,12 +16,12 @@ function createProgress(
     steps: [
       {
         id: "admin-community",
-        title: "Open your community",
-        detail: "Use an admin community as the home base.",
+        title: "Open your club",
+        detail: "Use an admin club as the home base.",
         actionLabel: "Open",
         href: "/community/community-1",
         targetId: "admin-onboarding-dashboard-community",
-        coachmark: "Open your admin community to continue.",
+        coachmark: "Open your admin club to continue.",
         completed: true,
         autoCompleted: true,
         manual: false,
@@ -29,7 +29,7 @@ function createProgress(
       {
         id: "reset-cleanup",
         title: "Optional cleanup",
-        detail: "Know where reset community lives.",
+        detail: "Know where reset club lives.",
         actionLabel: "Review cleanup",
         href: "/community/community-1/admin?tab=settings",
         targetId: "admin-onboarding-reset-community",
@@ -57,7 +57,7 @@ describe("AdminOnboardingChecklist", () => {
     expect(markup).toContain("Getting started");
     expect(markup).toContain("1/2 admin steps");
     expect(markup).toContain("Next step");
-    expect(markup).toContain("Open your community");
+    expect(markup).toContain("Open your club");
     expect(markup).toContain("Optional cleanup");
     expect(markup).toContain("Mark reviewed");
     expect(markup).toContain("Completed steps (1)");

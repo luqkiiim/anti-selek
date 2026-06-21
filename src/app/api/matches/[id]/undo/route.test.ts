@@ -90,7 +90,7 @@ describe("undo completed match route", () => {
     });
   });
 
-  it("allows community staff to undo a latest completed match in an active session", async () => {
+  it("allows club staff to undo a latest completed match in an active session", async () => {
     const response = await postUndo();
 
     expect(response.status).toBe(200);

@@ -77,7 +77,7 @@ describe("SessionRosterModal", () => {
     document.body.innerHTML = "";
   });
 
-  it("renders available community players while keeping guest creation collapsed", async () => {
+  it("renders available club players while keeping guest creation collapsed", async () => {
     await act(async () => {
       root.render(<SessionRosterModal {...getDefaultProps()} />);
     });
@@ -156,7 +156,7 @@ describe("SessionRosterModal", () => {
     ).toBeNull();
   });
 
-  it("uses clear empty-state copy when no community players are available", async () => {
+  it("uses clear empty-state copy when no club players are available", async () => {
     await act(async () => {
       root.render(
         <SessionRosterModal
@@ -168,7 +168,7 @@ describe("SessionRosterModal", () => {
     });
 
     expect(document.body.textContent).toContain(
-      "No available community players."
+      "No available club players."
     );
     expect(document.body.textContent).toContain(
       "Try another search or add a guest instead."

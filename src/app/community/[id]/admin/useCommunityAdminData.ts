@@ -43,7 +43,7 @@ export function useCommunityAdminData({
     const snapshot = await fetchCommunityAdminSnapshot(communityId);
     if (snapshot.community.role !== "ADMIN") {
       router.replace(`/community/${communityId}`);
-      throw new Error("Only community admins can access this page");
+      throw new Error("Only club admins can access this page");
     }
 
     setCommunity(snapshot.community);

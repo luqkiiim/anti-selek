@@ -58,7 +58,7 @@ function postPasswordReset(body: unknown) {
   );
 }
 
-describe("community emergency password reset route", () => {
+describe("club emergency password reset route", () => {
   beforeEach(() => {
     Object.values(mocks).forEach((mock) => mock.mockReset());
     mocks.isQuickAccessSession.mockReturnValue(false);
@@ -79,7 +79,7 @@ describe("community emergency password reset route", () => {
     });
   });
 
-  it("denies ordinary community admins", async () => {
+  it("denies ordinary club admins", async () => {
     mocks.auth.mockResolvedValue({
       user: { id: "community-admin-1", isAdmin: false },
     });

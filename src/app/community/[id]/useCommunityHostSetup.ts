@@ -150,7 +150,7 @@ export function useCommunityHostSetup({
           );
           const data = await safeJson(res);
           if (!res.ok) {
-            throw new Error(data.error || "Failed to search communities");
+            throw new Error(data.error || "Failed to search clubs");
           }
           if (!cancelled) {
             setCollabCandidates(Array.isArray(data) ? data : []);
@@ -159,7 +159,7 @@ export function useCommunityHostSetup({
           if (!cancelled) {
             setCollabCandidates([]);
             setError(
-              err instanceof Error ? err.message : "Failed to search communities"
+              err instanceof Error ? err.message : "Failed to search clubs"
             );
           }
         } finally {

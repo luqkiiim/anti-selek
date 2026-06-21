@@ -243,7 +243,7 @@ export function parseCreateSessionRequest(
     throw new SessionRouteError("Session name required", 400);
   }
   if (typeof communityId !== "string" || !communityId) {
-    throw new SessionRouteError("Community is required", 400);
+    throw new SessionRouteError("Club is required", 400);
   }
   if (
     partnerCommunityId !== undefined &&
@@ -252,7 +252,7 @@ export function parseCreateSessionRequest(
       partnerCommunityId.length === 0 ||
       partnerCommunityId === communityId)
   ) {
-    throw new SessionRouteError("Invalid partner community", 400);
+    throw new SessionRouteError("Invalid partner club", 400);
   }
   if (
     !Number.isInteger(courtCount) ||

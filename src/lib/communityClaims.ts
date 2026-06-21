@@ -138,7 +138,7 @@ export async function approveCommunityClaimRequest(
     transferCommunityIds[0] !== communityId
   ) {
     throw new CommunityClaimError(
-      "Linked profiles span multiple communities. Manual merge required.",
+      "Linked profiles span multiple clubs. Manual merge required.",
       409
     );
   }
@@ -196,13 +196,13 @@ export async function approveCommunityClaimRequest(
 
   if (!requesterMembership) {
     throw new CommunityClaimError(
-      "Requester must already be a member of this community",
+      "Requester must already be a member of this club",
       409
     );
   }
 
   if (targetMemberships.length !== transferMembers.length) {
-    throw new CommunityClaimError("Target profile is no longer in this community", 409);
+    throw new CommunityClaimError("Target profile is no longer in this club", 409);
   }
 
   const communitySessionIds = communitySessions.map((session) => session.id);
@@ -215,7 +215,7 @@ export async function approveCommunityClaimRequest(
 
   if (requesterMembership.elo !== 1000) {
     throw new CommunityClaimError(
-      "Requester already has community rating changes. Manual merge required.",
+      "Requester already has club rating changes. Manual merge required.",
       409
     );
   }
@@ -235,7 +235,7 @@ export async function approveCommunityClaimRequest(
   );
   if (unexpectedRequesterMembership) {
     throw new CommunityClaimError(
-      "Requester already belongs to a linked community. Manual merge required.",
+      "Requester already belongs to a linked club. Manual merge required.",
       409
     );
   }

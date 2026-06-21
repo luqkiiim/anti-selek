@@ -188,7 +188,7 @@ export function SessionRosterModal({
         </div>
       ) : (
         <p className="text-xs leading-5 text-gray-500">
-          Use this when someone is not in the community roster.
+          Use this when someone is not in the club roster.
         </p>
       )}
     </div>
@@ -244,7 +244,7 @@ export function SessionRosterModal({
         {playersNotInSession.length === 0 ? (
           <div className="app-empty px-4 py-10 text-center">
             <p className="text-sm font-semibold text-gray-900">
-              No available community players.
+              No available club players.
             </p>
             <p className="mt-2 text-sm text-gray-500">
               Try another search or add a guest instead.

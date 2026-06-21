@@ -601,7 +601,7 @@ export function CommunityOverviewPulsePanel({
           <SectionHeader
             icon={<Medal aria-hidden="true" size={20} />}
             title="Power rankings"
-            detail="Top of the community table"
+            detail="Top of the club table"
             action={
               <button
                 type="button"

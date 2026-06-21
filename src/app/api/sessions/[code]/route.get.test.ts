@@ -193,7 +193,7 @@ describe("session route GET", () => {
     );
   });
 
-  it("masks tutorial community names in linked session communities", async () => {
+  it("masks tutorial club names in linked session clubs", async () => {
     const sessionData = await mocks.sessionFindUnique();
     mocks.sessionFindUnique.mockClear();
     mocks.sessionFindUnique.mockResolvedValueOnce({

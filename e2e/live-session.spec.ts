@@ -216,7 +216,7 @@ test("admin can create and reshuffle valid Mixicano pairings", async ({
     });
 });
 
-test("admin can add a community player into an active session", async ({
+test("admin can add a club player into an active session", async ({
   page,
 }) => {
   await signInAsAdmin(page);

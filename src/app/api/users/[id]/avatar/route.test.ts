@@ -212,7 +212,7 @@ describe("user avatar route", () => {
     expect(mocks.uploadAvatarObject).not.toHaveBeenCalled();
   });
 
-  it("allows a community admin to manage a placeholder avatar", async () => {
+  it("allows a club admin to manage a placeholder avatar", async () => {
     mocks.auth.mockResolvedValue({
       user: { id: "admin-1", isAdmin: false, isQuickAccess: false },
     });

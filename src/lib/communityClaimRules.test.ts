@@ -5,7 +5,7 @@ import {
   normalizeClaimName,
 } from "./communityClaimRules";
 
-describe("community claim rules", () => {
+describe("club claim rules", () => {
   it("normalizes names for exact comparison", () => {
     expect(normalizeClaimName("  Jane   Doe ")).toBe("jane doe");
     expect(doClaimNamesMatch("Jane Doe", "  jane   doe ")).toBe(true);
@@ -25,7 +25,7 @@ describe("community claim rules", () => {
     });
   });
 
-  it("blocks accounts with community rating history", () => {
+  it("blocks accounts with club rating history", () => {
     expect(
       getClaimRequesterEligibility({
         isClaimed: true,
@@ -34,7 +34,7 @@ describe("community claim rules", () => {
       })
     ).toEqual({
       canRequest: false,
-      reason: "This account already has community rating history. Manual merge required.",
+      reason: "This account already has club rating history. Manual merge required.",
     });
   });
 
@@ -47,7 +47,7 @@ describe("community claim rules", () => {
       })
     ).toEqual({
       canRequest: false,
-      reason: "This account already has tournament history in this community. Manual merge required.",
+      reason: "This account already has tournament history in this club. Manual merge required.",
     });
   });
 

@@ -5,7 +5,7 @@ import {
 } from "./profileCommunityRank";
 
 describe("profileCommunityRank", () => {
-  it("reconstructs the previous rank by rolling back the recent community window", () => {
+  it("reconstructs the previous rank by rolling back the recent club window", () => {
     const result = buildProfileCommunityRankWindow(
       "u1",
       [
@@ -33,7 +33,7 @@ describe("profileCommunityRank", () => {
     });
   });
 
-  it("ignores players outside the tracked community leaderboard", () => {
+  it("ignores players outside the tracked club leaderboard", () => {
     const result = buildProfileCommunityRankWindow(
       "u1",
       [
@@ -94,7 +94,7 @@ describe("profileCommunityRank", () => {
   });
 });
 
-describe("community leaderboard rank movements", () => {
+describe("club leaderboard rank movements", () => {
   it("reports players moving up, down, and staying still after a rank window", () => {
     const result = buildCommunityLeaderboardRankMovements({
       members: [

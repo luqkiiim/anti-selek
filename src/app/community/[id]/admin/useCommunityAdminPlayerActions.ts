@@ -153,7 +153,7 @@ export function useCommunityAdminPlayerActions({
         throw new Error(data.error || "Failed to add player");
       }
 
-      setSuccess(`Player profile for "${name}" added to community.`);
+      setSuccess(`Player profile for "${name}" added to club.`);
       setName("");
       setNewPlayerGender(PlayerGender.MALE);
       setNewPlayerMixedSideOverride(null);
@@ -333,8 +333,8 @@ export function useCommunityAdminPlayerActions({
         const isSelfRemoval = player.id === currentUserId;
         setSuccess(
           isSelfRemoval
-            ? "You left the community."
-            : `${player.name} removed from community.`
+            ? "You left the club."
+            : `${player.name} removed from club.`
         );
         setPendingPlayerAction(null);
         closePlayerEditor();

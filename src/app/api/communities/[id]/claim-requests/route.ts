@@ -190,7 +190,7 @@ export async function POST(
 
     if (!requesterMembership) {
       return NextResponse.json(
-        { error: "Join the community before requesting a profile claim" },
+        { error: "Join the club before requesting a profile claim" },
         { status: 403 }
       );
     }
@@ -298,7 +298,7 @@ export async function POST(
       }
 
       if (!targetMembership) {
-        throw new Error("Target profile not found in this community");
+        throw new Error("Target profile not found in this club");
       }
 
       if (!isClaimableCommunityPlaceholder(targetMembership.user)) {
@@ -306,7 +306,7 @@ export async function POST(
       }
 
       if (existingRequesterRequest) {
-        throw new Error("You already have a pending claim request in this community");
+        throw new Error("You already have a pending claim request in this club");
       }
 
       if (existingTargetRequest) {
@@ -342,13 +342,13 @@ export async function POST(
     return NextResponse.json(toClaimRequestResponse(createdRequest), { status: 201 });
   } catch (error) {
     if (error instanceof Error) {
-      if (error.message === "Target profile not found in this community") {
+      if (error.message === "Target profile not found in this club") {
         return invalidTargetResponse(request, "api:communities:id:claim-requests");
       }
 
       const status = (() => {
         if (
-          error.message === "You already have a pending claim request in this community" ||
+          error.message === "You already have a pending claim request in this club" ||
           error.message === "This profile already has a pending claim request"
         ) {
           return 409;

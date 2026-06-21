@@ -545,7 +545,7 @@ export async function PATCH(
     if (name !== undefined) {
       if (typeof name !== "string" || name.trim().length < 3) {
         return NextResponse.json(
-          { error: "Community name must be at least 3 characters" },
+          { error: "Club name must be at least 3 characters" },
           { status: 400 }
         );
       }
@@ -553,7 +553,7 @@ export async function PATCH(
       const normalizedLookupName = normalizeNameLookupKey(nextName);
       if (!normalizedLookupName) {
         return NextResponse.json(
-          { error: "Community name must include letters or numbers" },
+          { error: "Club name must include letters or numbers" },
           { status: 400 }
         );
       }
@@ -568,7 +568,7 @@ export async function PATCH(
       );
       if (normalizedNameExists) {
         return NextResponse.json(
-          { error: "Community name already exists" },
+          { error: "Club name already exists" },
           { status: 409 }
         );
       }
@@ -603,7 +603,7 @@ export async function PATCH(
       (typeof password !== "string" || password.length === 0)
     ) {
       return NextResponse.json(
-        { error: "Password is required to protect the community" },
+        { error: "Password is required to protect the club" },
         { status: 400 }
       );
     }
@@ -630,7 +630,7 @@ export async function PATCH(
         ? (error as { code?: unknown }).code
         : undefined;
     if (code === "P2002") {
-      return NextResponse.json({ error: "Community name already exists" }, { status: 409 });
+      return NextResponse.json({ error: "Club name already exists" }, { status: 409 });
     }
     logError("Update community error", error);
     return safeErrorResponse();

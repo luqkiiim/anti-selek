@@ -131,7 +131,7 @@ export function useCommunityPageActions({
 
       await refreshCommunityData();
       setSuccess(
-        `Claim request sent for ${player.name}. A community admin must approve it.`
+        `Claim request sent for ${player.name}. A club admin must approve it.`
       );
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Failed to request claim");

@@ -145,7 +145,7 @@ function createRivalrySeries({
 }
 
 describe("communityPulse", () => {
-  it("returns quiet empty-state data when a community has no matches", () => {
+  it("returns quiet empty-state data when a club has no matches", () => {
     const result = buildCommunityPulse({
       members: [createMember(players.alice), createMember(players.ben)],
       sessions: [],

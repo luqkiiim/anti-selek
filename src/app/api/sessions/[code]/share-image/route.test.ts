@@ -213,7 +213,7 @@ describe("session share image route", () => {
     expect(mocks.imageResponses).toHaveLength(0);
   });
 
-  it("masks tutorial community display names", async () => {
+  it("masks tutorial club display names", async () => {
     mocks.sessionFindUnique.mockResolvedValue(
       createSessionData({ communityIsTutorial: true })
     );

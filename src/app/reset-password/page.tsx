@@ -76,7 +76,7 @@ function ResetPasswordForm() {
               </h1>
               <p className="mt-4 max-w-xl text-sm text-gray-600 sm:text-base">
                 This updates the single global password for your claimed player
-                account across every community.
+                account across every club.
               </p>
             </div>
           </section>

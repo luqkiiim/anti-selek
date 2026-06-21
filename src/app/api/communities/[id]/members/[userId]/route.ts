@@ -198,13 +198,13 @@ export async function PATCH(
 
     if (targetIsOwner && nextRole) {
       return NextResponse.json(
-        { error: "The community owner role cannot be changed" },
+        { error: "The club owner role cannot be changed" },
         { status: 400 }
       );
     }
     if (userId === session.user.id && nextRole) {
       return NextResponse.json(
-        { error: "Cannot change your own community role" },
+        { error: "Cannot change your own club role" },
         { status: 400 }
       );
     }
@@ -214,7 +214,7 @@ export async function PATCH(
       !requesterCanDemoteAdmin
     ) {
       return NextResponse.json(
-        { error: "Only the community owner can demote admins" },
+        { error: "Only the club owner can demote admins" },
         { status: 403 }
       );
     }
@@ -326,7 +326,7 @@ export async function PATCH(
       });
       if (duplicate) {
         return NextResponse.json(
-          { error: "An unclaimed player with this name already exists in this community" },
+          { error: "An unclaimed player with this name already exists in this club" },
           { status: 409 }
         );
       }
@@ -486,7 +486,7 @@ export async function DELETE(
     }
     if (adminAccess.createdById === userId) {
       return NextResponse.json(
-        { error: "The community owner cannot be removed" },
+        { error: "The club owner cannot be removed" },
         { status: 400 }
       );
     }
@@ -494,7 +494,7 @@ export async function DELETE(
     if (isSelfRemoval) {
       if (membership.role !== CommunityRole.ADMIN) {
         return NextResponse.json(
-          { error: "Cannot remove yourself from the community" },
+          { error: "Cannot remove yourself from the club" },
           { status: 400 }
         );
       }
@@ -510,7 +510,7 @@ export async function DELETE(
       });
       if (otherAdmins.length === 0) {
         return NextResponse.json(
-          { error: "Make another member an admin before leaving this community" },
+          { error: "Make another member an admin before leaving this club" },
           { status: 400 }
         );
       }

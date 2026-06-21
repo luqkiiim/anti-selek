@@ -64,7 +64,7 @@ function SigninForm() {
       });
 
       if (result?.error) {
-        setError("No matching community profile found");
+        setError("No matching club profile found");
         return;
       }
 
@@ -88,7 +88,7 @@ function SigninForm() {
               <p className="app-eyebrow">Court control</p>
               <h1 className="mt-3 app-title text-gray-900">Sign in to your badminton dashboard.</h1>
               <p className="mt-4 max-w-xl text-sm text-gray-600 sm:text-base">
-                Jump back into community leaderboards, active courts, and tournament management without losing your place.
+                Jump back into club leaderboards, active courts, and tournament management without losing your place.
               </p>
 
               <div className="mt-8 grid gap-3 sm:grid-cols-3">
@@ -112,7 +112,7 @@ function SigninForm() {
             <p className="app-eyebrow">Account access</p>
             <h2 className="mt-3 text-2xl font-semibold text-gray-900">Welcome back</h2>
             <p className="mt-2 text-sm text-gray-600">
-              Continue with your account or enter a community profile your host already added.
+              Continue with your account or enter a club profile your host already added.
             </p>
 
             <div className="mt-6 grid grid-cols-2 gap-2 rounded-2xl border border-gray-200 bg-gray-50 p-1">
@@ -197,7 +197,7 @@ function SigninForm() {
             ) : (
               <form onSubmit={handleQuickAccessSubmit} className="mt-6 space-y-4">
                 <label className="block space-y-2 text-sm font-medium text-gray-900">
-                  <span>Community name</span>
+                  <span>Club name</span>
                   <input
                     type="text"
                     value={communityName}
@@ -224,7 +224,7 @@ function SigninForm() {
                   className="app-button-primary w-full"
                 >
                   <LogIn aria-hidden="true" size={17} />
-                  {quickLoading ? "Entering..." : "Enter community"}
+                  {quickLoading ? "Entering..." : "Enter club"}
                 </button>
               </form>
             )}

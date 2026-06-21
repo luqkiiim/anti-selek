@@ -1115,7 +1115,7 @@ async function reverseReplayRatingEffectsInTransaction(
     if (communityIds.length > 1) {
       throw new CorrectCompletedMatchScoreError(
         "LEGACY_COLLAB_REPLAY_UNSUPPORTED",
-        "This completed match is missing rating ledger rows for a multi-community session, so exact ELO replay is blocked."
+        "This completed match is missing rating ledger rows for a multi-club session, so exact ELO replay is blocked."
       );
     }
     await reverseLegacyMatchRatingInTransaction(tx, {

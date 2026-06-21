@@ -96,7 +96,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         email: { label: "Email", type: "email" },
         password: { label: "Password", type: "password" },
         quickAccess: { label: "Quick access", type: "text" },
-        communityName: { label: "Community name", type: "text" },
+        communityName: { label: "Club name", type: "text" },
         playerName: { label: "Player name", type: "text" },
       },
       async authorize(credentials, request) {

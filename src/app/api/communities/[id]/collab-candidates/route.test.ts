@@ -42,7 +42,7 @@ function getCandidates(search: string) {
   );
 }
 
-describe("collab community candidate search route", () => {
+describe("collab club candidate search route", () => {
   beforeEach(() => {
     Object.values(mocks).forEach((mock) => mock.mockReset());
     mocks.auth.mockResolvedValue({
@@ -82,7 +82,7 @@ describe("collab community candidate search route", () => {
     expect(mocks.communityFindMany).not.toHaveBeenCalled();
   });
 
-  it("requires a host community admin or staff member", async () => {
+  it("requires a host club admin or staff member", async () => {
     mocks.communityMemberFindUnique.mockResolvedValue({ role: "MEMBER" });
 
     const response = await getCandidates("pa");
@@ -100,7 +100,7 @@ describe("collab community candidate search route", () => {
     expect(mocks.communityFindMany).toHaveBeenCalled();
   });
 
-  it("returns an empty result without querying all communities for short searches", async () => {
+  it("returns an empty result without querying all clubs for short searches", async () => {
     const response = await getCandidates("p");
     const body = await response.json();
 
@@ -109,7 +109,7 @@ describe("collab community candidate search route", () => {
     expect(mocks.communityFindMany).not.toHaveBeenCalled();
   });
 
-  it("searches by name, excludes the host community, caps results, and maps counts", async () => {
+  it("searches by name, excludes the host club, caps results, and maps counts", async () => {
     const response = await getCandidates("partner");
     const body = await response.json();
 

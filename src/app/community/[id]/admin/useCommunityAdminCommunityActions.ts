@@ -76,7 +76,7 @@ export function useCommunityAdminCommunityActions({
     setSuccess("");
 
     if (trimmedName.length < 3) {
-      setError("Community name must be at least 3 characters.");
+      setError("Club name must be at least 3 characters.");
       return;
     }
     if (!nextPasswordProtection && hasPasswordChange) {
@@ -123,15 +123,15 @@ export function useCommunityAdminCommunityActions({
       });
       const data = await safeJson(res);
       if (!res.ok) {
-        throw new Error(data.error || "Failed to update community");
+        throw new Error(data.error || "Failed to update club");
       }
 
       setCommunityPasswordInput("");
-      setSuccess("Community settings updated.");
+      setSuccess("Club settings updated.");
       await refreshCommunityData();
     } catch (err: unknown) {
       setError(
-        err instanceof Error ? err.message : "Failed to update community"
+        err instanceof Error ? err.message : "Failed to update club"
       );
     } finally {
       setSavingCommunitySettings(false);
@@ -180,14 +180,14 @@ export function useCommunityAdminCommunityActions({
             data.error ||
               (community?.isTutorial
                 ? "Failed to reset playground"
-                : "Failed to reset community")
+                : "Failed to reset club")
           );
         }
 
         setSuccess(
           community?.isTutorial
             ? "Playground reset successful."
-            : "Community reset successful."
+            : "Club reset successful."
         );
         setPendingCommunityAction(null);
         setCommunityActionConfirmationValue("");
@@ -199,7 +199,7 @@ export function useCommunityAdminCommunityActions({
             ? err.message
             : community?.isTutorial
               ? "Failed to reset playground"
-              : "Failed to reset community"
+              : "Failed to reset club"
         );
         return false;
       } finally {
@@ -216,7 +216,7 @@ export function useCommunityAdminCommunityActions({
       });
       const data = await safeJson(res);
       if (!res.ok) {
-        throw new Error(data.error || "Failed to delete community");
+        throw new Error(data.error || "Failed to delete club");
       }
 
       setPendingCommunityAction(null);
@@ -225,7 +225,7 @@ export function useCommunityAdminCommunityActions({
       return true;
     } catch (err: unknown) {
       setError(
-        err instanceof Error ? err.message : "Failed to delete community"
+        err instanceof Error ? err.message : "Failed to delete club"
       );
       return false;
     } finally {

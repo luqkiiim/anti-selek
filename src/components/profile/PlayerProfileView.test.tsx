@@ -330,7 +330,7 @@ describe("PlayerProfileView", () => {
     const snapshot = container.querySelector(
       '[data-testid="profile-rating-snapshot"]'
     );
-    expect(snapshot?.textContent).toContain("Community rating");
+    expect(snapshot?.textContent).toContain("Club rating");
     expect(snapshot?.textContent).toContain("1320");
     expect(snapshot?.textContent).toContain("#4");
     expect(snapshot?.textContent).toContain("Up 2");
@@ -338,7 +338,7 @@ describe("PlayerProfileView", () => {
 
     expect(document.body.textContent).not.toContain("Rating story");
     expect((document.body.textContent?.match(/Rank #4/g) ?? []).length).toBe(0);
-    expect((document.body.textContent?.match(/Community rating/g) ?? []).length).toBe(1);
+    expect((document.body.textContent?.match(/Club rating/g) ?? []).length).toBe(1);
   });
 
   it("does not show the long avatar upload helper text for admins", async () => {

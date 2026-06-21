@@ -114,7 +114,7 @@ async function assertPlaceholderMembership(
   });
 
   if (!membership) {
-    throw new OfflineIdentityError(`${label} placeholder is not in that community`, 404);
+    throw new OfflineIdentityError(`${label} placeholder is not in that club`, 404);
   }
 
   if (!isOfflineIdentityPlaceholder(membership.user)) {
@@ -251,7 +251,7 @@ async function resolveIdentityForAcceptedLink(
   const existingSourceUserId = memberByCommunityId.get(sourceCommunityId);
   if (existingSourceUserId && existingSourceUserId !== sourceUserId) {
     throw new OfflineIdentityError(
-      "This offline identity already has another placeholder in the source community",
+      "This offline identity already has another placeholder in the source club",
       409
     );
   }
@@ -259,7 +259,7 @@ async function resolveIdentityForAcceptedLink(
   const existingTargetUserId = memberByCommunityId.get(targetCommunityId);
   if (existingTargetUserId && existingTargetUserId !== targetUserId) {
     throw new OfflineIdentityError(
-      "This offline identity already has another placeholder in the target community",
+      "This offline identity already has another placeholder in the target club",
       409
     );
   }
@@ -318,7 +318,7 @@ export async function createOfflineIdentityLinkRequest(
   }
 ) {
   if (sourceCommunityId === targetCommunityId) {
-    throw new OfflineIdentityError("Choose placeholders from two different communities", 400);
+    throw new OfflineIdentityError("Choose placeholders from two different clubs", 400);
   }
 
   if (sourceUserId === targetUserId) {

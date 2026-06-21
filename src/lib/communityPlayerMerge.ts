@@ -159,7 +159,7 @@ export async function mergeDuplicateUnclaimedCommunityPlayer(
     sourceMembership.user.email !== null
   ) {
     throw new CommunityPlayerMergeError(
-      "Source player must be an unclaimed placeholder in this community",
+      "Source player must be an unclaimed placeholder in this club",
       404
     );
   }
@@ -173,7 +173,7 @@ export async function mergeDuplicateUnclaimedCommunityPlayer(
 
   if (targetCurrentMembership) {
     throw new CommunityPlayerMergeError(
-      "Target player already belongs to this community",
+      "Target player already belongs to this club",
       409
     );
   }
@@ -209,7 +209,7 @@ export async function mergeDuplicateUnclaimedCommunityPlayer(
 
     if (targetSessionPlayer || targetMatch || targetQueuedMatch) {
       throw new CommunityPlayerMergeError(
-        "Target player already appears in this community's session history",
+        "Target player already appears in this club's session history",
         409
       );
     }
@@ -235,7 +235,7 @@ export async function mergeDuplicateUnclaimedCommunityPlayer(
     });
     if (ledgerConflict) {
       throw new CommunityPlayerMergeError(
-        "Target player already has rating ledger rows for this community's matches",
+        "Target player already has rating ledger rows for this club's matches",
         409
       );
     }

@@ -292,7 +292,7 @@ export default function SettingsPage() {
             <SectionCard
               eyebrow="Display name"
               title="One-time player rename"
-              description="This updates the name shown across your profile, communities, and sessions."
+              description="This updates the name shown across your profile, clubs, and sessions."
               action={
                 <span
                   className={`app-chip ${
@@ -371,7 +371,7 @@ export default function SettingsPage() {
               <AvatarUploader
                 name={user.name}
                 avatarUrl={user.avatarUrl}
-                helperText="Use a clear photo so other players can recognize you across communities and sessions. We compress the final cropped avatar before saving."
+                helperText="Use a clear photo so other players can recognize you across clubs and sessions. We compress the final cropped avatar before saving."
                 onUpload={handleUploadAvatar}
                 onRemove={handleRemoveAvatar}
               />

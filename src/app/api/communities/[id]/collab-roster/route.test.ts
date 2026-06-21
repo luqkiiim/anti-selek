@@ -161,7 +161,7 @@ describe("collab roster route", () => {
     });
   });
 
-  it("requires operator access to the partner community before exposing its roster", async () => {
+  it("requires operator access to the partner club before exposing its roster", async () => {
     mocks.communityMemberFindUnique
       .mockResolvedValueOnce({ role: "STAFF" })
       .mockResolvedValueOnce({ role: "MEMBER" });
@@ -172,7 +172,7 @@ describe("collab roster route", () => {
     expect(mocks.communityMemberFindMany).not.toHaveBeenCalled();
   });
 
-  it("allows host operators to load rosters for already linked communities", async () => {
+  it("allows host operators to load rosters for already linked clubs", async () => {
     mocks.communityMemberFindUnique
       .mockResolvedValueOnce({ role: "STAFF" })
       .mockResolvedValueOnce({ role: "MEMBER" });

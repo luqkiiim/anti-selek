@@ -43,7 +43,7 @@ export function CreateCommunityPlayerModal({
   return (
     <ModalFrame
       title="Create player profile"
-      subtitle="Create a brand-new placeholder profile for this community."
+      subtitle="Create a brand-new placeholder profile for this club."
       onClose={onClose}
       footer={
         <div className="flex flex-wrap justify-end gap-3">
@@ -74,7 +74,7 @@ export function CreateCommunityPlayerModal({
             Local placeholder only
           </p>
           <p className="mt-1 text-xs text-gray-600">
-            Players who already belong in this community should join it
+            Players who already belong in this club should join it
             themselves and request a claim on their placeholder profile.
           </p>
         </div>

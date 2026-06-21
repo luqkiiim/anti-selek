@@ -8,7 +8,7 @@ function renderPanel(
 ) {
   return renderToStaticMarkup(
     <CommunitySettingsPanel
-      communityName="Community One"
+      communityName="Club One"
       onCommunityNameChange={vi.fn()}
       communityPassword=""
       onCommunityPasswordChange={vi.fn()}
@@ -30,14 +30,14 @@ describe("CommunitySettingsPanel", () => {
     expect(markup).not.toContain('placeholder="Set a password (min 4 characters)"');
   });
 
-  it("shows removal copy when turning password protection off for a protected community", () => {
+  it("shows removal copy when turning password protection off for a protected club", () => {
     const markup = renderPanel({
       isPasswordProtected: true,
       passwordProtectionEnabled: false,
     });
 
     expect(markup).toContain(
-      "Saving will remove the password and make the community public."
+      "Saving will remove the password and make the club public."
     );
   });
 
@@ -58,7 +58,7 @@ describe("CommunitySettingsPanel", () => {
 
     expect(markup).toContain("Tutorial Settings");
     expect(markup).toContain("Tutorial playground");
-    expect(markup).not.toContain("Community name");
+    expect(markup).not.toContain("Club name");
     expect(markup).not.toContain("Save Settings");
   });
 });

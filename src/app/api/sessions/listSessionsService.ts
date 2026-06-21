@@ -29,7 +29,7 @@ export async function listSessionsForCommunity({
   });
 
   if (!membership && !viewerIsAdmin) {
-    throw new SessionRouteError("Not authorized for this community", 403);
+    throw new SessionRouteError("Not authorized for this club", 403);
   }
 
   const visibleCollabStatuses =

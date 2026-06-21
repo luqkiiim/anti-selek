@@ -36,12 +36,12 @@ export async function POST(request: Request) {
 
     const { name, password } = body as { name?: unknown; password?: unknown };
     if (typeof name !== "string" || !name.trim()) {
-      return NextResponse.json({ error: "Community name is required" }, { status: 400 });
+      return NextResponse.json({ error: "Club name is required" }, { status: 400 });
     }
 
     const normalizedLookupName = normalizeNameLookupKey(name);
     if (!normalizedLookupName) {
-      return NextResponse.json({ error: "Community name is required" }, { status: 400 });
+      return NextResponse.json({ error: "Club name is required" }, { status: 400 });
     }
 
     const matchingCommunities = (
@@ -61,13 +61,13 @@ export async function POST(request: Request) {
     );
 
     if (matchingCommunities.length > 1) {
-      return NextResponse.json({ error: "Community name is ambiguous" }, { status: 409 });
+      return NextResponse.json({ error: "Club name is ambiguous" }, { status: 409 });
     }
 
     const community = matchingCommunities[0] ?? null;
 
     if (!community) {
-      return NextResponse.json({ error: "Community not found" }, { status: 404 });
+      return NextResponse.json({ error: "Club not found" }, { status: 404 });
     }
 
     if (community.isPasswordProtected) {

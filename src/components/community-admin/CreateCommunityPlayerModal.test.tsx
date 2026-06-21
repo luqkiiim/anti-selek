@@ -48,7 +48,7 @@ describe("CreateCommunityPlayerModal", () => {
 
     expect(markup).toContain("Local placeholder only");
     expect(markup).toContain(
-      "Players who already belong in this community should join it themselves and request a claim on their placeholder profile."
+      "Players who already belong in this club should join it themselves and request a claim on their placeholder profile."
     );
     expect(markup).not.toContain("Link existing unclaimed player");
     expect(markup).not.toContain("Search existing placeholders");

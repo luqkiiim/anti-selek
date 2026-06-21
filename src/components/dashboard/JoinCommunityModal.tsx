@@ -27,8 +27,8 @@ export function JoinCommunityModal({
 
   return (
     <ModalFrame
-      title="Join community"
-      subtitle="Enter the community name and password if the group is protected."
+      title="Join club"
+      subtitle="Enter the club name and password if the group is protected."
       onClose={onClose}
       footer={
         <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
@@ -52,12 +52,12 @@ export function JoinCommunityModal({
     >
       <div className="space-y-4 px-4 py-4 sm:px-5">
         <label className="block space-y-2 text-sm font-medium text-gray-900">
-          <span>Community name</span>
+          <span>Club name</span>
           <input
             type="text"
             value={communityName}
             onChange={(event) => onCommunityNameChange(event.target.value)}
-            placeholder="Community name"
+            placeholder="Club name"
             className="field"
           />
         </label>

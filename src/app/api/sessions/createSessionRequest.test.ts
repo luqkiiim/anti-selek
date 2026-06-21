@@ -170,7 +170,7 @@ describe("parseCreateSessionRequest", () => {
     ).toThrowError(new SessionRouteError("Session name required", 400));
     expect(() =>
       parseCreateSessionRequest({ name: "Session", communityId: "" })
-    ).toThrowError(new SessionRouteError("Community is required", 400));
+    ).toThrowError(new SessionRouteError("Club is required", 400));
     expect(() =>
       parseCreateSessionRequest({
         name: "Session",
@@ -189,7 +189,7 @@ describe("parseCreateSessionRequest", () => {
         communityId: "community-1",
         partnerCommunityId: "community-1",
       })
-    ).toThrowError(new SessionRouteError("Invalid partner community", 400));
+    ).toThrowError(new SessionRouteError("Invalid partner club", 400));
   });
 
   it("rejects invalid session modes", () => {
@@ -293,7 +293,7 @@ describe("parseCreateSessionRequest", () => {
     expect(parsed.respectPlayerRest).toBe(false);
   });
 
-  it("accepts a distinct partner community for collab sessions", () => {
+  it("accepts a distinct partner club for collab sessions", () => {
     const parsed = parseCreateSessionRequest({
       name: "Collab Night",
       communityId: "community-1",

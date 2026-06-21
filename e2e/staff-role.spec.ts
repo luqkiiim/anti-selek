@@ -43,7 +43,7 @@ test("staff can run a live session without admin-only controls", async ({
 
   await page.goto(`/community/${hostCommunityId}/admin`);
   await expect(page).toHaveURL(new RegExp(`/community/${hostCommunityId}$`));
-  await expect(page.getByText("Only community admins can access this page")).toHaveCount(0);
+  await expect(page.getByText("Only club admins can access this page")).toHaveCount(0);
 
   const sessionName = "E2E Staff Operator Session";
   const sessionCode = await createStartedHostSession(page, {

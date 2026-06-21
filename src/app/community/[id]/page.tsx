@@ -729,13 +729,13 @@ export default function CommunityPage() {
       <div className="app-page flex items-center justify-center px-6">
         <div className="app-panel flex flex-col items-center gap-4 px-8 py-8">
           <div className="h-12 w-12 animate-spin rounded-full border-4 border-blue-600 border-t-transparent"></div>
-          <p className="app-eyebrow">Loading community</p>
+          <p className="app-eyebrow">Loading club</p>
         </div>
       </div>
     );
   }
 
-  const communityName = community?.name || "Community";
+  const communityName = community?.name || "Club";
   const communityRoleLabel = community?.viewerIsOwner
     ? "Owner"
     : getCommunityRoleLabel(community?.role);
@@ -841,7 +841,7 @@ export default function CommunityPage() {
   const leaderboardPanel = (
     <CommunityLeaderboardPanel
       title="Leaderboard"
-      subtitle="Full community rankings"
+      subtitle="Full club rankings"
       players={leaderboard}
       communityId={communityId}
       action={
@@ -882,7 +882,7 @@ export default function CommunityPage() {
       <div className="app-shell space-y-8">
         <HeroCard
           title={communityName}
-          description="Community hub"
+          description="Club hub"
           headingAlign="center"
           actionsPosition="below"
           meta={

@@ -11,7 +11,7 @@ vi.mock("./sessionLifecycle", () => ({
   deleteDisposableUnclaimedUsers: vi.fn(),
 }));
 
-describe("community claim helpers", () => {
+describe("club claim helpers", () => {
   it("keeps admin role if either side is admin", () => {
     expect(mergeCommunityRoles("ADMIN", "MEMBER")).toBe("ADMIN");
     expect(mergeCommunityRoles("ADMIN", "STAFF")).toBe("ADMIN");
@@ -141,7 +141,7 @@ describe("community claim helpers", () => {
     expect(deleteDisposableUnclaimedUsers).toHaveBeenCalledWith(tx, ["placeholder-1"]);
   });
 
-  it("requires manual merge for linked profiles spanning multiple communities", async () => {
+  it("requires manual merge for linked profiles spanning multiple clubs", async () => {
     const tx = {
       claimRequest: {
         findUnique: vi.fn().mockResolvedValue({
@@ -189,7 +189,7 @@ describe("community claim helpers", () => {
         reviewerUserId: "admin-1",
       })
     ).rejects.toMatchObject({
-      message: "Linked profiles span multiple communities. Manual merge required.",
+      message: "Linked profiles span multiple clubs. Manual merge required.",
       statusCode: 409,
     });
     expect(tx.communityMember.update).not.toHaveBeenCalled();

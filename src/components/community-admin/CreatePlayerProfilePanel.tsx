@@ -24,7 +24,7 @@ export function CreatePlayerProfilePanel({
         Create Player Profile
       </h3>
       <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">
-        Add a player to this community.
+        Add a player to this club.
       </p>
       <form onSubmit={onSubmit} className="space-y-3">
         <input

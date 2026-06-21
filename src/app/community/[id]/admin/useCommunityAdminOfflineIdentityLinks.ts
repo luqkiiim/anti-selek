@@ -65,7 +65,7 @@ export function useCommunityAdminOfflineIdentityLinks({
           );
           const data = await safeJson(res);
           if (!res.ok) {
-            throw new Error(data.error || "Failed to search communities");
+            throw new Error(data.error || "Failed to search clubs");
           }
           if (!cancelled) {
             setTargetCommunityCandidates(Array.isArray(data) ? data : []);
@@ -74,7 +74,7 @@ export function useCommunityAdminOfflineIdentityLinks({
           if (!cancelled) {
             setTargetCommunityCandidates([]);
             setError(
-              err instanceof Error ? err.message : "Failed to search communities"
+              err instanceof Error ? err.message : "Failed to search clubs"
             );
           }
         } finally {

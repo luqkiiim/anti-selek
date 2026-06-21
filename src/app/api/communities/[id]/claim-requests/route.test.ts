@@ -92,7 +92,7 @@ function postClaim(body: unknown) {
   );
 }
 
-describe("community claim request route", () => {
+describe("club claim request route", () => {
   beforeEach(() => {
     Object.values(mocks).forEach((mock) => mock.mockReset());
 
@@ -189,14 +189,14 @@ describe("community claim request route", () => {
     });
   });
 
-  it("rejects requesters who are not yet in the community", async () => {
+  it("rejects requesters who are not yet in the club", async () => {
     mocks.communityMemberFindUnique.mockResolvedValue(null);
 
     const response = await postClaim({ targetUserId: "placeholder-1" });
     const body = await response.json();
 
     expect(response.status).toBe(403);
-    expect(body.error).toBe("Join the community before requesting a profile claim");
+    expect(body.error).toBe("Join the club before requesting a profile claim");
     expect(mocks.txClaimRequestCreate).not.toHaveBeenCalled();
   });
 
@@ -215,7 +215,7 @@ describe("community claim request route", () => {
     expect(body.error).toBe("Only claimed accounts can request a profile merge.");
   });
 
-  it("rejects requesters with community rating history", async () => {
+  it("rejects requesters with club rating history", async () => {
     queuePendingRequestChecks({});
     mocks.communityMemberFindUnique.mockResolvedValue({
       userId: "requester-1",
@@ -227,11 +227,11 @@ describe("community claim request route", () => {
 
     expect(response.status).toBe(400);
     expect(body.error).toBe(
-      "This account already has community rating history. Manual merge required."
+      "This account already has club rating history. Manual merge required."
     );
   });
 
-  it("rejects requesters with community tournament history", async () => {
+  it("rejects requesters with club tournament history", async () => {
     queuePendingRequestChecks({});
     mocks.txSessionPlayerFindFirst.mockResolvedValue({ id: "session-player-1" });
 
@@ -240,7 +240,7 @@ describe("community claim request route", () => {
 
     expect(response.status).toBe(400);
     expect(body.error).toBe(
-      "This account already has tournament history in this community. Manual merge required."
+      "This account already has tournament history in this club. Manual merge required."
     );
   });
 
@@ -281,7 +281,7 @@ describe("community claim request route", () => {
     const body = await response.json();
 
     expect(response.status).toBe(409);
-    expect(body.error).toBe("You already have a pending claim request in this community");
+    expect(body.error).toBe("You already have a pending claim request in this club");
   });
 
   it("rejects targets that already have a pending claim request", async () => {

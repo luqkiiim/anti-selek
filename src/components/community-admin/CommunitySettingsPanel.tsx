@@ -65,10 +65,10 @@ export function CommunitySettingsPanel({
       <div className="flex items-start justify-between gap-3">
         <div>
           <h3 className="text-sm font-black text-gray-900 uppercase tracking-widest">
-            Community Settings
+            Club Settings
           </h3>
           <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">
-            Rename the community, update its password, or make it public.
+            Rename the club, update its password, or make it public.
           </p>
         </div>
         <span
@@ -88,7 +88,7 @@ export function CommunitySettingsPanel({
           value={communityName}
           onChange={(e) => onCommunityNameChange(e.target.value)}
           className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl px-4 py-3 font-bold focus:outline-none focus:border-blue-500 transition-all"
-          placeholder="Community name"
+          placeholder="Club name"
           required
         />
         <label className="flex items-center justify-between gap-3 rounded-2xl border-2 border-gray-100 bg-gray-50 px-4 py-3">
@@ -100,9 +100,9 @@ export function CommunitySettingsPanel({
               {passwordProtectionEnabled
                 ? isPasswordProtected
                   ? "Members currently need a password to join."
-                  : "Set a password below to lock this community."
+                  : "Set a password below to lock this club."
                 : isPasswordProtected
-                  ? "Saving will remove the password and make the community public."
+                  ? "Saving will remove the password and make the club public."
                   : "Anyone can join without a password."}
             </p>
           </div>

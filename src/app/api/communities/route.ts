@@ -110,7 +110,7 @@ export async function POST(request: Request) {
 
     const { name, password } = body as { name?: unknown; password?: unknown };
     if (typeof name !== "string" || name.trim().length < 3) {
-      return NextResponse.json({ error: "Community name must be at least 3 characters" }, { status: 400 });
+      return NextResponse.json({ error: "Club name must be at least 3 characters" }, { status: 400 });
     }
     if (password !== undefined && typeof password !== "string") {
       return NextResponse.json({ error: "Invalid password" }, { status: 400 });
@@ -122,7 +122,7 @@ export async function POST(request: Request) {
     const normalizedName = name.trim();
     const normalizedLookupName = normalizeNameLookupKey(normalizedName);
     if (!normalizedLookupName) {
-      return NextResponse.json({ error: "Community name must include letters or numbers" }, { status: 400 });
+      return NextResponse.json({ error: "Club name must include letters or numbers" }, { status: 400 });
     }
 
     const existingCommunities = await prisma.community.findMany({
@@ -132,7 +132,7 @@ export async function POST(request: Request) {
       (community) => normalizeNameLookupKey(community.name) === normalizedLookupName
     );
     if (normalizedNameExists) {
-      return NextResponse.json({ error: "Community name already exists" }, { status: 409 });
+      return NextResponse.json({ error: "Club name already exists" }, { status: 409 });
     }
 
     const passwordHash = typeof password === "string" && password.length > 0
@@ -170,7 +170,7 @@ export async function POST(request: Request) {
         ? (error as { code?: unknown }).code
         : undefined;
     if (code === "P2002") {
-      return NextResponse.json({ error: "Community name already exists" }, { status: 409 });
+      return NextResponse.json({ error: "Club name already exists" }, { status: 409 });
     }
     logError("Create community error", error);
     return safeErrorResponse();

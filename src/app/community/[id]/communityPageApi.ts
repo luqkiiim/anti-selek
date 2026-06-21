@@ -22,7 +22,7 @@ export async function fetchCommunityPageSnapshot(communityId: string) {
   const snapshotRes = await fetch(`/api/communities/${communityId}`);
   const snapshotData = await safeJson(snapshotRes);
   if (!snapshotRes.ok) {
-    throw new Error(snapshotData.error || "Failed to load community");
+    throw new Error(snapshotData.error || "Failed to load club");
   }
 
   return {

@@ -48,7 +48,7 @@ export function useDashboardPage() {
     const res = await fetch("/api/communities");
     const data = await safeJson(res);
     if (!res.ok) {
-      throw new Error(data.error || "Failed to load communities");
+      throw new Error(data.error || "Failed to load clubs");
     }
 
     setCommunities(Array.isArray(data) ? (data as DashboardCommunity[]) : []);
@@ -131,7 +131,7 @@ export function useDashboardPage() {
       });
       const data = await safeJson(res);
       if (!res.ok) {
-        setError(data.error || "Failed to create community");
+        setError(data.error || "Failed to create club");
         return;
       }
 
@@ -145,7 +145,7 @@ export function useDashboardPage() {
       }
     } catch (err: unknown) {
       setError(
-        err instanceof Error ? err.message : "Failed to create community"
+        err instanceof Error ? err.message : "Failed to create club"
       );
     } finally {
       setCreatingCommunity(false);
@@ -168,7 +168,7 @@ export function useDashboardPage() {
       });
       const data = await safeJson(res);
       if (!res.ok) {
-        setError(data.error || "Failed to join community");
+        setError(data.error || "Failed to join club");
         return;
       }
 
@@ -182,7 +182,7 @@ export function useDashboardPage() {
       }
     } catch (err: unknown) {
       setError(
-        err instanceof Error ? err.message : "Failed to join community"
+        err instanceof Error ? err.message : "Failed to join club"
       );
     } finally {
       setJoiningCommunity(false);
