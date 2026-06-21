@@ -9,8 +9,8 @@ import {
 } from "@/lib/rateLimit";
 import { isQuickAccessSession } from "@/lib/quickAccess";
 import {
-  SessionCommunityRole,
-  SessionCommunityStatus,
+  SessionClubRole,
+  SessionClubStatus,
 } from "@/types/enums";
 
 export const dynamic = "force-dynamic";
@@ -56,8 +56,8 @@ export async function PATCH(
 
     const { status } = body as { status?: unknown };
     if (
-      status !== SessionCommunityStatus.ACCEPTED &&
-      status !== SessionCommunityStatus.REJECTED
+      status !== SessionClubStatus.ACCEPTED &&
+      status !== SessionClubStatus.REJECTED
     ) {
       return NextResponse.json({ error: "Invalid collab status" }, { status: 400 });
     }
@@ -69,8 +69,8 @@ export async function PATCH(
         status: true,
         sessionCommunities: {
           where: {
-            role: SessionCommunityRole.PARTNER,
-            status: SessionCommunityStatus.PENDING,
+            role: SessionClubRole.PARTNER,
+            status: SessionClubStatus.PENDING,
           },
           select: {
             id: true,

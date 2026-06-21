@@ -1,6 +1,6 @@
 "use client";
 
-export interface DashboardCommunity {
+export interface DashboardClub {
   id: string;
   name: string;
   role: "ADMIN" | "STAFF" | "MEMBER";

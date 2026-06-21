@@ -2,26 +2,26 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { serializeAvatarEntity } from "@/lib/avatar";
 import { prisma } from "@/lib/prisma";
-import { getCommunityEloByUserId, withCommunityElo } from "@/lib/communityElo";
+import { getClubEloByUserId, withClubElo } from "@/lib/clubElo";
 import {
-  getPlayerCommunityBadges,
+  getPlayerClubBadges,
   getSessionAdminMembership,
   getSessionMembership,
   getSessionOperatorMembership,
-  withPlayerCommunityBadges,
+  withPlayerClubBadges,
 } from "@/lib/sessionCollab";
 import { MatchStatus } from "@/types/enums";
 import { getQueuedMatchUserIds } from "@/lib/sessionQueue";
 import { parseMatchmakingReasonJson } from "@/lib/matchmaking/matchReason";
 import {
-  canQuickAccessCommunity,
+  canQuickAccessClub,
   getQuickAccessDeniedMessage,
   isQuickAccessSession,
 } from "@/lib/quickAccess";
 import { tryRebuildQueuedMatchForSessionId } from "./queue-match/shared";
 import { logError, safeErrorResponse } from "@/lib/errors";
 import { rateLimit, checkInvalidTargetRateLimit, invalidTargetResponse } from "@/lib/rateLimit";
-import { getTutorialCommunityDisplayName } from "@/lib/tutorialPlayground";
+import { getTutorialClubDisplayName } from "@/lib/tutorialPlayground";
 
 export const dynamic = "force-dynamic";
 
@@ -127,7 +127,7 @@ async function getSessionRoute(
   ) {
     return invalidTargetResponse(request, "api:sessions:code");
   }
-  if (!canQuickAccessCommunity(session, sessionData.communityId)) {
+  if (!canQuickAccessClub(session, sessionData.communityId)) {
     return invalidTargetResponse(request, "api:sessions:code");
   }
 
@@ -146,17 +146,17 @@ async function getSessionRoute(
     userId: session.user.id,
     acceptedOnly: true,
   });
-  const communityRole = membership?.role ?? null;
+  const clubRole = membership?.role ?? null;
 
   const isSessionPlayer = sessionData.players.some((p) => p.userId === session.user.id);
   const isQuickAccess = isQuickAccessSession(session);
   const canView =
-    (!isQuickAccess && session.user.isAdmin) || !!communityRole || isSessionPlayer;
+    (!isQuickAccess && session.user.isAdmin) || !!clubRole || isSessionPlayer;
   if (!canView) {
     return invalidTargetResponse(request, "api:sessions:code");
   }
 
-  const linkedCommunityIds = Array.from(
+  const linkedClubIds = Array.from(
     new Set(
       [
         ...(sessionData.communityId ? [sessionData.communityId] : []),
@@ -166,16 +166,16 @@ async function getSessionRoute(
   );
   const playerIds = sessionData.players.map((p) => p.userId);
   const players =
-    linkedCommunityIds.length > 1 && sessionData.players.length > 0
-      ? withPlayerCommunityBadges(
+    linkedClubIds.length > 1 && sessionData.players.length > 0
+      ? withPlayerClubBadges(
           sessionData.players,
-          await getPlayerCommunityBadges(prisma, linkedCommunityIds, playerIds),
+          await getPlayerClubBadges(prisma, linkedClubIds, playerIds),
           sessionData.communityId
         )
       : sessionData.communityId && sessionData.players.length > 0
-        ? withCommunityElo(
+        ? withClubElo(
             sessionData.players,
-            await getCommunityEloByUserId(sessionData.communityId, playerIds)
+            await getClubEloByUserId(sessionData.communityId, playerIds)
           )
         : sessionData.players;
   const serializedPlayers = players.map((player) => ({
@@ -238,16 +238,16 @@ async function getSessionRoute(
     courts,
     players: serializedPlayers,
     queuedMatch,
-    viewerCommunityRole: communityRole,
+    viewerCommunityRole: clubRole,
     viewerCanManage:
       !isQuickAccess && (session.user.isAdmin || !!operatorMembership),
     viewerCanUseAdminSessionControls:
       !isQuickAccess && (session.user.isAdmin || !!adminMembership),
-    isTutorialCommunity: sessionData.community?.isTutorial === true,
+    isTutorialClub: sessionData.community?.isTutorial === true,
     tutorialOwnerId: sessionData.community?.tutorialOwnerId ?? null,
     communities: sessionData.sessionCommunities.map((link) => ({
       id: link.community.id,
-      name: getTutorialCommunityDisplayName(link.community),
+      name: getTutorialClubDisplayName(link.community),
       role: link.role,
       status: link.status,
     })),

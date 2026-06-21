@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
-  CommunityPlayerStatus,
+  ClubPlayerStatus,
   PartnerPreference,
   PlayerGender,
 } from "@/types/enums";
@@ -73,7 +73,7 @@ describe("collab roster route", () => {
       {
         userId: "user-shared",
         elo: 1200,
-        status: CommunityPlayerStatus.CORE,
+        status: ClubPlayerStatus.CORE,
         role: "MEMBER",
         createdAt,
         community: { id: "community-1", name: "Host Club" },
@@ -92,7 +92,7 @@ describe("collab roster route", () => {
       {
         userId: "user-shared",
         elo: 1310,
-        status: CommunityPlayerStatus.OCCASIONAL,
+        status: ClubPlayerStatus.OCCASIONAL,
         role: "MEMBER",
         createdAt,
         community: { id: "community-2", name: "Partner Club" },
@@ -111,7 +111,7 @@ describe("collab roster route", () => {
       {
         userId: "user-duplicate-name",
         elo: 980,
-        status: CommunityPlayerStatus.CORE,
+        status: ClubPlayerStatus.CORE,
         role: "MEMBER",
         createdAt,
         community: { id: "community-2", name: "Partner Club" },

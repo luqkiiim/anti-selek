@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { getCommunityAdminAccess } from "@/lib/communityAdminPermissions";
+import { getClubAdminAccess } from "@/lib/clubAdminPermissions";
 import { prisma } from "@/lib/prisma";
 import {
-  approveCommunityClaimRequest,
-  CommunityClaimError,
-} from "@/lib/communityClaims";
+  approveClubClaimRequest,
+  ClubClaimError,
+} from "@/lib/clubClaims";
 import { getQuickAccessDeniedMessage, isQuickAccessSession } from "@/lib/quickAccess";
 import { ClaimRequestStatus } from "@/types/enums";
 import { logError, safeErrorResponse } from "@/lib/errors";
@@ -41,7 +41,7 @@ export async function PATCH(
     const invalidTargetLimitResponse = await checkInvalidTargetRateLimit(request, "api:communities:id:claim-requests:requestId");
 
     if (invalidTargetLimitResponse) return invalidTargetLimitResponse;
-    const adminAccess = await getCommunityAdminAccess(prisma, {
+    const adminAccess = await getClubAdminAccess(prisma, {
       communityId,
       userId: session.user.id,
       isGlobalAdmin: !!session.user.isAdmin,
@@ -83,7 +83,7 @@ export async function PATCH(
       }
 
       const approved = await prisma.$transaction((tx) =>
-        approveCommunityClaimRequest(tx, {
+        approveClubClaimRequest(tx, {
           communityId,
           requestId,
           reviewerUserId: session.user.id,
@@ -130,14 +130,14 @@ export async function PATCH(
 
     return NextResponse.json(rejected);
   } catch (error) {
-    if (error instanceof CommunityClaimError) {
+    if (error instanceof ClubClaimError) {
       return NextResponse.json(
         { error: error.message },
         { status: error.statusCode }
       );
     }
 
-    logError("Review community claim request error", error);
+    logError("Review club claim request error", error);
     return safeErrorResponse();
   }
 }

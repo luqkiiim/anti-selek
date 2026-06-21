@@ -461,18 +461,18 @@ async function captureScreens() {
         return;
       }
 
-      await page.getByRole("button", { name: "Create Community" }).click();
+      await page.getByRole("button", { name: "Create Club" }).click();
       await page
-        .getByRole("heading", { name: "Create community" })
+        .getByRole("heading", { name: "Create club" })
         .waitFor();
-      await saveScreenshot(page, "popup-create-community-mobile.png", {
+      await saveScreenshot(page, "popup-create-club-mobile.png", {
         fullPage: false,
       });
       await closeTopModal(page);
 
-      await page.getByRole("button", { name: "Join Community" }).click();
-      await page.getByRole("heading", { name: "Join community" }).waitFor();
-      await saveScreenshot(page, "popup-join-community-mobile.png", {
+      await page.getByRole("button", { name: "Join Club" }).click();
+      await page.getByRole("heading", { name: "Join club" }).waitFor();
+      await saveScreenshot(page, "popup-join-club-mobile.png", {
         fullPage: false,
       });
       await closeTopModal(page);
@@ -516,11 +516,11 @@ async function captureScreens() {
       }
 
       await page.goto(`${baseURL}/community/${ids.hostCommunityId}/admin`);
-      await page.getByRole("heading", { name: "Community controls" }).waitFor();
+      await page.getByRole("heading", { name: "Club controls" }).waitFor();
       await page.getByRole("button", { name: "Settings" }).click();
-      await page.getByRole("button", { name: "Delete community" }).click();
+      await page.getByRole("button", { name: "Delete club" }).click();
       await page
-        .getByRole("heading", { name: "Delete community permanently?" })
+        .getByRole("heading", { name: "Delete club permanently?" })
         .waitFor();
       await saveScreenshot(page, "popup-admin-delete-confirm-mobile.png", {
         fullPage: false,
@@ -574,7 +574,7 @@ async function captureScreens() {
         .scrollIntoViewIfNeeded();
     }
 
-    async function waitForCommunityMobileSection(page, section) {
+    async function waitForClubMobileSection(page, section) {
       const labelsBySection = {
         overview: "Overview",
         tournaments: "Tournaments",
@@ -586,7 +586,7 @@ async function captureScreens() {
       if (!tabLabel) return;
 
       const mobileTab = page
-        .locator(`nav[aria-label="Community navigation"] button[aria-label="${tabLabel}"]`)
+        .locator(`nav[aria-label="Club navigation"] button[aria-label="${tabLabel}"]`)
         .filter({ visible: true })
         .first();
 
@@ -597,13 +597,13 @@ async function captureScreens() {
       await page.waitForFunction(
         ({ section: targetSection, tabLabel: targetTabLabel }) => {
           const activeTab = document.querySelector(
-            `nav[aria-label="Community navigation"] button[aria-label="${targetTabLabel}"]`
+            `nav[aria-label="Club navigation"] button[aria-label="${targetTabLabel}"]`
           );
           const pager = document.querySelector(
             "div.app-swipe-track.overflow-x-auto"
           );
           const panel = document.querySelector(
-            `[data-community-section="${targetSection}"]`
+            `[data-club-section="${targetSection}"]`
           );
 
           if (activeTab?.getAttribute("aria-current") !== "page") {
@@ -732,7 +732,7 @@ async function captureScreens() {
       await page
         .getByRole("heading", { name: "UI Review Host Club" })
         .waitFor();
-      await saveFlowScreenshot(page, `community-hub-${label}.png`, label);
+      await saveFlowScreenshot(page, `club-hub-${label}.png`, label);
 
       await page.getByRole("button", { name: "Open Host Setup" }).click();
       await page
@@ -740,7 +740,7 @@ async function captureScreens() {
         .filter({ visible: true })
         .first()
         .waitFor();
-      await waitForCommunityMobileSection(page, "host");
+      await waitForClubMobileSection(page, "host");
       await saveFlowScreenshot(page, `host-setup-${label}.png`, label);
       await captureHostSetupPopups(page, label);
       await captureAdminConfirmPopup(page, label);

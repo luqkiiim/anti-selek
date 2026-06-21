@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { serializeAvatarEntity } from "@/lib/avatar";
 import {
-  getCommunityStatUserResolver,
+  getClubStatUserResolver,
   getOfflineIdentityInfoByUserId,
 } from "@/lib/offlineIdentities";
 import { prisma } from "@/lib/prisma";
@@ -16,7 +16,7 @@ import {
   resolveMixedSideState,
 } from "@/lib/mixedSide";
 import {
-  CommunityPlayerStatus,
+  ClubPlayerStatus,
   PlayerGender,
 } from "@/types/enums";
 import {
@@ -24,14 +24,14 @@ import {
   isQuickAccessSession,
   normalizeNameLookupKey,
 } from "@/lib/quickAccess";
-import { getCommunityAdminAccess } from "@/lib/communityAdminPermissions";
+import { getClubAdminAccess } from "@/lib/clubAdminPermissions";
 
-function isValidCommunityPlayerStatus(
+function isValidClubPlayerStatus(
   value: unknown
-): value is CommunityPlayerStatus {
+): value is ClubPlayerStatus {
   return (
-    value === CommunityPlayerStatus.CORE ||
-    value === CommunityPlayerStatus.OCCASIONAL
+    value === ClubPlayerStatus.CORE ||
+    value === ClubPlayerStatus.OCCASIONAL
   );
 }
 
@@ -177,7 +177,7 @@ export async function GET(
     for (const member of members) {
       statsByUserId.set(member.user.id, { wins: 0, losses: 0 });
     }
-    const resolveStatUserId = await getCommunityStatUserResolver(prisma, {
+    const resolveStatUserId = await getClubStatUserResolver(prisma, {
       communityId: id,
       memberUserIds: members.map((member) => member.user.id),
     });
@@ -217,9 +217,9 @@ export async function GET(
           email: m.user.email,
           avatarUrl: serializeAvatarEntity(m.user).avatarUrl,
           status:
-            m.status === CommunityPlayerStatus.OCCASIONAL
-              ? CommunityPlayerStatus.OCCASIONAL
-              : CommunityPlayerStatus.CORE,
+            m.status === ClubPlayerStatus.OCCASIONAL
+              ? ClubPlayerStatus.OCCASIONAL
+              : ClubPlayerStatus.CORE,
           gender:
             [PlayerGender.MALE, PlayerGender.FEMALE].includes(m.user.gender as PlayerGender)
               ? m.user.gender
@@ -238,13 +238,13 @@ export async function GET(
           role: m.role,
           isOwner: m.user.id === community.createdById,
           offlineIdentityId: offlineIdentityInfo?.offlineIdentityId ?? null,
-          linkedCommunityBadges:
-            offlineIdentityInfo?.linkedCommunityBadges ?? [],
+          linkedClubBadges:
+            offlineIdentityInfo?.linkedClubBadges ?? [],
         };
       })
     );
   } catch (error) {
-    logError("List community members error", error);
+    logError("List club members error", error);
     return safeErrorResponse();
   }
 }
@@ -278,7 +278,7 @@ export async function POST(
 
     if (invalidTargetLimitResponse) return invalidTargetLimitResponse;
 
-    const adminAccess = await getCommunityAdminAccess(prisma, {
+    const adminAccess = await getClubAdminAccess(prisma, {
       communityId: id,
       userId: session.user.id,
       isGlobalAdmin: !!session.user.isAdmin,
@@ -336,7 +336,7 @@ export async function POST(
     ) {
       return NextResponse.json({ error: "Invalid mixed side override" }, { status: 400 });
     }
-    if (status !== undefined && !isValidCommunityPlayerStatus(status)) {
+    if (status !== undefined && !isValidClubPlayerStatus(status)) {
       return NextResponse.json({ error: "Invalid roster status" }, { status: 400 });
     }
 
@@ -495,9 +495,9 @@ export async function POST(
         communityId: id,
         userId: user.id,
         role: "MEMBER",
-        status: isValidCommunityPlayerStatus(status)
+        status: isValidClubPlayerStatus(status)
           ? status
-          : CommunityPlayerStatus.CORE,
+          : ClubPlayerStatus.CORE,
       },
       select: {
         role: true,
@@ -512,9 +512,9 @@ export async function POST(
       email: user.email,
       avatarUrl: serializeAvatarEntity(user).avatarUrl,
       status:
-        membership.status === CommunityPlayerStatus.OCCASIONAL
-          ? CommunityPlayerStatus.OCCASIONAL
-          : CommunityPlayerStatus.CORE,
+        membership.status === ClubPlayerStatus.OCCASIONAL
+          ? ClubPlayerStatus.OCCASIONAL
+          : ClubPlayerStatus.CORE,
       gender: resolvedGender,
       partnerPreference: resolvedMixedState.partnerPreference,
       mixedSideOverride: resolvedMixedState.mixedSideOverride,
@@ -526,7 +526,7 @@ export async function POST(
       isOwner: user.id === adminAccess.createdById,
     });
   } catch (error) {
-    logError("Add community member error", error);
+    logError("Add club member error", error);
     return safeErrorResponse();
   }
 }

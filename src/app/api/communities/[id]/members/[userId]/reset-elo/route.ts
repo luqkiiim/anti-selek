@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { getCommunityAdminAccess } from "@/lib/communityAdminPermissions";
+import { getClubAdminAccess } from "@/lib/clubAdminPermissions";
 import { prisma } from "@/lib/prisma";
 import { getQuickAccessDeniedMessage, isQuickAccessSession } from "@/lib/quickAccess";
 import { logError, safeErrorResponse } from "@/lib/errors";
@@ -37,7 +37,7 @@ export async function POST(
 
     if (invalidTargetLimitResponse) return invalidTargetLimitResponse;
 
-    const adminAccess = await getCommunityAdminAccess(prisma, {
+    const adminAccess = await getClubAdminAccess(prisma, {
       communityId,
       userId: session.user.id,
       isGlobalAdmin: !!session.user.isAdmin,
@@ -91,7 +91,7 @@ export async function POST(
       elo: updatedMembership.elo,
     });
   } catch (error: unknown) {
-    logError("Community admin reset ELO error", error);
+    logError("Club admin reset ELO error", error);
     return safeErrorResponse();
   }
 }

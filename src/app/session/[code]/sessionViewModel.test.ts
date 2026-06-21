@@ -1,13 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { buildSessionViewModel } from "./sessionViewModel";
 import type {
-  CommunityUser,
+  ClubUser,
   ManualMatchFormState,
   Player,
   SessionData,
 } from "@/components/session/sessionTypes";
 import {
-  CommunityPlayerStatus,
+  ClubPlayerStatus,
   MatchStatus,
   PartnerPreference,
   PlayerGender,
@@ -94,14 +94,14 @@ describe("buildSessionViewModel", () => {
       }),
     ];
 
-    const communityPlayers: CommunityUser[] = [
+    const communityPlayers: ClubUser[] = [
       ...players
         .filter((player) => !player.isGuest)
         .map((player) => ({
           id: player.userId,
           name: player.user.name,
           elo: player.user.elo,
-          status: CommunityPlayerStatus.CORE,
+          status: ClubPlayerStatus.CORE,
           gender: player.gender,
           partnerPreference: player.partnerPreference,
         })),
@@ -109,7 +109,7 @@ describe("buildSessionViewModel", () => {
         id: "u10",
         name: "Julia",
         elo: 1020,
-        status: CommunityPlayerStatus.CORE,
+        status: ClubPlayerStatus.CORE,
         gender: PlayerGender.FEMALE,
         partnerPreference: PartnerPreference.FEMALE_FLEX,
       },

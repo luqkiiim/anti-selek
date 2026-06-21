@@ -1,16 +1,16 @@
 import { serializeAvatarEntity } from "@/lib/avatar";
-import { isCommunityAdminRole } from "@/lib/communityRoles";
+import { isClubAdminRole } from "@/lib/clubRoles";
 import { prisma } from "@/lib/prisma";
-import { getCommunityEloByUserId, withCommunityElo } from "@/lib/communityElo";
+import { getClubEloByUserId, withClubElo } from "@/lib/clubElo";
 import {
-  getPlayerCommunityBadges,
-  withPlayerCommunityBadges,
+  getPlayerClubBadges,
+  withPlayerClubBadges,
 } from "@/lib/sessionCollab";
-import { getTutorialCommunityDisplayName } from "@/lib/tutorialPlayground";
-import { SessionCommunityStatus } from "@/types/enums";
+import { getTutorialClubDisplayName } from "@/lib/tutorialPlayground";
+import { SessionClubStatus } from "@/types/enums";
 import { SessionRouteError } from "./sessionRouteShared";
 
-export async function listSessionsForCommunity({
+export async function listSessionsForClub({
   communityId,
   viewerId,
   viewerIsAdmin,
@@ -33,9 +33,9 @@ export async function listSessionsForCommunity({
   }
 
   const visibleCollabStatuses =
-    viewerIsAdmin || isCommunityAdminRole(membership?.role)
-      ? [SessionCommunityStatus.ACCEPTED, SessionCommunityStatus.PENDING]
-      : [SessionCommunityStatus.ACCEPTED];
+    viewerIsAdmin || isClubAdminRole(membership?.role)
+      ? [SessionClubStatus.ACCEPTED, SessionClubStatus.PENDING]
+      : [SessionClubStatus.ACCEPTED];
   const sessions = await prisma.session.findMany({
     where: {
       OR: [
@@ -73,7 +73,7 @@ export async function listSessionsForCommunity({
   const userIds = Array.from(
     new Set(sessions.flatMap((session) => session.players.map((player) => player.userId)))
   );
-  const communityEloByUserId = await getCommunityEloByUserId(communityId, userIds);
+  const clubEloByUserId = await getClubEloByUserId(communityId, userIds);
   const communityIds = Array.from(
     new Set(
       sessions.flatMap((session) => [
@@ -82,14 +82,14 @@ export async function listSessionsForCommunity({
       ])
     )
   );
-  const badgesByUserId = await getPlayerCommunityBadges(
+  const badgesByUserId = await getPlayerClubBadges(
     prisma,
     communityIds,
     userIds
   );
 
   return sessions.map((session) => {
-    const currentCommunityLink = session.sessionCommunities.find(
+    const currentClubLink = session.sessionCommunities.find(
       (link) => link.communityId === communityId
     );
     const partnerLink = session.sessionCommunities.find(
@@ -101,23 +101,23 @@ export async function listSessionsForCommunity({
       players:
         (
           session.sessionCommunities.length > 1
-            ? withPlayerCommunityBadges(
+            ? withPlayerClubBadges(
                 session.players,
                 badgesByUserId,
                 communityId
               )
-            : withCommunityElo(session.players, communityEloByUserId)
+            : withClubElo(session.players, clubEloByUserId)
         ).map((player) => ({
           ...player,
           user: serializeAvatarEntity(player.user),
         })),
       collabStatus:
-        currentCommunityLink?.role === "PARTNER"
-          ? currentCommunityLink.status
-          : partnerLink?.status ?? SessionCommunityStatus.ACCEPTED,
+        currentClubLink?.role === "PARTNER"
+          ? currentClubLink.status
+          : partnerLink?.status ?? SessionClubStatus.ACCEPTED,
       communities: session.sessionCommunities.map((link) => ({
         id: link.community.id,
-        name: getTutorialCommunityDisplayName(link.community),
+        name: getTutorialClubDisplayName(link.community),
         role: link.role,
         status: link.status,
       })),

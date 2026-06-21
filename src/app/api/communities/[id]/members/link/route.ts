@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { logError, safeErrorResponse } from "@/lib/errors";
 import { rateLimit } from "@/lib/rateLimit";
-import { DISABLED_CROSS_COMMUNITY_PLAYER_ADMIN_MESSAGE } from "@/lib/communityAdminDisabledFeatures";
+import { DISABLED_CROSS_COMMUNITY_PLAYER_ADMIN_MESSAGE } from "@/lib/clubAdminDisabledFeatures";
 
 export const dynamic = "force-dynamic";
 
@@ -47,7 +47,7 @@ export async function POST(request: Request) {
       error: DISABLED_CROSS_COMMUNITY_PLAYER_ADMIN_MESSAGE,
     }, { status: 403 });
   } catch (error: unknown) {
-    logError("Link player into community error", error);
+    logError("Link player into club error", error);
     return safeErrorResponse();
   }
 }

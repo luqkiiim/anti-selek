@@ -4,7 +4,7 @@ import { finalizeMatchResult } from "@/lib/matchCompletion";
 import { canApprovePendingSubmission } from "@/lib/matchApprovalRules";
 import { MATCH_SCORE_ERROR_MESSAGE, isValidMatchScore } from "@/lib/matchRules";
 import { prisma } from "@/lib/prisma";
-import { canQuickAccessCommunity, isQuickAccessSession } from "@/lib/quickAccess";
+import { canQuickAccessClub, isQuickAccessSession } from "@/lib/quickAccess";
 import { getSessionOperatorMembership } from "@/lib/sessionCollab";
 import { MatchStatus } from "@/types/enums";
 import { reconcileSessionQueueAfterCourtChange } from "../../_lib/reconcileSessionQueue";
@@ -52,7 +52,7 @@ export async function POST(
     if (!match) {
       return invalidTargetResponse(request, "api:matches:id:approve");
     }
-    if (!canQuickAccessCommunity(session, match.session.communityId)) {
+    if (!canQuickAccessClub(session, match.session.communityId)) {
       return invalidTargetResponse(request, "api:matches:id:approve");
     }
 

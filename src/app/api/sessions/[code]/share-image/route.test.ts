@@ -11,7 +11,7 @@ const mocks = vi.hoisted(() => ({
   auth: vi.fn(),
   sessionFindUnique: vi.fn(),
   getSessionMembership: vi.fn(),
-  canQuickAccessCommunity: vi.fn(),
+  canQuickAccessClub: vi.fn(),
   isQuickAccessSession: vi.fn(),
   invalidTargetResponse: vi.fn(),
   rateLimit: vi.fn(),
@@ -45,7 +45,7 @@ vi.mock("@/lib/sessionCollab", () => ({
 }));
 
 vi.mock("@/lib/quickAccess", () => ({
-  canQuickAccessCommunity: mocks.canQuickAccessCommunity,
+  canQuickAccessClub: mocks.canQuickAccessClub,
   isQuickAccessSession: mocks.isQuickAccessSession,
 }));
 
@@ -129,7 +129,7 @@ describe("session share image route", () => {
     mocks.auth.mockResolvedValue({ user: { id: "viewer", isAdmin: false } });
     mocks.sessionFindUnique.mockResolvedValue(createSessionData());
     mocks.getSessionMembership.mockResolvedValue({ role: "MEMBER" });
-    mocks.canQuickAccessCommunity.mockReturnValue(true);
+    mocks.canQuickAccessClub.mockReturnValue(true);
     mocks.isQuickAccessSession.mockReturnValue(false);
     mocks.invalidTargetResponse.mockImplementation(() =>
       Response.json({ error: "Unauthorized" }, { status: 403 })

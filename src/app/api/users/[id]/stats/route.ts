@@ -2,10 +2,10 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { serializeAvatarEntity } from "@/lib/avatar";
 import { prisma } from "@/lib/prisma";
-import { buildProfileCommunityRankWindow } from "@/lib/profileCommunityRank";
+import { buildProfileClubRankWindow } from "@/lib/profileClubRank";
 import { buildPlayerProfileDerivedData } from "@/lib/profileStats";
-import { canQuickAccessCommunity, isQuickAccessSession } from "@/lib/quickAccess";
-import { CommunityPlayerStatus, MatchStatus } from "@/types/enums";
+import { canQuickAccessClub, isQuickAccessSession } from "@/lib/quickAccess";
+import { ClubPlayerStatus, MatchStatus } from "@/types/enums";
 import { logError, safeErrorResponse } from "@/lib/errors";
 import { rateLimit, checkInvalidTargetRateLimit, invalidTargetResponse } from "@/lib/rateLimit";
 
@@ -51,7 +51,7 @@ async function getUserStatsRoute(
   let context:
     | {
         communityId: string;
-        viewerCanManageCommunity: boolean;
+        viewerCanManageClub: boolean;
         rankContext: {
           leaderboardSize: number;
           currentRank: number | null;
@@ -60,7 +60,7 @@ async function getUserStatsRoute(
         };
       }
     | null = null;
-  let viewerCanManageCommunity = false;
+  let viewerCanManageClub = false;
   let leaderboardMembers: Array<{
     userId: string;
     elo: number;
@@ -70,7 +70,7 @@ async function getUserStatsRoute(
   }> = [];
 
   if (communityId) {
-    if (!canQuickAccessCommunity(session, communityId)) {
+    if (!canQuickAccessClub(session, communityId)) {
       return invalidTargetResponse(request, "api:users:id:stats");
     }
 
@@ -112,7 +112,7 @@ async function getUserStatsRoute(
       return invalidTargetResponse(request, "api:users:id:stats");
     }
 
-    viewerCanManageCommunity =
+    viewerCanManageClub =
       !isQuickAccessSession(session) &&
       (requesterMembership.role === "ADMIN" || !!session.user.isAdmin);
     effectiveElo = targetMembership.elo;
@@ -121,7 +121,7 @@ async function getUserStatsRoute(
       where: {
         communityId,
         status: {
-          not: CommunityPlayerStatus.OCCASIONAL,
+          not: ClubPlayerStatus.OCCASIONAL,
         },
       },
       select: {
@@ -231,8 +231,8 @@ async function getUserStatsRoute(
 
     context = {
       communityId,
-      viewerCanManageCommunity,
-      rankContext: buildProfileCommunityRankWindow(
+      viewerCanManageClub,
+      rankContext: buildProfileClubRankWindow(
         id,
         leaderboardMembers.map((member) => ({
           userId: member.userId,

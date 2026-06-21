@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import type { DashboardCommunity } from "@/components/dashboard/dashboardTypes";
+import type { DashboardClub } from "@/components/dashboard/dashboardTypes";
 
 interface TutorialPlaygroundSummary {
   communityId: string;
@@ -19,15 +19,15 @@ export function useDashboardPage() {
   const router = useRouter();
   const isQuickAccess = session?.user?.isQuickAccess === true;
 
-  const [communities, setCommunities] = useState<DashboardCommunity[]>([]);
-  const [newCommunityName, setNewCommunityName] = useState("");
-  const [newCommunityPassword, setNewCommunityPassword] = useState("");
-  const [joinCommunityName, setJoinCommunityName] = useState("");
-  const [joinCommunityPassword, setJoinCommunityPassword] = useState("");
-  const [isCreateCommunityOpen, setIsCreateCommunityOpen] = useState(false);
-  const [isJoinCommunityOpen, setIsJoinCommunityOpen] = useState(false);
-  const [creatingCommunity, setCreatingCommunity] = useState(false);
-  const [joiningCommunity, setJoiningCommunity] = useState(false);
+  const [clubs, setClubs] = useState<DashboardClub[]>([]);
+  const [newClubName, setNewClubName] = useState("");
+  const [newClubPassword, setNewClubPassword] = useState("");
+  const [joinClubName, setJoinClubName] = useState("");
+  const [joinClubPassword, setJoinClubPassword] = useState("");
+  const [isCreateClubOpen, setIsCreateClubOpen] = useState(false);
+  const [isJoinClubOpen, setIsJoinClubOpen] = useState(false);
+  const [creatingClub, setCreatingClub] = useState(false);
+  const [joiningClub, setJoiningClub] = useState(false);
   const [openingTutorialPlayground, setOpeningTutorialPlayground] =
     useState(false);
   const [tutorialPlayground, setTutorialPlayground] =
@@ -44,14 +44,14 @@ export function useDashboardPage() {
     }
   }, []);
 
-  const fetchCommunities = useCallback(async () => {
+  const fetchClubs = useCallback(async () => {
     const res = await fetch("/api/communities");
     const data = await safeJson(res);
     if (!res.ok) {
       throw new Error(data.error || "Failed to load clubs");
     }
 
-    setCommunities(Array.isArray(data) ? (data as DashboardCommunity[]) : []);
+    setClubs(Array.isArray(data) ? (data as DashboardClub[]) : []);
   }, [safeJson]);
 
   const fetchTutorialPlayground = useCallback(async () => {
@@ -84,7 +84,7 @@ export function useDashboardPage() {
     void (async () => {
       try {
         setError("");
-        await Promise.all([fetchCommunities(), fetchTutorialPlayground()]);
+        await Promise.all([fetchClubs(), fetchTutorialPlayground()]);
       } catch (err: unknown) {
         setError(
           err instanceof Error ? err.message : "Failed to load dashboard"
@@ -93,40 +93,40 @@ export function useDashboardPage() {
         setLoading(false);
       }
     })();
-  }, [fetchCommunities, fetchTutorialPlayground, router, status]);
+  }, [fetchClubs, fetchTutorialPlayground, router, status]);
 
-  const openCreateCommunityModal = () => {
+  const openCreateClubModal = () => {
     setError("");
-    setIsCreateCommunityOpen(true);
+    setIsCreateClubOpen(true);
   };
 
-  const closeCreateCommunityModal = () => {
-    if (creatingCommunity) return;
-    setIsCreateCommunityOpen(false);
+  const closeCreateClubModal = () => {
+    if (creatingClub) return;
+    setIsCreateClubOpen(false);
   };
 
-  const openJoinCommunityModal = () => {
+  const openJoinClubModal = () => {
     setError("");
-    setIsJoinCommunityOpen(true);
+    setIsJoinClubOpen(true);
   };
 
-  const closeJoinCommunityModal = () => {
-    if (joiningCommunity) return;
-    setIsJoinCommunityOpen(false);
+  const closeJoinClubModal = () => {
+    if (joiningClub) return;
+    setIsJoinClubOpen(false);
   };
 
-  const createCommunity = async () => {
-    if (!newCommunityName.trim()) return;
+  const createClub = async () => {
+    if (!newClubName.trim()) return;
 
-    setCreatingCommunity(true);
+    setCreatingClub(true);
     setError("");
     try {
       const res = await fetch("/api/communities", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          name: newCommunityName,
-          password: newCommunityPassword || undefined,
+          name: newClubName,
+          password: newClubPassword || undefined,
         }),
       });
       const data = await safeJson(res);
@@ -135,10 +135,10 @@ export function useDashboardPage() {
         return;
       }
 
-      setNewCommunityName("");
-      setNewCommunityPassword("");
-      setIsCreateCommunityOpen(false);
-      await fetchCommunities();
+      setNewClubName("");
+      setNewClubPassword("");
+      setIsCreateClubOpen(false);
+      await fetchClubs();
 
       if (data?.id) {
         router.push(`/community/${data.id}`);
@@ -148,22 +148,22 @@ export function useDashboardPage() {
         err instanceof Error ? err.message : "Failed to create club"
       );
     } finally {
-      setCreatingCommunity(false);
+      setCreatingClub(false);
     }
   };
 
-  const joinCommunity = async () => {
-    if (!joinCommunityName.trim()) return;
+  const joinClub = async () => {
+    if (!joinClubName.trim()) return;
 
-    setJoiningCommunity(true);
+    setJoiningClub(true);
     setError("");
     try {
       const res = await fetch("/api/communities/join", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          name: joinCommunityName,
-          password: joinCommunityPassword || undefined,
+          name: joinClubName,
+          password: joinClubPassword || undefined,
         }),
       });
       const data = await safeJson(res);
@@ -172,10 +172,10 @@ export function useDashboardPage() {
         return;
       }
 
-      setJoinCommunityName("");
-      setJoinCommunityPassword("");
-      setIsJoinCommunityOpen(false);
-      await fetchCommunities();
+      setJoinClubName("");
+      setJoinClubPassword("");
+      setIsJoinClubOpen(false);
+      await fetchClubs();
 
       if (data?.id) {
         router.push(`/community/${data.id}`);
@@ -185,7 +185,7 @@ export function useDashboardPage() {
         err instanceof Error ? err.message : "Failed to join club"
       );
     } finally {
-      setJoiningCommunity(false);
+      setJoiningClub(false);
     }
   };
 
@@ -223,30 +223,30 @@ export function useDashboardPage() {
     status,
     isQuickAccess,
     accountName: session?.user?.name ?? "",
-    communities,
-    newCommunityName,
-    setNewCommunityName,
-    newCommunityPassword,
-    setNewCommunityPassword,
-    joinCommunityName,
-    setJoinCommunityName,
-    joinCommunityPassword,
-    setJoinCommunityPassword,
-    isCreateCommunityOpen,
-    isJoinCommunityOpen,
-    creatingCommunity,
-    joiningCommunity,
+    clubs,
+    newClubName,
+    setNewClubName,
+    newClubPassword,
+    setNewClubPassword,
+    joinClubName,
+    setJoinClubName,
+    joinClubPassword,
+    setJoinClubPassword,
+    isCreateClubOpen,
+    isJoinClubOpen,
+    creatingClub,
+    joiningClub,
     openingTutorialPlayground,
     tutorialPlayground,
     loading,
     error,
     setError,
-    openCreateCommunityModal,
-    closeCreateCommunityModal,
-    openJoinCommunityModal,
-    closeJoinCommunityModal,
-    createCommunity,
-    joinCommunity,
+    openCreateClubModal,
+    closeCreateClubModal,
+    openJoinClubModal,
+    closeJoinClubModal,
+    createClub,
+    joinClub,
     openTutorialPlayground,
   };
 }

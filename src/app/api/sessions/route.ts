@@ -2,12 +2,12 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { parseCreateSessionRequest } from "./createSessionRequest";
 import { createSessionForUser } from "./createSessionService";
-import { listSessionsForCommunity } from "./listSessionsService";
+import { listSessionsForClub } from "./listSessionsService";
 import { SessionRouteError } from "./sessionRouteShared";
 import { logError, safeErrorResponse } from "@/lib/errors";
 import { rateLimit } from "@/lib/rateLimit";
 import {
-  canQuickAccessCommunity,
+  canQuickAccessClub,
   getQuickAccessDeniedMessage,
   isQuickAccessSession,
 } from "@/lib/quickAccess";
@@ -64,11 +64,11 @@ export async function GET(request: Request) {
     if (!communityId) {
       return NextResponse.json([]);
     }
-    if (!canQuickAccessCommunity(session, communityId)) {
+    if (!canQuickAccessClub(session, communityId)) {
       return NextResponse.json({ error: "Not authorized" }, { status: 403 });
     }
 
-    const sessions = await listSessionsForCommunity({
+    const sessions = await listSessionsForClub({
       communityId,
       viewerId: session.user.id,
       viewerIsAdmin: !isQuickAccessSession(session) && !!session.user.isAdmin,

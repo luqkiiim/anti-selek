@@ -12,11 +12,11 @@ const mocks = vi.hoisted(() => ({
   matchDeleteMany: vi.fn(),
   transaction: vi.fn(),
   getSessionOperatorMembership: vi.fn(),
-  getAcceptedSessionCommunityIds: vi.fn(),
-  getPlayerCommunityBadges: vi.fn(),
-  withPlayerCommunityBadges: vi.fn(),
-  getCommunityEloByUserId: vi.fn(),
-  withCommunityElo: vi.fn(),
+  getAcceptedSessionClubIds: vi.fn(),
+  getPlayerClubBadges: vi.fn(),
+  withPlayerClubBadges: vi.fn(),
+  getClubEloByUserId: vi.fn(),
+  withClubElo: vi.fn(),
 }));
 
 vi.mock("@/lib/auth", () => ({
@@ -33,15 +33,15 @@ vi.mock("@/lib/prisma", () => ({
 }));
 
 vi.mock("@/lib/sessionCollab", () => ({
-  getAcceptedSessionCommunityIds: mocks.getAcceptedSessionCommunityIds,
-  getPlayerCommunityBadges: mocks.getPlayerCommunityBadges,
+  getAcceptedSessionClubIds: mocks.getAcceptedSessionClubIds,
+  getPlayerClubBadges: mocks.getPlayerClubBadges,
   getSessionOperatorMembership: mocks.getSessionOperatorMembership,
-  withPlayerCommunityBadges: mocks.withPlayerCommunityBadges,
+  withPlayerClubBadges: mocks.withPlayerClubBadges,
 }));
 
-vi.mock("@/lib/communityElo", () => ({
-  getCommunityEloByUserId: mocks.getCommunityEloByUserId,
-  withCommunityElo: mocks.withCommunityElo,
+vi.mock("@/lib/clubElo", () => ({
+  getClubEloByUserId: mocks.getClubEloByUserId,
+  withClubElo: mocks.withClubElo,
 }));
 
 vi.mock("@/lib/rateLimit", () => ({
@@ -65,11 +65,11 @@ describe("session end route", () => {
       Response.json({ error: "Unauthorized" }, { status: 403 })
     );
     mocks.getSessionOperatorMembership.mockResolvedValue({ role: "STAFF" });
-    mocks.getAcceptedSessionCommunityIds.mockResolvedValue(["community-1"]);
-    mocks.getCommunityEloByUserId.mockResolvedValue(new Map());
-    mocks.withCommunityElo.mockImplementation((players) => players);
-    mocks.getPlayerCommunityBadges.mockResolvedValue(new Map());
-    mocks.withPlayerCommunityBadges.mockImplementation((players) => players);
+    mocks.getAcceptedSessionClubIds.mockResolvedValue(["community-1"]);
+    mocks.getClubEloByUserId.mockResolvedValue(new Map());
+    mocks.withClubElo.mockImplementation((players) => players);
+    mocks.getPlayerClubBadges.mockResolvedValue(new Map());
+    mocks.withPlayerClubBadges.mockImplementation((players) => players);
 
     mocks.sessionFindUnique.mockResolvedValue({
       id: "session-1",

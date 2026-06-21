@@ -4,23 +4,23 @@ import { useCallback, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { FlashMessage } from "@/components/ui/chrome";
-import { ClaimRequestsPanel } from "@/components/community-admin/ClaimRequestsPanel";
-import { CommunityAdminActionConfirmModal } from "@/components/community-admin/CommunityAdminActionConfirmModal";
-import { CommunityDangerZonePanel } from "@/components/community-admin/CommunityDangerZonePanel";
-import { CommunityPasswordResetModal } from "@/components/community-admin/CommunityPasswordResetModal";
-import { CommunityPlayerEditorModal } from "@/components/community-admin/CommunityPlayerEditorModal";
-import { CommunityPlayersPanel } from "@/components/community-admin/CommunityPlayersPanel";
-import { CommunitySettingsPanel } from "@/components/community-admin/CommunitySettingsPanel";
-import { CreateCommunityPlayerModal } from "@/components/community-admin/CreateCommunityPlayerModal";
-import { OfflineIdentityLinksPanel } from "@/components/community-admin/OfflineIdentityLinksPanel";
+import { ClaimRequestsPanel } from "@/components/club-admin/ClaimRequestsPanel";
+import { ClubAdminActionConfirmModal } from "@/components/club-admin/ClubAdminActionConfirmModal";
+import { ClubDangerZonePanel } from "@/components/club-admin/ClubDangerZonePanel";
+import { ClubPasswordResetModal } from "@/components/club-admin/ClubPasswordResetModal";
+import { ClubPlayerEditorModal } from "@/components/club-admin/ClubPlayerEditorModal";
+import { ClubPlayersPanel } from "@/components/club-admin/ClubPlayersPanel";
+import { ClubSettingsPanel } from "@/components/club-admin/ClubSettingsPanel";
+import { CreateClubPlayerModal } from "@/components/club-admin/CreateClubPlayerModal";
+import { OfflineIdentityLinksPanel } from "@/components/club-admin/OfflineIdentityLinksPanel";
 import { AdminOnboardingChecklist } from "@/components/onboarding/AdminOnboardingChecklist";
 import { useAdminOnboardingProgress } from "@/components/onboarding/useAdminOnboardingProgress";
-import type { CommunityAdminSection } from "@/components/community-admin/communityAdminTypes";
-import { CommunityRole } from "@/types/enums";
-import { useCommunityAdminPage } from "./useCommunityAdminPage";
+import type { ClubAdminSection } from "@/components/club-admin/clubAdminTypes";
+import { ClubRole } from "@/types/enums";
+import { useClubAdminPage } from "./useClubAdminPage";
 
 const tabs: Array<{
-  key: CommunityAdminSection;
+  key: ClubAdminSection;
   label: string;
   detail: (counts: { players: number; claims: number; links: number }) => string;
 }> = [
@@ -49,7 +49,7 @@ const tabs: Array<{
 function getPlayerActionDialogCopy(action: {
   kind: "remove" | "promote" | "demote-admin";
   player: { id: string; name: string; email: string | null };
-  role?: CommunityRole.STAFF | CommunityRole.MEMBER;
+  role?: ClubRole.STAFF | ClubRole.MEMBER;
 }, currentUserId?: string | null) {
   if (action.kind === "remove") {
     const isSelfRemoval = action.player.id === currentUserId;
@@ -83,16 +83,16 @@ function getPlayerActionDialogCopy(action: {
 
   if (action.kind === "demote-admin") {
     const targetRole =
-      action.role === CommunityRole.STAFF ? "staff" : "member";
+      action.role === ClubRole.STAFF ? "staff" : "member";
 
     return {
       title: `Change ${action.player.name} to ${targetRole}?`,
       subtitle:
-        action.role === CommunityRole.STAFF
+        action.role === ClubRole.STAFF
           ? "They will keep live session controls, but lose club admin access."
           : "They will lose club admin access and live session operator controls.",
       confirmLabel:
-        action.role === CommunityRole.STAFF
+        action.role === ClubRole.STAFF
           ? "Change to Staff"
           : "Change to Member",
       confirmTone: "danger" as const,
@@ -133,9 +133,9 @@ function getPlayerActionDialogCopy(action: {
   };
 }
 
-function getCommunityActionDialogCopy(
+function getClubActionDialogCopy(
   action: { kind: "reset" | "delete" },
-  communityName: string,
+  clubName: string,
   isTutorial: boolean
 ) {
   if (action.kind === "reset") {
@@ -149,7 +149,7 @@ function getCommunityActionDialogCopy(
         details: (
           <div className="app-panel-muted space-y-2 p-4">
             <p className="text-sm font-semibold text-gray-900">
-              {communityName}
+              {clubName}
             </p>
             <p className="text-sm text-gray-600">
               The playground will return to its original seeded state.
@@ -167,7 +167,7 @@ function getCommunityActionDialogCopy(
       confirmationKeyword: "RESET",
       details: (
         <div className="app-panel-muted space-y-2 p-4">
-          <p className="text-sm font-semibold text-gray-900">{communityName}</p>
+          <p className="text-sm font-semibold text-gray-900">{clubName}</p>
           <p className="text-sm text-gray-600">
             Tournament history will be removed for this club. This cannot be undone.
           </p>
@@ -184,7 +184,7 @@ function getCommunityActionDialogCopy(
     confirmationKeyword: "DELETE",
     details: (
       <div className="app-panel-muted space-y-2 p-4">
-        <p className="text-sm font-semibold text-gray-900">{communityName}</p>
+        <p className="text-sm font-semibold text-gray-900">{clubName}</p>
         <p className="text-sm text-gray-600">
           This club cannot be recovered after deletion.
         </p>
@@ -193,7 +193,7 @@ function getCommunityActionDialogCopy(
   };
 }
 
-export default function CommunityAdminPage() {
+export default function ClubAdminPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const {
@@ -201,20 +201,20 @@ export default function CommunityAdminPage() {
     currentUserId,
     isGlobalAdmin,
     communityId,
-    community,
+    club,
     players,
     claimRequests,
     offlineIdentityLinks,
     loading,
     error,
     success,
-    communityNameInput,
-    setCommunityNameInput,
-    communityPasswordInput,
-    setCommunityPasswordInput,
-    communityPasswordProtectionEnabled,
-    setCommunityPasswordProtectionEnabled,
-    savingCommunitySettings,
+    clubNameInput,
+    setClubNameInput,
+    clubPasswordInput,
+    setClubPasswordInput,
+    clubPasswordProtectionEnabled,
+    setClubPasswordProtectionEnabled,
+    savingClubSettings,
     activeSection,
     setActiveSection,
     playerSearch,
@@ -242,8 +242,8 @@ export default function CommunityAdminPage() {
     linkSourceUserId,
     setLinkSourceUserId,
     targetCommunitySearch,
-    setTargetCommunitySearch,
-    selectedTargetCommunity,
+    setTargetClubSearch,
+    selectedTargetClub,
     targetCommunityCandidates,
     loadingTargetCommunities,
     loadingTargetRoster,
@@ -253,13 +253,13 @@ export default function CommunityAdminPage() {
     targetPlaceholderOptions,
     submittingOfflineIdentityLink,
     reviewingOfflineIdentityLinkId,
-    selectTargetCommunity,
-    clearTargetCommunity,
+    selectTargetClub,
+    clearTargetClub,
     submitOfflineIdentityLink,
     reviewOfflineIdentityLink,
     unlinkOfflineIdentity,
-    resettingCommunity,
-    deletingCommunity,
+    resettingClub,
+    deletingClub,
     passwordResetTarget,
     passwordResetValue,
     setPasswordResetValue,
@@ -274,11 +274,11 @@ export default function CommunityAdminPage() {
     pendingPlayerAction,
     closePendingPlayerAction,
     confirmPendingPlayerAction,
-    pendingCommunityAction,
-    communityActionConfirmationValue,
-    setCommunityActionConfirmationValue,
-    closePendingCommunityAction,
-    confirmPendingCommunityAction,
+    pendingClubAction,
+    clubActionConfirmationValue,
+    setClubActionConfirmationValue,
+    closePendingClubAction,
+    confirmPendingClubAction,
     openCreatePlayerModal,
     closeCreatePlayerModal,
     openPlayerEditor,
@@ -297,17 +297,17 @@ export default function CommunityAdminPage() {
     handleGrantStaff,
     handleRevokeStaff,
     handleUpdatePreferences,
-    handleResetCommunity,
-    handleUpdateCommunitySettings,
-    handleDeleteCommunity,
+    handleResetClub,
+    handleUpdateClubSettings,
+    handleDeleteClub,
     handleReviewClaimRequest,
-  } = useCommunityAdminPage();
+  } = useClubAdminPage();
   const isTutorialPlayground =
-    community?.isTutorial === true &&
-    community.tutorialOwnerId === currentUserId;
+    club?.isTutorial === true &&
+    club.tutorialOwnerId === currentUserId;
   const adminOnboarding = useAdminOnboardingProgress(
     status === "authenticated" &&
-      community?.role === "ADMIN" &&
+      club?.role === "ADMIN" &&
       isTutorialPlayground &&
       !loading
   );
@@ -343,7 +343,7 @@ export default function CommunityAdminPage() {
   }, [activeSection, adminOnboarding, isTutorialPlayground]);
 
   const switchAdminSection = useCallback(
-    (section: CommunityAdminSection) => {
+    (section: ClubAdminSection) => {
       setActiveSection(section);
       if (communityId) {
         router.replace(`/community/${communityId}/admin?tab=${section}`, {
@@ -373,10 +373,10 @@ export default function CommunityAdminPage() {
   const pendingPlayerActionDialog = pendingPlayerAction
     ? getPlayerActionDialogCopy(pendingPlayerAction, currentUserId)
     : null;
-  const pendingCommunityActionDialog = pendingCommunityAction
-    ? getCommunityActionDialogCopy(
-        pendingCommunityAction,
-        community?.name || "Club",
+  const pendingClubActionDialog = pendingClubAction
+    ? getClubActionDialogCopy(
+        pendingClubAction,
+        club?.name || "Club",
         isTutorialPlayground
       )
     : null;
@@ -407,7 +407,7 @@ export default function CommunityAdminPage() {
             </button>
             <div>
               <h1 className="text-lg font-semibold leading-none tracking-tight text-gray-900">
-                {community?.name || "Club"}
+                {club?.name || "Club"}
               </h1>
               <p className="text-[11px] text-gray-500">Club admin</p>
             </div>
@@ -422,12 +422,12 @@ export default function CommunityAdminPage() {
             <span className="app-chip app-chip-danger">Admin only</span>
             <span
               className={`app-chip ${
-                community?.isPasswordProtected
+                club?.isPasswordProtected
                   ? "app-chip-warning"
                   : "app-chip-neutral"
               }`}
             >
-              {community?.isPasswordProtected ? "Protected" : "Open"}
+              {club?.isPasswordProtected ? "Protected" : "Open"}
             </span>
           </div>
         </div>
@@ -522,7 +522,7 @@ export default function CommunityAdminPage() {
         </section>
 
         {activeSection === "players" ? (
-          <CommunityPlayersPanel
+          <ClubPlayersPanel
             players={players}
             filteredPlayers={filteredPlayers}
             claimedPlayersCount={claimedPlayersCount}
@@ -547,14 +547,14 @@ export default function CommunityAdminPage() {
         {!isTutorialPlayground && activeSection === "links" ? (
           <OfflineIdentityLinksPanel
             links={offlineIdentityLinks}
-            currentCommunityId={communityId}
+            currentClubId={communityId}
             currentUserId={currentUserId}
             sourcePlaceholderOptions={sourcePlaceholderOptions}
             sourceUserId={linkSourceUserId}
             onSourceUserIdChange={setLinkSourceUserId}
             targetCommunitySearch={targetCommunitySearch}
-            onTargetCommunitySearchChange={setTargetCommunitySearch}
-            selectedTargetCommunity={selectedTargetCommunity}
+            onTargetClubSearchChange={setTargetClubSearch}
+            selectedTargetClub={selectedTargetClub}
             targetCommunityCandidates={targetCommunityCandidates}
             loadingTargetCommunities={loadingTargetCommunities}
             loadingTargetRoster={loadingTargetRoster}
@@ -563,8 +563,8 @@ export default function CommunityAdminPage() {
             onTargetUserIdChange={setLinkTargetUserId}
             submitting={submittingOfflineIdentityLink}
             reviewingLinkId={reviewingOfflineIdentityLinkId}
-            onSelectTargetCommunity={selectTargetCommunity}
-            onClearTargetCommunity={clearTargetCommunity}
+            onSelectTargetClub={selectTargetClub}
+            onClearTargetClub={clearTargetClub}
             onSubmitLink={() => {
               void submitOfflineIdentityLink();
             }}
@@ -575,33 +575,33 @@ export default function CommunityAdminPage() {
 
         {activeSection === "settings" ? (
           <div className="grid gap-6 xl:grid-cols-[minmax(0,1.25fr)_minmax(0,0.9fr)]">
-              <CommunitySettingsPanel
+              <ClubSettingsPanel
                 isTutorial={isTutorialPlayground}
-                communityName={communityNameInput}
-                onCommunityNameChange={setCommunityNameInput}
-              communityPassword={communityPasswordInput}
-              onCommunityPasswordChange={setCommunityPasswordInput}
-              passwordProtectionEnabled={communityPasswordProtectionEnabled}
+                clubName={clubNameInput}
+                onClubNameChange={setClubNameInput}
+              clubPassword={clubPasswordInput}
+              onClubPasswordChange={setClubPasswordInput}
+              passwordProtectionEnabled={clubPasswordProtectionEnabled}
               onPasswordProtectionEnabledChange={
-                setCommunityPasswordProtectionEnabled
+                setClubPasswordProtectionEnabled
               }
-              isPasswordProtected={community?.isPasswordProtected ?? false}
-              onSubmit={handleUpdateCommunitySettings}
-              saving={savingCommunitySettings}
+              isPasswordProtected={club?.isPasswordProtected ?? false}
+              onSubmit={handleUpdateClubSettings}
+              saving={savingClubSettings}
             />
 
-            <CommunityDangerZonePanel
+            <ClubDangerZonePanel
               isTutorial={isTutorialPlayground}
-              resettingCommunity={resettingCommunity}
-              deletingCommunity={deletingCommunity}
-              onResetCommunity={handleResetCommunity}
-              onDeleteCommunity={handleDeleteCommunity}
+              resettingClub={resettingClub}
+              deletingClub={deletingClub}
+              onResetClub={handleResetClub}
+              onDeleteClub={handleDeleteClub}
             />
           </div>
         ) : null}
       </div>
 
-      <CreateCommunityPlayerModal
+      <CreateClubPlayerModal
         open={isCreatePlayerOpen}
         name={name}
         newPlayerGender={newPlayerGender}
@@ -618,7 +618,7 @@ export default function CommunityAdminPage() {
         onSubmit={handleAddPlayerWithOnboardingRefresh}
       />
 
-      <CommunityPlayerEditorModal
+      <ClubPlayerEditorModal
         player={editingPlayer}
         communityId={communityId}
         currentUserId={currentUserId}
@@ -642,7 +642,7 @@ export default function CommunityAdminPage() {
         onRevokeStaff={handleRevokeStaff}
         onOpenPasswordReset={openPasswordResetModal}
         canDemoteAdmins={
-          (community?.viewerIsOwner === true || isGlobalAdmin) &&
+          (club?.viewerIsOwner === true || isGlobalAdmin) &&
           editingPlayer?.id !== currentUserId
         }
         canOpenEmergencyPasswordReset={isGlobalAdmin}
@@ -650,7 +650,7 @@ export default function CommunityAdminPage() {
         onRemoveAvatar={handleRemovePlayerAvatar}
       />
 
-      <CommunityPasswordResetModal
+      <ClubPasswordResetModal
         target={passwordResetTarget}
         passwordResetValue={passwordResetValue}
         passwordResetConfirm={passwordResetConfirm}
@@ -663,7 +663,7 @@ export default function CommunityAdminPage() {
       />
 
       {pendingPlayerAction && pendingPlayerActionDialog ? (
-        <CommunityAdminActionConfirmModal
+        <ClubAdminActionConfirmModal
           title={pendingPlayerActionDialog.title}
           subtitle={pendingPlayerActionDialog.subtitle}
           details={pendingPlayerActionDialog.details}
@@ -679,24 +679,24 @@ export default function CommunityAdminPage() {
         />
       ) : null}
 
-      {pendingCommunityAction && pendingCommunityActionDialog ? (
-        <CommunityAdminActionConfirmModal
-          title={pendingCommunityActionDialog.title}
-          subtitle={pendingCommunityActionDialog.subtitle}
-          details={pendingCommunityActionDialog.details}
-          confirmLabel={pendingCommunityActionDialog.confirmLabel}
-          confirmationKeyword={pendingCommunityActionDialog.confirmationKeyword}
-          confirmationValue={communityActionConfirmationValue}
-          onConfirmationValueChange={setCommunityActionConfirmationValue}
-          confirmationInputLabel={`Type ${pendingCommunityActionDialog.confirmationKeyword} to continue`}
+      {pendingClubAction && pendingClubActionDialog ? (
+        <ClubAdminActionConfirmModal
+          title={pendingClubActionDialog.title}
+          subtitle={pendingClubActionDialog.subtitle}
+          details={pendingClubActionDialog.details}
+          confirmLabel={pendingClubActionDialog.confirmLabel}
+          confirmationKeyword={pendingClubActionDialog.confirmationKeyword}
+        confirmationValue={clubActionConfirmationValue}
+          onConfirmationValueChange={setClubActionConfirmationValue}
+          confirmationInputLabel={`Type ${pendingClubActionDialog.confirmationKeyword} to continue`}
           isSubmitting={
-            pendingCommunityAction.kind === "reset"
-              ? resettingCommunity
-              : deletingCommunity
+            pendingClubAction.kind === "reset"
+              ? resettingClub
+              : deletingClub
           }
-          onClose={closePendingCommunityAction}
+          onClose={closePendingClubAction}
           onConfirm={() => {
-            void confirmPendingCommunityAction();
+            void confirmPendingClubAction();
           }}
         />
       ) : null}

@@ -11,8 +11,8 @@ import {
   openSessionRoster,
   openSessionSettings,
   readCurrentMatchMixicanoShape,
-  readCommunityMembersSnapshot,
-  readCommunitySessionsSnapshot,
+  readClubMembersSnapshot,
+  readClubSessionsSnapshot,
   readCurrentMatchSignature,
   readSessionSnapshot,
   scoreSessionCode,
@@ -101,21 +101,18 @@ test("admin can manually override Mixicano pairing restrictions", async ({
     sessionMode: SessionMode.MIXICANO,
   });
 
-  const manualModal = await openManualMatchModal(page);
-
-  const selects = manualModal.locator("select");
-  await selects.nth(0).selectOption({ label: "Host Player 2 (1000)" });
-  await selects.nth(1).selectOption({ label: "Host Player 4 (1000)" });
-  await selects.nth(2).selectOption({ label: "Admin E2E (1000)" });
-  await selects.nth(3).selectOption({ label: "Host Player 1 (1000)" });
-  await manualModal.getByRole("button", { name: "Create Match" }).click();
+  await createManualMatchWithPlayers(page, [
+    "Host Player 2 (1000)",
+    "Host Player 4 (1000)",
+    "Admin E2E (1000)",
+    "Host Player 1 (1000)",
+  ]);
 
   await expect
     .poll(() => readCurrentMatchSignature(page, sessionCode), {
       message: "expected the manual override to place the requested lineup on court",
     })
     .toBe("Host Player 2|Host Player 4|vs|Admin E2E|Host Player 1");
-  await expect(manualModal).toHaveCount(0);
 });
 
 test("mixed sessions reject guests without explicit gender via the guest API", async ({
@@ -353,7 +350,7 @@ test("admin can end and rollback the latest completed tournament", async ({
 
   await expect
     .poll(async () => {
-      const snapshot = await readCommunityMembersSnapshot(page, hostCommunityId);
+      const snapshot = await readClubMembersSnapshot(page, hostCommunityId);
       return snapshot.some((member) => member.elo !== 1000);
     })
     .toBe(true);
@@ -392,8 +389,8 @@ test("admin can end and rollback the latest completed tournament", async ({
   await expect
     .poll(async () => {
       const [members, sessions] = await Promise.all([
-        readCommunityMembersSnapshot(page, hostCommunityId),
-        readCommunitySessionsSnapshot(page, hostCommunityId),
+        readClubMembersSnapshot(page, hostCommunityId),
+        readClubSessionsSnapshot(page, hostCommunityId),
       ]);
 
       return {

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { serializeAvatarEntity } from "@/lib/avatar";
-import { getCommunityEloByUserId, withCommunityElo } from "@/lib/communityElo";
+import { getClubEloByUserId, withClubElo } from "@/lib/clubElo";
 import { prisma } from "@/lib/prisma";
 import { MatchStatus, SessionStatus } from "@/types/enums";
 import { logError, safeErrorResponse } from "@/lib/errors";
@@ -44,7 +44,7 @@ export async function POST(
       return invalidTargetResponse(_request, "api:sessions:code:reset");
     }
 
-    let isCommunityAdmin = false;
+    let isClubAdmin = false;
     if (targetSession.communityId) {
       const membership = await prisma.communityMember.findUnique({
         where: {
@@ -55,10 +55,10 @@ export async function POST(
         },
         select: { role: true },
       });
-      isCommunityAdmin = membership?.role === "ADMIN";
+      isClubAdmin = membership?.role === "ADMIN";
     }
 
-    if (!session.user.isAdmin && !isCommunityAdmin) {
+    if (!session.user.isAdmin && !isClubAdmin) {
       return NextResponse.json({ error: "Admin only" }, { status: 403 });
     }
 
@@ -173,9 +173,9 @@ export async function POST(
 
     const players =
       updatedSession.communityId && updatedSession.players.length > 0
-        ? withCommunityElo(
+        ? withClubElo(
             updatedSession.players,
-            await getCommunityEloByUserId(
+            await getClubEloByUserId(
               updatedSession.communityId,
               updatedSession.players.map((player) => player.userId)
             )

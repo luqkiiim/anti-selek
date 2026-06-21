@@ -82,7 +82,7 @@ export async function GET(request: Request) {
       })
     );
   } catch (error) {
-    logError("List communities error", error);
+    logError("List clubs error", error);
     return safeErrorResponse();
   }
 }
@@ -172,7 +172,7 @@ export async function POST(request: Request) {
     if (code === "P2002") {
       return NextResponse.json({ error: "Club name already exists" }, { status: 409 });
     }
-    logError("Create community error", error);
+    logError("Create club error", error);
     return safeErrorResponse();
   }
 }

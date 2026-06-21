@@ -2,15 +2,15 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { serializeAvatarEntity } from "@/lib/avatar";
 import { prisma } from "@/lib/prisma";
-import { getCommunityEloByUserId, withCommunityElo } from "@/lib/communityElo";
+import { getClubEloByUserId, withClubElo } from "@/lib/clubElo";
 import {
-  getPlayerCommunityBadges,
+  getPlayerClubBadges,
   getSessionOperatorMembership,
-  getSessionCommunityLinks,
-  withPlayerCommunityBadges,
+  getSessionClubLinks,
+  withPlayerClubBadges,
 } from "@/lib/sessionCollab";
 import { SessionStatus } from "@/types/enums";
-import { SessionCommunityStatus } from "@/types/enums";
+import { SessionClubStatus } from "@/types/enums";
 import { logError, safeErrorResponse } from "@/lib/errors";
 import { rateLimit, checkInvalidTargetRateLimit, invalidTargetResponse } from "@/lib/rateLimit";
 
@@ -59,9 +59,9 @@ export async function POST(
     if (sessionData.status !== SessionStatus.WAITING) {
       return NextResponse.json({ error: "Session already started" }, { status: 400 });
     }
-    const communityLinks = await getSessionCommunityLinks(prisma, sessionData);
+    const communityLinks = await getSessionClubLinks(prisma, sessionData);
     const pendingPartner = communityLinks.find(
-      (link) => link.status !== SessionCommunityStatus.ACCEPTED
+      (link) => link.status !== SessionClubStatus.ACCEPTED
     );
     if (pendingPartner) {
       return NextResponse.json(
@@ -96,19 +96,19 @@ export async function POST(
       },
     });
 
-    const linkedCommunityIds = communityLinks.map((link) => link.communityId);
+    const linkedClubIds = communityLinks.map((link) => link.communityId);
     const playerIds = updated.players.map((p) => p.userId);
     const players =
-      linkedCommunityIds.length > 1 && updated.players.length > 0
-        ? withPlayerCommunityBadges(
+      linkedClubIds.length > 1 && updated.players.length > 0
+        ? withPlayerClubBadges(
             updated.players,
-            await getPlayerCommunityBadges(prisma, linkedCommunityIds, playerIds),
+            await getPlayerClubBadges(prisma, linkedClubIds, playerIds),
             updated.communityId
           )
         : updated.communityId && updated.players.length > 0
-          ? withCommunityElo(
+          ? withClubElo(
               updated.players,
-              await getCommunityEloByUserId(updated.communityId, playerIds)
+              await getClubEloByUserId(updated.communityId, playerIds)
             )
           : updated.players;
     const serializedPlayers = players.map((player) => ({

@@ -53,9 +53,9 @@ describe("buildAdminOnboardingProgress", () => {
     const progress = buildAdminOnboardingProgress({
       completedStepIds: [],
       dismissedAt: null,
-      primaryCommunityId: "community-1",
+      primaryClubId: "community-1",
       primarySessionCode: "SESSION1",
-      hasAdminCommunity: true,
+      hasAdminClub: true,
       hasScoredMatch: false,
       hasCompletedSession: false,
     });

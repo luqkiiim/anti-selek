@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { getCommunityAdminAccess } from "@/lib/communityAdminPermissions";
+import { getClubAdminAccess } from "@/lib/clubAdminPermissions";
 import { prisma } from "@/lib/prisma";
 import { getQuickAccessDeniedMessage, isQuickAccessSession } from "@/lib/quickAccess";
 import { logAuditEvent } from "@/lib/serverAudit";
@@ -43,7 +43,7 @@ export async function POST(
 
     if (invalidTargetLimitResponse) return invalidTargetLimitResponse;
 
-    const adminAccess = await getCommunityAdminAccess(prisma, {
+    const adminAccess = await getClubAdminAccess(prisma, {
       communityId: id,
       userId: session.user.id,
       isGlobalAdmin: !!session.user.isAdmin,
@@ -139,7 +139,7 @@ export async function POST(
 
     return NextResponse.json({ success: true });
   } catch (error: unknown) {
-    logError("Community scoped reset error", error);
+    logError("Club scoped reset error", error);
     return safeErrorResponse();
   }
 }

@@ -47,7 +47,7 @@ export async function DELETE(
       return invalidTargetResponse(request, "api:sessions:code:delete");
     }
 
-    let isCommunityAdmin = false;
+    let isClubAdmin = false;
     if (targetSession.communityId) {
       const membership = await prisma.communityMember.findUnique({
         where: {
@@ -58,10 +58,10 @@ export async function DELETE(
         },
         select: { role: true },
       });
-      isCommunityAdmin = membership?.role === "ADMIN";
+      isClubAdmin = membership?.role === "ADMIN";
     }
 
-    if (!session.user.isAdmin && !isCommunityAdmin) {
+    if (!session.user.isAdmin && !isClubAdmin) {
       return NextResponse.json({ error: "Admin only" }, { status: 403 });
     }
 

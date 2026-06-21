@@ -3,7 +3,7 @@ import { MatchStatus, SessionStatus } from "@/types/enums";
 
 const mocks = vi.hoisted(() => ({
   auth: vi.fn(),
-  canQuickAccessCommunity: vi.fn(),
+  canQuickAccessClub: vi.fn(),
   correctCompletedMatchScore: vi.fn(),
   getSessionAdminMembership: vi.fn(),
   invalidTargetResponse: vi.fn(),
@@ -36,7 +36,7 @@ vi.mock("@/lib/prisma", () => ({
 }));
 
 vi.mock("@/lib/quickAccess", () => ({
-  canQuickAccessCommunity: mocks.canQuickAccessCommunity,
+  canQuickAccessClub: mocks.canQuickAccessClub,
   isQuickAccessSession: mocks.isQuickAccessSession,
 }));
 
@@ -107,7 +107,7 @@ describe("completed match score correction route", () => {
         isAdmin: false,
       },
     });
-    mocks.canQuickAccessCommunity.mockReturnValue(true);
+    mocks.canQuickAccessClub.mockReturnValue(true);
     mocks.isQuickAccessSession.mockReturnValue(false);
     mocks.invalidTargetResponse.mockImplementation(async () =>
       Response.json({ error: "Unauthorized" }, { status: 403 })

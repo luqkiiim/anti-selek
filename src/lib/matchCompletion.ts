@@ -1,11 +1,11 @@
 import { prisma } from "@/lib/prisma";
 import { isValidMatchScore } from "@/lib/matchRules";
-import { getLinkedCommunityUserResolver } from "@/lib/offlineIdentities";
-import { getAcceptedSessionCommunityIds } from "@/lib/sessionCollab";
+import { getLinkedClubUserResolver } from "@/lib/offlineIdentities";
+import { getAcceptedSessionClubIds } from "@/lib/sessionCollab";
 import { getStandingPointsForTeam } from "@/lib/sessionStandings";
 import {
   MatchStatus,
-  SessionCommunityStatus,
+  SessionClubStatus,
   SessionStatus,
   SessionType,
 } from "@/types/enums";
@@ -251,10 +251,10 @@ function getPlayerSnapshotElo(match: FinalizableMatch, userId: string) {
 
 function getDisplayPlayerEloChanges({
   adjustments,
-  preferredCommunityId,
+  preferredClubId,
 }: {
   adjustments: EloAdjustmentInput[];
-  preferredCommunityId?: string | null;
+  preferredClubId?: string | null;
 }) {
   const byUserId = new Map<string, EloAdjustmentInput[]>();
   for (const adjustment of adjustments) {
@@ -265,9 +265,9 @@ function getDisplayPlayerEloChanges({
   }
 
   return Array.from(byUserId.entries()).map(([userId, userAdjustments]) => {
-    const preferred = preferredCommunityId
+    const preferred = preferredClubId
       ? userAdjustments.find(
-          (adjustment) => adjustment.communityId === preferredCommunityId
+          (adjustment) => adjustment.communityId === preferredClubId
         )
       : null;
     const selected = preferred ?? userAdjustments[0];
@@ -280,7 +280,7 @@ function getDisplayPlayerEloChanges({
   });
 }
 
-async function buildCommunityEloAdjustments({
+async function buildClubEloAdjustments({
   tx,
   match,
   playerIds,
@@ -302,7 +302,7 @@ async function buildCommunityEloAdjustments({
   userEloByUserId: Map<string, number>;
 }) {
   const communityIds = match.session.communityId
-    ? await getAcceptedSessionCommunityIds(tx, {
+    ? await getAcceptedSessionClubIds(tx, {
         id: match.sessionId,
         communityId: match.session.communityId,
       })
@@ -310,13 +310,13 @@ async function buildCommunityEloAdjustments({
 
   if (communityIds.length === 0) {
     return {
-      teamDeltasByCommunityId: new Map<string, TeamEloDeltas>(),
+      teamDeltasByClubId: new Map<string, TeamEloDeltas>(),
       adjustments: [] as EloAdjustmentInput[],
       sourceEloByUserId: new Map<string, number>(),
     };
   }
 
-  const linkedUserResolver = await getLinkedCommunityUserResolver(tx, {
+  const linkedUserResolver = await getLinkedClubUserResolver(tx, {
     userIds: playerIds,
     communityIds,
   });
@@ -336,9 +336,9 @@ async function buildCommunityEloAdjustments({
       elo: true,
     },
   });
-  const membershipByCommunityAndUser = new Map<string, number>();
+  const membershipByClubAndUser = new Map<string, number>();
   for (const membership of memberships) {
-    membershipByCommunityAndUser.set(
+    membershipByClubAndUser.set(
       `${membership.communityId}:${membership.userId}`,
       membership.elo
     );
@@ -347,22 +347,22 @@ async function buildCommunityEloAdjustments({
   const hostCommunityId = match.session.communityId;
   const sourceEloByUserId = new Map<string, number>();
   for (const userId of playerIds) {
-    const playerCommunityIds = communityIds.filter((communityId) => {
-      const linkedUserId = linkedUserResolver.getUserIdForCommunity(
+    const playerClubIds = communityIds.filter((communityId) => {
+      const linkedUserId = linkedUserResolver.getUserIdForClub(
         userId,
         communityId
       );
-      return membershipByCommunityAndUser.has(`${communityId}:${linkedUserId}`);
+      return membershipByClubAndUser.has(`${communityId}:${linkedUserId}`);
     });
     const sourceCommunityId =
-      (hostCommunityId && playerCommunityIds.includes(hostCommunityId)
+      (hostCommunityId && playerClubIds.includes(hostCommunityId)
         ? hostCommunityId
-        : playerCommunityIds[0]) ?? null;
+        : playerClubIds[0]) ?? null;
     const sourceCommunityUserId = sourceCommunityId
-      ? linkedUserResolver.getUserIdForCommunity(userId, sourceCommunityId)
+      ? linkedUserResolver.getUserIdForClub(userId, sourceCommunityId)
       : userId;
     const sourceElo = sourceCommunityId
-      ? membershipByCommunityAndUser.get(
+      ? membershipByClubAndUser.get(
           `${sourceCommunityId}:${sourceCommunityUserId}`
         )
       : undefined;
@@ -377,17 +377,17 @@ async function buildCommunityEloAdjustments({
 
   const team1Ids = [match.team1User1Id, match.team1User2Id];
   const team2Ids = [match.team2User1Id, match.team2User2Id];
-  const teamDeltasByCommunityId = new Map<string, TeamEloDeltas>();
+  const teamDeltasByClubId = new Map<string, TeamEloDeltas>();
   const adjustments: EloAdjustmentInput[] = [];
 
   for (const communityId of communityIds) {
     const getRating = (userId: string) => {
-      const linkedUserId = linkedUserResolver.getUserIdForCommunity(
+      const linkedUserId = linkedUserResolver.getUserIdForClub(
         userId,
         communityId
       );
       return (
-        membershipByCommunityAndUser.get(`${communityId}:${linkedUserId}`) ??
+        membershipByClubAndUser.get(`${communityId}:${linkedUserId}`) ??
         sourceEloByUserId.get(userId) ??
         userEloByUserId.get(userId) ??
         getPlayerSnapshotElo(match, userId)
@@ -404,14 +404,14 @@ async function buildCommunityEloAdjustments({
       team2Points,
       guestImpactMultiplier,
     });
-    teamDeltasByCommunityId.set(communityId, deltas);
+    teamDeltasByClubId.set(communityId, deltas);
 
     for (const userId of team1Ids) {
-      const linkedUserId = linkedUserResolver.getUserIdForCommunity(
+      const linkedUserId = linkedUserResolver.getUserIdForClub(
         userId,
         communityId
       );
-      const beforeElo = membershipByCommunityAndUser.get(
+      const beforeElo = membershipByClubAndUser.get(
         `${communityId}:${linkedUserId}`
       );
       if (beforeElo === undefined || isGuestByUserId.get(userId) === true) {
@@ -430,11 +430,11 @@ async function buildCommunityEloAdjustments({
     }
 
     for (const userId of team2Ids) {
-      const linkedUserId = linkedUserResolver.getUserIdForCommunity(
+      const linkedUserId = linkedUserResolver.getUserIdForClub(
         userId,
         communityId
       );
-      const beforeElo = membershipByCommunityAndUser.get(
+      const beforeElo = membershipByClubAndUser.get(
         `${communityId}:${linkedUserId}`
       );
       if (beforeElo === undefined || isGuestByUserId.get(userId) === true) {
@@ -453,12 +453,12 @@ async function buildCommunityEloAdjustments({
     }
   }
 
-  return { teamDeltasByCommunityId, adjustments, sourceEloByUserId };
+  return { teamDeltasByClubId, adjustments, sourceEloByUserId };
 }
 
 interface MatchRatingOutcome {
   awardsStandingPoints: boolean;
-  communityEloResult: Awaited<ReturnType<typeof buildCommunityEloAdjustments>>;
+  clubEloResult: Awaited<ReturnType<typeof buildClubEloAdjustments>>;
   isGuestByUserId: Map<string, boolean>;
   persistedTeam1EloChange: number;
   persistedTeam2EloChange: number;
@@ -514,7 +514,7 @@ async function buildMatchRatingOutcomeInTransaction(
   ).length;
   const guestImpactMultiplier = getGuestImpactMultiplier(guestCount);
   const userEloByUserId = await getUserEloByUserIdInTransaction(tx, playerIds);
-  const communityEloResult = await buildCommunityEloAdjustments({
+  const clubEloResult = await buildClubEloAdjustments({
     tx,
     match,
     playerIds,
@@ -525,27 +525,27 @@ async function buildMatchRatingOutcomeInTransaction(
     guestImpactMultiplier,
     userEloByUserId,
   });
-  const hostCommunityDeltas = match.session.communityId
-    ? communityEloResult.teamDeltasByCommunityId.get(match.session.communityId)
+  const hostClubDeltas = match.session.communityId
+    ? clubEloResult.teamDeltasByClubId.get(match.session.communityId)
     : undefined;
-  const firstCommunityDeltas = Array.from(
-    communityEloResult.teamDeltasByCommunityId.values()
+  const firstClubDeltas = Array.from(
+    clubEloResult.teamDeltasByClubId.values()
   )[0];
   const fallbackDeltas = calculateTeamEloDeltas({
     winnerTeam,
     team1AvgElo:
-      ((communityEloResult.sourceEloByUserId.get(match.team1User1Id) ??
+      ((clubEloResult.sourceEloByUserId.get(match.team1User1Id) ??
         userEloByUserId.get(match.team1User1Id) ??
         match.team1User1.elo) +
-        (communityEloResult.sourceEloByUserId.get(match.team1User2Id) ??
+        (clubEloResult.sourceEloByUserId.get(match.team1User2Id) ??
           userEloByUserId.get(match.team1User2Id) ??
           match.team1User2.elo)) /
       2,
     team2AvgElo:
-      ((communityEloResult.sourceEloByUserId.get(match.team2User1Id) ??
+      ((clubEloResult.sourceEloByUserId.get(match.team2User1Id) ??
         userEloByUserId.get(match.team2User1Id) ??
         match.team2User1.elo) +
-        (communityEloResult.sourceEloByUserId.get(match.team2User2Id) ??
+        (clubEloResult.sourceEloByUserId.get(match.team2User2Id) ??
           userEloByUserId.get(match.team2User2Id) ??
           match.team2User2.elo)) /
       2,
@@ -554,17 +554,17 @@ async function buildMatchRatingOutcomeInTransaction(
     guestImpactMultiplier,
   });
   const persistedTeam1EloChange =
-    hostCommunityDeltas?.team1Delta ??
-    firstCommunityDeltas?.team1Delta ??
+    hostClubDeltas?.team1Delta ??
+    firstClubDeltas?.team1Delta ??
     fallbackDeltas.team1Delta;
   const persistedTeam2EloChange =
-    hostCommunityDeltas?.team2Delta ??
-    firstCommunityDeltas?.team2Delta ??
+    hostClubDeltas?.team2Delta ??
+    firstClubDeltas?.team2Delta ??
     fallbackDeltas.team2Delta;
 
   return {
     awardsStandingPoints,
-    communityEloResult,
+    clubEloResult,
     isGuestByUserId,
     persistedTeam1EloChange,
     persistedTeam2EloChange,
@@ -589,8 +589,8 @@ async function applyRatingOutcomeInTransaction(
   const team1Ids = [match.team1User1Id, match.team1User2Id];
   const team2Ids = [match.team2User1Id, match.team2User2Id];
 
-  if (outcome.communityEloResult.adjustments.length > 0) {
-    for (const adjustment of outcome.communityEloResult.adjustments) {
+  if (outcome.clubEloResult.adjustments.length > 0) {
+    for (const adjustment of outcome.clubEloResult.adjustments) {
       await tx.communityMember.update({
         where: {
           communityId_userId: {
@@ -605,33 +605,33 @@ async function applyRatingOutcomeInTransaction(
     }
 
     await getMatchEloAdjustmentDelegate(tx)?.createMany?.({
-      data: outcome.communityEloResult.adjustments.map(toPersistedEloAdjustment),
+      data: outcome.clubEloResult.adjustments.map(toPersistedEloAdjustment),
     });
     return;
   }
 
   if (match.session.communityId) {
-    const team1CommunityMemberIds = team1Ids.filter(
+    const team1ClubMemberIds = team1Ids.filter(
       (userId) => outcome.isGuestByUserId.get(userId) !== true
     );
-    const team2CommunityMemberIds = team2Ids.filter(
+    const team2ClubMemberIds = team2Ids.filter(
       (userId) => outcome.isGuestByUserId.get(userId) !== true
     );
 
-    if (team1CommunityMemberIds.length > 0) {
+    if (team1ClubMemberIds.length > 0) {
       await tx.communityMember.updateMany({
         where: {
           communityId: match.session.communityId,
-          userId: { in: team1CommunityMemberIds },
+          userId: { in: team1ClubMemberIds },
         },
         data: { elo: { increment: outcome.persistedTeam1EloChange } },
       });
     }
-    if (team2CommunityMemberIds.length > 0) {
+    if (team2ClubMemberIds.length > 0) {
       await tx.communityMember.updateMany({
         where: {
           communityId: match.session.communityId,
-          userId: { in: team2CommunityMemberIds },
+          userId: { in: team2ClubMemberIds },
         },
         data: { elo: { increment: outcome.persistedTeam2EloChange } },
       });
@@ -777,7 +777,7 @@ export async function finalizeMatchResultInTransaction(
   if (
     !updatedMatch ||
     match.session.isTest ||
-    outcome.communityEloResult.adjustments.length === 0
+    outcome.clubEloResult.adjustments.length === 0
   ) {
     return updatedMatch;
   }
@@ -785,10 +785,10 @@ export async function finalizeMatchResultInTransaction(
   return {
     ...updatedMatch,
     playerEloChanges: getDisplayPlayerEloChanges({
-      adjustments: outcome.communityEloResult.adjustments,
-      preferredCommunityId: match.session.communityId,
+      adjustments: outcome.clubEloResult.adjustments,
+      preferredClubId: match.session.communityId,
     }),
-    eloAdjustments: outcome.communityEloResult.adjustments,
+    eloAdjustments: outcome.clubEloResult.adjustments,
   };
 }
 
@@ -940,7 +940,7 @@ async function assertNoNewerOutsideRatingMatches(
                   sessionCommunities: {
                     some: {
                       communityId: { in: communityIds },
-                      status: SessionCommunityStatus.ACCEPTED,
+                      status: SessionClubStatus.ACCEPTED,
                     },
                   },
                 },
@@ -1084,22 +1084,22 @@ async function reverseReplayRatingEffectsInTransaction(
     ]);
   }
 
-  const reverseDeltaByCommunityAndUserId = new Map<
+  const reverseDeltaByClubAndUserId = new Map<
     string,
     { communityId: string; userId: string; delta: number }
   >();
   for (const adjustment of ledgerAdjustments) {
     const key = `${adjustment.communityId}:${adjustment.userId}`;
-    const current = reverseDeltaByCommunityAndUserId.get(key) ?? {
+    const current = reverseDeltaByClubAndUserId.get(key) ?? {
       communityId: adjustment.communityId,
       userId: adjustment.userId,
       delta: 0,
     };
     current.delta -= adjustment.delta;
-    reverseDeltaByCommunityAndUserId.set(key, current);
+    reverseDeltaByClubAndUserId.set(key, current);
   }
 
-  for (const item of reverseDeltaByCommunityAndUserId.values()) {
+  for (const item of reverseDeltaByClubAndUserId.values()) {
     if (item.delta === 0) continue;
     await tx.communityMember.updateMany({
       where: {
@@ -1283,7 +1283,7 @@ export async function correctCompletedMatchScoreInTransaction(
     new Set(replayMatches.flatMap((match) => getMatchUserIds(match)))
   );
   const communityIds = targetMatch.session.communityId
-    ? await getAcceptedSessionCommunityIds(tx, {
+    ? await getAcceptedSessionClubIds(tx, {
         id: targetMatch.sessionId,
         communityId: targetMatch.session.communityId,
       })

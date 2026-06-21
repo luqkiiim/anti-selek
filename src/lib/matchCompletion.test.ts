@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   MatchStatus,
-  SessionCommunityRole,
-  SessionCommunityStatus,
+  SessionClubRole,
+  SessionClubStatus,
   SessionStatus,
   SessionType,
 } from "@/types/enums";
@@ -372,8 +372,8 @@ describe("finalizeMatchResult", () => {
             id: "link-host",
             sessionId: "session-1",
             communityId: "community-a",
-            role: SessionCommunityRole.HOST,
-            status: SessionCommunityStatus.ACCEPTED,
+            role: SessionClubRole.HOST,
+            status: SessionClubStatus.ACCEPTED,
             createdAt: new Date("2026-05-14T09:00:00.000Z"),
             community: { id: "community-a", name: "Host Club" },
           },
@@ -381,8 +381,8 @@ describe("finalizeMatchResult", () => {
             id: "link-partner",
             sessionId: "session-1",
             communityId: "community-b",
-            role: SessionCommunityRole.PARTNER,
-            status: SessionCommunityStatus.ACCEPTED,
+            role: SessionClubRole.PARTNER,
+            status: SessionClubStatus.ACCEPTED,
             createdAt: new Date("2026-05-14T09:01:00.000Z"),
             community: { id: "community-b", name: "Partner Club" },
           },

@@ -8,7 +8,7 @@ import {
 } from "@/lib/matchCompletion";
 import { MATCH_SCORE_ERROR_MESSAGE, isValidMatchScore } from "@/lib/matchRules";
 import { prisma } from "@/lib/prisma";
-import { canQuickAccessCommunity, isQuickAccessSession } from "@/lib/quickAccess";
+import { canQuickAccessClub, isQuickAccessSession } from "@/lib/quickAccess";
 import {
   checkInvalidTargetRateLimit,
   invalidTargetResponse,
@@ -127,7 +127,7 @@ export async function POST(
     if (!match) {
       return invalidTargetResponse(request, "api:matches:id:correction");
     }
-    if (!canQuickAccessCommunity(session, match.session.communityId)) {
+    if (!canQuickAccessClub(session, match.session.communityId)) {
       return invalidTargetResponse(request, "api:matches:id:correction");
     }
     if (match.status !== MatchStatus.COMPLETED) {

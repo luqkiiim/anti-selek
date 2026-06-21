@@ -117,7 +117,7 @@ async function removeDatabaseFiles() {
   );
 }
 
-async function createCommunityAdmin(prefix: string) {
+async function createClubAdmin(prefix: string) {
   const adminUserId = `${prefix}-admin`;
   const communityId = `${prefix}-community`;
 
@@ -330,7 +330,7 @@ afterAll(async () => {
 describe("generate match route integration", () => {
   it("creates a real automatic single-court match and assigns the court", async () => {
     const prefix = `single-${randomUUID().slice(0, 8)}`;
-    const { communityId } = await createCommunityAdmin(prefix);
+    const { communityId } = await createClubAdmin(prefix);
     const playerKeys = ["p1", "p2", "p3", "p4"];
     const playerIds = playerKeys.map((key) => `${prefix}-${key}`);
     const courtId = `${prefix}-court-1`;
@@ -383,7 +383,7 @@ describe("generate match route integration", () => {
 
   it("does not store reasoning for manual matches", async () => {
     const prefix = `manual-reason-${randomUUID().slice(0, 8)}`;
-    const { communityId } = await createCommunityAdmin(prefix);
+    const { communityId } = await createClubAdmin(prefix);
     const playerKeys = ["p1", "p2", "p3", "p4"];
     const playerIds = playerKeys.map((key) => `${prefix}-${key}`);
     const courtId = `${prefix}-court-1`;
@@ -423,7 +423,7 @@ describe("generate match route integration", () => {
 
   it("clears arrival priority when an automatic live match is created", async () => {
     const prefix = `arrival-clear-${randomUUID().slice(0, 8)}`;
-    const { communityId } = await createCommunityAdmin(prefix);
+    const { communityId } = await createClubAdmin(prefix);
     const playerKeys = ["p1", "p2", "p3", "p4", "p5", "p6", "late"];
     const playerIds = playerKeys.map((key) => `${prefix}-${key}`);
     const latePlayerId = `${prefix}-late`;
@@ -479,7 +479,7 @@ describe("generate match route integration", () => {
 
   it("keeps arrival priority when a manual live match is created", async () => {
     const prefix = `arrival-manual-${randomUUID().slice(0, 8)}`;
-    const { communityId } = await createCommunityAdmin(prefix);
+    const { communityId } = await createClubAdmin(prefix);
     const playerKeys = ["p1", "p2", "p3", "late"];
     const playerIds = playerKeys.map((key) => `${prefix}-${key}`);
     const latePlayerId = `${prefix}-late`;
@@ -527,7 +527,7 @@ describe("generate match route integration", () => {
 
   it("does not auto-queue the next match for a single-court session with exactly eight active players", async () => {
     const prefix = `single-eight-${randomUUID().slice(0, 8)}`;
-    const { communityId } = await createCommunityAdmin(prefix);
+    const { communityId } = await createClubAdmin(prefix);
     const playerKeys = ["p1", "p2", "p3", "p4", "p5", "p6", "p7", "p8"];
     const playerIds = playerKeys.map((key) => `${prefix}-${key}`);
     const courtId = `${prefix}-court-1`;
@@ -574,7 +574,7 @@ describe("generate match route integration", () => {
 
   it("still auto-queues the next match for a single-court session with more than eight active players", async () => {
     const prefix = `single-queue-${randomUUID().slice(0, 8)}`;
-    const { communityId } = await createCommunityAdmin(prefix);
+    const { communityId } = await createClubAdmin(prefix);
     const playerKeys = [
       "p1",
       "p2",
@@ -635,7 +635,7 @@ describe("generate match route integration", () => {
 
   it("rebuilds an automatic queued match to include an arrival-priority player", async () => {
     const prefix = `arrival-queue-${randomUUID().slice(0, 8)}`;
-    const { communityId } = await createCommunityAdmin(prefix);
+    const { communityId } = await createClubAdmin(prefix);
     const playerKeys = ["p1", "p2", "p3", "p4", "p5", "p6", "p7", "p8", "late"];
     const playerIds = playerKeys.map((key) => `${prefix}-${key}`);
     const courtId = `${prefix}-court-1`;
@@ -703,7 +703,7 @@ describe("generate match route integration", () => {
 
   it("preserves a manual queued match when an arrival-priority player appears", async () => {
     const prefix = `arrival-manual-queue-${randomUUID().slice(0, 8)}`;
-    const { communityId } = await createCommunityAdmin(prefix);
+    const { communityId } = await createClubAdmin(prefix);
     const playerKeys = ["p1", "p2", "p3", "p4", "p5", "p6", "p7", "p8", "late"];
     const playerIds = playerKeys.map((key) => `${prefix}-${key}`);
     const courtId = `${prefix}-court-1`;
@@ -766,7 +766,7 @@ describe("generate match route integration", () => {
 
   it("does not auto-queue when the session auto-queue toggle is off", async () => {
     const prefix = `batch-no-auto-queue-${randomUUID().slice(0, 8)}`;
-    const { communityId } = await createCommunityAdmin(prefix);
+    const { communityId } = await createClubAdmin(prefix);
     const playerKeys = [
       "p1",
       "p2",
@@ -815,7 +815,7 @@ describe("generate match route integration", () => {
 
   it("creates a real batch across two courts without duplicating players", async () => {
     const prefix = `batch-${randomUUID().slice(0, 8)}`;
-    const { communityId } = await createCommunityAdmin(prefix);
+    const { communityId } = await createClubAdmin(prefix);
     const playerKeys = ["p1", "p2", "p3", "p4", "p5", "p6", "p7", "p8"];
     const playerIds = playerKeys.map((key) => `${prefix}-${key}`);
     const courtIds = [`${prefix}-court-1`, `${prefix}-court-2`];
@@ -860,7 +860,7 @@ describe("generate match route integration", () => {
 
   it("creates a queued next match after filling the last open courts", async () => {
     const prefix = `batch-queue-${randomUUID().slice(0, 8)}`;
-    const { communityId } = await createCommunityAdmin(prefix);
+    const { communityId } = await createClubAdmin(prefix);
     const playerKeys = [
       "p1",
       "p2",
@@ -913,7 +913,7 @@ describe("generate match route integration", () => {
 
   it("reshuffles an in-progress match to a different quartet when alternates exist", async () => {
     const prefix = `reshuffle-${randomUUID().slice(0, 8)}`;
-    const { communityId } = await createCommunityAdmin(prefix);
+    const { communityId } = await createClubAdmin(prefix);
     const playerKeys = ["p1", "p2", "p3", "p4", "p5", "p6"];
     const playerIds = playerKeys.map((key) => `${prefix}-${key}`);
     const originalQuartet = playerIds.slice(0, 4);
@@ -986,7 +986,7 @@ describe("generate match route integration", () => {
 
   it("replaces one live-match player with the next eligible waiting player", async () => {
     const prefix = `replace-live-${randomUUID().slice(0, 8)}`;
-    const { communityId } = await createCommunityAdmin(prefix);
+    const { communityId } = await createClubAdmin(prefix);
     const playerKeys = ["p1", "p2", "p3", "p4", "p5", "p6"];
     const playerIds = playerKeys.map((key) => `${prefix}-${key}`);
     const courtId = `${prefix}-court-1`;
@@ -1057,7 +1057,7 @@ describe("generate match route integration", () => {
 
   it("undoes an in-progress match and clears the court when no queued match exists", async () => {
     const prefix = `undo-${randomUUID().slice(0, 8)}`;
-    const { communityId } = await createCommunityAdmin(prefix);
+    const { communityId } = await createClubAdmin(prefix);
     const playerKeys = ["p1", "p2", "p3", "p4"];
     const playerIds = playerKeys.map((key) => `${prefix}-${key}`);
     const courtId = `${prefix}-court-1`;
@@ -1127,7 +1127,7 @@ describe("generate match route integration", () => {
 
   it("undoes a live match, promotes the queued match, and rebuilds the queue", async () => {
     const prefix = `undo-refill-${randomUUID().slice(0, 8)}`;
-    const { communityId } = await createCommunityAdmin(prefix);
+    const { communityId } = await createClubAdmin(prefix);
     const playerKeys = [
       "p1",
       "p2",
@@ -1248,7 +1248,7 @@ describe("generate match route integration", () => {
 
   it("preserves the race regression behavior through the real POST route", async () => {
     const prefix = `race-${randomUUID().slice(0, 8)}`;
-    const { communityId } = await createCommunityAdmin(prefix);
+    const { communityId } = await createClubAdmin(prefix);
     const waitingSince = new Date("2026-04-04T00:00:00Z");
     const mixedAvailableSince = new Date("2026-04-04T00:21:00Z");
     const mixedFinishedAt = new Date("2026-04-04T00:20:00Z");
@@ -1426,7 +1426,7 @@ describe("generate match route integration", () => {
 
   it("creates a women's court from effective side overrides instead of raw gender", async () => {
     const prefix = `womens-${randomUUID().slice(0, 8)}`;
-    const { communityId } = await createCommunityAdmin(prefix);
+    const { communityId } = await createClubAdmin(prefix);
     const courtId = `${prefix}-court-1`;
     const lowerSideIds = [
       `${prefix}-F1`,
@@ -1510,7 +1510,7 @@ describe("generate match route integration", () => {
 
   it("rejects men's/women's court creation while a queued match exists", async () => {
     const prefix = `queue-guard-${randomUUID().slice(0, 8)}`;
-    const { communityId } = await createCommunityAdmin(prefix);
+    const { communityId } = await createClubAdmin(prefix);
     const courtId = `${prefix}-court-1`;
 
     await createUsers(prefix, [

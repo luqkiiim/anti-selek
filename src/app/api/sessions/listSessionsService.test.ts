@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { SessionCommunityStatus } from "@/types/enums";
+import { SessionClubStatus } from "@/types/enums";
 
 const mocks = vi.hoisted(() => ({
   communityMemberFindUnique: vi.fn(),
@@ -17,7 +17,7 @@ vi.mock("@/lib/prisma", () => ({
   },
 }));
 
-import { listSessionsForCommunity } from "./listSessionsService";
+import { listSessionsForClub } from "./listSessionsService";
 
 describe("listSessionsForCommunity", () => {
   beforeEach(() => {
@@ -28,7 +28,7 @@ describe("listSessionsForCommunity", () => {
   it("does not expose incoming pending collab sessions to staff", async () => {
     mocks.communityMemberFindUnique.mockResolvedValue({ role: "STAFF" });
 
-    await listSessionsForCommunity({
+    await listSessionsForClub({
       communityId: "community-1",
       viewerId: "staff-1",
       viewerIsAdmin: false,
@@ -42,7 +42,7 @@ describe("listSessionsForCommunity", () => {
               sessionCommunities: {
                 some: {
                   communityId: "community-1",
-                  status: { in: [SessionCommunityStatus.ACCEPTED] },
+                  status: { in: [SessionClubStatus.ACCEPTED] },
                 },
               },
             }),
@@ -55,7 +55,7 @@ describe("listSessionsForCommunity", () => {
   it("keeps incoming pending collab sessions visible to admins", async () => {
     mocks.communityMemberFindUnique.mockResolvedValue({ role: "ADMIN" });
 
-    await listSessionsForCommunity({
+    await listSessionsForClub({
       communityId: "community-1",
       viewerId: "admin-1",
       viewerIsAdmin: false,
@@ -71,8 +71,8 @@ describe("listSessionsForCommunity", () => {
                   communityId: "community-1",
                   status: {
                     in: [
-                      SessionCommunityStatus.ACCEPTED,
-                      SessionCommunityStatus.PENDING,
+                      SessionClubStatus.ACCEPTED,
+                      SessionClubStatus.PENDING,
                     ],
                   },
                 },

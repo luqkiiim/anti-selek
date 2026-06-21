@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { logError, safeErrorResponse } from "@/lib/errors";
 import {
-  isCommunityAdmin,
+  isClubAdmin,
   OfflineIdentityError,
   reviewOfflineIdentityLinkRequest,
   toOfflineIdentityLinkResponse,
@@ -60,7 +60,7 @@ export async function PATCH(
     );
     if (invalidTargetLimitResponse) return invalidTargetLimitResponse;
 
-    const canManage = await isCommunityAdmin(
+    const canManage = await isClubAdmin(
       prisma,
       communityId,
       session.user.id,
@@ -148,7 +148,7 @@ export async function DELETE(
     );
     if (invalidTargetLimitResponse) return invalidTargetLimitResponse;
 
-    const canManage = await isCommunityAdmin(
+    const canManage = await isClubAdmin(
       prisma,
       communityId,
       session.user.id,

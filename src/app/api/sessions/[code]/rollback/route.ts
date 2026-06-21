@@ -78,7 +78,7 @@ export async function POST(
       );
     }
 
-    let isCommunityAdmin = false;
+    let isClubAdmin = false;
     if (targetSession.communityId) {
       const membership = await prisma.communityMember.findUnique({
         where: {
@@ -89,10 +89,10 @@ export async function POST(
         },
         select: { role: true },
       });
-      isCommunityAdmin = membership?.role === "ADMIN";
+      isClubAdmin = membership?.role === "ADMIN";
     }
 
-    if (!session.user.isAdmin && !isCommunityAdmin) {
+    if (!session.user.isAdmin && !isClubAdmin) {
       return NextResponse.json({ error: "Admin only" }, { status: 403 });
     }
 
@@ -182,22 +182,22 @@ export async function POST(
 
       const reversedPlayerKeys = new Set<string>();
       if (ledgerAdjustments.length > 0) {
-        const reverseDeltaByCommunityAndUserId = new Map<
+        const reverseDeltaByClubAndUserId = new Map<
           string,
           { communityId: string; userId: string; delta: number }
         >();
         for (const adjustment of ledgerAdjustments) {
           const key = `${adjustment.communityId}:${adjustment.userId}`;
-          const current = reverseDeltaByCommunityAndUserId.get(key) ?? {
+          const current = reverseDeltaByClubAndUserId.get(key) ?? {
             communityId: adjustment.communityId,
             userId: adjustment.userId,
             delta: 0,
           };
           current.delta -= adjustment.delta;
-          reverseDeltaByCommunityAndUserId.set(key, current);
+          reverseDeltaByClubAndUserId.set(key, current);
         }
 
-        for (const item of reverseDeltaByCommunityAndUserId.values()) {
+        for (const item of reverseDeltaByClubAndUserId.values()) {
           if (item.delta === 0) continue;
           await tx.communityMember.updateMany({
             where: {

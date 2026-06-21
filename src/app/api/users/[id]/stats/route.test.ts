@@ -30,8 +30,8 @@ vi.mock("@/lib/profileStats", () => ({
   buildPlayerProfileDerivedData: mocks.buildPlayerProfileDerivedData,
 }));
 
-vi.mock("@/lib/profileCommunityRank", () => ({
-  buildProfileCommunityRankWindow: vi.fn(() => ({
+vi.mock("@/lib/profileClubRank", () => ({
+  buildProfileClubRankWindow: vi.fn(() => ({
     leaderboardSize: 0,
     currentRank: null,
     previousRank: null,

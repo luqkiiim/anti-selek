@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
-  CommunityPlayerStatus,
+  ClubPlayerStatus,
   PartnerPreference,
   PlayerGender,
 } from "@/types/enums";
@@ -147,7 +147,7 @@ describe("club admin update member route", () => {
         id: "membership-1",
         role: "MEMBER",
         elo: 1000,
-        status: CommunityPlayerStatus.CORE,
+        status: ClubPlayerStatus.CORE,
       });
     mocks.userFindUnique.mockResolvedValue({
       name: "Claimed Player",
@@ -174,7 +174,7 @@ describe("club admin update member route", () => {
         id: "membership-1",
         role: "MEMBER",
         elo: 1000,
-        status: CommunityPlayerStatus.CORE,
+        status: ClubPlayerStatus.CORE,
       });
     mocks.userFindUnique.mockResolvedValueOnce(null).mockResolvedValueOnce({
       name: "Claimed Player",
@@ -202,7 +202,7 @@ describe("club admin update member route", () => {
         id: "membership-1",
         role: "MEMBER",
         elo: 1000,
-        status: CommunityPlayerStatus.CORE,
+        status: ClubPlayerStatus.CORE,
       });
     mocks.userFindUnique.mockResolvedValue({
       name: "Claimed Player",
@@ -231,12 +231,12 @@ describe("club admin update member route", () => {
         id: "membership-1",
         role: "MEMBER",
         elo: 1000,
-        status: CommunityPlayerStatus.CORE,
+        status: ClubPlayerStatus.CORE,
       })
       .mockResolvedValueOnce({
         role: "MEMBER",
         elo: 1000,
-        status: CommunityPlayerStatus.CORE,
+        status: ClubPlayerStatus.CORE,
       });
     mocks.userFindUnique.mockResolvedValue({
       name: "Placeholder",
@@ -299,7 +299,7 @@ describe("club admin update member route", () => {
         id: "membership-1",
         role: "MEMBER",
         elo: 1000,
-        status: CommunityPlayerStatus.CORE,
+        status: ClubPlayerStatus.CORE,
       });
     mocks.userFindUnique
       .mockResolvedValueOnce({ isClaimed: true })
@@ -327,7 +327,7 @@ describe("club admin update member route", () => {
     mocks.communityMemberUpdate.mockResolvedValue({
       role: "STAFF",
       elo: 1000,
-      status: CommunityPlayerStatus.CORE,
+      status: ClubPlayerStatus.CORE,
     });
 
     const response = await patchMember({ role: "STAFF" });
@@ -350,7 +350,7 @@ describe("club admin update member route", () => {
         id: "membership-1",
         role: "STAFF",
         elo: 1000,
-        status: CommunityPlayerStatus.CORE,
+        status: ClubPlayerStatus.CORE,
       });
     mocks.userFindUnique.mockResolvedValue({
       name: "Staff Player",
@@ -376,7 +376,7 @@ describe("club admin update member route", () => {
     mocks.communityMemberUpdate.mockResolvedValue({
       role: "MEMBER",
       elo: 1000,
-      status: CommunityPlayerStatus.CORE,
+      status: ClubPlayerStatus.CORE,
     });
 
     const response = await patchMember({ role: "MEMBER" });
@@ -398,7 +398,7 @@ describe("club admin update member route", () => {
         id: "membership-1",
         role: "ADMIN",
         elo: 1000,
-        status: CommunityPlayerStatus.CORE,
+        status: ClubPlayerStatus.CORE,
       });
     mocks.userFindUnique.mockResolvedValue({
       name: "Other Admin",
@@ -424,7 +424,7 @@ describe("club admin update member route", () => {
     mocks.communityMemberUpdate.mockResolvedValue({
       role: "STAFF",
       elo: 1000,
-      status: CommunityPlayerStatus.CORE,
+      status: ClubPlayerStatus.CORE,
     });
 
     const response = await patchMember({ role: "STAFF" });
@@ -451,7 +451,7 @@ describe("club admin update member route", () => {
         id: "membership-1",
         role: "ADMIN",
         elo: 1000,
-        status: CommunityPlayerStatus.CORE,
+        status: ClubPlayerStatus.CORE,
       });
     mocks.userFindUnique.mockResolvedValue({
       name: "Other Admin",
@@ -477,7 +477,7 @@ describe("club admin update member route", () => {
     mocks.communityMemberUpdate.mockResolvedValue({
       role: "MEMBER",
       elo: 1000,
-      status: CommunityPlayerStatus.CORE,
+      status: ClubPlayerStatus.CORE,
     });
 
     const response = await patchMember({ role: "MEMBER" });
@@ -504,7 +504,7 @@ describe("club admin update member route", () => {
         id: "membership-1",
         role: "ADMIN",
         elo: 1000,
-        status: CommunityPlayerStatus.CORE,
+        status: ClubPlayerStatus.CORE,
       });
     mocks.userFindUnique.mockResolvedValue({
       name: "Other Admin",
@@ -530,7 +530,7 @@ describe("club admin update member route", () => {
     mocks.communityMemberUpdate.mockResolvedValue({
       role: "MEMBER",
       elo: 1000,
-      status: CommunityPlayerStatus.CORE,
+      status: ClubPlayerStatus.CORE,
     });
 
     const response = await patchMember({ role: "MEMBER" });
@@ -551,7 +551,7 @@ describe("club admin update member route", () => {
         id: "membership-1",
         role: "ADMIN",
         elo: 1000,
-        status: CommunityPlayerStatus.CORE,
+        status: ClubPlayerStatus.CORE,
       });
 
     const response = await patchMember({ role: "STAFF" });
@@ -574,7 +574,7 @@ describe("club admin update member route", () => {
         id: "membership-1",
         role: "ADMIN",
         elo: 1000,
-        status: CommunityPlayerStatus.CORE,
+        status: ClubPlayerStatus.CORE,
       });
 
     const response = await patchMember({ role: "STAFF" }, "owner-1");
@@ -593,7 +593,7 @@ describe("club admin update member route", () => {
         id: "membership-1",
         role: "ADMIN",
         elo: 1000,
-        status: CommunityPlayerStatus.CORE,
+        status: ClubPlayerStatus.CORE,
       });
 
     const response = await patchMember({ role: "MEMBER" }, "admin-1");

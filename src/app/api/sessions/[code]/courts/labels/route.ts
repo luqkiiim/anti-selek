@@ -59,17 +59,17 @@ export async function PATCH(
       return invalidTargetResponse(request, "api:sessions:code:courts:labels");
     }
 
-    let isCommunityOperator = false;
+    let isClubOperator = false;
     if (!session.user.isAdmin) {
       const membership = await getSessionOperatorMembership(prisma, {
         session: sessionData,
         userId: session.user.id,
         acceptedOnly: true,
       });
-      isCommunityOperator = !!membership;
+      isClubOperator = !!membership;
     }
 
-    if (!session.user.isAdmin && !isCommunityOperator) {
+    if (!session.user.isAdmin && !isClubOperator) {
       return invalidTargetResponse(request, "api:sessions:code:courts:labels");
     }
 

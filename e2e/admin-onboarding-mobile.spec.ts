@@ -30,7 +30,7 @@ async function getPlaygroundSummary(page: Page) {
   });
 }
 
-async function getCommunitySnapshot(page: Page, communityId: string) {
+async function getClubSnapshot(page: Page, communityId: string) {
   return page.evaluate(async (targetCommunityId) => {
     const response = await fetch(`/api/communities/${targetCommunityId}`);
     if (!response.ok) {
@@ -53,7 +53,7 @@ async function getCommunitySnapshot(page: Page, communityId: string) {
   }, communityId);
 }
 
-async function getCommunityMembers(page: Page, communityId: string) {
+async function getClubMembers(page: Page, communityId: string) {
   return page.evaluate(async (targetCommunityId) => {
     const response = await fetch(`/api/communities/${targetCommunityId}/members`);
     if (!response.ok) {
@@ -76,7 +76,7 @@ async function getSessionSnapshot(page: Page, sessionCode: string) {
     return response.json() as Promise<{
       players: unknown[];
       courts: unknown[];
-      isTutorialCommunity: boolean;
+      isTutorialClub: boolean;
     }>;
   }, sessionCode);
 }
@@ -178,7 +178,7 @@ test.describe("tutorial playground mobile walkthrough", () => {
     expect(playground.communityName).toBe("Tutorial playground");
     expect(playground.playersCount).toBe(13);
     expect(playground.courtsCount).toBe(2);
-    const communitySnapshot = await getCommunitySnapshot(
+    const communitySnapshot = await getClubSnapshot(
       page,
       playground.communityId
     );
@@ -203,7 +203,7 @@ test.describe("tutorial playground mobile walkthrough", () => {
     await expect(page.getByText("Haziq").first()).toBeVisible();
     await expect(page.getByText("Weekend Cup").first()).toBeVisible();
 
-    const members = await getCommunityMembers(page, playground.communityId);
+    const members = await getClubMembers(page, playground.communityId);
     const fakeMembers = members.filter(
       (member) => !member.isClaimed && member.email === null
     );
@@ -271,7 +271,7 @@ test.describe("tutorial playground mobile walkthrough", () => {
       page,
       playground.sessionCode
     );
-    expect(sessionSnapshot.isTutorialCommunity).toBe(true);
+    expect(sessionSnapshot.isTutorialClub).toBe(true);
     expect(sessionSnapshot.players).toHaveLength(13);
     expect(sessionSnapshot.courts).toHaveLength(2);
 
@@ -302,13 +302,13 @@ test.describe("tutorial playground mobile walkthrough", () => {
     expect(resetResult.playground.communityName).toBe("Tutorial playground");
     expect(resetResult.playground.playersCount).toBe(13);
     expect(resetResult.playground.courtsCount).toBe(2);
-    const resetCommunitySnapshot = await getCommunitySnapshot(
+    const resetClubSnapshot = await getClubSnapshot(
       page,
       resetResult.playground.communityId
     );
-    expect(resetCommunitySnapshot.community.name).toBe("Tutorial playground");
-    expect(resetCommunitySnapshot.communityPulse.metrics.completedTournaments).toBe(3);
-    expect(resetCommunitySnapshot.communityPulse.metrics.recentMatches).toBe(18);
+    expect(resetClubSnapshot.community.name).toBe("Tutorial playground");
+    expect(resetClubSnapshot.communityPulse.metrics.completedTournaments).toBe(3);
+    expect(resetClubSnapshot.communityPulse.metrics.recentMatches).toBe(18);
 
     await page.goto(`/community/${hostCommunityId}`);
     await expect(page.getByRole("heading", { name: "E2E Host Club" }))

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { serializeAvatarEntity } from "@/lib/avatar";
-import { isCommunityOperatorRole } from "@/lib/communityRoles";
+import { isClubOperatorRole } from "@/lib/clubRoles";
 import { logError, safeErrorResponse } from "@/lib/errors";
 import { getOfflineIdentityInfoByUserId } from "@/lib/offlineIdentities";
 import { prisma } from "@/lib/prisma";
@@ -12,7 +12,7 @@ import {
 } from "@/lib/rateLimit";
 import { isQuickAccessSession } from "@/lib/quickAccess";
 import {
-  CommunityPlayerStatus,
+  ClubPlayerStatus,
   OfflineIdentityLinkStatus,
   PlayerGender,
 } from "@/types/enums";
@@ -41,12 +41,12 @@ export async function GET(
 
     const { id: hostCommunityId } = await params;
     const url = new URL(request.url);
-    const partnerCommunityId = url.searchParams.get("partnerCommunityId");
+    const partnerClubId = url.searchParams.get("partnerCommunityId");
     if (
       typeof hostCommunityId !== "string" ||
       hostCommunityId.length === 0 ||
-      !partnerCommunityId ||
-      partnerCommunityId === hostCommunityId
+      !partnerClubId ||
+      partnerClubId === hostCommunityId
     ) {
       return NextResponse.json(
         { error: "Invalid request parameters" },
@@ -61,8 +61,8 @@ export async function GET(
     if (invalidTargetLimitResponse) return invalidTargetLimitResponse;
 
     const [
-      hostCommunity,
-      partnerCommunity,
+      hostClub,
+      partnerClub,
       hostMembership,
       partnerMembership,
       acceptedIdentityLink,
@@ -72,7 +72,7 @@ export async function GET(
         select: { isTutorial: true },
       }),
       prisma.community.findUnique({
-        where: { id: partnerCommunityId },
+        where: { id: partnerClubId },
         select: { isTutorial: true },
       }),
       prisma.communityMember.findUnique({
@@ -89,7 +89,7 @@ export async function GET(
         : prisma.communityMember.findUnique({
             where: {
               communityId_userId: {
-                communityId: partnerCommunityId,
+                communityId: partnerClubId,
                 userId: session.user.id,
               },
             },
@@ -101,10 +101,10 @@ export async function GET(
           OR: [
             {
               sourceCommunityId: hostCommunityId,
-              targetCommunityId: partnerCommunityId,
+              targetCommunityId: partnerClubId,
             },
             {
-              sourceCommunityId: partnerCommunityId,
+              sourceCommunityId: partnerClubId,
               targetCommunityId: hostCommunityId,
             },
           ],
@@ -114,16 +114,16 @@ export async function GET(
     ]);
     const hasPartnerRosterAccess =
       session.user.isAdmin ||
-      isCommunityOperatorRole(partnerMembership?.role) ||
+      isClubOperatorRole(partnerMembership?.role) ||
       !!acceptedIdentityLink;
 
     if (
-      !hostCommunity ||
-      !partnerCommunity ||
-      hostCommunity.isTutorial ||
-      partnerCommunity.isTutorial ||
+      !hostClub ||
+      !partnerClub ||
+      hostClub.isTutorial ||
+      partnerClub.isTutorial ||
       (!session.user.isAdmin &&
-        (!isCommunityOperatorRole(hostMembership?.role) ||
+        (!isClubOperatorRole(hostMembership?.role) ||
           !hasPartnerRosterAccess))
     ) {
       return invalidTargetResponse(request, "api:communities:id:collab-roster");
@@ -131,7 +131,7 @@ export async function GET(
 
     const memberships = await prisma.communityMember.findMany({
       where: {
-        communityId: { in: [hostCommunityId, partnerCommunityId] },
+        communityId: { in: [hostCommunityId, partnerClubId] },
       },
       include: {
         community: { select: { id: true, name: true } },
@@ -213,9 +213,9 @@ export async function GET(
             email: user.email,
             avatarUrl: serializeAvatarEntity(user).avatarUrl,
             status:
-              preferred.status === CommunityPlayerStatus.OCCASIONAL
-                ? CommunityPlayerStatus.OCCASIONAL
-                : CommunityPlayerStatus.CORE,
+              preferred.status === ClubPlayerStatus.OCCASIONAL
+                ? ClubPlayerStatus.OCCASIONAL
+                : ClubPlayerStatus.CORE,
             gender: [PlayerGender.MALE, PlayerGender.FEMALE].includes(
               user.gender as PlayerGender
             )
@@ -250,7 +250,7 @@ export async function GET(
                 userId: membership.userId,
                 elo: membership.elo,
               })),
-            linkedCommunityBadges: userMemberships.map((membership) => ({
+            linkedClubBadges: userMemberships.map((membership) => ({
               id: membership.id,
               name: membership.name,
               userId: membership.userId,

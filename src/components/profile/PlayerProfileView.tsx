@@ -51,7 +51,7 @@ interface UserProfileResponse {
   };
   context?: {
     communityId: string;
-    viewerCanManageCommunity: boolean;
+    viewerCanManageClub: boolean;
     rankContext: {
       leaderboardSize: number;
       currentRank: number | null;
@@ -1678,12 +1678,12 @@ export function PlayerProfileView({
   }, [userId, session, communityId]);
 
   const handleUploadAvatar = async (file: File) => {
-    const canUseCommunityAdminRoute =
-      communityId.length > 0 && data?.context?.viewerCanManageCommunity;
+    const canUseClubAdminRoute =
+      communityId.length > 0 && data?.context?.viewerCanManageClub;
     const response = await uploadUserAvatar(
       userId,
       file,
-      canUseCommunityAdminRoute ? communityId : undefined
+      canUseClubAdminRoute ? communityId : undefined
     );
 
     setData((current) =>
@@ -1711,11 +1711,11 @@ export function PlayerProfileView({
   };
 
   const handleRemoveAvatar = async () => {
-    const canUseCommunityAdminRoute =
-      communityId.length > 0 && data?.context?.viewerCanManageCommunity;
+    const canUseClubAdminRoute =
+      communityId.length > 0 && data?.context?.viewerCanManageClub;
     await deleteUserAvatar(
       userId,
-      canUseCommunityAdminRoute ? communityId : undefined
+      canUseClubAdminRoute ? communityId : undefined
     );
 
     setData((current) =>
@@ -1840,7 +1840,7 @@ export function PlayerProfileView({
       (currentUser.id === userId &&
         currentUser.isClaimed === true &&
         currentUser.isQuickAccess !== true) ||
-      (!!data.context?.viewerCanManageCommunity && communityId.length > 0));
+      (!!data.context?.viewerCanManageClub && communityId.length > 0));
   const handlePreviewAvatar = (avatarUrl: string) => {
     setPreviewAvatarUrl(avatarUrl);
   };

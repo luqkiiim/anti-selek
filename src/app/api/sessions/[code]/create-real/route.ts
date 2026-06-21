@@ -1,7 +1,7 @@
 import { randomUUID } from "crypto";
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { getCommunityEloByUserId, withCommunityElo } from "@/lib/communityElo";
+import { getClubEloByUserId, withClubElo } from "@/lib/clubElo";
 import {
   finalizeMatchResultInTransaction,
   type FinalizableMatch,
@@ -99,7 +99,7 @@ export async function POST(
       return invalidTargetResponse(request, "api:sessions:code:create-real");
     }
 
-    let isCommunityAdmin = false;
+    let isClubAdmin = false;
     if (sourceSession.communityId) {
       const membership = await prisma.communityMember.findUnique({
         where: {
@@ -110,10 +110,10 @@ export async function POST(
         },
         select: { role: true },
       });
-      isCommunityAdmin = membership?.role === "ADMIN";
+      isClubAdmin = membership?.role === "ADMIN";
     }
 
-    if (!session.user.isAdmin && !isCommunityAdmin) {
+    if (!session.user.isAdmin && !isClubAdmin) {
       return NextResponse.json({ error: "Admin only" }, { status: 403 });
     }
 
@@ -443,9 +443,9 @@ export async function POST(
 
     const players =
       createdSession.communityId && createdSession.players.length > 0
-        ? withCommunityElo(
+        ? withClubElo(
             createdSession.players,
-            await getCommunityEloByUserId(
+            await getClubEloByUserId(
               createdSession.communityId,
               createdSession.players.map((player) => player.userId)
             )

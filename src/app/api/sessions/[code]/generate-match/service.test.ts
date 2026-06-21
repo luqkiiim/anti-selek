@@ -20,8 +20,8 @@ vi.mock("@/lib/prisma", () => ({
   },
 }));
 
-vi.mock("@/lib/communityElo", () => ({
-  getCommunityEloByUserId: vi.fn(),
+vi.mock("@/lib/clubElo", () => ({
+  getClubEloByUserId: vi.fn(),
 }));
 
 vi.mock("@/lib/matchmaking/v3", async () => {
@@ -56,7 +56,7 @@ import {
   type V3BatchSelection,
   type V3SingleCourtSelection,
 } from "@/lib/matchmaking/v3";
-import { getCommunityEloByUserId } from "@/lib/communityElo";
+import { getClubEloByUserId } from "@/lib/clubElo";
 import {
   findBestBatchSelectionLadder,
   findBestSingleCourtSelectionLadder,
@@ -680,7 +680,7 @@ describe("generate match service", () => {
 
   describe("buildMatchmakingState", () => {
     it("uses club elo only for ratings sessions", async () => {
-      vi.mocked(getCommunityEloByUserId).mockResolvedValue(
+      vi.mocked(getClubEloByUserId).mockResolvedValue(
         new Map([
           ["A", 1440],
           ["B", 1330],
@@ -696,7 +696,7 @@ describe("generate match service", () => {
         createSessionData({ type: SessionType.ELO, players })
       );
 
-      expect(getCommunityEloByUserId).toHaveBeenCalledTimes(1);
+      expect(getClubEloByUserId).toHaveBeenCalledTimes(1);
       expect(eloState.playersById.get("A")?.elo).toBe(1440);
       expect(eloState.playersById.get("B")?.elo).toBe(1330);
     });
@@ -711,7 +711,7 @@ describe("generate match service", () => {
         createSessionData({ type: SessionType.RACE, players })
       );
 
-      expect(getCommunityEloByUserId).not.toHaveBeenCalled();
+      expect(getClubEloByUserId).not.toHaveBeenCalled();
       expect(raceState.playersById.get("A")?.elo).toBe(0);
       expect(raceState.playersById.get("B")?.elo).toBe(0);
     });

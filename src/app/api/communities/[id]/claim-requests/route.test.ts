@@ -10,7 +10,7 @@ const mocks = vi.hoisted(() => ({
   communityFindUnique: vi.fn(),
   communityMemberFindUnique: vi.fn(),
   txUserFindUnique: vi.fn(),
-  txCommunityMemberFindUnique: vi.fn(),
+  txClubMemberFindUnique: vi.fn(),
   txClaimRequestFindFirst: vi.fn(),
   txSessionPlayerFindFirst: vi.fn(),
   txClaimRequestCreate: vi.fn(),
@@ -41,7 +41,7 @@ vi.mock("@/lib/prisma", () => ({
     $transaction: async (
       callback: (tx: {
         user: { findUnique: typeof mocks.txUserFindUnique };
-        communityMember: { findUnique: typeof mocks.txCommunityMemberFindUnique };
+        communityMember: { findUnique: typeof mocks.txClubMemberFindUnique };
         claimRequest: {
           findFirst: typeof mocks.txClaimRequestFindFirst;
           create: typeof mocks.txClaimRequestCreate;
@@ -54,7 +54,7 @@ vi.mock("@/lib/prisma", () => ({
           findUnique: mocks.txUserFindUnique,
         },
         communityMember: {
-          findUnique: mocks.txCommunityMemberFindUnique,
+          findUnique: mocks.txClubMemberFindUnique,
         },
         claimRequest: {
           findFirst: mocks.txClaimRequestFindFirst,
@@ -118,7 +118,7 @@ describe("club claim request route", () => {
       isClaimed: true,
     });
 
-    mocks.txCommunityMemberFindUnique.mockResolvedValue({
+    mocks.txClubMemberFindUnique.mockResolvedValue({
       user: {
         id: "placeholder-1",
         name: "Old Member",
@@ -246,7 +246,7 @@ describe("club claim request route", () => {
 
   it("rejects targets that are not claimable placeholders", async () => {
     queuePendingRequestChecks({});
-    mocks.txCommunityMemberFindUnique.mockResolvedValue({
+    mocks.txClubMemberFindUnique.mockResolvedValue({
       user: {
         id: "placeholder-1",
         name: "Claimed Profile",

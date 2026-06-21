@@ -15,7 +15,7 @@ export function isQuickAccessSession(
   return session?.user?.isQuickAccess === true;
 }
 
-export function canQuickAccessCommunity(
+export function canQuickAccessClub(
   session: Session | null | undefined,
   communityId: string | null | undefined
 ): boolean {

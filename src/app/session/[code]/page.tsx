@@ -434,7 +434,7 @@ export default function SessionPage() {
   const isClaimedUser = user?.isClaimed === true;
   const currentUserId = session?.user?.id || "";
   const isTutorialPlayground =
-    sessionData?.isTutorialCommunity === true &&
+    sessionData?.isTutorialClub === true &&
     sessionData.tutorialOwnerId === currentUserId;
   const canOpenPlayerManager =
     isAdmin && sessionData?.status !== SessionStatus.COMPLETED;

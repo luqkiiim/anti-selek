@@ -1,11 +1,11 @@
 import { randomUUID } from "crypto";
 import { prisma } from "@/lib/prisma";
-import { getCommunityEloByUserId, withCommunityElo } from "@/lib/communityElo";
-import { isCommunityOperatorRole } from "@/lib/communityRoles";
+import { getClubEloByUserId, withClubElo } from "@/lib/clubElo";
+import { isClubOperatorRole } from "@/lib/clubRoles";
 import { getOfflineIdentityInfoByUserId } from "@/lib/offlineIdentities";
 import {
-  getPlayerCommunityBadges,
-  withPlayerCommunityBadges,
+  getPlayerClubBadges,
+  withPlayerClubBadges,
 } from "@/lib/sessionCollab";
 import { resolveMixedSideState } from "@/lib/mixedSide";
 import { getNormalizedSessionPool } from "@/lib/sessionPools";
@@ -15,8 +15,8 @@ import {
   SessionMode,
   SessionPool,
   SessionStatus,
-  SessionCommunityRole,
-  SessionCommunityStatus,
+  SessionClubRole,
+  SessionClubStatus,
 } from "@/types/enums";
 import {
   mixedModeLabel,
@@ -119,42 +119,42 @@ export async function createSessionForUser({
   }
   if (
     !requesterIsAdmin &&
-    !isCommunityOperatorRole(requesterMembership?.role)
+    !isClubOperatorRole(requesterMembership?.role)
   ) {
     throw new SessionRouteError(
       "Only club admins or staff can create tournaments",
       403
     );
   }
-  const hostCommunity =
+  const hostClub =
     requesterMembership?.community ??
     (await prisma.community.findUnique({
       where: { id: input.communityId },
       select: { isTutorial: true, tutorialOwnerId: true },
     }));
-  if (hostCommunity?.isTutorial && hostCommunity.tutorialOwnerId !== requesterId) {
+  if (hostClub?.isTutorial && hostClub.tutorialOwnerId !== requesterId) {
     throw new SessionRouteError("Tutorial playground not found", 404);
   }
-  if (hostCommunity?.isTutorial && input.partnerCommunityId) {
+  if (hostClub?.isTutorial && input.partnerClubId) {
     throw new SessionRouteError(
       "Tutorial playground sessions cannot invite collab clubs",
       400
     );
   }
 
-  const involvedCommunityIds = input.partnerCommunityId
-    ? [input.communityId, input.partnerCommunityId]
+  const involvedClubIds = input.partnerClubId
+    ? [input.communityId, input.partnerClubId]
     : [input.communityId];
-  if (input.partnerCommunityId) {
-    const partnerCommunity = await prisma.community.findUnique({
-      where: { id: input.partnerCommunityId },
+  if (input.partnerClubId) {
+    const partnerClub = await prisma.community.findUnique({
+      where: { id: input.partnerClubId },
       select: { id: true, isTutorial: true },
     });
 
-    if (!partnerCommunity) {
+    if (!partnerClub) {
       throw new SessionRouteError("Partner club not found", 404);
     }
-    if (partnerCommunity.isTutorial) {
+    if (partnerClub.isTutorial) {
       throw new SessionRouteError(
         "Tutorial playgrounds cannot be used for collab tournaments",
         400
@@ -163,7 +163,7 @@ export async function createSessionForUser({
   }
 
   const memberRows = await prisma.communityMember.findMany({
-    where: { communityId: { in: involvedCommunityIds } },
+    where: { communityId: { in: involvedClubIds } },
     select: { userId: true },
   });
   const memberSet = new Set(memberRows.map((member) => member.userId));
@@ -252,18 +252,18 @@ export async function createSessionForUser({
           create: [
             {
               communityId: input.communityId,
-              role: SessionCommunityRole.HOST,
-              status: SessionCommunityStatus.ACCEPTED,
+              role: SessionClubRole.HOST,
+              status: SessionClubStatus.ACCEPTED,
               requestedById: requesterId,
               reviewedById: requesterId,
               reviewedAt: new Date(),
             },
-            ...(input.partnerCommunityId
+            ...(input.partnerClubId
               ? [
                   {
-                    communityId: input.partnerCommunityId,
-                    role: SessionCommunityRole.PARTNER,
-                    status: SessionCommunityStatus.PENDING,
+                    communityId: input.partnerClubId,
+                    role: SessionClubRole.PARTNER,
+                    status: SessionClubStatus.PENDING,
                     requestedById: requesterId,
                   },
                 ]
@@ -356,16 +356,16 @@ export async function createSessionForUser({
 
   const playerIds = newSession.players.map((player) => player.userId);
   const players =
-    input.partnerCommunityId && newSession.players.length > 0
-      ? withPlayerCommunityBadges(
+    input.partnerClubId && newSession.players.length > 0
+      ? withPlayerClubBadges(
           newSession.players,
-          await getPlayerCommunityBadges(prisma, involvedCommunityIds, playerIds),
+          await getPlayerClubBadges(prisma, involvedClubIds, playerIds),
           newSession.communityId
         )
       : newSession.communityId && newSession.players.length > 0
-        ? withCommunityElo(
+        ? withClubElo(
             newSession.players,
-            await getCommunityEloByUserId(newSession.communityId, playerIds)
+            await getClubEloByUserId(newSession.communityId, playerIds)
           )
         : newSession.players;
 

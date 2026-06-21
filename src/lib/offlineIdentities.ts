@@ -1,5 +1,5 @@
 import type { Prisma, PrismaClient } from "@prisma/client";
-import { CommunityRole, OfflineIdentityLinkStatus } from "@/types/enums";
+import { ClubRole, OfflineIdentityLinkStatus } from "@/types/enums";
 
 type DbClient = Prisma.TransactionClient | PrismaClient;
 
@@ -27,14 +27,14 @@ export function isOfflineIdentityPlaceholder(user: {
   return !user.isClaimed && user.email === null;
 }
 
-export async function getCommunityAdminMembership(
+export async function getClubAdminMembership(
   tx: DbClient,
   communityId: string,
   userId: string,
   isGlobalAdmin = false
 ) {
   if (isGlobalAdmin) {
-    return { role: CommunityRole.ADMIN };
+    return { role: ClubRole.ADMIN };
   }
 
   const [community, membership] = await Promise.all([
@@ -54,19 +54,19 @@ export async function getCommunityAdminMembership(
   ]);
 
   if (community?.createdById === userId) {
-    return { role: CommunityRole.ADMIN };
+    return { role: ClubRole.ADMIN };
   }
 
   return membership;
 }
 
-export async function isCommunityAdmin(
+export async function isClubAdmin(
   tx: DbClient,
   communityId: string,
   userId: string,
   isGlobalAdmin = false
 ) {
-  const membership = await getCommunityAdminMembership(
+  const membership = await getClubAdminMembership(
     tx,
     communityId,
     userId,
@@ -244,11 +244,11 @@ async function resolveIdentityForAcceptedLink(
       await assertNoSameSessionOrMatchConflict(tx, member.userId, targetUserId);
     }
   }
-  const memberByCommunityId = new Map(
+  const memberByClubId = new Map(
     existingMembers.map((member) => [member.communityId, member.userId])
   );
 
-  const existingSourceUserId = memberByCommunityId.get(sourceCommunityId);
+  const existingSourceUserId = memberByClubId.get(sourceCommunityId);
   if (existingSourceUserId && existingSourceUserId !== sourceUserId) {
     throw new OfflineIdentityError(
       "This offline identity already has another placeholder in the source club",
@@ -256,7 +256,7 @@ async function resolveIdentityForAcceptedLink(
     );
   }
 
-  const existingTargetUserId = memberByCommunityId.get(targetCommunityId);
+  const existingTargetUserId = memberByClubId.get(targetCommunityId);
   if (existingTargetUserId && existingTargetUserId !== targetUserId) {
     throw new OfflineIdentityError(
       "This offline identity already has another placeholder in the target club",
@@ -543,13 +543,13 @@ export function toOfflineIdentityLinkResponse(request: {
   };
 }
 
-export interface LinkedCommunityUserResolver {
-  getUserIdForCommunity: (sourceUserId: string, communityId: string) => string;
+export interface LinkedClubUserResolver {
+  getUserIdForClub: (sourceUserId: string, communityId: string) => string;
   getLinkedUserIds: (sourceUserId: string) => string[];
   getOfflineIdentityId: (sourceUserId: string) => string | null;
 }
 
-export async function getLinkedCommunityUserResolver(
+export async function getLinkedClubUserResolver(
   tx: DbClient,
   {
     userIds,
@@ -558,12 +558,12 @@ export async function getLinkedCommunityUserResolver(
     userIds: string[];
     communityIds: string[];
   }
-): Promise<LinkedCommunityUserResolver> {
+): Promise<LinkedClubUserResolver> {
   const uniqueUserIds = Array.from(new Set(userIds));
-  const uniqueCommunityIds = Array.from(new Set(communityIds));
-  if (uniqueUserIds.length === 0 || uniqueCommunityIds.length === 0) {
+  const uniqueClubIds = Array.from(new Set(communityIds));
+  if (uniqueUserIds.length === 0 || uniqueClubIds.length === 0) {
     return {
-      getUserIdForCommunity: (sourceUserId) => sourceUserId,
+      getUserIdForClub: (sourceUserId) => sourceUserId,
       getLinkedUserIds: (sourceUserId) => [sourceUserId],
       getOfflineIdentityId: () => null,
     };
@@ -582,7 +582,7 @@ export async function getLinkedCommunityUserResolver(
   const identityIds = Array.from(new Set(seedMembers.map((member) => member.offlineIdentityId)));
   if (identityIds.length === 0) {
     return {
-      getUserIdForCommunity: (sourceUserId) => sourceUserId,
+      getUserIdForClub: (sourceUserId) => sourceUserId,
       getLinkedUserIds: (sourceUserId) => [sourceUserId],
       getOfflineIdentityId: () => null,
     };
@@ -591,7 +591,7 @@ export async function getLinkedCommunityUserResolver(
   const allMembers = await tx.offlineIdentityMember.findMany({
     where: {
       offlineIdentityId: { in: identityIds },
-      communityId: { in: uniqueCommunityIds },
+      communityId: { in: uniqueClubIds },
     },
     select: {
       offlineIdentityId: true,
@@ -599,11 +599,11 @@ export async function getLinkedCommunityUserResolver(
       userId: true,
     },
   });
-  const userIdByIdentityAndCommunity = new Map<string, string>();
+  const userIdByIdentityAndClub = new Map<string, string>();
   const linkedUserIdsByIdentity = new Map<string, string[]>();
 
   for (const member of allMembers) {
-    userIdByIdentityAndCommunity.set(
+    userIdByIdentityAndClub.set(
       `${member.offlineIdentityId}:${member.communityId}`,
       member.userId
     );
@@ -613,11 +613,11 @@ export async function getLinkedCommunityUserResolver(
   }
 
   return {
-    getUserIdForCommunity: (sourceUserId, communityId) => {
+    getUserIdForClub: (sourceUserId, communityId) => {
       const identityId = identityIdByUserId.get(sourceUserId);
       if (!identityId) return sourceUserId;
       return (
-        userIdByIdentityAndCommunity.get(`${identityId}:${communityId}`) ??
+        userIdByIdentityAndClub.get(`${identityId}:${communityId}`) ??
         sourceUserId
       );
     },
@@ -632,7 +632,7 @@ export async function getLinkedCommunityUserResolver(
   };
 }
 
-export async function getCommunityStatUserResolver(
+export async function getClubStatUserResolver(
   tx: DbClient,
   {
     communityId,
@@ -711,7 +711,7 @@ export async function getOfflineIdentityInfoByUserId(
       row.userId,
       {
         offlineIdentityId: row.offlineIdentityId,
-        linkedCommunityBadges: row.offlineIdentity.members.map((member) => ({
+        linkedClubBadges: row.offlineIdentity.members.map((member) => ({
           id: member.community.id,
           name: member.community.name,
           userId: member.userId,

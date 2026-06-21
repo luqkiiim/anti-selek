@@ -12,27 +12,27 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowLeft, Shield } from "lucide-react";
 import { getHostSessionOnboardingOverride } from "@/lib/adminOnboarding";
-import { getCommunityRoleLabel } from "@/lib/communityRoles";
+import { getClubRoleLabel } from "@/lib/clubRoles";
 import { getSessionTypeLabel } from "@/lib/sessionModeLabels";
 import { FlashMessage, HeroCard } from "@/components/ui/chrome";
-import { CommunityActionConfirmModal } from "@/components/community/CommunityActionConfirmModal";
-import { CommunityBottomTabs } from "@/components/community/CommunityBottomTabs";
-import { CommunityGuestsModal } from "@/components/community/CommunityGuestsModal";
-import { CommunityLeaderboardPanel } from "@/components/community/CommunityLeaderboardPanel";
-import { CommunityOverviewPulsePanel } from "@/components/community/CommunityOverviewPulsePanel";
-import { CommunityPlayersModal } from "@/components/community/CommunityPlayersModal";
-import { CommunityProfilePanel } from "@/components/community/CommunityProfilePanel";
-import { CurrentTournamentsPanel } from "@/components/community/CurrentTournamentsPanel";
-import { HostTournamentPanel } from "@/components/community/HostTournamentPanel";
-import { PastTournamentsPanel } from "@/components/community/PastTournamentsPanel";
-import { TestSessionsPanel } from "@/components/community/TestSessionsPanel";
+import { ClubActionConfirmModal } from "@/components/club/ClubActionConfirmModal";
+import { ClubBottomTabs } from "@/components/club/ClubBottomTabs";
+import { ClubGuestsModal } from "@/components/club/ClubGuestsModal";
+import { ClubLeaderboardPanel } from "@/components/club/ClubLeaderboardPanel";
+import { ClubOverviewPulsePanel } from "@/components/club/ClubOverviewPulsePanel";
+import { ClubPlayersModal } from "@/components/club/ClubPlayersModal";
+import { ClubProfilePanel } from "@/components/club/ClubProfilePanel";
+import { CurrentTournamentsPanel } from "@/components/club/CurrentTournamentsPanel";
+import { HostTournamentPanel } from "@/components/club/HostTournamentPanel";
+import { PastTournamentsPanel } from "@/components/club/PastTournamentsPanel";
+import { TestSessionsPanel } from "@/components/club/TestSessionsPanel";
 import { AdminOnboardingChecklist } from "@/components/onboarding/AdminOnboardingChecklist";
 import { useAdminOnboardingProgress } from "@/components/onboarding/useAdminOnboardingProgress";
-import type { CommunityPageSection } from "@/components/community/communityTypes";
-import { useCommunityPage } from "./useCommunityPage";
+import type { ClubPageSection } from "@/components/club/clubTypes";
+import { useClubPage } from "./useClubPage";
 
 const baseSectionTabs: Array<{
-  key: Exclude<CommunityPageSection, "host" | "profile">;
+  key: Exclude<ClubPageSection, "host" | "profile">;
   label: string;
   detail: (counts: { sessions: number; leaderboard: number }) => string;
 }> = [
@@ -53,17 +53,17 @@ const baseSectionTabs: Array<{
   },
 ];
 
-function getCommunitySectionHref(
+function getClubSectionHref(
   communityId: string,
-  section: CommunityPageSection
+  section: ClubPageSection
 ) {
   return `/community/${communityId}?tab=${section}`;
 }
 
-function getRequestedCommunitySection(
+function getRequestedClubSection(
   tab: string | null,
-  canManageCommunity: boolean
-): CommunityPageSection | null {
+  canManageClub: boolean
+): ClubPageSection | null {
   switch (tab) {
     case "overview":
     case "tournaments":
@@ -71,33 +71,33 @@ function getRequestedCommunitySection(
     case "profile":
       return tab;
     case "host":
-      return canManageCommunity ? "host" : null;
+      return canManageClub ? "host" : null;
     default:
       return null;
   }
 }
 
-export default function CommunityPage() {
+export default function ClubPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const requestedTab = searchParams.get("tab");
-  const communityPagerRef = useRef<HTMLDivElement | null>(null);
-  const communityPanelRefs = useRef<
-    Partial<Record<CommunityPageSection, HTMLElement | null>>
+  const clubPagerRef = useRef<HTMLDivElement | null>(null);
+  const clubPanelRefs = useRef<
+    Partial<Record<ClubPageSection, HTMLElement | null>>
   >({});
-  const communityPanelMeasureFrameRef = useRef<number | null>(null);
-  const communityPagerSnapTimeoutRef = useRef<ReturnType<
+  const clubPanelMeasureFrameRef = useRef<number | null>(null);
+  const clubPagerSnapTimeoutRef = useRef<ReturnType<
     typeof setTimeout
   > | null>(null);
-  const programmaticCommunityPagerTargetRef =
-    useRef<CommunityPageSection | null>(null);
-  const programmaticCommunityPagerReleaseTimeoutRef =
+  const programmaticClubPagerTargetRef =
+    useRef<ClubPageSection | null>(null);
+  const programmaticClubPagerReleaseTimeoutRef =
     useRef<ReturnType<typeof setTimeout> | null>(null);
-  const communityPagerStartXRef = useRef<number | null>(null);
-  const communityPagerStartIndexRef = useRef<number | null>(null);
-  const communityPagerIsDraggingRef = useRef(false);
-  const pendingCommunitySectionRef = useRef<CommunityPageSection | null>(null);
-  const [communityPagerHeight, setCommunityPagerHeight] = useState<
+  const clubPagerStartXRef = useRef<number | null>(null);
+  const clubPagerStartIndexRef = useRef<number | null>(null);
+  const clubPagerIsDraggingRef = useRef(false);
+  const pendingClubSectionRef = useRef<ClubPageSection | null>(null);
+  const [clubPagerHeight, setClubPagerHeight] = useState<
     number | null
   >(null);
   const {
@@ -106,7 +106,7 @@ export default function CommunityPage() {
     openModeLabel,
     mixedModeLabel,
     user,
-    community,
+    club,
     newSessionName,
     setNewSessionName,
     matchmakingStyle,
@@ -122,14 +122,14 @@ export default function CommunityPage() {
     setAutoQueueEnabled,
     respectPlayerRest,
     setRespectPlayerRest,
-    partnerCommunityId,
-    partnerCommunitySearch,
-    setPartnerCommunitySearch,
+    partnerClubId,
+    partnerClubSearch,
+    setPartnerClubSearch,
     collabCandidates,
-    selectedPartnerCommunity,
+    selectedPartnerClub,
     loadingCollabCandidates,
-    selectPartnerCommunity,
-    clearPartnerCommunity,
+    selectPartnerClub,
+    clearPartnerClub,
     loadingCollabRoster,
     courtCount,
     setCourtCount,
@@ -171,9 +171,9 @@ export default function CommunityPage() {
     testSessions,
     latestPastTournamentId,
     leaderboardPreview,
-    communityPulse,
-    canManageCommunity,
-    canAdminCommunity,
+    clubPulse,
+    canManageClub,
+    canAdminClub,
     selectablePlayers,
     filteredSelectablePlayers,
     currentUserClaimEligibility,
@@ -198,14 +198,14 @@ export default function CommunityPage() {
     closeGuestsModal,
     switchSection,
     exitHostMode,
-    openCommunityPlayerProfile,
+    openClubPlayerProfile,
     openTournament,
-  } = useCommunityPage();
+  } = useClubPage();
   const isTutorialPlayground =
-    community?.isTutorial === true && community.tutorialOwnerId === user?.id;
+    club?.isTutorial === true && club.tutorialOwnerId === user?.id;
   const adminOnboarding = useAdminOnboardingProgress(
     status === "authenticated" &&
-      canManageCommunity &&
+      canManageClub &&
       isTutorialPlayground &&
       !loading
   );
@@ -227,13 +227,13 @@ export default function CommunityPage() {
   }, [adminOnboarding, createSession]);
 
   const mobileSections = useMemo(() => {
-    const sections: CommunityPageSection[] = [
+    const sections: ClubPageSection[] = [
       "overview",
       "tournaments",
       "leaderboard",
     ];
 
-    if (canManageCommunity) {
+    if (canManageClub) {
       sections.splice(2, 0, "host");
     }
 
@@ -242,36 +242,36 @@ export default function CommunityPage() {
     }
 
     return sections;
-  }, [canManageCommunity, user?.id]);
+  }, [canManageClub, user?.id]);
   const activeMobileSection = mobileSections.includes(activeSection)
     ? activeSection
     : mobileSections[0] ?? "overview";
 
-  const measureActiveCommunityPanel = useCallback(() => {
-    const activePanel = communityPanelRefs.current[activeMobileSection];
+  const measureActiveClubPanel = useCallback(() => {
+    const activePanel = clubPanelRefs.current[activeMobileSection];
     if (!activePanel) {
-      setCommunityPagerHeight(null);
+      setClubPagerHeight(null);
       return;
     }
 
     const nextHeight = Math.ceil(activePanel.getBoundingClientRect().height);
-    setCommunityPagerHeight((currentHeight) =>
+    setClubPagerHeight((currentHeight) =>
       currentHeight !== null && Math.abs(currentHeight - nextHeight) < 1
         ? currentHeight
         : nextHeight
     );
   }, [activeMobileSection]);
 
-  const scheduleMeasureActiveCommunityPanel = useCallback(() => {
-    if (communityPanelMeasureFrameRef.current !== null) {
-      cancelAnimationFrame(communityPanelMeasureFrameRef.current);
+  const scheduleMeasureActiveClubPanel = useCallback(() => {
+    if (clubPanelMeasureFrameRef.current !== null) {
+      cancelAnimationFrame(clubPanelMeasureFrameRef.current);
     }
 
-    communityPanelMeasureFrameRef.current = requestAnimationFrame(() => {
-      communityPanelMeasureFrameRef.current = null;
-      measureActiveCommunityPanel();
+    clubPanelMeasureFrameRef.current = requestAnimationFrame(() => {
+      clubPanelMeasureFrameRef.current = null;
+      measureActiveClubPanel();
     });
-  }, [measureActiveCommunityPanel]);
+  }, [measureActiveClubPanel]);
 
   const handleBack = useCallback(() => {
     if (typeof window !== "undefined" && window.history.length > 1) {
@@ -282,41 +282,41 @@ export default function CommunityPage() {
     router.push("/");
   }, [router]);
 
-  const clearProgrammaticCommunityPagerSync = useCallback(() => {
-    if (programmaticCommunityPagerReleaseTimeoutRef.current) {
-      clearTimeout(programmaticCommunityPagerReleaseTimeoutRef.current);
-      programmaticCommunityPagerReleaseTimeoutRef.current = null;
+  const clearProgrammaticClubPagerSync = useCallback(() => {
+    if (programmaticClubPagerReleaseTimeoutRef.current) {
+      clearTimeout(programmaticClubPagerReleaseTimeoutRef.current);
+      programmaticClubPagerReleaseTimeoutRef.current = null;
     }
 
-    programmaticCommunityPagerTargetRef.current = null;
+    programmaticClubPagerTargetRef.current = null;
   }, []);
 
-  const markProgrammaticCommunityPagerSync = useCallback(
-    (section: CommunityPageSection, behavior: ScrollBehavior) => {
-      if (programmaticCommunityPagerReleaseTimeoutRef.current) {
-        clearTimeout(programmaticCommunityPagerReleaseTimeoutRef.current);
+  const markProgrammaticClubPagerSync = useCallback(
+    (section: ClubPageSection, behavior: ScrollBehavior) => {
+      if (programmaticClubPagerReleaseTimeoutRef.current) {
+        clearTimeout(programmaticClubPagerReleaseTimeoutRef.current);
       }
 
-      programmaticCommunityPagerTargetRef.current = section;
-      programmaticCommunityPagerReleaseTimeoutRef.current = setTimeout(() => {
-        if (programmaticCommunityPagerTargetRef.current === section) {
-          programmaticCommunityPagerTargetRef.current = null;
+      programmaticClubPagerTargetRef.current = section;
+      programmaticClubPagerReleaseTimeoutRef.current = setTimeout(() => {
+        if (programmaticClubPagerTargetRef.current === section) {
+          programmaticClubPagerTargetRef.current = null;
         }
 
-        programmaticCommunityPagerReleaseTimeoutRef.current = null;
+        programmaticClubPagerReleaseTimeoutRef.current = null;
       }, behavior === "smooth" ? 280 : 80);
     },
     []
   );
 
-  const scrollCommunityPagerToSection = useCallback(
-    (section: CommunityPageSection, behavior: ScrollBehavior = "auto") => {
-      const container = communityPagerRef.current;
+  const scrollClubPagerToSection = useCallback(
+    (section: ClubPageSection, behavior: ScrollBehavior = "auto") => {
+      const container = clubPagerRef.current;
       if (!container) return;
 
-      if (communityPagerSnapTimeoutRef.current) {
-        clearTimeout(communityPagerSnapTimeoutRef.current);
-        communityPagerSnapTimeoutRef.current = null;
+      if (clubPagerSnapTimeoutRef.current) {
+        clearTimeout(clubPagerSnapTimeoutRef.current);
+        clubPagerSnapTimeoutRef.current = null;
       }
 
       const sectionIndex = mobileSections.findIndex(
@@ -326,7 +326,7 @@ export default function CommunityPage() {
 
       if (container.clientWidth <= 0) {
         requestAnimationFrame(() => {
-          const retryContainer = communityPagerRef.current;
+          const retryContainer = clubPagerRef.current;
           if (!retryContainer || retryContainer.clientWidth <= 0) return;
 
           const retryIndex = mobileSections.findIndex(
@@ -336,11 +336,11 @@ export default function CommunityPage() {
 
           const retryLeft = retryIndex * retryContainer.clientWidth;
           if (Math.abs(retryContainer.scrollLeft - retryLeft) < 4) {
-            clearProgrammaticCommunityPagerSync();
+            clearProgrammaticClubPagerSync();
             return;
           }
 
-          markProgrammaticCommunityPagerSync(section, behavior);
+          markProgrammaticClubPagerSync(section, behavior);
           retryContainer.scrollTo({
             left: retryLeft,
             behavior,
@@ -351,24 +351,24 @@ export default function CommunityPage() {
 
       const nextLeft = sectionIndex * container.clientWidth;
       if (Math.abs(container.scrollLeft - nextLeft) < 4) {
-        clearProgrammaticCommunityPagerSync();
+        clearProgrammaticClubPagerSync();
         return;
       }
 
-      markProgrammaticCommunityPagerSync(section, behavior);
+      markProgrammaticClubPagerSync(section, behavior);
       container.scrollTo({
         left: nextLeft,
         behavior,
       });
     },
     [
-      clearProgrammaticCommunityPagerSync,
-      markProgrammaticCommunityPagerSync,
+      clearProgrammaticClubPagerSync,
+      markProgrammaticClubPagerSync,
       mobileSections,
     ]
   );
 
-  const getNearestCommunitySection = useCallback(
+  const getNearestClubSection = useCallback(
     (container: HTMLDivElement) => {
       const pageWidth = Math.max(container.clientWidth, 1);
       const sectionIndex = Math.min(
@@ -385,33 +385,33 @@ export default function CommunityPage() {
     [mobileSections]
   );
 
-  const navigateCommunitySection = useCallback(
+  const navigateClubSection = useCallback(
     (
-      section: CommunityPageSection,
+      section: ClubPageSection,
       behavior: ScrollBehavior = "smooth"
     ) => {
-      pendingCommunitySectionRef.current = section;
+      pendingClubSectionRef.current = section;
       switchSection(section);
-      scrollCommunityPagerToSection(section, behavior);
-      router.replace(getCommunitySectionHref(communityId, section), {
+      scrollClubPagerToSection(section, behavior);
+      router.replace(getClubSectionHref(communityId, section), {
         scroll: false,
       });
     },
-    [communityId, router, scrollCommunityPagerToSection, switchSection]
+    [communityId, router, scrollClubPagerToSection, switchSection]
   );
 
-  const switchCommunitySection = useCallback(
-    (section: CommunityPageSection) => {
-      navigateCommunitySection(section, "smooth");
+  const switchClubSection = useCallback(
+    (section: ClubPageSection) => {
+      navigateClubSection(section, "smooth");
     },
-    [navigateCommunitySection]
+    [navigateClubSection]
   );
 
-  const exitCommunityHostMode = useCallback(() => {
+  const exitClubHostMode = useCallback(() => {
     exitHostMode();
-    pendingCommunitySectionRef.current = lastNonHostSection;
-    scrollCommunityPagerToSection(lastNonHostSection, "smooth");
-    router.replace(getCommunitySectionHref(communityId, lastNonHostSection), {
+    pendingClubSectionRef.current = lastNonHostSection;
+    scrollClubPagerToSection(lastNonHostSection, "smooth");
+    router.replace(getClubSectionHref(communityId, lastNonHostSection), {
       scroll: false,
     });
   }, [
@@ -419,17 +419,17 @@ export default function CommunityPage() {
     exitHostMode,
     lastNonHostSection,
     router,
-    scrollCommunityPagerToSection,
+    scrollClubPagerToSection,
   ]);
 
-  const settleCommunityPagerToNearestSection = useCallback(
+  const settleClubPagerToNearestSection = useCallback(
     (behavior: ScrollBehavior = "smooth") => {
-      const container = communityPagerRef.current;
+      const container = clubPagerRef.current;
       if (!container) {
         return;
       }
 
-      const { section, targetLeft } = getNearestCommunitySection(container);
+      const { section, targetLeft } = getNearestClubSection(container);
       if (!section) {
         return;
       }
@@ -438,35 +438,35 @@ export default function CommunityPage() {
 
       if (section !== activeMobileSection) {
         if (isAligned) {
-          navigateCommunitySection(section, "auto");
+          navigateClubSection(section, "auto");
           return;
         }
 
-        navigateCommunitySection(section, behavior);
+        navigateClubSection(section, behavior);
         return;
       }
 
       if (!isAligned) {
-        scrollCommunityPagerToSection(section, behavior);
+        scrollClubPagerToSection(section, behavior);
       }
     },
     [
       activeMobileSection,
-      getNearestCommunitySection,
-      navigateCommunitySection,
-      scrollCommunityPagerToSection,
+      getNearestClubSection,
+      navigateClubSection,
+      scrollClubPagerToSection,
     ]
   );
 
-  const settleCommunityPagerFromSwipe = useCallback(
+  const settleClubPagerFromSwipe = useCallback(
     (endX: number | null) => {
-      const container = communityPagerRef.current;
-      const startX = communityPagerStartXRef.current;
-      const startIndex = communityPagerStartIndexRef.current;
+      const container = clubPagerRef.current;
+      const startX = clubPagerStartXRef.current;
+      const startIndex = clubPagerStartIndexRef.current;
 
-      communityPagerIsDraggingRef.current = false;
-      communityPagerStartXRef.current = null;
-      communityPagerStartIndexRef.current = null;
+      clubPagerIsDraggingRef.current = false;
+      clubPagerStartXRef.current = null;
+      clubPagerStartIndexRef.current = null;
 
       if (!container || startX === null || startIndex === null) {
         return;
@@ -474,7 +474,7 @@ export default function CommunityPage() {
 
       const swipeDelta = endX === null ? 0 : startX - endX;
       const swipeThreshold = Math.max(container.clientWidth * 0.16, 32);
-      let targetIndex = getNearestCommunitySection(container).sectionIndex;
+      let targetIndex = getNearestClubSection(container).sectionIndex;
 
       if (Math.abs(swipeDelta) >= swipeThreshold) {
         targetIndex = Math.min(
@@ -488,20 +488,20 @@ export default function CommunityPage() {
         return;
       }
 
-      navigateCommunitySection(targetSection, "smooth");
+      navigateClubSection(targetSection, "smooth");
     },
     [
-      getNearestCommunitySection,
+      getNearestClubSection,
       mobileSections,
-      navigateCommunitySection,
+      navigateClubSection,
     ]
   );
 
-  const handleCommunityPagerScroll = useCallback(() => {
-    const container = communityPagerRef.current;
+  const handleClubPagerScroll = useCallback(() => {
+    const container = clubPagerRef.current;
     if (!container) return;
 
-    const programmaticTarget = programmaticCommunityPagerTargetRef.current;
+    const programmaticTarget = programmaticClubPagerTargetRef.current;
     if (programmaticTarget) {
       const targetIndex = mobileSections.findIndex(
         (section) => section === programmaticTarget
@@ -513,53 +513,53 @@ export default function CommunityPage() {
         }
       }
 
-      clearProgrammaticCommunityPagerSync();
+      clearProgrammaticClubPagerSync();
     }
 
-    if (communityPagerIsDraggingRef.current) {
+    if (clubPagerIsDraggingRef.current) {
       return;
     }
 
-    if (communityPagerSnapTimeoutRef.current) {
-      clearTimeout(communityPagerSnapTimeoutRef.current);
+    if (clubPagerSnapTimeoutRef.current) {
+      clearTimeout(clubPagerSnapTimeoutRef.current);
     }
 
-    communityPagerSnapTimeoutRef.current = setTimeout(() => {
-      settleCommunityPagerToNearestSection("smooth");
+    clubPagerSnapTimeoutRef.current = setTimeout(() => {
+      settleClubPagerToNearestSection("smooth");
     }, 140);
   }, [
-    clearProgrammaticCommunityPagerSync,
+    clearProgrammaticClubPagerSync,
     mobileSections,
-    settleCommunityPagerToNearestSection,
+    settleClubPagerToNearestSection,
   ]);
 
-  const handleCommunityPagerTouchStart = useCallback(
+  const handleClubPagerTouchStart = useCallback(
     (event: React.TouchEvent<HTMLDivElement>) => {
-      const container = communityPagerRef.current;
+      const container = clubPagerRef.current;
       const touch = event.touches[0];
       if (!container || !touch) return;
 
-      clearProgrammaticCommunityPagerSync();
-      if (communityPagerSnapTimeoutRef.current) {
-        clearTimeout(communityPagerSnapTimeoutRef.current);
-        communityPagerSnapTimeoutRef.current = null;
+      clearProgrammaticClubPagerSync();
+      if (clubPagerSnapTimeoutRef.current) {
+        clearTimeout(clubPagerSnapTimeoutRef.current);
+        clubPagerSnapTimeoutRef.current = null;
       }
 
-      communityPagerIsDraggingRef.current = true;
-      communityPagerStartXRef.current = touch.clientX;
-      communityPagerStartIndexRef.current = Math.round(
+      clubPagerIsDraggingRef.current = true;
+      clubPagerStartXRef.current = touch.clientX;
+      clubPagerStartIndexRef.current = Math.round(
         container.scrollLeft / Math.max(container.clientWidth, 1)
       );
     },
-    [clearProgrammaticCommunityPagerSync]
+    [clearProgrammaticClubPagerSync]
   );
 
-  const handleCommunityPagerTouchMove = useCallback(
+  const handleClubPagerTouchMove = useCallback(
     (event: React.TouchEvent<HTMLDivElement>) => {
-      const container = communityPagerRef.current;
+      const container = clubPagerRef.current;
       const touch = event.touches[0];
-      const startX = communityPagerStartXRef.current;
-      const startIndex = communityPagerStartIndexRef.current;
+      const startX = clubPagerStartXRef.current;
+      const startIndex = clubPagerStartIndexRef.current;
 
       if (!container || !touch || startX === null || startIndex === null) {
         return;
@@ -585,17 +585,17 @@ export default function CommunityPage() {
     [mobileSections.length]
   );
 
-  const handleCommunityPagerTouchEnd = useCallback(
+  const handleClubPagerTouchEnd = useCallback(
     (event: React.TouchEvent<HTMLDivElement>) => {
       const touch = event.changedTouches[0];
-      settleCommunityPagerFromSwipe(touch ? touch.clientX : null);
+      settleClubPagerFromSwipe(touch ? touch.clientX : null);
     },
-    [settleCommunityPagerFromSwipe]
+    [settleClubPagerFromSwipe]
   );
 
-  const handleCommunityPagerTouchCancel = useCallback(() => {
-    settleCommunityPagerFromSwipe(null);
-  }, [settleCommunityPagerFromSwipe]);
+  const handleClubPagerTouchCancel = useCallback(() => {
+    settleClubPagerFromSwipe(null);
+  }, [settleClubPagerFromSwipe]);
 
   useEffect(() => {
     router.prefetch("/");
@@ -612,27 +612,27 @@ export default function CommunityPage() {
   }, [activeTournaments, pastTournaments, router, testSessions]);
 
   useEffect(() => {
-    if (status === "loading" || loading || !community || !communityId) {
+    if (status === "loading" || loading || !club || !communityId) {
       return;
     }
 
-    const requestedSection = getRequestedCommunitySection(
+    const requestedSection = getRequestedClubSection(
       requestedTab,
-      canManageCommunity
+      canManageClub
     );
     const nextSection = requestedSection ?? "overview";
-    const pendingSection = pendingCommunitySectionRef.current;
+    const pendingSection = pendingClubSectionRef.current;
 
     if (pendingSection) {
       if (requestedSection === pendingSection) {
-        pendingCommunitySectionRef.current = null;
+        pendingClubSectionRef.current = null;
       } else {
         return;
       }
     }
 
     if (requestedTab && !requestedSection) {
-      router.replace(getCommunitySectionHref(communityId, "overview"), {
+      router.replace(getClubSectionHref(communityId, "overview"), {
         scroll: false,
       });
     }
@@ -642,8 +642,8 @@ export default function CommunityPage() {
     }
   }, [
     activeSection,
-    canManageCommunity,
-    community,
+    canManageClub,
+    club,
     communityId,
     loading,
     requestedTab,
@@ -653,51 +653,51 @@ export default function CommunityPage() {
   ]);
 
   useLayoutEffect(() => {
-    if (status === "loading" || loading || !community) {
+    if (status === "loading" || loading || !club) {
       return;
     }
 
-    scheduleMeasureActiveCommunityPanel();
+    scheduleMeasureActiveClubPanel();
 
     if (
-      programmaticCommunityPagerTargetRef.current ||
-      communityPagerIsDraggingRef.current
+      programmaticClubPagerTargetRef.current ||
+      clubPagerIsDraggingRef.current
     ) {
       return;
     }
 
-    scrollCommunityPagerToSection(activeMobileSection, "auto");
+    scrollClubPagerToSection(activeMobileSection, "auto");
   }, [
     activeMobileSection,
-    community,
+    club,
     loading,
-    scheduleMeasureActiveCommunityPanel,
-    scrollCommunityPagerToSection,
+    scheduleMeasureActiveClubPanel,
+    scrollClubPagerToSection,
     status,
   ]);
 
   useEffect(() => {
-    const activePanel = communityPanelRefs.current[activeMobileSection];
+    const activePanel = clubPanelRefs.current[activeMobileSection];
     if (!activePanel || typeof ResizeObserver === "undefined") {
-      scheduleMeasureActiveCommunityPanel();
+      scheduleMeasureActiveClubPanel();
       return;
     }
 
     const observer = new ResizeObserver(() => {
-      scheduleMeasureActiveCommunityPanel();
+      scheduleMeasureActiveClubPanel();
     });
     observer.observe(activePanel);
-    scheduleMeasureActiveCommunityPanel();
+    scheduleMeasureActiveClubPanel();
 
     return () => {
       observer.disconnect();
     };
-  }, [activeMobileSection, scheduleMeasureActiveCommunityPanel, mobileSections]);
+  }, [activeMobileSection, scheduleMeasureActiveClubPanel, mobileSections]);
 
   useEffect(() => {
     const handleResize = () => {
-      scrollCommunityPagerToSection(activeMobileSection, "auto");
-      scheduleMeasureActiveCommunityPanel();
+      scrollClubPagerToSection(activeMobileSection, "auto");
+      scheduleMeasureActiveClubPanel();
     };
 
     window.addEventListener("resize", handleResize);
@@ -706,23 +706,23 @@ export default function CommunityPage() {
     };
   }, [
     activeMobileSection,
-    scheduleMeasureActiveCommunityPanel,
-    scrollCommunityPagerToSection,
+    scheduleMeasureActiveClubPanel,
+    scrollClubPagerToSection,
   ]);
 
   useEffect(() => {
     return () => {
-      if (communityPagerSnapTimeoutRef.current) {
-        clearTimeout(communityPagerSnapTimeoutRef.current);
+      if (clubPagerSnapTimeoutRef.current) {
+        clearTimeout(clubPagerSnapTimeoutRef.current);
       }
 
-      if (communityPanelMeasureFrameRef.current !== null) {
-        cancelAnimationFrame(communityPanelMeasureFrameRef.current);
+      if (clubPanelMeasureFrameRef.current !== null) {
+        cancelAnimationFrame(clubPanelMeasureFrameRef.current);
       }
 
-      clearProgrammaticCommunityPagerSync();
+      clearProgrammaticClubPagerSync();
     };
-  }, [clearProgrammaticCommunityPagerSync]);
+  }, [clearProgrammaticClubPagerSync]);
 
   if (status === "loading" || loading) {
     return (
@@ -735,11 +735,11 @@ export default function CommunityPage() {
     );
   }
 
-  const communityName = community?.name || "Club";
-  const communityRoleLabel = community?.viewerIsOwner
+  const clubName = club?.name || "Club";
+  const clubRoleLabel = club?.viewerIsOwner
     ? "Owner"
-    : getCommunityRoleLabel(community?.role);
-  const sectionTabs = canManageCommunity
+    : getClubRoleLabel(club?.role);
+  const sectionTabs = canManageClub
     ? [
         baseSectionTabs[0],
         {
@@ -750,7 +750,7 @@ export default function CommunityPage() {
         ...baseSectionTabs.slice(1),
       ]
     : baseSectionTabs;
-  const hostSetupPanel = canManageCommunity ? (
+  const hostSetupPanel = canManageClub ? (
     <HostTournamentPanel
       newSessionName={newSessionName}
       onNewSessionNameChange={setNewSessionName}
@@ -766,14 +766,14 @@ export default function CommunityPage() {
       onAutoQueueEnabledChange={setAutoQueueEnabled}
       respectPlayerRest={respectPlayerRest}
       onRespectPlayerRestChange={setRespectPlayerRest}
-      partnerCommunityId={partnerCommunityId}
-      partnerCommunitySearch={partnerCommunitySearch}
-      onPartnerCommunitySearchChange={setPartnerCommunitySearch}
+      partnerClubId={partnerClubId}
+      partnerClubSearch={partnerClubSearch}
+      onPartnerClubSearchChange={setPartnerClubSearch}
       collabCandidates={collabCandidates}
-      selectedPartnerCommunity={selectedPartnerCommunity}
+      selectedPartnerClub={selectedPartnerClub}
       loadingCollabCandidates={loadingCollabCandidates}
-      onSelectPartnerCommunity={selectPartnerCommunity}
-      onClearPartnerCommunity={clearPartnerCommunity}
+      onSelectPartnerClub={selectPartnerClub}
+      onClearPartnerClub={clearPartnerClub}
       loadingCollabRoster={loadingCollabRoster}
       openModeLabel={openModeLabel}
       mixedModeLabel={mixedModeLabel}
@@ -792,34 +792,34 @@ export default function CommunityPage() {
       onOpenPlayers={openPlayersModal}
       onOpenGuests={openGuestsModal}
       onCreateSession={createSessionWithOnboardingRefresh}
-      onExitHostMode={exitCommunityHostMode}
+      onExitHostMode={exitClubHostMode}
       exitHostModeLabel="Back"
       creatingSession={creatingSession}
     />
   ) : null;
   const overviewPanel = (
-    <CommunityOverviewPulsePanel
-      communityPulse={communityPulse}
+    <ClubOverviewPulsePanel
+      clubPulse={clubPulse}
       activeTournaments={activeTournaments}
       leaderboardPreview={leaderboardPreview}
       currentUserId={user?.id}
       onJoinTournament={joinTournament}
       onOpenTournament={openTournament}
-      onOpenLeaderboard={() => switchCommunitySection("leaderboard")}
-      onOpenTournaments={() => switchCommunitySection("tournaments")}
-      onOpenPlayerProfile={openCommunityPlayerProfile}
+      onOpenLeaderboard={() => switchClubSection("leaderboard")}
+      onOpenTournaments={() => switchClubSection("tournaments")}
+      onOpenPlayerProfile={openClubPlayerProfile}
     />
   );
   const profilePanel = (
-    <CommunityProfilePanel userId={user?.id} communityId={communityId} />
+    <ClubProfilePanel userId={user?.id} communityId={communityId} />
   );
   const tournamentsPanel = (
     <div className="space-y-8">
       <CurrentTournamentsPanel
         tournaments={activeTournaments}
         currentUserId={user?.id}
-        currentCommunityId={communityId}
-        canManageCommunity={canAdminCommunity}
+        currentClubId={communityId}
+        canManageClub={canAdminClub}
         onJoinTournament={joinTournament}
         onReviewCollabTournament={reviewCollabTournament}
       />
@@ -830,7 +830,7 @@ export default function CommunityPage() {
       />
       <PastTournamentsPanel
         tournaments={pastTournaments}
-        canManageCommunity={canAdminCommunity && !isTutorialPlayground}
+        canManageClub={canAdminClub && !isTutorialPlayground}
         latestPastTournamentId={latestPastTournamentId}
         rollingBackTournamentCode={rollingBackTournamentCode}
         onOpenTournament={openTournament}
@@ -839,7 +839,7 @@ export default function CommunityPage() {
     </div>
   );
   const leaderboardPanel = (
-    <CommunityLeaderboardPanel
+    <ClubLeaderboardPanel
       title="Leaderboard"
       subtitle="Full club rankings"
       players={leaderboard}
@@ -857,10 +857,10 @@ export default function CommunityPage() {
         requestingClaimFor,
       }}
       onRequestClaim={requestClaim}
-      onOpenPlayerProfile={openCommunityPlayerProfile}
+      onOpenPlayerProfile={openClubPlayerProfile}
     />
   );
-  const renderCommunitySection = (section: CommunityPageSection) => {
+  const renderClubSection = (section: ClubPageSection) => {
     switch (section) {
       case "overview":
         return overviewPanel;
@@ -881,7 +881,7 @@ export default function CommunityPage() {
     <main className="app-page">
       <div className="app-shell space-y-8">
         <HeroCard
-          title={communityName}
+          title={clubName}
           description="Club hub"
           headingAlign="center"
           actionsPosition="below"
@@ -903,23 +903,23 @@ export default function CommunityPage() {
                     Tutorial playground
                   </span>
                 ) : null}
-                {canAdminCommunity ? (
+                {canAdminClub ? (
                   <Link
                     href={`/community/${communityId}/admin`}
                     className="app-button-secondary px-3 py-2 text-sm"
                     data-tutorial-target={
                       isTutorialPlayground
-                        ? "admin-onboarding-community-admin"
+                        ? "admin-onboarding-club-admin"
                         : undefined
                     }
                   >
                     <Shield aria-hidden="true" size={15} />
-                    <span>{communityRoleLabel}</span>
+                    <span>{clubRoleLabel}</span>
                   </Link>
                 ) : (
                   <div className="flex items-center gap-2 text-sm font-medium text-gray-600">
                     <Shield aria-hidden="true" size={15} className="text-gray-500" />
-                    <span>{communityRoleLabel}</span>
+                    <span>{clubRoleLabel}</span>
                   </div>
                 )}
               </div>
@@ -945,7 +945,7 @@ export default function CommunityPage() {
         <section className="app-panel-soft hidden p-2 sm:block">
           <div
             className={`grid gap-2 ${
-              canManageCommunity ? "sm:grid-cols-4" : "sm:grid-cols-3"
+              canManageClub ? "sm:grid-cols-4" : "sm:grid-cols-3"
             }`}
           >
             {sectionTabs.map((tab) => {
@@ -954,7 +954,7 @@ export default function CommunityPage() {
                 <button
                   key={tab.key}
                   type="button"
-                  onClick={() => switchCommunitySection(tab.key)}
+                  onClick={() => switchClubSection(tab.key)}
                   className={`rounded-lg px-4 py-3 text-left transition ${
                     isActive
                       ? "bg-white shadow-sm ring-1 ring-[rgba(15,118,110,0.16)]"
@@ -985,16 +985,16 @@ export default function CommunityPage() {
         </section>
 
         <div
-          ref={communityPagerRef}
-          onScroll={handleCommunityPagerScroll}
-          onTouchStart={handleCommunityPagerTouchStart}
-          onTouchMove={handleCommunityPagerTouchMove}
-          onTouchEnd={handleCommunityPagerTouchEnd}
-          onTouchCancel={handleCommunityPagerTouchCancel}
+          ref={clubPagerRef}
+          onScroll={handleClubPagerScroll}
+          onTouchStart={handleClubPagerTouchStart}
+          onTouchMove={handleClubPagerTouchMove}
+          onTouchEnd={handleClubPagerTouchEnd}
+          onTouchCancel={handleClubPagerTouchCancel}
           className="app-swipe-track -mx-1 overflow-x-auto overflow-y-hidden overscroll-x-none sm:hidden"
           style={
-            communityPagerHeight !== null
-              ? { height: `${communityPagerHeight}px` }
+            clubPagerHeight !== null
+              ? { height: `${clubPagerHeight}px` }
               : undefined
           }
         >
@@ -1003,13 +1003,13 @@ export default function CommunityPage() {
               <section
                 key={section}
                 ref={(node) => {
-                  communityPanelRefs.current[section] = node;
+                  clubPanelRefs.current[section] = node;
                 }}
-                data-community-section={section}
+                data-club-section={section}
                 className="min-w-0 max-w-full basis-full shrink-0 snap-center px-1"
               >
                 <div className="min-w-0 space-y-8 pb-28">
-                  {renderCommunitySection(section)}
+                  {renderClubSection(section)}
                 </div>
               </section>
             ))}
@@ -1017,11 +1017,11 @@ export default function CommunityPage() {
         </div>
 
         <div className="hidden space-y-8 sm:block">
-          {renderCommunitySection(activeSection)}
+          {renderClubSection(activeSection)}
         </div>
       </div>
 
-      <CommunityPlayersModal
+      <ClubPlayersModal
         open={showPlayersModal}
         selectedPlayerIds={selectedPlayerIds}
         selectedPlayerPools={selectedPlayerPools}
@@ -1038,7 +1038,7 @@ export default function CommunityPage() {
         onClose={closePlayersModal}
       />
 
-      <CommunityGuestsModal
+      <ClubGuestsModal
         open={showGuestsModal}
         guestConfigs={guestConfigs}
         sessionMode={sessionMode}
@@ -1059,7 +1059,7 @@ export default function CommunityPage() {
       />
 
       {pendingRollbackTournament ? (
-        <CommunityActionConfirmModal
+        <ClubActionConfirmModal
           title="Rollback tournament?"
           subtitle="This will delete the completed tournament and reverse its rating changes."
           details={
@@ -1098,12 +1098,12 @@ export default function CommunityPage() {
         </div>
       ) : null}
 
-      <CommunityBottomTabs
+      <ClubBottomTabs
         activeTab={activeSection}
-        canManageCommunity={canManageCommunity}
+        canManageClub={canManageClub}
         communityId={communityId}
         currentUserId={user?.id}
-        onSelect={switchCommunitySection}
+        onSelect={switchClubSection}
       />
     </main>
   );

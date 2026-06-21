@@ -8,15 +8,15 @@ import {
 } from "@/lib/mixedSide";
 import { isValidSessionPool } from "@/lib/sessionPools";
 import { prisma } from "@/lib/prisma";
-import { getCommunityEloByUserId, withCommunityElo } from "@/lib/communityElo";
+import { getClubEloByUserId, withClubElo } from "@/lib/clubElo";
 import {
-  getAcceptedSessionCommunityIds,
-  getPlayerCommunityBadges,
+  getAcceptedSessionClubIds,
+  getPlayerClubBadges,
   getSessionMembership,
   getSessionOperatorMembership,
-  withPlayerCommunityBadges,
+  withPlayerClubBadges,
 } from "@/lib/sessionCollab";
-import { canQuickAccessCommunity, isQuickAccessSession } from "@/lib/quickAccess";
+import { canQuickAccessClub, isQuickAccessSession } from "@/lib/quickAccess";
 import { logError, safeErrorResponse } from "@/lib/errors";
 import { rateLimit, checkInvalidTargetRateLimit, invalidTargetResponse } from "@/lib/rateLimit";
 import { tryRebuildAutomaticQueuedMatchForSessionId } from "../queue-match/shared";
@@ -78,7 +78,7 @@ export async function POST(
     if (!sessionData) {
       return invalidTargetResponse(request, "api:sessions:code:join");
     }
-    if (!canQuickAccessCommunity(session, sessionData.communityId)) {
+    if (!canQuickAccessClub(session, sessionData.communityId)) {
       return invalidTargetResponse(request, "api:sessions:code:join");
     }
     if (isQuickAccessSession(session)) {
@@ -236,22 +236,22 @@ export async function POST(
       },
     });
 
-    const linkedCommunityIds = await getAcceptedSessionCommunityIds(
+    const linkedClubIds = await getAcceptedSessionClubIds(
       prisma,
       updatedSession
     );
     const playerIds = updatedSession.players.map((p) => p.userId);
     const players =
-      linkedCommunityIds.length > 1 && updatedSession.players.length > 0
-        ? withPlayerCommunityBadges(
+      linkedClubIds.length > 1 && updatedSession.players.length > 0
+        ? withPlayerClubBadges(
             updatedSession.players,
-            await getPlayerCommunityBadges(prisma, linkedCommunityIds, playerIds),
+            await getPlayerClubBadges(prisma, linkedClubIds, playerIds),
             updatedSession.communityId
           )
         : updatedSession.communityId && updatedSession.players.length > 0
-          ? withCommunityElo(
+          ? withClubElo(
               updatedSession.players,
-              await getCommunityEloByUserId(updatedSession.communityId, playerIds)
+              await getClubEloByUserId(updatedSession.communityId, playerIds)
             )
           : updatedSession.players;
     const queuedMatch =

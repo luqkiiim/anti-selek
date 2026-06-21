@@ -396,7 +396,7 @@ export function mergeSessionSnapshot(
     viewerCanManage: current.viewerCanManage,
     viewerCanUseAdminSessionControls: current.viewerCanUseAdminSessionControls,
     viewerCommunityRole: current.viewerCommunityRole,
-    isTutorialCommunity: current.isTutorialCommunity,
+    isTutorialClub: current.isTutorialClub,
     tutorialOwnerId: current.tutorialOwnerId,
   };
 }

@@ -26,7 +26,7 @@ test("dashboard lets an admin create a club and another member join it", async (
   await page.getByRole("button", { name: "Create", exact: true }).click();
 
   await expect(page).toHaveURL(/\/community\/.+/);
-  const createdCommunityPath = new URL(page.url()).pathname;
+  const createdClubPath = new URL(page.url()).pathname;
   await expect(page.getByRole("heading", { name: communityName })).toBeVisible();
 
   await signIn(page, getHostPlayerCredentials(1));
@@ -39,6 +39,6 @@ test("dashboard lets an admin create a club and another member join it", async (
   await page.getByLabel("Password").fill(communityPassword);
   await page.getByRole("button", { name: "Join", exact: true }).click();
 
-  await expect(page).toHaveURL(new RegExp(`${createdCommunityPath}$`));
+  await expect(page).toHaveURL(new RegExp(`${createdClubPath}$`));
   await expect(page.getByRole("heading", { name: communityName })).toBeVisible();
 });

@@ -116,7 +116,7 @@ export async function POST(request: Request) {
       createdAt: membership.community.createdAt,
     });
   } catch (error) {
-    logError("Join community error", error);
+    logError("Join club error", error);
     return safeErrorResponse();
   }
 }

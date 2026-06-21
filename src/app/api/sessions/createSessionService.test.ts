@@ -28,13 +28,13 @@ vi.mock("@/lib/prisma", () => ({
   },
 }));
 
-vi.mock("@/lib/communityElo", () => ({
-  getCommunityEloByUserId: vi.fn(),
-  withCommunityElo: vi.fn((players: unknown) => players),
+vi.mock("@/lib/clubElo", () => ({
+  getClubEloByUserId: vi.fn(),
+  withClubElo: vi.fn((players: unknown) => players),
 }));
 
 import { prisma } from "@/lib/prisma";
-import { getCommunityEloByUserId } from "@/lib/communityElo";
+import { getClubEloByUserId } from "@/lib/clubElo";
 import { parseCreateSessionRequest } from "./createSessionRequest";
 import { createSessionForUser } from "./createSessionService";
 
@@ -82,7 +82,7 @@ describe("createSessionForUser", () => {
       },
     ] as never);
     vi.mocked(prisma.offlineIdentityMember.findMany).mockResolvedValue([] as never);
-    vi.mocked(getCommunityEloByUserId).mockResolvedValue(new Map() as never);
+    vi.mocked(getClubEloByUserId).mockResolvedValue(new Map() as never);
 
     const sessionCreate = vi.fn().mockResolvedValue({
       id: "session-1",

@@ -32,12 +32,12 @@ vi.mock("./useDashboardPage", () => ({
   useDashboardPage: mocks.useDashboardPage,
 }));
 
-vi.mock("@/components/dashboard/CreateCommunityModal", () => ({
-  CreateCommunityModal: () => null,
+vi.mock("@/components/dashboard/CreateClubModal", () => ({
+  CreateClubModal: () => null,
 }));
 
-vi.mock("@/components/dashboard/JoinCommunityModal", () => ({
-  JoinCommunityModal: () => null,
+vi.mock("@/components/dashboard/JoinClubModal", () => ({
+  JoinClubModal: () => null,
 }));
 
 import Home from "./page";
@@ -61,27 +61,27 @@ describe("dashboard home", () => {
       status: "authenticated",
       isQuickAccess: false,
       accountName: "Owner",
-      communities: [],
-      newCommunityName: "",
-      setNewCommunityName: vi.fn(),
-      newCommunityPassword: "",
-      setNewCommunityPassword: vi.fn(),
-      joinCommunityName: "",
-      setJoinCommunityName: vi.fn(),
-      joinCommunityPassword: "",
-      setJoinCommunityPassword: vi.fn(),
-      isCreateCommunityOpen: false,
-      isJoinCommunityOpen: false,
-      creatingCommunity: false,
-      joiningCommunity: false,
+      clubs: [],
+      newClubName: "",
+      setNewClubName: vi.fn(),
+      newClubPassword: "",
+      setNewClubPassword: vi.fn(),
+      joinClubName: "",
+      setJoinClubName: vi.fn(),
+      joinClubPassword: "",
+      setJoinClubPassword: vi.fn(),
+      isCreateClubOpen: false,
+      isJoinClubOpen: false,
+      creatingClub: false,
+      joiningClub: false,
       loading: false,
       error: "",
-      openCreateCommunityModal: vi.fn(),
-      closeCreateCommunityModal: vi.fn(),
-      openJoinCommunityModal: vi.fn(),
-      closeJoinCommunityModal: vi.fn(),
-      createCommunity: vi.fn(),
-      joinCommunity: vi.fn(),
+      openCreateClubModal: vi.fn(),
+      closeCreateClubModal: vi.fn(),
+      openJoinClubModal: vi.fn(),
+      closeJoinClubModal: vi.fn(),
+      createClub: vi.fn(),
+      joinClub: vi.fn(),
     });
   });
 

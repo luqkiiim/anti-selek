@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { isCommunityOperatorRole } from "@/lib/communityRoles";
+import { isClubOperatorRole } from "@/lib/clubRoles";
 import { logError, safeErrorResponse } from "@/lib/errors";
 import { isGlobalAdminEmail } from "@/lib/globalAdmin";
 import { prisma } from "@/lib/prisma";
@@ -53,7 +53,7 @@ export async function GET(
     const isGlobalAdmin =
       !!session.user.isAdmin ||
       isGlobalAdminEmail(session.user.email ?? null);
-    const [hostCommunity, hostMembership] = await Promise.all([
+    const [hostClub, hostMembership] = await Promise.all([
       prisma.community.findUnique({
         where: { id: hostCommunityId },
         select: { id: true, isTutorial: true },
@@ -72,9 +72,9 @@ export async function GET(
     ]);
 
     if (
-      !hostCommunity ||
-      hostCommunity.isTutorial ||
-      (!isGlobalAdmin && !isCommunityOperatorRole(hostMembership?.role))
+      !hostClub ||
+      hostClub.isTutorial ||
+      (!isGlobalAdmin && !isClubOperatorRole(hostMembership?.role))
     ) {
       return invalidTargetResponse(
         request,
@@ -115,7 +115,7 @@ export async function GET(
       }))
     );
   } catch (error) {
-    logError("Search collab candidate communities error", error);
+    logError("Search collab candidate clubs error", error);
     return safeErrorResponse();
   }
 }

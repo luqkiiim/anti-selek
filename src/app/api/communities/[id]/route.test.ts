@@ -11,8 +11,8 @@ const mocks = vi.hoisted(() => ({
   matchFindMany: vi.fn(),
   claimRequestFindMany: vi.fn(),
   offlineIdentityMemberFindMany: vi.fn(),
-  listSessionsForCommunity: vi.fn(),
-  buildCommunityPulse: vi.fn(),
+  listSessionsForClub: vi.fn(),
+  buildClubPulse: vi.fn(),
 }));
 
 vi.mock("@/lib/auth", () => ({
@@ -46,15 +46,15 @@ vi.mock("@/lib/prisma", () => ({
 }));
 
 vi.mock("@/app/api/sessions/listSessionsService", () => ({
-  listSessionsForCommunity: mocks.listSessionsForCommunity,
+  listSessionsForClub: mocks.listSessionsForClub,
 }));
 
-vi.mock("@/lib/communityPulse", () => ({
-  buildCommunityPulse: mocks.buildCommunityPulse,
+vi.mock("@/lib/clubPulse", () => ({
+  buildClubPulse: mocks.buildClubPulse,
 }));
 
 vi.mock("@/lib/quickAccess", () => ({
-  canQuickAccessCommunity: vi.fn(() => true),
+  canQuickAccessClub: vi.fn(() => true),
   getQuickAccessDeniedMessage: vi.fn(() => "Denied"),
   isQuickAccessSession: vi.fn(() => false),
   normalizeNameLookupKey: vi.fn((value: string) => value.toLowerCase()),
@@ -144,7 +144,7 @@ describe("club snapshot route", () => {
       },
     ]);
     mocks.matchFindMany.mockResolvedValue([]);
-    mocks.listSessionsForCommunity.mockResolvedValue([
+    mocks.listSessionsForClub.mockResolvedValue([
       {
         id: "session-1",
         code: "ABC123",
@@ -166,7 +166,7 @@ describe("club snapshot route", () => {
     ]);
     mocks.claimRequestFindMany.mockResolvedValue([]);
     mocks.offlineIdentityMemberFindMany.mockResolvedValue([]);
-    mocks.buildCommunityPulse.mockReturnValue({
+    mocks.buildClubPulse.mockReturnValue({
       metrics: {
         members: 2,
         activeTournaments: 1,
@@ -275,7 +275,7 @@ describe("club snapshot route", () => {
         },
       },
     ]);
-    mocks.listSessionsForCommunity.mockResolvedValueOnce([
+    mocks.listSessionsForClub.mockResolvedValueOnce([
       {
         id: "session-1",
         code: "ABC123",

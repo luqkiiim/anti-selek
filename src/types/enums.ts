@@ -65,12 +65,12 @@ export enum SessionPool {
   B = "B",
 }
 
-export enum CommunityPlayerStatus {
+export enum ClubPlayerStatus {
   CORE = "CORE",
   OCCASIONAL = "OCCASIONAL",
 }
 
-export enum CommunityRole {
+export enum ClubRole {
   MEMBER = "MEMBER",
   STAFF = "STAFF",
   ADMIN = "ADMIN",
@@ -82,12 +82,12 @@ export enum ClaimRequestStatus {
   REJECTED = "REJECTED",
 }
 
-export enum SessionCommunityRole {
+export enum SessionClubRole {
   HOST = "HOST",
   PARTNER = "PARTNER",
 }
 
-export enum SessionCommunityStatus {
+export enum SessionClubStatus {
   PENDING = "PENDING",
   ACCEPTED = "ACCEPTED",
   REJECTED = "REJECTED",

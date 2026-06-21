@@ -4,9 +4,9 @@ import Link from "next/link";
 import { signOut } from "next-auth/react";
 import { LogIn, LogOut, Plus, Settings, Sparkles } from "lucide-react";
 import { EmptyState, FlashMessage, SectionCard } from "@/components/ui/chrome";
-import { CreateCommunityModal } from "@/components/dashboard/CreateCommunityModal";
-import { JoinCommunityModal } from "@/components/dashboard/JoinCommunityModal";
-import { getCommunityRoleLabel } from "@/lib/communityRoles";
+import { CreateClubModal } from "@/components/dashboard/CreateClubModal";
+import { JoinClubModal } from "@/components/dashboard/JoinClubModal";
+import { getClubRoleLabel } from "@/lib/clubRoles";
 import { useDashboardPage } from "./useDashboardPage";
 
 export default function Home() {
@@ -14,29 +14,29 @@ export default function Home() {
     status,
     isQuickAccess,
     accountName,
-    communities,
-    newCommunityName,
-    setNewCommunityName,
-    newCommunityPassword,
-    setNewCommunityPassword,
-    joinCommunityName,
-    setJoinCommunityName,
-    joinCommunityPassword,
-    setJoinCommunityPassword,
-    isCreateCommunityOpen,
-    isJoinCommunityOpen,
-    creatingCommunity,
-    joiningCommunity,
+    clubs,
+    newClubName,
+    setNewClubName,
+    newClubPassword,
+    setNewClubPassword,
+    joinClubName,
+    setJoinClubName,
+    joinClubPassword,
+    setJoinClubPassword,
+    isCreateClubOpen,
+    isJoinClubOpen,
+    creatingClub,
+    joiningClub,
     openingTutorialPlayground,
     tutorialPlayground,
     loading,
     error,
-    openCreateCommunityModal,
-    closeCreateCommunityModal,
-    openJoinCommunityModal,
-    closeJoinCommunityModal,
-    createCommunity,
-    joinCommunity,
+    openCreateClubModal,
+    closeCreateClubModal,
+    openJoinClubModal,
+    closeJoinClubModal,
+    createClub,
+    joinClub,
     openTutorialPlayground,
   } = useDashboardPage();
 
@@ -105,7 +105,7 @@ export default function Home() {
               <div className="flex flex-wrap justify-center gap-3">
                 <button
                   type="button"
-                  onClick={openJoinCommunityModal}
+                  onClick={openJoinClubModal}
                   className="app-button-secondary"
                 >
                   <LogIn aria-hidden="true" size={17} />
@@ -113,7 +113,7 @@ export default function Home() {
                 </button>
                 <button
                   type="button"
-                  onClick={openCreateCommunityModal}
+                  onClick={openCreateClubModal}
                   className="app-button-primary"
                 >
                   <Plus aria-hidden="true" size={17} />
@@ -169,45 +169,45 @@ export default function Home() {
           title="Clubs"
           action={
             <span className="app-chip app-chip-neutral">
-              {communities.length} listed
+              {clubs.length} listed
             </span>
           }
         >
-          {communities.length === 0 ? (
+          {clubs.length === 0 ? (
             <EmptyState
               title="No clubs yet"
               detail="Create your first group or join an existing one with its club name and password."
             />
           ) : (
             <div className="grid gap-4">
-              {communities.map((community) => (
+              {clubs.map((club) => (
                 <Link
-                  key={community.id}
-                  href={`/community/${community.id}`}
+                  key={club.id}
+                  href={`/community/${club.id}`}
                   className="app-subcard block p-4 transition hover:-translate-y-0.5 hover:border-blue-300 hover:bg-blue-50"
                 >
                   <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
                         <h3 className="text-lg font-semibold text-gray-900">
-                          {community.name}
+                          {club.name}
                         </h3>
                         <span
                           className={`app-chip ${
-                            community.viewerIsOwner
+                            club.viewerIsOwner
                               ? "app-chip-accent"
-                              : community.role === "ADMIN"
+                              : club.role === "ADMIN"
                               ? "app-chip-accent"
-                              : community.role === "STAFF"
+                              : club.role === "STAFF"
                                 ? "app-chip-warning"
                               : "app-chip-neutral"
                           }`}
                         >
-                          {community.viewerIsOwner
+                          {club.viewerIsOwner
                             ? "Owner"
-                            : getCommunityRoleLabel(community.role)}
+                            : getClubRoleLabel(club.role)}
                         </span>
-                        {community.isPasswordProtected ? (
+                        {club.isPasswordProtected ? (
                           <span className="app-chip app-chip-warning">
                             Protected
                           </span>
@@ -221,7 +221,7 @@ export default function Home() {
                           Members
                         </p>
                         <p className="mt-2 text-lg font-semibold text-gray-900">
-                          {community.membersCount}
+                          {club.membersCount}
                         </p>
                       </div>
                       <div className="app-panel-muted px-3 py-3">
@@ -229,7 +229,7 @@ export default function Home() {
                           Tournaments
                         </p>
                         <p className="mt-2 text-lg font-semibold text-gray-900">
-                          {community.sessionsCount}
+                          {club.sessionsCount}
                         </p>
                       </div>
                     </div>
@@ -241,26 +241,26 @@ export default function Home() {
         </SectionCard>
       </div>
 
-      <CreateCommunityModal
-        open={isCreateCommunityOpen}
-        communityName={newCommunityName}
-        communityPassword={newCommunityPassword}
-        creatingCommunity={creatingCommunity}
-        onCommunityNameChange={setNewCommunityName}
-        onCommunityPasswordChange={setNewCommunityPassword}
-        onClose={closeCreateCommunityModal}
-        onCreateCommunity={createCommunity}
+      <CreateClubModal
+        open={isCreateClubOpen}
+        clubName={newClubName}
+        clubPassword={newClubPassword}
+        creatingClub={creatingClub}
+        onClubNameChange={setNewClubName}
+        onClubPasswordChange={setNewClubPassword}
+        onClose={closeCreateClubModal}
+        onCreateClub={createClub}
       />
 
-      <JoinCommunityModal
-        open={isJoinCommunityOpen}
-        communityName={joinCommunityName}
-        communityPassword={joinCommunityPassword}
-        joiningCommunity={joiningCommunity}
-        onCommunityNameChange={setJoinCommunityName}
-        onCommunityPasswordChange={setJoinCommunityPassword}
-        onClose={closeJoinCommunityModal}
-        onJoinCommunity={joinCommunity}
+      <JoinClubModal
+        open={isJoinClubOpen}
+        clubName={joinClubName}
+        clubPassword={joinClubPassword}
+        joiningClub={joiningClub}
+        onClubNameChange={setJoinClubName}
+        onClubPasswordChange={setJoinClubPassword}
+        onClose={closeJoinClubModal}
+        onJoinClub={joinClub}
       />
     </main>
   );

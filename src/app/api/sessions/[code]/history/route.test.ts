@@ -1,14 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   MatchStatus,
-  SessionCommunityStatus,
+  SessionClubStatus,
   SessionStatus,
   SessionType,
 } from "@/types/enums";
 
 const mocks = vi.hoisted(() => ({
   auth: vi.fn(),
-  canQuickAccessCommunity: vi.fn(),
+  canQuickAccessClub: vi.fn(),
   getSessionAdminMembership: vi.fn(),
   getSessionMembership: vi.fn(),
   getSessionOperatorMembership: vi.fn(),
@@ -34,7 +34,7 @@ vi.mock("@/lib/prisma", () => ({
 }));
 
 vi.mock("@/lib/quickAccess", () => ({
-  canQuickAccessCommunity: mocks.canQuickAccessCommunity,
+  canQuickAccessClub: mocks.canQuickAccessClub,
   isQuickAccessSession: mocks.isQuickAccessSession,
 }));
 
@@ -67,7 +67,7 @@ function createHistorySession() {
     sessionCommunities: [
       {
         communityId: "community-1",
-        status: SessionCommunityStatus.ACCEPTED,
+        status: SessionClubStatus.ACCEPTED,
       },
     ],
     players: [{ userId: "admin-1" }, { userId: "a1" }],
@@ -108,7 +108,7 @@ describe("session history route correction availability", () => {
     mocks.auth.mockResolvedValue({
       user: { id: "admin-1", isAdmin: false },
     });
-    mocks.canQuickAccessCommunity.mockReturnValue(true);
+    mocks.canQuickAccessClub.mockReturnValue(true);
     mocks.isQuickAccessSession.mockReturnValue(false);
     mocks.invalidTargetResponse.mockImplementation(async () =>
       Response.json({ error: "Unauthorized" }, { status: 403 })

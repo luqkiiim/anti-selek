@@ -9,7 +9,7 @@ import {
   resolveMixedSideState,
 } from "@/lib/mixedSide";
 import type {
-  CommunityUser,
+  ClubUser,
   PreferenceEditorState,
   SessionData,
 } from "@/components/session/sessionTypes";
@@ -26,7 +26,7 @@ import {
   type SessionSnapshotLike,
 } from "./sessionDataMutations";
 import {
-  CommunityPlayerStatus,
+  ClubPlayerStatus,
   MixedSide,
   PlayerGender,
   SessionMode,
@@ -55,12 +55,12 @@ interface RenameGuestResponse {
   name?: string;
 }
 
-function parseCommunityPlayers(data: unknown): CommunityUser[] {
+function parseClubPlayers(data: unknown): ClubUser[] {
   if (!Array.isArray(data)) {
     return [];
   }
 
-  return data.reduce<CommunityUser[]>((players, player) => {
+  return data.reduce<ClubUser[]>((players, player) => {
       if (typeof player !== "object" || player === null) return players;
       const candidate = player as {
         id?: unknown;
@@ -104,9 +104,9 @@ function parseCommunityPlayers(data: unknown): CommunityUser[] {
           typeof candidate.avatarUrl === "string" ? candidate.avatarUrl : null,
         elo: candidate.elo,
         status:
-          candidate.status === CommunityPlayerStatus.OCCASIONAL
-            ? CommunityPlayerStatus.OCCASIONAL
-            : CommunityPlayerStatus.CORE,
+          candidate.status === ClubPlayerStatus.OCCASIONAL
+            ? ClubPlayerStatus.OCCASIONAL
+            : ClubPlayerStatus.CORE,
         gender,
         partnerPreference,
         mixedSideOverride,
@@ -126,7 +126,7 @@ export function useSessionPlayerManagement({
 }: UseSessionPlayerManagementArgs) {
   const [showRosterModal, setShowRosterModal] = useState(false);
   const [rosterSearch, setRosterSearch] = useState("");
-  const [communityPlayers, setCommunityPlayers] = useState<CommunityUser[]>([]);
+  const [communityPlayers, setClubPlayers] = useState<ClubUser[]>([]);
   const [addingPlayerId, setAddingPlayerId] = useState<string | null>(null);
   const [guestName, setGuestName] = useState("");
   const [guestGender, setGuestGender] = useState<PlayerGender>(PlayerGender.MALE);
@@ -202,7 +202,7 @@ export function useSessionPlayerManagement({
     };
   }, [openPreferenceEditor]);
 
-  const fetchCommunityPlayers = async () => {
+  const fetchClubPlayers = async () => {
     if (!sessionData?.communityId) return;
     try {
       const res = await fetch(
@@ -210,7 +210,7 @@ export function useSessionPlayerManagement({
       );
       const data = await safeJson<unknown>(res);
       if (res.ok) {
-        setCommunityPlayers(parseCommunityPlayers(data));
+        setClubPlayers(parseClubPlayers(data));
       }
     } catch (err) {
       console.error(err);
@@ -236,7 +236,7 @@ export function useSessionPlayerManagement({
   };
 
   const openRosterModal = () => {
-    void fetchCommunityPlayers();
+    void fetchClubPlayers();
     resetRosterInputs();
     setShowRosterModal(true);
   };

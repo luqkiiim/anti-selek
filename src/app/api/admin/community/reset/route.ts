@@ -62,7 +62,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ success: true });
   } catch (error: unknown) {
-    logError("Community reset error", error);
+    logError("Club reset error", error);
     return safeErrorResponse();
   }
 }

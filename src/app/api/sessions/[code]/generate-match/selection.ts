@@ -3,11 +3,11 @@ import {
   getSideSpecificCourtCreateShortageMessage,
   type SideSpecificCourtCreateType,
 } from "@/lib/courtCreate";
-import { getCommunityEloByUserId } from "@/lib/communityElo";
+import { getClubEloByUserId } from "@/lib/clubElo";
 import { prisma } from "@/lib/prisma";
 import {
-  getAcceptedSessionCommunityIds,
-  getPlayerCommunityBadges,
+  getAcceptedSessionClubIds,
+  getPlayerClubBadges,
 } from "@/lib/sessionCollab";
 import { getSessionModeLabel } from "@/lib/sessionModeLabels";
 import {
@@ -149,12 +149,12 @@ function withMatchmakingReason<
 function getPlayerBalanceInput({
   sessionType,
   sessionPoints,
-  communityElo,
+  clubElo,
   userElo,
 }: {
   sessionType: SessionType;
   sessionPoints: number;
-  communityElo?: number;
+  clubElo?: number;
   userElo: number;
 }) {
   switch (sessionType) {
@@ -162,7 +162,7 @@ function getPlayerBalanceInput({
     case SessionType.SOCIAL_MIX:
       return sessionPoints;
     case SessionType.ELO:
-      return communityElo ?? userElo;
+      return clubElo ?? userElo;
     case SessionType.LADDER:
     case SessionType.RACE:
       return 0;
@@ -390,28 +390,28 @@ export async function buildMatchmakingState(
     getMatchmakerSessionType(sessionData) === SessionType.ELO &&
     sessionData.communityId &&
     sessionData.players.length > 0
-      ? await getAcceptedSessionCommunityIds(prisma, sessionData)
+      ? await getAcceptedSessionClubIds(prisma, sessionData)
       : [];
   const playerIds = sessionData.players.map((player) => player.userId);
   const hostCommunityId = sessionData.communityId;
-  let usesLegacySingleCommunityElo = false;
-  let legacyCommunityEloByUserId = new Map<string, number>();
+  let usesLegacySingleClubElo = false;
+  let legacyClubEloByUserId = new Map<string, number>();
 
   if (
     typeof hostCommunityId === "string" &&
     sessionCommunityIds.length === 1 &&
     sessionCommunityIds[0] === hostCommunityId
   ) {
-    usesLegacySingleCommunityElo = true;
-    legacyCommunityEloByUserId = await getCommunityEloByUserId(
+    usesLegacySingleClubElo = true;
+    legacyClubEloByUserId = await getClubEloByUserId(
       hostCommunityId,
       playerIds
     );
   }
 
   const communityBadgesByUserId =
-    sessionCommunityIds.length > 0 && !usesLegacySingleCommunityElo
-      ? await getPlayerCommunityBadges(prisma, sessionCommunityIds, playerIds)
+    sessionCommunityIds.length > 0 && !usesLegacySingleClubElo
+      ? await getPlayerClubBadges(prisma, sessionCommunityIds, playerIds)
       : new Map<string, Array<{ id: string; name: string; elo: number }>>();
   const pointDiffByUserId = new Map<string, number>();
 
@@ -450,8 +450,8 @@ export async function buildMatchmakingState(
         elo: getPlayerBalanceInput({
           sessionType: getMatchmakerSessionType(sessionData),
           sessionPoints: player.sessionPoints,
-        communityElo:
-          legacyCommunityEloByUserId.get(player.userId) ??
+        clubElo:
+          legacyClubEloByUserId.get(player.userId) ??
           communityBadgesByUserId
             .get(player.userId)
             ?.find((badge) => badge.id === sessionData.communityId)?.elo ??

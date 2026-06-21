@@ -63,7 +63,7 @@ async function removeDatabaseFiles() {
   );
 }
 
-async function createCommunityAdmin(prefix: string) {
+async function createClubAdmin(prefix: string) {
   const adminUserId = `${prefix}-admin`;
   const communityId = `${prefix}-community`;
 
@@ -278,7 +278,7 @@ afterAll(async () => {
 describe("create real session route integration", () => {
   it("keeps setup-only copies free of test results by default", async () => {
     const prefix = `setup-${randomUUID().slice(0, 8)}`;
-    const { communityId } = await createCommunityAdmin(prefix);
+    const { communityId } = await createClubAdmin(prefix);
     await createPlayers(prefix, communityId, ["p1", "p2", "p3", "p4"]);
     const { sessionId, code } = await createTestSessionWithMatch(
       prefix,
@@ -310,7 +310,7 @@ describe("create real session route integration", () => {
 
   it("copies completed results into the real session and replays standings and ratings", async () => {
     const prefix = `results-${randomUUID().slice(0, 8)}`;
-    const { communityId } = await createCommunityAdmin(prefix);
+    const { communityId } = await createClubAdmin(prefix);
     await createPlayers(prefix, communityId, ["p1", "p2", "p3", "p4"]);
     const { sessionId, code, playerIds, completedAt } =
       await createTestSessionWithMatch(prefix, communityId);

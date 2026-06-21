@@ -1,5 +1,5 @@
 import {
-  CommunityPlayerStatus,
+  ClubPlayerStatus,
   MixedSide,
   PartnerPreference,
   PlayerGender,
@@ -77,12 +77,12 @@ export interface Court {
   currentMatch: Match | null;
 }
 
-export interface CommunityUser {
+export interface ClubUser {
   id: string;
   name: string;
   avatarUrl?: string | null;
   elo: number;
-  status: CommunityPlayerStatus;
+  status: ClubPlayerStatus;
   gender: PlayerGender;
   partnerPreference: PartnerPreference;
   mixedSideOverride?: MixedSide | null;
@@ -115,7 +115,7 @@ export interface SessionData {
   viewerCanManage?: boolean;
   viewerCanUseAdminSessionControls?: boolean;
   viewerCommunityRole?: string | null;
-  isTutorialCommunity?: boolean;
+  isTutorialClub?: boolean;
   tutorialOwnerId?: string | null;
   communities?: Array<{
     id: string;

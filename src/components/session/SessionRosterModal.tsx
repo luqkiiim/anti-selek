@@ -7,12 +7,12 @@ import { PlayerPickerSheet } from "@/components/ui/PlayerPickerSheet";
 import { SearchField } from "@/components/ui/SearchField";
 import { getMixedSideOverrideOptionForGender } from "@/lib/mixedSide";
 import {
-  CommunityPlayerStatus,
+  ClubPlayerStatus,
   MixedSide,
   PlayerGender,
   SessionPool,
 } from "@/types/enums";
-import type { CommunityUser } from "./sessionTypes";
+import type { ClubUser } from "./sessionTypes";
 
 const GUEST_ELO_PRESETS = [
   { label: "Beginner", value: 850 },
@@ -35,7 +35,7 @@ interface SessionRosterModalProps {
   guestInitialElo: number;
   addingGuest: boolean;
   addingPlayerId: string | null;
-  playersNotInSession: CommunityUser[];
+  playersNotInSession: ClubUser[];
   onClose: () => void;
   onRosterSearchChange: (value: string) => void;
   onRosterPoolChange: (value: SessionPool) => void;
@@ -269,7 +269,7 @@ export function SessionRosterModal({
                     </p>
                     <div className="flex flex-wrap items-center gap-2">
                       <p className="text-xs text-gray-500">Rating {player.elo}</p>
-                      {player.status === CommunityPlayerStatus.OCCASIONAL ? (
+                      {player.status === ClubPlayerStatus.OCCASIONAL ? (
                         <span className="app-chip app-chip-success px-2 py-0.5 text-[10px]">
                           Occasional
                         </span>

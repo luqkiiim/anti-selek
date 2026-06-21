@@ -86,7 +86,7 @@ function buildMembership(overrides?: Partial<{
   };
 }
 
-function buildTutorialCommunity(overrides?: Partial<{
+function buildTutorialClub(overrides?: Partial<{
   id: string;
   isTutorial: boolean;
   members: number;
@@ -116,7 +116,7 @@ describe("admin onboarding progress route", () => {
     mocks.rateLimit.mockResolvedValue(null);
     mocks.tutorialProgressFindUnique.mockResolvedValue(null);
     mocks.tutorialProgressUpsert.mockResolvedValue({});
-    mocks.communityFindUnique.mockResolvedValue(buildTutorialCommunity());
+    mocks.communityFindUnique.mockResolvedValue(buildTutorialClub());
     mocks.communityMemberFindMany.mockResolvedValue([buildMembership()]);
     mocks.sessionFindFirst.mockResolvedValue({ id: "session-1", code: "ABC123" });
     mocks.matchFindFirst.mockResolvedValue(null);
@@ -135,7 +135,7 @@ describe("admin onboarding progress route", () => {
 
     expect(response.status).toBe(200);
     expect(body.visible).toBe(true);
-    expect(body.primaryCommunityId).toBe("community-1");
+    expect(body.primaryClubId).toBe("community-1");
     expect(body.primarySessionCode).toBe("ABC123");
     expect(body.completedStepIds).toEqual(["admin-community"]);
   });

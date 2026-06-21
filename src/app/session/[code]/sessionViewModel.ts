@@ -12,7 +12,7 @@ import {
 } from "@/lib/sessionStandings";
 import { getSessionModeLabel, getSessionTypeLabel } from "@/lib/sessionModeLabels";
 import type {
-  CommunityUser,
+  ClubUser,
   ManualMatchFormState,
   Player,
   PreferenceEditorState,
@@ -34,7 +34,7 @@ interface PlayerSessionStats {
 
 interface BuildSessionViewModelArgs {
   sessionData: SessionData;
-  communityPlayers: CommunityUser[];
+  communityPlayers: ClubUser[];
   rosterSearch: string;
   manualMatchForm: ManualMatchFormState;
   manualCourtId: string | null;
@@ -47,7 +47,7 @@ export interface SessionViewModel {
   manualMatchPlayerOptions: Player[];
   selectedManualPlayerIds: Set<string>;
   activeManualCourt: SessionData["courts"][number] | null;
-  playersNotInSession: CommunityUser[];
+  playersNotInSession: ClubUser[];
   activeMatchesCount: number;
   readyCourtsCount: number;
   creatableOpenCourtCount: number;

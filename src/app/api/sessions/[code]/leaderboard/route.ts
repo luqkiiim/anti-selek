@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { getCommunityEloByUserId } from "@/lib/communityElo";
+import { getClubEloByUserId } from "@/lib/clubElo";
 import {
   getCompetitiveEntryAt,
   deriveLadderRecordsByEntryTime,
@@ -11,7 +11,7 @@ import {
   compareCompetitiveStandings,
   compareSessionStandings,
 } from "@/lib/sessionStandings";
-import { canQuickAccessCommunity, isQuickAccessSession } from "@/lib/quickAccess";
+import { canQuickAccessClub, isQuickAccessSession } from "@/lib/quickAccess";
 import { MatchStatus, SessionType } from "@/types/enums";
 import { logError, safeErrorResponse } from "@/lib/errors";
 import { rateLimit, checkInvalidTargetRateLimit, invalidTargetResponse } from "@/lib/rateLimit";
@@ -71,11 +71,11 @@ async function getSessionLeaderboard(
   if (!sessionData) {
     return invalidTargetResponse(request, "api:sessions:code:leaderboard");
   }
-  if (!canQuickAccessCommunity(session, sessionData.communityId)) {
+  if (!canQuickAccessClub(session, sessionData.communityId)) {
     return invalidTargetResponse(request, "api:sessions:code:leaderboard");
   }
 
-  let communityRole: string | null = null;
+  let clubRole: string | null = null;
   if (sessionData.communityId) {
     const membership = await prisma.communityMember.findUnique({
       where: {
@@ -86,13 +86,13 @@ async function getSessionLeaderboard(
       },
       select: { role: true },
     });
-    communityRole = membership?.role ?? null;
+    clubRole = membership?.role ?? null;
   }
 
   const isSessionPlayer = sessionData.players.some((p) => p.userId === session.user.id);
   const canView =
     (!isQuickAccessSession(session) && session.user.isAdmin) ||
-    !!communityRole ||
+    !!clubRole ||
     isSessionPlayer;
   if (!canView) {
     return invalidTargetResponse(request, "api:sessions:code:leaderboard");
@@ -122,16 +122,16 @@ async function getSessionLeaderboard(
     }
   });
 
-  const communityEloByUserId =
+  const clubEloByUserId =
     sessionData.communityId && sessionData.players.length > 0
-      ? await getCommunityEloByUserId(
+      ? await getClubEloByUserId(
           sessionData.communityId,
           sessionData.players.map((p) => p.userId)
         )
       : new Map<string, number>();
 
   const getPlayerElo = (userId: string, fallbackElo: number) =>
-    communityEloByUserId.get(userId) ?? fallbackElo;
+    clubEloByUserId.get(userId) ?? fallbackElo;
 
   const leaderboardEntries = sessionData.players
     .map((p) => ({

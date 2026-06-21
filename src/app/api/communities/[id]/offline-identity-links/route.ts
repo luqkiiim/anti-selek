@@ -3,7 +3,7 @@ import { auth } from "@/lib/auth";
 import { logError, safeErrorResponse } from "@/lib/errors";
 import {
   createOfflineIdentityLinkRequest,
-  isCommunityAdmin,
+  isClubAdmin,
   OfflineIdentityError,
   offlineIdentityLinkRequestInclude,
   toOfflineIdentityLinkResponse,
@@ -57,7 +57,7 @@ export async function GET(
       return NextResponse.json([]);
     }
 
-    const canManage = await isCommunityAdmin(
+    const canManage = await isClubAdmin(
       prisma,
       communityId,
       session.user.id,
@@ -127,7 +127,7 @@ export async function POST(
       );
     }
 
-    const canManageSource = await isCommunityAdmin(
+    const canManageSource = await isClubAdmin(
       prisma,
       sourceCommunityId,
       session.user.id,
@@ -170,7 +170,7 @@ export async function POST(
       );
     }
 
-    const canManageTarget = await isCommunityAdmin(
+    const canManageTarget = await isClubAdmin(
       prisma,
       targetCommunityId,
       session.user.id,

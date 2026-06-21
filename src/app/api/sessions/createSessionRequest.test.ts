@@ -300,7 +300,7 @@ describe("parseCreateSessionRequest", () => {
       partnerCommunityId: "community-2",
     });
 
-    expect(parsed.partnerCommunityId).toBe("community-2");
+    expect(parsed.partnerClubId).toBe("community-2");
   });
 
   it("rejects invalid session types", () => {

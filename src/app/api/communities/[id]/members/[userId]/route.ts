@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { serializeAvatarEntity } from "@/lib/avatar";
-import { getCommunityAdminAccess } from "@/lib/communityAdminPermissions";
-import { isValidCommunityRole } from "@/lib/communityRoles";
+import { getClubAdminAccess } from "@/lib/clubAdminPermissions";
+import { isValidClubRole } from "@/lib/clubRoles";
 import { prisma } from "@/lib/prisma";
 import {
   isValidMixedSide,
@@ -10,7 +10,7 @@ import {
   isValidPlayerGender,
   resolveMixedSideState,
 } from "@/lib/mixedSide";
-import { CommunityPlayerStatus, CommunityRole, PlayerGender } from "@/types/enums";
+import { ClubPlayerStatus, ClubRole, PlayerGender } from "@/types/enums";
 import { logError, safeErrorResponse } from "@/lib/errors";
 import { rateLimit, checkInvalidTargetRateLimit, invalidTargetResponse } from "@/lib/rateLimit";
 import {
@@ -19,12 +19,12 @@ import {
   normalizeNameLookupKey,
 } from "@/lib/quickAccess";
 
-function isValidCommunityPlayerStatus(
+function isValidClubPlayerStatus(
   value: unknown
-): value is CommunityPlayerStatus {
+): value is ClubPlayerStatus {
   return (
-    value === CommunityPlayerStatus.CORE ||
-    value === CommunityPlayerStatus.OCCASIONAL
+    value === ClubPlayerStatus.CORE ||
+    value === ClubPlayerStatus.OCCASIONAL
   );
 }
 
@@ -95,7 +95,7 @@ export async function PATCH(
     const invalidTargetLimitResponse = await checkInvalidTargetRateLimit(request, "api:communities:id:members:userId");
 
     if (invalidTargetLimitResponse) return invalidTargetLimitResponse;
-    const adminAccess = await getCommunityAdminAccess(prisma, {
+    const adminAccess = await getClubAdminAccess(prisma, {
       communityId,
       userId: session.user.id,
       isGlobalAdmin: !!session.user.isAdmin,
@@ -178,20 +178,20 @@ export async function PATCH(
     ) {
       return NextResponse.json({ error: "Invalid mixed side override" }, { status: 400 });
     }
-    if (status !== undefined && !isValidCommunityPlayerStatus(status)) {
+    if (status !== undefined && !isValidClubPlayerStatus(status)) {
       return NextResponse.json({ error: "Invalid roster status" }, { status: 400 });
     }
-    if (role !== undefined && !isValidCommunityRole(role)) {
+    if (role !== undefined && !isValidClubRole(role)) {
       return NextResponse.json({ error: "Invalid role update" }, { status: 400 });
     }
 
     const normalizedEmail = typeof email === "string" ? email.trim().toLowerCase() : email;
-    const requestedRole = isValidCommunityRole(role) ? role : undefined;
+    const requestedRole = isValidClubRole(role) ? role : undefined;
     const nextRole =
       requestedRole && requestedRole !== membership.role ? requestedRole : undefined;
-    const shouldPromoteToAdmin = nextRole === CommunityRole.ADMIN;
-    const shouldGrantStaff = nextRole === CommunityRole.STAFF;
-    const shouldRevokeStaff = nextRole === CommunityRole.MEMBER;
+    const shouldPromoteToAdmin = nextRole === ClubRole.ADMIN;
+    const shouldGrantStaff = nextRole === ClubRole.STAFF;
+    const shouldRevokeStaff = nextRole === ClubRole.MEMBER;
     const targetIsOwner = adminAccess.createdById === userId;
     const requesterCanDemoteAdmin =
       adminAccess.isOwner || adminAccess.isGlobalAdmin;
@@ -209,7 +209,7 @@ export async function PATCH(
       );
     }
     if (
-      membership.role === CommunityRole.ADMIN &&
+      membership.role === ClubRole.ADMIN &&
       (shouldGrantStaff || shouldRevokeStaff) &&
       !requesterCanDemoteAdmin
     ) {
@@ -218,8 +218,8 @@ export async function PATCH(
         { status: 403 }
       );
     }
-    if (shouldRevokeStaff && membership.role !== CommunityRole.STAFF) {
-      if (membership.role !== CommunityRole.ADMIN) {
+    if (shouldRevokeStaff && membership.role !== ClubRole.STAFF) {
+      if (membership.role !== ClubRole.ADMIN) {
         return NextResponse.json(
           { error: "Only staff members can be changed back to member here" },
           { status: 400 }
@@ -229,7 +229,7 @@ export async function PATCH(
 
     if (
       shouldPromoteToAdmin ||
-      (shouldGrantStaff && membership.role !== CommunityRole.ADMIN)
+      (shouldGrantStaff && membership.role !== ClubRole.ADMIN)
     ) {
       const targetUser = await prisma.user.findUnique({
         where: { id: userId },
@@ -385,7 +385,7 @@ export async function PATCH(
       shouldPromoteToAdmin ||
       shouldGrantStaff ||
       shouldRevokeStaff ||
-      isValidCommunityPlayerStatus(status)
+      isValidClubPlayerStatus(status)
         ? await prisma.communityMember.update({
             where: {
               communityId_userId: {
@@ -395,7 +395,7 @@ export async function PATCH(
             },
             data: {
               ...(typeof elo === "number" ? { elo } : {}),
-              ...(isValidCommunityPlayerStatus(status) ? { status } : {}),
+              ...(isValidClubPlayerStatus(status) ? { status } : {}),
               ...(nextRole ? { role: nextRole } : {}),
             },
             select: { role: true, elo: true, status: true },
@@ -425,12 +425,12 @@ export async function PATCH(
       isOwner: targetIsOwner,
       elo: updatedMembership?.elo ?? membership.elo,
       status:
-        updatedMembership?.status === CommunityPlayerStatus.OCCASIONAL
-          ? CommunityPlayerStatus.OCCASIONAL
-          : CommunityPlayerStatus.CORE,
+        updatedMembership?.status === ClubPlayerStatus.OCCASIONAL
+          ? ClubPlayerStatus.OCCASIONAL
+          : ClubPlayerStatus.CORE,
     });
   } catch (error) {
-    logError("Community admin update player error", error);
+    logError("Club admin update player error", error);
     return safeErrorResponse();
   }
 }
@@ -463,7 +463,7 @@ export async function DELETE(
     const invalidTargetLimitResponse = await checkInvalidTargetRateLimit(request, "api:communities:id:members:userId");
 
     if (invalidTargetLimitResponse) return invalidTargetLimitResponse;
-    const adminAccess = await getCommunityAdminAccess(prisma, {
+    const adminAccess = await getClubAdminAccess(prisma, {
       communityId,
       userId: session.user.id,
       isGlobalAdmin: !!session.user.isAdmin,
@@ -492,7 +492,7 @@ export async function DELETE(
     }
     const isSelfRemoval = userId === session.user.id;
     if (isSelfRemoval) {
-      if (membership.role !== CommunityRole.ADMIN) {
+      if (membership.role !== ClubRole.ADMIN) {
         return NextResponse.json(
           { error: "Cannot remove yourself from the club" },
           { status: 400 }
@@ -502,7 +502,7 @@ export async function DELETE(
       const otherAdmins = await prisma.communityMember.findMany({
         where: {
           communityId,
-          role: CommunityRole.ADMIN,
+          role: ClubRole.ADMIN,
           userId: { not: userId },
         },
         select: { id: true },
@@ -514,7 +514,7 @@ export async function DELETE(
           { status: 400 }
         );
       }
-    } else if (membership.role === CommunityRole.ADMIN) {
+    } else if (membership.role === ClubRole.ADMIN) {
       return NextResponse.json(
         { error: "Demote admins before removing them" },
         { status: 400 }
@@ -549,7 +549,7 @@ export async function DELETE(
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    logError("Community admin remove player error", error);
+    logError("Club admin remove player error", error);
     return safeErrorResponse();
   }
 }

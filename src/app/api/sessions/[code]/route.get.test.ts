@@ -6,8 +6,8 @@ const mocks = vi.hoisted(() => ({
   getSessionMembership: vi.fn(),
   getSessionAdminMembership: vi.fn(),
   getSessionOperatorMembership: vi.fn(),
-  getCommunityEloByUserId: vi.fn(),
-  withCommunityElo: vi.fn(),
+  getClubEloByUserId: vi.fn(),
+  withClubElo: vi.fn(),
   getQueuedMatchUserIds: vi.fn(),
   parseMatchmakingReasonJson: vi.fn(),
 }));
@@ -25,20 +25,20 @@ vi.mock("@/lib/prisma", () => ({
 }));
 
 vi.mock("@/lib/sessionCollab", () => ({
-  getPlayerCommunityBadges: vi.fn(),
+  getPlayerClubBadges: vi.fn(),
   getSessionAdminMembership: mocks.getSessionAdminMembership,
   getSessionMembership: mocks.getSessionMembership,
   getSessionOperatorMembership: mocks.getSessionOperatorMembership,
-  withPlayerCommunityBadges: vi.fn(),
+  withPlayerClubBadges: vi.fn(),
 }));
 
-vi.mock("@/lib/communityElo", () => ({
-  getCommunityEloByUserId: mocks.getCommunityEloByUserId,
-  withCommunityElo: mocks.withCommunityElo,
+vi.mock("@/lib/clubElo", () => ({
+  getClubEloByUserId: mocks.getClubEloByUserId,
+  withClubElo: mocks.withClubElo,
 }));
 
 vi.mock("@/lib/quickAccess", () => ({
-  canQuickAccessCommunity: vi.fn(() => true),
+  canQuickAccessClub: vi.fn(() => true),
   getQuickAccessDeniedMessage: vi.fn(() => "Denied"),
   isQuickAccessSession: vi.fn(() => false),
 }));
@@ -71,8 +71,8 @@ describe("session route GET", () => {
     mocks.getSessionMembership.mockResolvedValue({ role: "MEMBER" });
     mocks.getSessionAdminMembership.mockResolvedValue(null);
     mocks.getSessionOperatorMembership.mockResolvedValue(null);
-    mocks.getCommunityEloByUserId.mockResolvedValue(new Map());
-    mocks.withCommunityElo.mockImplementation((players) => players);
+    mocks.getClubEloByUserId.mockResolvedValue(new Map());
+    mocks.withClubElo.mockImplementation((players) => players);
     mocks.getQueuedMatchUserIds.mockReturnValue(["u1", "u2", "u3", "u4"]);
     mocks.parseMatchmakingReasonJson.mockReturnValue(null);
 

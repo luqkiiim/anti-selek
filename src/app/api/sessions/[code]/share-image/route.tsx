@@ -5,7 +5,7 @@ import { resolveAvatarUrl } from "@/lib/avatar";
 import { logError, safeErrorResponse } from "@/lib/errors";
 import { prisma } from "@/lib/prisma";
 import {
-  canQuickAccessCommunity,
+  canQuickAccessClub,
   isQuickAccessSession,
 } from "@/lib/quickAccess";
 import {
@@ -21,17 +21,17 @@ import {
   SESSION_SHARE_IMAGE_WIDTH,
 } from "@/lib/sessionShareImage";
 import { getSessionMembership } from "@/lib/sessionCollab";
-import { getTutorialCommunityDisplayName } from "@/lib/tutorialPlayground";
+import { getTutorialClubDisplayName } from "@/lib/tutorialPlayground";
 import {
   MatchStatus,
-  SessionCommunityRole,
-  SessionCommunityStatus,
+  SessionClubRole,
+  SessionClubStatus,
   SessionStatus,
 } from "@/types/enums";
 
 export const dynamic = "force-dynamic";
 
-function getShareImageCommunityName(sessionData: {
+function getShareImageClubName(sessionData: {
   community?: { name: string; isTutorial: boolean } | null;
   sessionCommunities: Array<{
     role: string;
@@ -40,18 +40,18 @@ function getShareImageCommunityName(sessionData: {
   }>;
 }) {
   const acceptedCommunities = sessionData.sessionCommunities.filter(
-    (link) => link.status === SessionCommunityStatus.ACCEPTED
+    (link) => link.status === SessionClubStatus.ACCEPTED
   );
-  const hostCommunity =
-    acceptedCommunities.find((link) => link.role === SessionCommunityRole.HOST)
+  const hostClub =
+    acceptedCommunities.find((link) => link.role === SessionClubRole.HOST)
       ?.community ?? acceptedCommunities[0]?.community;
 
-  if (hostCommunity) {
-    return getTutorialCommunityDisplayName(hostCommunity);
+  if (hostClub) {
+    return getTutorialClubDisplayName(hostClub);
   }
 
   return sessionData.community
-    ? getTutorialCommunityDisplayName(sessionData.community)
+    ? getTutorialClubDisplayName(sessionData.community)
     : "Club";
 }
 
@@ -151,7 +151,7 @@ async function getSessionShareImageRoute(
     return invalidTargetResponse(request, "api:sessions:code:share-image");
   }
 
-  if (!canQuickAccessCommunity(session, sessionData.communityId)) {
+  if (!canQuickAccessClub(session, sessionData.communityId)) {
     return invalidTargetResponse(request, "api:sessions:code:share-image");
   }
 
@@ -186,7 +186,7 @@ async function getSessionShareImageRoute(
 
   const viewModel = buildSessionShareImageViewModel({
     sessionName: sessionData.name,
-    communityName: getShareImageCommunityName(sessionData),
+    communityName: getShareImageClubName(sessionData),
     sessionType: sessionData.type,
     players: sessionData.players.map((player) => ({
       userId: player.userId,

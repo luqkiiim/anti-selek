@@ -2,31 +2,31 @@ import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { auth } from "@/lib/auth";
 import { serializeAvatarEntity } from "@/lib/avatar";
-import { buildCommunityPulse } from "@/lib/communityPulse";
+import { buildClubPulse } from "@/lib/clubPulse";
 import {
-  getCommunityStatUserResolver,
+  getClubStatUserResolver,
   getOfflineIdentityInfoByUserId,
 } from "@/lib/offlineIdentities";
-import { buildCommunityLeaderboardRankMovements } from "@/lib/profileCommunityRank";
+import { buildClubLeaderboardRankMovements } from "@/lib/profileClubRank";
 import { prisma } from "@/lib/prisma";
-import { listSessionsForCommunity } from "@/app/api/sessions/listSessionsService";
+import { listSessionsForClub } from "@/app/api/sessions/listSessionsService";
 import { logAuditEvent } from "@/lib/serverAudit";
 import { logError, safeErrorResponse } from "@/lib/errors";
 import {
   deleteTutorialPlayground,
-  getTutorialCommunityDisplayName,
+  getTutorialClubDisplayName,
 } from "@/lib/tutorialPlayground";
 import { rateLimit, checkInvalidTargetRateLimit, invalidTargetResponse } from "@/lib/rateLimit";
 import {
-  canQuickAccessCommunity,
+  canQuickAccessClub,
   getQuickAccessDeniedMessage,
   isQuickAccessSession,
   normalizeNameLookupKey,
 } from "@/lib/quickAccess";
 import {
   ClaimRequestStatus,
-  CommunityRole,
-  CommunityPlayerStatus,
+  ClubRole,
+  ClubPlayerStatus,
   PartnerPreference,
   PlayerGender,
   SessionStatus,
@@ -43,7 +43,7 @@ function toClaimRequestResponse(request: {
   reviewedAt: Date | null;
   requester: { id: string; name: string; email: string | null };
   target: { id: string; name: string; email: string | null };
-  linkedCommunityNames?: string[];
+  linkedClubNames?: string[];
 }) {
   return {
     id: request.id,
@@ -56,7 +56,7 @@ function toClaimRequestResponse(request: {
     targetEmail: request.target.email,
     status: request.status,
     note: request.note,
-    linkedCommunityNames: request.linkedCommunityNames ?? [],
+    linkedClubNames: request.linkedClubNames ?? [],
     createdAt: request.createdAt,
     reviewedAt: request.reviewedAt,
   };
@@ -84,7 +84,7 @@ export async function GET(
     const invalidTargetLimitResponse = await checkInvalidTargetRateLimit(request, "api:communities:id");
 
     if (invalidTargetLimitResponse) return invalidTargetLimitResponse;
-    if (!canQuickAccessCommunity(session, id)) {
+    if (!canQuickAccessClub(session, id)) {
       return invalidTargetResponse(request, "api:communities:id");
     }
 
@@ -142,8 +142,8 @@ export async function GET(
     }
 
     const viewerIsOwner = community.createdById === viewerId;
-    const viewerCanAdminCommunity =
-      viewerIsAdmin || viewerIsOwner || membership?.role === CommunityRole.ADMIN;
+    const viewerCanAdminClub =
+      viewerIsAdmin || viewerIsOwner || membership?.role === ClubRole.ADMIN;
 
     if (community.isTutorial && community.tutorialOwnerId !== viewerId) {
       return invalidTargetResponse(request, "api:communities:id");
@@ -224,14 +224,14 @@ export async function GET(
           },
         },
       }),
-      listSessionsForCommunity({
+      listSessionsForClub({
         communityId: id,
         viewerId,
-        viewerIsAdmin: viewerCanAdminCommunity,
+        viewerIsAdmin: viewerCanAdminClub,
       }),
       prisma.claimRequest.findMany({
         where:
-          viewerCanAdminCommunity
+          viewerCanAdminClub
             ? {
                 communityId: id,
                 status: ClaimRequestStatus.PENDING,
@@ -269,7 +269,7 @@ export async function GET(
     for (const member of members) {
       statsByUserId.set(member.user.id, { wins: 0, losses: 0 });
     }
-    const resolveStatUserId = await getCommunityStatUserResolver(prisma, {
+    const resolveStatUserId = await getClubStatUserResolver(prisma, {
       communityId: id,
       memberUserIds: members.map((member) => member.user.id),
     });
@@ -288,13 +288,13 @@ export async function GET(
           (match) => match.session.id === latestCompletedSession.id
         )
       : [];
-    const rankMovements = buildCommunityLeaderboardRankMovements({
+    const rankMovements = buildClubLeaderboardRankMovements({
       members: members.map((member) => ({
         userId: member.user.id,
         name: member.user.name,
         elo: member.elo,
         isLeaderboardEligible:
-          member.status !== CommunityPlayerStatus.OCCASIONAL,
+          member.status !== ClubPlayerStatus.OCCASIONAL,
       })),
       matchesSinceWindowStart: latestCompletedSessionMatches,
       resolveUserId: resolveStatUserId,
@@ -335,9 +335,9 @@ export async function GET(
         email: member.user.email,
         avatarUrl: serializeAvatarEntity(member.user).avatarUrl,
         status:
-          member.status === CommunityPlayerStatus.OCCASIONAL
-            ? CommunityPlayerStatus.OCCASIONAL
-            : CommunityPlayerStatus.CORE,
+          member.status === ClubPlayerStatus.OCCASIONAL
+            ? ClubPlayerStatus.OCCASIONAL
+            : ClubPlayerStatus.CORE,
         gender:
           [PlayerGender.MALE, PlayerGender.FEMALE].includes(
             member.user.gender as PlayerGender
@@ -360,10 +360,10 @@ export async function GET(
         role: member.role,
         isOwner: member.user.id === community.createdById,
         offlineIdentityId: offlineIdentityInfo?.offlineIdentityId ?? null,
-        linkedCommunityBadges: offlineIdentityInfo?.linkedCommunityBadges ?? [],
+        linkedClubBadges: offlineIdentityInfo?.linkedClubBadges ?? [],
       };
     });
-    const communityPulse = buildCommunityPulse({
+    const clubPulse = buildClubPulse({
       members: communityMembers.map((member) => ({
         id: member.id,
         name: member.name,
@@ -405,14 +405,14 @@ export async function GET(
       },
       community: {
         id: community.id,
-        name: getTutorialCommunityDisplayName(community),
+        name: getTutorialClubDisplayName(community),
         isTutorial: community.isTutorial,
         tutorialOwnerId: community.tutorialOwnerId,
         viewerIsOwner,
         role: viewerIsQuickAccess
-          ? CommunityRole.MEMBER
-          : viewerCanAdminCommunity
-            ? CommunityRole.ADMIN
+          ? ClubRole.MEMBER
+          : viewerCanAdminClub
+            ? ClubRole.ADMIN
             : membership?.role ?? "MEMBER",
         isPasswordProtected: community.isPasswordProtected,
         membersCount: community._count.members,
@@ -420,19 +420,19 @@ export async function GET(
       },
       communityMembers,
       sessions,
-      communityPulse,
+      communityPulse: clubPulse,
       claimRequests: claimRequests.map((claimRequest) =>
         toClaimRequestResponse({
           ...claimRequest,
-          linkedCommunityNames:
+          linkedClubNames:
             offlineIdentityInfoByUserId
               .get(claimRequest.targetUserId)
-              ?.linkedCommunityBadges.map((badge) => badge.name) ?? [],
+              ?.linkedClubBadges.map((badge) => badge.name) ?? [],
         })
       ),
     });
   } catch (error) {
-    logError("Get community snapshot error", error);
+    logError("Get club snapshot error", error);
     return safeErrorResponse();
   }
 }
@@ -496,7 +496,7 @@ export async function PATCH(
     const viewerIsOwner = existing.createdById === session.user.id;
     if (
       !viewerIsOwner &&
-      membership?.role !== CommunityRole.ADMIN &&
+      membership?.role !== ClubRole.ADMIN &&
       !session.user.isAdmin
     ) {
       return invalidTargetResponse(request, "api:communities:id");
@@ -612,7 +612,7 @@ export async function PATCH(
       return NextResponse.json({ error: "Nothing to update" }, { status: 400 });
     }
 
-    const updatedCommunity = await prisma.community.update({
+    const updatedClub = await prisma.community.update({
       where: { id },
       data: updates,
       select: {
@@ -623,7 +623,7 @@ export async function PATCH(
       },
     });
 
-    return NextResponse.json(updatedCommunity);
+    return NextResponse.json(updatedClub);
   } catch (error: unknown) {
     const code =
       typeof error === "object" && error !== null && "code" in error
@@ -632,7 +632,7 @@ export async function PATCH(
     if (code === "P2002") {
       return NextResponse.json({ error: "Club name already exists" }, { status: 409 });
     }
-    logError("Update community error", error);
+    logError("Update club error", error);
     return safeErrorResponse();
   }
 }
@@ -693,7 +693,7 @@ export async function DELETE(
     const viewerIsOwner = existing.createdById === session.user.id;
     if (
       !viewerIsOwner &&
-      membership?.role !== CommunityRole.ADMIN &&
+      membership?.role !== ClubRole.ADMIN &&
       !session.user.isAdmin
     ) {
       return invalidTargetResponse(request, "api:communities:id");
@@ -738,7 +738,7 @@ export async function DELETE(
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    logError("Delete community error", error);
+    logError("Delete club error", error);
     return safeErrorResponse();
   }
 }

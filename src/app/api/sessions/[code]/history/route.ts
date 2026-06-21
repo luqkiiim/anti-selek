@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { canQuickAccessCommunity, isQuickAccessSession } from "@/lib/quickAccess";
+import { canQuickAccessClub, isQuickAccessSession } from "@/lib/quickAccess";
 import {
   getSessionAdminMembership,
   getSessionMembership,
@@ -10,7 +10,7 @@ import {
 } from "@/lib/sessionCollab";
 import {
   MatchStatus,
-  SessionCommunityStatus,
+  SessionClubStatus,
   SessionStatus,
 } from "@/types/enums";
 import { logError, safeErrorResponse } from "@/lib/errors";
@@ -57,19 +57,19 @@ async function getCompletedScoreCorrectionBlockedReason(
     { completedAt: { gt: firstReplayTime } },
     { completedAt: null, createdAt: { gt: firstReplayTime } },
   ];
-  const acceptedCommunityIds = Array.from(
+  const acceptedClubIds = Array.from(
     new Set(
       [
         sessionData.communityId,
         ...sessionData.sessionCommunities
-          .filter((link) => link.status === SessionCommunityStatus.ACCEPTED)
+          .filter((link) => link.status === SessionClubStatus.ACCEPTED)
           .map((link) => link.communityId),
       ].filter((communityId): communityId is string => Boolean(communityId))
     )
   );
 
   const newerOutsideMatch =
-    acceptedCommunityIds.length > 0
+    acceptedClubIds.length > 0
       ? await prisma.match.findFirst({
           where: {
             sessionId: { not: sessionData.id },
@@ -78,12 +78,12 @@ async function getCompletedScoreCorrectionBlockedReason(
             session: {
               isTest: false,
               OR: [
-                { communityId: { in: acceptedCommunityIds } },
+                { communityId: { in: acceptedClubIds } },
                 {
                   sessionCommunities: {
                     some: {
-                      communityId: { in: acceptedCommunityIds },
-                      status: SessionCommunityStatus.ACCEPTED,
+                      communityId: { in: acceptedClubIds },
+                      status: SessionClubStatus.ACCEPTED,
                     },
                   },
                 },
@@ -217,7 +217,7 @@ async function getSessionHistory(
   if (!sessionData) {
     return invalidTargetResponse(_request, "api:sessions:code:history");
   }
-  if (!canQuickAccessCommunity(session, sessionData.communityId)) {
+  if (!canQuickAccessClub(session, sessionData.communityId)) {
     return invalidTargetResponse(_request, "api:sessions:code:history");
   }
 
@@ -236,7 +236,7 @@ async function getSessionHistory(
     userId: session.user.id,
     acceptedOnly: true,
   });
-  const communityRole = membership?.role ?? null;
+  const clubRole = membership?.role ?? null;
 
   const isSessionPlayer = sessionData.players.some((player) => player.userId === session.user.id);
   const isQuickAccess = isQuickAccessSession(session);
@@ -247,7 +247,7 @@ async function getSessionHistory(
     !isQuickAccess && (!!session.user.isAdmin || !!adminMembership);
   const canView =
     viewerCanManage ||
-    !!communityRole ||
+    !!clubRole ||
     isSessionPlayer;
   if (!canView) {
     return invalidTargetResponse(_request, "api:sessions:code:history");

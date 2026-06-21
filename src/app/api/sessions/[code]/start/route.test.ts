@@ -12,9 +12,9 @@ vi.mock("@/lib/prisma", () => ({
   },
 }));
 
-vi.mock("@/lib/communityElo", () => ({
-  getCommunityEloByUserId: vi.fn(),
-  withCommunityElo: vi.fn((players) => players),
+vi.mock("@/lib/clubElo", () => ({
+  getClubEloByUserId: vi.fn(),
+  withClubElo: vi.fn((players) => players),
 }));
 
 import { auth } from "@/lib/auth";

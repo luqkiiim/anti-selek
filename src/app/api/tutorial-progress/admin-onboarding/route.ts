@@ -41,9 +41,9 @@ async function getAdminOnboardingProgress(userId: string) {
         progress?.completedStepIdsJson
       ),
       dismissedAt: progress?.dismissedAt ?? null,
-      primaryCommunityId: null,
+      primaryClubId: null,
       primarySessionCode: null,
-      hasAdminCommunity: false,
+      hasAdminClub: false,
       hasScoredMatch: false,
       hasCompletedSession: false,
     });
@@ -85,9 +85,9 @@ async function getAdminOnboardingProgress(userId: string) {
       progress?.completedStepIdsJson
     ),
     dismissedAt: progress?.dismissedAt ?? null,
-    primaryCommunityId: playground.id,
+    primaryClubId: playground.id,
     primarySessionCode: latestSession?.code ?? null,
-    hasAdminCommunity: true,
+    hasAdminClub: true,
     hasScoredMatch: Boolean(scoredMatch),
     hasCompletedSession: Boolean(completedSession),
   });
@@ -112,8 +112,8 @@ export async function GET(request: Request) {
         buildAdminOnboardingProgress({
           completedStepIds: [],
           dismissedAt: null,
-          primaryCommunityId: null,
-          hasAdminCommunity: false,
+          primaryClubId: null,
+          hasAdminClub: false,
           hasScoredMatch: false,
           hasCompletedSession: false,
           primarySessionCode: null,

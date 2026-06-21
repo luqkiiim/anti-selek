@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { getCommunityAdminAccess } from "@/lib/communityAdminPermissions";
+import { getClubAdminAccess } from "@/lib/clubAdminPermissions";
 import { prisma } from "@/lib/prisma";
-import { isClaimableCommunityPlaceholder } from "@/lib/communityClaims";
-import { getClaimRequesterEligibility } from "@/lib/communityClaimRules";
+import { isClaimableClubPlaceholder } from "@/lib/clubClaims";
+import { getClaimRequesterEligibility } from "@/lib/clubClaimRules";
 import { getOfflineIdentityInfoByUserId } from "@/lib/offlineIdentities";
 import { isQuickAccessSession } from "@/lib/quickAccess";
 import { ClaimRequestStatus } from "@/types/enums";
@@ -23,7 +23,7 @@ function toClaimRequestResponse(request: {
   reviewedAt: Date | null;
   requester: { id: string; name: string; email: string | null };
   target: { id: string; name: string; email: string | null };
-  linkedCommunityNames?: string[];
+  linkedClubNames?: string[];
 }) {
   return {
     id: request.id,
@@ -36,7 +36,7 @@ function toClaimRequestResponse(request: {
     targetEmail: request.target.email,
     status: request.status,
     note: request.note,
-    linkedCommunityNames: request.linkedCommunityNames ?? [],
+    linkedClubNames: request.linkedClubNames ?? [],
     createdAt: request.createdAt,
     reviewedAt: request.reviewedAt,
   };
@@ -72,20 +72,20 @@ export async function GET(
       return NextResponse.json([]);
     }
 
-    const adminAccess = await getCommunityAdminAccess(prisma, {
+    const adminAccess = await getClubAdminAccess(prisma, {
       communityId,
       userId: session.user.id,
       isGlobalAdmin: !!session.user.isAdmin,
     });
 
     const isQuickAccess = isQuickAccessSession(session);
-    const isCommunityAdmin = !isQuickAccess && adminAccess?.canAdmin === true;
-    if (!adminAccess || (!adminAccess.membershipRole && !isCommunityAdmin)) {
+    const isClubAdmin = !isQuickAccess && adminAccess?.canAdmin === true;
+    if (!adminAccess || (!adminAccess.membershipRole && !isClubAdmin)) {
       return invalidTargetResponse(request, "api:communities:id:claim-requests");
     }
 
     const requests = await prisma.claimRequest.findMany({
-      where: isCommunityAdmin
+      where: isClubAdmin
         ? {
             communityId,
             status: ClaimRequestStatus.PENDING,
@@ -123,15 +123,15 @@ export async function GET(
       requests.map((requestItem) =>
         toClaimRequestResponse({
           ...requestItem,
-          linkedCommunityNames:
+          linkedClubNames:
             offlineIdentityInfoByUserId
               .get(requestItem.targetUserId)
-              ?.linkedCommunityBadges.map((badge) => badge.name) ?? [],
+              ?.linkedClubBadges.map((badge) => badge.name) ?? [],
         })
       )
     );
   } catch (error) {
-    logError("List community claim requests error", error);
+    logError("List club claim requests error", error);
     return safeErrorResponse();
   }
 }
@@ -227,7 +227,7 @@ export async function POST(
         targetMembership,
         existingRequesterRequest,
         existingTargetRequest,
-        existingCommunityHistory,
+        existingClubHistory,
       ] =
         await Promise.all([
           tx.user.findUnique({
@@ -289,8 +289,8 @@ export async function POST(
 
       const requesterEligibility = getClaimRequesterEligibility({
         isClaimed: requester.isClaimed,
-        communityElo: requesterMembership.elo,
-        hasCommunitySessionHistory: !!existingCommunityHistory,
+        clubElo: requesterMembership.elo,
+        hasClubSessionHistory: !!existingClubHistory,
       });
 
       if (!requesterEligibility.canRequest) {
@@ -301,7 +301,7 @@ export async function POST(
         throw new Error("Target profile not found in this club");
       }
 
-      if (!isClaimableCommunityPlaceholder(targetMembership.user)) {
+      if (!isClaimableClubPlaceholder(targetMembership.user)) {
         throw new Error("Only unclaimed placeholder profiles without email can be claimed");
       }
 
@@ -358,7 +358,7 @@ export async function POST(
       return NextResponse.json({ error: error.message }, { status });
     }
 
-    logError("Create community claim request error", error);
+    logError("Create club claim request error", error);
     return safeErrorResponse();
   }
 }

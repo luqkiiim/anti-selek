@@ -123,7 +123,7 @@ export async function POST(
       email: membership.user.email,
     });
   } catch (error) {
-    logError("Community admin reset player password error", error);
+    logError("Club admin reset player password error", error);
     return safeErrorResponse();
   }
 }

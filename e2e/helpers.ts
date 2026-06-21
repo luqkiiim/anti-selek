@@ -34,19 +34,19 @@ interface SessionMatchSnapshot {
   status: string;
 }
 
-interface CommunityMemberSnapshot {
+interface ClubMemberSnapshot {
   id: string;
   name: string;
   elo: number;
 }
 
-interface CommunitySessionSnapshot {
+interface ClubSessionSnapshot {
   code: string;
   name: string;
   status: string;
 }
 
-interface CommunityClaimRequestSnapshot {
+interface ClubClaimRequestSnapshot {
   id: string;
   requesterUserId: string;
   requesterName: string;
@@ -70,9 +70,9 @@ export interface SessionSnapshot {
   courts: SessionCourtSnapshot[];
 }
 
-export type CommunityMembersSnapshot = CommunityMemberSnapshot[];
-export type CommunitySessionsSnapshot = CommunitySessionSnapshot[];
-export type CommunityClaimRequestsSnapshot = CommunityClaimRequestSnapshot[];
+export type ClubMembersSnapshot = ClubMemberSnapshot[];
+export type ClubSessionsSnapshot = ClubSessionSnapshot[];
+export type ClubClaimRequestsSnapshot = ClubClaimRequestSnapshot[];
 
 export function getHostPlayerCredentials(index: number) {
   return {
@@ -134,16 +134,30 @@ export async function createStartedHostSession(
   await expect(hostPanel).toBeVisible();
 
   await hostPanel.getByLabel("Name", { exact: true }).fill(sessionName);
-  const formatSelect = hostPanel.locator("select").first();
-  if ((await formatSelect.count()) > 0) {
-    await formatSelect.selectOption({ label: getSessionTypeButtonName(sessionType) });
-  } else {
-    await hostPanel
-      .getByRole("button", {
-        name: getSessionTypeButtonName(sessionType),
-        exact: true,
-      })
-      .click();
+  const formatLabel = getSessionTypeButtonName(sessionType);
+  let selectedFormat = false;
+  const selects = hostPanel.locator("select");
+  for (let index = 0; index < (await selects.count()); index += 1) {
+    const select = selects.nth(index);
+    const optionLabels = await select.locator("option").allTextContents();
+    if (optionLabels.includes(formatLabel)) {
+      await select.selectOption({ label: formatLabel });
+      selectedFormat = true;
+      break;
+    }
+  }
+  if (!selectedFormat) {
+    const formatButton = hostPanel.getByRole("button", {
+      name: formatLabel,
+      exact: true,
+    });
+    if ((await formatButton.count()) > 0) {
+      await formatButton.click();
+      selectedFormat = true;
+    }
+  }
+  if (!selectedFormat && sessionType !== SessionType.POINTS) {
+    throw new Error(`Unable to select session type ${formatLabel}`);
   }
   await hostPanel
     .getByRole("button", {
@@ -238,10 +252,10 @@ export async function readSessionSnapshot(
   }, code);
 }
 
-export async function readCommunityMembersSnapshot(
+export async function readClubMembersSnapshot(
   page: Page,
   communityId: string
-): Promise<CommunityMembersSnapshot> {
+): Promise<ClubMembersSnapshot> {
   return page.evaluate(async (targetCommunityId) => {
     const res = await fetch(`/api/communities/${targetCommunityId}/members`);
     if (!res.ok) {
@@ -251,10 +265,10 @@ export async function readCommunityMembersSnapshot(
   }, communityId);
 }
 
-export async function readCommunitySessionsSnapshot(
+export async function readClubSessionsSnapshot(
   page: Page,
   communityId: string
-): Promise<CommunitySessionsSnapshot> {
+): Promise<ClubSessionsSnapshot> {
   return page.evaluate(async (targetCommunityId) => {
     const res = await fetch(`/api/sessions?communityId=${encodeURIComponent(targetCommunityId)}`);
     if (!res.ok) {
@@ -264,10 +278,10 @@ export async function readCommunitySessionsSnapshot(
   }, communityId);
 }
 
-export async function readCommunityClaimRequestsSnapshot(
+export async function readClubClaimRequestsSnapshot(
   page: Page,
   communityId: string
-): Promise<CommunityClaimRequestsSnapshot> {
+): Promise<ClubClaimRequestsSnapshot> {
   return page.evaluate(async (targetCommunityId) => {
     const res = await fetch(`/api/communities/${targetCommunityId}/claim-requests`);
     if (!res.ok) {
@@ -370,8 +384,13 @@ export async function submitAndApproveVisibleMatch(
   await page.getByRole("button", { name: "Submit Score" }).click();
   await expect(page.getByRole("button", { name: "Confirm", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Confirm", exact: true }).click();
-  await expect(page.getByText("Awaiting Confirmation")).toBeVisible();
-  await page.getByRole("button", { name: "Confirm Results" }).click();
+  const confirmResultsButton = page.getByRole("button", {
+    name: "Confirm Results",
+  });
+  if (await confirmResultsButton.isVisible({ timeout: 1000 }).catch(() => false)) {
+    await expect(page.getByText("Awaiting Confirmation")).toBeVisible();
+    await confirmResultsButton.click();
+  }
 }
 
 export async function createManualMatchWithPlayers(

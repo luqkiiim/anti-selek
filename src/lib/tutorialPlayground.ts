@@ -5,12 +5,12 @@ import {
   ADMIN_ONBOARDING_TUTORIAL_KEY,
 } from "@/lib/adminOnboarding";
 import {
-  CommunityPlayerStatus,
+  ClubPlayerStatus,
   MatchStatus,
   PartnerPreference,
   PlayerGender,
-  SessionCommunityRole,
-  SessionCommunityStatus,
+  SessionClubRole,
+  SessionClubStatus,
   SessionMode,
   SessionPool,
   SessionStatus,
@@ -140,11 +140,11 @@ export interface TutorialPlaygroundSummary {
   isTutorial: true;
 }
 
-function getTutorialCommunityName(userId: string) {
+function getTutorialClubName(userId: string) {
   return `${TUTORIAL_PLAYGROUND_LABEL} ${userId.slice(-8)}`;
 }
 
-export function getTutorialCommunityDisplayName(community: {
+export function getTutorialClubDisplayName(community: {
   name: string;
   isTutorial?: boolean | null;
 }) {
@@ -358,10 +358,10 @@ async function summarizeTutorialPlayground(
   };
 }
 
-async function createTutorialCommunity(tx: TutorialTx, userId: string) {
+async function createTutorialClub(tx: TutorialTx, userId: string) {
   return tx.community.create({
     data: {
-      name: getTutorialCommunityName(userId),
+      name: getTutorialClubName(userId),
       createdById: userId,
       isTutorial: true,
       tutorialOwnerId: userId,
@@ -369,7 +369,7 @@ async function createTutorialCommunity(tx: TutorialTx, userId: string) {
         create: {
           userId,
           role: "ADMIN",
-          status: CommunityPlayerStatus.CORE,
+          status: ClubPlayerStatus.CORE,
         },
       },
     },
@@ -391,14 +391,14 @@ async function seedTutorialPlaygroundData(
     },
     update: {
       role: "ADMIN",
-      status: CommunityPlayerStatus.CORE,
+      status: ClubPlayerStatus.CORE,
       elo: 1000,
     },
     create: {
       communityId,
       userId: ownerUserId,
       role: "ADMIN",
-      status: CommunityPlayerStatus.CORE,
+      status: ClubPlayerStatus.CORE,
       elo: 1000,
     },
   });
@@ -433,8 +433,8 @@ async function seedTutorialPlaygroundData(
       role: "MEMBER",
       status:
         index % 6 === 4
-          ? CommunityPlayerStatus.OCCASIONAL
-          : CommunityPlayerStatus.CORE,
+          ? ClubPlayerStatus.OCCASIONAL
+          : ClubPlayerStatus.CORE,
       elo: user.elo,
     })),
   });
@@ -508,8 +508,8 @@ async function seedCompletedPracticeSessions(
         sessionCommunities: {
           create: {
             communityId,
-            role: SessionCommunityRole.HOST,
-            status: SessionCommunityStatus.ACCEPTED,
+            role: SessionClubRole.HOST,
+            status: SessionClubStatus.ACCEPTED,
             reviewedAt: endedAt,
           },
         },
@@ -663,8 +663,8 @@ async function seedActiveTutorialSession(
       sessionCommunities: {
         create: {
           communityId,
-          role: SessionCommunityRole.HOST,
-          status: SessionCommunityStatus.ACCEPTED,
+          role: SessionClubRole.HOST,
+          status: SessionClubStatus.ACCEPTED,
           requestedById: ownerUserId,
           reviewedById: ownerUserId,
           reviewedAt: now,
@@ -962,7 +962,7 @@ async function clearTutorialPlaygroundData(
     where: { communityId, userId: ownerUserId },
     data: {
       role: "ADMIN",
-      status: CommunityPlayerStatus.CORE,
+      status: ClubPlayerStatus.CORE,
       elo: 1000,
     },
   });
@@ -998,7 +998,7 @@ export async function ensureTutorialPlayground(userId: string) {
     });
 
     if (!playground) {
-      playground = await createTutorialCommunity(tx, userId);
+      playground = await createTutorialClub(tx, userId);
       await seedTutorialPlaygroundData(tx, playground.id, userId);
     } else if (!playground.isTutorial) {
       throw new Error("Tutorial owner is attached to a non-tutorial club");
@@ -1019,7 +1019,7 @@ export async function resetTutorialPlayground(userId: string) {
     });
 
     if (!playground) {
-      playground = await createTutorialCommunity(tx, userId);
+      playground = await createTutorialClub(tx, userId);
     } else if (!playground.isTutorial) {
       throw new Error("Tutorial owner is attached to a non-tutorial club");
     } else {

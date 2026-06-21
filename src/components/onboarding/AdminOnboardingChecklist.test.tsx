@@ -11,7 +11,7 @@ function createProgress(
     visible: true,
     dismissed: false,
     completedStepIds: ["admin-community"],
-    primaryCommunityId: "community-1",
+    primaryClubId: "community-1",
     primarySessionCode: "ABC123",
     steps: [
       {
@@ -32,7 +32,7 @@ function createProgress(
         detail: "Know where reset club lives.",
         actionLabel: "Review cleanup",
         href: "/community/community-1/admin?tab=settings",
-        targetId: "admin-onboarding-reset-community",
+        targetId: "admin-onboarding-reset-club",
         coachmark: "Use reset only when you want to clear test history.",
         completed: false,
         autoCompleted: false,

@@ -5,21 +5,21 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
-  CommunityPlayerStatus,
+  ClubPlayerStatus,
   MixedSide,
   PartnerPreference,
   PlayerGender,
   SessionPool,
 } from "@/types/enums";
 import { SessionRosterModal } from "./SessionRosterModal";
-import type { CommunityUser } from "./sessionTypes";
+import type { ClubUser } from "./sessionTypes";
 
-const availablePlayer: CommunityUser = {
+const availablePlayer: ClubUser = {
   id: "player-1",
   name: "Host Player 4",
   avatarUrl: null,
   elo: 1120,
-  status: CommunityPlayerStatus.CORE,
+  status: ClubPlayerStatus.CORE,
   gender: PlayerGender.MALE,
   partnerPreference: PartnerPreference.OPEN,
   mixedSideOverride: null,

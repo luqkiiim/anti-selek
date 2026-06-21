@@ -13,7 +13,7 @@ type AccessMode = "account" | "quick";
 function SigninForm() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [communityName, setCommunityName] = useState("");
+  const [clubName, setClubName] = useState("");
   const [playerName, setPlayerName] = useState("");
   const [accessMode, setAccessMode] = useState<AccessMode>("account");
   const [error, setError] = useState("");
@@ -58,7 +58,7 @@ function SigninForm() {
     try {
       const result = await signIn("credentials", {
         quickAccess: "true",
-        communityName,
+        communityName: clubName,
         playerName,
         redirect: false,
       });
@@ -69,8 +69,8 @@ function SigninForm() {
       }
 
       const nextSession = await getSession();
-      const quickCommunityId = nextSession?.user?.quickAccessCommunityId;
-      router.push(quickCommunityId ? `/community/${quickCommunityId}` : "/");
+      const quickClubId = nextSession?.user?.quickAccessCommunityId;
+      router.push(quickClubId ? `/community/${quickClubId}` : "/");
       router.refresh();
     } catch {
       setError("Something went wrong");
@@ -200,8 +200,8 @@ function SigninForm() {
                   <span>Club name</span>
                   <input
                     type="text"
-                    value={communityName}
-                    onChange={(e) => setCommunityName(e.target.value)}
+                    value={clubName}
+                    onChange={(e) => setClubName(e.target.value)}
                     className="field"
                     required
                   />
@@ -220,7 +220,7 @@ function SigninForm() {
 
                 <button
                   type="submit"
-                  disabled={quickLoading || !communityName.trim() || !playerName.trim()}
+                  disabled={quickLoading || !clubName.trim() || !playerName.trim()}
                   className="app-button-primary w-full"
                 >
                   <LogIn aria-hidden="true" size={17} />

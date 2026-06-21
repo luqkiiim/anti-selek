@@ -13,7 +13,7 @@ import {
 import {
   ADMIN_ONBOARDING_TUTORIAL_KEY,
 } from "./adminOnboarding";
-import { buildCommunityPulse } from "./communityPulse";
+import { buildClubPulse } from "./clubPulse";
 import {
   MatchStatus,
   PartnerPreference,
@@ -96,7 +96,7 @@ function expectSeededNames(expectFn: typeof expect, names: string[]) {
   expectFn(names.every((name) => name.length < 9)).toBe(true);
 }
 
-async function buildSeededCommunityPulse(communityId: string) {
+async function buildSeededClubPulse(communityId: string) {
   const [members, sessions, completedMatches] = await Promise.all([
     prisma.communityMember.findMany({
       where: { communityId },
@@ -132,7 +132,7 @@ async function buildSeededCommunityPulse(communityId: string) {
     }),
   ]);
 
-  return buildCommunityPulse({
+  return buildClubPulse({
     members: members.map((member) => ({
       id: member.user.id,
       name: member.user.name,
@@ -324,7 +324,7 @@ describe("tutorial playground service", () => {
       "Siti",
     ]);
 
-    const pulse = await buildSeededCommunityPulse(summary.communityId);
+    const pulse = await buildSeededClubPulse(summary.communityId);
     expect(pulse.metrics.completedTournaments).toBe(3);
     expect(pulse.metrics.recentMatches).toBe(18);
     expect(pulse.hotPlayers.length).toBeGreaterThan(0);

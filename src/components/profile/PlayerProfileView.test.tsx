@@ -59,7 +59,7 @@ function buildProfileResponse(overrides?: Partial<{
   avatarUrl: string | null;
   context: {
     communityId: string;
-    viewerCanManageCommunity: boolean;
+    viewerCanManageClub: boolean;
     rankContext: {
       leaderboardSize: number;
       currentRank: number | null;
@@ -316,7 +316,7 @@ describe("PlayerProfileView", () => {
       profileResponse: buildProfileResponse({
         context: {
           communityId: "community-1",
-          viewerCanManageCommunity: false,
+          viewerCanManageClub: false,
           rankContext: {
             leaderboardSize: 20,
             currentRank: 4,

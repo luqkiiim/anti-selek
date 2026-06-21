@@ -350,7 +350,7 @@ export function parseCreateSessionRequest(
     balanceMetric: settings.balanceMetric,
     pairingMode: settings.pairingMode,
     communityId,
-    partnerCommunityId:
+    partnerClubId:
       typeof partnerCommunityId === "string" ? partnerCommunityId : null,
     isTest: isTest === true,
     courtCount: courtCount as number,

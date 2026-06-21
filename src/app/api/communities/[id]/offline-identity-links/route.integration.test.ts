@@ -17,8 +17,8 @@ import {
   OfflineIdentityLinkStatus,
   PartnerPreference,
   PlayerGender,
-  SessionCommunityRole,
-  SessionCommunityStatus,
+  SessionClubRole,
+  SessionClubStatus,
   SessionMode,
   SessionStatus,
   SessionType,
@@ -109,7 +109,7 @@ async function createUser({
   });
 }
 
-async function createCommunity({
+async function createClub({
   id,
   name,
   adminId,
@@ -196,12 +196,12 @@ async function createLinkedCommunities(prefix: string) {
   });
   await createUser({ id: haziqAId, name: "Haziq" });
   await createUser({ id: haziqBId, name: "Haziq" });
-  await createCommunity({
+  await createClub({
     id: communityAId,
     name: `${prefix} Community A`,
     adminId: adminAId,
   });
-  await createCommunity({
+  await createClub({
     id: communityBId,
     name: `${prefix} Community B`,
     adminId: adminBId,
@@ -315,7 +315,7 @@ describe("offline identity links", () => {
     const adminAId = `${prefix}-admin-a`;
     const adminBId = `${prefix}-admin-b`;
     const unrelatedAdminId = `${prefix}-admin-c`;
-    const unrelatedCommunityId = `${prefix}-community-c`;
+    const unrelatedClubId = `${prefix}-community-c`;
     const haziqAId = `${prefix}-haziq-a`;
     const haziqBId = `${prefix}-haziq-b`;
 
@@ -324,9 +324,9 @@ describe("offline identity links", () => {
     await createUser({ id: unrelatedAdminId, name: "Admin C", email: `${prefix}-c@example.com`, isClaimed: true });
     await createUser({ id: haziqAId, name: "Haziq" });
     await createUser({ id: haziqBId, name: "Haziq" });
-    await createCommunity({ id: communityAId, name: `${prefix} A`, adminId: adminAId });
-    await createCommunity({ id: communityBId, name: `${prefix} B`, adminId: adminBId });
-    await createCommunity({ id: unrelatedCommunityId, name: `${prefix} C`, adminId: unrelatedAdminId });
+    await createClub({ id: communityAId, name: `${prefix} A`, adminId: adminAId });
+    await createClub({ id: communityBId, name: `${prefix} B`, adminId: adminBId });
+    await createClub({ id: unrelatedClubId, name: `${prefix} C`, adminId: unrelatedAdminId });
     await addMember(communityAId, haziqAId);
     await addMember(communityBId, haziqBId);
 
@@ -425,16 +425,16 @@ describe("offline identity links", () => {
           create: [
             {
               communityId: communityAId,
-              role: SessionCommunityRole.HOST,
-              status: SessionCommunityStatus.ACCEPTED,
+              role: SessionClubRole.HOST,
+              status: SessionClubStatus.ACCEPTED,
               requestedById: adminAId,
               reviewedById: adminAId,
               reviewedAt: new Date(),
             },
             {
               communityId: communityBId,
-              role: SessionCommunityRole.PARTNER,
-              status: SessionCommunityStatus.ACCEPTED,
+              role: SessionClubRole.PARTNER,
+              status: SessionClubStatus.ACCEPTED,
               requestedById: adminAId,
               reviewedById: adminAId,
               reviewedAt: new Date(),

@@ -139,8 +139,8 @@ async function smokeSignedInSurface(context, label, { allowScoreMutation = false
 
   if (smokeCommunityId) {
     await page.goto(`/community/${smokeCommunityId}`, { waitUntil: "networkidle" });
-    await page.getByText("Community hub").first().waitFor({ timeout: 25_000 });
-    log(`${label} community hub loaded`);
+    await page.getByText("Club hub").first().waitFor({ timeout: 25_000 });
+    log(`${label} club hub loaded`);
 
     const hostSetupButton = page
       .getByRole("button", { name: "Open Host Setup" })
@@ -151,10 +151,10 @@ async function smokeSignedInSurface(context, label, { allowScoreMutation = false
       await page.getByText("New tournament").first().waitFor({ timeout: 10_000 });
       log(`${label} host setup opened`);
     } else {
-      log(`${label} host setup skipped; smoke user is not an admin for the community`);
+      log(`${label} host setup skipped; smoke user is not an admin for the club`);
     }
   } else {
-    log(`${label} community smoke skipped; set PRODUCTION_SMOKE_COMMUNITY_ID`);
+    log(`${label} club smoke skipped; set PRODUCTION_SMOKE_COMMUNITY_ID`);
   }
 
   if (smokeSessionCode) {

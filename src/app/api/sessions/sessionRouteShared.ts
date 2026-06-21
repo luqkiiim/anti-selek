@@ -56,7 +56,7 @@ export interface ParsedCreateSessionRequest {
   balanceMetric: SessionBalanceMetric;
   pairingMode: SessionPairingMode;
   communityId: string;
-  partnerCommunityId?: string | null;
+  partnerClubId?: string | null;
   isTest: boolean;
   courtCount: number;
   requestedPlayerIds: string[];

@@ -30,7 +30,7 @@ export interface AdminOnboardingProgressPayload {
   visible: boolean;
   dismissed: boolean;
   completedStepIds: AdminOnboardingStepId[];
-  primaryCommunityId: string | null;
+  primaryClubId: string | null;
   primarySessionCode: string | null;
   steps: AdminOnboardingStep[];
 }
@@ -109,36 +109,36 @@ export function normalizeAdminOnboardingStepIds(values: unknown) {
 export function buildAdminOnboardingProgress({
   completedStepIds,
   dismissedAt,
-  primaryCommunityId,
-  hasAdminCommunity,
+  primaryClubId,
+  hasAdminClub,
   hasScoredMatch,
   hasCompletedSession,
   primarySessionCode,
 }: {
   completedStepIds: AdminOnboardingStepId[];
   dismissedAt: Date | string | null;
-  primaryCommunityId: string | null;
+  primaryClubId: string | null;
   primarySessionCode: string | null;
-  hasAdminCommunity: boolean;
+  hasAdminClub: boolean;
   hasScoredMatch: boolean;
   hasCompletedSession: boolean;
 }): AdminOnboardingProgressPayload {
   const manualCompletions = new Set(completedStepIds);
-  const communityHref = primaryCommunityId ? `/community/${primaryCommunityId}` : "/";
-  const adminPlayersHref = primaryCommunityId
-    ? `/community/${primaryCommunityId}/admin?tab=players`
+  const communityHref = primaryClubId ? `/community/${primaryClubId}` : "/";
+  const adminPlayersHref = primaryClubId
+    ? `/community/${primaryClubId}/admin?tab=players`
     : "/";
-  const adminSettingsHref = primaryCommunityId
-    ? `/community/${primaryCommunityId}/admin?tab=settings`
+  const adminSettingsHref = primaryClubId
+    ? `/community/${primaryClubId}/admin?tab=settings`
     : "/";
-  const hostHref = primaryCommunityId
-    ? `/community/${primaryCommunityId}?tab=host`
+  const hostHref = primaryClubId
+    ? `/community/${primaryClubId}?tab=host`
     : "/";
   const sessionHref = primarySessionCode
     ? `/session/${primarySessionCode}`
     : hostHref;
   const inferredCompletions: Record<AdminOnboardingStepId, boolean> = {
-    "admin-community": hasAdminCommunity,
+    "admin-community": hasAdminClub,
     players: false,
     "host-session": false,
     "session-workflow": false,
@@ -154,14 +154,14 @@ export function buildAdminOnboardingProgress({
       id: "admin-community",
       title: "Open playground",
       detail: "Start in your private tutorial club so practice data stays separate.",
-      actionLabel: primaryCommunityId
+      actionLabel: primaryClubId
         ? "Open tutorial playground"
         : "Open tutorial playground",
       href: communityHref,
-      targetId: primaryCommunityId
+      targetId: primaryClubId
         ? "admin-onboarding-dashboard-community"
         : "admin-onboarding-create-community",
-      coachmark: primaryCommunityId
+      coachmark: primaryClubId
         ? "Open your tutorial playground to practice the admin flow."
         : "Open the tutorial playground to create a safe practice club.",
       manual: false,
@@ -226,7 +226,7 @@ export function buildAdminOnboardingProgress({
       detail: "Restore the playground to the original players, courts, matches, and progress.",
       actionLabel: "Reset playground",
       href: adminSettingsHref,
-      targetId: "admin-onboarding-reset-community",
+      targetId: "admin-onboarding-reset-club",
       coachmark: "Reset the playground whenever you want a fresh practice run.",
       manual: true,
     },
@@ -234,12 +234,12 @@ export function buildAdminOnboardingProgress({
 
   return {
     tutorialKey: ADMIN_ONBOARDING_TUTORIAL_KEY,
-    visible: hasAdminCommunity,
+    visible: hasAdminClub,
     dismissed: dismissedAt !== null,
     completedStepIds: ADMIN_ONBOARDING_STEP_IDS.filter(
       (id) => inferredCompletions[id] || manualCompletions.has(id)
     ),
-    primaryCommunityId,
+    primaryClubId,
     primarySessionCode,
     steps: stepDefinitions.map((step) => {
       const autoCompleted = inferredCompletions[step.id];

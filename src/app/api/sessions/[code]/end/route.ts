@@ -2,12 +2,12 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { serializeAvatarEntity } from "@/lib/avatar";
 import { prisma } from "@/lib/prisma";
-import { getCommunityEloByUserId, withCommunityElo } from "@/lib/communityElo";
+import { getClubEloByUserId, withClubElo } from "@/lib/clubElo";
 import {
-  getAcceptedSessionCommunityIds,
-  getPlayerCommunityBadges,
+  getAcceptedSessionClubIds,
+  getPlayerClubBadges,
   getSessionOperatorMembership,
-  withPlayerCommunityBadges,
+  withPlayerClubBadges,
 } from "@/lib/sessionCollab";
 import { MatchStatus, SessionStatus } from "@/types/enums";
 import { logError, safeErrorResponse } from "@/lib/errors";
@@ -99,22 +99,22 @@ export async function POST(
       });
     });
 
-    const linkedCommunityIds = await getAcceptedSessionCommunityIds(
+    const linkedClubIds = await getAcceptedSessionClubIds(
       prisma,
       updated
     );
     const playerIds = updated.players.map((p) => p.userId);
     const players =
-      linkedCommunityIds.length > 1 && updated.players.length > 0
-        ? withPlayerCommunityBadges(
+      linkedClubIds.length > 1 && updated.players.length > 0
+        ? withPlayerClubBadges(
             updated.players,
-            await getPlayerCommunityBadges(prisma, linkedCommunityIds, playerIds),
+            await getPlayerClubBadges(prisma, linkedClubIds, playerIds),
             updated.communityId
           )
         : updated.communityId && updated.players.length > 0
-          ? withCommunityElo(
+          ? withClubElo(
               updated.players,
-              await getCommunityEloByUserId(updated.communityId, playerIds)
+              await getClubEloByUserId(updated.communityId, playerIds)
             )
           : updated.players;
 
