@@ -23,23 +23,23 @@ export class ClubPlayerMergeError extends Error {
 
   constructor(message: string, statusCode = 400) {
     super(message);
-    this.name = "CommunityPlayerMergeError";
+    this.name = "ClubPlayerMergeError";
     this.statusCode = statusCode;
   }
 }
 
 export async function getMergeAffectedSessionIds(
   tx: Prisma.TransactionClient,
-  communityId: string
+  clubId: string
 ) {
   const sessions = await tx.session.findMany({
     where: {
       OR: [
-        { communityId },
+        { clubId },
         {
-          sessionCommunities: {
+          sessionClubs: {
             some: {
-              communityId,
+              clubId,
               status: {
                 in: [
                   SessionClubStatus.PENDING,
@@ -80,7 +80,7 @@ async function deleteDisposableMergedUser(
       id: userId,
       isClaimed: false,
       email: null,
-      communities: { none: {} },
+      clubMemberships: { none: {} },
       sessionPlayers: { none: {} },
       matchesAsTeam1Player1: { none: {} },
       matchesAsTeam1Player2: { none: {} },
@@ -96,12 +96,12 @@ async function deleteDisposableMergedUser(
 export async function mergeDuplicateUnclaimedClubPlayer(
   tx: Prisma.TransactionClient,
   {
-    communityId,
+    clubId,
     sourceUserId,
     targetUserId,
     reviewerUserId,
   }: {
-    communityId: string;
+    clubId: string;
     sourceUserId: string;
     targetUserId: string;
     reviewerUserId: string;
@@ -113,10 +113,10 @@ export async function mergeDuplicateUnclaimedClubPlayer(
 
   const [sourceMembership, targetUser, targetCurrentMembership] =
     await Promise.all([
-      tx.communityMember.findUnique({
+      tx.clubMember.findUnique({
         where: {
-          communityId_userId: {
-            communityId,
+          clubId_userId: {
+            clubId,
             userId: sourceUserId,
           },
         },
@@ -142,10 +142,10 @@ export async function mergeDuplicateUnclaimedClubPlayer(
           avatarKey: true,
         },
       }),
-      tx.communityMember.findUnique({
+      tx.clubMember.findUnique({
         where: {
-          communityId_userId: {
-            communityId,
+          clubId_userId: {
+            clubId,
             userId: targetUserId,
           },
         },
@@ -178,7 +178,7 @@ export async function mergeDuplicateUnclaimedClubPlayer(
     );
   }
 
-  const affectedSessionIds = await getMergeAffectedSessionIds(tx, communityId);
+  const affectedSessionIds = await getMergeAffectedSessionIds(tx, clubId);
   if (affectedSessionIds.length > 0) {
     const targetSessionPlayer = await tx.sessionPlayer.findFirst({
       where: {
@@ -217,7 +217,7 @@ export async function mergeDuplicateUnclaimedClubPlayer(
 
   const sourceAdjustments = await tx.matchEloAdjustment.findMany({
     where: {
-      communityId,
+      clubId,
       userId: sourceUserId,
     },
     select: { matchId: true },
@@ -225,7 +225,7 @@ export async function mergeDuplicateUnclaimedClubPlayer(
   if (sourceAdjustments.length > 0) {
     const ledgerConflict = await tx.matchEloAdjustment.findFirst({
       where: {
-        communityId,
+        clubId,
         userId: targetUserId,
         matchId: {
           in: sourceAdjustments.map((adjustment) => adjustment.matchId),
@@ -260,10 +260,10 @@ export async function mergeDuplicateUnclaimedClubPlayer(
     });
   }
 
-  await tx.communityMember.update({
+  await tx.clubMember.update({
     where: {
-      communityId_userId: {
-        communityId,
+      clubId_userId: {
+        clubId,
         userId: sourceUserId,
       },
     },
@@ -310,7 +310,7 @@ export async function mergeDuplicateUnclaimedClubPlayer(
 
   await tx.matchEloAdjustment.updateMany({
     where: {
-      communityId,
+      clubId,
       userId: sourceUserId,
     },
     data: { userId: targetUserId },
@@ -318,7 +318,7 @@ export async function mergeDuplicateUnclaimedClubPlayer(
 
   await tx.claimRequest.updateMany({
     where: {
-      communityId,
+      clubId,
       status: ClaimRequestStatus.PENDING,
       OR: [
         { requesterUserId: sourceUserId },

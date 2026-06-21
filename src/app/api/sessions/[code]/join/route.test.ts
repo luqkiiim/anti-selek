@@ -24,7 +24,7 @@ vi.mock("@/lib/auth", () => ({
 
 vi.mock("@/lib/prisma", () => ({
   prisma: {
-    communityMember: {
+    clubMember: {
       findUnique: vi.fn(),
       findMany: vi.fn(),
     },
@@ -84,12 +84,12 @@ describe("join session route", () => {
         id: "player-1",
         isAdmin: false,
         isQuickAccess: true,
-        quickAccessCommunityId: "community-1",
+        quickAccessClubId: "community-1",
       },
     });
     mocks.sessionFindUnique.mockResolvedValue({
       id: "session-1",
-      communityId: "community-1",
+      clubId: "community-1",
       status: SessionStatus.WAITING,
       players: [],
     });
@@ -115,7 +115,7 @@ describe("join session route", () => {
     });
     mocks.sessionFindUnique.mockResolvedValue({
       id: "session-1",
-      communityId: null,
+      clubId: null,
       status: SessionStatus.ACTIVE,
       mode: SessionMode.MEXICANO,
       poolsEnabled: false,
@@ -132,7 +132,7 @@ describe("join session route", () => {
     });
     mocks.sessionUpdate.mockImplementation(async (args) => ({
       id: "session-1",
-      communityId: null,
+      clubId: null,
       courts: [],
       players: [
         {
@@ -189,7 +189,7 @@ describe("join session route", () => {
     });
     mocks.sessionFindUnique.mockResolvedValue({
       id: "session-1",
-      communityId: null,
+      clubId: null,
       status: SessionStatus.WAITING,
       mode: SessionMode.MEXICANO,
       poolsEnabled: false,
@@ -203,7 +203,7 @@ describe("join session route", () => {
     });
     mocks.sessionUpdate.mockImplementation(async (args) => ({
       id: "session-1",
-      communityId: null,
+      clubId: null,
       courts: [],
       players: [
         {

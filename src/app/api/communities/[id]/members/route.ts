@@ -36,19 +36,19 @@ function isValidClubPlayerStatus(
 }
 
 async function findDuplicateUnclaimedMemberName({
-  communityId,
+  clubId,
   name,
   excludeUserId,
 }: {
-  communityId: string;
+  clubId: string;
   name: string;
   excludeUserId?: string;
 }) {
   const lookupName = normalizeNameLookupKey(name);
   if (!lookupName) return null;
 
-  const members = await prisma.communityMember.findMany({
-    where: { communityId },
+  const members = await prisma.clubMember.findMany({
+    where: { clubId },
     include: {
       user: {
         select: {
@@ -97,32 +97,32 @@ export async function GET(
 
     if (invalidTargetLimitResponse) return invalidTargetLimitResponse;
 
-    const [membership, community] = await Promise.all([
-      prisma.communityMember.findUnique({
+    const [membership, club] = await Promise.all([
+      prisma.clubMember.findUnique({
         where: {
-          communityId_userId: {
-            communityId: id,
+          clubId_userId: {
+            clubId: id,
             userId: session.user.id,
           },
         },
       }),
-      prisma.community.findUnique({
+      prisma.club.findUnique({
         where: { id },
         select: { createdById: true },
       }),
     ]);
 
     if (
-      !community ||
+      !club ||
       (!membership &&
-        community.createdById !== session.user.id &&
+        club.createdById !== session.user.id &&
         !session.user.isAdmin)
     ) {
       return invalidTargetResponse(request, "api:communities:id:members");
     }
 
-    const members = await prisma.communityMember.findMany({
-      where: { communityId: id },
+    const members = await prisma.clubMember.findMany({
+      where: { clubId: id },
       include: {
         user: {
           select: {
@@ -148,11 +148,11 @@ export async function GET(
         session: {
           isTest: false,
           OR: [
-            { communityId: id },
+            { clubId: id },
             {
-              sessionCommunities: {
+              sessionClubs: {
                 some: {
-                  communityId: id,
+                  clubId: id,
                   status: "ACCEPTED",
                 },
               },
@@ -178,7 +178,7 @@ export async function GET(
       statsByUserId.set(member.user.id, { wins: 0, losses: 0 });
     }
     const resolveStatUserId = await getClubStatUserResolver(prisma, {
-      communityId: id,
+      clubId: id,
       memberUserIds: members.map((member) => member.user.id),
     });
 
@@ -236,7 +236,7 @@ export async function GET(
           wins: statsByUserId.get(m.user.id)?.wins ?? 0,
           losses: statsByUserId.get(m.user.id)?.losses ?? 0,
           role: m.role,
-          isOwner: m.user.id === community.createdById,
+          isOwner: m.user.id === club.createdById,
           offlineIdentityId: offlineIdentityInfo?.offlineIdentityId ?? null,
           linkedClubBadges:
             offlineIdentityInfo?.linkedClubBadges ?? [],
@@ -279,7 +279,7 @@ export async function POST(
     if (invalidTargetLimitResponse) return invalidTargetLimitResponse;
 
     const adminAccess = await getClubAdminAccess(prisma, {
-      communityId: id,
+      clubId: id,
       userId: session.user.id,
       isGlobalAdmin: !!session.user.isAdmin,
     });
@@ -351,7 +351,7 @@ export async function POST(
     }
     if (!normalizedEmail) {
       const duplicate = await findDuplicateUnclaimedMemberName({
-        communityId: id,
+        clubId: id,
         name: normalizedName,
       });
       if (duplicate) {
@@ -483,16 +483,16 @@ export async function POST(
       });
     }
 
-    const membership = await prisma.communityMember.upsert({
+    const membership = await prisma.clubMember.upsert({
       where: {
-        communityId_userId: {
-          communityId: id,
+        clubId_userId: {
+          clubId: id,
           userId: user.id,
         },
       },
       update: {},
       create: {
-        communityId: id,
+        clubId: id,
         userId: user.id,
         role: "MEMBER",
         status: isValidClubPlayerStatus(status)

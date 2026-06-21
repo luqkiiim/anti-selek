@@ -16,14 +16,14 @@ interface PendingClubAction {
 }
 
 export function useClubAdminClubActions({
-  communityId,
+  clubId,
   club,
   refreshClubData,
   router,
   setError,
   setSuccess,
 }: {
-  communityId: string;
+  clubId: string;
   club: ClubAdminClub | null;
   refreshClubData: () => Promise<void>;
   router: ClubAdminRouter;
@@ -116,7 +116,7 @@ export function useClubAdminClubActions({
         body.password = nextPassword;
       }
 
-      const res = await fetch(`/api/communities/${communityId}`, {
+      const res = await fetch(`/api/clubs/${clubId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
@@ -169,7 +169,7 @@ export function useClubAdminClubActions({
       try {
         const res = club?.isTutorial
           ? await fetch("/api/tutorial-playground/reset", { method: "POST" })
-          : await fetch(`/api/communities/${communityId}/reset`, {
+          : await fetch(`/api/clubs/${clubId}/reset`, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ confirmation: "RESET" }),
@@ -209,7 +209,7 @@ export function useClubAdminClubActions({
 
     setDeletingClub(true);
     try {
-      const res = await fetch(`/api/communities/${communityId}`, {
+      const res = await fetch(`/api/clubs/${clubId}`, {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ confirmation: "DELETE" }),
@@ -243,7 +243,7 @@ export function useClubAdminClubActions({
 
     try {
       const res = await fetch(
-        `/api/communities/${communityId}/claim-requests/${claimRequest.id}`,
+        `/api/clubs/${clubId}/claim-requests/${claimRequest.id}`,
         {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },

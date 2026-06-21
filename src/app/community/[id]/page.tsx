@@ -54,10 +54,10 @@ const baseSectionTabs: Array<{
 ];
 
 function getClubSectionHref(
-  communityId: string,
+  clubId: string,
   section: ClubPageSection
 ) {
-  return `/community/${communityId}?tab=${section}`;
+  return `/club/${clubId}?tab=${section}`;
 }
 
 function getRequestedClubSection(
@@ -102,7 +102,7 @@ export default function ClubPage() {
   >(null);
   const {
     status,
-    communityId,
+    clubId,
     openModeLabel,
     mixedModeLabel,
     user,
@@ -393,11 +393,11 @@ export default function ClubPage() {
       pendingClubSectionRef.current = section;
       switchSection(section);
       scrollClubPagerToSection(section, behavior);
-      router.replace(getClubSectionHref(communityId, section), {
+      router.replace(getClubSectionHref(clubId, section), {
         scroll: false,
       });
     },
-    [communityId, router, scrollClubPagerToSection, switchSection]
+    [clubId, router, scrollClubPagerToSection, switchSection]
   );
 
   const switchClubSection = useCallback(
@@ -411,11 +411,11 @@ export default function ClubPage() {
     exitHostMode();
     pendingClubSectionRef.current = lastNonHostSection;
     scrollClubPagerToSection(lastNonHostSection, "smooth");
-    router.replace(getClubSectionHref(communityId, lastNonHostSection), {
+    router.replace(getClubSectionHref(clubId, lastNonHostSection), {
       scroll: false,
     });
   }, [
-    communityId,
+    clubId,
     exitHostMode,
     lastNonHostSection,
     router,
@@ -612,7 +612,7 @@ export default function ClubPage() {
   }, [activeTournaments, pastTournaments, router, testSessions]);
 
   useEffect(() => {
-    if (status === "loading" || loading || !club || !communityId) {
+    if (status === "loading" || loading || !club || !clubId) {
       return;
     }
 
@@ -632,7 +632,7 @@ export default function ClubPage() {
     }
 
     if (requestedTab && !requestedSection) {
-      router.replace(getClubSectionHref(communityId, "overview"), {
+      router.replace(getClubSectionHref(clubId, "overview"), {
         scroll: false,
       });
     }
@@ -644,7 +644,7 @@ export default function ClubPage() {
     activeSection,
     canManageClub,
     club,
-    communityId,
+    clubId,
     loading,
     requestedTab,
     router,
@@ -811,14 +811,14 @@ export default function ClubPage() {
     />
   );
   const profilePanel = (
-    <ClubProfilePanel userId={user?.id} communityId={communityId} />
+    <ClubProfilePanel userId={user?.id} clubId={clubId} />
   );
   const tournamentsPanel = (
     <div className="space-y-8">
       <CurrentTournamentsPanel
         tournaments={activeTournaments}
         currentUserId={user?.id}
-        currentClubId={communityId}
+        currentClubId={clubId}
         canManageClub={canAdminClub}
         onJoinTournament={joinTournament}
         onReviewCollabTournament={reviewCollabTournament}
@@ -843,7 +843,7 @@ export default function ClubPage() {
       title="Leaderboard"
       subtitle="Full club rankings"
       players={leaderboard}
-      communityId={communityId}
+      clubId={clubId}
       action={
         <span className="app-chip app-chip-neutral">
           {leaderboard.length} players
@@ -905,7 +905,7 @@ export default function ClubPage() {
                 ) : null}
                 {canAdminClub ? (
                   <Link
-                    href={`/community/${communityId}/admin`}
+                    href={`/club/${clubId}/admin`}
                     className="app-button-secondary px-3 py-2 text-sm"
                     data-tutorial-target={
                       isTutorialPlayground
@@ -1101,7 +1101,7 @@ export default function ClubPage() {
       <ClubBottomTabs
         activeTab={activeSection}
         canManageClub={canManageClub}
-        communityId={communityId}
+        clubId={clubId}
         currentUserId={user?.id}
         onSelect={switchClubSection}
       />

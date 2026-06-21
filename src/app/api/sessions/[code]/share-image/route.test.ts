@@ -80,11 +80,11 @@ function createSessionData({
   return {
     id: "session-1",
     code: "ABC123",
-    communityId: "community-1",
+    clubId: "community-1",
     name: "Badminton 29/5/26",
     type: SessionType.POINTS,
     status,
-    community: {
+    club: {
       id: "community-1",
       name: communityIsTutorial
         ? "Tutorial playground u1"
@@ -92,11 +92,11 @@ function createSessionData({
       isTutorial: communityIsTutorial,
       tutorialOwnerId: communityIsTutorial ? "viewer" : null,
     },
-    sessionCommunities: [
+    sessionClubs: [
       {
         role: "HOST",
         status: "ACCEPTED",
-        community: {
+        club: {
           id: "community-1",
           name: communityIsTutorial
             ? "Tutorial playground u1"

@@ -19,7 +19,7 @@ vi.mock("@/lib/prisma", () => ({
     match: {
       findMany: mocks.matchFindMany,
     },
-    communityMember: {
+    clubMember: {
       findUnique: vi.fn(),
       findMany: vi.fn(),
     },

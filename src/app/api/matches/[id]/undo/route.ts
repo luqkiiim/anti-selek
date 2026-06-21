@@ -50,7 +50,7 @@ export async function POST(
         status: true,
         session: {
           select: {
-            communityId: true,
+            clubId: true,
             status: true,
           },
         },
@@ -76,7 +76,7 @@ export async function POST(
     }
 
     const operatorMembership = await getSessionOperatorMembership(prisma, {
-      session: { id: match.sessionId, communityId: match.session.communityId },
+      session: { id: match.sessionId, clubId: match.session.clubId },
       userId: session.user.id,
       acceptedOnly: true,
     });

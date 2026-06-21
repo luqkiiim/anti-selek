@@ -44,10 +44,10 @@ export async function PATCH(
       );
     }
 
-    const { id: communityId, requestId } = await params;
+    const { id: clubId, requestId } = await params;
     if (
-      typeof communityId !== "string" ||
-      communityId.length === 0 ||
+      typeof clubId !== "string" ||
+      clubId.length === 0 ||
       typeof requestId !== "string" ||
       requestId.length === 0
     ) {
@@ -62,7 +62,7 @@ export async function PATCH(
 
     const canManage = await isClubAdmin(
       prisma,
-      communityId,
+      clubId,
       session.user.id,
       !!session.user.isAdmin
     );
@@ -89,7 +89,7 @@ export async function PATCH(
     const reviewed = await prisma.$transaction((tx) =>
       reviewOfflineIdentityLinkRequest(tx, {
         requestId,
-        targetCommunityId: communityId,
+        targetClubId: clubId,
         reviewerUserId: session.user.id,
         status,
       })
@@ -132,10 +132,10 @@ export async function DELETE(
       );
     }
 
-    const { id: communityId, requestId } = await params;
+    const { id: clubId, requestId } = await params;
     if (
-      typeof communityId !== "string" ||
-      communityId.length === 0 ||
+      typeof clubId !== "string" ||
+      clubId.length === 0 ||
       typeof requestId !== "string" ||
       requestId.length === 0
     ) {
@@ -150,7 +150,7 @@ export async function DELETE(
 
     const canManage = await isClubAdmin(
       prisma,
-      communityId,
+      clubId,
       session.user.id,
       !!session.user.isAdmin
     );
@@ -167,16 +167,16 @@ export async function DELETE(
         select: {
           id: true,
           offlineIdentityId: true,
-          sourceCommunityId: true,
-          targetCommunityId: true,
+          sourceClubId: true,
+          targetClubId: true,
           status: true,
         },
       });
 
       if (
         !link ||
-        (link.sourceCommunityId !== communityId &&
-          link.targetCommunityId !== communityId)
+        (link.sourceClubId !== clubId &&
+          link.targetClubId !== clubId)
       ) {
         throw new OfflineIdentityError("Offline identity link request not found", 404);
       }

@@ -28,7 +28,7 @@ interface ClubAdminRouter {
 }
 
 export function useClubAdminPlayerActions({
-  communityId,
+  clubId,
   currentUserId,
   players,
   setPlayers,
@@ -37,7 +37,7 @@ export function useClubAdminPlayerActions({
   setError,
   setSuccess,
 }: {
-  communityId: string;
+  clubId: string;
   currentUserId?: string | null;
   players: ClubAdminPlayer[];
   setPlayers: Dispatch<SetStateAction<ClubAdminPlayer[]>>;
@@ -137,7 +137,7 @@ export function useClubAdminPlayerActions({
     setSuccess("");
 
     try {
-      const res = await fetch(`/api/communities/${communityId}/members`, {
+      const res = await fetch(`/api/clubs/${clubId}/members`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -182,7 +182,7 @@ export function useClubAdminPlayerActions({
     setSuccess("");
 
     try {
-      const res = await fetch(`/api/communities/${communityId}/members/${player.id}`, {
+      const res = await fetch(`/api/clubs/${clubId}/members/${player.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: nextName }),
@@ -213,7 +213,7 @@ export function useClubAdminPlayerActions({
     setSuccess("");
 
     try {
-      const res = await fetch(`/api/communities/${communityId}/members/${player.id}`, {
+      const res = await fetch(`/api/clubs/${clubId}/members/${player.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ elo: nextRating }),
@@ -264,7 +264,7 @@ export function useClubAdminPlayerActions({
     setSuccess("");
 
     try {
-      const res = await fetch(`/api/communities/${communityId}/members/${player.id}`, {
+      const res = await fetch(`/api/clubs/${clubId}/members/${player.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ role }),
@@ -322,7 +322,7 @@ export function useClubAdminPlayerActions({
     if (kind === "remove") {
       setRemovingPlayer(true);
       try {
-        const res = await fetch(`/api/communities/${communityId}/members/${player.id}`, {
+        const res = await fetch(`/api/clubs/${clubId}/members/${player.id}`, {
           method: "DELETE",
         });
         const data = await safeJson(res);
@@ -339,7 +339,7 @@ export function useClubAdminPlayerActions({
         setPendingPlayerAction(null);
         closePlayerEditor();
         if (isSelfRemoval) {
-          router.replace(`/community/${communityId}`);
+          router.replace(`/club/${clubId}`);
           return true;
         }
 
@@ -358,7 +358,7 @@ export function useClubAdminPlayerActions({
 
       setSavingRole(true);
       try {
-        const res = await fetch(`/api/communities/${communityId}/members/${player.id}`, {
+        const res = await fetch(`/api/clubs/${clubId}/members/${player.id}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ role: pendingPlayerAction.role }),
@@ -388,7 +388,7 @@ export function useClubAdminPlayerActions({
 
     setSavingRole(true);
     try {
-      const res = await fetch(`/api/communities/${communityId}/members/${player.id}`, {
+      const res = await fetch(`/api/clubs/${clubId}/members/${player.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ role: "ADMIN" }),
@@ -434,7 +434,7 @@ export function useClubAdminPlayerActions({
 
     try {
       const res = await fetch(
-        `/api/communities/${communityId}/members/${passwordResetTarget.id}/password`,
+        `/api/clubs/${clubId}/members/${passwordResetTarget.id}/password`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -479,7 +479,7 @@ export function useClubAdminPlayerActions({
     setSuccess("");
 
     try {
-      const res = await fetch(`/api/communities/${communityId}/members/${player.id}`, {
+      const res = await fetch(`/api/clubs/${clubId}/members/${player.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(updates),
@@ -537,7 +537,7 @@ export function useClubAdminPlayerActions({
     setError("");
     setSuccess("");
 
-    const { avatarUrl } = await uploadUserAvatar(player.id, file, communityId);
+    const { avatarUrl } = await uploadUserAvatar(player.id, file, clubId);
     setPlayers((prev) =>
       prev.map((item) =>
         item.id === player.id
@@ -555,7 +555,7 @@ export function useClubAdminPlayerActions({
     setError("");
     setSuccess("");
 
-    await deleteUserAvatar(player.id, communityId);
+    await deleteUserAvatar(player.id, clubId);
     setPlayers((prev) =>
       prev.map((item) =>
         item.id === player.id

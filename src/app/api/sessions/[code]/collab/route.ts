@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { logError, safeErrorResponse } from "@/lib/errors";
+import { withLegacyClubAliases } from "@/lib/clubContractAliases";
 import { prisma } from "@/lib/prisma";
 import {
   checkInvalidTargetRateLimit,
@@ -67,15 +68,15 @@ export async function PATCH(
       select: {
         id: true,
         status: true,
-        sessionCommunities: {
+        sessionClubs: {
           where: {
             role: SessionClubRole.PARTNER,
             status: SessionClubStatus.PENDING,
           },
           select: {
             id: true,
-            communityId: true,
-            community: {
+            clubId: true,
+            club: {
               select: { id: true, name: true },
             },
           },
@@ -83,15 +84,15 @@ export async function PATCH(
       },
     });
 
-    if (!sessionData || sessionData.sessionCommunities.length === 0) {
+    if (!sessionData || sessionData.sessionClubs.length === 0) {
       return invalidTargetResponse(request, "api:sessions:code:collab");
     }
 
-    const partnerLink = sessionData.sessionCommunities[0];
-    const membership = await prisma.communityMember.findUnique({
+    const partnerLink = sessionData.sessionClubs[0];
+    const membership = await prisma.clubMember.findUnique({
       where: {
-        communityId_userId: {
-          communityId: partnerLink.communityId,
+        clubId_userId: {
+          clubId: partnerLink.clubId,
           userId: session.user.id,
         },
       },
@@ -102,7 +103,7 @@ export async function PATCH(
       return invalidTargetResponse(request, "api:sessions:code:collab");
     }
 
-    const updated = await prisma.sessionCommunity.update({
+    const updated = await prisma.sessionClub.update({
       where: { id: partnerLink.id },
       data: {
         status,
@@ -110,18 +111,18 @@ export async function PATCH(
         reviewedAt: new Date(),
       },
       include: {
-        community: { select: { id: true, name: true } },
+        club: { select: { id: true, name: true } },
       },
     });
 
-    return NextResponse.json({
+    return NextResponse.json(withLegacyClubAliases({
       id: updated.id,
-      communityId: updated.communityId,
-      communityName: updated.community.name,
+      clubId: updated.clubId,
+      clubName: updated.club.name,
       role: updated.role,
       status: updated.status,
       reviewedAt: updated.reviewedAt,
-    });
+    }));
   } catch (error) {
     logError("Review collab session error", error);
     return safeErrorResponse();

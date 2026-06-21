@@ -78,14 +78,14 @@ async function clearDatabase() {
   await prisma.match.deleteMany();
   await prisma.court.deleteMany();
   await prisma.sessionPlayer.deleteMany();
-  await prisma.sessionCommunity.deleteMany();
+  await prisma.sessionClub.deleteMany();
   await prisma.session.deleteMany();
   await prisma.claimRequest.deleteMany();
   await prisma.offlineIdentityLinkRequest.deleteMany();
   await prisma.offlineIdentityMember.deleteMany();
   await prisma.offlineIdentity.deleteMany();
-  await prisma.communityMember.deleteMany();
-  await prisma.community.deleteMany();
+  await prisma.clubMember.deleteMany();
+  await prisma.club.deleteMany();
   await prisma.user.deleteMany();
 }
 
@@ -96,14 +96,14 @@ function expectSeededNames(expectFn: typeof expect, names: string[]) {
   expectFn(names.every((name) => name.length < 9)).toBe(true);
 }
 
-async function buildSeededClubPulse(communityId: string) {
+async function buildSeededClubPulse(clubId: string) {
   const [members, sessions, completedMatches] = await Promise.all([
-    prisma.communityMember.findMany({
-      where: { communityId },
+    prisma.clubMember.findMany({
+      where: { clubId },
       include: { user: { select: { id: true, name: true } } },
     }),
     prisma.session.findMany({
-      where: { communityId },
+      where: { clubId },
       include: {
         players: { include: { user: { select: { id: true, name: true } } } },
       },
@@ -111,7 +111,7 @@ async function buildSeededClubPulse(communityId: string) {
     prisma.match.findMany({
       where: {
         status: MatchStatus.COMPLETED,
-        session: { communityId, isTest: false },
+        session: { clubId, isTest: false },
       },
       include: {
         team1User1: { select: { id: true, name: true } },
@@ -228,15 +228,15 @@ describe("tutorial playground service", () => {
 
     const summary = await tutorialPlayground.ensureTutorialPlayground(owner.id);
 
-    expect(summary.communityName).toBe(
+    expect(summary.clubName).toBe(
       tutorialPlayground.TUTORIAL_PLAYGROUND_LABEL
     );
     expect(summary.playersCount).toBe(13);
     expect(summary.courtsCount).toBe(2);
     expect(summary.sessionCode).toEqual(expect.any(String));
 
-    const community = await prisma.community.findUnique({
-      where: { id: summary.communityId },
+    const club = await prisma.club.findUnique({
+      where: { id: summary.clubId },
       include: {
         members: {
           include: { user: true },
@@ -252,16 +252,16 @@ describe("tutorial playground service", () => {
       },
     });
 
-    expect(community?.isTutorial).toBe(true);
-    expect(community?.tutorialOwnerId).toBe(owner.id);
-    expect(community?.name).not.toBe(summary.communityName);
-    expect(community?.name).toContain(summary.communityName);
+    expect(club?.isTutorial).toBe(true);
+    expect(club?.tutorialOwnerId).toBe(owner.id);
+    expect(club?.name).not.toBe(summary.clubName);
+    expect(club?.name).toContain(summary.clubName);
     expect(
-      community?.members.find((member) => member.userId === owner.id)?.role
+      club?.members.find((member) => member.userId === owner.id)?.role
     ).toBe("ADMIN");
 
     const fakeMembers =
-      community?.members.filter((member) => member.userId !== owner.id) ?? [];
+      club?.members.filter((member) => member.userId !== owner.id) ?? [];
     expect(fakeMembers).toHaveLength(13);
     expectSeededNames(
       expect,
@@ -273,7 +273,7 @@ describe("tutorial playground service", () => {
       )
     ).toBe(true);
 
-    const practiceSession = community?.sessions.find(
+    const practiceSession = club?.sessions.find(
       (session) => session.isTest
     );
     expect(practiceSession?.status).toBe(SessionStatus.ACTIVE);
@@ -290,7 +290,7 @@ describe("tutorial playground service", () => {
     ).toHaveLength(2);
 
     const completedPracticeSessions =
-      community?.sessions.filter(
+      club?.sessions.filter(
         (session) =>
           !session.isTest && session.status === SessionStatus.COMPLETED
       ) ?? [];
@@ -305,12 +305,12 @@ describe("tutorial playground service", () => {
     ).toHaveLength(18);
     expect(
       await prisma.matchEloAdjustment.count({
-        where: { communityId: summary.communityId },
+        where: { clubId: summary.clubId },
       })
     ).toBe(72);
 
     const rankedNames =
-      community?.members
+      club?.members
         .filter((member) => member.userId !== owner.id)
         .slice()
         .sort((left, right) => right.elo - left.elo)
@@ -324,7 +324,7 @@ describe("tutorial playground service", () => {
       "Siti",
     ]);
 
-    const pulse = await buildSeededClubPulse(summary.communityId);
+    const pulse = await buildSeededClubPulse(summary.clubId);
     expect(pulse.metrics.completedTournaments).toBe(3);
     expect(pulse.metrics.recentMatches).toBe(18);
     expect(pulse.hotPlayers.length).toBeGreaterThan(0);
@@ -349,9 +349,9 @@ describe("tutorial playground service", () => {
     const owner = await createOwner();
     const firstSummary = await tutorialPlayground.ensureTutorialPlayground(owner.id);
     const originalFakeUserIds = (
-      await prisma.communityMember.findMany({
+      await prisma.clubMember.findMany({
         where: {
-          communityId: firstSummary.communityId,
+          clubId: firstSummary.clubId,
           userId: { not: owner.id },
         },
         select: { userId: true },
@@ -368,11 +368,11 @@ describe("tutorial playground service", () => {
 
     const resetSummary = await tutorialPlayground.resetTutorialPlayground(owner.id);
 
-    expect(resetSummary.communityId).toBe(firstSummary.communityId);
+    expect(resetSummary.clubId).toBe(firstSummary.clubId);
     expect(resetSummary.sessionCode).not.toBe(firstSummary.sessionCode);
     expect(resetSummary.playersCount).toBe(13);
     expect(resetSummary.courtsCount).toBe(2);
-    expect(resetSummary.communityName).toBe(
+    expect(resetSummary.clubName).toBe(
       tutorialPlayground.TUTORIAL_PLAYGROUND_LABEL
     );
     expect(
@@ -392,9 +392,9 @@ describe("tutorial playground service", () => {
     ).toHaveLength(0);
 
     const fakeNames = (
-      await prisma.communityMember.findMany({
+      await prisma.clubMember.findMany({
         where: {
-          communityId: resetSummary.communityId,
+          clubId: resetSummary.clubId,
           userId: { not: owner.id },
         },
         include: { user: true },
@@ -406,7 +406,7 @@ describe("tutorial playground service", () => {
     expect(
       await prisma.session.count({
         where: {
-          communityId: resetSummary.communityId,
+          clubId: resetSummary.clubId,
           isTest: false,
           status: SessionStatus.COMPLETED,
         },
@@ -417,7 +417,7 @@ describe("tutorial playground service", () => {
         where: {
           status: MatchStatus.COMPLETED,
           session: {
-            communityId: resetSummary.communityId,
+            clubId: resetSummary.clubId,
             isTest: false,
           },
         },

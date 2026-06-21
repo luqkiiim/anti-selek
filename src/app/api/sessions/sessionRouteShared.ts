@@ -55,7 +55,7 @@ export interface ParsedCreateSessionRequest {
   matchmakingStyle: SessionMatchmakingStyle;
   balanceMetric: SessionBalanceMetric;
   pairingMode: SessionPairingMode;
-  communityId: string;
+  clubId: string;
   partnerClubId?: string | null;
   isTest: boolean;
   courtCount: number;

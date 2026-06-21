@@ -18,8 +18,8 @@ export async function safeJson(res: Response) {
   }
 }
 
-export async function fetchClubPageSnapshot(communityId: string) {
-  const snapshotRes = await fetch(`/api/communities/${communityId}`);
+export async function fetchClubPageSnapshot(clubId: string) {
+  const snapshotRes = await fetch(`/api/clubs/${clubId}`);
   const snapshotData = await safeJson(snapshotRes);
   if (!snapshotRes.ok) {
     throw new Error(snapshotData.error || "Failed to load club");
@@ -29,17 +29,17 @@ export async function fetchClubPageSnapshot(communityId: string) {
     user: snapshotData.viewer
       ? (snapshotData.viewer as ClubPageUser)
       : null,
-    club: snapshotData.community
-      ? (snapshotData.community as ClubPageClub)
+    club: snapshotData.club
+      ? (snapshotData.club as ClubPageClub)
       : null,
-    clubMembers: Array.isArray(snapshotData.communityMembers)
-      ? (snapshotData.communityMembers as ClubPageMember[])
+    clubMembers: Array.isArray(snapshotData.clubMembers)
+      ? (snapshotData.clubMembers as ClubPageMember[])
       : [],
     sessions: Array.isArray(snapshotData.sessions)
       ? (snapshotData.sessions as ClubPageSession[])
       : [],
-    clubPulse: snapshotData.communityPulse
-      ? (snapshotData.communityPulse as ClubPagePulse)
+    clubPulse: snapshotData.clubPulse
+      ? (snapshotData.clubPulse as ClubPagePulse)
       : null,
     claimRequests: Array.isArray(snapshotData.claimRequests)
       ? (snapshotData.claimRequests as ClubClaimRequest[])

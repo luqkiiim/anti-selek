@@ -28,9 +28,9 @@ export async function POST(
       );
     }
 
-    const { id: communityId, userId } = await params;
+    const { id: clubId, userId } = await params;
 
-    if (typeof communityId !== "string" || communityId.length === 0 || typeof userId !== "string" || userId.length === 0) {
+    if (typeof clubId !== "string" || clubId.length === 0 || typeof userId !== "string" || userId.length === 0) {
       return NextResponse.json({ error: "Invalid request parameters" }, { status: 400 });
     }
 
@@ -59,10 +59,10 @@ export async function POST(
       );
     }
 
-    const membership = await prisma.communityMember.findUnique({
+    const membership = await prisma.clubMember.findUnique({
       where: {
-        communityId_userId: {
-          communityId,
+        clubId_userId: {
+          clubId,
           userId,
         },
       },
@@ -106,8 +106,8 @@ export async function POST(
       outcome: "success",
       request,
       scope: {
-        communityId,
-        route: "/api/communities/[id]/members/[userId]/password",
+        clubId,
+        route: "/api/clubs/[id]/members/[userId]/password",
       },
       target: {
         id: membership.user.id,

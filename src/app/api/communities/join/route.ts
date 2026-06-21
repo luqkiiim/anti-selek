@@ -6,6 +6,11 @@ import { isGlobalAdminEmail } from "@/lib/globalAdmin";
 import { logError, safeErrorResponse } from "@/lib/errors";
 import { rateLimit } from "@/lib/rateLimit";
 import {
+  ClubContractAliasConflictError,
+  readAliasedValue,
+  withLegacyClubAliases,
+} from "@/lib/clubContractAliases";
+import {
   getQuickAccessDeniedMessage,
   isQuickAccessSession,
   normalizeNameLookupKey,
@@ -34,7 +39,23 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
     }
 
-    const { name, password } = body as { name?: unknown; password?: unknown };
+    const bodyRecord = body as Record<string, unknown>;
+    let aliasedName: unknown;
+    try {
+      aliasedName = readAliasedValue(
+        bodyRecord,
+        "clubName",
+        "communityName",
+        "club name"
+      );
+    } catch (error) {
+      if (error instanceof ClubContractAliasConflictError) {
+        return NextResponse.json({ error: error.message }, { status: 400 });
+      }
+      throw error;
+    }
+    const { password } = bodyRecord as { password?: unknown };
+    const name = aliasedName ?? bodyRecord.name;
     if (typeof name !== "string" || !name.trim()) {
       return NextResponse.json({ error: "Club name is required" }, { status: 400 });
     }
@@ -44,8 +65,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Club name is required" }, { status: 400 });
     }
 
-    const matchingCommunities = (
-      await prisma.community.findMany({
+    const matchingClubs = (
+      await prisma.club.findMany({
         select: {
           id: true,
           name: true,
@@ -55,26 +76,26 @@ export async function POST(request: Request) {
         },
       })
     ).filter(
-      (community) =>
-        !community.isTutorial &&
-        normalizeNameLookupKey(community.name) === normalizedLookupName
+      (club) =>
+        !club.isTutorial &&
+        normalizeNameLookupKey(club.name) === normalizedLookupName
     );
 
-    if (matchingCommunities.length > 1) {
+    if (matchingClubs.length > 1) {
       return NextResponse.json({ error: "Club name is ambiguous" }, { status: 409 });
     }
 
-    const community = matchingCommunities[0] ?? null;
+    const club = matchingClubs[0] ?? null;
 
-    if (!community) {
+    if (!club) {
       return NextResponse.json({ error: "Club not found" }, { status: 404 });
     }
 
-    if (community.isPasswordProtected) {
+    if (club.isPasswordProtected) {
       if (typeof password !== "string" || password.length === 0) {
         return NextResponse.json({ error: "Password is required" }, { status: 400 });
       }
-      const ok = await bcrypt.compare(password, community.passwordHash || "");
+      const ok = await bcrypt.compare(password, club.passwordHash || "");
       if (!ok) {
         return NextResponse.json({ error: "Invalid password" }, { status: 403 });
       }
@@ -82,22 +103,22 @@ export async function POST(request: Request) {
     const shouldBeAdmin =
       !!session.user.isAdmin || isGlobalAdminEmail(session.user.email ?? null);
 
-    const membership = await prisma.communityMember.upsert({
+    const membership = await prisma.clubMember.upsert({
       where: {
-        communityId_userId: {
-          communityId: community.id,
+        clubId_userId: {
+          clubId: club.id,
           userId: session.user.id,
         },
       },
       update: shouldBeAdmin ? { role: "ADMIN" } : {},
       create: {
-        communityId: community.id,
+        clubId: club.id,
         userId: session.user.id,
         role: shouldBeAdmin ? "ADMIN" : "MEMBER",
       },
       select: {
         role: true,
-        community: {
+        club: {
           select: {
             id: true,
             name: true,
@@ -108,13 +129,15 @@ export async function POST(request: Request) {
       },
     });
 
-    return NextResponse.json({
-      id: membership.community.id,
-      name: membership.community.name,
+    return NextResponse.json(withLegacyClubAliases({
+      id: membership.club.id,
+      name: membership.club.name,
+      clubId: membership.club.id,
+      clubName: membership.club.name,
       role: membership.role,
-      isPasswordProtected: membership.community.isPasswordProtected,
-      createdAt: membership.community.createdAt,
-    });
+      isPasswordProtected: membership.club.isPasswordProtected,
+      createdAt: membership.club.createdAt,
+    }));
   } catch (error) {
     logError("Join club error", error);
     return safeErrorResponse();

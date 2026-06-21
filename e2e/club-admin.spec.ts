@@ -1,12 +1,12 @@
 import { expect, test } from "@playwright/test";
 import {
-  adminControlsCommunityId,
-  claimCommunityId,
+  adminControlsClubId,
+  claimClubId,
   claimPlaceholderUserId,
   claimRequesterUserId,
   createClaimRequest,
   readClubClaimRequestsSnapshot,
-  hostCommunityId,
+  hostClubId,
   readClubMembersSnapshot,
   signIn,
   signInAsAdmin,
@@ -17,7 +17,7 @@ test("admin can create and open a club player profile from admin page", async ({
   page,
 }) => {
   await signInAsAdmin(page);
-  await page.goto(`/community/${hostCommunityId}/admin`);
+  await page.goto(`/club/${hostClubId}/admin`);
 
   await expect(page.getByText("Club admin")).toBeVisible();
   await expect(page.getByRole("heading", { name: "E2E Host Club" })).toBeVisible();
@@ -32,7 +32,7 @@ test("admin can create and open a club player profile from admin page", async ({
 
   await expect
     .poll(async () => {
-      const members = await readClubMembersSnapshot(page, hostCommunityId);
+      const members = await readClubMembersSnapshot(page, hostClubId);
       return members.some((member) => member.name === "Admin Page Placeholder");
     })
     .toBe(true);
@@ -65,7 +65,7 @@ test("admin can remove a player through the admin confirmation modal", async ({
   page,
 }) => {
   await signInAsAdmin(page);
-  await page.goto(`/community/${adminControlsCommunityId}/admin`);
+  await page.goto(`/club/${adminControlsClubId}/admin`);
 
   await page.getByPlaceholder("Search players by name or email").fill(
     "Admin Control Remove"
@@ -88,7 +88,7 @@ test("admin can remove a player through the admin confirmation modal", async ({
     .poll(async () => {
       const members = await readClubMembersSnapshot(
         page,
-        adminControlsCommunityId
+        adminControlsClubId
       );
       return members.some((member) => member.name === "Admin Control Remove");
     })
@@ -99,7 +99,7 @@ test("admin can reset a claimed member password from the admin page", async ({
   page,
 }) => {
   await signInAsAdmin(page);
-  await page.goto(`/community/${adminControlsCommunityId}/admin`);
+  await page.goto(`/club/${adminControlsClubId}/admin`);
 
   await page.getByPlaceholder("Search players by name or email").fill(
     "Admin Control Reset"
@@ -129,7 +129,7 @@ test("admin can approve a pending claim request from the admin page", async ({
 }) => {
   await signInAsClaimRequester(page);
   const claimResponse = await createClaimRequest(page, {
-    communityId: claimCommunityId,
+    clubId: claimClubId,
     targetUserId: claimPlaceholderUserId,
   });
   expect(claimResponse.ok).toBe(true);
@@ -138,14 +138,14 @@ test("admin can approve a pending claim request from the admin page", async ({
     .poll(async () => {
       const requests = await readClubClaimRequestsSnapshot(
         page,
-        claimCommunityId
+        claimClubId
       );
       return requests.length;
     })
     .toBe(1);
 
   await signInAsAdmin(page);
-  await page.goto(`/community/${claimCommunityId}/admin`);
+  await page.goto(`/club/${claimClubId}/admin`);
   await page.getByRole("button", { name: "Claims" }).click();
 
   await expect(page.getByRole("button", { name: "Approve" }).first()).toBeVisible();
@@ -155,7 +155,7 @@ test("admin can approve a pending claim request from the admin page", async ({
     .poll(async () => {
       const requests = await readClubClaimRequestsSnapshot(
         page,
-        claimCommunityId
+        claimClubId
       );
       return requests.length;
     })
@@ -163,7 +163,7 @@ test("admin can approve a pending claim request from the admin page", async ({
 
   await expect
     .poll(async () => {
-      const members = await readClubMembersSnapshot(page, claimCommunityId);
+      const members = await readClubMembersSnapshot(page, claimClubId);
       const placeholder = members.find(
         (member) => member.id === claimPlaceholderUserId
       );

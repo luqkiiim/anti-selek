@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { hostCommunityId, signInAsAdmin } from "./helpers";
+import { hostClubId, signInAsAdmin } from "./helpers";
 
 const mobileViewport = { width: 393, height: 727 };
 
@@ -20,8 +20,8 @@ async function getPlaygroundSummary(page: Page) {
 
     return response.json() as Promise<{
       playground: {
-        communityId: string;
-        communityName: string;
+        clubId: string;
+        clubName: string;
         sessionCode: string;
         playersCount: number;
         courtsCount: number;
@@ -30,16 +30,16 @@ async function getPlaygroundSummary(page: Page) {
   });
 }
 
-async function getClubSnapshot(page: Page, communityId: string) {
-  return page.evaluate(async (targetCommunityId) => {
-    const response = await fetch(`/api/communities/${targetCommunityId}`);
+async function getClubSnapshot(page: Page, clubId: string) {
+  return page.evaluate(async (targetClubId) => {
+    const response = await fetch(`/api/clubs/${targetClubId}`);
     if (!response.ok) {
-      throw new Error(`Failed to load community: ${response.status}`);
+      throw new Error(`Failed to load club: ${response.status}`);
     }
 
     return response.json() as Promise<{
-      community: { name: string };
-      communityPulse: {
+      club: { name: string };
+      clubPulse: {
         metrics: {
           completedTournaments: number;
           recentMatches: number;
@@ -50,12 +50,12 @@ async function getClubSnapshot(page: Page, communityId: string) {
         latestStory: { session: { name: string } } | null;
       };
     }>;
-  }, communityId);
+  }, clubId);
 }
 
-async function getClubMembers(page: Page, communityId: string) {
-  return page.evaluate(async (targetCommunityId) => {
-    const response = await fetch(`/api/communities/${targetCommunityId}/members`);
+async function getClubMembers(page: Page, clubId: string) {
+  return page.evaluate(async (targetClubId) => {
+    const response = await fetch(`/api/clubs/${targetClubId}/members`);
     if (!response.ok) {
       throw new Error(`Failed to load members: ${response.status}`);
     }
@@ -63,7 +63,7 @@ async function getClubMembers(page: Page, communityId: string) {
     return response.json() as Promise<
       Array<{ name: string; email: string | null; isClaimed: boolean }>
     >;
-  }, communityId);
+  }, clubId);
 }
 
 async function getSessionSnapshot(page: Page, sessionCode: string) {
@@ -92,8 +92,8 @@ async function resetPlayground(page: Page) {
 
     return response.json() as Promise<{
       playground: {
-        communityId: string;
-        communityName: string;
+        clubId: string;
+        clubName: string;
         sessionCode: string;
         playersCount: number;
         courtsCount: number;
@@ -159,7 +159,7 @@ test.describe("tutorial playground mobile walkthrough", () => {
     await expect(page.getByText("Getting started", { exact: true })).toHaveCount(0);
 
     await page.getByRole("button", { name: "Open tutorial playground" }).click();
-    await expect(page).toHaveURL(/\/community\/.+/);
+    await expect(page).toHaveURL(/\/club\/.+/);
     await expect(
       page.getByRole("heading", { name: "Tutorial playground" })
     ).toBeVisible();
@@ -175,20 +175,20 @@ test.describe("tutorial playground mobile walkthrough", () => {
     const onboardingProgress = await getAdminOnboardingProgress(page);
     expect(onboardingProgress.completedStepIds).toEqual(["admin-community"]);
 
-    expect(playground.communityName).toBe("Tutorial playground");
+    expect(playground.clubName).toBe("Tutorial playground");
     expect(playground.playersCount).toBe(13);
     expect(playground.courtsCount).toBe(2);
-    const communitySnapshot = await getClubSnapshot(
+    const clubSnapshot = await getClubSnapshot(
       page,
-      playground.communityId
+      playground.clubId
     );
-    expect(communitySnapshot.community.name).toBe("Tutorial playground");
-    expect(communitySnapshot.communityPulse.metrics.completedTournaments).toBe(3);
-    expect(communitySnapshot.communityPulse.metrics.recentMatches).toBe(18);
-    expect(communitySnapshot.communityPulse.hotPlayers.length).toBeGreaterThan(0);
-    expect(communitySnapshot.communityPulse.rivalries.length).toBeGreaterThan(0);
-    expect(communitySnapshot.communityPulse.partnerships.length).toBeGreaterThan(0);
-    expect(communitySnapshot.communityPulse.latestStory?.session.name).toBe(
+    expect(clubSnapshot.club.name).toBe("Tutorial playground");
+    expect(clubSnapshot.clubPulse.metrics.completedTournaments).toBe(3);
+    expect(clubSnapshot.clubPulse.metrics.recentMatches).toBe(18);
+    expect(clubSnapshot.clubPulse.hotPlayers.length).toBeGreaterThan(0);
+    expect(clubSnapshot.clubPulse.rivalries.length).toBeGreaterThan(0);
+    expect(clubSnapshot.clubPulse.partnerships.length).toBeGreaterThan(0);
+    expect(clubSnapshot.clubPulse.latestStory?.session.name).toBe(
       "Weekend Cup"
     );
 
@@ -203,7 +203,7 @@ test.describe("tutorial playground mobile walkthrough", () => {
     await expect(page.getByText("Haziq").first()).toBeVisible();
     await expect(page.getByText("Weekend Cup").first()).toBeVisible();
 
-    const members = await getClubMembers(page, playground.communityId);
+    const members = await getClubMembers(page, playground.clubId);
     const fakeMembers = members.filter(
       (member) => !member.isClaimed && member.email === null
     );
@@ -231,14 +231,14 @@ test.describe("tutorial playground mobile walkthrough", () => {
     await expect(page.getByText("Weekend Cup").first()).toBeVisible();
     await expect(page.getByRole("button", { name: "Rollback" })).toHaveCount(0);
 
-    await page.goto(`/community/${playground.communityId}/admin?tab=players`);
+    await page.goto(`/club/${playground.clubId}/admin?tab=players`);
     await expect(page.getByRole("heading", { name: "Club controls" }))
       .toBeVisible();
     await expect
       .poll(async () => (await getAdminOnboardingProgress(page)).completedStepIds)
       .toContain("players");
 
-    await page.goto(`/community/${playground.communityId}?tab=host`);
+    await page.goto(`/club/${playground.clubId}?tab=host`);
     await expect(page.getByText("Create a test tournament").first()).toBeVisible();
     await page.locator('[data-tutorial-target="admin-onboarding-session-name"]')
       .filter({ visible: true })
@@ -299,18 +299,18 @@ test.describe("tutorial playground mobile walkthrough", () => {
       .toContain("end-session");
 
     const resetResult = await resetPlayground(page);
-    expect(resetResult.playground.communityName).toBe("Tutorial playground");
+    expect(resetResult.playground.clubName).toBe("Tutorial playground");
     expect(resetResult.playground.playersCount).toBe(13);
     expect(resetResult.playground.courtsCount).toBe(2);
     const resetClubSnapshot = await getClubSnapshot(
       page,
-      resetResult.playground.communityId
+      resetResult.playground.clubId
     );
-    expect(resetClubSnapshot.community.name).toBe("Tutorial playground");
-    expect(resetClubSnapshot.communityPulse.metrics.completedTournaments).toBe(3);
-    expect(resetClubSnapshot.communityPulse.metrics.recentMatches).toBe(18);
+    expect(resetClubSnapshot.club.name).toBe("Tutorial playground");
+    expect(resetClubSnapshot.clubPulse.metrics.completedTournaments).toBe(3);
+    expect(resetClubSnapshot.clubPulse.metrics.recentMatches).toBe(18);
 
-    await page.goto(`/community/${hostCommunityId}`);
+    await page.goto(`/club/${hostClubId}`);
     await expect(page.getByRole("heading", { name: "E2E Host Club" }))
       .toBeVisible();
     await expect(page.getByText("Tutorial playground")).toHaveCount(0);

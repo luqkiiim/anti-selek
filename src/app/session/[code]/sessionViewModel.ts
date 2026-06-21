@@ -34,7 +34,7 @@ interface PlayerSessionStats {
 
 interface BuildSessionViewModelArgs {
   sessionData: SessionData;
-  communityPlayers: ClubUser[];
+  clubPlayers: ClubUser[];
   rosterSearch: string;
   manualMatchForm: ManualMatchFormState;
   manualCourtId: string | null;
@@ -196,7 +196,7 @@ function buildPlayerPerformanceMaps(sessionData: SessionData) {
 
 export function buildSessionViewModel({
   sessionData,
-  communityPlayers,
+  clubPlayers,
   rosterSearch,
   manualMatchForm,
   manualCourtId,
@@ -221,16 +221,16 @@ export function buildSessionViewModel({
     .slice()
     .sort((a, b) => a.user.name.localeCompare(b.user.name));
 
-  const playersNotInSession = communityPlayers
+  const playersNotInSession = clubPlayers
     .filter(
-      (communityPlayer) =>
+      (clubPlayer) =>
         !sessionData.players.some(
-          (sessionPlayer) => sessionPlayer.userId === communityPlayer.id
+          (sessionPlayer) => sessionPlayer.userId === clubPlayer.id
         )
     )
-    .filter((communityPlayer) =>
+    .filter((clubPlayer) =>
       normalizedRosterSearch.length > 0
-        ? communityPlayer.name.toLowerCase().includes(normalizedRosterSearch)
+        ? clubPlayer.name.toLowerCase().includes(normalizedRosterSearch)
         : true
     );
 
@@ -335,8 +335,8 @@ export function buildSessionViewModel({
     sessionModeLabel: getSessionModeLabel(sessionData.mode),
     sessionTypeLabel: getSessionTypeLabel(sessionData.type),
     getPlayerProfileHref: (player) =>
-      sessionData.communityId && !player.isGuest
-        ? `/profile/${player.user.id}?communityId=${sessionData.communityId}`
+      sessionData.clubId && !player.isGuest
+        ? `/profile/${player.user.id}?clubId=${sessionData.clubId}`
         : `/profile/${player.user.id}`,
   };
 }

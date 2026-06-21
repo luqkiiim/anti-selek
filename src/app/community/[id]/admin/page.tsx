@@ -200,7 +200,7 @@ export default function ClubAdminPage() {
     status,
     currentUserId,
     isGlobalAdmin,
-    communityId,
+    clubId,
     club,
     players,
     claimRequests,
@@ -241,11 +241,11 @@ export default function ClubAdminPage() {
     reviewingClaimRequestId,
     linkSourceUserId,
     setLinkSourceUserId,
-    targetCommunitySearch,
+    targetClubSearch,
     setTargetClubSearch,
     selectedTargetClub,
-    targetCommunityCandidates,
-    loadingTargetCommunities,
+    targetClubCandidates,
+    loadingTargetClubs,
     loadingTargetRoster,
     linkTargetUserId,
     setLinkTargetUserId,
@@ -345,13 +345,13 @@ export default function ClubAdminPage() {
   const switchAdminSection = useCallback(
     (section: ClubAdminSection) => {
       setActiveSection(section);
-      if (communityId) {
-        router.replace(`/community/${communityId}/admin?tab=${section}`, {
+      if (clubId) {
+        router.replace(`/club/${clubId}/admin?tab=${section}`, {
           scroll: false,
         });
       }
     },
-    [communityId, router, setActiveSection]
+    [clubId, router, setActiveSection]
   );
   const handleAddPlayerWithOnboardingRefresh = useCallback(
     async (event: Parameters<typeof handleAddPlayer>[0]) => {
@@ -367,8 +367,8 @@ export default function ClubAdminPage() {
       return;
     }
 
-    router.push(communityId ? `/community/${communityId}` : "/");
-  }, [communityId, router]);
+    router.push(clubId ? `/club/${clubId}` : "/");
+  }, [clubId, router]);
 
   const pendingPlayerActionDialog = pendingPlayerAction
     ? getPlayerActionDialogCopy(pendingPlayerAction, currentUserId)
@@ -527,7 +527,7 @@ export default function ClubAdminPage() {
             filteredPlayers={filteredPlayers}
             claimedPlayersCount={claimedPlayersCount}
             occasionalPlayersCount={occasionalPlayersCount}
-            communityId={communityId}
+            clubId={clubId}
             playerSearch={playerSearch}
             onPlayerSearchChange={setPlayerSearch}
             onOpenCreatePlayer={openCreatePlayerModal}
@@ -547,16 +547,16 @@ export default function ClubAdminPage() {
         {!isTutorialPlayground && activeSection === "links" ? (
           <OfflineIdentityLinksPanel
             links={offlineIdentityLinks}
-            currentClubId={communityId}
+            currentClubId={clubId}
             currentUserId={currentUserId}
             sourcePlaceholderOptions={sourcePlaceholderOptions}
             sourceUserId={linkSourceUserId}
             onSourceUserIdChange={setLinkSourceUserId}
-            targetCommunitySearch={targetCommunitySearch}
+            targetClubSearch={targetClubSearch}
             onTargetClubSearchChange={setTargetClubSearch}
             selectedTargetClub={selectedTargetClub}
-            targetCommunityCandidates={targetCommunityCandidates}
-            loadingTargetCommunities={loadingTargetCommunities}
+            targetClubCandidates={targetClubCandidates}
+            loadingTargetClubs={loadingTargetClubs}
             loadingTargetRoster={loadingTargetRoster}
             targetPlaceholderOptions={targetPlaceholderOptions}
             targetUserId={linkTargetUserId}
@@ -620,7 +620,7 @@ export default function ClubAdminPage() {
 
       <ClubPlayerEditorModal
         player={editingPlayer}
-        communityId={communityId}
+        clubId={clubId}
         currentUserId={currentUserId}
         editorName={editorName}
         editorRating={editorRating}

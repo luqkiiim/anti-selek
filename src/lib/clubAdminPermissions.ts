@@ -14,24 +14,24 @@ export interface ClubAdminAccess {
 export async function getClubAdminAccess(
   tx: DbClient,
   {
-    communityId,
+    clubId,
     userId,
     isGlobalAdmin = false,
   }: {
-    communityId: string;
+    clubId: string;
     userId: string;
     isGlobalAdmin?: boolean;
   }
 ): Promise<ClubAdminAccess | null> {
-  const [community, membership] = await Promise.all([
-    tx.community.findUnique({
-      where: { id: communityId },
+  const [club, membership] = await Promise.all([
+    tx.club.findUnique({
+      where: { id: clubId },
       select: { createdById: true },
     }),
-    tx.communityMember.findUnique({
+    tx.clubMember.findUnique({
       where: {
-        communityId_userId: {
-          communityId,
+        clubId_userId: {
+          clubId,
           userId,
         },
       },
@@ -39,13 +39,13 @@ export async function getClubAdminAccess(
     }),
   ]);
 
-  if (!community) return null;
+  if (!club) return null;
 
-  const isOwner = community.createdById === userId;
+  const isOwner = club.createdById === userId;
   const membershipRole = membership?.role ?? null;
 
   return {
-    createdById: community.createdById,
+    createdById: club.createdById,
     isGlobalAdmin,
     isOwner,
     membershipRole,
@@ -57,11 +57,11 @@ export async function getClubAdminAccess(
 export async function canAdminClub(
   tx: DbClient,
   {
-    communityId,
+    clubId,
     userId,
     isGlobalAdmin = false,
   }: {
-    communityId: string;
+    clubId: string;
     userId: string;
     isGlobalAdmin?: boolean;
   }
@@ -69,7 +69,7 @@ export async function canAdminClub(
   return (
     (
       await getClubAdminAccess(tx, {
-        communityId,
+        clubId,
         userId,
         isGlobalAdmin,
       })

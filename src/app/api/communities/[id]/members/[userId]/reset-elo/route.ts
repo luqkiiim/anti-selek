@@ -27,9 +27,9 @@ export async function POST(
       );
     }
 
-    const { id: communityId, userId } = await params;
+    const { id: clubId, userId } = await params;
 
-    if (typeof communityId !== "string" || communityId.length === 0 || typeof userId !== "string" || userId.length === 0) {
+    if (typeof clubId !== "string" || clubId.length === 0 || typeof userId !== "string" || userId.length === 0) {
       return NextResponse.json({ error: "Invalid request parameters" }, { status: 400 });
     }
 
@@ -38,7 +38,7 @@ export async function POST(
     if (invalidTargetLimitResponse) return invalidTargetLimitResponse;
 
     const adminAccess = await getClubAdminAccess(prisma, {
-      communityId,
+      clubId,
       userId: session.user.id,
       isGlobalAdmin: !!session.user.isAdmin,
     });
@@ -47,10 +47,10 @@ export async function POST(
       return invalidTargetResponse(request, "api:communities:id:members:userId:reset-elo");
     }
 
-    const targetMembership = await prisma.communityMember.findUnique({
+    const targetMembership = await prisma.clubMember.findUnique({
       where: {
-        communityId_userId: {
-          communityId,
+        clubId_userId: {
+          clubId,
           userId,
         },
       },
@@ -62,10 +62,10 @@ export async function POST(
     }
 
     const [updatedMembership, updatedUser] = await prisma.$transaction([
-      prisma.communityMember.update({
+      prisma.clubMember.update({
         where: {
-          communityId_userId: {
-            communityId,
+          clubId_userId: {
+            clubId,
             userId,
           },
         },

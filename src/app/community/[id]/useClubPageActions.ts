@@ -18,7 +18,7 @@ interface ClubPageRouter {
 }
 
 export function useClubPageActions({
-  communityId,
+  clubId,
   canManageClub,
   canAdminClub,
   router,
@@ -26,7 +26,7 @@ export function useClubPageActions({
   setError,
   setSuccess,
 }: {
-  communityId: string;
+  clubId: string;
   canManageClub: boolean;
   canAdminClub: boolean;
   router: ClubPageRouter;
@@ -111,13 +111,13 @@ export function useClubPageActions({
   };
 
   const requestClaim = async (player: ClubPageMember) => {
-    if (!communityId) return;
+    if (!clubId) return;
 
     setRequestingClaimFor(player.id);
     setError("");
     setSuccess("");
     try {
-      const res = await fetch(`/api/communities/${communityId}/claim-requests`, {
+      const res = await fetch(`/api/clubs/${clubId}/claim-requests`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -160,7 +160,7 @@ export function useClubPageActions({
       }
 
       const clubName =
-        typeof data.communityName === "string" ? data.communityName : "club";
+        typeof data.clubName === "string" ? data.clubName : "club";
       await refreshClubData();
       setSuccess(
         status === "ACCEPTED"
@@ -196,7 +196,7 @@ export function useClubPageActions({
   }, [activeSection, canManageClub, exitHostMode]);
 
   const openClubPlayerProfile = (playerId: string) => {
-    router.push(`/profile/${playerId}?communityId=${communityId}`);
+    router.push(`/profile/${playerId}?clubId=${clubId}`);
   };
 
   const openTournament = (code: string) => {

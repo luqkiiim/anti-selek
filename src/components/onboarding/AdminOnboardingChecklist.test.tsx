@@ -19,7 +19,7 @@ function createProgress(
         title: "Open your club",
         detail: "Use an admin club as the home base.",
         actionLabel: "Open",
-        href: "/community/community-1",
+        href: "/club/community-1",
         targetId: "admin-onboarding-dashboard-community",
         coachmark: "Open your admin club to continue.",
         completed: true,
@@ -31,7 +31,7 @@ function createProgress(
         title: "Optional cleanup",
         detail: "Know where reset club lives.",
         actionLabel: "Review cleanup",
-        href: "/community/community-1/admin?tab=settings",
+        href: "/club/community-1/admin?tab=settings",
         targetId: "admin-onboarding-reset-club",
         coachmark: "Use reset only when you want to clear test history.",
         completed: false,
@@ -62,7 +62,7 @@ describe("AdminOnboardingChecklist", () => {
     expect(markup).toContain("Mark reviewed");
     expect(markup).toContain("Completed steps (1)");
     expect(markup).toContain("Review cleanup");
-    expect(markup).toContain('href="/community/community-1/admin?tab=settings"');
+    expect(markup).toContain('href="/club/community-1/admin?tab=settings"');
     expect(markup).not.toContain("Go there");
   });
 
@@ -93,7 +93,7 @@ describe("AdminOnboardingChecklist", () => {
               title: "Create a test tournament",
               detail: "Try the Host flow.",
               actionLabel: "Host",
-              href: "/community/community-1?tab=host",
+              href: "/club/community-1?tab=host",
               targetId: "admin-onboarding-create-session",
               coachmark: "Create it.",
               completed: false,

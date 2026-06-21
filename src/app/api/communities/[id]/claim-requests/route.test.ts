@@ -7,8 +7,8 @@ const mocks = vi.hoisted(() => ({
   rateLimit: vi.fn(),
   checkInvalidTargetRateLimit: vi.fn(),
   invalidTargetResponse: vi.fn(),
-  communityFindUnique: vi.fn(),
-  communityMemberFindUnique: vi.fn(),
+  clubFindUnique: vi.fn(),
+  clubMemberFindUnique: vi.fn(),
   txUserFindUnique: vi.fn(),
   txClubMemberFindUnique: vi.fn(),
   txClaimRequestFindFirst: vi.fn(),
@@ -32,16 +32,16 @@ vi.mock("@/lib/rateLimit", () => ({
 
 vi.mock("@/lib/prisma", () => ({
   prisma: {
-    community: {
-      findUnique: mocks.communityFindUnique,
+    club: {
+      findUnique: mocks.clubFindUnique,
     },
-    communityMember: {
-      findUnique: mocks.communityMemberFindUnique,
+    clubMember: {
+      findUnique: mocks.clubMemberFindUnique,
     },
     $transaction: async (
       callback: (tx: {
         user: { findUnique: typeof mocks.txUserFindUnique };
-        communityMember: { findUnique: typeof mocks.txClubMemberFindUnique };
+        clubMember: { findUnique: typeof mocks.txClubMemberFindUnique };
         claimRequest: {
           findFirst: typeof mocks.txClaimRequestFindFirst;
           create: typeof mocks.txClaimRequestCreate;
@@ -53,7 +53,7 @@ vi.mock("@/lib/prisma", () => ({
         user: {
           findUnique: mocks.txUserFindUnique,
         },
-        communityMember: {
+        clubMember: {
           findUnique: mocks.txClubMemberFindUnique,
         },
         claimRequest: {
@@ -83,7 +83,7 @@ function queuePendingRequestChecks({
 
 function postClaim(body: unknown) {
   return POST(
-    new Request("http://localhost/api/communities/community-1/claim-requests", {
+    new Request("http://localhost/api/clubs/community-1/claim-requests", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(body),
@@ -105,9 +105,9 @@ describe("club claim request route", () => {
     mocks.invalidTargetResponse.mockImplementation(() =>
       Response.json({ error: "Unauthorized" }, { status: 403 })
     );
-    mocks.communityFindUnique.mockResolvedValue({ isTutorial: false });
+    mocks.clubFindUnique.mockResolvedValue({ isTutorial: false });
 
-    mocks.communityMemberFindUnique.mockResolvedValue({
+    mocks.clubMemberFindUnique.mockResolvedValue({
       userId: "requester-1",
       elo: 1000,
     });
@@ -131,7 +131,7 @@ describe("club claim request route", () => {
 
     mocks.txClaimRequestCreate.mockResolvedValue({
       id: "claim-1",
-      communityId: "community-1",
+      clubId: "community-1",
       requesterUserId: "requester-1",
       targetUserId: "placeholder-1",
       status: ClaimRequestStatus.PENDING,
@@ -160,7 +160,7 @@ describe("club claim request route", () => {
     expect(response.status).toBe(201);
     expect(mocks.txClaimRequestCreate).toHaveBeenCalledWith({
       data: {
-        communityId: "community-1",
+        clubId: "community-1",
         requesterUserId: "requester-1",
         targetUserId: "placeholder-1",
         note: null,
@@ -190,7 +190,7 @@ describe("club claim request route", () => {
   });
 
   it("rejects requesters who are not yet in the club", async () => {
-    mocks.communityMemberFindUnique.mockResolvedValue(null);
+    mocks.clubMemberFindUnique.mockResolvedValue(null);
 
     const response = await postClaim({ targetUserId: "placeholder-1" });
     const body = await response.json();
@@ -217,7 +217,7 @@ describe("club claim request route", () => {
 
   it("rejects requesters with club rating history", async () => {
     queuePendingRequestChecks({});
-    mocks.communityMemberFindUnique.mockResolvedValue({
+    mocks.clubMemberFindUnique.mockResolvedValue({
       userId: "requester-1",
       elo: 1016,
     });

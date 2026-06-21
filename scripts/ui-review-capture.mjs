@@ -22,8 +22,8 @@ const skipServerStart = process.env.UI_REVIEW_SKIP_SERVER === "1";
 
 const ids = {
   adminUserId: "user-ui-review-admin",
-  hostCommunityId: "community-ui-review-host",
-  scoreCommunityId: "community-ui-review-score",
+  hostClubId: "community-ui-review-host",
+  scoreClubId: "community-ui-review-score",
   scoreSessionId: "session-ui-review-active",
   scoreCourtId: "court-ui-review-active-1",
   mobileScoreSessionId: "session-ui-review-mobile-active",
@@ -154,14 +154,14 @@ async function prepareReviewDatabase() {
         },
       },
     });
-    await prisma.communityMember.deleteMany({
+    await prisma.clubMember.deleteMany({
       where: {
-        communityId: { in: [ids.hostCommunityId, ids.scoreCommunityId] },
+        clubId: { in: [ids.hostClubId, ids.scoreClubId] },
       },
     });
-    await prisma.community.deleteMany({
+    await prisma.club.deleteMany({
       where: {
-        id: { in: [ids.hostCommunityId, ids.scoreCommunityId] },
+        id: { in: [ids.hostClubId, ids.scoreClubId] },
       },
     });
     await prisma.user.deleteMany({
@@ -207,40 +207,40 @@ async function prepareReviewDatabase() {
       ],
     });
 
-    await prisma.community.createMany({
+    await prisma.club.createMany({
       data: [
         {
-          id: ids.hostCommunityId,
+          id: ids.hostClubId,
           name: "UI Review Host Club",
           createdById: ids.adminUserId,
         },
         {
-          id: ids.scoreCommunityId,
+          id: ids.scoreClubId,
           name: "UI Review Score Club",
           createdById: ids.adminUserId,
         },
       ],
     });
 
-    await prisma.communityMember.createMany({
+    await prisma.clubMember.createMany({
       data: [
         {
-          communityId: ids.hostCommunityId,
+          clubId: ids.hostClubId,
           userId: ids.adminUserId,
           role: "ADMIN",
         },
         ...hostPlayerIds.map((userId) => ({
-          communityId: ids.hostCommunityId,
+          clubId: ids.hostClubId,
           userId,
           role: "MEMBER",
         })),
         {
-          communityId: ids.scoreCommunityId,
+          clubId: ids.scoreClubId,
           userId: ids.adminUserId,
           role: "ADMIN",
         },
         ...scorePlayerIds.map((userId) => ({
-          communityId: ids.scoreCommunityId,
+          clubId: ids.scoreClubId,
           userId,
           role: "MEMBER",
         })),
@@ -251,7 +251,7 @@ async function prepareReviewDatabase() {
       data: {
         id: ids.waitingSessionId,
         code: ids.waitingSessionId,
-        communityId: ids.hostCommunityId,
+        clubId: ids.hostClubId,
         name: "Waiting Session Example",
         type: "POINTS",
         mode: "MEXICANO",
@@ -292,7 +292,7 @@ async function prepareReviewDatabase() {
         data: {
           id: sessionId,
           code: sessionId,
-          communityId: ids.scoreCommunityId,
+          clubId: ids.scoreClubId,
           name,
           type: "POINTS",
           mode: "OPEN",
@@ -515,7 +515,7 @@ async function captureScreens() {
         return;
       }
 
-      await page.goto(`${baseURL}/community/${ids.hostCommunityId}/admin`);
+      await page.goto(`${baseURL}/club/${ids.hostClubId}/admin`);
       await page.getByRole("heading", { name: "Club controls" }).waitFor();
       await page.getByRole("button", { name: "Settings" }).click();
       await page.getByRole("button", { name: "Delete club" }).click();
@@ -728,7 +728,7 @@ async function captureScreens() {
       await saveFlowScreenshot(page, `dashboard-${label}.png`, label);
       await captureDashboardPopups(page, label);
 
-      await page.goto(`${baseURL}/community/${ids.hostCommunityId}`);
+      await page.goto(`${baseURL}/club/${ids.hostClubId}`);
       await page
         .getByRole("heading", { name: "UI Review Host Club" })
         .waitFor();

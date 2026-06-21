@@ -116,7 +116,7 @@ export async function POST(
             id: true,
             code: true,
             name: true,
-            communityId: true,
+            clubId: true,
             isTest: true,
             status: true,
           },
@@ -127,7 +127,7 @@ export async function POST(
     if (!match) {
       return invalidTargetResponse(request, "api:matches:id:correction");
     }
-    if (!canQuickAccessClub(session, match.session.communityId)) {
+    if (!canQuickAccessClub(session, match.session.clubId)) {
       return invalidTargetResponse(request, "api:matches:id:correction");
     }
     if (match.status !== MatchStatus.COMPLETED) {
@@ -189,7 +189,7 @@ export async function POST(
       outcome: "success",
       request,
       scope: {
-        communityId: match.session.communityId ?? undefined,
+        clubId: match.session.clubId ?? undefined,
         route: "/api/matches/[id]/correction",
         sessionCode: match.session.code,
       },

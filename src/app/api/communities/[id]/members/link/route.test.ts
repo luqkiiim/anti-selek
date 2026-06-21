@@ -26,7 +26,7 @@ describe("link existing unclaimed club player route", () => {
   it("disables candidate listing and points admins to the claim flow", async () => {
     const response = await GET(
       new Request(
-        "http://localhost/api/communities/community-2/members/link?search=alex"
+        "http://localhost/api/clubs/community-2/members/link?search=alex"
       )
     );
     const body = await response.json();
@@ -39,7 +39,7 @@ describe("link existing unclaimed club player route", () => {
 
   it("disables cross-community linking and points admins to the claim flow", async () => {
     const response = await POST(
-      new Request("http://localhost/api/communities/community-2/members/link", {
+      new Request("http://localhost/api/clubs/community-2/members/link", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({

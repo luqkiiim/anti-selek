@@ -5,7 +5,7 @@ import {
   createManualMatchWithPlayers,
   createStartedHostSession,
   getHostPlayerCredentials,
-  hostCommunityId,
+  hostClubId,
   openSessionSettings,
   readSessionSnapshot,
   signIn,
@@ -18,7 +18,7 @@ test("staff can run a live session without admin-only controls", async ({
   page,
 }) => {
   await signInAsAdmin(page);
-  await page.goto(`/community/${hostCommunityId}/admin`);
+  await page.goto(`/club/${hostClubId}/admin`);
   await expect(page.getByRole("heading", { name: "E2E Host Club" })).toBeVisible();
 
   await page.getByPlaceholder("Search players by name or email").fill(
@@ -37,12 +37,12 @@ test("staff can run a live session without admin-only controls", async ({
   ).toBeVisible();
 
   await signIn(page, getHostPlayerCredentials(1));
-  await page.goto(`/community/${hostCommunityId}`);
+  await page.goto(`/club/${hostClubId}`);
   await expect(page.getByText("Staff", { exact: true })).toBeVisible();
   await expect(page.getByRole("link", { name: "Admin" })).toHaveCount(0);
 
-  await page.goto(`/community/${hostCommunityId}/admin`);
-  await expect(page).toHaveURL(new RegExp(`/community/${hostCommunityId}$`));
+  await page.goto(`/club/${hostClubId}/admin`);
+  await expect(page).toHaveURL(new RegExp(`/club/${hostClubId}$`));
   await expect(page.getByText("Only club admins can access this page")).toHaveCount(0);
 
   const sessionName = "E2E Staff Operator Session";
@@ -132,19 +132,19 @@ test("staff can run a live session without admin-only controls", async ({
   });
 
   const playerEditResponse = await page.evaluate(
-    async ({ communityId, targetUserId }) => {
-      const res = await fetch(`/api/communities/${communityId}/members/${targetUserId}`, {
+    async ({ clubId, targetUserId }) => {
+      const res = await fetch(`/api/clubs/${clubId}/members/${targetUserId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ elo: 1200 }),
       });
       return res.status;
     },
-    { communityId: hostCommunityId, targetUserId: adminUserId }
+    { clubId: hostClubId, targetUserId: adminUserId }
   );
   expect(playerEditResponse).toBe(403);
 
-  await page.goto(`/community/${hostCommunityId}`);
+  await page.goto(`/club/${hostClubId}`);
   await page.getByRole("button", { name: "Tournaments" }).click();
   await expect(page.getByText(sessionName).filter({ visible: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Rollback" })).toHaveCount(0);

@@ -95,7 +95,7 @@ describe("session route GET", () => {
     mocks.sessionFindUnique.mockResolvedValue({
       id: "session-1",
       code: "ABC123",
-      communityId: "community-1",
+      clubId: "community-1",
       name: "Morning Session",
       type: "POINTS",
       mode: "MEXICANO",
@@ -132,7 +132,7 @@ describe("session route GET", () => {
           },
         },
       ],
-      sessionCommunities: [],
+      sessionClubs: [],
       players: sessionPlayers,
       matches: [],
       queuedMatch: {
@@ -184,7 +184,7 @@ describe("session route GET", () => {
     const body = await response.json();
 
     expect(response.status).toBe(200);
-    expect(body.viewerCommunityRole).toBe("STAFF");
+    expect(body.viewerClubRole).toBe("STAFF");
     expect(body.viewerCanManage).toBe(true);
     expect(body.viewerCanUseAdminSessionControls).toBe(false);
     expect(mocks.getSessionOperatorMembership).toHaveBeenCalledWith(
@@ -198,17 +198,17 @@ describe("session route GET", () => {
     mocks.sessionFindUnique.mockClear();
     mocks.sessionFindUnique.mockResolvedValueOnce({
       ...sessionData,
-      community: {
+      club: {
         id: "community-1",
         isTutorial: true,
         tutorialOwnerId: "u1",
       },
-      sessionCommunities: [
+      sessionClubs: [
         {
-          communityId: "community-1",
+          clubId: "community-1",
           role: "HOST",
           status: "ACCEPTED",
-          community: {
+          club: {
             id: "community-1",
             name: "Tutorial playground u1",
             isTutorial: true,

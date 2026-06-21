@@ -36,6 +36,10 @@ import {
   type PlayerConfigOverride,
   SessionRouteError,
 } from "./sessionRouteShared";
+import {
+  ClubContractAliasConflictError,
+  readAliasedValue,
+} from "@/lib/clubContractAliases";
 
 interface CreateSessionBody {
   name?: unknown;
@@ -52,7 +56,9 @@ interface CreateSessionBody {
   guestNames?: unknown;
   playerConfigs?: unknown;
   guestConfigs?: unknown;
+  clubId?: unknown;
   communityId?: unknown;
+  partnerClubId?: unknown;
   partnerCommunityId?: unknown;
   courtCount?: unknown;
   poolsEnabled?: unknown;
@@ -216,6 +222,7 @@ export function parseCreateSessionRequest(
     throw new SessionRouteError("Invalid request body", 400);
   }
 
+  const bodyRecord = body as CreateSessionBody & Record<string, unknown>;
   const {
     name,
     type,
@@ -228,8 +235,6 @@ export function parseCreateSessionRequest(
     guestNames = [],
     playerConfigs = [],
     guestConfigs = [],
-    communityId,
-    partnerCommunityId,
     courtCount = 2,
     isTest = false,
     autoQueueEnabled = false,
@@ -237,20 +242,41 @@ export function parseCreateSessionRequest(
     poolsEnabled = false,
     poolAName = DEFAULT_SESSION_POOL_A_NAME,
     poolBName = DEFAULT_SESSION_POOL_B_NAME,
-  } = body as CreateSessionBody;
+  } = bodyRecord;
+  let clubId: unknown;
+  let partnerClubId: unknown;
+  try {
+    clubId = readAliasedValue(
+      bodyRecord,
+      "clubId",
+      "communityId",
+      "club identifier"
+    );
+    partnerClubId = readAliasedValue(
+      bodyRecord,
+      "partnerClubId",
+      "partnerCommunityId",
+      "partner club identifier"
+    );
+  } catch (error) {
+    if (error instanceof ClubContractAliasConflictError) {
+      throw new SessionRouteError(error.message, 400);
+    }
+    throw error;
+  }
 
   if (typeof name !== "string" || !name.trim()) {
     throw new SessionRouteError("Session name required", 400);
   }
-  if (typeof communityId !== "string" || !communityId) {
+  if (typeof clubId !== "string" || !clubId) {
     throw new SessionRouteError("Club is required", 400);
   }
   if (
-    partnerCommunityId !== undefined &&
-    partnerCommunityId !== null &&
-    (typeof partnerCommunityId !== "string" ||
-      partnerCommunityId.length === 0 ||
-      partnerCommunityId === communityId)
+    partnerClubId !== undefined &&
+    partnerClubId !== null &&
+    (typeof partnerClubId !== "string" ||
+      partnerClubId.length === 0 ||
+      partnerClubId === clubId)
   ) {
     throw new SessionRouteError("Invalid partner club", 400);
   }
@@ -349,9 +375,9 @@ export function parseCreateSessionRequest(
     matchmakingStyle: settings.matchmakingStyle,
     balanceMetric: settings.balanceMetric,
     pairingMode: settings.pairingMode,
-    communityId,
+    clubId,
     partnerClubId:
-      typeof partnerCommunityId === "string" ? partnerCommunityId : null,
+      typeof partnerClubId === "string" ? partnerClubId : null,
     isTest: isTest === true,
     courtCount: courtCount as number,
     requestedPlayerIds,

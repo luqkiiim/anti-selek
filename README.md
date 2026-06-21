@@ -184,7 +184,7 @@ Notes:
 
 - `npm run dev` can run fully offline when `USE_TURSO` is unset/`false` and the app is using local SQLite
 - `npm run build` always invokes the Turso migration wrapper first, but that wrapper only applies migrations on Vercel unless you force it with `npm run db:migrate:turso`
-- `npm run smoke:production` defaults to public, non-mutating checks. Set `PRODUCTION_SMOKE_EMAIL`, `PRODUCTION_SMOKE_PASSWORD`, `PRODUCTION_SMOKE_COMMUNITY_ID`, and `PRODUCTION_SMOKE_SESSION_CODE` to include signed-in production paths. Signed-in smoke checks mobile first, then desktop. Set `PRODUCTION_SMOKE_MUTATE=1` only for a disposable production session where score submission and approval are safe.
+- `npm run smoke:production` defaults to public, non-mutating checks. Set `PRODUCTION_SMOKE_EMAIL`, `PRODUCTION_SMOKE_PASSWORD`, `PRODUCTION_SMOKE_CLUB_ID`, and `PRODUCTION_SMOKE_SESSION_CODE` to include signed-in production paths. `PRODUCTION_SMOKE_COMMUNITY_ID` still works as a compatibility fallback. Signed-in smoke checks mobile first, then desktop. Set `PRODUCTION_SMOKE_MUTATE=1` only for a disposable production session where score submission and approval are safe.
 
 ## Core Workflow
 
@@ -248,7 +248,7 @@ Notes:
 - Margin of victory affects the rating delta
 - Both teammates receive the same rating delta
 - Guest participation reduces rating impact through a multiplier
-- In clubs, persistent ratings are stored on `CommunityMember.elo`
+- In clubs, persistent ratings are stored on `ClubMember.elo`
 
 Note: user-facing copy says `rating` or `Ratings`, but some internal code and database fields still use `elo`.
 
@@ -287,7 +287,7 @@ Shared constraints:
 
 - `User`: base account identity
 - `Community`: scoped badminton club
-- `CommunityMember`: club role plus club-specific rating
+- `ClubMember`: club role plus club-specific rating
 - `Session`: tournament instance inside a club
 - `SessionPlayer`: per-session standings points and matchmaking state
 - `Court`: court slot and current match pointer

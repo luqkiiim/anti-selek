@@ -7,7 +7,7 @@ vi.mock("@/lib/auth", () => ({
 vi.mock("@/lib/prisma", () => ({
   prisma: {
     session: { findUnique: vi.fn() },
-    communityMember: { findUnique: vi.fn() },
+    clubMember: { findUnique: vi.fn() },
     sessionPlayer: { findUnique: vi.fn(), findMany: vi.fn() },
     queuedMatch: { findUnique: vi.fn(), delete: vi.fn() },
     $transaction: vi.fn(),
@@ -53,7 +53,7 @@ describe("pause player route", () => {
     } as never);
     vi.mocked(prisma.session.findUnique).mockResolvedValue({
       id: "session-1",
-      communityId: null,
+      clubId: null,
       type: "POINTS",
       status: "ACTIVE",
     } as never);
@@ -163,7 +163,7 @@ describe("pause player route", () => {
 
     vi.mocked(prisma.session.findUnique).mockResolvedValue({
       id: "session-1",
-      communityId: null,
+      clubId: null,
       type: "POINTS",
       status: "WAITING",
     } as never);

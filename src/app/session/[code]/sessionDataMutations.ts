@@ -33,7 +33,7 @@ export interface MatchPayload {
   playerEloChanges?: Array<{
     userId: string;
     delta: number;
-    communityId?: string | null;
+    clubId?: string | null;
   }>;
   completedAt?: string | Date | null;
   scoreSubmittedByUserId?: string | null;
@@ -395,7 +395,7 @@ export function mergeSessionSnapshot(
         : current.queuedMatch,
     viewerCanManage: current.viewerCanManage,
     viewerCanUseAdminSessionControls: current.viewerCanUseAdminSessionControls,
-    viewerCommunityRole: current.viewerCommunityRole,
+    viewerClubRole: current.viewerClubRole,
     isTutorialClub: current.isTutorialClub,
     tutorialOwnerId: current.tutorialOwnerId,
   };

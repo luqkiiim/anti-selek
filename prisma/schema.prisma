@@ -25,10 +25,10 @@ model User {
   updatedAt         DateTime  @updatedAt
 
   sessionPlayers                SessionPlayer[]
-  communities                   CommunityMember[]
-  createdCommunities            Community[]                  @relation("CommunityCreator")
-  requestedSessionCommunities   SessionCommunity[]           @relation("SessionCommunityRequester")
-  reviewedSessionCommunities    SessionCommunity[]           @relation("SessionCommunityReviewer")
+  clubMemberships               ClubMember[]
+  createdClubs                  Club[]                       @relation("ClubCreator")
+  requestedSessionClubs         SessionClub[]                @relation("SessionClubRequester")
+  reviewedSessionClubs          SessionClub[]                @relation("SessionClubReviewer")
   matchEloAdjustments           MatchEloAdjustment[]
   claimRequestsMade             ClaimRequest[]               @relation("ClaimRequester")
   claimRequestsTargeted         ClaimRequest[]               @relation("ClaimTarget")
@@ -50,7 +50,7 @@ model User {
   matchesAsTeam2Player2 Match[] @relation("Team2Player2")
 }
 
-model Community {
+model Club {
   id                  String   @id @default(cuid())
   name                String   @unique
   isPasswordProtected Boolean  @default(false)
@@ -61,38 +61,40 @@ model Community {
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 
-  createdBy                       User                         @relation("CommunityCreator", fields: [createdById], references: [id], onDelete: Cascade)
-  members                         CommunityMember[]
+  createdBy                       User                         @relation("ClubCreator", fields: [createdById], references: [id], onDelete: Cascade)
+  members                         ClubMember[]
   sessions                        Session[]
-  sessionCommunities              SessionCommunity[]
+  sessionClubs                    SessionClub[]
   matchEloAdjustments             MatchEloAdjustment[]
   claimRequests                   ClaimRequest[]
   offlineIdentityMembers          OfflineIdentityMember[]
-  offlineIdentityLinkRequestsFrom OfflineIdentityLinkRequest[] @relation("OfflineIdentityLinkSourceCommunity")
-  offlineIdentityLinkRequestsTo   OfflineIdentityLinkRequest[] @relation("OfflineIdentityLinkTargetCommunity")
+  offlineIdentityLinkRequestsFrom OfflineIdentityLinkRequest[] @relation("OfflineIdentityLinkSourceClub")
+  offlineIdentityLinkRequestsTo   OfflineIdentityLinkRequest[] @relation("OfflineIdentityLinkTargetClub")
 
   @@index([isTutorial])
+  @@map("Community")
 }
 
-model CommunityMember {
-  id          String   @id @default(cuid())
-  communityId String
-  userId      String
-  role        String   @default("MEMBER") // MEMBER, STAFF, or ADMIN
-  status      String   @default("CORE") // CORE or OCCASIONAL
-  elo         Int      @default(1000)
-  createdAt   DateTime @default(now())
+model ClubMember {
+  id        String   @id @default(cuid())
+  clubId    String   @map("communityId")
+  userId    String
+  role      String   @default("MEMBER") // MEMBER, STAFF, or ADMIN
+  status    String   @default("CORE") // CORE or OCCASIONAL
+  elo       Int      @default(1000)
+  createdAt DateTime @default(now())
 
-  community Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
-  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  club Club @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@unique([communityId, userId])
+  @@unique([clubId, userId])
+  @@map("CommunityMember")
 }
 
 model Session {
   id                     String    @id @default(cuid())
   code                   String    @unique
-  communityId            String?
+  clubId                 String?   @map("communityId")
   name                   String
   type                   String    @default("POINTS") // POINTS or ELO
   mode                   String    @default("MEXICANO") // MEXICANO or MIXICANO
@@ -116,18 +118,18 @@ model Session {
   createdAt              DateTime  @default(now())
   endedAt                DateTime?
 
-  community          Community?         @relation(fields: [communityId], references: [id], onDelete: Cascade)
-  sessionCommunities SessionCommunity[]
+  club               Club?         @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  sessionClubs       SessionClub[]
   players            SessionPlayer[]
   courts             Court[]
   matches            Match[]
   queuedMatch        QueuedMatch?
 }
 
-model SessionCommunity {
+model SessionClub {
   id            String    @id @default(cuid())
   sessionId     String
-  communityId   String
+  clubId        String    @map("communityId")
   role          String    @default("PARTNER") // HOST or PARTNER
   status        String    @default("PENDING") // PENDING, ACCEPTED, or REJECTED
   requestedById String?
@@ -136,14 +138,15 @@ model SessionCommunity {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
-  session     Session   @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  community   Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
-  requestedBy User?     @relation("SessionCommunityRequester", fields: [requestedById], references: [id], onDelete: SetNull)
-  reviewedBy  User?     @relation("SessionCommunityReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+  session     Session @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  club        Club    @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  requestedBy User?   @relation("SessionClubRequester", fields: [requestedById], references: [id], onDelete: SetNull)
+  reviewedBy  User?   @relation("SessionClubReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
 
-  @@unique([sessionId, communityId])
-  @@index([communityId, status])
+  @@unique([sessionId, clubId])
+  @@index([clubId, status])
   @@index([sessionId, role])
+  @@map("SessionCommunity")
 }
 
 model Court {
@@ -226,19 +229,19 @@ model Match {
 model MatchEloAdjustment {
   id          String   @id @default(cuid())
   matchId     String
-  communityId String
+  clubId      String   @map("communityId")
   userId      String
   delta       Int
   beforeElo   Int
   afterElo    Int
   createdAt   DateTime @default(now())
 
-  match     Match     @relation(fields: [matchId], references: [id], onDelete: Cascade)
-  community Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
-  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  match Match @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  club  Club  @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@unique([matchId, communityId, userId])
-  @@index([communityId, userId])
+  @@unique([matchId, clubId, userId])
+  @@index([clubId, userId])
   @@index([userId])
 }
 
@@ -258,7 +261,7 @@ model QueuedMatch {
 
 model ClaimRequest {
   id              String    @id @default(cuid())
-  communityId     String
+  clubId          String    @map("communityId")
   requesterUserId String
   targetUserId    String
   status          String    @default("PENDING") // PENDING, APPROVED, REJECTED
@@ -268,12 +271,12 @@ model ClaimRequest {
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
-  community  Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  club       Club      @relation(fields: [clubId], references: [id], onDelete: Cascade)
   requester  User      @relation("ClaimRequester", fields: [requesterUserId], references: [id], onDelete: Cascade)
   target     User      @relation("ClaimTarget", fields: [targetUserId], references: [id], onDelete: Cascade)
   reviewedBy User?     @relation("ClaimReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
 
-  @@index([communityId, status])
+  @@index([clubId, status])
   @@index([requesterUserId, status])
   @@index([targetUserId, status])
 }
@@ -295,27 +298,27 @@ model OfflineIdentity {
 model OfflineIdentityMember {
   id                String   @id @default(cuid())
   offlineIdentityId String
-  communityId       String
+  clubId            String   @map("communityId")
   userId            String
   addedById         String?
   createdAt         DateTime @default(now())
 
   offlineIdentity OfflineIdentity @relation(fields: [offlineIdentityId], references: [id], onDelete: Cascade)
-  community       Community       @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  club            Club            @relation(fields: [clubId], references: [id], onDelete: Cascade)
   user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@unique([offlineIdentityId, communityId])
-  @@unique([communityId, userId])
+  @@unique([offlineIdentityId, clubId])
+  @@unique([clubId, userId])
   @@unique([userId])
-  @@index([communityId])
+  @@index([clubId])
 }
 
 model OfflineIdentityLinkRequest {
   id                String    @id @default(cuid())
   offlineIdentityId String?
-  sourceCommunityId String
+  sourceClubId      String    @map("sourceCommunityId")
   sourceUserId      String
-  targetCommunityId String
+  targetClubId      String    @map("targetCommunityId")
   targetUserId      String
   status            String    @default("PENDING") // PENDING, ACCEPTED, or REJECTED
   requestedById     String?
@@ -325,16 +328,16 @@ model OfflineIdentityLinkRequest {
   updatedAt         DateTime  @updatedAt
 
   offlineIdentity OfflineIdentity? @relation(fields: [offlineIdentityId], references: [id], onDelete: SetNull)
-  sourceCommunity Community        @relation("OfflineIdentityLinkSourceCommunity", fields: [sourceCommunityId], references: [id], onDelete: Cascade)
-  targetCommunity Community        @relation("OfflineIdentityLinkTargetCommunity", fields: [targetCommunityId], references: [id], onDelete: Cascade)
+  sourceClub      Club             @relation("OfflineIdentityLinkSourceClub", fields: [sourceClubId], references: [id], onDelete: Cascade)
+  targetClub      Club             @relation("OfflineIdentityLinkTargetClub", fields: [targetClubId], references: [id], onDelete: Cascade)
   sourceUser      User             @relation("OfflineIdentityLinkSourceUser", fields: [sourceUserId], references: [id], onDelete: Cascade)
   targetUser      User             @relation("OfflineIdentityLinkTargetUser", fields: [targetUserId], references: [id], onDelete: Cascade)
   requestedBy     User?            @relation("OfflineIdentityLinkRequester", fields: [requestedById], references: [id], onDelete: SetNull)
   reviewedBy      User?            @relation("OfflineIdentityLinkReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
 
-  @@unique([sourceCommunityId, sourceUserId, targetCommunityId, targetUserId])
-  @@index([sourceCommunityId, status])
-  @@index([targetCommunityId, status])
+  @@unique([sourceClubId, sourceUserId, targetClubId, targetUserId])
+  @@index([sourceClubId, status])
+  @@index([targetClubId, status])
   @@index([offlineIdentityId])
 }
 

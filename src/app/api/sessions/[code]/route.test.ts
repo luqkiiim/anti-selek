@@ -10,7 +10,7 @@ vi.mock("@/lib/prisma", () => ({
       findUnique: vi.fn(),
       update: vi.fn(),
     },
-    communityMember: {
+    clubMember: {
       findUnique: vi.fn(),
     },
     queuedMatch: {
@@ -40,7 +40,7 @@ describe("session settings route", () => {
     } as never);
     vi.mocked(prisma.session.findUnique).mockResolvedValue({
       id: "session-1",
-      communityId: "community-1",
+      clubId: "community-1",
     } as never);
     vi.mocked(prisma.session.update).mockReturnValue({} as never);
     vi.mocked(prisma.queuedMatch.deleteMany).mockReturnValue({} as never);
@@ -77,7 +77,7 @@ describe("session settings route", () => {
     } as never);
     vi.mocked(prisma.session.findUnique).mockResolvedValue({
       id: "session-1",
-      communityId: "community-1",
+      clubId: "community-1",
     } as never);
     vi.mocked(prisma.session.update).mockResolvedValue({} as never);
     vi.mocked(tryRebuildQueuedMatchForSessionId).mockResolvedValue({

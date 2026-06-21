@@ -18,7 +18,7 @@ describe("parseCreateSessionRequest", () => {
   it("normalizes player overrides and guest config precedence", () => {
     const parsed = parseCreateSessionRequest({
       name: "  Friday Night  ",
-      communityId: "community-1",
+      clubId: "community-1",
       type: SessionType.ELO,
       mode: SessionMode.MIXICANO,
       courtCount: 4,
@@ -97,7 +97,7 @@ describe("parseCreateSessionRequest", () => {
   it("defaults open mode guests to unspecified gender", () => {
     const parsed = parseCreateSessionRequest({
       name: "Open Session",
-      communityId: "community-1",
+      clubId: "community-1",
       guestNames: ["Open Guest"],
     });
 
@@ -117,7 +117,7 @@ describe("parseCreateSessionRequest", () => {
   it("defaults to two courts when court count is omitted", () => {
     const parsed = parseCreateSessionRequest({
       name: "Default Courts",
-      communityId: "community-1",
+      clubId: "community-1",
     });
 
     expect(parsed.courtCount).toBe(2);
@@ -126,7 +126,7 @@ describe("parseCreateSessionRequest", () => {
   it("maps legacy female open preferences to an upper-side override", () => {
     const parsed = parseCreateSessionRequest({
       name: "Legacy Mix",
-      communityId: "community-1",
+      clubId: "community-1",
       mode: SessionMode.MIXICANO,
       playerConfigs: [
         {
@@ -166,15 +166,15 @@ describe("parseCreateSessionRequest", () => {
       new SessionRouteError("Invalid request body", 400)
     );
     expect(() =>
-      parseCreateSessionRequest({ name: "", communityId: "community-1" })
+      parseCreateSessionRequest({ name: "", clubId: "community-1" })
     ).toThrowError(new SessionRouteError("Session name required", 400));
     expect(() =>
-      parseCreateSessionRequest({ name: "Session", communityId: "" })
+      parseCreateSessionRequest({ name: "Session", clubId: "" })
     ).toThrowError(new SessionRouteError("Club is required", 400));
     expect(() =>
       parseCreateSessionRequest({
         name: "Session",
-        communityId: "community-1",
+        clubId: "community-1",
         courtCount: 0,
       })
     ).toThrowError(
@@ -186,8 +186,8 @@ describe("parseCreateSessionRequest", () => {
     expect(() =>
       parseCreateSessionRequest({
         name: "Session",
-        communityId: "community-1",
-        partnerCommunityId: "community-1",
+        clubId: "community-1",
+        partnerClubId: "community-1",
       })
     ).toThrowError(new SessionRouteError("Invalid partner club", 400));
   });
@@ -196,7 +196,7 @@ describe("parseCreateSessionRequest", () => {
     expect(() =>
       parseCreateSessionRequest({
         name: "Session",
-        communityId: "community-1",
+        clubId: "community-1",
         mode: "BAD_MODE",
       })
     ).toThrowError(new SessionRouteError("Invalid session mode", 400));
@@ -205,7 +205,7 @@ describe("parseCreateSessionRequest", () => {
   it("normalizes legacy social mix, ladder, and race session types", () => {
     const socialMixParsed = parseCreateSessionRequest({
       name: "Social Night",
-      communityId: "community-1",
+      clubId: "community-1",
       type: SessionType.SOCIAL_MIX,
     });
 
@@ -216,7 +216,7 @@ describe("parseCreateSessionRequest", () => {
 
     const parsed = parseCreateSessionRequest({
       name: "Ladder Night",
-      communityId: "community-1",
+      clubId: "community-1",
       type: SessionType.LADDER,
     });
 
@@ -225,7 +225,7 @@ describe("parseCreateSessionRequest", () => {
 
     const raceParsed = parseCreateSessionRequest({
       name: "Race Night",
-      communityId: "community-1",
+      clubId: "community-1",
       type: SessionType.RACE,
     });
 
@@ -238,7 +238,7 @@ describe("parseCreateSessionRequest", () => {
   it("accepts new matchmaking settings and derives legacy shadows", () => {
     const parsed = parseCreateSessionRequest({
       name: "Level Night",
-      communityId: "community-1",
+      clubId: "community-1",
       scoringType: SessionScoringType.POINTS,
       matchmakingStyle: SessionMatchmakingStyle.LEVEL_MATCH,
       balanceMetric: SessionBalanceMetric.RATING,
@@ -256,7 +256,7 @@ describe("parseCreateSessionRequest", () => {
   it("carries the test-session flag", () => {
     const parsed = parseCreateSessionRequest({
       name: "Dry Run",
-      communityId: "community-1",
+      clubId: "community-1",
       isTest: true,
     });
 
@@ -266,7 +266,7 @@ describe("parseCreateSessionRequest", () => {
   it("allows auto queue to be disabled explicitly", () => {
     const parsed = parseCreateSessionRequest({
       name: "No Queue Night",
-      communityId: "community-1",
+      clubId: "community-1",
       autoQueueEnabled: false,
     });
 
@@ -276,7 +276,7 @@ describe("parseCreateSessionRequest", () => {
   it("allows auto queue to be enabled explicitly", () => {
     const parsed = parseCreateSessionRequest({
       name: "Queue Night",
-      communityId: "community-1",
+      clubId: "community-1",
       autoQueueEnabled: true,
     });
 
@@ -286,7 +286,7 @@ describe("parseCreateSessionRequest", () => {
   it("allows player rest to be disabled explicitly", () => {
     const parsed = parseCreateSessionRequest({
       name: "No Rest Night",
-      communityId: "community-1",
+      clubId: "community-1",
       respectPlayerRest: false,
     });
 
@@ -296,18 +296,57 @@ describe("parseCreateSessionRequest", () => {
   it("accepts a distinct partner club for collab sessions", () => {
     const parsed = parseCreateSessionRequest({
       name: "Collab Night",
+      clubId: "community-1",
+      partnerClubId: "community-2",
+    });
+
+    expect(parsed.partnerClubId).toBe("community-2");
+  });
+
+  it("accepts legacy community identifiers", () => {
+    const parsed = parseCreateSessionRequest({
+      name: "Legacy Collab Night",
       communityId: "community-1",
       partnerCommunityId: "community-2",
     });
 
+    expect(parsed.clubId).toBe("community-1");
     expect(parsed.partnerClubId).toBe("community-2");
+  });
+
+  it("rejects conflicting club and community identifiers", () => {
+    expect(() =>
+      parseCreateSessionRequest({
+        name: "Conflict Night",
+        clubId: "community-1",
+        communityId: "community-2",
+      })
+    ).toThrowError(
+      new SessionRouteError(
+        "Conflicting club identifier; use either clubId or communityId.",
+        400
+      )
+    );
+    expect(() =>
+      parseCreateSessionRequest({
+        name: "Conflict Collab Night",
+        clubId: "community-1",
+        partnerClubId: "community-2",
+        partnerCommunityId: "community-3",
+      })
+    ).toThrowError(
+      new SessionRouteError(
+        "Conflicting partner club identifier; use either partnerClubId or partnerCommunityId.",
+        400
+      )
+    );
   });
 
   it("rejects invalid session types", () => {
     expect(() =>
       parseCreateSessionRequest({
         name: "Session",
-        communityId: "community-1",
+        clubId: "community-1",
         type: "BAD_TYPE",
       })
     ).toThrowError(new SessionRouteError("Invalid session type", 400));
@@ -317,21 +356,21 @@ describe("parseCreateSessionRequest", () => {
     expect(() =>
       parseCreateSessionRequest({
         name: "Session",
-        communityId: "community-1",
+        clubId: "community-1",
         matchmakingStyle: "BAD_STYLE",
       })
     ).toThrowError(new SessionRouteError("Invalid matchmaking style", 400));
     expect(() =>
       parseCreateSessionRequest({
         name: "Session",
-        communityId: "community-1",
+        clubId: "community-1",
         balanceMetric: "BAD_METRIC",
       })
     ).toThrowError(new SessionRouteError("Invalid balance metric", 400));
     expect(() =>
       parseCreateSessionRequest({
         name: "Session",
-        communityId: "community-1",
+        clubId: "community-1",
         pairingMode: "BAD_PAIRING",
       })
     ).toThrowError(new SessionRouteError("Invalid pairing mode", 400));

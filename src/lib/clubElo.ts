@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 
 export async function getClubEloByUserId(
-  communityId: string,
+  clubId: string,
   userIds: string[]
 ): Promise<Map<string, number>> {
   const uniqueUserIds = Array.from(new Set(userIds));
@@ -9,9 +9,9 @@ export async function getClubEloByUserId(
     return new Map<string, number>();
   }
 
-  const rows = await prisma.communityMember.findMany({
+  const rows = await prisma.clubMember.findMany({
     where: {
-      communityId,
+      clubId,
       userId: { in: uniqueUserIds },
     },
     select: { userId: true, elo: true },

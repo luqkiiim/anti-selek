@@ -6,6 +6,10 @@ import { logError, safeErrorResponse } from "@/lib/errors";
 import { getOfflineIdentityInfoByUserId } from "@/lib/offlineIdentities";
 import { prisma } from "@/lib/prisma";
 import {
+  ClubContractAliasConflictError,
+  readAliasedSearchParam,
+} from "@/lib/clubContractAliases";
+import {
   checkInvalidTargetRateLimit,
   invalidTargetResponse,
   rateLimit,
@@ -39,14 +43,19 @@ export async function GET(
       return invalidTargetResponse(request, "api:communities:id:collab-roster");
     }
 
-    const { id: hostCommunityId } = await params;
+    const { id: hostClubId } = await params;
     const url = new URL(request.url);
-    const partnerClubId = url.searchParams.get("partnerCommunityId");
+    const partnerClubId = readAliasedSearchParam(
+      url.searchParams,
+      "partnerClubId",
+      "partnerCommunityId",
+      "partner club identifier"
+    );
     if (
-      typeof hostCommunityId !== "string" ||
-      hostCommunityId.length === 0 ||
+      typeof hostClubId !== "string" ||
+      hostClubId.length === 0 ||
       !partnerClubId ||
-      partnerClubId === hostCommunityId
+      partnerClubId === hostClubId
     ) {
       return NextResponse.json(
         { error: "Invalid request parameters" },
@@ -67,18 +76,18 @@ export async function GET(
       partnerMembership,
       acceptedIdentityLink,
     ] = await Promise.all([
-      prisma.community.findUnique({
-        where: { id: hostCommunityId },
+      prisma.club.findUnique({
+        where: { id: hostClubId },
         select: { isTutorial: true },
       }),
-      prisma.community.findUnique({
+      prisma.club.findUnique({
         where: { id: partnerClubId },
         select: { isTutorial: true },
       }),
-      prisma.communityMember.findUnique({
+      prisma.clubMember.findUnique({
         where: {
-          communityId_userId: {
-            communityId: hostCommunityId,
+          clubId_userId: {
+            clubId: hostClubId,
             userId: session.user.id,
           },
         },
@@ -86,10 +95,10 @@ export async function GET(
       }),
       session.user.isAdmin
         ? Promise.resolve(null)
-        : prisma.communityMember.findUnique({
+        : prisma.clubMember.findUnique({
             where: {
-              communityId_userId: {
-                communityId: partnerClubId,
+              clubId_userId: {
+                clubId: partnerClubId,
                 userId: session.user.id,
               },
             },
@@ -100,12 +109,12 @@ export async function GET(
           status: OfflineIdentityLinkStatus.ACCEPTED,
           OR: [
             {
-              sourceCommunityId: hostCommunityId,
-              targetCommunityId: partnerClubId,
+              sourceClubId: hostClubId,
+              targetClubId: partnerClubId,
             },
             {
-              sourceCommunityId: partnerClubId,
-              targetCommunityId: hostCommunityId,
+              sourceClubId: partnerClubId,
+              targetClubId: hostClubId,
             },
           ],
         },
@@ -129,12 +138,12 @@ export async function GET(
       return invalidTargetResponse(request, "api:communities:id:collab-roster");
     }
 
-    const memberships = await prisma.communityMember.findMany({
+    const memberships = await prisma.clubMember.findMany({
       where: {
-        communityId: { in: [hostCommunityId, partnerClubId] },
+        clubId: { in: [hostClubId, partnerClubId] },
       },
       include: {
-        community: { select: { id: true, name: true } },
+        club: { select: { id: true, name: true } },
         user: {
           select: {
             id: true,
@@ -187,14 +196,14 @@ export async function GET(
           memberships: [],
         };
       current.memberships.push({
-        id: membership.community.id,
-        name: membership.community.name,
+        id: membership.club.id,
+        name: membership.club.name,
         userId: membership.userId,
         elo: membership.elo,
         status: membership.status,
         role: membership.role,
       });
-      if (membership.community.id === hostCommunityId) {
+      if (membership.club.id === hostClubId) {
         current.user = membership.user;
       }
       byIdentityKey.set(groupKey, current);
@@ -204,7 +213,7 @@ export async function GET(
       Array.from(byIdentityKey.values())
         .map(({ user, memberships: userMemberships }) => {
           const preferred =
-            userMemberships.find((membership) => membership.id === hostCommunityId) ??
+            userMemberships.find((membership) => membership.id === hostClubId) ??
             userMemberships[0];
 
           return {
@@ -238,9 +247,9 @@ export async function GET(
             communityBadges: userMemberships
               .slice()
               .sort((left, right) =>
-                left.id === hostCommunityId
+                left.id === hostClubId
                   ? -1
-                  : right.id === hostCommunityId
+                  : right.id === hostClubId
                     ? 1
                     : left.name.localeCompare(right.name)
               )
@@ -263,6 +272,9 @@ export async function GET(
         )
     );
   } catch (error) {
+    if (error instanceof ClubContractAliasConflictError) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
     logError("Load collab roster error", error);
     return safeErrorResponse();
   }

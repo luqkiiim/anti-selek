@@ -32,9 +32,9 @@ export async function PATCH(
       );
     }
 
-    const { id: communityId, requestId } = await params;
+    const { id: clubId, requestId } = await params;
 
-    if (typeof communityId !== "string" || communityId.length === 0 || typeof requestId !== "string" || requestId.length === 0) {
+    if (typeof clubId !== "string" || clubId.length === 0 || typeof requestId !== "string" || requestId.length === 0) {
       return NextResponse.json({ error: "Invalid request parameters" }, { status: 400 });
     }
 
@@ -42,7 +42,7 @@ export async function PATCH(
 
     if (invalidTargetLimitResponse) return invalidTargetLimitResponse;
     const adminAccess = await getClubAdminAccess(prisma, {
-      communityId,
+      clubId,
       userId: session.user.id,
       isGlobalAdmin: !!session.user.isAdmin,
     });
@@ -66,12 +66,12 @@ export async function PATCH(
         where: { id: requestId },
         select: {
           id: true,
-          communityId: true,
+          clubId: true,
           requesterUserId: true,
         },
       });
 
-      if (!existingRequest || existingRequest.communityId !== communityId) {
+      if (!existingRequest || existingRequest.clubId !== clubId) {
         return invalidTargetResponse(request, "api:communities:id:claim-requests:requestId");
       }
 
@@ -84,7 +84,7 @@ export async function PATCH(
 
       const approved = await prisma.$transaction((tx) =>
         approveClubClaimRequest(tx, {
-          communityId,
+          clubId,
           requestId,
           reviewerUserId: session.user.id,
         })
@@ -97,12 +97,12 @@ export async function PATCH(
       where: { id: requestId },
       select: {
         id: true,
-        communityId: true,
+        clubId: true,
         status: true,
       },
     });
 
-    if (!existingRequest || existingRequest.communityId !== communityId) {
+    if (!existingRequest || existingRequest.clubId !== clubId) {
       return invalidTargetResponse(request, "api:communities:id:claim-requests:requestId");
     }
 

@@ -48,7 +48,7 @@ export interface SessionShareImageMatch {
 
 export interface SessionShareImageInput {
   sessionName: string;
-  communityName: string;
+  clubName: string;
   sessionType: string;
   players: SessionShareImagePlayer[];
   matches: SessionShareImageMatch[];
@@ -70,7 +70,7 @@ export interface SessionShareImageStanding {
 
 export interface SessionShareImageViewModel {
   sessionName: string;
-  communityName: string;
+  clubName: string;
   sessionType: string;
   sessionTypeLabel: string;
   standings: SessionShareImageStanding[];
@@ -238,7 +238,7 @@ function getStandingScore({
 
 export function buildSessionShareImageViewModel({
   sessionName,
-  communityName,
+  clubName,
   sessionType,
   players,
   matches,
@@ -288,7 +288,7 @@ export function buildSessionShareImageViewModel({
 
   return {
     sessionName,
-    communityName,
+    clubName,
     sessionType,
     sessionTypeLabel: getSessionTypeLabel(sessionType),
     standings: sortedPlayers
@@ -428,7 +428,7 @@ const styles: Record<string, CSSProperties> = {
     lineHeight: 0.95,
     color: "#111827",
   },
-  community: {
+  club: {
     display: "flex",
     marginTop: 24,
     fontSize: 38,
@@ -875,7 +875,7 @@ export function renderSessionShareImage(
         <div style={styles.headerText}>
           <div style={styles.eyebrow}>Final standings</div>
           <div style={styles.title}>{viewModel.sessionName}</div>
-          <div style={styles.community}>{viewModel.communityName}</div>
+          <div style={styles.club}>{viewModel.clubName}</div>
         </div>
         <div style={styles.typeBadge}>{viewModel.sessionTypeLabel}</div>
       </div>

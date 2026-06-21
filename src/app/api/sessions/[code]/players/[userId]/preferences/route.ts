@@ -76,7 +76,7 @@ export async function PATCH(
       where: { code },
       select: {
         id: true,
-        communityId: true,
+        clubId: true,
         mode: true,
         status: true,
         poolsEnabled: true,

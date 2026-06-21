@@ -6,6 +6,7 @@ declare module "next-auth" {
       id: string;
       isAdmin: boolean;
       isQuickAccess: boolean;
+      quickAccessClubId?: string | null;
       quickAccessCommunityId?: string | null;
     } & DefaultSession["user"];
   }
@@ -13,6 +14,7 @@ declare module "next-auth" {
   interface User {
     isAdmin: boolean;
     isQuickAccess?: boolean;
+    quickAccessClubId?: string | null;
     quickAccessCommunityId?: string | null;
   }
 }
@@ -22,6 +24,7 @@ declare module "next-auth/jwt" {
     id: string;
     isAdmin: boolean;
     isQuickAccess: boolean;
+    quickAccessClubId?: string | null;
     quickAccessCommunityId?: string | null;
   }
 }

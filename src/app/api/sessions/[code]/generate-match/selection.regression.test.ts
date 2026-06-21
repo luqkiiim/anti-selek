@@ -86,7 +86,7 @@ function createSessionData(
   return {
     id: "session-1",
     code: "session-1",
-    communityId: null,
+    clubId: null,
     name: "Race Regression",
     type: SessionType.RACE,
     mode: SessionMode.MIXICANO,

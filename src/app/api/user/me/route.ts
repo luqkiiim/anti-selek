@@ -5,6 +5,7 @@ import { serializeAvatarEntity } from "@/lib/avatar";
 import { prisma } from "@/lib/prisma";
 import { isGlobalAdminEmail } from "@/lib/globalAdmin";
 import { logError, safeErrorResponse } from "@/lib/errors";
+import { withLegacyClubAliases } from "@/lib/clubContractAliases";
 import { rateLimit } from "@/lib/rateLimit";
 import { logAuditEvent } from "@/lib/serverAudit";
 import {
@@ -31,19 +32,19 @@ function toCurrentUserPayload(
   },
   session: Session
 ) {
-  return {
+  return withLegacyClubAliases({
     ...serializeAvatarEntity(user),
     isAdmin:
       !session.user.isQuickAccess &&
       (!!session.user.isAdmin || isGlobalAdminEmail(user.email)),
     isQuickAccess: !!session.user.isQuickAccess,
-    quickAccessCommunityId: session.user.quickAccessCommunityId ?? null,
+    quickAccessClubId: session.user.quickAccessClubId ?? null,
     selfNameChangedAt: user.selfNameChangedAt,
     canRenameName:
       user.isClaimed &&
       !session.user.isQuickAccess &&
       user.selfNameChangedAt === null,
-  };
+  });
 }
 
 async function getCurrentUserRoute(_request: Request) {

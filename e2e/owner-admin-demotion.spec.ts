@@ -3,7 +3,7 @@ import { expect, test } from "@playwright/test";
 import {
   adminUserId,
   getHostPlayerCredentials,
-  hostCommunityId,
+  hostClubId,
   signIn,
   signInAsAdmin,
 } from "./helpers";
@@ -16,7 +16,7 @@ test("owner gates admin demotion while staff/member access changes", async ({
   const playerName = "Host Player 4";
 
   await signInAsAdmin(page);
-  await page.goto(`/community/${hostCommunityId}/admin`);
+  await page.goto(`/club/${hostClubId}/admin`);
   await expect(page.getByRole("heading", { name: "E2E Host Club" })).toBeVisible();
 
   await page.getByPlaceholder("Search players by name or email").fill(playerName);
@@ -34,7 +34,7 @@ test("owner gates admin demotion while staff/member access changes", async ({
   await expect(page.getByText(`${playerName} promoted to admin.`)).toBeVisible();
 
   await signIn(page, getHostPlayerCredentials(4));
-  await page.goto(`/community/${hostCommunityId}/admin`);
+  await page.goto(`/club/${hostClubId}/admin`);
   await expect(page.getByRole("heading", { name: "E2E Host Club" })).toBeVisible();
   await page.getByPlaceholder("Search players by name or email").fill("Admin E2E");
   await page.getByRole("button", { name: "Edit" }).click();
@@ -46,8 +46,8 @@ test("owner gates admin demotion while staff/member access changes", async ({
   await expect(ownerEditor.getByRole("button", { name: "Change to staff" })).toHaveCount(0);
 
   const demoteOwnerResponse = await page.evaluate(
-    async ({ communityId, targetUserId }) => {
-      const res = await fetch(`/api/communities/${communityId}/members/${targetUserId}`, {
+    async ({ clubId, targetUserId }) => {
+      const res = await fetch(`/api/clubs/${clubId}/members/${targetUserId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ role: "STAFF" }),
@@ -55,7 +55,7 @@ test("owner gates admin demotion while staff/member access changes", async ({
       const body = await res.json().catch(() => ({}));
       return { status: res.status, body };
     },
-    { communityId: hostCommunityId, targetUserId: adminUserId }
+    { clubId: hostClubId, targetUserId: adminUserId }
   );
   expect(demoteOwnerResponse).toEqual({
     status: 400,
@@ -63,7 +63,7 @@ test("owner gates admin demotion while staff/member access changes", async ({
   });
 
   await signInAsAdmin(page);
-  await page.goto(`/community/${hostCommunityId}/admin`);
+  await page.goto(`/club/${hostClubId}/admin`);
   await page.getByPlaceholder("Search players by name or email").fill(playerName);
   await page.getByRole("button", { name: "Edit" }).click();
   const adminEditor = page
@@ -79,13 +79,13 @@ test("owner gates admin demotion while staff/member access changes", async ({
   await expect(page.getByText(`${playerName} changed to staff.`)).toBeVisible();
 
   await signIn(page, getHostPlayerCredentials(4));
-  await page.goto(`/community/${hostCommunityId}`);
+  await page.goto(`/club/${hostClubId}`);
   await expect(page.getByText("Staff", { exact: true })).toBeVisible();
   await expect(page.getByRole("link", { name: "Admin" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Host Setup desk" })).toBeVisible();
 
   await signInAsAdmin(page);
-  await page.goto(`/community/${hostCommunityId}/admin`);
+  await page.goto(`/club/${hostClubId}/admin`);
   await page.getByPlaceholder("Search players by name or email").fill(playerName);
   await page.getByRole("button", { name: "Edit" }).click();
   const staffEditor = page
@@ -96,7 +96,7 @@ test("owner gates admin demotion while staff/member access changes", async ({
   await expect(page.getByText(`${playerName} is back to member access.`)).toBeVisible();
 
   await signIn(page, getHostPlayerCredentials(4));
-  await page.goto(`/community/${hostCommunityId}`);
+  await page.goto(`/club/${hostClubId}`);
   await expect(page.getByText("Member", { exact: true })).toBeVisible();
   await expect(page.getByRole("link", { name: "Admin" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Host Setup desk" })).toHaveCount(0);

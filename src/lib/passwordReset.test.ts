@@ -5,18 +5,26 @@ describe("password reset URL origin", () => {
   const originalAppBaseUrl = process.env.APP_BASE_URL;
   const originalNodeEnv = process.env.NODE_ENV;
 
+  function setNodeEnv(value: string | undefined) {
+    if (typeof value === "undefined") {
+      Reflect.deleteProperty(process.env, "NODE_ENV");
+    } else {
+      Reflect.set(process.env, "NODE_ENV", value);
+    }
+  }
+
   afterEach(() => {
     if (typeof originalAppBaseUrl === "undefined") {
       delete process.env.APP_BASE_URL;
     } else {
       process.env.APP_BASE_URL = originalAppBaseUrl;
     }
-    process.env.NODE_ENV = originalNodeEnv;
+    setNodeEnv(originalNodeEnv);
   });
 
   it("uses configured APP_BASE_URL without trailing slashes", () => {
     process.env.APP_BASE_URL = "https://antiselek.com///";
-    process.env.NODE_ENV = "production";
+    setNodeEnv("production");
 
     expect(getAppBaseUrl(new Request("https://evil.example/reset"))).toBe(
       "https://antiselek.com"
@@ -25,7 +33,7 @@ describe("password reset URL origin", () => {
 
   it("does not trust request origin as a production fallback", () => {
     delete process.env.APP_BASE_URL;
-    process.env.NODE_ENV = "production";
+    setNodeEnv("production");
 
     expect(() =>
       getAppBaseUrl(new Request("https://evil.example/reset"))
@@ -34,7 +42,7 @@ describe("password reset URL origin", () => {
 
   it("keeps request-origin fallback outside production for local tests", () => {
     delete process.env.APP_BASE_URL;
-    process.env.NODE_ENV = "test";
+    setNodeEnv("test");
 
     expect(getAppBaseUrl(new Request("http://localhost:3000/reset"))).toBe(
       "http://localhost:3000"

@@ -20,6 +20,7 @@ import {
 } from "@/lib/quickAccess";
 import { tryRebuildQueuedMatchForSessionId } from "./queue-match/shared";
 import { logError, safeErrorResponse } from "@/lib/errors";
+import { withLegacyClubAliases } from "@/lib/clubContractAliases";
 import { rateLimit, checkInvalidTargetRateLimit, invalidTargetResponse } from "@/lib/rateLimit";
 import { getTutorialClubDisplayName } from "@/lib/tutorialPlayground";
 
@@ -52,7 +53,7 @@ async function getSessionRoute(
   const sessionData = await prisma.session.findUnique({
     where: { code },
     include: {
-      community: {
+      club: {
         select: {
           id: true,
           isTutorial: true,
@@ -78,9 +79,9 @@ async function getSessionRoute(
           },
         },
       },
-      sessionCommunities: {
+      sessionClubs: {
         include: {
-          community: { select: { id: true, name: true, isTutorial: true } },
+          club: { select: { id: true, name: true, isTutorial: true } },
         },
       },
       players: {
@@ -122,12 +123,12 @@ async function getSessionRoute(
     return invalidTargetResponse(request, "api:sessions:code");
   }
   if (
-    sessionData.community?.isTutorial &&
-    sessionData.community.tutorialOwnerId !== session.user.id
+    sessionData.club?.isTutorial &&
+    sessionData.club.tutorialOwnerId !== session.user.id
   ) {
     return invalidTargetResponse(request, "api:sessions:code");
   }
-  if (!canQuickAccessClub(session, sessionData.communityId)) {
+  if (!canQuickAccessClub(session, sessionData.clubId)) {
     return invalidTargetResponse(request, "api:sessions:code");
   }
 
@@ -159,8 +160,8 @@ async function getSessionRoute(
   const linkedClubIds = Array.from(
     new Set(
       [
-        ...(sessionData.communityId ? [sessionData.communityId] : []),
-        ...sessionData.sessionCommunities.map((link) => link.communityId),
+        ...(sessionData.clubId ? [sessionData.clubId] : []),
+        ...sessionData.sessionClubs.map((link) => link.clubId),
       ].filter(Boolean)
     )
   );
@@ -170,12 +171,12 @@ async function getSessionRoute(
       ? withPlayerClubBadges(
           sessionData.players,
           await getPlayerClubBadges(prisma, linkedClubIds, playerIds),
-          sessionData.communityId
+          sessionData.clubId
         )
-      : sessionData.communityId && sessionData.players.length > 0
+      : sessionData.clubId && sessionData.players.length > 0
         ? withClubElo(
             sessionData.players,
-            await getClubEloByUserId(sessionData.communityId, playerIds)
+            await getClubEloByUserId(sessionData.clubId, playerIds)
           )
         : sessionData.players;
   const serializedPlayers = players.map((player) => ({
@@ -233,25 +234,25 @@ async function getSessionRoute(
     };
   });
 
-  return NextResponse.json({
+  return NextResponse.json(withLegacyClubAliases({
     ...sessionData,
     courts,
     players: serializedPlayers,
     queuedMatch,
-    viewerCommunityRole: clubRole,
+    viewerClubRole: clubRole,
     viewerCanManage:
       !isQuickAccess && (session.user.isAdmin || !!operatorMembership),
     viewerCanUseAdminSessionControls:
       !isQuickAccess && (session.user.isAdmin || !!adminMembership),
-    isTutorialClub: sessionData.community?.isTutorial === true,
-    tutorialOwnerId: sessionData.community?.tutorialOwnerId ?? null,
-    communities: sessionData.sessionCommunities.map((link) => ({
-      id: link.community.id,
-      name: getTutorialClubDisplayName(link.community),
+    isTutorialClub: sessionData.club?.isTutorial === true,
+    tutorialOwnerId: sessionData.club?.tutorialOwnerId ?? null,
+    clubs: sessionData.sessionClubs.map((link) => ({
+      id: link.club.id,
+      name: getTutorialClubDisplayName(link.club),
       role: link.role,
       status: link.status,
     })),
-  });
+  }));
 }
 
 export async function GET(...args: Parameters<typeof getSessionRoute>) {
@@ -314,7 +315,7 @@ export async function PATCH(
       where: { code },
       select: {
         id: true,
-        communityId: true,
+        clubId: true,
       },
     });
 

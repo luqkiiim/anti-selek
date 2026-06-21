@@ -31,7 +31,7 @@ vi.mock("@/lib/auth", () => ({
 type PrismaInstance = typeof import("@/lib/prisma")["prisma"];
 type PostLinkRoute = typeof import("./route")["POST"];
 type GetRosterRoute =
-  typeof import("@/app/api/communities/[id]/collab-roster/route")["GET"];
+  typeof import("@/app/api/clubs/[id]/collab-roster/route")["GET"];
 type PatchLinkRoute = typeof import("./[requestId]/route")["PATCH"];
 type ScoreRoute = typeof import("@/app/api/matches/[id]/score/route")["POST"];
 type RollbackRoute =
@@ -118,26 +118,26 @@ async function createClub({
   name: string;
   adminId: string;
 }) {
-  await prisma.community.create({
+  await prisma.club.create({
     data: {
       id,
       name,
       createdById: adminId,
     },
   });
-  await prisma.communityMember.create({
+  await prisma.clubMember.create({
     data: {
-      communityId: id,
+      clubId: id,
       userId: adminId,
       role: "ADMIN",
     },
   });
 }
 
-async function addMember(communityId: string, userId: string, elo = 1000) {
-  await prisma.communityMember.create({
+async function addMember(clubId: string, userId: string, elo = 1000) {
+  await prisma.clubMember.create({
     data: {
-      communityId,
+      clubId,
       userId,
       role: "MEMBER",
       elo,
@@ -145,32 +145,32 @@ async function addMember(communityId: string, userId: string, elo = 1000) {
   });
 }
 
-async function postLink(body: Record<string, unknown>, communityId: string) {
+async function postLink(body: Record<string, unknown>, clubId: string) {
   return POST_LINK(
-    new Request(`http://localhost/api/communities/${communityId}/offline-identity-links`, {
+    new Request(`http://localhost/api/clubs/${clubId}/offline-identity-links`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(body),
     }),
-    { params: Promise.resolve({ id: communityId }) }
+    { params: Promise.resolve({ id: clubId }) }
   );
 }
 
 async function patchLink(
   requestId: string,
-  communityId: string,
+  clubId: string,
   status: OfflineIdentityLinkStatus.ACCEPTED | OfflineIdentityLinkStatus.REJECTED
 ) {
   return PATCH_LINK(
     new Request(
-      `http://localhost/api/communities/${communityId}/offline-identity-links/${requestId}`,
+      `http://localhost/api/clubs/${clubId}/offline-identity-links/${requestId}`,
       {
         method: "PATCH",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ status }),
       }
     ),
-    { params: Promise.resolve({ id: communityId, requestId }) }
+    { params: Promise.resolve({ id: clubId, requestId }) }
   );
 }
 
@@ -213,7 +213,7 @@ async function createLinkedCommunities(prefix: string) {
   const createResponse = await postLink(
     {
       sourceUserId: haziqAId,
-      targetCommunityId: communityBId,
+      targetClubId: communityBId,
       targetUserId: haziqBId,
     },
     communityAId
@@ -274,7 +274,7 @@ beforeAll(async () => {
 
   POST_LINK = (await import("./route")).POST;
   PATCH_LINK = (await import("./[requestId]/route")).PATCH;
-  GET_ROSTER = (await import("@/app/api/communities/[id]/collab-roster/route")).GET;
+  GET_ROSTER = (await import("@/app/api/clubs/[id]/collab-roster/route")).GET;
   SCORE_MATCH = (await import("@/app/api/matches/[id]/score/route")).POST;
   ROLLBACK_SESSION = (await import("@/app/api/sessions/[code]/rollback/route")).POST;
 });
@@ -285,13 +285,13 @@ beforeEach(async () => {
   await prisma.match.deleteMany();
   await prisma.court.deleteMany();
   await prisma.sessionPlayer.deleteMany();
-  await prisma.sessionCommunity.deleteMany();
+  await prisma.sessionClub.deleteMany();
   await prisma.session.deleteMany();
   await prisma.offlineIdentityLinkRequest.deleteMany();
   await prisma.offlineIdentityMember.deleteMany();
   await prisma.offlineIdentity.deleteMany();
-  await prisma.communityMember.deleteMany();
-  await prisma.community.deleteMany();
+  await prisma.clubMember.deleteMany();
+  await prisma.club.deleteMany();
   await prisma.user.deleteMany();
 });
 
@@ -334,7 +334,7 @@ describe("offline identity links", () => {
     const forbiddenCreate = await postLink(
       {
         sourceUserId: haziqAId,
-        targetCommunityId: communityBId,
+        targetClubId: communityBId,
         targetUserId: haziqBId,
       },
       communityAId
@@ -345,7 +345,7 @@ describe("offline identity links", () => {
     const createResponse = await postLink(
       {
         sourceUserId: haziqAId,
-        targetCommunityId: communityBId,
+        targetClubId: communityBId,
         targetUserId: haziqBId,
       },
       communityAId
@@ -399,7 +399,7 @@ describe("offline identity links", () => {
     mockUser(adminAId);
     const rosterResponse = await GET_ROSTER(
       new Request(
-        `http://localhost/api/communities/${communityAId}/collab-roster?partnerCommunityId=${communityBId}`
+        `http://localhost/api/clubs/${communityAId}/collab-roster?partnerClubId=${communityBId}`
       ),
       { params: Promise.resolve({ id: communityAId }) }
     );
@@ -416,15 +416,15 @@ describe("offline identity links", () => {
       data: {
         id: sessionId,
         code: `${prefix}-code`,
-        communityId: communityAId,
+        clubId: communityAId,
         name: `${prefix} Session`,
         type: SessionType.ELO,
         mode: SessionMode.MEXICANO,
         status: SessionStatus.ACTIVE,
-        sessionCommunities: {
+        sessionClubs: {
           create: [
             {
-              communityId: communityAId,
+              clubId: communityAId,
               role: SessionClubRole.HOST,
               status: SessionClubStatus.ACCEPTED,
               requestedById: adminAId,
@@ -432,7 +432,7 @@ describe("offline identity links", () => {
               reviewedAt: new Date(),
             },
             {
-              communityId: communityBId,
+              clubId: communityBId,
               role: SessionClubRole.PARTNER,
               status: SessionClubStatus.ACCEPTED,
               requestedById: adminAId,
@@ -477,11 +477,11 @@ describe("offline identity links", () => {
     expect(scoreResponse.status).toBe(200);
 
     const [haziqA, haziqB] = await Promise.all([
-      prisma.communityMember.findUnique({
-        where: { communityId_userId: { communityId: communityAId, userId: haziqAId } },
+      prisma.clubMember.findUnique({
+        where: { clubId_userId: { clubId: communityAId, userId: haziqAId } },
       }),
-      prisma.communityMember.findUnique({
-        where: { communityId_userId: { communityId: communityBId, userId: haziqBId } },
+      prisma.clubMember.findUnique({
+        where: { clubId_userId: { clubId: communityBId, userId: haziqBId } },
       }),
     ]);
     expect(haziqA?.elo).toBeGreaterThan(1000);
@@ -500,11 +500,11 @@ describe("offline identity links", () => {
     expect(rollbackResponse.status).toBe(200);
 
     const [rolledBackA, rolledBackB] = await Promise.all([
-      prisma.communityMember.findUnique({
-        where: { communityId_userId: { communityId: communityAId, userId: haziqAId } },
+      prisma.clubMember.findUnique({
+        where: { clubId_userId: { clubId: communityAId, userId: haziqAId } },
       }),
-      prisma.communityMember.findUnique({
-        where: { communityId_userId: { communityId: communityBId, userId: haziqBId } },
+      prisma.clubMember.findUnique({
+        where: { clubId_userId: { clubId: communityBId, userId: haziqBId } },
       }),
     ]);
     expect(rolledBackA?.elo).toBe(1000);

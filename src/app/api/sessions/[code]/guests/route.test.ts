@@ -107,7 +107,7 @@ describe("guest route", () => {
 
     mocks.sessionFindUnique.mockResolvedValue({
       id: "session-1",
-      communityId: null,
+      clubId: null,
       status: SessionStatus.ACTIVE,
       mode: SessionMode.MEXICANO,
       poolsEnabled: false,
@@ -141,7 +141,7 @@ describe("guest route", () => {
 
     mocks.sessionFindUnique.mockResolvedValue({
       id: "session-1",
-      communityId: null,
+      clubId: null,
       status: SessionStatus.WAITING,
       mode: SessionMode.MEXICANO,
       poolsEnabled: false,

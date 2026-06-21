@@ -87,7 +87,7 @@ export async function POST(
           },
           orderBy: [{ completedAt: "asc" }, { createdAt: "asc" }],
         },
-        community: {
+        club: {
           select: {
             isTutorial: true,
           },
@@ -100,11 +100,11 @@ export async function POST(
     }
 
     let isClubAdmin = false;
-    if (sourceSession.communityId) {
-      const membership = await prisma.communityMember.findUnique({
+    if (sourceSession.clubId) {
+      const membership = await prisma.clubMember.findUnique({
         where: {
-          communityId_userId: {
-            communityId: sourceSession.communityId,
+          clubId_userId: {
+            clubId: sourceSession.clubId,
             userId: session.user.id,
           },
         },
@@ -124,7 +124,7 @@ export async function POST(
       );
     }
 
-    if (sourceSession.community?.isTutorial) {
+    if (sourceSession.club?.isTutorial) {
       return NextResponse.json(
         { error: "Tutorial playground sessions cannot create real sessions" },
         { status: 400 }
@@ -255,7 +255,7 @@ export async function POST(
         data: {
           id: nextSessionId,
           code: nextSessionId,
-          communityId: sourceSession.communityId,
+          clubId: sourceSession.clubId,
           name: sourceSession.name,
           type: sourceSession.type,
           mode: sourceSession.mode,
@@ -387,7 +387,7 @@ export async function POST(
           const copiedFinalizableMatch: FinalizableMatch = {
             ...copiedMatch,
             session: {
-              communityId: nextSession.communityId,
+              clubId: nextSession.clubId,
               type: nextSession.type,
               isTest: false,
             },
@@ -442,11 +442,11 @@ export async function POST(
     }
 
     const players =
-      createdSession.communityId && createdSession.players.length > 0
+      createdSession.clubId && createdSession.players.length > 0
         ? withClubElo(
             createdSession.players,
             await getClubEloByUserId(
-              createdSession.communityId,
+              createdSession.clubId,
               createdSession.players.map((player) => player.userId)
             )
           )

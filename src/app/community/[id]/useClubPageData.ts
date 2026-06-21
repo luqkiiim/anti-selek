@@ -16,11 +16,11 @@ interface ClubPageRouter {
 }
 
 export function useClubPageData({
-  communityId,
+  clubId,
   status,
   router,
 }: {
-  communityId: string;
+  clubId: string;
   status: "authenticated" | "loading" | "unauthenticated";
   router: ClubPageRouter;
 }) {
@@ -37,16 +37,16 @@ export function useClubPageData({
   const [success, setSuccess] = useState("");
 
   const refreshClubData = useCallback(async () => {
-    if (!communityId) return;
+    if (!clubId) return;
 
-    const snapshot = await fetchClubPageSnapshot(communityId);
+    const snapshot = await fetchClubPageSnapshot(clubId);
     setUser(snapshot.user);
     setClub(snapshot.club);
     setClubMembers(snapshot.clubMembers);
     setSessions(snapshot.sessions);
     setClubPulse(snapshot.clubPulse);
     setClaimRequests(snapshot.claimRequests);
-  }, [communityId]);
+  }, [clubId]);
 
   useEffect(() => {
     if (status === "unauthenticated") {
@@ -54,7 +54,7 @@ export function useClubPageData({
       return;
     }
 
-    if (status !== "authenticated" || !communityId) return;
+    if (status !== "authenticated" || !clubId) return;
 
     void (async () => {
       try {
@@ -68,7 +68,7 @@ export function useClubPageData({
         setLoading(false);
       }
     })();
-  }, [communityId, refreshClubData, router, status]);
+  }, [clubId, refreshClubData, router, status]);
 
   return {
     user,

@@ -26,7 +26,7 @@ describe("duplicate player merge route", () => {
   it("disables cross-community merge and points admins to the claim flow", async () => {
     const response = await POST(
       new Request(
-        "http://localhost/api/communities/community-1/members/source-user/merge",
+        "http://localhost/api/clubs/community-1/members/source-user/merge",
         {
           method: "POST",
           headers: { "content-type": "application/json" },

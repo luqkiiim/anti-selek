@@ -65,7 +65,7 @@ function buildSession(overrides?: Partial<{
   email: string;
   isAdmin: boolean;
   isQuickAccess: boolean;
-  quickAccessCommunityId: string | null;
+  quickAccessClubId: string | null;
 }>) {
   return {
     user: {
@@ -73,7 +73,7 @@ function buildSession(overrides?: Partial<{
       email: "user@example.com",
       isAdmin: false,
       isQuickAccess: false,
-      quickAccessCommunityId: null,
+      quickAccessClubId: null,
       ...overrides,
     },
   };
@@ -114,7 +114,7 @@ describe("current user route", () => {
     mocks.auth.mockResolvedValue(
       buildSession({
         isQuickAccess: true,
-        quickAccessCommunityId: "community-1",
+        quickAccessClubId: "community-1",
       })
     );
     mocks.userFindUnique.mockResolvedValue(
@@ -230,7 +230,7 @@ describe("current user route", () => {
     mocks.auth.mockResolvedValue(
       buildSession({
         isQuickAccess: true,
-        quickAccessCommunityId: "community-1",
+        quickAccessClubId: "community-1",
       })
     );
 

@@ -11,11 +11,11 @@ import {
 
 vi.mock("@/lib/prisma", () => ({
   prisma: {
-    communityMember: {
+    clubMember: {
       findUnique: vi.fn(),
       findMany: vi.fn(),
     },
-    community: {
+    club: {
       findUnique: vi.fn(),
     },
     user: {
@@ -46,23 +46,23 @@ describe("createSessionForUser", () => {
   it("allows staff to host without auto-adding the requester to the tournament player list", async () => {
     const input = parseCreateSessionRequest({
       name: "Friday Night",
-      communityId: "community-1",
+      clubId: "community-1",
       type: SessionType.POINTS,
       mode: SessionMode.MEXICANO,
       courtCount: 3,
       playerIds: ["player-2", "player-3"],
     });
 
-    vi.mocked(prisma.communityMember.findUnique).mockResolvedValue({
-      communityId: "community-1",
+    vi.mocked(prisma.clubMember.findUnique).mockResolvedValue({
+      clubId: "community-1",
       userId: "host-1",
       role: "STAFF",
     } as never);
-    vi.mocked(prisma.community.findUnique).mockResolvedValue({
+    vi.mocked(prisma.club.findUnique).mockResolvedValue({
       isTutorial: false,
       tutorialOwnerId: null,
     } as never);
-    vi.mocked(prisma.communityMember.findMany).mockResolvedValue([
+    vi.mocked(prisma.clubMember.findMany).mockResolvedValue([
       { userId: "host-1" },
       { userId: "player-2" },
       { userId: "player-3" },
@@ -87,7 +87,7 @@ describe("createSessionForUser", () => {
     const sessionCreate = vi.fn().mockResolvedValue({
       id: "session-1",
       code: "session-1",
-      communityId: "community-1",
+      clubId: "community-1",
       name: "Friday Night",
       type: SessionType.POINTS,
       mode: SessionMode.MEXICANO,
@@ -96,7 +96,7 @@ describe("createSessionForUser", () => {
     const sessionFindUnique = vi.fn().mockResolvedValue({
       id: "session-1",
       code: "session-1",
-      communityId: "community-1",
+      clubId: "community-1",
       name: "Friday Night",
       type: SessionType.POINTS,
       mode: SessionMode.MEXICANO,

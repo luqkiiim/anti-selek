@@ -19,7 +19,7 @@ interface ClubLeaderboardPanelProps {
   title: string;
   subtitle: string;
   players: ClubPageMember[];
-  communityId: string;
+  clubId: string;
   action?: ReactNode;
   showClaimControls?: boolean;
   claimState?: ClubLeaderboardClaimState;
@@ -154,7 +154,7 @@ export function ClubLeaderboardPanel({
   title,
   subtitle,
   players,
-  communityId,
+  clubId,
   action,
   showClaimControls = true,
   claimState,
@@ -217,7 +217,7 @@ export function ClubLeaderboardPanel({
                   <Avatar name={player.name} avatarUrl={player.avatarUrl} size="md" />
                   <div className="min-w-0">
                     <Link
-                      href={`/profile/${player.id}?communityId=${communityId}`}
+                      href={`/profile/${player.id}?clubId=${clubId}`}
                       className="text-sm font-semibold text-gray-900 hover:text-blue-600 hover:underline"
                     >
                       {player.name}

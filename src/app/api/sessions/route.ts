@@ -4,6 +4,11 @@ import { parseCreateSessionRequest } from "./createSessionRequest";
 import { createSessionForUser } from "./createSessionService";
 import { listSessionsForClub } from "./listSessionsService";
 import { SessionRouteError } from "./sessionRouteShared";
+import {
+  ClubContractAliasConflictError,
+  readAliasedSearchParam,
+  withLegacyClubAliases,
+} from "@/lib/clubContractAliases";
 import { logError, safeErrorResponse } from "@/lib/errors";
 import { rateLimit } from "@/lib/rateLimit";
 import {
@@ -38,7 +43,7 @@ export async function POST(request: Request) {
       input,
     });
 
-    return NextResponse.json(createdSession);
+    return NextResponse.json(withLegacyClubAliases(createdSession));
   } catch (error) {
     if (error instanceof SessionRouteError) {
       return NextResponse.json({ error: error.message }, { status: error.status });
@@ -60,22 +65,30 @@ export async function GET(request: Request) {
     }
 
     const url = new URL(request.url);
-    const communityId = url.searchParams.get("communityId");
-    if (!communityId) {
+    const clubId = readAliasedSearchParam(
+      url.searchParams,
+      "clubId",
+      "communityId",
+      "club identifier"
+    );
+    if (!clubId) {
       return NextResponse.json([]);
     }
-    if (!canQuickAccessClub(session, communityId)) {
+    if (!canQuickAccessClub(session, clubId)) {
       return NextResponse.json({ error: "Not authorized" }, { status: 403 });
     }
 
     const sessions = await listSessionsForClub({
-      communityId,
+      clubId,
       viewerId: session.user.id,
       viewerIsAdmin: !isQuickAccessSession(session) && !!session.user.isAdmin,
     });
 
     return NextResponse.json(sessions);
   } catch (error) {
+    if (error instanceof ClubContractAliasConflictError) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
     if (error instanceof SessionRouteError) {
       return NextResponse.json({ error: error.message }, { status: error.status });
     }

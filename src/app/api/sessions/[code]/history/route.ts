@@ -23,9 +23,9 @@ const NEWER_OUTSIDE_MATCH_BLOCKED_REASON =
 
 interface CorrectionAvailabilitySession {
   id: string;
-  communityId?: string | null;
+  clubId?: string | null;
   players: Array<{ userId: string }>;
-  sessionCommunities: Array<{ communityId: string; status: string }>;
+  sessionClubs: Array<{ clubId: string; status: string }>;
   matches: Array<{
     status: string;
     createdAt: Date;
@@ -60,11 +60,11 @@ async function getCompletedScoreCorrectionBlockedReason(
   const acceptedClubIds = Array.from(
     new Set(
       [
-        sessionData.communityId,
-        ...sessionData.sessionCommunities
+        sessionData.clubId,
+        ...sessionData.sessionClubs
           .filter((link) => link.status === SessionClubStatus.ACCEPTED)
-          .map((link) => link.communityId),
-      ].filter((communityId): communityId is string => Boolean(communityId))
+          .map((link) => link.clubId),
+      ].filter((clubId): clubId is string => Boolean(clubId))
     )
   );
 
@@ -78,11 +78,11 @@ async function getCompletedScoreCorrectionBlockedReason(
             session: {
               isTest: false,
               OR: [
-                { communityId: { in: acceptedClubIds } },
+                { clubId: { in: acceptedClubIds } },
                 {
-                  sessionCommunities: {
+                  sessionClubs: {
                     some: {
-                      communityId: { in: acceptedClubIds },
+                      clubId: { in: acceptedClubIds },
                       status: SessionClubStatus.ACCEPTED,
                     },
                   },
@@ -155,7 +155,7 @@ async function getSessionHistory(
     select: {
       id: true,
       code: true,
-      communityId: true,
+      clubId: true,
       name: true,
       status: true,
       isTest: true,
@@ -167,9 +167,9 @@ async function getSessionHistory(
       pairingMode: true,
       createdAt: true,
       endedAt: true,
-      sessionCommunities: {
+      sessionClubs: {
         select: {
-          communityId: true,
+          clubId: true,
           status: true,
         },
       },
@@ -217,7 +217,7 @@ async function getSessionHistory(
   if (!sessionData) {
     return invalidTargetResponse(_request, "api:sessions:code:history");
   }
-  if (!canQuickAccessClub(session, sessionData.communityId)) {
+  if (!canQuickAccessClub(session, sessionData.clubId)) {
     return invalidTargetResponse(_request, "api:sessions:code:history");
   }
 
@@ -279,7 +279,7 @@ async function getSessionHistory(
     session: {
       id: sessionData.id,
       code: sessionData.code,
-      communityId: sessionData.communityId,
+      clubId: sessionData.clubId,
       name: sessionData.name,
       status: sessionData.status,
       isTest: sessionData.isTest,

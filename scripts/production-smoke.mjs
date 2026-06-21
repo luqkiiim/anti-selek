@@ -14,7 +14,10 @@ function normalizeBaseUrl(value) {
 const baseURL = normalizeBaseUrl(process.env.PRODUCTION_BASE_URL);
 const smokeEmail = process.env.PRODUCTION_SMOKE_EMAIL ?? "";
 const smokePassword = process.env.PRODUCTION_SMOKE_PASSWORD ?? "";
-const smokeCommunityId = process.env.PRODUCTION_SMOKE_COMMUNITY_ID ?? "";
+const smokeClubId =
+  process.env.PRODUCTION_SMOKE_CLUB_ID ??
+  process.env.PRODUCTION_SMOKE_COMMUNITY_ID ??
+  "";
 const smokeSessionCode = process.env.PRODUCTION_SMOKE_SESSION_CODE ?? "";
 const allowMutation = process.env.PRODUCTION_SMOKE_MUTATE === "1";
 const allowNonProductionTarget =
@@ -137,8 +140,8 @@ async function smokeSignedInSurface(context, label, { allowScoreMutation = false
   await signIn(page);
   log(`${label} signed-in dashboard loaded`);
 
-  if (smokeCommunityId) {
-    await page.goto(`/community/${smokeCommunityId}`, { waitUntil: "networkidle" });
+  if (smokeClubId) {
+    await page.goto(`/club/${smokeClubId}`, { waitUntil: "networkidle" });
     await page.getByText("Club hub").first().waitFor({ timeout: 25_000 });
     log(`${label} club hub loaded`);
 
@@ -154,7 +157,9 @@ async function smokeSignedInSurface(context, label, { allowScoreMutation = false
       log(`${label} host setup skipped; smoke user is not an admin for the club`);
     }
   } else {
-    log(`${label} club smoke skipped; set PRODUCTION_SMOKE_COMMUNITY_ID`);
+    log(
+      `${label} club smoke skipped; set PRODUCTION_SMOKE_CLUB_ID or PRODUCTION_SMOKE_COMMUNITY_ID`
+    );
   }
 
   if (smokeSessionCode) {

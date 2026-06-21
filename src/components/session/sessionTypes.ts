@@ -91,7 +91,7 @@ export interface ClubUser {
 export interface SessionData {
   id: string;
   code: string;
-  communityId?: string | null;
+  clubId?: string | null;
   name: string;
   type: string;
   mode: SessionMode;
@@ -114,10 +114,10 @@ export interface SessionData {
   crossoverMissThreshold: number;
   viewerCanManage?: boolean;
   viewerCanUseAdminSessionControls?: boolean;
-  viewerCommunityRole?: string | null;
+  viewerClubRole?: string | null;
   isTutorialClub?: boolean;
   tutorialOwnerId?: string | null;
-  communities?: Array<{
+  clubs?: Array<{
     id: string;
     name: string;
     role: string;

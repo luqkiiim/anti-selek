@@ -15,17 +15,17 @@ type DbClient = Prisma.TransactionClient | PrismaClient;
 
 interface SessionIdentity {
   id: string;
-  communityId?: string | null;
+  clubId?: string | null;
 }
 
 export interface SessionClubLink {
   id: string;
   sessionId: string;
-  communityId: string;
+  clubId: string;
   role: string;
   status: string;
   reviewedAt?: Date | null;
-  community?: {
+  club?: {
     id: string;
     name: string;
   };
@@ -49,37 +49,37 @@ async function getLegacySessionClubLink(
   statuses?: string[]
 ): Promise<SessionClubLink[]> {
   if (
-    !session.communityId ||
+    !session.clubId ||
     (statuses && !statuses.includes(SessionClubStatus.ACCEPTED))
   ) {
     return [];
   }
 
-  const communityDelegate = (
+  const clubDelegate = (
     tx as unknown as {
-      community?: {
+      club?: {
         findUnique?: (args: {
           where: { id: string };
           select: { id: true; name: true };
         }) => Promise<{ id: string; name: string } | null>;
       };
     }
-  ).community;
+  ).club;
   const fallbackClub =
-    (await communityDelegate?.findUnique?.({
-      where: { id: session.communityId },
+    (await clubDelegate?.findUnique?.({
+      where: { id: session.clubId },
       select: { id: true, name: true },
-    })) ?? { id: session.communityId, name: "" };
+    })) ?? { id: session.clubId, name: "" };
 
   return [
     {
-      id: `legacy:${session.id}:${session.communityId}`,
+      id: `legacy:${session.id}:${session.clubId}`,
       sessionId: session.id,
-      communityId: session.communityId,
+      clubId: session.clubId,
       role: SessionClubRole.HOST,
       status: SessionClubStatus.ACCEPTED,
       reviewedAt: null,
-      community: fallbackClub,
+      club: fallbackClub,
     },
   ];
 }
@@ -89,16 +89,16 @@ export async function getSessionClubLinks(
   session: SessionIdentity,
   statuses?: string[]
 ): Promise<SessionClubLink[]> {
-  const sessionCommunityDelegate = (
+  const sessionClubDelegate = (
     tx as unknown as {
-      sessionCommunity?: {
+      sessionClub?: {
         findMany?: (args: {
           where: {
             sessionId: string;
             status?: { in: string[] };
           };
           include: {
-            community: {
+            club: {
               select: {
                 id: true;
                 name: true;
@@ -109,19 +109,19 @@ export async function getSessionClubLinks(
         }) => Promise<Array<SessionClubLink & { createdAt?: Date }>>;
       };
     }
-  ).sessionCommunity;
+  ).sessionClub;
 
-  if (!sessionCommunityDelegate?.findMany) {
+  if (!sessionClubDelegate?.findMany) {
     return getLegacySessionClubLink(tx, session, statuses);
   }
 
-  const links = await sessionCommunityDelegate.findMany({
+  const links = await sessionClubDelegate.findMany({
     where: {
       sessionId: session.id,
       ...(statuses ? { status: { in: statuses } } : {}),
     },
     include: {
-      community: {
+      club: {
         select: {
           id: true,
           name: true,
@@ -131,7 +131,7 @@ export async function getSessionClubLinks(
     orderBy: [{ role: "asc" }, { createdAt: "asc" }],
   });
 
-  if (links.length > 0 || !session.communityId) {
+  if (links.length > 0 || !session.clubId) {
     return orderSessionClubLinks(links);
   }
 
@@ -145,10 +145,10 @@ export async function getAcceptedSessionClubIds(
   const links = await getSessionClubLinks(tx, session, [
     SessionClubStatus.ACCEPTED,
   ]);
-  const ids = links.map((link) => link.communityId);
+  const ids = links.map((link) => link.clubId);
 
-  if (session.communityId && !ids.includes(session.communityId)) {
-    ids.unshift(session.communityId);
+  if (session.clubId && !ids.includes(session.clubId)) {
+    ids.unshift(session.clubId);
   }
 
   return Array.from(new Set(ids));
@@ -162,10 +162,10 @@ export async function getSessionClubIdsForAccess(
     SessionClubStatus.ACCEPTED,
     SessionClubStatus.PENDING,
   ]);
-  const ids = links.map((link) => link.communityId);
+  const ids = links.map((link) => link.clubId);
 
-  if (session.communityId && !ids.includes(session.communityId)) {
-    ids.unshift(session.communityId);
+  if (session.clubId && !ids.includes(session.clubId)) {
+    ids.unshift(session.clubId);
   }
 
   return Array.from(new Set(ids));
@@ -174,35 +174,35 @@ export async function getSessionClubIdsForAccess(
 function getClubMemberDelegate(tx: DbClient) {
   return (
     tx as unknown as {
-      communityMember?: {
+      clubMember?: {
         findFirst?: (args: {
           where: {
-            communityId: { in: string[] };
+            clubId: { in: string[] };
             userId: string;
             role?: string | { in: string[] };
           };
           select: {
-            communityId: true;
+            clubId: true;
             role: true;
             elo?: true;
           };
-        }) => Promise<{ communityId?: string; role: string; elo?: number } | null>;
+        }) => Promise<{ clubId?: string; role: string; elo?: number } | null>;
         findUnique?: (args: {
           where: {
-            communityId_userId: {
-              communityId: string;
+            clubId_userId: {
+              clubId: string;
               userId: string;
             };
           };
           select: {
-            communityId: true;
+            clubId: true;
             role: true;
             elo?: true;
           };
-        }) => Promise<{ communityId?: string; role: string; elo?: number } | null>;
+        }) => Promise<{ clubId?: string; role: string; elo?: number } | null>;
       };
     }
-  ).communityMember;
+  ).clubMember;
 }
 
 export async function getSessionAdminMembership(
@@ -259,43 +259,43 @@ async function getSessionRoleMembership(
     roles: ClubRole[];
   }
 ) {
-  const communityIds = acceptedOnly
+  const clubIds = acceptedOnly
     ? await getAcceptedSessionClubIds(tx, session)
     : await getSessionClubIdsForAccess(tx, session);
 
-  if (communityIds.length === 0) {
+  if (clubIds.length === 0) {
     return null;
   }
 
-  const communityMemberDelegate = getClubMemberDelegate(tx);
-  if (communityMemberDelegate?.findFirst) {
-    return communityMemberDelegate.findFirst({
+  const clubMemberDelegate = getClubMemberDelegate(tx);
+  if (clubMemberDelegate?.findFirst) {
+    return clubMemberDelegate.findFirst({
       where: {
-        communityId: { in: communityIds },
+        clubId: { in: clubIds },
         userId,
         role: roles.length === 1 ? roles[0] : { in: roles },
       },
       select: {
-        communityId: true,
+        clubId: true,
         role: true,
       },
     });
   }
 
-  if (!communityMemberDelegate?.findUnique) {
+  if (!clubMemberDelegate?.findUnique) {
     return null;
   }
 
-  for (const communityId of communityIds) {
-    const membership = await communityMemberDelegate.findUnique({
+  for (const clubId of clubIds) {
+    const membership = await clubMemberDelegate.findUnique({
       where: {
-        communityId_userId: {
-          communityId,
+        clubId_userId: {
+          clubId,
           userId,
         },
       },
       select: {
-        communityId: true,
+        clubId: true,
         role: true,
       },
     });
@@ -307,7 +307,7 @@ async function getSessionRoleMembership(
     if (membership && hasRole) {
       return {
         ...membership,
-        communityId: membership.communityId ?? communityId,
+        clubId: membership.clubId ?? clubId,
       };
     }
   }
@@ -327,43 +327,43 @@ export async function getSessionMembership(
     acceptedOnly?: boolean;
   }
 ) {
-  const communityIds = acceptedOnly
+  const clubIds = acceptedOnly
     ? await getAcceptedSessionClubIds(tx, session)
     : await getSessionClubIdsForAccess(tx, session);
 
-  if (communityIds.length === 0) {
+  if (clubIds.length === 0) {
     return null;
   }
 
-  const communityMemberDelegate = getClubMemberDelegate(tx);
-  if (communityMemberDelegate?.findFirst) {
-    return communityMemberDelegate.findFirst({
+  const clubMemberDelegate = getClubMemberDelegate(tx);
+  if (clubMemberDelegate?.findFirst) {
+    return clubMemberDelegate.findFirst({
       where: {
-        communityId: { in: communityIds },
+        clubId: { in: clubIds },
         userId,
       },
       select: {
-        communityId: true,
+        clubId: true,
         role: true,
         elo: true,
       },
     });
   }
 
-  if (!communityMemberDelegate?.findUnique) {
+  if (!clubMemberDelegate?.findUnique) {
     return null;
   }
 
-  for (const communityId of communityIds) {
-    const membership = await communityMemberDelegate.findUnique({
+  for (const clubId of clubIds) {
+    const membership = await clubMemberDelegate.findUnique({
       where: {
-        communityId_userId: {
-          communityId,
+        clubId_userId: {
+          clubId,
           userId,
         },
       },
       select: {
-        communityId: true,
+        clubId: true,
         role: true,
         elo: true,
       },
@@ -372,7 +372,7 @@ export async function getSessionMembership(
     if (membership) {
       return {
         ...membership,
-        communityId: membership.communityId ?? communityId,
+        clubId: membership.clubId ?? clubId,
       };
     }
   }
@@ -382,10 +382,10 @@ export async function getSessionMembership(
 
 export async function getPlayerClubBadges(
   tx: DbClient,
-  communityIds: string[],
+  clubIds: string[],
   userIds: string[]
 ) {
-  const uniqueClubIds = Array.from(new Set(communityIds));
+  const uniqueClubIds = Array.from(new Set(clubIds));
   const uniqueUserIds = Array.from(new Set(userIds));
   if (uniqueClubIds.length === 0 || uniqueUserIds.length === 0) {
     return new Map<string, Array<{ id: string; name: string; elo: number }>>();
@@ -393,7 +393,7 @@ export async function getPlayerClubBadges(
 
   const linkedUserResolver = await getLinkedClubUserResolver(tx, {
     userIds: uniqueUserIds,
-    communityIds: uniqueClubIds,
+    clubIds: uniqueClubIds,
   });
   const candidateUserIds = Array.from(
     new Set(
@@ -401,18 +401,18 @@ export async function getPlayerClubBadges(
     )
   );
 
-  const communityMemberDelegate = (
+  const clubMemberDelegate = (
     tx as unknown as {
-      communityMember?: {
+      clubMember?: {
         findMany?: (args: {
           where: {
-            communityId: { in: string[] };
+            clubId: { in: string[] };
             userId: { in: string[] };
           };
           select: {
             userId: true;
             elo: true;
-            community: {
+            club: {
               select: {
                 id: true;
                 name: true;
@@ -423,7 +423,7 @@ export async function getPlayerClubBadges(
           Array<{
             userId: string;
             elo: number;
-            community: {
+            club: {
               id: string;
               name: string;
             };
@@ -431,21 +431,21 @@ export async function getPlayerClubBadges(
         >;
       };
     }
-  ).communityMember;
+  ).clubMember;
 
-  if (!communityMemberDelegate?.findMany) {
+  if (!clubMemberDelegate?.findMany) {
     return new Map<string, Array<{ id: string; name: string; elo: number }>>();
   }
 
-  const rows = await communityMemberDelegate.findMany({
+  const rows = await clubMemberDelegate.findMany({
     where: {
-      communityId: { in: uniqueClubIds },
+      clubId: { in: uniqueClubIds },
       userId: { in: candidateUserIds },
     },
     select: {
       userId: true,
       elo: true,
-      community: {
+      club: {
         select: {
           id: true,
           name: true,
@@ -455,7 +455,7 @@ export async function getPlayerClubBadges(
   });
 
   const rowByClubAndUser = new Map(
-    rows.map((row) => [`${row.community.id}:${row.userId}`, row])
+    rows.map((row) => [`${row.club.id}:${row.userId}`, row])
   );
   const badgesByUserId = new Map<
     string,
@@ -463,17 +463,17 @@ export async function getPlayerClubBadges(
   >();
   for (const sourceUserId of uniqueUserIds) {
     const badges: Array<{ id: string; name: string; elo: number }> = [];
-    for (const communityId of uniqueClubIds) {
+    for (const clubId of uniqueClubIds) {
       const linkedUserId = linkedUserResolver.getUserIdForClub(
         sourceUserId,
-        communityId
+        clubId
       );
-      const row = rowByClubAndUser.get(`${communityId}:${linkedUserId}`);
+      const row = rowByClubAndUser.get(`${clubId}:${linkedUserId}`);
       if (!row) continue;
 
       badges.push({
-        id: row.community.id,
-        name: row.community.name,
+        id: row.club.id,
+        name: row.club.name,
         elo: row.elo,
       });
     }
@@ -501,14 +501,14 @@ export function withPlayerClubBadges<
   preferredClubId?: string | null
 ) {
   return players.map((player) => {
-    const communityBadges = badgesByUserId.get(player.userId) ?? [];
+    const clubBadges = badgesByUserId.get(player.userId) ?? [];
     const preferredBadge = preferredClubId
-      ? communityBadges.find((badge) => badge.id === preferredClubId)
-      : communityBadges[0];
+      ? clubBadges.find((badge) => badge.id === preferredClubId)
+      : clubBadges[0];
 
     return {
       ...player,
-      communityBadges,
+      communityBadges: clubBadges,
       user: {
         ...player.user,
         elo: preferredBadge?.elo ?? player.user.elo,

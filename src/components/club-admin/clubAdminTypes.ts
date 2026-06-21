@@ -56,13 +56,13 @@ export interface ClubAdminClaimRequest {
 export interface ClubAdminOfflineIdentityLink {
   id: string;
   offlineIdentityId: string | null;
-  sourceCommunityId: string;
-  sourceCommunityName: string;
+  sourceClubId: string;
+  sourceClubName: string;
   sourceUserId: string;
   sourceUserName: string;
   sourceUserEmail: string | null;
-  targetCommunityId: string;
-  targetCommunityName: string;
+  targetClubId: string;
+  targetClubName: string;
   targetUserId: string;
   targetUserName: string;
   targetUserEmail: string | null;

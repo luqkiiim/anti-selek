@@ -124,15 +124,15 @@ export function buildAdminOnboardingProgress({
   hasCompletedSession: boolean;
 }): AdminOnboardingProgressPayload {
   const manualCompletions = new Set(completedStepIds);
-  const communityHref = primaryClubId ? `/community/${primaryClubId}` : "/";
+  const clubHref = primaryClubId ? `/club/${primaryClubId}` : "/";
   const adminPlayersHref = primaryClubId
-    ? `/community/${primaryClubId}/admin?tab=players`
+    ? `/club/${primaryClubId}/admin?tab=players`
     : "/";
   const adminSettingsHref = primaryClubId
-    ? `/community/${primaryClubId}/admin?tab=settings`
+    ? `/club/${primaryClubId}/admin?tab=settings`
     : "/";
   const hostHref = primaryClubId
-    ? `/community/${primaryClubId}?tab=host`
+    ? `/club/${primaryClubId}?tab=host`
     : "/";
   const sessionHref = primarySessionCode
     ? `/session/${primarySessionCode}`
@@ -157,7 +157,7 @@ export function buildAdminOnboardingProgress({
       actionLabel: primaryClubId
         ? "Open tutorial playground"
         : "Open tutorial playground",
-      href: communityHref,
+      href: clubHref,
       targetId: primaryClubId
         ? "admin-onboarding-dashboard-community"
         : "admin-onboarding-create-community",

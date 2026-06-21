@@ -386,32 +386,32 @@ export async function buildMatchmakingState(
       busyPlayerIds.add(userId);
     }
   }
-  const sessionCommunityIds =
+  const sessionClubIds =
     getMatchmakerSessionType(sessionData) === SessionType.ELO &&
-    sessionData.communityId &&
+    sessionData.clubId &&
     sessionData.players.length > 0
       ? await getAcceptedSessionClubIds(prisma, sessionData)
       : [];
   const playerIds = sessionData.players.map((player) => player.userId);
-  const hostCommunityId = sessionData.communityId;
+  const hostClubId = sessionData.clubId;
   let usesLegacySingleClubElo = false;
   let legacyClubEloByUserId = new Map<string, number>();
 
   if (
-    typeof hostCommunityId === "string" &&
-    sessionCommunityIds.length === 1 &&
-    sessionCommunityIds[0] === hostCommunityId
+    typeof hostClubId === "string" &&
+    sessionClubIds.length === 1 &&
+    sessionClubIds[0] === hostClubId
   ) {
     usesLegacySingleClubElo = true;
     legacyClubEloByUserId = await getClubEloByUserId(
-      hostCommunityId,
+      hostClubId,
       playerIds
     );
   }
 
   const communityBadgesByUserId =
-    sessionCommunityIds.length > 0 && !usesLegacySingleClubElo
-      ? await getPlayerClubBadges(prisma, sessionCommunityIds, playerIds)
+    sessionClubIds.length > 0 && !usesLegacySingleClubElo
+      ? await getPlayerClubBadges(prisma, sessionClubIds, playerIds)
       : new Map<string, Array<{ id: string; name: string; elo: number }>>();
   const pointDiffByUserId = new Map<string, number>();
 
@@ -454,7 +454,7 @@ export async function buildMatchmakingState(
           legacyClubEloByUserId.get(player.userId) ??
           communityBadgesByUserId
             .get(player.userId)
-            ?.find((badge) => badge.id === sessionData.communityId)?.elo ??
+            ?.find((badge) => badge.id === sessionData.clubId)?.elo ??
           communityBadgesByUserId.get(player.userId)?.[0]?.elo,
           userElo: player.user.elo,
         }),

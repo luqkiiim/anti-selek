@@ -8,7 +8,7 @@ vi.mock("@/lib/auth", () => ({
 vi.mock("@/lib/prisma", () => ({
   prisma: {
     session: { findUnique: vi.fn(), update: vi.fn() },
-    communityMember: { findUnique: vi.fn() },
+    clubMember: { findUnique: vi.fn() },
   },
 }));
 
@@ -32,12 +32,12 @@ describe("start session route", () => {
     } as never);
     vi.mocked(prisma.session.findUnique).mockResolvedValue({
       code: "session-1",
-      communityId: null,
+      clubId: null,
       status: SessionStatus.WAITING,
       players: [{ id: "player-1" }],
     } as never);
     vi.mocked(prisma.session.update).mockResolvedValue({
-      communityId: null,
+      clubId: null,
       players: [],
       courts: [],
     } as never);

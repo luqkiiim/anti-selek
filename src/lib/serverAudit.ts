@@ -9,7 +9,7 @@ interface AuditActor {
 }
 
 interface AuditScope {
-  communityId?: string;
+  clubId?: string;
   route?: string;
   sessionCode?: string;
 }

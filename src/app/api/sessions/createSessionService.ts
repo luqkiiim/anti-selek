@@ -100,15 +100,15 @@ export async function createSessionForUser({
   requesterIsAdmin: boolean;
   input: ParsedCreateSessionRequest;
 }) {
-  const requesterMembership = await prisma.communityMember.findUnique({
+  const requesterMembership = await prisma.clubMember.findUnique({
     where: {
-      communityId_userId: {
-        communityId: input.communityId,
+      clubId_userId: {
+        clubId: input.clubId,
         userId: requesterId,
       },
     },
     include: {
-      community: {
+      club: {
         select: { isTutorial: true, tutorialOwnerId: true },
       },
     },
@@ -127,9 +127,9 @@ export async function createSessionForUser({
     );
   }
   const hostClub =
-    requesterMembership?.community ??
-    (await prisma.community.findUnique({
-      where: { id: input.communityId },
+    requesterMembership?.club ??
+    (await prisma.club.findUnique({
+      where: { id: input.clubId },
       select: { isTutorial: true, tutorialOwnerId: true },
     }));
   if (hostClub?.isTutorial && hostClub.tutorialOwnerId !== requesterId) {
@@ -143,10 +143,10 @@ export async function createSessionForUser({
   }
 
   const involvedClubIds = input.partnerClubId
-    ? [input.communityId, input.partnerClubId]
-    : [input.communityId];
+    ? [input.clubId, input.partnerClubId]
+    : [input.clubId];
   if (input.partnerClubId) {
-    const partnerClub = await prisma.community.findUnique({
+    const partnerClub = await prisma.club.findUnique({
       where: { id: input.partnerClubId },
       select: { id: true, isTutorial: true },
     });
@@ -162,8 +162,8 @@ export async function createSessionForUser({
     }
   }
 
-  const memberRows = await prisma.communityMember.findMany({
-    where: { communityId: { in: involvedClubIds } },
+  const memberRows = await prisma.clubMember.findMany({
+    where: { clubId: { in: involvedClubIds } },
     select: { userId: true },
   });
   const memberSet = new Set(memberRows.map((member) => member.userId));
@@ -227,7 +227,7 @@ export async function createSessionForUser({
       data: {
         id: sessionId,
         code: sessionId,
-        communityId: input.communityId,
+        clubId: input.clubId,
         name: input.name,
         type: input.type,
         mode: input.mode,
@@ -248,10 +248,10 @@ export async function createSessionForUser({
             courtNumber: index + 1,
           })),
         },
-        sessionCommunities: {
+        sessionClubs: {
           create: [
             {
-              communityId: input.communityId,
+              clubId: input.clubId,
               role: SessionClubRole.HOST,
               status: SessionClubStatus.ACCEPTED,
               requestedById: requesterId,
@@ -261,7 +261,7 @@ export async function createSessionForUser({
             ...(input.partnerClubId
               ? [
                   {
-                    communityId: input.partnerClubId,
+                    clubId: input.partnerClubId,
                     role: SessionClubRole.PARTNER,
                     status: SessionClubStatus.PENDING,
                     requestedById: requesterId,
@@ -325,9 +325,9 @@ export async function createSessionForUser({
     return tx.session.findUnique({
       where: { id: createdSession.id },
       include: {
-        sessionCommunities: {
+        sessionClubs: {
           include: {
-            community: { select: { id: true, name: true } },
+            club: { select: { id: true, name: true } },
           },
         },
         courts: true,
@@ -360,12 +360,12 @@ export async function createSessionForUser({
       ? withPlayerClubBadges(
           newSession.players,
           await getPlayerClubBadges(prisma, involvedClubIds, playerIds),
-          newSession.communityId
+          newSession.clubId
         )
-      : newSession.communityId && newSession.players.length > 0
+      : newSession.clubId && newSession.players.length > 0
         ? withClubElo(
             newSession.players,
-            await getClubEloByUserId(newSession.communityId, playerIds)
+            await getClubEloByUserId(newSession.clubId, playerIds)
           )
         : newSession.players;
 

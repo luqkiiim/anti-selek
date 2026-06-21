@@ -80,7 +80,7 @@ function createMatch({
       id: "session-1",
       code: "ABC123",
       name: "Friday Night",
-      communityId: "community-1",
+      clubId: "community-1",
       isTest,
       status: sessionStatus,
     },

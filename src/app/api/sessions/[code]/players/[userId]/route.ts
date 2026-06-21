@@ -49,7 +49,7 @@ export async function PATCH(
       where: { code },
       select: {
         id: true,
-        communityId: true,
+        clubId: true,
         status: true,
       },
     });
@@ -145,7 +145,7 @@ export async function DELETE(
       where: { code },
       select: {
         id: true,
-        communityId: true,
+        clubId: true,
         status: true,
       },
     });

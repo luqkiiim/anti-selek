@@ -8,6 +8,10 @@ import {
   offlineIdentityLinkRequestInclude,
   toOfflineIdentityLinkResponse,
 } from "@/lib/offlineIdentities";
+import {
+  ClubContractAliasConflictError,
+  readAliasedValue,
+} from "@/lib/clubContractAliases";
 import { prisma } from "@/lib/prisma";
 import {
   getQuickAccessDeniedMessage,
@@ -38,8 +42,8 @@ export async function GET(
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
     }
 
-    const { id: communityId } = await params;
-    if (typeof communityId !== "string" || communityId.length === 0) {
+    const { id: clubId } = await params;
+    if (typeof clubId !== "string" || clubId.length === 0) {
       return NextResponse.json({ error: "Invalid request parameters" }, { status: 400 });
     }
 
@@ -49,17 +53,17 @@ export async function GET(
     );
     if (invalidTargetLimitResponse) return invalidTargetLimitResponse;
 
-    const community = await prisma.community.findUnique({
-      where: { id: communityId },
+    const club = await prisma.club.findUnique({
+      where: { id: clubId },
       select: { isTutorial: true },
     });
-    if (community?.isTutorial) {
+    if (club?.isTutorial) {
       return NextResponse.json([]);
     }
 
     const canManage = await isClubAdmin(
       prisma,
-      communityId,
+      clubId,
       session.user.id,
       !isQuickAccessSession(session) && !!session.user.isAdmin
     );
@@ -69,7 +73,7 @@ export async function GET(
 
     const requests = await prisma.offlineIdentityLinkRequest.findMany({
       where: {
-        OR: [{ sourceCommunityId: communityId }, { targetCommunityId: communityId }],
+        OR: [{ sourceClubId: clubId }, { targetClubId: clubId }],
       },
       include: offlineIdentityLinkRequestInclude,
       orderBy: { createdAt: "desc" },
@@ -105,8 +109,8 @@ export async function POST(
       );
     }
 
-    const { id: sourceCommunityId } = await params;
-    if (typeof sourceCommunityId !== "string" || sourceCommunityId.length === 0) {
+    const { id: sourceClubId } = await params;
+    if (typeof sourceClubId !== "string" || sourceClubId.length === 0) {
       return NextResponse.json({ error: "Invalid request parameters" }, { status: 400 });
     }
 
@@ -116,11 +120,11 @@ export async function POST(
     );
     if (invalidTargetLimitResponse) return invalidTargetLimitResponse;
 
-    const sourceCommunity = await prisma.community.findUnique({
-      where: { id: sourceCommunityId },
+    const sourceClub = await prisma.club.findUnique({
+      where: { id: sourceClubId },
       select: { isTutorial: true },
     });
-    if (sourceCommunity?.isTutorial) {
+    if (sourceClub?.isTutorial) {
       return NextResponse.json(
         { error: "Tutorial playground profiles cannot be linked" },
         { status: 403 }
@@ -129,7 +133,7 @@ export async function POST(
 
     const canManageSource = await isClubAdmin(
       prisma,
-      sourceCommunityId,
+      sourceClubId,
       session.user.id,
       !!session.user.isAdmin
     );
@@ -142,28 +146,43 @@ export async function POST(
       return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
     }
 
-    const { sourceUserId, targetCommunityId, targetUserId } = body as {
+    const bodyRecord = body as Record<string, unknown>;
+    let targetClubId: unknown;
+    try {
+      targetClubId = readAliasedValue(
+        bodyRecord,
+        "targetClubId",
+        "targetCommunityId",
+        "target club identifier"
+      );
+    } catch (error) {
+      if (error instanceof ClubContractAliasConflictError) {
+        return NextResponse.json({ error: error.message }, { status: 400 });
+      }
+      throw error;
+    }
+
+    const { sourceUserId, targetUserId } = bodyRecord as {
       sourceUserId?: unknown;
-      targetCommunityId?: unknown;
       targetUserId?: unknown;
     };
 
     if (
       typeof sourceUserId !== "string" ||
       sourceUserId.length === 0 ||
-      typeof targetCommunityId !== "string" ||
-      targetCommunityId.length === 0 ||
+      typeof targetClubId !== "string" ||
+      targetClubId.length === 0 ||
       typeof targetUserId !== "string" ||
       targetUserId.length === 0
     ) {
       return NextResponse.json({ error: "Invalid link target" }, { status: 400 });
     }
 
-    const targetCommunity = await prisma.community.findUnique({
-      where: { id: targetCommunityId },
+    const targetClub = await prisma.club.findUnique({
+      where: { id: targetClubId },
       select: { isTutorial: true },
     });
-    if (targetCommunity?.isTutorial) {
+    if (targetClub?.isTutorial) {
       return NextResponse.json(
         { error: "Tutorial playground profiles cannot be linked" },
         { status: 403 }
@@ -172,16 +191,16 @@ export async function POST(
 
     const canManageTarget = await isClubAdmin(
       prisma,
-      targetCommunityId,
+      targetClubId,
       session.user.id,
       !!session.user.isAdmin
     );
 
     const created = await prisma.$transaction((tx) =>
       createOfflineIdentityLinkRequest(tx, {
-        sourceCommunityId,
+        sourceClubId,
         sourceUserId,
-        targetCommunityId,
+        targetClubId,
         targetUserId,
         requestedById: session.user.id,
         autoApprove: canManageTarget,
@@ -192,6 +211,9 @@ export async function POST(
       status: created.status === "ACCEPTED" ? 200 : 201,
     });
   } catch (error) {
+    if (error instanceof ClubContractAliasConflictError) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
     if (error instanceof OfflineIdentityError) {
       return NextResponse.json(
         { error: error.message },

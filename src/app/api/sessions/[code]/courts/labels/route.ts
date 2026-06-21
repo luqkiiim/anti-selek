@@ -45,7 +45,7 @@ export async function PATCH(
       where: { code },
       select: {
         id: true,
-        communityId: true,
+        clubId: true,
         courts: {
           select: {
             id: true,

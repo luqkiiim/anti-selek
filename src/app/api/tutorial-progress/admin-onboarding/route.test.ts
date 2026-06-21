@@ -5,8 +5,8 @@ const mocks = vi.hoisted(() => ({
   rateLimit: vi.fn(async () => null),
   tutorialProgressFindUnique: vi.fn(),
   tutorialProgressUpsert: vi.fn(),
-  communityFindUnique: vi.fn(),
-  communityMemberFindMany: vi.fn(),
+  clubFindUnique: vi.fn(),
+  clubMemberFindMany: vi.fn(),
   sessionFindFirst: vi.fn(),
   matchFindFirst: vi.fn(),
 }));
@@ -21,11 +21,11 @@ vi.mock("@/lib/prisma", () => ({
       findUnique: mocks.tutorialProgressFindUnique,
       upsert: mocks.tutorialProgressUpsert,
     },
-    community: {
-      findUnique: mocks.communityFindUnique,
+    club: {
+      findUnique: mocks.clubFindUnique,
     },
-    communityMember: {
-      findMany: mocks.communityMemberFindMany,
+    clubMember: {
+      findMany: mocks.clubMemberFindMany,
     },
     session: {
       findFirst: mocks.sessionFindFirst,
@@ -47,7 +47,7 @@ function buildSession(overrides?: Partial<{
   email: string;
   isAdmin: boolean;
   isQuickAccess: boolean;
-  quickAccessCommunityId: string | null;
+  quickAccessClubId: string | null;
 }>) {
   return {
     user: {
@@ -55,28 +55,28 @@ function buildSession(overrides?: Partial<{
       email: "admin@example.com",
       isAdmin: false,
       isQuickAccess: false,
-      quickAccessCommunityId: null,
+      quickAccessClubId: null,
       ...overrides,
     },
   };
 }
 
 function buildMembership(overrides?: Partial<{
-  communityId: string;
+  clubId: string;
   members: number;
   sessions: number;
 }>) {
   const values = {
-    communityId: "community-1",
+    clubId: "community-1",
     members: 2,
     sessions: 1,
     ...overrides,
   };
 
   return {
-    communityId: values.communityId,
-    community: {
-      id: values.communityId,
+    clubId: values.clubId,
+    club: {
+      id: values.clubId,
       createdAt: new Date("2026-05-25T00:00:00.000Z"),
       _count: {
         members: values.members,
@@ -116,8 +116,8 @@ describe("admin onboarding progress route", () => {
     mocks.rateLimit.mockResolvedValue(null);
     mocks.tutorialProgressFindUnique.mockResolvedValue(null);
     mocks.tutorialProgressUpsert.mockResolvedValue({});
-    mocks.communityFindUnique.mockResolvedValue(buildTutorialClub());
-    mocks.communityMemberFindMany.mockResolvedValue([buildMembership()]);
+    mocks.clubFindUnique.mockResolvedValue(buildTutorialClub());
+    mocks.clubMemberFindMany.mockResolvedValue([buildMembership()]);
     mocks.sessionFindFirst.mockResolvedValue({ id: "session-1", code: "ABC123" });
     mocks.matchFindFirst.mockResolvedValue(null);
   });
@@ -206,7 +206,7 @@ describe("admin onboarding progress route", () => {
     mocks.auth.mockResolvedValue(
       buildSession({
         isQuickAccess: true,
-        quickAccessCommunityId: "community-1",
+        quickAccessClubId: "community-1",
       })
     );
 
@@ -217,7 +217,7 @@ describe("admin onboarding progress route", () => {
 
     expect(response.status).toBe(200);
     expect(body.visible).toBe(false);
-    expect(mocks.communityMemberFindMany).not.toHaveBeenCalled();
+    expect(mocks.clubMemberFindMany).not.toHaveBeenCalled();
   });
 
   it("updates stored progress and dismissal state", async () => {

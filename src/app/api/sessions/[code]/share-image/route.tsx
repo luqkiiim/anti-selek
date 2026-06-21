@@ -32,26 +32,26 @@ import {
 export const dynamic = "force-dynamic";
 
 function getShareImageClubName(sessionData: {
-  community?: { name: string; isTutorial: boolean } | null;
-  sessionCommunities: Array<{
+  club?: { name: string; isTutorial: boolean } | null;
+  sessionClubs: Array<{
     role: string;
     status: string;
-    community: { name: string; isTutorial: boolean };
+    club: { name: string; isTutorial: boolean };
   }>;
 }) {
-  const acceptedCommunities = sessionData.sessionCommunities.filter(
+  const acceptedClubs = sessionData.sessionClubs.filter(
     (link) => link.status === SessionClubStatus.ACCEPTED
   );
   const hostClub =
-    acceptedCommunities.find((link) => link.role === SessionClubRole.HOST)
-      ?.community ?? acceptedCommunities[0]?.community;
+    acceptedClubs.find((link) => link.role === SessionClubRole.HOST)
+      ?.club ?? acceptedClubs[0]?.club;
 
   if (hostClub) {
     return getTutorialClubDisplayName(hostClub);
   }
 
-  return sessionData.community
-    ? getTutorialClubDisplayName(sessionData.community)
+  return sessionData.club
+    ? getTutorialClubDisplayName(sessionData.club)
     : "Club";
 }
 
@@ -80,11 +80,11 @@ async function getSessionShareImageRoute(
     select: {
       id: true,
       code: true,
-      communityId: true,
+      clubId: true,
       name: true,
       type: true,
       status: true,
-      community: {
+      club: {
         select: {
           id: true,
           name: true,
@@ -92,11 +92,11 @@ async function getSessionShareImageRoute(
           tutorialOwnerId: true,
         },
       },
-      sessionCommunities: {
+      sessionClubs: {
         select: {
           role: true,
           status: true,
-          community: {
+          club: {
             select: {
               id: true,
               name: true,
@@ -145,13 +145,13 @@ async function getSessionShareImageRoute(
   }
 
   if (
-    sessionData.community?.isTutorial &&
-    sessionData.community.tutorialOwnerId !== session.user.id
+    sessionData.club?.isTutorial &&
+    sessionData.club.tutorialOwnerId !== session.user.id
   ) {
     return invalidTargetResponse(request, "api:sessions:code:share-image");
   }
 
-  if (!canQuickAccessClub(session, sessionData.communityId)) {
+  if (!canQuickAccessClub(session, sessionData.clubId)) {
     return invalidTargetResponse(request, "api:sessions:code:share-image");
   }
 
@@ -186,7 +186,7 @@ async function getSessionShareImageRoute(
 
   const viewModel = buildSessionShareImageViewModel({
     sessionName: sessionData.name,
-    communityName: getShareImageClubName(sessionData),
+    clubName: getShareImageClubName(sessionData),
     sessionType: sessionData.type,
     players: sessionData.players.map((player) => ({
       userId: player.userId,

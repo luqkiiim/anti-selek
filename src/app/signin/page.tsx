@@ -58,7 +58,7 @@ function SigninForm() {
     try {
       const result = await signIn("credentials", {
         quickAccess: "true",
-        communityName: clubName,
+        clubName: clubName,
         playerName,
         redirect: false,
       });
@@ -69,8 +69,8 @@ function SigninForm() {
       }
 
       const nextSession = await getSession();
-      const quickClubId = nextSession?.user?.quickAccessCommunityId;
-      router.push(quickClubId ? `/community/${quickClubId}` : "/");
+      const quickClubId = nextSession?.user?.quickAccessClubId;
+      router.push(quickClubId ? `/club/${quickClubId}` : "/");
       router.refresh();
     } catch {
       setError("Something went wrong");

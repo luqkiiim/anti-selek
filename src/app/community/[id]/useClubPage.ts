@@ -23,12 +23,12 @@ export function useClubPage() {
   const { status } = useSession();
   const router = useRouter();
   const params = useParams<{ id: string }>();
-  const communityId = typeof params.id === "string" ? params.id : "";
+  const clubId = typeof params.id === "string" ? params.id : "";
   const openModeLabel = getSessionModeLabel(SessionMode.MEXICANO);
   const mixedModeLabel = getSessionModeLabel(SessionMode.MIXICANO);
 
   const data = useClubPageData({
-    communityId,
+    clubId,
     status,
     router,
   });
@@ -131,7 +131,7 @@ export function useClubPage() {
   );
 
   const hostSetup = useClubHostSetup({
-    communityId,
+    clubId,
     router,
     selectablePlayers: baseSelectablePlayers,
     mixedModeLabel,
@@ -148,7 +148,7 @@ export function useClubPage() {
   );
 
   const actions = useClubPageActions({
-    communityId,
+    clubId,
     canManageClub,
     canAdminClub,
     router,
@@ -159,7 +159,7 @@ export function useClubPage() {
 
   return {
     status,
-    communityId,
+    clubId,
     openModeLabel,
     mixedModeLabel,
     leaderboard,

@@ -8,10 +8,10 @@ import bcrypt from "bcryptjs";
 import { e2eDatabaseFile, e2eEnv } from "./env";
 
 const adminUserId = "user-admin-e2e";
-const hostCommunityId = "community-host-e2e";
-const adminControlsCommunityId = "community-admin-controls-e2e";
-const claimCommunityId = "community-claim-e2e";
-const scoreCommunityId = "community-score-e2e";
+const hostClubId = "community-host-e2e";
+const adminControlsClubId = "community-admin-controls-e2e";
+const claimClubId = "community-claim-e2e";
+const scoreClubId = "community-score-e2e";
 const scoreSessionId = "session-score-e2e";
 const scoreCourtId = "court-score-e2e";
 const adminControlResetUserId = "user-admin-control-reset-e2e";
@@ -128,85 +128,85 @@ async function seedDatabase() {
       ],
     });
 
-    await prisma.community.createMany({
+    await prisma.club.createMany({
       data: [
         {
-          id: hostCommunityId,
+          id: hostClubId,
           name: "E2E Host Club",
           createdById: adminUserId,
         },
         {
-          id: scoreCommunityId,
+          id: scoreClubId,
           name: "E2E Score Club",
           createdById: adminUserId,
         },
         {
-          id: claimCommunityId,
+          id: claimClubId,
           name: "E2E Claim Club",
           createdById: adminUserId,
         },
         {
-          id: adminControlsCommunityId,
+          id: adminControlsClubId,
           name: "E2E Admin Controls Club",
           createdById: adminUserId,
         },
       ],
     });
 
-    await prisma.communityMember.createMany({
+    await prisma.clubMember.createMany({
       data: [
         {
-          communityId: hostCommunityId,
+          clubId: hostClubId,
           userId: adminUserId,
           role: "ADMIN",
         },
         ...hostPlayerIds.map((userId) => ({
-          communityId: hostCommunityId,
+          clubId: hostClubId,
           userId,
           role: "MEMBER",
         })),
         {
-          communityId: scoreCommunityId,
+          clubId: scoreClubId,
           userId: adminUserId,
           role: "ADMIN",
         },
         ...scorePlayerIds.map((userId) => ({
-          communityId: scoreCommunityId,
+          clubId: scoreClubId,
           userId,
           role: "MEMBER",
         })),
         {
-          communityId: claimCommunityId,
+          clubId: claimClubId,
           userId: adminUserId,
           role: "ADMIN",
         },
         {
-          communityId: claimCommunityId,
+          clubId: claimClubId,
           userId: claimRequesterId,
           role: "MEMBER",
         },
         {
-          communityId: claimCommunityId,
+          clubId: claimClubId,
           userId: claimPlaceholderId,
           role: "MEMBER",
         },
         {
-          communityId: adminControlsCommunityId,
+          clubId: adminControlsClubId,
           userId: adminUserId,
           role: "ADMIN",
         },
         {
-          communityId: adminControlsCommunityId,
+          clubId: adminControlsClubId,
           userId: adminControlResetUserId,
           role: "MEMBER",
         },
         {
-          communityId: adminControlsCommunityId,
+          clubId: adminControlsClubId,
           userId: adminControlRemoveUserId,
           role: "MEMBER",
         },
         {
-          communityId: adminControlsCommunityId,
+          clubId: adminControlsClubId,
           userId: adminControlPromoteUserId,
           role: "MEMBER",
         },
@@ -217,7 +217,7 @@ async function seedDatabase() {
       data: {
         id: scoreSessionId,
         code: scoreSessionId,
-        communityId: scoreCommunityId,
+        clubId: scoreClubId,
         name: "E2E Score Session",
         type: "POINTS",
         mode: "MEXICANO",

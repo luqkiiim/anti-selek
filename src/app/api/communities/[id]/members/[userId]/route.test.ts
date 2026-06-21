@@ -11,11 +11,11 @@ const mocks = vi.hoisted(() => ({
   rateLimit: vi.fn(),
   checkInvalidTargetRateLimit: vi.fn(),
   invalidTargetResponse: vi.fn(),
-  communityMemberFindUnique: vi.fn(),
-  communityMemberFindMany: vi.fn(),
-  communityMemberUpdate: vi.fn(),
-  communityMemberDelete: vi.fn(),
-  communityFindUnique: vi.fn(),
+  clubMemberFindUnique: vi.fn(),
+  clubMemberFindMany: vi.fn(),
+  clubMemberUpdate: vi.fn(),
+  clubMemberDelete: vi.fn(),
+  clubFindUnique: vi.fn(),
   sessionFindMany: vi.fn(),
   sessionPlayerDeleteMany: vi.fn(),
   transaction: vi.fn(),
@@ -31,14 +31,14 @@ vi.mock("@/lib/auth", () => ({
 
 vi.mock("@/lib/prisma", () => ({
   prisma: {
-    communityMember: {
-      findUnique: mocks.communityMemberFindUnique,
-      findMany: mocks.communityMemberFindMany,
-      update: mocks.communityMemberUpdate,
-      delete: mocks.communityMemberDelete,
+    clubMember: {
+      findUnique: mocks.clubMemberFindUnique,
+      findMany: mocks.clubMemberFindMany,
+      update: mocks.clubMemberUpdate,
+      delete: mocks.clubMemberDelete,
     },
-    community: {
-      findUnique: mocks.communityFindUnique,
+    club: {
+      findUnique: mocks.clubFindUnique,
     },
     session: {
       findMany: mocks.sessionFindMany,
@@ -86,7 +86,7 @@ import { DELETE, PATCH } from "./route";
 
 function patchMember(body: unknown, userId = "user-1") {
   return PATCH(
-    new Request(`http://localhost/api/communities/community-1/members/${userId}`, {
+    new Request(`http://localhost/api/clubs/community-1/members/${userId}`, {
       method: "PATCH",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(body),
@@ -97,7 +97,7 @@ function patchMember(body: unknown, userId = "user-1") {
 
 function deleteMember(userId = "user-1") {
   return DELETE(
-    new Request(`http://localhost/api/communities/community-1/members/${userId}`, {
+    new Request(`http://localhost/api/clubs/community-1/members/${userId}`, {
       method: "DELETE",
     }),
     { params: Promise.resolve({ id: "community-1", userId }) }
@@ -117,7 +117,7 @@ describe("club admin update member route", () => {
     mocks.invalidTargetResponse.mockImplementation(() =>
       Response.json({ error: "Unauthorized" }, { status: 403 })
     );
-    mocks.communityFindUnique.mockResolvedValue({
+    mocks.clubFindUnique.mockResolvedValue({
       createdById: "owner-1",
     });
     mocks.sessionFindMany.mockResolvedValue([]);
@@ -126,8 +126,8 @@ describe("club admin update member route", () => {
         sessionPlayer: {
           deleteMany: mocks.sessionPlayerDeleteMany,
         },
-        communityMember: {
-          delete: mocks.communityMemberDelete,
+        clubMember: {
+          delete: mocks.clubMemberDelete,
         },
       })
     );
@@ -141,7 +141,7 @@ describe("club admin update member route", () => {
   });
 
   it("rejects renaming claimed members", async () => {
-    mocks.communityMemberFindUnique
+    mocks.clubMemberFindUnique
       .mockResolvedValueOnce({ role: "ADMIN" })
       .mockResolvedValueOnce({
         id: "membership-1",
@@ -168,7 +168,7 @@ describe("club admin update member route", () => {
   });
 
   it("rejects changing claimed member account emails", async () => {
-    mocks.communityMemberFindUnique
+    mocks.clubMemberFindUnique
       .mockResolvedValueOnce({ role: "ADMIN" })
       .mockResolvedValueOnce({
         id: "membership-1",
@@ -196,7 +196,7 @@ describe("club admin update member route", () => {
   });
 
   it("rejects changing claimed member account status", async () => {
-    mocks.communityMemberFindUnique
+    mocks.clubMemberFindUnique
       .mockResolvedValueOnce({ role: "ADMIN" })
       .mockResolvedValueOnce({
         id: "membership-1",
@@ -225,7 +225,7 @@ describe("club admin update member route", () => {
 
   it("still allows renaming unclaimed placeholders", async () => {
     const createdAt = new Date("2026-05-19T00:00:00.000Z");
-    mocks.communityMemberFindUnique
+    mocks.clubMemberFindUnique
       .mockResolvedValueOnce({ role: "ADMIN" })
       .mockResolvedValueOnce({
         id: "membership-1",
@@ -247,7 +247,7 @@ describe("club admin update member route", () => {
       partnerPreference: PartnerPreference.OPEN,
       mixedSideOverride: null,
     });
-    mocks.communityMemberFindMany.mockResolvedValue([]);
+    mocks.clubMemberFindMany.mockResolvedValue([]);
     mocks.userUpdate.mockResolvedValue({
       id: "user-1",
       name: "Renamed Placeholder",
@@ -293,7 +293,7 @@ describe("club admin update member route", () => {
 
   it("allows admins to grant staff to claimed members", async () => {
     const createdAt = new Date("2026-05-19T00:00:00.000Z");
-    mocks.communityMemberFindUnique
+    mocks.clubMemberFindUnique
       .mockResolvedValueOnce({ role: "ADMIN" })
       .mockResolvedValueOnce({
         id: "membership-1",
@@ -324,7 +324,7 @@ describe("club admin update member route", () => {
       isClaimed: true,
       createdAt,
     });
-    mocks.communityMemberUpdate.mockResolvedValue({
+    mocks.clubMemberUpdate.mockResolvedValue({
       role: "STAFF",
       elo: 1000,
       status: ClubPlayerStatus.CORE,
@@ -334,7 +334,7 @@ describe("club admin update member route", () => {
     const body = await response.json();
 
     expect(response.status).toBe(200);
-    expect(mocks.communityMemberUpdate).toHaveBeenCalledWith(
+    expect(mocks.clubMemberUpdate).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({ role: "STAFF" }),
       })
@@ -344,7 +344,7 @@ describe("club admin update member route", () => {
 
   it("allows admins to revoke staff back to member", async () => {
     const createdAt = new Date("2026-05-19T00:00:00.000Z");
-    mocks.communityMemberFindUnique
+    mocks.clubMemberFindUnique
       .mockResolvedValueOnce({ role: "ADMIN" })
       .mockResolvedValueOnce({
         id: "membership-1",
@@ -373,7 +373,7 @@ describe("club admin update member route", () => {
       isClaimed: true,
       createdAt,
     });
-    mocks.communityMemberUpdate.mockResolvedValue({
+    mocks.clubMemberUpdate.mockResolvedValue({
       role: "MEMBER",
       elo: 1000,
       status: ClubPlayerStatus.CORE,
@@ -391,8 +391,8 @@ describe("club admin update member route", () => {
     mocks.auth.mockResolvedValue({
       user: { id: "owner-1", isAdmin: false },
     });
-    mocks.communityFindUnique.mockResolvedValue({ createdById: "owner-1" });
-    mocks.communityMemberFindUnique
+    mocks.clubFindUnique.mockResolvedValue({ createdById: "owner-1" });
+    mocks.clubMemberFindUnique
       .mockResolvedValueOnce({ role: "ADMIN" })
       .mockResolvedValueOnce({
         id: "membership-1",
@@ -421,7 +421,7 @@ describe("club admin update member route", () => {
       isClaimed: true,
       createdAt,
     });
-    mocks.communityMemberUpdate.mockResolvedValue({
+    mocks.clubMemberUpdate.mockResolvedValue({
       role: "STAFF",
       elo: 1000,
       status: ClubPlayerStatus.CORE,
@@ -431,7 +431,7 @@ describe("club admin update member route", () => {
     const body = await response.json();
 
     expect(response.status).toBe(200);
-    expect(mocks.communityMemberUpdate).toHaveBeenCalledWith(
+    expect(mocks.clubMemberUpdate).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({ role: "STAFF" }),
       })
@@ -444,8 +444,8 @@ describe("club admin update member route", () => {
     mocks.auth.mockResolvedValue({
       user: { id: "owner-1", isAdmin: false },
     });
-    mocks.communityFindUnique.mockResolvedValue({ createdById: "owner-1" });
-    mocks.communityMemberFindUnique
+    mocks.clubFindUnique.mockResolvedValue({ createdById: "owner-1" });
+    mocks.clubMemberFindUnique
       .mockResolvedValueOnce({ role: "ADMIN" })
       .mockResolvedValueOnce({
         id: "membership-1",
@@ -474,7 +474,7 @@ describe("club admin update member route", () => {
       isClaimed: true,
       createdAt,
     });
-    mocks.communityMemberUpdate.mockResolvedValue({
+    mocks.clubMemberUpdate.mockResolvedValue({
       role: "MEMBER",
       elo: 1000,
       status: ClubPlayerStatus.CORE,
@@ -484,7 +484,7 @@ describe("club admin update member route", () => {
     const body = await response.json();
 
     expect(response.status).toBe(200);
-    expect(mocks.communityMemberUpdate).toHaveBeenCalledWith(
+    expect(mocks.clubMemberUpdate).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({ role: "MEMBER" }),
       })
@@ -497,8 +497,8 @@ describe("club admin update member route", () => {
     mocks.auth.mockResolvedValue({
       user: { id: "global-1", isAdmin: true },
     });
-    mocks.communityFindUnique.mockResolvedValue({ createdById: "owner-1" });
-    mocks.communityMemberFindUnique
+    mocks.clubFindUnique.mockResolvedValue({ createdById: "owner-1" });
+    mocks.clubMemberFindUnique
       .mockResolvedValueOnce(null)
       .mockResolvedValueOnce({
         id: "membership-1",
@@ -527,7 +527,7 @@ describe("club admin update member route", () => {
       isClaimed: true,
       createdAt,
     });
-    mocks.communityMemberUpdate.mockResolvedValue({
+    mocks.clubMemberUpdate.mockResolvedValue({
       role: "MEMBER",
       elo: 1000,
       status: ClubPlayerStatus.CORE,
@@ -536,7 +536,7 @@ describe("club admin update member route", () => {
     const response = await patchMember({ role: "MEMBER" });
 
     expect(response.status).toBe(200);
-    expect(mocks.communityMemberUpdate).toHaveBeenCalledWith(
+    expect(mocks.clubMemberUpdate).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({ role: "MEMBER" }),
       })
@@ -544,8 +544,8 @@ describe("club admin update member route", () => {
   });
 
   it("rejects regular admin attempts to demote another admin", async () => {
-    mocks.communityFindUnique.mockResolvedValue({ createdById: "owner-1" });
-    mocks.communityMemberFindUnique
+    mocks.clubFindUnique.mockResolvedValue({ createdById: "owner-1" });
+    mocks.clubMemberFindUnique
       .mockResolvedValueOnce({ role: "ADMIN" })
       .mockResolvedValueOnce({
         id: "membership-1",
@@ -560,15 +560,15 @@ describe("club admin update member route", () => {
     expect(response.status).toBe(403);
     expect(body.error).toBe("Only the club owner can demote admins");
     expect(mocks.userUpdate).not.toHaveBeenCalled();
-    expect(mocks.communityMemberUpdate).not.toHaveBeenCalled();
+    expect(mocks.clubMemberUpdate).not.toHaveBeenCalled();
   });
 
   it("rejects attempts to demote the club owner", async () => {
     mocks.auth.mockResolvedValue({
       user: { id: "global-1", isAdmin: true },
     });
-    mocks.communityFindUnique.mockResolvedValue({ createdById: "owner-1" });
-    mocks.communityMemberFindUnique
+    mocks.clubFindUnique.mockResolvedValue({ createdById: "owner-1" });
+    mocks.clubMemberFindUnique
       .mockResolvedValueOnce(null)
       .mockResolvedValueOnce({
         id: "membership-1",
@@ -582,12 +582,12 @@ describe("club admin update member route", () => {
 
     expect(response.status).toBe(400);
     expect(body.error).toBe("The club owner role cannot be changed");
-    expect(mocks.communityMemberUpdate).not.toHaveBeenCalled();
+    expect(mocks.clubMemberUpdate).not.toHaveBeenCalled();
   });
 
   it("rejects self-demotion", async () => {
-    mocks.communityFindUnique.mockResolvedValue({ createdById: "owner-1" });
-    mocks.communityMemberFindUnique
+    mocks.clubFindUnique.mockResolvedValue({ createdById: "owner-1" });
+    mocks.clubMemberFindUnique
       .mockResolvedValueOnce({ role: "ADMIN" })
       .mockResolvedValueOnce({
         id: "membership-1",
@@ -601,12 +601,12 @@ describe("club admin update member route", () => {
 
     expect(response.status).toBe(400);
     expect(body.error).toBe("Cannot change your own club role");
-    expect(mocks.communityMemberUpdate).not.toHaveBeenCalled();
+    expect(mocks.clubMemberUpdate).not.toHaveBeenCalled();
   });
 
   it("rejects direct removal of admins and owners", async () => {
-    mocks.communityFindUnique.mockResolvedValue({ createdById: "owner-1" });
-    mocks.communityMemberFindUnique
+    mocks.clubFindUnique.mockResolvedValue({ createdById: "owner-1" });
+    mocks.clubMemberFindUnique
       .mockResolvedValueOnce({ role: "ADMIN" })
       .mockResolvedValueOnce({
         id: "membership-1",
@@ -630,14 +630,14 @@ describe("club admin update member route", () => {
   });
 
   it("allows an admin to leave when another admin remains", async () => {
-    mocks.communityFindUnique.mockResolvedValue({ createdById: "owner-1" });
-    mocks.communityMemberFindUnique
+    mocks.clubFindUnique.mockResolvedValue({ createdById: "owner-1" });
+    mocks.clubMemberFindUnique
       .mockResolvedValueOnce({ role: "ADMIN" })
       .mockResolvedValueOnce({
         id: "membership-1",
         role: "ADMIN",
       });
-    mocks.communityMemberFindMany.mockResolvedValueOnce([
+    mocks.clubMemberFindMany.mockResolvedValueOnce([
       { id: "other-admin-membership" },
     ]);
     mocks.sessionFindMany.mockResolvedValueOnce([{ id: "session-1" }]);
@@ -647,9 +647,9 @@ describe("club admin update member route", () => {
 
     expect(response.status).toBe(200);
     expect(body).toEqual({ success: true });
-    expect(mocks.communityMemberFindMany).toHaveBeenCalledWith({
+    expect(mocks.clubMemberFindMany).toHaveBeenCalledWith({
       where: {
-        communityId: "community-1",
+        clubId: "community-1",
         role: "ADMIN",
         userId: { not: "admin-1" },
       },
@@ -662,10 +662,10 @@ describe("club admin update member route", () => {
         userId: "admin-1",
       },
     });
-    expect(mocks.communityMemberDelete).toHaveBeenCalledWith({
+    expect(mocks.clubMemberDelete).toHaveBeenCalledWith({
       where: {
-        communityId_userId: {
-          communityId: "community-1",
+        clubId_userId: {
+          clubId: "community-1",
           userId: "admin-1",
         },
       },
@@ -673,14 +673,14 @@ describe("club admin update member route", () => {
   });
 
   it("blocks an admin from leaving when no other admin remains", async () => {
-    mocks.communityFindUnique.mockResolvedValue({ createdById: "owner-1" });
-    mocks.communityMemberFindUnique
+    mocks.clubFindUnique.mockResolvedValue({ createdById: "owner-1" });
+    mocks.clubMemberFindUnique
       .mockResolvedValueOnce({ role: "ADMIN" })
       .mockResolvedValueOnce({
         id: "membership-1",
         role: "ADMIN",
       });
-    mocks.communityMemberFindMany.mockResolvedValueOnce([]);
+    mocks.clubMemberFindMany.mockResolvedValueOnce([]);
 
     const response = await deleteMember("admin-1");
     const body = await response.json();
@@ -693,12 +693,12 @@ describe("club admin update member route", () => {
   });
 
   it("rejects staff attempts to edit player profiles", async () => {
-    mocks.communityMemberFindUnique.mockResolvedValueOnce({ role: "STAFF" });
+    mocks.clubMemberFindUnique.mockResolvedValueOnce({ role: "STAFF" });
 
     const response = await patchMember({ name: "Nope" });
 
     expect(response.status).toBe(403);
     expect(mocks.userUpdate).not.toHaveBeenCalled();
-    expect(mocks.communityMemberUpdate).not.toHaveBeenCalled();
+    expect(mocks.clubMemberUpdate).not.toHaveBeenCalled();
   });
 });

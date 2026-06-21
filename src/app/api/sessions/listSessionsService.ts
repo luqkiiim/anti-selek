@@ -6,23 +6,24 @@ import {
   getPlayerClubBadges,
   withPlayerClubBadges,
 } from "@/lib/sessionCollab";
+import { withLegacyClubAliases } from "@/lib/clubContractAliases";
 import { getTutorialClubDisplayName } from "@/lib/tutorialPlayground";
 import { SessionClubStatus } from "@/types/enums";
 import { SessionRouteError } from "./sessionRouteShared";
 
 export async function listSessionsForClub({
-  communityId,
+  clubId,
   viewerId,
   viewerIsAdmin,
 }: {
-  communityId: string;
+  clubId: string;
   viewerId: string;
   viewerIsAdmin: boolean;
 }) {
-  const membership = await prisma.communityMember.findUnique({
+  const membership = await prisma.clubMember.findUnique({
     where: {
-      communityId_userId: {
-        communityId,
+      clubId_userId: {
+        clubId,
         userId: viewerId,
       },
     },
@@ -39,11 +40,11 @@ export async function listSessionsForClub({
   const sessions = await prisma.session.findMany({
     where: {
       OR: [
-        { communityId },
+        { clubId },
         {
-          sessionCommunities: {
+          sessionClubs: {
             some: {
-              communityId,
+              clubId,
               status: { in: visibleCollabStatuses },
             },
           },
@@ -52,9 +53,9 @@ export async function listSessionsForClub({
     },
     orderBy: { createdAt: "desc" },
     include: {
-      sessionCommunities: {
+      sessionClubs: {
         include: {
-          community: { select: { id: true, name: true, isTutorial: true } },
+          club: { select: { id: true, name: true, isTutorial: true } },
         },
       },
       courts: true,
@@ -73,38 +74,38 @@ export async function listSessionsForClub({
   const userIds = Array.from(
     new Set(sessions.flatMap((session) => session.players.map((player) => player.userId)))
   );
-  const clubEloByUserId = await getClubEloByUserId(communityId, userIds);
-  const communityIds = Array.from(
+  const clubEloByUserId = await getClubEloByUserId(clubId, userIds);
+  const clubIds = Array.from(
     new Set(
       sessions.flatMap((session) => [
-        ...(session.communityId ? [session.communityId] : []),
-        ...session.sessionCommunities.map((link) => link.communityId),
+        ...(session.clubId ? [session.clubId] : []),
+        ...session.sessionClubs.map((link) => link.clubId),
       ])
     )
   );
   const badgesByUserId = await getPlayerClubBadges(
     prisma,
-    communityIds,
+    clubIds,
     userIds
   );
 
   return sessions.map((session) => {
-    const currentClubLink = session.sessionCommunities.find(
-      (link) => link.communityId === communityId
+    const currentClubLink = session.sessionClubs.find(
+      (link) => link.clubId === clubId
     );
-    const partnerLink = session.sessionCommunities.find(
+    const partnerLink = session.sessionClubs.find(
       (link) => link.role === "PARTNER"
     );
 
-    return {
+    return withLegacyClubAliases({
       ...session,
       players:
         (
-          session.sessionCommunities.length > 1
+          session.sessionClubs.length > 1
             ? withPlayerClubBadges(
                 session.players,
                 badgesByUserId,
-                communityId
+                clubId
               )
             : withClubElo(session.players, clubEloByUserId)
         ).map((player) => ({
@@ -115,12 +116,12 @@ export async function listSessionsForClub({
         currentClubLink?.role === "PARTNER"
           ? currentClubLink.status
           : partnerLink?.status ?? SessionClubStatus.ACCEPTED,
-      communities: session.sessionCommunities.map((link) => ({
-        id: link.community.id,
-        name: getTutorialClubDisplayName(link.community),
+      clubs: session.sessionClubs.map((link) => ({
+        id: link.club.id,
+        name: getTutorialClubDisplayName(link.club),
         role: link.role,
         status: link.status,
       })),
-    };
+    });
   });
 }

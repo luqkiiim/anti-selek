@@ -6,7 +6,7 @@ const mocks = vi.hoisted(() => ({
   rateLimit: vi.fn(),
   checkInvalidTargetRateLimit: vi.fn(),
   invalidTargetResponse: vi.fn(),
-  communityMemberFindUnique: vi.fn(),
+  clubMemberFindUnique: vi.fn(),
   userUpdate: vi.fn(),
   bcryptHash: vi.fn(),
 }));
@@ -28,8 +28,8 @@ vi.mock("@/lib/quickAccess", () => ({
 
 vi.mock("@/lib/prisma", () => ({
   prisma: {
-    communityMember: {
-      findUnique: mocks.communityMemberFindUnique,
+    clubMember: {
+      findUnique: mocks.clubMemberFindUnique,
     },
     user: {
       update: mocks.userUpdate,
@@ -47,7 +47,7 @@ import { POST } from "./route";
 
 function postPasswordReset(body: unknown) {
   return POST(
-    new Request("http://localhost/api/communities/community-1/members/user-1/password", {
+    new Request("http://localhost/api/clubs/community-1/members/user-1/password", {
       method: "POST",
       headers: {
         "content-type": "application/json",
@@ -69,7 +69,7 @@ describe("club emergency password reset route", () => {
     );
     mocks.bcryptHash.mockResolvedValue("emergency-password-hash");
     mocks.userUpdate.mockResolvedValue({});
-    mocks.communityMemberFindUnique.mockResolvedValue({
+    mocks.clubMemberFindUnique.mockResolvedValue({
       user: {
         id: "user-1",
         name: "Player One",

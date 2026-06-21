@@ -16,25 +16,25 @@ export type ClubBottomTabKey = ClubPageSection;
 interface ClubBottomTabsProps {
   activeTab: ClubBottomTabKey;
   canManageClub: boolean;
-  communityId: string;
+  clubId: string;
   currentUserId?: string | null;
   onSelect?: (tab: ClubBottomTabKey) => void;
 }
 
-function getClubTabHref(communityId: string, tab: ClubBottomTabKey) {
-  return `/community/${communityId}?tab=${tab}`;
+function getClubTabHref(clubId: string, tab: ClubBottomTabKey) {
+  return `/club/${clubId}?tab=${tab}`;
 }
 
 export function ClubBottomTabs({
   activeTab,
   canManageClub,
-  communityId,
+  clubId,
   currentUserId,
   onSelect,
 }: ClubBottomTabsProps) {
   const router = useRouter();
 
-  if (!communityId) {
+  if (!clubId) {
     return null;
   }
 
@@ -82,7 +82,7 @@ export function ClubBottomTabs({
       return;
     }
 
-    router.push(getClubTabHref(communityId, tab));
+    router.push(getClubTabHref(clubId, tab));
   };
 
   return (

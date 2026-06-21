@@ -12,11 +12,11 @@ interface OfflineIdentityLinksPanelProps {
   sourcePlaceholderOptions: ClubAdminPlayer[];
   sourceUserId: string;
   onSourceUserIdChange: (value: string) => void;
-  targetCommunitySearch: string;
+  targetClubSearch: string;
   onTargetClubSearchChange: (value: string) => void;
   selectedTargetClub: { id: string; name: string; membersCount: number } | null;
-  targetCommunityCandidates: Array<{ id: string; name: string; membersCount: number }>;
-  loadingTargetCommunities: boolean;
+  targetClubCandidates: Array<{ id: string; name: string; membersCount: number }>;
+  loadingTargetClubs: boolean;
   loadingTargetRoster: boolean;
   targetPlaceholderOptions: Array<{
     id: string;
@@ -45,7 +45,7 @@ function getLinkDirection(
   link: ClubAdminOfflineIdentityLink,
   currentClubId: string
 ) {
-  return link.sourceCommunityId === currentClubId ? "Outgoing" : "Incoming";
+  return link.sourceClubId === currentClubId ? "Outgoing" : "Incoming";
 }
 
 export function OfflineIdentityLinksPanel({
@@ -55,11 +55,11 @@ export function OfflineIdentityLinksPanel({
   sourcePlaceholderOptions,
   sourceUserId,
   onSourceUserIdChange,
-  targetCommunitySearch,
+  targetClubSearch,
   onTargetClubSearchChange,
   selectedTargetClub,
-  targetCommunityCandidates,
-  loadingTargetCommunities,
+  targetClubCandidates,
+  loadingTargetClubs,
   loadingTargetRoster,
   targetPlaceholderOptions,
   targetUserId,
@@ -134,22 +134,22 @@ export function OfflineIdentityLinksPanel({
               <div className="relative">
                 <input
                   type="search"
-                  value={targetCommunitySearch}
+                  value={targetClubSearch}
                   onChange={(event) =>
                     onTargetClubSearchChange(event.target.value)
                   }
                   className="field"
                   placeholder="Search clubs"
                 />
-                {targetCommunityCandidates.length > 0 ||
-                loadingTargetCommunities ? (
+                {targetClubCandidates.length > 0 ||
+                loadingTargetClubs ? (
                   <div className="absolute z-20 mt-2 w-full overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-lg">
-                    {loadingTargetCommunities ? (
+                    {loadingTargetClubs ? (
                       <p className="px-3 py-2 text-xs font-semibold text-gray-500">
                         Searching...
                       </p>
                     ) : (
-                      targetCommunityCandidates.map((candidate) => (
+                      targetClubCandidates.map((candidate) => (
                         <button
                           key={candidate.id}
                           type="button"
@@ -229,7 +229,7 @@ export function OfflineIdentityLinksPanel({
             links.map((link) => {
               const isIncomingPending =
                 link.status === "PENDING" &&
-                link.targetCommunityId === currentClubId;
+                link.targetClubId === currentClubId;
               const isOwnRequest = link.requestedById === currentUserId;
 
               return (
@@ -243,10 +243,10 @@ export function OfflineIdentityLinksPanel({
                         {getLinkDirection(link, currentClubId)} - {link.status}
                       </p>
                       <p className="mt-1 text-sm font-black text-gray-900">
-                        {link.sourceUserName} in {link.sourceCommunityName}
+                        {link.sourceUserName} in {link.sourceClubName}
                       </p>
                       <p className="text-sm font-black text-gray-900">
-                        {link.targetUserName} in {link.targetCommunityName}
+                        {link.targetUserName} in {link.targetClubName}
                       </p>
                       <p className="mt-1 text-xs font-semibold text-gray-500">
                         Requested {new Date(link.createdAt).toLocaleDateString()}

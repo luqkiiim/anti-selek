@@ -35,7 +35,7 @@ export async function POST(
       where: { code },
       select: {
         id: true,
-        communityId: true,
+        clubId: true,
         isTest: true,
       },
     });
@@ -45,11 +45,11 @@ export async function POST(
     }
 
     let isClubAdmin = false;
-    if (targetSession.communityId) {
-      const membership = await prisma.communityMember.findUnique({
+    if (targetSession.clubId) {
+      const membership = await prisma.clubMember.findUnique({
         where: {
-          communityId_userId: {
-            communityId: targetSession.communityId,
+          clubId_userId: {
+            clubId: targetSession.clubId,
             userId: session.user.id,
           },
         },
@@ -172,11 +172,11 @@ export async function POST(
     });
 
     const players =
-      updatedSession.communityId && updatedSession.players.length > 0
+      updatedSession.clubId && updatedSession.players.length > 0
         ? withClubElo(
             updatedSession.players,
             await getClubEloByUserId(
-              updatedSession.communityId,
+              updatedSession.clubId,
               updatedSession.players.map((player) => player.userId)
             )
           )

@@ -75,7 +75,7 @@ export async function deleteDisposableUnclaimedUsers(
       id: { in: uniqueUserIds },
       isClaimed: false,
       email: null,
-      communities: { none: {} },
+      clubMemberships: { none: {} },
       sessionPlayers: { none: {} },
       matchesAsTeam1Player1: { none: {} },
       matchesAsTeam1Player2: { none: {} },

@@ -38,7 +38,7 @@ export async function DELETE(
       select: {
         id: true,
         code: true,
-        communityId: true,
+        clubId: true,
         isTest: true,
       },
     });
@@ -48,11 +48,11 @@ export async function DELETE(
     }
 
     let isClubAdmin = false;
-    if (targetSession.communityId) {
-      const membership = await prisma.communityMember.findUnique({
+    if (targetSession.clubId) {
+      const membership = await prisma.clubMember.findUnique({
         where: {
-          communityId_userId: {
-            communityId: targetSession.communityId,
+          clubId_userId: {
+            clubId: targetSession.clubId,
             userId: session.user.id,
           },
         },
@@ -105,7 +105,7 @@ export async function DELETE(
       outcome: "success",
       request,
       scope: {
-        communityId: targetSession.communityId ?? undefined,
+        clubId: targetSession.clubId ?? undefined,
         route: "/api/sessions/[code]/delete",
         sessionCode: targetSession.code,
       },
@@ -118,7 +118,7 @@ export async function DELETE(
     return NextResponse.json({
       success: true,
       code: targetSession.code,
-      communityId: targetSession.communityId,
+      clubId: targetSession.clubId,
     });
   } catch (error) {
     logError("Delete test session error", error);

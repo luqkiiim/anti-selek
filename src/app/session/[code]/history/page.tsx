@@ -36,7 +36,7 @@ interface SessionHistoryData {
   session: {
     id: string;
     code: string;
-    communityId?: string | null;
+    clubId?: string | null;
     name: string;
     status: string;
     isTest?: boolean;
@@ -256,8 +256,8 @@ export default function SessionHistoryPage() {
   const sessionTypeLabel = getSessionTypeLabel(data.session.type);
   const sessionModeLabel = getSessionModeLabel(data.session.mode);
   const getProfileHref = (userId: string) =>
-    data.session.communityId
-      ? `/profile/${userId}?communityId=${data.session.communityId}`
+    data.session.clubId
+      ? `/profile/${userId}?clubId=${data.session.clubId}`
       : `/profile/${userId}`;
 
   return (

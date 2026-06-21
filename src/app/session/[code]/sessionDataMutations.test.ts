@@ -26,7 +26,7 @@ function createSessionData(): SessionData {
   return {
     id: "session-1",
     code: "session-1",
-    communityId: "community-1",
+    clubId: "community-1",
     name: "Test Session",
     type: SessionType.POINTS,
     mode: SessionMode.MEXICANO,
@@ -43,7 +43,7 @@ function createSessionData(): SessionData {
     poolBMissedTurns: 0,
     crossoverMissThreshold: 1,
     viewerCanManage: true,
-    viewerCommunityRole: "ADMIN",
+    viewerClubRole: "ADMIN",
     courts: [
       {
         id: "court-1",
@@ -122,7 +122,7 @@ describe("sessionDataMutations", () => {
 
     expect(merged.status).toBe("COMPLETED");
     expect(merged.viewerCanManage).toBe(true);
-    expect(merged.viewerCommunityRole).toBe("ADMIN");
+    expect(merged.viewerClubRole).toBe("ADMIN");
     expect(merged.matches).toHaveLength(1);
   });
 

@@ -16,15 +16,15 @@ export async function safeJson(res: Response) {
   }
 }
 
-export async function fetchClubAdminSnapshot(communityId: string) {
-  const communityRes = await fetch(`/api/communities/${communityId}`);
-  const communityData = await safeJson(communityRes);
-  if (!communityRes.ok) {
-    throw new Error(communityData.error || "Failed to load club");
+export async function fetchClubAdminSnapshot(clubId: string) {
+  const clubRes = await fetch(`/api/clubs/${clubId}`);
+  const clubData = await safeJson(clubRes);
+  if (!clubRes.ok) {
+    throw new Error(clubData.error || "Failed to load club");
   }
 
-  const currentClub = communityData.community
-    ? (communityData.community as ClubAdminClub)
+  const currentClub = clubData.club
+    ? (clubData.club as ClubAdminClub)
     : null;
   if (!currentClub) {
     throw new Error("Club not found or access denied");
@@ -40,13 +40,13 @@ export async function fetchClubAdminSnapshot(communityId: string) {
 
   const [playersRes, claimRequestsRes, offlineIdentityLinksRes] =
     await Promise.all([
-      fetch(`/api/communities/${communityId}/members`),
+      fetch(`/api/clubs/${clubId}/members`),
       currentClub.isTutorial
         ? Promise.resolve(null)
-        : fetch(`/api/communities/${communityId}/claim-requests`),
+        : fetch(`/api/clubs/${clubId}/claim-requests`),
       currentClub.isTutorial
         ? Promise.resolve(null)
-        : fetch(`/api/communities/${communityId}/offline-identity-links`),
+        : fetch(`/api/clubs/${clubId}/offline-identity-links`),
     ]);
   const [playersData, claimRequestsData, offlineIdentityLinksData] =
     await Promise.all([

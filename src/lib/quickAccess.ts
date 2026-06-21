@@ -17,14 +17,14 @@ export function isQuickAccessSession(
 
 export function canQuickAccessClub(
   session: Session | null | undefined,
-  communityId: string | null | undefined
+  clubId: string | null | undefined
 ): boolean {
   if (!isQuickAccessSession(session)) {
     return true;
   }
 
   return (
-    !!communityId && session?.user?.quickAccessCommunityId === communityId
+    !!clubId && session?.user?.quickAccessClubId === clubId
   );
 }
 

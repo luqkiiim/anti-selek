@@ -15,20 +15,20 @@ export function useClubAdminPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
   const params = useParams<{ id: string }>();
-  const communityId = typeof params.id === "string" ? params.id : "";
+  const clubId = typeof params.id === "string" ? params.id : "";
 
   const [activeSection, setActiveSection] =
     useState<ClubAdminSection>("players");
   const [playerSearch, setPlayerSearch] = useState("");
 
   const adminData = useClubAdminData({
-    communityId,
+    clubId,
     status,
     router,
   });
 
   const playerActions = useClubAdminPlayerActions({
-    communityId,
+    clubId,
     currentUserId: session?.user?.id,
     players: adminData.players,
     setPlayers: adminData.setPlayers,
@@ -39,7 +39,7 @@ export function useClubAdminPage() {
   });
 
   const clubActions = useClubAdminClubActions({
-    communityId,
+    clubId,
     club: adminData.club,
     refreshClubData: adminData.fetchClubAndPlayers,
     router,
@@ -48,7 +48,7 @@ export function useClubAdminPage() {
   });
 
   const offlineIdentityLinkActions = useClubAdminOfflineIdentityLinks({
-    communityId,
+    clubId,
     players: adminData.players,
     refreshClubData: adminData.fetchClubAndPlayers,
     setError: adminData.setError,
@@ -84,7 +84,7 @@ export function useClubAdminPage() {
     status,
     currentUserId: session?.user?.id,
     isGlobalAdmin: !!session?.user?.isAdmin,
-    communityId,
+    clubId,
     activeSection,
     setActiveSection,
     playerSearch,

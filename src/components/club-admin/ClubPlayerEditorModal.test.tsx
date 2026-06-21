@@ -61,7 +61,7 @@ function renderModal(
   return renderToStaticMarkup(
     <ClubPlayerEditorModal
       player={player}
-      communityId="community-1"
+      clubId="community-1"
       currentUserId={currentUserId}
       editorName={player.name}
       editorRating={String(player.elo)}

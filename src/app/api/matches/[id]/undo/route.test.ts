@@ -4,7 +4,7 @@ import { MatchStatus, SessionStatus } from "@/types/enums";
 const mocks = vi.hoisted(() => ({
   auth: vi.fn(),
   matchFindUnique: vi.fn(),
-  communityMemberFindUnique: vi.fn(),
+  clubMemberFindUnique: vi.fn(),
   undoCompletedMatchResult: vi.fn(),
 }));
 
@@ -28,8 +28,8 @@ vi.mock("@/lib/prisma", () => ({
     match: {
       findUnique: mocks.matchFindUnique,
     },
-    communityMember: {
-      findUnique: mocks.communityMemberFindUnique,
+    clubMember: {
+      findUnique: mocks.clubMemberFindUnique,
     },
   },
 }));
@@ -53,17 +53,17 @@ import { POST } from "./route";
 function createMatch({
   status = MatchStatus.COMPLETED,
   sessionStatus = SessionStatus.ACTIVE,
-  communityId = "community-1",
+  clubId = "community-1",
 }: {
   status?: MatchStatus;
   sessionStatus?: SessionStatus;
-  communityId?: string | null;
+  clubId?: string | null;
 } = {}) {
   return {
     id: "match-1",
     status,
     session: {
-      communityId,
+      clubId,
       status: sessionStatus,
     },
   };
@@ -82,7 +82,7 @@ describe("undo completed match route", () => {
       user: { id: "admin-1", isAdmin: false },
     });
     mocks.matchFindUnique.mockResolvedValue(createMatch());
-    mocks.communityMemberFindUnique.mockResolvedValue({ role: "STAFF" });
+    mocks.clubMemberFindUnique.mockResolvedValue({ role: "STAFF" });
     mocks.undoCompletedMatchResult.mockResolvedValue({
       ok: true,
       undoneMatchId: "match-1",
@@ -105,7 +105,7 @@ describe("undo completed match route", () => {
   });
 
   it("rejects non-admins", async () => {
-    mocks.communityMemberFindUnique.mockResolvedValue({ role: "MEMBER" });
+    mocks.clubMemberFindUnique.mockResolvedValue({ role: "MEMBER" });
 
     const response = await postUndo();
 

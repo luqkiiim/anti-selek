@@ -12,6 +12,7 @@ import { prisma } from "@/lib/prisma";
 import { listSessionsForClub } from "@/app/api/sessions/listSessionsService";
 import { logAuditEvent } from "@/lib/serverAudit";
 import { logError, safeErrorResponse } from "@/lib/errors";
+import { withLegacyClubAliases } from "@/lib/clubContractAliases";
 import {
   deleteTutorialPlayground,
   getTutorialClubDisplayName,
@@ -34,7 +35,7 @@ import {
 
 function toClaimRequestResponse(request: {
   id: string;
-  communityId: string;
+  clubId: string;
   requesterUserId: string;
   targetUserId: string;
   status: string;
@@ -45,9 +46,9 @@ function toClaimRequestResponse(request: {
   target: { id: string; name: string; email: string | null };
   linkedClubNames?: string[];
 }) {
-  return {
+  return withLegacyClubAliases({
     id: request.id,
-    communityId: request.communityId,
+    clubId: request.clubId,
     requesterUserId: request.requesterUserId,
     requesterName: request.requester.name,
     requesterEmail: request.requester.email,
@@ -57,9 +58,10 @@ function toClaimRequestResponse(request: {
     status: request.status,
     note: request.note,
     linkedClubNames: request.linkedClubNames ?? [],
+    linkedCommunityNames: request.linkedClubNames ?? [],
     createdAt: request.createdAt,
     reviewedAt: request.reviewedAt,
-  };
+  });
 }
 
 export async function GET(
@@ -92,7 +94,7 @@ export async function GET(
     const viewerIsQuickAccess = isQuickAccessSession(session);
     const viewerIsAdmin = !viewerIsQuickAccess && !!session.user.isAdmin;
 
-    const [viewer, membership, community] = await Promise.all([
+    const [viewer, membership, club] = await Promise.all([
       prisma.user.findUnique({
         where: { id: viewerId },
         select: {
@@ -106,10 +108,10 @@ export async function GET(
           mixedSideOverride: true,
         },
       }),
-      prisma.communityMember.findUnique({
+      prisma.clubMember.findUnique({
         where: {
-          communityId_userId: {
-            communityId: id,
+          clubId_userId: {
+            clubId: id,
             userId: viewerId,
           },
         },
@@ -118,7 +120,7 @@ export async function GET(
           elo: true,
         },
       }),
-      prisma.community.findUnique({
+      prisma.club.findUnique({
         where: { id },
         select: {
           id: true,
@@ -137,15 +139,15 @@ export async function GET(
       }),
     ]);
 
-    if (!community) {
+    if (!club) {
       return invalidTargetResponse(request, "api:communities:id");
     }
 
-    const viewerIsOwner = community.createdById === viewerId;
+    const viewerIsOwner = club.createdById === viewerId;
     const viewerCanAdminClub =
       viewerIsAdmin || viewerIsOwner || membership?.role === ClubRole.ADMIN;
 
-    if (community.isTutorial && community.tutorialOwnerId !== viewerId) {
+    if (club.isTutorial && club.tutorialOwnerId !== viewerId) {
       return invalidTargetResponse(request, "api:communities:id");
     }
 
@@ -158,8 +160,8 @@ export async function GET(
     }
 
     const [members, completedMatches, sessions, claimRequests] = await Promise.all([
-      prisma.communityMember.findMany({
-        where: { communityId: id },
+      prisma.clubMember.findMany({
+        where: { clubId: id },
         include: {
           user: {
             select: {
@@ -184,11 +186,11 @@ export async function GET(
           session: {
             isTest: false,
             OR: [
-              { communityId: id },
+              { clubId: id },
               {
-                sessionCommunities: {
+                sessionClubs: {
                   some: {
-                    communityId: id,
+                    clubId: id,
                     status: "ACCEPTED",
                   },
                 },
@@ -225,7 +227,7 @@ export async function GET(
         },
       }),
       listSessionsForClub({
-        communityId: id,
+        clubId: id,
         viewerId,
         viewerIsAdmin: viewerCanAdminClub,
       }),
@@ -233,11 +235,11 @@ export async function GET(
         where:
           viewerCanAdminClub
             ? {
-                communityId: id,
+                clubId: id,
                 status: ClaimRequestStatus.PENDING,
               }
             : {
-                communityId: id,
+                clubId: id,
                 requesterUserId: viewerId,
                 status: ClaimRequestStatus.PENDING,
               },
@@ -270,7 +272,7 @@ export async function GET(
       statsByUserId.set(member.user.id, { wins: 0, losses: 0 });
     }
     const resolveStatUserId = await getClubStatUserResolver(prisma, {
-      communityId: id,
+      clubId: id,
       memberUserIds: members.map((member) => member.user.id),
     });
     const latestCompletedSession = sessions
@@ -325,7 +327,7 @@ export async function GET(
       }
     }
 
-    const communityMembers = members.map((member) => {
+    const clubMembers = members.map((member) => {
       const offlineIdentityInfo = offlineIdentityInfoByUserId.get(member.user.id);
       const rankMovement = rankMovements.get(member.user.id);
 
@@ -358,13 +360,13 @@ export async function GET(
         previousRank: rankMovement?.previousRank ?? null,
         rankDelta: rankMovement?.rankDelta ?? null,
         role: member.role,
-        isOwner: member.user.id === community.createdById,
+        isOwner: member.user.id === club.createdById,
         offlineIdentityId: offlineIdentityInfo?.offlineIdentityId ?? null,
         linkedClubBadges: offlineIdentityInfo?.linkedClubBadges ?? [],
       };
     });
     const clubPulse = buildClubPulse({
-      members: communityMembers.map((member) => ({
+      members: clubMembers.map((member) => ({
         id: member.id,
         name: member.name,
         avatarUrl: member.avatarUrl,
@@ -380,6 +382,23 @@ export async function GET(
       })),
     });
 
+    const clubPayload = {
+      id: club.id,
+      name: getTutorialClubDisplayName(club),
+      clubId: club.id,
+      clubName: getTutorialClubDisplayName(club),
+      isTutorial: club.isTutorial,
+      tutorialOwnerId: club.tutorialOwnerId,
+      viewerIsOwner,
+      role: viewerIsQuickAccess
+        ? ClubRole.MEMBER
+        : viewerCanAdminClub
+          ? ClubRole.ADMIN
+          : membership?.role ?? "MEMBER",
+      isPasswordProtected: club.isPasswordProtected,
+      membersCount: club._count.members,
+      sessionsCount: club._count.sessions,
+    };
     return NextResponse.json({
       viewer: {
         id: viewer.id,
@@ -403,23 +422,12 @@ export async function GET(
             ? viewer.mixedSideOverride
             : null,
       },
-      community: {
-        id: community.id,
-        name: getTutorialClubDisplayName(community),
-        isTutorial: community.isTutorial,
-        tutorialOwnerId: community.tutorialOwnerId,
-        viewerIsOwner,
-        role: viewerIsQuickAccess
-          ? ClubRole.MEMBER
-          : viewerCanAdminClub
-            ? ClubRole.ADMIN
-            : membership?.role ?? "MEMBER",
-        isPasswordProtected: community.isPasswordProtected,
-        membersCount: community._count.members,
-        sessionsCount: community._count.sessions,
-      },
-      communityMembers,
+      club: withLegacyClubAliases(clubPayload),
+      community: withLegacyClubAliases(clubPayload),
+      clubMembers,
+      communityMembers: clubMembers,
       sessions,
+      clubPulse: clubPulse,
       communityPulse: clubPulse,
       claimRequests: claimRequests.map((claimRequest) =>
         toClaimRequestResponse({
@@ -469,16 +477,16 @@ export async function PATCH(
     if (invalidTargetLimitResponse) return invalidTargetLimitResponse;
 
     const [membership, existing] = await Promise.all([
-      prisma.communityMember.findUnique({
+      prisma.clubMember.findUnique({
         where: {
-          communityId_userId: {
-            communityId: id,
+          clubId_userId: {
+            clubId: id,
             userId: session.user.id,
           },
         },
         select: { role: true },
       }),
-      prisma.community.findUnique({
+      prisma.club.findUnique({
         where: { id },
         select: {
           id: true,
@@ -558,13 +566,13 @@ export async function PATCH(
         );
       }
 
-      const existingCommunities = await prisma.community.findMany({
+      const existingClubs = await prisma.club.findMany({
         where: { NOT: { id } },
         select: { name: true },
       });
-      const normalizedNameExists = existingCommunities.some(
-        (community) =>
-          normalizeNameLookupKey(community.name) === normalizedLookupName
+      const normalizedNameExists = existingClubs.some(
+        (club) =>
+          normalizeNameLookupKey(club.name) === normalizedLookupName
       );
       if (normalizedNameExists) {
         return NextResponse.json(
@@ -612,7 +620,7 @@ export async function PATCH(
       return NextResponse.json({ error: "Nothing to update" }, { status: 400 });
     }
 
-    const updatedClub = await prisma.community.update({
+    const updatedClub = await prisma.club.update({
       where: { id },
       data: updates,
       select: {
@@ -667,16 +675,16 @@ export async function DELETE(
     if (invalidTargetLimitResponse) return invalidTargetLimitResponse;
 
     const [membership, existing] = await Promise.all([
-      prisma.communityMember.findUnique({
+      prisma.clubMember.findUnique({
         where: {
-          communityId_userId: {
-            communityId: id,
+          clubId_userId: {
+            clubId: id,
             userId: session.user.id,
           },
         },
         select: { role: true },
       }),
-      prisma.community.findUnique({
+      prisma.club.findUnique({
         where: { id },
         select: {
           id: true,
@@ -714,7 +722,7 @@ export async function DELETE(
       }
       await deleteTutorialPlayground(session.user.id, id);
     } else {
-      await prisma.community.delete({ where: { id } });
+      await prisma.club.delete({ where: { id } });
     }
 
     logAuditEvent({
@@ -727,8 +735,8 @@ export async function DELETE(
       outcome: "success",
       request,
       scope: {
-        communityId: id,
-        route: "/api/communities/[id]",
+        clubId: id,
+        route: "/api/clubs/[id]",
       },
       target: {
         id,

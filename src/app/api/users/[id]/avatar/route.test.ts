@@ -5,7 +5,7 @@ const mocks = vi.hoisted(() => ({
   auth: vi.fn(),
   userFindUnique: vi.fn(),
   userUpdate: vi.fn(),
-  communityMemberFindUnique: vi.fn(),
+  clubMemberFindUnique: vi.fn(),
   uploadAvatarObject: vi.fn(),
   cleanupSupersededAvatar: vi.fn(),
   rollbackUploadedAvatar: vi.fn(),
@@ -21,8 +21,8 @@ vi.mock("@/lib/prisma", () => ({
       findUnique: mocks.userFindUnique,
       update: mocks.userUpdate,
     },
-    communityMember: {
-      findUnique: mocks.communityMemberFindUnique,
+    clubMember: {
+      findUnique: mocks.clubMemberFindUnique,
     },
   },
 }));
@@ -222,13 +222,13 @@ describe("user avatar route", () => {
       isClaimed: false,
       name: "Placeholder",
     });
-    mocks.communityMemberFindUnique
+    mocks.clubMemberFindUnique
       .mockResolvedValueOnce({ role: "ADMIN" })
       .mockResolvedValueOnce({ role: "MEMBER" });
 
     const response = await POST(
       createAvatarRequest({
-        url: "http://localhost/api/users/placeholder-1/avatar?communityId=community-1",
+        url: "http://localhost/api/users/placeholder-1/avatar?clubId=community-1",
       }),
       {
         params: Promise.resolve({ id: "placeholder-1" }),
@@ -236,7 +236,7 @@ describe("user avatar route", () => {
     );
 
     expect(response.status).toBe(200);
-    expect(mocks.communityMemberFindUnique).toHaveBeenCalledTimes(2);
+    expect(mocks.clubMemberFindUnique).toHaveBeenCalledTimes(2);
   });
 
   it("removes an avatar and clears the stored key", async () => {

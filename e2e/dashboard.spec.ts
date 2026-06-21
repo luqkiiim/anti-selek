@@ -8,8 +8,8 @@ import {
 test("dashboard lets an admin create a club and another member join it", async ({
   page,
 }) => {
-  const communityName = `E2E Dashboard Club ${Date.now()}`;
-  const communityPassword = "ClubSecret123";
+  const clubName = `E2E Dashboard Club ${Date.now()}`;
+  const clubPassword = "ClubSecret123";
 
   await signInAsAdmin(page);
   await page.goto("/");
@@ -21,13 +21,13 @@ test("dashboard lets an admin create a club and another member join it", async (
   await expect(
     page.getByRole("heading", { name: "Create club" })
   ).toBeVisible();
-  await page.getByLabel("Club name").fill(communityName);
-  await page.getByLabel("Password").fill(communityPassword);
+  await page.getByLabel("Club name").fill(clubName);
+  await page.getByLabel("Password").fill(clubPassword);
   await page.getByRole("button", { name: "Create", exact: true }).click();
 
-  await expect(page).toHaveURL(/\/community\/.+/);
+  await expect(page).toHaveURL(/\/club\/.+/);
   const createdClubPath = new URL(page.url()).pathname;
-  await expect(page.getByRole("heading", { name: communityName })).toBeVisible();
+  await expect(page.getByRole("heading", { name: clubName })).toBeVisible();
 
   await signIn(page, getHostPlayerCredentials(1));
   await page.goto("/");
@@ -35,10 +35,10 @@ test("dashboard lets an admin create a club and another member join it", async (
   await expect(
     page.getByRole("heading", { name: "Join club" })
   ).toBeVisible();
-  await page.getByLabel("Club name").fill(communityName);
-  await page.getByLabel("Password").fill(communityPassword);
+  await page.getByLabel("Club name").fill(clubName);
+  await page.getByLabel("Password").fill(clubPassword);
   await page.getByRole("button", { name: "Join", exact: true }).click();
 
   await expect(page).toHaveURL(new RegExp(`${createdClubPath}$`));
-  await expect(page.getByRole("heading", { name: communityName })).toBeVisible();
+  await expect(page.getByRole("heading", { name: clubName })).toBeVisible();
 });

@@ -7,9 +7,9 @@ import {
 
 const mocks = vi.hoisted(() => ({
   auth: vi.fn(),
-  communityFindUnique: vi.fn(),
-  communityMemberFindUnique: vi.fn(),
-  communityMemberFindMany: vi.fn(),
+  clubFindUnique: vi.fn(),
+  clubMemberFindUnique: vi.fn(),
+  clubMemberFindMany: vi.fn(),
   offlineIdentityLinkRequestFindFirst: vi.fn(),
   offlineIdentityMemberFindMany: vi.fn(),
 }));
@@ -20,12 +20,12 @@ vi.mock("@/lib/auth", () => ({
 
 vi.mock("@/lib/prisma", () => ({
   prisma: {
-    community: {
-      findUnique: mocks.communityFindUnique,
+    club: {
+      findUnique: mocks.clubFindUnique,
     },
-    communityMember: {
-      findUnique: mocks.communityMemberFindUnique,
-      findMany: mocks.communityMemberFindMany,
+    clubMember: {
+      findUnique: mocks.clubMemberFindUnique,
+      findMany: mocks.clubMemberFindMany,
     },
     offlineIdentityLinkRequest: {
       findFirst: mocks.offlineIdentityLinkRequestFindFirst,
@@ -49,7 +49,7 @@ import { GET } from "./route";
 function getCollabRoster() {
   return GET(
     new Request(
-      "http://localhost/api/communities/community-1/collab-roster?partnerCommunityId=community-2"
+      "http://localhost/api/clubs/community-1/collab-roster?partnerClubId=community-2"
     ),
     { params: Promise.resolve({ id: "community-1" }) }
   );
@@ -61,22 +61,22 @@ describe("collab roster route", () => {
     mocks.auth.mockResolvedValue({
       user: { id: "admin-1", isAdmin: false },
     });
-    mocks.communityMemberFindUnique.mockResolvedValue({ role: "STAFF" });
-    mocks.communityFindUnique.mockResolvedValue({ isTutorial: false });
+    mocks.clubMemberFindUnique.mockResolvedValue({ role: "STAFF" });
+    mocks.clubFindUnique.mockResolvedValue({ isTutorial: false });
     mocks.offlineIdentityLinkRequestFindFirst.mockResolvedValue(null);
     mocks.offlineIdentityMemberFindMany.mockResolvedValue([]);
   });
 
   it("allows staff to load outgoing collab rosters and de-duplicates shared unclaimed players", async () => {
     const createdAt = new Date("2026-05-14T10:00:00.000Z");
-    mocks.communityMemberFindMany.mockResolvedValue([
+    mocks.clubMemberFindMany.mockResolvedValue([
       {
         userId: "user-shared",
         elo: 1200,
         status: ClubPlayerStatus.CORE,
         role: "MEMBER",
         createdAt,
-        community: { id: "community-1", name: "Host Club" },
+        club: { id: "community-1", name: "Host Club" },
         user: {
           id: "user-shared",
           name: "Alex Lee",
@@ -95,7 +95,7 @@ describe("collab roster route", () => {
         status: ClubPlayerStatus.OCCASIONAL,
         role: "MEMBER",
         createdAt,
-        community: { id: "community-2", name: "Partner Club" },
+        club: { id: "community-2", name: "Partner Club" },
         user: {
           id: "user-shared",
           name: "Alex Lee",
@@ -114,7 +114,7 @@ describe("collab roster route", () => {
         status: ClubPlayerStatus.CORE,
         role: "MEMBER",
         createdAt,
-        community: { id: "community-2", name: "Partner Club" },
+        club: { id: "community-2", name: "Partner Club" },
         user: {
           id: "user-duplicate-name",
           name: "Alex Lee",
@@ -162,26 +162,26 @@ describe("collab roster route", () => {
   });
 
   it("requires operator access to the partner club before exposing its roster", async () => {
-    mocks.communityMemberFindUnique
+    mocks.clubMemberFindUnique
       .mockResolvedValueOnce({ role: "STAFF" })
       .mockResolvedValueOnce({ role: "MEMBER" });
 
     const response = await getCollabRoster();
 
     expect(response.status).toBe(403);
-    expect(mocks.communityMemberFindMany).not.toHaveBeenCalled();
+    expect(mocks.clubMemberFindMany).not.toHaveBeenCalled();
   });
 
   it("allows host operators to load rosters for already linked clubs", async () => {
-    mocks.communityMemberFindUnique
+    mocks.clubMemberFindUnique
       .mockResolvedValueOnce({ role: "STAFF" })
       .mockResolvedValueOnce({ role: "MEMBER" });
     mocks.offlineIdentityLinkRequestFindFirst.mockResolvedValue({ id: "link-1" });
-    mocks.communityMemberFindMany.mockResolvedValue([]);
+    mocks.clubMemberFindMany.mockResolvedValue([]);
 
     const response = await getCollabRoster();
 
     expect(response.status).toBe(200);
-    expect(mocks.communityMemberFindMany).toHaveBeenCalled();
+    expect(mocks.clubMemberFindMany).toHaveBeenCalled();
   });
 });

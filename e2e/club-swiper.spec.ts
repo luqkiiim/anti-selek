@@ -6,7 +6,7 @@ import {
   type Page,
 } from "@playwright/test";
 
-import { hostCommunityId, signInAsAdmin } from "./helpers";
+import { hostClubId, signInAsAdmin } from "./helpers";
 
 test.use({
   viewport: { width: 390, height: 844 },
@@ -20,7 +20,7 @@ test("club mobile swiper pages one tab at a time", async ({
   page,
 }) => {
   await signInAsAdmin(page);
-  await page.goto(`/community/${hostCommunityId}`);
+  await page.goto(`/club/${hostClubId}`);
   await expect(
     page.getByRole("heading", { name: "E2E Host Club" })
   ).toBeVisible();
@@ -125,7 +125,7 @@ test("club mobile swiper handles fast flicks without skipping tabs", async ({
   page,
 }) => {
   await signInAsAdmin(page);
-  await page.goto(`/community/${hostCommunityId}`);
+  await page.goto(`/club/${hostClubId}`);
   await expect(
     page.getByRole("heading", { name: "E2E Host Club" })
   ).toBeVisible();

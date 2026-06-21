@@ -57,7 +57,7 @@ export interface FinalizableMatch {
   team1Score?: number | null;
   team2Score?: number | null;
   session: {
-    communityId: string | null;
+    clubId: string | null;
     type: string;
     isTest: boolean;
   };
@@ -143,7 +143,7 @@ interface TeamEloDeltas {
 
 interface EloAdjustmentInput {
   matchId: string;
-  communityId: string;
+  clubId: string;
   userId: string;
   sourceUserId?: string;
   delta: number;
@@ -154,7 +154,7 @@ interface EloAdjustmentInput {
 function toPersistedEloAdjustment(adjustment: EloAdjustmentInput) {
   return {
     matchId: adjustment.matchId,
-    communityId: adjustment.communityId,
+    clubId: adjustment.clubId,
     userId: adjustment.userId,
     delta: adjustment.delta,
     beforeElo: adjustment.beforeElo,
@@ -174,14 +174,14 @@ function getMatchEloAdjustmentDelegate(tx: Prisma.TransactionClient) {
           where: { matchId: string | { in: string[] } };
           select: {
             matchId?: true;
-            communityId: true;
+            clubId: true;
             userId: true;
             delta: true;
           };
         }) => Promise<
           Array<{
             matchId?: string;
-            communityId: string;
+            clubId: string;
             userId: string;
             delta: number;
           }>
@@ -267,7 +267,7 @@ function getDisplayPlayerEloChanges({
   return Array.from(byUserId.entries()).map(([userId, userAdjustments]) => {
     const preferred = preferredClubId
       ? userAdjustments.find(
-          (adjustment) => adjustment.communityId === preferredClubId
+          (adjustment) => adjustment.clubId === preferredClubId
         )
       : null;
     const selected = preferred ?? userAdjustments[0];
@@ -275,7 +275,7 @@ function getDisplayPlayerEloChanges({
     return {
       userId,
       delta: selected.delta,
-      communityId: selected.communityId,
+      clubId: selected.clubId,
     };
   });
 }
@@ -301,14 +301,14 @@ async function buildClubEloAdjustments({
   guestImpactMultiplier: number;
   userEloByUserId: Map<string, number>;
 }) {
-  const communityIds = match.session.communityId
+  const clubIds = match.session.clubId
     ? await getAcceptedSessionClubIds(tx, {
         id: match.sessionId,
-        communityId: match.session.communityId,
+        clubId: match.session.clubId,
       })
     : [];
 
-  if (communityIds.length === 0) {
+  if (clubIds.length === 0) {
     return {
       teamDeltasByClubId: new Map<string, TeamEloDeltas>(),
       adjustments: [] as EloAdjustmentInput[],
@@ -318,20 +318,20 @@ async function buildClubEloAdjustments({
 
   const linkedUserResolver = await getLinkedClubUserResolver(tx, {
     userIds: playerIds,
-    communityIds,
+    clubIds,
   });
   const membershipUserIds = Array.from(
     new Set(
       playerIds.flatMap((userId) => linkedUserResolver.getLinkedUserIds(userId))
     )
   );
-  const memberships = await tx.communityMember.findMany({
+  const memberships = await tx.clubMember.findMany({
     where: {
-      communityId: { in: communityIds },
+      clubId: { in: clubIds },
       userId: { in: membershipUserIds },
     },
     select: {
-      communityId: true,
+      clubId: true,
       userId: true,
       elo: true,
     },
@@ -339,31 +339,31 @@ async function buildClubEloAdjustments({
   const membershipByClubAndUser = new Map<string, number>();
   for (const membership of memberships) {
     membershipByClubAndUser.set(
-      `${membership.communityId}:${membership.userId}`,
+      `${membership.clubId}:${membership.userId}`,
       membership.elo
     );
   }
 
-  const hostCommunityId = match.session.communityId;
+  const hostClubId = match.session.clubId;
   const sourceEloByUserId = new Map<string, number>();
   for (const userId of playerIds) {
-    const playerClubIds = communityIds.filter((communityId) => {
+    const playerClubIds = clubIds.filter((clubId) => {
       const linkedUserId = linkedUserResolver.getUserIdForClub(
         userId,
-        communityId
+        clubId
       );
-      return membershipByClubAndUser.has(`${communityId}:${linkedUserId}`);
+      return membershipByClubAndUser.has(`${clubId}:${linkedUserId}`);
     });
-    const sourceCommunityId =
-      (hostCommunityId && playerClubIds.includes(hostCommunityId)
-        ? hostCommunityId
+    const sourceClubId =
+      (hostClubId && playerClubIds.includes(hostClubId)
+        ? hostClubId
         : playerClubIds[0]) ?? null;
-    const sourceCommunityUserId = sourceCommunityId
-      ? linkedUserResolver.getUserIdForClub(userId, sourceCommunityId)
+    const sourceClubUserId = sourceClubId
+      ? linkedUserResolver.getUserIdForClub(userId, sourceClubId)
       : userId;
-    const sourceElo = sourceCommunityId
+    const sourceElo = sourceClubId
       ? membershipByClubAndUser.get(
-          `${sourceCommunityId}:${sourceCommunityUserId}`
+          `${sourceClubId}:${sourceClubUserId}`
         )
       : undefined;
 
@@ -380,14 +380,14 @@ async function buildClubEloAdjustments({
   const teamDeltasByClubId = new Map<string, TeamEloDeltas>();
   const adjustments: EloAdjustmentInput[] = [];
 
-  for (const communityId of communityIds) {
+  for (const clubId of clubIds) {
     const getRating = (userId: string) => {
       const linkedUserId = linkedUserResolver.getUserIdForClub(
         userId,
-        communityId
+        clubId
       );
       return (
-        membershipByClubAndUser.get(`${communityId}:${linkedUserId}`) ??
+        membershipByClubAndUser.get(`${clubId}:${linkedUserId}`) ??
         sourceEloByUserId.get(userId) ??
         userEloByUserId.get(userId) ??
         getPlayerSnapshotElo(match, userId)
@@ -404,15 +404,15 @@ async function buildClubEloAdjustments({
       team2Points,
       guestImpactMultiplier,
     });
-    teamDeltasByClubId.set(communityId, deltas);
+    teamDeltasByClubId.set(clubId, deltas);
 
     for (const userId of team1Ids) {
       const linkedUserId = linkedUserResolver.getUserIdForClub(
         userId,
-        communityId
+        clubId
       );
       const beforeElo = membershipByClubAndUser.get(
-        `${communityId}:${linkedUserId}`
+        `${clubId}:${linkedUserId}`
       );
       if (beforeElo === undefined || isGuestByUserId.get(userId) === true) {
         continue;
@@ -420,7 +420,7 @@ async function buildClubEloAdjustments({
 
       adjustments.push({
         matchId: match.id,
-        communityId,
+        clubId,
         userId: linkedUserId,
         sourceUserId: userId,
         delta: deltas.team1Delta,
@@ -432,10 +432,10 @@ async function buildClubEloAdjustments({
     for (const userId of team2Ids) {
       const linkedUserId = linkedUserResolver.getUserIdForClub(
         userId,
-        communityId
+        clubId
       );
       const beforeElo = membershipByClubAndUser.get(
-        `${communityId}:${linkedUserId}`
+        `${clubId}:${linkedUserId}`
       );
       if (beforeElo === undefined || isGuestByUserId.get(userId) === true) {
         continue;
@@ -443,7 +443,7 @@ async function buildClubEloAdjustments({
 
       adjustments.push({
         matchId: match.id,
-        communityId,
+        clubId,
         userId: linkedUserId,
         sourceUserId: userId,
         delta: deltas.team2Delta,
@@ -525,8 +525,8 @@ async function buildMatchRatingOutcomeInTransaction(
     guestImpactMultiplier,
     userEloByUserId,
   });
-  const hostClubDeltas = match.session.communityId
-    ? clubEloResult.teamDeltasByClubId.get(match.session.communityId)
+  const hostClubDeltas = match.session.clubId
+    ? clubEloResult.teamDeltasByClubId.get(match.session.clubId)
     : undefined;
   const firstClubDeltas = Array.from(
     clubEloResult.teamDeltasByClubId.values()
@@ -591,10 +591,10 @@ async function applyRatingOutcomeInTransaction(
 
   if (outcome.clubEloResult.adjustments.length > 0) {
     for (const adjustment of outcome.clubEloResult.adjustments) {
-      await tx.communityMember.update({
+      await tx.clubMember.update({
         where: {
-          communityId_userId: {
-            communityId: adjustment.communityId,
+          clubId_userId: {
+            clubId: adjustment.clubId,
             userId: adjustment.userId,
           },
         },
@@ -610,7 +610,7 @@ async function applyRatingOutcomeInTransaction(
     return;
   }
 
-  if (match.session.communityId) {
+  if (match.session.clubId) {
     const team1ClubMemberIds = team1Ids.filter(
       (userId) => outcome.isGuestByUserId.get(userId) !== true
     );
@@ -619,18 +619,18 @@ async function applyRatingOutcomeInTransaction(
     );
 
     if (team1ClubMemberIds.length > 0) {
-      await tx.communityMember.updateMany({
+      await tx.clubMember.updateMany({
         where: {
-          communityId: match.session.communityId,
+          clubId: match.session.clubId,
           userId: { in: team1ClubMemberIds },
         },
         data: { elo: { increment: outcome.persistedTeam1EloChange } },
       });
     }
     if (team2ClubMemberIds.length > 0) {
-      await tx.communityMember.updateMany({
+      await tx.clubMember.updateMany({
         where: {
-          communityId: match.session.communityId,
+          clubId: match.session.clubId,
           userId: { in: team2ClubMemberIds },
         },
         data: { elo: { increment: outcome.persistedTeam2EloChange } },
@@ -786,7 +786,7 @@ export async function finalizeMatchResultInTransaction(
     ...updatedMatch,
     playerEloChanges: getDisplayPlayerEloChanges({
       adjustments: outcome.clubEloResult.adjustments,
-      preferredClubId: match.session.communityId,
+      preferredClubId: match.session.clubId,
     }),
     eloAdjustments: outcome.clubEloResult.adjustments,
   };
@@ -910,12 +910,12 @@ async function assertNoNewerOutsideRatingMatches(
   tx: Prisma.TransactionClient,
   {
     sessionId,
-    communityIds,
+    clubIds,
     completedAfter,
     userIds,
   }: {
     sessionId: string;
-    communityIds: string[];
+    clubIds: string[];
     completedAfter: Date;
     userIds: string[];
   }
@@ -926,7 +926,7 @@ async function assertNoNewerOutsideRatingMatches(
   ];
 
   const newerOutsideMatch =
-    communityIds.length > 0
+    clubIds.length > 0
       ? await tx.match.findFirst({
           where: {
             sessionId: { not: sessionId },
@@ -935,11 +935,11 @@ async function assertNoNewerOutsideRatingMatches(
             session: {
               isTest: false,
               OR: [
-                { communityId: { in: communityIds } },
+                { clubId: { in: clubIds } },
                 {
-                  sessionCommunities: {
+                  sessionClubs: {
                     some: {
-                      communityId: { in: communityIds },
+                      clubId: { in: clubIds },
                       status: SessionClubStatus.ACCEPTED,
                     },
                   },
@@ -1000,20 +1000,20 @@ async function reverseLegacyMatchRatingInTransaction(
     (userId) => isGuestByUserId.get(userId) !== true
   );
 
-  if (match.session.communityId) {
+  if (match.session.clubId) {
     if (team1CoreIds.length > 0 && team1ReverseEloDelta !== 0) {
-      await tx.communityMember.updateMany({
+      await tx.clubMember.updateMany({
         where: {
-          communityId: match.session.communityId,
+          clubId: match.session.clubId,
           userId: { in: team1CoreIds },
         },
         data: { elo: { increment: team1ReverseEloDelta } },
       });
     }
     if (team2CoreIds.length > 0 && team2ReverseEloDelta !== 0) {
-      await tx.communityMember.updateMany({
+      await tx.clubMember.updateMany({
         where: {
-          communityId: match.session.communityId,
+          clubId: match.session.clubId,
           userId: { in: team2CoreIds },
         },
         data: { elo: { increment: team2ReverseEloDelta } },
@@ -1040,10 +1040,10 @@ async function reverseReplayRatingEffectsInTransaction(
   tx: Prisma.TransactionClient,
   {
     replayMatches,
-    communityIds,
+    clubIds,
   }: {
     replayMatches: CompletedReplayMatch[];
-    communityIds: string[];
+    clubIds: string[];
   }
 ) {
   const replayMatchIds = replayMatches.map((match) => match.id);
@@ -1070,7 +1070,7 @@ async function reverseReplayRatingEffectsInTransaction(
       where: { matchId: { in: replayMatchIds } },
       select: {
         matchId: true,
-        communityId: true,
+        clubId: true,
         userId: true,
         delta: true,
       },
@@ -1086,12 +1086,12 @@ async function reverseReplayRatingEffectsInTransaction(
 
   const reverseDeltaByClubAndUserId = new Map<
     string,
-    { communityId: string; userId: string; delta: number }
+    { clubId: string; userId: string; delta: number }
   >();
   for (const adjustment of ledgerAdjustments) {
-    const key = `${adjustment.communityId}:${adjustment.userId}`;
+    const key = `${adjustment.clubId}:${adjustment.userId}`;
     const current = reverseDeltaByClubAndUserId.get(key) ?? {
-      communityId: adjustment.communityId,
+      clubId: adjustment.clubId,
       userId: adjustment.userId,
       delta: 0,
     };
@@ -1101,9 +1101,9 @@ async function reverseReplayRatingEffectsInTransaction(
 
   for (const item of reverseDeltaByClubAndUserId.values()) {
     if (item.delta === 0) continue;
-    await tx.communityMember.updateMany({
+    await tx.clubMember.updateMany({
       where: {
-        communityId: item.communityId,
+        clubId: item.clubId,
         userId: item.userId,
       },
       data: { elo: { increment: item.delta } },
@@ -1112,7 +1112,7 @@ async function reverseReplayRatingEffectsInTransaction(
 
   for (const match of replayMatches) {
     if (ledgerRowsByMatchId.has(match.id)) continue;
-    if (communityIds.length > 1) {
+    if (clubIds.length > 1) {
       throw new CorrectCompletedMatchScoreError(
         "LEGACY_COLLAB_REPLAY_UNSUPPORTED",
         "This completed match is missing rating ledger rows for a multi-club session, so exact ELO replay is blocked."
@@ -1196,7 +1196,7 @@ export async function correctCompletedMatchScoreInTransaction(
     include: {
       session: {
         select: {
-          communityId: true,
+          clubId: true,
           isTest: true,
           status: true,
           type: true,
@@ -1251,7 +1251,7 @@ export async function correctCompletedMatchScoreInTransaction(
     include: {
       session: {
         select: {
-          communityId: true,
+          clubId: true,
           isTest: true,
           status: true,
           type: true,
@@ -1282,23 +1282,23 @@ export async function correctCompletedMatchScoreInTransaction(
   const replayUserIds = Array.from(
     new Set(replayMatches.flatMap((match) => getMatchUserIds(match)))
   );
-  const communityIds = targetMatch.session.communityId
+  const clubIds = targetMatch.session.clubId
     ? await getAcceptedSessionClubIds(tx, {
         id: targetMatch.sessionId,
-        communityId: targetMatch.session.communityId,
+        clubId: targetMatch.session.clubId,
       })
     : [];
 
   await assertNoNewerOutsideRatingMatches(tx, {
     sessionId: targetMatch.sessionId,
-    communityIds,
+    clubIds,
     completedAfter: getMatchOrderTime(targetMatch as CompletedReplayMatch),
     userIds: replayUserIds,
   });
 
   await reverseReplayRatingEffectsInTransaction(tx, {
     replayMatches,
-    communityIds,
+    clubIds,
   });
 
   let correctedMatch = null;
@@ -1383,7 +1383,7 @@ export async function undoCompletedMatchResultInTransaction(
     include: {
       session: {
         select: {
-          communityId: true,
+          clubId: true,
           isTest: true,
           status: true,
           type: true,
@@ -1447,7 +1447,7 @@ export async function undoCompletedMatchResultInTransaction(
     (await getMatchEloAdjustmentDelegate(tx)?.findMany?.({
       where: { matchId: match.id },
       select: {
-        communityId: true,
+        clubId: true,
         userId: true,
         delta: true,
       },
@@ -1459,9 +1459,9 @@ export async function undoCompletedMatchResultInTransaction(
     for (const adjustment of ledgerAdjustments) {
       if (adjustment.delta === 0) continue;
 
-      await tx.communityMember.updateMany({
+      await tx.clubMember.updateMany({
         where: {
-          communityId: adjustment.communityId,
+          clubId: adjustment.clubId,
           userId: adjustment.userId,
         },
         data: {
@@ -1477,20 +1477,20 @@ export async function undoCompletedMatchResultInTransaction(
       (userId) => isGuestByUserId.get(userId) !== true
     );
 
-    if (match.session.communityId) {
+    if (match.session.clubId) {
       if (team1CoreIds.length > 0 && team1ReverseEloDelta !== 0) {
-        await tx.communityMember.updateMany({
+        await tx.clubMember.updateMany({
           where: {
-            communityId: match.session.communityId,
+            clubId: match.session.clubId,
             userId: { in: team1CoreIds },
           },
           data: { elo: { increment: team1ReverseEloDelta } },
         });
       }
       if (team2CoreIds.length > 0 && team2ReverseEloDelta !== 0) {
-        await tx.communityMember.updateMany({
+        await tx.clubMember.updateMany({
           where: {
-            communityId: match.session.communityId,
+            clubId: match.session.clubId,
             userId: { in: team2CoreIds },
           },
           data: { elo: { increment: team2ReverseEloDelta } },

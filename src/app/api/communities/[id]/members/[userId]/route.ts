@@ -31,19 +31,19 @@ function isValidClubPlayerStatus(
 export const dynamic = "force-dynamic";
 
 async function findDuplicateUnclaimedMemberName({
-  communityId,
+  clubId,
   name,
   excludeUserId,
 }: {
-  communityId: string;
+  clubId: string;
   name: string;
   excludeUserId?: string;
 }) {
   const lookupName = normalizeNameLookupKey(name);
   if (!lookupName) return null;
 
-  const members = await prisma.communityMember.findMany({
-    where: { communityId },
+  const members = await prisma.clubMember.findMany({
+    where: { clubId },
     include: {
       user: {
         select: {
@@ -86,9 +86,9 @@ export async function PATCH(
       );
     }
 
-    const { id: communityId, userId } = await params;
+    const { id: clubId, userId } = await params;
 
-    if (typeof communityId !== "string" || communityId.length === 0 || typeof userId !== "string" || userId.length === 0) {
+    if (typeof clubId !== "string" || clubId.length === 0 || typeof userId !== "string" || userId.length === 0) {
       return NextResponse.json({ error: "Invalid request parameters" }, { status: 400 });
     }
 
@@ -96,7 +96,7 @@ export async function PATCH(
 
     if (invalidTargetLimitResponse) return invalidTargetLimitResponse;
     const adminAccess = await getClubAdminAccess(prisma, {
-      communityId,
+      clubId,
       userId: session.user.id,
       isGlobalAdmin: !!session.user.isAdmin,
     });
@@ -104,10 +104,10 @@ export async function PATCH(
       return invalidTargetResponse(request, "api:communities:id:members:userId");
     }
 
-    const membership = await prisma.communityMember.findUnique({
+    const membership = await prisma.clubMember.findUnique({
       where: {
-        communityId_userId: {
-          communityId,
+        clubId_userId: {
+          clubId,
           userId,
         },
       },
@@ -320,7 +320,7 @@ export async function PATCH(
 
     if (!currentUser.isClaimed && nextEmail === null) {
       const duplicate = await findDuplicateUnclaimedMemberName({
-        communityId,
+        clubId,
         name: nextName,
         excludeUserId: userId,
       });
@@ -386,10 +386,10 @@ export async function PATCH(
       shouldGrantStaff ||
       shouldRevokeStaff ||
       isValidClubPlayerStatus(status)
-        ? await prisma.communityMember.update({
+        ? await prisma.clubMember.update({
             where: {
-              communityId_userId: {
-                communityId,
+              clubId_userId: {
+                clubId,
                 userId,
               },
             },
@@ -400,10 +400,10 @@ export async function PATCH(
             },
             select: { role: true, elo: true, status: true },
           })
-        : await prisma.communityMember.findUnique({
+        : await prisma.clubMember.findUnique({
             where: {
-              communityId_userId: {
-                communityId,
+              clubId_userId: {
+                clubId,
                 userId,
               },
             },
@@ -454,9 +454,9 @@ export async function DELETE(
       );
     }
 
-    const { id: communityId, userId } = await params;
+    const { id: clubId, userId } = await params;
 
-    if (typeof communityId !== "string" || communityId.length === 0 || typeof userId !== "string" || userId.length === 0) {
+    if (typeof clubId !== "string" || clubId.length === 0 || typeof userId !== "string" || userId.length === 0) {
       return NextResponse.json({ error: "Invalid request parameters" }, { status: 400 });
     }
 
@@ -464,7 +464,7 @@ export async function DELETE(
 
     if (invalidTargetLimitResponse) return invalidTargetLimitResponse;
     const adminAccess = await getClubAdminAccess(prisma, {
-      communityId,
+      clubId,
       userId: session.user.id,
       isGlobalAdmin: !!session.user.isAdmin,
     });
@@ -472,10 +472,10 @@ export async function DELETE(
       return invalidTargetResponse(request, "api:communities:id:members:userId");
     }
 
-    const membership = await prisma.communityMember.findUnique({
+    const membership = await prisma.clubMember.findUnique({
       where: {
-        communityId_userId: {
-          communityId,
+        clubId_userId: {
+          clubId,
           userId,
         },
       },
@@ -499,9 +499,9 @@ export async function DELETE(
         );
       }
 
-      const otherAdmins = await prisma.communityMember.findMany({
+      const otherAdmins = await prisma.clubMember.findMany({
         where: {
-          communityId,
+          clubId,
           role: ClubRole.ADMIN,
           userId: { not: userId },
         },
@@ -522,7 +522,7 @@ export async function DELETE(
     }
 
     const sessionRows = await prisma.session.findMany({
-      where: { communityId },
+      where: { clubId },
       select: { id: true },
     });
     const sessionIds = sessionRows.map((s) => s.id);
@@ -537,10 +537,10 @@ export async function DELETE(
         });
       }
 
-      await tx.communityMember.delete({
+      await tx.clubMember.delete({
         where: {
-          communityId_userId: {
-            communityId,
+          clubId_userId: {
+            clubId,
             userId,
           },
         },

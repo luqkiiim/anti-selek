@@ -6,8 +6,8 @@ import { useRouter } from "next/navigation";
 import type { DashboardClub } from "@/components/dashboard/dashboardTypes";
 
 interface TutorialPlaygroundSummary {
-  communityId: string;
-  communityName: string;
+  clubId: string;
+  clubName: string;
   sessionCode: string | null;
   playersCount: number;
   courtsCount: number;
@@ -45,7 +45,7 @@ export function useDashboardPage() {
   }, []);
 
   const fetchClubs = useCallback(async () => {
-    const res = await fetch("/api/communities");
+    const res = await fetch("/api/clubs");
     const data = await safeJson(res);
     if (!res.ok) {
       throw new Error(data.error || "Failed to load clubs");
@@ -121,7 +121,7 @@ export function useDashboardPage() {
     setCreatingClub(true);
     setError("");
     try {
-      const res = await fetch("/api/communities", {
+      const res = await fetch("/api/clubs", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -141,7 +141,7 @@ export function useDashboardPage() {
       await fetchClubs();
 
       if (data?.id) {
-        router.push(`/community/${data.id}`);
+        router.push(`/club/${data.id}`);
       }
     } catch (err: unknown) {
       setError(
@@ -158,7 +158,7 @@ export function useDashboardPage() {
     setJoiningClub(true);
     setError("");
     try {
-      const res = await fetch("/api/communities/join", {
+      const res = await fetch("/api/clubs/join", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -178,7 +178,7 @@ export function useDashboardPage() {
       await fetchClubs();
 
       if (data?.id) {
-        router.push(`/community/${data.id}`);
+        router.push(`/club/${data.id}`);
       }
     } catch (err: unknown) {
       setError(
@@ -201,13 +201,13 @@ export function useDashboardPage() {
       }
 
       const playground = data?.playground as TutorialPlaygroundSummary | null;
-      if (!playground?.communityId) {
+      if (!playground?.clubId) {
         setError("Failed to open tutorial playground");
         return;
       }
 
       setTutorialPlayground(playground);
-      router.push(`/community/${playground.communityId}`);
+      router.push(`/club/${playground.clubId}`);
     } catch (err: unknown) {
       setError(
         err instanceof Error

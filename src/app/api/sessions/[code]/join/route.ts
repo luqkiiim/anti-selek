@@ -78,7 +78,7 @@ export async function POST(
     if (!sessionData) {
       return invalidTargetResponse(request, "api:sessions:code:join");
     }
-    if (!canQuickAccessClub(session, sessionData.communityId)) {
+    if (!canQuickAccessClub(session, sessionData.clubId)) {
       return invalidTargetResponse(request, "api:sessions:code:join");
     }
     if (isQuickAccessSession(session)) {
@@ -99,7 +99,7 @@ export async function POST(
       userId: session.user.id,
       acceptedOnly: true,
     });
-    if (sessionData.communityId) {
+    if (sessionData.clubId) {
       if (!requesterMembership && !session.user.isAdmin) {
         return NextResponse.json({ error: "Not a member of this club" }, { status: 403 });
       }
@@ -113,7 +113,7 @@ export async function POST(
       userIdToJoin = targetUserId;
     }
 
-    if (sessionData.communityId) {
+    if (sessionData.clubId) {
       const targetMembership = await getSessionMembership(prisma, {
         session: sessionData,
         userId: userIdToJoin,
@@ -246,12 +246,12 @@ export async function POST(
         ? withPlayerClubBadges(
             updatedSession.players,
             await getPlayerClubBadges(prisma, linkedClubIds, playerIds),
-            updatedSession.communityId
+            updatedSession.clubId
           )
-        : updatedSession.communityId && updatedSession.players.length > 0
+        : updatedSession.clubId && updatedSession.players.length > 0
           ? withClubElo(
               updatedSession.players,
-              await getClubEloByUserId(updatedSession.communityId, playerIds)
+              await getClubEloByUserId(updatedSession.clubId, playerIds)
             )
           : updatedSession.players;
     const queuedMatch =

@@ -3,11 +3,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   auth: vi.fn(),
   userFindUnique: vi.fn(),
-  communityMemberFindUnique: vi.fn(),
-  communityFindUnique: vi.fn(),
-  communityFindMany: vi.fn(),
-  communityUpdate: vi.fn(),
-  communityMemberFindMany: vi.fn(),
+  clubMemberFindUnique: vi.fn(),
+  clubFindUnique: vi.fn(),
+  clubFindMany: vi.fn(),
+  clubUpdate: vi.fn(),
+  clubMemberFindMany: vi.fn(),
   matchFindMany: vi.fn(),
   claimRequestFindMany: vi.fn(),
   offlineIdentityMemberFindMany: vi.fn(),
@@ -24,14 +24,14 @@ vi.mock("@/lib/prisma", () => ({
     user: {
       findUnique: mocks.userFindUnique,
     },
-    communityMember: {
-      findUnique: mocks.communityMemberFindUnique,
-      findMany: mocks.communityMemberFindMany,
+    clubMember: {
+      findUnique: mocks.clubMemberFindUnique,
+      findMany: mocks.clubMemberFindMany,
     },
-    community: {
-      findUnique: mocks.communityFindUnique,
-      findMany: mocks.communityFindMany,
-      update: mocks.communityUpdate,
+    club: {
+      findUnique: mocks.clubFindUnique,
+      findMany: mocks.clubFindMany,
+      update: mocks.clubUpdate,
     },
     match: {
       findMany: mocks.matchFindMany,
@@ -69,6 +69,7 @@ vi.mock("@/lib/rateLimit", () => ({
 }));
 
 import { GET, PATCH } from "./route";
+import { GET as GET_CLUB_ALIAS } from "@/app/api/clubs/[id]/route";
 
 describe("club snapshot route", () => {
   beforeEach(() => {
@@ -87,11 +88,11 @@ describe("club snapshot route", () => {
       partnerPreference: "OPEN",
       mixedSideOverride: null,
     });
-    mocks.communityMemberFindUnique.mockResolvedValue({
+    mocks.clubMemberFindUnique.mockResolvedValue({
       role: "ADMIN",
       elo: 1120,
     });
-    mocks.communityFindUnique.mockResolvedValue({
+    mocks.clubFindUnique.mockResolvedValue({
       id: "community-1",
       name: "Club One",
       createdById: "viewer-1",
@@ -100,14 +101,14 @@ describe("club snapshot route", () => {
       isPasswordProtected: false,
       _count: { members: 2, sessions: 1 },
     });
-    mocks.communityFindMany.mockResolvedValue([]);
-    mocks.communityUpdate.mockResolvedValue({
+    mocks.clubFindMany.mockResolvedValue([]);
+    mocks.clubUpdate.mockResolvedValue({
       id: "community-1",
       name: "Club One",
       isPasswordProtected: false,
       updatedAt: new Date("2026-05-19T00:00:00.000Z"),
     });
-    mocks.communityMemberFindMany.mockResolvedValue([
+    mocks.clubMemberFindMany.mockResolvedValue([
       {
         role: "ADMIN",
         status: "CORE",
@@ -183,7 +184,7 @@ describe("club snapshot route", () => {
 
   it("includes avatarUrl in viewer, roster, and session payloads", async () => {
     const response = await GET(
-      new Request("http://localhost/api/communities/community-1"),
+      new Request("http://localhost/api/clubs/community-1"),
       {
         params: Promise.resolve({ id: "community-1" }),
       }
@@ -194,7 +195,7 @@ describe("club snapshot route", () => {
     expect(body.viewer.avatarUrl).toBe(
       "https://blob.vercel-storage.com/avatars/viewer-1/avatar.jpg"
     );
-    expect(body.communityMembers[0].avatarUrl).toBe(
+    expect(body.clubMembers[0].avatarUrl).toBe(
       "https://blob.vercel-storage.com/avatars/viewer-1/avatar.jpg"
     );
     expect(body.sessions[0].players[0].user.avatarUrl).toBe(
@@ -202,7 +203,24 @@ describe("club snapshot route", () => {
     );
   });
 
-  it("includes owner flags in the club and roster snapshot", async () => {
+  it("serves the canonical clubs route with legacy response aliases", async () => {
+    const response = await GET_CLUB_ALIAS(
+      new Request("http://localhost/api/clubs/community-1"),
+      {
+        params: Promise.resolve({ id: "community-1" }),
+      }
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.club.clubId).toBe("community-1");
+    expect(body.club.communityId).toBe("community-1");
+    expect(body.community.id).toBe("community-1");
+    expect(body.communityMembers).toEqual(body.clubMembers);
+    expect(body.communityPulse).toEqual(body.clubPulse);
+  });
+
+  it("keeps the legacy communities route working", async () => {
     const response = await GET(
       new Request("http://localhost/api/communities/community-1"),
       {
@@ -212,8 +230,21 @@ describe("club snapshot route", () => {
     const body = await response.json();
 
     expect(response.status).toBe(200);
-    expect(body.community.viewerIsOwner).toBe(true);
-    expect(body.communityMembers).toEqual(
+    expect(body.club.id).toBe("community-1");
+  });
+
+  it("includes owner flags in the club and roster snapshot", async () => {
+    const response = await GET(
+      new Request("http://localhost/api/clubs/community-1"),
+      {
+        params: Promise.resolve({ id: "community-1" }),
+      }
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.club.viewerIsOwner).toBe(true);
+    expect(body.clubMembers).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ id: "viewer-1", isOwner: true }),
         expect.objectContaining({ id: "player-2", isOwner: false }),
@@ -222,7 +253,7 @@ describe("club snapshot route", () => {
   });
 
   it("includes rank movement from the latest completed tournament", async () => {
-    mocks.communityMemberFindMany.mockResolvedValueOnce([
+    mocks.clubMemberFindMany.mockResolvedValueOnce([
       {
         role: "ADMIN",
         status: "CORE",
@@ -317,7 +348,7 @@ describe("club snapshot route", () => {
     ]);
 
     const response = await GET(
-      new Request("http://localhost/api/communities/community-1"),
+      new Request("http://localhost/api/clubs/community-1"),
       {
         params: Promise.resolve({ id: "community-1" }),
       }
@@ -325,7 +356,7 @@ describe("club snapshot route", () => {
     const body = await response.json();
 
     expect(response.status).toBe(200);
-    expect(body.communityMembers).toEqual(
+    expect(body.clubMembers).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           id: "viewer-1",
@@ -347,7 +378,7 @@ describe("club snapshot route", () => {
   });
 
   it("masks tutorial club backend names in the snapshot", async () => {
-    mocks.communityFindUnique.mockResolvedValueOnce({
+    mocks.clubFindUnique.mockResolvedValueOnce({
       id: "community-1",
       name: "Tutorial playground viewer-1",
       createdById: "viewer-1",
@@ -358,7 +389,7 @@ describe("club snapshot route", () => {
     });
 
     const response = await GET(
-      new Request("http://localhost/api/communities/community-1"),
+      new Request("http://localhost/api/clubs/community-1"),
       {
         params: Promise.resolve({ id: "community-1" }),
       }
@@ -366,20 +397,20 @@ describe("club snapshot route", () => {
     const body = await response.json();
 
     expect(response.status).toBe(200);
-    expect(body.community.name).toBe("Tutorial playground");
+    expect(body.club.name).toBe("Tutorial playground");
   });
 
   it("allows admins to remove a club password and make it public", async () => {
-    mocks.communityMemberFindUnique.mockResolvedValueOnce({
+    mocks.clubMemberFindUnique.mockResolvedValueOnce({
       role: "ADMIN",
     });
-    mocks.communityFindUnique.mockResolvedValueOnce({
+    mocks.clubFindUnique.mockResolvedValueOnce({
       id: "community-1",
       isPasswordProtected: true,
       isTutorial: false,
       tutorialOwnerId: null,
     });
-    mocks.communityUpdate.mockResolvedValueOnce({
+    mocks.clubUpdate.mockResolvedValueOnce({
       id: "community-1",
       name: "Club One",
       isPasswordProtected: false,
@@ -387,7 +418,7 @@ describe("club snapshot route", () => {
     });
 
     const response = await PATCH(
-      new Request("http://localhost/api/communities/community-1", {
+      new Request("http://localhost/api/clubs/community-1", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ isPasswordProtected: false }),
@@ -399,7 +430,7 @@ describe("club snapshot route", () => {
     const body = await response.json();
 
     expect(response.status).toBe(200);
-    expect(mocks.communityUpdate).toHaveBeenCalledWith({
+    expect(mocks.clubUpdate).toHaveBeenCalledWith({
       where: { id: "community-1" },
       data: {
         isPasswordProtected: false,
@@ -416,10 +447,10 @@ describe("club snapshot route", () => {
   });
 
   it("requires a password when enabling protection for an open club", async () => {
-    mocks.communityMemberFindUnique.mockResolvedValueOnce({
+    mocks.clubMemberFindUnique.mockResolvedValueOnce({
       role: "ADMIN",
     });
-    mocks.communityFindUnique.mockResolvedValueOnce({
+    mocks.clubFindUnique.mockResolvedValueOnce({
       id: "community-1",
       isPasswordProtected: false,
       isTutorial: false,
@@ -427,7 +458,7 @@ describe("club snapshot route", () => {
     });
 
     const response = await PATCH(
-      new Request("http://localhost/api/communities/community-1", {
+      new Request("http://localhost/api/clubs/community-1", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ isPasswordProtected: true }),
@@ -443,10 +474,10 @@ describe("club snapshot route", () => {
   });
 
   it("rejects direct settings updates for tutorial playgrounds", async () => {
-    mocks.communityMemberFindUnique.mockResolvedValueOnce({
+    mocks.clubMemberFindUnique.mockResolvedValueOnce({
       role: "ADMIN",
     });
-    mocks.communityFindUnique.mockResolvedValueOnce({
+    mocks.clubFindUnique.mockResolvedValueOnce({
       id: "community-1",
       isPasswordProtected: false,
       isTutorial: true,
@@ -454,7 +485,7 @@ describe("club snapshot route", () => {
     });
 
     const response = await PATCH(
-      new Request("http://localhost/api/communities/community-1", {
+      new Request("http://localhost/api/clubs/community-1", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: "New Tutorial Name" }),
@@ -467,6 +498,6 @@ describe("club snapshot route", () => {
 
     expect(response.status).toBe(400);
     expect(body.error).toBe("Tutorial playground settings are managed by reset.");
-    expect(mocks.communityUpdate).not.toHaveBeenCalled();
+    expect(mocks.clubUpdate).not.toHaveBeenCalled();
   });
 });

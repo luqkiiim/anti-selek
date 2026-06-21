@@ -54,7 +54,7 @@ export async function POST(
         status: true,
         session: {
           select: {
-            communityId: true,
+            clubId: true,
             type: true,
             isTest: true,
           },
@@ -81,7 +81,7 @@ export async function POST(
     if (!match) {
       return invalidTargetResponse(request, "api:matches:id:score");
     }
-    if (!canQuickAccessClub(session, match.session.communityId)) {
+    if (!canQuickAccessClub(session, match.session.clubId)) {
       return invalidTargetResponse(request, "api:matches:id:score");
     }
     if (isQuickAccessSession(session)) {
@@ -89,7 +89,7 @@ export async function POST(
     }
 
     const operatorMembership = await getSessionOperatorMembership(prisma, {
-      session: { id: match.sessionId, communityId: match.session.communityId },
+      session: { id: match.sessionId, clubId: match.session.clubId },
       userId: session.user.id,
       acceptedOnly: true,
     });

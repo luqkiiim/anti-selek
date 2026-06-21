@@ -21,39 +21,39 @@ function isQuickAccessCredential(value: unknown): boolean {
 }
 
 async function findQuickAccessProfile({
-  communityName,
+  clubName,
   playerName,
 }: {
-  communityName: string;
+  clubName: string;
   playerName: string;
 }) {
-  const communityKey = normalizeNameLookupKey(communityName);
+  const clubKey = normalizeNameLookupKey(clubName);
   const playerKey = normalizeNameLookupKey(playerName);
 
-  if (!communityKey || !playerKey) {
+  if (!clubKey || !playerKey) {
     return null;
   }
 
-  const communities = await prisma.community.findMany({
+  const clubs = await prisma.club.findMany({
     select: {
       id: true,
       name: true,
       isTutorial: true,
     },
   });
-  const matchingCommunities = communities.filter(
-    (community) =>
-      !community.isTutorial &&
-      normalizeNameLookupKey(community.name) === communityKey
+  const matchingClubs = clubs.filter(
+    (club) =>
+      !club.isTutorial &&
+      normalizeNameLookupKey(club.name) === clubKey
   );
 
-  if (matchingCommunities.length !== 1) {
+  if (matchingClubs.length !== 1) {
     return null;
   }
 
-  const community = matchingCommunities[0];
-  const members = await prisma.communityMember.findMany({
-    where: { communityId: community.id },
+  const club = matchingClubs[0];
+  const members = await prisma.clubMember.findMany({
+    where: { clubId: club.id },
     include: {
       user: {
         select: {
@@ -83,7 +83,7 @@ async function findQuickAccessProfile({
   }
 
   return {
-    community,
+    club,
     user: matchingPlayers[0],
   };
 }
@@ -96,17 +96,27 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         email: { label: "Email", type: "email" },
         password: { label: "Password", type: "password" },
         quickAccess: { label: "Quick access", type: "text" },
+        clubName: { label: "Club name", type: "text" },
         communityName: { label: "Club name", type: "text" },
         playerName: { label: "Player name", type: "text" },
       },
       async authorize(credentials, request) {
         if (isQuickAccessCredential(credentials?.quickAccess)) {
-          const communityName = getCredentialString(credentials?.communityName);
+          const rawClubName = getCredentialString(credentials?.clubName);
+          const rawCommunityName = getCredentialString(credentials?.communityName);
+          if (
+            rawClubName &&
+            rawCommunityName &&
+            rawClubName !== rawCommunityName
+          ) {
+            return null;
+          }
+          const clubName = rawClubName ?? rawCommunityName;
           const playerName = getCredentialString(credentials?.playerName);
-          const communityKey = normalizeNameLookupKey(communityName ?? "");
+          const clubKey = normalizeNameLookupKey(clubName ?? "");
           const playerKey = normalizeNameLookupKey(playerName ?? "");
 
-          if (!communityName || !playerName || !communityKey || !playerKey) {
+          if (!clubName || !playerName || !clubKey || !playerKey) {
             return null;
           }
 
@@ -115,7 +125,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
               ? null
               : await checkRateLimit(request, "auth:quick_access", {
                   applyHighRiskBucket: false,
-                  identity: `${communityKey}:${playerKey}`,
+                  identity: `${clubKey}:${playerKey}`,
                   limit: QUICK_ACCESS_MAX_ATTEMPTS,
                   windowMs: QUICK_ACCESS_WINDOW_MS,
                 });
@@ -132,7 +142,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
                   route: "/api/auth/[...nextauth]",
                 },
                 target: {
-                  id: `${communityKey}:${playerKey}`,
+                  id: `${clubKey}:${playerKey}`,
                   type: "quick_access_profile",
                 },
               });
@@ -140,7 +150,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             }
 
             const match = await findQuickAccessProfile({
-              communityName,
+              clubName,
               playerName,
             });
             if (!match) {
@@ -155,7 +165,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
                   route: "/api/auth/[...nextauth]",
                 },
                 target: {
-                  id: `${communityKey}:${playerKey}`,
+                  id: `${clubKey}:${playerKey}`,
                   type: "quick_access_profile",
                 },
               });
@@ -170,7 +180,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
               outcome: "success",
               request,
               scope: {
-                communityId: match.community.id,
+                clubId: match.club.id,
                 route: "/api/auth/[...nextauth]",
               },
               target: {
@@ -186,7 +196,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
               name: match.user.name,
               isAdmin: false,
               isQuickAccess: true,
-              quickAccessCommunityId: match.community.id,
+              quickAccessClubId: match.club.id,
+              quickAccessCommunityId: match.club.id,
             };
           } catch (error) {
             logAuditEvent({
@@ -202,7 +213,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
                 route: "/api/auth/[...nextauth]",
               },
               target: {
-                id: `${communityKey}:${playerKey}`,
+                id: `${clubKey}:${playerKey}`,
                 type: "quick_access_profile",
               },
             });
@@ -369,10 +380,13 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         }
         token.email = typeof user.email === "string" ? user.email : null;
         token.isQuickAccess = !!user.isQuickAccess;
-        token.quickAccessCommunityId =
-          typeof user.quickAccessCommunityId === "string"
-            ? user.quickAccessCommunityId
+        token.quickAccessClubId =
+          typeof user.quickAccessClubId === "string"
+            ? user.quickAccessClubId
+            : typeof user.quickAccessCommunityId === "string"
+              ? user.quickAccessCommunityId
             : null;
+        token.quickAccessCommunityId = token.quickAccessClubId;
         token.isAdmin = token.isQuickAccess ? false : !!user.isAdmin;
       } else if (trigger === "update" && typeof session?.name === "string") {
         token.name = session.name;
@@ -381,9 +395,13 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       }
       if (typeof token.isAdmin !== "boolean") token.isAdmin = false;
       if (typeof token.isQuickAccess !== "boolean") token.isQuickAccess = false;
-      if (token.isQuickAccess && typeof token.quickAccessCommunityId !== "string") {
-        token.quickAccessCommunityId = null;
+      if (token.isQuickAccess && typeof token.quickAccessClubId !== "string") {
+        token.quickAccessClubId =
+          typeof token.quickAccessCommunityId === "string"
+            ? token.quickAccessCommunityId
+            : null;
       }
+      token.quickAccessCommunityId = token.quickAccessClubId ?? null;
       return token;
     },
     async session({ session, token }) {
@@ -395,10 +413,11 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           typeof token.email === "string" ? token.email : "";
         session.user.isAdmin = !!token.isAdmin;
         session.user.isQuickAccess = !!token.isQuickAccess;
-        session.user.quickAccessCommunityId =
-          typeof token.quickAccessCommunityId === "string"
-            ? token.quickAccessCommunityId
+        session.user.quickAccessClubId =
+          typeof token.quickAccessClubId === "string"
+            ? token.quickAccessClubId
             : null;
+        session.user.quickAccessCommunityId = session.user.quickAccessClubId;
       }
       return session;
     },

@@ -43,7 +43,7 @@ function createSessionData(overrides: Partial<SessionData> = {}): SessionData {
   return {
     id: "session-1",
     code: "CODE123",
-    communityId: "community-1",
+    clubId: "community-1",
     name: "Tuesday Night",
     type: SessionType.ELO,
     mode: SessionMode.MIXICANO,
@@ -60,7 +60,7 @@ function createSessionData(overrides: Partial<SessionData> = {}): SessionData {
     poolBMissedTurns: 0,
     crossoverMissThreshold: 1,
     viewerCanManage: true,
-    viewerCommunityRole: "ADMIN",
+    viewerClubRole: "ADMIN",
     courts: [],
     players: [],
     matches: [],
@@ -94,7 +94,7 @@ describe("buildSessionViewModel", () => {
       }),
     ];
 
-    const communityPlayers: ClubUser[] = [
+    const clubPlayers: ClubUser[] = [
       ...players
         .filter((player) => !player.isGuest)
         .map((player) => ({
@@ -171,7 +171,7 @@ describe("buildSessionViewModel", () => {
 
     const viewModel = buildSessionViewModel({
       sessionData,
-      communityPlayers,
+      clubPlayers,
       rosterSearch: "ju",
       manualMatchForm: {
         ...emptyManualMatchForm,
@@ -218,7 +218,7 @@ describe("buildSessionViewModel", () => {
     ]);
     expect(viewModel.activePreferencePlayer?.user.name).toBe("Ben");
     expect(viewModel.getPlayerProfileHref(players[0])).toBe(
-      "/profile/u1?communityId=community-1"
+      "/profile/u1?clubId=community-1"
     );
     expect(viewModel.getPlayerProfileHref(players[8])).toBe("/profile/u9");
   });
@@ -232,7 +232,7 @@ describe("buildSessionViewModel", () => {
     ];
 
     const sessionData = createSessionData({
-      communityId: null,
+      clubId: null,
       mode: SessionMode.MEXICANO,
       status: SessionStatus.COMPLETED,
       players,
@@ -253,7 +253,7 @@ describe("buildSessionViewModel", () => {
 
     const viewModel = buildSessionViewModel({
       sessionData,
-      communityPlayers: [],
+      clubPlayers: [],
       rosterSearch: "",
       manualMatchForm: emptyManualMatchForm,
       manualCourtId: null,
@@ -292,7 +292,7 @@ describe("buildSessionViewModel", () => {
         mode: SessionMode.MEXICANO,
         players,
       }),
-      communityPlayers: [],
+      clubPlayers: [],
       rosterSearch: "",
       manualMatchForm: emptyManualMatchForm,
       manualCourtId: null,
@@ -352,7 +352,7 @@ describe("buildSessionViewModel", () => {
 
     const viewModel = buildSessionViewModel({
       sessionData,
-      communityPlayers: [],
+      clubPlayers: [],
       rosterSearch: "",
       manualMatchForm: emptyManualMatchForm,
       manualCourtId: null,
@@ -418,7 +418,7 @@ describe("buildSessionViewModel", () => {
 
     const viewModel = buildSessionViewModel({
       sessionData,
-      communityPlayers: [],
+      clubPlayers: [],
       rosterSearch: "",
       manualMatchForm: emptyManualMatchForm,
       manualCourtId: null,
@@ -484,7 +484,7 @@ describe("buildSessionViewModel", () => {
 
     const viewModel = buildSessionViewModel({
       sessionData,
-      communityPlayers: [],
+      clubPlayers: [],
       rosterSearch: "",
       manualMatchForm: emptyManualMatchForm,
       manualCourtId: null,

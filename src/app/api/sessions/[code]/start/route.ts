@@ -59,8 +59,8 @@ export async function POST(
     if (sessionData.status !== SessionStatus.WAITING) {
       return NextResponse.json({ error: "Session already started" }, { status: 400 });
     }
-    const communityLinks = await getSessionClubLinks(prisma, sessionData);
-    const pendingPartner = communityLinks.find(
+    const clubLinks = await getSessionClubLinks(prisma, sessionData);
+    const pendingPartner = clubLinks.find(
       (link) => link.status !== SessionClubStatus.ACCEPTED
     );
     if (pendingPartner) {
@@ -96,19 +96,19 @@ export async function POST(
       },
     });
 
-    const linkedClubIds = communityLinks.map((link) => link.communityId);
+    const linkedClubIds = clubLinks.map((link) => link.clubId);
     const playerIds = updated.players.map((p) => p.userId);
     const players =
       linkedClubIds.length > 1 && updated.players.length > 0
         ? withPlayerClubBadges(
             updated.players,
             await getPlayerClubBadges(prisma, linkedClubIds, playerIds),
-            updated.communityId
+            updated.clubId
           )
-        : updated.communityId && updated.players.length > 0
+        : updated.clubId && updated.players.length > 0
           ? withClubElo(
               updated.players,
-              await getClubEloByUserId(updated.communityId, playerIds)
+              await getClubEloByUserId(updated.clubId, playerIds)
             )
           : updated.players;
     const serializedPlayers = players.map((player) => ({

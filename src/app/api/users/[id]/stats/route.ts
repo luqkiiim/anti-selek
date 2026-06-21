@@ -5,6 +5,11 @@ import { prisma } from "@/lib/prisma";
 import { buildProfileClubRankWindow } from "@/lib/profileClubRank";
 import { buildPlayerProfileDerivedData } from "@/lib/profileStats";
 import { canQuickAccessClub, isQuickAccessSession } from "@/lib/quickAccess";
+import {
+  ClubContractAliasConflictError,
+  readAliasedSearchParam,
+  withLegacyClubAliases,
+} from "@/lib/clubContractAliases";
 import { ClubPlayerStatus, MatchStatus } from "@/types/enums";
 import { logError, safeErrorResponse } from "@/lib/errors";
 import { rateLimit, checkInvalidTargetRateLimit, invalidTargetResponse } from "@/lib/rateLimit";
@@ -30,7 +35,12 @@ async function getUserStatsRoute(
 
   if (invalidTargetLimitResponse) return invalidTargetLimitResponse;
   const url = new URL(request.url);
-  const communityId = url.searchParams.get("communityId");
+  const clubId = readAliasedSearchParam(
+    url.searchParams,
+    "clubId",
+    "communityId",
+    "club identifier"
+  );
 
   const user = await prisma.user.findUnique({
     where: { id },
@@ -50,7 +60,7 @@ async function getUserStatsRoute(
   let effectiveElo = user.elo;
   let context:
     | {
-        communityId: string;
+        clubId: string;
         viewerCanManageClub: boolean;
         rankContext: {
           leaderboardSize: number;
@@ -69,25 +79,25 @@ async function getUserStatsRoute(
     };
   }> = [];
 
-  if (communityId) {
-    if (!canQuickAccessClub(session, communityId)) {
+  if (clubId) {
+    if (!canQuickAccessClub(session, clubId)) {
       return invalidTargetResponse(request, "api:users:id:stats");
     }
 
     const [requesterMembership, targetMembership] = await Promise.all([
-      prisma.communityMember.findUnique({
+      prisma.clubMember.findUnique({
         where: {
-          communityId_userId: {
-            communityId,
+          clubId_userId: {
+            clubId,
             userId: session.user.id,
           },
         },
         select: { role: true },
       }),
-      prisma.communityMember.findUnique({
+      prisma.clubMember.findUnique({
         where: {
-          communityId_userId: {
-            communityId,
+          clubId_userId: {
+            clubId,
             userId: id,
           },
         },
@@ -117,9 +127,9 @@ async function getUserStatsRoute(
       (requesterMembership.role === "ADMIN" || !!session.user.isAdmin);
     effectiveElo = targetMembership.elo;
 
-    leaderboardMembers = await prisma.communityMember.findMany({
+    leaderboardMembers = await prisma.clubMember.findMany({
       where: {
-        communityId,
+        clubId,
         status: {
           not: ClubPlayerStatus.OCCASIONAL,
         },
@@ -139,8 +149,8 @@ async function getUserStatsRoute(
   const matches = await prisma.match.findMany({
     where: {
       status: MatchStatus.COMPLETED,
-      session: communityId
-        ? { communityId, isTest: false }
+      session: clubId
+        ? { clubId, isTest: false }
         : { isTest: false },
       OR: [
         { team1User1Id: id },
@@ -203,7 +213,7 @@ async function getUserStatsRoute(
     }))
   );
 
-  if (communityId) {
+  if (clubId) {
     const recentSessionIds = profileData.recentSessions.map((session) => session.id);
     const rankWindowMatches =
       recentSessionIds.length > 0
@@ -214,7 +224,7 @@ async function getUserStatsRoute(
                 in: recentSessionIds,
               },
               session: {
-                communityId,
+                clubId,
                 isTest: false,
               },
             },
@@ -229,8 +239,8 @@ async function getUserStatsRoute(
           })
         : [];
 
-    context = {
-      communityId,
+    context = withLegacyClubAliases({
+      clubId,
       viewerCanManageClub,
       rankContext: buildProfileClubRankWindow(
         id,
@@ -241,7 +251,7 @@ async function getUserStatsRoute(
         })),
         rankWindowMatches
       ),
-    };
+    });
   }
 
   return NextResponse.json({
@@ -261,6 +271,9 @@ export async function GET(...args: Parameters<typeof getUserStatsRoute>) {
 
     return await getUserStatsRoute(...args);
   } catch (error) {
+    if (error instanceof ClubContractAliasConflictError) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
     logError("Load user stats error", error);
     return safeErrorResponse();
   }

@@ -14,7 +14,7 @@ vi.mock("@/lib/prisma", () => ({
   prisma: {
     session: { findUnique: vi.fn() },
     court: { findMany: vi.fn(), update: vi.fn(), updateMany: vi.fn() },
-    communityMember: { findUnique: vi.fn() },
+    clubMember: { findUnique: vi.fn() },
     match: { delete: vi.fn(), findMany: vi.fn(), create: vi.fn() },
     $transaction: vi.fn(),
   },
@@ -135,7 +135,7 @@ function createSessionData(
   return {
     id: "session-1",
     code: "session-1",
-    communityId: "community-1",
+    clubId: "community-1",
     name: "Test Session",
     type: SessionType.ELO,
     mode: SessionMode.MEXICANO,

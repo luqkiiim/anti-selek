@@ -40,7 +40,7 @@ export async function POST(
       where: { id },
       include: {
         session: {
-          select: { communityId: true, type: true, isTest: true },
+          select: { clubId: true, type: true, isTest: true },
         },
         team1User1: { select: { id: true, name: true, elo: true } },
         team1User2: { select: { id: true, name: true, elo: true } },
@@ -52,7 +52,7 @@ export async function POST(
     if (!match) {
       return invalidTargetResponse(request, "api:matches:id:approve");
     }
-    if (!canQuickAccessClub(session, match.session.communityId)) {
+    if (!canQuickAccessClub(session, match.session.clubId)) {
       return invalidTargetResponse(request, "api:matches:id:approve");
     }
 
@@ -62,7 +62,7 @@ export async function POST(
 
     // Check if admin or one of the players
     const operatorMembership = await getSessionOperatorMembership(prisma, {
-      session: { id: match.sessionId, communityId: match.session.communityId },
+      session: { id: match.sessionId, clubId: match.session.clubId },
       userId: session.user.id,
       acceptedOnly: true,
     });

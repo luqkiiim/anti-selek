@@ -42,9 +42,9 @@ export async function POST(
         code: true,
         name: true,
         status: true,
-        communityId: true,
+        clubId: true,
         isTest: true,
-        community: {
+        club: {
           select: {
             isTutorial: true,
             tutorialOwnerId: true,
@@ -62,8 +62,8 @@ export async function POST(
         { status: 400 }
       );
     }
-    if (targetSession.community?.isTutorial) {
-      if (targetSession.community.tutorialOwnerId !== session.user.id) {
+    if (targetSession.club?.isTutorial) {
+      if (targetSession.club.tutorialOwnerId !== session.user.id) {
         return invalidTargetResponse(_request, "api:sessions:code:rollback");
       }
       return NextResponse.json(
@@ -79,11 +79,11 @@ export async function POST(
     }
 
     let isClubAdmin = false;
-    if (targetSession.communityId) {
-      const membership = await prisma.communityMember.findUnique({
+    if (targetSession.clubId) {
+      const membership = await prisma.clubMember.findUnique({
         where: {
-          communityId_userId: {
-            communityId: targetSession.communityId,
+          clubId_userId: {
+            clubId: targetSession.clubId,
             userId: session.user.id,
           },
         },
@@ -104,11 +104,11 @@ export async function POST(
           code: true,
           name: true,
           status: true,
-          communityId: true,
+          clubId: true,
           endedAt: true,
           createdAt: true,
           isTest: true,
-          community: {
+          club: {
             select: {
               isTutorial: true,
             },
@@ -122,7 +122,7 @@ export async function POST(
       if (freshTarget.isTest) {
         throw new Error("IS_TEST");
       }
-      if (freshTarget.community?.isTutorial) {
+      if (freshTarget.club?.isTutorial) {
         throw new Error("IS_TUTORIAL");
       }
       if (freshTarget.status !== SessionStatus.COMPLETED) {
@@ -131,7 +131,7 @@ export async function POST(
 
       const latestCompleted = await tx.session.findFirst({
         where: {
-          communityId: freshTarget.communityId,
+          clubId: freshTarget.clubId,
           status: SessionStatus.COMPLETED,
           isTest: false,
         },
@@ -174,7 +174,7 @@ export async function POST(
           matchId: { in: completedMatches.map((match) => match.id) },
         },
         select: {
-          communityId: true,
+          clubId: true,
           userId: true,
           delta: true,
         },
@@ -184,12 +184,12 @@ export async function POST(
       if (ledgerAdjustments.length > 0) {
         const reverseDeltaByClubAndUserId = new Map<
           string,
-          { communityId: string; userId: string; delta: number }
+          { clubId: string; userId: string; delta: number }
         >();
         for (const adjustment of ledgerAdjustments) {
-          const key = `${adjustment.communityId}:${adjustment.userId}`;
+          const key = `${adjustment.clubId}:${adjustment.userId}`;
           const current = reverseDeltaByClubAndUserId.get(key) ?? {
-            communityId: adjustment.communityId,
+            clubId: adjustment.clubId,
             userId: adjustment.userId,
             delta: 0,
           };
@@ -199,16 +199,16 @@ export async function POST(
 
         for (const item of reverseDeltaByClubAndUserId.values()) {
           if (item.delta === 0) continue;
-          await tx.communityMember.updateMany({
+          await tx.clubMember.updateMany({
             where: {
-              communityId: item.communityId,
+              clubId: item.clubId,
               userId: item.userId,
             },
             data: {
               elo: { increment: item.delta },
             },
           });
-          reversedPlayerKeys.add(`${item.communityId}:${item.userId}`);
+          reversedPlayerKeys.add(`${item.clubId}:${item.userId}`);
         }
       } else {
         const eloReverseDeltaByUserId = computeRollbackEloDeltas(
@@ -218,17 +218,17 @@ export async function POST(
 
         for (const [userId, delta] of eloReverseDeltaByUserId.entries()) {
           if (delta === 0) continue;
-          if (freshTarget.communityId) {
-            await tx.communityMember.updateMany({
+          if (freshTarget.clubId) {
+            await tx.clubMember.updateMany({
               where: {
-                communityId: freshTarget.communityId,
+                clubId: freshTarget.clubId,
                 userId,
               },
               data: {
                 elo: { increment: delta },
               },
             });
-            reversedPlayerKeys.add(`${freshTarget.communityId}:${userId}`);
+            reversedPlayerKeys.add(`${freshTarget.clubId}:${userId}`);
           } else {
             await tx.user.updateMany({
               where: { id: userId },

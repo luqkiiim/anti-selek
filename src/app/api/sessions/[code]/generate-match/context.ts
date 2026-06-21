@@ -13,14 +13,14 @@ import {
 
 async function ensureManagePermission(
   sessionId: string,
-  communityId: string | null | undefined,
+  clubId: string | null | undefined,
   userId: string,
   requesterIsAdmin: boolean
 ) {
   if (requesterIsAdmin) return;
 
   const membership = await getSessionOperatorMembership(prisma, {
-    session: { id: sessionId, communityId },
+    session: { id: sessionId, clubId },
     userId,
     acceptedOnly: true,
   });
@@ -54,7 +54,7 @@ export async function loadGenerateMatchContext({
 
   await ensureManagePermission(
     sessionData.id,
-    sessionData.communityId,
+    sessionData.clubId,
     userId,
     requesterIsAdmin
   );

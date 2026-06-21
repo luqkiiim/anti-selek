@@ -19,7 +19,7 @@ export class ClubClaimError extends Error {
 
   constructor(message: string, statusCode = 400) {
     super(message);
-    this.name = "CommunityClaimError";
+    this.name = "ClubClaimError";
     this.statusCode = statusCode;
   }
 }
@@ -39,13 +39,13 @@ export function isClaimableClubPlaceholder(user: {
 }
 
 interface ApproveClubClaimArgs {
-  communityId: string;
+  clubId: string;
   requestId: string;
   reviewerUserId: string;
 }
 
 interface ClaimTransferMember {
-  communityId: string;
+  clubId: string;
   userId: string;
 }
 
@@ -61,7 +61,7 @@ async function getClaimTransferMembers(
         include: {
           members: {
             select: {
-              communityId: true,
+              clubId: true,
               userId: true,
             },
           },
@@ -71,7 +71,7 @@ async function getClaimTransferMembers(
   });
 
   if (!offlineIdentityMember) {
-    return [{ communityId: fallbackClubId, userId: targetUserId }];
+    return [{ clubId: fallbackClubId, userId: targetUserId }];
   }
 
   return offlineIdentityMember.offlineIdentity.members;
@@ -79,7 +79,7 @@ async function getClaimTransferMembers(
 
 export async function approveClubClaimRequest(
   tx: Prisma.TransactionClient,
-  { communityId, requestId, reviewerUserId }: ApproveClubClaimArgs
+  { clubId, requestId, reviewerUserId }: ApproveClubClaimArgs
 ) {
   const claimRequest = await tx.claimRequest.findUnique({
     where: { id: requestId },
@@ -106,7 +106,7 @@ export async function approveClubClaimRequest(
     },
   });
 
-  if (!claimRequest || claimRequest.communityId !== communityId) {
+  if (!claimRequest || claimRequest.clubId !== clubId) {
     throw new ClubClaimError("Claim request not found", 404);
   }
 
@@ -128,14 +128,14 @@ export async function approveClubClaimRequest(
   const transferMembers = await getClaimTransferMembers(
     tx,
     claimRequest.targetUserId,
-    communityId
+    clubId
   );
   const transferClubIds = Array.from(
-    new Set(transferMembers.map((member) => member.communityId))
+    new Set(transferMembers.map((member) => member.clubId))
   );
   if (
     transferClubIds.length !== 1 ||
-    transferClubIds[0] !== communityId
+    transferClubIds[0] !== clubId
   ) {
     throw new ClubClaimError(
       "Linked profiles span multiple clubs. Manual merge required.",
@@ -147,11 +147,11 @@ export async function approveClubClaimRequest(
     new Set(transferMembers.map((member) => member.userId))
   );
 
-  const [requesterMembership, targetMemberships, communitySessions] = await Promise.all([
-    tx.communityMember.findUnique({
+  const [requesterMembership, targetMemberships, clubSessions] = await Promise.all([
+    tx.clubMember.findUnique({
       where: {
-        communityId_userId: {
-          communityId,
+        clubId_userId: {
+          clubId,
           userId: claimRequest.requesterUserId,
         },
       },
@@ -160,15 +160,15 @@ export async function approveClubClaimRequest(
         elo: true,
       },
     }),
-    tx.communityMember.findMany({
+    tx.clubMember.findMany({
       where: {
         OR: transferMembers.map((member) => ({
-          communityId: member.communityId,
+          clubId: member.clubId,
           userId: member.userId,
         })),
       },
       select: {
-        communityId: true,
+        clubId: true,
         userId: true,
         role: true,
       },
@@ -176,11 +176,11 @@ export async function approveClubClaimRequest(
     tx.session.findMany({
       where: {
         OR: [
-          { communityId: { in: transferClubIds } },
+          { clubId: { in: transferClubIds } },
           {
-            sessionCommunities: {
+            sessionClubs: {
               some: {
-                communityId: { in: transferClubIds },
+                clubId: { in: transferClubIds },
                 status: "ACCEPTED",
               },
             },
@@ -205,10 +205,10 @@ export async function approveClubClaimRequest(
     throw new ClubClaimError("Target profile is no longer in this club", 409);
   }
 
-  const communitySessionIds = communitySessions.map((session) => session.id);
+  const clubSessionIds = clubSessions.map((session) => session.id);
   const targetMembershipByClubAndUser = new Map(
     targetMemberships.map((membership) => [
-      `${membership.communityId}:${membership.userId}`,
+      `${membership.clubId}:${membership.userId}`,
       membership,
     ])
   );
@@ -220,18 +220,18 @@ export async function approveClubClaimRequest(
     );
   }
 
-  const requesterExistingMemberships = await tx.communityMember.findMany({
+  const requesterExistingMemberships = await tx.clubMember.findMany({
     where: {
-      communityId: { in: transferClubIds },
+      clubId: { in: transferClubIds },
       userId: claimRequest.requesterUserId,
     },
     select: {
-      communityId: true,
+      clubId: true,
       elo: true,
     },
   });
   const unexpectedRequesterMembership = requesterExistingMemberships.find(
-    (membership) => membership.communityId !== communityId
+    (membership) => membership.clubId !== clubId
   );
   if (unexpectedRequesterMembership) {
     throw new ClubClaimError(
@@ -240,10 +240,10 @@ export async function approveClubClaimRequest(
     );
   }
 
-  if (communitySessionIds.length > 0) {
+  if (clubSessionIds.length > 0) {
     const conflictingSessionPlayer = await tx.sessionPlayer.findFirst({
       where: {
-        sessionId: { in: communitySessionIds },
+        sessionId: { in: clubSessionIds },
         userId: claimRequest.requesterUserId,
       },
       select: {
@@ -265,10 +265,10 @@ export async function approveClubClaimRequest(
 
   const reviewedAt = new Date();
 
-  await tx.communityMember.delete({
+  await tx.clubMember.delete({
     where: {
-      communityId_userId: {
-        communityId,
+      clubId_userId: {
+        clubId,
         userId: claimRequest.requesterUserId,
       },
     },
@@ -276,21 +276,21 @@ export async function approveClubClaimRequest(
 
   for (const member of transferMembers) {
     const targetMembership = targetMembershipByClubAndUser.get(
-      `${member.communityId}:${member.userId}`
+      `${member.clubId}:${member.userId}`
     );
     if (!targetMembership) continue;
 
-    await tx.communityMember.update({
+    await tx.clubMember.update({
       where: {
-        communityId_userId: {
-          communityId: member.communityId,
+        clubId_userId: {
+          clubId: member.clubId,
           userId: member.userId,
         },
       },
       data: {
         userId: claimRequest.requesterUserId,
         role:
-          member.communityId === communityId
+          member.clubId === clubId
             ? mergeClubRoles(
                 normalizeClubRole(requesterMembership.role),
                 normalizeClubRole(targetMembership.role)
@@ -300,10 +300,10 @@ export async function approveClubClaimRequest(
     });
   }
 
-  if (communitySessionIds.length > 0) {
+  if (clubSessionIds.length > 0) {
     await tx.sessionPlayer.updateMany({
       where: {
-        sessionId: { in: communitySessionIds },
+        sessionId: { in: clubSessionIds },
         userId: { in: transferTargetUserIds },
       },
       data: {
@@ -314,7 +314,7 @@ export async function approveClubClaimRequest(
     for (const field of COMMUNITY_MATCH_USER_FIELDS) {
       await tx.match.updateMany({
         where: {
-          sessionId: { in: communitySessionIds },
+          sessionId: { in: clubSessionIds },
           [field]: { in: transferTargetUserIds },
         },
         data: {
@@ -325,7 +325,7 @@ export async function approveClubClaimRequest(
 
     await tx.match.updateMany({
       where: {
-        sessionId: { in: communitySessionIds },
+        sessionId: { in: clubSessionIds },
         scoreSubmittedByUserId: { in: transferTargetUserIds },
       },
       data: {
@@ -336,7 +336,7 @@ export async function approveClubClaimRequest(
 
   await tx.matchEloAdjustment.updateMany({
     where: {
-      communityId: { in: transferClubIds },
+      clubId: { in: transferClubIds },
       userId: { in: transferTargetUserIds },
     },
     data: {
@@ -364,7 +364,7 @@ export async function approveClubClaimRequest(
 
   await tx.claimRequest.updateMany({
     where: {
-      communityId,
+      clubId,
       status: ClaimRequestStatus.PENDING,
       NOT: { id: claimRequest.id },
       OR: [

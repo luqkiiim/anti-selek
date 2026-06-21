@@ -13,6 +13,10 @@ import {
   uploadAvatarObject,
 } from "@/lib/avatarStorage";
 import { logError, safeErrorResponse } from "@/lib/errors";
+import {
+  ClubContractAliasConflictError,
+  readAliasedSearchParam,
+} from "@/lib/clubContractAliases";
 import { prisma } from "@/lib/prisma";
 import { isQuickAccessSession } from "@/lib/quickAccess";
 import {
@@ -36,14 +40,14 @@ async function getAvatarTargetUser(userId: string) {
 }
 
 async function canManageAvatar({
-  communityId,
+  clubId,
   requesterId,
   requesterIsAdmin,
   requesterIsQuickAccess,
   targetUserId,
   targetIsClaimed,
 }: {
-  communityId: string | null;
+  clubId: string | null;
   requesterId: string;
   requesterIsAdmin: boolean;
   requesterIsQuickAccess: boolean;
@@ -62,24 +66,24 @@ async function canManageAvatar({
     return true;
   }
 
-  if (!communityId) {
+  if (!clubId) {
     return false;
   }
 
   const [requesterMembership, targetMembership] = await Promise.all([
-    prisma.communityMember.findUnique({
+    prisma.clubMember.findUnique({
       where: {
-        communityId_userId: {
-          communityId,
+        clubId_userId: {
+          clubId,
           userId: requesterId,
         },
       },
       select: { role: true },
     }),
-    prisma.communityMember.findUnique({
+    prisma.clubMember.findUnique({
       where: {
-        communityId_userId: {
-          communityId,
+        clubId_userId: {
+          clubId,
           userId: targetUserId,
         },
       },
@@ -123,7 +127,12 @@ export async function POST(
     );
     if (invalidTargetLimitResponse) return invalidTargetLimitResponse;
     const url = new URL(request.url);
-    const communityId = url.searchParams.get("communityId");
+    const clubId = readAliasedSearchParam(
+      url.searchParams,
+      "clubId",
+      "communityId",
+      "club identifier"
+    );
 
     const targetUser = await getAvatarTargetUser(id);
     if (!targetUser) {
@@ -132,7 +141,7 @@ export async function POST(
 
     const requesterIsQuickAccess = isQuickAccessSession(session);
     const allowed = await canManageAvatar({
-      communityId,
+      clubId,
       requesterId: session.user.id,
       requesterIsAdmin: !!session.user.isAdmin,
       requesterIsQuickAccess,
@@ -204,6 +213,9 @@ export async function POST(
       avatarUrl: resolveAvatarUrl(updatedUser.avatarKey),
     });
   } catch (error) {
+    if (error instanceof ClubContractAliasConflictError) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
     await rollbackUploadedAvatar({
       uploadedAvatarKey: uploadedAvatarUrl,
     });
@@ -243,7 +255,12 @@ export async function DELETE(
     );
     if (invalidTargetLimitResponse) return invalidTargetLimitResponse;
     const url = new URL(request.url);
-    const communityId = url.searchParams.get("communityId");
+    const clubId = readAliasedSearchParam(
+      url.searchParams,
+      "clubId",
+      "communityId",
+      "club identifier"
+    );
 
     const targetUser = await getAvatarTargetUser(id);
     if (!targetUser) {
@@ -251,7 +268,7 @@ export async function DELETE(
     }
 
     const allowed = await canManageAvatar({
-      communityId,
+      clubId,
       requesterId: session.user.id,
       requesterIsAdmin: !!session.user.isAdmin,
       requesterIsQuickAccess: isQuickAccessSession(session),
@@ -274,6 +291,9 @@ export async function DELETE(
 
     return NextResponse.json({ avatarUrl: null });
   } catch (error) {
+    if (error instanceof ClubContractAliasConflictError) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
     logError("Delete avatar error", error);
     return safeErrorResponse();
   }

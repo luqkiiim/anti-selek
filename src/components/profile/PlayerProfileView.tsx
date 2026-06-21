@@ -50,7 +50,7 @@ interface UserProfileResponse {
     createdAt: string;
   };
   context?: {
-    communityId: string;
+    clubId: string;
     viewerCanManageClub: boolean;
     rankContext: {
       leaderboardSize: number;
@@ -127,7 +127,7 @@ interface RatingSeriesPoint {
 
 export interface PlayerProfileViewProps {
   userId: string;
-  communityId?: string;
+  clubId?: string;
   mode?: "standalone" | "embedded";
   onBack?: () => void;
 }
@@ -200,9 +200,9 @@ function formatMatchScore(score: string) {
   return score.replace(/\s*-\s*/g, "-");
 }
 
-function getPlayerProfileHref(userId: string, communityId: string) {
-  return communityId
-    ? `/profile/${userId}?communityId=${encodeURIComponent(communityId)}`
+function getPlayerProfileHref(userId: string, clubId: string) {
+  return clubId
+    ? `/profile/${userId}?clubId=${encodeURIComponent(clubId)}`
     : `/profile/${userId}`;
 }
 
@@ -765,7 +765,7 @@ function ProfileHero({
             <div className="flex items-start justify-between gap-3">
               <div>
                 <p className="text-sm font-semibold text-white/70">
-                  {data.context?.communityId ? "Club rating" : "Overall rating"}
+                  {data.context?.clubId ? "Club rating" : "Overall rating"}
                 </p>
                 <p className="mt-2 text-4xl font-semibold text-white">
                   {data.user.elo}
@@ -991,11 +991,11 @@ function PerformanceSummary({ data }: { data: UserProfileResponse }) {
 function ConnectionRow({
   summary,
   rank,
-  communityId,
+  clubId,
 }: {
   summary: PlayerProfileConnectionSummary;
   rank: number;
-  communityId: string;
+  clubId: string;
 }) {
   return (
     <div className="flex items-center gap-3 rounded-xl border border-[var(--line)] bg-white px-3 py-3">
@@ -1005,7 +1005,7 @@ function ConnectionRow({
       <Avatar name={summary.user.name} avatarUrl={summary.user.avatarUrl} size="sm" />
       <div className="min-w-0 flex-1">
         <div className="truncate text-sm">
-          <ProfileLink href={getPlayerProfileHref(summary.user.id, communityId)}>
+          <ProfileLink href={getPlayerProfileHref(summary.user.id, clubId)}>
             {summary.user.name}
           </ProfileLink>
         </div>
@@ -1020,11 +1020,11 @@ function ConnectionRow({
 
 function ConnectionRankList({
   summaries,
-  communityId,
+  clubId,
   emptyText,
 }: {
   summaries: PlayerProfileConnectionSummary[];
-  communityId: string;
+  clubId: string;
   emptyText: string;
 }) {
   if (summaries.length === 0) {
@@ -1042,7 +1042,7 @@ function ConnectionRankList({
           key={summary.user.id}
           summary={summary}
           rank={index + 1}
-          communityId={communityId}
+          clubId={clubId}
         />
       ))}
     </div>
@@ -1051,10 +1051,10 @@ function ConnectionRankList({
 
 function RelationshipCards({
   data,
-  communityId,
+  clubId,
 }: {
   data: UserProfileResponse;
-  communityId: string;
+  clubId: string;
 }) {
   return (
     <div className="grid gap-3 lg:grid-cols-2">
@@ -1065,7 +1065,7 @@ function RelationshipCards({
       >
         <ConnectionRankList
           summaries={data.partners.best}
-          communityId={communityId}
+          clubId={clubId}
           emptyText="Complete a few partner matches to reveal chemistry."
         />
       </ProfileSection>
@@ -1077,7 +1077,7 @@ function RelationshipCards({
       >
         <ConnectionRankList
           summaries={data.opponents.toughest}
-          communityId={communityId}
+          clubId={clubId}
           emptyText="Toughest opponents appear once enough history exists."
         />
       </ProfileSection>
@@ -1264,12 +1264,12 @@ function RecentSessionTile({
 function MatchCard({
   match,
   userName,
-  communityId,
+  clubId,
   compact = false,
 }: {
   match: PlayerProfileMatchHistoryEntry;
   userName: string;
-  communityId: string;
+  clubId: string;
   compact?: boolean;
 }) {
   const sessionHref = getSessionHistoryHref(match.sessionCode);
@@ -1290,7 +1290,7 @@ function MatchCard({
               <p className="min-w-0 truncate text-sm font-semibold text-gray-900 sm:text-base">
                 <span>{userName}</span>
                 <span className="px-1 text-gray-400">/</span>
-                <ProfileLink href={getPlayerProfileHref(match.partner.id, communityId)}>
+                <ProfileLink href={getPlayerProfileHref(match.partner.id, clubId)}>
                   {match.partner.name}
                 </ProfileLink>
               </p>
@@ -1305,7 +1305,7 @@ function MatchCard({
             {match.opponents.map((opponent) => (
               <span key={opponent.id} className="inline-flex items-center gap-1.5">
                 <Avatar name={opponent.name} avatarUrl={opponent.avatarUrl} size="xs" />
-                <ProfileLink href={getPlayerProfileHref(opponent.id, communityId)}>
+                <ProfileLink href={getPlayerProfileHref(opponent.id, clubId)}>
                   {opponent.name}
                 </ProfileLink>
               </span>
@@ -1347,12 +1347,12 @@ function MatchCard({
 function MatchesList({
   matches,
   userName,
-  communityId,
+  clubId,
   compact = false,
 }: {
   matches: PlayerProfileMatchHistoryEntry[];
   userName: string;
-  communityId: string;
+  clubId: string;
   compact?: boolean;
 }) {
   if (matches.length === 0) {
@@ -1371,7 +1371,7 @@ function MatchesList({
           key={match.id}
           match={match}
           userName={userName}
-          communityId={communityId}
+          clubId={clubId}
           compact={compact}
         />
       ))}
@@ -1382,20 +1382,20 @@ function MatchesList({
 function OverviewTab({
   data,
   rankContext,
-  communityId,
+  clubId,
   ratingSeries,
   achievements,
 }: {
   data: UserProfileResponse;
   rankContext: RankContext | null;
-  communityId: string;
+  clubId: string;
   ratingSeries: RatingSeriesPoint[];
   achievements: PlayerProfileAchievement[];
 }) {
   return (
     <div className="space-y-5">
       <PerformanceSummary data={data} />
-      <RelationshipCards data={data} communityId={communityId} />
+      <RelationshipCards data={data} clubId={clubId} />
       <div className="grid gap-5 lg:grid-cols-[0.95fr_1.05fr]">
         <AchievementPreview achievements={achievements} />
         <RatingProgressCard data={data} ratingSeries={ratingSeries} />
@@ -1412,7 +1412,7 @@ function OverviewTab({
         <MatchesList
           matches={data.matchHistory.slice(0, 3)}
           userName={data.user.name}
-          communityId={communityId}
+          clubId={clubId}
           compact
         />
       </ProfileSection>
@@ -1428,10 +1428,10 @@ function OverviewTab({
 
 function MatchesTab({
   data,
-  communityId,
+  clubId,
 }: {
   data: UserProfileResponse;
-  communityId: string;
+  clubId: string;
 }) {
   return (
     <ProfileSection
@@ -1442,7 +1442,7 @@ function MatchesTab({
       <MatchesList
         matches={data.matchHistory}
         userName={data.user.name}
-        communityId={communityId}
+        clubId={clubId}
       />
     </ProfileSection>
   );
@@ -1499,12 +1499,12 @@ function StyleTraitBars({ traits }: { traits: StyleTrait[] }) {
 function StatsTab({
   data,
   rankContext,
-  communityId,
+  clubId,
   styleTraits,
 }: {
   data: UserProfileResponse;
   rankContext: RankContext | null;
-  communityId: string;
+  clubId: string;
   styleTraits: StyleTrait[];
 }) {
   return (
@@ -1583,7 +1583,7 @@ function StatsTab({
           ) : null}
         </ProfileSection>
       </div>
-      <RelationshipCards data={data} communityId={communityId} />
+      <RelationshipCards data={data} clubId={clubId} />
     </div>
   );
 }
@@ -1614,7 +1614,7 @@ function AchievementsTab({
 
 export function PlayerProfileView({
   userId,
-  communityId = "",
+  clubId = "",
   mode = "standalone",
   onBack,
 }: PlayerProfileViewProps) {
@@ -1644,8 +1644,8 @@ export function PlayerProfileView({
       try {
         setLoading(true);
         setError("");
-        const query = communityId
-          ? `?communityId=${encodeURIComponent(communityId)}`
+        const query = clubId
+          ? `?clubId=${encodeURIComponent(clubId)}`
           : "";
         const [res, meRes] = await Promise.all([
           fetch(`/api/users/${userId}/stats${query}`),
@@ -1675,15 +1675,15 @@ export function PlayerProfileView({
     if (session?.user) {
       void fetchData();
     }
-  }, [userId, session, communityId]);
+  }, [userId, session, clubId]);
 
   const handleUploadAvatar = async (file: File) => {
     const canUseClubAdminRoute =
-      communityId.length > 0 && data?.context?.viewerCanManageClub;
+      clubId.length > 0 && data?.context?.viewerCanManageClub;
     const response = await uploadUserAvatar(
       userId,
       file,
-      canUseClubAdminRoute ? communityId : undefined
+      canUseClubAdminRoute ? clubId : undefined
     );
 
     setData((current) =>
@@ -1712,10 +1712,10 @@ export function PlayerProfileView({
 
   const handleRemoveAvatar = async () => {
     const canUseClubAdminRoute =
-      communityId.length > 0 && data?.context?.viewerCanManageClub;
+      clubId.length > 0 && data?.context?.viewerCanManageClub;
     await deleteUserAvatar(
       userId,
-      canUseClubAdminRoute ? communityId : undefined
+      canUseClubAdminRoute ? clubId : undefined
     );
 
     setData((current) =>
@@ -1740,7 +1740,7 @@ export function PlayerProfileView({
     setPreviewAvatarUrl(null);
   };
 
-  const fallbackBackHref = communityId ? `/community/${communityId}` : "/";
+  const fallbackBackHref = clubId ? `/club/${clubId}` : "/";
 
   const handleBack = () => {
     if (onBack) {
@@ -1840,7 +1840,7 @@ export function PlayerProfileView({
       (currentUser.id === userId &&
         currentUser.isClaimed === true &&
         currentUser.isQuickAccess !== true) ||
-      (!!data.context?.viewerCanManageClub && communityId.length > 0));
+      (!!data.context?.viewerCanManageClub && clubId.length > 0));
   const handlePreviewAvatar = (avatarUrl: string) => {
     setPreviewAvatarUrl(avatarUrl);
   };
@@ -1877,21 +1877,21 @@ export function PlayerProfileView({
         <OverviewTab
           data={data}
           rankContext={rankContext}
-          communityId={communityId}
+          clubId={clubId}
           ratingSeries={ratingSeries}
           achievements={achievements}
         />
       ) : null}
 
       {activeTab === "matches" ? (
-        <MatchesTab data={data} communityId={communityId} />
+        <MatchesTab data={data} clubId={clubId} />
       ) : null}
 
       {activeTab === "stats" ? (
         <StatsTab
           data={data}
           rankContext={rankContext}
-          communityId={communityId}
+          clubId={clubId}
           styleTraits={styleTraits}
         />
       ) : null}

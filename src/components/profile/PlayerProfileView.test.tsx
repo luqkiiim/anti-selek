@@ -58,7 +58,7 @@ function createJsonResponse(body: unknown, status = 200) {
 function buildProfileResponse(overrides?: Partial<{
   avatarUrl: string | null;
   context: {
-    communityId: string;
+    clubId: string;
     viewerCanManageClub: boolean;
     rankContext: {
       leaderboardSize: number;
@@ -315,7 +315,7 @@ describe("PlayerProfileView", () => {
     await renderView({
       profileResponse: buildProfileResponse({
         context: {
-          communityId: "community-1",
+          clubId: "community-1",
           viewerCanManageClub: false,
           rankContext: {
             leaderboardSize: 20,

@@ -5,7 +5,7 @@ import {
   adminUserId,
   createManualMatchWithPlayers,
   createStartedHostSession,
-  hostCommunityId,
+  hostClubId,
   openManualMatchModal,
   openSessionPlayersModal,
   openSessionRoster,
@@ -350,7 +350,7 @@ test("admin can end and rollback the latest completed tournament", async ({
 
   await expect
     .poll(async () => {
-      const snapshot = await readClubMembersSnapshot(page, hostCommunityId);
+      const snapshot = await readClubMembersSnapshot(page, hostClubId);
       return snapshot.some((member) => member.elo !== 1000);
     })
     .toBe(true);
@@ -364,7 +364,7 @@ test("admin can end and rollback the latest completed tournament", async ({
 
   await page.getByRole("button", { name: "Back" }).click();
   await expect(page).toHaveURL(
-    new RegExp(`/community/${hostCommunityId}(\\?tab=host)?$`)
+    new RegExp(`/club/${hostClubId}(\\?tab=host)?$`)
   );
   await page.getByRole("button", { name: "Tournaments" }).click();
   await expect(
@@ -389,8 +389,8 @@ test("admin can end and rollback the latest completed tournament", async ({
   await expect
     .poll(async () => {
       const [members, sessions] = await Promise.all([
-        readClubMembersSnapshot(page, hostCommunityId),
-        readClubSessionsSnapshot(page, hostCommunityId),
+        readClubMembersSnapshot(page, hostClubId),
+        readClubSessionsSnapshot(page, hostClubId),
       ]);
 
       return {

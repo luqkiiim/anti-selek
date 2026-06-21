@@ -20,7 +20,7 @@ import { rateLimit, checkInvalidTargetRateLimit, invalidTargetResponse } from "@
 
 async function ensureManagePermission(
   sessionId: string,
-  communityId: string | null | undefined,
+  clubId: string | null | undefined,
   userId: string,
   requesterIsAdmin: boolean
 ) {
@@ -29,7 +29,7 @@ async function ensureManagePermission(
   }
 
   const membership = await getSessionOperatorMembership(prisma, {
-    session: { id: sessionId, communityId },
+    session: { id: sessionId, clubId },
     userId,
     acceptedOnly: true,
   });
@@ -69,7 +69,7 @@ export async function POST(
 
     await ensureManagePermission(
       sessionData.id,
-      sessionData.communityId,
+      sessionData.clubId,
       session.user.id,
       !!session.user.isAdmin
     );

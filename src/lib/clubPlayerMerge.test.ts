@@ -75,7 +75,7 @@ async function createUser(id: string, name = id, claimed = false) {
 }
 
 async function createClub(id: string, createdById: string) {
-  await prisma.community.create({
+  await prisma.club.create({
     data: {
       id,
       name: `${id} ${randomUUID()}`,
@@ -86,13 +86,13 @@ async function createClub(id: string, createdById: string) {
 
 async function createSessionWithSourceReferences({
   id,
-  hostCommunityId,
+  hostClubId,
   sourceUserId,
   otherUserIds,
   participantClubId,
 }: {
   id: string;
-  hostCommunityId: string;
+  hostClubId: string;
   sourceUserId: string;
   otherUserIds: string[];
   participantClubId?: string;
@@ -104,7 +104,7 @@ async function createSessionWithSourceReferences({
     data: {
       id,
       code: `${id}-code`,
-      communityId: hostCommunityId,
+      clubId: hostClubId,
       name: id,
       type: SessionType.ELO,
       mode: SessionMode.MEXICANO,
@@ -119,11 +119,11 @@ async function createSessionWithSourceReferences({
       courts: {
         create: [{ id: courtId, courtNumber: 1 }],
       },
-      sessionCommunities: participantClubId
+      sessionClubs: participantClubId
         ? {
             create: [
               {
-                communityId: participantClubId,
+                clubId: participantClubId,
                 role: SessionClubRole.PARTNER,
                 status: SessionClubStatus.PENDING,
               },
@@ -203,10 +203,10 @@ beforeEach(async () => {
   await prisma.match.deleteMany();
   await prisma.court.deleteMany();
   await prisma.sessionPlayer.deleteMany();
-  await prisma.sessionCommunity.deleteMany();
+  await prisma.sessionClub.deleteMany();
   await prisma.session.deleteMany();
-  await prisma.communityMember.deleteMany();
-  await prisma.community.deleteMany();
+  await prisma.clubMember.deleteMany();
+  await prisma.club.deleteMany();
   await prisma.user.deleteMany();
 });
 
@@ -227,7 +227,7 @@ describe("mergeDuplicateUnclaimedCommunityPlayer", () => {
     const prefix = `merge-${randomUUID().slice(0, 8)}`;
     const adminId = `${prefix}-admin`;
     const currentClubId = `${prefix}-current`;
-    const targetCommunityId = `${prefix}-target-community`;
+    const targetClubId = `${prefix}-target-community`;
     const sourceUserId = `${prefix}-source`;
     const targetUserId = `${prefix}-target`;
     const otherUserIds = ["p2", "p3", "p4"].map((key) => `${prefix}-${key}`);
@@ -239,19 +239,19 @@ describe("mergeDuplicateUnclaimedCommunityPlayer", () => {
       await createUser(userId);
     }
     await createClub(currentClubId, adminId);
-    await createClub(targetCommunityId, adminId);
-    await prisma.communityMember.create({
+    await createClub(targetClubId, adminId);
+    await prisma.clubMember.create({
       data: {
-        communityId: currentClubId,
+        clubId: currentClubId,
         userId: sourceUserId,
         elo: 1432,
         status: ClubPlayerStatus.OCCASIONAL,
         role: "MEMBER",
       },
     });
-    await prisma.communityMember.create({
+    await prisma.clubMember.create({
       data: {
-        communityId: targetCommunityId,
+        clubId: targetClubId,
         userId: targetUserId,
         elo: 1190,
       },
@@ -259,13 +259,13 @@ describe("mergeDuplicateUnclaimedCommunityPlayer", () => {
 
     const hostSession = await createSessionWithSourceReferences({
       id: `${prefix}-host-session`,
-      hostCommunityId: currentClubId,
+      hostClubId: currentClubId,
       sourceUserId,
       otherUserIds,
     });
     const collabSession = await createSessionWithSourceReferences({
       id: `${prefix}-collab-session`,
-      hostCommunityId: targetCommunityId,
+      hostClubId: targetClubId,
       participantClubId: currentClubId,
       sourceUserId,
       otherUserIds,
@@ -274,7 +274,7 @@ describe("mergeDuplicateUnclaimedCommunityPlayer", () => {
       data: [
         {
           matchId: hostSession.matchId,
-          communityId: currentClubId,
+          clubId: currentClubId,
           userId: sourceUserId,
           delta: 16,
           beforeElo: 1416,
@@ -282,7 +282,7 @@ describe("mergeDuplicateUnclaimedCommunityPlayer", () => {
         },
         {
           matchId: collabSession.matchId,
-          communityId: currentClubId,
+          clubId: currentClubId,
           userId: sourceUserId,
           delta: -8,
           beforeElo: 1432,
@@ -293,7 +293,7 @@ describe("mergeDuplicateUnclaimedCommunityPlayer", () => {
 
     const result = await prisma.$transaction((tx) =>
       mergeService.mergeDuplicateUnclaimedClubPlayer(tx, {
-        communityId: currentClubId,
+        clubId: currentClubId,
         sourceUserId,
         targetUserId,
         reviewerUserId: adminId,
@@ -307,20 +307,20 @@ describe("mergeDuplicateUnclaimedCommunityPlayer", () => {
     });
 
     await expect(
-      prisma.communityMember.findUnique({
+      prisma.clubMember.findUnique({
         where: {
-          communityId_userId: {
-            communityId: currentClubId,
+          clubId_userId: {
+            clubId: currentClubId,
             userId: sourceUserId,
           },
         },
       })
     ).resolves.toBeNull();
     await expect(
-      prisma.communityMember.findUnique({
+      prisma.clubMember.findUnique({
         where: {
-          communityId_userId: {
-            communityId: currentClubId,
+          clubId_userId: {
+            clubId: currentClubId,
             userId: targetUserId,
           },
         },
@@ -349,7 +349,7 @@ describe("mergeDuplicateUnclaimedCommunityPlayer", () => {
     ).toBe(2);
     expect(
       await prisma.matchEloAdjustment.count({
-        where: { communityId: currentClubId, userId: targetUserId },
+        where: { clubId: currentClubId, userId: targetUserId },
       })
     ).toBe(2);
     expect(await prisma.user.findUnique({ where: { id: sourceUserId } }))
@@ -360,7 +360,7 @@ describe("mergeDuplicateUnclaimedCommunityPlayer", () => {
     const prefix = `keep-${randomUUID().slice(0, 8)}`;
     const adminId = `${prefix}-admin`;
     const currentClubId = `${prefix}-current`;
-    const targetCommunityId = `${prefix}-target-community`;
+    const targetClubId = `${prefix}-target-community`;
     const sourceOtherClubId = `${prefix}-source-other-community`;
     const sourceUserId = `${prefix}-source`;
     const targetUserId = `${prefix}-target`;
@@ -369,19 +369,19 @@ describe("mergeDuplicateUnclaimedCommunityPlayer", () => {
     await createUser(sourceUserId, "Alex Lee");
     await createUser(targetUserId, "Alex Lee");
     await createClub(currentClubId, adminId);
-    await createClub(targetCommunityId, adminId);
+    await createClub(targetClubId, adminId);
     await createClub(sourceOtherClubId, adminId);
-    await prisma.communityMember.createMany({
+    await prisma.clubMember.createMany({
       data: [
-        { communityId: currentClubId, userId: sourceUserId, elo: 1310 },
-        { communityId: sourceOtherClubId, userId: sourceUserId, elo: 990 },
-        { communityId: targetCommunityId, userId: targetUserId, elo: 1200 },
+        { clubId: currentClubId, userId: sourceUserId, elo: 1310 },
+        { clubId: sourceOtherClubId, userId: sourceUserId, elo: 990 },
+        { clubId: targetClubId, userId: targetUserId, elo: 1200 },
       ],
     });
 
     const result = await prisma.$transaction((tx) =>
       mergeService.mergeDuplicateUnclaimedClubPlayer(tx, {
-        communityId: currentClubId,
+        clubId: currentClubId,
         sourceUserId,
         targetUserId,
         reviewerUserId: adminId,
@@ -392,10 +392,10 @@ describe("mergeDuplicateUnclaimedCommunityPlayer", () => {
     expect(await prisma.user.findUnique({ where: { id: sourceUserId } }))
       .toMatchObject({ id: sourceUserId });
     expect(
-      await prisma.communityMember.findUnique({
+      await prisma.clubMember.findUnique({
         where: {
-          communityId_userId: {
-            communityId: sourceOtherClubId,
+          clubId_userId: {
+            clubId: sourceOtherClubId,
             userId: sourceUserId,
           },
         },
@@ -407,7 +407,7 @@ describe("mergeDuplicateUnclaimedCommunityPlayer", () => {
     const prefix = `conflict-${randomUUID().slice(0, 8)}`;
     const adminId = `${prefix}-admin`;
     const currentClubId = `${prefix}-current`;
-    const targetCommunityId = `${prefix}-target-community`;
+    const targetClubId = `${prefix}-target-community`;
     const sourceUserId = `${prefix}-source`;
     const targetUserId = `${prefix}-target`;
     const otherUserIds = ["p2", "p3", "p4"].map((key) => `${prefix}-${key}`);
@@ -419,17 +419,17 @@ describe("mergeDuplicateUnclaimedCommunityPlayer", () => {
       await createUser(userId);
     }
     await createClub(currentClubId, adminId);
-    await createClub(targetCommunityId, adminId);
-    await prisma.communityMember.createMany({
+    await createClub(targetClubId, adminId);
+    await prisma.clubMember.createMany({
       data: [
-        { communityId: currentClubId, userId: sourceUserId },
-        { communityId: targetCommunityId, userId: targetUserId },
+        { clubId: currentClubId, userId: sourceUserId },
+        { clubId: targetClubId, userId: targetUserId },
       ],
     });
 
     const { matchId } = await createSessionWithSourceReferences({
       id: `${prefix}-session`,
-      hostCommunityId: currentClubId,
+      hostClubId: currentClubId,
       sourceUserId,
       otherUserIds,
     });
@@ -444,7 +444,7 @@ describe("mergeDuplicateUnclaimedCommunityPlayer", () => {
     await prisma.matchEloAdjustment.create({
       data: {
         matchId,
-        communityId: currentClubId,
+        clubId: currentClubId,
         userId: sourceUserId,
         delta: 4,
         beforeElo: 1000,
@@ -455,7 +455,7 @@ describe("mergeDuplicateUnclaimedCommunityPlayer", () => {
     await expect(
       prisma.$transaction((tx) =>
         mergeService.mergeDuplicateUnclaimedClubPlayer(tx, {
-          communityId: currentClubId,
+          clubId: currentClubId,
           sourceUserId,
           targetUserId,
           reviewerUserId: adminId,
@@ -467,10 +467,10 @@ describe("mergeDuplicateUnclaimedCommunityPlayer", () => {
     });
 
     expect(
-      await prisma.communityMember.findUnique({
+      await prisma.clubMember.findUnique({
         where: {
-          communityId_userId: {
-            communityId: currentClubId,
+          clubId_userId: {
+            clubId: currentClubId,
             userId: sourceUserId,
           },
         },
@@ -483,7 +483,7 @@ describe("mergeDuplicateUnclaimedCommunityPlayer", () => {
     const adminId = `${prefix}-admin`;
     const claimantId = `${prefix}-claimant`;
     const currentClubId = `${prefix}-current`;
-    const targetCommunityId = `${prefix}-target-community`;
+    const targetClubId = `${prefix}-target-community`;
     const sourceOtherClubId = `${prefix}-source-other-community`;
     const sourceUserId = `${prefix}-source`;
     const targetUserId = `${prefix}-target`;
@@ -493,19 +493,19 @@ describe("mergeDuplicateUnclaimedCommunityPlayer", () => {
     await createUser(sourceUserId, "Alex Lee");
     await createUser(targetUserId, "Alex Lee");
     await createClub(currentClubId, adminId);
-    await createClub(targetCommunityId, adminId);
+    await createClub(targetClubId, adminId);
     await createClub(sourceOtherClubId, adminId);
-    await prisma.communityMember.createMany({
+    await prisma.clubMember.createMany({
       data: [
-        { communityId: currentClubId, userId: sourceUserId },
-        { communityId: currentClubId, userId: claimantId },
-        { communityId: sourceOtherClubId, userId: sourceUserId },
-        { communityId: targetCommunityId, userId: targetUserId },
+        { clubId: currentClubId, userId: sourceUserId },
+        { clubId: currentClubId, userId: claimantId },
+        { clubId: sourceOtherClubId, userId: sourceUserId },
+        { clubId: targetClubId, userId: targetUserId },
       ],
     });
     const claim = await prisma.claimRequest.create({
       data: {
-        communityId: currentClubId,
+        clubId: currentClubId,
         requesterUserId: claimantId,
         targetUserId: sourceUserId,
       },
@@ -513,7 +513,7 @@ describe("mergeDuplicateUnclaimedCommunityPlayer", () => {
 
     await prisma.$transaction((tx) =>
       mergeService.mergeDuplicateUnclaimedClubPlayer(tx, {
-        communityId: currentClubId,
+        clubId: currentClubId,
         sourceUserId,
         targetUserId,
         reviewerUserId: adminId,

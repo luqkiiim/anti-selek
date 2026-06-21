@@ -36,8 +36,8 @@ export async function GET(
       );
     }
 
-    const { id: hostCommunityId } = await params;
-    if (typeof hostCommunityId !== "string" || hostCommunityId.length === 0) {
+    const { id: hostClubId } = await params;
+    if (typeof hostClubId !== "string" || hostClubId.length === 0) {
       return NextResponse.json(
         { error: "Invalid request parameters" },
         { status: 400 }
@@ -54,16 +54,16 @@ export async function GET(
       !!session.user.isAdmin ||
       isGlobalAdminEmail(session.user.email ?? null);
     const [hostClub, hostMembership] = await Promise.all([
-      prisma.community.findUnique({
-        where: { id: hostCommunityId },
+      prisma.club.findUnique({
+        where: { id: hostClubId },
         select: { id: true, isTutorial: true },
       }),
       isGlobalAdmin
         ? Promise.resolve(null)
-        : prisma.communityMember.findUnique({
+        : prisma.clubMember.findUnique({
             where: {
-              communityId_userId: {
-                communityId: hostCommunityId,
+              clubId_userId: {
+                clubId: hostClubId,
                 userId: session.user.id,
               },
             },
@@ -88,9 +88,9 @@ export async function GET(
       return NextResponse.json([]);
     }
 
-    const candidates = await prisma.community.findMany({
+    const candidates = await prisma.club.findMany({
       where: {
-        id: { not: hostCommunityId },
+        id: { not: hostClubId },
         isTutorial: false,
         name: { contains: search },
       },

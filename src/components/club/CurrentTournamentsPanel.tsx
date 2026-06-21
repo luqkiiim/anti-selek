@@ -11,7 +11,7 @@ interface Tournament {
   status: string;
   players: { user: { id: string } }[];
   collabStatus?: "PENDING" | "ACCEPTED" | "REJECTED";
-  communities?: Array<{
+  clubs?: Array<{
     id: string;
     name: string;
     role: "HOST" | "PARTNER";
@@ -56,7 +56,7 @@ export function CurrentTournamentsPanel({
             const isParticipant = tournament.players.some(
               (player) => player.user.id === currentUserId
             );
-            const currentClubLink = tournament.communities?.find(
+            const currentClubLink = tournament.clubs?.find(
               (club) => club.id === currentClubId
             );
             const canReviewCollab =
@@ -64,9 +64,9 @@ export function CurrentTournamentsPanel({
               currentClubLink?.role === "PARTNER" &&
               currentClubLink.status === "PENDING";
             const isPendingCollab = tournament.collabStatus === "PENDING";
-            const communityLabel =
-              tournament.communities && tournament.communities.length > 1
-                ? tournament.communities.map((club) => club.name).join(" + ")
+            const clubLabel =
+              tournament.clubs && tournament.clubs.length > 1
+                ? tournament.clubs.map((club) => club.name).join(" + ")
                 : null;
 
             if (canReviewCollab) {
@@ -88,9 +88,9 @@ export function CurrentTournamentsPanel({
                       <p className="text-xs font-semibold text-gray-500">
                         {tournament.players.length} Players - {getSessionTypeLabel(tournament.type)}
                       </p>
-                      {communityLabel ? (
+                      {clubLabel ? (
                         <p className="mt-1 text-xs font-semibold text-gray-500">
-                          {communityLabel}
+                          {clubLabel}
                         </p>
                       ) : null}
                       <p className="mt-1 text-xs font-semibold text-amber-700">
@@ -143,9 +143,9 @@ export function CurrentTournamentsPanel({
                 <p className="text-xs font-semibold text-gray-500">
                   {tournament.players.length} Players - {getSessionTypeLabel(tournament.type)}
                 </p>
-                {communityLabel ? (
+                {clubLabel ? (
                   <p className="mt-1 text-xs font-semibold text-gray-500">
-                    {communityLabel}
+                    {clubLabel}
                   </p>
                 ) : null}
               </Link>
@@ -165,9 +165,9 @@ export function CurrentTournamentsPanel({
                     <p className="text-xs font-semibold text-gray-500">
                       {tournament.players.length} Players - {getSessionTypeLabel(tournament.type)}
                     </p>
-                    {communityLabel ? (
+                    {clubLabel ? (
                       <p className="mt-1 text-xs font-semibold text-gray-500">
-                        {communityLabel}
+                        {clubLabel}
                       </p>
                     ) : null}
                     {isPendingCollab ? (

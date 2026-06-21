@@ -126,7 +126,7 @@ export function useSessionPlayerManagement({
 }: UseSessionPlayerManagementArgs) {
   const [showRosterModal, setShowRosterModal] = useState(false);
   const [rosterSearch, setRosterSearch] = useState("");
-  const [communityPlayers, setClubPlayers] = useState<ClubUser[]>([]);
+  const [clubPlayers, setClubPlayers] = useState<ClubUser[]>([]);
   const [addingPlayerId, setAddingPlayerId] = useState<string | null>(null);
   const [guestName, setGuestName] = useState("");
   const [guestGender, setGuestGender] = useState<PlayerGender>(PlayerGender.MALE);
@@ -203,10 +203,10 @@ export function useSessionPlayerManagement({
   }, [openPreferenceEditor]);
 
   const fetchClubPlayers = async () => {
-    if (!sessionData?.communityId) return;
+    if (!sessionData?.clubId) return;
     try {
       const res = await fetch(
-        `/api/communities/${sessionData.communityId}/members`
+        `/api/clubs/${sessionData.clubId}/members`
       );
       const data = await safeJson<unknown>(res);
       if (res.ok) {
@@ -520,7 +520,7 @@ export function useSessionPlayerManagement({
   return {
     showRosterModal,
     rosterSearch,
-    communityPlayers,
+    clubPlayers,
     addingPlayerId,
     guestName,
     guestGender,

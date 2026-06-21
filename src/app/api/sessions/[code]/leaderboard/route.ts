@@ -71,16 +71,16 @@ async function getSessionLeaderboard(
   if (!sessionData) {
     return invalidTargetResponse(request, "api:sessions:code:leaderboard");
   }
-  if (!canQuickAccessClub(session, sessionData.communityId)) {
+  if (!canQuickAccessClub(session, sessionData.clubId)) {
     return invalidTargetResponse(request, "api:sessions:code:leaderboard");
   }
 
   let clubRole: string | null = null;
-  if (sessionData.communityId) {
-    const membership = await prisma.communityMember.findUnique({
+  if (sessionData.clubId) {
+    const membership = await prisma.clubMember.findUnique({
       where: {
-        communityId_userId: {
-          communityId: sessionData.communityId,
+        clubId_userId: {
+          clubId: sessionData.clubId,
           userId: session.user.id,
         },
       },
@@ -123,9 +123,9 @@ async function getSessionLeaderboard(
   });
 
   const clubEloByUserId =
-    sessionData.communityId && sessionData.players.length > 0
+    sessionData.clubId && sessionData.players.length > 0
       ? await getClubEloByUserId(
-          sessionData.communityId,
+          sessionData.clubId,
           sessionData.players.map((p) => p.userId)
         )
       : new Map<string, number>();

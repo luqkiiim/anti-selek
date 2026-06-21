@@ -19,7 +19,7 @@ vi.mock("@/lib/auth", () => ({
 
 vi.mock("@/lib/prisma", () => ({
   prisma: {
-    communityMember: {
+    clubMember: {
       findUnique: vi.fn(),
     },
     queuedMatch: {

@@ -73,14 +73,14 @@ describe("session end route", () => {
 
     mocks.sessionFindUnique.mockResolvedValue({
       id: "session-1",
-      communityId: "community-1",
+      clubId: "community-1",
       endedAt: null,
     });
 
     const updatedSession = {
       id: "session-1",
       code: "ABC123",
-      communityId: "community-1",
+      clubId: "community-1",
       name: "Evening Session",
       status: "COMPLETED",
       type: "POINTS",

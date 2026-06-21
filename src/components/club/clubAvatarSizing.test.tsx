@@ -142,7 +142,7 @@ describe("club avatar sizing", () => {
           title="Leaderboard"
           subtitle="Top players"
           players={[member]}
-          communityId="community-1"
+          clubId="community-1"
           onOpenPlayerProfile={() => undefined}
         />
       );

@@ -183,7 +183,7 @@ export default function Home() {
               {clubs.map((club) => (
                 <Link
                   key={club.id}
-                  href={`/community/${club.id}`}
+                  href={`/club/${club.id}`}
                   className="app-subcard block p-4 transition hover:-translate-y-0.5 hover:border-blue-300 hover:bg-blue-50"
                 >
                   <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">

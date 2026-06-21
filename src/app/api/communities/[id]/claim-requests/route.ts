@@ -14,7 +14,7 @@ export const dynamic = "force-dynamic";
 
 function toClaimRequestResponse(request: {
   id: string;
-  communityId: string;
+  clubId: string;
   requesterUserId: string;
   targetUserId: string;
   status: string;
@@ -27,7 +27,7 @@ function toClaimRequestResponse(request: {
 }) {
   return {
     id: request.id,
-    communityId: request.communityId,
+    clubId: request.clubId,
     requesterUserId: request.requesterUserId,
     requesterName: request.requester.name,
     requesterEmail: request.requester.email,
@@ -55,17 +55,17 @@ export async function GET(
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
     }
 
-    const { id: communityId } = await params;
+    const { id: clubId } = await params;
 
-    if (typeof communityId !== "string" || communityId.length === 0) {
+    if (typeof clubId !== "string" || clubId.length === 0) {
       return NextResponse.json({ error: "Invalid request parameters" }, { status: 400 });
     }
 
     const invalidTargetLimitResponse = await checkInvalidTargetRateLimit(request, "api:communities:id:claim-requests");
 
     if (invalidTargetLimitResponse) return invalidTargetLimitResponse;
-    const community = await prisma.community.findUnique({
-      where: { id: communityId },
+    const community = await prisma.club.findUnique({
+      where: { id: clubId },
       select: { isTutorial: true },
     });
     if (community?.isTutorial) {
@@ -73,7 +73,7 @@ export async function GET(
     }
 
     const adminAccess = await getClubAdminAccess(prisma, {
-      communityId,
+      clubId,
       userId: session.user.id,
       isGlobalAdmin: !!session.user.isAdmin,
     });
@@ -87,11 +87,11 @@ export async function GET(
     const requests = await prisma.claimRequest.findMany({
       where: isClubAdmin
         ? {
-            communityId,
+            clubId,
             status: ClaimRequestStatus.PENDING,
           }
         : {
-            communityId,
+            clubId,
             requesterUserId: session.user.id,
             status: ClaimRequestStatus.PENDING,
           },
@@ -155,17 +155,17 @@ export async function POST(
       );
     }
 
-    const { id: communityId } = await params;
+    const { id: clubId } = await params;
 
-    if (typeof communityId !== "string" || communityId.length === 0) {
+    if (typeof clubId !== "string" || clubId.length === 0) {
       return NextResponse.json({ error: "Invalid request parameters" }, { status: 400 });
     }
 
     const invalidTargetLimitResponse = await checkInvalidTargetRateLimit(request, "api:communities:id:claim-requests");
 
     if (invalidTargetLimitResponse) return invalidTargetLimitResponse;
-    const community = await prisma.community.findUnique({
-      where: { id: communityId },
+    const community = await prisma.club.findUnique({
+      where: { id: clubId },
       select: { isTutorial: true },
     });
     if (community?.isTutorial) {
@@ -175,10 +175,10 @@ export async function POST(
       );
     }
 
-    const requesterMembership = await prisma.communityMember.findUnique({
+    const requesterMembership = await prisma.clubMember.findUnique({
       where: {
-        communityId_userId: {
-          communityId,
+        clubId_userId: {
+          clubId,
           userId: session.user.id,
         },
       },
@@ -238,10 +238,10 @@ export async function POST(
               isClaimed: true,
             },
           }),
-          tx.communityMember.findUnique({
+          tx.clubMember.findUnique({
             where: {
-              communityId_userId: {
-                communityId,
+              clubId_userId: {
+                clubId,
                 userId: trimmedTargetUserId,
               },
             },
@@ -258,7 +258,7 @@ export async function POST(
           }),
           tx.claimRequest.findFirst({
             where: {
-              communityId,
+              clubId,
               requesterUserId: session.user.id,
               status: ClaimRequestStatus.PENDING,
             },
@@ -266,7 +266,7 @@ export async function POST(
           }),
           tx.claimRequest.findFirst({
             where: {
-              communityId,
+              clubId,
               targetUserId: trimmedTargetUserId,
               status: ClaimRequestStatus.PENDING,
             },
@@ -276,7 +276,7 @@ export async function POST(
             where: {
               userId: session.user.id,
               session: {
-                communityId,
+                clubId,
               },
             },
             select: { id: true },
@@ -315,7 +315,7 @@ export async function POST(
 
       return tx.claimRequest.create({
         data: {
-          communityId,
+          clubId,
           requesterUserId: session.user.id,
           targetUserId: trimmedTargetUserId,
           note: trimmedNote,

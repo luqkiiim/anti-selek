@@ -50,7 +50,7 @@ export async function POST(
 
     const sessionData = await prisma.session.findUnique({
       where: { code },
-      select: { id: true, communityId: true, type: true, status: true },
+      select: { id: true, clubId: true, type: true, status: true },
     });
 
     if (!sessionData) {

@@ -23,9 +23,9 @@ function getRouteErrorMessage(
   return fallback;
 }
 
-function getAvatarRoute(userId: string, communityId?: string) {
-  const query = communityId
-    ? `?communityId=${encodeURIComponent(communityId)}`
+function getAvatarRoute(userId: string, clubId?: string) {
+  const query = clubId
+    ? `?clubId=${encodeURIComponent(clubId)}`
     : "";
   return `/api/users/${userId}/avatar${query}`;
 }
@@ -33,12 +33,12 @@ function getAvatarRoute(userId: string, communityId?: string) {
 export async function uploadUserAvatar(
   userId: string,
   file: File,
-  communityId?: string
+  clubId?: string
 ) {
   const formData = new FormData();
   formData.append("avatar", file);
 
-  const response = await fetch(getAvatarRoute(userId, communityId), {
+  const response = await fetch(getAvatarRoute(userId, clubId), {
     method: "POST",
     body: formData,
   });
@@ -51,8 +51,8 @@ export async function uploadUserAvatar(
   return payload as { avatarUrl: string | null };
 }
 
-export async function deleteUserAvatar(userId: string, communityId?: string) {
-  const response = await fetch(getAvatarRoute(userId, communityId), {
+export async function deleteUserAvatar(userId: string, clubId?: string) {
+  const response = await fetch(getAvatarRoute(userId, clubId), {
     method: "DELETE",
   });
   const payload = await safeJson(response);

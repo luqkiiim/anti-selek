@@ -23,7 +23,7 @@ describe("session share image", () => {
   it("renders top 13 with podium ranks 1-3 and rows 4-13 only", () => {
     const viewModel = buildSessionShareImageViewModel({
       sessionName: "Weekend Cup",
-      communityName: "Badminton Usuals",
+      clubName: "Badminton Usuals",
       sessionType: SessionType.POINTS,
       players: createPlayers(14),
       matches: [],
@@ -47,7 +47,7 @@ describe("session share image", () => {
       renderSessionShareImage(
         buildSessionShareImageViewModel({
           sessionName: "Weekend Cup",
-          communityName: "Badminton Usuals",
+          clubName: "Badminton Usuals",
           sessionType: SessionType.POINTS,
           players: createPlayers(8),
           matches: [],
@@ -58,7 +58,7 @@ describe("session share image", () => {
       renderSessionShareImage(
         buildSessionShareImageViewModel({
           sessionName: "Weekend Cup",
-          communityName: "Badminton Usuals",
+          clubName: "Badminton Usuals",
           sessionType: SessionType.POINTS,
           players: createPlayers(9),
           matches: [],
@@ -74,7 +74,7 @@ describe("session share image", () => {
   it("uses session points, wins, losses, and point diff for points standings", () => {
     const viewModel = buildSessionShareImageViewModel({
       sessionName: "Weekend Cup",
-      communityName: "Badminton Usuals",
+      clubName: "Badminton Usuals",
       sessionType: SessionType.POINTS,
       players: [
         { userId: "u1", sessionPoints: 10, user: { name: "Aiman" } },
@@ -115,7 +115,7 @@ describe("session share image", () => {
   it("renders avatar initials when no avatar data URL is available", () => {
     const viewModel = buildSessionShareImageViewModel({
       sessionName: "Weekend Cup",
-      communityName: "Badminton Usuals",
+      clubName: "Badminton Usuals",
       sessionType: SessionType.POINTS,
       players: [{ userId: "u1", sessionPoints: 10, user: { name: "Lina Kay" } }],
       matches: [],
@@ -129,7 +129,7 @@ describe("session share image", () => {
   it("renders enlarged podium and row avatar images when data URLs are available", () => {
     const viewModel = buildSessionShareImageViewModel({
       sessionName: "Weekend Cup",
-      communityName: "Badminton Usuals",
+      clubName: "Badminton Usuals",
       sessionType: SessionType.POINTS,
       players: createPlayers(4),
       matches: [],

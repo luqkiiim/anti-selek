@@ -23,7 +23,7 @@ import {
 
 interface ClubPlayerEditorModalProps {
   player: ClubAdminPlayer | null;
-  communityId: string;
+  clubId: string;
   currentUserId?: string | null;
   editorName: string;
   editorRating: string;
@@ -62,7 +62,7 @@ interface ClubPlayerEditorModalProps {
 
 export function ClubPlayerEditorModal({
   player,
-  communityId,
+  clubId,
   currentUserId,
   editorName,
   editorRating,
@@ -167,7 +167,7 @@ export function ClubPlayerEditorModal({
           </div>
           <div className="flex flex-wrap gap-2">
             <Link
-              href={`/profile/${player.id}?communityId=${communityId}`}
+              href={`/profile/${player.id}?clubId=${clubId}`}
               className="app-button-secondary inline-flex px-4 py-2"
             >
               View profile

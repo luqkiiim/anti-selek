@@ -16,7 +16,7 @@ interface ClubPlayersPanelProps {
   filteredPlayers: ClubAdminPlayer[];
   claimedPlayersCount: number;
   occasionalPlayersCount: number;
-  communityId: string;
+  clubId: string;
   playerSearch: string;
   onPlayerSearchChange: (value: string) => void;
   onOpenCreatePlayer: () => void;
@@ -28,7 +28,7 @@ export function ClubPlayersPanel({
   filteredPlayers,
   claimedPlayersCount,
   occasionalPlayersCount,
-  communityId,
+  clubId,
   playerSearch,
   onPlayerSearchChange,
   onOpenCreatePlayer,
@@ -123,7 +123,7 @@ export function ClubPlayersPanel({
                         {player.email || "No email on file"}
                       </p>
                       <Link
-                        href={`/profile/${player.id}?communityId=${communityId}`}
+                        href={`/profile/${player.id}?clubId=${clubId}`}
                         className="mt-1 inline-flex text-[11px] font-semibold uppercase tracking-[0.16em] text-blue-600 hover:text-blue-700"
                       >
                         View profile

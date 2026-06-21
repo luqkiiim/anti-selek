@@ -7,7 +7,7 @@ const mocks = vi.hoisted(() => ({
   finalizeMatchResult: vi.fn(),
   matchFindUnique: vi.fn(),
   matchUpdateMany: vi.fn(),
-  communityMemberFindUnique: vi.fn(),
+  clubMemberFindUnique: vi.fn(),
   shouldRequireOpponentApproval: vi.fn(),
   reconcileSessionQueueAfterCourtChange: vi.fn(),
 }));
@@ -30,8 +30,8 @@ vi.mock("@/lib/prisma", () => ({
       findUnique: mocks.matchFindUnique,
       updateMany: mocks.matchUpdateMany,
     },
-    communityMember: {
-      findUnique: mocks.communityMemberFindUnique,
+    clubMember: {
+      findUnique: mocks.clubMemberFindUnique,
     },
   },
 }));
@@ -50,7 +50,7 @@ function createMatch() {
     courtId: "court-1",
     status: MatchStatus.IN_PROGRESS,
     session: {
-      communityId: null,
+      clubId: null,
       type: SessionType.POINTS,
       isTest: true,
     },
@@ -154,12 +154,12 @@ describe("score match route", () => {
     mocks.matchFindUnique.mockResolvedValue({
       ...createMatch(),
       session: {
-        communityId: "community-1",
+        clubId: "community-1",
         type: SessionType.POINTS,
         isTest: false,
       },
     });
-    mocks.communityMemberFindUnique.mockResolvedValue({ role: "STAFF" });
+    mocks.clubMemberFindUnique.mockResolvedValue({ role: "STAFF" });
     mocks.shouldRequireOpponentApproval.mockReturnValue(false);
     mocks.finalizeMatchResult.mockResolvedValue(completedMatch);
 

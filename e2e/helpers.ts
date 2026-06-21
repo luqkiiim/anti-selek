@@ -13,9 +13,9 @@ export const claimRequesterCredentials = {
 };
 
 export const adminUserId = "user-admin-e2e";
-export const hostCommunityId = "community-host-e2e";
-export const adminControlsCommunityId = "community-admin-controls-e2e";
-export const claimCommunityId = "community-claim-e2e";
+export const hostClubId = "community-host-e2e";
+export const adminControlsClubId = "community-admin-controls-e2e";
+export const claimClubId = "community-claim-e2e";
 export const claimRequesterUserId = "user-claim-requester-e2e";
 export const claimPlaceholderUserId = "user-claim-placeholder-e2e";
 export const scoreSessionCode = "session-score-e2e";
@@ -114,7 +114,7 @@ export async function createStartedHostSession(
     sessionMode?: SessionMode;
   }
 ) {
-  await page.goto(`/community/${hostCommunityId}`);
+  await page.goto(`/club/${hostClubId}`);
   await expect(
     page.getByRole("heading", { name: "E2E Host Club" })
   ).toBeVisible();
@@ -254,56 +254,56 @@ export async function readSessionSnapshot(
 
 export async function readClubMembersSnapshot(
   page: Page,
-  communityId: string
+  clubId: string
 ): Promise<ClubMembersSnapshot> {
-  return page.evaluate(async (targetCommunityId) => {
-    const res = await fetch(`/api/communities/${targetCommunityId}/members`);
+  return page.evaluate(async (targetClubId) => {
+    const res = await fetch(`/api/clubs/${targetClubId}/members`);
     if (!res.ok) {
-      throw new Error(`Failed to load community members ${targetCommunityId}: ${res.status}`);
+      throw new Error(`Failed to load club members ${targetClubId}: ${res.status}`);
     }
     return res.json();
-  }, communityId);
+  }, clubId);
 }
 
 export async function readClubSessionsSnapshot(
   page: Page,
-  communityId: string
+  clubId: string
 ): Promise<ClubSessionsSnapshot> {
-  return page.evaluate(async (targetCommunityId) => {
-    const res = await fetch(`/api/sessions?communityId=${encodeURIComponent(targetCommunityId)}`);
+  return page.evaluate(async (targetClubId) => {
+    const res = await fetch(`/api/sessions?clubId=${encodeURIComponent(targetClubId)}`);
     if (!res.ok) {
-      throw new Error(`Failed to load community sessions ${targetCommunityId}: ${res.status}`);
+      throw new Error(`Failed to load club sessions ${targetClubId}: ${res.status}`);
     }
     return res.json();
-  }, communityId);
+  }, clubId);
 }
 
 export async function readClubClaimRequestsSnapshot(
   page: Page,
-  communityId: string
+  clubId: string
 ): Promise<ClubClaimRequestsSnapshot> {
-  return page.evaluate(async (targetCommunityId) => {
-    const res = await fetch(`/api/communities/${targetCommunityId}/claim-requests`);
+  return page.evaluate(async (targetClubId) => {
+    const res = await fetch(`/api/clubs/${targetClubId}/claim-requests`);
     if (!res.ok) {
-      throw new Error(`Failed to load claim requests ${targetCommunityId}: ${res.status}`);
+      throw new Error(`Failed to load claim requests ${targetClubId}: ${res.status}`);
     }
     return res.json();
-  }, communityId);
+  }, clubId);
 }
 
 export async function createClaimRequest(
   page: Page,
   {
-    communityId,
+    clubId,
     targetUserId,
   }: {
-    communityId: string;
+    clubId: string;
     targetUserId: string;
   }
 ) {
   return page.evaluate(
-    async ({ targetCommunityId, targetUserId: requestedTargetUserId }) => {
-      const res = await fetch(`/api/communities/${targetCommunityId}/claim-requests`, {
+    async ({ targetClubId, targetUserId: requestedTargetUserId }) => {
+      const res = await fetch(`/api/clubs/${targetClubId}/claim-requests`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -317,7 +317,7 @@ export async function createClaimRequest(
         body: text ? JSON.parse(text) : {},
       };
     },
-    { targetCommunityId: communityId, targetUserId }
+    { targetClubId: clubId, targetUserId }
   );
 }
 

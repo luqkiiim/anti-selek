@@ -26,7 +26,7 @@ describe("duplicate player merge candidates route", () => {
   it("disables merge candidate lookup and points admins to the claim flow", async () => {
     const response = await GET(
       new Request(
-        "http://localhost/api/communities/community-1/members/source-user/merge-candidates?search=Alex"
+        "http://localhost/api/clubs/community-1/members/source-user/merge-candidates?search=Alex"
       )
     );
     const body = await response.json();

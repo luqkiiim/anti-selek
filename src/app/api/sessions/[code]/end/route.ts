@@ -41,7 +41,7 @@ export async function POST(
       where: { code },
       select: {
         id: true,
-        communityId: true,
+        clubId: true,
         endedAt: true,
       },
     });
@@ -109,12 +109,12 @@ export async function POST(
         ? withPlayerClubBadges(
             updated.players,
             await getPlayerClubBadges(prisma, linkedClubIds, playerIds),
-            updated.communityId
+            updated.clubId
           )
-        : updated.communityId && updated.players.length > 0
+        : updated.clubId && updated.players.length > 0
           ? withClubElo(
               updated.players,
-              await getClubEloByUserId(updated.communityId, playerIds)
+              await getClubEloByUserId(updated.clubId, playerIds)
             )
           : updated.players;
 

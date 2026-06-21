@@ -44,7 +44,7 @@ export async function POST(request: Request) {
     ]);
 
     logAuditEvent({
-      action: "admin.community.reset_all",
+      action: "admin.club.reset_all",
       actor: {
         email: session.user.email ?? null,
         isGlobalAdmin: !!session.user.isAdmin,
@@ -53,7 +53,7 @@ export async function POST(request: Request) {
       outcome: "success",
       request,
       scope: {
-        route: "/api/admin/community/reset",
+        route: "/api/admin/club/reset",
       },
       target: {
         type: "platform",

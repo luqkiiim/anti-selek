@@ -6,6 +6,11 @@ import { isGlobalAdminEmail } from "@/lib/globalAdmin";
 import { logError, safeErrorResponse } from "@/lib/errors";
 import { rateLimit } from "@/lib/rateLimit";
 import {
+  ClubContractAliasConflictError,
+  readAliasedValue,
+  withLegacyClubAliases,
+} from "@/lib/clubContractAliases";
+import {
   getQuickAccessDeniedMessage,
   isQuickAccessSession,
   normalizeNameLookupKey,
@@ -27,20 +32,20 @@ export async function GET(request: Request) {
       !isQuickAccess &&
       (!!session.user.isAdmin || isGlobalAdminEmail(session.user.email ?? null));
 
-    if (isQuickAccess && !session.user.quickAccessCommunityId) {
+    if (isQuickAccess && !session.user.quickAccessClubId) {
       return NextResponse.json([]);
     }
 
-    const memberships = await prisma.communityMember.findMany({
+    const memberships = await prisma.clubMember.findMany({
       where: {
         userId: session.user.id,
         ...(isQuickAccess
-          ? { communityId: session.user.quickAccessCommunityId ?? "" }
+          ? { clubId: session.user.quickAccessClubId ?? "" }
           : {}),
-        community: { isTutorial: false },
+        club: { isTutorial: false },
       },
       include: {
-        community: {
+        club: {
           select: {
             id: true,
             name: true,
@@ -62,11 +67,13 @@ export async function GET(request: Request) {
 
     return NextResponse.json(
       memberships.map((m) => {
-        const viewerIsOwner = m.community.createdById === session.user.id;
+        const viewerIsOwner = m.club.createdById === session.user.id;
 
-        return {
-          id: m.community.id,
-          name: m.community.name,
+        return withLegacyClubAliases({
+          id: m.club.id,
+          name: m.club.name,
+          clubId: m.club.id,
+          clubName: m.club.name,
           role:
             isQuickAccess
               ? "MEMBER"
@@ -74,11 +81,11 @@ export async function GET(request: Request) {
                 ? "ADMIN"
                 : m.role,
           viewerIsOwner,
-          isPasswordProtected: m.community.isPasswordProtected,
-          createdAt: m.community.createdAt,
-          membersCount: m.community._count.members,
-          sessionsCount: m.community._count.sessions,
-        };
+          isPasswordProtected: m.club.isPasswordProtected,
+          createdAt: m.club.createdAt,
+          membersCount: m.club._count.members,
+          sessionsCount: m.club._count.sessions,
+        });
       })
     );
   } catch (error) {
@@ -108,7 +115,23 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
     }
 
-    const { name, password } = body as { name?: unknown; password?: unknown };
+    const bodyRecord = body as Record<string, unknown>;
+    let aliasedName: unknown;
+    try {
+      aliasedName = readAliasedValue(
+        bodyRecord,
+        "clubName",
+        "communityName",
+        "club name"
+      );
+    } catch (error) {
+      if (error instanceof ClubContractAliasConflictError) {
+        return NextResponse.json({ error: error.message }, { status: 400 });
+      }
+      throw error;
+    }
+    const { password } = bodyRecord as { password?: unknown };
+    const name = aliasedName ?? bodyRecord.name;
     if (typeof name !== "string" || name.trim().length < 3) {
       return NextResponse.json({ error: "Club name must be at least 3 characters" }, { status: 400 });
     }
@@ -125,11 +148,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Club name must include letters or numbers" }, { status: 400 });
     }
 
-    const existingCommunities = await prisma.community.findMany({
+    const existingClubs = await prisma.club.findMany({
       select: { name: true },
     });
-    const normalizedNameExists = existingCommunities.some(
-      (community) => normalizeNameLookupKey(community.name) === normalizedLookupName
+    const normalizedNameExists = existingClubs.some(
+      (club) => normalizeNameLookupKey(club.name) === normalizedLookupName
     );
     if (normalizedNameExists) {
       return NextResponse.json({ error: "Club name already exists" }, { status: 409 });
@@ -139,7 +162,7 @@ export async function POST(request: Request) {
       ? await bcrypt.hash(password, 10)
       : null;
 
-    const created = await prisma.community.create({
+    const created = await prisma.club.create({
       data: {
         name: normalizedName,
         isPasswordProtected: !!passwordHash,
@@ -161,7 +184,13 @@ export async function POST(request: Request) {
     });
 
     return NextResponse.json(
-      { ...created, role: "ADMIN", viewerIsOwner: true },
+      withLegacyClubAliases({
+        ...created,
+        clubId: created.id,
+        clubName: created.name,
+        role: "ADMIN",
+        viewerIsOwner: true,
+      }),
       { status: 201 }
     );
   } catch (error: unknown) {

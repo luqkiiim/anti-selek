@@ -29,14 +29,14 @@ interface ClubPageRouter {
 }
 
 export function useClubHostSetup({
-  communityId,
+  clubId,
   router,
   selectablePlayers,
   mixedModeLabel,
   setError,
   setSuccess,
 }: {
-  communityId: string;
+  clubId: string;
   router: ClubPageRouter;
   selectablePlayers: ClubPageMember[];
   mixedModeLabel: string;
@@ -123,10 +123,10 @@ export function useClubHostSetup({
     setPlayerSearch("");
     setShowPlayersModal(false);
     setShowGuestsModal(false);
-  }, [communityId]);
+  }, [clubId]);
 
   useEffect(() => {
-    if (!communityId || partnerClubId) {
+    if (!clubId || partnerClubId) {
       setCollabCandidates([]);
       setLoadingCollabCandidates(false);
       return;
@@ -146,7 +146,7 @@ export function useClubHostSetup({
         setError("");
         try {
           const res = await fetch(
-            `/api/communities/${communityId}/collab-candidates?search=${encodeURIComponent(search)}`
+            `/api/clubs/${clubId}/collab-candidates?search=${encodeURIComponent(search)}`
           );
           const data = await safeJson(res);
           if (!res.ok) {
@@ -174,10 +174,10 @@ export function useClubHostSetup({
       cancelled = true;
       window.clearTimeout(timeout);
     };
-  }, [communityId, partnerClubId, partnerClubSearch, setError]);
+  }, [clubId, partnerClubId, partnerClubSearch, setError]);
 
   useEffect(() => {
-    if (!partnerClubId || !communityId) {
+    if (!partnerClubId || !clubId) {
       setCollabRoster([]);
       setLoadingCollabRoster(false);
       return;
@@ -189,7 +189,7 @@ export function useClubHostSetup({
       setError("");
       try {
         const res = await fetch(
-          `/api/communities/${communityId}/collab-roster?partnerCommunityId=${encodeURIComponent(partnerClubId)}`
+          `/api/clubs/${clubId}/collab-roster?partnerClubId=${encodeURIComponent(partnerClubId)}`
         );
         const data = await safeJson(res);
         if (!res.ok) {
@@ -215,7 +215,7 @@ export function useClubHostSetup({
     return () => {
       cancelled = true;
     };
-  }, [communityId, partnerClubId, setError]);
+  }, [clubId, partnerClubId, setError]);
 
   const effectiveSelectablePlayers = partnerClubId
     ? collabRoster
@@ -231,7 +231,7 @@ export function useClubHostSetup({
   }, [effectiveSelectablePlayers]);
 
   const createSession = async () => {
-    if (!newSessionName.trim() || !communityId) return false;
+    if (!newSessionName.trim() || !clubId) return false;
 
     if (sessionMode === SessionMode.MIXICANO) {
       const invalidGuest = guestConfigs.find(
@@ -263,8 +263,8 @@ export function useClubHostSetup({
           autoQueueEnabled,
           respectPlayerRest,
           courtCount,
-          communityId,
-          partnerCommunityId: partnerClubId || undefined,
+          clubId,
+          partnerClubId: partnerClubId || undefined,
           playerIds: selectedPlayerIds,
           playerConfigs: selectedPlayerIds.map((userId) => ({
             userId,

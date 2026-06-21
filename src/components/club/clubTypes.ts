@@ -67,7 +67,7 @@ export interface ClubPageSession {
   endedAt?: string | null;
   players: { user: { id: string; name: string; avatarUrl?: string | null } }[];
   collabStatus?: "PENDING" | "ACCEPTED" | "REJECTED";
-  communities?: Array<{
+  clubs?: Array<{
     id: string;
     name: string;
     role: "HOST" | "PARTNER";
@@ -92,7 +92,7 @@ export interface ClubGuestConfig {
 
 export interface ClubClaimRequest {
   id: string;
-  communityId: string;
+  clubId: string;
   requesterUserId: string;
   requesterName: string;
   requesterEmail: string | null;

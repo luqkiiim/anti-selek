@@ -99,7 +99,7 @@ export async function POST(
       where: { code },
       select: {
         id: true,
-        communityId: true,
+        clubId: true,
         status: true,
         mode: true,
         poolsEnabled: true,
@@ -123,7 +123,7 @@ export async function POST(
     }
 
     let canManage = !!session.user.isAdmin;
-    if (sessionData.communityId) {
+    if (sessionData.clubId) {
       const membership = await getSessionOperatorMembership(prisma, {
         session: sessionData,
         userId: session.user.id,

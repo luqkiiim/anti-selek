@@ -26,7 +26,7 @@ async function getAdminOnboardingProgress(userId: string) {
         },
       },
     }),
-    prisma.community.findUnique({
+    prisma.club.findUnique({
       where: { tutorialOwnerId: userId },
       select: {
         id: true,
@@ -53,7 +53,7 @@ async function getAdminOnboardingProgress(userId: string) {
     await Promise.all([
       prisma.session.findFirst({
         where: {
-          communityId: playground.id,
+          clubId: playground.id,
           isTest: true,
         },
         orderBy: { createdAt: "asc" },
@@ -62,7 +62,7 @@ async function getAdminOnboardingProgress(userId: string) {
       prisma.match.findFirst({
         where: {
           session: {
-            communityId: playground.id,
+            clubId: playground.id,
             isTest: true,
           },
           team1Score: { not: null },
@@ -72,7 +72,7 @@ async function getAdminOnboardingProgress(userId: string) {
       }),
       prisma.session.findFirst({
         where: {
-          communityId: playground.id,
+          clubId: playground.id,
           isTest: true,
           status: "COMPLETED",
         },

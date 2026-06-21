@@ -60,7 +60,7 @@ function renderPanel(
       title="Leaderboard"
       subtitle="Latest standings"
       players={[player]}
-      communityId="community-1"
+      clubId="community-1"
       claimState={claimState}
       onRequestClaim={vi.fn()}
       onOpenPlayerProfile={vi.fn()}

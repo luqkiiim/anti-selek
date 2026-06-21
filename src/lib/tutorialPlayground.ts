@@ -1,6 +1,7 @@
 import { randomUUID } from "crypto";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { withLegacyClubAliases } from "@/lib/clubContractAliases";
 import {
   ADMIN_ONBOARDING_TUTORIAL_KEY,
 } from "@/lib/adminOnboarding";
@@ -132,8 +133,8 @@ interface TutorialPracticeSessionSeed {
 }
 
 export interface TutorialPlaygroundSummary {
-  communityId: string;
-  communityName: string;
+  clubId: string;
+  clubName: string;
   sessionCode: string | null;
   playersCount: number;
   courtsCount: number;
@@ -144,11 +145,11 @@ function getTutorialClubName(userId: string) {
   return `${TUTORIAL_PLAYGROUND_LABEL} ${userId.slice(-8)}`;
 }
 
-export function getTutorialClubDisplayName(community: {
+export function getTutorialClubDisplayName(club: {
   name: string;
   isTutorial?: boolean | null;
 }) {
-  return community.isTutorial ? TUTORIAL_PLAYGROUND_LABEL : community.name;
+  return club.isTutorial ? TUTORIAL_PLAYGROUND_LABEL : club.name;
 }
 
 const TUTORIAL_PRACTICE_SESSIONS: TutorialPracticeSessionSeed[] = [
@@ -318,10 +319,10 @@ const TUTORIAL_PRACTICE_SESSIONS: TutorialPracticeSessionSeed[] = [
 
 async function summarizeTutorialPlayground(
   tx: TutorialTx,
-  communityId: string
+  clubId: string
 ): Promise<TutorialPlaygroundSummary> {
-  const community = await tx.community.findUnique({
-    where: { id: communityId },
+  const club = await tx.club.findUnique({
+    where: { id: clubId },
     select: {
       id: true,
       name: true,
@@ -342,24 +343,24 @@ async function summarizeTutorialPlayground(
     },
   });
 
-  if (!community) {
+  if (!club) {
     throw new Error("Tutorial playground not found");
   }
 
-  const session = community.sessions[0] ?? null;
+  const session = club.sessions[0] ?? null;
 
-  return {
-    communityId: community.id,
-    communityName: TUTORIAL_PLAYGROUND_LABEL,
+  return withLegacyClubAliases({
+    clubId: club.id,
+    clubName: TUTORIAL_PLAYGROUND_LABEL,
     sessionCode: session?.code ?? null,
     playersCount: session?._count.players ?? 0,
     courtsCount: session?._count.courts ?? 0,
-    isTutorial: true,
-  };
+    isTutorial: true as const,
+  });
 }
 
 async function createTutorialClub(tx: TutorialTx, userId: string) {
-  return tx.community.create({
+  return tx.club.create({
     data: {
       name: getTutorialClubName(userId),
       createdById: userId,
@@ -379,13 +380,13 @@ async function createTutorialClub(tx: TutorialTx, userId: string) {
 
 async function seedTutorialPlaygroundData(
   tx: TutorialTx,
-  communityId: string,
+  clubId: string,
   ownerUserId: string
 ) {
-  await tx.communityMember.upsert({
+  await tx.clubMember.upsert({
     where: {
-      communityId_userId: {
-        communityId,
+      clubId_userId: {
+        clubId,
         userId: ownerUserId,
       },
     },
@@ -395,7 +396,7 @@ async function seedTutorialPlaygroundData(
       elo: 1000,
     },
     create: {
-      communityId,
+      clubId,
       userId: ownerUserId,
       role: "ADMIN",
       status: ClubPlayerStatus.CORE,
@@ -426,9 +427,9 @@ async function seedTutorialPlaygroundData(
     fakeUsers.push(user);
   }
 
-  await tx.communityMember.createMany({
+  await tx.clubMember.createMany({
     data: fakeUsers.map((user, index) => ({
-      communityId,
+      clubId,
       userId: user.id,
       role: "MEMBER",
       status:
@@ -439,8 +440,8 @@ async function seedTutorialPlaygroundData(
     })),
   });
 
-  await seedCompletedPracticeSessions(tx, communityId, fakeUsers);
-  await seedActiveTutorialSession(tx, communityId, ownerUserId, fakeUsers);
+  await seedCompletedPracticeSessions(tx, clubId, fakeUsers);
+  await seedActiveTutorialSession(tx, clubId, ownerUserId, fakeUsers);
 }
 
 function addDays(date: Date, days: number) {
@@ -462,7 +463,7 @@ function getSeedPlayer(
 
 async function seedCompletedPracticeSessions(
   tx: TutorialTx,
-  communityId: string,
+  clubId: string,
   fakeUsers: TutorialSeedUser[]
 ) {
   const now = new Date();
@@ -490,7 +491,7 @@ async function seedCompletedPracticeSessions(
       data: {
         id: sessionId,
         code: sessionId,
-        communityId,
+        clubId,
         name: practiceSession.name,
         type: SessionType.POINTS,
         mode: SessionMode.MEXICANO,
@@ -505,9 +506,9 @@ async function seedCompletedPracticeSessions(
             courtNumber: index + 1,
           })),
         },
-        sessionCommunities: {
+        sessionClubs: {
           create: {
-            communityId,
+            clubId,
             role: SessionClubRole.HOST,
             status: SessionClubStatus.ACCEPTED,
             reviewedAt: endedAt,
@@ -586,7 +587,7 @@ async function seedCompletedPracticeSessions(
             ratingByUserId.set(player.id, afterElo);
             return {
               matchId,
-              communityId,
+              clubId,
               userId: player.id,
               delta: team.delta,
               beforeElo,
@@ -620,10 +621,10 @@ async function seedCompletedPracticeSessions(
   }
 
   for (const user of fakeUsers) {
-    await tx.communityMember.update({
+    await tx.clubMember.update({
       where: {
-        communityId_userId: {
-          communityId,
+        clubId_userId: {
+          clubId,
           userId: user.id,
         },
       },
@@ -636,7 +637,7 @@ async function seedCompletedPracticeSessions(
 
 async function seedActiveTutorialSession(
   tx: TutorialTx,
-  communityId: string,
+  clubId: string,
   ownerUserId: string,
   fakeUsers: TutorialSeedUser[]
 ) {
@@ -647,7 +648,7 @@ async function seedActiveTutorialSession(
     data: {
       id: sessionId,
       code: sessionId,
-      communityId,
+      clubId,
       name: TUTORIAL_PLAYGROUND_SESSION_NAME,
       type: SessionType.POINTS,
       mode: SessionMode.MEXICANO,
@@ -660,9 +661,9 @@ async function seedActiveTutorialSession(
           courtNumber: index + 1,
         })),
       },
-      sessionCommunities: {
+      sessionClubs: {
         create: {
-          communityId,
+          clubId,
           role: SessionClubRole.HOST,
           status: SessionClubStatus.ACCEPTED,
           requestedById: ownerUserId,
@@ -719,10 +720,10 @@ async function seedActiveTutorialSession(
   }
 }
 
-async function getSeededFakeUsers(tx: TutorialTx, communityId: string) {
-  const members = await tx.communityMember.findMany({
+async function getSeededFakeUsers(tx: TutorialTx, clubId: string) {
+  const members = await tx.clubMember.findMany({
     where: {
-      communityId,
+      clubId,
       user: {
         email: null,
         isClaimed: false,
@@ -765,11 +766,11 @@ async function getSeededFakeUsers(tx: TutorialTx, communityId: string) {
 
 async function deleteNamedPracticeSessions(
   tx: TutorialTx,
-  communityId: string
+  clubId: string
 ) {
   const sessionRows = await tx.session.findMany({
     where: {
-      communityId,
+      clubId,
       isTest: false,
       name: { in: [...TUTORIAL_HISTORY_SESSION_NAMES] },
     },
@@ -801,7 +802,7 @@ async function deleteNamedPracticeSessions(
   await tx.sessionPlayer.deleteMany({
     where: { sessionId: { in: sessionIds } },
   });
-  await tx.sessionCommunity.deleteMany({
+  await tx.sessionClub.deleteMany({
     where: { sessionId: { in: sessionIds } },
   });
   await tx.court.deleteMany({ where: { sessionId: { in: sessionIds } } });
@@ -810,12 +811,12 @@ async function deleteNamedPracticeSessions(
 
 async function hasCompletedPracticeHistory(
   tx: TutorialTx,
-  communityId: string
+  clubId: string
 ) {
   const [sessionCount, matchCount] = await Promise.all([
     tx.session.count({
       where: {
-        communityId,
+        clubId,
         isTest: false,
         status: SessionStatus.COMPLETED,
         name: { in: [...TUTORIAL_HISTORY_SESSION_NAMES] },
@@ -825,7 +826,7 @@ async function hasCompletedPracticeHistory(
       where: {
         status: MatchStatus.COMPLETED,
         session: {
-          communityId,
+          clubId,
           isTest: false,
           name: { in: [...TUTORIAL_HISTORY_SESSION_NAMES] },
         },
@@ -844,21 +845,21 @@ async function hasCompletedPracticeHistory(
 
 async function ensureCompletedPracticeHistory(
   tx: TutorialTx,
-  communityId: string
+  clubId: string
 ) {
-  if (await hasCompletedPracticeHistory(tx, communityId)) {
+  if (await hasCompletedPracticeHistory(tx, clubId)) {
     return true;
   }
 
-  const fakeUsers = await getSeededFakeUsers(tx, communityId);
+  const fakeUsers = await getSeededFakeUsers(tx, clubId);
   if (fakeUsers.length !== TUTORIAL_FAKE_PLAYERS.length) {
     return false;
   }
 
-  await deleteNamedPracticeSessions(tx, communityId);
-  await tx.communityMember.updateMany({
+  await deleteNamedPracticeSessions(tx, clubId);
+  await tx.clubMember.updateMany({
     where: {
-      communityId,
+      clubId,
       userId: { in: fakeUsers.map((user) => user.id) },
     },
     data: { elo: 1000 },
@@ -867,10 +868,10 @@ async function ensureCompletedPracticeHistory(
   for (const player of TUTORIAL_FAKE_PLAYERS) {
     const user = fakeUsers.find((item) => item.name === player.name);
     if (!user) continue;
-    await tx.communityMember.update({
+    await tx.clubMember.update({
       where: {
-        communityId_userId: {
-          communityId,
+        clubId_userId: {
+          clubId,
           userId: user.id,
         },
       },
@@ -878,17 +879,17 @@ async function ensureCompletedPracticeHistory(
     });
   }
 
-  await seedCompletedPracticeSessions(tx, communityId, fakeUsers);
+  await seedCompletedPracticeSessions(tx, clubId, fakeUsers);
   return true;
 }
 
 async function clearTutorialPlaygroundData(
   tx: TutorialTx,
-  communityId: string,
+  clubId: string,
   ownerUserId: string
 ) {
   const sessionRows = await tx.session.findMany({
-    where: { communityId },
+    where: { clubId },
     select: { id: true },
   });
   const sessionIds = sessionRows.map((session) => session.id);
@@ -902,7 +903,7 @@ async function clearTutorialPlaygroundData(
       where: { sessionId: { in: sessionIds } },
     });
     await tx.matchEloAdjustment.deleteMany({
-      where: { communityId },
+      where: { clubId },
     });
     await tx.match.deleteMany({
       where: { sessionId: { in: sessionIds } },
@@ -910,7 +911,7 @@ async function clearTutorialPlaygroundData(
     await tx.sessionPlayer.deleteMany({
       where: { sessionId: { in: sessionIds } },
     });
-    await tx.sessionCommunity.deleteMany({
+    await tx.sessionClub.deleteMany({
       where: { sessionId: { in: sessionIds } },
     });
     await tx.session.deleteMany({
@@ -918,20 +919,20 @@ async function clearTutorialPlaygroundData(
     });
   }
 
-  await tx.claimRequest.deleteMany({ where: { communityId } });
+  await tx.claimRequest.deleteMany({ where: { clubId } });
   await tx.offlineIdentityLinkRequest.deleteMany({
     where: {
       OR: [
-        { sourceCommunityId: communityId },
-        { targetCommunityId: communityId },
+        { sourceClubId: clubId },
+        { targetClubId: clubId },
       ],
     },
   });
-  await tx.offlineIdentityMember.deleteMany({ where: { communityId } });
+  await tx.offlineIdentityMember.deleteMany({ where: { clubId } });
 
-  const fakeMembers = await tx.communityMember.findMany({
+  const fakeMembers = await tx.clubMember.findMany({
     where: {
-      communityId,
+      clubId,
       userId: { not: ownerUserId },
       user: {
         email: null,
@@ -943,9 +944,9 @@ async function clearTutorialPlaygroundData(
   const fakeUserIds = fakeMembers.map((member) => member.userId);
 
   if (fakeUserIds.length > 0) {
-    await tx.communityMember.deleteMany({
+    await tx.clubMember.deleteMany({
       where: {
-        communityId,
+        clubId,
         userId: { in: fakeUserIds },
       },
     });
@@ -958,8 +959,8 @@ async function clearTutorialPlaygroundData(
     });
   }
 
-  await tx.communityMember.updateMany({
-    where: { communityId, userId: ownerUserId },
+  await tx.clubMember.updateMany({
+    where: { clubId, userId: ownerUserId },
     data: {
       role: "ADMIN",
       status: ClubPlayerStatus.CORE,
@@ -976,7 +977,7 @@ async function clearTutorialPlaygroundData(
 }
 
 export async function getTutorialPlaygroundSummary(userId: string) {
-  const playground = await prisma.community.findUnique({
+  const playground = await prisma.club.findUnique({
     where: { tutorialOwnerId: userId },
     select: { id: true, isTutorial: true },
   });
@@ -992,7 +993,7 @@ export async function getTutorialPlaygroundSummary(userId: string) {
 
 export async function ensureTutorialPlayground(userId: string) {
   return prisma.$transaction(async (tx) => {
-    let playground = await tx.community.findUnique({
+    let playground = await tx.club.findUnique({
       where: { tutorialOwnerId: userId },
       select: { id: true, isTutorial: true },
     });
@@ -1013,7 +1014,7 @@ export async function ensureTutorialPlayground(userId: string) {
 
 export async function resetTutorialPlayground(userId: string) {
   return prisma.$transaction(async (tx) => {
-    let playground = await tx.community.findUnique({
+    let playground = await tx.club.findUnique({
       where: { tutorialOwnerId: userId },
       select: { id: true, isTutorial: true },
     });
@@ -1031,10 +1032,10 @@ export async function resetTutorialPlayground(userId: string) {
   });
 }
 
-export async function deleteTutorialPlayground(userId: string, communityId: string) {
+export async function deleteTutorialPlayground(userId: string, clubId: string) {
   return prisma.$transaction(async (tx) => {
-    const playground = await tx.community.findUnique({
-      where: { id: communityId },
+    const playground = await tx.club.findUnique({
+      where: { id: clubId },
       select: {
         id: true,
         isTutorial: true,
@@ -1050,7 +1051,7 @@ export async function deleteTutorialPlayground(userId: string, communityId: stri
     }
 
     await clearTutorialPlaygroundData(tx, playground.id, userId);
-    await tx.community.delete({ where: { id: playground.id } });
+    await tx.club.delete({ where: { id: playground.id } });
 
     return { success: true };
   });

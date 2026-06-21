@@ -183,7 +183,7 @@ export default function SessionPage() {
   const {
     showRosterModal,
     rosterSearch,
-    communityPlayers,
+    clubPlayers,
     addingPlayerId,
     guestName,
     guestGender,
@@ -406,7 +406,7 @@ export default function SessionPage() {
 
       setShowDeleteTestConfirm(false);
       router.push(
-        sessionData?.communityId ? `/community/${sessionData.communityId}` : "/"
+        sessionData?.clubId ? `/club/${sessionData.clubId}` : "/"
       );
     } catch (err) {
       console.error(err);
@@ -414,7 +414,7 @@ export default function SessionPage() {
     } finally {
       setDeletingTestSession(false);
     }
-  }, [code, router, sessionData?.communityId]);
+  }, [code, router, sessionData?.clubId]);
 
   const handleBack = useCallback(() => {
     if (typeof window !== "undefined" && window.history.length > 1) {
@@ -422,8 +422,8 @@ export default function SessionPage() {
       return;
     }
 
-    router.push(sessionData?.communityId ? `/community/${sessionData.communityId}` : "/");
-  }, [router, sessionData?.communityId]);
+    router.push(sessionData?.clubId ? `/club/${sessionData.clubId}` : "/");
+  }, [router, sessionData?.clubId]);
 
   const isAdmin =
     !!sessionData?.viewerCanManage || !!user?.isAdmin || !!session?.user?.isAdmin;
@@ -523,14 +523,14 @@ export default function SessionPage() {
 
     return buildSessionViewModel({
       sessionData,
-      communityPlayers,
+      clubPlayers,
       rosterSearch,
       manualMatchForm: courtActions.manualMatchForm,
       manualCourtId: courtActions.manualCourtId,
       openPreferenceEditor,
     });
   }, [
-    communityPlayers,
+    clubPlayers,
     courtActions.manualCourtId,
     courtActions.manualMatchForm,
     openPreferenceEditor,

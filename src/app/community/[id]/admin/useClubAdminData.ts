@@ -15,11 +15,11 @@ interface ClubAdminRouter {
 }
 
 export function useClubAdminData({
-  communityId,
+  clubId,
   status,
   router,
 }: {
-  communityId: string;
+  clubId: string;
   status: "authenticated" | "loading" | "unauthenticated";
   router: ClubAdminRouter;
 }) {
@@ -36,11 +36,11 @@ export function useClubAdminData({
   const [success, setSuccess] = useState("");
 
   const fetchClubAndPlayers = useCallback(async () => {
-    if (!communityId) return;
+    if (!clubId) return;
 
-    const snapshot = await fetchClubAdminSnapshot(communityId);
+    const snapshot = await fetchClubAdminSnapshot(clubId);
     if (snapshot.club.role !== "ADMIN") {
-      router.replace(`/community/${communityId}`);
+      router.replace(`/club/${clubId}`);
       throw new Error("Only club admins can access this page");
     }
 
@@ -48,7 +48,7 @@ export function useClubAdminData({
     setPlayers(snapshot.players);
     setClaimRequests(snapshot.claimRequests);
     setOfflineIdentityLinks(snapshot.offlineIdentityLinks);
-  }, [communityId, router]);
+  }, [clubId, router]);
 
   useEffect(() => {
     if (status === "unauthenticated") {
@@ -56,7 +56,7 @@ export function useClubAdminData({
       return;
     }
 
-    if (status !== "authenticated" || !communityId) return;
+    if (status !== "authenticated" || !clubId) return;
 
     void (async () => {
       try {
@@ -69,7 +69,7 @@ export function useClubAdminData({
         setLoading(false);
       }
     })();
-  }, [communityId, fetchClubAndPlayers, router, status]);
+  }, [clubId, fetchClubAndPlayers, router, status]);
 
   return {
     club,

@@ -2,9 +2,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   auth: vi.fn(),
-  communityFindUnique: vi.fn(),
-  communityFindMany: vi.fn(),
-  communityMemberFindUnique: vi.fn(),
+  clubFindUnique: vi.fn(),
+  clubFindMany: vi.fn(),
+  clubMemberFindUnique: vi.fn(),
 }));
 
 vi.mock("@/lib/auth", () => ({
@@ -13,12 +13,12 @@ vi.mock("@/lib/auth", () => ({
 
 vi.mock("@/lib/prisma", () => ({
   prisma: {
-    community: {
-      findUnique: mocks.communityFindUnique,
-      findMany: mocks.communityFindMany,
+    club: {
+      findUnique: mocks.clubFindUnique,
+      findMany: mocks.clubFindMany,
     },
-    communityMember: {
-      findUnique: mocks.communityMemberFindUnique,
+    clubMember: {
+      findUnique: mocks.clubMemberFindUnique,
     },
   },
 }));
@@ -36,7 +36,7 @@ import { GET } from "./route";
 function getCandidates(search: string) {
   return GET(
     new Request(
-      `http://localhost/api/communities/community-1/collab-candidates?search=${encodeURIComponent(search)}`
+      `http://localhost/api/clubs/community-1/collab-candidates?search=${encodeURIComponent(search)}`
     ),
     { params: Promise.resolve({ id: "community-1" }) }
   );
@@ -48,12 +48,12 @@ describe("collab club candidate search route", () => {
     mocks.auth.mockResolvedValue({
       user: { id: "admin-1", isAdmin: false, email: "admin@example.com" },
     });
-    mocks.communityFindUnique.mockResolvedValue({
+    mocks.clubFindUnique.mockResolvedValue({
       id: "community-1",
       isTutorial: false,
     });
-    mocks.communityMemberFindUnique.mockResolvedValue({ role: "ADMIN" });
-    mocks.communityFindMany.mockResolvedValue([
+    mocks.clubMemberFindUnique.mockResolvedValue({ role: "ADMIN" });
+    mocks.clubFindMany.mockResolvedValue([
       {
         id: "community-2",
         name: "Partner Club",
@@ -68,7 +68,7 @@ describe("collab club candidate search route", () => {
     const response = await getCandidates("pa");
 
     expect(response.status).toBe(401);
-    expect(mocks.communityFindMany).not.toHaveBeenCalled();
+    expect(mocks.clubFindMany).not.toHaveBeenCalled();
   });
 
   it("rejects quick-access users", async () => {
@@ -79,25 +79,25 @@ describe("collab club candidate search route", () => {
     const response = await getCandidates("pa");
 
     expect(response.status).toBe(403);
-    expect(mocks.communityFindMany).not.toHaveBeenCalled();
+    expect(mocks.clubFindMany).not.toHaveBeenCalled();
   });
 
   it("requires a host club admin or staff member", async () => {
-    mocks.communityMemberFindUnique.mockResolvedValue({ role: "MEMBER" });
+    mocks.clubMemberFindUnique.mockResolvedValue({ role: "MEMBER" });
 
     const response = await getCandidates("pa");
 
     expect(response.status).toBe(403);
-    expect(mocks.communityFindMany).not.toHaveBeenCalled();
+    expect(mocks.clubFindMany).not.toHaveBeenCalled();
   });
 
   it("allows staff to search outgoing collab candidates", async () => {
-    mocks.communityMemberFindUnique.mockResolvedValue({ role: "STAFF" });
+    mocks.clubMemberFindUnique.mockResolvedValue({ role: "STAFF" });
 
     const response = await getCandidates("partner");
 
     expect(response.status).toBe(200);
-    expect(mocks.communityFindMany).toHaveBeenCalled();
+    expect(mocks.clubFindMany).toHaveBeenCalled();
   });
 
   it("returns an empty result without querying all clubs for short searches", async () => {
@@ -106,7 +106,7 @@ describe("collab club candidate search route", () => {
 
     expect(response.status).toBe(200);
     expect(body).toEqual([]);
-    expect(mocks.communityFindMany).not.toHaveBeenCalled();
+    expect(mocks.clubFindMany).not.toHaveBeenCalled();
   });
 
   it("searches by name, excludes the host club, caps results, and maps counts", async () => {
@@ -114,7 +114,7 @@ describe("collab club candidate search route", () => {
     const body = await response.json();
 
     expect(response.status).toBe(200);
-    expect(mocks.communityFindMany).toHaveBeenCalledWith({
+    expect(mocks.clubFindMany).toHaveBeenCalledWith({
       where: {
         id: { not: "community-1" },
         isTutorial: false,

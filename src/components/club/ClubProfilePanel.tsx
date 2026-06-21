@@ -5,10 +5,10 @@ import { EmptyState, SectionCard } from "@/components/ui/chrome";
 
 export function ClubProfilePanel({
   userId,
-  communityId,
+  clubId,
 }: {
   userId?: string | null;
-  communityId: string;
+  clubId: string;
 }) {
   if (!userId) {
     return (
@@ -24,7 +24,7 @@ export function ClubProfilePanel({
   return (
     <PlayerProfileView
       userId={userId}
-      communityId={communityId}
+      clubId={clubId}
       mode="embedded"
     />
   );

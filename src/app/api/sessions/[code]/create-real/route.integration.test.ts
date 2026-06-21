@@ -65,7 +65,7 @@ async function removeDatabaseFiles() {
 
 async function createClubAdmin(prefix: string) {
   const adminUserId = `${prefix}-admin`;
-  const communityId = `${prefix}-community`;
+  const clubId = `${prefix}-community`;
 
   await prisma.user.create({
     data: {
@@ -79,17 +79,17 @@ async function createClubAdmin(prefix: string) {
     },
   });
 
-  await prisma.community.create({
+  await prisma.club.create({
     data: {
-      id: communityId,
+      id: clubId,
       name: `${prefix} Community ${randomUUID()}`,
       createdById: adminUserId,
     },
   });
 
-  await prisma.communityMember.create({
+  await prisma.clubMember.create({
     data: {
-      communityId,
+      clubId,
       userId: adminUserId,
       role: "ADMIN",
     },
@@ -102,10 +102,10 @@ async function createClubAdmin(prefix: string) {
     },
   } as never);
 
-  return { adminUserId, communityId };
+  return { adminUserId, clubId };
 }
 
-async function createPlayers(prefix: string, communityId: string, keys: string[]) {
+async function createPlayers(prefix: string, clubId: string, keys: string[]) {
   await prisma.user.createMany({
     data: keys.map((key) => ({
       id: `${prefix}-${key}`,
@@ -119,9 +119,9 @@ async function createPlayers(prefix: string, communityId: string, keys: string[]
     })),
   });
 
-  await prisma.communityMember.createMany({
+  await prisma.clubMember.createMany({
     data: keys.map((key) => ({
-      communityId,
+      clubId,
       userId: `${prefix}-${key}`,
       role: "MEMBER",
       elo: 1000,
@@ -129,7 +129,7 @@ async function createPlayers(prefix: string, communityId: string, keys: string[]
   });
 }
 
-async function createTestSessionWithMatch(prefix: string, communityId: string) {
+async function createTestSessionWithMatch(prefix: string, clubId: string) {
   const playerIds = ["p1", "p2", "p3", "p4"].map((key) => `${prefix}-${key}`);
   const sessionId = `${prefix}-test-session`;
   const code = `${prefix}-test-code`;
@@ -140,7 +140,7 @@ async function createTestSessionWithMatch(prefix: string, communityId: string) {
     data: {
       id: sessionId,
       code,
-      communityId,
+      clubId,
       name: `${prefix} Test Session`,
       type: SessionType.POINTS,
       mode: SessionMode.MEXICANO,
@@ -278,11 +278,11 @@ afterAll(async () => {
 describe("create real session route integration", () => {
   it("keeps setup-only copies free of test results by default", async () => {
     const prefix = `setup-${randomUUID().slice(0, 8)}`;
-    const { communityId } = await createClubAdmin(prefix);
-    await createPlayers(prefix, communityId, ["p1", "p2", "p3", "p4"]);
+    const { clubId } = await createClubAdmin(prefix);
+    await createPlayers(prefix, clubId, ["p1", "p2", "p3", "p4"]);
     const { sessionId, code } = await createTestSessionWithMatch(
       prefix,
-      communityId
+      clubId
     );
 
     const response = await postCreateReal(code);
@@ -310,10 +310,10 @@ describe("create real session route integration", () => {
 
   it("copies completed results into the real session and replays standings and ratings", async () => {
     const prefix = `results-${randomUUID().slice(0, 8)}`;
-    const { communityId } = await createClubAdmin(prefix);
-    await createPlayers(prefix, communityId, ["p1", "p2", "p3", "p4"]);
+    const { clubId } = await createClubAdmin(prefix);
+    await createPlayers(prefix, clubId, ["p1", "p2", "p3", "p4"]);
     const { sessionId, code, playerIds, completedAt } =
-      await createTestSessionWithMatch(prefix, communityId);
+      await createTestSessionWithMatch(prefix, clubId);
 
     const response = await postCreateReal(code, { includeResults: true });
     const payload = await response.json();
@@ -359,11 +359,11 @@ describe("create real session route integration", () => {
       playerIds[3]
     );
 
-    const communityMembers = await prisma.communityMember.findMany({
-      where: { communityId, userId: { in: playerIds } },
+    const clubMembers = await prisma.clubMember.findMany({
+      where: { clubId, userId: { in: playerIds } },
     });
     const eloByUserId = new Map(
-      communityMembers.map((member) => [member.userId, member.elo])
+      clubMembers.map((member) => [member.userId, member.elo])
     );
     expect(eloByUserId.get(playerIds[0])).toBe(1016);
     expect(eloByUserId.get(playerIds[1])).toBe(1016);

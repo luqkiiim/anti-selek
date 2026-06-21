@@ -12,26 +12,26 @@ import type {
 import { safeJson } from "./clubAdminApi";
 
 export function useClubAdminOfflineIdentityLinks({
-  communityId,
+  clubId,
   players,
   refreshClubData,
   setError,
   setSuccess,
 }: {
-  communityId: string;
+  clubId: string;
   players: ClubAdminPlayer[];
   refreshClubData: () => Promise<void>;
   setError: Dispatch<SetStateAction<string>>;
   setSuccess: Dispatch<SetStateAction<string>>;
 }) {
   const [linkSourceUserId, setLinkSourceUserId] = useState("");
-  const [targetCommunitySearch, setTargetClubSearch] = useState("");
+  const [targetClubSearch, setTargetClubSearch] = useState("");
   const [selectedTargetClub, setSelectedTargetClub] =
     useState<ClubCollabCandidate | null>(null);
-  const [targetCommunityCandidates, setTargetClubCandidates] = useState<
+  const [targetClubCandidates, setTargetClubCandidates] = useState<
     ClubCollabCandidate[]
   >([]);
-  const [loadingTargetCommunities, setLoadingTargetCommunities] =
+  const [loadingTargetClubs, setLoadingTargetClubs] =
     useState(false);
   const [targetRoster, setTargetRoster] = useState<ClubPageMember[]>([]);
   const [loadingTargetRoster, setLoadingTargetRoster] = useState(false);
@@ -42,26 +42,26 @@ export function useClubAdminOfflineIdentityLinks({
     useState<string | null>(null);
 
   useEffect(() => {
-    if (!communityId || selectedTargetClub) {
+    if (!clubId || selectedTargetClub) {
       setTargetClubCandidates([]);
-      setLoadingTargetCommunities(false);
+      setLoadingTargetClubs(false);
       return;
     }
 
-    const search = targetCommunitySearch.trim();
+    const search = targetClubSearch.trim();
     if (search.length < 2) {
       setTargetClubCandidates([]);
-      setLoadingTargetCommunities(false);
+      setLoadingTargetClubs(false);
       return;
     }
 
     let cancelled = false;
     const timeout = window.setTimeout(() => {
       void (async () => {
-        setLoadingTargetCommunities(true);
+        setLoadingTargetClubs(true);
         try {
           const res = await fetch(
-            `/api/communities/${communityId}/collab-candidates?search=${encodeURIComponent(search)}`
+            `/api/clubs/${clubId}/collab-candidates?search=${encodeURIComponent(search)}`
           );
           const data = await safeJson(res);
           if (!res.ok) {
@@ -79,7 +79,7 @@ export function useClubAdminOfflineIdentityLinks({
           }
         } finally {
           if (!cancelled) {
-            setLoadingTargetCommunities(false);
+            setLoadingTargetClubs(false);
           }
         }
       })();
@@ -89,10 +89,10 @@ export function useClubAdminOfflineIdentityLinks({
       cancelled = true;
       window.clearTimeout(timeout);
     };
-  }, [communityId, selectedTargetClub, setError, targetCommunitySearch]);
+  }, [clubId, selectedTargetClub, setError, targetClubSearch]);
 
   useEffect(() => {
-    if (!communityId || !selectedTargetClub) {
+    if (!clubId || !selectedTargetClub) {
       setTargetRoster([]);
       setLinkTargetUserId("");
       setLoadingTargetRoster(false);
@@ -104,7 +104,7 @@ export function useClubAdminOfflineIdentityLinks({
       setLoadingTargetRoster(true);
       try {
         const res = await fetch(
-          `/api/communities/${communityId}/collab-roster?partnerCommunityId=${encodeURIComponent(selectedTargetClub.id)}`
+          `/api/clubs/${clubId}/collab-roster?partnerClubId=${encodeURIComponent(selectedTargetClub.id)}`
         );
         const data = await safeJson(res);
         if (!res.ok) {
@@ -128,7 +128,7 @@ export function useClubAdminOfflineIdentityLinks({
     return () => {
       cancelled = true;
     };
-  }, [communityId, selectedTargetClub, setError]);
+  }, [clubId, selectedTargetClub, setError]);
 
   const sourcePlaceholderOptions = useMemo(
     () =>
@@ -189,7 +189,7 @@ export function useClubAdminOfflineIdentityLinks({
   };
 
   const submitOfflineIdentityLink = async () => {
-    if (!communityId || !selectedTargetClub || !linkSourceUserId || !linkTargetUserId) {
+    if (!clubId || !selectedTargetClub || !linkSourceUserId || !linkTargetUserId) {
       return;
     }
 
@@ -197,12 +197,12 @@ export function useClubAdminOfflineIdentityLinks({
     setError("");
     setSuccess("");
     try {
-      const res = await fetch(`/api/communities/${communityId}/offline-identity-links`, {
+      const res = await fetch(`/api/clubs/${clubId}/offline-identity-links`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           sourceUserId: linkSourceUserId,
-          targetCommunityId: selectedTargetClub.id,
+          targetClubId: selectedTargetClub.id,
           targetUserId: linkTargetUserId,
         }),
       });
@@ -235,7 +235,7 @@ export function useClubAdminOfflineIdentityLinks({
     setSuccess("");
     try {
       const res = await fetch(
-        `/api/communities/${communityId}/offline-identity-links/${link.id}`,
+        `/api/clubs/${clubId}/offline-identity-links/${link.id}`,
         {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
@@ -266,7 +266,7 @@ export function useClubAdminOfflineIdentityLinks({
     setSuccess("");
     try {
       const res = await fetch(
-        `/api/communities/${communityId}/offline-identity-links/${link.id}`,
+        `/api/clubs/${clubId}/offline-identity-links/${link.id}`,
         { method: "DELETE" }
       );
       const data = await safeJson(res);
@@ -286,11 +286,11 @@ export function useClubAdminOfflineIdentityLinks({
   return {
     linkSourceUserId,
     setLinkSourceUserId,
-    targetCommunitySearch,
+    targetClubSearch,
     setTargetClubSearch,
     selectedTargetClub,
-    targetCommunityCandidates,
-    loadingTargetCommunities,
+    targetClubCandidates,
+    loadingTargetClubs,
     loadingTargetRoster,
     linkTargetUserId,
     setLinkTargetUserId,

@@ -12,7 +12,7 @@ describe("session share image response", () => {
   it("renders the share card JSX into PNG bytes", async () => {
     const viewModel = buildSessionShareImageViewModel({
       sessionName: "Weekend Cup",
-      communityName: "Badminton Usuals",
+      clubName: "Badminton Usuals",
       sessionType: SessionType.POINTS,
       players: [
         { userId: "u1", sessionPoints: 12, user: { name: "Aiman" } },

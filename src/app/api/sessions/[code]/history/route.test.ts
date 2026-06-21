@@ -56,7 +56,7 @@ function createHistorySession() {
   return {
     id: "session-1",
     code: "ABC123",
-    communityId: "community-1",
+    clubId: "community-1",
     name: "Friday Night",
     status: SessionStatus.COMPLETED,
     isTest: false,
@@ -64,9 +64,9 @@ function createHistorySession() {
     mode: "MEXICANO",
     createdAt: new Date("2026-05-02T09:00:00.000Z"),
     endedAt: new Date("2026-05-02T11:00:00.000Z"),
-    sessionCommunities: [
+    sessionClubs: [
       {
-        communityId: "community-1",
+        clubId: "community-1",
         status: SessionClubStatus.ACCEPTED,
       },
     ],

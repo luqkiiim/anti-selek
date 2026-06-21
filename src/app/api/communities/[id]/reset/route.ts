@@ -44,7 +44,7 @@ export async function POST(
     if (invalidTargetLimitResponse) return invalidTargetLimitResponse;
 
     const adminAccess = await getClubAdminAccess(prisma, {
-      communityId: id,
+      clubId: id,
       userId: session.user.id,
       isGlobalAdmin: !!session.user.isAdmin,
     });
@@ -53,12 +53,12 @@ export async function POST(
       return invalidTargetResponse(request, "api:communities:id:reset");
     }
 
-    const targetCommunity = await prisma.community.findUnique({
+    const targetClub = await prisma.club.findUnique({
       where: { id },
       select: { isTutorial: true, tutorialOwnerId: true },
     });
-    if (targetCommunity?.isTutorial) {
-      if (targetCommunity.tutorialOwnerId !== session.user.id) {
+    if (targetClub?.isTutorial) {
+      if (targetClub.tutorialOwnerId !== session.user.id) {
         return invalidTargetResponse(request, "api:communities:id:reset");
       }
 
@@ -74,7 +74,7 @@ export async function POST(
 
     await prisma.$transaction(async (tx) => {
       const sessionRows = await tx.session.findMany({
-        where: { communityId: id },
+        where: { clubId: id },
         select: { id: true },
       });
       const sessionIds = sessionRows.map((row) => row.id);
@@ -112,8 +112,8 @@ export async function POST(
 
       await deleteEphemeralGuestUsers(tx, guestUserIds);
 
-      await tx.communityMember.updateMany({
-        where: { communityId: id },
+      await tx.clubMember.updateMany({
+        where: { clubId: id },
         data: { elo: 1000 },
       });
     });
@@ -128,8 +128,8 @@ export async function POST(
       outcome: "success",
       request,
       scope: {
-        communityId: id,
-        route: "/api/communities/[id]/reset",
+        clubId: id,
+        route: "/api/clubs/[id]/reset",
       },
       target: {
         id,

@@ -58,7 +58,7 @@ describe("club claim helpers", () => {
       claimRequest: {
         findUnique: vi.fn().mockResolvedValue({
           id: "claim-1",
-          communityId: "community-1",
+          clubId: "community-1",
           requesterUserId: "requester-1",
           targetUserId: "placeholder-1",
           status: ClaimRequestStatus.PENDING,
@@ -81,14 +81,14 @@ describe("club claim helpers", () => {
         update: vi.fn().mockResolvedValue({}),
         updateMany: vi.fn().mockResolvedValue({ count: 0 }),
       },
-      communityMember: {
+      clubMember: {
         findUnique: vi
           .fn()
           .mockResolvedValueOnce({ role: "MEMBER", elo: 1000 })
           .mockResolvedValueOnce({ role: "MEMBER" }),
         findMany: vi.fn().mockResolvedValue([
           {
-            communityId: "community-1",
+            clubId: "community-1",
             userId: "placeholder-1",
             role: "MEMBER",
             elo: 1000,
@@ -124,7 +124,7 @@ describe("club claim helpers", () => {
     } as unknown as Parameters<typeof approveClubClaimRequest>[0];
 
     const result = await approveClubClaimRequest(tx, {
-      communityId: "community-1",
+      clubId: "community-1",
       requestId: "claim-1",
       reviewerUserId: "admin-1",
     });
@@ -146,7 +146,7 @@ describe("club claim helpers", () => {
       claimRequest: {
         findUnique: vi.fn().mockResolvedValue({
           id: "claim-1",
-          communityId: "community-1",
+          clubId: "community-1",
           requesterUserId: "requester-1",
           targetUserId: "placeholder-1",
           status: ClaimRequestStatus.PENDING,
@@ -171,20 +171,20 @@ describe("club claim helpers", () => {
         findUnique: vi.fn().mockResolvedValue({
           offlineIdentity: {
             members: [
-              { communityId: "community-1", userId: "placeholder-1" },
-              { communityId: "community-2", userId: "placeholder-2" },
+              { clubId: "community-1", userId: "placeholder-1" },
+              { clubId: "community-2", userId: "placeholder-2" },
             ],
           },
         }),
       },
-      communityMember: {
+      clubMember: {
         update: vi.fn(),
       },
     } as unknown as Parameters<typeof approveClubClaimRequest>[0];
 
     await expect(
       approveClubClaimRequest(tx, {
-        communityId: "community-1",
+        clubId: "community-1",
         requestId: "claim-1",
         reviewerUserId: "admin-1",
       })
@@ -192,6 +192,6 @@ describe("club claim helpers", () => {
       message: "Linked profiles span multiple clubs. Manual merge required.",
       statusCode: 409,
     });
-    expect(tx.communityMember.update).not.toHaveBeenCalled();
+    expect(tx.clubMember.update).not.toHaveBeenCalled();
   });
 });
