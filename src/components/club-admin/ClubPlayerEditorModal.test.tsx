@@ -55,8 +55,13 @@ function renderModal(
   player: ClubAdminPlayer,
   {
     canDemoteAdmins = false,
+    canOpenEmergencyPasswordReset = false,
     currentUserId = null,
-  }: { canDemoteAdmins?: boolean; currentUserId?: string | null } = {}
+  }: {
+    canDemoteAdmins?: boolean;
+    canOpenEmergencyPasswordReset?: boolean;
+    currentUserId?: string | null;
+  } = {}
 ) {
   return renderToStaticMarkup(
     <ClubPlayerEditorModal
@@ -83,7 +88,7 @@ function renderModal(
       onRevokeStaff={vi.fn(async () => {})}
       onOpenPasswordReset={vi.fn()}
       canDemoteAdmins={canDemoteAdmins}
-      canOpenEmergencyPasswordReset={false}
+      canOpenEmergencyPasswordReset={canOpenEmergencyPasswordReset}
       onUploadAvatar={vi.fn(async () => {})}
       onRemoveAvatar={vi.fn(async () => {})}
     />
@@ -104,6 +109,22 @@ describe("ClubPlayerEditorModal", () => {
       '<input type="text" class="field" disabled="" value="Player One"/>'
     );
     expect(markup).toContain(
+      "Claimed members recover passwords from the sign-in screen by email."
+    );
+    expect(markup).not.toContain("Emergency password reset");
+  });
+
+  it("shows emergency password reset for global admin access", () => {
+    const markup = renderModal(
+      buildPlayer({
+        isClaimed: true,
+        email: "claimed@example.com",
+      }),
+      { canOpenEmergencyPasswordReset: true }
+    );
+
+    expect(markup).toContain("Emergency password reset");
+    expect(markup).not.toContain(
       "Claimed members recover passwords from the sign-in screen by email."
     );
   });

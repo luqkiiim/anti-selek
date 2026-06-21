@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 import {
   adminControlsClubId,
   claimClubId,
@@ -8,10 +8,15 @@ import {
   readClubClaimRequestsSnapshot,
   hostClubId,
   readClubMembersSnapshot,
-  signIn,
   signInAsAdmin,
   signInAsClaimRequester,
 } from "./helpers";
+
+function getPlayerEditorModal(page: Page, playerName: string) {
+  return page
+    .locator(".app-modal-frame")
+    .filter({ has: page.getByRole("heading", { name: playerName }) });
+}
 
 test("admin can create and open a club player profile from admin page", async ({
   page,
@@ -46,12 +51,10 @@ test("admin can create and open a club player profile from admin page", async ({
   ).toBeVisible();
   await page.getByRole("button", { name: "Edit" }).click();
 
+  const editorModal = getPlayerEditorModal(page, "Admin Page Placeholder");
   await expect(
-    page.getByRole("heading", { name: "Admin Page Placeholder" })
+    editorModal.getByRole("heading", { name: "Admin Page Placeholder" })
   ).toBeVisible();
-  const editorModal = page
-    .locator(".app-modal-frame")
-    .filter({ has: page.getByRole("heading", { name: "Admin Page Placeholder" }) });
   await expect(
     editorModal.getByRole("link", { name: "View profile" })
   ).toBeVisible();
@@ -71,11 +74,12 @@ test("admin can remove a player through the admin confirmation modal", async ({
     "Admin Control Remove"
   );
   await page.getByRole("button", { name: "Edit" }).click();
+  const editorModal = getPlayerEditorModal(page, "Admin Control Remove");
   await expect(
-    page.getByRole("heading", { name: "Admin Control Remove" })
+    editorModal.getByRole("heading", { name: "Admin Control Remove" })
   ).toBeVisible();
 
-  await page.getByRole("button", { name: "Remove player" }).click();
+  await editorModal.getByRole("button", { name: "Remove player" }).click();
   const removeModal = page
     .locator(".app-modal-frame")
     .filter({ has: page.getByRole("heading", { name: "Remove Admin Control Remove?" }) });
@@ -95,7 +99,7 @@ test("admin can remove a player through the admin confirmation modal", async ({
     .toBe(false);
 });
 
-test("admin can reset a claimed member password from the admin page", async ({
+test("club admin sees password recovery guidance for claimed members", async ({
   page,
 }) => {
   await signInAsAdmin(page);
@@ -105,23 +109,19 @@ test("admin can reset a claimed member password from the admin page", async ({
     "Admin Control Reset"
   );
   await page.getByRole("button", { name: "Edit" }).click();
-  await page.getByRole("button", { name: "Reset password" }).click();
 
+  const editorModal = getPlayerEditorModal(page, "Admin Control Reset");
   await expect(
-    page.getByRole("heading", { name: "Reset member password" })
+    editorModal.getByRole("heading", { name: "Admin Control Reset" })
   ).toBeVisible();
-  await page.getByLabel("New password").fill("UpdatedPass456!");
-  await page.getByLabel("Confirm password").fill("UpdatedPass456!");
-  await page.getByRole("button", { name: "Save password" }).click();
   await expect(
-    page.getByText("Password reset for Admin Control Reset.")
+    editorModal.getByText(
+      "Claimed members recover passwords from the sign-in screen by email."
+    )
   ).toBeVisible();
-
-  await signIn(page, {
-    email: "admin-control-reset@example.com",
-    password: "UpdatedPass456!",
-  });
-  await expect(page).toHaveURL(/\/$/);
+  await expect(
+    editorModal.getByRole("button", { name: "Emergency password reset" })
+  ).toHaveCount(0);
 });
 
 test("admin can approve a pending claim request from the admin page", async ({
@@ -148,8 +148,14 @@ test("admin can approve a pending claim request from the admin page", async ({
   await page.goto(`/club/${claimClubId}/admin`);
   await page.getByRole("button", { name: "Claims" }).click();
 
-  await expect(page.getByRole("button", { name: "Approve" }).first()).toBeVisible();
-  await page.getByRole("button", { name: "Approve" }).click();
+  const claimsPanel = page
+    .getByRole("heading", { name: "Claim Requests" })
+    .locator("xpath=ancestor::div[contains(@class, 'bg-white')][1]");
+  await expect(claimsPanel).toBeVisible();
+  await expect(
+    claimsPanel.getByRole("button", { name: "Approve" }).first()
+  ).toBeVisible();
+  await claimsPanel.getByRole("button", { name: "Approve" }).first().click();
 
   await expect
     .poll(async () => {
@@ -177,6 +183,6 @@ test("admin can approve a pending claim request from the admin page", async ({
     })
     .toEqual({
       placeholderExists: false,
-      requesterName: "Claim Candidate",
+      requesterName: "CLAIM Candidate",
     });
 });
