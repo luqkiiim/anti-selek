@@ -1,2 +1,4 @@
 export const dynamic = "force-dynamic";
-export { PATCH } from "@/app/api/communities/[id]/claim-requests/[requestId]/route";
+
+export { PATCH } from "@/features/club-api/[id]/claim-requests/[requestId]/route";
+

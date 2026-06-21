@@ -1,2 +1,4 @@
 export const dynamic = "force-dynamic";
-export { POST } from "@/app/api/communities/[id]/members/[userId]/merge/route";
+
+export { POST } from "@/features/club-api/[id]/members/[userId]/merge/route";
+

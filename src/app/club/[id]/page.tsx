@@ -1,1 +1,1 @@
-export { default } from "@/app/community/[id]/page";
+export { default } from "@/features/club-page/ClubPage";

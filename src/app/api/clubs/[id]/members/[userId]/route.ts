@@ -1,2 +1,4 @@
 export const dynamic = "force-dynamic";
-export { DELETE, PATCH } from "@/app/api/communities/[id]/members/[userId]/route";
+
+export { PATCH, DELETE } from "@/features/club-api/[id]/members/[userId]/route";
+

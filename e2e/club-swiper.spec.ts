@@ -15,6 +15,18 @@ test.use({
   deviceScaleFactor: 2,
 });
 
+test("legacy community page route still loads the club page", async ({ page }) => {
+  await signInAsAdmin(page);
+  await page.goto(`/community/${hostClubId}`);
+
+  await expect(
+    page.getByRole("heading", { name: "E2E Host Club" })
+  ).toBeVisible();
+  await expect(
+    page.locator('nav[aria-label="Club navigation"]')
+  ).toBeVisible();
+});
+
 test("club mobile swiper pages one tab at a time", async ({
   context,
   page,

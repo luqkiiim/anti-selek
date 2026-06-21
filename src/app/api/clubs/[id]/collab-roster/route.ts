@@ -1,2 +1,4 @@
 export const dynamic = "force-dynamic";
-export { GET } from "@/app/api/communities/[id]/collab-roster/route";
+
+export { GET } from "@/features/club-api/[id]/collab-roster/route";
+
