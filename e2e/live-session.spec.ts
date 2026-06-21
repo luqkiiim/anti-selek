@@ -6,7 +6,6 @@ import {
   createManualMatchWithPlayers,
   createStartedHostSession,
   hostClubId,
-  openManualMatchModal,
   openSessionPlayersModal,
   openSessionRoster,
   openSessionSettings,
