@@ -4,7 +4,9 @@ import {
   ClubContractAliasConflictError,
   readAliasedSearchParam,
   readAliasedValue,
+  withLegacyClubAliases,
 } from "@/lib/clubContractAliases";
+import { expectClubContractAliases } from "@/lib/clubContractAliasTestUtils";
 import { LEGACY_COMMUNITY_INPUT_ALIAS_USED_EVENT } from "@/lib/serverTelemetry";
 
 function getTelemetryPayload(infoSpy: ReturnType<typeof vi.spyOn>) {
@@ -20,6 +22,27 @@ function getTelemetryPayload(infoSpy: ReturnType<typeof vi.spyOn>) {
 describe("club contract aliases", () => {
   afterEach(() => {
     vi.restoreAllMocks();
+  });
+
+  it("adds legacy response aliases for every canonical club contract field", () => {
+    const clubPulse = {
+      metrics: { members: 2 },
+    };
+    const clubs = [{ id: "community-1", name: "Club One" }];
+
+    const response = withLegacyClubAliases({
+      clubId: "community-1",
+      clubName: "Club One",
+      clubPulse,
+      clubs,
+      quickAccessClubId: "community-1",
+      viewerClubRole: "ADMIN",
+      partnerClubId: "community-2",
+      sourceClubId: "community-3",
+      targetClubId: "community-4",
+    });
+
+    expectClubContractAliases(response);
   });
 
   it("logs legacy body alias usage without recording request values", () => {

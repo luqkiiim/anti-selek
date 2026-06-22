@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { expectAliasPair } from "@/lib/clubContractAliasTestUtils";
+
 const mocks = vi.hoisted(() => ({
   auth: vi.fn(),
   sessionFindUnique: vi.fn(),
@@ -167,6 +169,9 @@ describe("session route GET", () => {
     expect(body.queuedMatch.team1User1.avatarUrl).toBe(
       "https://blob.vercel-storage.com/avatars/u1/photo.jpg"
     );
+    expectAliasPair(body, "clubId", "communityId");
+    expectAliasPair(body, "clubs", "communities");
+    expectAliasPair(body, "viewerClubRole", "viewerCommunityRole");
     expect(body.respectPlayerRest).toBe(true);
   });
 
@@ -185,6 +190,7 @@ describe("session route GET", () => {
 
     expect(response.status).toBe(200);
     expect(body.viewerClubRole).toBe("STAFF");
+    expect(body.viewerCommunityRole).toBe("STAFF");
     expect(body.viewerCanManage).toBe(true);
     expect(body.viewerCanUseAdminSessionControls).toBe(false);
     expect(mocks.getSessionOperatorMembership).toHaveBeenCalledWith(
@@ -226,6 +232,7 @@ describe("session route GET", () => {
     const body = await response.json();
 
     expect(response.status).toBe(200);
+    expectAliasPair(body, "clubs", "communities");
     expect(body.communities[0].name).toBe("Tutorial playground");
   });
 });

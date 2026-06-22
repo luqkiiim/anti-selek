@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { SessionClubStatus } from "@/types/enums";
+import { expectAliasPair } from "@/lib/clubContractAliasTestUtils";
 
 const mocks = vi.hoisted(() => ({
   clubMemberFindUnique: vi.fn(),
@@ -82,5 +83,45 @@ describe("listSessionsForClub", () => {
         }),
       })
     );
+  });
+
+  it("returns canonical session club fields with legacy aliases", async () => {
+    mocks.clubMemberFindUnique.mockResolvedValue({ role: "ADMIN" });
+    mocks.sessionFindMany.mockResolvedValue([
+      {
+        id: "session-1",
+        code: "ABC123",
+        clubId: "community-1",
+        name: "Morning Session",
+        status: "ACTIVE",
+        isTest: false,
+        createdAt: new Date("2026-05-18T00:00:00.000Z"),
+        endedAt: null,
+        sessionClubs: [
+          {
+            clubId: "community-1",
+            role: "HOST",
+            status: SessionClubStatus.ACCEPTED,
+            club: {
+              id: "community-1",
+              name: "Club One",
+              isTutorial: false,
+            },
+          },
+        ],
+        courts: [],
+        players: [],
+      },
+    ]);
+
+    const sessions = await listSessionsForClub({
+      clubId: "community-1",
+      viewerId: "admin-1",
+      viewerIsAdmin: false,
+    });
+
+    expect(sessions).toHaveLength(1);
+    expectAliasPair(sessions[0], "clubId", "communityId");
+    expectAliasPair(sessions[0], "clubs", "communities");
   });
 });

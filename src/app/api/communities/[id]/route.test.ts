@@ -70,6 +70,10 @@ vi.mock("@/lib/rateLimit", () => ({
 
 import { GET, PATCH } from "./route";
 import { GET as GET_CLUB_ALIAS } from "@/app/api/clubs/[id]/route";
+import {
+  expectAliasPair,
+  expectClubContractAliases,
+} from "@/lib/clubContractAliasTestUtils";
 
 describe("club snapshot route", () => {
   beforeEach(() => {
@@ -213,9 +217,11 @@ describe("club snapshot route", () => {
     const body = await response.json();
 
     expect(response.status).toBe(200);
+    expectClubContractAliases(body.club);
+    expectClubContractAliases(body.community);
     expect(body.club.clubId).toBe("community-1");
-    expect(body.club.communityId).toBe("community-1");
-    expect(body.community.id).toBe("community-1");
+    expect(body.community.communityId).toBe("community-1");
+    expect(body.community).toEqual(body.club);
     expect(body.communityMembers).toEqual(body.clubMembers);
     expect(body.communityPulse).toEqual(body.clubPulse);
   });
@@ -231,6 +237,11 @@ describe("club snapshot route", () => {
 
     expect(response.status).toBe(200);
     expect(body.club.id).toBe("community-1");
+    expectClubContractAliases(body.club);
+    expectClubContractAliases(body.community);
+    expectAliasPair(body, "clubPulse", "communityPulse");
+    expect(body.community).toEqual(body.club);
+    expect(body.communityMembers).toEqual(body.clubMembers);
   });
 
   it("includes owner flags in the club and roster snapshot", async () => {

@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { expectAliasPair } from "@/lib/clubContractAliasTestUtils";
+
 const mocks = vi.hoisted(() => ({
   auth: vi.fn(),
   logAuditEvent: vi.fn(),
@@ -129,6 +131,9 @@ describe("current user route", () => {
     expect(response.status).toBe(200);
     expect(body.user.canRenameName).toBe(false);
     expect(body.user.isQuickAccess).toBe(true);
+    expectAliasPair(body.user, "quickAccessClubId", "quickAccessCommunityId");
+    expect(body.user.quickAccessClubId).toBe("community-1");
+    expect(body.user.quickAccessCommunityId).toBe("community-1");
   });
 
   it("allows a full-account user to rename once", async () => {

@@ -1,7 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { expectAliasPair } from "@/lib/clubContractAliasTestUtils";
+
 const mocks = vi.hoisted(() => ({
   auth: vi.fn(),
+  clubMemberFindMany: vi.fn(),
+  clubMemberFindUnique: vi.fn(),
   userFindUnique: vi.fn(),
   matchFindMany: vi.fn(),
   buildPlayerProfileDerivedData: vi.fn(),
@@ -20,8 +24,8 @@ vi.mock("@/lib/prisma", () => ({
       findMany: mocks.matchFindMany,
     },
     clubMember: {
-      findUnique: vi.fn(),
-      findMany: vi.fn(),
+      findUnique: mocks.clubMemberFindUnique,
+      findMany: mocks.clubMemberFindMany,
     },
   },
 }));
@@ -64,6 +68,8 @@ describe("user stats route", () => {
       createdAt: new Date("2026-05-18T00:00:00.000Z"),
     });
     mocks.matchFindMany.mockResolvedValue([]);
+    mocks.clubMemberFindMany.mockResolvedValue([]);
+    mocks.clubMemberFindUnique.mockResolvedValue(null);
     mocks.buildPlayerProfileDerivedData.mockReturnValue({
       stats: {
         totalMatches: 0,
@@ -201,5 +207,40 @@ describe("user stats route", () => {
         }),
       ]
     );
+  });
+
+  it("returns canonical and legacy club context aliases for scoped stats", async () => {
+    mocks.clubMemberFindUnique
+      .mockResolvedValueOnce({ role: "ADMIN" })
+      .mockResolvedValueOnce({
+        elo: 1275,
+        status: "CORE",
+        user: {
+          id: "user-1",
+          name: "Alex Lee",
+        },
+      });
+    mocks.clubMemberFindMany.mockResolvedValueOnce([
+      {
+        userId: "user-1",
+        elo: 1275,
+        user: {
+          name: "Alex Lee",
+        },
+      },
+    ]);
+
+    const response = await GET(
+      new Request("http://localhost/api/users/user-1/stats?clubId=community-1"),
+      {
+        params: Promise.resolve({ id: "user-1" }),
+      }
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expectAliasPair(body.context, "clubId", "communityId");
+    expect(body.context.clubId).toBe("community-1");
+    expect(body.context.communityId).toBe("community-1");
   });
 });
