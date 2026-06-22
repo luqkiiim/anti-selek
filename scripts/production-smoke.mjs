@@ -43,6 +43,103 @@ function getHeader(headers, name) {
   return headers[name.toLowerCase()] ?? headers[name] ?? "";
 }
 
+function isJsonObject(value) {
+  return !!value && typeof value === "object" && !Array.isArray(value);
+}
+
+function jsonValuesEqual(left, right) {
+  if (Object.is(left, right)) {
+    return true;
+  }
+
+  if (Array.isArray(left) || Array.isArray(right)) {
+    return (
+      Array.isArray(left) &&
+      Array.isArray(right) &&
+      left.length === right.length &&
+      left.every((item, index) => jsonValuesEqual(item, right[index]))
+    );
+  }
+
+  if (isJsonObject(left) || isJsonObject(right)) {
+    if (!isJsonObject(left) || !isJsonObject(right)) {
+      return false;
+    }
+
+    const leftKeys = Object.keys(left).sort();
+    const rightKeys = Object.keys(right).sort();
+    return (
+      leftKeys.length === rightKeys.length &&
+      leftKeys.every(
+        (key, index) =>
+          key === rightKeys[index] &&
+          jsonValuesEqual(left[key], right[key])
+      )
+    );
+  }
+
+  return false;
+}
+
+function formatJson(value) {
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return String(value);
+  }
+}
+
+function assertJsonObject(value, label) {
+  if (!isJsonObject(value)) {
+    throw new Error(`${label} did not return a JSON object`);
+  }
+}
+
+function assertJsonArray(value, label) {
+  if (!Array.isArray(value)) {
+    throw new Error(`${label} did not return a JSON array`);
+  }
+}
+
+function assertAliasPair(value, canonicalKey, legacyKey, label) {
+  assertJsonObject(value, label);
+
+  if (!Object.prototype.hasOwnProperty.call(value, canonicalKey)) {
+    throw new Error(`${label} missing ${canonicalKey}`);
+  }
+  if (!Object.prototype.hasOwnProperty.call(value, legacyKey)) {
+    throw new Error(`${label} missing ${legacyKey}`);
+  }
+  if (!jsonValuesEqual(value[canonicalKey], value[legacyKey])) {
+    throw new Error(
+      `${label} ${canonicalKey}/${legacyKey} mismatch; received ${formatJson(value[canonicalKey])} and ${formatJson(value[legacyKey])}`
+    );
+  }
+}
+
+function assertNoLegacyDeprecationHeaders(headers, label) {
+  const deprecation = getHeader(headers, "Deprecation");
+  if (deprecation) {
+    throw new Error(
+      `${label} unexpectedly returned Deprecation header "${deprecation}"`
+    );
+  }
+
+  const link = getHeader(headers, "Link");
+  if (link.includes('rel="successor-version"')) {
+    throw new Error(
+      `${label} unexpectedly returned legacy successor Link header "${link}"`
+    );
+  }
+
+  const guidance = getHeader(headers, "X-Anti-Selek-Deprecated");
+  if (guidance) {
+    throw new Error(
+      `${label} unexpectedly returned legacy guidance header "${guidance}"`
+    );
+  }
+}
+
 function assertLegacyDeprecationHeaders(headers, { label, successorPath }) {
   const deprecation = getHeader(headers, "Deprecation");
   if (deprecation !== "true") {
@@ -63,6 +160,67 @@ function assertLegacyDeprecationHeaders(headers, { label, successorPath }) {
   if (!guidance.includes(legacyDeprecationMessage)) {
     throw new Error(
       `${label} missing legacy guidance header; received "${guidance}"`
+    );
+  }
+}
+
+async function fetchJson(context, pathname, label) {
+  const response = await context.request.get(pathname);
+  if (!response.ok()) {
+    throw new Error(
+      `${label} failed: ${response.status()} ${response.statusText()}`
+    );
+  }
+
+  return {
+    body: await response.json(),
+    response,
+  };
+}
+
+function assertClubDetailAliases(body, label) {
+  assertJsonObject(body, label);
+  assertAliasPair(body, "club", "community", label);
+  assertAliasPair(body.club, "clubId", "communityId", `${label} club`);
+  assertAliasPair(body.club, "clubName", "communityName", `${label} club`);
+  assertAliasPair(body.community, "clubId", "communityId", `${label} community`);
+  assertAliasPair(body.community, "clubName", "communityName", `${label} community`);
+  assertAliasPair(body, "clubMembers", "communityMembers", label);
+  assertAliasPair(body, "clubPulse", "communityPulse", label);
+}
+
+function assertClubCollectionAliases(body, label) {
+  assertJsonArray(body, label);
+  if (body.length === 0) {
+    log(`${label} alias check skipped; no clubs returned`);
+    return;
+  }
+
+  for (const [index, club] of body.entries()) {
+    assertAliasPair(club, "clubId", "communityId", `${label} row ${index + 1}`);
+    assertAliasPair(club, "clubName", "communityName", `${label} row ${index + 1}`);
+  }
+}
+
+function assertSessionListAliases(body, label) {
+  assertJsonArray(body, label);
+  if (body.length === 0) {
+    log(`${label} alias check skipped; no sessions returned`);
+    return;
+  }
+
+  for (const [index, session] of body.entries()) {
+    assertAliasPair(
+      session,
+      "clubId",
+      "communityId",
+      `${label} session ${index + 1}`
+    );
+    assertAliasPair(
+      session,
+      "clubs",
+      "communities",
+      `${label} session ${index + 1}`
     );
   }
 }
@@ -196,7 +354,87 @@ async function smokeLegacyCommunityCompatibility(context, page, label) {
   if (!body || typeof body !== "object" || Array.isArray(body)) {
     throw new Error(`${label} legacy communities API did not return JSON object`);
   }
+  assertClubDetailAliases(body, `${label} legacy communities API`);
   log(`${label} legacy communities API deprecation headers verified`);
+}
+
+async function smokeClubApiAliasContracts(context, label) {
+  const clubCollection = await fetchJson(context, "/api/clubs", `${label} clubs API`);
+  assertNoLegacyDeprecationHeaders(
+    clubCollection.response.headers(),
+    `${label} clubs API`
+  );
+  assertClubCollectionAliases(clubCollection.body, `${label} clubs API`);
+  log(`${label} clubs API alias contracts verified`);
+
+  const clubDetail = await fetchJson(
+    context,
+    `/api/clubs/${smokeClubId}`,
+    `${label} club detail API`
+  );
+  assertNoLegacyDeprecationHeaders(
+    clubDetail.response.headers(),
+    `${label} club detail API`
+  );
+  assertClubDetailAliases(clubDetail.body, `${label} club detail API`);
+  log(`${label} club detail API alias contracts verified`);
+
+  const currentUser = await fetchJson(context, "/api/user/me", `${label} user API`);
+  assertNoLegacyDeprecationHeaders(
+    currentUser.response.headers(),
+    `${label} user API`
+  );
+  assertJsonObject(currentUser.body, `${label} user API`);
+  assertAliasPair(
+    currentUser.body.user,
+    "quickAccessClubId",
+    "quickAccessCommunityId",
+    `${label} user API user`
+  );
+  log(`${label} user API quick-access alias contracts verified`);
+
+  const sessions = await fetchJson(
+    context,
+    `/api/sessions?clubId=${encodeURIComponent(smokeClubId)}`,
+    `${label} sessions API`
+  );
+  assertNoLegacyDeprecationHeaders(
+    sessions.response.headers(),
+    `${label} sessions API`
+  );
+  assertSessionListAliases(sessions.body, `${label} sessions API`);
+  log(`${label} sessions API alias contracts verified`);
+}
+
+async function smokeSessionApiAliasContracts(context, label) {
+  const session = await fetchJson(
+    context,
+    `/api/sessions/${encodeURIComponent(smokeSessionCode)}`,
+    `${label} session detail API`
+  );
+  assertNoLegacyDeprecationHeaders(
+    session.response.headers(),
+    `${label} session detail API`
+  );
+  assertAliasPair(
+    session.body,
+    "clubId",
+    "communityId",
+    `${label} session detail API`
+  );
+  assertAliasPair(
+    session.body,
+    "clubs",
+    "communities",
+    `${label} session detail API`
+  );
+  assertAliasPair(
+    session.body,
+    "viewerClubRole",
+    "viewerCommunityRole",
+    `${label} session detail API`
+  );
+  log(`${label} session detail API alias contracts verified`);
 }
 
 async function smokeSignedInSurface(context, label, { allowScoreMutation = false } = {}) {
@@ -226,6 +464,7 @@ async function smokeSignedInSurface(context, label, { allowScoreMutation = false
       log(`${label} host setup skipped; smoke user is not an admin for the club`);
     }
 
+    await smokeClubApiAliasContracts(context, label);
     await smokeLegacyCommunityCompatibility(context, page, label);
   } else {
     log(
@@ -241,6 +480,7 @@ async function smokeSignedInSurface(context, label, { allowScoreMutation = false
       .waitFor({ timeout: 25_000 });
     await showMobileTab(page, "Session navigation", "Courts");
     log(`${label} live session loaded`);
+    await smokeSessionApiAliasContracts(context, label);
 
     await showMobileTab(page, "Session navigation", "Standings");
     await page.getByText("Standings").first().waitFor({ timeout: 10_000 });
