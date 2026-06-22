@@ -138,6 +138,13 @@ function assertNoLegacyDeprecationHeaders(headers, label) {
       `${label} unexpectedly returned legacy guidance header "${guidance}"`
     );
   }
+
+  const sunset = getHeader(headers, "Sunset");
+  if (sunset) {
+    throw new Error(
+      `${label} unexpectedly returned Sunset header "${sunset}"`
+    );
+  }
 }
 
 function assertLegacyDeprecationHeaders(headers, { label, successorPath }) {

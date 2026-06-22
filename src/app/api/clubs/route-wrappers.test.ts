@@ -1,10 +1,12 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   ANTI_SELEK_DEPRECATED_HEADER,
   DEPRECATED_COMMUNITY_CONTRACT_MESSAGE,
   DEPRECATION_HEADER,
+  LEGACY_COMMUNITY_CONTRACT_SUNSET_DATE_ENV,
   LINK_HEADER,
+  SUNSET_HEADER,
 } from "@/lib/deprecatedCommunityContracts";
 import { LEGACY_COMMUNITY_ROUTE_USED_EVENT } from "@/lib/serverTelemetry";
 
@@ -76,6 +78,10 @@ type TelemetryPayload = {
   details: Record<string, unknown>;
   event: string;
 };
+
+const mutableEnv = process.env as Record<string, string | undefined>;
+const previousSunsetDate =
+  mutableEnv[LEGACY_COMMUNITY_CONTRACT_SUNSET_DATE_ENV];
 
 const routeCases: Array<{
   name: string;
@@ -281,7 +287,16 @@ describe("club API route wrappers", () => {
     }),
   };
 
+  beforeEach(() => {
+    delete mutableEnv[LEGACY_COMMUNITY_CONTRACT_SUNSET_DATE_ENV];
+  });
+
   afterEach(() => {
+    if (previousSunsetDate === undefined) {
+      delete mutableEnv[LEGACY_COMMUNITY_CONTRACT_SUNSET_DATE_ENV];
+    } else {
+      mutableEnv[LEGACY_COMMUNITY_CONTRACT_SUNSET_DATE_ENV] = previousSunsetDate;
+    }
     vi.restoreAllMocks();
   });
 
@@ -313,6 +328,7 @@ describe("club API route wrappers", () => {
       expect(canonicalResponse.headers.get(DEPRECATION_HEADER)).toBeNull();
       expect(canonicalResponse.headers.get(LINK_HEADER)).toBeNull();
       expect(canonicalResponse.headers.get(ANTI_SELEK_DEPRECATED_HEADER)).toBeNull();
+      expect(canonicalResponse.headers.get(SUNSET_HEADER)).toBeNull();
       expect(infoSpy).not.toHaveBeenCalled();
 
       const legacyResponse = await (legacy[method] as RouteHandler)(
@@ -327,6 +343,7 @@ describe("club API route wrappers", () => {
       expect(legacyResponse.headers.get(ANTI_SELEK_DEPRECATED_HEADER)).toBe(
         DEPRECATED_COMMUNITY_CONTRACT_MESSAGE
       );
+      expect(legacyResponse.headers.get(SUNSET_HEADER)).toBeNull();
 
       const telemetryPayload = getTelemetryPayload(infoSpy);
       expect(telemetryPayload).toMatchObject({
@@ -343,5 +360,52 @@ describe("club API route wrappers", () => {
       expect(JSON.stringify(telemetryPayload)).not.toContain("user-1");
       expect(JSON.stringify(telemetryPayload)).not.toContain("request-1");
     }
+  });
+
+  it("adds a configured Sunset header to legacy API wrappers", async () => {
+    mutableEnv[LEGACY_COMMUNITY_CONTRACT_SUNSET_DATE_ENV] = "2026-08-01";
+    const infoSpy = vi.spyOn(console, "info").mockImplementation(() => undefined);
+    const [canonical, legacy] = await Promise.all([
+      import("@/app/api/clubs/route"),
+      import("@/app/api/communities/route"),
+    ]);
+
+    const canonicalResponse = await (canonical.GET as RouteHandler)(
+      new Request("http://localhost/api/clubs", { method: "GET" }),
+      context
+    );
+    expect(canonicalResponse.headers.get(SUNSET_HEADER)).toBeNull();
+
+    const legacyResponse = await (legacy.GET as RouteHandler)(
+      new Request("http://localhost/api/communities", { method: "GET" }),
+      context
+    );
+
+    expect(legacyResponse.headers.get(SUNSET_HEADER)).toBe(
+      "Sat, 01 Aug 2026 00:00:00 GMT"
+    );
+    expect(infoSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("omits Sunset and warns once when the configured date is invalid", async () => {
+    mutableEnv[LEGACY_COMMUNITY_CONTRACT_SUNSET_DATE_ENV] = "2026-02-31";
+    const infoSpy = vi.spyOn(console, "info").mockImplementation(() => undefined);
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const legacy = await import("@/app/api/communities/route");
+
+    for (const method of ["GET", "POST"] as const) {
+      const response = await (legacy[method] as RouteHandler)(
+        new Request("http://localhost/api/communities", { method }),
+        context
+      );
+
+      expect(response.headers.get(SUNSET_HEADER)).toBeNull();
+    }
+
+    expect(infoSpy).toHaveBeenCalledTimes(2);
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+    expect(warnSpy.mock.calls[0]?.[0]).toContain(
+      LEGACY_COMMUNITY_CONTRACT_SUNSET_DATE_ENV
+    );
   });
 });

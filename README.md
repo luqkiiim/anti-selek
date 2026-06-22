@@ -185,7 +185,7 @@ Notes:
 - `npm run dev` can run fully offline when `USE_TURSO` is unset/`false` and the app is using local SQLite
 - `npm run build` always invokes the Turso migration wrapper first, but that wrapper only applies migrations on Vercel unless you force it with `npm run db:migrate:turso`
 - `npm run smoke:production` defaults to public, non-mutating checks. Set `PRODUCTION_SMOKE_EMAIL`, `PRODUCTION_SMOKE_PASSWORD`, `PRODUCTION_SMOKE_CLUB_ID`, and `PRODUCTION_SMOKE_SESSION_CODE` to include signed-in production paths. `PRODUCTION_SMOKE_COMMUNITY_ID` still works as a compatibility fallback. Signed-in club smoke also verifies canonical/legacy API alias contracts and legacy `/community` and `/api/communities` deprecation headers. Signed-in smoke checks mobile first, then desktop. Set `PRODUCTION_SMOKE_MUTATE=1` only for a disposable production session where score submission and approval are safe.
-- New integrations should use `/club`, `/api/clubs`, and `club*` JSON fields. Legacy `/community`, `/api/communities`, and `community*` aliases are deprecated but still supported during the current compatibility window; legacy route responses include HTTP deprecation headers, and legacy route/input usage is emitted in structured `[telemetry]` logs.
+- New integrations should use `/club`, `/api/clubs`, and `club*` JSON fields. Legacy `/community`, `/api/communities`, and `community*` aliases are deprecated but still supported during the current compatibility window; legacy route responses include HTTP deprecation headers, and legacy route/input usage is emitted in structured `[telemetry]` logs. Set `LEGACY_COMMUNITY_CONTRACT_SUNSET_DATE=YYYY-MM-DD` when a removal date is chosen to emit the standard `Sunset` header on legacy contracts.
 
 ## Core Workflow
 
