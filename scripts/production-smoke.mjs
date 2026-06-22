@@ -22,6 +22,8 @@ const smokeSessionCode = process.env.PRODUCTION_SMOKE_SESSION_CODE ?? "";
 const allowMutation = process.env.PRODUCTION_SMOKE_MUTATE === "1";
 const allowNonProductionTarget =
   process.env.ALLOW_NON_PROD_SMOKE_TARGET === "1";
+const legacyDeprecationMessage =
+  "Use club routes and club fields; community compatibility will be removed in a future phase.";
 
 function log(message) {
   console.log(`[production-smoke] ${message}`);
@@ -35,6 +37,34 @@ async function assertFetchOk(pathname, label) {
   }
 
   log(`${label}: ${response.status}`);
+}
+
+function getHeader(headers, name) {
+  return headers[name.toLowerCase()] ?? headers[name] ?? "";
+}
+
+function assertLegacyDeprecationHeaders(headers, { label, successorPath }) {
+  const deprecation = getHeader(headers, "Deprecation");
+  if (deprecation !== "true") {
+    throw new Error(
+      `${label} missing Deprecation header; expected "true", received "${deprecation}"`
+    );
+  }
+
+  const link = getHeader(headers, "Link");
+  const expectedLink = `<${successorPath}>; rel="successor-version"`;
+  if (!link.includes(expectedLink)) {
+    throw new Error(
+      `${label} missing successor Link header; expected to include "${expectedLink}", received "${link}"`
+    );
+  }
+
+  const guidance = getHeader(headers, "X-Anti-Selek-Deprecated");
+  if (!guidance.includes(legacyDeprecationMessage)) {
+    throw new Error(
+      `${label} missing legacy guidance header; received "${guidance}"`
+    );
+  }
 }
 
 async function smokePublicSurface(context, label) {
@@ -130,6 +160,45 @@ async function showMobileTab(page, navLabel, tabLabel) {
   return true;
 }
 
+async function smokeLegacyCommunityCompatibility(context, page, label) {
+  const legacyPageResponse = await page.goto(`/community/${smokeClubId}`, {
+    waitUntil: "networkidle",
+  });
+  if (!legacyPageResponse) {
+    throw new Error(`${label} legacy community page did not return a response`);
+  }
+  if (!legacyPageResponse.ok()) {
+    throw new Error(
+      `${label} legacy community page failed: ${legacyPageResponse.status()} ${legacyPageResponse.statusText()}`
+    );
+  }
+  assertLegacyDeprecationHeaders(legacyPageResponse.headers(), {
+    label: `${label} legacy community page`,
+    successorPath: `/club/${smokeClubId}`,
+  });
+  await page.getByText("Club hub").first().waitFor({ timeout: 25_000 });
+  log(`${label} legacy community page deprecation headers verified`);
+
+  const legacyApiResponse = await context.request.get(
+    `/api/communities/${smokeClubId}`
+  );
+  if (!legacyApiResponse.ok()) {
+    throw new Error(
+      `${label} legacy communities API failed: ${legacyApiResponse.status()} ${legacyApiResponse.statusText()}`
+    );
+  }
+  assertLegacyDeprecationHeaders(legacyApiResponse.headers(), {
+    label: `${label} legacy communities API`,
+    successorPath: `/api/clubs/${smokeClubId}`,
+  });
+
+  const body = await legacyApiResponse.json();
+  if (!body || typeof body !== "object" || Array.isArray(body)) {
+    throw new Error(`${label} legacy communities API did not return JSON object`);
+  }
+  log(`${label} legacy communities API deprecation headers verified`);
+}
+
 async function smokeSignedInSurface(context, label, { allowScoreMutation = false } = {}) {
   if (!smokeEmail || !smokePassword) {
     log("signed-in smoke skipped; set PRODUCTION_SMOKE_EMAIL and PRODUCTION_SMOKE_PASSWORD");
@@ -156,6 +225,8 @@ async function smokeSignedInSurface(context, label, { allowScoreMutation = false
     } else {
       log(`${label} host setup skipped; smoke user is not an admin for the club`);
     }
+
+    await smokeLegacyCommunityCompatibility(context, page, label);
   } else {
     log(
       `${label} club smoke skipped; set PRODUCTION_SMOKE_CLUB_ID or PRODUCTION_SMOKE_COMMUNITY_ID`
