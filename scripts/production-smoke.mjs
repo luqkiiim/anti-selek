@@ -26,6 +26,16 @@ const legacyCommunityContractSunsetDate =
   process.env.LEGACY_COMMUNITY_CONTRACT_SUNSET_DATE ?? "";
 const legacyDeprecationMessage =
   "Use club routes and club fields; community compatibility will be removed in a future phase.";
+const desktopContextOptions = {
+  baseURL,
+  viewport: { width: 1440, height: 1000 },
+};
+const mobileContextOptions = {
+  baseURL,
+  viewport: { width: 390, height: 844 },
+  isMobile: true,
+  hasTouch: true,
+};
 
 function log(message) {
   console.log(`[production-smoke] ${message}`);
@@ -285,23 +295,56 @@ function assertSessionListAliases(body, label) {
   }
 }
 
-async function smokePublicSurface(context, label) {
+async function smokePublicSurface(
+  context,
+  label,
+  { checkSignInPage = false } = {}
+) {
   const page = await context.newPage();
+  try {
+    if (checkSignInPage) {
+      await page.goto("/signin", { waitUntil: "networkidle" });
+      await page.getByRole("heading", { name: "Welcome back" }).waitFor();
+      await page.getByLabel("Email", { exact: true }).waitFor();
+      await page.getByRole("button", { name: "Quick access" }).waitFor();
+      log(`${label} sign-in page rendered`);
+    }
 
-  await page.goto("/signin", { waitUntil: "networkidle" });
-  await page.getByRole("heading", { name: "Welcome back" }).waitFor();
-  await page.getByLabel("Email", { exact: true }).waitFor();
-  await page.getByRole("button", { name: "Quick access" }).waitFor();
-  log(`${label} sign-in page rendered`);
+    await page.goto("/", { waitUntil: "networkidle" });
+    await page
+      .getByText(/Anti-Selek|Welcome back|Dashboard/i)
+      .first()
+      .waitFor({ timeout: 20_000 });
+    log(`${label} root route rendered or redirected cleanly`);
+  } finally {
+    await page.close();
+  }
+}
 
-  await page.goto("/", { waitUntil: "networkidle" });
-  await page
-    .getByText(/Anti-Selek|Welcome back|Dashboard/i)
-    .first()
-    .waitFor({ timeout: 20_000 });
-  log(`${label} root route rendered or redirected cleanly`);
+async function readBodyText(page) {
+  return page.locator("body").innerText({ timeout: 5_000 }).catch(() => "");
+}
 
-  await page.close();
+async function throwIfRecognizedSignInFailure(page) {
+  const currentUrl = new URL(page.url());
+  const bodyText = await readBodyText(page);
+  if (/rate limit exceeded/i.test(bodyText)) {
+    throw new Error(
+      "Production smoke sign-in was rate-limited by /api/auth; wait for the auth rate-limit window to clear before rerunning."
+    );
+  }
+
+  if (/invalid email or password/i.test(bodyText)) {
+    throw new Error(
+      "Production smoke sign-in was rejected by the credentials flow. Verify PRODUCTION_SMOKE_EMAIL and PRODUCTION_SMOKE_PASSWORD; if they are correct, wait 15 minutes for the auth:signin rate-limit window to clear before rerunning."
+    );
+  }
+
+  if (currentUrl.pathname.startsWith("/api/auth/error")) {
+    throw new Error(
+      "Production smoke sign-in reached /api/auth/error. Check smoke credentials and production auth logs."
+    );
+  }
 }
 
 async function signIn(page) {
@@ -309,14 +352,89 @@ async function signIn(page) {
   await page.getByLabel("Email", { exact: true }).fill(smokeEmail);
   await page.getByLabel("Password", { exact: true }).fill(smokePassword);
   await page.getByRole("button", { name: "Sign in" }).click();
-  await page.waitForURL((url) => !url.pathname.startsWith("/signin"), {
-    timeout: 25_000,
-  });
-  await page
+  const logoutButton = page
     .getByRole("button", { name: "Logout" })
     .filter({ visible: true })
-    .first()
-    .waitFor({ timeout: 25_000 });
+    .first();
+  try {
+    await Promise.any([
+      page.waitForURL((url) => !url.pathname.startsWith("/signin"), {
+        timeout: 25_000,
+      }),
+      logoutButton.waitFor({ timeout: 25_000 }),
+    ]);
+  } catch (error) {
+    await throwIfRecognizedSignInFailure(page);
+    throw error;
+  }
+  await throwIfRecognizedSignInFailure(page);
+
+  try {
+    await logoutButton.waitFor({ timeout: 25_000 });
+  } catch {
+    await throwIfRecognizedSignInFailure(page);
+    throw new Error(
+      "Production smoke sign-in completed navigation but did not show a visible Logout button."
+    );
+  }
+}
+
+async function installCachedAuthSessionRoute(context) {
+  const response = await context.request.get("/api/auth/session");
+  if (!response.ok()) {
+    throw new Error(
+      `Production smoke authenticated session check failed: ${response.status()} ${response.statusText()}`
+    );
+  }
+
+  const body = await response.text();
+  let payload = null;
+  try {
+    payload = JSON.parse(body);
+  } catch {
+    throw new Error("Production smoke authenticated session check did not return JSON.");
+  }
+
+  if (!payload?.user) {
+    throw new Error("Production smoke authenticated session check returned no user.");
+  }
+
+  const contentType =
+    response.headers()["content-type"] ?? "application/json; charset=utf-8";
+  await context.route("**/api/auth/session", async (route) => {
+    if (route.request().method() !== "GET") {
+      await route.continue();
+      return;
+    }
+
+    await route.fulfill({
+      body,
+      contentType,
+      headers: {
+        "cache-control": "no-store",
+      },
+      status: 200,
+    });
+  });
+  log("authenticated session cached for browser checks");
+}
+
+async function createAuthenticatedContext(browser) {
+  const context = await browser.newContext(desktopContextOptions);
+  try {
+    const page = await context.newPage();
+    try {
+      await signIn(page);
+      await installCachedAuthSessionRoute(context);
+      log("authenticated browser context created");
+      return context;
+    } finally {
+      await page.close();
+    }
+  } catch (error) {
+    await context.close();
+    throw error;
+  }
 }
 
 function validateSmokeConfiguration() {
@@ -506,84 +624,114 @@ async function smokeSessionApiAliasContracts(context, label) {
   log(`${label} session detail API alias contracts verified`);
 }
 
-async function smokeSignedInSurface(context, label, { allowScoreMutation = false } = {}) {
+async function smokeSignedInSurface(
+  context,
+  label,
+  {
+    allowScoreMutation = false,
+    checkApiAliasContracts = true,
+    checkDashboard = true,
+    checkLegacyCompatibility = false,
+    checkSessionApiAliasContracts = true,
+    viewport = null,
+  } = {}
+) {
   if (!smokeEmail || !smokePassword) {
     log("signed-in smoke skipped; set PRODUCTION_SMOKE_EMAIL and PRODUCTION_SMOKE_PASSWORD");
     return;
   }
 
   const page = await context.newPage();
-  await signIn(page);
-  log(`${label} signed-in dashboard loaded`);
-
-  if (smokeClubId) {
-    await page.goto(`/club/${smokeClubId}`, { waitUntil: "networkidle" });
-    await page.getByText("Club hub").first().waitFor({ timeout: 25_000 });
-    log(`${label} club hub loaded`);
-
-    const hostSetupButton = page
-      .getByRole("button", { name: "Open Host Setup" })
-      .filter({ visible: true })
-      .first();
-    if ((await hostSetupButton.count()) > 0) {
-      await hostSetupButton.click();
-      await page.getByText("New tournament").first().waitFor({ timeout: 10_000 });
-      log(`${label} host setup opened`);
-    } else {
-      log(`${label} host setup skipped; smoke user is not an admin for the club`);
+  try {
+    if (viewport) {
+      await page.setViewportSize(viewport);
     }
 
-    await smokeClubApiAliasContracts(context, label);
-    await smokeLegacyCommunityCompatibility(context, page, label);
-  } else {
-    log(
-      `${label} club smoke skipped; set PRODUCTION_SMOKE_CLUB_ID or PRODUCTION_SMOKE_COMMUNITY_ID`
-    );
-  }
+    if (checkDashboard) {
+      await page.goto("/", { waitUntil: "networkidle" });
+      await page
+        .getByRole("button", { name: "Logout" })
+        .filter({ visible: true })
+        .first()
+        .waitFor({ timeout: 25_000 });
+      log(`${label} signed-in dashboard loaded`);
+    }
 
-  if (smokeSessionCode) {
-    await page.goto(`/session/${smokeSessionCode}`, { waitUntil: "networkidle" });
-    await page
-      .getByText(/Court board|Court layout|Standings/i)
-      .first()
-      .waitFor({ timeout: 25_000 });
-    await showMobileTab(page, "Session navigation", "Courts");
-    log(`${label} live session loaded`);
-    await smokeSessionApiAliasContracts(context, label);
+    if (smokeClubId) {
+      await page.goto(`/club/${smokeClubId}`, { waitUntil: "networkidle" });
+      await page.getByText("Club hub").first().waitFor({ timeout: 25_000 });
+      log(`${label} club hub loaded`);
 
-    await showMobileTab(page, "Session navigation", "Standings");
-    await page.getByText("Standings").first().waitFor({ timeout: 10_000 });
-    log(`${label} standings visible`);
-
-    if (allowScoreMutation) {
-      await showMobileTab(page, "Session navigation", "Courts");
-      const scoreInputs = page.locator('input[type="number"]');
-      if ((await scoreInputs.count()) < 2) {
-        throw new Error("PRODUCTION_SMOKE_MUTATE=1 set, but score inputs are unavailable");
-      }
-
-      await scoreInputs.nth(0).fill("21");
-      await scoreInputs.nth(1).fill("15");
-      await page.getByRole("button", { name: "Submit Score" }).click();
-      await page.getByRole("button", { name: "Confirm", exact: true }).click();
-      log(`${label} score submitted`);
-
-      const approveButton = page
-        .getByRole("button", { name: "Confirm Results" })
+      const hostSetupButton = page
+        .getByRole("button", { name: "Open Host Setup" })
         .filter({ visible: true })
         .first();
-      if ((await approveButton.count()) > 0) {
-        await approveButton.click();
-        log(`${label} pending score approved`);
+      if ((await hostSetupButton.count()) > 0) {
+        await hostSetupButton.click();
+        await page.getByText("New tournament").first().waitFor({ timeout: 10_000 });
+        log(`${label} host setup opened`);
+      } else {
+        log(`${label} host setup skipped; smoke user is not an admin for the club`);
+      }
+
+      if (checkApiAliasContracts) {
+        await smokeClubApiAliasContracts(context, label);
+      }
+      if (checkLegacyCompatibility) {
+        await smokeLegacyCommunityCompatibility(context, page, label);
       }
     } else {
-      log(`${label} score submission skipped; set PRODUCTION_SMOKE_MUTATE=1 only for a disposable production session`);
+      log(
+        `${label} club smoke skipped; set PRODUCTION_SMOKE_CLUB_ID or PRODUCTION_SMOKE_COMMUNITY_ID`
+      );
     }
-  } else {
-    log(`${label} session smoke skipped; set PRODUCTION_SMOKE_SESSION_CODE`);
-  }
 
-  await page.close();
+    if (smokeSessionCode) {
+      await page.goto(`/session/${smokeSessionCode}`, { waitUntil: "networkidle" });
+      await page
+        .getByText(/Court board|Court layout|Standings/i)
+        .first()
+        .waitFor({ timeout: 25_000 });
+      await showMobileTab(page, "Session navigation", "Courts");
+      log(`${label} live session loaded`);
+      if (checkSessionApiAliasContracts) {
+        await smokeSessionApiAliasContracts(context, label);
+      }
+
+      await showMobileTab(page, "Session navigation", "Standings");
+      await page.getByText("Standings").first().waitFor({ timeout: 10_000 });
+      log(`${label} standings visible`);
+
+      if (allowScoreMutation) {
+        await showMobileTab(page, "Session navigation", "Courts");
+        const scoreInputs = page.locator('input[type="number"]');
+        if ((await scoreInputs.count()) < 2) {
+          throw new Error("PRODUCTION_SMOKE_MUTATE=1 set, but score inputs are unavailable");
+        }
+
+        await scoreInputs.nth(0).fill("21");
+        await scoreInputs.nth(1).fill("15");
+        await page.getByRole("button", { name: "Submit Score" }).click();
+        await page.getByRole("button", { name: "Confirm", exact: true }).click();
+        log(`${label} score submitted`);
+
+        const approveButton = page
+          .getByRole("button", { name: "Confirm Results" })
+          .filter({ visible: true })
+          .first();
+        if ((await approveButton.count()) > 0) {
+          await approveButton.click();
+          log(`${label} pending score approved`);
+        }
+      } else {
+        log(`${label} score submission skipped; set PRODUCTION_SMOKE_MUTATE=1 only for a disposable production session`);
+      }
+    } else {
+      log(`${label} session smoke skipped; set PRODUCTION_SMOKE_SESSION_CODE`);
+    }
+  } finally {
+    await page.close();
+  }
 }
 
 async function main() {
@@ -591,38 +739,52 @@ async function main() {
   validateSmokeConfiguration();
 
   await assertFetchOk("/", "home");
-  await assertFetchOk("/signin", "sign in");
-  await assertFetchOk("/api/auth/providers", "auth providers");
   await assertFetchOk("/manifest.webmanifest", "web manifest");
+  if (!smokeEmail || !smokePassword) {
+    await assertFetchOk("/signin", "sign in");
+    await assertFetchOk("/api/auth/providers", "auth providers");
+  }
 
   const browser = await chromium.launch({ headless: true });
   try {
-    const desktop = await browser.newContext({
-      baseURL,
-      viewport: { width: 1440, height: 1000 },
-    });
-    const mobile = await browser.newContext({
-      baseURL,
-      viewport: { width: 390, height: 844 },
-      isMobile: true,
-      hasTouch: true,
-    });
-
-    await smokePublicSurface(desktop, "desktop");
-    await smokePublicSurface(mobile, "mobile");
     if (smokeEmail && smokePassword) {
-      await smokeSignedInSurface(mobile, "mobile", {
-        allowScoreMutation: allowMutation,
-      });
-      await smokeSignedInSurface(desktop, "desktop", {
-        allowScoreMutation: false,
-      });
+      const authenticated = await createAuthenticatedContext(browser);
+      try {
+        await smokeSignedInSurface(authenticated, "mobile", {
+          allowScoreMutation: allowMutation,
+          viewport: mobileContextOptions.viewport,
+        });
+        await smokeSignedInSurface(authenticated, "desktop", {
+          allowScoreMutation: false,
+          checkApiAliasContracts: false,
+          checkDashboard: false,
+          checkLegacyCompatibility: true,
+          checkSessionApiAliasContracts: false,
+          viewport: desktopContextOptions.viewport,
+        });
+      } finally {
+        await authenticated.close();
+      }
     } else {
-      await smokeSignedInSurface(mobile, "mobile");
-    }
+      const publicDesktop = await browser.newContext(desktopContextOptions);
+      const publicMobile = await browser.newContext(mobileContextOptions);
+      try {
+        await smokePublicSurface(publicDesktop, "desktop", {
+          checkSignInPage: true,
+        });
+        await smokePublicSurface(publicMobile, "mobile");
+      } finally {
+        await publicDesktop.close();
+        await publicMobile.close();
+      }
 
-    await desktop.close();
-    await mobile.close();
+      const mobile = await browser.newContext(mobileContextOptions);
+      try {
+        await smokeSignedInSurface(mobile, "mobile");
+      } finally {
+        await mobile.close();
+      }
+    }
   } finally {
     await browser.close();
   }
