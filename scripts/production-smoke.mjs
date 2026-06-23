@@ -22,6 +22,8 @@ const smokeSessionCode = process.env.PRODUCTION_SMOKE_SESSION_CODE ?? "";
 const allowMutation = process.env.PRODUCTION_SMOKE_MUTATE === "1";
 const allowNonProductionTarget =
   process.env.ALLOW_NON_PROD_SMOKE_TARGET === "1";
+const legacyCommunityContractSunsetDate =
+  process.env.LEGACY_COMMUNITY_CONTRACT_SUNSET_DATE ?? "";
 const legacyDeprecationMessage =
   "Use club routes and club fields; community compatibility will be removed in a future phase.";
 
@@ -147,6 +149,55 @@ function assertNoLegacyDeprecationHeaders(headers, label) {
   }
 }
 
+function getExpectedLegacySunsetHeader() {
+  if (!legacyCommunityContractSunsetDate) {
+    return null;
+  }
+
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(
+    legacyCommunityContractSunsetDate
+  );
+  if (!match) {
+    return null;
+  }
+
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const date = new Date(Date.UTC(year, month - 1, day));
+
+  if (
+    date.getUTCFullYear() !== year ||
+    date.getUTCMonth() !== month - 1 ||
+    date.getUTCDate() !== day
+  ) {
+    return null;
+  }
+
+  return date.toUTCString();
+}
+
+function assertLegacySunsetHeader(headers, label) {
+  const sunset = getHeader(headers, "Sunset");
+  const expectedSunset = getExpectedLegacySunsetHeader();
+
+  if (!expectedSunset) {
+    if (sunset) {
+      throw new Error(
+        `${label} unexpectedly returned Sunset header "${sunset}"`
+      );
+    }
+
+    return;
+  }
+
+  if (sunset !== expectedSunset) {
+    throw new Error(
+      `${label} missing Sunset header; expected "${expectedSunset}", received "${sunset}"`
+    );
+  }
+}
+
 function assertLegacyDeprecationHeaders(headers, { label, successorPath }) {
   const deprecation = getHeader(headers, "Deprecation");
   if (deprecation !== "true") {
@@ -169,6 +220,8 @@ function assertLegacyDeprecationHeaders(headers, { label, successorPath }) {
       `${label} missing legacy guidance header; received "${guidance}"`
     );
   }
+
+  assertLegacySunsetHeader(headers, label);
 }
 
 async function fetchJson(context, pathname, label) {
@@ -283,6 +336,15 @@ function validateSmokeConfiguration() {
   ) {
     throw new Error(
       `Refusing to submit production smoke credentials to ${targetHost}. Set PRODUCTION_SMOKE_ALLOWED_HOSTS or ALLOW_NON_PROD_SMOKE_TARGET=1 for non-production credentials.`
+    );
+  }
+
+  if (
+    legacyCommunityContractSunsetDate &&
+    !getExpectedLegacySunsetHeader()
+  ) {
+    throw new Error(
+      "Invalid LEGACY_COMMUNITY_CONTRACT_SUNSET_DATE; expected YYYY-MM-DD."
     );
   }
 
