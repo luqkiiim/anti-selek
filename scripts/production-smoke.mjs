@@ -1,3 +1,7 @@
+import "dotenv/config";
+
+import { createClient } from "@libsql/client";
+import bcrypt from "bcryptjs";
 import { chromium } from "@playwright/test";
 
 const DEFAULT_BASE_URL = "https://antiselek.com";
@@ -22,6 +26,7 @@ const smokeSessionCode = process.env.PRODUCTION_SMOKE_SESSION_CODE ?? "";
 const allowMutation = process.env.PRODUCTION_SMOKE_MUTATE === "1";
 const allowNonProductionTarget =
   process.env.ALLOW_NON_PROD_SMOKE_TARGET === "1";
+const preflightOnly = process.argv.includes("--preflight");
 const legacyCommunityContractSunsetDate =
   process.env.LEGACY_COMMUNITY_CONTRACT_SUNSET_DATE ?? "";
 const legacyDeprecationMessage =
@@ -39,6 +44,10 @@ const mobileContextOptions = {
 
 function log(message) {
   console.log(`[production-smoke] ${message}`);
+}
+
+function failPreflight(message) {
+  throw new Error(`Production smoke preflight failed: ${message}`);
 }
 
 async function assertFetchOk(pathname, label) {
@@ -482,6 +491,202 @@ function validateSmokeConfiguration() {
   }
 }
 
+function getSignedInSmokeEnvState() {
+  const entries = [
+    ["PRODUCTION_SMOKE_EMAIL", smokeEmail],
+    ["PRODUCTION_SMOKE_PASSWORD", smokePassword],
+    [
+      process.env.PRODUCTION_SMOKE_CLUB_ID
+        ? "PRODUCTION_SMOKE_CLUB_ID"
+        : "PRODUCTION_SMOKE_CLUB_ID or PRODUCTION_SMOKE_COMMUNITY_ID",
+      smokeClubId,
+    ],
+    ["PRODUCTION_SMOKE_SESSION_CODE", smokeSessionCode],
+  ];
+  const configured = entries.some(([, value]) => !!value);
+  const missing = configured
+    ? entries.filter(([, value]) => !value).map(([name]) => name)
+    : [];
+
+  return {
+    configured,
+    complete: configured && missing.length === 0,
+    missing,
+  };
+}
+
+function hasTursoSmokePreflightConfig() {
+  return !!process.env.TURSO_DATABASE_URL && !!process.env.TURSO_AUTH_TOKEN;
+}
+
+function createTursoSmokeClient() {
+  return createClient({
+    authToken: process.env.TURSO_AUTH_TOKEN,
+    url: process.env.TURSO_DATABASE_URL,
+  });
+}
+
+async function getSingleRow(db, sql, args, label) {
+  const result = await db.execute({ sql, args });
+  if (result.rows.length > 1) {
+    failPreflight(`${label} returned more than one row.`);
+  }
+
+  return result.rows[0] ?? null;
+}
+
+async function verifySmokeAccountAndTargets(db) {
+  const normalizedEmail = smokeEmail.trim().toLowerCase();
+  const user = await getSingleRow(
+    db,
+    `SELECT "id", "passwordHash", "isClaimed" FROM "User" WHERE lower("email") = ?`,
+    [normalizedEmail],
+    "smoke user lookup"
+  );
+  if (!user) {
+    failPreflight("smoke user was not found in Turso.");
+  }
+  if (!user.passwordHash) {
+    failPreflight("smoke user exists but has no password hash.");
+  }
+
+  const passwordMatches = await bcrypt.compare(
+    smokePassword,
+    String(user.passwordHash)
+  );
+  if (!passwordMatches) {
+    failPreflight("smoke user password does not match PRODUCTION_SMOKE_PASSWORD.");
+  }
+  log("preflight smoke user verified");
+
+  const club = await getSingleRow(
+    db,
+    `SELECT "id" FROM "Community" WHERE "id" = ?`,
+    [smokeClubId],
+    "smoke club lookup"
+  );
+  if (!club) {
+    failPreflight("smoke club was not found in Turso.");
+  }
+
+  const membership = await getSingleRow(
+    db,
+    `SELECT "id" FROM "CommunityMember" WHERE "communityId" = ? AND "userId" = ?`,
+    [smokeClubId, user.id],
+    "smoke club membership lookup"
+  );
+  if (!membership) {
+    failPreflight("smoke user is not a member of the smoke club.");
+  }
+  log("preflight smoke club membership verified");
+
+  const session = await getSingleRow(
+    db,
+    `SELECT "id", "communityId" FROM "Session" WHERE "code" = ?`,
+    [smokeSessionCode],
+    "smoke session lookup"
+  );
+  if (!session) {
+    failPreflight("smoke session was not found in Turso.");
+  }
+
+  const linkedDirectly = session.communityId === smokeClubId;
+  const linkedBySessionClub = await getSingleRow(
+    db,
+    `SELECT "id" FROM "SessionCommunity" WHERE "sessionId" = ? AND "communityId" = ?`,
+    [session.id, smokeClubId],
+    "smoke session club lookup"
+  );
+  if (!linkedDirectly && !linkedBySessionClub) {
+    failPreflight("smoke session is not linked to the smoke club.");
+  }
+  log("preflight smoke session verified");
+}
+
+function getRelevantRateLimitScopes() {
+  return new Map([
+    ["api:auth:nextauth:get", 10],
+    ["api:auth:nextauth:post", 10],
+    ["auth:signin", 10],
+    ["api:communities:get", 30],
+    ["api:communities:id:get", 30],
+    ["api:sessions:get", 30],
+    ["api:sessions:code:get", 30],
+    ["api:user:me:get", 30],
+  ]);
+}
+
+async function verifySmokeRateLimitBuckets(db) {
+  const scopeLimits = getRelevantRateLimitScopes();
+  const result = await db.execute({
+    args: [...scopeLimits.keys()],
+    sql: `SELECT "scope", "count", "resetAt" FROM "RateLimitBucket" WHERE "scope" IN (${[...scopeLimits.keys()].map(() => "?").join(", ")})`,
+  });
+  const now = Date.now();
+  const hotBuckets = result.rows
+    .map((row) => {
+      const scope = String(row.scope);
+      const resetAt = new Date(String(row.resetAt)).getTime();
+      const limit = scopeLimits.get(scope) ?? 30;
+
+      return {
+        count: Number(row.count),
+        limit,
+        resetInSeconds: Math.max(0, Math.ceil((resetAt - now) / 1000)),
+        scope,
+      };
+    })
+    .filter(
+      (bucket) =>
+        bucket.resetInSeconds > 0 &&
+        Number.isFinite(bucket.count) &&
+        bucket.count >= bucket.limit
+    );
+
+  if (hotBuckets.length > 0) {
+    const details = hotBuckets
+      .map(
+        (bucket) =>
+          `${bucket.scope} ${bucket.count}/${bucket.limit}, retry in ${bucket.resetInSeconds}s`
+      )
+      .join("; ");
+    failPreflight(`rate-limit buckets are hot: ${details}.`);
+  }
+
+  log("preflight rate-limit buckets verified");
+}
+
+async function runProductionSmokePreflight() {
+  log("preflight started");
+  validateSmokeConfiguration();
+
+  const signedInEnv = getSignedInSmokeEnvState();
+  if (!signedInEnv.configured) {
+    log(
+      "signed-in preflight skipped; set PRODUCTION_SMOKE_EMAIL, PRODUCTION_SMOKE_PASSWORD, PRODUCTION_SMOKE_CLUB_ID, and PRODUCTION_SMOKE_SESSION_CODE"
+    );
+    log("preflight complete");
+    return;
+  }
+
+  if (signedInEnv.missing.length > 0) {
+    failPreflight(`missing signed-in smoke env: ${signedInEnv.missing.join(", ")}.`);
+  }
+
+  if (!hasTursoSmokePreflightConfig()) {
+    log(
+      "Turso preflight skipped; set TURSO_DATABASE_URL and TURSO_AUTH_TOKEN to verify smoke data and rate-limit buckets"
+    );
+    log("preflight complete");
+    return;
+  }
+
+  const db = createTursoSmokeClient();
+  await verifySmokeAccountAndTargets(db);
+  await verifySmokeRateLimitBuckets(db);
+  log("preflight complete");
+}
+
 async function showMobileTab(page, navLabel, tabLabel) {
   const tab = page
     .locator(`nav[aria-label="${navLabel}"] button[aria-label="${tabLabel}"]`)
@@ -736,7 +941,10 @@ async function smokeSignedInSurface(
 
 async function main() {
   log(`base URL: ${baseURL}`);
-  validateSmokeConfiguration();
+  await runProductionSmokePreflight();
+  if (preflightOnly) {
+    return;
+  }
 
   await assertFetchOk("/", "home");
   await assertFetchOk("/manifest.webmanifest", "web manifest");

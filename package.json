@@ -16,6 +16,8 @@
     "start": "next start",
     "presmoke:production": "node scripts/ensure-node-lts.mjs",
     "smoke:production": "node scripts/production-smoke.mjs",
+    "presmoke:production:preflight": "node scripts/ensure-node-lts.mjs",
+    "smoke:production:preflight": "node scripts/production-smoke.mjs --preflight",
     "lint": "eslint",
     "pretest": "node scripts/ensure-node-lts.mjs",
     "test": "vitest run src",
