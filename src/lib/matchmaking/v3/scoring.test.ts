@@ -266,7 +266,7 @@ describe("matchmaking v3 scoring", () => {
     });
     const nearRestAlternative = createSelection({
       restTurns: [3, 3, 2, 2],
-      balanceGap: 3,
+      balanceGap: 1.5,
       sharedCourtRepeatPenalty: 2,
       exactRematchPenalty: 0,
     });
@@ -475,7 +475,28 @@ describe("matchmaking v3 scoring", () => {
       exactRematchPenalty: 0,
     });
     const freshCourt = createSelection({
-      balanceGap: 4,
+      balanceGap: 2,
+      sharedCourtRepeatPenalty: 0,
+      exactRematchPenalty: 0,
+    });
+
+    expect(
+      compareSingleCourtSelections(
+        repeatedCourt,
+        freshCourt,
+        SessionType.POINTS
+      )
+    ).toBeLessThan(0);
+  });
+
+  it("keeps points balance ahead of variety at the old three-point window", () => {
+    const repeatedCourt = createSelection({
+      balanceGap: 0,
+      sharedCourtRepeatPenalty: 1,
+      exactRematchPenalty: 0,
+    });
+    const freshCourt = createSelection({
+      balanceGap: 3,
       sharedCourtRepeatPenalty: 0,
       exactRematchPenalty: 0,
     });
@@ -496,7 +517,7 @@ describe("matchmaking v3 scoring", () => {
       exactRematchPenalty: 0,
     });
     const freshCourt = createSelection({
-      balanceGap: 3,
+      balanceGap: 1.5,
       sharedCourtRepeatPenalty: 0,
       exactRematchPenalty: 0,
     });
@@ -632,7 +653,7 @@ describe("matchmaking v3 scoring", () => {
       exactRematchPenalty: 0,
     });
     const freshOpponents = createSelection({
-      balanceGap: 3,
+      balanceGap: 1.5,
       opponentRepeatPenalty: 0,
       exactRematchPenalty: 0,
     });
@@ -652,7 +673,7 @@ describe("matchmaking v3 scoring", () => {
       exactRematchPenalty: 1,
     });
     const freshMatchup = createSelection({
-      balanceGap: 3,
+      balanceGap: 1.5,
       exactRematchPenalty: 0,
     });
 
@@ -839,8 +860,8 @@ describe("matchmaking v3 scoring", () => {
       totalSharedCourtRepeatPenalty: 1,
     });
     const freshCourtBatch = createBatchSelection({
-      maxBalanceGap: 3,
-      totalBalanceGap: 3,
+      maxBalanceGap: 1.5,
+      totalBalanceGap: 1.5,
       totalSharedCourtRepeatPenalty: 0,
     });
 
@@ -871,7 +892,7 @@ describe("matchmaking v3 scoring", () => {
     const nearRestBatch = createBatchFromSelections([
       createSelection({
         restTurns: [3, 3, 2, 2],
-        balanceGap: 3,
+        balanceGap: 1.5,
         sharedCourtRepeatPenalty: 2,
         exactRematchPenalty: 0,
       }),

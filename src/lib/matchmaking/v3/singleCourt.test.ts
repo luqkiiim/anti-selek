@@ -226,7 +226,7 @@ describe("matchmaking v3 single-court selection", () => {
         createPlayer("B", { strength: 10 }),
         createPlayer("C", { strength: 10 }),
         createPlayer("D", { strength: 10 }),
-        createPlayer("E", { strength: 16 }),
+        createPlayer("E", { strength: 13 }),
       ],
       {
         sessionMode: SessionMode.MEXICANO,
@@ -243,7 +243,7 @@ describe("matchmaking v3 single-court selection", () => {
     );
 
     expect(result.selection?.ids).toContain("E");
-    expect(result.selection?.balanceGap).toBe(3);
+    expect(result.selection?.balanceGap).toBe(1.5);
     expect(result.selection?.sharedCourtRepeatPenalty).toBeLessThan(6);
   });
 
@@ -254,7 +254,7 @@ describe("matchmaking v3 single-court selection", () => {
         createPlayer("B", { strength: 10 }),
         createPlayer("C", { strength: 10 }),
         createPlayer("D", { strength: 10 }),
-        createPlayer("E", { strength: 16 }),
+        createPlayer("E", { strength: 13 }),
         createPlayer("F", { strength: 28 }),
       ],
       {
@@ -273,7 +273,7 @@ describe("matchmaking v3 single-court selection", () => {
 
     expect(result.selection?.ids).toContain("E");
     expect(result.selection?.ids).not.toContain("F");
-    expect(result.selection?.balanceGap).toBe(3);
+    expect(result.selection?.balanceGap).toBe(1.5);
   });
 
   it("keeps lower-rest players eligible when they create the best points balance", () => {
@@ -478,7 +478,7 @@ describe("matchmaking v3 single-court selection", () => {
       team1: ["A", "B"],
       team2: ["C", "D"],
     });
-    expect(result.selection?.balanceGap).toBeLessThanOrEqual(3);
+    expect(result.selection?.balanceGap).toBeLessThanOrEqual(1.5);
     expect(result.selection?.partnerRepeatPenalty).toBe(0);
   });
 
