@@ -162,11 +162,6 @@ export function ClubPlayerEditorModal({
                 isOwner={player.isOwner}
               />
               <ClubAdminStatusPill status={player.status} />
-              {player.needsMoreRest ? (
-                <span className="inline-flex items-center rounded-full border border-sky-200 bg-sky-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-sky-800">
-                  More rest
-                </span>
-              ) : null}
               <ClubAdminClaimPill isClaimed={player.isClaimed} />
               <ClubAdminGenderPill player={player} />
             </div>

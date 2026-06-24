@@ -231,11 +231,6 @@ export function LiveStandingsTable({
                             Guest
                           </span>
                         ) : null}
-                        {player.needsMoreRest ? (
-                          <span className="rounded-full border border-sky-200 bg-sky-50 px-1.5 py-0.5 text-[9px] font-medium text-sky-800 sm:px-2 sm:text-[10px]">
-                            More rest
-                          </span>
-                        ) : null}
                         {poolsEnabled ? (
                           <span className="rounded-full border border-indigo-200 bg-indigo-50 px-1.5 py-0.5 text-[9px] font-medium text-indigo-700 sm:px-2 sm:text-[10px]">
                             {poolLabel}

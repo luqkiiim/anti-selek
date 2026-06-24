@@ -146,11 +146,6 @@ export function ClubPlayersPanel({
                       isOwner={player.isOwner}
                     />
                     <ClubAdminStatusPill status={player.status} />
-                    {player.needsMoreRest ? (
-                      <span className="app-chip border-sky-200 bg-sky-50 text-sky-800">
-                        More rest
-                      </span>
-                    ) : null}
                     <ClubAdminClaimPill isClaimed={player.isClaimed} />
                     <ClubAdminGenderPill player={player} />
                     {player.offlineIdentityId ? (
