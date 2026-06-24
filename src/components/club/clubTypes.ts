@@ -51,6 +51,7 @@ export interface ClubPageMember {
   isClaimed: boolean;
   role: "ADMIN" | "STAFF" | "MEMBER";
   isOwner?: boolean;
+  matchesPlayed?: number;
   offlineIdentityId?: string | null;
   communityBadges?: Array<{ id: string; name: string; elo: number; userId?: string }>;
   linkedClubBadges?: Array<{ id: string; name: string; elo?: number; userId: string }>;

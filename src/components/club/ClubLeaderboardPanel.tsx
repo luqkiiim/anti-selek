@@ -179,7 +179,7 @@ export function ClubLeaderboardPanel({
         {players.length === 0 ? (
           <div className="app-empty p-4 text-center">
             <p className="text-sm font-semibold text-gray-500">
-              No players yet
+              No ranked players yet
             </p>
           </div>
         ) : (

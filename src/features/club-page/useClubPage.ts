@@ -11,10 +11,10 @@ import {
 import { getSessionModeLabel } from "@/lib/sessionModeLabels";
 import {
   ClaimRequestStatus,
-  ClubPlayerStatus,
   SessionMode,
   SessionStatus,
 } from "@/types/enums";
+import { getClubLeaderboard } from "./clubLeaderboard";
 import { useClubHostSetup } from "./useClubHostSetup";
 import { useClubPageActions } from "./useClubPageActions";
 import { useClubPageData } from "./useClubPageData";
@@ -34,13 +34,7 @@ export function useClubPage() {
   });
 
   const leaderboard = useMemo(
-    () =>
-      data.clubMembers
-        .filter((member) => member.status !== ClubPlayerStatus.OCCASIONAL)
-        .sort((a, b) => {
-        if (b.elo !== a.elo) return b.elo - a.elo;
-        return a.name.localeCompare(b.name);
-      }),
+    () => getClubLeaderboard(data.clubMembers),
     [data.clubMembers]
   );
 

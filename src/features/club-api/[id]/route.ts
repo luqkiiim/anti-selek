@@ -275,6 +275,28 @@ export async function GET(
       clubId: id,
       memberUserIds: members.map((member) => member.user.id),
     });
+    const recordedMatchCountByUserId = new Map<string, number>(
+      members.map((member) => [member.user.id, 0])
+    );
+    for (const match of completedMatches) {
+      const participantIds = new Set(
+        [
+          match.team1User1Id,
+          match.team1User2Id,
+          match.team2User1Id,
+          match.team2User2Id,
+        ].map(resolveStatUserId)
+      );
+
+      for (const participantId of participantIds) {
+        if (recordedMatchCountByUserId.has(participantId)) {
+          recordedMatchCountByUserId.set(
+            participantId,
+            (recordedMatchCountByUserId.get(participantId) ?? 0) + 1
+          );
+        }
+      }
+    }
     const latestCompletedSession = sessions
       .filter(
         (sessionItem) =>
@@ -296,7 +318,8 @@ export async function GET(
         name: member.user.name,
         elo: member.elo,
         isLeaderboardEligible:
-          member.status !== ClubPlayerStatus.OCCASIONAL,
+          member.status !== ClubPlayerStatus.OCCASIONAL &&
+          (recordedMatchCountByUserId.get(member.user.id) ?? 0) > 0,
       })),
       matchesSinceWindowStart: latestCompletedSessionMatches,
       resolveUserId: resolveStatUserId,
@@ -356,6 +379,7 @@ export async function GET(
         isActive: member.user.isActive,
         isClaimed: member.user.isClaimed,
         createdAt: member.user.createdAt,
+        matchesPlayed: recordedMatchCountByUserId.get(member.user.id) ?? 0,
         wins: statsByUserId.get(member.user.id)?.wins ?? 0,
         losses: statsByUserId.get(member.user.id)?.losses ?? 0,
         previousRank: rankMovement?.previousRank ?? null,

@@ -371,18 +371,21 @@ describe("club snapshot route", () => {
       expect.arrayContaining([
         expect.objectContaining({
           id: "viewer-1",
+          matchesPlayed: 1,
           previousRank: 2,
           rankDelta: 1,
         }),
         expect.objectContaining({
           id: "player-2",
+          matchesPlayed: 1,
           previousRank: 1,
           rankDelta: -1,
         }),
         expect.objectContaining({
           id: "player-3",
-          previousRank: 3,
-          rankDelta: 0,
+          matchesPlayed: 0,
+          previousRank: null,
+          rankDelta: null,
         }),
       ])
     );

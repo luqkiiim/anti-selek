@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { serializeAvatarEntity } from "@/lib/avatar";
+import { getClubStatUserResolver } from "@/lib/offlineIdentities";
 import { prisma } from "@/lib/prisma";
 import { buildProfileClubRankWindow } from "@/lib/profileClubRank";
 import { buildPlayerProfileDerivedData } from "@/lib/profileStats";
@@ -83,6 +84,8 @@ async function getUserStatsRoute(
       name: string;
     };
   }> = [];
+  let leaderboardMatchCountByUserId = new Map<string, number>();
+  let resolveClubStatUserId = (userId: string) => userId;
 
   if (clubId) {
     if (!canQuickAccessClub(session, clubId)) {
@@ -149,6 +152,49 @@ async function getUserStatsRoute(
         },
       },
     });
+    resolveClubStatUserId = await getClubStatUserResolver(prisma, {
+      clubId,
+      memberUserIds: leaderboardMembers.map((member) => member.userId),
+    });
+
+    const leaderboardMatches = await prisma.match.findMany({
+      where: {
+        status: MatchStatus.COMPLETED,
+        session: {
+          clubId,
+          isTest: false,
+        },
+      },
+      select: {
+        team1User1Id: true,
+        team1User2Id: true,
+        team2User1Id: true,
+        team2User2Id: true,
+      },
+    });
+    leaderboardMatchCountByUserId = new Map(
+      leaderboardMembers.map((member) => [member.userId, 0])
+    );
+
+    for (const match of leaderboardMatches) {
+      const participantIds = new Set(
+        [
+          match.team1User1Id,
+          match.team1User2Id,
+          match.team2User1Id,
+          match.team2User2Id,
+        ].map(resolveClubStatUserId)
+      );
+
+      for (const participantId of participantIds) {
+        if (leaderboardMatchCountByUserId.has(participantId)) {
+          leaderboardMatchCountByUserId.set(
+            participantId,
+            (leaderboardMatchCountByUserId.get(participantId) ?? 0) + 1
+          );
+        }
+      }
+    }
   }
 
   const matches = await prisma.match.findMany({
@@ -253,6 +299,8 @@ async function getUserStatsRoute(
           userId: member.userId,
           name: member.user.name,
           elo: member.elo,
+          isLeaderboardEligible:
+            (leaderboardMatchCountByUserId.get(member.userId) ?? 0) > 0,
         })),
         rankWindowMatches
       ),

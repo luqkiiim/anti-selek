@@ -8,7 +8,14 @@ const mocks = vi.hoisted(() => ({
   clubMemberFindUnique: vi.fn(),
   userFindUnique: vi.fn(),
   matchFindMany: vi.fn(),
+  offlineIdentityMemberFindMany: vi.fn(),
   buildPlayerProfileDerivedData: vi.fn(),
+  buildProfileClubRankWindow: vi.fn(() => ({
+    leaderboardSize: 0,
+    currentRank: null,
+    previousRank: null,
+    rankDelta: null,
+  })),
 }));
 
 vi.mock("@/lib/auth", () => ({
@@ -27,6 +34,9 @@ vi.mock("@/lib/prisma", () => ({
       findUnique: mocks.clubMemberFindUnique,
       findMany: mocks.clubMemberFindMany,
     },
+    offlineIdentityMember: {
+      findMany: mocks.offlineIdentityMemberFindMany,
+    },
   },
 }));
 
@@ -35,12 +45,7 @@ vi.mock("@/lib/profileStats", () => ({
 }));
 
 vi.mock("@/lib/profileClubRank", () => ({
-  buildProfileClubRankWindow: vi.fn(() => ({
-    leaderboardSize: 0,
-    currentRank: null,
-    previousRank: null,
-    rankDelta: null,
-  })),
+  buildProfileClubRankWindow: mocks.buildProfileClubRankWindow,
 }));
 
 vi.mock("@/lib/rateLimit", () => ({
@@ -68,6 +73,13 @@ describe("user stats route", () => {
       createdAt: new Date("2026-05-18T00:00:00.000Z"),
     });
     mocks.matchFindMany.mockResolvedValue([]);
+    mocks.offlineIdentityMemberFindMany.mockResolvedValue([]);
+    mocks.buildProfileClubRankWindow.mockReturnValue({
+      leaderboardSize: 0,
+      currentRank: null,
+      previousRank: null,
+      rankDelta: null,
+    });
     mocks.clubMemberFindMany.mockResolvedValue([]);
     mocks.clubMemberFindUnique.mockResolvedValue(null);
     mocks.buildPlayerProfileDerivedData.mockReturnValue({
@@ -242,5 +254,67 @@ describe("user stats route", () => {
     expectAliasPair(body.context, "clubId", "communityId");
     expect(body.context.clubId).toBe("community-1");
     expect(body.context.communityId).toBe("community-1");
+  });
+
+  it("excludes scoped profile rank eligibility until the member has a recorded club match", async () => {
+    mocks.clubMemberFindUnique
+      .mockResolvedValueOnce({ role: "ADMIN" })
+      .mockResolvedValueOnce({
+        elo: 1275,
+        status: "CORE",
+        user: {
+          id: "user-1",
+          name: "Alex Lee",
+        },
+      });
+    mocks.clubMemberFindMany.mockResolvedValueOnce([
+      {
+        userId: "user-1",
+        elo: 1275,
+        user: {
+          name: "Alex Lee",
+        },
+      },
+      {
+        userId: "player-2",
+        elo: 1210,
+        user: {
+          name: "Played Member",
+        },
+      },
+    ]);
+    mocks.matchFindMany
+      .mockResolvedValueOnce([
+        {
+          team1User1Id: "player-2",
+          team1User2Id: "player-3",
+          team2User1Id: "player-4",
+          team2User2Id: "player-5",
+        },
+      ])
+      .mockResolvedValueOnce([]);
+
+    const response = await GET(
+      new Request("http://localhost/api/users/user-1/stats?clubId=community-1"),
+      {
+        params: Promise.resolve({ id: "user-1" }),
+      }
+    );
+
+    expect(response.status).toBe(200);
+    expect(mocks.buildProfileClubRankWindow).toHaveBeenCalledWith(
+      "user-1",
+      [
+        expect.objectContaining({
+          userId: "user-1",
+          isLeaderboardEligible: false,
+        }),
+        expect.objectContaining({
+          userId: "player-2",
+          isLeaderboardEligible: true,
+        }),
+      ],
+      []
+    );
   });
 });
