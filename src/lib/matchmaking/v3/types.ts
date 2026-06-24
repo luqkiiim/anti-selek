@@ -4,6 +4,8 @@ export interface MatchmakerV3Player {
   matchmakingBaseline: number;
   availableSince: Date;
   restTurns?: number;
+  needsMoreRest?: boolean;
+  moreRestTarget?: number;
   arrivalPriorityAt?: Date | string | null;
   strength: number;
   pointDiff?: number;
@@ -27,6 +29,9 @@ export type ActiveMatchmakerV3Player<
 > = T & {
   effectiveMatchCount: number;
   restTurns: number;
+  needsMoreRest: boolean;
+  moreRestTarget: number;
+  moreRestDeficit: number;
   randomScore: number;
   rank: number;
 };

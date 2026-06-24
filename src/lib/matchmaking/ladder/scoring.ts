@@ -86,6 +86,22 @@ export function getQuartetRandomScore<
   return players.reduce((sum, player) => sum + player.randomScore, 0);
 }
 
+function getMoreRestDeficitTotal<
+  T extends Pick<ActiveMatchmakerLadderPlayer, "moreRestDeficit">,
+>(players: T[]) {
+  return players.reduce((sum, player) => sum + player.moreRestDeficit, 0);
+}
+
+function compareMoreRestDeficitTotals<T extends ActiveMatchmakerLadderPlayer>(
+  leftPlayers: T[],
+  rightPlayers: T[]
+) {
+  return (
+    getMoreRestDeficitTotal(leftPlayers) -
+    getMoreRestDeficitTotal(rightPlayers)
+  );
+}
+
 export function compareRestSummaries(
   left: LadderRestSummary,
   right: LadderRestSummary
@@ -152,6 +168,14 @@ export function compareSingleCourtSelections<
   }
 
   if (options?.respectPlayerRest !== false) {
+    const moreRestCompare = compareMoreRestDeficitTotals(
+      left.players,
+      right.players
+    );
+    if (moreRestCompare !== 0) {
+      return moreRestCompare;
+    }
+
     const restCompare = compareRestSummaries(
       left.restSummary,
       right.restSummary
@@ -216,6 +240,14 @@ export function compareBatchSelections<T extends ActiveMatchmakerLadderPlayer>(
   }
 
   if (options?.respectPlayerRest !== false) {
+    const moreRestCompare = compareMoreRestDeficitTotals(
+      left.selections.flatMap((selection) => selection.players),
+      right.selections.flatMap((selection) => selection.players)
+    );
+    if (moreRestCompare !== 0) {
+      return moreRestCompare;
+    }
+
     const restCompare = compareRestSummaries(
       left.restSummary,
       right.restSummary

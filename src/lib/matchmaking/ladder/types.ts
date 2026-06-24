@@ -11,6 +11,8 @@ export interface MatchmakerLadderPlayer extends LadderRecord {
   matchmakingBaseline: number;
   availableSince: Date;
   restTurns?: number;
+  needsMoreRest?: boolean;
+  moreRestTarget?: number;
   arrivalPriorityAt?: Date | string | null;
   strength: number;
   isBusy?: boolean;
@@ -36,6 +38,9 @@ export type ActiveMatchmakerLadderPlayer<
 > = T & {
   effectiveMatchCount: number;
   restTurns: number;
+  needsMoreRest: boolean;
+  moreRestTarget: number;
+  moreRestDeficit: number;
   randomScore: number;
   rank: number;
 };

@@ -26,6 +26,7 @@ export interface ClubAdminPlayer {
   email: string | null;
   avatarUrl?: string | null;
   status: ClubPlayerStatus;
+  needsMoreRest: boolean;
   gender: PlayerGender;
   partnerPreference: PartnerPreference;
   mixedSideOverride?: MixedSide | null;

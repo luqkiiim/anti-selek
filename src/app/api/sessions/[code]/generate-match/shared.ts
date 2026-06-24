@@ -29,6 +29,7 @@ const sessionRecordInclude = {
   players: {
     include: { user: { select: { id: true, name: true, elo: true } } },
   },
+  courts: true,
   matches: true,
   queuedMatch: true,
 };

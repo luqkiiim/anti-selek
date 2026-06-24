@@ -18,6 +18,7 @@ function buildPlayer(overrides: Partial<ClubPageMember> = {}): ClubPageMember {
     email: null,
     avatarUrl: null,
     status: ClubPlayerStatus.CORE,
+    needsMoreRest: false,
     gender: PlayerGender.UNSPECIFIED,
     partnerPreference: PartnerPreference.OPEN,
     elo: 1000,

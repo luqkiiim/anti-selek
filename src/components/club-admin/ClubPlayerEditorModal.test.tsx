@@ -39,6 +39,7 @@ function buildPlayer(
     email: null,
     avatarUrl: null,
     status: ClubPlayerStatus.CORE,
+    needsMoreRest: false,
     gender: PlayerGender.MALE,
     partnerPreference: PartnerPreference.OPEN,
     mixedSideOverride: null,
@@ -127,6 +128,16 @@ describe("ClubPlayerEditorModal", () => {
     expect(markup).not.toContain(
       "Claimed members recover passwords from the sign-in screen by email."
     );
+  });
+
+  it("shows the more rest preference for marked players", () => {
+    const markup = renderModal(buildPlayer({ needsMoreRest: true }));
+
+    expect(markup).toContain("More rest");
+    expect(markup).toContain(
+      "Default this player to a lighter session rotation."
+    );
+    expect(markup).toContain('checked=""');
   });
 
   it("keeps name editing available for unclaimed placeholders", () => {

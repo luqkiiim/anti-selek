@@ -60,6 +60,7 @@ function createSessionData(): SessionData {
         gender: PlayerGender.MALE,
         partnerPreference: PartnerPreference.OPEN,
         pool: SessionPool.A,
+        needsMoreRest: false,
         user: { id: "p1", name: "Player 1", elo: 1000 },
       },
       {
@@ -70,6 +71,7 @@ function createSessionData(): SessionData {
         gender: PlayerGender.FEMALE,
         partnerPreference: PartnerPreference.FEMALE_FLEX,
         pool: SessionPool.A,
+        needsMoreRest: false,
         user: { id: "p2", name: "Player 2", elo: 1000 },
       },
       {
@@ -80,6 +82,7 @@ function createSessionData(): SessionData {
         gender: PlayerGender.MALE,
         partnerPreference: PartnerPreference.OPEN,
         pool: SessionPool.A,
+        needsMoreRest: false,
         user: { id: "p3", name: "Player 3", elo: 1000 },
       },
       {
@@ -90,6 +93,7 @@ function createSessionData(): SessionData {
         gender: PlayerGender.FEMALE,
         partnerPreference: PartnerPreference.FEMALE_FLEX,
         pool: SessionPool.A,
+        needsMoreRest: false,
         user: { id: "p4", name: "Player 4", elo: 1000 },
       },
     ],

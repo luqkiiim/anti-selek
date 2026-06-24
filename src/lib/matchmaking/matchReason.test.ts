@@ -25,6 +25,9 @@ function createActivePlayer(
     strength: 1000,
     effectiveMatchCount,
     restTurns,
+    needsMoreRest: false,
+    moreRestTarget: 1,
+    moreRestDeficit: 0,
     randomScore: 0,
     rank: 0,
   };

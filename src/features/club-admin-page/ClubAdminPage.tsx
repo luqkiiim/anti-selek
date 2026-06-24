@@ -228,6 +228,8 @@ export default function ClubAdminPage() {
     setNewPlayerMixedSideOverride,
     newPlayerStatus,
     setNewPlayerStatus,
+    newPlayerNeedsMoreRest,
+    setNewPlayerNeedsMoreRest,
     editingPlayer,
     editorName,
     setEditorName,
@@ -607,6 +609,7 @@ export default function ClubAdminPage() {
         newPlayerGender={newPlayerGender}
         newPlayerMixedSideOverride={newPlayerMixedSideOverride}
         newPlayerStatus={newPlayerStatus}
+        newPlayerNeedsMoreRest={newPlayerNeedsMoreRest}
         onNameChange={setName}
         onNewPlayerGenderChange={(value) => {
           setNewPlayerGender(value);
@@ -614,6 +617,7 @@ export default function ClubAdminPage() {
         }}
         onNewPlayerMixedSideOverrideChange={setNewPlayerMixedSideOverride}
         onNewPlayerStatusChange={setNewPlayerStatus}
+        onNewPlayerNeedsMoreRestChange={setNewPlayerNeedsMoreRest}
         onClose={closeCreatePlayerModal}
         onSubmit={handleAddPlayerWithOnboardingRefresh}
       />

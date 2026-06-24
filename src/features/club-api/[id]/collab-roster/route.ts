@@ -182,6 +182,7 @@ export async function GET(
           elo: number;
           status: string;
           role: string;
+          needsMoreRest: boolean;
         }>;
       }
     >();
@@ -205,6 +206,7 @@ export async function GET(
         elo: membership.elo,
         status: membership.status,
         role: membership.role,
+        needsMoreRest: membership.needsMoreRest,
       });
       if (membership.club.id === hostClubId) {
         current.user = membership.user;
@@ -239,6 +241,7 @@ export async function GET(
                 ? user.mixedSideOverride
                 : null,
             elo: preferred.elo,
+            needsMoreRest: preferred.needsMoreRest,
             isActive: user.isActive,
             isClaimed: user.isClaimed,
             createdAt: user.createdAt,
@@ -282,4 +285,3 @@ export async function GET(
     return safeErrorResponse();
   }
 }
-

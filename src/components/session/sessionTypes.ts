@@ -23,6 +23,7 @@ export interface Player {
   partnerPreference: PartnerPreference;
   mixedSideOverride?: MixedSide | null;
   pool: SessionPool;
+  needsMoreRest: boolean;
   user: {
     id: string;
     name: string;
@@ -83,6 +84,7 @@ export interface ClubUser {
   avatarUrl?: string | null;
   elo: number;
   status: ClubPlayerStatus;
+  needsMoreRest: boolean;
   gender: PlayerGender;
   partnerPreference: PartnerPreference;
   mixedSideOverride?: MixedSide | null;

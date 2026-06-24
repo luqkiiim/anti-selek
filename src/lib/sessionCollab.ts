@@ -185,8 +185,14 @@ function getClubMemberDelegate(tx: DbClient) {
             clubId: true;
             role: true;
             elo?: true;
+            needsMoreRest?: true;
           };
-        }) => Promise<{ clubId?: string; role: string; elo?: number } | null>;
+        }) => Promise<{
+          clubId?: string;
+          role: string;
+          elo?: number;
+          needsMoreRest?: boolean;
+        } | null>;
         findUnique?: (args: {
           where: {
             clubId_userId: {
@@ -198,8 +204,14 @@ function getClubMemberDelegate(tx: DbClient) {
             clubId: true;
             role: true;
             elo?: true;
+            needsMoreRest?: true;
           };
-        }) => Promise<{ clubId?: string; role: string; elo?: number } | null>;
+        }) => Promise<{
+          clubId?: string;
+          role: string;
+          elo?: number;
+          needsMoreRest?: boolean;
+        } | null>;
       };
     }
   ).clubMember;
@@ -346,6 +358,7 @@ export async function getSessionMembership(
         clubId: true,
         role: true,
         elo: true,
+        needsMoreRest: true,
       },
     });
   }
@@ -366,6 +379,7 @@ export async function getSessionMembership(
         clubId: true,
         role: true,
         elo: true,
+        needsMoreRest: true,
       },
     });
 

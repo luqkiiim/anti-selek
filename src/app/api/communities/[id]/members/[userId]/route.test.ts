@@ -291,6 +291,65 @@ describe("club admin update member route", () => {
     expect(body.name).toBe("Renamed Placeholder");
   });
 
+  it("saves and returns the more-rest player default", async () => {
+    const createdAt = new Date("2026-05-19T00:00:00.000Z");
+    mocks.clubMemberFindUnique
+      .mockResolvedValueOnce({ role: "ADMIN" })
+      .mockResolvedValueOnce({
+        id: "membership-1",
+        role: "MEMBER",
+        elo: 1000,
+        status: ClubPlayerStatus.CORE,
+        needsMoreRest: false,
+      });
+    mocks.userFindUnique.mockResolvedValue({
+      name: "Rest Player",
+      email: null,
+      avatarKey: null,
+      isClaimed: false,
+      gender: PlayerGender.MALE,
+      partnerPreference: PartnerPreference.OPEN,
+      mixedSideOverride: null,
+    });
+    mocks.clubMemberFindMany.mockResolvedValue([]);
+    mocks.userUpdate.mockResolvedValue({
+      id: "user-1",
+      name: "Rest Player",
+      email: null,
+      avatarKey: null,
+      gender: PlayerGender.MALE,
+      partnerPreference: PartnerPreference.OPEN,
+      mixedSideOverride: null,
+      isActive: true,
+      isClaimed: false,
+      createdAt,
+    });
+    mocks.clubMemberUpdate.mockResolvedValue({
+      role: "MEMBER",
+      elo: 1000,
+      status: ClubPlayerStatus.CORE,
+      needsMoreRest: true,
+    });
+
+    const response = await patchMember({ needsMoreRest: true });
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(mocks.clubMemberUpdate).toHaveBeenCalledWith({
+      where: {
+        clubId_userId: {
+          clubId: "community-1",
+          userId: "user-1",
+        },
+      },
+      data: {
+        needsMoreRest: true,
+      },
+      select: { role: true, elo: true, status: true, needsMoreRest: true },
+    });
+    expect(body.needsMoreRest).toBe(true);
+  });
+
   it("allows admins to grant staff to claimed members", async () => {
     const createdAt = new Date("2026-05-19T00:00:00.000Z");
     mocks.clubMemberFindUnique

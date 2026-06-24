@@ -113,6 +113,7 @@ export async function POST(
       userIdToJoin = targetUserId;
     }
 
+    let targetNeedsMoreRest = false;
     if (sessionData.clubId) {
       const targetMembership = await getSessionMembership(prisma, {
         session: sessionData,
@@ -122,6 +123,7 @@ export async function POST(
       if (!targetMembership) {
         return NextResponse.json({ error: "Target player is not a member of this club" }, { status: 400 });
       }
+      targetNeedsMoreRest = targetMembership.needsMoreRest ?? false;
     }
 
     // Check if already in session
@@ -204,6 +206,7 @@ export async function POST(
             gender: sessionGender,
             partnerPreference: resolvedMixedState.partnerPreference,
             mixedSideOverride: resolvedMixedState.mixedSideOverride,
+            needsMoreRest: targetNeedsMoreRest,
             pool:
               sessionData.poolsEnabled && isValidSessionPool(overridePool)
                 ? overridePool

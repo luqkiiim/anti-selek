@@ -25,6 +25,7 @@ const member: ClubPageMember = {
   name: "Alex Lee",
   avatarUrl: "https://cdn.test/alex.jpg",
   status: ClubPlayerStatus.CORE,
+  needsMoreRest: false,
   gender: PlayerGender.UNSPECIFIED,
   partnerPreference: PartnerPreference.OPEN,
   elo: 1640,

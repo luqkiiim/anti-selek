@@ -11,6 +11,18 @@ export function getEffectiveMatchCount(
   return Math.max(player.matchesPlayed, player.matchmakingBaseline);
 }
 
+export function getMoreRestDeficit(
+  player: Pick<MatchmakerLadderPlayer, "needsMoreRest" | "moreRestTarget">,
+  restTurns: number,
+  respectPlayerRest: boolean
+) {
+  if (!respectPlayerRest || player.needsMoreRest !== true) {
+    return 0;
+  }
+
+  return Math.max(0, Math.max(1, player.moreRestTarget ?? 1) - restTurns);
+}
+
 export function buildActivePlayers<T extends MatchmakerLadderPlayer>(
   players: T[],
   {
@@ -31,12 +43,23 @@ export function buildActivePlayers<T extends MatchmakerLadderPlayer>(
           : player.wins - player.losses,
       effectiveMatchCount: getEffectiveMatchCount(player),
       restTurns: Math.max(0, player.restTurns ?? 0),
+      needsMoreRest: player.needsMoreRest === true,
+      moreRestTarget: Math.max(1, player.moreRestTarget ?? 1),
+      moreRestDeficit: getMoreRestDeficit(
+        player,
+        Math.max(0, player.restTurns ?? 0),
+        respectPlayerRest
+      ),
       randomScore: randomFn(),
       rank: 0,
     }))
     .sort((left, right) => {
       if (left.effectiveMatchCount !== right.effectiveMatchCount) {
         return left.effectiveMatchCount - right.effectiveMatchCount;
+      }
+
+      if (respectPlayerRest && left.moreRestDeficit !== right.moreRestDeficit) {
+        return left.moreRestDeficit - right.moreRestDeficit;
       }
 
       if (respectPlayerRest && left.restTurns !== right.restTurns) {

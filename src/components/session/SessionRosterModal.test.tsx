@@ -23,6 +23,7 @@ const availablePlayer: ClubUser = {
   gender: PlayerGender.MALE,
   partnerPreference: PartnerPreference.OPEN,
   mixedSideOverride: null,
+  needsMoreRest: false,
 };
 
 function getDefaultProps() {

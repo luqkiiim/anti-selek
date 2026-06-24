@@ -320,6 +320,7 @@ export async function POST(
           gender: player.gender,
           partnerPreference: player.partnerPreference,
           mixedSideOverride: player.mixedSideOverride,
+          needsMoreRest: player.needsMoreRest,
           pool: sourceSession.poolsEnabled ? player.pool : SessionPool.A,
           sessionPoints: 0,
           lastPartnerId: null,

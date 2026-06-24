@@ -36,6 +36,22 @@ export function getQuartetRandomScore<
   return players.reduce((sum, player) => sum + player.randomScore, 0);
 }
 
+function getMoreRestDeficitTotal<
+  T extends Pick<ActiveMatchmakerV3Player, "moreRestDeficit">,
+>(players: T[]) {
+  return players.reduce((sum, player) => sum + player.moreRestDeficit, 0);
+}
+
+function compareMoreRestDeficitTotals<T extends ActiveMatchmakerV3Player>(
+  leftPlayers: T[],
+  rightPlayers: T[]
+) {
+  return (
+    getMoreRestDeficitTotal(leftPlayers) -
+    getMoreRestDeficitTotal(rightPlayers)
+  );
+}
+
 function usesConsecutivePlayPreference(sessionType: SessionType) {
   return (
     sessionType === SessionType.POINTS ||
@@ -276,6 +292,14 @@ export function compareSingleCourtSelections<
     }
 
     if (shouldRespectPlayerRest(options)) {
+      const moreRestCompare = compareMoreRestDeficitTotals(
+        left.players,
+        right.players
+      );
+      if (moreRestCompare !== 0) {
+        return moreRestCompare;
+      }
+
       const restCompare = compareRestSummaries(
         left.restSummary,
         right.restSummary
@@ -303,6 +327,14 @@ export function compareSingleCourtSelections<
     });
     if (fullRepeatGuardrailCompare !== 0) {
       return fullRepeatGuardrailCompare;
+    }
+
+    const moreRestCompare = compareMoreRestDeficitTotals(
+      left.players,
+      right.players
+    );
+    if (moreRestCompare !== 0) {
+      return moreRestCompare;
     }
 
     const restCompare = compareRestSummaries(
@@ -431,6 +463,14 @@ export function compareBatchSelections<T extends ActiveMatchmakerV3Player>(
     }
 
     if (shouldRespectPlayerRest(options)) {
+      const moreRestCompare = compareMoreRestDeficitTotals(
+        left.selections.flatMap((selection) => selection.players),
+        right.selections.flatMap((selection) => selection.players)
+      );
+      if (moreRestCompare !== 0) {
+        return moreRestCompare;
+      }
+
       const restCompare = compareRestSummaries(
         left.restSummary,
         right.restSummary
@@ -451,6 +491,14 @@ export function compareBatchSelections<T extends ActiveMatchmakerV3Player>(
     );
     if (fullRepeatGuardrailCompare !== 0) {
       return fullRepeatGuardrailCompare;
+    }
+
+    const moreRestCompare = compareMoreRestDeficitTotals(
+      left.selections.flatMap((selection) => selection.players),
+      right.selections.flatMap((selection) => selection.players)
+    );
+    if (moreRestCompare !== 0) {
+      return moreRestCompare;
     }
 
     const restCompare = compareRestSummaries(

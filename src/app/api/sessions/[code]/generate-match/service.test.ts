@@ -104,6 +104,7 @@ function createSessionPlayer(
     availableSince?: Date;
     inactiveSeconds?: number;
     pool?: SessionPool;
+    needsMoreRest?: boolean;
   } = {}
 ) {
   return {
@@ -121,6 +122,7 @@ function createSessionPlayer(
     availableSince: options.availableSince ?? new Date("2026-01-01T00:00:00Z"),
     inactiveSeconds: options.inactiveSeconds ?? 0,
     pool: options.pool ?? SessionPool.A,
+    needsMoreRest: options.needsMoreRest ?? false,
     user: {
       id: userId,
       name: options.name ?? userId,
@@ -141,6 +143,7 @@ function createSessionData(
     mode: SessionMode.MEXICANO,
     status: SessionStatus.ACTIVE,
     poolsEnabled: false,
+    courts: [],
     poolAName: "Open",
     poolBName: "Regular",
     poolACourtAssignments: 0,
@@ -196,6 +199,9 @@ function createActiveV3Player(
     pointDiff: 0,
     effectiveMatchCount: 0,
     restTurns: 0,
+    needsMoreRest: false,
+    moreRestTarget: 1,
+    moreRestDeficit: 0,
     randomScore: 0,
     rank: 0,
   };
@@ -216,6 +222,9 @@ function createActiveLadderPlayer(
     ladderScore: 0,
     effectiveMatchCount: 0,
     restTurns: 0,
+    needsMoreRest: false,
+    moreRestTarget: 1,
+    moreRestDeficit: 0,
     randomScore: 0,
     rank: 0,
   };
@@ -675,6 +684,70 @@ describe("generate match service", () => {
       expect(rankedCandidates.map((candidate) => candidate.userId)).toEqual(
         expect.arrayContaining(["resumed", "A"])
       );
+    });
+
+    it("uses the total court count as the more-rest target for normal sessions", () => {
+      const players = [
+        createSessionPlayer("rest-player", { needsMoreRest: true }),
+        createSessionPlayer("regular-player"),
+      ];
+
+      const { availableCandidates, rankedCandidates } = getRankedCandidates(
+        createSessionData({
+          players,
+          courts: [createCourt("court-1"), createCourt("court-2")],
+        }),
+        new Set()
+      );
+
+      expect(
+        availableCandidates.find(
+          (candidate) => candidate.userId === "rest-player"
+        )?.moreRestTarget
+      ).toBe(2);
+      expect(
+        rankedCandidates.find((candidate) => candidate.userId === "rest-player")
+          ?.moreRestDeficit
+      ).toBe(2);
+    });
+
+    it("uses pool-specific court assignments as the more-rest target in pooled sessions", () => {
+      const players = [
+        createSessionPlayer("pool-a-rest", {
+          pool: SessionPool.A,
+          needsMoreRest: true,
+        }),
+        createSessionPlayer("pool-b-rest", {
+          pool: SessionPool.B,
+          needsMoreRest: true,
+        }),
+      ];
+
+      const { availableCandidates } = getRankedCandidates(
+        createSessionData({
+          players,
+          courts: [
+            createCourt("court-1"),
+            createCourt("court-2"),
+            createCourt("court-3"),
+          ],
+          poolsEnabled: true,
+          poolACourtAssignments: 1,
+          poolBCourtAssignments: 3,
+        }),
+        new Set()
+      );
+
+      expect(
+        availableCandidates.find(
+          (candidate) => candidate.userId === "pool-a-rest"
+        )?.moreRestTarget
+      ).toBe(1);
+      expect(
+        availableCandidates.find(
+          (candidate) => candidate.userId === "pool-b-rest"
+        )?.moreRestTarget
+      ).toBe(3);
     });
   });
 

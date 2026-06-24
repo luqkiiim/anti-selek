@@ -23,7 +23,8 @@ interface SessionPreferenceEditorPortalProps {
     userId: string,
     nextGender: PlayerGender,
     nextMixedSideOverride: MixedSide | null,
-    nextPool: SessionPool
+    nextPool: SessionPool,
+    nextNeedsMoreRest: boolean
   ) => Promise<void>;
   onRequestRenameGuest: (userId: string, currentName: string) => void;
   onRemovePlayer: (userId: string, playerName: string) => void;
@@ -130,7 +131,8 @@ export function SessionPreferenceEditorPortal({
                   activePreferencePlayer.userId,
                   nextGender,
                   null,
-                  activePreferencePlayer.pool
+                  activePreferencePlayer.pool,
+                  activePreferencePlayer.needsMoreRest
                 );
               }}
               className={selectClassName()}
@@ -151,7 +153,8 @@ export function SessionPreferenceEditorPortal({
                     activePreferencePlayer.userId,
                     activePreferencePlayer.gender,
                     event.target.value ? (event.target.value as MixedSide) : null,
-                    activePreferencePlayer.pool
+                    activePreferencePlayer.pool,
+                    activePreferencePlayer.needsMoreRest
                   );
                 }}
                 className={selectClassName()}
@@ -179,7 +182,8 @@ export function SessionPreferenceEditorPortal({
                 activePreferencePlayer.userId,
                 activePreferencePlayer.gender,
                 activePreferencePlayer.mixedSideOverride ?? null,
-                event.target.value as SessionPool
+                event.target.value as SessionPool,
+                activePreferencePlayer.needsMoreRest
               );
             }}
             className={selectClassName()}
@@ -192,6 +196,32 @@ export function SessionPreferenceEditorPortal({
           </select>
         </label>
       ) : null}
+
+      <label className="flex items-start gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-600">
+        <input
+          type="checkbox"
+          checked={activePreferencePlayer.needsMoreRest}
+          onChange={async (event) => {
+            onClose();
+            await onUpdatePreference(
+              activePreferencePlayer.userId,
+              activePreferencePlayer.gender,
+              activePreferencePlayer.mixedSideOverride ?? null,
+              activePreferencePlayer.pool,
+              event.target.checked
+            );
+          }}
+          className="mt-0.5 h-4 w-4 rounded border-gray-300 text-[var(--accent)]"
+        />
+        <span>
+          <span className="block font-semibold text-gray-900">
+            More rest this session
+          </span>
+          <span className="mt-0.5 block">
+            Prefer a lighter rotation for this player.
+          </span>
+        </span>
+      </label>
 
       {activePreferencePlayer.isGuest ? (
         <div className="border-t border-gray-100 pt-3">

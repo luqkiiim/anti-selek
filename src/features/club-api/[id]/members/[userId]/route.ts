@@ -128,6 +128,7 @@ export async function PATCH(
       partnerPreference,
       mixedSideOverride,
       status,
+      needsMoreRest,
       role,
     } = body as {
       name?: unknown;
@@ -138,6 +139,7 @@ export async function PATCH(
       partnerPreference?: unknown;
       mixedSideOverride?: unknown;
       status?: unknown;
+      needsMoreRest?: unknown;
       role?: unknown;
     };
 
@@ -178,6 +180,9 @@ export async function PATCH(
     }
     if (status !== undefined && !isValidClubPlayerStatus(status)) {
       return NextResponse.json({ error: "Invalid roster status" }, { status: 400 });
+    }
+    if (needsMoreRest !== undefined && typeof needsMoreRest !== "boolean") {
+      return NextResponse.json({ error: "Invalid more rest value" }, { status: 400 });
     }
     if (role !== undefined && !isValidClubRole(role)) {
       return NextResponse.json({ error: "Invalid role update" }, { status: 400 });
@@ -383,7 +388,8 @@ export async function PATCH(
       shouldPromoteToAdmin ||
       shouldGrantStaff ||
       shouldRevokeStaff ||
-      isValidClubPlayerStatus(status)
+      isValidClubPlayerStatus(status) ||
+      typeof needsMoreRest === "boolean"
         ? await prisma.clubMember.update({
             where: {
               clubId_userId: {
@@ -394,9 +400,10 @@ export async function PATCH(
             data: {
               ...(typeof elo === "number" ? { elo } : {}),
               ...(isValidClubPlayerStatus(status) ? { status } : {}),
+              ...(typeof needsMoreRest === "boolean" ? { needsMoreRest } : {}),
               ...(nextRole ? { role: nextRole } : {}),
             },
-            select: { role: true, elo: true, status: true },
+            select: { role: true, elo: true, status: true, needsMoreRest: true },
           })
         : await prisma.clubMember.findUnique({
             where: {
@@ -405,7 +412,7 @@ export async function PATCH(
                 userId,
               },
             },
-            select: { role: true, elo: true, status: true },
+            select: { role: true, elo: true, status: true, needsMoreRest: true },
           });
 
     return NextResponse.json({
@@ -422,6 +429,7 @@ export async function PATCH(
       role: updatedMembership?.role ?? membership.role,
       isOwner: targetIsOwner,
       elo: updatedMembership?.elo ?? membership.elo,
+      needsMoreRest: updatedMembership?.needsMoreRest ?? membership.needsMoreRest,
       status:
         updatedMembership?.status === ClubPlayerStatus.OCCASIONAL
           ? ClubPlayerStatus.OCCASIONAL
@@ -551,4 +559,3 @@ export async function DELETE(
     return safeErrorResponse();
   }
 }
-

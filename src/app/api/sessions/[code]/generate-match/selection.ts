@@ -72,6 +72,8 @@ type AvailableCandidate = {
   arrivalPriorityAt: Date | null;
   strength: number;
   pool?: string | null;
+  needsMoreRest: boolean;
+  moreRestTarget: number;
   isBusy: false;
   isPaused: false;
 };
@@ -216,6 +218,28 @@ function getPoolWaitingCounts(
   };
 }
 
+function getSessionCourtCount(sessionData: GenerateMatchSession) {
+  return Math.max(1, sessionData.courts?.length ?? 0);
+}
+
+function getPlayerMoreRestTarget(
+  sessionData: GenerateMatchSession,
+  pool: SessionPool | string | null | undefined
+) {
+  const sessionCourtCount = getSessionCourtCount(sessionData);
+
+  if (!sessionData.poolsEnabled) {
+    return sessionCourtCount;
+  }
+
+  const poolCourtCount = getSessionPoolCourtAssignments(
+    sessionData,
+    getNormalizedSessionPool(pool)
+  );
+
+  return poolCourtCount > 0 ? poolCourtCount : sessionCourtCount;
+}
+
 function chooseDuePool(
   sessionData: GenerateMatchSession,
   rankedCandidates: RankedCandidates
@@ -306,6 +330,8 @@ function buildV3Players(
     pointDiff: playersById.get(player.userId)?.pointDiff ?? 0,
     isBusy: !player.isPaused && !availableUserIds.has(player.userId),
     isPaused: player.isPaused,
+    needsMoreRest: player.needsMoreRest,
+    moreRestTarget: getPlayerMoreRestTarget(sessionData, player.pool),
     gender: player.gender,
     partnerPreference: player.partnerPreference,
     mixedSideOverride: player.mixedSideOverride,
@@ -367,6 +393,8 @@ function buildLadderPlayers(
       ladderScore: record.ladderScore,
       isBusy: !player.isPaused && !availableUserIds.has(player.userId),
       isPaused: player.isPaused,
+      needsMoreRest: player.needsMoreRest,
+      moreRestTarget: getPlayerMoreRestTarget(sessionData, player.pool),
       gender: player.gender,
       partnerPreference: player.partnerPreference,
       mixedSideOverride: player.mixedSideOverride,
@@ -525,6 +553,8 @@ export function getRankedCandidates(
       arrivalPriorityAt: player.arrivalPriorityAt ?? null,
       strength: 0,
       pool: player.pool,
+      needsMoreRest: player.needsMoreRest,
+      moreRestTarget: getPlayerMoreRestTarget(sessionData, player.pool),
       isBusy: false,
       isPaused: false,
     }));
@@ -533,6 +563,7 @@ export function getRankedCandidates(
     availableCandidates,
     rankedCandidates: buildActivePlayers(availableCandidates, {
       randomFn: () => 0,
+      respectPlayerRest: sessionData.respectPlayerRest,
     }),
   };
 }

@@ -37,16 +37,19 @@ describe("CreateClubPlayerModal", () => {
         newPlayerGender={PlayerGender.MALE}
         newPlayerMixedSideOverride={null}
         newPlayerStatus={ClubPlayerStatus.CORE}
+        newPlayerNeedsMoreRest={false}
         onNameChange={vi.fn()}
         onNewPlayerGenderChange={vi.fn()}
         onNewPlayerMixedSideOverrideChange={vi.fn()}
         onNewPlayerStatusChange={vi.fn()}
+        onNewPlayerNeedsMoreRestChange={vi.fn()}
         onClose={vi.fn()}
         onSubmit={vi.fn()}
       />
     );
 
     expect(markup).toContain("Local placeholder only");
+    expect(markup).toContain("More rest");
     expect(markup).toContain(
       "Players who already belong in this club should join it themselves and request a claim on their placeholder profile."
     );

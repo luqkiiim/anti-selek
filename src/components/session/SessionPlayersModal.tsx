@@ -181,6 +181,11 @@ export function SessionPlayersModal({
                         Paused
                       </span>
                     ) : null}
+                    {player.needsMoreRest ? (
+                      <span className="app-chip border-sky-200 bg-sky-50 px-2 py-0.5 text-[10px] text-sky-800">
+                        More rest
+                      </span>
+                    ) : null}
                   </div>
                   <p className="text-xs text-gray-500">Rating {player.user.elo}</p>
                   </div>

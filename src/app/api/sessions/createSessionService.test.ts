@@ -63,9 +63,9 @@ describe("createSessionForUser", () => {
       tutorialOwnerId: null,
     } as never);
     vi.mocked(prisma.clubMember.findMany).mockResolvedValue([
-      { userId: "host-1" },
-      { userId: "player-2" },
-      { userId: "player-3" },
+      { userId: "host-1", needsMoreRest: false },
+      { userId: "player-2", needsMoreRest: false },
+      { userId: "player-3", needsMoreRest: true },
     ] as never);
     vi.mocked(prisma.user.findMany).mockResolvedValue([
       {
@@ -161,9 +161,11 @@ describe("createSessionForUser", () => {
             create: [
               expect.objectContaining({
                 userId: "player-2",
+                needsMoreRest: false,
               }),
               expect.objectContaining({
                 userId: "player-3",
+                needsMoreRest: true,
               }),
             ],
           },

@@ -336,6 +336,7 @@ export async function GET(
         name: member.user.name,
         email: member.user.email,
         avatarUrl: serializeAvatarEntity(member.user).avatarUrl,
+        needsMoreRest: member.needsMoreRest,
         status:
           member.status === ClubPlayerStatus.OCCASIONAL
             ? ClubPlayerStatus.OCCASIONAL
@@ -748,4 +749,3 @@ export async function DELETE(
     return safeErrorResponse();
   }
 }
-

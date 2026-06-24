@@ -14,6 +14,8 @@ const mocks = vi.hoisted(() => ({
   sessionFindUnique: vi.fn(),
   sessionUpdate: vi.fn(),
   sessionPlayerFindUnique: vi.fn(),
+  clubMemberFindUnique: vi.fn(),
+  clubMemberFindMany: vi.fn(),
   userFindUnique: vi.fn(),
   tryRebuildAutomaticQueuedMatchForSessionId: vi.fn(),
 }));
@@ -25,8 +27,8 @@ vi.mock("@/lib/auth", () => ({
 vi.mock("@/lib/prisma", () => ({
   prisma: {
     clubMember: {
-      findUnique: vi.fn(),
-      findMany: vi.fn(),
+      findUnique: mocks.clubMemberFindUnique,
+      findMany: mocks.clubMemberFindMany,
     },
     session: {
       findUnique: mocks.sessionFindUnique,
@@ -76,6 +78,8 @@ describe("join session route", () => {
     mocks.invalidTargetResponse.mockImplementation(() =>
       Response.json({ error: "Unauthorized" }, { status: 403 })
     );
+    mocks.clubMemberFindUnique.mockResolvedValue(null);
+    mocks.clubMemberFindMany.mockResolvedValue([]);
   });
 
   it("blocks quick-access users from joining sessions", async () => {
@@ -241,5 +245,54 @@ describe("join session route", () => {
     ).not.toHaveBeenCalled();
 
     vi.useRealTimers();
+  });
+
+  it("copies the club more-rest default when a member joins", async () => {
+    mocks.auth.mockResolvedValue({
+      user: {
+        id: "rest-player",
+        isAdmin: false,
+      },
+    });
+    mocks.sessionFindUnique.mockResolvedValue({
+      id: "session-1",
+      clubId: "community-1",
+      status: SessionStatus.WAITING,
+      mode: SessionMode.MEXICANO,
+      poolsEnabled: false,
+      players: [],
+    });
+    mocks.clubMemberFindUnique.mockResolvedValue({
+      clubId: "community-1",
+      role: "MEMBER",
+      needsMoreRest: true,
+    });
+    mocks.sessionPlayerFindUnique.mockResolvedValue(null);
+    mocks.userFindUnique.mockResolvedValue({
+      gender: PlayerGender.MALE,
+      partnerPreference: PartnerPreference.OPEN,
+      mixedSideOverride: null,
+    });
+    mocks.sessionUpdate.mockResolvedValue({
+      id: "session-1",
+      players: [],
+      courts: [],
+    });
+
+    const response = await postJoin();
+
+    expect(response.status).toBe(200);
+    expect(mocks.sessionUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: {
+          players: {
+            create: expect.objectContaining({
+              userId: "rest-player",
+              needsMoreRest: true,
+            }),
+          },
+        },
+      })
+    );
   });
 });

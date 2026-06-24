@@ -15,10 +15,12 @@ interface CreateClubPlayerModalProps {
   newPlayerGender: PlayerGender;
   newPlayerMixedSideOverride: MixedSide | null;
   newPlayerStatus: ClubPlayerStatus;
+  newPlayerNeedsMoreRest: boolean;
   onNameChange: (value: string) => void;
   onNewPlayerGenderChange: (value: PlayerGender) => void;
   onNewPlayerMixedSideOverrideChange: (value: MixedSide | null) => void;
   onNewPlayerStatusChange: (value: ClubPlayerStatus) => void;
+  onNewPlayerNeedsMoreRestChange: (value: boolean) => void;
   onClose: () => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 }
@@ -29,10 +31,12 @@ export function CreateClubPlayerModal({
   newPlayerGender,
   newPlayerMixedSideOverride,
   newPlayerStatus,
+  newPlayerNeedsMoreRest,
   onNameChange,
   onNewPlayerGenderChange,
   onNewPlayerMixedSideOverrideChange,
   onNewPlayerStatusChange,
+  onNewPlayerNeedsMoreRestChange,
   onClose,
   onSubmit,
 }: CreateClubPlayerModalProps) {
@@ -141,6 +145,24 @@ export function CreateClubPlayerModal({
               Occasional
             </option>
           </select>
+        </label>
+
+        <label className="flex items-start gap-3 rounded-xl border border-gray-200 bg-gray-50/80 p-3 text-sm text-gray-700">
+          <input
+            type="checkbox"
+            checked={newPlayerNeedsMoreRest}
+            onChange={(event) =>
+              onNewPlayerNeedsMoreRestChange(event.target.checked)
+            }
+            className="mt-1 h-4 w-4 rounded border-gray-300 text-[var(--accent)]"
+          />
+          <span>
+            <span className="block font-semibold text-gray-900">More rest</span>
+            <span className="mt-1 block text-xs text-gray-600">
+              Use as the default lighter-rotation marker when this player is
+              added to sessions.
+            </span>
+          </span>
         </label>
       </form>
     </ModalFrame>

@@ -214,6 +214,7 @@ export async function GET(
           name: m.user.name,
           email: m.user.email,
           avatarUrl: serializeAvatarEntity(m.user).avatarUrl,
+          needsMoreRest: m.needsMoreRest,
           status:
             m.status === ClubPlayerStatus.OCCASIONAL
               ? ClubPlayerStatus.OCCASIONAL
@@ -299,6 +300,7 @@ export async function POST(
       partnerPreference,
       mixedSideOverride,
       status,
+      needsMoreRest,
     } =
       body as {
       name?: unknown;
@@ -308,6 +310,7 @@ export async function POST(
       partnerPreference?: unknown;
       mixedSideOverride?: unknown;
       status?: unknown;
+      needsMoreRest?: unknown;
     };
     if (typeof name !== "string" || name.trim().length < 2) {
       return NextResponse.json({ error: "Player name must be at least 2 characters" }, { status: 400 });
@@ -336,6 +339,9 @@ export async function POST(
     }
     if (status !== undefined && !isValidClubPlayerStatus(status)) {
       return NextResponse.json({ error: "Invalid roster status" }, { status: 400 });
+    }
+    if (needsMoreRest !== undefined && typeof needsMoreRest !== "boolean") {
+      return NextResponse.json({ error: "Invalid more rest value" }, { status: 400 });
     }
 
     const normalizedName = name.trim();
@@ -496,11 +502,14 @@ export async function POST(
         status: isValidClubPlayerStatus(status)
           ? status
           : ClubPlayerStatus.CORE,
+        needsMoreRest:
+          typeof needsMoreRest === "boolean" ? needsMoreRest : false,
       },
       select: {
         role: true,
         elo: true,
         status: true,
+        needsMoreRest: true,
       },
     });
 
@@ -509,6 +518,7 @@ export async function POST(
       name: user.name,
       email: user.email,
       avatarUrl: serializeAvatarEntity(user).avatarUrl,
+      needsMoreRest: membership.needsMoreRest,
       status:
         membership.status === ClubPlayerStatus.OCCASIONAL
           ? ClubPlayerStatus.OCCASIONAL
@@ -528,4 +538,3 @@ export async function POST(
     return safeErrorResponse();
   }
 }
-

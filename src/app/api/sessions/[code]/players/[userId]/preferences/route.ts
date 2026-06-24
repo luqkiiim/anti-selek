@@ -45,11 +45,12 @@ export async function PATCH(
       return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
     }
 
-    const { gender, partnerPreference, mixedSideOverride, pool } = body as {
+    const { gender, partnerPreference, mixedSideOverride, pool, needsMoreRest } = body as {
       gender?: unknown;
       partnerPreference?: unknown;
       mixedSideOverride?: unknown;
       pool?: unknown;
+      needsMoreRest?: unknown;
     };
 
     if (gender !== undefined && !isValidPlayerGender(gender)) {
@@ -70,6 +71,9 @@ export async function PATCH(
     }
     if (pool !== undefined && !isValidSessionPool(pool)) {
       return NextResponse.json({ error: "Invalid pool" }, { status: 400 });
+    }
+    if (needsMoreRest !== undefined && typeof needsMoreRest !== "boolean") {
+      return NextResponse.json({ error: "Invalid more rest value" }, { status: 400 });
     }
 
     const sessionData = await prisma.session.findUnique({
@@ -164,6 +168,8 @@ export async function PATCH(
             : sessionData.poolsEnabled
               ? existing.pool
               : SessionPool.A,
+        needsMoreRest:
+          typeof needsMoreRest === "boolean" ? needsMoreRest : undefined,
       },
       include: {
         user: { select: { id: true, name: true } },

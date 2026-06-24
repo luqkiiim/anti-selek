@@ -10,10 +10,17 @@ function createPlayer(
     matchmakingBaseline = matchesPlayed,
     availableSince = new Date("2026-03-18T00:00:00Z"),
     restTurns = 0,
+    needsMoreRest = false,
+    moreRestTarget,
   }: Partial<
     Pick<
       MatchmakerV3Player,
-      "matchesPlayed" | "matchmakingBaseline" | "availableSince" | "restTurns"
+      | "matchesPlayed"
+      | "matchmakingBaseline"
+      | "availableSince"
+      | "restTurns"
+      | "needsMoreRest"
+      | "moreRestTarget"
     >
   > = {}
 ): MatchmakerV3Player {
@@ -23,6 +30,8 @@ function createPlayer(
     matchmakingBaseline,
     availableSince,
     restTurns,
+    needsMoreRest,
+    moreRestTarget,
     strength: 1000,
     isBusy: false,
     isPaused: false,
@@ -245,6 +254,61 @@ describe("matchmaking v3 candidate pool", () => {
       "D",
       "E",
       "F",
+    ]);
+  });
+
+  it("skips under-target more-rest players when enough same-band alternatives are ready", () => {
+    const pool = buildCandidatePool(
+      [
+        createPlayer("ReadyA", { matchesPlayed: 4, restTurns: 0 }),
+        createPlayer("ReadyB", { matchesPlayed: 4, restTurns: 0 }),
+        createPlayer("ReadyC", { matchesPlayed: 4, restTurns: 0 }),
+        createPlayer("ReadyD", { matchesPlayed: 4, restTurns: 0 }),
+        createPlayer("NeedsMoreRest", {
+          matchesPlayed: 4,
+          restTurns: 1,
+          needsMoreRest: true,
+          moreRestTarget: 2,
+        }),
+      ],
+      {
+        requiredPlayerCount: 4,
+        randomFn: () => 0,
+      }
+    );
+
+    expect(pool.candidatePlayers.map((player) => player.userId)).toEqual([
+      "ReadyA",
+      "ReadyB",
+      "ReadyC",
+      "ReadyD",
+    ]);
+  });
+
+  it("keeps an under-target more-rest player when they are needed for a fair legal pool", () => {
+    const pool = buildCandidatePool(
+      [
+        createPlayer("ReadyA", { matchesPlayed: 4, restTurns: 0 }),
+        createPlayer("ReadyB", { matchesPlayed: 4, restTurns: 0 }),
+        createPlayer("ReadyC", { matchesPlayed: 4, restTurns: 0 }),
+        createPlayer("NeedsMoreRest", {
+          matchesPlayed: 4,
+          restTurns: 1,
+          needsMoreRest: true,
+          moreRestTarget: 2,
+        }),
+      ],
+      {
+        requiredPlayerCount: 4,
+        randomFn: () => 0,
+      }
+    );
+
+    expect(pool.candidatePlayers.map((player) => player.userId)).toEqual([
+      "ReadyA",
+      "ReadyB",
+      "ReadyC",
+      "NeedsMoreRest",
     ]);
   });
 

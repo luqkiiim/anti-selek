@@ -147,6 +147,11 @@ export function ClubPlayersModal({
                             Occasional
                           </span>
                         ) : null}
+                        {player.needsMoreRest ? (
+                          <span className="app-chip border-sky-200 bg-sky-50 px-2 py-0.5 text-[10px] text-sky-800">
+                            More rest
+                          </span>
+                        ) : null}
                         {poolsEnabled && isSelected ? (
                           <span className="app-chip app-chip-accent px-2 py-0.5 text-[10px]">
                             {selectedPool === SessionPool.A ? poolAName : poolBName}

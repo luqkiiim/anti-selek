@@ -38,6 +38,7 @@ function buildMemberSessionConfigs({
     gender: string;
     partnerPreference: string;
     mixedSideOverride: string | null;
+    needsMoreRest: boolean;
   }>;
   playerConfigMap: ParsedCreateSessionRequest["playerConfigMap"];
   mode: SessionMode;
@@ -86,6 +87,7 @@ function buildMemberSessionConfigs({
       pool: poolsEnabled
         ? getNormalizedSessionPool(override?.pool)
         : SessionPool.A,
+      needsMoreRest: selectedUser?.needsMoreRest ?? false,
       sessionPoints: 0,
     };
   });
@@ -164,9 +166,17 @@ export async function createSessionForUser({
 
   const memberRows = await prisma.clubMember.findMany({
     where: { clubId: { in: involvedClubIds } },
-    select: { userId: true },
+    select: { userId: true, needsMoreRest: true },
   });
   const memberSet = new Set(memberRows.map((member) => member.userId));
+  const needsMoreRestByUserId = new Map<string, boolean>();
+  for (const member of memberRows) {
+    needsMoreRestByUserId.set(
+      member.userId,
+      (needsMoreRestByUserId.get(member.userId) ?? false) ||
+        member.needsMoreRest
+    );
+  }
   const uniquePlayerIds = Array.from(new Set(input.requestedPlayerIds)).filter(
     (id) => memberSet.has(id)
   );
@@ -201,9 +211,13 @@ export async function createSessionForUser({
       mixedSideOverride: true,
     },
   });
+  const selectedUsersWithRest = selectedUsers.map((user) => ({
+    ...user,
+    needsMoreRest: needsMoreRestByUserId.get(user.id) ?? false,
+  }));
   const memberSessionConfigs = buildMemberSessionConfigs({
     uniquePlayerIds,
-    selectedUsers,
+    selectedUsers: selectedUsersWithRest,
     playerConfigMap: input.playerConfigMap,
     mode: input.mode,
     poolsEnabled: input.poolsEnabled,
@@ -315,6 +329,7 @@ export async function createSessionForUser({
           pool: input.poolsEnabled
             ? input.normalizedGuests[index].pool
             : SessionPool.A,
+          needsMoreRest: false,
           sessionPoints: 0,
           joinedAt: new Date(),
           availableSince: new Date(),

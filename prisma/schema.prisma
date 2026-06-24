@@ -81,6 +81,7 @@ model ClubMember {
   userId    String
   role      String   @default("MEMBER") // MEMBER, STAFF, or ADMIN
   status    String   @default("CORE") // CORE or OCCASIONAL
+  needsMoreRest Boolean @default(false)
   elo       Int      @default(1000)
   createdAt DateTime @default(now())
 
@@ -170,6 +171,7 @@ model SessionPlayer {
   partnerPreference String  @default("OPEN") // legacy MIXICANO preference fallback: OPEN, FEMALE_FLEX
   mixedSideOverride String? // UPPER, LOWER
   pool              String  @default("A") // A, B
+  needsMoreRest     Boolean @default(false)
   sessionPoints     Int     @default(0)
   lastPartnerId     String? // player ID of last partner (for repeat-partner penalty)
   isPaused          Boolean @default(false)

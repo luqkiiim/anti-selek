@@ -12,6 +12,14 @@ import type {
   V3RestTurnTieZone,
 } from "./types";
 
+function getLoadPreferredPlayers<T extends ActiveMatchmakerV3Player>(
+  players: T[],
+  requiredSlots: number
+) {
+  const readyPlayers = players.filter((player) => player.moreRestDeficit === 0);
+  return readyPlayers.length >= requiredSlots ? readyPlayers : players;
+}
+
 export function buildCandidatePool<T extends MatchmakerV3Player>(
   players: T[],
   {
@@ -69,14 +77,17 @@ export function buildCandidatePool<T extends MatchmakerV3Player>(
 
     selectionBand = band;
     requiredSelectableCount = requiredPlayerCount - lockedPlayers.length;
+    const loadPreferredPlayers = respectPlayerRest
+      ? getLoadPreferredPlayers(band.players, requiredSelectableCount)
+      : band.players;
     tieZone = respectPlayerRest
       ? buildRestTurnTieZone(
-          band.players,
+          loadPreferredPlayers,
           requiredSelectableCount,
           restTurnTieZoneTolerance
         )
       : null;
-    selectablePlayers = tieZone?.players ?? band.players;
+    selectablePlayers = tieZone?.players ?? loadPreferredPlayers;
     break;
   }
 

@@ -202,6 +202,7 @@ export async function POST(
           gender: user.gender,
           partnerPreference: user.partnerPreference,
           mixedSideOverride: user.mixedSideOverride,
+          needsMoreRest: false,
           pool:
             sessionData.poolsEnabled && isValidSessionPool(pool)
               ? pool
@@ -230,6 +231,7 @@ export async function POST(
       gender: createdGuest.gender,
       partnerPreference: createdGuest.partnerPreference,
       mixedSideOverride: createdGuest.mixedSideOverride,
+      needsMoreRest: false,
       pool:
         sessionData.poolsEnabled && isValidSessionPool(pool)
           ? pool

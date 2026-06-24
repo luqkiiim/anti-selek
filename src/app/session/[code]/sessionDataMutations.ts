@@ -74,6 +74,7 @@ export interface GuestPayload {
   partnerPreference: Player["partnerPreference"];
   mixedSideOverride?: Player["mixedSideOverride"];
   pool?: Player["pool"];
+  needsMoreRest?: boolean;
 }
 
 export interface SessionPlayerPayload {
@@ -82,6 +83,7 @@ export interface SessionPlayerPayload {
   partnerPreference: Player["partnerPreference"];
   mixedSideOverride?: Player["mixedSideOverride"];
   pool?: Player["pool"];
+  needsMoreRest?: boolean;
 }
 
 function normalizeOptionalNumber(value: number | null | undefined) {
@@ -571,6 +573,7 @@ export function applyGuestAdded(current: SessionData, guest: GuestPayload) {
         partnerPreference: guest.partnerPreference,
         mixedSideOverride: guest.mixedSideOverride ?? null,
         pool: getNormalizedSessionPool(guest.pool),
+        needsMoreRest: guest.needsMoreRest ?? false,
         user: {
           id: guest.id,
           name: guest.name,
@@ -682,6 +685,7 @@ export function applyPlayerPreferenceUpdate(
             partnerPreference: payload.partnerPreference,
             mixedSideOverride: payload.mixedSideOverride ?? null,
             pool: payload.pool ?? player.pool,
+            needsMoreRest: payload.needsMoreRest ?? player.needsMoreRest,
           }
         : player
     ),

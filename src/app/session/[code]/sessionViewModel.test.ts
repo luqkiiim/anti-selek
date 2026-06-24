@@ -30,6 +30,7 @@ function createPlayer(
     gender: PlayerGender.MALE,
     partnerPreference: PartnerPreference.OPEN,
     pool: SessionPool.A,
+    needsMoreRest: false,
     user: {
       id: userId,
       name,
@@ -104,6 +105,7 @@ describe("buildSessionViewModel", () => {
           status: ClubPlayerStatus.CORE,
           gender: player.gender,
           partnerPreference: player.partnerPreference,
+          needsMoreRest: player.needsMoreRest,
         })),
       {
         id: "u10",
@@ -112,6 +114,7 @@ describe("buildSessionViewModel", () => {
         status: ClubPlayerStatus.CORE,
         gender: PlayerGender.FEMALE,
         partnerPreference: PartnerPreference.FEMALE_FLEX,
+        needsMoreRest: false,
       },
     ];
 

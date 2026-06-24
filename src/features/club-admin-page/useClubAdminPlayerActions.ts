@@ -56,6 +56,7 @@ export function useClubAdminPlayerActions({
   const [newPlayerStatus, setNewPlayerStatus] = useState<ClubPlayerStatus>(
     ClubPlayerStatus.CORE
   );
+  const [newPlayerNeedsMoreRest, setNewPlayerNeedsMoreRest] = useState(false);
 
   const [editingPlayerId, setEditingPlayerId] = useState<string | null>(null);
   const [editorName, setEditorName] = useState("");
@@ -89,6 +90,7 @@ export function useClubAdminPlayerActions({
     setNewPlayerGender(PlayerGender.MALE);
     setNewPlayerMixedSideOverride(null);
     setNewPlayerStatus(ClubPlayerStatus.CORE);
+    setNewPlayerNeedsMoreRest(false);
     setIsCreatePlayerOpen(true);
   };
 
@@ -145,6 +147,7 @@ export function useClubAdminPlayerActions({
           gender: newPlayerGender,
           mixedSideOverride: newPlayerMixedSideOverride,
           status: newPlayerStatus,
+          needsMoreRest: newPlayerNeedsMoreRest,
         }),
       });
 
@@ -158,6 +161,7 @@ export function useClubAdminPlayerActions({
       setNewPlayerGender(PlayerGender.MALE);
       setNewPlayerMixedSideOverride(null);
       setNewPlayerStatus(ClubPlayerStatus.CORE);
+      setNewPlayerNeedsMoreRest(false);
       setIsCreatePlayerOpen(false);
       await refreshClubData();
     } catch (err: unknown) {
@@ -464,12 +468,14 @@ export function useClubAdminPlayerActions({
       gender?: PlayerGender;
       mixedSideOverride?: MixedSide | null;
       status?: ClubPlayerStatus;
+      needsMoreRest?: boolean;
     }
   ) => {
     if (
       updates.gender === undefined &&
       updates.mixedSideOverride === undefined &&
-      updates.status === undefined
+      updates.status === undefined &&
+      updates.needsMoreRest === undefined
     ) {
       return;
     }
@@ -514,6 +520,10 @@ export function useClubAdminPlayerActions({
                     : data.status === ClubPlayerStatus.CORE
                       ? ClubPlayerStatus.CORE
                       : item.status,
+                needsMoreRest:
+                  typeof data.needsMoreRest === "boolean"
+                    ? data.needsMoreRest
+                    : item.needsMoreRest,
               }
             : item
         )
@@ -579,6 +589,8 @@ export function useClubAdminPlayerActions({
     setNewPlayerMixedSideOverride,
     newPlayerStatus,
     setNewPlayerStatus,
+    newPlayerNeedsMoreRest,
+    setNewPlayerNeedsMoreRest,
     editingPlayer,
     editorName,
     setEditorName,

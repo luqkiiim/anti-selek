@@ -15,7 +15,8 @@ import type {
 function createActivePlayer(
   userId: string,
   restTurns: number,
-  randomScore: number
+  randomScore: number,
+  moreRestDeficit = 0
 ): ActiveMatchmakerV3Player {
   return {
     userId,
@@ -25,6 +26,9 @@ function createActivePlayer(
     strength: 1000,
     effectiveMatchCount: 0,
     restTurns,
+    needsMoreRest: false,
+    moreRestTarget: 1,
+    moreRestDeficit,
     randomScore,
     rank: 0,
   };
@@ -33,6 +37,7 @@ function createActivePlayer(
 function createSelection(
   {
     restTurns = [1, 1, 1, 1],
+    moreRestDeficits = [0, 0, 0, 0],
     balanceGap,
     pointDiffGap = 0,
     sharedCourtRepeatPenalty = 0,
@@ -47,6 +52,7 @@ function createSelection(
     randomScore = 0,
   }: {
     restTurns?: number[];
+    moreRestDeficits?: number[];
     balanceGap: number;
     pointDiffGap?: number;
     sharedCourtRepeatPenalty?: number;
@@ -62,7 +68,12 @@ function createSelection(
   }
 ): V3SingleCourtSelection {
   const players = restTurns.map((value, index) =>
-    createActivePlayer(`P${index + 1}`, value, randomScore)
+    createActivePlayer(
+      `P${index + 1}`,
+      value,
+      randomScore,
+      moreRestDeficits[index] ?? 0
+    )
   ) as [
     ActiveMatchmakerV3Player,
     ActiveMatchmakerV3Player,
@@ -320,6 +331,55 @@ describe("matchmaking v3 scoring", () => {
         SessionType.POINTS
       )
     ).toBeLessThan(0);
+  });
+
+  it("prefers the lower total more-rest deficit before raw rest turns", () => {
+    const lowerDeficit = createSelection({
+      restTurns: [1, 1, 1, 1],
+      moreRestDeficits: [0, 0, 0, 0],
+      balanceGap: 0,
+      exactRematchPenalty: 0,
+    });
+    const higherDeficitWithMoreRestTurns = createSelection({
+      restTurns: [5, 5, 5, 5],
+      moreRestDeficits: [1, 0, 0, 0],
+      balanceGap: 0,
+      exactRematchPenalty: 0,
+    });
+
+    expect(
+      compareSingleCourtSelections(
+        lowerDeficit,
+        higherDeficitWithMoreRestTurns,
+        SessionType.ELO
+      )
+    ).toBeLessThan(0);
+  });
+
+  it("ignores more-rest deficit scoring when player rest is disabled", () => {
+    const lowerDeficit = createSelection({
+      restTurns: [1, 1, 1, 1],
+      moreRestDeficits: [0, 0, 0, 0],
+      balanceGap: 0,
+      exactRematchPenalty: 0,
+      randomScore: 2,
+    });
+    const higherDeficit = createSelection({
+      restTurns: [5, 5, 5, 5],
+      moreRestDeficits: [1, 0, 0, 0],
+      balanceGap: 0,
+      exactRematchPenalty: 0,
+      randomScore: 1,
+    });
+
+    expect(
+      compareSingleCourtSelections(
+        lowerDeficit,
+        higherDeficit,
+        SessionType.ELO,
+        { respectPlayerRest: false }
+      )
+    ).toBeGreaterThan(0);
   });
 
   it("prefers a new partner inside the Elo balance window", () => {

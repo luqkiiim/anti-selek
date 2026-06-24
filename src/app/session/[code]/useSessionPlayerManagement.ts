@@ -71,6 +71,7 @@ function parseClubPlayers(data: unknown): ClubUser[] {
         partnerPreference?: unknown;
         mixedSideOverride?: unknown;
         status?: unknown;
+        needsMoreRest?: unknown;
       };
 
       if (
@@ -110,6 +111,7 @@ function parseClubPlayers(data: unknown): ClubUser[] {
         gender,
         partnerPreference,
         mixedSideOverride,
+        needsMoreRest: candidate.needsMoreRest === true,
       });
 
       return players;
@@ -485,7 +487,8 @@ export function useSessionPlayerManagement({
     userId: string,
     nextGender: PlayerGender,
     nextMixedSideOverride: MixedSide | null,
-    nextPool: SessionPool
+    nextPool: SessionPool,
+    nextNeedsMoreRest: boolean
   ) => {
     setSavingPreferencesFor(userId);
     setError("");
@@ -499,6 +502,7 @@ export function useSessionPlayerManagement({
             gender: nextGender,
             mixedSideOverride: nextMixedSideOverride,
             pool: sessionData?.poolsEnabled ? nextPool : SessionPool.A,
+            needsMoreRest: nextNeedsMoreRest,
           }),
         }
       );
