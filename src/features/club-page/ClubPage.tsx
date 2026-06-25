@@ -843,7 +843,10 @@ export default function ClubPage() {
       <TestSessionsPanel
         sessions={testSessions}
         currentUserId={user?.id}
+        currentClubId={clubId}
+        canReviewCollabs={canAdminClub}
         onOpenSession={openTournament}
+        onReviewCollabTournament={reviewCollabTournament}
       />
       <PastTournamentsPanel
         tournaments={pastTournaments}

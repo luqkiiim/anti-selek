@@ -7,13 +7,22 @@ import type { ClubPageSession } from "./clubTypes";
 interface TestSessionsPanelProps {
   sessions: ClubPageSession[];
   currentUserId?: string | null;
+  currentClubId: string;
+  canReviewCollabs: boolean;
   onOpenSession: (code: string) => void;
+  onReviewCollabTournament: (
+    code: string,
+    status: "ACCEPTED" | "REJECTED"
+  ) => void;
 }
 
 export function TestSessionsPanel({
   sessions,
   currentUserId,
+  currentClubId,
+  canReviewCollabs,
   onOpenSession,
+  onReviewCollabTournament,
 }: TestSessionsPanelProps) {
   return (
     <div className="app-panel space-y-4 p-5 sm:p-6">
@@ -41,6 +50,74 @@ export function TestSessionsPanel({
             const isParticipant = session.players.some(
               (player) => player.user.id === currentUserId
             );
+            const currentClubLink = session.clubs?.find(
+              (club) => club.id === currentClubId
+            );
+            const canReviewCollab =
+              canReviewCollabs &&
+              currentClubLink?.role === "PARTNER" &&
+              currentClubLink.status === "PENDING";
+            const clubLabel =
+              session.clubs && session.clubs.length > 1
+                ? session.clubs.map((club) => club.name).join(" + ")
+                : null;
+
+            if (canReviewCollab) {
+              return (
+                <div
+                  key={session.id}
+                  className="rounded-xl border border-amber-200 bg-amber-50 p-4"
+                >
+                  <div className="mb-2 flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <h4 className="truncate font-semibold text-gray-900">
+                        {session.name}
+                      </h4>
+                      <p className="mt-2 text-xs font-semibold text-gray-500">
+                        {session.players.length} Players -{" "}
+                        {getSessionTypeLabel(session.type)}
+                      </p>
+                      {clubLabel ? (
+                        <p className="mt-1 text-xs font-semibold text-gray-500">
+                          {clubLabel}
+                        </p>
+                      ) : null}
+                      <p className="mt-1 text-xs font-semibold text-amber-700">
+                        Partner approval required before start
+                      </p>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-2">
+                      <span className="rounded-lg bg-amber-100 px-2 py-1 text-xs font-semibold text-amber-700">
+                        Test
+                      </span>
+                      <span className="rounded-lg bg-amber-100 px-2 py-1 text-xs font-semibold text-amber-700">
+                        Pending
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap justify-end gap-2">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        onReviewCollabTournament(session.code, "REJECTED")
+                      }
+                      className="app-button-secondary px-3 py-1.5 text-sm"
+                    >
+                      Reject
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        onReviewCollabTournament(session.code, "ACCEPTED")
+                      }
+                      className="app-button-dark px-3 py-1.5 text-sm"
+                    >
+                      Approve
+                    </button>
+                  </div>
+                </div>
+              );
+            }
 
             return isParticipant ? (
               <Link
