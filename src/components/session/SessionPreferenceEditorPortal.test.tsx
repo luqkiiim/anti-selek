@@ -62,6 +62,8 @@ describe("SessionPreferenceEditorPortal", () => {
           isAdmin
           isCompletedSession={false}
           isMixicano={false}
+          isInterclub={false}
+          interclubClubOptions={[]}
           poolsEnabled={false}
           renamingGuestId={null}
           removingPlayerId={null}
@@ -88,7 +90,8 @@ describe("SessionPreferenceEditorPortal", () => {
       PlayerGender.MALE,
       null,
       SessionPool.A,
-      true
+      true,
+      null
     );
   });
 });

@@ -30,6 +30,8 @@ export interface MatchPayload {
   team2Score?: number | null;
   team1EloChange?: number | null;
   team2EloChange?: number | null;
+  team1ClubId?: string | null;
+  team2ClubId?: string | null;
   playerEloChanges?: Array<{
     userId: string;
     delta: number;
@@ -74,6 +76,7 @@ export interface GuestPayload {
   partnerPreference: Player["partnerPreference"];
   mixedSideOverride?: Player["mixedSideOverride"];
   pool?: Player["pool"];
+  representingClubId?: string | null;
   needsMoreRest?: boolean;
 }
 
@@ -83,6 +86,7 @@ export interface SessionPlayerPayload {
   partnerPreference: Player["partnerPreference"];
   mixedSideOverride?: Player["mixedSideOverride"];
   pool?: Player["pool"];
+  representingClubId?: string | null;
   needsMoreRest?: boolean;
 }
 
@@ -198,6 +202,8 @@ function buildLiveMatch(
     team1User2,
     team2User1,
     team2User2,
+    team1ClubId: payload.team1ClubId ?? fallbackMatch?.team1ClubId ?? null,
+    team2ClubId: payload.team2ClubId ?? fallbackMatch?.team2ClubId ?? null,
     team1Score: normalizeOptionalNumber(payload.team1Score),
     team2Score: normalizeOptionalNumber(payload.team2Score),
     completedAt: normalizeOptionalDate(payload.completedAt),
@@ -225,6 +231,8 @@ function buildCompletedMatchInfo(
     team1User2Id,
     team2User1Id,
     team2User2Id,
+    team1ClubId: payload.team1ClubId ?? fallbackMatch?.team1ClubId ?? null,
+    team2ClubId: payload.team2ClubId ?? fallbackMatch?.team2ClubId ?? null,
     team1Score: normalizeOptionalNumber(payload.team1Score),
     team2Score: normalizeOptionalNumber(payload.team2Score),
     winnerTeam:
@@ -256,6 +264,8 @@ function buildQueuedMatch(
     id: queuedMatch.id,
     createdAt: normalizeOptionalDate(queuedMatch.createdAt),
     targetPool: queuedMatch.targetPool ?? null,
+    team1ClubId: queuedMatch.team1ClubId ?? null,
+    team2ClubId: queuedMatch.team2ClubId ?? null,
     team1User1: withAvatar(queuedMatch.team1User1),
     team1User2: withAvatar(queuedMatch.team1User2),
     team2User1: withAvatar(queuedMatch.team2User1),
@@ -569,6 +579,7 @@ export function applyGuestAdded(current: SessionData, guest: GuestPayload) {
         ladderEntryAt: guest.ladderEntryAt,
         isPaused: false,
         isGuest: guest.isGuest,
+        representingClubId: guest.representingClubId ?? null,
         gender: guest.gender,
         partnerPreference: guest.partnerPreference,
         mixedSideOverride: guest.mixedSideOverride ?? null,
@@ -685,6 +696,10 @@ export function applyPlayerPreferenceUpdate(
             partnerPreference: payload.partnerPreference,
             mixedSideOverride: payload.mixedSideOverride ?? null,
             pool: payload.pool ?? player.pool,
+            representingClubId:
+              Object.prototype.hasOwnProperty.call(payload, "representingClubId")
+                ? payload.representingClubId ?? null
+                : player.representingClubId ?? null,
             needsMoreRest: payload.needsMoreRest ?? player.needsMoreRest,
           }
         : player

@@ -14,6 +14,7 @@ import {
   ClubPlayerStatus,
   PartnerPreference,
   PlayerGender,
+  SessionCollabFormat,
 } from "@/types/enums";
 
 function countMdAvatars(markup: string) {
@@ -198,6 +199,12 @@ describe("club avatar sizing", () => {
           onToggleAllPlayers={() => undefined}
           onTogglePlayerSelection={() => undefined}
           onChangePlayerPool={() => undefined}
+          collabFormat={SessionCollabFormat.FREE_PLAY}
+          hostClubId="club-1"
+          hostClubName="Host Club"
+          selectedPartnerClub={null}
+          selectedPlayerRepresentingClubs={{}}
+          onChangePlayerRepresentingClub={() => undefined}
           onClose={() => undefined}
         />
       );

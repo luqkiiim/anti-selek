@@ -11,6 +11,10 @@ import {
 } from "@/lib/sessionCollab";
 import { SessionStatus } from "@/types/enums";
 import { SessionClubStatus } from "@/types/enums";
+import {
+  ensureInterclubSessionReady,
+} from "../generate-match/interclub";
+import { GenerateMatchError } from "../generate-match/shared";
 import { logError, safeErrorResponse } from "@/lib/errors";
 import { rateLimit, checkInvalidTargetRateLimit, invalidTargetResponse } from "@/lib/rateLimit";
 
@@ -40,7 +44,10 @@ export async function POST(
     if (invalidTargetLimitResponse) return invalidTargetLimitResponse;
     const sessionData = await prisma.session.findUnique({
       where: { code },
-      include: { players: true },
+      include: {
+        players: true,
+        sessionClubs: true,
+      },
     });
 
     if (!sessionData) {
@@ -69,6 +76,7 @@ export async function POST(
         { status: 409 }
       );
     }
+    ensureInterclubSessionReady(sessionData);
 
     const startedAt = new Date();
     const updated = await prisma.session.update({
@@ -118,6 +126,13 @@ export async function POST(
 
     return NextResponse.json({ ...updated, players: serializedPlayers });
   } catch (error) {
+    if (error instanceof GenerateMatchError) {
+      return NextResponse.json(
+        { error: error.message },
+        { status: error.status }
+      );
+    }
+
     logError("Start session error", error);
     return safeErrorResponse();
   }

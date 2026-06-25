@@ -31,6 +31,11 @@ const sessionRecordInclude = {
   },
   courts: true,
   matches: true,
+  sessionClubs: {
+    include: {
+      club: { select: { id: true, name: true } },
+    },
+  },
   queuedMatch: true,
 };
 

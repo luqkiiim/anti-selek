@@ -24,6 +24,8 @@ interface SessionRosterModalProps {
   open: boolean;
   isAdmin: boolean;
   isMixicano: boolean;
+  isInterclub: boolean;
+  interclubClubOptions: Array<{ id: string; name: string }>;
   poolsEnabled: boolean;
   poolAName?: string | null;
   poolBName?: string | null;
@@ -32,6 +34,7 @@ interface SessionRosterModalProps {
   guestName: string;
   guestGender: PlayerGender;
   guestMixedSideOverride: MixedSide | null;
+  guestRepresentingClubId: string;
   guestInitialElo: number;
   addingGuest: boolean;
   addingPlayerId: string | null;
@@ -42,6 +45,7 @@ interface SessionRosterModalProps {
   onGuestNameChange: (value: string) => void;
   onGuestGenderChange: (value: PlayerGender) => void;
   onGuestMixedSideOverrideChange: (value: MixedSide | null) => void;
+  onGuestRepresentingClubChange: (value: string) => void;
   onGuestInitialEloChange: (value: number) => void;
   onAddGuest: () => void;
   onAddPlayer: (userId: string) => void;
@@ -51,6 +55,8 @@ export function SessionRosterModal({
   open,
   isAdmin,
   isMixicano,
+  isInterclub,
+  interclubClubOptions,
   poolsEnabled,
   poolAName,
   poolBName,
@@ -59,6 +65,7 @@ export function SessionRosterModal({
   guestName,
   guestGender,
   guestMixedSideOverride,
+  guestRepresentingClubId,
   guestInitialElo,
   addingGuest,
   addingPlayerId,
@@ -69,6 +76,7 @@ export function SessionRosterModal({
   onGuestNameChange,
   onGuestGenderChange,
   onGuestMixedSideOverrideChange,
+  onGuestRepresentingClubChange,
   onGuestInitialEloChange,
   onAddGuest,
   onAddPlayer,
@@ -143,6 +151,22 @@ export function SessionRosterModal({
             >
               <option value={SessionPool.A}>{poolAName ?? "Open"}</option>
               <option value={SessionPool.B}>{poolBName ?? "Regular"}</option>
+            </select>
+          ) : null}
+          {isInterclub ? (
+            <select
+              aria-label="Guest representing club"
+              value={guestRepresentingClubId}
+              onChange={(event) =>
+                onGuestRepresentingClubChange(event.target.value)
+              }
+              className="field px-3 py-2.5 text-sm"
+            >
+              {interclubClubOptions.map((option) => (
+                <option key={option.id} value={option.id}>
+                  {option.name}
+                </option>
+              ))}
             </select>
           ) : null}
           {isMixicano ? (

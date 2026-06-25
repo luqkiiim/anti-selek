@@ -5,6 +5,7 @@ import { ChevronDown, SlidersHorizontal, UserPlus, Users, X } from "lucide-react
 import type { ClubCollabCandidate } from "./clubTypes";
 import {
   SessionBalanceMetric,
+  SessionCollabFormat,
   SessionMatchmakingStyle,
   SessionPairingMode,
   SessionPool,
@@ -25,6 +26,8 @@ interface HostTournamentPanelProps {
   onAutoQueueEnabledChange: (value: boolean) => void;
   respectPlayerRest: boolean;
   onRespectPlayerRestChange: (value: boolean) => void;
+  collabFormat: SessionCollabFormat;
+  onCollabFormatChange: (format: SessionCollabFormat) => void;
   partnerClubId: string;
   partnerClubSearch: string;
   onPartnerClubSearchChange: (value: string) => void;
@@ -165,19 +168,22 @@ function SwitchRow({
   description,
   checked,
   onChange,
+  disabled = false,
 }: {
   label: string;
   description: string;
   checked: boolean;
   onChange: (value: boolean) => void;
+  disabled?: boolean;
 }) {
   return (
     <button
       type="button"
       role="switch"
       aria-checked={checked}
+      disabled={disabled}
       onClick={() => onChange(!checked)}
-      className="flex w-full min-w-0 max-w-full items-center justify-between gap-3 rounded-xl border border-gray-200 bg-white px-3 py-3 text-left transition hover:border-blue-200 hover:bg-blue-50/40 sm:gap-4 sm:px-4"
+      className="flex w-full min-w-0 max-w-full items-center justify-between gap-3 rounded-xl border border-gray-200 bg-white px-3 py-3 text-left transition hover:border-blue-200 hover:bg-blue-50/40 disabled:cursor-not-allowed disabled:opacity-60 sm:gap-4 sm:px-4"
     >
       <span className="min-w-0">
         <span className="block break-words text-sm font-semibold text-gray-900">
@@ -220,6 +226,8 @@ export function HostTournamentPanel({
   onAutoQueueEnabledChange,
   respectPlayerRest,
   onRespectPlayerRestChange,
+  collabFormat,
+  onCollabFormatChange,
   partnerClubId,
   partnerClubSearch,
   onPartnerClubSearchChange,
@@ -253,6 +261,7 @@ export function HostTournamentPanel({
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const canCreateSession = Boolean(newSessionName.trim()) && !creatingSession;
   const hasPartnerClub = Boolean(partnerClubId);
+  const isInterclub = collabFormat === SessionCollabFormat.INTERCLUB;
   const trimmedPartnerSearch = partnerClubSearch.trim();
   const selectedStyleInfo = MATCHMAKING_STYLE_INFO[matchmakingStyle];
 
@@ -459,9 +468,14 @@ export function HostTournamentPanel({
                 />
                 <SwitchRow
                   label="Pools"
-                  description="Split matchmaking into two soft groups that can crossover later."
+                  description={
+                    isInterclub
+                      ? "Pools are off for club vs club."
+                      : "Split matchmaking into two soft groups that can crossover later."
+                  }
                   checked={poolsEnabled}
                   onChange={onPoolsEnabledChange}
+                  disabled={isInterclub}
                 />
               </div>
 
@@ -595,6 +609,29 @@ export function HostTournamentPanel({
                     </span>
                   ) : null}
                 </div>
+                {hasPartnerClub ? (
+                  <div className="mt-3 border-t border-gray-200 pt-3">
+                    <p className="mb-2 text-sm font-medium text-gray-900">
+                      Collab format
+                    </p>
+                    <div className="grid grid-cols-2 gap-2">
+                      <SegmentedOption
+                        label="Free play"
+                        selected={collabFormat === SessionCollabFormat.FREE_PLAY}
+                        onClick={() =>
+                          onCollabFormatChange(SessionCollabFormat.FREE_PLAY)
+                        }
+                      />
+                      <SegmentedOption
+                        label="Club vs club"
+                        selected={collabFormat === SessionCollabFormat.INTERCLUB}
+                        onClick={() =>
+                          onCollabFormatChange(SessionCollabFormat.INTERCLUB)
+                        }
+                      />
+                    </div>
+                  </div>
+                ) : null}
               </div>
             </div>
           ) : null}

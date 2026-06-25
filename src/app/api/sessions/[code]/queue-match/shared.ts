@@ -41,6 +41,8 @@ export function buildQueuedMatchResponse(
     id: queuedMatch.id,
     createdAt: queuedMatch.createdAt,
     targetPool: queuedMatch.targetPool ?? null,
+    team1ClubId: queuedMatch.team1ClubId ?? null,
+    team2ClubId: queuedMatch.team2ClubId ?? null,
     matchmakingReason: parseMatchmakingReasonJson(
       queuedMatch.matchmakingReasonJson
     ),
@@ -104,7 +106,8 @@ async function createQueuedMatchRecord(
   sessionId: string,
   partition: ManualMatchTeams,
   targetPool?: string | null,
-  matchmakingReasonJson?: string | null
+  matchmakingReasonJson?: string | null,
+  teamClubIds?: { team1ClubId?: string | null; team2ClubId?: string | null }
 ) {
   try {
     return await prisma.queuedMatch.create({
@@ -112,8 +115,10 @@ async function createQueuedMatchRecord(
         sessionId,
         team1User1Id: partition.team1[0],
         team1User2Id: partition.team1[1],
+        team1ClubId: teamClubIds?.team1ClubId ?? null,
         team2User1Id: partition.team2[0],
         team2User2Id: partition.team2[1],
+        team2ClubId: teamClubIds?.team2ClubId ?? null,
         targetPool: targetPool ?? null,
         matchmakingReasonJson: matchmakingReasonJson ?? null,
       },
@@ -151,6 +156,8 @@ async function selectQueuedMatchForSession(sessionData: QueueSessionRecord) {
   return {
     partition: selection.partition,
     targetPool: "targetPool" in selection ? selection.targetPool : null,
+    team1ClubId: "team1ClubId" in selection ? selection.team1ClubId : null,
+    team2ClubId: "team2ClubId" in selection ? selection.team2ClubId : null,
     matchmakingReasonJson: selection.matchmakingReasonJson ?? null,
   };
 }
@@ -160,19 +167,25 @@ async function updateQueuedMatchRecord({
   partition,
   targetPool,
   matchmakingReasonJson,
+  team1ClubId,
+  team2ClubId,
 }: {
   queuedMatchId: string;
   partition: ManualMatchTeams;
   targetPool?: string | null;
   matchmakingReasonJson?: string | null;
+  team1ClubId?: string | null;
+  team2ClubId?: string | null;
 }) {
   return prisma.queuedMatch.update({
     where: { id: queuedMatchId },
     data: {
       team1User1Id: partition.team1[0],
       team1User2Id: partition.team1[1],
+      team1ClubId: team1ClubId ?? null,
       team2User1Id: partition.team2[0],
       team2User2Id: partition.team2[1],
+      team2ClubId: team2ClubId ?? null,
       targetPool: targetPool ?? null,
       matchmakingReasonJson: matchmakingReasonJson ?? null,
     },
@@ -212,7 +225,11 @@ export async function createQueuedMatchForSession(sessionData: QueueSessionRecor
     sessionData.id,
     selection.partition,
     selection.targetPool,
-    selection.matchmakingReasonJson ?? null
+    selection.matchmakingReasonJson ?? null,
+    {
+      team1ClubId: selection.team1ClubId,
+      team2ClubId: selection.team2ClubId,
+    }
   );
 
   return buildQueuedMatchResponse(sessionData, queuedMatch);
@@ -282,6 +299,8 @@ export async function reshuffleQueuedMatchForSession(
     partition: selection.partition,
     targetPool: "targetPool" in selection ? selection.targetPool : null,
     matchmakingReasonJson: selection.matchmakingReasonJson ?? null,
+    team1ClubId: "team1ClubId" in selection ? selection.team1ClubId : null,
+    team2ClubId: "team2ClubId" in selection ? selection.team2ClubId : null,
   });
 
   return buildQueuedMatchResponse(sessionData, queuedMatch);
@@ -351,6 +370,14 @@ export async function replaceQueuedMatchPlayerForSession(
     partition: replacementSelection.partition,
     targetPool: sessionData.queuedMatch.targetPool ?? null,
     matchmakingReasonJson: replacementSelection.matchmakingReasonJson ?? null,
+    team1ClubId:
+      "team1ClubId" in replacementSelection
+        ? replacementSelection.team1ClubId
+        : sessionData.queuedMatch.team1ClubId ?? null,
+    team2ClubId:
+      "team2ClubId" in replacementSelection
+        ? replacementSelection.team2ClubId
+        : sessionData.queuedMatch.team2ClubId ?? null,
   });
 
   return buildQueuedMatchResponse(sessionData, queuedMatch);
@@ -359,14 +386,16 @@ export async function replaceQueuedMatchPlayerForSession(
 export async function createManualQueuedMatchForSession(
   sessionData: QueueSessionRecord,
   partition: ManualMatchTeams,
-  targetPool?: string | null
+  targetPool?: string | null,
+  teamClubIds?: { team1ClubId?: string | null; team2ClubId?: string | null }
 ) {
   await ensureQueueSlotAvailable(sessionData);
   const queuedMatch = await createQueuedMatchRecord(
     sessionData.id,
     partition,
     targetPool,
-    null
+    null,
+    teamClubIds
   );
   return buildQueuedMatchResponse(sessionData, queuedMatch);
 }
@@ -404,6 +433,8 @@ async function tryRebuildAutomaticQueuedMatch(
       partition: selection.partition,
       targetPool: selection.targetPool,
       matchmakingReasonJson: selection.matchmakingReasonJson,
+      team1ClubId: selection.team1ClubId,
+      team2ClubId: selection.team2ClubId,
     });
 
     return buildQueuedMatchResponse(sessionData, queuedMatch);

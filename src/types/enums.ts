@@ -31,6 +31,11 @@ export enum SessionPairingMode {
   MIXED = "MIXED",
 }
 
+export enum SessionCollabFormat {
+  FREE_PLAY = "FREE_PLAY",
+  INTERCLUB = "INTERCLUB",
+}
+
 export enum SessionStatus {
   WAITING = "WAITING",
   ACTIVE = "ACTIVE",

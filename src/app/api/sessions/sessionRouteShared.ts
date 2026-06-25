@@ -8,6 +8,7 @@ import {
   PartnerPreference,
   PlayerGender,
   SessionBalanceMetric,
+  SessionCollabFormat,
   SessionMatchmakingStyle,
   SessionMode,
   SessionPairingMode,
@@ -36,6 +37,7 @@ export interface PlayerConfigOverride {
   partnerPreference?: PartnerPreference;
   mixedSideOverride?: MixedSide | null;
   pool?: SessionPool;
+  representingClubId?: string | null;
 }
 
 export interface NormalizedGuestConfig {
@@ -45,6 +47,7 @@ export interface NormalizedGuestConfig {
   mixedSideOverride: MixedSide | null;
   pool: SessionPool;
   initialElo: number;
+  representingClubId?: string | null;
 }
 
 export interface ParsedCreateSessionRequest {
@@ -55,6 +58,7 @@ export interface ParsedCreateSessionRequest {
   matchmakingStyle: SessionMatchmakingStyle;
   balanceMetric: SessionBalanceMetric;
   pairingMode: SessionPairingMode;
+  collabFormat: SessionCollabFormat;
   clubId: string;
   partnerClubId?: string | null;
   isTest: boolean;

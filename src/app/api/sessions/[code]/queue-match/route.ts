@@ -10,6 +10,10 @@ import {
   GenerateMatchError,
   loadSessionRecord,
 } from "../generate-match/shared";
+import {
+  ensureInterclubSessionReady,
+  getInterclubTeamClubIdsForPartition,
+} from "../generate-match/interclub";
 import { parseManualTeams } from "../generate-match/request";
 import { validateManualMatchRequest } from "../generate-match/manual";
 import { buildMatchmakingState } from "../generate-match/selection";
@@ -108,6 +112,8 @@ export async function POST(
       throw new GenerateMatchError(400, "Invalid replacement player");
     }
 
+    ensureInterclubSessionReady(sessionData);
+
     if (wantsReshuffle) {
       if (replaceUserId) {
         throw new GenerateMatchError(
@@ -170,6 +176,10 @@ export async function POST(
         parsedTeams,
         busyPlayerIds,
       });
+      const teamClubIds = getInterclubTeamClubIdsForPartition(
+        sessionData,
+        parsedTeams
+      );
 
       const poolSummary = summarizeSessionPoolMembership(
         [
@@ -189,7 +199,8 @@ export async function POST(
         queuedMatch: await createManualQueuedMatchForSession(
           sessionData,
           parsedTeams,
-          poolSummary.dominantPool
+          poolSummary.dominantPool,
+          teamClubIds
         ),
       });
     }

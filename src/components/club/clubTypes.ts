@@ -6,6 +6,7 @@ import {
   MixedSide,
   PartnerPreference,
   PlayerGender,
+  SessionCollabFormat,
   SessionPool,
 } from "@/types/enums";
 
@@ -64,6 +65,7 @@ export interface ClubPageSession {
   type: string;
   status: string;
   isTest: boolean;
+  collabFormat?: SessionCollabFormat;
   sourceSessionId?: string | null;
   createdAt: string;
   endedAt?: string | null;
@@ -90,6 +92,7 @@ export interface ClubGuestConfig {
   mixedSideOverride?: MixedSide | null;
   pool: SessionPool;
   initialElo: number;
+  representingClubId?: string | null;
 }
 
 export interface ClubClaimRequest {

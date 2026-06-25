@@ -4,8 +4,8 @@ import { useRef } from "react";
 import { Avatar } from "@/components/ui/Avatar";
 import { PlayerPickerSheet } from "@/components/ui/PlayerPickerSheet";
 import { SearchField } from "@/components/ui/SearchField";
-import type { ClubPageMember } from "./clubTypes";
-import { ClubPlayerStatus, SessionPool } from "@/types/enums";
+import type { ClubCollabCandidate, ClubPageMember } from "./clubTypes";
+import { ClubPlayerStatus, SessionCollabFormat, SessionPool } from "@/types/enums";
 
 interface ClubPlayersModalProps {
   open: boolean;
@@ -21,6 +21,15 @@ interface ClubPlayersModalProps {
   onToggleAllPlayers: () => void;
   onTogglePlayerSelection: (playerId: string) => void;
   onChangePlayerPool: (playerId: string, pool: SessionPool) => void;
+  collabFormat: SessionCollabFormat;
+  hostClubId: string;
+  hostClubName: string;
+  selectedPartnerClub: ClubCollabCandidate | null;
+  selectedPlayerRepresentingClubs: Record<string, string | null>;
+  onChangePlayerRepresentingClub: (
+    playerId: string,
+    representingClubId: string | null
+  ) => void;
   onClose: () => void;
 }
 
@@ -38,12 +47,49 @@ export function ClubPlayersModal({
   onToggleAllPlayers,
   onTogglePlayerSelection,
   onChangePlayerPool,
+  collabFormat,
+  hostClubId,
+  hostClubName,
+  selectedPartnerClub,
+  selectedPlayerRepresentingClubs,
+  onChangePlayerRepresentingClub,
   onClose,
 }: ClubPlayersModalProps) {
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const shouldRestoreSearchFocusRef = useRef(false);
 
   if (!open) return null;
+
+  const isInterclub =
+    collabFormat === SessionCollabFormat.INTERCLUB && !!selectedPartnerClub;
+
+  function getRepresentingClubOptions(player: ClubPageMember) {
+    if (!selectedPartnerClub) {
+      return [];
+    }
+
+    const labelsByClubId = new Map([
+      [hostClubId, hostClubName],
+      [selectedPartnerClub.id, selectedPartnerClub.name],
+    ]);
+    const validIds = new Set(labelsByClubId.keys());
+    const badges = [
+      ...(player.communityBadges ?? []),
+      ...(player.linkedClubBadges ?? []),
+    ];
+    const eligibleIds = Array.from(
+      new Set(
+        badges
+          .map((badge) => badge.id)
+          .filter((clubId) => validIds.has(clubId))
+      )
+    );
+
+    return eligibleIds.map((clubId) => ({
+      id: clubId,
+      name: labelsByClubId.get(clubId) ?? clubId,
+    }));
+  }
 
   function captureSearchFocusIntent() {
     shouldRestoreSearchFocusRef.current =
@@ -115,6 +161,14 @@ export function ClubPlayersModal({
           {filteredSelectablePlayers.map((player) => {
             const isSelected = selectedPlayerIds.includes(player.id);
             const selectedPool = selectedPlayerPools[player.id] ?? SessionPool.A;
+            const representingOptions = isInterclub
+              ? getRepresentingClubOptions(player)
+              : [];
+            const selectedRepresentingClubId =
+              selectedPlayerRepresentingClubs[player.id] ??
+              (representingOptions.length === 1
+                ? representingOptions[0].id
+                : null);
 
             return (
               <div
@@ -214,6 +268,44 @@ export function ClubPlayersModal({
                         </button>
                       );
                     })}
+                  </div>
+                ) : null}
+
+                {isInterclub && isSelected ? (
+                  <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-gray-200 pt-3">
+                    <span className="text-xs font-semibold text-gray-500">
+                      Represents
+                    </span>
+                    {representingOptions.length > 0 ? (
+                      representingOptions.map((option) => {
+                        const isActive =
+                          selectedRepresentingClubId === option.id;
+
+                        return (
+                          <button
+                            key={option.id}
+                            type="button"
+                            onPointerDownCapture={captureSearchFocusIntent}
+                            onMouseDownCapture={captureSearchFocusIntent}
+                            onClick={() => {
+                              onChangePlayerRepresentingClub(player.id, option.id);
+                              restoreSearchFocusIfNeeded();
+                            }}
+                            className={`min-h-9 rounded-lg border px-3 py-2 text-xs font-semibold transition ${
+                              isActive
+                                ? "border-[rgba(15,118,110,0.24)] bg-[var(--accent-faint)] text-[var(--accent-strong)]"
+                                : "border-gray-200 bg-white text-gray-500"
+                            }`}
+                          >
+                            {option.name}
+                          </button>
+                        );
+                      })
+                    ) : (
+                      <span className="text-xs font-semibold text-red-600">
+                        No club side
+                      </span>
+                    )}
                   </div>
                 ) : null}
               </div>

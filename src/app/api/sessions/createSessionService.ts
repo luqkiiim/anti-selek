@@ -12,6 +12,7 @@ import { getNormalizedSessionPool } from "@/lib/sessionPools";
 import {
   MixedSide,
   PlayerGender,
+  SessionCollabFormat,
   SessionMode,
   SessionPool,
   SessionStatus,
@@ -30,6 +31,9 @@ function buildMemberSessionConfigs({
   playerConfigMap,
   mode,
   poolsEnabled,
+  collabFormat,
+  interclubClubIds,
+  clubBadgesByUserId,
 }: {
   uniquePlayerIds: string[];
   selectedUsers: Array<{
@@ -43,8 +47,12 @@ function buildMemberSessionConfigs({
   playerConfigMap: ParsedCreateSessionRequest["playerConfigMap"];
   mode: SessionMode;
   poolsEnabled: boolean;
+  collabFormat: SessionCollabFormat;
+  interclubClubIds: string[];
+  clubBadgesByUserId: Map<string, Array<{ id: string; name: string; elo: number }>>;
 }) {
   const selectedUserById = new Map(selectedUsers.map((user) => [user.id, user]));
+  const interclubClubIdSet = new Set(interclubClubIds);
 
   return uniquePlayerIds.map((userId) => {
     const selectedUser = selectedUserById.get(userId);
@@ -77,9 +85,29 @@ function buildMemberSessionConfigs({
           ? undefined
           : selectedUser?.partnerPreference),
     });
+    const availableRepresentingClubIds = (clubBadgesByUserId.get(userId) ?? [])
+      .map((badge) => badge.id)
+      .filter((clubId) => interclubClubIdSet.has(clubId));
+    let representingClubId: string | null = null;
+    if (collabFormat === SessionCollabFormat.INTERCLUB) {
+      if (override?.representingClubId === null) {
+        representingClubId = null;
+      } else if (typeof override?.representingClubId === "string") {
+        if (!availableRepresentingClubIds.includes(override.representingClubId)) {
+          throw new SessionRouteError(
+            "Selected player cannot represent that club",
+            400
+          );
+        }
+        representingClubId = override.representingClubId;
+      } else if (availableRepresentingClubIds.length === 1) {
+        representingClubId = availableRepresentingClubIds[0];
+      }
+    }
 
     return {
       userId,
+      representingClubId,
       isGuest: false,
       gender: sessionGender,
       partnerPreference: resolvedMixedState.partnerPreference,
@@ -91,6 +119,23 @@ function buildMemberSessionConfigs({
       sessionPoints: 0,
     };
   });
+}
+
+function getGuestRepresentingClubId(
+  guest: ParsedCreateSessionRequest["normalizedGuests"][number],
+  interclubClubIds: string[]
+) {
+  if (
+    typeof guest.representingClubId === "string" &&
+    interclubClubIds.includes(guest.representingClubId)
+  ) {
+    return guest.representingClubId;
+  }
+
+  throw new SessionRouteError(
+    "Guests in club vs club sessions must represent a club",
+    400
+  );
 }
 
 export async function createSessionForUser({
@@ -147,6 +192,10 @@ export async function createSessionForUser({
   const involvedClubIds = input.partnerClubId
     ? [input.clubId, input.partnerClubId]
     : [input.clubId];
+  const interclubClubIds =
+    input.collabFormat === SessionCollabFormat.INTERCLUB && input.partnerClubId
+      ? [input.clubId, input.partnerClubId]
+      : [];
   if (input.partnerClubId) {
     const partnerClub = await prisma.club.findUnique({
       where: { id: input.partnerClubId },
@@ -215,12 +264,21 @@ export async function createSessionForUser({
     ...user,
     needsMoreRest: needsMoreRestByUserId.get(user.id) ?? false,
   }));
+  const clubBadgesByUserId =
+    input.collabFormat === SessionCollabFormat.INTERCLUB &&
+    interclubClubIds.length === 2 &&
+    uniquePlayerIds.length > 0
+      ? await getPlayerClubBadges(prisma, interclubClubIds, uniquePlayerIds)
+      : new Map<string, Array<{ id: string; name: string; elo: number }>>();
   const memberSessionConfigs = buildMemberSessionConfigs({
     uniquePlayerIds,
     selectedUsers: selectedUsersWithRest,
     playerConfigMap: input.playerConfigMap,
     mode: input.mode,
     poolsEnabled: input.poolsEnabled,
+    collabFormat: input.collabFormat,
+    interclubClubIds,
+    clubBadgesByUserId,
   });
 
   if (input.mode === SessionMode.MIXICANO) {
@@ -245,6 +303,7 @@ export async function createSessionForUser({
         name: input.name,
         type: input.type,
         mode: input.mode,
+        collabFormat: input.collabFormat,
         scoringType: input.scoringType,
         matchmakingStyle: input.matchmakingStyle,
         balanceMetric: input.balanceMetric,
@@ -318,6 +377,13 @@ export async function createSessionForUser({
         data: createdGuests.map((guest, index) => ({
           sessionId: createdSession.id,
           userId: guest.id,
+          representingClubId:
+            input.collabFormat === SessionCollabFormat.INTERCLUB
+              ? getGuestRepresentingClubId(
+                  input.normalizedGuests[index],
+                  interclubClubIds
+                )
+              : null,
           isGuest: true,
           gender: guest.gender,
           partnerPreference:

@@ -10,6 +10,10 @@ import {
 import { isValidSessionPool } from "@/lib/sessionPools";
 import { prisma } from "@/lib/prisma";
 import { getSessionOperatorMembership } from "@/lib/sessionCollab";
+import {
+  getAcceptedInterclubClubIds,
+  isInterclubSession,
+} from "@/lib/sessionCollabFormat";
 import { getSessionModeLabel } from "@/lib/sessionModeLabels";
 import { logError, safeErrorResponse } from "@/lib/errors";
 import { rateLimit, checkInvalidTargetRateLimit, invalidTargetResponse } from "@/lib/rateLimit";
@@ -50,6 +54,7 @@ export async function POST(
       partnerPreference,
       mixedSideOverride,
       pool,
+      representingClubId,
     } =
       body as {
       name?: unknown;
@@ -58,6 +63,7 @@ export async function POST(
       partnerPreference?: unknown;
       mixedSideOverride?: unknown;
       pool?: unknown;
+      representingClubId?: unknown;
     };
     if (typeof name !== "string" || name.trim().length < 2) {
       return NextResponse.json({ error: "Guest name must be at least 2 characters" }, { status: 400 });
@@ -100,9 +106,11 @@ export async function POST(
       select: {
         id: true,
         clubId: true,
+        collabFormat: true,
         status: true,
         mode: true,
         poolsEnabled: true,
+        sessionClubs: true,
       },
     });
 
@@ -145,6 +153,23 @@ export async function POST(
 
     if (!canManage) {
       return NextResponse.json({ error: "Only admins or staff can add guests" }, { status: 403 });
+    }
+
+    const acceptedInterclubClubIds = getAcceptedInterclubClubIds(sessionData);
+    let normalizedRepresentingClubId: string | null = null;
+
+    if (isInterclubSession(sessionData)) {
+      if (
+        typeof representingClubId !== "string" ||
+        !acceptedInterclubClubIds.includes(representingClubId)
+      ) {
+        return NextResponse.json(
+          { error: "Guests in club vs club sessions must represent one club" },
+          { status: 400 }
+        );
+      }
+
+      normalizedRepresentingClubId = representingClubId;
     }
 
     const guestName = name.trim();
@@ -199,6 +224,7 @@ export async function POST(
           sessionId: sessionData.id,
           userId: user.id,
           isGuest: true,
+          representingClubId: normalizedRepresentingClubId,
           gender: user.gender,
           partnerPreference: user.partnerPreference,
           mixedSideOverride: user.mixedSideOverride,
@@ -231,6 +257,7 @@ export async function POST(
       gender: createdGuest.gender,
       partnerPreference: createdGuest.partnerPreference,
       mixedSideOverride: createdGuest.mixedSideOverride,
+      representingClubId: normalizedRepresentingClubId,
       needsMoreRest: false,
       pool:
         sessionData.poolsEnabled && isValidSessionPool(pool)

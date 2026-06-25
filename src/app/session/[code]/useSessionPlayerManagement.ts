@@ -31,6 +31,7 @@ import {
   PlayerGender,
   SessionMode,
   SessionPool,
+  SessionCollabFormat,
 } from "@/types/enums";
 import { getSessionModeLabel } from "@/lib/sessionModeLabels";
 
@@ -136,6 +137,7 @@ export function useSessionPlayerManagement({
     useState<MixedSide | null>(null);
   const [rosterPool, setRosterPool] = useState<SessionPool>(SessionPool.A);
   const [guestInitialElo, setGuestInitialElo] = useState<number>(1000);
+  const [guestRepresentingClubId, setGuestRepresentingClubId] = useState("");
   const [addingGuest, setAddingGuest] = useState(false);
   const [savingPreferencesFor, setSavingPreferencesFor] = useState<string | null>(null);
   const [togglingPausePlayerId, setTogglingPausePlayerId] = useState<string | null>(
@@ -161,7 +163,7 @@ export function useSessionPlayerManagement({
 
       const rect = triggerEl.getBoundingClientRect();
       const panelWidth = 176;
-      const panelHeight =
+      const basePanelHeight =
         sessionData?.mode === SessionMode.MIXICANO
           ? sessionData?.poolsEnabled
             ? 280
@@ -169,6 +171,9 @@ export function useSessionPlayerManagement({
           : sessionData?.poolsEnabled
             ? 184
             : 124;
+      const panelHeight =
+        basePanelHeight +
+        (sessionData?.collabFormat === SessionCollabFormat.INTERCLUB ? 70 : 0);
       const margin = 8;
       const openUp = window.innerHeight - rect.bottom < panelHeight + margin;
 
@@ -220,11 +225,18 @@ export function useSessionPlayerManagement({
   };
 
   const resetGuestInputs = () => {
+    const defaultRepresentingClubId =
+      sessionData?.collabFormat === SessionCollabFormat.INTERCLUB
+        ? (sessionData.clubs?.find((club) => club.status === "ACCEPTED")?.id ??
+          "")
+        : "";
+
     setGuestName("");
     setGuestGender(PlayerGender.MALE);
     setGuestMixedSideOverride(null);
     setGuestInitialElo(1000);
     setRosterPool(SessionPool.A);
+    setGuestRepresentingClubId(defaultRepresentingClubId);
   };
 
   const resetRosterInputs = () => {
@@ -454,6 +466,10 @@ export function useSessionPlayerManagement({
           partnerPreference: resolvedMixedState.partnerPreference,
           mixedSideOverride: resolvedMixedState.mixedSideOverride,
           pool: sessionData?.poolsEnabled ? rosterPool : SessionPool.A,
+          representingClubId:
+            sessionData?.collabFormat === SessionCollabFormat.INTERCLUB
+              ? guestRepresentingClubId
+              : undefined,
         }),
       });
       const data = await safeJson<
@@ -488,7 +504,8 @@ export function useSessionPlayerManagement({
     nextGender: PlayerGender,
     nextMixedSideOverride: MixedSide | null,
     nextPool: SessionPool,
-    nextNeedsMoreRest: boolean
+    nextNeedsMoreRest: boolean,
+    nextRepresentingClubId?: string | null
   ) => {
     setSavingPreferencesFor(userId);
     setError("");
@@ -503,6 +520,9 @@ export function useSessionPlayerManagement({
             mixedSideOverride: nextMixedSideOverride,
             pool: sessionData?.poolsEnabled ? nextPool : SessionPool.A,
             needsMoreRest: nextNeedsMoreRest,
+            ...(sessionData?.collabFormat === SessionCollabFormat.INTERCLUB
+              ? { representingClubId: nextRepresentingClubId ?? null }
+              : {}),
           }),
         }
       );
@@ -531,6 +551,7 @@ export function useSessionPlayerManagement({
     guestMixedSideOverride,
     rosterPool,
     guestInitialElo,
+    guestRepresentingClubId,
     addingGuest,
     savingPreferencesFor,
     togglingPausePlayerId,
@@ -545,6 +566,7 @@ export function useSessionPlayerManagement({
     setGuestMixedSideOverride,
     setRosterPool,
     setGuestInitialElo,
+    setGuestRepresentingClubId,
     setGuestRenameInput,
     setOpenPreferenceEditor,
     togglePreferenceEditor,

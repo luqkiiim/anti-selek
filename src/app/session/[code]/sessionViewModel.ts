@@ -21,6 +21,7 @@ import type {
 } from "@/components/session/sessionTypes";
 import {
   MatchStatus,
+  SessionCollabFormat,
   SessionMode,
   SessionStatus,
   SessionType,
@@ -30,6 +31,21 @@ interface PlayerSessionStats {
   played: number;
   wins: number;
   losses: number;
+}
+
+export interface InterclubScoreboardRow {
+  clubId: string;
+  clubName: string;
+  rubberWins: number;
+  pointsFor: number;
+  pointsAgainst: number;
+  pointDiff: number;
+}
+
+export interface InterclubScoreboard {
+  rows: [InterclubScoreboardRow, InterclubScoreboardRow];
+  leaderClubId: string | null;
+  resultLabel: string;
 }
 
 interface BuildSessionViewModelArgs {
@@ -61,6 +77,7 @@ export interface SessionViewModel {
   nextReadyCourtLabel: string | null;
   pointDiffByUserId: Map<string, number>;
   playerStatsByUserId: Map<string, PlayerSessionStats>;
+  interclubScoreboard: InterclubScoreboard | null;
   sortedPlayers: Player[];
   activePreferencePlayer: Player | null;
   sessionModeLabel: string;
@@ -194,6 +211,95 @@ function buildPlayerPerformanceMaps(sessionData: SessionData) {
   };
 }
 
+function buildInterclubScoreboard(
+  sessionData: SessionData
+): InterclubScoreboard | null {
+  if (sessionData.collabFormat !== SessionCollabFormat.INTERCLUB) {
+    return null;
+  }
+
+  const clubs = (sessionData.clubs ?? [])
+    .filter((club) => club.status === "ACCEPTED")
+    .slice(0, 2);
+
+  if (clubs.length !== 2) {
+    return null;
+  }
+
+  const rowByClubId = new Map<string, InterclubScoreboardRow>(
+    clubs.map((club) => [
+      club.id,
+      {
+        clubId: club.id,
+        clubName: club.name,
+        rubberWins: 0,
+        pointsFor: 0,
+        pointsAgainst: 0,
+        pointDiff: 0,
+      },
+    ])
+  );
+
+  for (const match of sessionData.matches ?? []) {
+    if (
+      match.status !== MatchStatus.COMPLETED ||
+      typeof match.team1Score !== "number" ||
+      typeof match.team2Score !== "number" ||
+      !match.team1ClubId ||
+      !match.team2ClubId
+    ) {
+      continue;
+    }
+
+    const team1Row = rowByClubId.get(match.team1ClubId);
+    const team2Row = rowByClubId.get(match.team2ClubId);
+
+    if (!team1Row || !team2Row) {
+      continue;
+    }
+
+    team1Row.pointsFor += match.team1Score;
+    team1Row.pointsAgainst += match.team2Score;
+    team2Row.pointsFor += match.team2Score;
+    team2Row.pointsAgainst += match.team1Score;
+
+    if (match.winnerTeam === 1) {
+      team1Row.rubberWins += 1;
+    } else if (match.winnerTeam === 2) {
+      team2Row.rubberWins += 1;
+    }
+  }
+
+  const rows = clubs.map((club) => {
+    const row = rowByClubId.get(club.id)!;
+    return {
+      ...row,
+      pointDiff: row.pointsFor - row.pointsAgainst,
+    };
+  }) as [InterclubScoreboardRow, InterclubScoreboardRow];
+  const [left, right] = rows;
+  const leader =
+    left.rubberWins !== right.rubberWins
+      ? left.rubberWins > right.rubberWins
+        ? left
+        : right
+      : left.pointDiff !== right.pointDiff
+        ? left.pointDiff > right.pointDiff
+          ? left
+          : right
+        : null;
+
+  return {
+    rows,
+    leaderClubId: leader?.clubId ?? null,
+    resultLabel: leader
+      ? `${leader.clubName} ${
+          sessionData.status === SessionStatus.COMPLETED ? "wins" : "leads"
+        }`
+      : "Draw",
+  };
+}
+
 export function buildSessionViewModel({
   sessionData,
   clubPlayers,
@@ -264,6 +370,7 @@ export function buildSessionViewModel({
 
   const { playerStatsByUserId, pointDiffByUserId } =
     buildPlayerPerformanceMaps(sessionData);
+  const interclubScoreboard = buildInterclubScoreboard(sessionData);
 
   const sortedPlayers = sessionData.players.slice().sort((a, b) =>
     sessionData.type === SessionType.LADDER
@@ -330,6 +437,7 @@ export function buildSessionViewModel({
       : null,
     pointDiffByUserId,
     playerStatsByUserId,
+    interclubScoreboard,
     sortedPlayers,
     activePreferencePlayer,
     sessionModeLabel: getSessionModeLabel(sessionData.mode),

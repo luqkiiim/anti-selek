@@ -8,7 +8,14 @@ import {
 } from "@/lib/mixedSide";
 import { isValidSessionPool } from "@/lib/sessionPools";
 import { prisma } from "@/lib/prisma";
-import { getSessionOperatorMembership } from "@/lib/sessionCollab";
+import {
+  getPlayerClubBadges,
+  getSessionOperatorMembership,
+} from "@/lib/sessionCollab";
+import {
+  getAcceptedInterclubClubIds,
+  isInterclubSession,
+} from "@/lib/sessionCollabFormat";
 import { getSessionModeLabel } from "@/lib/sessionModeLabels";
 import { PlayerGender, SessionMode, SessionPool, SessionStatus } from "@/types/enums";
 import { logError, safeErrorResponse } from "@/lib/errors";
@@ -45,13 +52,25 @@ export async function PATCH(
       return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
     }
 
-    const { gender, partnerPreference, mixedSideOverride, pool, needsMoreRest } = body as {
+    const {
+      gender,
+      partnerPreference,
+      mixedSideOverride,
+      pool,
+      needsMoreRest,
+      representingClubId,
+    } = body as {
       gender?: unknown;
       partnerPreference?: unknown;
       mixedSideOverride?: unknown;
       pool?: unknown;
       needsMoreRest?: unknown;
+      representingClubId?: unknown;
     };
+    const hasRepresentingClubInput = Object.prototype.hasOwnProperty.call(
+      body,
+      "representingClubId"
+    );
 
     if (gender !== undefined && !isValidPlayerGender(gender)) {
       return NextResponse.json({ error: "Invalid gender" }, { status: 400 });
@@ -75,15 +94,29 @@ export async function PATCH(
     if (needsMoreRest !== undefined && typeof needsMoreRest !== "boolean") {
       return NextResponse.json({ error: "Invalid more rest value" }, { status: 400 });
     }
+    if (
+      hasRepresentingClubInput &&
+      representingClubId !== null &&
+      typeof representingClubId !== "string"
+    ) {
+      return NextResponse.json(
+        { error: "Invalid representing club" },
+        { status: 400 }
+      );
+    }
 
     const sessionData = await prisma.session.findUnique({
       where: { code },
       select: {
         id: true,
         clubId: true,
+        collabFormat: true,
         mode: true,
         status: true,
         poolsEnabled: true,
+        sessionClubs: true,
+        queuedMatch: { select: { id: true } },
+        _count: { select: { matches: true } },
       },
     });
     if (!sessionData) {
@@ -115,6 +148,8 @@ export async function PATCH(
         partnerPreference: true,
         mixedSideOverride: true,
         pool: true,
+        representingClubId: true,
+        isGuest: true,
       },
     });
     if (!existing) {
@@ -134,6 +169,74 @@ export async function PATCH(
         { error: `${mixedModeLabel} requires MALE/FEMALE gender for all players` },
         { status: 400 }
       );
+    }
+    let nextRepresentingClubId: string | null | undefined;
+
+    if (hasRepresentingClubInput) {
+      if (!isInterclubSession(sessionData)) {
+        if (representingClubId !== null && representingClubId !== "") {
+          return NextResponse.json(
+            { error: "Representing club only applies to club vs club sessions" },
+            { status: 400 }
+          );
+        }
+
+        nextRepresentingClubId = null;
+      } else {
+        const requestedRepresentingClubId =
+          representingClubId === "" || representingClubId === null
+            ? null
+            : (representingClubId as string);
+        const locked =
+          sessionData._count.matches > 0 || Boolean(sessionData.queuedMatch);
+
+        if (
+          locked &&
+          requestedRepresentingClubId !== existing.representingClubId
+        ) {
+          return NextResponse.json(
+            {
+              error:
+                "Club side assignments are locked after the first club vs club match is created.",
+            },
+            { status: 409 }
+          );
+        }
+
+        if (requestedRepresentingClubId === null) {
+          nextRepresentingClubId = null;
+        } else {
+          const acceptedClubIds = getAcceptedInterclubClubIds(sessionData);
+          const validClubIds = new Set(acceptedClubIds);
+
+          if (!validClubIds.has(requestedRepresentingClubId)) {
+            return NextResponse.json(
+              { error: "Player must represent one of the two clubs" },
+              { status: 400 }
+            );
+          }
+
+          if (!existing.isGuest) {
+            const clubBadges = await getPlayerClubBadges(
+              prisma,
+              acceptedClubIds,
+              [userId]
+            );
+            const eligibleClubIds = new Set(
+              (clubBadges.get(userId) ?? []).map((badge) => badge.id)
+            );
+
+            if (!eligibleClubIds.has(requestedRepresentingClubId)) {
+              return NextResponse.json(
+                { error: "Player can only represent a club they belong to" },
+                { status: 400 }
+              );
+            }
+          }
+
+          nextRepresentingClubId = requestedRepresentingClubId;
+        }
+      }
     }
 
     const resolvedMixedState = resolveMixedSideState({
@@ -170,6 +273,9 @@ export async function PATCH(
               : SessionPool.A,
         needsMoreRest:
           typeof needsMoreRest === "boolean" ? needsMoreRest : undefined,
+        representingClubId: hasRepresentingClubInput
+          ? nextRepresentingClubId ?? null
+          : undefined,
       },
       include: {
         user: { select: { id: true, name: true } },

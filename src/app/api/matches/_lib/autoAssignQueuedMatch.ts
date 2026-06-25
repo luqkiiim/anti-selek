@@ -6,6 +6,7 @@ import {
 } from "@/app/api/sessions/[code]/generate-match/selection";
 import { validateManualMatchRequest } from "@/app/api/sessions/[code]/generate-match/manual";
 import { GenerateMatchError } from "@/app/api/sessions/[code]/generate-match/shared";
+import { getInterclubTeamClubIdsForPartition } from "@/app/api/sessions/[code]/generate-match/interclub";
 import { SessionPool } from "@/types/enums";
 
 export async function autoAssignQueuedMatch(sessionId: string) {
@@ -16,6 +17,11 @@ export async function autoAssignQueuedMatch(sessionId: string) {
         include: { user: { select: { id: true, name: true, elo: true } } },
       },
       matches: true,
+      sessionClubs: {
+        include: {
+          club: { select: { id: true, name: true } },
+        },
+      },
       queuedMatch: true,
       courts: {
         include: { currentMatch: true },
@@ -49,6 +55,9 @@ export async function autoAssignQueuedMatch(sessionId: string) {
     ] as [string, string],
   };
 
+  let teamClubIds: { team1ClubId?: string | null; team2ClubId?: string | null } =
+    {};
+
   try {
     validateManualMatchRequest({
       sessionData,
@@ -56,6 +65,7 @@ export async function autoAssignQueuedMatch(sessionId: string) {
       parsedTeams: partition,
       busyPlayerIds,
     });
+    teamClubIds = getInterclubTeamClubIdsForPartition(sessionData, partition);
   } catch (error) {
     if (error instanceof GenerateMatchError) {
       await prisma.queuedMatch.deleteMany({
@@ -75,6 +85,7 @@ export async function autoAssignQueuedMatch(sessionId: string) {
     queuedMatchId: sessionData.queuedMatch.id,
     courtId: targetCourt.id,
     partition,
+    ...teamClubIds,
     matchmakingReasonJson: sessionData.queuedMatch.matchmakingReasonJson ?? null,
   });
 

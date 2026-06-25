@@ -21,6 +21,7 @@ import {
 import { getErrorMessage, safeJson } from "@/lib/http";
 import { FlashMessage } from "@/components/ui/chrome";
 import { MobileBottomTabs } from "@/components/ui/MobileBottomTabs";
+import { InterclubScoreboard } from "@/components/session/InterclubScoreboard";
 import { LiveCourtsPanel } from "@/components/session/LiveCourtsPanel";
 import { LiveStandingsTable } from "@/components/session/LiveStandingsTable";
 import { ManualMatchModal } from "@/components/session/ManualMatchModal";
@@ -35,7 +36,7 @@ import { SessionSettingsModal } from "@/components/session/SessionSettingsModal"
 import { AdminOnboardingChecklist } from "@/components/onboarding/AdminOnboardingChecklist";
 import { useAdminOnboardingProgress } from "@/components/onboarding/useAdminOnboardingProgress";
 import type { CurrentUser } from "@/components/session/sessionTypes";
-import { MatchStatus, SessionStatus } from "@/types/enums";
+import { MatchStatus, SessionCollabFormat, SessionStatus } from "@/types/enums";
 import { shareSessionStandingsImage } from "@/lib/sessionShareImageClient";
 import {
   applyCourtLabelUpdates,
@@ -190,6 +191,7 @@ export default function SessionPage() {
     guestMixedSideOverride,
     rosterPool,
     guestInitialElo,
+    guestRepresentingClubId,
     addingGuest,
     togglingPausePlayerId,
     guestRenameDraft,
@@ -203,6 +205,7 @@ export default function SessionPage() {
     setGuestMixedSideOverride,
     setRosterPool,
     setGuestInitialElo,
+    setGuestRepresentingClubId,
     setGuestRenameInput,
     setOpenPreferenceEditor,
     togglePreferenceEditor,
@@ -227,6 +230,16 @@ export default function SessionPage() {
     scheduleSessionRefresh,
     setError,
   });
+  const isInterclubSession =
+    sessionData?.collabFormat === SessionCollabFormat.INTERCLUB;
+  const interclubClubOptions = useMemo(
+    () =>
+      (sessionData?.clubs ?? [])
+        .filter((club) => club.status === "ACCEPTED")
+        .slice(0, 2)
+        .map((club) => ({ id: club.id, name: club.name })),
+    [sessionData?.clubs]
+  );
 
   useEffect(() => {
     if (status === "unauthenticated") {
@@ -1345,6 +1358,12 @@ export default function SessionPage() {
 
             <section className="w-full shrink-0 snap-center pb-24 xl:w-auto xl:shrink xl:snap-none xl:pb-0">
               <div className="space-y-6">
+                {sessionView.interclubScoreboard ? (
+                  <InterclubScoreboard
+                    scoreboard={sessionView.interclubScoreboard}
+                  />
+                ) : null}
+
                 {sessionView.isCompletedSession ? (
                   <SessionPodium
                     sessionType={sessionData.type}
@@ -1693,6 +1712,8 @@ export default function SessionPage() {
         isAdmin={isAdmin}
         isCompletedSession={sessionView.isCompletedSession}
         isMixicano={sessionView.isMixicano}
+        isInterclub={isInterclubSession}
+        interclubClubOptions={interclubClubOptions}
         poolsEnabled={sessionData.poolsEnabled}
         poolAName={sessionData.poolAName}
         poolBName={sessionData.poolBName}
@@ -1717,6 +1738,8 @@ export default function SessionPage() {
         open={showRosterModal}
         isAdmin={isAdmin}
         isMixicano={sessionView.isMixicano}
+        isInterclub={isInterclubSession}
+        interclubClubOptions={interclubClubOptions}
         poolsEnabled={sessionData.poolsEnabled}
         poolAName={sessionData.poolAName}
         poolBName={sessionData.poolBName}
@@ -1725,6 +1748,7 @@ export default function SessionPage() {
         guestName={guestName}
         guestGender={guestGender}
         guestMixedSideOverride={guestMixedSideOverride}
+        guestRepresentingClubId={guestRepresentingClubId}
         guestInitialElo={guestInitialElo}
         addingGuest={addingGuest}
         addingPlayerId={addingPlayerId}
@@ -1735,6 +1759,7 @@ export default function SessionPage() {
         onGuestNameChange={setGuestName}
         onGuestGenderChange={handleGuestGenderChange}
         onGuestMixedSideOverrideChange={setGuestMixedSideOverride}
+        onGuestRepresentingClubChange={setGuestRepresentingClubId}
         onGuestInitialEloChange={setGuestInitialElo}
         onAddGuest={addGuestToSession}
         onAddPlayer={addPlayerToSession}

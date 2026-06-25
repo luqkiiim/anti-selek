@@ -16,6 +16,10 @@ import {
   getSessionOperatorMembership,
   withPlayerClubBadges,
 } from "@/lib/sessionCollab";
+import {
+  getAcceptedInterclubClubIds,
+  isInterclubSession,
+} from "@/lib/sessionCollabFormat";
 import { canQuickAccessClub, isQuickAccessSession } from "@/lib/quickAccess";
 import { logError, safeErrorResponse } from "@/lib/errors";
 import { rateLimit, checkInvalidTargetRateLimit, invalidTargetResponse } from "@/lib/rateLimit";
@@ -58,6 +62,7 @@ export async function POST(
       partnerPreference: overridePreference,
       mixedSideOverride: overrideMixedSideOverride,
       pool: overridePool,
+      representingClubId,
     } =
       body as {
         userId?: unknown;
@@ -65,14 +70,25 @@ export async function POST(
         partnerPreference?: unknown;
         mixedSideOverride?: unknown;
         pool?: unknown;
+        representingClubId?: unknown;
       };
+    if (
+      representingClubId !== undefined &&
+      representingClubId !== null &&
+      typeof representingClubId !== "string"
+    ) {
+      return NextResponse.json(
+        { error: "Invalid representing club" },
+        { status: 400 }
+      );
+    }
 
     // Determine who is joining
     let userIdToJoin = session.user.id;
 
     const sessionData = await prisma.session.findUnique({
       where: { code },
-      include: { players: true },
+      include: { players: true, sessionClubs: true },
     });
 
     if (!sessionData) {
@@ -195,6 +211,40 @@ export async function POST(
     const joinedAt = new Date();
     const arrivalPriorityAt =
       sessionData.status === SessionStatus.ACTIVE ? joinedAt : null;
+    let normalizedRepresentingClubId: string | null = null;
+
+    if (isInterclubSession(sessionData)) {
+      const acceptedInterclubClubIds = getAcceptedInterclubClubIds(sessionData);
+      const clubBadges = await getPlayerClubBadges(
+        prisma,
+        acceptedInterclubClubIds,
+        [userIdToJoin]
+      );
+      const eligibleClubIds = (clubBadges.get(userIdToJoin) ?? [])
+        .map((badge) => badge.id)
+        .filter((clubId) => acceptedInterclubClubIds.includes(clubId));
+      const uniqueEligibleClubIds = Array.from(new Set(eligibleClubIds));
+
+      if (uniqueEligibleClubIds.length === 0) {
+        return NextResponse.json(
+          { error: "Player must belong to one of the two clubs" },
+          { status: 400 }
+        );
+      }
+
+      if (typeof representingClubId === "string" && representingClubId !== "") {
+        if (!uniqueEligibleClubIds.includes(representingClubId)) {
+          return NextResponse.json(
+            { error: "Player can only represent a club they belong to" },
+            { status: 400 }
+          );
+        }
+
+        normalizedRepresentingClubId = representingClubId;
+      } else if (uniqueEligibleClubIds.length === 1) {
+        normalizedRepresentingClubId = uniqueEligibleClubIds[0];
+      }
+    }
 
     const updatedSession = await prisma.session.update({
       where: { id: sessionData.id },
@@ -203,6 +253,7 @@ export async function POST(
           create: {
             userId: userIdToJoin,
             isGuest: false,
+            representingClubId: normalizedRepresentingClubId,
             gender: sessionGender,
             partnerPreference: resolvedMixedState.partnerPreference,
             mixedSideOverride: resolvedMixedState.mixedSideOverride,

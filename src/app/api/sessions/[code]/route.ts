@@ -66,6 +66,8 @@ async function getSessionRoute(
             select: {
               id: true,
               status: true,
+              team1ClubId: true,
+              team2ClubId: true,
               team1Score: true,
               team2Score: true,
               completedAt: true,
@@ -108,6 +110,8 @@ async function getSessionRoute(
           team1User2Id: true,
           team2User1Id: true,
           team2User2Id: true,
+          team1ClubId: true,
+          team2ClubId: true,
           team1Score: true,
           team2Score: true,
           winnerTeam: true,
@@ -204,6 +208,8 @@ async function getSessionRoute(
           id: sessionData.queuedMatch.id,
           createdAt: sessionData.queuedMatch.createdAt,
           targetPool: sessionData.queuedMatch.targetPool,
+          team1ClubId: sessionData.queuedMatch.team1ClubId,
+          team2ClubId: sessionData.queuedMatch.team2ClubId,
           matchmakingReason: parseMatchmakingReasonJson(
             sessionData.queuedMatch.matchmakingReasonJson
           ),

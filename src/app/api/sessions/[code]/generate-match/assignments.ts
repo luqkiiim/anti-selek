@@ -62,6 +62,8 @@ async function createMatchAssignment(
   assignment: {
     courtId: string;
     partition: ManualMatchTeams;
+    team1ClubId?: string | null;
+    team2ClubId?: string | null;
     matchmakingReasonJson?: string | null;
     clearArrivalPriority?: boolean;
   }
@@ -73,8 +75,10 @@ async function createMatchAssignment(
       status: MatchStatus.IN_PROGRESS,
       team1User1Id: assignment.partition.team1[0],
       team1User2Id: assignment.partition.team1[1],
+      team1ClubId: assignment.team1ClubId ?? null,
       team2User1Id: assignment.partition.team2[0],
       team2User2Id: assignment.partition.team2[1],
+      team2ClubId: assignment.team2ClubId ?? null,
       matchmakingReasonJson: assignment.matchmakingReasonJson ?? null,
     },
     include: {
@@ -128,6 +132,8 @@ export async function createMatchesForAssignments(
     courtId: string;
     selectedIds: string[];
     partition: ManualMatchTeams;
+    team1ClubId?: string | null;
+    team2ClubId?: string | null;
     matchmakingReasonJson?: string | null;
     clearArrivalPriority?: boolean;
   }>
@@ -152,6 +158,8 @@ export async function replaceCurrentCourtMatchAssignment({
   currentMatchId,
   selectedIds,
   partition,
+  team1ClubId,
+  team2ClubId,
   matchmakingReasonJson,
   clearArrivalPriority,
 }: {
@@ -160,6 +168,8 @@ export async function replaceCurrentCourtMatchAssignment({
   currentMatchId: string;
   selectedIds: string[];
   partition: ManualMatchTeams;
+  team1ClubId?: string | null;
+  team2ClubId?: string | null;
   matchmakingReasonJson?: string | null;
   clearArrivalPriority?: boolean;
 }) {
@@ -201,6 +211,8 @@ export async function replaceCurrentCourtMatchAssignment({
     return createMatchAssignment(tx, sessionId, {
       courtId,
       partition,
+      team1ClubId,
+      team2ClubId,
       matchmakingReasonJson,
       clearArrivalPriority,
     });
@@ -212,12 +224,16 @@ export async function createQueuedMatchAssignment({
   queuedMatchId,
   courtId,
   partition,
+  team1ClubId,
+  team2ClubId,
   matchmakingReasonJson,
 }: {
   sessionId: string;
   queuedMatchId: string;
   courtId: string;
   partition: ManualMatchTeams;
+  team1ClubId?: string | null;
+  team2ClubId?: string | null;
   matchmakingReasonJson?: string | null;
 }) {
   return prisma.$transaction(async (tx) => {
@@ -235,6 +251,8 @@ export async function createQueuedMatchAssignment({
     const match = await createMatchAssignment(tx, sessionId, {
       courtId,
       partition,
+      team1ClubId,
+      team2ClubId,
       matchmakingReasonJson,
       clearArrivalPriority: matchmakingReasonJson != null,
     });

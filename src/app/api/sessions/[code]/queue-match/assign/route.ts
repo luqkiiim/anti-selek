@@ -14,6 +14,7 @@ import {
   GenerateMatchError,
   loadSessionRecord,
 } from "../../generate-match/shared";
+import { getInterclubTeamClubIdsForPartition } from "../../generate-match/interclub";
 import { validateManualMatchRequest } from "../../generate-match/manual";
 import { logError, safeErrorResponse } from "@/lib/errors";
 import { rateLimit, checkInvalidTargetRateLimit, invalidTargetResponse } from "@/lib/rateLimit";
@@ -116,12 +117,20 @@ export async function POST(
       parsedTeams: partition,
       busyPlayerIds,
     });
+    const teamClubIds = getInterclubTeamClubIdsForPartition(
+      sessionData,
+      partition
+    );
 
     const match = await createQueuedMatchAssignment({
       sessionId: sessionData.id,
       queuedMatchId: sessionData.queuedMatch.id,
       courtId: targetCourt.id,
       partition,
+      team1ClubId:
+        teamClubIds.team1ClubId ?? sessionData.queuedMatch.team1ClubId ?? null,
+      team2ClubId:
+        teamClubIds.team2ClubId ?? sessionData.queuedMatch.team2ClubId ?? null,
       matchmakingReasonJson: sessionData.queuedMatch.matchmakingReasonJson,
     });
 

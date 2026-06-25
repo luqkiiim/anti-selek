@@ -21,6 +21,10 @@ export {
   parseManualTeams,
 } from "./request";
 export {
+  ensureInterclubSessionReady,
+  getInterclubTeamClubIdsForPartition,
+} from "./interclub";
+export {
   applyPoolSelectionOutcome,
   buildMatchmakingState,
   ensureEnoughPlayers,

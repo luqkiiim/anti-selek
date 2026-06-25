@@ -55,12 +55,18 @@ import {
   SessionPool,
   SessionType,
 } from "@/types/enums";
+import { isInterclubSession } from "@/lib/sessionCollabFormat";
 import {
   GenerateMatchError,
   type GenerateMatchCourt,
   type GenerateMatchSession,
   type ReshuffleSource,
 } from "./shared";
+import {
+  selectInterclubBatchMatches,
+  selectInterclubReplacementMatch,
+  selectInterclubSingleCourtMatch,
+} from "./interclub";
 
 type AvailableCandidate = {
   userId: string;
@@ -1173,6 +1179,15 @@ export function selectSingleCourtMatch({
   rotationHistory: ReturnType<typeof buildRotationHistory>;
   reshuffleSource: ReshuffleSource | null;
 }) {
+  if (isInterclubSession(sessionData)) {
+    return selectInterclubSingleCourtMatch({
+      rankedCandidates,
+      playersById,
+      sessionData,
+      reshuffleSource,
+    });
+  }
+
   if (sessionData.poolsEnabled) {
     return selectPoolEnabledSingleCourtMatch({
       rankedCandidates,
@@ -1388,6 +1403,16 @@ export function selectReplacementMatch({
   retainedUserIds: [string, string, string];
   excludedUserIds?: string[];
 }) {
+  if (isInterclubSession(sessionData)) {
+    return selectInterclubReplacementMatch({
+      rankedCandidates,
+      playersById,
+      sessionData,
+      retainedUserIds,
+      excludedUserIds,
+    });
+  }
+
   const retainedUserIdSet = new Set(retainedUserIds);
   if (retainedUserIdSet.size !== 3) {
     throw new GenerateMatchError(
@@ -1438,6 +1463,15 @@ export function selectBatchMatches({
   requestedMatchCount: number;
   randomFn?: () => number;
 }) {
+  if (isInterclubSession(sessionData)) {
+    return selectInterclubBatchMatches({
+      rankedCandidates,
+      playersById,
+      sessionData,
+      requestedMatchCount,
+    });
+  }
+
   if (sessionData.poolsEnabled) {
     const search = ({
       workingSessionData,

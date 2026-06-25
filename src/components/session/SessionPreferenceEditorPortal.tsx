@@ -13,6 +13,8 @@ interface SessionPreferenceEditorPortalProps {
   isAdmin: boolean;
   isCompletedSession: boolean;
   isMixicano: boolean;
+  isInterclub: boolean;
+  interclubClubOptions: Array<{ id: string; name: string }>;
   poolsEnabled: boolean;
   poolAName?: string | null;
   poolBName?: string | null;
@@ -24,7 +26,8 @@ interface SessionPreferenceEditorPortalProps {
     nextGender: PlayerGender,
     nextMixedSideOverride: MixedSide | null,
     nextPool: SessionPool,
-    nextNeedsMoreRest: boolean
+    nextNeedsMoreRest: boolean,
+    nextRepresentingClubId?: string | null
   ) => Promise<void>;
   onRequestRenameGuest: (userId: string, currentName: string) => void;
   onRemovePlayer: (userId: string, playerName: string) => void;
@@ -44,6 +47,8 @@ export function SessionPreferenceEditorPortal({
   isAdmin,
   isCompletedSession,
   isMixicano,
+  isInterclub,
+  interclubClubOptions,
   poolsEnabled,
   poolAName,
   poolBName,
@@ -132,7 +137,8 @@ export function SessionPreferenceEditorPortal({
                   nextGender,
                   null,
                   activePreferencePlayer.pool,
-                  activePreferencePlayer.needsMoreRest
+                  activePreferencePlayer.needsMoreRest,
+                  activePreferencePlayer.representingClubId ?? null
                 );
               }}
               className={selectClassName()}
@@ -154,7 +160,8 @@ export function SessionPreferenceEditorPortal({
                     activePreferencePlayer.gender,
                     event.target.value ? (event.target.value as MixedSide) : null,
                     activePreferencePlayer.pool,
-                    activePreferencePlayer.needsMoreRest
+                    activePreferencePlayer.needsMoreRest,
+                    activePreferencePlayer.representingClubId ?? null
                   );
                 }}
                 className={selectClassName()}
@@ -183,7 +190,8 @@ export function SessionPreferenceEditorPortal({
                 activePreferencePlayer.gender,
                 activePreferencePlayer.mixedSideOverride ?? null,
                 event.target.value as SessionPool,
-                activePreferencePlayer.needsMoreRest
+                activePreferencePlayer.needsMoreRest,
+                activePreferencePlayer.representingClubId ?? null
               );
             }}
             className={selectClassName()}
@@ -191,6 +199,34 @@ export function SessionPreferenceEditorPortal({
             {poolOptions.map((option) => (
               <option key={option.value} value={option.value}>
                 {option.label}
+              </option>
+            ))}
+          </select>
+        </label>
+      ) : null}
+
+      {isInterclub ? (
+        <label className="block space-y-1.5">
+          <span className={labelClassName()}>Represents</span>
+          <select
+            value={activePreferencePlayer.representingClubId ?? ""}
+            onChange={async (event) => {
+              onClose();
+              await onUpdatePreference(
+                activePreferencePlayer.userId,
+                activePreferencePlayer.gender,
+                activePreferencePlayer.mixedSideOverride ?? null,
+                activePreferencePlayer.pool,
+                activePreferencePlayer.needsMoreRest,
+                event.target.value || null
+              );
+            }}
+            className={selectClassName()}
+          >
+            <option value="">Unassigned</option>
+            {interclubClubOptions.map((option) => (
+              <option key={option.id} value={option.id}>
+                {option.name}
               </option>
             ))}
           </select>
@@ -208,7 +244,8 @@ export function SessionPreferenceEditorPortal({
               activePreferencePlayer.gender,
               activePreferencePlayer.mixedSideOverride ?? null,
               activePreferencePlayer.pool,
-              event.target.checked
+              event.target.checked,
+              activePreferencePlayer.representingClubId ?? null
             );
           }}
           className="mt-0.5 h-4 w-4 rounded border-gray-300 text-[var(--accent)]"

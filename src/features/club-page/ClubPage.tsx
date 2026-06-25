@@ -122,6 +122,8 @@ export default function ClubPage() {
     setAutoQueueEnabled,
     respectPlayerRest,
     setRespectPlayerRest,
+    collabFormat,
+    setCollabFormat,
     partnerClubId,
     partnerClubSearch,
     setPartnerClubSearch,
@@ -141,6 +143,7 @@ export default function ClubPage() {
     setPoolBName,
     selectedPlayerIds,
     selectedPlayerPools,
+    selectedPlayerRepresentingClubs,
     selectedPoolCounts,
     guestNameInput,
     setGuestNameInput,
@@ -149,6 +152,8 @@ export default function ClubPage() {
     setGuestMixedSideOverrideInput,
     guestPoolInput,
     setGuestPoolInput,
+    guestRepresentingClubInput,
+    setGuestRepresentingClubInput,
     guestConfigs,
     guestPoolCounts,
     loading,
@@ -189,6 +194,7 @@ export default function ClubPage() {
     togglePlayerSelection,
     toggleAllPlayers,
     updateSelectedPlayerPool,
+    updateSelectedPlayerRepresentingClub,
     addGuestName,
     removeGuestName,
     handleGuestGenderChange,
@@ -766,6 +772,8 @@ export default function ClubPage() {
       onAutoQueueEnabledChange={setAutoQueueEnabled}
       respectPlayerRest={respectPlayerRest}
       onRespectPlayerRestChange={setRespectPlayerRest}
+      collabFormat={collabFormat}
+      onCollabFormatChange={setCollabFormat}
       partnerClubId={partnerClubId}
       partnerClubSearch={partnerClubSearch}
       onPartnerClubSearchChange={setPartnerClubSearch}
@@ -797,6 +805,15 @@ export default function ClubPage() {
       creatingSession={creatingSession}
     />
   ) : null;
+  const interclubClubOptions = partnerClubId
+    ? [
+        { id: clubId, name: club?.name ?? "Host club" },
+        {
+          id: partnerClubId,
+          name: selectedPartnerClub?.name ?? "Partner club",
+        },
+      ]
+    : [];
   const overviewPanel = (
     <ClubOverviewPulsePanel
       clubPulse={clubPulse}
@@ -1035,6 +1052,12 @@ export default function ClubPage() {
         onToggleAllPlayers={toggleAllPlayers}
         onTogglePlayerSelection={togglePlayerSelection}
         onChangePlayerPool={updateSelectedPlayerPool}
+        collabFormat={collabFormat}
+        hostClubId={clubId}
+        hostClubName={club?.name ?? "Host club"}
+        selectedPartnerClub={selectedPartnerClub}
+        selectedPlayerRepresentingClubs={selectedPlayerRepresentingClubs}
+        onChangePlayerRepresentingClub={updateSelectedPlayerRepresentingClub}
         onClose={closePlayersModal}
       />
 
@@ -1046,13 +1069,17 @@ export default function ClubPage() {
         guestGenderInput={guestGenderInput}
         guestMixedSideOverrideInput={guestMixedSideOverrideInput}
         guestPoolInput={guestPoolInput}
+        guestRepresentingClubInput={guestRepresentingClubInput}
         poolsEnabled={poolsEnabled}
         poolAName={poolAName}
         poolBName={poolBName}
+        collabFormat={collabFormat}
+        interclubClubOptions={interclubClubOptions}
         onGuestNameChange={setGuestNameInput}
         onGuestGenderChange={handleGuestGenderChange}
         onGuestMixedSideOverrideChange={setGuestMixedSideOverrideInput}
         onGuestPoolChange={setGuestPoolInput}
+        onGuestRepresentingClubChange={setGuestRepresentingClubInput}
         onAddGuest={addGuestName}
         onRemoveGuest={removeGuestName}
         onClose={closeGuestsModal}

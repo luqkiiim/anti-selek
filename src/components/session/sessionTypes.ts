@@ -4,6 +4,7 @@ import {
   PartnerPreference,
   PlayerGender,
   SessionBalanceMetric,
+  SessionCollabFormat,
   SessionMatchmakingStyle,
   SessionMode,
   SessionPairingMode,
@@ -14,6 +15,7 @@ import type { MatchmakingReason } from "@/lib/matchmaking/matchReason";
 
 export interface Player {
   userId: string;
+  representingClubId?: string | null;
   sessionPoints: number;
   ladderEntryAt?: string;
   joinedAt?: string;
@@ -37,6 +39,8 @@ export interface Match {
   id: string;
   status: string;
   scoreSubmittedByUserId?: string | null;
+  team1ClubId?: string | null;
+  team2ClubId?: string | null;
   team1User1: { id: string; name: string; avatarUrl?: string | null };
   team1User2: { id: string; name: string; avatarUrl?: string | null };
   team2User1: { id: string; name: string; avatarUrl?: string | null };
@@ -51,6 +55,8 @@ export interface QueuedMatch {
   id: string;
   createdAt?: string;
   targetPool?: SessionPool | null;
+  team1ClubId?: string | null;
+  team2ClubId?: string | null;
   team1User1: { id: string; name: string; avatarUrl?: string | null };
   team1User2: { id: string; name: string; avatarUrl?: string | null };
   team2User1: { id: string; name: string; avatarUrl?: string | null };
@@ -64,6 +70,8 @@ export interface CompletedMatchInfo {
   team1User2Id: string;
   team2User1Id: string;
   team2User2Id: string;
+  team1ClubId?: string | null;
+  team2ClubId?: string | null;
   team1Score?: number;
   team2Score?: number;
   winnerTeam: number;
@@ -97,6 +105,7 @@ export interface SessionData {
   name: string;
   type: string;
   mode: SessionMode;
+  collabFormat?: SessionCollabFormat;
   scoringType?: SessionScoringType;
   matchmakingStyle?: SessionMatchmakingStyle;
   balanceMetric?: SessionBalanceMetric;

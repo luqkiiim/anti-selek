@@ -15,8 +15,10 @@ import {
   createMatchesForAssignments,
   ensureEnoughPlayers,
   ensureEnoughMatchTypePlayers,
+  ensureInterclubSessionReady,
   filterRankedCandidatesByMatchType,
   GenerateMatchError,
+  getInterclubTeamClubIdsForPartition,
   getRankedCandidates,
   getRequestedOpenCourts,
   loadGenerateMatchContext,
@@ -83,6 +85,8 @@ export async function POST(
       return NextResponse.json(await undoCurrentCourtMatch(targetCourt));
     }
 
+    ensureInterclubSessionReady(sessionData);
+
     if (matchType && sessionData.queuedMatch) {
       throw new GenerateMatchError(
         409,
@@ -101,12 +105,18 @@ export async function POST(
         parsedTeams,
         busyPlayerIds,
       });
+      const teamClubIds = getInterclubTeamClubIdsForPartition(
+        sessionData,
+        parsedTeams
+      );
 
       const [createdMatch] = await createMatchesForAssignments(sessionData.id, [
         {
           courtId: targetCourt.id,
           selectedIds,
           partition: parsedTeams,
+          team1ClubId: teamClubIds.team1ClubId,
+          team2ClubId: teamClubIds.team2ClubId,
           matchmakingReasonJson: null,
         },
       ]);
@@ -204,6 +214,14 @@ export async function POST(
           currentMatchId: targetCourt.currentMatch.id,
           selectedIds: [...replacementSelection.ids],
           partition: replacementSelection.partition,
+          team1ClubId:
+            "team1ClubId" in replacementSelection
+              ? replacementSelection.team1ClubId
+              : null,
+          team2ClubId:
+            "team2ClubId" in replacementSelection
+              ? replacementSelection.team2ClubId
+              : null,
           matchmakingReasonJson: replacementSelection.matchmakingReasonJson ?? null,
           clearArrivalPriority: true,
         })
@@ -268,6 +286,10 @@ export async function POST(
         currentMatchId: targetCourt.currentMatch.id,
         selectedIds: [...bestSelection.ids],
         partition: bestSelection.partition,
+        team1ClubId:
+          "team1ClubId" in bestSelection ? bestSelection.team1ClubId : null,
+        team2ClubId:
+          "team2ClubId" in bestSelection ? bestSelection.team2ClubId : null,
         matchmakingReasonJson: bestSelection.matchmakingReasonJson ?? null,
         clearArrivalPriority: true,
       });
@@ -328,6 +350,10 @@ export async function POST(
           courtId: requestedOpenCourts[0].id,
           selectedIds: [...bestSelection.ids],
           partition: bestSelection.partition,
+          team1ClubId:
+            "team1ClubId" in bestSelection ? bestSelection.team1ClubId : null,
+          team2ClubId:
+            "team2ClubId" in bestSelection ? bestSelection.team2ClubId : null,
           matchmakingReasonJson: bestSelection.matchmakingReasonJson ?? null,
           clearArrivalPriority: true,
         },
@@ -368,6 +394,10 @@ export async function POST(
           courtId: court.id,
           selectedIds: [...selection.ids],
           partition: selection.partition,
+          team1ClubId:
+            "team1ClubId" in selection ? selection.team1ClubId : null,
+          team2ClubId:
+            "team2ClubId" in selection ? selection.team2ClubId : null,
           matchmakingReasonJson: selection.matchmakingReasonJson ?? null,
           clearArrivalPriority: true,
         };

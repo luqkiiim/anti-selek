@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { HostTournamentPanel } from "./HostTournamentPanel";
 import {
   SessionBalanceMetric,
+  SessionCollabFormat,
   SessionMatchmakingStyle,
   SessionPairingMode,
   SessionPool,
@@ -27,6 +28,8 @@ function renderPanel(
       onAutoQueueEnabledChange={vi.fn()}
       respectPlayerRest={true}
       onRespectPlayerRestChange={vi.fn()}
+      collabFormat={SessionCollabFormat.FREE_PLAY}
+      onCollabFormatChange={vi.fn()}
       partnerClubId=""
       partnerClubSearch=""
       onPartnerClubSearchChange={vi.fn()}

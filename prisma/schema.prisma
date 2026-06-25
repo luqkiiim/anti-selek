@@ -99,6 +99,7 @@ model Session {
   name                   String
   type                   String    @default("POINTS") // POINTS or ELO
   mode                   String    @default("MEXICANO") // MEXICANO or MIXICANO
+  collabFormat           String    @default("FREE_PLAY") // FREE_PLAY or INTERCLUB
   scoringType            String    @default("POINTS")
   matchmakingStyle       String    @default("BALANCED")
   balanceMetric          String    @default("SESSION_POINTS")
@@ -166,6 +167,7 @@ model SessionPlayer {
   id                String  @id @default(cuid())
   sessionId         String
   userId            String
+  representingClubId String?
   isGuest           Boolean @default(false)
   gender            String  @default("UNSPECIFIED") // MALE, FEMALE, UNSPECIFIED
   partnerPreference String  @default("OPEN") // legacy MIXICANO preference fallback: OPEN, FEMALE_FLEX
@@ -191,6 +193,7 @@ model SessionPlayer {
   user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([sessionId, userId])
+  @@index([sessionId, representingClubId])
 }
 
 model Match {
@@ -203,11 +206,13 @@ model Match {
   // Team 1
   team1User1Id String
   team1User2Id String
+  team1ClubId  String?
   team1Score   Int?
 
   // Team 2
   team2User1Id String
   team2User2Id String
+  team2ClubId  String?
   team2Score   Int?
 
   winnerTeam            Int? // 1 or 2
@@ -226,6 +231,9 @@ model Match {
   team1User2          User                 @relation("Team1Player2", fields: [team1User2Id], references: [id], onDelete: Cascade)
   team2User1          User                 @relation("Team2Player1", fields: [team2User1Id], references: [id], onDelete: Cascade)
   team2User2          User                 @relation("Team2Player2", fields: [team2User2Id], references: [id], onDelete: Cascade)
+
+  @@index([sessionId, team1ClubId])
+  @@index([sessionId, team2ClubId])
 }
 
 model MatchEloAdjustment {
@@ -252,8 +260,10 @@ model QueuedMatch {
   sessionId             String   @unique
   team1User1Id          String
   team1User2Id          String
+  team1ClubId           String?
   team2User1Id          String
   team2User2Id          String
+  team2ClubId           String?
   targetPool            String? // A, B
   matchmakingReasonJson String?
   createdAt             DateTime @default(now())

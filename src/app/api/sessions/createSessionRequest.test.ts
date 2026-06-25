@@ -4,6 +4,7 @@ import {
   PartnerPreference,
   PlayerGender,
   SessionBalanceMetric,
+  SessionCollabFormat,
   SessionMatchmakingStyle,
   SessionMode,
   SessionPairingMode,
@@ -53,6 +54,7 @@ describe("parseCreateSessionRequest", () => {
     expect(parsed.type).toBe(SessionType.ELO);
     expect(parsed.mode).toBe(SessionMode.MIXICANO);
     expect(parsed.scoringType).toBe(SessionScoringType.POINTS);
+    expect(parsed.collabFormat).toBe(SessionCollabFormat.FREE_PLAY);
     expect(parsed.matchmakingStyle).toBe(SessionMatchmakingStyle.BALANCED);
     expect(parsed.balanceMetric).toBe(SessionBalanceMetric.RATING);
     expect(parsed.pairingMode).toBe(SessionPairingMode.MIXED);
@@ -301,6 +303,54 @@ describe("parseCreateSessionRequest", () => {
     });
 
     expect(parsed.partnerClubId).toBe("community-2");
+  });
+
+  it("accepts club vs club collab sessions with representing clubs", () => {
+    const parsed = parseCreateSessionRequest({
+      name: "Interclub Night",
+      clubId: "community-1",
+      partnerClubId: "community-2",
+      collabFormat: SessionCollabFormat.INTERCLUB,
+      playerConfigs: [
+        { userId: "player-1", representingClubId: "community-1" },
+      ],
+      guestConfigs: [
+        { name: "Guest A", representingClubId: "community-2" },
+      ],
+    });
+
+    expect(parsed.collabFormat).toBe(SessionCollabFormat.INTERCLUB);
+    expect(parsed.playerConfigMap.get("player-1")?.representingClubId).toBe(
+      "community-1"
+    );
+    expect(parsed.normalizedGuests[0].representingClubId).toBe("community-2");
+  });
+
+  it("rejects invalid club vs club setup", () => {
+    expect(() =>
+      parseCreateSessionRequest({
+        name: "No Partner",
+        clubId: "community-1",
+        collabFormat: SessionCollabFormat.INTERCLUB,
+      })
+    ).toThrowError(
+      new SessionRouteError(
+        "Club vs club sessions require a partner club",
+        400
+      )
+    );
+
+    expect(() =>
+      parseCreateSessionRequest({
+        name: "Pooled",
+        clubId: "community-1",
+        partnerClubId: "community-2",
+        collabFormat: SessionCollabFormat.INTERCLUB,
+        poolsEnabled: true,
+      })
+    ).toThrowError(
+      new SessionRouteError("Club vs club sessions do not support pools", 400)
+    );
   });
 
   it("accepts legacy community identifiers", () => {

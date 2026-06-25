@@ -5,7 +5,13 @@ import {
   getMixedSideDisplayLabel,
   getMixedSideOverrideOptionForGender,
 } from "@/lib/mixedSide";
-import { MixedSide, PlayerGender, SessionMode, SessionPool } from "@/types/enums";
+import {
+  MixedSide,
+  PlayerGender,
+  SessionCollabFormat,
+  SessionMode,
+  SessionPool,
+} from "@/types/enums";
 import type { ClubGuestConfig } from "./clubTypes";
 
 interface ClubGuestsModalProps {
@@ -16,13 +22,17 @@ interface ClubGuestsModalProps {
   guestGenderInput: PlayerGender;
   guestMixedSideOverrideInput: MixedSide | null;
   guestPoolInput: SessionPool;
+  guestRepresentingClubInput: string;
   poolsEnabled: boolean;
   poolAName: string;
   poolBName: string;
+  collabFormat: SessionCollabFormat;
+  interclubClubOptions: Array<{ id: string; name: string }>;
   onGuestNameChange: (value: string) => void;
   onGuestGenderChange: (value: PlayerGender) => void;
   onGuestMixedSideOverrideChange: (value: MixedSide | null) => void;
   onGuestPoolChange: (value: SessionPool) => void;
+  onGuestRepresentingClubChange: (value: string) => void;
   onAddGuest: () => void;
   onRemoveGuest: (name: string) => void;
   onClose: () => void;
@@ -36,13 +46,17 @@ export function ClubGuestsModal({
   guestGenderInput,
   guestMixedSideOverrideInput,
   guestPoolInput,
+  guestRepresentingClubInput,
   poolsEnabled,
   poolAName,
   poolBName,
+  collabFormat,
+  interclubClubOptions,
   onGuestNameChange,
   onGuestGenderChange,
   onGuestMixedSideOverrideChange,
   onGuestPoolChange,
+  onGuestRepresentingClubChange,
   onAddGuest,
   onRemoveGuest,
   onClose,
@@ -50,6 +64,10 @@ export function ClubGuestsModal({
   if (!open) return null;
 
   const mixedSideOption = getMixedSideOverrideOptionForGender(guestGenderInput);
+  const isInterclub = collabFormat === SessionCollabFormat.INTERCLUB;
+  const clubNameById = new Map(
+    interclubClubOptions.map((option) => [option.id, option.name])
+  );
 
   return (
     <PlayerPickerSheet
@@ -104,6 +122,22 @@ export function ClubGuestsModal({
               >
                 <option value={SessionPool.A}>{poolAName}</option>
                 <option value={SessionPool.B}>{poolBName}</option>
+              </select>
+            ) : null}
+            {isInterclub ? (
+              <select
+                aria-label="Guest representing club"
+                value={guestRepresentingClubInput}
+                onChange={(event) =>
+                  onGuestRepresentingClubChange(event.target.value)
+                }
+                className="field px-3 py-2.5 text-sm"
+              >
+                {interclubClubOptions.map((option) => (
+                  <option key={option.id} value={option.id}>
+                    {option.name}
+                  </option>
+                ))}
               </select>
             ) : null}
             {mixedSideOption ? (
@@ -168,6 +202,11 @@ export function ClubGuestsModal({
                   {poolsEnabled ? (
                     <span className="app-chip app-chip-accent px-2 py-0.5 text-[10px]">
                       {guest.pool === SessionPool.A ? poolAName : poolBName}
+                    </span>
+                  ) : null}
+                  {isInterclub && guest.representingClubId ? (
+                    <span className="app-chip app-chip-warning px-2 py-0.5 text-[10px]">
+                      {clubNameById.get(guest.representingClubId) ?? "Club"}
                     </span>
                   ) : null}
                   {guest.mixedSideOverride ? (

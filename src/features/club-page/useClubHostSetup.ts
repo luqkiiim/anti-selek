@@ -14,6 +14,7 @@ import {
   MixedSide,
   PlayerGender,
   SessionBalanceMetric,
+  SessionCollabFormat,
   SessionMatchmakingStyle,
   SessionMode,
   SessionPairingMode,
@@ -63,6 +64,9 @@ export function useClubHostSetup({
   const [respectPlayerRest, setRespectPlayerRest] = useState(true);
   const [courtCount, setCourtCount] = useState(DEFAULT_COURT_COUNT);
   const [poolsEnabled, setPoolsEnabled] = useState(false);
+  const [collabFormat, setCollabFormatState] = useState<SessionCollabFormat>(
+    SessionCollabFormat.FREE_PLAY
+  );
   const [poolAName, setPoolAName] = useState("Open");
   const [poolBName, setPoolBName] = useState("Regular");
   const [selectedPlayerIds, setSelectedPlayerIds] = useState<string[]>([]);
@@ -79,6 +83,10 @@ export function useClubHostSetup({
   const [selectedPlayerPools, setSelectedPlayerPools] = useState<
     Record<string, SessionPool>
   >({});
+  const [
+    selectedPlayerRepresentingClubs,
+    setSelectedPlayerRepresentingClubs,
+  ] = useState<Record<string, string | null>>({});
   const [guestNameInput, setGuestNameInput] = useState("");
   const [guestGenderInput, setGuestGenderInput] = useState<PlayerGender>(
     PlayerGender.MALE
@@ -88,6 +96,8 @@ export function useClubHostSetup({
   const [guestPoolInput, setGuestPoolInput] = useState<SessionPool>(
     SessionPool.A
   );
+  const [guestRepresentingClubInput, setGuestRepresentingClubInput] =
+    useState("");
   const [guestConfigs, setGuestConfigs] = useState<ClubGuestConfig[]>([]);
   const [creatingSession, setCreatingSession] = useState(false);
   const [showPlayersModal, setShowPlayersModal] = useState(false);
@@ -104,6 +114,7 @@ export function useClubHostSetup({
     setRespectPlayerRest(true);
     setCourtCount(DEFAULT_COURT_COUNT);
     setPoolsEnabled(false);
+    setCollabFormatState(SessionCollabFormat.FREE_PLAY);
     setPoolAName("Open");
     setPoolBName("Regular");
     setSelectedPlayerIds([]);
@@ -115,11 +126,13 @@ export function useClubHostSetup({
     setCollabRoster([]);
     setLoadingCollabRoster(false);
     setSelectedPlayerPools({});
+    setSelectedPlayerRepresentingClubs({});
     setGuestConfigs([]);
     setGuestNameInput("");
     setGuestGenderInput(PlayerGender.MALE);
     setGuestMixedSideOverrideInput(null);
     setGuestPoolInput(SessionPool.A);
+    setGuestRepresentingClubInput("");
     setPlayerSearch("");
     setShowPlayersModal(false);
     setShowGuestsModal(false);
@@ -220,6 +233,44 @@ export function useClubHostSetup({
   const effectiveSelectablePlayers = partnerClubId
     ? collabRoster
     : selectablePlayers;
+  const interclubClubIds = partnerClubId ? [clubId, partnerClubId] : [];
+  const isInterclub = collabFormat === SessionCollabFormat.INTERCLUB;
+
+  function getEligibleRepresentingClubIds(player: ClubPageMember) {
+    if (!partnerClubId) {
+      return [];
+    }
+
+    const validIds = new Set([clubId, partnerClubId]);
+    const badges = [
+      ...(player.communityBadges ?? []),
+      ...(player.linkedClubBadges ?? []),
+    ];
+
+    return Array.from(
+      new Set(
+        badges
+          .map((badge) => badge.id)
+          .filter((badgeClubId) => validIds.has(badgeClubId))
+      )
+    );
+  }
+
+  function getDefaultRepresentingClubId(playerId: string) {
+    if (!isInterclub) {
+      return null;
+    }
+
+    const player = effectiveSelectablePlayers.find(
+      (candidate) => candidate.id === playerId
+    );
+    if (!player) {
+      return null;
+    }
+
+    const eligibleClubIds = getEligibleRepresentingClubIds(player);
+    return eligibleClubIds.length === 1 ? eligibleClubIds[0] : null;
+  }
 
   useEffect(() => {
     const availableIds = new Set(
@@ -228,7 +279,61 @@ export function useClubHostSetup({
     setSelectedPlayerIds((current) =>
       current.filter((playerId) => availableIds.has(playerId))
     );
+    setSelectedPlayerRepresentingClubs((current) => {
+      const next: Record<string, string | null> = {};
+      for (const [playerId, representingClubId] of Object.entries(current)) {
+        if (availableIds.has(playerId)) {
+          next[playerId] = representingClubId;
+        }
+      }
+      return next;
+    });
   }, [effectiveSelectablePlayers]);
+
+  const setCollabFormat = (nextFormat: SessionCollabFormat) => {
+    setCollabFormatState(nextFormat);
+
+    if (nextFormat === SessionCollabFormat.INTERCLUB) {
+      setPoolsEnabled(false);
+      setMatchmakingStyle(SessionMatchmakingStyle.BALANCED);
+      setBalanceMetric(SessionBalanceMetric.RATING);
+      setSelectedPlayerRepresentingClubs((current) => {
+        const next = { ...current };
+        for (const playerId of selectedPlayerIds) {
+          if (next[playerId] === undefined) {
+            next[playerId] = getDefaultRepresentingClubId(playerId);
+          }
+        }
+        return next;
+      });
+      if (!guestRepresentingClubInput && interclubClubIds.length > 0) {
+        setGuestRepresentingClubInput(interclubClubIds[0]);
+      }
+      setGuestConfigs((current) =>
+        current.map((guest) => ({
+          ...guest,
+          representingClubId:
+            guest.representingClubId ?? interclubClubIds[0] ?? null,
+        }))
+      );
+      return;
+    }
+
+    setSelectedPlayerRepresentingClubs({});
+    setGuestRepresentingClubInput("");
+    setGuestConfigs((current) =>
+      current.map((guest) => ({ ...guest, representingClubId: null }))
+    );
+  };
+
+  const setPoolsEnabledForFormat = (nextPoolsEnabled: boolean) => {
+    if (isInterclub && nextPoolsEnabled) {
+      setPoolsEnabled(false);
+      return;
+    }
+
+    setPoolsEnabled(nextPoolsEnabled);
+  };
 
   const createSession = async () => {
     if (!newSessionName.trim() || !clubId) return false;
@@ -242,6 +347,42 @@ export function useClubHostSetup({
         setError(
           `${mixedModeLabel} requires MALE/FEMALE gender for guest ${invalidGuest.name}`
         );
+        return false;
+      }
+    }
+
+    if (isInterclub) {
+      if (!partnerClubId) {
+        setError("Choose a partner club before creating club vs club.");
+        return false;
+      }
+
+      const invalidPlayer = selectedPlayerIds
+        .map((playerId) =>
+          effectiveSelectablePlayers.find((player) => player.id === playerId)
+        )
+        .find((player) => {
+          if (!player) return true;
+          const representingClubId =
+            selectedPlayerRepresentingClubs[player.id] ??
+            getDefaultRepresentingClubId(player.id);
+          return (
+            !representingClubId ||
+            !getEligibleRepresentingClubIds(player).includes(representingClubId)
+          );
+        });
+
+      if (invalidPlayer) {
+        setError("Assign every selected player to a club side.");
+        return false;
+      }
+
+      if (
+        guestConfigs.some(
+          (guest) => !guest.representingClubId || !interclubClubIds.includes(guest.representingClubId)
+        )
+      ) {
+        setError("Assign every guest to a club side.");
         return false;
       }
     }
@@ -264,6 +405,7 @@ export function useClubHostSetup({
           respectPlayerRest,
           courtCount,
           clubId,
+          collabFormat,
           partnerClubId: partnerClubId || undefined,
           playerIds: selectedPlayerIds,
           playerConfigs: selectedPlayerIds.map((userId) => ({
@@ -271,6 +413,10 @@ export function useClubHostSetup({
             pool: poolsEnabled
               ? (selectedPlayerPools[userId] ?? SessionPool.A)
               : SessionPool.A,
+            representingClubId: isInterclub
+              ? (selectedPlayerRepresentingClubs[userId] ??
+                getDefaultRepresentingClubId(userId))
+              : null,
           })),
           guestConfigs,
           poolsEnabled,
@@ -297,12 +443,15 @@ export function useClubHostSetup({
       setMatchmakingStyle(SessionMatchmakingStyle.BALANCED);
       setBalanceMetric(SessionBalanceMetric.SESSION_POINTS);
       setPairingMode(SessionPairingMode.OPEN);
+      setCollabFormatState(SessionCollabFormat.FREE_PLAY);
       setPartnerClubId("");
       setPartnerClubSearch("");
       setSelectedPartnerClub(null);
       setCollabCandidates([]);
       setCollabRoster([]);
       setLoadingCollabRoster(false);
+      setSelectedPlayerRepresentingClubs({});
+      setGuestRepresentingClubInput("");
       router.push(`/session/${data.code}`);
       return true;
     } catch (err: unknown) {
@@ -326,17 +475,35 @@ export function useClubHostSetup({
               [playerId]: SessionPool.A,
             }
       );
+      setSelectedPlayerRepresentingClubs((current) => {
+        if (!isInterclub || current[playerId] !== undefined) {
+          return current;
+        }
+
+        return {
+          ...current,
+          [playerId]: getDefaultRepresentingClubId(playerId),
+        };
+      });
     }
 
     setSelectedPlayerIds((prev) =>
       isSelected ? prev.filter((id) => id !== playerId) : [...prev, playerId]
     );
+    if (isSelected) {
+      setSelectedPlayerRepresentingClubs((current) => {
+        const next = { ...current };
+        delete next[playerId];
+        return next;
+      });
+    }
   };
 
   const toggleAllPlayers = () => {
     const allOtherIds = effectiveSelectablePlayers.map((player) => player.id);
     if (selectedPlayerIds.length === allOtherIds.length) {
       setSelectedPlayerIds([]);
+      setSelectedPlayerRepresentingClubs({});
       return;
     }
     setSelectedPlayerPools((current) => {
@@ -349,12 +516,33 @@ export function useClubHostSetup({
       return next;
     });
     setSelectedPlayerIds(allOtherIds);
+    if (isInterclub) {
+      setSelectedPlayerRepresentingClubs((current) => {
+        const next = { ...current };
+        for (const playerId of allOtherIds) {
+          if (next[playerId] === undefined) {
+            next[playerId] = getDefaultRepresentingClubId(playerId);
+          }
+        }
+        return next;
+      });
+    }
   };
 
   const updateSelectedPlayerPool = (playerId: string, pool: SessionPool) => {
     setSelectedPlayerPools((current) => ({
       ...current,
       [playerId]: pool,
+    }));
+  };
+
+  const updateSelectedPlayerRepresentingClub = (
+    playerId: string,
+    representingClubId: string | null
+  ) => {
+    setSelectedPlayerRepresentingClubs((current) => ({
+      ...current,
+      [playerId]: representingClubId,
     }));
   };
 
@@ -391,12 +579,18 @@ export function useClubHostSetup({
         mixedSideOverride: resolvedMixedState.mixedSideOverride,
         pool: poolsEnabled ? guestPoolInput : SessionPool.A,
         initialElo: DEFAULT_GUEST_INITIAL_ELO,
+        representingClubId: isInterclub
+          ? guestRepresentingClubInput || interclubClubIds[0] || null
+          : null,
       },
     ]);
     setGuestNameInput("");
     setGuestGenderInput(PlayerGender.MALE);
     setGuestMixedSideOverrideInput(null);
     setGuestPoolInput(SessionPool.A);
+    if (isInterclub) {
+      setGuestRepresentingClubInput(interclubClubIds[0] ?? "");
+    }
   };
 
   const removeGuestName = (nameToRemove: string) => {
@@ -458,6 +652,7 @@ export function useClubHostSetup({
     setCollabCandidates([]);
     setSelectedPlayerIds([]);
     setSelectedPlayerPools({});
+    setSelectedPlayerRepresentingClubs({});
   };
 
   const clearPartnerClub = () => {
@@ -469,6 +664,12 @@ export function useClubHostSetup({
     setLoadingCollabRoster(false);
     setSelectedPlayerIds([]);
     setSelectedPlayerPools({});
+    setSelectedPlayerRepresentingClubs({});
+    setCollabFormatState(SessionCollabFormat.FREE_PLAY);
+    setGuestRepresentingClubInput("");
+    setGuestConfigs((current) =>
+      current.map((guest) => ({ ...guest, representingClubId: null }))
+    );
   };
 
   return {
@@ -490,7 +691,9 @@ export function useClubHostSetup({
     courtCount,
     setCourtCount,
     poolsEnabled,
-    setPoolsEnabled,
+    setPoolsEnabled: setPoolsEnabledForFormat,
+    collabFormat,
+    setCollabFormat,
     poolAName,
     setPoolAName,
     poolBName,
@@ -507,6 +710,7 @@ export function useClubHostSetup({
     selectablePlayers: effectiveSelectablePlayers,
     selectedPlayerIds,
     selectedPlayerPools,
+    selectedPlayerRepresentingClubs,
     selectedPoolCounts,
     guestNameInput,
     setGuestNameInput,
@@ -515,6 +719,8 @@ export function useClubHostSetup({
     setGuestMixedSideOverrideInput,
     guestPoolInput,
     setGuestPoolInput,
+    guestRepresentingClubInput,
+    setGuestRepresentingClubInput,
     guestConfigs,
     guestPoolCounts,
     creatingSession,
@@ -526,6 +732,7 @@ export function useClubHostSetup({
     togglePlayerSelection,
     toggleAllPlayers,
     updateSelectedPlayerPool,
+    updateSelectedPlayerRepresentingClub,
     addGuestName,
     removeGuestName,
     handleGuestGenderChange,

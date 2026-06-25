@@ -19,12 +19,14 @@ import {
   isValidSessionPairingMode,
   isValidSessionScoringType,
 } from "@/lib/sessionSettings";
+import { isValidSessionCollabFormat } from "@/lib/sessionCollabFormat";
 import {
   MixedSide,
   PartnerPreference,
   PlayerGender,
   SessionMode,
   SessionPool,
+  SessionCollabFormat,
   SessionType,
 } from "@/types/enums";
 import {
@@ -50,6 +52,7 @@ interface CreateSessionBody {
   matchmakingStyle?: unknown;
   balanceMetric?: unknown;
   pairingMode?: unknown;
+  collabFormat?: unknown;
   isTest?: unknown;
   autoQueueEnabled?: unknown;
   respectPlayerRest?: unknown;
@@ -82,6 +85,7 @@ function normalizePlayerConfigMap(playerConfigs: unknown) {
       partnerPreference?: unknown;
       mixedSideOverride?: unknown;
       pool?: unknown;
+      representingClubId?: unknown;
     };
     if (typeof candidate.userId !== "string") continue;
 
@@ -105,6 +109,12 @@ function normalizePlayerConfigMap(playerConfigs: unknown) {
     }
     if (isValidSessionPool(candidate.pool)) {
       normalized.pool = candidate.pool;
+    }
+    if (
+      candidate.representingClubId === null ||
+      typeof candidate.representingClubId === "string"
+    ) {
+      normalized.representingClubId = candidate.representingClubId;
     }
 
     playerConfigMap.set(candidate.userId, normalized);
@@ -170,6 +180,7 @@ function normalizeGuests(
         mixedSideOverride?: unknown;
         pool?: unknown;
         initialElo?: unknown;
+        representingClubId?: unknown;
       };
       if (typeof candidate.name !== "string") continue;
 
@@ -200,6 +211,15 @@ function normalizeGuests(
         poolsEnabled && isValidSessionPool(candidate.pool)
           ? candidate.pool
           : SessionPool.A;
+      const hasRepresentingClubId = Object.prototype.hasOwnProperty.call(
+        candidate,
+        "representingClubId"
+      );
+      const representingClubId =
+        candidate.representingClubId === null ||
+        typeof candidate.representingClubId === "string"
+          ? candidate.representingClubId
+          : null;
 
       upsertGuest(
         candidate.name,
@@ -210,6 +230,14 @@ function normalizeGuests(
         initialElo,
         true
       );
+      const key = candidate.name.trim().toLowerCase();
+      const normalizedGuest = normalizedGuestsByName.get(key);
+      if (normalizedGuest && hasRepresentingClubId) {
+        normalizedGuestsByName.set(key, {
+          ...normalizedGuest,
+          representingClubId,
+        });
+      }
     }
   }
 
@@ -233,6 +261,7 @@ export function parseCreateSessionRequest(
     matchmakingStyle,
     balanceMetric,
     pairingMode,
+    collabFormat = SessionCollabFormat.FREE_PLAY,
     playerIds = [],
     guestNames = [],
     playerConfigs = [],
@@ -338,6 +367,12 @@ export function parseCreateSessionRequest(
   if (pairingMode !== undefined && !isValidSessionPairingMode(pairingMode)) {
     throw new SessionRouteError("Invalid pairing mode", 400);
   }
+  if (
+    collabFormat !== undefined &&
+    !isValidSessionCollabFormat(collabFormat)
+  ) {
+    throw new SessionRouteError("Invalid collab format", 400);
+  }
 
   const requestedPlayerIds = Array.isArray(playerIds)
     ? playerIds.filter((id): id is string => typeof id === "string")
@@ -356,6 +391,24 @@ export function parseCreateSessionRequest(
 
   if (normalizedPoolsEnabled && normalizedPoolAName === normalizedPoolBName) {
     throw new SessionRouteError("Pool names must be different", 400);
+  }
+  const normalizedCollabFormat =
+    typeof collabFormat === "string"
+      ? (collabFormat as SessionCollabFormat)
+      : SessionCollabFormat.FREE_PLAY;
+  if (normalizedCollabFormat === SessionCollabFormat.INTERCLUB) {
+    if (typeof partnerClubId !== "string" || !partnerClubId) {
+      throw new SessionRouteError(
+        "Club vs club sessions require a partner club",
+        400
+      );
+    }
+    if (normalizedPoolsEnabled) {
+      throw new SessionRouteError(
+        "Club vs club sessions do not support pools",
+        400
+      );
+    }
   }
   const settings = getSessionSettings({
     type: typeof type === "string" ? type : undefined,
@@ -379,6 +432,7 @@ export function parseCreateSessionRequest(
     matchmakingStyle: settings.matchmakingStyle,
     balanceMetric: settings.balanceMetric,
     pairingMode: settings.pairingMode,
+    collabFormat: normalizedCollabFormat,
     clubId,
     partnerClubId:
       typeof partnerClubId === "string" ? partnerClubId : null,

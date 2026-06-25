@@ -4,6 +4,7 @@ import {
   MixedSide,
   PartnerPreference,
   PlayerGender,
+  SessionCollabFormat,
   SessionMode,
   SessionPool,
   SessionStatus,
@@ -105,6 +106,7 @@ function createSessionPlayer(
     inactiveSeconds?: number;
     pool?: SessionPool;
     needsMoreRest?: boolean;
+    representingClubId?: string | null;
   } = {}
 ) {
   return {
@@ -112,6 +114,7 @@ function createSessionPlayer(
     sessionPoints: options.sessionPoints ?? 1000,
     isPaused: options.isPaused ?? false,
     isGuest: options.isGuest ?? false,
+    representingClubId: options.representingClubId ?? null,
     gender: options.gender ?? PlayerGender.MALE,
     partnerPreference: options.partnerPreference ?? PartnerPreference.OPEN,
     mixedSideOverride: options.mixedSideOverride ?? null,
@@ -141,6 +144,7 @@ function createSessionData(
     name: "Test Session",
     type: SessionType.ELO,
     mode: SessionMode.MEXICANO,
+    collabFormat: SessionCollabFormat.FREE_PLAY,
     status: SessionStatus.ACTIVE,
     poolsEnabled: false,
     courts: [],
@@ -155,6 +159,37 @@ function createSessionData(
     matches: [],
     ...overrides,
   } as unknown as GenerateMatchSession;
+}
+
+function createInterclubLinks() {
+  return [
+    {
+      id: "session-club-host",
+      sessionId: "session-1",
+      clubId: "community-1",
+      role: "HOST",
+      status: "ACCEPTED",
+      requestedById: null,
+      reviewedById: null,
+      reviewedAt: null,
+      createdAt: new Date("2026-01-01T00:00:00Z"),
+      updatedAt: new Date("2026-01-01T00:00:00Z"),
+      club: { id: "community-1", name: "Club A" },
+    },
+    {
+      id: "session-club-partner",
+      sessionId: "session-1",
+      clubId: "community-2",
+      role: "PARTNER",
+      status: "ACCEPTED",
+      requestedById: null,
+      reviewedById: null,
+      reviewedAt: null,
+      createdAt: new Date("2026-01-01T00:00:01Z"),
+      updatedAt: new Date("2026-01-01T00:00:01Z"),
+      club: { id: "community-2", name: "Club B" },
+    },
+  ] as unknown as GenerateMatchSession["sessionClubs"];
 }
 
 function createCourt(
@@ -818,6 +853,118 @@ describe("generate match service", () => {
           .map((candidate) => candidate.userId)
           .sort()
       ).toEqual(["female-lower", "male-lower"]);
+    });
+
+    it("selects strict club pairs for club vs club sessions", () => {
+      const players = [
+        createSessionPlayer("A1", {
+          representingClubId: "community-1",
+          elo: 1000,
+        }),
+        createSessionPlayer("A2", {
+          representingClubId: "community-1",
+          elo: 1020,
+        }),
+        createSessionPlayer("B1", {
+          representingClubId: "community-2",
+          elo: 1010,
+        }),
+        createSessionPlayer("B2", {
+          representingClubId: "community-2",
+          elo: 1030,
+        }),
+      ];
+      const sessionData = createSessionData({
+        collabFormat: SessionCollabFormat.INTERCLUB,
+        sessionClubs: createInterclubLinks(),
+        players,
+      });
+      const { rankedCandidates } = getRankedCandidates(sessionData, new Set());
+
+      const selection = selectSingleCourtMatch({
+        rankedCandidates,
+        playersById: createPlayersById(players),
+        sessionData,
+        rotationHistory: buildRotationHistory([]),
+        reshuffleSource: null,
+      });
+
+      expect(selection.partition).toEqual({
+        team1: ["A1", "A2"],
+        team2: ["B1", "B2"],
+      });
+      expect(selection).toEqual(
+        expect.objectContaining({
+          team1ClubId: "community-1",
+          team2ClubId: "community-2",
+          matchmakingReasonJson: expect.any(String),
+        })
+      );
+    });
+
+    it("uses dual-club players only for their assigned side", () => {
+      const players = [
+        createSessionPlayer("A1", { representingClubId: "community-1" }),
+        createSessionPlayer("dual", { representingClubId: "community-1" }),
+        createSessionPlayer("B1", { representingClubId: "community-2" }),
+        createSessionPlayer("B2", { representingClubId: "community-2" }),
+      ];
+      const sessionData = createSessionData({
+        collabFormat: SessionCollabFormat.INTERCLUB,
+        sessionClubs: createInterclubLinks(),
+        players,
+      });
+      const { rankedCandidates } = getRankedCandidates(sessionData, new Set());
+
+      const selection = selectSingleCourtMatch({
+        rankedCandidates,
+        playersById: createPlayersById(players),
+        sessionData,
+        rotationHistory: buildRotationHistory([]),
+        reshuffleSource: null,
+      });
+
+      expect(selection.partition.team1).toContain("dual");
+      expect(selection.partition.team2).not.toContain("dual");
+    });
+
+    it("reports mixed-rule shortages for club vs club sessions", () => {
+      const players = [
+        createSessionPlayer("A1", {
+          representingClubId: "community-1",
+          gender: PlayerGender.MALE,
+        }),
+        createSessionPlayer("A2", {
+          representingClubId: "community-1",
+          gender: PlayerGender.MALE,
+        }),
+        createSessionPlayer("B1", {
+          representingClubId: "community-2",
+          gender: PlayerGender.MALE,
+        }),
+        createSessionPlayer("B2", {
+          representingClubId: "community-2",
+          gender: PlayerGender.FEMALE,
+          partnerPreference: PartnerPreference.FEMALE_FLEX,
+        }),
+      ];
+      const sessionData = createSessionData({
+        collabFormat: SessionCollabFormat.INTERCLUB,
+        mode: SessionMode.MIXICANO,
+        sessionClubs: createInterclubLinks(),
+        players,
+      });
+      const { rankedCandidates } = getRankedCandidates(sessionData, new Set());
+
+      expect(() =>
+        selectSingleCourtMatch({
+          rankedCandidates,
+          playersById: createPlayersById(players),
+          sessionData,
+          rotationHistory: buildRotationHistory([]),
+          reshuffleSource: null,
+        })
+      ).toThrowError(/No valid club vs club pairing/);
     });
 
     it("throws when no valid pairing exists", () => {
