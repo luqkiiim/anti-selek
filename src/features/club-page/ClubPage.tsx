@@ -962,10 +962,13 @@ export default function ClubPage() {
           />
         ) : null}
 
-        <section className="app-panel-soft hidden p-2 sm:block">
+        <section
+          aria-label="Club section tabs"
+          className="app-panel-soft hidden p-2 xl:block"
+        >
           <div
             className={`grid gap-2 ${
-              canManageClub ? "sm:grid-cols-4" : "sm:grid-cols-3"
+              canManageClub ? "xl:grid-cols-4" : "xl:grid-cols-3"
             }`}
           >
             {sectionTabs.map((tab) => {
@@ -1011,7 +1014,7 @@ export default function ClubPage() {
           onTouchMove={handleClubPagerTouchMove}
           onTouchEnd={handleClubPagerTouchEnd}
           onTouchCancel={handleClubPagerTouchCancel}
-          className="app-swipe-track -mx-1 overflow-x-auto overflow-y-hidden overscroll-x-none sm:hidden"
+          className="app-swipe-track -mx-1 overflow-x-auto overflow-y-hidden overscroll-x-none xl:hidden"
           style={
             clubPagerHeight !== null
               ? { height: `${clubPagerHeight}px` }
@@ -1036,7 +1039,7 @@ export default function ClubPage() {
           </div>
         </div>
 
-        <div className="hidden space-y-8 sm:block">
+        <div className="hidden space-y-8 xl:block">
           {renderClubSection(activeSection)}
         </div>
       </div>
@@ -1116,7 +1119,7 @@ export default function ClubPage() {
       ) : null}
 
       {error ? (
-        <div className="fixed bottom-24 left-6 right-6 z-50 sm:bottom-6">
+        <div className="fixed bottom-24 left-6 right-6 z-50 xl:bottom-6">
           <div className="bg-red-600 text-white px-6 py-4 rounded-2xl shadow-2xl flex justify-between items-center">
             <p className="text-xs font-black uppercase tracking-wide">
               {error}

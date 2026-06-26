@@ -122,8 +122,15 @@ export async function createStartedHostSession(
   const hostSetupButton = page.getByRole("button", {
     name: "Host Setup desk",
   });
+  const hostSetupBottomTab = page
+    .getByRole("button", { name: "Host setup", exact: true })
+    .filter({ visible: true })
+    .first();
+
   if (await hostSetupButton.isVisible()) {
     await hostSetupButton.click();
+  } else if (await hostSetupBottomTab.isVisible().catch(() => false)) {
+    await hostSetupBottomTab.click();
   } else {
     await page.getByRole("button", { name: "Open Host Setup" }).click();
   }

@@ -91,6 +91,7 @@ export function ClubBottomTabs({
       activeId={activeTab}
       onSelect={handleSelect}
       ariaLabel="Club navigation"
+      visibilityClassName="xl:hidden"
     />
   );
 }
