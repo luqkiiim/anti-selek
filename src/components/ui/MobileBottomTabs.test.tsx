@@ -61,12 +61,18 @@ describe("MobileBottomTabs", () => {
         />
       );
     });
+    await act(async () => {
+      await new Promise((resolve) => queueMicrotask(resolve));
+    });
 
-    const nav = container.querySelector("nav");
+    const nav = document.body.querySelector("nav");
     expect(nav).not.toBeNull();
+    expect(nav?.parentElement).toBe(document.body);
     expect(nav?.getAttribute("aria-label")).toBe("Club navigation");
     expect(nav?.className).toContain("fixed");
     expect(nav?.className).toContain("bottom-0");
+    expect(nav?.className).toContain("transform-gpu");
+    expect(nav?.className).toContain("will-change-transform");
     expect(nav?.className).toContain("rounded-t-2xl");
     expect(nav?.className).toContain("border-t");
     expect(nav?.className).toContain("bg-white/95");
@@ -85,13 +91,13 @@ describe("MobileBottomTabs", () => {
     expect(tabContent?.className).not.toContain("bg-white/95");
     expect(tabContent?.className).not.toContain("shadow-[0_12px");
 
-    const activeTab = container.querySelector(
+    const activeTab = document.body.querySelector(
       'button[aria-label="Tournaments"]'
     );
     expect(activeTab?.getAttribute("aria-current")).toBe("page");
     expect(activeTab?.textContent).toContain("Tournaments");
 
-    const disabledTab = container.querySelector(
+    const disabledTab = document.body.querySelector(
       'button[aria-label="Player profile"]'
     ) as HTMLButtonElement | null;
     expect(disabledTab?.disabled).toBe(true);
