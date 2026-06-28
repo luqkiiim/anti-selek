@@ -70,7 +70,7 @@ export function SessionSettingsModal({
   return (
     <ModalFrame
       title="Session settings"
-      subtitle="Manage roster, queue behavior, court labels, and session controls."
+      subtitle="Roster, courts, controls."
       onClose={onClose}
       footer={
         <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">

@@ -17,7 +17,7 @@ import type {
 
 interface ClubLeaderboardPanelProps {
   title: string;
-  subtitle: string;
+  subtitle?: string;
   players: ClubPageMember[];
   clubId: string;
   action?: ReactNode;
@@ -168,9 +168,11 @@ export function ClubLeaderboardPanel({
           <h3 className="app-section-eyebrow">
             {title}
           </h3>
-          <p className="mt-1 text-xs font-semibold text-gray-500">
-            {subtitle}
-          </p>
+          {subtitle ? (
+            <p className="mt-1 text-xs font-semibold text-gray-500">
+              {subtitle}
+            </p>
+          ) : null}
         </div>
         {action}
       </div>

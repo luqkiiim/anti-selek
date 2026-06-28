@@ -622,7 +622,7 @@ function buildAchievementsFromSessions(
     buildAchievement({
       id: "strong-start",
       title: "Strong Start",
-      description: "Win your first 2 matches in a completed session.",
+      description: "Win your first 2 matches.",
       progressLabel: "wins",
       target: 2,
       ...strongStart,
@@ -630,7 +630,7 @@ function buildAchievementsFromSessions(
     buildAchievement({
       id: "clutch-finish",
       title: "Clutch Finish",
-      description: "Win your final 2 matches in a completed session.",
+      description: "Win your final 2 matches.",
       progressLabel: "wins",
       target: 2,
       ...clutchFinish,
@@ -638,7 +638,7 @@ function buildAchievementsFromSessions(
     buildAchievement({
       id: "perfect-session",
       title: "Perfect Session",
-      description: "Finish a completed session unbeaten with at least 3 matches played.",
+      description: "Go unbeaten with 3+ matches.",
       progressLabel: "wins",
       target: 3,
       ...perfectSession,
@@ -646,7 +646,7 @@ function buildAchievementsFromSessions(
     buildAchievement({
       id: "podium-finish",
       title: "Podium Finish",
-      description: "Finish top 3 in a completed session once.",
+      description: "Finish top 3 once.",
       progressLabel: "podium",
       target: 1,
       progress: podiums,
@@ -655,7 +655,7 @@ function buildAchievementsFromSessions(
     buildAchievement({
       id: "clean-sweep",
       title: "Clean Sweep",
-      description: "Win all 5+ matches you played in a completed session.",
+      description: "Win all 5+ matches.",
       progressLabel: "wins",
       target: 5,
       ...cleanSweep,
@@ -663,7 +663,7 @@ function buildAchievementsFromSessions(
     buildAchievement({
       id: "bounce-back",
       title: "Bounce Back",
-      description: "Lose your first match, then finish that session with a winning record.",
+      description: "Lose first, finish winning.",
       progressLabel: "bounce back",
       target: 1,
       ...bounceBack,
@@ -671,7 +671,7 @@ function buildAchievementsFromSessions(
     buildAchievement({
       id: "close-battle-tested",
       title: "Close Battle Tested",
-      description: "Play 3 matches in one session decided by 3 points or less.",
+      description: "Play 3 close matches.",
       progressLabel: "close matches",
       target: 3,
       ...closeBattleTested,
@@ -679,7 +679,7 @@ function buildAchievementsFromSessions(
     buildAchievement({
       id: "narrow-survivor",
       title: "Narrow Survivor",
-      description: "Win 2 matches in one session by 2 points or less.",
+      description: "Win 2 narrow matches.",
       progressLabel: "narrow wins",
       target: 2,
       ...narrowSurvivor,
@@ -687,7 +687,7 @@ function buildAchievementsFromSessions(
     buildAchievement({
       id: "dominant-day",
       title: "Dominant Day",
-      description: "Finish a session with 5+ wins and at least 80% win rate.",
+      description: "5+ wins, 80%+ win rate.",
       progressLabel: "wins",
       target: 5,
       ...dominantDay,
@@ -695,7 +695,7 @@ function buildAchievementsFromSessions(
     buildAchievement({
       id: "big-differential",
       title: "Big Differential",
-      description: "Finish a session with +25 or better point differential.",
+      description: "+25 point differential.",
       progressLabel: "point diff",
       target: 25,
       ...bigDifferential,
@@ -703,7 +703,7 @@ function buildAchievementsFromSessions(
     buildAchievement({
       id: "podium-regular",
       title: "Podium Regular",
-      description: "Finish top 3 in completed sessions 3 times.",
+      description: "Finish top 3 three times.",
       progressLabel: "podiums",
       target: 3,
       progress: podiums,
@@ -712,7 +712,7 @@ function buildAchievementsFromSessions(
     buildAchievement({
       id: "podium-mainstay",
       title: "Podium Mainstay",
-      description: "Finish top 3 in completed sessions 5 times.",
+      description: "Finish top 3 five times.",
       progressLabel: "podiums",
       target: 5,
       progress: podiums,
@@ -721,7 +721,7 @@ function buildAchievementsFromSessions(
     buildAchievement({
       id: "podium-legend",
       title: "Podium Legend",
-      description: "Finish top 3 in completed sessions 10 times.",
+      description: "Finish top 3 ten times.",
       progressLabel: "podiums",
       target: 10,
       progress: podiums,

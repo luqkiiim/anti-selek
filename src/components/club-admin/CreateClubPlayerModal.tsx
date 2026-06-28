@@ -47,7 +47,7 @@ export function CreateClubPlayerModal({
   return (
     <ModalFrame
       title="Create player profile"
-      subtitle="Create a brand-new placeholder profile for this club."
+      subtitle="Placeholder profile."
       onClose={onClose}
       footer={
         <div className="flex flex-wrap justify-end gap-3">

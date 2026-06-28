@@ -102,7 +102,7 @@ export function ClubPlayerEditorModal({
   return (
     <ModalFrame
       title={player.name}
-      subtitle="Edit player details without turning the roster into a wall of forms."
+      subtitle="Player details."
       onClose={onClose}
       footer={
         <div className="flex flex-wrap justify-between gap-3">

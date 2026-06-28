@@ -935,11 +935,7 @@ function SummaryMetric({
 
 function PerformanceSummary({ data }: { data: UserProfileResponse }) {
   return (
-    <ProfileSection
-      eyebrow="Performance"
-      title="Performance summary"
-      action={<span className="app-chip app-chip-neutral">Current view</span>}
-    >
+    <ProfileSection title="Performance">
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         <SummaryMetric
           icon={Trophy}
@@ -952,7 +948,7 @@ function PerformanceSummary({ data }: { data: UserProfileResponse }) {
           icon={BarChart3}
           label="Matches played"
           value={data.stats.totalMatches}
-          detail={`${data.stats.sessionsPlayed} completed sessions`}
+          detail={`${data.stats.sessionsPlayed} sessions`}
           tone="accent"
         />
         <SummaryMetric
@@ -966,14 +962,14 @@ function PerformanceSummary({ data }: { data: UserProfileResponse }) {
           icon={Shield}
           label="Points conceded"
           value={data.stats.pointsConceded}
-          detail="Across completed matches"
+          detail="All matches"
           tone="danger"
         />
         <SummaryMetric
           icon={Target}
           label="Point differential"
           value={formatSignedNumber(data.stats.pointDifferential)}
-          detail="Total scoring margin"
+          detail="Scoring margin"
           tone={data.stats.pointDifferential >= 0 ? "success" : "danger"}
         />
         <SummaryMetric
@@ -1059,26 +1055,24 @@ function RelationshipCards({
   return (
     <div className="grid gap-3 lg:grid-cols-2">
       <ProfileSection
-        eyebrow="Connections"
-        title="Best partners"
+        title="Partners"
         action={<span className="app-chip app-chip-accent">Doubles</span>}
       >
         <ConnectionRankList
           summaries={data.partners.best}
           clubId={clubId}
-          emptyText="Complete a few partner matches to reveal chemistry."
+          emptyText="No partner data yet"
         />
       </ProfileSection>
 
       <ProfileSection
-        eyebrow="Opponents"
-        title="Toughest opponents"
+        title="Opponents"
         action={<span className="app-chip app-chip-warning">Head-to-head</span>}
       >
         <ConnectionRankList
           summaries={data.opponents.toughest}
           clubId={clubId}
-          emptyText="Toughest opponents appear once enough history exists."
+          emptyText="No opponent data yet"
         />
       </ProfileSection>
     </div>
@@ -1098,8 +1092,7 @@ function RatingProgressCard({
 
   return (
     <ProfileSection
-      eyebrow="Rating"
-      title="Rating progression"
+      title="Rating"
       action={<span className={getTrendDirectionChipClass(data.trend.direction)}>{getTrendDirectionLabel(data.trend.direction)}</span>}
     >
       <div className="rounded-2xl border border-[rgba(15,118,110,0.16)] bg-[var(--accent-faint)] p-4">
@@ -1129,8 +1122,10 @@ function RatingProgressCard({
 
 function AchievementBadge({
   achievement,
+  compact = false,
 }: {
   achievement: PlayerProfileAchievement;
+  compact?: boolean;
 }) {
   const presentation = ACHIEVEMENT_PRESENTATION[achievement.id];
   const Icon = presentation.icon;
@@ -1148,32 +1143,47 @@ function AchievementBadge({
   return (
     <div
       className={cx(
-        "rounded-2xl border p-4 transition",
+        "rounded-2xl border transition",
+        compact ? "p-3" : "p-4",
         achievement.unlocked ? "shadow-[0_8px_18px_rgba(23,32,31,0.04)]" : "",
         toneClass
       )}
     >
       <div className="flex items-start gap-3">
-        <span className="rounded-xl bg-white/70 p-2">
-          <Icon aria-hidden="true" size={22} strokeWidth={2.4} />
+        <span
+          className={cx(
+            "rounded-xl bg-white/70",
+            compact ? "p-1.5" : "p-2"
+          )}
+        >
+          <Icon aria-hidden="true" size={compact ? 18 : 22} strokeWidth={2.4} />
         </span>
         <div className="min-w-0">
-          <p className="font-semibold text-gray-900">{achievement.title}</p>
-          <p className="mt-1 text-xs leading-snug text-gray-600">
-            {achievement.description}
+          <p
+            className={cx(
+              "font-semibold text-gray-900",
+              compact ? "text-sm leading-tight" : ""
+            )}
+          >
+            {achievement.title}
           </p>
-          <span className="mt-3 inline-flex rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-gray-600">
+          {!compact ? (
+            <p className="mt-1 text-xs leading-snug text-gray-600">
+              {achievement.description}
+            </p>
+          ) : null}
+          <span
+            className={cx(
+              "inline-flex rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-gray-600",
+              compact ? "mt-2" : "mt-3"
+            )}
+          >
             {progressText}
           </span>
-          {achievement.unlocked && achievement.earnedFromSession ? (
+          {!compact && achievement.unlocked && achievement.earnedFromSession ? (
             <p className="mt-2 truncate text-xs text-gray-500">
               Unlocked in {achievement.earnedFromSession.name}
             </p>
-          ) : null}
-          {!achievement.unlocked ? (
-            <span className="mt-2 inline-flex rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-gray-500">
-              Locked
-            </span>
           ) : null}
         </div>
       </div>
@@ -1188,8 +1198,7 @@ function AchievementPreview({
 }) {
   return (
     <ProfileSection
-      eyebrow="Achievements"
-      title="Badges"
+      title="Achievements"
       action={
         <span className="app-chip app-chip-neutral">
           {achievements.filter((achievement) => achievement.unlocked).length}/
@@ -1197,9 +1206,13 @@ function AchievementPreview({
         </span>
       }
     >
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-3">
         {achievements.slice(0, 4).map((achievement) => (
-          <AchievementBadge key={achievement.title} achievement={achievement} />
+          <AchievementBadge
+            key={achievement.title}
+            achievement={achievement}
+            compact
+          />
         ))}
       </div>
     </ProfileSection>
@@ -1212,7 +1225,7 @@ function SessionInlineValue({
   summary: PlayerProfileSessionSummary | null;
 }) {
   if (!summary) {
-    return <span className="text-gray-500">No completed sessions yet</span>;
+    return <span className="text-gray-500">No sessions yet</span>;
   }
 
   return (
@@ -1358,8 +1371,7 @@ function MatchesList({
   if (matches.length === 0) {
     return (
       <EmptyState
-        title="No matches played yet"
-        detail="Once a tournament result is approved, it will appear here."
+        title="No matches yet"
       />
     );
   }
@@ -1401,7 +1413,6 @@ function OverviewTab({
         <RatingProgressCard data={data} ratingSeries={ratingSeries} />
       </div>
       <ProfileSection
-        eyebrow="Recent"
         title="Recent matches"
         action={
           <span className="app-chip app-chip-neutral">
@@ -1417,10 +1428,7 @@ function OverviewTab({
         />
       </ProfileSection>
       {rankContext ? (
-        <p className="px-1 text-xs text-gray-500">
-          Rank movement is calculated from the same recent-session window as the
-          profile stats.
-        </p>
+        <p className="px-1 text-xs text-gray-500">Recent-session window</p>
       ) : null}
     </div>
   );
@@ -1435,7 +1443,6 @@ function MatchesTab({
 }) {
   return (
     <ProfileSection
-      eyebrow="History"
       title="Match history"
       action={<span className="app-chip app-chip-neutral">{data.matchHistory.length} matches</span>}
     >
@@ -1472,7 +1479,7 @@ function MiniFact({
 
 function StyleTraitBars({ traits }: { traits: StyleTrait[] }) {
   return (
-    <ProfileSection eyebrow="Derived" title="Playstyle snapshot">
+    <ProfileSection title="Playstyle">
       <div className="space-y-3">
         {traits.map((trait) => (
           <div key={trait.label}>
@@ -1513,8 +1520,7 @@ function StatsTab({
       <div className="grid gap-5 lg:grid-cols-[0.85fr_1.15fr]">
         <StyleTraitBars traits={styleTraits} />
         <ProfileSection
-          eyebrow="Form"
-          title="Momentum and sessions"
+          title="Momentum"
           action={<span className={getTrendDirectionChipClass(data.trend.direction)}>{getTrendDirectionLabel(data.trend.direction)}</span>}
         >
           <DetailGrid>
@@ -1543,10 +1549,10 @@ function StatsTab({
                 }
                 detail={
                   rankContext.currentRank === null
-                    ? "Only ranked club members appear on the leaderboard."
+                    ? "Leaderboard only"
                     : rankContext.previousRank
-                      ? `Started this window at #${rankContext.previousRank}.`
-                      : "Previous rank is unavailable for this window."
+                      ? `Started at #${rankContext.previousRank}`
+                      : "No previous rank"
                 }
               />
             ) : null}
@@ -1561,7 +1567,7 @@ function StatsTab({
             <MiniFact
               label="Session volume"
               value={`${data.stats.sessionsPlayed} sessions`}
-              detail={`${data.stats.averageMatchesPerSession} matches per session`}
+              detail={`${data.stats.averageMatchesPerSession} matches/session`}
             />
             <MiniFact
               label="Current streak"
@@ -1570,7 +1576,7 @@ function StatsTab({
                   ? "No streak yet"
                   : `${data.recentForm.currentStreak.result === "WIN" ? "W" : "L"}${data.recentForm.currentStreak.count}`
               }
-              detail={`${data.recentForm.matches} recent matches`}
+              detail={`${data.recentForm.matches} recent`}
             />
           </DetailGrid>
 
@@ -1595,8 +1601,7 @@ function AchievementsTab({
 }) {
   return (
     <ProfileSection
-      eyebrow="Achievements"
-      title="Permanent session feats"
+      title="Achievements"
       action={
         <span className="app-chip app-chip-neutral">
           {achievements.filter((achievement) => achievement.unlocked).length} unlocked

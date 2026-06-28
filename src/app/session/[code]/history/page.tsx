@@ -266,7 +266,6 @@ export default function SessionHistoryPage() {
         <HeroCard
           eyebrow="Match history"
           title={data.session.name}
-          description={`${data.matches.length} recorded matches`}
           onBack={handleBack}
           backLabel="Back"
           meta={
@@ -291,8 +290,7 @@ export default function SessionHistoryPage() {
         >
           {data.matches.length === 0 ? (
             <EmptyState
-              title="No matches recorded yet"
-              detail="Completed or submitted matches will appear here as the session progresses."
+              title="No matches yet"
             />
           ) : (
             <div className="space-y-3">
@@ -400,7 +398,7 @@ export default function SessionHistoryPage() {
       {undoDraft ? (
         <SessionActionConfirmModal
           title="Undo result?"
-          subtitle="This removes the latest recorded result and reverses its standings and rating changes."
+          subtitle="Removes the result and reverses standings."
           details={
             <div className="space-y-4">
               <div className="app-panel-muted space-y-3 p-4">
@@ -445,7 +443,7 @@ export default function SessionHistoryPage() {
       {correctionDraft ? (
         <SessionActionConfirmModal
           title="Correct score?"
-          subtitle="This updates the ended session result and replays rating changes from this match onward."
+          subtitle="Replays ratings from this match onward."
           details={
             <div className="space-y-4">
               <div className="app-panel-muted space-y-3 p-4">

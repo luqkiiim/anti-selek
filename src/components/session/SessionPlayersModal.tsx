@@ -84,7 +84,7 @@ export function SessionPlayersModal({
     <PlayerPickerSheet
       open={open}
       title="Players"
-      subtitle="Search, pause, unpause, or edit player preferences."
+      subtitle="Roster and preferences."
       onClose={handleClose}
       toolbar={
         <div className="space-y-4">

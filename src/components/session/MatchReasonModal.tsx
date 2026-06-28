@@ -138,7 +138,7 @@ export function MatchReasonModal({
   return (
     <ModalFrame
       title="Match Reason"
-      subtitle="Why the auto matcher picked this court."
+      subtitle="Auto matcher details."
       onClose={onClose}
       bodyClassName="p-4 sm:p-5"
     >

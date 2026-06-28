@@ -25,7 +25,7 @@ export function SessionGuestRenameModal({
     <PlayerPickerSheet
       open={open}
       title="Rename guest"
-      subtitle="Update the guest name for this live session."
+      subtitle="Guest name."
       onClose={onClose}
       overlayClassName="z-[90]"
       panelClassName="lg:max-w-[28rem]"

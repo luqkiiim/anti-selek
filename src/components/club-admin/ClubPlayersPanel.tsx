@@ -38,7 +38,6 @@ export function ClubPlayersPanel({
     <SectionCard
       eyebrow="Roster"
       title="Club players"
-      description="A compact roster for quick review. Open a player when you need to edit details or admin access."
       action={
         <button
           type="button"

@@ -98,7 +98,7 @@ function SigninForm() {
                 </div>
                 <div className="app-panel-muted p-4">
                   <p className="text-xs font-semibold text-gray-500">Clear standings</p>
-                  <p className="mt-2 text-sm font-semibold text-gray-900">Check points, ratings, and match history from one place.</p>
+                  <p className="mt-2 text-sm font-semibold text-gray-900">Points, ratings, history.</p>
                 </div>
                 <div className="app-panel-muted p-4">
                   <p className="text-xs font-semibold text-gray-500">Mobile ready</p>

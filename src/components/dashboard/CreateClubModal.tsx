@@ -28,7 +28,7 @@ export function CreateClubModal({
   return (
     <ModalFrame
       title="Create club"
-      subtitle="Set up a new club space with an optional password."
+      subtitle="Name and optional password."
       onClose={onClose}
       footer={
         <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">

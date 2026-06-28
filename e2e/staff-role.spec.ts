@@ -92,7 +92,7 @@ test("staff can run a live session without admin-only controls", async ({
     .filter({ has: page.getByRole("heading", { name: "Undo result?" }) });
   await expect(undoModal.getByRole("heading", { name: "Undo result?" })).toBeVisible();
   await undoModal.getByRole("button", { name: "Undo Result", exact: true }).click();
-  await expect(page.getByText("No matches recorded yet")).toBeVisible();
+  await expect(page.getByText("No matches yet")).toBeVisible();
 
   await expect
     .poll(async () => {

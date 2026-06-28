@@ -1466,8 +1466,8 @@ export default function SessionPage() {
           }
           subtitle={
             courtActions.courtActionDraft.action === "reshuffle"
-              ? `This will replace the current lineup on ${courtActions.courtActionDraft.courtLabel} with a new one.`
-              : `This will clear ${courtActions.courtActionDraft.courtLabel} and return these players to the pool.`
+              ? `Replace the lineup on ${courtActions.courtActionDraft.courtLabel}.`
+              : `Clear ${courtActions.courtActionDraft.courtLabel} and return players.`
           }
           details={
             <div className="space-y-4">
@@ -1510,7 +1510,7 @@ export default function SessionPage() {
       {showEndSessionConfirm ? (
         <SessionActionConfirmModal
           title="End session?"
-          subtitle="This will close the live session and lock in the final standings."
+          subtitle="Closes the session and locks standings."
           details={
             <div className="app-panel-muted space-y-2 p-4">
               <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">
@@ -1537,7 +1537,7 @@ export default function SessionPage() {
       {showResetTestConfirm ? (
         <SessionActionConfirmModal
           title="Reset test session?"
-          subtitle="This clears all simulated results but keeps the setup, roster, guests, courts, and pools."
+          subtitle="Clears results and keeps setup."
           details={
             <div className="app-panel-muted space-y-2 p-4">
               <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">
@@ -1562,7 +1562,7 @@ export default function SessionPage() {
       {showCreateRealSessionConfirm ? (
         <SessionActionConfirmModal
           title="Create real session?"
-          subtitle="Choose whether the real session should start clean or include the completed results from this test."
+          subtitle="Start clean or include test results."
           details={
             <div className="space-y-3">
               <div className="app-panel-muted space-y-2 p-4">
@@ -1600,8 +1600,7 @@ export default function SessionPage() {
                       Setup only
                     </span>
                     <span className="block text-sm text-gray-600">
-                      Start a clean real session with the same roster, courts,
-                      format, mode, and pools.
+                      Same setup, no results.
                     </span>
                   </span>
                 </label>
@@ -1630,9 +1629,7 @@ export default function SessionPage() {
                       Include completed results
                     </span>
                     <span className="block text-sm text-gray-600">
-                      Copy completed scored matches into the real session and
-                      apply standings, partner history, point difference, and
-                      ratings.
+                      Copy scored matches and ratings.
                     </span>
                   </span>
                 </label>
@@ -1658,7 +1655,7 @@ export default function SessionPage() {
       {showDeleteTestConfirm ? (
         <SessionActionConfirmModal
           title="Delete test session?"
-          subtitle="This permanently removes the rehearsal session and its guest placeholders."
+          subtitle="Permanently removes this test session."
           details={
             <div className="app-panel-muted space-y-2 p-4">
               <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">
@@ -1683,7 +1680,7 @@ export default function SessionPage() {
       {removePlayerDraft ? (
         <SessionActionConfirmModal
           title="Remove player?"
-          subtitle="This will remove the player from the current session roster."
+          subtitle="Removes the player from this session."
           details={
             <div className="app-panel-muted space-y-2 p-4">
               <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">

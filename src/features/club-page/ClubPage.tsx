@@ -861,7 +861,6 @@ export default function ClubPage() {
   const leaderboardPanel = (
     <ClubLeaderboardPanel
       title="Leaderboard"
-      subtitle="Full club rankings"
       players={leaderboard}
       clubId={clubId}
       action={
@@ -902,7 +901,6 @@ export default function ClubPage() {
       <div className="app-shell space-y-8">
         <HeroCard
           title={clubName}
-          description="Club hub"
           headingAlign="center"
           actionsPosition="below"
           meta={
@@ -1094,7 +1092,7 @@ export default function ClubPage() {
       {pendingRollbackTournament ? (
         <ClubActionConfirmModal
           title="Rollback tournament?"
-          subtitle="This will delete the completed tournament and reverse its rating changes."
+          subtitle="Deletes the tournament and reverses ratings."
           details={
             <div className="app-panel-muted space-y-2 p-4">
               <p className="text-sm font-semibold text-gray-900">

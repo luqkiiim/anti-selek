@@ -122,7 +122,7 @@ export function AvatarCropModal({
   return (
     <ModalFrame
       title="Crop photo"
-      subtitle="Adjust the framing if you want to, and use the circle guide to preview how the avatar will look."
+      subtitle="Frame the avatar."
       onClose={processing ? () => undefined : onClose}
       bodyScroll={false}
       bodyClassName="flex min-h-0 flex-1 flex-col"

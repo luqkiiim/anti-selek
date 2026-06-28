@@ -32,7 +32,7 @@ export function ClubPasswordResetModal({
   return (
     <ModalFrame
       title="Emergency password reset"
-      subtitle="Use this only when the member cannot complete the normal email recovery flow."
+      subtitle="Use when email recovery is unavailable."
       onClose={onClose}
       footer={
         <div className="flex flex-wrap justify-end gap-3">

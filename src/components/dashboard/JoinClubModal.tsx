@@ -28,7 +28,7 @@ export function JoinClubModal({
   return (
     <ModalFrame
       title="Join club"
-      subtitle="Enter the club name and password if the group is protected."
+      subtitle="Name and password."
       onClose={onClose}
       footer={
         <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">

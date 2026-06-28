@@ -109,12 +109,10 @@ function isTournamentParticipant(
 function SectionHeader({
   icon,
   title,
-  detail,
   action,
 }: {
   icon: ReactNode;
   title: string;
-  detail?: string;
   action?: ReactNode;
 }) {
   return (
@@ -125,11 +123,6 @@ function SectionHeader({
         </span>
         <div className="min-w-0">
           <h3 className="app-section-eyebrow">{title}</h3>
-          {detail ? (
-            <p className="mt-1 text-xs font-semibold text-gray-500">
-              {detail}
-            </p>
-          ) : null}
         </div>
       </div>
       {action}
@@ -214,7 +207,6 @@ export function ClubOverviewPulsePanel({
         <SectionHeader
           icon={<Activity aria-hidden="true" size={20} />}
           title="Club pulse"
-          detail="The competitive snapshot right now"
         />
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           <PulseMetric
@@ -275,7 +267,6 @@ export function ClubOverviewPulsePanel({
         <SectionHeader
           icon={<Play aria-hidden="true" size={20} />}
           title="Current tournament"
-          detail="Open or running now"
           action={
             activeTournaments.length > 3 ? (
               <button
@@ -346,7 +337,6 @@ export function ClubOverviewPulsePanel({
           <SectionHeader
             icon={<Flame aria-hidden="true" size={20} />}
             title="Hot players"
-            detail="Recent form leaders"
           />
           {hotPlayers.length > 0 ? (
             <div className="space-y-2">
@@ -387,9 +377,7 @@ export function ClubOverviewPulsePanel({
               ))}
             </div>
           ) : (
-            <EmptyPulseState>
-              Hot players appear after recent completed games
-            </EmptyPulseState>
+            <EmptyPulseState>No hot players yet</EmptyPulseState>
           )}
         </section>
 
@@ -397,7 +385,6 @@ export function ClubOverviewPulsePanel({
           <SectionHeader
             icon={<Swords aria-hidden="true" size={20} />}
             title="Top rivalry"
-            detail="Repeated close matchups"
           />
           {rivalries.length > 0 ? (
             <div className="space-y-2">
@@ -456,9 +443,7 @@ export function ClubOverviewPulsePanel({
               })}
             </div>
           ) : (
-            <EmptyPulseState>
-              Top rivalries unlock after players face each other a few times
-            </EmptyPulseState>
+            <EmptyPulseState>No rivalry data yet</EmptyPulseState>
           )}
         </section>
 
@@ -466,7 +451,6 @@ export function ClubOverviewPulsePanel({
           <SectionHeader
             icon={<Users aria-hidden="true" size={20} />}
             title="Partner chemistry"
-            detail="Duos with the strongest record together"
           />
           {partnerships.length > 0 ? (
             <div className="space-y-2">
@@ -507,9 +491,7 @@ export function ClubOverviewPulsePanel({
               ))}
             </div>
           ) : (
-            <EmptyPulseState>
-              Partner chemistry appears after duos play together a few times
-            </EmptyPulseState>
+            <EmptyPulseState>No partner data yet</EmptyPulseState>
           )}
         </section>
       </div>
@@ -519,7 +501,6 @@ export function ClubOverviewPulsePanel({
           <SectionHeader
             icon={<Trophy aria-hidden="true" size={20} />}
             title="Latest story"
-            detail="Most recent completed tournament"
             action={
               latestStory ? (
                 <button
@@ -591,9 +572,7 @@ export function ClubOverviewPulsePanel({
               )}
             </div>
           ) : (
-            <EmptyPulseState>
-              First tournament story appears after a completed session
-            </EmptyPulseState>
+            <EmptyPulseState>No completed tournament yet</EmptyPulseState>
           )}
         </section>
 
@@ -601,7 +580,6 @@ export function ClubOverviewPulsePanel({
           <SectionHeader
             icon={<Medal aria-hidden="true" size={20} />}
             title="Power rankings"
-            detail="Top of the club table"
             action={
               <button
                 type="button"
@@ -642,7 +620,7 @@ export function ClubOverviewPulsePanel({
               ))}
             </div>
           ) : (
-            <EmptyPulseState>Rankings appear after players join</EmptyPulseState>
+            <EmptyPulseState>No ranked players yet</EmptyPulseState>
           )}
         </section>
       </div>

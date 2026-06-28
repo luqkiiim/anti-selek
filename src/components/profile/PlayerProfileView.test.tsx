@@ -135,7 +135,7 @@ function buildProfileResponse(overrides?: Partial<{
       {
         id: "strong-start" as const,
         title: "Strong Start",
-        description: "Win your first 2 matches in a completed session.",
+        description: "Win your first 2 matches.",
         progress: 2,
         target: 2,
         progressLabel: "wins",
@@ -149,7 +149,7 @@ function buildProfileResponse(overrides?: Partial<{
       {
         id: "close-battle-tested" as const,
         title: "Close Battle Tested",
-        description: "Play 3 matches in one session decided by 3 points or less.",
+        description: "Play 3 close matches.",
         progress: 2,
         target: 3,
         progressLabel: "close matches",
@@ -303,12 +303,38 @@ describe("PlayerProfileView", () => {
 
     expect(document.body.textContent).toContain("Strong Start");
     expect(document.body.textContent).toContain("2/2 wins");
-    expect(document.body.textContent).toContain("Unlocked in Friday Session");
     expect(document.body.textContent).toContain("Close Battle Tested");
     expect(document.body.textContent).toContain("2/3 close matches");
+    expect(document.body.textContent).not.toContain("Unlocked in Friday Session");
+    expect(document.body.textContent).not.toContain(
+      "Win your first 2 matches."
+    );
+    expect(document.body.textContent).not.toContain(
+      "Play 3 close matches."
+    );
+    expect(document.body.textContent).not.toContain("Locked");
     expect(document.body.textContent).not.toContain("Hot streak");
     expect(document.body.textContent).not.toContain("Rival tested");
     expect(document.body.textContent).not.toContain("Partner chemistry");
+  });
+
+  it("keeps achievement descriptions on the full achievements tab", async () => {
+    await renderView();
+
+    const achievementsTab = Array.from(
+      container.querySelectorAll('button[role="tab"]')
+    ).find((button) => button.textContent === "Achievements");
+    expect(achievementsTab).toBeTruthy();
+
+    await act(async () => {
+      achievementsTab?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    expect(document.body.textContent).toContain("Win your first 2 matches.");
+    expect(document.body.textContent).toContain("Play 3 close matches.");
+    expect(document.body.textContent).toContain("Unlocked in Friday Session");
+    expect(document.body.textContent).not.toContain("Locked");
   });
 
   it("uses a single rating snapshot without duplicating hero rating or rank chips", async () => {

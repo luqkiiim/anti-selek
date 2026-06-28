@@ -18,7 +18,7 @@ export function AvatarPreviewModal({
   return (
     <ModalFrame
       title={`${name} photo`}
-      subtitle="Full-size profile photo"
+      subtitle="Profile photo"
       onClose={onClose}
       bodyScroll={false}
       bodyClassName="flex min-h-0 flex-1 items-center justify-center bg-[#0b1211] px-4 py-5 sm:px-6 sm:py-6"

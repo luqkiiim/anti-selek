@@ -224,8 +224,8 @@ export function SessionRosterModal({
       title="Add Players"
       subtitle={
         isAdmin
-          ? "Search members or add a guest to this session."
-          : "Search members and add them to this session."
+          ? "Members or guests."
+          : "Members"
       }
       onClose={handleClose}
       toolbar={

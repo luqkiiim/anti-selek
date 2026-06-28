@@ -115,12 +115,12 @@ function SectionIntro({
   description,
 }: {
   title: string;
-  description: string;
+  description?: string;
 }) {
   return (
     <div className="space-y-1">
       <p className="text-sm font-semibold text-gray-900">{title}</p>
-      <p className="text-xs text-gray-500">{description}</p>
+      {description ? <p className="text-xs text-gray-500">{description}</p> : null}
     </div>
   );
 }
@@ -171,7 +171,7 @@ function SwitchRow({
   disabled = false,
 }: {
   label: string;
-  description: string;
+  description?: string;
   checked: boolean;
   onChange: (value: boolean) => void;
   disabled?: boolean;
@@ -189,9 +189,11 @@ function SwitchRow({
         <span className="block break-words text-sm font-semibold text-gray-900">
           {label}
         </span>
-        <span className="mt-0.5 block break-words text-xs leading-5 text-gray-500">
-          {description}
-        </span>
+        {description ? (
+          <span className="mt-0.5 block break-words text-xs leading-5 text-gray-500">
+            {description}
+          </span>
+        ) : null}
       </span>
       <span
         aria-hidden="true"
@@ -365,10 +367,7 @@ export function HostTournamentPanel({
         </div>
 
         <div className="grid gap-3">
-          <SectionIntro
-            title="Roster"
-            description="Choose club players and add any guests before creating."
-          />
+          <SectionIntro title="Roster" />
           <div className="grid gap-2">
             <RosterRow
               label="Players"
@@ -450,19 +449,19 @@ export function HostTournamentPanel({
               <div className="min-w-0 space-y-2">
                 <SwitchRow
                   label="Test session"
-                  description="Safe for rehearsal and can be reset later."
+                  description="Resettable rehearsal."
                   checked={isTestSession}
                   onChange={onIsTestSessionChange}
                 />
                 <SwitchRow
                   label="Auto queue"
-                  description="Lock the next quartet automatically once all courts are full."
+                  description="Fill open courts automatically."
                   checked={autoQueueEnabled}
                   onChange={onAutoQueueEnabledChange}
                 />
                 <SwitchRow
                   label="Respect player rest"
-                  description="Prefer longer-waiting players and avoid immediate back-to-back matches."
+                  description="Avoid back-to-back games."
                   checked={respectPlayerRest}
                   onChange={onRespectPlayerRestChange}
                 />
@@ -470,8 +469,8 @@ export function HostTournamentPanel({
                   label="Pools"
                   description={
                     isInterclub
-                      ? "Pools are off for club vs club."
-                      : "Split matchmaking into two soft groups that can crossover later."
+                      ? "Off for club vs club."
+                      : "Two soft groups."
                   }
                   checked={poolsEnabled}
                   onChange={onPoolsEnabledChange}

@@ -96,10 +96,6 @@ export default function Home() {
             </div>
             <div className="space-y-3">
               <h1 className="app-title text-gray-900">Anti-Selek</h1>
-              <p className="mx-auto max-w-3xl text-sm text-gray-600 sm:text-base">
-                Manage badminton clubs, launch tournaments quickly, and
-                jump straight back into the sessions you already belong to.
-              </p>
             </div>
             {!isQuickAccess ? (
               <div className="flex flex-wrap justify-center gap-3">
@@ -138,12 +134,12 @@ export default function Home() {
                 </div>
                 <div>
                   <h2 className="text-lg font-semibold text-gray-900">
-                    Practice with a private sandbox
+                    Tutorial playground
                   </h2>
                   <p className="mt-1 text-sm text-gray-600">
                     {tutorialPlayground
-                      ? `${tutorialPlayground.playersCount} practice players, ${tutorialPlayground.courtsCount} courts, and a live test session are ready.`
-                      : "Open a resettable tutorial club with practice players, courts, and a live test session."}
+                      ? `${tutorialPlayground.playersCount} players, ${tutorialPlayground.courtsCount} courts`
+                      : "Practice club"}
                   </p>
                 </div>
               </div>
@@ -176,7 +172,6 @@ export default function Home() {
           {clubs.length === 0 ? (
             <EmptyState
               title="No clubs yet"
-              detail="Create your first group or join an existing one with its club name and password."
             />
           ) : (
             <div className="grid gap-4">

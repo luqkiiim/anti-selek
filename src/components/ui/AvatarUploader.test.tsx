@@ -148,7 +148,7 @@ describe("AvatarUploader", () => {
 
     expect(document.body.textContent).toContain("Crop photo");
     expect(document.body.textContent).toContain(
-      "Adjust the framing if you want to, and use the circle guide to preview how the avatar will look."
+      "Frame the avatar."
     );
     expect(
       document.body.querySelector('[data-testid="avatar-circle-guide"]')
