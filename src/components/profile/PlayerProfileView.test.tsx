@@ -55,6 +55,74 @@ function createJsonResponse(body: unknown, status = 200) {
   });
 }
 
+function buildMatch(id: string, overrides?: Partial<{
+  partner: {
+    id: string;
+    name: string;
+    avatarUrl: string | null;
+  };
+  opponents: Array<{
+    id: string;
+    name: string;
+    avatarUrl: string | null;
+  }>;
+  score: string;
+  result: "WIN" | "LOSS";
+}>) {
+  return {
+    id,
+    date: "2026-05-20T00:00:00.000Z",
+    sessionId: "session-1",
+    sessionCode: "session-1",
+    sessionName: "Session 12",
+    partner: overrides?.partner ?? {
+      id: "partner-1",
+      name: "Haziq Azman",
+      avatarUrl: "https://cdn.test/avatars/haziq.jpg",
+    },
+    opponents: overrides?.opponents ?? [
+      {
+        id: "opponent-1",
+        name: "Daniel Nabil",
+        avatarUrl: "https://cdn.test/avatars/daniel.jpg",
+      },
+      {
+        id: "opponent-2",
+        name: "Khairul Zaim",
+        avatarUrl: "https://cdn.test/avatars/khairul.jpg",
+      },
+    ],
+    score: overrides?.score ?? "21-16",
+    result: overrides?.result ?? "WIN",
+    eloChange: 12,
+    pointDifferential: 5,
+  };
+}
+
+function buildRecentSession(id: string, overrides?: Partial<{
+  date: string | null;
+  wins: number;
+  losses: number;
+  pointDifferential: number;
+  ratingChange: number;
+}>) {
+  const wins = overrides?.wins ?? 3;
+  const losses = overrides?.losses ?? 1;
+
+  return {
+    id,
+    code: id,
+    name: "Friday Session",
+    date: overrides?.date ?? "2026-05-20T00:00:00.000Z",
+    matches: wins + losses,
+    wins,
+    losses,
+    winRate: Math.round((wins / Math.max(wins + losses, 1)) * 100),
+    pointDifferential: overrides?.pointDifferential ?? 18,
+    ratingChange: overrides?.ratingChange ?? 12,
+  };
+}
+
 function buildProfileResponse(overrides?: Partial<{
   avatarUrl: string | null;
   context: {
@@ -67,7 +135,9 @@ function buildProfileResponse(overrides?: Partial<{
       rankDelta: number | null;
     };
   } | null;
+  matchHistory: ReturnType<typeof buildMatch>[];
   name: string;
+  recentSessions: ReturnType<typeof buildRecentSession>[];
 }>) {
   const avatarUrl =
     overrides?.avatarUrl === undefined
@@ -108,7 +178,7 @@ function buildProfileResponse(overrides?: Partial<{
         count: 2,
       },
     },
-    recentSessions: [],
+    recentSessions: overrides?.recentSessions ?? [],
     trend: {
       sessions: 3,
       matches: 9,
@@ -156,7 +226,7 @@ function buildProfileResponse(overrides?: Partial<{
         unlocked: false,
       },
     ],
-    matchHistory: [],
+    matchHistory: overrides?.matchHistory ?? [],
   };
 }
 
@@ -322,6 +392,30 @@ describe("PlayerProfileView", () => {
     ).toBeNull();
   });
 
+  it("keeps the hero as avatar-left and profile-info-right on mobile widths", async () => {
+    await renderView({
+      profileResponse: buildProfileResponse({
+        name: "Alexandria Lee Rahman",
+      }),
+    });
+
+    const heroBody = container.querySelector(
+      '[data-testid="profile-hero-body"]'
+    );
+    const heroTitle = container.querySelector(
+      '[data-testid="profile-hero-title"]'
+    );
+
+    expect(heroBody?.className).toContain(
+      "grid-cols-[6rem_minmax(0,1fr)]"
+    );
+    expect(heroBody?.className).toContain(
+      "sm:grid-cols-[auto_minmax(0,1fr)]"
+    );
+    expect(heroTitle?.className).toContain("break-words");
+    expect(heroTitle?.className).not.toContain("truncate");
+  });
+
   it("renders concrete permanent achievement badges with exact progress", async () => {
     await renderView();
 
@@ -413,6 +507,107 @@ describe("PlayerProfileView", () => {
     expect(document.body.textContent).not.toContain("Errors / match");
     expect(document.body.textContent).not.toContain("R16");
     expect(document.body.textContent).not.toContain("R32");
+  });
+
+  it("shows avatars only in the overview recent matches rows", async () => {
+    await renderView({
+      profileResponse: buildProfileResponse({
+        matchHistory: [
+          buildMatch("match-1", {
+            opponents: [
+              {
+                id: "opponent-1",
+                name: "Daniel Nabil",
+                avatarUrl: "https://cdn.test/avatars/daniel.jpg",
+              },
+              {
+                id: "opponent-2",
+                name: "Khairul Zaim Longname",
+                avatarUrl: "https://cdn.test/avatars/khairul.jpg",
+              },
+            ],
+          }),
+        ],
+      }),
+    });
+
+    expect(document.body.textContent).toContain("Recent matches");
+    expect(document.body.textContent).toContain("Haziq Azman");
+    expect(document.body.textContent).toContain("Daniel Nabil");
+    expect(document.body.textContent).toContain("Khairul Zaim Longname");
+    expect(container.querySelector('img[alt="Haziq Azman avatar"]')).toBeTruthy();
+    expect(container.querySelector('img[alt="Daniel Nabil avatar"]')).toBeTruthy();
+    expect(
+      container.querySelector('img[alt="Khairul Zaim Longname avatar"]')
+    ).toBeTruthy();
+
+    const matchesTab = Array.from(
+      container.querySelectorAll('button[role="tab"]')
+    ).find((button) => button.textContent === "Matches");
+    expect(matchesTab).toBeTruthy();
+
+    await act(async () => {
+      matchesTab?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    expect(document.body.textContent).toContain("Khairul Zaim Longname");
+    expect(container.querySelector('img[alt="Haziq Azman avatar"]')).toBeNull();
+    expect(container.querySelector('img[alt="Daniel Nabil avatar"]')).toBeNull();
+    expect(
+      container.querySelector('img[alt="Khairul Zaim Longname avatar"]')
+    ).toBeNull();
+  });
+
+  it("keeps the stats tab to rating ledger and prototype-style session form", async () => {
+    await renderView({
+      profileResponse: buildProfileResponse({
+        recentSessions: [
+          buildRecentSession("session-1", {
+            date: "2026-05-18T00:00:00.000Z",
+            wins: 3,
+            losses: 1,
+            pointDifferential: 24,
+            ratingChange: 18,
+          }),
+          buildRecentSession("session-2", {
+            date: "2026-05-15T00:00:00.000Z",
+            wins: 1,
+            losses: 3,
+            pointDifferential: -14,
+            ratingChange: -11,
+          }),
+        ],
+      }),
+    });
+
+    const statsTab = Array.from(
+      container.querySelectorAll('button[role="tab"]')
+    ).find((button) => button.textContent === "Stats");
+    expect(statsTab).toBeTruthy();
+
+    await act(async () => {
+      statsTab?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    expect(document.body.textContent).toContain("Rating ledger");
+    expect(document.body.textContent).toContain("Current");
+    expect(document.body.textContent).toContain("Peak");
+    expect(document.body.textContent).toContain("Lowest");
+    expect(document.body.textContent).toContain("30D change");
+    expect(document.body.textContent).toContain("Session form");
+    expect(document.body.textContent).toContain("3-1");
+    expect(document.body.textContent).toContain("+24 diff");
+    expect(document.body.textContent).toContain("+18 rating");
+    expect(document.body.textContent).toContain("1-3");
+    expect(document.body.textContent).toContain("-14 diff");
+    expect(document.body.textContent).toContain("-11 rating");
+
+    expect(document.body.textContent).not.toContain("Performance");
+    expect(document.body.textContent).not.toContain("Partners & opponents");
+    expect(document.body.textContent).not.toContain("Trend window");
+    expect(document.body.textContent).not.toContain("Session volume");
   });
 
   it("renders relationship previews and opens group-specific full lists", async () => {

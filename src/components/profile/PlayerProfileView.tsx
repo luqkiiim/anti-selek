@@ -156,18 +156,17 @@ function formatSignedNumber(value: number) {
 
 function formatShortDate(value: string | null) {
   if (!value) {
-    return "No matches yet";
+    return "No date";
   }
 
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) {
-    return "No matches yet";
+    return "No date";
   }
 
   return date.toLocaleDateString(undefined, {
     day: "numeric",
     month: "short",
-    year: "numeric",
   });
 }
 
@@ -629,7 +628,10 @@ function ProfileHero({
         )}
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-[auto_minmax(0,1fr)] sm:items-center">
+      <div
+        className="grid grid-cols-[6rem_minmax(0,1fr)] items-center gap-3 sm:grid-cols-[auto_minmax(0,1fr)] sm:gap-4"
+        data-testid="profile-hero-body"
+      >
         <div className="justify-self-start">
           {canManageAvatar ? (
             <AvatarUploader
@@ -643,7 +645,7 @@ function ProfileHero({
               onRemove={onRemoveAvatar}
             />
           ) : (
-            <div className="relative aspect-square h-28 w-28">
+            <div className="relative aspect-square h-24 w-24 sm:h-28 sm:w-28">
               {data.user.avatarUrl ? (
                 <button
                   type="button"
@@ -674,7 +676,10 @@ function ProfileHero({
         </div>
 
         <div className="min-w-0">
-          <h1 className="truncate text-4xl font-[760] leading-none text-gray-950 sm:text-5xl">
+          <h1
+            className="break-words text-3xl font-[760] leading-[1.02] text-gray-950 sm:text-5xl"
+            data-testid="profile-hero-title"
+          >
             {data.user.name}
           </h1>
           <div className="mt-3 flex flex-wrap items-center gap-2">
@@ -687,11 +692,11 @@ function ProfileHero({
             </span>
           </div>
           <div
-            className="mt-4 grid max-w-[28rem] grid-cols-[minmax(0,1fr)_1px_minmax(0,1fr)] items-center gap-4"
+            className="mt-3 grid max-w-[28rem] grid-cols-[minmax(0,1fr)_1px_minmax(0,1fr)] items-center gap-2 sm:mt-4 sm:gap-4"
             data-testid="profile-rating-snapshot"
           >
             <div className="min-w-0 text-center">
-              <p className="text-3xl font-[760] leading-none text-gray-950">
+              <p className="text-2xl font-[760] leading-none text-gray-950 sm:text-3xl">
                 {data.user.elo}
               </p>
               <p className="mt-1 text-sm font-semibold text-gray-600">
@@ -700,7 +705,7 @@ function ProfileHero({
             </div>
             <span className="h-14 bg-[var(--line-strong)]" />
             <div className="min-w-0 text-center">
-              <p className="text-3xl font-[760] leading-none text-[var(--accent-strong)]">
+              <p className="text-2xl font-[760] leading-none text-[var(--accent-strong)] sm:text-3xl">
                 {recentStreakSummary}
               </p>
               <p className="mt-1 text-sm font-semibold text-gray-600">
@@ -1308,131 +1313,133 @@ function AchievementPreview({
   );
 }
 
-function SessionInlineValue({
-  summary,
-}: {
-  summary: PlayerProfileSessionSummary | null;
-}) {
-  if (!summary) {
-    return <span className="text-gray-500">No sessions yet</span>;
-  }
+type MatchListVariant = "recent" | "full";
 
+function MatchParticipantAvatars({
+  participants,
+}: {
+  participants: PlayerProfileMatchHistoryEntry["opponents"];
+}) {
   return (
-    <div className="space-y-1">
-      <ProfileLink href={getSessionHistoryHref(summary.code)}>
-        {summary.name}
-      </ProfileLink>
-      <p className="text-xs text-gray-600">
-        {summary.wins}-{summary.losses}, {summary.winRate}%
-      </p>
-    </div>
+    <span className="flex shrink-0 -space-x-2">
+      {participants.map((participant) => (
+        <Avatar
+          key={participant.id}
+          name={participant.name}
+          avatarUrl={participant.avatarUrl}
+          size="match"
+          className="border-2 border-white shadow-[0_2px_8px_rgba(23,32,31,0.12)]"
+        />
+      ))}
+    </span>
   );
 }
 
-function RecentSessionTile({
-  summary,
+function MatchParticipantCell({
+  label,
+  participants,
+  clubId,
+  showAvatars,
 }: {
-  summary: PlayerProfileSessionSummary;
+  label: "with" | "vs";
+  participants: PlayerProfileMatchHistoryEntry["opponents"];
+  clubId: string;
+  showAvatars: boolean;
 }) {
   return (
-    <article className="rounded-xl border border-[var(--line)] bg-white px-3 py-3">
-      <p className="text-xs font-bold text-gray-500">
-        {formatShortDate(summary.date)}
-      </p>
-      <div className="mt-1 truncate text-sm">
-        <ProfileLink href={getSessionHistoryHref(summary.code)}>
-          {summary.name}
-        </ProfileLink>
+    <div className="min-w-0">
+      <span className="block text-xs font-semibold text-gray-500">{label}</span>
+      <div className="mt-1 flex min-w-0 items-start gap-2">
+        {showAvatars ? <MatchParticipantAvatars participants={participants} /> : null}
+        <div className="min-w-0 text-sm font-semibold leading-snug text-gray-950">
+          {participants.map((participant, index) => (
+            <span key={participant.id}>
+              {index > 0 ? " / " : ""}
+              <ProfileLink href={getPlayerProfileHref(participant.id, clubId)}>
+                {participant.name}
+              </ProfileLink>
+            </span>
+          ))}
+        </div>
       </div>
-      <div className="mt-3 flex flex-wrap gap-2">
-        <span className="app-chip app-chip-neutral">{summary.matches} matches</span>
-        <span className="app-chip app-chip-accent">
-          {summary.wins}-{summary.losses}
-        </span>
-        <span className={getSignedChipClass(summary.pointDifferential)}>
-          {formatSignedNumber(summary.pointDifferential)} diff
-        </span>
-        <span className={getSignedChipClass(summary.ratingChange)}>
-          {formatSignedNumber(summary.ratingChange)} rating
-        </span>
-      </div>
-    </article>
+    </div>
   );
 }
 
 function MatchCard({
   match,
   clubId,
+  variant,
 }: {
   match: PlayerProfileMatchHistoryEntry;
   clubId: string;
+  variant: MatchListVariant;
 }) {
   const { date, year } = formatMatchDateParts(match.date);
+  const showAvatars = variant === "recent";
 
   return (
     <article
       className={cx(
-        "grid grid-cols-[4.9rem_minmax(5.7rem,0.9fr)_minmax(4.9rem,0.78fr)_minmax(5.2rem,0.82fr)_3.25rem] items-center gap-2 border-b border-[var(--line)] px-3 py-3 last:border-b-0",
+        "grid gap-2 border-b border-[var(--line)] px-3 py-3 last:border-b-0",
         getMatchResultSurfaceClass(match.result)
       )}
+      data-match-row-variant={variant}
     >
-      <div className="grid grid-cols-[1.1rem_minmax(0,1fr)] gap-x-1.5 gap-y-0.5 border-r border-[var(--line)] pr-2 text-xs font-semibold text-gray-600">
-        <CalendarDays
-          aria-hidden="true"
-          size={17}
-          strokeWidth={1.7}
-          className="row-span-2 mt-0.5 text-gray-900"
-        />
-        <span>{date}</span>
-        <span>{year}</span>
-      </div>
-      <div className="min-w-0 border-r border-[var(--line)] pr-2">
-        <strong
+      <div className="grid grid-cols-[minmax(4.25rem,auto)_minmax(0,1fr)_2.75rem] items-center gap-2">
+        <div className="grid grid-cols-[1.1rem_minmax(0,1fr)] gap-x-1.5 gap-y-0.5 border-r border-[var(--line)] pr-2 text-xs font-semibold text-gray-600">
+          <CalendarDays
+            aria-hidden="true"
+            size={17}
+            strokeWidth={1.7}
+            className="row-span-2 mt-0.5 text-gray-900"
+          />
+          <span>{date}</span>
+          <span>{year}</span>
+        </div>
+        <div className="min-w-0 border-r border-[var(--line)] pr-2">
+          <strong
+            className={cx(
+              "block text-base font-[760] leading-tight",
+              match.result === "WIN" ? "text-[var(--accent-strong)]" : "text-rose-600"
+            )}
+          >
+            {formatMatchScore(match.score)}
+          </strong>
+          <Link
+            href={getSessionHistoryHref(match.sessionCode)}
+            className="mt-0.5 block text-xs font-semibold leading-tight text-gray-600 hover:text-[var(--accent-strong)] hover:underline"
+          >
+            {match.sessionName}
+          </Link>
+        </div>
+        <span
           className={cx(
-            "block truncate text-sm font-[760]",
-            match.result === "WIN" ? "text-[var(--accent-strong)]" : "text-rose-600"
+            "inline-flex h-10 w-10 items-center justify-center justify-self-center rounded-xl text-base font-extrabold",
+            match.result === "WIN"
+              ? "bg-[var(--accent-soft)] text-[var(--accent-strong)]"
+              : "bg-rose-100 text-rose-700"
           )}
         >
-          {formatMatchScore(match.score)}
-        </strong>
-        <Link
-          href={getSessionHistoryHref(match.sessionCode)}
-          className="mt-0.5 block truncate text-xs font-semibold text-gray-600 hover:text-[var(--accent-strong)] hover:underline"
-        >
-          {match.sessionName}
-        </Link>
+          {match.result === "WIN" ? "W" : "L"}
+        </span>
       </div>
-      <div className="min-w-0 border-r border-[var(--line)] pr-2">
-        <span className="block text-xs font-semibold text-gray-500">with</span>
-        <div className="truncate text-sm">
-          <ProfileLink href={getPlayerProfileHref(match.partner.id, clubId)}>
-            {match.partner.name}
-          </ProfileLink>
+      <div className="grid gap-2 border-t border-[rgba(23,32,31,0.08)] pt-2 min-[380px]:grid-cols-[minmax(0,0.88fr)_minmax(0,1.12fr)]">
+        <MatchParticipantCell
+          label="with"
+          participants={[match.partner]}
+          clubId={clubId}
+          showAvatars={showAvatars}
+        />
+        <div className="min-w-0 border-t border-[rgba(23,32,31,0.08)] pt-2 min-[380px]:border-l min-[380px]:border-t-0 min-[380px]:pl-2 min-[380px]:pt-0">
+          <MatchParticipantCell
+            label="vs"
+            participants={match.opponents}
+            clubId={clubId}
+            showAvatars={showAvatars}
+          />
         </div>
       </div>
-      <div className="min-w-0 border-r border-[var(--line)] pr-2">
-        <span className="block text-xs font-semibold text-gray-500">vs</span>
-        <div className="truncate text-sm font-semibold text-gray-950">
-          {match.opponents.map((opponent, index) => (
-            <span key={opponent.id}>
-              {index > 0 ? " / " : ""}
-              <ProfileLink href={getPlayerProfileHref(opponent.id, clubId)}>
-                {opponent.name}
-              </ProfileLink>
-            </span>
-          ))}
-        </div>
-      </div>
-      <span
-        className={cx(
-          "inline-flex h-11 w-11 items-center justify-center justify-self-center rounded-xl text-lg font-extrabold",
-          match.result === "WIN"
-            ? "bg-[var(--accent-soft)] text-[var(--accent-strong)]"
-            : "bg-rose-100 text-rose-700"
-        )}
-      >
-        {match.result === "WIN" ? "W" : "L"}
-      </span>
     </article>
   );
 }
@@ -1440,9 +1447,11 @@ function MatchCard({
 function MatchesList({
   matches,
   clubId,
+  variant = "full",
 }: {
   matches: PlayerProfileMatchHistoryEntry[];
   clubId: string;
+  variant?: MatchListVariant;
 }) {
   if (matches.length === 0) {
     return <EmptyState title="No matches yet" />;
@@ -1451,7 +1460,12 @@ function MatchesList({
   return (
     <div>
       {matches.map((match) => (
-        <MatchCard key={match.id} match={match} clubId={clubId} />
+        <MatchCard
+          key={match.id}
+          match={match}
+          clubId={clubId}
+          variant={variant}
+        />
       ))}
     </div>
   );
@@ -1489,7 +1503,11 @@ function OverviewTab({
           ) : null
         }
       >
-        <MatchesList matches={data.matchHistory.slice(0, 4)} clubId={clubId} />
+        <MatchesList
+          matches={data.matchHistory.slice(0, 4)}
+          clubId={clubId}
+          variant="recent"
+        />
       </ProfileSection>
     </div>
   );
@@ -1517,75 +1535,55 @@ function MatchesTab({
   );
 }
 
-function DetailGrid({ children }: { children: ReactNode }) {
-  return <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">{children}</div>;
-}
-
-function MiniFact({
-  label,
-  value,
-  detail,
-}: {
-  label: string;
-  value: ReactNode;
-  detail?: ReactNode;
-}) {
-  return (
-    <div className="rounded-xl border border-[var(--line)] bg-white px-3 py-3">
-      <p className="text-sm font-semibold text-gray-600">{label}</p>
-      <div className="mt-1 text-lg font-[760] text-gray-950">{value}</div>
-      {detail ? <p className="mt-1 text-xs font-semibold text-gray-500">{detail}</p> : null}
-    </div>
-  );
-}
-
-function RatingFacts({
+function RatingLedgerSection({
   data,
-  rankContext,
   ratingSeries,
 }: {
   data: UserProfileResponse;
-  rankContext: RankContext | null;
   ratingSeries: RatingSeriesPoint[];
 }) {
   const ratings = ratingSeries.map((point) => point.value);
   const peak = Math.max(...ratings, data.user.elo);
   const low = Math.min(...ratings, data.user.elo);
+  const rows = [
+    { label: "Current", value: data.user.elo, tone: "neutral" },
+    { label: "Peak", value: peak, tone: "neutral" },
+    { label: "Lowest", value: low, tone: "neutral" },
+    {
+      label: "30D change",
+      value: formatSignedNumber(data.trend.ratingChange),
+      tone: data.trend.ratingChange >= 0 ? "accent" : "danger",
+    },
+  ] as const;
 
   return (
-    <ProfileSection
-      icon={BarChart3}
-      title="Rating"
-      action={
-        <span className={getTrendDirectionChipClass(data.trend.direction)}>
-          {getTrendDirectionLabel(data.trend.direction)}
-        </span>
-      }
-    >
-      <div className="space-y-4 p-4">
+    <ProfileSection icon={Star} title="Rating ledger">
+      <div className="px-4 pb-3 pt-3">
         <RatingSparkline series={ratingSeries} className="h-36 w-full" />
-        <DetailGrid>
-          <MiniFact label="Current" value={data.user.elo} />
-          <MiniFact label="Peak" value={peak} />
-          <MiniFact label="Lowest" value={low} />
-          {rankContext ? (
-            <MiniFact
-              label="Rank movement"
-              value={
-                rankContext.currentRank === null
-                  ? "Unranked"
-                  : getRankMovementLabel(rankContext.rankDelta)
-              }
-              detail={
-                rankContext.currentRank === null
-                  ? "Leaderboard only"
-                  : rankContext.previousRank
-                    ? `Started at #${rankContext.previousRank}`
-                    : "No previous rank"
-              }
-            />
-          ) : null}
-        </DetailGrid>
+      </div>
+      <div className="grid grid-cols-[minmax(0,1fr)_auto] border-t border-[var(--line)]">
+        {rows.map((row) => (
+          <div
+            key={row.label}
+            className="contents border-b border-[var(--line)] last:border-b-0"
+          >
+            <span className="border-b border-[var(--line)] px-4 py-3 text-sm font-semibold text-gray-600">
+              {row.label}
+            </span>
+            <strong
+              className={cx(
+                "border-b border-[var(--line)] px-4 py-3 text-right text-lg font-[760]",
+                row.tone === "accent"
+                  ? "text-[var(--accent-strong)]"
+                  : row.tone === "danger"
+                    ? "text-rose-700"
+                    : "text-gray-950"
+              )}
+            >
+              {row.value}
+            </strong>
+          </div>
+        ))}
       </div>
     </ProfileSection>
   );
@@ -1593,79 +1591,54 @@ function RatingFacts({
 
 function SessionFormSection({ data }: { data: UserProfileResponse }) {
   return (
-    <ProfileSection
-      icon={Flame}
-      title="Session form"
-      action={
-        data.recentSessions.length > 0 ? (
-          <span className="app-chip app-chip-neutral">
-            {data.recentSessions.length} recent
-          </span>
-        ) : null
-      }
-    >
-      <div className="space-y-4 p-4">
-        <DetailGrid>
-          <MiniFact
-            label="Trend window"
-            value={
-              data.trend.sessions > 0
-                ? `${data.trend.wins}-${data.trend.losses}`
-                : "No window yet"
-            }
-            detail={
-              data.trend.sessions > 0
-                ? `${data.trend.winRate}% win rate`
-                : "No matches yet"
-            }
-          />
-          <MiniFact
-            label="Latest session"
-            value={<SessionInlineValue summary={data.sessions.latest} />}
-          />
-          <MiniFact
-            label="Best session"
-            value={<SessionInlineValue summary={data.sessions.best} />}
-          />
-          <MiniFact
-            label="Session volume"
-            value={`${data.stats.sessionsPlayed} sessions`}
-            detail={`${data.stats.averageMatchesPerSession} matches/session`}
-          />
-        </DetailGrid>
-        {data.recentSessions.length > 0 ? (
-          <div className="grid gap-3 sm:grid-cols-2">
-            {data.recentSessions.map((recentSession) => (
-              <RecentSessionTile key={recentSession.id} summary={recentSession} />
-            ))}
-          </div>
-        ) : null}
-      </div>
+    <ProfileSection icon={CalendarDays} title="Session form">
+      {data.recentSessions.length > 0 ? (
+        <div className="grid">
+          {data.recentSessions.map((recentSession) => (
+            <div
+              key={recentSession.id}
+              className="grid grid-cols-[minmax(4.25rem,1fr)_3rem_minmax(4.8rem,1fr)_minmax(5.8rem,1.15fr)] items-center gap-2 border-b border-[var(--line)] px-4 py-3 text-sm last:border-b-0"
+            >
+              <span className="font-semibold text-gray-600">
+                {formatShortDate(recentSession.date)}
+              </span>
+              <strong className="font-[760] text-gray-950">
+                {recentSession.wins}-{recentSession.losses}
+              </strong>
+              <span className="font-semibold text-gray-600">
+                {formatSignedNumber(recentSession.pointDifferential)} diff
+              </span>
+              <span
+                className={cx(
+                  "text-right font-bold",
+                  recentSession.ratingChange >= 0
+                    ? "text-[var(--accent-strong)]"
+                    : "text-rose-700"
+                )}
+              >
+                {formatSignedNumber(recentSession.ratingChange)} rating
+              </span>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <EmptyState title="No sessions yet" />
+      )}
     </ProfileSection>
   );
 }
 
 function StatsTab({
   data,
-  rankContext,
-  clubId,
   ratingSeries,
 }: {
   data: UserProfileResponse;
-  rankContext: RankContext | null;
-  clubId: string;
   ratingSeries: RatingSeriesPoint[];
 }) {
   return (
     <div className="grid gap-4">
-      <PerformanceSummary data={data} ratingSeries={ratingSeries} />
-      <RatingFacts
-        data={data}
-        rankContext={rankContext}
-        ratingSeries={ratingSeries}
-      />
+      <RatingLedgerSection data={data} ratingSeries={ratingSeries} />
       <SessionFormSection data={data} />
-      <RelationshipCards data={data} clubId={clubId} />
     </div>
   );
 }
@@ -1983,12 +1956,7 @@ export function PlayerProfileView({
         ) : null}
 
         {activeTab === "stats" ? (
-          <StatsTab
-            data={data}
-            rankContext={rankContext}
-            clubId={clubId}
-            ratingSeries={ratingSeries}
-          />
+          <StatsTab data={data} ratingSeries={ratingSeries} />
         ) : null}
 
         {activeTab === "achievements" ? (

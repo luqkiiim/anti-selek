@@ -9,12 +9,13 @@ function cx(...values: Array<string | false | null | undefined>) {
 const AVATAR_SIZE_CLASSES = {
   court:
     "h-10 w-10 text-[13px] sm:h-12 sm:w-12 sm:text-sm md:h-14 md:w-14 md:text-base xl:h-10 xl:w-10 xl:text-[13px]",
+  match: "h-8 w-8 text-[11px]",
   xs: "h-10 w-10 text-[13px] xl:h-8 xl:w-8 xl:text-[11px]",
   sm: "h-12 w-12 text-sm xl:h-10 xl:w-10 xl:text-[13px]",
   md: "h-14 w-14 text-base xl:h-12 xl:w-12 xl:text-sm",
   lg: "h-14 w-14 text-base",
   xl: "h-20 w-20 text-2xl",
-  hero: "h-28 w-28 text-4xl",
+  hero: "h-24 w-24 text-3xl sm:h-28 sm:w-28 sm:text-4xl",
 } as const;
 
 const AVATAR_APPEARANCE_CLASSES = {
