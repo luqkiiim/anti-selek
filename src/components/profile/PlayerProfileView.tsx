@@ -12,18 +12,20 @@ import {
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import {
-  Activity,
   ArrowLeft,
   Award,
   BarChart3,
-  ChevronRight,
+  CalendarDays,
   Flame,
+  LayoutGrid,
   Medal,
   Shield,
   Star,
   Target,
   TrendingUp,
   Trophy,
+  Users,
+  X,
   type LucideIcon,
 } from "lucide-react";
 import { Avatar } from "@/components/ui/Avatar";
@@ -93,6 +95,8 @@ type ProfileTab = "overview" | "matches" | "stats" | "achievements";
 
 type AchievementTone = "accent" | "success" | "warning" | "danger" | "neutral";
 
+const RELATIONSHIP_PREVIEW_COUNT = 3;
+
 const ACHIEVEMENT_PRESENTATION: Record<
   PlayerProfileAchievement["id"],
   { icon: LucideIcon; tone: AchievementTone }
@@ -112,17 +116,16 @@ const ACHIEVEMENT_PRESENTATION: Record<
   "podium-legend": { icon: Trophy, tone: "danger" },
 };
 
-interface StyleTrait {
-  label: string;
-  value: number;
-  detail: string;
-}
-
 interface RatingSeriesPoint {
   value: number;
   index: number;
   label: string;
   deltaFromPrev: number | null;
+}
+
+interface RelationshipDialogState {
+  title: string;
+  summaries: PlayerProfileConnectionSummary[];
 }
 
 export interface PlayerProfileViewProps {
@@ -156,48 +159,45 @@ function formatShortDate(value: string | null) {
     return "No matches yet";
   }
 
-  return new Date(value).toLocaleDateString(undefined, {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "No matches yet";
+  }
+
+  return date.toLocaleDateString(undefined, {
     day: "numeric",
     month: "short",
     year: "numeric",
   });
 }
 
-function formatMatchHistoryDate(value: string | null) {
+function formatMatchDateParts(value: string | null) {
   if (!value) {
-    return "No date";
+    return { date: "No date", year: "" };
   }
 
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) {
-    return "No date";
+    return { date: "No date", year: "" };
   }
 
-  const diffMs = Date.now() - date.getTime();
-  if (diffMs >= 0) {
-    const days = Math.floor(diffMs / 86_400_000);
-    if (days === 0) {
-      return "Today";
-    }
-
-    if (days < 7) {
-      return `${days}d ago`;
-    }
-
-    const weeks = Math.floor(days / 7);
-    if (weeks < 8) {
-      return `${weeks}w ago`;
-    }
-  }
-
-  return date.toLocaleDateString(undefined, {
-    day: "numeric",
-    month: "short",
-  });
+  return {
+    date: date.toLocaleDateString(undefined, {
+      day: "numeric",
+      month: "short",
+    }),
+    year: date.toLocaleDateString(undefined, {
+      year: "numeric",
+    }),
+  };
 }
 
 function formatMatchScore(score: string) {
   return score.replace(/\s*-\s*/g, "-");
+}
+
+function formatConnectionRecord(summary: PlayerProfileConnectionSummary) {
+  return `${summary.wins}W/${summary.losses}L`;
 }
 
 function getPlayerProfileHref(userId: string, clubId: string) {
@@ -246,19 +246,6 @@ function getTrendDirectionChipClass(
   }
 }
 
-function getTrendDirectionDetail(
-  direction: PlayerProfileTrendSummary["direction"]
-) {
-  switch (direction) {
-    case "RISING":
-      return "Recent sessions are moving upward on results, rating, or point swing.";
-    case "SLIPPING":
-      return "Recent sessions are giving back rating or point swing.";
-    default:
-      return "Recent sessions are balancing out without a clear swing.";
-  }
-}
-
 function getRankMovementLabel(rankDelta: number | null) {
   if (rankDelta === null || rankDelta === 0) {
     return "No change";
@@ -275,23 +262,6 @@ function getRankMovementChipClass(rankDelta: number | null) {
   return rankDelta > 0 ? "app-chip app-chip-success" : "app-chip app-chip-danger";
 }
 
-function getMatchResultSurfaceClass(result: PlayerProfileMatchHistoryEntry["result"]) {
-  return cx(
-    "border-l-4",
-    result === "WIN"
-      ? "border-l-emerald-400 bg-emerald-50/70"
-      : "border-l-rose-400 bg-rose-50/70"
-  );
-}
-
-function getEloChangeClass(value: number | null) {
-  if (value === null || value === 0) {
-    return "text-gray-500";
-  }
-
-  return value > 0 ? "text-emerald-600" : "text-rose-600";
-}
-
 function getTierLabel(elo: number) {
   if (elo >= 1700) return "Premier";
   if (elo >= 1450) return "Elite";
@@ -300,27 +270,20 @@ function getTierLabel(elo: number) {
   return "Developing";
 }
 
-function getRankContextLabel(rankContext: RankContext | null) {
-  if (!rankContext?.currentRank || rankContext.leaderboardSize <= 0) {
-    return "Rank building";
-  }
-
-  const topPercent = Math.max(
-    1,
-    Math.round((rankContext.currentRank / rankContext.leaderboardSize) * 100)
-  );
-
-  return `Top ${topPercent}% of players`;
+function getMatchResultSurfaceClass(result: PlayerProfileMatchHistoryEntry["result"]) {
+  return result === "WIN"
+    ? "bg-[rgba(15,118,110,0.045)]"
+    : "bg-rose-50/70";
 }
 
 function formatRatingTooltipDate(value: string | null) {
   if (!value) {
-    return "Date unknown";
+    return "Start";
   }
 
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) {
-    return "Date unknown";
+    return "Start";
   }
 
   return date.toLocaleDateString(undefined, {
@@ -385,38 +348,6 @@ function buildRatingSeries(data: UserProfileResponse) {
   }));
 }
 
-function buildStyleTraits(data: UserProfileResponse): StyleTrait[] {
-  return [
-    {
-      label: "Consistency",
-      value: clamp(data.stats.winRate, 0, 100),
-      detail: `${data.stats.winRate}% overall win rate`,
-    },
-    {
-      label: "Momentum",
-      value: clamp(50 + data.trend.ratingChange, 5, 100),
-      detail: `${formatSignedNumber(data.trend.ratingChange)} recent rating`,
-    },
-    {
-      label: "Pressure",
-      value: clamp(50 + data.stats.pointDifferential / 6, 5, 100),
-      detail: `${formatSignedNumber(data.stats.pointDifferential)} point diff`,
-    },
-    {
-      label: "Endurance",
-      value: clamp(data.stats.sessionsPlayed * 6, 5, 100),
-      detail: `${data.stats.sessionsPlayed} sessions played`,
-    },
-    {
-      label: "Chemistry",
-      value: clamp(data.partners.best[0]?.winRate ?? 0, 0, 100),
-      detail: data.partners.best[0]
-        ? `${data.partners.best[0].winRate}% best partner win rate`
-        : "No partner trend yet",
-    },
-  ];
-}
-
 function ProfileLink({
   href,
   children,
@@ -427,7 +358,7 @@ function ProfileLink({
   return (
     <Link
       href={href}
-      className="font-semibold text-[var(--accent-strong)] underline-offset-2 hover:text-[var(--accent)] hover:underline"
+      className="font-semibold text-gray-950 underline-offset-2 hover:text-[var(--accent-strong)] hover:underline"
     >
       {children}
     </Link>
@@ -437,40 +368,49 @@ function ProfileLink({
 function RatingSparkline({
   series,
   className,
-  stroke = "#5eead4",
 }: {
   series: RatingSeriesPoint[];
   className?: string;
-  stroke?: string;
 }) {
-  const width = 180;
-  const height = 66;
-  const padding = 8;
+  const width = 360;
+  const height = 124;
+  const chartLeft = 48;
+  const chartRight = 318;
+  const chartTop = 16;
+  const chartBottom = 84;
   const values = series.map((point) => point.value);
-  const min = Math.min(...values);
-  const max = Math.max(...values);
-  const range = max - min || 1;
+  const minValue = Math.min(...values);
+  const maxValue = Math.max(...values);
+  const paddedMin = Math.floor((minValue - 35) / 50) * 50;
+  const paddedMax = Math.ceil((maxValue + 35) / 50) * 50;
+  const range = Math.max(1, paddedMax - paddedMin);
   const points = values.map((value, index) => {
     const x =
       values.length === 1
-        ? width / 2
-        : (index / (values.length - 1)) * (width - padding * 2) + padding;
+        ? (chartLeft + chartRight) / 2
+        : chartLeft + (index / (values.length - 1)) * (chartRight - chartLeft);
     const y =
-      height - padding - ((value - min) / range) * (height - padding * 2);
-    return {
-      x,
-      y,
-    };
+      chartBottom - ((value - paddedMin) / range) * (chartBottom - chartTop);
+    return { x, y };
   });
-  const pointPairs = points.map((point) => `${point.x.toFixed(1)},${point.y.toFixed(1)}`);
+  const pointPairs = points
+    .map((point) => `${point.x.toFixed(1)},${point.y.toFixed(1)}`)
+    .join(" ");
   const areaPoints = [
-    `${padding},${height - padding}`,
-    ...pointPairs,
-    `${width - padding},${height - padding}`,
+    `${chartLeft},${chartBottom}`,
+    pointPairs,
+    `${chartRight},${chartBottom}`,
   ].join(" ");
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
   const [isScrubbing, setIsScrubbing] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const activePoint = activeIndex !== null ? points[activeIndex] : points.at(-1);
+  const activeValue =
+    activeIndex !== null ? series[activeIndex] : series.at(-1) ?? series[0];
+  const firstPoint = points[0];
+  const lastPoint = points.at(-1) ?? points[0];
+  const firstLabel = series[0]?.label ?? "Start";
+  const lastLabel = series.at(-1)?.label ?? "Now";
 
   const getClosestIndex = (clientX: number) => {
     const rect = containerRef.current?.getBoundingClientRect();
@@ -479,7 +419,7 @@ function RatingSparkline({
     }
 
     const ratio = clamp((clientX - rect.left) / rect.width, 0, 1);
-    const chartX = padding + ratio * (width - padding * 2);
+    const chartX = ratio * width;
     let bestIndex = 0;
     let bestDistance = Number.POSITIVE_INFINITY;
 
@@ -517,80 +457,89 @@ function RatingSparkline({
       event.currentTarget.releasePointerCapture(event.pointerId);
     }
     setIsScrubbing(false);
-    setActiveIndex(null);
   };
 
-  const scrubPoint =
-    activeIndex !== null ? points[activeIndex] : null;
-  const scrubValue =
-    activeIndex !== null ? series[activeIndex] : null;
-  const scrubDeltaLabel = scrubValue
-    ? scrubValue.deltaFromPrev === null
-      ? "Starting point"
-      : `${formatSignedNumber(scrubValue.deltaFromPrev)} from previous`
-    : "";
-  const tooltipLeftPercent =
-    scrubPoint === null ? 0 : clamp((scrubPoint.x / width) * 100, 11, 89);
+  const clearMouseScrub = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (event.pointerType === "mouse" && !isScrubbing) {
+      setActiveIndex(null);
+    }
+  };
 
   return (
     <div
       ref={containerRef}
-      className={cx("relative overflow-visible", className)}
+      className={cx("relative", className)}
       data-rating-chart-root="true"
       onPointerDown={beginScrub}
       onPointerMove={moveScrub}
       onPointerUp={endScrub}
       onPointerCancel={endScrub}
-      onPointerLeave={(event) => {
-        if (event.pointerType === "mouse" && !isScrubbing) {
-          setActiveIndex(null);
-        }
-      }}
+      onPointerLeave={clearMouseScrub}
       style={{ touchAction: "pan-y" }}
-      aria-label="Rating progression chart"
+      aria-label="Rating trend"
       role="img"
     >
-      {scrubPoint && scrubValue ? (
-        <div
-          className="pointer-events-none absolute z-20 rounded-lg border border-[rgba(15,118,110,0.26)] bg-white/96 px-2.5 py-1.5 text-[11px] text-gray-700 shadow-[0_8px_16px_rgba(17,25,23,0.16)]"
-          data-rating-tooltip="true"
-          style={{
-            left: `${tooltipLeftPercent}%`,
-            top: `${Math.max(scrubPoint.y - 10, 8)}px`,
-            transform: "translate(-50%, -100%)",
-          }}
-        >
-          <p className="font-semibold text-[var(--accent-strong)]">
-            {scrubValue.value}
-          </p>
-          <p className="text-gray-600">{scrubValue.label}</p>
-          <p className="text-gray-500">{scrubDeltaLabel}</p>
-        </div>
-      ) : null}
       <svg
         viewBox={`0 0 ${width} ${height}`}
         className="h-full w-full"
         preserveAspectRatio="none"
         aria-hidden="true"
       >
-        <polygon points={areaPoints} fill="rgba(94, 234, 212, 0.12)" />
+        <text x="8" y={chartTop + 4} className="fill-gray-500 text-[10px]">
+          {paddedMax}
+        </text>
+        <text
+          x="8"
+          y={(chartTop + chartBottom) / 2 + 4}
+          className="fill-gray-500 text-[10px]"
+        >
+          {Math.round((paddedMin + paddedMax) / 2)}
+        </text>
+        <text x="8" y={chartBottom + 4} className="fill-gray-500 text-[10px]">
+          {paddedMin}
+        </text>
+        <line
+          x1={chartLeft}
+          y1={chartTop}
+          x2={chartLeft}
+          y2={chartBottom}
+          stroke="rgba(23,32,31,0.14)"
+          strokeWidth="1.2"
+        />
+        <line
+          x1={chartLeft}
+          y1={chartBottom}
+          x2={chartRight}
+          y2={chartBottom}
+          stroke="rgba(23,32,31,0.14)"
+          strokeWidth="1.2"
+        />
+        <polygon points={areaPoints} fill="rgba(15,118,110,0.09)" />
         <polyline
-          points={pointPairs.join(" ")}
+          points={pointPairs}
           fill="none"
-          stroke={stroke}
+          stroke="rgba(15,118,110,0.22)"
           strokeLinecap="round"
           strokeLinejoin="round"
-          strokeWidth="4"
+          strokeWidth="11"
         />
-        {scrubPoint ? (
+        <polyline
+          points={pointPairs}
+          fill="none"
+          stroke="var(--accent)"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth="3.4"
+        />
+        {activePoint ? (
           <line
-            x1={scrubPoint.x}
-            y1={padding}
-            x2={scrubPoint.x}
-            y2={height - padding}
-            stroke="rgba(255,255,255,0.58)"
+            x1={activePoint.x}
+            y1={chartTop}
+            x2={activePoint.x}
+            y2={chartBottom}
+            stroke="rgba(15,118,110,0.26)"
             strokeDasharray="3 3"
-            strokeWidth="1.5"
+            strokeWidth="1.2"
           />
         ) : null}
         {points.map((point, index) => (
@@ -598,25 +547,45 @@ function RatingSparkline({
             key={`${point.x}-${point.y}-${index}`}
             cx={point.x.toFixed(1)}
             cy={point.y.toFixed(1)}
-            r={
-              activeIndex === index
-                ? 4.8
-                : index === points.length - 1
-                  ? 4
-                  : 2.3
-            }
-            fill={
-              activeIndex === index
-                ? "white"
-                : index === points.length - 1
-                  ? stroke
-                  : "rgba(255,255,255,0.7)"
-            }
-            stroke={activeIndex === index ? stroke : "none"}
-            strokeWidth={activeIndex === index ? "2.2" : "0"}
+            r={activeIndex === index || index === points.length - 1 ? 4.4 : 3}
+            fill={activeIndex === index ? "var(--accent)" : "white"}
+            stroke="var(--accent)"
+            strokeWidth={activeIndex === index ? "3" : "2"}
           />
         ))}
+        {points.length > 1 ? (
+          <text
+            x={firstPoint.x}
+            y="112"
+            textAnchor="middle"
+            className="fill-gray-500 text-[11px] font-semibold"
+          >
+            {firstLabel}
+          </text>
+        ) : null}
+        <text
+          x={lastPoint.x}
+          y="112"
+          textAnchor="middle"
+          className="fill-gray-500 text-[11px] font-semibold"
+        >
+          {lastLabel}
+        </text>
       </svg>
+      {activePoint && activeValue ? (
+        <div
+          className="pointer-events-none absolute z-20 rounded-lg bg-[var(--accent)] px-2.5 py-1.5 text-center text-xs font-semibold leading-tight text-white shadow-[0_8px_18px_rgba(15,118,110,0.22)]"
+          data-rating-tooltip="true"
+          style={{
+            left: `${(activePoint.x / width) * 100}%`,
+            top: `${Math.max(activePoint.y - 9, 8)}px`,
+            transform: "translate(-50%, -100%)",
+          }}
+        >
+          <span className="block">{activeValue.value}</span>
+          <span className="block text-[11px] text-white/90">{activeValue.label}</span>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -624,9 +593,7 @@ function RatingSparkline({
 function ProfileHero({
   data,
   rankContext,
-  recentFormSummary,
   recentStreakSummary,
-  ratingSeries,
   onBack,
   canManageAvatar,
   onPreviewAvatar,
@@ -635,9 +602,7 @@ function ProfileHero({
 }: {
   data: UserProfileResponse;
   rankContext: RankContext | null;
-  recentFormSummary: string;
   recentStreakSummary: string;
-  ratingSeries: RatingSeriesPoint[];
   onBack?: () => void;
   canManageAvatar: boolean;
   onPreviewAvatar: (avatarUrl: string) => void;
@@ -648,174 +613,160 @@ function ProfileHero({
   const tier = getTierLabel(data.user.elo);
 
   return (
-    <section className="overflow-hidden rounded-[1.35rem] border border-[rgba(255,255,255,0.08)] bg-[#111917] text-white shadow-[0_20px_54px_rgba(17,25,23,0.24)]">
-      <div className="relative px-4 pb-5 pt-4 sm:px-6 sm:pb-6">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_15%_10%,rgba(15,118,110,0.34),transparent_38%),radial-gradient(circle_at_90%_8%,rgba(255,255,255,0.12),transparent_34%)]" />
+    <section className="relative rounded-none bg-[linear-gradient(180deg,#eef8f5_0%,#f7faf8_68%,transparent_100%)] px-4 pb-4 pt-3 sm:rounded-[1.35rem] sm:px-6 sm:pt-4">
+      <div className="mb-4 flex items-center justify-between">
+        {onBack ? (
+          <button
+            type="button"
+            onClick={onBack}
+            className="inline-flex h-11 w-11 items-center justify-center rounded-full text-gray-900 transition hover:bg-white/70 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]"
+            aria-label="Go back"
+          >
+            <ArrowLeft aria-hidden="true" size={25} strokeWidth={2.2} />
+          </button>
+        ) : (
+          <span className="h-11 w-11" />
+        )}
+      </div>
 
-        <div className="relative mt-5 grid gap-4 lg:grid-cols-[minmax(0,1fr)_21rem] lg:items-start">
-          <div className="space-y-4">
-            {onBack ? (
-              <div className="flex items-center gap-3">
+      <div className="grid gap-4 sm:grid-cols-[auto_minmax(0,1fr)] sm:items-center">
+        <div className="justify-self-start">
+          {canManageAvatar ? (
+            <AvatarUploader
+              name={data.user.name}
+              avatarUrl={data.user.avatarUrl}
+              size="hero"
+              presentation="menu"
+              onPreviewAvatar={onPreviewAvatar}
+              previewAvatarLabel={`View profile photo of ${data.user.name}`}
+              onUpload={onUploadAvatar}
+              onRemove={onRemoveAvatar}
+            />
+          ) : (
+            <div className="relative aspect-square h-28 w-28">
+              {data.user.avatarUrl ? (
                 <button
                   type="button"
-                  onClick={onBack}
-                  className="inline-flex min-h-11 items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-2 text-sm font-semibold text-white transition hover:bg-white/16"
+                  onClick={() => onPreviewAvatar(data.user.avatarUrl as string)}
+                  className="inline-flex aspect-square h-full w-full rounded-full transition hover:scale-[1.02] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]"
+                  aria-label={`View profile photo of ${data.user.name}`}
+                  data-testid="profile-hero-avatar-trigger"
                 >
-                  <ArrowLeft aria-hidden="true" size={18} strokeWidth={2.2} />
-                  Back
-                </button>
-              </div>
-            ) : null}
-
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
-              <div className="shrink-0">
-                {canManageAvatar ? (
-                  <AvatarUploader
+                  <Avatar
                     name={data.user.name}
                     avatarUrl={data.user.avatarUrl}
                     size="hero"
-                    onPreviewAvatar={onPreviewAvatar}
-                    previewAvatarLabel={`View profile photo of ${data.user.name}`}
-                    onUpload={onUploadAvatar}
-                    onRemove={onRemoveAvatar}
+                    className="h-full w-full border-4 border-white shadow-[0_16px_34px_rgba(23,32,31,0.12)]"
+                    imageLoading="eager"
+                    imageFetchPriority="high"
                   />
-                ) : (
-                  <div className="relative aspect-square h-28 w-28">
-                    {data.user.avatarUrl ? (
-                      <button
-                        type="button"
-                        onClick={() =>
-                          onPreviewAvatar(data.user.avatarUrl as string)
-                        }
-                        className="inline-flex aspect-square h-full w-full rounded-full transition hover:scale-[1.02] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-200"
-                        aria-label={`View profile photo of ${data.user.name}`}
-                        data-testid="profile-hero-avatar-trigger"
-                      >
-                        <Avatar
-                          name={data.user.name}
-                          avatarUrl={data.user.avatarUrl}
-                          size="hero"
-                          className="h-full w-full border-4 border-emerald-400 bg-[#17201f] shadow-[0_10px_32px_rgba(0,0,0,0.22)]"
-                          fallbackClassName="text-emerald-100"
-                        />
-                      </button>
-                    ) : (
-                      <Avatar
-                        name={data.user.name}
-                        avatarUrl={data.user.avatarUrl}
-                        size="hero"
-                        className="h-full w-full border-4 border-emerald-400 bg-[#17201f] shadow-[0_10px_32px_rgba(0,0,0,0.22)]"
-                        fallbackClassName="text-emerald-100"
-                      />
-                    )}
-                  </div>
-                )}
-              </div>
-
-              <div className="min-w-0">
-                <p className="text-sm font-semibold text-emerald-100/78">
-                  Player profile
-                </p>
-                <h1 className="mt-1 truncate text-4xl font-semibold leading-tight !text-white sm:text-5xl">
-                  {data.user.name}
-                </h1>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  <span className="inline-flex items-center gap-1 rounded-full bg-emerald-400/18 px-3 py-1.5 text-sm font-semibold text-emerald-100">
-                    <Award aria-hidden="true" size={16} strokeWidth={2.3} />
-                    {tier}
-                  </span>
-                  <span className="rounded-full bg-white/10 px-3 py-1.5 text-sm font-semibold text-white">
-                    {recentFormSummary}
-                  </span>
-                </div>
-                <p className="mt-3 flex flex-wrap gap-x-3 gap-y-1 text-sm text-white/64">
-                  <span>Joined {formatShortDate(data.user.createdAt)}</span>
-                  <span>
-                    Last played {formatShortDate(data.stats.lastPlayedAt)}
-                  </span>
-                </p>
-                <div className="mt-4 grid grid-cols-3 gap-3 text-center sm:max-w-md">
-                  <div>
-                    <p className="text-2xl font-semibold text-white">
-                      {data.stats.totalMatches}
-                    </p>
-                    <p className="text-xs text-white/56">Matches</p>
-                  </div>
-                  <div className="border-x border-white/10">
-                    <p className="text-2xl font-semibold text-white">
-                      {data.stats.winRate}%
-                    </p>
-                    <p className="text-xs text-white/56">Win rate</p>
-                  </div>
-                  <div>
-                    <p className="text-2xl font-semibold text-white">
-                      {recentStreakSummary}
-                    </p>
-                    <p className="text-xs text-white/56">Streak</p>
-                  </div>
-                </div>
-              </div>
+                </button>
+              ) : (
+                <Avatar
+                  name={data.user.name}
+                  avatarUrl={data.user.avatarUrl}
+                  size="hero"
+                  className="h-full w-full border-4 border-white shadow-[0_16px_34px_rgba(23,32,31,0.12)]"
+                />
+              )}
             </div>
-          </div>
+          )}
+        </div>
 
+        <div className="min-w-0">
+          <h1 className="truncate text-4xl font-[760] leading-none text-gray-950 sm:text-5xl">
+            {data.user.name}
+          </h1>
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <span className="inline-flex min-h-9 items-center rounded-xl bg-[var(--accent)] px-3 text-sm font-bold text-white">
+              {rankContext?.currentRank ? `#${rankContext.currentRank}` : "Rank building"}
+            </span>
+            <span className={getTrendDirectionChipClass(data.trend.direction)}>
+              <TrendingUp aria-hidden="true" size={15} strokeWidth={2.3} />
+              {tier}
+            </span>
+          </div>
           <div
-            className="rounded-2xl border border-white/10 bg-white/10 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]"
+            className="mt-4 grid max-w-[28rem] grid-cols-[minmax(0,1fr)_1px_minmax(0,1fr)] items-center gap-4"
             data-testid="profile-rating-snapshot"
           >
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <p className="text-sm font-semibold text-white/70">
-                  {data.context?.clubId ? "Club rating" : "Overall rating"}
-                </p>
-                <p className="mt-2 text-4xl font-semibold text-white">
-                  {data.user.elo}
-                </p>
-              </div>
-              <span
-                className={cx(
-                  "rounded-full px-3 py-1 text-sm font-semibold",
-                  ratingDelta >= 0
-                    ? "bg-emerald-400/18 text-emerald-100"
-                    : "bg-red-400/16 text-red-100"
-                )}
-              >
-                {formatSignedNumber(ratingDelta)}
+            <div className="min-w-0 text-center">
+              <p className="text-3xl font-[760] leading-none text-gray-950">
+                {data.user.elo}
+              </p>
+              <p className="mt-1 text-sm font-semibold text-gray-600">
+                {data.context?.clubId ? "Club rating" : "Overall rating"}
+              </p>
+            </div>
+            <span className="h-14 bg-[var(--line-strong)]" />
+            <div className="min-w-0 text-center">
+              <p className="text-3xl font-[760] leading-none text-[var(--accent-strong)]">
+                {recentStreakSummary}
+              </p>
+              <p className="mt-1 text-sm font-semibold text-gray-600">
+                Recent form
+              </p>
+            </div>
+          </div>
+          <div className="mt-3 flex flex-wrap gap-2 text-xs font-semibold text-gray-600">
+            <span className={getSignedChipClass(ratingDelta)}>
+              {formatSignedNumber(ratingDelta)} rating
+            </span>
+            {rankContext?.currentRank ? (
+              <span className={getRankMovementChipClass(rankContext.rankDelta)}>
+                {getRankMovementLabel(rankContext.rankDelta)}
               </span>
-            </div>
-            <div className="mt-4 grid grid-cols-2 gap-3">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-white/45">
-                  Rank
-                </p>
-                <p className="mt-1 text-lg font-semibold text-white">
-                  {rankContext?.currentRank
-                    ? `#${rankContext.currentRank}`
-                    : "Building"}
-                </p>
-              </div>
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-white/45">
-                  Movement
-                </p>
-                <p className="mt-1 text-lg font-semibold text-white">
-                  {rankContext?.currentRank
-                    ? getRankMovementLabel(rankContext.rankDelta)
-                    : "Rank building"}
-                </p>
-              </div>
-            </div>
-            <p className="mt-3 text-sm text-white/62">
-              {formatSignedNumber(ratingDelta)} recent rating -{" "}
-              {getRankContextLabel(rankContext)}
-            </p>
-            <RatingSparkline
-              series={ratingSeries}
-              className="mt-4 h-20 w-full"
-              stroke="#5eead4"
-            />
+            ) : null}
           </div>
         </div>
       </div>
+
+      <StatStrip data={data} recentStreakSummary={recentStreakSummary} />
+    </section>
+  );
+}
+
+function StatStrip({
+  data,
+  recentStreakSummary,
+}: {
+  data: UserProfileResponse;
+  recentStreakSummary: string;
+}) {
+  const items = [
+    { icon: LayoutGrid, label: "Matches", value: data.stats.totalMatches },
+    { icon: BarChart3, label: "Win rate", value: `${data.stats.winRate}%` },
+    { icon: Flame, label: "Streak", value: recentStreakSummary, accent: true },
+    {
+      icon: Award,
+      label: "Point diff",
+      value: formatSignedNumber(data.stats.pointDifferential),
+      accent: true,
+    },
+  ];
+
+  return (
+    <section
+      className="mt-5 grid grid-cols-4 divide-x divide-[var(--line-strong)] overflow-hidden rounded-2xl border border-[var(--line)] bg-white shadow-[0_18px_44px_rgba(23,32,31,0.08)]"
+      aria-label="Player summary"
+    >
+      {items.map(({ icon: Icon, label, value, accent }) => (
+        <div
+          className="grid min-h-[5rem] place-items-center px-2 py-3 text-center"
+          key={label}
+        >
+          <Icon aria-hidden="true" size={22} strokeWidth={1.8} />
+          <span className="mt-1 text-xs font-semibold text-gray-600">{label}</span>
+          <strong
+            className={cx(
+              "mt-1 text-2xl font-[760] leading-none",
+              accent ? "text-[var(--accent-strong)]" : "text-gray-950"
+            )}
+          >
+            {value}
+          </strong>
+        </div>
+      ))}
     </section>
   );
 }
@@ -828,7 +779,7 @@ function ProfileTabs({
   onChange: (tab: ProfileTab) => void;
 }) {
   return (
-    <div className="app-panel sticky top-0 z-20 grid grid-cols-4 gap-1 p-1">
+    <div className="grid grid-cols-4 border-b border-[var(--line)]">
       {PROFILE_TABS.map((tab) => {
         const isActive = activeTab === tab.id;
 
@@ -839,17 +790,15 @@ function ProfileTabs({
             role="tab"
             aria-selected={isActive}
             onClick={() => onChange(tab.id)}
-            aria-current={isActive ? "page" : undefined}
-            style={{
-              backgroundColor: isActive ? "var(--accent)" : "transparent",
-              color: isActive ? "#ffffff" : "var(--foreground)",
-            }}
             className={cx(
-              "min-h-11 rounded-xl px-1 text-xs font-semibold sm:px-2 sm:text-sm",
-              isActive ? "shadow-sm" : null
+              "relative min-h-12 px-1 text-sm font-[760] text-gray-600 transition hover:text-[var(--accent-strong)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)] sm:text-base",
+              isActive ? "text-[var(--accent-strong)]" : null
             )}
           >
             {tab.label}
+            {isActive ? (
+              <span className="absolute bottom-[-1px] left-0 right-0 h-[3px] bg-[var(--accent)]" />
+            ) : null}
           </button>
         );
       })}
@@ -858,24 +807,29 @@ function ProfileTabs({
 }
 
 function ProfileSection({
-  eyebrow,
+  icon: Icon,
   title,
   action,
   children,
   className,
 }: {
-  eyebrow?: string;
+  icon?: LucideIcon;
   title: ReactNode;
   action?: ReactNode;
   children: ReactNode;
   className?: string;
 }) {
   return (
-    <section className={cx("app-panel p-4 sm:p-5", className)}>
-      <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
-        <div>
-          {eyebrow ? <p className="app-eyebrow">{eyebrow}</p> : null}
-          <h2 className="mt-1 text-xl font-semibold text-gray-900 sm:text-2xl">
+    <section
+      className={cx(
+        "overflow-hidden rounded-2xl border border-[var(--line)] bg-white shadow-[0_14px_34px_rgba(23,32,31,0.06)]",
+        className
+      )}
+    >
+      <div className="flex min-h-12 items-center justify-between gap-3 border-b border-[var(--line)] px-4 py-2.5">
+        <div className="flex min-w-0 items-center gap-2.5">
+          {Icon ? <Icon aria-hidden="true" size={24} strokeWidth={1.9} /> : null}
+          <h2 className="truncate text-xl font-[760] leading-tight text-gray-950">
             {title}
           </h2>
         </div>
@@ -890,95 +844,75 @@ function SummaryMetric({
   icon: Icon,
   label,
   value,
-  detail,
   tone = "neutral",
 }: {
   icon: LucideIcon;
   label: string;
   value: ReactNode;
-  detail?: ReactNode;
   tone?: "accent" | "success" | "warning" | "danger" | "neutral";
 }) {
   const toneClass = {
-    accent: "bg-[var(--accent-soft)] text-[var(--accent-strong)]",
-    success: "bg-[var(--success-soft)] text-[var(--success)]",
-    warning: "bg-[var(--warning-soft)] text-[var(--warning)]",
-    danger: "bg-[var(--danger-soft)] text-[var(--danger)]",
-    neutral: "bg-[var(--surface-muted)] text-gray-600",
+    accent: "text-[var(--accent-strong)]",
+    success: "text-[var(--success)]",
+    warning: "text-[var(--warning)]",
+    danger: "text-[var(--danger)]",
+    neutral: "text-gray-950",
   }[tone];
 
   return (
-    <div className="min-h-[7.25rem] rounded-xl border border-[var(--line)] bg-white p-3 shadow-[0_8px_18px_rgba(23,32,31,0.04)] sm:min-h-0 sm:p-4">
-      <div className="flex h-full flex-col justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <span className={cx("rounded-lg p-1.5", toneClass)}>
-            <Icon aria-hidden="true" size={17} strokeWidth={2.4} />
-          </span>
-          <p className="min-w-0 text-xs font-semibold leading-tight text-gray-700 sm:text-sm">
-            {label}
-          </p>
-        </div>
-        <div className="min-w-0">
-          <p className="text-2xl font-semibold leading-none text-gray-900">
-            {value}
-          </p>
-          {detail ? (
-            <p className="mt-1.5 text-[11px] leading-snug text-gray-600 sm:text-xs">
-              {detail}
-            </p>
-          ) : null}
-        </div>
+    <div className="grid min-h-[4.25rem] grid-cols-[2rem_minmax(0,1fr)] items-center gap-2 border-b border-[var(--line)] px-3 py-2.5 odd:border-r sm:px-4">
+      <Icon aria-hidden="true" size={21} strokeWidth={1.7} />
+      <div className="min-w-0">
+        <span className="block truncate text-sm font-semibold leading-tight text-gray-600">
+          {label}
+        </span>
+        <strong className={cx("mt-1 block text-2xl font-[760] leading-none", toneClass)}>
+          {value}
+        </strong>
       </div>
     </div>
   );
 }
 
-function PerformanceSummary({ data }: { data: UserProfileResponse }) {
+function PerformanceSummary({
+  data,
+  ratingSeries,
+}: {
+  data: UserProfileResponse;
+  ratingSeries: RatingSeriesPoint[];
+}) {
   return (
-    <ProfileSection title="Performance">
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-        <SummaryMetric
-          icon={Trophy}
-          label="Win rate"
-          value={`${data.stats.winRate}%`}
-          detail={`${data.stats.wins} wins / ${data.stats.losses} losses`}
-          tone="success"
-        />
-        <SummaryMetric
-          icon={BarChart3}
-          label="Matches played"
-          value={data.stats.totalMatches}
-          detail={`${data.stats.sessionsPlayed} sessions`}
-          tone="accent"
-        />
-        <SummaryMetric
-          icon={Star}
-          label="Points scored"
-          value={data.stats.pointsScored}
-          detail={`${data.stats.averageMatchesPerSession} matches per session`}
-          tone="warning"
-        />
+    <ProfileSection icon={TrendingUp} title="Performance">
+      <div className="grid grid-cols-2">
+        <SummaryMetric icon={Trophy} label="Win rate" value={`${data.stats.winRate}%`} />
+        <SummaryMetric icon={LayoutGrid} label="Matches played" value={data.stats.totalMatches} />
+        <SummaryMetric icon={Target} label="Points scored" value={data.stats.pointsScored} />
         <SummaryMetric
           icon={Shield}
           label="Points conceded"
           value={data.stats.pointsConceded}
-          detail="All matches"
-          tone="danger"
         />
         <SummaryMetric
-          icon={Target}
-          label="Point differential"
+          icon={TrendingUp}
+          label="Point diff"
           value={formatSignedNumber(data.stats.pointDifferential)}
-          detail="Scoring margin"
           tone={data.stats.pointDifferential >= 0 ? "success" : "danger"}
         />
         <SummaryMetric
-          icon={Activity}
+          icon={Flame}
           label="Recent form"
           value={`${data.recentForm.wins}-${data.recentForm.losses}`}
-          detail={`${data.recentForm.matches} match window`}
           tone="neutral"
         />
+      </div>
+      <div className="px-4 pb-4 pt-3">
+        <div className="mb-1 flex items-center justify-between gap-3">
+          <h3 className="text-base font-[760] text-gray-700">Rating trend</h3>
+          <span className={getTrendDirectionChipClass(data.trend.direction)}>
+            {getTrendDirectionLabel(data.trend.direction)}
+          </span>
+        </div>
+        <RatingSparkline series={ratingSeries} className="h-36 w-full" />
       </div>
     </ProfileSection>
   );
@@ -994,22 +928,22 @@ function ConnectionRow({
   clubId: string;
 }) {
   return (
-    <div className="flex items-center gap-3 rounded-xl border border-[var(--line)] bg-white px-3 py-3">
-      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-[rgba(15,118,110,0.18)] bg-[var(--accent-faint)] text-xs font-semibold text-[var(--accent-strong)]">
+    <div className="grid min-h-14 grid-cols-[2rem_2.4rem_minmax(0,1fr)_4.1rem_3rem] items-center gap-2 border-b border-[var(--line)] px-3 py-2.5 last:border-b-0">
+      <span className="text-left text-xs font-extrabold text-gray-600">
         #{rank}
       </span>
-      <Avatar name={summary.user.name} avatarUrl={summary.user.avatarUrl} size="sm" />
-      <div className="min-w-0 flex-1">
-        <div className="truncate text-sm">
-          <ProfileLink href={getPlayerProfileHref(summary.user.id, clubId)}>
-            {summary.user.name}
-          </ProfileLink>
-        </div>
-        <p className="mt-1 text-xs text-gray-600">
-          {summary.wins}-{summary.losses}, {summary.winRate}% win,{" "}
-          {summary.matches} {summary.matches === 1 ? "match" : "matches"}
-        </p>
+      <Avatar name={summary.user.name} avatarUrl={summary.user.avatarUrl} size="xs" />
+      <div className="min-w-0 truncate text-sm font-bold text-gray-950">
+        <ProfileLink href={getPlayerProfileHref(summary.user.id, clubId)}>
+          {summary.user.name}
+        </ProfileLink>
       </div>
+      <span className="text-right text-sm font-bold text-gray-600">
+        {formatConnectionRecord(summary)}
+      </span>
+      <span className="text-right text-sm font-extrabold text-[var(--accent-strong)]">
+        {summary.winRate}%
+      </span>
     </div>
   );
 }
@@ -1025,14 +959,14 @@ function ConnectionRankList({
 }) {
   if (summaries.length === 0) {
     return (
-      <div className="rounded-xl border border-dashed border-[var(--line-strong)] bg-[var(--surface-muted)] px-3 py-4 text-sm text-gray-600">
+      <div className="px-4 py-4 text-sm font-semibold text-gray-500">
         {emptyText}
       </div>
     );
   }
 
   return (
-    <div className="space-y-2">
+    <div>
       {summaries.map((summary, index) => (
         <ConnectionRow
           key={summary.user.id}
@@ -1045,6 +979,110 @@ function ConnectionRankList({
   );
 }
 
+function RelationshipGroup({
+  title,
+  summaries,
+  clubId,
+  emptyText,
+  onViewAll,
+}: {
+  title: string;
+  summaries: PlayerProfileConnectionSummary[];
+  clubId: string;
+  emptyText: string;
+  onViewAll: () => void;
+}) {
+  const visibleSummaries = summaries.slice(0, RELATIONSHIP_PREVIEW_COUNT);
+  const hasMore = summaries.length > RELATIONSHIP_PREVIEW_COUNT;
+
+  return (
+    <div className="min-w-0">
+      <div className="flex min-h-11 items-center justify-between gap-3 border-b border-[var(--line)] px-4 py-2">
+        <h3 className="text-sm font-[760] text-gray-600">{title}</h3>
+        {hasMore ? (
+          <button
+            type="button"
+            className="text-sm font-[760] text-[var(--accent-strong)] hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]"
+            aria-label={`View all ${title}`}
+            onClick={onViewAll}
+          >
+            View all
+          </button>
+        ) : null}
+      </div>
+      <ConnectionRankList
+        summaries={visibleSummaries}
+        clubId={clubId}
+        emptyText={emptyText}
+      />
+    </div>
+  );
+}
+
+function RelationshipDialog({
+  group,
+  clubId,
+  onClose,
+}: {
+  group: RelationshipDialogState | null;
+  clubId: string;
+  onClose: () => void;
+}) {
+  useEffect(() => {
+    if (!group) {
+      return undefined;
+    }
+
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        onClose();
+      }
+    };
+
+    window.addEventListener("keydown", handleEscape);
+
+    return () => window.removeEventListener("keydown", handleEscape);
+  }, [group, onClose]);
+
+  if (!group) {
+    return null;
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-gray-950/10 px-4 py-6"
+      onClick={onClose}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={`${group.title} list`}
+        className="grid max-h-[72vh] w-full max-w-md overflow-hidden rounded-2xl border border-[var(--line)] bg-white shadow-[0_24px_60px_rgba(23,32,31,0.22)]"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <header className="flex min-h-12 items-center justify-between gap-3 border-b border-[var(--line)] px-4 py-2">
+          <h3 className="text-lg font-[760] text-gray-950">{group.title}</h3>
+          <button
+            type="button"
+            aria-label="Close"
+            onClick={onClose}
+            className="inline-flex h-9 w-9 items-center justify-center rounded-full text-gray-700 transition hover:bg-[var(--surface-muted)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]"
+          >
+            <X aria-hidden="true" size={19} strokeWidth={2.2} />
+          </button>
+        </header>
+        <div className="max-h-[min(60vh,32rem)] overflow-y-auto">
+          <ConnectionRankList
+            summaries={group.summaries}
+            clubId={clubId}
+            emptyText="No data yet"
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function RelationshipCards({
   data,
   clubId,
@@ -1052,169 +1090,220 @@ function RelationshipCards({
   data: UserProfileResponse;
   clubId: string;
 }) {
+  const [activeGroup, setActiveGroup] = useState<RelationshipDialogState | null>(
+    null
+  );
+
   return (
-    <div className="grid gap-3 lg:grid-cols-2">
-      <ProfileSection
-        title="Partners"
-        action={<span className="app-chip app-chip-accent">Doubles</span>}
-      >
-        <ConnectionRankList
+    <ProfileSection icon={Users} title="Partners & opponents">
+      <div className="grid">
+        <RelationshipGroup
+          title="Best partners"
           summaries={data.partners.best}
           clubId={clubId}
           emptyText="No partner data yet"
+          onViewAll={() =>
+            setActiveGroup({
+              title: "Best partners",
+              summaries: data.partners.best,
+            })
+          }
         />
-      </ProfileSection>
-
-      <ProfileSection
-        title="Opponents"
-        action={<span className="app-chip app-chip-warning">Head-to-head</span>}
-      >
-        <ConnectionRankList
+        <RelationshipGroup
+          title="Toughest opponents"
           summaries={data.opponents.toughest}
           clubId={clubId}
           emptyText="No opponent data yet"
+          onViewAll={() =>
+            setActiveGroup({
+              title: "Toughest opponents",
+              summaries: data.opponents.toughest,
+            })
+          }
         />
-      </ProfileSection>
-    </div>
+      </div>
+      <RelationshipDialog
+        group={activeGroup}
+        clubId={clubId}
+        onClose={() => setActiveGroup(null)}
+      />
+    </ProfileSection>
   );
 }
 
-function RatingProgressCard({
-  data,
-  ratingSeries,
+function AchievementDetail({
+  achievement,
+  onClose,
 }: {
-  data: UserProfileResponse;
-  ratingSeries: RatingSeriesPoint[];
+  achievement: PlayerProfileAchievement | null;
+  onClose: () => void;
 }) {
-  const ratings = ratingSeries.map((point) => point.value);
-  const peak = Math.max(...ratings, data.user.elo);
-  const low = Math.min(...ratings, data.user.elo);
+  useEffect(() => {
+    if (!achievement) {
+      return undefined;
+    }
+
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        onClose();
+      }
+    };
+
+    window.addEventListener("keydown", handleEscape);
+
+    return () => window.removeEventListener("keydown", handleEscape);
+  }, [achievement, onClose]);
+
+  if (!achievement) {
+    return null;
+  }
 
   return (
-    <ProfileSection
-      title="Rating"
-      action={<span className={getTrendDirectionChipClass(data.trend.direction)}>{getTrendDirectionLabel(data.trend.direction)}</span>}
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-gray-950/10 px-5"
+      onClick={onClose}
     >
-      <div className="rounded-2xl border border-[rgba(15,118,110,0.16)] bg-[var(--accent-faint)] p-4">
-        <RatingSparkline
-          series={ratingSeries}
-          className="h-36 w-full"
-          stroke="#0f766e"
-        />
-        <div className="mt-4 grid grid-cols-3 divide-x divide-[var(--line)] text-center">
-          <div>
-            <p className="text-xs text-gray-500">Peak</p>
-            <p className="text-lg font-semibold text-gray-900">{peak}</p>
-          </div>
-          <div>
-            <p className="text-xs text-gray-500">Current</p>
-            <p className="text-lg font-semibold text-gray-900">{data.user.elo}</p>
-          </div>
-          <div>
-            <p className="text-xs text-gray-500">Lowest</p>
-            <p className="text-lg font-semibold text-gray-900">{low}</p>
-          </div>
-        </div>
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={`${achievement.title} badge details`}
+        className="grid w-full max-w-xs gap-1.5 rounded-2xl border border-[var(--line)] bg-white px-4 py-4 shadow-[0_24px_60px_rgba(23,32,31,0.2)]"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <strong className="text-base font-[760] text-gray-950">
+          {achievement.title}
+        </strong>
+        <p className="text-sm font-semibold leading-snug text-gray-700">
+          {achievement.description}
+        </p>
+        <small className="text-xs font-bold text-gray-500">
+          {achievement.progress}/{achievement.target} {achievement.progressLabel}
+        </small>
       </div>
-    </ProfileSection>
+    </div>
   );
 }
 
 function AchievementBadge({
   achievement,
   compact = false,
+  selected = false,
+  onSelect,
 }: {
   achievement: PlayerProfileAchievement;
   compact?: boolean;
+  selected?: boolean;
+  onSelect: () => void;
 }) {
   const presentation = ACHIEVEMENT_PRESENTATION[achievement.id];
   const Icon = presentation.icon;
+  const progressPercent =
+    achievement.target > 0
+      ? Math.min(100, Math.round((achievement.progress / achievement.target) * 100))
+      : 0;
   const toneClass = achievement.unlocked
     ? {
         accent: "border-[rgba(15,118,110,0.2)] bg-[var(--accent-faint)] text-[var(--accent-strong)]",
-        success: "border-[rgba(21,128,61,0.18)] bg-[var(--success-soft)] text-[var(--success)]",
-        warning: "border-[rgba(180,83,9,0.18)] bg-[var(--warning-soft)] text-[var(--warning)]",
-        danger: "border-[rgba(220,38,38,0.18)] bg-[var(--danger-soft)] text-[var(--danger)]",
+        success: "border-[rgba(15,118,110,0.22)] bg-[var(--accent-faint)] text-[var(--accent-strong)]",
+        warning: "border-[rgba(180,83,9,0.28)] bg-amber-50 text-amber-700",
+        danger: "border-[rgba(220,38,38,0.2)] bg-rose-50 text-rose-700",
         neutral: "border-[var(--line)] bg-[var(--surface-muted)] text-gray-600",
       }[presentation.tone]
     : "border-[var(--line)] bg-[var(--surface-muted)] text-gray-400";
-  const progressText = `${achievement.progress}/${achievement.target} ${achievement.progressLabel}`;
 
   return (
-    <div
+    <button
+      type="button"
+      aria-expanded={selected}
+      onClick={onSelect}
       className={cx(
-        "rounded-2xl border transition",
-        compact ? "p-3" : "p-4",
-        achievement.unlocked ? "shadow-[0_8px_18px_rgba(23,32,31,0.04)]" : "",
-        toneClass
+        "grid min-w-0 justify-items-center gap-2 border-r border-[var(--line)] px-2 py-4 text-center transition last:border-r-0 hover:bg-[rgba(15,118,110,0.045)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--accent)]",
+        compact ? "min-h-[9.4rem]" : "min-h-[11rem]",
+        selected ? "bg-[rgba(15,118,110,0.055)]" : null
       )}
     >
-      <div className="flex items-start gap-3">
-        <span
-          className={cx(
-            "rounded-xl bg-white/70",
-            compact ? "p-1.5" : "p-2"
-          )}
-        >
-          <Icon aria-hidden="true" size={compact ? 18 : 22} strokeWidth={2.4} />
-        </span>
-        <div className="min-w-0">
-          <p
-            className={cx(
-              "font-semibold text-gray-900",
-              compact ? "text-sm leading-tight" : ""
-            )}
-          >
-            {achievement.title}
-          </p>
-          {!compact ? (
-            <p className="mt-1 text-xs leading-snug text-gray-600">
-              {achievement.description}
-            </p>
-          ) : null}
+      <span
+        className={cx(
+          "inline-flex aspect-square items-center justify-center rounded-full border-2",
+          compact ? "h-[4.1rem]" : "h-[4.8rem]",
+          toneClass
+        )}
+      >
+        <Icon aria-hidden="true" size={compact ? 31 : 35} strokeWidth={1.8} />
+      </span>
+      <strong className="min-h-[2rem] max-w-[7rem] text-sm font-[760] leading-tight text-gray-950">
+        {achievement.title}
+      </strong>
+      {compact ? (
+        <span className="h-1.5 w-16 overflow-hidden rounded-full bg-gray-200">
           <span
-            className={cx(
-              "inline-flex rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-gray-600",
-              compact ? "mt-2" : "mt-3"
-            )}
-          >
-            {progressText}
-          </span>
-          {!compact && achievement.unlocked && achievement.earnedFromSession ? (
-            <p className="mt-2 truncate text-xs text-gray-500">
-              Unlocked in {achievement.earnedFromSession.name}
-            </p>
-          ) : null}
-        </div>
-      </div>
-    </div>
+            className="block h-full rounded-full bg-[var(--accent)]"
+            style={{ width: `${progressPercent}%` }}
+          />
+        </span>
+      ) : (
+        <p className="max-w-[10rem] text-xs font-semibold leading-snug text-gray-600">
+          {achievement.description}
+        </p>
+      )}
+      <span className="text-xs font-extrabold text-gray-600">
+        {achievement.progress}/{achievement.target}
+      </span>
+    </button>
   );
 }
 
 function AchievementPreview({
   achievements,
+  onViewAll,
 }: {
   achievements: PlayerProfileAchievement[];
+  onViewAll: () => void;
 }) {
+  const [selectedAchievementId, setSelectedAchievementId] = useState<
+    PlayerProfileAchievement["id"] | null
+  >(null);
+  const visibleAchievements = achievements.slice(0, 4);
+  const selectedAchievement =
+    visibleAchievements.find(
+      (achievement) => achievement.id === selectedAchievementId
+    ) ?? null;
+
   return (
     <ProfileSection
+      icon={Medal}
       title="Achievements"
       action={
-        <span className="app-chip app-chip-neutral">
-          {achievements.filter((achievement) => achievement.unlocked).length}/
-          {achievements.length} unlocked
-        </span>
+        achievements.length > visibleAchievements.length ? (
+          <button
+            type="button"
+            onClick={onViewAll}
+            className="text-sm font-[760] text-[var(--accent-strong)] hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]"
+          >
+            View all
+          </button>
+        ) : null
       }
     >
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-3">
-        {achievements.slice(0, 4).map((achievement) => (
+      <div className="grid grid-cols-4">
+        {visibleAchievements.map((achievement) => (
           <AchievementBadge
-            key={achievement.title}
+            key={achievement.id}
             achievement={achievement}
             compact
+            selected={selectedAchievementId === achievement.id}
+            onSelect={() =>
+              setSelectedAchievementId((current) =>
+                current === achievement.id ? null : achievement.id
+              )
+            }
           />
         ))}
       </div>
+      <AchievementDetail
+        achievement={selectedAchievement}
+        onClose={() => setSelectedAchievementId(null)}
+      />
     </ProfileSection>
   );
 }
@@ -1234,10 +1323,8 @@ function SessionInlineValue({
         {summary.name}
       </ProfileLink>
       <p className="text-xs text-gray-600">
-        {summary.wins}-{summary.losses} record,{" "}
-        {formatSignedNumber(summary.pointDifferential)} diff
+        {summary.wins}-{summary.losses}, {summary.winRate}%
       </p>
-      <p className="text-xs text-gray-500">{formatShortDate(summary.date)}</p>
     </div>
   );
 }
@@ -1248,8 +1335,8 @@ function RecentSessionTile({
   summary: PlayerProfileSessionSummary;
 }) {
   return (
-    <article className="snap-start rounded-xl border border-[var(--line)] bg-white px-3 py-3 sm:min-w-[15rem]">
-      <p className="text-xs font-semibold text-gray-500">
+    <article className="rounded-xl border border-[var(--line)] bg-white px-3 py-3">
+      <p className="text-xs font-bold text-gray-500">
         {formatShortDate(summary.date)}
       </p>
       <div className="mt-1 truncate text-sm">
@@ -1257,7 +1344,6 @@ function RecentSessionTile({
           {summary.name}
         </ProfileLink>
       </div>
-
       <div className="mt-3 flex flex-wrap gap-2">
         <span className="app-chip app-chip-neutral">{summary.matches} matches</span>
         <span className="app-chip app-chip-accent">
@@ -1276,116 +1362,96 @@ function RecentSessionTile({
 
 function MatchCard({
   match,
-  userName,
   clubId,
-  compact = false,
 }: {
   match: PlayerProfileMatchHistoryEntry;
-  userName: string;
   clubId: string;
-  compact?: boolean;
 }) {
-  const sessionHref = getSessionHistoryHref(match.sessionCode);
+  const { date, year } = formatMatchDateParts(match.date);
 
   return (
     <article
       className={cx(
-        "rounded-xl border border-[var(--line)] shadow-[0_6px_16px_rgba(23,32,31,0.035)]",
-        getMatchResultSurfaceClass(match.result),
-        compact ? "px-3 py-3" : "px-3.5 py-3.5 sm:px-4"
+        "grid grid-cols-[4.9rem_minmax(5.7rem,0.9fr)_minmax(4.9rem,0.78fr)_minmax(5.2rem,0.82fr)_3.25rem] items-center gap-2 border-b border-[var(--line)] px-3 py-3 last:border-b-0",
+        getMatchResultSurfaceClass(match.result)
       )}
     >
-      <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2.5">
-        <div className="min-w-0">
-          <div className="flex min-w-0 items-baseline justify-between gap-2">
-            <div className="flex min-w-0 items-center gap-2">
-              <Avatar name={match.partner.name} avatarUrl={match.partner.avatarUrl} size="sm" />
-              <p className="min-w-0 truncate text-sm font-semibold text-gray-900 sm:text-base">
-                <span>{userName}</span>
-                <span className="px-1 text-gray-400">/</span>
-                <ProfileLink href={getPlayerProfileHref(match.partner.id, clubId)}>
-                  {match.partner.name}
-                </ProfileLink>
-              </p>
-            </div>
-            <p className="shrink-0 text-sm font-semibold text-gray-950 sm:text-base">
-              {formatMatchScore(match.score)}
-            </p>
-          </div>
-
-          <div className="mt-1 flex min-w-0 flex-wrap items-center gap-2 text-xs text-gray-600 sm:text-sm">
-            <span className="text-gray-500">vs</span>
-            {match.opponents.map((opponent) => (
-              <span key={opponent.id} className="inline-flex items-center gap-1.5">
-                <Avatar name={opponent.name} avatarUrl={opponent.avatarUrl} size="xs" />
-                <ProfileLink href={getPlayerProfileHref(opponent.id, clubId)}>
-                  {opponent.name}
-                </ProfileLink>
-              </span>
-            ))}
-          </div>
-        </div>
-
-        <div className="flex items-center gap-1">
-          <div className="w-[3.2rem] text-right">
-            <p
-              className={cx(
-                "whitespace-nowrap text-[11px] font-semibold leading-tight sm:text-sm",
-                getEloChangeClass(match.eloChange)
-              )}
-            >
-              {typeof match.eloChange === "number"
-                ? `${formatSignedNumber(match.eloChange)} ELO`
-                : "No ELO"}
-            </p>
-            <p className="mt-0.5 whitespace-nowrap text-xs text-gray-500">
-              {formatMatchHistoryDate(match.date)}
-            </p>
-          </div>
-
-          <Link
-            href={sessionHref}
-            aria-label={`Open ${match.sessionName} history`}
-            title={match.sessionName}
-            className="-mr-2 inline-flex h-11 w-10 items-center justify-center rounded-lg text-gray-500 transition hover:bg-[var(--surface-muted)] hover:text-[var(--accent-strong)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]"
-          >
-            <ChevronRight className="h-5 w-5" aria-hidden="true" />
-          </Link>
+      <div className="grid grid-cols-[1.1rem_minmax(0,1fr)] gap-x-1.5 gap-y-0.5 border-r border-[var(--line)] pr-2 text-xs font-semibold text-gray-600">
+        <CalendarDays
+          aria-hidden="true"
+          size={17}
+          strokeWidth={1.7}
+          className="row-span-2 mt-0.5 text-gray-900"
+        />
+        <span>{date}</span>
+        <span>{year}</span>
+      </div>
+      <div className="min-w-0 border-r border-[var(--line)] pr-2">
+        <strong
+          className={cx(
+            "block truncate text-sm font-[760]",
+            match.result === "WIN" ? "text-[var(--accent-strong)]" : "text-rose-600"
+          )}
+        >
+          {formatMatchScore(match.score)}
+        </strong>
+        <Link
+          href={getSessionHistoryHref(match.sessionCode)}
+          className="mt-0.5 block truncate text-xs font-semibold text-gray-600 hover:text-[var(--accent-strong)] hover:underline"
+        >
+          {match.sessionName}
+        </Link>
+      </div>
+      <div className="min-w-0 border-r border-[var(--line)] pr-2">
+        <span className="block text-xs font-semibold text-gray-500">with</span>
+        <div className="truncate text-sm">
+          <ProfileLink href={getPlayerProfileHref(match.partner.id, clubId)}>
+            {match.partner.name}
+          </ProfileLink>
         </div>
       </div>
+      <div className="min-w-0 border-r border-[var(--line)] pr-2">
+        <span className="block text-xs font-semibold text-gray-500">vs</span>
+        <div className="truncate text-sm font-semibold text-gray-950">
+          {match.opponents.map((opponent, index) => (
+            <span key={opponent.id}>
+              {index > 0 ? " / " : ""}
+              <ProfileLink href={getPlayerProfileHref(opponent.id, clubId)}>
+                {opponent.name}
+              </ProfileLink>
+            </span>
+          ))}
+        </div>
+      </div>
+      <span
+        className={cx(
+          "inline-flex h-11 w-11 items-center justify-center justify-self-center rounded-xl text-lg font-extrabold",
+          match.result === "WIN"
+            ? "bg-[var(--accent-soft)] text-[var(--accent-strong)]"
+            : "bg-rose-100 text-rose-700"
+        )}
+      >
+        {match.result === "WIN" ? "W" : "L"}
+      </span>
     </article>
   );
 }
 
 function MatchesList({
   matches,
-  userName,
   clubId,
-  compact = false,
 }: {
   matches: PlayerProfileMatchHistoryEntry[];
-  userName: string;
   clubId: string;
-  compact?: boolean;
 }) {
   if (matches.length === 0) {
-    return (
-      <EmptyState
-        title="No matches yet"
-      />
-    );
+    return <EmptyState title="No matches yet" />;
   }
 
   return (
-    <div className="space-y-3">
+    <div>
       {matches.map((match) => (
-        <MatchCard
-          key={match.id}
-          match={match}
-          userName={userName}
-          clubId={clubId}
-          compact={compact}
-        />
+        <MatchCard key={match.id} match={match} clubId={clubId} />
       ))}
     </div>
   );
@@ -1393,43 +1459,38 @@ function MatchesList({
 
 function OverviewTab({
   data,
-  rankContext,
   clubId,
   ratingSeries,
   achievements,
+  onViewAchievements,
 }: {
   data: UserProfileResponse;
-  rankContext: RankContext | null;
   clubId: string;
   ratingSeries: RatingSeriesPoint[];
   achievements: PlayerProfileAchievement[];
+  onViewAchievements: () => void;
 }) {
   return (
-    <div className="space-y-5">
-      <PerformanceSummary data={data} />
+    <div className="grid gap-4">
+      <PerformanceSummary data={data} ratingSeries={ratingSeries} />
       <RelationshipCards data={data} clubId={clubId} />
-      <div className="grid gap-5 lg:grid-cols-[0.95fr_1.05fr]">
-        <AchievementPreview achievements={achievements} />
-        <RatingProgressCard data={data} ratingSeries={ratingSeries} />
-      </div>
+      <AchievementPreview
+        achievements={achievements}
+        onViewAll={onViewAchievements}
+      />
       <ProfileSection
+        icon={CalendarDays}
         title="Recent matches"
         action={
-          <span className="app-chip app-chip-neutral">
-            {data.matchHistory.length} total
-          </span>
+          data.matchHistory.length > 3 ? (
+            <span className="text-sm font-[760] text-[var(--accent-strong)]">
+              {data.matchHistory.length} total
+            </span>
+          ) : null
         }
       >
-        <MatchesList
-          matches={data.matchHistory.slice(0, 3)}
-          userName={data.user.name}
-          clubId={clubId}
-          compact
-        />
+        <MatchesList matches={data.matchHistory.slice(0, 4)} clubId={clubId} />
       </ProfileSection>
-      {rankContext ? (
-        <p className="px-1 text-xs text-gray-500">Recent-session window</p>
-      ) : null}
     </div>
   );
 }
@@ -1443,14 +1504,15 @@ function MatchesTab({
 }) {
   return (
     <ProfileSection
-      title="Match history"
-      action={<span className="app-chip app-chip-neutral">{data.matchHistory.length} matches</span>}
+      icon={CalendarDays}
+      title="Matches"
+      action={
+        <span className="text-sm font-[760] text-gray-600">
+          {data.matchHistory.length}
+        </span>
+      }
     >
-      <MatchesList
-        matches={data.matchHistory}
-        userName={data.user.name}
-        clubId={clubId}
-      />
+      <MatchesList matches={data.matchHistory} clubId={clubId} />
     </ProfileSection>
   );
 }
@@ -1470,34 +1532,114 @@ function MiniFact({
 }) {
   return (
     <div className="rounded-xl border border-[var(--line)] bg-white px-3 py-3">
-      <p className="text-xs font-semibold text-gray-500">{label}</p>
-      <div className="mt-1 text-sm font-semibold text-gray-900">{value}</div>
-      {detail ? <p className="mt-1 text-xs text-gray-600">{detail}</p> : null}
+      <p className="text-sm font-semibold text-gray-600">{label}</p>
+      <div className="mt-1 text-lg font-[760] text-gray-950">{value}</div>
+      {detail ? <p className="mt-1 text-xs font-semibold text-gray-500">{detail}</p> : null}
     </div>
   );
 }
 
-function StyleTraitBars({ traits }: { traits: StyleTrait[] }) {
+function RatingFacts({
+  data,
+  rankContext,
+  ratingSeries,
+}: {
+  data: UserProfileResponse;
+  rankContext: RankContext | null;
+  ratingSeries: RatingSeriesPoint[];
+}) {
+  const ratings = ratingSeries.map((point) => point.value);
+  const peak = Math.max(...ratings, data.user.elo);
+  const low = Math.min(...ratings, data.user.elo);
+
   return (
-    <ProfileSection title="Playstyle">
-      <div className="space-y-3">
-        {traits.map((trait) => (
-          <div key={trait.label}>
-            <div className="flex items-center justify-between gap-3">
-              <p className="text-sm font-semibold text-gray-800">{trait.label}</p>
-              <p className="text-sm font-semibold text-[var(--accent-strong)]">
-                {Math.round(trait.value)}
-              </p>
-            </div>
-            <div className="mt-2 h-2 rounded-full bg-[var(--surface-muted)]">
-              <div
-                className="h-2 rounded-full bg-[var(--accent)]"
-                style={{ width: `${trait.value}%` }}
-              />
-            </div>
-            <p className="mt-1 text-xs text-gray-500">{trait.detail}</p>
+    <ProfileSection
+      icon={BarChart3}
+      title="Rating"
+      action={
+        <span className={getTrendDirectionChipClass(data.trend.direction)}>
+          {getTrendDirectionLabel(data.trend.direction)}
+        </span>
+      }
+    >
+      <div className="space-y-4 p-4">
+        <RatingSparkline series={ratingSeries} className="h-36 w-full" />
+        <DetailGrid>
+          <MiniFact label="Current" value={data.user.elo} />
+          <MiniFact label="Peak" value={peak} />
+          <MiniFact label="Lowest" value={low} />
+          {rankContext ? (
+            <MiniFact
+              label="Rank movement"
+              value={
+                rankContext.currentRank === null
+                  ? "Unranked"
+                  : getRankMovementLabel(rankContext.rankDelta)
+              }
+              detail={
+                rankContext.currentRank === null
+                  ? "Leaderboard only"
+                  : rankContext.previousRank
+                    ? `Started at #${rankContext.previousRank}`
+                    : "No previous rank"
+              }
+            />
+          ) : null}
+        </DetailGrid>
+      </div>
+    </ProfileSection>
+  );
+}
+
+function SessionFormSection({ data }: { data: UserProfileResponse }) {
+  return (
+    <ProfileSection
+      icon={Flame}
+      title="Session form"
+      action={
+        data.recentSessions.length > 0 ? (
+          <span className="app-chip app-chip-neutral">
+            {data.recentSessions.length} recent
+          </span>
+        ) : null
+      }
+    >
+      <div className="space-y-4 p-4">
+        <DetailGrid>
+          <MiniFact
+            label="Trend window"
+            value={
+              data.trend.sessions > 0
+                ? `${data.trend.wins}-${data.trend.losses}`
+                : "No window yet"
+            }
+            detail={
+              data.trend.sessions > 0
+                ? `${data.trend.winRate}% win rate`
+                : "No matches yet"
+            }
+          />
+          <MiniFact
+            label="Latest session"
+            value={<SessionInlineValue summary={data.sessions.latest} />}
+          />
+          <MiniFact
+            label="Best session"
+            value={<SessionInlineValue summary={data.sessions.best} />}
+          />
+          <MiniFact
+            label="Session volume"
+            value={`${data.stats.sessionsPlayed} sessions`}
+            detail={`${data.stats.averageMatchesPerSession} matches/session`}
+          />
+        </DetailGrid>
+        {data.recentSessions.length > 0 ? (
+          <div className="grid gap-3 sm:grid-cols-2">
+            {data.recentSessions.map((recentSession) => (
+              <RecentSessionTile key={recentSession.id} summary={recentSession} />
+            ))}
           </div>
-        ))}
+        ) : null}
       </div>
     </ProfileSection>
   );
@@ -1507,88 +1649,22 @@ function StatsTab({
   data,
   rankContext,
   clubId,
-  styleTraits,
+  ratingSeries,
 }: {
   data: UserProfileResponse;
   rankContext: RankContext | null;
   clubId: string;
-  styleTraits: StyleTrait[];
+  ratingSeries: RatingSeriesPoint[];
 }) {
   return (
-    <div className="space-y-5">
-      <PerformanceSummary data={data} />
-      <div className="grid gap-5 lg:grid-cols-[0.85fr_1.15fr]">
-        <StyleTraitBars traits={styleTraits} />
-        <ProfileSection
-          title="Momentum"
-          action={<span className={getTrendDirectionChipClass(data.trend.direction)}>{getTrendDirectionLabel(data.trend.direction)}</span>}
-        >
-          <DetailGrid>
-            <MiniFact
-              label="Trend window"
-              value={
-                data.trend.sessions > 0
-                  ? `${data.trend.wins}-${data.trend.losses}, ${data.trend.winRate}%`
-                  : "No window yet"
-              }
-              detail={
-                data.trend.sessions > 0
-                  ? `${formatSignedNumber(data.trend.ratingChange)} rating, ${formatSignedNumber(data.trend.pointDifferential)} diff`
-                  : getTrendDirectionDetail(data.trend.direction)
-              }
-            />
-            {rankContext ? (
-              <MiniFact
-                label="Rank movement"
-                value={
-                  <span className={getRankMovementChipClass(rankContext.rankDelta)}>
-                    {rankContext.currentRank === null
-                      ? "Unranked"
-                      : getRankMovementLabel(rankContext.rankDelta)}
-                  </span>
-                }
-                detail={
-                  rankContext.currentRank === null
-                    ? "Leaderboard only"
-                    : rankContext.previousRank
-                      ? `Started at #${rankContext.previousRank}`
-                      : "No previous rank"
-                }
-              />
-            ) : null}
-            <MiniFact
-              label="Latest session"
-              value={<SessionInlineValue summary={data.sessions.latest} />}
-            />
-            <MiniFact
-              label="Best session"
-              value={<SessionInlineValue summary={data.sessions.best} />}
-            />
-            <MiniFact
-              label="Session volume"
-              value={`${data.stats.sessionsPlayed} sessions`}
-              detail={`${data.stats.averageMatchesPerSession} matches/session`}
-            />
-            <MiniFact
-              label="Current streak"
-              value={
-                data.recentForm.currentStreak.result === null
-                  ? "No streak yet"
-                  : `${data.recentForm.currentStreak.result === "WIN" ? "W" : "L"}${data.recentForm.currentStreak.count}`
-              }
-              detail={`${data.recentForm.matches} recent`}
-            />
-          </DetailGrid>
-
-          {data.recentSessions.length > 0 ? (
-            <div className="mt-4 grid gap-3 sm:flex sm:snap-x sm:overflow-x-auto sm:pb-1">
-              {data.recentSessions.map((recentSession) => (
-                <RecentSessionTile key={recentSession.id} summary={recentSession} />
-              ))}
-            </div>
-          ) : null}
-        </ProfileSection>
-      </div>
+    <div className="grid gap-4">
+      <PerformanceSummary data={data} ratingSeries={ratingSeries} />
+      <RatingFacts
+        data={data}
+        rankContext={rankContext}
+        ratingSeries={ratingSeries}
+      />
+      <SessionFormSection data={data} />
       <RelationshipCards data={data} clubId={clubId} />
     </div>
   );
@@ -1599,8 +1675,16 @@ function AchievementsTab({
 }: {
   achievements: PlayerProfileAchievement[];
 }) {
+  const [selectedAchievementId, setSelectedAchievementId] = useState<
+    PlayerProfileAchievement["id"] | null
+  >(null);
+  const selectedAchievement =
+    achievements.find((achievement) => achievement.id === selectedAchievementId) ??
+    null;
+
   return (
     <ProfileSection
+      icon={Medal}
       title="Achievements"
       action={
         <span className="app-chip app-chip-neutral">
@@ -1608,11 +1692,24 @@ function AchievementsTab({
         </span>
       }
     >
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4">
         {achievements.map((achievement) => (
-          <AchievementBadge key={achievement.title} achievement={achievement} />
+          <AchievementBadge
+            key={achievement.id}
+            achievement={achievement}
+            selected={selectedAchievementId === achievement.id}
+            onSelect={() =>
+              setSelectedAchievementId((current) =>
+                current === achievement.id ? null : achievement.id
+              )
+            }
+          />
         ))}
       </div>
+      <AchievementDetail
+        achievement={selectedAchievement}
+        onClose={() => setSelectedAchievementId(null)}
+      />
     </ProfileSection>
   );
 }
@@ -1777,10 +1874,6 @@ export function PlayerProfileView({
     [data]
   );
   const achievements = data?.achievements ?? [];
-  const styleTraits = useMemo(
-    () => (data ? buildStyleTraits(data) : []),
-    [data]
-  );
 
   if (status === "loading" || loading) {
     if (isEmbedded) {
@@ -1831,13 +1924,9 @@ export function PlayerProfileView({
     );
   }
 
-  const recentFormSummary =
-    data.recentForm.matches > 0
-      ? `${data.recentForm.wins}-${data.recentForm.losses} in last ${data.recentForm.matches}`
-      : "No recent matches yet";
   const recentStreakSummary =
     data.recentForm.currentStreak.result === null
-      ? "No streak yet"
+      ? "No streak"
       : `${data.recentForm.currentStreak.result === "WIN" ? "W" : "L"}${data.recentForm.currentStreak.count}`;
   const canManageAvatar =
     !!currentUser &&
@@ -1854,15 +1943,13 @@ export function PlayerProfileView({
     <div
       className={cx(
         "space-y-4 sm:space-y-5",
-        isEmbedded ? "pb-4" : "app-shell max-w-[78rem]"
+        isEmbedded ? "pb-4" : "mx-auto max-w-[64rem] px-0 pb-10 sm:px-4"
       )}
     >
       <ProfileHero
         data={data}
         rankContext={rankContext}
-        recentFormSummary={recentFormSummary}
         recentStreakSummary={recentStreakSummary}
-        ratingSeries={ratingSeries}
         canManageAvatar={canManageAvatar}
         onPreviewAvatar={handlePreviewAvatar}
         onUploadAvatar={handleUploadAvatar}
@@ -1876,38 +1963,42 @@ export function PlayerProfileView({
         onClose={() => setPreviewAvatarUrl(null)}
       />
 
-      <ProfileTabs activeTab={activeTab} onChange={setActiveTab} />
+      <div className="px-4 sm:px-0">
+        <ProfileTabs activeTab={activeTab} onChange={setActiveTab} />
+      </div>
 
-      {activeTab === "overview" ? (
-        <OverviewTab
-          data={data}
-          rankContext={rankContext}
-          clubId={clubId}
-          ratingSeries={ratingSeries}
-          achievements={achievements}
-        />
-      ) : null}
+      <div className="px-4 sm:px-0">
+        {activeTab === "overview" ? (
+          <OverviewTab
+            data={data}
+            clubId={clubId}
+            ratingSeries={ratingSeries}
+            achievements={achievements}
+            onViewAchievements={() => setActiveTab("achievements")}
+          />
+        ) : null}
 
-      {activeTab === "matches" ? (
-        <MatchesTab data={data} clubId={clubId} />
-      ) : null}
+        {activeTab === "matches" ? (
+          <MatchesTab data={data} clubId={clubId} />
+        ) : null}
 
-      {activeTab === "stats" ? (
-        <StatsTab
-          data={data}
-          rankContext={rankContext}
-          clubId={clubId}
-          styleTraits={styleTraits}
-        />
-      ) : null}
+        {activeTab === "stats" ? (
+          <StatsTab
+            data={data}
+            rankContext={rankContext}
+            clubId={clubId}
+            ratingSeries={ratingSeries}
+          />
+        ) : null}
 
-      {activeTab === "achievements" ? (
-        <AchievementsTab achievements={achievements} />
-      ) : null}
+        {activeTab === "achievements" ? (
+          <AchievementsTab achievements={achievements} />
+        ) : null}
+      </div>
     </div>
   );
 
-  return isEmbedded ? content : <main className="app-page">{content}</main>;
+  return isEmbedded ? content : <main className="app-page px-0">{content}</main>;
 }
 
 export default PlayerProfileView;

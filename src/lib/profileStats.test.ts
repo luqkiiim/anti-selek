@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  PROFILE_CONNECTION_RANKING_LIMIT,
   PROFILE_RECENT_SESSION_COUNT,
   buildPlayerProfileDerivedData,
   type ProfileMatchSource,
@@ -207,11 +208,12 @@ describe("profileStats", () => {
       user: partner2,
       matches: 1,
     });
-    expect(result.opponents.toughest).toHaveLength(3);
+    expect(result.opponents.toughest).toHaveLength(4);
     expect(result.opponents.toughest.map((summary) => summary.user)).toEqual([
       opponent1,
       opponent2,
       opponent3,
+      opponent4,
     ]);
     expect(result.opponents.toughest[0]).toMatchObject({
       user: opponent1,
@@ -289,6 +291,7 @@ describe("profileStats", () => {
       opponent3,
       opponent4,
       opponent1,
+      opponent2,
     ]);
     expect(result.recentForm.currentStreak).toEqual({
       result: "WIN",
@@ -426,11 +429,12 @@ describe("profileStats", () => {
 
     const result = buildPlayerProfileDerivedData(user.id, matches);
 
-    expect(result.opponents.toughest).toHaveLength(3);
+    expect(result.opponents.toughest).toHaveLength(11);
     expect(result.opponents.toughest.map((summary) => summary.user)).toEqual([
       provenOpponent,
       shortMate,
       shortOpponent,
+      ...fillers.slice(0, 8),
     ]);
     expect(result.opponents.toughest[0]).toMatchObject({
       user: provenOpponent,
@@ -536,11 +540,12 @@ describe("profileStats", () => {
 
     const result = buildPlayerProfileDerivedData(user.id, matches);
 
-    expect(result.partners.best).toHaveLength(3);
+    expect(result.partners.best).toHaveLength(4);
     expect(result.partners.best.map((summary) => summary.user)).toEqual([
       provenPartner,
       shortPartner,
       solidPartner,
+      weakPartner,
     ]);
     expect(result.partners.best[0]).toMatchObject({
       user: provenPartner,
@@ -549,6 +554,40 @@ describe("profileStats", () => {
       losses: 3,
       winRate: 63,
     });
+  });
+
+  it("keeps enough ranked connections for full profile popups", () => {
+    const user = { id: "u1", name: "Alice" };
+    const partners = Array.from({ length: 25 }, (_, index) => ({
+      id: `p${index + 1}`,
+      name: `Partner ${index + 1}`,
+    }));
+    const opponents = Array.from({ length: 50 }, (_, index) => ({
+      id: `o${index + 1}`,
+      name: `Opponent ${index + 1}`,
+    }));
+
+    const result = buildPlayerProfileDerivedData(
+      user.id,
+      partners.map((partner, index) =>
+        createMatch(`connection-${index + 1}`, {
+          sessionId: `s${index + 1}`,
+          sessionCode: `week-${index + 1}`,
+          sessionName: `Week ${index + 1}`,
+          completedAt: `2026-04-${String(index + 1).padStart(2, "0")}T12:00:00.000Z`,
+          team1: [user, partner],
+          team2: [opponents[index * 2], opponents[index * 2 + 1]],
+          team1Score: index % 3 === 0 ? 18 : 21,
+          team2Score: index % 3 === 0 ? 21 : 17,
+          winnerTeam: index % 3 === 0 ? 2 : 1,
+        })
+      )
+    );
+
+    expect(result.partners.best).toHaveLength(PROFILE_CONNECTION_RANKING_LIMIT);
+    expect(result.opponents.toughest).toHaveLength(
+      PROFILE_CONNECTION_RANKING_LIMIT
+    );
   });
 
   it("groups recent matches into a five-session window", () => {

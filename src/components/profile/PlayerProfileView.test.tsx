@@ -160,6 +160,30 @@ function buildProfileResponse(overrides?: Partial<{
   };
 }
 
+function buildConnection(
+  id: string,
+  name: string,
+  wins: number,
+  losses: number,
+  avatarUrl: string | null = `https://cdn.test/avatars/${id}.jpg`
+) {
+  const matches = wins + losses;
+
+  return {
+    user: {
+      id,
+      name,
+      avatarUrl,
+    },
+    matches,
+    wins,
+    losses,
+    winRate: matches > 0 ? Math.round((wins / matches) * 100) : 0,
+    pointDifferential: wins * 3 - losses * 4,
+    ratingChange: wins - losses,
+  };
+}
+
 describe("PlayerProfileView", () => {
   let container: HTMLDivElement;
   let root: Root;
@@ -302,9 +326,9 @@ describe("PlayerProfileView", () => {
     await renderView();
 
     expect(document.body.textContent).toContain("Strong Start");
-    expect(document.body.textContent).toContain("2/2 wins");
+    expect(document.body.textContent).toContain("2/2");
     expect(document.body.textContent).toContain("Close Battle Tested");
-    expect(document.body.textContent).toContain("2/3 close matches");
+    expect(document.body.textContent).toContain("2/3");
     expect(document.body.textContent).not.toContain("Unlocked in Friday Session");
     expect(document.body.textContent).not.toContain(
       "Win your first 2 matches."
@@ -316,6 +340,19 @@ describe("PlayerProfileView", () => {
     expect(document.body.textContent).not.toContain("Hot streak");
     expect(document.body.textContent).not.toContain("Rival tested");
     expect(document.body.textContent).not.toContain("Partner chemistry");
+
+    const strongStartButton = Array.from(
+      container.querySelectorAll("button")
+    ).find((button) => button.textContent?.includes("Strong Start"));
+    expect(strongStartButton).toBeTruthy();
+
+    await act(async () => {
+      strongStartButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    expect(document.body.textContent).toContain("Win your first 2 matches.");
+    expect(document.body.textContent).not.toContain("How to earn");
   });
 
   it("keeps achievement descriptions on the full achievements tab", async () => {
@@ -333,8 +370,8 @@ describe("PlayerProfileView", () => {
 
     expect(document.body.textContent).toContain("Win your first 2 matches.");
     expect(document.body.textContent).toContain("Play 3 close matches.");
-    expect(document.body.textContent).toContain("Unlocked in Friday Session");
     expect(document.body.textContent).not.toContain("Locked");
+    expect(document.body.textContent).not.toContain("Unlocked in Friday Session");
   });
 
   it("uses a single rating snapshot without duplicating hero rating or rank chips", async () => {
@@ -358,13 +395,82 @@ describe("PlayerProfileView", () => {
     );
     expect(snapshot?.textContent).toContain("Club rating");
     expect(snapshot?.textContent).toContain("1320");
-    expect(snapshot?.textContent).toContain("#4");
-    expect(snapshot?.textContent).toContain("Up 2");
-    expect(snapshot?.textContent).toContain("+10 recent rating");
+    expect(document.body.textContent).toContain("#4");
+    expect(document.body.textContent).toContain("Up 2");
+    expect(document.body.textContent).toContain("+10 rating");
 
     expect(document.body.textContent).not.toContain("Rating story");
     expect((document.body.textContent?.match(/Rank #4/g) ?? []).length).toBe(0);
     expect((document.body.textContent?.match(/Club rating/g) ?? []).length).toBe(1);
+  });
+
+  it("does not render unsupported prototype-only stats or tournament metadata", async () => {
+    await renderView();
+
+    expect(document.body.textContent).not.toContain("Playstyle");
+    expect(document.body.textContent).not.toContain("Smash win rate");
+    expect(document.body.textContent).not.toContain("Defensive win rate");
+    expect(document.body.textContent).not.toContain("Errors / match");
+    expect(document.body.textContent).not.toContain("R16");
+    expect(document.body.textContent).not.toContain("R32");
+  });
+
+  it("renders relationship previews and opens group-specific full lists", async () => {
+    await renderView({
+      profileResponse: {
+        ...buildProfileResponse(),
+        partners: {
+          best: [
+            buildConnection("partner-1", "Haziq Azman", 11, 3),
+            buildConnection("partner-2", "Farid Iqbal", 7, 4),
+            buildConnection("partner-3", "Nabil Rahman", 6, 3),
+            buildConnection("partner-4", "Syafiq Halim", 5, 4),
+          ],
+        },
+        opponents: {
+          toughest: [
+            buildConnection("opponent-1", "Zaki Rahim", 2, 5),
+            buildConnection("opponent-2", "Khairul Zaim", 3, 4),
+            buildConnection("opponent-3", "Arif Hakim", 2, 4),
+            buildConnection("opponent-4", "Hafiz Omar", 2, 3),
+          ],
+        },
+      },
+    });
+
+    expect(document.body.textContent).toContain("Partners & opponents");
+    expect(document.body.textContent).toContain("#1");
+    expect(document.body.textContent).toContain("Haziq Azman");
+    expect(document.body.textContent).toContain("11W/3L");
+    expect(document.body.textContent).toContain("79%");
+    expect(document.body.textContent).toContain("Zaki Rahim");
+    expect(document.body.textContent).toContain("2W/5L");
+    expect(document.body.textContent).not.toContain("Syafiq Halim");
+
+    const partnerViewAll = container.querySelector(
+      'button[aria-label="View all Best partners"]'
+    ) as HTMLButtonElement | null;
+    expect(partnerViewAll).toBeTruthy();
+
+    await act(async () => {
+      partnerViewAll?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    expect(document.body.textContent).toContain("Syafiq Halim");
+    expect(document.body.textContent).toContain("5W/4L");
+
+    const closeButton = document.body.querySelector(
+      'button[aria-label="Close"]'
+    ) as HTMLButtonElement | null;
+    expect(closeButton).toBeTruthy();
+
+    await act(async () => {
+      closeButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    expect(document.body.textContent).not.toContain("Syafiq Halim");
   });
 
   it("does not show the long avatar upload helper text for admins", async () => {
@@ -381,6 +487,19 @@ describe("PlayerProfileView", () => {
     expect(document.body.textContent).not.toContain(
       "Choose a JPG, PNG, or WebP photo"
     );
-    expect(document.body.textContent).toContain("Replace photo");
+    expect(document.body.textContent).not.toContain("Replace photo");
+
+    const avatarMenuButton = container.querySelector(
+      'button[aria-label="Change profile photo for Alex Lee"]'
+    ) as HTMLButtonElement | null;
+    expect(avatarMenuButton).toBeTruthy();
+
+    await act(async () => {
+      avatarMenuButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    expect(document.body.textContent).toContain("Change photo");
+    expect(document.body.textContent).toContain("Remove");
   });
 });

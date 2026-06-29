@@ -6,6 +6,7 @@ import { compareSessionStandings } from "./sessionStandings";
 
 export const PROFILE_RECENT_FORM_MATCH_COUNT = 10;
 export const PROFILE_RECENT_SESSION_COUNT = 5;
+export const PROFILE_CONNECTION_RANKING_LIMIT = 20;
 
 interface ProfileParticipant {
   id: string;
@@ -328,7 +329,7 @@ function pickPreferredConnections(
     left: PlayerProfileConnectionSummary,
     right: PlayerProfileConnectionSummary
   ) => number,
-  limit = 3
+  limit = PROFILE_CONNECTION_RANKING_LIMIT
 ) {
   const candidates =
     summaries.filter(
