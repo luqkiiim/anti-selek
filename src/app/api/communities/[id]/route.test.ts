@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
   clubMemberFindMany: vi.fn(),
   matchFindMany: vi.fn(),
   clubNewsLikeFindMany: vi.fn(),
+  clubNotificationCount: vi.fn(),
   claimRequestFindMany: vi.fn(),
   offlineIdentityMemberFindMany: vi.fn(),
   listSessionsForClub: vi.fn(),
@@ -39,6 +40,9 @@ vi.mock("@/lib/prisma", () => ({
     },
     clubNewsLike: {
       findMany: mocks.clubNewsLikeFindMany,
+    },
+    clubNotification: {
+      count: mocks.clubNotificationCount,
     },
     claimRequest: {
       findMany: mocks.claimRequestFindMany,
@@ -176,6 +180,7 @@ describe("club snapshot route", () => {
     mocks.claimRequestFindMany.mockResolvedValue([]);
     mocks.offlineIdentityMemberFindMany.mockResolvedValue([]);
     mocks.clubNewsLikeFindMany.mockResolvedValue([]);
+    mocks.clubNotificationCount.mockResolvedValue(0);
     mocks.buildClubPulse.mockReturnValue({
       metrics: {
         members: 2,
@@ -216,6 +221,7 @@ describe("club snapshot route", () => {
     expect(body.sessions[0].players[0].user.avatarUrl).toBe(
       "https://blob.vercel-storage.com/avatars/viewer-1/avatar.jpg"
     );
+    expect(body.notifications).toEqual({ unreadCount: 0 });
   });
 
   it("serves the canonical clubs route with legacy response aliases", async () => {

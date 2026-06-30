@@ -159,7 +159,13 @@ export async function GET(
       return invalidTargetResponse(request, "api:communities:id");
     }
 
-    const [members, completedMatches, sessions, claimRequests] = await Promise.all([
+    const [
+      members,
+      completedMatches,
+      sessions,
+      claimRequests,
+      unreadNotificationCount,
+    ] = await Promise.all([
       prisma.clubMember.findMany({
         where: { clubId: id },
         include: {
@@ -269,6 +275,13 @@ export async function GET(
           },
         },
         orderBy: { createdAt: "asc" },
+      }),
+      prisma.clubNotification.count({
+        where: {
+          clubId: id,
+          recipientUserId: viewerId,
+          readAt: null,
+        },
       }),
     ]);
 
@@ -497,6 +510,9 @@ export async function GET(
       sessions,
       clubPulse: clubPulse,
       communityPulse: clubPulse,
+      notifications: {
+        unreadCount: unreadNotificationCount,
+      },
       claimRequests: claimRequests.map((claimRequest) =>
         toClaimRequestResponse({
           ...claimRequest,

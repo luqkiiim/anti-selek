@@ -17,6 +17,8 @@ import {
 } from "@/lib/quickAccess";
 import { ClubRole } from "@/types/enums";
 
+const NEWS_LIKE_NOTIFICATION_TYPE = "NEWS_LIKE";
+
 async function buildCurrentClubPulse({
   clubId,
   viewerId,
@@ -235,29 +237,78 @@ export async function POST(
       );
     }
 
+    const notificationRecipientIds = Array.from(
+      new Set(
+        (newsItem.featuredPlayers?.length > 0
+          ? newsItem.featuredPlayers
+          : newsItem.players
+        ).map((player) => player.id)
+      )
+    ).filter((recipientId) => recipientId !== viewerId);
+
     if (liked) {
-      await prisma.clubNewsLike.upsert({
-        where: {
-          newsItemId_userId: {
+      await prisma.$transaction([
+        prisma.clubNewsLike.upsert({
+          where: {
+            newsItemId_userId: {
+              newsItemId,
+              userId: viewerId,
+            },
+          },
+          update: {},
+          create: {
+            clubId: id,
+            sessionId: newsItem.session.id,
             newsItemId,
             userId: viewerId,
           },
-        },
-        update: {},
-        create: {
-          clubId: id,
-          sessionId: newsItem.session.id,
-          newsItemId,
-          userId: viewerId,
-        },
-      });
+        }),
+        ...notificationRecipientIds.map((recipientUserId) =>
+          prisma.clubNotification.upsert({
+            where: {
+              type_newsItemId_actorUserId_recipientUserId: {
+                type: NEWS_LIKE_NOTIFICATION_TYPE,
+                newsItemId,
+                actorUserId: viewerId,
+                recipientUserId,
+              },
+            },
+            update: {
+              detail: newsItem.detail,
+              title: newsItem.title,
+              value: newsItem.value,
+            },
+            create: {
+              actorUserId: viewerId,
+              clubId: id,
+              detail: newsItem.detail,
+              newsItemId,
+              newsType: newsItem.type,
+              recipientUserId,
+              sessionId: newsItem.session.id,
+              title: newsItem.title,
+              type: NEWS_LIKE_NOTIFICATION_TYPE,
+              value: newsItem.value,
+            },
+          })
+        ),
+      ]);
     } else {
-      await prisma.clubNewsLike.deleteMany({
-        where: {
-          newsItemId,
-          userId: viewerId,
-        },
-      });
+      await prisma.$transaction([
+        prisma.clubNewsLike.deleteMany({
+          where: {
+            newsItemId,
+            userId: viewerId,
+          },
+        }),
+        prisma.clubNotification.deleteMany({
+          where: {
+            actorUserId: viewerId,
+            newsItemId,
+            type: NEWS_LIKE_NOTIFICATION_TYPE,
+          },
+        }),
+      ]);
     }
 
     const [likeCount, likedByMe] = await Promise.all([

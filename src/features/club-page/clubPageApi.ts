@@ -2,6 +2,7 @@
 
 import type {
   ClubClaimRequest,
+  ClubPageNotificationsSummary,
   ClubPageClub,
   ClubPageMember,
   ClubPagePulse,
@@ -44,5 +45,8 @@ export async function fetchClubPageSnapshot(clubId: string) {
     claimRequests: Array.isArray(snapshotData.claimRequests)
       ? (snapshotData.claimRequests as ClubClaimRequest[])
       : [],
+    notifications: snapshotData.notifications
+      ? (snapshotData.notifications as ClubPageNotificationsSummary)
+      : { unreadCount: 0 },
   };
 }

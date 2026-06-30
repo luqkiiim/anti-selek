@@ -5,6 +5,7 @@ import type {
   ClubClaimRequest,
   ClubPageClub,
   ClubPageMember,
+  ClubPageNotificationsSummary,
   ClubPagePulse,
   ClubPageSession,
   ClubPageUser,
@@ -32,6 +33,8 @@ export function useClubPageData({
   const [claimRequests, setClaimRequests] = useState<ClubClaimRequest[]>(
     []
   );
+  const [notifications, setNotifications] =
+    useState<ClubPageNotificationsSummary>({ unreadCount: 0 });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -46,6 +49,7 @@ export function useClubPageData({
     setSessions(snapshot.sessions);
     setClubPulse(snapshot.clubPulse);
     setClaimRequests(snapshot.claimRequests);
+    setNotifications(snapshot.notifications);
   }, [clubId]);
 
   useEffect(() => {
@@ -77,6 +81,8 @@ export function useClubPageData({
     sessions,
     clubPulse,
     claimRequests,
+    notifications,
+    setNotifications,
     loading,
     error,
     setError,

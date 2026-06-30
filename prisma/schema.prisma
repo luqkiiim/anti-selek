@@ -43,6 +43,8 @@ model User {
   passwordResetTokens           PasswordResetToken[]
   tutorialProgress              TutorialProgress[]
   clubNewsLikes                 ClubNewsLike[]
+  clubNotificationsReceived     ClubNotification[]           @relation("ClubNotificationRecipient")
+  clubNotificationsActed        ClubNotification[]           @relation("ClubNotificationActor")
 
   // Match relations (team memberships)
   matchesAsTeam1Player1 Match[] @relation("Team1Player1")
@@ -72,20 +74,21 @@ model Club {
   offlineIdentityLinkRequestsFrom OfflineIdentityLinkRequest[] @relation("OfflineIdentityLinkSourceClub")
   offlineIdentityLinkRequestsTo   OfflineIdentityLinkRequest[] @relation("OfflineIdentityLinkTargetClub")
   newsLikes                       ClubNewsLike[]
+  notifications                   ClubNotification[]
 
   @@index([isTutorial])
   @@map("Community")
 }
 
 model ClubMember {
-  id        String   @id @default(cuid())
-  clubId    String   @map("communityId")
-  userId    String
-  role      String   @default("MEMBER") // MEMBER, STAFF, or ADMIN
-  status    String   @default("CORE") // CORE or OCCASIONAL
-  needsMoreRest Boolean @default(false)
-  elo       Int      @default(1000)
-  createdAt DateTime @default(now())
+  id            String   @id @default(cuid())
+  clubId        String   @map("communityId")
+  userId        String
+  role          String   @default("MEMBER") // MEMBER, STAFF, or ADMIN
+  status        String   @default("CORE") // CORE or OCCASIONAL
+  needsMoreRest Boolean  @default(false)
+  elo           Int      @default(1000)
+  createdAt     DateTime @default(now())
 
   club Club @relation(fields: [clubId], references: [id], onDelete: Cascade)
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -122,13 +125,14 @@ model Session {
   createdAt              DateTime  @default(now())
   endedAt                DateTime?
 
-  club               Club?         @relation(fields: [clubId], references: [id], onDelete: Cascade)
-  sessionClubs       SessionClub[]
-  players            SessionPlayer[]
-  courts             Court[]
-  matches            Match[]
-  queuedMatch        QueuedMatch?
-  newsLikes          ClubNewsLike[]
+  club          Club?              @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  sessionClubs  SessionClub[]
+  players       SessionPlayer[]
+  courts        Court[]
+  matches       Match[]
+  queuedMatch   QueuedMatch?
+  newsLikes     ClubNewsLike[]
+  notifications ClubNotification[]
 }
 
 model SessionClub {
@@ -167,19 +171,19 @@ model Court {
 }
 
 model SessionPlayer {
-  id                String  @id @default(cuid())
-  sessionId         String
-  userId            String
+  id                 String  @id @default(cuid())
+  sessionId          String
+  userId             String
   representingClubId String?
-  isGuest           Boolean @default(false)
-  gender            String  @default("UNSPECIFIED") // MALE, FEMALE, UNSPECIFIED
-  partnerPreference String  @default("OPEN") // legacy MIXICANO preference fallback: OPEN, FEMALE_FLEX
-  mixedSideOverride String? // UPPER, LOWER
-  pool              String  @default("A") // A, B
-  needsMoreRest     Boolean @default(false)
-  sessionPoints     Int     @default(0)
-  lastPartnerId     String? // player ID of last partner (for repeat-partner penalty)
-  isPaused          Boolean @default(false)
+  isGuest            Boolean @default(false)
+  gender             String  @default("UNSPECIFIED") // MALE, FEMALE, UNSPECIFIED
+  partnerPreference  String  @default("OPEN") // legacy MIXICANO preference fallback: OPEN, FEMALE_FLEX
+  mixedSideOverride  String? // UPPER, LOWER
+  pool               String  @default("A") // A, B
+  needsMoreRest      Boolean @default(false)
+  sessionPoints      Int     @default(0)
+  lastPartnerId      String? // player ID of last partner (for repeat-partner penalty)
+  isPaused           Boolean @default(false)
 
   // Persisted matchmaking state
   matchesPlayed            Int       @default(0)
@@ -240,14 +244,14 @@ model Match {
 }
 
 model MatchEloAdjustment {
-  id          String   @id @default(cuid())
-  matchId     String
-  clubId      String   @map("communityId")
-  userId      String
-  delta       Int
-  beforeElo   Int
-  afterElo    Int
-  createdAt   DateTime @default(now())
+  id        String   @id @default(cuid())
+  matchId   String
+  clubId    String   @map("communityId")
+  userId    String
+  delta     Int
+  beforeElo Int
+  afterElo  Int
+  createdAt DateTime @default(now())
 
   match Match @relation(fields: [matchId], references: [id], onDelete: Cascade)
   club  Club  @relation(fields: [clubId], references: [id], onDelete: Cascade)
@@ -286,10 +290,10 @@ model ClaimRequest {
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
-  club       Club      @relation(fields: [clubId], references: [id], onDelete: Cascade)
-  requester  User      @relation("ClaimRequester", fields: [requesterUserId], references: [id], onDelete: Cascade)
-  target     User      @relation("ClaimTarget", fields: [targetUserId], references: [id], onDelete: Cascade)
-  reviewedBy User?     @relation("ClaimReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+  club       Club  @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  requester  User  @relation("ClaimRequester", fields: [requesterUserId], references: [id], onDelete: Cascade)
+  target     User  @relation("ClaimTarget", fields: [targetUserId], references: [id], onDelete: Cascade)
+  reviewedBy User? @relation("ClaimReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
 
   @@index([clubId, status])
   @@index([requesterUserId, status])
@@ -413,4 +417,29 @@ model ClubNewsLike {
   @@unique([newsItemId, userId])
   @@index([clubId, sessionId])
   @@index([userId])
+}
+
+model ClubNotification {
+  id              String    @id @default(cuid())
+  clubId          String    @map("communityId")
+  sessionId       String
+  recipientUserId String
+  actorUserId     String
+  type            String
+  newsItemId      String
+  newsType        String
+  title           String
+  detail          String
+  value           String
+  readAt          DateTime?
+  createdAt       DateTime  @default(now())
+
+  club      Club    @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  session   Session @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  recipient User    @relation("ClubNotificationRecipient", fields: [recipientUserId], references: [id], onDelete: Cascade)
+  actor     User    @relation("ClubNotificationActor", fields: [actorUserId], references: [id], onDelete: Cascade)
+
+  @@unique([type, newsItemId, actorUserId, recipientUserId])
+  @@index([clubId, recipientUserId, readAt, createdAt])
+  @@index([recipientUserId, createdAt])
 }

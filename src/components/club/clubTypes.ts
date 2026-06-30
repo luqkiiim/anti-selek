@@ -111,6 +111,33 @@ export interface ClubClaimRequest {
   reviewedAt?: string | null;
 }
 
+export interface ClubPageNotificationsSummary {
+  unreadCount: number;
+}
+
+export interface ClubNotificationItem {
+  id: string;
+  type: string;
+  newsItemId: string;
+  newsType: string;
+  title: string;
+  detail: string;
+  value: string;
+  readAt: string | null;
+  createdAt: string | null;
+  actor: {
+    id: string;
+    name: string;
+    avatarUrl?: string | null;
+  };
+  session: {
+    id: string;
+    code: string;
+    name: string;
+    date: string | null;
+  };
+}
+
 export type ClubPagePulse = ClubPulseSnapshot;
 
 export interface ClubLeaderboardClaimState {

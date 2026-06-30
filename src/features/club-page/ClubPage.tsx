@@ -19,6 +19,7 @@ import { ClubActionConfirmModal } from "@/components/club/ClubActionConfirmModal
 import { ClubBottomTabs } from "@/components/club/ClubBottomTabs";
 import { ClubGuestsModal } from "@/components/club/ClubGuestsModal";
 import { ClubLeaderboardPanel } from "@/components/club/ClubLeaderboardPanel";
+import { ClubNotificationsButton } from "@/components/club/ClubNotificationsButton";
 import { ClubOverviewPulsePanel } from "@/components/club/ClubOverviewPulsePanel";
 import { ClubPlayersModal } from "@/components/club/ClubPlayersModal";
 import { ClubProfilePanel } from "@/components/club/ClubProfilePanel";
@@ -170,6 +171,7 @@ export default function ClubPage() {
     error,
     setError,
     success,
+    notifications,
     leaderboard,
     activeTournaments,
     pastTournaments,
@@ -914,6 +916,10 @@ export default function ClubPage() {
                 </button>
               </div>
               <div className="flex flex-wrap items-center justify-end gap-2">
+                <ClubNotificationsButton
+                  clubId={clubId}
+                  initialUnreadCount={notifications.unreadCount}
+                />
                 {isTutorialPlayground ? (
                   <span className="app-chip app-chip-accent">
                     Tutorial playground

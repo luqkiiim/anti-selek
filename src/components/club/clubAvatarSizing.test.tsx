@@ -146,6 +146,7 @@ const pulse: ClubPagePulse = {
       detail: "Biggest rating jump",
       value: "+11 rating",
       players: [{ id: "story-1", name: "Nora Tan", avatarUrl: null }],
+      featuredPlayers: [{ id: "story-1", name: "Nora Tan", avatarUrl: null }],
       likeCount: 2,
       likedByMe: true,
     },

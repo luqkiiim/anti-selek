@@ -145,6 +145,7 @@ export interface ClubPulseNewsItem {
   detail: string;
   value: string;
   players: ClubPulseParticipant[];
+  featuredPlayers: ClubPulseParticipant[];
   likeCount: number;
   likedByMe: boolean;
 }
@@ -909,6 +910,7 @@ function createSessionNewsItem({
   detail,
   value,
   players,
+  featuredPlayers = players,
 }: {
   type: ClubPulseNewsType;
   latestSession: ClubPulseSessionSource;
@@ -916,6 +918,7 @@ function createSessionNewsItem({
   detail: string;
   value: string;
   players: ClubPulseParticipant[];
+  featuredPlayers?: ClubPulseParticipant[];
 }): ClubPulseNewsItem {
   const playerKey = players
     .map((player) => player.id)
@@ -935,6 +938,7 @@ function createSessionNewsItem({
     detail,
     value,
     players,
+    featuredPlayers,
     likeCount: 0,
     likedByMe: false,
   };
@@ -1268,6 +1272,7 @@ function buildSessionNews(
         detail: "Beat higher-rated side",
         value: `${formatSigned(upset.gap)} gap`,
         players: [...upset.winningTeam, ...upset.losingTeam],
+        featuredPlayers: upset.winningTeam,
       })
     );
   }

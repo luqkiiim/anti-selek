@@ -6,9 +6,12 @@ const mocks = vi.hoisted(() => ({
   clubMemberFindMany: vi.fn(),
   clubFindUnique: vi.fn(),
   matchFindMany: vi.fn(),
+  transaction: vi.fn(),
   clubNewsLikeUpsert: vi.fn(),
   clubNewsLikeDeleteMany: vi.fn(),
   clubNewsLikeCount: vi.fn(),
+  clubNotificationUpsert: vi.fn(),
+  clubNotificationDeleteMany: vi.fn(),
   listSessionsForClub: vi.fn(),
   buildClubPulse: vi.fn(),
 }));
@@ -29,10 +32,15 @@ vi.mock("@/lib/prisma", () => ({
     match: {
       findMany: mocks.matchFindMany,
     },
+    $transaction: mocks.transaction,
     clubNewsLike: {
       upsert: mocks.clubNewsLikeUpsert,
       deleteMany: mocks.clubNewsLikeDeleteMany,
       count: mocks.clubNewsLikeCount,
+    },
+    clubNotification: {
+      upsert: mocks.clubNotificationUpsert,
+      deleteMany: mocks.clubNotificationDeleteMany,
     },
   },
 }));
@@ -74,6 +82,7 @@ const newsItem = {
   detail: "Biggest rating jump",
   value: "+24 rating",
   players: [{ id: "player-1", name: "Player One", avatarUrl: null }],
+  featuredPlayers: [{ id: "player-1", name: "Player One", avatarUrl: null }],
   likeCount: 0,
   likedByMe: false,
 };
@@ -90,6 +99,9 @@ describe("club news likes route", () => {
   beforeEach(() => {
     vi.clearAllMocks();
 
+    mocks.transaction.mockImplementation(async (operations: unknown[]) =>
+      Promise.all(operations)
+    );
     mocks.auth.mockResolvedValue({
       user: { id: "viewer-1", isAdmin: false },
     });
@@ -162,6 +174,33 @@ describe("club news likes route", () => {
         userId: "viewer-1",
       },
     });
+    expect(mocks.clubNotificationUpsert).toHaveBeenCalledWith({
+      where: {
+        type_newsItemId_actorUserId_recipientUserId: {
+          type: "NEWS_LIKE",
+          newsItemId: newsItem.id,
+          actorUserId: "viewer-1",
+          recipientUserId: "player-1",
+        },
+      },
+      update: {
+        detail: "Biggest rating jump",
+        title: "Player One",
+        value: "+24 rating",
+      },
+      create: {
+        actorUserId: "viewer-1",
+        clubId: "club-1",
+        detail: "Biggest rating jump",
+        newsItemId: newsItem.id,
+        newsType: "RATING_JUMP",
+        recipientUserId: "player-1",
+        sessionId: "session-1",
+        title: "Player One",
+        type: "NEWS_LIKE",
+        value: "+24 rating",
+      },
+    });
     expect(body).toEqual({
       newsItemId: newsItem.id,
       likedByMe: true,
@@ -187,11 +226,39 @@ describe("club news likes route", () => {
         userId: "viewer-1",
       },
     });
+    expect(mocks.clubNotificationDeleteMany).toHaveBeenCalledWith({
+      where: {
+        actorUserId: "viewer-1",
+        newsItemId: newsItem.id,
+        type: "NEWS_LIKE",
+      },
+    });
     expect(body).toEqual({
       newsItemId: newsItem.id,
       likedByMe: false,
       likeCount: 2,
     });
+  });
+
+  it("does not notify the liker when they are the featured player", async () => {
+    mocks.auth.mockResolvedValueOnce({
+      user: { id: "player-1", isAdmin: false },
+    });
+    mocks.clubMemberFindUnique.mockResolvedValueOnce({
+      role: "MEMBER",
+    });
+    mocks.clubNewsLikeCount.mockResolvedValueOnce(1).mockResolvedValueOnce(1);
+
+    const response = await POST(
+      createRequest({ newsItemId: newsItem.id, liked: true }),
+      {
+        params: Promise.resolve({ id: "club-1" }),
+      }
+    );
+
+    expect(response.status).toBe(200);
+    expect(mocks.clubNewsLikeUpsert).toHaveBeenCalled();
+    expect(mocks.clubNotificationUpsert).not.toHaveBeenCalled();
   });
 
   it("rejects stale or unknown news item ids", async () => {
