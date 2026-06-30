@@ -11,11 +11,9 @@ import {
 } from "../queue-match/shared";
 import { logError, safeErrorResponse } from "@/lib/errors";
 import { rateLimit, checkInvalidTargetRateLimit, invalidTargetResponse } from "@/lib/rateLimit";
-import { SessionStatus } from "@/types/enums";
+import { MatchStatus, SessionStatus } from "@/types/enums";
 
 export const dynamic = "force-dynamic";
-
-const RESUME_QUEUE_RESET_GUARD_MS = 60 * 1000;
 
 export async function POST(
   request: Request,
@@ -98,11 +96,35 @@ export async function POST(
     if (!isPaused && existingPlayer.pausedAt) {
       // Transitioning from Paused to Unpaused
       const durationMs = now.getTime() - existingPlayer.pausedAt.getTime();
-      const isAccidentalToggle =
-        durationMs < RESUME_QUEUE_RESET_GUARD_MS;
+      inactiveSecondsToIncrement = Math.max(
+        0,
+        Math.floor(durationMs / 1000)
+      );
 
-      if (!isAccidentalToggle) {
-        inactiveSecondsToIncrement = Math.floor(durationMs / 1000);
+      const completedMatchWhilePaused = await prisma.match.findFirst({
+        where: {
+          sessionId: sessionData.id,
+          status: MatchStatus.COMPLETED,
+          OR: [
+            { completedAt: { gt: existingPlayer.pausedAt } },
+            {
+              completedAt: null,
+              createdAt: { gt: existingPlayer.pausedAt },
+            },
+          ],
+          NOT: {
+            OR: [
+              { team1User1Id: userId },
+              { team1User2Id: userId },
+              { team2User1Id: userId },
+              { team2User2Id: userId },
+            ],
+          },
+        },
+        select: { id: true },
+      });
+
+      if (completedMatchWhilePaused) {
         shouldResetResumeQueue = true;
 
         const activePlayers = await prisma.sessionPlayer.findMany({
