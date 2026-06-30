@@ -1085,7 +1085,7 @@ describe("clubPulse", () => {
       likedByMe: false,
     });
     expect(result.sessionNews.find((item) => item.type === "UPSET")).toMatchObject({
-      detail: "Beat higher-rated side",
+      detail: "Beat higher-rated Cara / Dan",
       value: "+510 gap",
       players: [players.alice, players.ben, players.cara, players.dan],
       featuredPlayers: [players.alice, players.ben],

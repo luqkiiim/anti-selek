@@ -1269,7 +1269,9 @@ function buildSessionNews(
         type: "UPSET",
         latestSession,
         title: upset.winningTeam.map((player) => player.name).join(" / "),
-        detail: "Beat higher-rated side",
+        detail: `Beat higher-rated ${upset.losingTeam
+          .map((player) => player.name)
+          .join(" / ")}`,
         value: `${formatSigned(upset.gap)} gap`,
         players: [...upset.winningTeam, ...upset.losingTeam],
         featuredPlayers: upset.winningTeam,
