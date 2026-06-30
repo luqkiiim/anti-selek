@@ -21,6 +21,10 @@
 
 # production
 /build
+/prototypes/**/dist
+/prototypes/**/node_modules
+/prototypes/**/.npm-cache
+/prototypes/**/.npmrc
 
 # misc
 .DS_Store

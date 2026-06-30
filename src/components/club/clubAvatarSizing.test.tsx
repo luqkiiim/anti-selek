@@ -21,6 +21,10 @@ function countMdAvatars(markup: string) {
   return markup.match(/h-14 w-14 text-base xl:h-12 xl:w-12 xl:text-sm/g)?.length ?? 0;
 }
 
+function countSmAvatars(markup: string) {
+  return markup.match(/h-12 w-12 text-sm xl:h-10 xl:w-10 xl:text-\[13px\]/g)?.length ?? 0;
+}
+
 const member: ClubPageMember = {
   id: "player-1",
   name: "Alex Lee",
@@ -43,6 +47,9 @@ const pulse: ClubPagePulse = {
     completedTournaments: 3,
     recentMatches: 18,
     activePlayers: 8,
+    totalMatches: 42,
+    totalSessions: 12,
+    lastPlayedAt: "2026-05-18T00:00:00.000Z",
   },
   hotPlayers: [
     {
@@ -55,6 +62,19 @@ const pulse: ClubPagePulse = {
       pointDifferential: 22,
       currentStreak: { result: "WIN", count: 3 },
       heatScore: 99,
+    },
+  ],
+  ratingMovers: [
+    {
+      user: { id: "mover-1", name: "Amir Hakim", avatarUrl: null },
+      matches: 3,
+      wins: 2,
+      losses: 1,
+      winRate: 67,
+      ratingChange: 42,
+      pointDifferential: 14,
+      currentStreak: { result: null, count: 0 },
+      heatScore: 42,
     },
   ],
   rivalries: [
@@ -88,6 +108,46 @@ const pulse: ClubPagePulse = {
         code: "PAIR1",
         name: "Chemistry Cup",
       },
+    },
+  ],
+  recentMatches: [
+    {
+      id: "match-1",
+      completedAt: "2026-05-18T00:00:00.000Z",
+      session: {
+        id: "session-1",
+        code: "ABCD",
+        name: "Weekend Mix",
+      },
+      team1: [
+        { id: "hot-1", name: "Mia Chen", avatarUrl: null },
+        { id: "partner-1", name: "June Park", avatarUrl: null },
+      ],
+      team2: [
+        { id: "rival-1", name: "Ari Stone", avatarUrl: null },
+        { id: "rival-2", name: "Sam Wong", avatarUrl: null },
+      ],
+      team1Score: 21,
+      team2Score: 16,
+      winnerTeam: 1,
+    },
+  ],
+  sessionNews: [
+    {
+      id: "session-1:rating_jump:story-1",
+      type: "RATING_JUMP",
+      session: {
+        id: "session-1",
+        code: "ABCD",
+        name: "Weekend Mix",
+        date: "2026-05-19",
+      },
+      title: "Nora Tan",
+      detail: "Biggest rating jump",
+      value: "+11 rating",
+      players: [{ id: "story-1", name: "Nora Tan", avatarUrl: null }],
+      likeCount: 2,
+      likedByMe: true,
     },
   ],
   latestStory: {
@@ -157,12 +217,11 @@ describe("club avatar sizing", () => {
     await act(async () => {
       root.render(
         <ClubOverviewPulsePanel
+          clubId="community-1"
           clubPulse={pulse}
           activeTournaments={[]}
-          leaderboardPreview={[member]}
           onJoinTournament={() => undefined}
           onOpenTournament={() => undefined}
-          onOpenLeaderboard={() => undefined}
           onOpenTournaments={() => undefined}
           onOpenPlayerProfile={() => undefined}
         />
@@ -172,14 +231,19 @@ describe("club avatar sizing", () => {
     const text = container.textContent ?? "";
     expect(text).toContain("Top rivalry");
     expect(text).toContain("Partner chemistry");
+    expect(text).toContain("Session news");
+    expect(text).toContain("Recent matches");
+    expect(text).toContain("+11 rating");
     expect(text).toContain("24 - 22");
-    expect(text).toContain("46 games");
+    expect(text).not.toContain("Power rankings");
+    expect(text).not.toContain("Leaderboard");
+    expect(text).not.toContain("46 games");
     expect(text).not.toContain("Ari Stone leads");
     expect(text).not.toContain("Sam Wong leads");
     expect(text).not.toContain("vs");
-    expect(text.indexOf("Sam")).toBeLessThan(text.indexOf("24 - 22"));
-    expect(text.indexOf("24 - 22")).toBeLessThan(text.indexOf("Ari"));
-    expect(countMdAvatars(container.innerHTML)).toBe(8);
+    expect(text).not.toContain("W 12 / L 4");
+    expect(container.innerHTML).toContain("text-red-600");
+    expect(countSmAvatars(container.innerHTML)).toBeGreaterThanOrEqual(6);
   });
 
   it("uses md avatars in the club player picker rows", async () => {

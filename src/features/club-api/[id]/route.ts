@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { auth } from "@/lib/auth";
 import { serializeAvatarEntity } from "@/lib/avatar";
-import { buildClubPulse } from "@/lib/clubPulse";
+import { applyClubPulseNewsLikes, buildClubPulse } from "@/lib/clubPulse";
 import {
   getClubStatUserResolver,
   getOfflineIdentityInfoByUserId,
@@ -214,6 +214,15 @@ export async function GET(
           team1User2: { select: { id: true, name: true, avatarKey: true } },
           team2User1: { select: { id: true, name: true, avatarKey: true } },
           team2User2: { select: { id: true, name: true, avatarKey: true } },
+          eloAdjustments: {
+            where: { clubId: id },
+            select: {
+              userId: true,
+              delta: true,
+              beforeElo: true,
+              afterElo: true,
+            },
+          },
           session: {
             select: {
               id: true,
@@ -390,7 +399,7 @@ export async function GET(
         linkedClubBadges: offlineIdentityInfo?.linkedClubBadges ?? [],
       };
     });
-    const clubPulse = buildClubPulse({
+    let clubPulse = buildClubPulse({
       members: clubMembers.map((member) => ({
         id: member.id,
         name: member.name,
@@ -406,6 +415,40 @@ export async function GET(
         team2User2: serializeAvatarEntity(match.team2User2),
       })),
     });
+    const newsItemIds = clubPulse.sessionNews.map((item) => item.id);
+
+    if (newsItemIds.length > 0) {
+      const newsLikes = await prisma.clubNewsLike.findMany({
+        where: {
+          clubId: id,
+          newsItemId: {
+            in: newsItemIds,
+          },
+        },
+        select: {
+          newsItemId: true,
+          userId: true,
+        },
+      });
+      const likeStateByNewsItemId = new Map<
+        string,
+        { likeCount: number; likedByMe: boolean }
+      >();
+
+      for (const like of newsLikes) {
+        const likeState = likeStateByNewsItemId.get(like.newsItemId) ?? {
+          likeCount: 0,
+          likedByMe: false,
+        };
+        likeState.likeCount += 1;
+        if (like.userId === viewerId) {
+          likeState.likedByMe = true;
+        }
+        likeStateByNewsItemId.set(like.newsItemId, likeState);
+      }
+
+      clubPulse = applyClubPulseNewsLikes(clubPulse, likeStateByNewsItemId);
+    }
 
     const clubPayload = {
       id: club.id,

@@ -42,6 +42,7 @@ model User {
   reviewedOfflineIdentityLinks  OfflineIdentityLinkRequest[] @relation("OfflineIdentityLinkReviewer")
   passwordResetTokens           PasswordResetToken[]
   tutorialProgress              TutorialProgress[]
+  clubNewsLikes                 ClubNewsLike[]
 
   // Match relations (team memberships)
   matchesAsTeam1Player1 Match[] @relation("Team1Player1")
@@ -70,6 +71,7 @@ model Club {
   offlineIdentityMembers          OfflineIdentityMember[]
   offlineIdentityLinkRequestsFrom OfflineIdentityLinkRequest[] @relation("OfflineIdentityLinkSourceClub")
   offlineIdentityLinkRequestsTo   OfflineIdentityLinkRequest[] @relation("OfflineIdentityLinkTargetClub")
+  newsLikes                       ClubNewsLike[]
 
   @@index([isTutorial])
   @@map("Community")
@@ -126,6 +128,7 @@ model Session {
   courts             Court[]
   matches            Match[]
   queuedMatch        QueuedMatch?
+  newsLikes          ClubNewsLike[]
 }
 
 model SessionClub {
@@ -393,4 +396,21 @@ model TutorialProgress {
 
   @@unique([userId, tutorialKey])
   @@index([tutorialKey])
+}
+
+model ClubNewsLike {
+  id         String   @id @default(cuid())
+  clubId     String   @map("communityId")
+  sessionId  String
+  newsItemId String
+  userId     String
+  createdAt  DateTime @default(now())
+
+  club    Club    @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  session Session @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([newsItemId, userId])
+  @@index([clubId, sessionId])
+  @@index([userId])
 }

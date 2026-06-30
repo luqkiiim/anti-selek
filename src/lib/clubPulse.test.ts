@@ -57,6 +57,7 @@ function createMatch(
     winnerTeam,
     team1EloChange = null,
     team2EloChange = null,
+    eloAdjustments,
   }: {
     session: ClubPulseSessionSource;
     completedAt: string;
@@ -73,6 +74,7 @@ function createMatch(
     winnerTeam: number;
     team1EloChange?: number | null;
     team2EloChange?: number | null;
+    eloAdjustments?: ClubPulseMatchSource["eloAdjustments"];
   }
 ): ClubPulseMatchSource {
   return {
@@ -99,6 +101,7 @@ function createMatch(
     team2Score,
     team1EloChange,
     team2EloChange,
+    eloAdjustments,
   };
 }
 
@@ -159,10 +162,16 @@ describe("clubPulse", () => {
         completedTournaments: 0,
         recentMatches: 0,
         activePlayers: 0,
+        totalMatches: 0,
+        totalSessions: 0,
+        lastPlayedAt: null,
       },
       hotPlayers: [],
+      ratingMovers: [],
       rivalries: [],
       partnerships: [],
+      recentMatches: [],
+      sessionNews: [],
       latestStory: null,
     });
   });
@@ -775,6 +784,7 @@ describe("clubPulse", () => {
       [players.alice, players.ben],
       [players.dan, players.eli],
       [players.farah, players.gina],
+      [players.cara, players.hugo],
     ]);
     expect(result.partnerships).not.toContainEqual(
       expect.objectContaining({
@@ -940,6 +950,165 @@ describe("clubPulse", () => {
         ratingChange: 6,
       },
     });
+  });
+
+  it("generates stat-backed session news from the latest completed session", () => {
+    const oldSession = createSession("old-news", {
+      endedAt: "2026-05-01T12:00:00.000Z",
+    });
+    const latestSession = createSession("latest-news", {
+      name: "Friday Mexicano",
+      endedAt: "2026-05-08T12:00:00.000Z",
+    });
+    const members = Object.values(players).map((player) =>
+      createMember(player)
+    );
+    const completedMatches = [
+      createMatch("old-loss-1", {
+        session: oldSession,
+        completedAt: "2026-05-01T10:00:00.000Z",
+        team1: [players.cara, players.dan],
+        team2: [players.alice, players.ben],
+        team1Score: 21,
+        team2Score: 17,
+        winnerTeam: 1,
+        team1EloChange: 10,
+        team2EloChange: -10,
+        eloAdjustments: [
+          { userId: "alice", delta: -10, beforeElo: 1010, afterElo: 1000 },
+          { userId: "ben", delta: -10, beforeElo: 1080, afterElo: 1070 },
+          { userId: "cara", delta: 10, beforeElo: 1180, afterElo: 1190 },
+          { userId: "dan", delta: 10, beforeElo: 1160, afterElo: 1170 },
+        ],
+      }),
+      createMatch("old-loss-2", {
+        session: oldSession,
+        completedAt: "2026-05-01T11:00:00.000Z",
+        team1: [players.eli, players.farah],
+        team2: [players.alice, players.gina],
+        team1Score: 21,
+        team2Score: 18,
+        winnerTeam: 1,
+        team1EloChange: 10,
+        team2EloChange: -10,
+        eloAdjustments: [
+          { userId: "alice", delta: -10, beforeElo: 1000, afterElo: 990 },
+          { userId: "gina", delta: -10, beforeElo: 1000, afterElo: 990 },
+          { userId: "eli", delta: 10, beforeElo: 1100, afterElo: 1110 },
+          { userId: "farah", delta: 10, beforeElo: 1110, afterElo: 1120 },
+        ],
+      }),
+      createMatch("latest-upset", {
+        session: latestSession,
+        completedAt: "2026-05-08T10:00:00.000Z",
+        team1: [players.alice, players.ben],
+        team2: [players.cara, players.dan],
+        team1Score: 21,
+        team2Score: 15,
+        winnerTeam: 1,
+        team1EloChange: 18,
+        team2EloChange: -18,
+        eloAdjustments: [
+          { userId: "alice", delta: 18, beforeElo: 990, afterElo: 1008 },
+          { userId: "ben", delta: 18, beforeElo: 1080, afterElo: 1098 },
+          { userId: "cara", delta: -18, beforeElo: 1300, afterElo: 1282 },
+          { userId: "dan", delta: -18, beforeElo: 1280, afterElo: 1262 },
+        ],
+      }),
+      createMatch("latest-win-2", {
+        session: latestSession,
+        completedAt: "2026-05-08T10:30:00.000Z",
+        team1: [players.alice, players.eli],
+        team2: [players.cara, players.farah],
+        team1Score: 21,
+        team2Score: 18,
+        winnerTeam: 1,
+        team1EloChange: 10,
+        team2EloChange: -10,
+        eloAdjustments: [
+          { userId: "alice", delta: 10, beforeElo: 1008, afterElo: 1018 },
+          { userId: "eli", delta: 10, beforeElo: 1110, afterElo: 1120 },
+          { userId: "cara", delta: -10, beforeElo: 1282, afterElo: 1272 },
+          { userId: "farah", delta: -10, beforeElo: 1120, afterElo: 1110 },
+        ],
+      }),
+      createMatch("latest-win-3", {
+        session: latestSession,
+        completedAt: "2026-05-08T11:00:00.000Z",
+        team1: [players.alice, players.gina],
+        team2: [players.ben, players.dan],
+        team1Score: 21,
+        team2Score: 19,
+        winnerTeam: 1,
+        team1EloChange: 8,
+        team2EloChange: -8,
+        eloAdjustments: [
+          { userId: "alice", delta: 8, beforeElo: 1018, afterElo: 1026 },
+          { userId: "gina", delta: 8, beforeElo: 990, afterElo: 998 },
+          { userId: "ben", delta: -8, beforeElo: 1098, afterElo: 1090 },
+          { userId: "dan", delta: -8, beforeElo: 1262, afterElo: 1254 },
+        ],
+      }),
+    ];
+
+    const result = buildClubPulse({
+      members,
+      sessions: [oldSession, latestSession],
+      completedMatches,
+    });
+
+    expect(result.metrics).toMatchObject({
+      totalMatches: 5,
+      totalSessions: 2,
+      lastPlayedAt: "2026-05-08T11:00:00.000Z",
+    });
+    expect(result.ratingMovers[0]).toMatchObject({
+      user: players.alice,
+      ratingChange: 36,
+      wins: 3,
+      losses: 0,
+    });
+    expect(result.sessionNews.map((item) => item.type)).toEqual([
+      "RATING_JUMP",
+      "PERFECT_SESSION",
+      "UPSET",
+      "STREAK_EXTENDED",
+      "BOUNCE_BACK",
+      "NEW_PEAK",
+    ]);
+    expect(result.sessionNews[0]).toMatchObject({
+      title: "Alice",
+      detail: "Biggest rating jump",
+      value: "+36 rating",
+      likeCount: 0,
+      likedByMe: false,
+    });
+    expect(result.sessionNews.find((item) => item.type === "UPSET")).toMatchObject({
+      detail: "Beat higher-rated side",
+      value: "+510 gap",
+    });
+  });
+
+  it("omits session news when a completed session has no qualifying highlight", () => {
+    const session = createSession("quiet-news");
+    const result = buildClubPulse({
+      members: Object.values(players).map((player) => createMember(player)),
+      sessions: [session],
+      completedMatches: [
+        createMatch("quiet-match", {
+          session,
+          completedAt: "2026-05-01T10:00:00.000Z",
+          team1: [players.alice, players.ben],
+          team2: [players.cara, players.dan],
+          team1Score: 21,
+          team2Score: 19,
+          winnerTeam: 1,
+        }),
+      ],
+    });
+
+    expect(result.sessionNews).toEqual([]);
+    expect(result.ratingMovers).toEqual([]);
   });
 
   it("excludes guests from pulse people while keeping member match results", () => {

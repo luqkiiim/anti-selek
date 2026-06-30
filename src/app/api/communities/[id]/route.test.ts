@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   clubUpdate: vi.fn(),
   clubMemberFindMany: vi.fn(),
   matchFindMany: vi.fn(),
+  clubNewsLikeFindMany: vi.fn(),
   claimRequestFindMany: vi.fn(),
   offlineIdentityMemberFindMany: vi.fn(),
   listSessionsForClub: vi.fn(),
@@ -35,6 +36,9 @@ vi.mock("@/lib/prisma", () => ({
     },
     match: {
       findMany: mocks.matchFindMany,
+    },
+    clubNewsLike: {
+      findMany: mocks.clubNewsLikeFindMany,
     },
     claimRequest: {
       findMany: mocks.claimRequestFindMany,
@@ -171,6 +175,7 @@ describe("club snapshot route", () => {
     ]);
     mocks.claimRequestFindMany.mockResolvedValue([]);
     mocks.offlineIdentityMemberFindMany.mockResolvedValue([]);
+    mocks.clubNewsLikeFindMany.mockResolvedValue([]);
     mocks.buildClubPulse.mockReturnValue({
       metrics: {
         members: 2,
@@ -178,10 +183,16 @@ describe("club snapshot route", () => {
         completedTournaments: 0,
         recentMatches: 0,
         activePlayers: 0,
+        totalMatches: 0,
+        totalSessions: 1,
+        lastPlayedAt: null,
       },
       hotPlayers: [],
+      ratingMovers: [],
       rivalries: [],
       partnerships: [],
+      recentMatches: [],
+      sessionNews: [],
       latestStory: null,
     });
   });

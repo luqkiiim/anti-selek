@@ -175,7 +175,6 @@ export default function ClubPage() {
     pastTournaments,
     testSessions,
     latestPastTournamentId,
-    leaderboardPreview,
     clubPulse,
     canManageClub,
     canAdminClub,
@@ -816,13 +815,12 @@ export default function ClubPage() {
     : [];
   const overviewPanel = (
     <ClubOverviewPulsePanel
+      clubId={clubId}
       clubPulse={clubPulse}
       activeTournaments={activeTournaments}
-      leaderboardPreview={leaderboardPreview}
       currentUserId={user?.id}
       onJoinTournament={joinTournament}
       onOpenTournament={openTournament}
-      onOpenLeaderboard={() => switchClubSection("leaderboard")}
       onOpenTournaments={() => switchClubSection("tournaments")}
       onOpenPlayerProfile={openClubPlayerProfile}
     />

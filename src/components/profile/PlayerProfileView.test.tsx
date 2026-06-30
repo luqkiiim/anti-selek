@@ -300,6 +300,7 @@ describe("PlayerProfileView", () => {
       isQuickAccess: false,
       avatarUrl: null,
     },
+    mode = "standalone",
   }: {
     profileResponse?: ReturnType<typeof buildProfileResponse>;
     currentUser?: {
@@ -309,6 +310,7 @@ describe("PlayerProfileView", () => {
       isQuickAccess?: boolean;
       avatarUrl?: string | null;
     };
+    mode?: "standalone" | "embedded";
   } = {}) {
     mocks.fetch.mockImplementation((input: string | Request | URL) => {
       const url =
@@ -334,7 +336,7 @@ describe("PlayerProfileView", () => {
     });
 
     await act(async () => {
-      root.render(<PlayerProfileView userId="user-1" mode="standalone" />);
+      root.render(<PlayerProfileView userId="user-1" mode={mode} />);
       await Promise.resolve();
       await Promise.resolve();
       await Promise.resolve();
@@ -414,6 +416,25 @@ describe("PlayerProfileView", () => {
     );
     expect(heroTitle?.className).toContain("break-words");
     expect(heroTitle?.className).not.toContain("truncate");
+  });
+
+  it("does not reserve back-button toolbar space in embedded club profile mode", async () => {
+    await renderView({ mode: "embedded" });
+
+    expect(
+      container.querySelector('button[aria-label="Go back"]')
+    ).toBeNull();
+    expect(
+      container.querySelector('[data-testid="profile-hero-body"]')
+    ).toBeTruthy();
+  });
+
+  it("keeps the back button on standalone profile pages", async () => {
+    await renderView();
+
+    expect(
+      container.querySelector('button[aria-label="Go back"]')
+    ).toBeTruthy();
   });
 
   it("renders concrete permanent achievement badges with exact progress", async () => {
