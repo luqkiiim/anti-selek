@@ -275,6 +275,16 @@ export function compareSingleCourtSelections<
       return balanceDiff;
     }
 
+    if (
+      sessionType === SessionType.POINTS &&
+      shouldRespectPlayerRest(options)
+    ) {
+      const consecutivePlayCompare = compareConsecutivePlayFairness(left, right);
+      if (consecutivePlayCompare !== 0) {
+        return consecutivePlayCompare;
+      }
+    }
+
     const varietyDiff = compareBalanceFirstVariety(left, right);
     if (varietyDiff !== 0) {
       return varietyDiff;
