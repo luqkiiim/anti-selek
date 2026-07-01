@@ -35,6 +35,7 @@ import type {
   V3BatchResult,
   V3BatchSelection,
   V3CandidatePool,
+  V3SelectionConstraints,
   V3SingleCourtSelection,
 } from "./types";
 
@@ -249,6 +250,7 @@ function buildQuartetSelections<T extends MatchmakerV3Player>(
   {
     sessionMode,
     completedMatches,
+    selectionConstraints,
   }: {
     sessionMode: SessionMode;
     completedMatches: Array<{
@@ -256,6 +258,7 @@ function buildQuartetSelections<T extends MatchmakerV3Player>(
       team2: [string, string];
       completedAt?: Date | null;
     }>;
+    selectionConstraints?: V3SelectionConstraints<ActiveMatchmakerV3Player<T>>;
   }
 ) {
   const quartets = buildCombinations(candidatePlayers, 4);
@@ -274,6 +277,13 @@ function buildQuartetSelections<T extends MatchmakerV3Player>(
       continue;
     }
 
+    if (
+      selectionConstraints?.isQuartetAllowed &&
+      !selectionConstraints.isQuartetAllowed(quartetPlayers)
+    ) {
+      continue;
+    }
+
     const ids = quartetPlayers.map((player) => player.userId) as [
       string,
       string,
@@ -288,35 +298,47 @@ function buildQuartetSelections<T extends MatchmakerV3Player>(
       playersById,
       sessionMode
     )) {
+      const partition = selectionConstraints?.normalizePartition
+        ? selectionConstraints.normalizePartition({
+            partition: evaluation.partition,
+            players: quartetPlayers,
+            playersById,
+          })
+        : evaluation.partition;
+
+      if (!partition) {
+        continue;
+      }
+
       selections.push({
         ids,
         players: quartetPlayers,
-        partition: evaluation.partition,
+        partition,
         restSummary,
         balanceGap: evaluation.balanceGap,
         pointDiffGap: evaluation.pointDiffGap,
         sharedCourtRepeatPenalty: getSharedCourtRepeatPenalty(
-          evaluation.partition,
+          partition,
           socialMixHistory
         ),
         partnerCoveragePenalty: getPartnerCoveragePenalty(
-          evaluation.partition,
+          partition,
           socialMixHistory
         ),
         opponentCoveragePenalty: getOpponentCoveragePenalty(
-          evaluation.partition,
+          partition,
           socialMixHistory
         ),
         partnerRepeatPenalty: getPartnerRepeatPenalty(
-          evaluation.partition,
+          partition,
           partnerHistory
         ),
         opponentRepeatPenalty: getOpponentRepeatPenalty(
-          evaluation.partition,
+          partition,
           opponentHistory
         ),
         exactRematchPenalty: getExactRematchPenalty(
-          evaluation.partition,
+          partition,
           rematchHistory
         ),
         ...getEmptyConsecutivePlayMetrics(),
@@ -654,6 +676,7 @@ function searchBatchCandidatePlayers<T extends MatchmakerV3Player>({
   respectPlayerRest,
   completedMatches,
   searchLimits,
+  selectionConstraints,
 }: {
   candidatePlayers: ActiveMatchmakerV3Player<T>[];
   lockedIds: Set<string>;
@@ -670,6 +693,7 @@ function searchBatchCandidatePlayers<T extends MatchmakerV3Player>({
     maxBranches?: number;
     maxMs?: number;
   };
+  selectionConstraints?: V3SelectionConstraints<ActiveMatchmakerV3Player<T>>;
 }): BatchSearchAttemptResult<ActiveMatchmakerV3Player<T>> {
   const requiredPlayerCount = courtCount * 4;
   const candidatePlayerIds = candidatePlayers.map((player) => player.userId);
@@ -695,6 +719,7 @@ function searchBatchCandidatePlayers<T extends MatchmakerV3Player>({
     buildQuartetSelections(candidatePlayers, {
       sessionMode,
       completedMatches,
+      selectionConstraints,
     }),
     sessionType,
     respectPlayerRest
@@ -844,6 +869,9 @@ export function findBestBatchSelectionV3<T extends MatchmakerV3Player>(
     completedMatches = [],
     randomFn = Math.random,
     searchLimits,
+    candidatePool,
+    candidatePoolVariants,
+    selectionConstraints,
   }: {
     courtCount: number;
     sessionMode: SessionMode;
@@ -859,29 +887,42 @@ export function findBestBatchSelectionV3<T extends MatchmakerV3Player>(
       maxBranches?: number;
       maxMs?: number;
     };
+    candidatePool?: V3CandidatePool<ActiveMatchmakerV3Player<T>>;
+    candidatePoolVariants?: (
+      candidatePool: V3CandidatePool<ActiveMatchmakerV3Player<T>>
+    ) => Array<V3CandidatePool<ActiveMatchmakerV3Player<T>>>;
+    selectionConstraints?: V3SelectionConstraints<ActiveMatchmakerV3Player<T>>;
   }
 ): V3BatchResult<ActiveMatchmakerV3Player<T>> {
   const requiredPlayerCount = courtCount * 4;
   const candidateCap =
     courtCount > 0 ? getBatchCandidateCap(courtCount, requiredPlayerCount) : null;
-  const candidatePool = buildCandidatePool(players, {
-    requiredPlayerCount,
-    randomFn,
-    respectPlayerRest,
-    restTurnTieZoneTolerance: getRestTurnTieZoneTolerance(sessionType),
-  });
+  const resolvedCandidatePool =
+    candidatePool ??
+    buildCandidatePool(players, {
+      requiredPlayerCount,
+      randomFn,
+      respectPlayerRest,
+      restTurnTieZoneTolerance: getRestTurnTieZoneTolerance(sessionType),
+    });
   const debug: V3BatchDebug = {
-    eligiblePlayerIds: candidatePool.activePlayers.map((player) => player.userId),
-    availableCandidateCount: candidatePool.candidatePlayers.length,
+    eligiblePlayerIds: resolvedCandidatePool.activePlayers.map(
+      (player) => player.userId
+    ),
+    availableCandidateCount: resolvedCandidatePool.candidatePlayers.length,
     consideredCandidateCount: 0,
     candidateCap,
-    lowestBand: candidatePool.lowestBand,
-    includedBandValues: candidatePool.includedBandValues,
-    widened: candidatePool.widened,
-    lockedPlayerIds: candidatePool.lockedPlayers.map((player) => player.userId),
+    lowestBand: resolvedCandidatePool.lowestBand,
+    includedBandValues: resolvedCandidatePool.includedBandValues,
+    widened: resolvedCandidatePool.widened,
+    lockedPlayerIds: resolvedCandidatePool.lockedPlayers.map(
+      (player) => player.userId
+    ),
     tieZonePlayerIds:
-      candidatePool.tieZone?.players.map((player) => player.userId) ?? [],
-    candidatePlayerIds: candidatePool.candidatePlayers.map((player) => player.userId),
+      resolvedCandidatePool.tieZone?.players.map((player) => player.userId) ?? [],
+    candidatePlayerIds: resolvedCandidatePool.candidatePlayers.map(
+      (player) => player.userId
+    ),
     quartetCount: 0,
     validQuartetCount: 0,
     exploredBranches: 0,
@@ -901,8 +942,8 @@ export function findBestBatchSelectionV3<T extends MatchmakerV3Player>(
 
   if (
     courtCount <= 0 ||
-    candidatePool.insufficientPlayers ||
-    candidatePool.candidatePlayers.length < requiredPlayerCount
+    resolvedCandidatePool.insufficientPlayers ||
+    resolvedCandidatePool.candidatePlayers.length < requiredPlayerCount
   ) {
     debug.failureReason = "INSUFFICIENT_PLAYERS";
     return {
@@ -913,9 +954,10 @@ export function findBestBatchSelectionV3<T extends MatchmakerV3Player>(
 
   const attemptedCandidateLists = new Set<string>();
   const candidatePools =
-    sessionMode === SessionMode.MIXICANO
-      ? buildFeasibilityCandidatePools(candidatePool)
-      : [candidatePool];
+    candidatePoolVariants?.(resolvedCandidatePool) ??
+    (sessionMode === SessionMode.MIXICANO
+      ? buildFeasibilityCandidatePools(resolvedCandidatePool)
+      : [resolvedCandidatePool]);
   let finalSelection: V3BatchSelection<ActiveMatchmakerV3Player<T>> | null =
     null;
   const attemptRecords: Array<{
@@ -949,13 +991,16 @@ export function findBestBatchSelectionV3<T extends MatchmakerV3Player>(
       respectPlayerRest,
       completedMatches,
       searchLimits,
+      selectionConstraints,
     });
 
     attemptRecords.push({ pool, result: attempt });
     return attempt;
   };
 
-  const priorityPlayers = sortArrivalPriorityPlayers(candidatePool.activePlayers);
+  const priorityPlayers = sortArrivalPriorityPlayers(
+    resolvedCandidatePool.activePlayers
+  );
   if (priorityPlayers.length > 0) {
     const maxPriorityCount = Math.min(priorityPlayers.length, requiredPlayerCount);
 
@@ -966,7 +1011,7 @@ export function findBestBatchSelectionV3<T extends MatchmakerV3Player>(
     ) {
       const requiredPriorityPlayers = priorityPlayers.slice(0, priorityCount);
       const priorityPool = buildArrivalPriorityBatchCandidatePool(
-        candidatePool,
+        resolvedCandidatePool,
         requiredPriorityPlayers,
         requiredPlayerCount,
         candidateCap ?? requiredPlayerCount
@@ -987,12 +1032,12 @@ export function findBestBatchSelectionV3<T extends MatchmakerV3Player>(
 
   if (!finalSelection) {
     const strictLockedIds = new Set(
-      candidatePool.lockedPlayers.map((player) => player.userId)
+      resolvedCandidatePool.lockedPlayers.map((player) => player.userId)
     );
     const strictAttempt = runAttempt({
-      pool: candidatePool,
+      pool: resolvedCandidatePool,
       candidatePlayers: limitBatchCandidatePlayers(
-        candidatePool,
+        resolvedCandidatePool,
         candidateCap ?? requiredPlayerCount
       ),
       lockedIds: strictLockedIds,

@@ -1469,6 +1469,7 @@ export function selectBatchMatches({
       playersById,
       sessionData,
       requestedMatchCount,
+      randomFn,
     });
   }
 

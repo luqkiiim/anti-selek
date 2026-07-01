@@ -63,6 +63,21 @@ export interface V3BalancedPartition {
   mixedSideGap: number;
 }
 
+export interface V3SelectionConstraints<
+  T extends ActiveMatchmakerV3Player = ActiveMatchmakerV3Player,
+> {
+  isQuartetAllowed?: (players: [T, T, T, T]) => boolean;
+  normalizePartition?: ({
+    partition,
+    players,
+    playersById,
+  }: {
+    partition: V3DoublesPartition;
+    players: [T, T, T, T];
+    playersById: Map<string, T>;
+  }) => V3DoublesPartition | null;
+}
+
 export interface V3RestSummary {
   totalRestTurns: number;
   minimumRestTurns: number;

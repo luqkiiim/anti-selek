@@ -31,6 +31,7 @@ import type {
   ActiveMatchmakerV3Player,
   MatchmakerV3Player,
   V3CandidatePool,
+  V3SelectionConstraints,
   V3SingleCourtDebug,
   V3SingleCourtResult,
   V3SingleCourtSelection,
@@ -218,6 +219,7 @@ function searchCandidatePool<T extends MatchmakerV3Player>({
   socialMixHistory,
   consecutivePlayHistory,
   respectPlayerRest,
+  selectionConstraints,
 }: {
   candidatePool: V3CandidatePool<ActiveMatchmakerV3Player<T>>;
   sessionMode: SessionMode;
@@ -233,6 +235,7 @@ function searchCandidatePool<T extends MatchmakerV3Player>({
   socialMixHistory: ReturnType<typeof buildSocialMixHistory>;
   consecutivePlayHistory: ReturnType<typeof buildConsecutivePlayHistory>;
   respectPlayerRest: boolean;
+  selectionConstraints?: V3SelectionConstraints<ActiveMatchmakerV3Player<T>>;
 }) {
   const remainingSlots = 4 - candidatePool.lockedPlayers.length;
   const quartetGroups =
@@ -254,6 +257,13 @@ function searchCandidatePool<T extends MatchmakerV3Player>({
   for (const group of quartetGroups) {
     const quartetPlayers = toQuartet(group);
     if (!quartetPlayers) {
+      continue;
+    }
+
+    if (
+      selectionConstraints?.isQuartetAllowed &&
+      !selectionConstraints.isQuartetAllowed(quartetPlayers)
+    ) {
       continue;
     }
 
@@ -295,9 +305,21 @@ function searchCandidatePool<T extends MatchmakerV3Player>({
       playersById,
       sessionMode
     )) {
+      const partition = selectionConstraints?.normalizePartition
+        ? selectionConstraints.normalizePartition({
+            partition: evaluation.partition,
+            players: quartetPlayers,
+            playersById,
+          })
+        : evaluation.partition;
+
+      if (!partition) {
+        continue;
+      }
+
       if (
         excludedPartitionKey &&
-        getExactPartitionKey(evaluation.partition) === excludedPartitionKey
+        getExactPartitionKey(partition) === excludedPartitionKey
       ) {
         continue;
       }
@@ -307,32 +329,32 @@ function searchCandidatePool<T extends MatchmakerV3Player>({
       const selection: V3SingleCourtSelection<ActiveMatchmakerV3Player<T>> = {
         ids,
         players: quartetPlayers,
-        partition: evaluation.partition,
+        partition,
         restSummary,
         balanceGap: evaluation.balanceGap,
         pointDiffGap: evaluation.pointDiffGap,
         sharedCourtRepeatPenalty: getSharedCourtRepeatPenalty(
-          evaluation.partition,
+          partition,
           socialMixHistory
         ),
         partnerCoveragePenalty: getPartnerCoveragePenalty(
-          evaluation.partition,
+          partition,
           socialMixHistory
         ),
         opponentCoveragePenalty: getOpponentCoveragePenalty(
-          evaluation.partition,
+          partition,
           socialMixHistory
         ),
         partnerRepeatPenalty: getPartnerRepeatPenalty(
-          evaluation.partition,
+          partition,
           partnerHistory
         ),
         opponentRepeatPenalty: getOpponentRepeatPenalty(
-          evaluation.partition,
+          partition,
           opponentHistory
         ),
         exactRematchPenalty: getExactRematchPenalty(
-          evaluation.partition,
+          partition,
           rematchHistory
         ),
         ...consecutivePlayMetrics,
@@ -424,6 +446,9 @@ export function findBestSingleCourtSelectionV3<T extends MatchmakerV3Player>(
     minimumTargetPoolPlayers,
     respectPlayerRest = true,
     randomFn = Math.random,
+    candidatePool,
+    candidatePoolVariants,
+    selectionConstraints,
   }: {
     sessionMode: SessionMode;
     sessionType: SessionType;
@@ -439,14 +464,21 @@ export function findBestSingleCourtSelectionV3<T extends MatchmakerV3Player>(
     minimumTargetPoolPlayers?: number;
     respectPlayerRest?: boolean;
     randomFn?: () => number;
+    candidatePool?: V3CandidatePool<ActiveMatchmakerV3Player<T>>;
+    candidatePoolVariants?: (
+      candidatePool: V3CandidatePool<ActiveMatchmakerV3Player<T>>
+    ) => Array<V3CandidatePool<ActiveMatchmakerV3Player<T>>>;
+    selectionConstraints?: V3SelectionConstraints<ActiveMatchmakerV3Player<T>>;
   }
 ): V3SingleCourtResult<ActiveMatchmakerV3Player<T>> {
-  const initialCandidatePool = buildCandidatePool(players, {
-    requiredPlayerCount: 4,
-    randomFn,
-    respectPlayerRest,
-    restTurnTieZoneTolerance: getRestTurnTieZoneTolerance(sessionType),
-  });
+  const initialCandidatePool =
+    candidatePool ??
+    buildCandidatePool(players, {
+      requiredPlayerCount: 4,
+      randomFn,
+      respectPlayerRest,
+      restTurnTieZoneTolerance: getRestTurnTieZoneTolerance(sessionType),
+    });
 
   if (
     initialCandidatePool.insufficientPlayers ||
@@ -486,18 +518,21 @@ export function findBestSingleCourtSelectionV3<T extends MatchmakerV3Player>(
   }
 
   const candidatePoolEntries = [
-    ...buildArrivalPriorityCandidatePools(initialCandidatePool).map(
-      (candidatePool) => ({
-        candidatePool,
-        requiresArrivalPriority: true,
-      })
-    ),
-    ...buildFeasibilityCandidatePools(initialCandidatePool).map(
-      (candidatePool) => ({
-        candidatePool,
-        requiresArrivalPriority: false,
-      })
-    ),
+    ...(candidatePoolVariants
+      ? []
+      : buildArrivalPriorityCandidatePools(initialCandidatePool).map(
+          (candidatePool) => ({
+            candidatePool,
+            requiresArrivalPriority: true,
+          })
+        )),
+    ...(candidatePoolVariants?.(initialCandidatePool) ??
+      buildFeasibilityCandidatePools(initialCandidatePool)).map(
+        (candidatePool) => ({
+          candidatePool,
+          requiresArrivalPriority: false,
+        })
+      ),
   ];
   const rematchHistory = buildExactRematchHistory(completedMatches);
   const partnerHistory = buildPartnerRepeatHistory(completedMatches);
@@ -529,6 +564,7 @@ export function findBestSingleCourtSelectionV3<T extends MatchmakerV3Player>(
       socialMixHistory,
       consecutivePlayHistory,
       respectPlayerRest,
+      selectionConstraints,
     });
     totalQuartetCount += candidatePoolSearch.quartetCount;
     totalValidPartitionCount += candidatePoolSearch.validPartitionCount;
@@ -556,6 +592,7 @@ export function findBestSingleCourtSelectionV3<T extends MatchmakerV3Player>(
           socialMixHistory,
           consecutivePlayHistory,
           respectPlayerRest,
+          selectionConstraints,
         });
         totalQuartetCount += candidatePoolSearch.quartetCount;
         totalValidPartitionCount += candidatePoolSearch.validPartitionCount;
