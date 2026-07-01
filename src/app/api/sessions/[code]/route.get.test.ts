@@ -10,6 +10,8 @@ const mocks = vi.hoisted(() => ({
   getSessionOperatorMembership: vi.fn(),
   getClubEloByUserId: vi.fn(),
   withClubElo: vi.fn(),
+  getPlayerClubBadges: vi.fn(),
+  withPlayerClubBadges: vi.fn(),
   getQueuedMatchUserIds: vi.fn(),
   parseMatchmakingReasonJson: vi.fn(),
 }));
@@ -27,11 +29,11 @@ vi.mock("@/lib/prisma", () => ({
 }));
 
 vi.mock("@/lib/sessionCollab", () => ({
-  getPlayerClubBadges: vi.fn(),
+  getPlayerClubBadges: mocks.getPlayerClubBadges,
   getSessionAdminMembership: mocks.getSessionAdminMembership,
   getSessionMembership: mocks.getSessionMembership,
   getSessionOperatorMembership: mocks.getSessionOperatorMembership,
-  withPlayerClubBadges: vi.fn(),
+  withPlayerClubBadges: mocks.withPlayerClubBadges,
 }));
 
 vi.mock("@/lib/clubElo", () => ({
@@ -75,6 +77,8 @@ describe("session route GET", () => {
     mocks.getSessionOperatorMembership.mockResolvedValue(null);
     mocks.getClubEloByUserId.mockResolvedValue(new Map());
     mocks.withClubElo.mockImplementation((players) => players);
+    mocks.getPlayerClubBadges.mockResolvedValue(new Map());
+    mocks.withPlayerClubBadges.mockImplementation((players) => players);
     mocks.getQueuedMatchUserIds.mockReturnValue(["u1", "u2", "u3", "u4"]);
     mocks.parseMatchmakingReasonJson.mockReturnValue(null);
 
@@ -173,6 +177,65 @@ describe("session route GET", () => {
     expectAliasPair(body, "clubs", "communities");
     expectAliasPair(body, "viewerClubRole", "viewerCommunityRole");
     expect(body.respectPlayerRest).toBe(true);
+  });
+
+  it("includes avatarUrl in linked session clubs", async () => {
+    const sessionData = await mocks.sessionFindUnique();
+    mocks.sessionFindUnique.mockClear();
+    mocks.sessionFindUnique.mockResolvedValueOnce({
+      ...sessionData,
+      sessionClubs: [
+        {
+          clubId: "community-1",
+          role: "HOST",
+          status: "ACCEPTED",
+          club: {
+            id: "community-1",
+            name: "Northside Club",
+            avatarKey: "https://cdn.test/northside.png",
+            isTutorial: false,
+          },
+        },
+        {
+          clubId: "community-2",
+          role: "PARTNER",
+          status: "ACCEPTED",
+          club: {
+            id: "community-2",
+            name: "Anti-SeleK Club",
+            avatarKey: null,
+            isTutorial: false,
+          },
+        },
+      ],
+    });
+
+    const response = await GET(
+      new Request("http://localhost/api/sessions/ABC123"),
+      {
+        params: Promise.resolve({ code: "ABC123" }),
+      }
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.clubs).toEqual([
+      {
+        id: "community-1",
+        name: "Northside Club",
+        avatarUrl: "https://cdn.test/northside.png",
+        role: "HOST",
+        status: "ACCEPTED",
+      },
+      {
+        id: "community-2",
+        name: "Anti-SeleK Club",
+        avatarUrl: null,
+        role: "PARTNER",
+        status: "ACCEPTED",
+      },
+    ]);
+    expect(body.communities).toEqual(body.clubs);
   });
 
   it("marks staff as session operators without admin-only controls", async () => {

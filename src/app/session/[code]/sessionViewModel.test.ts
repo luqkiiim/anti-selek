@@ -11,6 +11,7 @@ import {
   MatchStatus,
   PartnerPreference,
   PlayerGender,
+  SessionCollabFormat,
   SessionMode,
   SessionPool,
   SessionStatus,
@@ -309,6 +310,127 @@ describe("buildSessionViewModel", () => {
       "Dan",
       "Cara",
     ]);
+  });
+
+  it("builds interclub scoreboard rows in accepted club order with match wins and avatars", () => {
+    const players = [
+      createPlayer("u1", "Alice"),
+      createPlayer("u2", "Ben"),
+      createPlayer("u3", "Cara"),
+      createPlayer("u4", "Dan"),
+    ];
+
+    const viewModel = buildSessionViewModel({
+      sessionData: createSessionData({
+        collabFormat: SessionCollabFormat.INTERCLUB,
+        status: SessionStatus.ACTIVE,
+        clubs: [
+          {
+            id: "community-1",
+            name: "Northside Club",
+            avatarUrl: "https://cdn.test/northside.png",
+            role: "HOST",
+            status: "ACCEPTED",
+          },
+          {
+            id: "community-2",
+            name: "Anti-SeleK Club",
+            avatarUrl: null,
+            role: "PARTNER",
+            status: "ACCEPTED",
+          },
+        ],
+        players,
+        matches: [
+          {
+            id: "match-1",
+            team1User1Id: "u1",
+            team1User2Id: "u2",
+            team2User1Id: "u3",
+            team2User2Id: "u4",
+            team1ClubId: "community-1",
+            team2ClubId: "community-2",
+            team1Score: 21,
+            team2Score: 18,
+            winnerTeam: 1,
+            status: MatchStatus.COMPLETED,
+          },
+          {
+            id: "match-2",
+            team1User1Id: "u3",
+            team1User2Id: "u4",
+            team2User1Id: "u1",
+            team2User2Id: "u2",
+            team1ClubId: "community-2",
+            team2ClubId: "community-1",
+            team1Score: 19,
+            team2Score: 21,
+            winnerTeam: 2,
+            status: MatchStatus.COMPLETED,
+          },
+        ],
+      }),
+      clubPlayers: [],
+      rosterSearch: "",
+      manualMatchForm: emptyManualMatchForm,
+      manualCourtId: null,
+      openPreferenceEditor: null,
+    });
+
+    expect(viewModel.interclubScoreboard).toEqual({
+      rows: [
+        {
+          clubId: "community-1",
+          clubName: "Northside Club",
+          avatarUrl: "https://cdn.test/northside.png",
+          matchWins: 2,
+          pointsFor: 42,
+          pointsAgainst: 37,
+          pointDiff: 5,
+        },
+        {
+          clubId: "community-2",
+          clubName: "Anti-SeleK Club",
+          avatarUrl: null,
+          matchWins: 0,
+          pointsFor: 37,
+          pointsAgainst: 42,
+          pointDiff: -5,
+        },
+      ],
+      leaderClubId: "community-1",
+      resultLabel: "Northside Club leads",
+      statusLabel: "Live",
+    });
+  });
+
+  it("keeps the interclub scoreboard out of free-play sessions", () => {
+    const viewModel = buildSessionViewModel({
+      sessionData: createSessionData({
+        collabFormat: SessionCollabFormat.FREE_PLAY,
+        clubs: [
+          {
+            id: "community-1",
+            name: "Northside Club",
+            role: "HOST",
+            status: "ACCEPTED",
+          },
+          {
+            id: "community-2",
+            name: "Anti-SeleK Club",
+            role: "PARTNER",
+            status: "ACCEPTED",
+          },
+        ],
+      }),
+      clubPlayers: [],
+      rosterSearch: "",
+      manualMatchForm: emptyManualMatchForm,
+      manualCourtId: null,
+      openPreferenceEditor: null,
+    });
+
+    expect(viewModel.interclubScoreboard).toBeNull();
   });
 
   it("sorts ladder standings by record and ignores matches before ladder re-entry", () => {

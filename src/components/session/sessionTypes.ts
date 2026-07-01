@@ -131,6 +131,7 @@ export interface SessionData {
   clubs?: Array<{
     id: string;
     name: string;
+    avatarUrl?: string | null;
     role: string;
     status: string;
   }>;

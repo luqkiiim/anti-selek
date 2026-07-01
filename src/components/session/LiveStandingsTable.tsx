@@ -24,6 +24,7 @@ interface LiveStandingsTableProps {
   poolsEnabled: boolean;
   poolAName?: string | null;
   poolBName?: string | null;
+  interclubClubToneById?: Record<string, "blue" | "red">;
 }
 
 function getStandingValue(
@@ -75,6 +76,18 @@ function getRankBadgeClass(rank: number) {
   return "border-gray-300 bg-white text-gray-500";
 }
 
+function getInterclubRowCellClass(tone?: "blue" | "red") {
+  if (tone === "blue") {
+    return "border-sky-200/70 bg-sky-50/70";
+  }
+
+  if (tone === "red") {
+    return "border-rose-200/70 bg-rose-50/70";
+  }
+
+  return "border-gray-100 bg-white";
+}
+
 export function LiveStandingsTable({
   sessionType,
   players,
@@ -85,6 +98,7 @@ export function LiveStandingsTable({
   poolsEnabled,
   poolAName,
   poolBName,
+  interclubClubToneById,
 }: LiveStandingsTableProps) {
   const isLadderSession = sessionType === SessionType.LADDER;
   const [poolFilter, setPoolFilter] = useState<"ALL" | SessionPool>("ALL");
@@ -184,15 +198,20 @@ export function LiveStandingsTable({
               const standingValue = getStandingValue(sessionType, player, stats);
               const poolLabel =
                 player.pool === SessionPool.A ? poolAName ?? "Open" : poolBName ?? "Regular";
+              const interclubTone = player.representingClubId
+                ? interclubClubToneById?.[player.representingClubId]
+                : undefined;
+              const rowCellClass = getInterclubRowCellClass(interclubTone);
 
               return (
                 <tr
                   key={player.userId}
+                  data-interclub-club-tone={interclubTone}
                   className={`transition-colors ${
                     isMe ? "text-blue-950" : "text-gray-900"
                   } ${player.isPaused ? "opacity-60" : ""}`}
                 >
-                  <td className="whitespace-nowrap rounded-l-2xl border-y border-l border-gray-100 bg-white px-2 py-2 align-middle sm:px-3">
+                  <td className={`whitespace-nowrap rounded-l-2xl border-y border-l px-2 py-2 align-middle sm:px-3 ${rowCellClass}`}>
                     <span
                       className={`flex h-5 w-5 items-center justify-center rounded-lg border text-[10px] font-semibold sm:h-6 sm:w-6 sm:text-[11px] ${getRankBadgeClass(
                         idx + 1
@@ -201,7 +220,7 @@ export function LiveStandingsTable({
                       {idx + 1}
                     </span>
                   </td>
-                  <td className="border-y border-gray-100 bg-white px-2 py-2 align-middle sm:px-3">
+                  <td className={`border-y px-2 py-2 align-middle sm:px-3 ${rowCellClass}`}>
                     <div className="space-y-1">
                       <div className="flex min-w-0 flex-wrap items-center gap-1.5 leading-tight sm:gap-2">
                         <Avatar
@@ -239,7 +258,7 @@ export function LiveStandingsTable({
                       </div>
                     </div>
                   </td>
-                  <td className="whitespace-nowrap border-y border-gray-100 bg-white px-1.5 py-2 text-center align-middle sm:w-[5.25rem] sm:px-4">
+                  <td className={`whitespace-nowrap border-y px-1.5 py-2 text-center align-middle sm:w-[5.25rem] sm:px-4 ${rowCellClass}`}>
                     <span
                       className={`inline-flex min-w-[2.85rem] items-center justify-center rounded-full border px-2.5 py-1 text-[12px] font-semibold tabular-nums sm:min-w-[3.2rem] sm:text-sm ${getStandingBadgeClass(
                         sessionType
@@ -248,7 +267,7 @@ export function LiveStandingsTable({
                       {standingValue}
                     </span>
                   </td>
-                  <td className="whitespace-nowrap border-y border-gray-100 bg-white px-1.5 py-2 text-center align-middle sm:w-[4.75rem] sm:px-4">
+                  <td className={`whitespace-nowrap border-y px-1.5 py-2 text-center align-middle sm:w-[4.75rem] sm:px-4 ${rowCellClass}`}>
                     <span
                       className={`text-[12px] font-medium tabular-nums sm:text-sm ${
                         pointDiff >= 0 ? "text-green-600" : "text-red-500"
@@ -257,10 +276,10 @@ export function LiveStandingsTable({
                       {formatPointDiff(pointDiff)}
                     </span>
                   </td>
-                  <td className="whitespace-nowrap border-y border-gray-100 bg-white px-1.5 py-2 text-center align-middle text-[12px] font-medium tabular-nums text-gray-700 sm:w-[4.5rem] sm:px-4 sm:text-sm">
+                  <td className={`whitespace-nowrap border-y px-1.5 py-2 text-center align-middle text-[12px] font-medium tabular-nums text-gray-700 sm:w-[4.5rem] sm:px-4 sm:text-sm ${rowCellClass}`}>
                     {stats.played}
                   </td>
-                  <td className="whitespace-nowrap rounded-r-2xl border-y border-r border-gray-100 bg-white px-1.5 py-2 text-center align-middle text-[12px] font-medium tabular-nums text-gray-700 sm:w-[5rem] sm:px-4 sm:text-sm">
+                  <td className={`whitespace-nowrap rounded-r-2xl border-y border-r px-1.5 py-2 text-center align-middle text-[12px] font-medium tabular-nums text-gray-700 sm:w-[5rem] sm:px-4 sm:text-sm ${rowCellClass}`}>
                     <span className="text-green-600">{stats.wins}</span>
                     <span className="mx-0.5 text-gray-300 sm:mx-1">/</span>
                     <span className="text-red-500">{stats.losses}</span>

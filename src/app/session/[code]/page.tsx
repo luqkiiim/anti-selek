@@ -550,6 +550,18 @@ export default function SessionPage() {
     rosterSearch,
     sessionData,
   ]);
+  const interclubClubToneById = useMemo(() => {
+    if (!sessionView?.interclubScoreboard) {
+      return undefined;
+    }
+
+    const [firstClub, secondClub] = sessionView.interclubScoreboard.rows;
+
+    return {
+      [firstClub.clubId]: "blue",
+      [secondClub.clubId]: "red",
+    } satisfies Record<string, "blue" | "red">;
+  }, [sessionView?.interclubScoreboard]);
   const handleShareResults = useCallback(async () => {
     if (!sessionData || !sessionView) {
       setError("Results are not ready to share yet");
@@ -1394,6 +1406,7 @@ export default function SessionPage() {
                   poolsEnabled={sessionData.poolsEnabled}
                   poolAName={sessionData.poolAName}
                   poolBName={sessionData.poolBName}
+                  interclubClubToneById={interclubClubToneById}
                 />
               </div>
             </section>

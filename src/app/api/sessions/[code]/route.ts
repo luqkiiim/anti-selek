@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { serializeAvatarEntity } from "@/lib/avatar";
+import { resolveAvatarUrl, serializeAvatarEntity } from "@/lib/avatar";
 import { prisma } from "@/lib/prisma";
 import { getClubEloByUserId, withClubElo } from "@/lib/clubElo";
 import {
@@ -83,7 +83,14 @@ async function getSessionRoute(
       },
       sessionClubs: {
         include: {
-          club: { select: { id: true, name: true, isTutorial: true } },
+          club: {
+            select: {
+              id: true,
+              name: true,
+              avatarKey: true,
+              isTutorial: true,
+            },
+          },
         },
       },
       players: {
@@ -255,6 +262,7 @@ async function getSessionRoute(
     clubs: sessionData.sessionClubs.map((link) => ({
       id: link.club.id,
       name: getTutorialClubDisplayName(link.club),
+      avatarUrl: resolveAvatarUrl(link.club.avatarKey),
       role: link.role,
       status: link.status,
     })),

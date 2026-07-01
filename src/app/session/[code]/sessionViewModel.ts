@@ -36,7 +36,8 @@ interface PlayerSessionStats {
 export interface InterclubScoreboardRow {
   clubId: string;
   clubName: string;
-  rubberWins: number;
+  avatarUrl?: string | null;
+  matchWins: number;
   pointsFor: number;
   pointsAgainst: number;
   pointDiff: number;
@@ -46,6 +47,7 @@ export interface InterclubScoreboard {
   rows: [InterclubScoreboardRow, InterclubScoreboardRow];
   leaderClubId: string | null;
   resultLabel: string;
+  statusLabel: string;
 }
 
 interface BuildSessionViewModelArgs {
@@ -232,7 +234,8 @@ function buildInterclubScoreboard(
       {
         clubId: club.id,
         clubName: club.name,
-        rubberWins: 0,
+        avatarUrl: club.avatarUrl ?? null,
+        matchWins: 0,
         pointsFor: 0,
         pointsAgainst: 0,
         pointDiff: 0,
@@ -264,9 +267,9 @@ function buildInterclubScoreboard(
     team2Row.pointsAgainst += match.team1Score;
 
     if (match.winnerTeam === 1) {
-      team1Row.rubberWins += 1;
+      team1Row.matchWins += 1;
     } else if (match.winnerTeam === 2) {
-      team2Row.rubberWins += 1;
+      team2Row.matchWins += 1;
     }
   }
 
@@ -279,8 +282,8 @@ function buildInterclubScoreboard(
   }) as [InterclubScoreboardRow, InterclubScoreboardRow];
   const [left, right] = rows;
   const leader =
-    left.rubberWins !== right.rubberWins
-      ? left.rubberWins > right.rubberWins
+    left.matchWins !== right.matchWins
+      ? left.matchWins > right.matchWins
         ? left
         : right
       : left.pointDiff !== right.pointDiff
@@ -297,6 +300,8 @@ function buildInterclubScoreboard(
           sessionData.status === SessionStatus.COMPLETED ? "wins" : "leads"
         }`
       : "Draw",
+    statusLabel:
+      sessionData.status === SessionStatus.COMPLETED ? "Final" : "Live",
   };
 }
 
