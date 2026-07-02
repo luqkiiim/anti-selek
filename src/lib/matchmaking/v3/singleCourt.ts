@@ -221,6 +221,7 @@ function searchCandidatePool<T extends MatchmakerV3Player>({
   consecutivePlayHistory,
   respectPlayerRest,
   selectionConstraints,
+  pairingRandomSalt,
 }: {
   candidatePool: V3CandidatePool<ActiveMatchmakerV3Player<T>>;
   sessionMode: SessionMode;
@@ -237,6 +238,7 @@ function searchCandidatePool<T extends MatchmakerV3Player>({
   consecutivePlayHistory: ReturnType<typeof buildConsecutivePlayHistory>;
   respectPlayerRest: boolean;
   selectionConstraints?: V3SelectionConstraints<ActiveMatchmakerV3Player<T>>;
+  pairingRandomSalt: number;
 }) {
   const remainingSlots = 4 - candidatePool.lockedPlayers.length;
   const quartetGroups =
@@ -362,7 +364,7 @@ function searchCandidatePool<T extends MatchmakerV3Player>({
         randomScore,
         pairingRandomScore: getPartitionPairingRandomScore(
           partition,
-          playersById
+          pairingRandomSalt
         ),
       };
 
@@ -484,6 +486,7 @@ export function findBestSingleCourtSelectionV3<T extends MatchmakerV3Player>(
       respectPlayerRest,
       restTurnTieZoneTolerance: getRestTurnTieZoneTolerance(sessionType),
     });
+  const pairingRandomSalt = randomFn();
 
   if (
     initialCandidatePool.insufficientPlayers ||
@@ -570,6 +573,7 @@ export function findBestSingleCourtSelectionV3<T extends MatchmakerV3Player>(
       consecutivePlayHistory,
       respectPlayerRest,
       selectionConstraints,
+      pairingRandomSalt,
     });
     totalQuartetCount += candidatePoolSearch.quartetCount;
     totalValidPartitionCount += candidatePoolSearch.validPartitionCount;
@@ -598,6 +602,7 @@ export function findBestSingleCourtSelectionV3<T extends MatchmakerV3Player>(
           consecutivePlayHistory,
           respectPlayerRest,
           selectionConstraints,
+          pairingRandomSalt,
         });
         totalQuartetCount += candidatePoolSearch.quartetCount;
         totalValidPartitionCount += candidatePoolSearch.validPartitionCount;

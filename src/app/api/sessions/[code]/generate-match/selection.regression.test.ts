@@ -441,8 +441,9 @@ describe("generate-match interclub points batch regressions", () => {
       rotationHistory,
       requestedMatchCount: 3,
       randomFn: createSequenceRandom([
-        0.01, 0.02, 0.03, 0.04, 0.05, 0.06,
-        0.11, 0.12, 0.13, 0.14, 0.15, 0.16,
+        0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0,
+        0.123,
       ]),
     });
     const secondBatch = selectBatchMatches({
@@ -452,8 +453,9 @@ describe("generate-match interclub points batch regressions", () => {
       rotationHistory,
       requestedMatchCount: 3,
       randomFn: createSequenceRandom([
-        0.011, 0.022, 0.037, 0.049, 0.058, 0.089,
-        0.118, 0.129, 0.133, 0.157, 0.171, 0.199,
+        0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0,
+        0.987,
       ]),
     });
 

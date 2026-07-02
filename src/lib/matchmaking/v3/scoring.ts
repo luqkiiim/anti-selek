@@ -52,32 +52,51 @@ function hashUnitInterval(value: string) {
   return (hash >>> 0) / 0xffffffff;
 }
 
-function getPartnerPairRandomScore<
-  T extends Pick<ActiveMatchmakerV3Player, "randomScore">,
->(pair: [string, string], playersById: ReadonlyMap<string, T>) {
-  const leftScore = playersById.get(pair[0])?.randomScore ?? 0;
-  const rightScore = playersById.get(pair[1])?.randomScore ?? 0;
+function getPartnerPairKey(pair: [string, string]) {
+  return [...pair].sort().join("+");
+}
 
-  if (leftScore === rightScore) {
+function getPartitionPairingKey(partition: V3DoublesPartition) {
+  return [
+    getPartnerPairKey(partition.team1),
+    getPartnerPairKey(partition.team2),
+  ]
+    .sort()
+    .join("/");
+}
+
+export function getPartitionPairingRandomScore(
+  partition: V3DoublesPartition,
+  pairingRandomSalt: number
+) {
+  if (pairingRandomSalt === 0) {
     return 0;
   }
 
-  const [lowScore, highScore] =
-    leftScore < rightScore
-      ? [leftScore, rightScore]
-      : [rightScore, leftScore];
-
   return hashUnitInterval(
-    `${formatRandomScore(lowScore)}:${formatRandomScore(highScore)}`
+    `${formatRandomScore(pairingRandomSalt)}:${getPartitionPairingKey(
+      partition
+    )}`
   );
 }
 
-export function getPartitionPairingRandomScore<
-  T extends Pick<ActiveMatchmakerV3Player, "randomScore">,
->(partition: V3DoublesPartition, playersById: ReadonlyMap<string, T>) {
-  return (
-    getPartnerPairRandomScore(partition.team1, playersById) +
-    getPartnerPairRandomScore(partition.team2, playersById)
+export function getBatchPairingRandomScore<
+  T extends ActiveMatchmakerV3Player,
+>(
+  selections: Array<Pick<V3SingleCourtSelection<T>, "partition">>,
+  pairingRandomSalt: number
+) {
+  if (pairingRandomSalt === 0) {
+    return 0;
+  }
+
+  const batchPairingKey = selections
+    .map((selection) => getPartitionPairingKey(selection.partition))
+    .sort()
+    .join("|");
+
+  return hashUnitInterval(
+    `${formatRandomScore(pairingRandomSalt)}:${batchPairingKey}`
   );
 }
 

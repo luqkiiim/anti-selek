@@ -23,6 +23,7 @@ import {
   compareBatchSelections,
   compareSingleCourtSelections,
   FULL_REPEAT_REST_TOLERANCE,
+  getBatchPairingRandomScore,
   getBalanceVarietyTolerance,
   getPartitionPairingRandomScore,
   getQuartetRandomScore,
@@ -165,7 +166,8 @@ function buildFeasibilityCandidatePools<T extends MatchmakerV3Player>(
 }
 
 function summarizeBatch<T extends ActiveMatchmakerV3Player>(
-  selections: V3SingleCourtSelection<T>[]
+  selections: V3SingleCourtSelection<T>[],
+  pairingRandomSalt: number
 ): V3BatchSelection<T> {
   const flattenedPlayers = selections.flatMap((selection) => selection.players);
 
@@ -214,9 +216,9 @@ function summarizeBatch<T extends ActiveMatchmakerV3Player>(
       (sum, selection) => sum + selection.randomScore,
       0
     ),
-    totalPairingRandomScore: selections.reduce(
-      (sum, selection) => sum + selection.pairingRandomScore,
-      0
+    totalPairingRandomScore: getBatchPairingRandomScore(
+      selections,
+      pairingRandomSalt
     ),
   };
 }
@@ -256,6 +258,7 @@ function buildQuartetSelections<T extends MatchmakerV3Player>(
     sessionMode,
     completedMatches,
     selectionConstraints,
+    pairingRandomSalt,
   }: {
     sessionMode: SessionMode;
     completedMatches: Array<{
@@ -264,6 +267,7 @@ function buildQuartetSelections<T extends MatchmakerV3Player>(
       completedAt?: Date | null;
     }>;
     selectionConstraints?: V3SelectionConstraints<ActiveMatchmakerV3Player<T>>;
+    pairingRandomSalt: number;
   }
 ) {
   const quartets = buildCombinations(candidatePlayers, 4);
@@ -350,7 +354,7 @@ function buildQuartetSelections<T extends MatchmakerV3Player>(
         randomScore,
         pairingRandomScore: getPartitionPairingRandomScore(
           partition,
-          playersById
+          pairingRandomSalt
         ),
       });
     }
@@ -578,7 +582,8 @@ function findGreedyBatchSelection<T extends ActiveMatchmakerV3Player>(
   quartetSelections: V3SingleCourtSelection<T>[],
   orderedCandidateIds: string[],
   lockedIds: Set<string>,
-  courtCount: number
+  courtCount: number,
+  pairingRandomSalt: number
 ) {
   const chosen: V3SingleCourtSelection<T>[] = [];
   const usedIds = new Set<string>();
@@ -617,7 +622,7 @@ function findGreedyBatchSelection<T extends ActiveMatchmakerV3Player>(
     return null;
   }
 
-  return summarizeBatch(chosen);
+  return summarizeBatch(chosen, pairingRandomSalt);
 }
 
 function chooseBestBatchSelection<T extends ActiveMatchmakerV3Player>(
@@ -694,6 +699,7 @@ function searchBatchCandidatePlayers<T extends MatchmakerV3Player>({
   completedMatches,
   searchLimits,
   selectionConstraints,
+  pairingRandomSalt,
 }: {
   candidatePlayers: ActiveMatchmakerV3Player<T>[];
   lockedIds: Set<string>;
@@ -711,6 +717,7 @@ function searchBatchCandidatePlayers<T extends MatchmakerV3Player>({
     maxMs?: number;
   };
   selectionConstraints?: V3SelectionConstraints<ActiveMatchmakerV3Player<T>>;
+  pairingRandomSalt: number;
 }): BatchSearchAttemptResult<ActiveMatchmakerV3Player<T>> {
   const requiredPlayerCount = courtCount * 4;
   const candidatePlayerIds = candidatePlayers.map((player) => player.userId);
@@ -737,6 +744,7 @@ function searchBatchCandidatePlayers<T extends MatchmakerV3Player>({
       sessionMode,
       completedMatches,
       selectionConstraints,
+      pairingRandomSalt,
     }),
     sessionType,
     respectPlayerRest
@@ -798,7 +806,7 @@ function searchBatchCandidatePlayers<T extends MatchmakerV3Player>({
         return;
       }
 
-      const batchSelection = summarizeBatch(chosen);
+      const batchSelection = summarizeBatch(chosen, pairingRandomSalt);
       completedSelections.push(batchSelection);
 
       return;
@@ -854,7 +862,8 @@ function searchBatchCandidatePlayers<T extends MatchmakerV3Player>({
           quartetSelections,
           orderedCandidateIds,
           lockedIds,
-          courtCount
+          courtCount,
+          pairingRandomSalt
         )
       : null);
 
@@ -922,6 +931,7 @@ export function findBestBatchSelectionV3<T extends MatchmakerV3Player>(
       respectPlayerRest,
       restTurnTieZoneTolerance: getRestTurnTieZoneTolerance(sessionType),
     });
+  const pairingRandomSalt = randomFn();
   const debug: V3BatchDebug = {
     eligiblePlayerIds: resolvedCandidatePool.activePlayers.map(
       (player) => player.userId
@@ -1009,6 +1019,7 @@ export function findBestBatchSelectionV3<T extends MatchmakerV3Player>(
       completedMatches,
       searchLimits,
       selectionConstraints,
+      pairingRandomSalt,
     });
 
     attemptRecords.push({ pool, result: attempt });
