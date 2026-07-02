@@ -50,6 +50,7 @@ function createSelection(
     consecutivePlayMaxBurden = 0,
     consecutivePlayTotalBurden = 0,
     randomScore = 0,
+    pairingRandomScore = 0,
   }: {
     restTurns?: number[];
     moreRestDeficits?: number[];
@@ -65,6 +66,7 @@ function createSelection(
     consecutivePlayMaxBurden?: number;
     consecutivePlayTotalBurden?: number;
     randomScore?: number;
+    pairingRandomScore?: number;
   }
 ): V3SingleCourtSelection {
   const players = restTurns.map((value, index) =>
@@ -101,6 +103,7 @@ function createSelection(
     consecutivePlayMaxBurden,
     consecutivePlayTotalBurden,
     randomScore,
+    pairingRandomScore,
   };
 }
 
@@ -117,6 +120,7 @@ function createBatchSelection({
   totalOpponentRepeatPenalty = 0,
   totalExactRematchPenalty = 0,
   totalRandomScore = 0,
+  totalPairingRandomScore = 0,
 }: {
   restTurns?: number[];
   maxBalanceGap: number;
@@ -130,6 +134,7 @@ function createBatchSelection({
   totalOpponentRepeatPenalty?: number;
   totalExactRematchPenalty?: number;
   totalRandomScore?: number;
+  totalPairingRandomScore?: number;
 }): V3BatchSelection {
   const selection = createSelection({
     restTurns,
@@ -142,6 +147,7 @@ function createBatchSelection({
     opponentRepeatPenalty: totalOpponentRepeatPenalty,
     exactRematchPenalty: totalExactRematchPenalty,
     randomScore: totalRandomScore,
+    pairingRandomScore: totalPairingRandomScore,
   });
 
   return {
@@ -158,6 +164,7 @@ function createBatchSelection({
     totalOpponentRepeatPenalty,
     totalExactRematchPenalty,
     totalRandomScore,
+    totalPairingRandomScore,
   };
 }
 
@@ -209,6 +216,10 @@ function createBatchFromSelections(
     ),
     totalRandomScore: selections.reduce(
       (sum, selection) => sum + selection.randomScore,
+      0
+    ),
+    totalPairingRandomScore: selections.reduce(
+      (sum, selection) => sum + selection.pairingRandomScore,
       0
     ),
   };
@@ -621,6 +632,52 @@ describe("matchmaking v3 scoring", () => {
     ).toBeLessThan(0);
   });
 
+  it("uses selected-player random before pairing-layout random", () => {
+    const lowerSelectedPlayerRandom = createSelection({
+      balanceGap: 0,
+      exactRematchPenalty: 0,
+      randomScore: 1,
+      pairingRandomScore: 10,
+    });
+    const lowerPairingRandom = createSelection({
+      balanceGap: 0,
+      exactRematchPenalty: 0,
+      randomScore: 2,
+      pairingRandomScore: 0,
+    });
+
+    expect(
+      compareSingleCourtSelections(
+        lowerSelectedPlayerRandom,
+        lowerPairingRandom,
+        SessionType.POINTS
+      )
+    ).toBeLessThan(0);
+  });
+
+  it("uses pairing-layout random after selected-player random ties", () => {
+    const lowerPairingRandom = createSelection({
+      balanceGap: 0,
+      exactRematchPenalty: 0,
+      randomScore: 1,
+      pairingRandomScore: 0,
+    });
+    const higherPairingRandom = createSelection({
+      balanceGap: 0,
+      exactRematchPenalty: 0,
+      randomScore: 1,
+      pairingRandomScore: 10,
+    });
+
+    expect(
+      compareSingleCourtSelections(
+        lowerPairingRandom,
+        higherPairingRandom,
+        SessionType.POINTS
+      )
+    ).toBeLessThan(0);
+  });
+
   it("uses partner, opponent, and exact-rematch penalties for points variety", () => {
     const repeatPenalized = createSelection({
       balanceGap: 0,
@@ -1024,6 +1081,29 @@ describe("matchmaking v3 scoring", () => {
       compareBatchSelections(
         lowerPointDiffBatch,
         higherPointDiffBatch,
+        SessionType.POINTS
+      )
+    ).toBeLessThan(0);
+  });
+
+  it("uses batch pairing-layout random after selected-player random ties", () => {
+    const lowerPairingRandomBatch = createBatchSelection({
+      maxBalanceGap: 0,
+      totalBalanceGap: 0,
+      totalRandomScore: 1,
+      totalPairingRandomScore: 0,
+    });
+    const higherPairingRandomBatch = createBatchSelection({
+      maxBalanceGap: 0,
+      totalBalanceGap: 0,
+      totalRandomScore: 1,
+      totalPairingRandomScore: 10,
+    });
+
+    expect(
+      compareBatchSelections(
+        lowerPairingRandomBatch,
+        higherPairingRandomBatch,
         SessionType.POINTS
       )
     ).toBeLessThan(0);

@@ -122,6 +122,7 @@ export interface V3SingleCourtSelection<
   consecutivePlayMaxBurden: number;
   consecutivePlayTotalBurden: number;
   randomScore: number;
+  pairingRandomScore: number;
 }
 
 export interface V3SingleCourtDebug {
@@ -168,6 +169,7 @@ export interface V3BatchSelection<
   totalOpponentRepeatPenalty: number;
   totalExactRematchPenalty: number;
   totalRandomScore: number;
+  totalPairingRandomScore: number;
 }
 
 export type V3BatchFailureReason =

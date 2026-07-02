@@ -24,6 +24,7 @@ import {
   compareSingleCourtSelections,
   FULL_REPEAT_REST_TOLERANCE,
   getBalanceVarietyTolerance,
+  getPartitionPairingRandomScore,
   getQuartetRandomScore,
 } from "./scoring";
 
@@ -359,6 +360,10 @@ function searchCandidatePool<T extends MatchmakerV3Player>({
         ),
         ...consecutivePlayMetrics,
         randomScore,
+        pairingRandomScore: getPartitionPairingRandomScore(
+          partition,
+          playersById
+        ),
       };
 
       selections.push(selection);

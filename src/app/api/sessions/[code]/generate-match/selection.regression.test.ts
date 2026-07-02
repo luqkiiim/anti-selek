@@ -183,6 +183,15 @@ function expectStrictInterclubSides(
   ]);
 }
 
+function getClubAPairLayout(selection: ReturnType<typeof selectBatchMatches>) {
+  return selection.selections
+    .map((courtSelection) =>
+      [...courtSelection.partition.team1].sort().join("+")
+    )
+    .sort()
+    .join("|");
+}
+
 describe("generate-match race regressions", () => {
   it("creates a new Mixicano race match after the mixed court finishes while a men's court is still active", async () => {
     const waitingSince = new Date("2026-04-04T00:00:00Z");
@@ -395,6 +404,74 @@ describe("generate-match interclub points batch regressions", () => {
     for (const selection of firstBatch.selections) {
       expect(selection.team1ClubId).toBe("community-1");
       expect(selection.team2ClubId).toBe("community-2");
+    }
+  });
+
+  it("randomizes equal 3-court interclub partner layouts for the same selected players", async () => {
+    const clubAPlayers = Array.from({ length: 6 }, (_, index) =>
+      createSessionPlayer(`A${index + 1}`, {
+        representingClubId: "community-1",
+      })
+    );
+    const clubBPlayers = Array.from({ length: 6 }, (_, index) =>
+      createSessionPlayer(`B${index + 1}`, {
+        representingClubId: "community-2",
+      })
+    );
+    const players = [...clubAPlayers, ...clubBPlayers];
+    const clubByUserId = new Map(
+      players.map((player) => [player.userId, player.representingClubId!])
+    );
+    const sessionData = createSessionData({
+      type: SessionType.POINTS,
+      mode: SessionMode.MEXICANO,
+      collabFormat: SessionCollabFormat.INTERCLUB,
+      sessionClubs: createInterclubLinks(),
+      players,
+      matches: [],
+    });
+    const { busyPlayerIds, playersById, rotationHistory } =
+      await buildMatchmakingState(sessionData);
+    const { rankedCandidates } = getRankedCandidates(sessionData, busyPlayerIds);
+
+    const firstBatch = selectBatchMatches({
+      rankedCandidates,
+      playersById,
+      sessionData,
+      rotationHistory,
+      requestedMatchCount: 3,
+      randomFn: createSequenceRandom([
+        0.01, 0.02, 0.03, 0.04, 0.05, 0.06,
+        0.11, 0.12, 0.13, 0.14, 0.15, 0.16,
+      ]),
+    });
+    const secondBatch = selectBatchMatches({
+      rankedCandidates,
+      playersById,
+      sessionData,
+      rotationHistory,
+      requestedMatchCount: 3,
+      randomFn: createSequenceRandom([
+        0.011, 0.022, 0.037, 0.049, 0.058, 0.089,
+        0.118, 0.129, 0.133, 0.157, 0.171, 0.199,
+      ]),
+    });
+
+    expect(getSelectedBatchIds(firstBatch)).toEqual(
+      new Set(players.map((player) => player.userId))
+    );
+    expect(getSelectedBatchIds(secondBatch)).toEqual(
+      new Set(players.map((player) => player.userId))
+    );
+    expect(getClubAPairLayout(firstBatch)).not.toBe(
+      getClubAPairLayout(secondBatch)
+    );
+
+    for (const selection of [
+      ...firstBatch.selections,
+      ...secondBatch.selections,
+    ]) {
+      expectStrictInterclubSides(selection, clubByUserId);
     }
   });
 

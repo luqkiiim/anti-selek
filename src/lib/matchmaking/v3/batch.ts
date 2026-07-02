@@ -24,6 +24,7 @@ import {
   compareSingleCourtSelections,
   FULL_REPEAT_REST_TOLERANCE,
   getBalanceVarietyTolerance,
+  getPartitionPairingRandomScore,
   getQuartetRandomScore,
 } from "./scoring";
 
@@ -213,6 +214,10 @@ function summarizeBatch<T extends ActiveMatchmakerV3Player>(
       (sum, selection) => sum + selection.randomScore,
       0
     ),
+    totalPairingRandomScore: selections.reduce(
+      (sum, selection) => sum + selection.pairingRandomScore,
+      0
+    ),
   };
 }
 
@@ -343,6 +348,10 @@ function buildQuartetSelections<T extends MatchmakerV3Player>(
         ),
         ...getEmptyConsecutivePlayMetrics(),
         randomScore,
+        pairingRandomScore: getPartitionPairingRandomScore(
+          partition,
+          playersById
+        ),
       });
     }
   }
@@ -480,10 +489,14 @@ function compressQuartetSelections<T extends ActiveMatchmakerV3Player>(
             (left, right) =>
               left.balanceGap - right.balanceGap ||
               left.pointDiffGap - right.pointDiffGap ||
-              left.randomScore - right.randomScore
+              left.randomScore - right.randomScore ||
+              left.pairingRandomScore - right.pairingRandomScore
           )[0]
         : [...group].sort(
-            (left, right) => left.balanceGap - right.balanceGap
+            (left, right) =>
+              left.balanceGap - right.balanceGap ||
+              left.randomScore - right.randomScore ||
+              left.pairingRandomScore - right.pairingRandomScore
           )[0];
 
     if (
@@ -505,7 +518,8 @@ function compressQuartetSelections<T extends ActiveMatchmakerV3Player>(
               left.partnerRepeatPenalty - right.partnerRepeatPenalty ||
               left.opponentRepeatPenalty - right.opponentRepeatPenalty ||
               left.exactRematchPenalty - right.exactRematchPenalty ||
-              left.randomScore - right.randomScore
+              left.randomScore - right.randomScore ||
+              left.pairingRandomScore - right.pairingRandomScore
           )[0]
         : sessionType === SessionType.POINTS
         ? [...group].sort(
@@ -518,7 +532,8 @@ function compressQuartetSelections<T extends ActiveMatchmakerV3Player>(
               left.exactRematchPenalty - right.exactRematchPenalty ||
               left.balanceGap - right.balanceGap ||
               left.pointDiffGap - right.pointDiffGap ||
-              left.randomScore - right.randomScore
+              left.randomScore - right.randomScore ||
+              left.pairingRandomScore - right.pairingRandomScore
           )[0]
         : sessionType === SessionType.ELO
           ? [...group].sort(
@@ -530,13 +545,15 @@ function compressQuartetSelections<T extends ActiveMatchmakerV3Player>(
                 left.opponentRepeatPenalty - right.opponentRepeatPenalty ||
                 left.exactRematchPenalty - right.exactRematchPenalty ||
                 left.balanceGap - right.balanceGap ||
-                left.randomScore - right.randomScore
+                left.randomScore - right.randomScore ||
+                left.pairingRandomScore - right.pairingRandomScore
             )[0]
           : [...group].sort(
               (left, right) =>
                 left.exactRematchPenalty - right.exactRematchPenalty ||
                 left.balanceGap - right.balanceGap ||
-                left.randomScore - right.randomScore
+                left.randomScore - right.randomScore ||
+                left.pairingRandomScore - right.pairingRandomScore
             )[0];
 
     if (

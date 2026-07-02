@@ -322,6 +322,7 @@ function createV3Selection(
     consecutivePlayMaxBurden: 0,
     consecutivePlayTotalBurden: 0,
     randomScore: 0,
+    pairingRandomScore: 0,
   };
 }
 
@@ -1462,6 +1463,7 @@ describe("generate match service", () => {
         totalOpponentRepeatPenalty: 0,
         totalExactRematchPenalty: 0,
         totalRandomScore: 0,
+        totalPairingRandomScore: 0,
       };
       vi.mocked(findBestBatchSelectionV3).mockReturnValueOnce({
         selection: batchSelection,
@@ -1526,6 +1528,7 @@ describe("generate match service", () => {
         totalOpponentRepeatPenalty: 0,
         totalExactRematchPenalty: 0,
         totalRandomScore: 0,
+        totalPairingRandomScore: 0,
       };
       const randomFn = vi.fn(() => 0.42);
       vi.mocked(findBestBatchSelectionV3).mockReturnValueOnce({
