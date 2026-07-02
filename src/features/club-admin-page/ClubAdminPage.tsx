@@ -301,6 +301,8 @@ export default function ClubAdminPage() {
     handleUpdatePreferences,
     handleResetClub,
     handleUpdateClubSettings,
+    handleUploadClubAvatar,
+    handleRemoveClubAvatar,
     handleDeleteClub,
     handleReviewClaimRequest,
   } = useClubAdminPage();
@@ -577,10 +579,11 @@ export default function ClubAdminPage() {
 
         {activeSection === "settings" ? (
           <div className="grid gap-6 xl:grid-cols-[minmax(0,1.25fr)_minmax(0,0.9fr)]">
-              <ClubSettingsPanel
-                isTutorial={isTutorialPlayground}
-                clubName={clubNameInput}
-                onClubNameChange={setClubNameInput}
+            <ClubSettingsPanel
+              isTutorial={isTutorialPlayground}
+              clubName={clubNameInput}
+              clubAvatarUrl={club?.avatarUrl ?? null}
+              onClubNameChange={setClubNameInput}
               clubPassword={clubPasswordInput}
               onClubPasswordChange={setClubPasswordInput}
               passwordProtectionEnabled={clubPasswordProtectionEnabled}
@@ -588,6 +591,8 @@ export default function ClubAdminPage() {
                 setClubPasswordProtectionEnabled
               }
               isPasswordProtected={club?.isPasswordProtected ?? false}
+              onUploadAvatar={handleUploadClubAvatar}
+              onRemoveAvatar={handleRemoveClubAvatar}
               onSubmit={handleUpdateClubSettings}
               saving={savingClubSettings}
             />

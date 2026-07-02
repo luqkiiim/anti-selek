@@ -107,6 +107,7 @@ describe("club snapshot route", () => {
     mocks.clubFindUnique.mockResolvedValue({
       id: "community-1",
       name: "Club One",
+      avatarKey: "https://blob.vercel-storage.com/avatars/clubs/community-1/logo.webp",
       createdById: "viewer-1",
       isTutorial: false,
       tutorialOwnerId: null,
@@ -202,7 +203,7 @@ describe("club snapshot route", () => {
     });
   });
 
-  it("includes avatarUrl in viewer, roster, and session payloads", async () => {
+  it("includes avatarUrl in club, viewer, roster, and session payloads", async () => {
     const response = await GET(
       new Request("http://localhost/api/clubs/community-1"),
       {
@@ -212,6 +213,9 @@ describe("club snapshot route", () => {
     const body = await response.json();
 
     expect(response.status).toBe(200);
+    expect(body.club.avatarUrl).toBe(
+      "https://blob.vercel-storage.com/avatars/clubs/community-1/logo.webp"
+    );
     expect(body.viewer.avatarUrl).toBe(
       "https://blob.vercel-storage.com/avatars/viewer-1/avatar.jpg"
     );

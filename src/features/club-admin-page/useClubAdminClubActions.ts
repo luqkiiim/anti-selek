@@ -5,6 +5,7 @@ import type {
   ClubAdminClaimRequest,
   ClubAdminClub,
 } from "@/components/club-admin/clubAdminTypes";
+import { deleteClubAvatar, uploadClubAvatar } from "@/lib/avatarClient";
 import { safeJson } from "./clubAdminApi";
 
 interface ClubAdminRouter {
@@ -135,6 +136,42 @@ export function useClubAdminClubActions({
       );
     } finally {
       setSavingClubSettings(false);
+    }
+  };
+
+  const handleUploadClubAvatar = async (file: File) => {
+    if (!club) return;
+
+    setError("");
+    setSuccess("");
+
+    try {
+      await uploadClubAvatar(clubId, file);
+      setSuccess("Club profile picture updated.");
+      await refreshClubData();
+    } catch (err: unknown) {
+      setError(
+        err instanceof Error ? err.message : "Failed to update club photo"
+      );
+      throw err;
+    }
+  };
+
+  const handleRemoveClubAvatar = async () => {
+    if (!club) return;
+
+    setError("");
+    setSuccess("");
+
+    try {
+      await deleteClubAvatar(clubId);
+      setSuccess("Club profile picture removed.");
+      await refreshClubData();
+    } catch (err: unknown) {
+      setError(
+        err instanceof Error ? err.message : "Failed to remove club photo"
+      );
+      throw err;
     }
   };
 
@@ -286,6 +323,8 @@ export function useClubAdminClubActions({
     setClubActionConfirmationValue,
     handleResetClub,
     handleUpdateClubSettings,
+    handleUploadClubAvatar,
+    handleRemoveClubAvatar,
     handleDeleteClub,
     closePendingClubAction,
     confirmPendingClubAction,

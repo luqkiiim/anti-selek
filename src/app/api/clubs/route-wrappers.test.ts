@@ -30,6 +30,7 @@ const handlerMocks = vi.hoisted(() => {
     collabCandidates: makeHandlers(["GET"]),
     collabRoster: makeHandlers(["GET"]),
     club: makeHandlers(["GET", "PATCH", "DELETE"]),
+    clubAvatar: makeHandlers(["POST", "DELETE"]),
     join: makeHandlers(["POST"]),
     member: makeHandlers(["PATCH", "DELETE"]),
     memberMerge: makeHandlers(["POST"]),
@@ -48,6 +49,7 @@ const handlerMocks = vi.hoisted(() => {
 vi.mock("@/features/club-api/route", () => handlerMocks.root);
 vi.mock("@/features/club-api/join/route", () => handlerMocks.join);
 vi.mock("@/features/club-api/[id]/route", () => handlerMocks.club);
+vi.mock("@/features/club-api/[id]/avatar/route", () => handlerMocks.clubAvatar);
 vi.mock("@/features/club-api/[id]/reset/route", () => handlerMocks.reset);
 vi.mock("@/features/club-api/[id]/collab-candidates/route", () => handlerMocks.collabCandidates);
 vi.mock("@/features/club-api/[id]/collab-roster/route", () => handlerMocks.collabRoster);
@@ -122,6 +124,16 @@ const routeCases: Array<{
     feature: () => import("@/features/club-api/[id]/route"),
     canonical: () => import("@/app/api/clubs/[id]/route"),
     legacy: () => import("@/app/api/communities/[id]/route"),
+  },
+  {
+    name: "club avatar",
+    methods: ["POST", "DELETE"],
+    legacyPath: "/api/communities/club-1/avatar",
+    legacyRoute: "/api/communities/[id]/avatar",
+    successorRoute: "/api/clubs/[id]/avatar",
+    feature: () => import("@/features/club-api/[id]/avatar/route"),
+    canonical: () => import("@/app/api/clubs/[id]/avatar/route"),
+    legacy: () => import("@/app/api/communities/[id]/avatar/route"),
   },
   {
     name: "club reset",

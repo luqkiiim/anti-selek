@@ -125,6 +125,7 @@ export async function GET(
         select: {
           id: true,
           name: true,
+          avatarKey: true,
           createdById: true,
           isTutorial: true,
           tutorialOwnerId: true,
@@ -466,6 +467,7 @@ export async function GET(
     const clubPayload = {
       id: club.id,
       name: getTutorialClubDisplayName(club),
+      avatarUrl: serializeAvatarEntity(club).avatarUrl,
       clubId: club.id,
       clubName: getTutorialClubDisplayName(club),
       isTutorial: club.isTutorial,

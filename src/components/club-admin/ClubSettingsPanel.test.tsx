@@ -9,12 +9,15 @@ function renderPanel(
   return renderToStaticMarkup(
     <ClubSettingsPanel
       clubName="Club One"
+      clubAvatarUrl="https://cdn.test/club-one.png"
       onClubNameChange={vi.fn()}
       clubPassword=""
       onClubPasswordChange={vi.fn()}
       passwordProtectionEnabled={false}
       onPasswordProtectionEnabledChange={vi.fn()}
       isPasswordProtected={false}
+      onUploadAvatar={vi.fn(async () => undefined)}
+      onRemoveAvatar={vi.fn(async () => undefined)}
       onSubmit={vi.fn()}
       saving={false}
       {...overrides}
@@ -28,6 +31,15 @@ describe("ClubSettingsPanel", () => {
 
     expect(markup).toContain("Anyone can join without a password.");
     expect(markup).not.toContain('placeholder="Set a password (min 4 characters)"');
+  });
+
+  it("renders the club profile picture uploader with the current avatar", () => {
+    const markup = renderPanel();
+
+    expect(markup).toContain("Club profile picture");
+    expect(markup).toContain("https://cdn.test/club-one.png");
+    expect(markup).toContain("Replace photo");
+    expect(markup).toContain("Remove photo");
   });
 
   it("shows removal copy when turning password protection off for a protected club", () => {
@@ -58,6 +70,7 @@ describe("ClubSettingsPanel", () => {
 
     expect(markup).toContain("Tutorial Settings");
     expect(markup).toContain("Tutorial playground");
+    expect(markup).not.toContain("Club profile picture");
     expect(markup).not.toContain("Club name");
     expect(markup).not.toContain("Save Settings");
   });

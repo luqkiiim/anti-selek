@@ -30,6 +30,10 @@ function getAvatarRoute(userId: string, clubId?: string) {
   return `/api/users/${userId}/avatar${query}`;
 }
 
+function getClubAvatarRoute(clubId: string) {
+  return `/api/clubs/${clubId}/avatar`;
+}
+
 export async function uploadUserAvatar(
   userId: string,
   file: File,
@@ -59,6 +63,40 @@ export async function deleteUserAvatar(userId: string, clubId?: string) {
 
   if (!response.ok) {
     throw new Error(getRouteErrorMessage(payload, "Failed to remove avatar"));
+  }
+
+  return payload as { avatarUrl: null };
+}
+
+export async function uploadClubAvatar(clubId: string, file: File) {
+  const formData = new FormData();
+  formData.append("avatar", file);
+
+  const response = await fetch(getClubAvatarRoute(clubId), {
+    method: "POST",
+    body: formData,
+  });
+  const payload = await safeJson(response);
+
+  if (!response.ok) {
+    throw new Error(
+      getRouteErrorMessage(payload, "Failed to upload club photo")
+    );
+  }
+
+  return payload as { avatarUrl: string | null };
+}
+
+export async function deleteClubAvatar(clubId: string) {
+  const response = await fetch(getClubAvatarRoute(clubId), {
+    method: "DELETE",
+  });
+  const payload = await safeJson(response);
+
+  if (!response.ok) {
+    throw new Error(
+      getRouteErrorMessage(payload, "Failed to remove club photo")
+    );
   }
 
   return payload as { avatarUrl: null };

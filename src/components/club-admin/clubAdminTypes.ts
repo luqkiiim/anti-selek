@@ -11,6 +11,7 @@ import {
 export interface ClubAdminClub {
   id: string;
   name: string;
+  avatarUrl?: string | null;
   role: "ADMIN" | "STAFF" | "MEMBER";
   viewerIsOwner?: boolean;
   isPasswordProtected: boolean;

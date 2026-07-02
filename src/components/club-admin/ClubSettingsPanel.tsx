@@ -1,9 +1,11 @@
 "use client";
 
 import type { FormEvent } from "react";
+import { AvatarUploader } from "@/components/ui/AvatarUploader";
 
 interface ClubSettingsPanelProps {
   clubName: string;
+  clubAvatarUrl?: string | null;
   onClubNameChange: (value: string) => void;
   clubPassword: string;
   onClubPasswordChange: (value: string) => void;
@@ -11,12 +13,15 @@ interface ClubSettingsPanelProps {
   onPasswordProtectionEnabledChange: (value: boolean) => void;
   isPasswordProtected: boolean;
   isTutorial?: boolean;
+  onUploadAvatar: (file: File) => Promise<void>;
+  onRemoveAvatar: () => Promise<void>;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   saving: boolean;
 }
 
 export function ClubSettingsPanel({
   clubName,
+  clubAvatarUrl = null,
   onClubNameChange,
   clubPassword,
   onClubPasswordChange,
@@ -24,6 +29,8 @@ export function ClubSettingsPanel({
   onPasswordProtectionEnabledChange,
   isPasswordProtected,
   isTutorial = false,
+  onUploadAvatar,
+  onRemoveAvatar,
   onSubmit,
   saving,
 }: ClubSettingsPanelProps) {
@@ -80,6 +87,22 @@ export function ClubSettingsPanel({
         >
           {isPasswordProtected ? "Protected" : "Open"}
         </span>
+      </div>
+
+      <div className="rounded-2xl border-2 border-gray-100 bg-gray-50 px-4 py-4">
+        <p className="text-xs font-black uppercase tracking-wider text-gray-900">
+          Club profile picture
+        </p>
+        <div className="mt-3">
+          <AvatarUploader
+            name={clubName}
+            avatarUrl={clubAvatarUrl}
+            size="xl"
+            helperText="Use a clear club logo or photo. It will appear in club vs club standings and other club surfaces."
+            onUpload={onUploadAvatar}
+            onRemove={onRemoveAvatar}
+          />
+        </div>
       </div>
 
       <form onSubmit={onSubmit} className="space-y-3">

@@ -167,6 +167,21 @@ export function buildAvatarObjectKey({
   return `avatars/${userId}/${now}-${randomSuffix}.${extension}`;
 }
 
+export function buildClubAvatarObjectKey({
+  clubId,
+  mimeType,
+  now = Date.now(),
+  randomSuffix = randomBytes(6).toString("hex"),
+}: {
+  clubId: string;
+  mimeType: AvatarMimeType;
+  now?: number;
+  randomSuffix?: string;
+}) {
+  const extension = MIME_TYPE_TO_EXTENSION[mimeType];
+  return `avatars/clubs/${clubId}/${now}-${randomSuffix}.${extension}`;
+}
+
 export function resolveAvatarUrl(
   avatarKey: string | null | undefined
 ) {
