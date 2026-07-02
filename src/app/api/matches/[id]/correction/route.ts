@@ -136,9 +136,12 @@ export async function POST(
         { status: 400 }
       );
     }
-    if (match.session.status !== SessionStatus.COMPLETED) {
+    if (
+      match.session.status !== SessionStatus.ACTIVE &&
+      match.session.status !== SessionStatus.COMPLETED
+    ) {
       return NextResponse.json(
-        { error: "Only ended sessions can correct completed scores." },
+        { error: "Only active or ended sessions can correct completed scores." },
         { status: 400 }
       );
     }

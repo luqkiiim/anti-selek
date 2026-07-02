@@ -154,12 +154,14 @@ function createReplayMatch({
   team1Score = 21,
   team2Score = 18,
   winnerTeam = 1,
+  sessionStatus = SessionStatus.COMPLETED,
 }: {
   id: string;
   completedAt: Date;
   team1Score?: number;
   team2Score?: number;
   winnerTeam?: 1 | 2;
+  sessionStatus?: SessionStatus;
 }) {
   return {
     id,
@@ -180,7 +182,7 @@ function createReplayMatch({
     session: {
       clubId: "community-1",
       isTest: false,
-      status: SessionStatus.COMPLETED,
+      status: sessionStatus,
       type: SessionType.POINTS,
     },
     team1User1: { id: "a1", name: "A1", elo: 1000 },
@@ -748,6 +750,65 @@ describe("correctCompletedMatchScore", () => {
       }),
     });
     expect(tx.matchEloAdjustment.createMany).toHaveBeenCalledTimes(2);
+  });
+
+  it("replays active-session corrections and updates session points", async () => {
+    const tx: CorrectionTransactionMock = createCorrectionTransactionMock({
+      targetMatch: createReplayMatch({
+        id: "match-1",
+        completedAt: new Date("2026-05-02T10:00:00.000Z"),
+        sessionStatus: SessionStatus.ACTIVE,
+      }),
+      laterMatch: createReplayMatch({
+        id: "match-2",
+        completedAt: new Date("2026-05-02T10:30:00.000Z"),
+        team1Score: 18,
+        team2Score: 21,
+        winnerTeam: 2,
+        sessionStatus: SessionStatus.ACTIVE,
+      }),
+    });
+    mocks.transaction.mockImplementation(
+      (callback: (tx: CorrectionTransactionMock) => unknown) => callback(tx)
+    );
+
+    const result = await correctCompletedMatchScore({
+      matchId: "match-1",
+      finalTeam1Score: 17,
+      finalTeam2Score: 21,
+    });
+
+    expect(result.replayedMatchIds).toEqual(["match-1", "match-2"]);
+    expect(tx.match.update).toHaveBeenNthCalledWith(1, {
+      where: { id: "match-1" },
+      data: expect.objectContaining({
+        team1Score: 17,
+        team2Score: 21,
+        winnerTeam: 2,
+      }),
+    });
+    expect(tx.match.update).toHaveBeenNthCalledWith(2, {
+      where: { id: "match-2" },
+      data: expect.objectContaining({
+        team1Score: 18,
+        team2Score: 21,
+        winnerTeam: 2,
+      }),
+    });
+    expect(tx.sessionPlayer.updateMany).toHaveBeenCalledWith({
+      where: {
+        sessionId: "session-1",
+        userId: { in: ["a1", "a2"] },
+      },
+      data: { sessionPoints: { increment: -3 } },
+    });
+    expect(tx.sessionPlayer.updateMany).toHaveBeenCalledWith({
+      where: {
+        sessionId: "session-1",
+        userId: { in: ["b1", "b2"] },
+      },
+      data: { sessionPoints: { increment: 3 } },
+    });
   });
 
   it("moves session points when the corrected winner changes", async () => {

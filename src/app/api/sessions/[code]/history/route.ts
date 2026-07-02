@@ -266,9 +266,14 @@ async function getSessionHistory(
       : null;
   let correctionBlockedReason: string | null = null;
   let canCorrectCompletedScores = false;
+  const hasCompletedMatches = sessionData.matches.some(
+    (match) => match.status === MatchStatus.COMPLETED
+  );
   if (
     viewerCanCorrectCompletedScores &&
-    sessionData.status === SessionStatus.COMPLETED
+    hasCompletedMatches &&
+    (sessionData.status === SessionStatus.ACTIVE ||
+      sessionData.status === SessionStatus.COMPLETED)
   ) {
     if (sessionData.isTest) {
       correctionBlockedReason =

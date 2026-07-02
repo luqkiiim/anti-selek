@@ -156,16 +156,31 @@ describe("completed match score correction route", () => {
     expect(mocks.correctCompletedMatchScore).not.toHaveBeenCalled();
   });
 
-  it("rejects active sessions", async () => {
+  it("allows admins to correct a completed score in an active session", async () => {
     mocks.matchFindUnique.mockResolvedValue(
       createMatch({ sessionStatus: SessionStatus.ACTIVE })
     );
 
     const response = await postCorrection();
 
+    expect(response.status).toBe(200);
+    expect(mocks.correctCompletedMatchScore).toHaveBeenCalledWith({
+      matchId: "match-1",
+      finalTeam1Score: 21,
+      finalTeam2Score: 16,
+    });
+  });
+
+  it("rejects waiting sessions", async () => {
+    mocks.matchFindUnique.mockResolvedValue(
+      createMatch({ sessionStatus: SessionStatus.WAITING })
+    );
+
+    const response = await postCorrection();
+
     expect(response.status).toBe(400);
     await expect(response.json()).resolves.toEqual({
-      error: "Only ended sessions can correct completed scores.",
+      error: "Only active or ended sessions can correct completed scores.",
     });
     expect(mocks.correctCompletedMatchScore).not.toHaveBeenCalled();
   });

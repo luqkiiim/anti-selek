@@ -53,7 +53,16 @@ vi.mock("@/lib/sessionCollab", () => ({
 
 import { GET } from "./route";
 
-function createHistorySession() {
+function createHistorySession(
+  overrides: Partial<ReturnType<typeof createHistorySessionBase>> = {}
+) {
+  return {
+    ...createHistorySessionBase(),
+    ...overrides,
+  };
+}
+
+function createHistorySessionBase() {
   return {
     id: "session-1",
     code: "ABC123",
@@ -146,6 +155,22 @@ describe("session history route correction availability", () => {
   });
 
   it("marks completed sessions correctable for admins when replay is exact", async () => {
+    const response = await getHistory();
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.canCorrectCompletedScores).toBe(true);
+    expect(body.correctionBlockedReason).toBeNull();
+  });
+
+  it("marks active sessions correctable for admins when replay is exact", async () => {
+    mocks.sessionFindUnique.mockResolvedValue(
+      createHistorySession({
+        status: SessionStatus.ACTIVE,
+        endedAt: null,
+      })
+    );
+
     const response = await getHistory();
     const body = await response.json();
 

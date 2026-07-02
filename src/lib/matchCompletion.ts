@@ -100,7 +100,7 @@ export class CorrectCompletedMatchScoreError extends Error {
     public readonly code:
       | "MATCH_NOT_FOUND"
       | "MATCH_NOT_COMPLETED"
-      | "SESSION_NOT_COMPLETED"
+      | "SESSION_NOT_CORRECTABLE"
       | "TEST_SESSION"
       | "INVALID_SCORE"
       | "UNCHANGED_SCORE"
@@ -1221,10 +1221,13 @@ export async function correctCompletedMatchScoreInTransaction(
       "Only completed matches can be corrected."
     );
   }
-  if (targetMatch.session.status !== SessionStatus.COMPLETED) {
+  if (
+    targetMatch.session.status !== SessionStatus.ACTIVE &&
+    targetMatch.session.status !== SessionStatus.COMPLETED
+  ) {
     throw new CorrectCompletedMatchScoreError(
-      "SESSION_NOT_COMPLETED",
-      "Only ended sessions can correct completed scores."
+      "SESSION_NOT_CORRECTABLE",
+      "Only active or ended sessions can correct completed scores."
     );
   }
   if (targetMatch.session.isTest) {
