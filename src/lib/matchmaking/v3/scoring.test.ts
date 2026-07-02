@@ -121,6 +121,7 @@ function createBatchSelection({
   totalExactRematchPenalty = 0,
   totalRandomScore = 0,
   totalPairingRandomScore = 0,
+  sidePairingLayoutKeys = ["team1", "team2"],
   sidePairingRandomScores = [totalPairingRandomScore, totalPairingRandomScore],
 }: {
   restTurns?: number[];
@@ -136,6 +137,7 @@ function createBatchSelection({
   totalExactRematchPenalty?: number;
   totalRandomScore?: number;
   totalPairingRandomScore?: number;
+  sidePairingLayoutKeys?: [string, string];
   sidePairingRandomScores?: [number, number];
 }): V3BatchSelection {
   const selection = createSelection({
@@ -167,6 +169,7 @@ function createBatchSelection({
     totalExactRematchPenalty,
     totalRandomScore,
     totalPairingRandomScore,
+    sidePairingLayoutKeys,
     sidePairingRandomScores,
   };
 }
@@ -225,6 +228,7 @@ function createBatchFromSelections(
       (sum, selection) => sum + selection.pairingRandomScore,
       0
     ),
+    sidePairingLayoutKeys: ["team1", "team2"],
     sidePairingRandomScores: [0, 0],
   };
 }
@@ -1139,15 +1143,15 @@ describe("matchmaking v3 scoring", () => {
     ).toBeLessThan(0);
   });
 
-  it("balances side layout random before combined layout random", () => {
-    const greatFirstSideOnly = createBatchSelection({
+  it("uses combined layout random when side-balanced comparison has no candidate-set context", () => {
+    const lowerCombinedLayoutRandom = createBatchSelection({
       maxBalanceGap: 0,
       totalBalanceGap: 0,
       totalRandomScore: 1,
       totalPairingRandomScore: 0,
       sidePairingRandomScores: [0, 10],
     });
-    const balancedBothSides = createBatchSelection({
+    const higherCombinedLayoutRandom = createBatchSelection({
       maxBalanceGap: 0,
       totalBalanceGap: 0,
       totalRandomScore: 1,
@@ -1157,12 +1161,12 @@ describe("matchmaking v3 scoring", () => {
 
     expect(
       compareBatchSelections(
-        greatFirstSideOnly,
-        balancedBothSides,
+        lowerCombinedLayoutRandom,
+        higherCombinedLayoutRandom,
         SessionType.POINTS,
         { pairingRandomMode: "side-balanced" }
       )
-    ).toBeGreaterThan(0);
+    ).toBeLessThan(0);
   });
 
   it("uses combined layout random after side-balanced layout scores tie", () => {

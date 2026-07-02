@@ -1464,6 +1464,7 @@ describe("generate match service", () => {
         totalExactRematchPenalty: 0,
         totalRandomScore: 0,
         totalPairingRandomScore: 0,
+        sidePairingLayoutKeys: ["team1", "team2"],
         sidePairingRandomScores: [0, 0],
       };
       vi.mocked(findBestBatchSelectionV3).mockReturnValueOnce({
@@ -1530,6 +1531,7 @@ describe("generate match service", () => {
         totalExactRematchPenalty: 0,
         totalRandomScore: 0,
         totalPairingRandomScore: 0,
+        sidePairingLayoutKeys: ["team1", "team2"],
         sidePairingRandomScores: [0, 0],
       };
       const randomFn = vi.fn(() => 0.42);

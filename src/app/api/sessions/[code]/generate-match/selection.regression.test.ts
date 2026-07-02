@@ -441,49 +441,43 @@ describe("generate-match interclub points batch regressions", () => {
       await buildMatchmakingState(sessionData);
     const { rankedCandidates } = getRankedCandidates(sessionData, busyPlayerIds);
 
-    const firstBatch = selectBatchMatches({
-      rankedCandidates,
-      playersById,
-      sessionData,
-      rotationHistory,
-      requestedMatchCount: 3,
-      randomFn: createSequenceRandom([
-        0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0,
-        0.01,
-      ]),
-    });
-    const secondBatch = selectBatchMatches({
-      rankedCandidates,
-      playersById,
-      sessionData,
-      rotationHistory,
-      requestedMatchCount: 3,
-      randomFn: createSequenceRandom([
-        0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0,
-        0.02,
-      ]),
-    });
+    const saltTriples: Array<[number, number, number]> = [
+      [0.01, 0.11, 0.21],
+      [0.02, 0.12, 0.22],
+      [0.03, 0.13, 0.23],
+      [0.04, 0.14, 0.24],
+      [0.05, 0.15, 0.25],
+      [0.06, 0.16, 0.26],
+    ];
+    const batches = saltTriples.map(([combinedSalt, clubASalt, clubBSalt]) =>
+      selectBatchMatches({
+        rankedCandidates,
+        playersById,
+        sessionData,
+        rotationHistory,
+        requestedMatchCount: 3,
+        randomFn: createSequenceRandom([
+          0, 0, 0, 0, 0, 0,
+          0, 0, 0, 0, 0, 0,
+          combinedSalt,
+          clubASalt,
+          clubBSalt,
+        ]),
+      })
+    );
+    const expectedSelectedIds = new Set(players.map((player) => player.userId));
+    const clubAPairLayouts = new Set(batches.map(getClubAPairLayout));
+    const clubBPairLayouts = new Set(batches.map(getClubBPairLayout));
 
-    expect(getSelectedBatchIds(firstBatch)).toEqual(
-      new Set(players.map((player) => player.userId))
-    );
-    expect(getSelectedBatchIds(secondBatch)).toEqual(
-      new Set(players.map((player) => player.userId))
-    );
-    expect(getClubAPairLayout(firstBatch)).not.toBe(
-      getClubAPairLayout(secondBatch)
-    );
-    expect(getClubBPairLayout(firstBatch)).not.toBe(
-      getClubBPairLayout(secondBatch)
-    );
+    expect(clubAPairLayouts.size).toBeGreaterThan(1);
+    expect(clubBPairLayouts.size).toBeGreaterThan(1);
 
-    for (const selection of [
-      ...firstBatch.selections,
-      ...secondBatch.selections,
-    ]) {
-      expectStrictInterclubSides(selection, clubByUserId);
+    for (const batch of batches) {
+      expect(getSelectedBatchIds(batch)).toEqual(expectedSelectedIds);
+
+      for (const selection of batch.selections) {
+        expectStrictInterclubSides(selection, clubByUserId);
+      }
     }
   });
 

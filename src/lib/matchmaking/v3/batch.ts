@@ -24,6 +24,7 @@ import {
   compareSingleCourtSelections,
   FULL_REPEAT_REST_TOLERANCE,
   getBatchPairingRandomScore,
+  getBatchSidePairingKeys,
   getBatchSidePairingRandomScores,
   getBalanceVarietyTolerance,
   getPartitionPairingRandomScore,
@@ -33,6 +34,7 @@ import {
 import type {
   ActiveMatchmakerV3Player,
   V3BatchPairingRandomMode,
+  V3BatchPairingRandomSalts,
   V3BatchFailureReason,
   MatchmakerV3Player,
   V3BatchDebug,
@@ -169,7 +171,7 @@ function buildFeasibilityCandidatePools<T extends MatchmakerV3Player>(
 
 function summarizeBatch<T extends ActiveMatchmakerV3Player>(
   selections: V3SingleCourtSelection<T>[],
-  pairingRandomSalt: number
+  pairingRandomSalts: V3BatchPairingRandomSalts
 ): V3BatchSelection<T> {
   const flattenedPlayers = selections.flatMap((selection) => selection.players);
 
@@ -220,11 +222,12 @@ function summarizeBatch<T extends ActiveMatchmakerV3Player>(
     ),
     totalPairingRandomScore: getBatchPairingRandomScore(
       selections,
-      pairingRandomSalt
+      pairingRandomSalts.combined
     ),
+    sidePairingLayoutKeys: getBatchSidePairingKeys(selections),
     sidePairingRandomScores: getBatchSidePairingRandomScores(
       selections,
-      pairingRandomSalt
+      pairingRandomSalts.sides
     ),
   };
 }
@@ -256,6 +259,131 @@ function compareBatchFairnessVectors<T extends ActiveMatchmakerV3Player>(
   }
 
   return 0;
+}
+
+function getSelectionWithNeutralPairingRandom<T extends ActiveMatchmakerV3Player>(
+  selection: V3BatchSelection<T>
+): V3BatchSelection<T> {
+  return {
+    ...selection,
+    totalPairingRandomScore: 0,
+    sidePairingRandomScores: [0, 0],
+  };
+}
+
+function compareBatchSelectionsBeforePairingRandom<
+  T extends ActiveMatchmakerV3Player,
+>(
+  left: V3BatchSelection<T>,
+  right: V3BatchSelection<T>,
+  sessionType: SessionType,
+  respectPlayerRest: boolean
+) {
+  return compareBatchSelections(
+    getSelectionWithNeutralPairingRandom(left),
+    getSelectionWithNeutralPairingRandom(right),
+    sessionType,
+    { respectPlayerRest, pairingRandomMode: "combined" }
+  );
+}
+
+function getIndependentSideDistance(
+  selection: V3BatchSelection,
+  bestSidePairingRandomScores: [number, number]
+): [number, number] {
+  return [
+    selection.sidePairingRandomScores[0] - bestSidePairingRandomScores[0],
+    selection.sidePairingRandomScores[1] - bestSidePairingRandomScores[1],
+  ];
+}
+
+function compareIndependentSidePairingRandom<
+  T extends ActiveMatchmakerV3Player,
+>(
+  left: V3BatchSelection<T>,
+  right: V3BatchSelection<T>,
+  bestSidePairingRandomScores: [number, number]
+) {
+  const leftDistances = getIndependentSideDistance(
+    left,
+    bestSidePairingRandomScores
+  );
+  const rightDistances = getIndependentSideDistance(
+    right,
+    bestSidePairingRandomScores
+  );
+  const worstSideDistanceDiff =
+    Math.max(...leftDistances) - Math.max(...rightDistances);
+  if (worstSideDistanceDiff !== 0) {
+    return worstSideDistanceDiff;
+  }
+
+  const totalSideDistanceDiff =
+    leftDistances[0] +
+    leftDistances[1] -
+    (rightDistances[0] + rightDistances[1]);
+  if (totalSideDistanceDiff !== 0) {
+    return totalSideDistanceDiff;
+  }
+
+  return left.totalPairingRandomScore - right.totalPairingRandomScore;
+}
+
+function chooseIndependentSidePairingBatchSelection<
+  T extends ActiveMatchmakerV3Player,
+>(
+  selections: V3BatchSelection<T>[],
+  sessionType: SessionType,
+  respectPlayerRest: boolean
+) {
+  const sortedByStrongerPriorities = [...selections].sort((left, right) =>
+    compareBatchSelectionsBeforePairingRandom(
+      left,
+      right,
+      sessionType,
+      respectPlayerRest
+    )
+  );
+  const bestBeforePairingRandom = sortedByStrongerPriorities[0];
+
+  if (!bestBeforePairingRandom) {
+    return null;
+  }
+
+  const layoutTieSelections = sortedByStrongerPriorities.filter(
+    (selection) =>
+      compareBatchSelectionsBeforePairingRandom(
+        selection,
+        bestBeforePairingRandom,
+        sessionType,
+        respectPlayerRest
+      ) === 0
+  );
+
+  if (layoutTieSelections.length <= 1) {
+    return bestBeforePairingRandom;
+  }
+
+  const bestSidePairingRandomScores: [number, number] = [
+    Math.min(
+      ...layoutTieSelections.map(
+        (selection) => selection.sidePairingRandomScores[0]
+      )
+    ),
+    Math.min(
+      ...layoutTieSelections.map(
+        (selection) => selection.sidePairingRandomScores[1]
+      )
+    ),
+  ];
+
+  return [...layoutTieSelections].sort((left, right) =>
+    compareIndependentSidePairingRandom(
+      left,
+      right,
+      bestSidePairingRandomScores
+    )
+  )[0] ?? null;
 }
 
 function buildQuartetSelections<T extends MatchmakerV3Player>(
@@ -390,6 +518,19 @@ function getRestTurnTieZoneTolerance(sessionType: SessionType) {
   }
 
   return sessionType === SessionType.SOCIAL_MIX ? FULL_REPEAT_REST_TOLERANCE : 0;
+}
+
+function createBatchPairingRandomSalts(
+  randomFn: () => number,
+  pairingRandomMode: V3BatchPairingRandomMode
+): V3BatchPairingRandomSalts {
+  return {
+    combined: randomFn(),
+    sides:
+      pairingRandomMode === "side-balanced"
+        ? [randomFn(), randomFn()]
+        : [0, 0],
+  };
 }
 
 function limitBatchCandidatePlayers<T extends MatchmakerV3Player>(
@@ -589,7 +730,7 @@ function findGreedyBatchSelection<T extends ActiveMatchmakerV3Player>(
   orderedCandidateIds: string[],
   lockedIds: Set<string>,
   courtCount: number,
-  pairingRandomSalt: number
+  pairingRandomSalts: V3BatchPairingRandomSalts
 ) {
   const chosen: V3SingleCourtSelection<T>[] = [];
   const usedIds = new Set<string>();
@@ -628,7 +769,7 @@ function findGreedyBatchSelection<T extends ActiveMatchmakerV3Player>(
     return null;
   }
 
-  return summarizeBatch(chosen, pairingRandomSalt);
+  return summarizeBatch(chosen, pairingRandomSalts);
 }
 
 function chooseBestBatchSelection<T extends ActiveMatchmakerV3Player>(
@@ -656,6 +797,14 @@ function chooseBestBatchSelection<T extends ActiveMatchmakerV3Player>(
     getBalanceVarietyTolerance(sessionType) !== null
       ? filterBalanceSafeBatches(fairnessSafeSelections, sessionType)
       : fairnessSafeSelections;
+
+  if (pairingRandomMode === "side-balanced") {
+    return chooseIndependentSidePairingBatchSelection(
+      balanceSafeSelections,
+      sessionType,
+      respectPlayerRest
+    );
+  }
 
   return [...balanceSafeSelections].sort((left, right) =>
     compareBatchSelections(left, right, sessionType, {
@@ -707,7 +856,7 @@ function searchBatchCandidatePlayers<T extends MatchmakerV3Player>({
   completedMatches,
   searchLimits,
   selectionConstraints,
-  pairingRandomSalt,
+  pairingRandomSalts,
   pairingRandomMode,
 }: {
   candidatePlayers: ActiveMatchmakerV3Player<T>[];
@@ -726,7 +875,7 @@ function searchBatchCandidatePlayers<T extends MatchmakerV3Player>({
     maxMs?: number;
   };
   selectionConstraints?: V3SelectionConstraints<ActiveMatchmakerV3Player<T>>;
-  pairingRandomSalt: number;
+  pairingRandomSalts: V3BatchPairingRandomSalts;
   pairingRandomMode: V3BatchPairingRandomMode;
 }): BatchSearchAttemptResult<ActiveMatchmakerV3Player<T>> {
   const requiredPlayerCount = courtCount * 4;
@@ -754,7 +903,7 @@ function searchBatchCandidatePlayers<T extends MatchmakerV3Player>({
       sessionMode,
       completedMatches,
       selectionConstraints,
-      pairingRandomSalt,
+      pairingRandomSalt: pairingRandomSalts.combined,
     }),
     sessionType,
     respectPlayerRest
@@ -816,7 +965,7 @@ function searchBatchCandidatePlayers<T extends MatchmakerV3Player>({
         return;
       }
 
-      const batchSelection = summarizeBatch(chosen, pairingRandomSalt);
+      const batchSelection = summarizeBatch(chosen, pairingRandomSalts);
       completedSelections.push(batchSelection);
 
       return;
@@ -874,7 +1023,7 @@ function searchBatchCandidatePlayers<T extends MatchmakerV3Player>({
           orderedCandidateIds,
           lockedIds,
           courtCount,
-          pairingRandomSalt
+          pairingRandomSalts
         )
       : null);
 
@@ -944,7 +1093,10 @@ export function findBestBatchSelectionV3<T extends MatchmakerV3Player>(
       respectPlayerRest,
       restTurnTieZoneTolerance: getRestTurnTieZoneTolerance(sessionType),
     });
-  const pairingRandomSalt = randomFn();
+  const pairingRandomSalts = createBatchPairingRandomSalts(
+    randomFn,
+    pairingRandomMode
+  );
   const debug: V3BatchDebug = {
     eligiblePlayerIds: resolvedCandidatePool.activePlayers.map(
       (player) => player.userId
@@ -1032,7 +1184,7 @@ export function findBestBatchSelectionV3<T extends MatchmakerV3Player>(
       completedMatches,
       searchLimits,
       selectionConstraints,
-      pairingRandomSalt,
+      pairingRandomSalts,
       pairingRandomMode,
     });
 

@@ -86,6 +86,11 @@ export interface V3RestSummary {
 
 export type V3BatchPairingRandomMode = "combined" | "side-balanced";
 
+export interface V3BatchPairingRandomSalts {
+  combined: number;
+  sides: [number, number];
+}
+
 export interface V3CandidatePool<
   T extends ActiveMatchmakerV3Player = ActiveMatchmakerV3Player,
 > {
@@ -172,6 +177,7 @@ export interface V3BatchSelection<
   totalExactRematchPenalty: number;
   totalRandomScore: number;
   totalPairingRandomScore: number;
+  sidePairingLayoutKeys: [string, string];
   sidePairingRandomScores: [number, number];
 }
 
