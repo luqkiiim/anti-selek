@@ -716,6 +716,52 @@ describe("PlayerProfileView", () => {
     });
 
     expect(document.body.textContent).toContain("Change photo");
+    expect(document.body.textContent).toContain("View photo");
     expect(document.body.textContent).toContain("Remove");
+  });
+
+  it("opens the enlarged photo viewer from the editable self avatar menu", async () => {
+    await renderView({
+      currentUser: {
+        id: "user-1",
+        isAdmin: false,
+        isClaimed: true,
+        isQuickAccess: false,
+        avatarUrl: null,
+      },
+    });
+
+    const avatarMenuButton = container.querySelector(
+      'button[aria-label="Change profile photo for Alex Lee"]'
+    ) as HTMLButtonElement | null;
+    expect(avatarMenuButton).toBeTruthy();
+
+    await act(async () => {
+      avatarMenuButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    expect(document.body.textContent).toContain("View photo");
+    expect(document.body.textContent).toContain("Change photo");
+    expect(document.body.textContent).toContain("Remove");
+
+    const viewPhotoButton = Array.from(
+      document.body.querySelectorAll("button")
+    ).find((button) => button.textContent?.trim() === "View photo");
+    expect(viewPhotoButton).toBeTruthy();
+
+    await act(async () => {
+      viewPhotoButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    expect(document.body.textContent).toContain("Alex Lee photo");
+    const enlargedImage = document.body.querySelector(
+      'img[alt="Alex Lee profile photo"]'
+    ) as HTMLImageElement | null;
+    expect(enlargedImage?.getAttribute("src")).toBe(
+      "https://cdn.test/avatars/alex.jpg"
+    );
+    expect(document.body.textContent).not.toContain("View photo");
   });
 });

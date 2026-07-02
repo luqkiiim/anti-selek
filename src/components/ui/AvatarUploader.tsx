@@ -2,7 +2,7 @@
 
 import type { ChangeEvent } from "react";
 import { useEffect, useRef, useState } from "react";
-import { Camera, Trash2, Upload, X } from "lucide-react";
+import { Camera, Eye, Trash2, Upload, X } from "lucide-react";
 import { Avatar } from "@/components/ui/Avatar";
 import { AvatarCropModal } from "@/components/ui/AvatarCropModal";
 import {
@@ -192,6 +192,15 @@ export function AvatarUploader({
     }
   };
 
+  const handlePreview = () => {
+    if (!currentAvatarUrl || !onPreviewAvatar) {
+      return;
+    }
+
+    setMenuOpen(false);
+    onPreviewAvatar(currentAvatarUrl);
+  };
+
   const avatarControl = canPreviewAvatar ? (
     <button
       type="button"
@@ -235,6 +244,17 @@ export function AvatarUploader({
           </button>
           {menuOpen ? (
             <div className="absolute left-0 top-[calc(100%+0.6rem)] z-30 grid min-w-44 overflow-hidden rounded-xl border border-[var(--line)] bg-white text-sm font-semibold text-gray-900 shadow-[0_18px_44px_rgba(23,32,31,0.18)]">
+              {avatarUrl && canPreviewAvatar ? (
+                <button
+                  type="button"
+                  onClick={handlePreview}
+                  disabled={uploading || removing}
+                  className="inline-flex items-center gap-2 border-b border-[var(--line)] px-3 py-3 text-left transition hover:bg-[var(--accent-faint)] hover:text-[var(--accent-strong)] disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  <Eye aria-hidden="true" size={17} strokeWidth={2.1} />
+                  View photo
+                </button>
+              ) : null}
               <button
                 type="button"
                 onClick={handleChooseFile}

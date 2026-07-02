@@ -110,7 +110,10 @@ describe("AvatarUploader", () => {
         <AvatarUploader
           name="Alex Lee"
           avatarUrl={props?.avatarUrl}
+          size={props?.size}
+          editable={props?.editable}
           helperText={props?.helperText}
+          presentation={props?.presentation}
           onPreviewAvatar={props?.onPreviewAvatar}
           previewAvatarLabel={props?.previewAvatarLabel}
           onUpload={onUpload}
@@ -267,6 +270,60 @@ describe("AvatarUploader", () => {
       "https://blob.vercel-storage.com/avatars/alex.webp"
     );
     expect(onRemove).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows a menu preview action for an existing avatar", async () => {
+    const onPreviewAvatar = vi.fn();
+    await renderUploader({
+      avatarUrl: "https://blob.vercel-storage.com/avatars/alex.webp",
+      presentation: "menu",
+      onPreviewAvatar,
+    });
+
+    const avatarMenuButton = container.querySelector(
+      'button[aria-label="Change profile photo for Alex Lee"]'
+    ) as HTMLButtonElement | null;
+    expect(avatarMenuButton).toBeTruthy();
+
+    await act(async () => {
+      avatarMenuButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(document.body.textContent).toContain("View photo");
+    expect(document.body.textContent).toContain("Change photo");
+    expect(document.body.textContent).toContain("Remove");
+
+    const viewButton = getButtonByText("View photo");
+    expect(viewButton).toBeTruthy();
+
+    await act(async () => {
+      viewButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(onPreviewAvatar).toHaveBeenCalledWith(
+      "https://blob.vercel-storage.com/avatars/alex.webp"
+    );
+    expect(document.body.textContent).not.toContain("View photo");
+  });
+
+  it("does not show a menu preview action without an uploaded avatar", async () => {
+    await renderUploader({
+      presentation: "menu",
+      onPreviewAvatar: vi.fn(),
+    });
+
+    const avatarMenuButton = container.querySelector(
+      'button[aria-label="Add profile photo for Alex Lee"]'
+    ) as HTMLButtonElement | null;
+    expect(avatarMenuButton).toBeTruthy();
+
+    await act(async () => {
+      avatarMenuButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(document.body.textContent).not.toContain("View photo");
+    expect(document.body.textContent).toContain("Add photo");
+    expect(document.body.textContent).not.toContain("Remove");
   });
 
   it("does not render a preview trigger unless preview support is enabled", async () => {
