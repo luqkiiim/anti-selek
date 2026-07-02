@@ -11,6 +11,7 @@ import {
   Newspaper,
   TrendingUp,
   Trophy,
+  UserPlus,
   Users,
   X,
 } from "lucide-react";
@@ -395,6 +396,7 @@ export function ClubOverviewPulsePanel({
           tournament,
           currentUserId
         );
+        const isPendingCollab = tournament.collabStatus === "PENDING";
 
         return (
           <article
@@ -417,18 +419,29 @@ export function ClubOverviewPulsePanel({
                 <span>{getSessionTypeLabel(tournament.type)}</span>
               </p>
             </div>
-            <button
-              type="button"
-              onClick={() =>
-                isParticipant
-                  ? onOpenTournament(tournament.code)
-                  : onJoinTournament(tournament.code)
-              }
-              className="app-button-primary px-4 py-2 text-sm"
-            >
-              {isParticipant ? "Open" : "Join"}
-              <ArrowRight aria-hidden="true" size={15} />
-            </button>
+            <div className="flex flex-wrap justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => onOpenTournament(tournament.code)}
+                className="app-button-primary px-4 py-2 text-sm"
+              >
+                {isParticipant ? "Open" : "View"}
+                <ArrowRight aria-hidden="true" size={15} />
+              </button>
+              {!isParticipant ? (
+                <button
+                  type="button"
+                  onClick={() => onJoinTournament(tournament.code)}
+                  disabled={isPendingCollab}
+                  className="app-button-secondary px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {isPendingCollab ? "Pending" : "Join"}
+                  {!isPendingCollab ? (
+                    <UserPlus aria-hidden="true" size={15} />
+                  ) : null}
+                </button>
+              ) : null}
+            </div>
           </article>
         );
       }),

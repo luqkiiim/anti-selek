@@ -837,6 +837,7 @@ export default function ClubPage() {
         currentUserId={user?.id}
         currentClubId={clubId}
         canManageClub={canAdminClub}
+        onOpenTournament={openTournament}
         onJoinTournament={joinTournament}
         onReviewCollabTournament={reviewCollabTournament}
       />

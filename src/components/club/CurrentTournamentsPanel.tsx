@@ -24,6 +24,7 @@ interface CurrentTournamentsPanelProps {
   currentUserId?: string | null;
   currentClubId: string;
   canManageClub: boolean;
+  onOpenTournament: (code: string) => void;
   onJoinTournament: (code: string) => void;
   onReviewCollabTournament: (
     code: string,
@@ -36,6 +37,7 @@ export function CurrentTournamentsPanel({
   currentUserId,
   currentClubId,
   canManageClub,
+  onOpenTournament,
   onJoinTournament,
   onReviewCollabTournament,
 }: CurrentTournamentsPanelProps) {
@@ -98,6 +100,13 @@ export function CurrentTournamentsPanel({
                       </p>
                     </div>
                     <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => onOpenTournament(tournament.code)}
+                        className="app-button-secondary px-3 py-1.5 text-sm"
+                      >
+                        View
+                      </button>
                       <button
                         type="button"
                         onClick={() =>
@@ -176,14 +185,23 @@ export function CurrentTournamentsPanel({
                       </p>
                     ) : null}
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => onJoinTournament(tournament.code)}
-                    disabled={isPendingCollab}
-                    className="app-button-dark px-3 py-1.5 text-sm disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    {isPendingCollab ? "Pending" : "Join"}
-                  </button>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => onOpenTournament(tournament.code)}
+                      className="app-button-secondary px-3 py-1.5 text-sm"
+                    >
+                      View
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onJoinTournament(tournament.code)}
+                      disabled={isPendingCollab}
+                      className="app-button-dark px-3 py-1.5 text-sm disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {isPendingCollab ? "Pending" : "Join"}
+                    </button>
+                  </div>
                 </div>
               </div>
             );
