@@ -74,24 +74,26 @@ function ClubPanel({
       className={`flex min-w-0 flex-col items-center rounded-2xl border px-3 py-3 text-center sm:px-4 ${toneClasses.panel}`}
       aria-label={`${row.clubName} club stats`}
     >
-      <div
-        className={`flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-full border text-lg font-black tracking-normal ${toneClasses.mark}`}
-      >
-        {row.avatarUrl ? (
-          /* eslint-disable-next-line @next/next/no-img-element */
-          <img
-            src={row.avatarUrl}
-            alt={`${row.clubName} logo`}
-            className="h-full w-full object-cover"
-          />
-        ) : (
-          <span>{getClubInitials(row.clubName)}</span>
-        )}
-      </div>
+      <div className="flex w-full min-w-0 flex-col items-center">
+        <div
+          className={`flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-full border text-lg font-black tracking-normal ${toneClasses.mark}`}
+        >
+          {row.avatarUrl ? (
+            /* eslint-disable-next-line @next/next/no-img-element */
+            <img
+              src={row.avatarUrl}
+              alt={`${row.clubName} logo`}
+              className="h-full w-full object-cover"
+            />
+          ) : (
+            <span>{getClubInitials(row.clubName)}</span>
+          )}
+        </div>
 
-      <h2 className="mt-3 min-w-0 max-w-full overflow-hidden text-ellipsis text-sm font-bold leading-tight text-gray-900 sm:text-base">
-        {row.clubName}
-      </h2>
+        <h2 className="mt-3 grid min-h-[2.25rem] max-h-[2.25rem] w-full min-w-0 place-items-center overflow-hidden text-sm font-bold leading-tight text-gray-900 sm:min-h-[2.5rem] sm:max-h-[2.5rem] sm:text-base">
+          {row.clubName}
+        </h2>
+      </div>
 
       <dl className="mt-4 grid w-full gap-2">
         <div className="flex min-h-6 items-baseline justify-between gap-3">

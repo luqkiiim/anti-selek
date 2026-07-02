@@ -85,4 +85,39 @@ describe("InterclubScoreboard", () => {
     expect(text).not.toContain("Leading");
     expect(text).not.toContain("Chasing");
   });
+
+  it("reserves a two-line club-name slot so stat rows stay aligned", async () => {
+    const mixedNameScoreboard: InterclubScoreboardModel = {
+      ...scoreboard,
+      rows: [
+        {
+          ...scoreboard.rows[0],
+          clubName: "NT",
+        },
+        {
+          ...scoreboard.rows[1],
+          clubName: "Very Long Anti-SeleK Club Name",
+        },
+      ],
+    };
+
+    await act(async () => {
+      root.render(<InterclubScoreboard scoreboard={mixedNameScoreboard} />);
+    });
+
+    const clubNameHeadings = document.body.querySelectorAll(
+      'section[aria-label$=" club stats"] h2'
+    );
+
+    expect(clubNameHeadings).toHaveLength(2);
+
+    for (const heading of clubNameHeadings) {
+      expect(heading.className).toContain("min-h-[2.25rem]");
+      expect(heading.className).toContain("max-h-[2.25rem]");
+      expect(heading.className).toContain("sm:min-h-[2.5rem]");
+      expect(heading.className).toContain("sm:max-h-[2.5rem]");
+      expect(heading.className).toContain("overflow-hidden");
+      expect(heading.className).toContain("leading-tight");
+    }
+  });
 });
