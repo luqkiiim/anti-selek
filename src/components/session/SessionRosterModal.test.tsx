@@ -25,6 +25,11 @@ const availablePlayer: ClubUser = {
   mixedSideOverride: null,
   needsMoreRest: false,
 };
+const interclubPlayer: ClubUser = {
+  ...availablePlayer,
+  representingClubId: "club-b",
+  representingClubName: "Anti-SeleK",
+};
 
 function getDefaultProps() {
   return {
@@ -90,10 +95,50 @@ describe("SessionRosterModal", () => {
     expect(document.body.textContent).toContain("Host Player 4");
     expect(document.body.textContent).toContain("Rating 1120");
     expect(document.body.textContent).toContain("Add guest instead");
+    expect(document.body.textContent).not.toContain("Anti-SeleK");
     expect(
       document.body.querySelector('input[placeholder="Guest name"]')
     ).toBeNull();
     expect(document.body.textContent).not.toContain("Add Guest");
+  });
+
+  it("shows represented club chips for interclub roster rows", async () => {
+    await act(async () => {
+      root.render(
+        <SessionRosterModal
+          {...getDefaultProps()}
+          isInterclub
+          playersNotInSession={[interclubPlayer]}
+        />
+      );
+    });
+
+    expect(document.body.textContent).toContain("Host Player 4");
+    expect(document.body.textContent).toContain("Anti-SeleK");
+  });
+
+  it("passes the selected roster row when adding a player", async () => {
+    const onAddPlayer = vi.fn();
+
+    await act(async () => {
+      root.render(
+        <SessionRosterModal
+          {...getDefaultProps()}
+          playersNotInSession={[interclubPlayer]}
+          onAddPlayer={onAddPlayer}
+        />
+      );
+    });
+
+    const addButton = Array.from(document.body.querySelectorAll("button")).find(
+      (button) => button.textContent === "Add"
+    );
+
+    await act(async () => {
+      addButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(onAddPlayer).toHaveBeenCalledWith(interclubPlayer);
   });
 
   it("shows the guest form after expanding the secondary guest action", async () => {

@@ -129,19 +129,6 @@ export async function POST(
       userIdToJoin = targetUserId;
     }
 
-    let targetNeedsMoreRest = false;
-    if (sessionData.clubId) {
-      const targetMembership = await getSessionMembership(prisma, {
-        session: sessionData,
-        userId: userIdToJoin,
-        acceptedOnly: true,
-      });
-      if (!targetMembership) {
-        return NextResponse.json({ error: "Target player is not a member of this club" }, { status: 400 });
-      }
-      targetNeedsMoreRest = targetMembership.needsMoreRest ?? false;
-    }
-
     // Check if already in session
     const existing = await prisma.sessionPlayer.findUnique({
       where: {
@@ -212,6 +199,7 @@ export async function POST(
     const arrivalPriorityAt =
       sessionData.status === SessionStatus.ACTIVE ? joinedAt : null;
     let normalizedRepresentingClubId: string | null = null;
+    let targetNeedsMoreRest = false;
 
     if (isInterclubSession(sessionData)) {
       const acceptedInterclubClubIds = getAcceptedInterclubClubIds(sessionData);
@@ -243,7 +231,50 @@ export async function POST(
         normalizedRepresentingClubId = representingClubId;
       } else if (uniqueEligibleClubIds.length === 1) {
         normalizedRepresentingClubId = uniqueEligibleClubIds[0];
+      } else {
+        return NextResponse.json(
+          { error: "Choose which club this player represents" },
+          { status: 400 }
+        );
       }
+
+      const representedClubId = normalizedRepresentingClubId;
+      if (!representedClubId) {
+        return NextResponse.json(
+          { error: "Choose which club this player represents" },
+          { status: 400 }
+        );
+      }
+
+      const targetMembership = await prisma.clubMember.findUnique({
+        where: {
+          clubId_userId: {
+            clubId: representedClubId,
+            userId: userIdToJoin,
+          },
+        },
+        select: {
+          needsMoreRest: true,
+        },
+      });
+      if (!targetMembership) {
+        return NextResponse.json(
+          { error: "Target player is not a member of this club" },
+          { status: 400 }
+        );
+      }
+
+      targetNeedsMoreRest = targetMembership.needsMoreRest ?? false;
+    } else if (sessionData.clubId) {
+      const targetMembership = await getSessionMembership(prisma, {
+        session: sessionData,
+        userId: userIdToJoin,
+        acceptedOnly: true,
+      });
+      if (!targetMembership) {
+        return NextResponse.json({ error: "Target player is not a member of this club" }, { status: 400 });
+      }
+      targetNeedsMoreRest = targetMembership.needsMoreRest ?? false;
     }
 
     const updatedSession = await prisma.session.update({

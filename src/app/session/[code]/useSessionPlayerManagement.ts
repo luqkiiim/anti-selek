@@ -73,6 +73,8 @@ function parseClubPlayers(data: unknown): ClubUser[] {
         mixedSideOverride?: unknown;
         status?: unknown;
         needsMoreRest?: unknown;
+        representingClubId?: unknown;
+        representingClubName?: unknown;
       };
 
       if (
@@ -113,6 +115,14 @@ function parseClubPlayers(data: unknown): ClubUser[] {
         partnerPreference,
         mixedSideOverride,
         needsMoreRest: candidate.needsMoreRest === true,
+        representingClubId:
+          typeof candidate.representingClubId === "string"
+            ? candidate.representingClubId
+            : null,
+        representingClubName:
+          typeof candidate.representingClubName === "string"
+            ? candidate.representingClubName
+            : null,
       });
 
       return players;
@@ -210,11 +220,18 @@ export function useSessionPlayerManagement({
   }, [openPreferenceEditor]);
 
   const fetchClubPlayers = async () => {
-    if (!sessionData?.clubId) return;
+    if (!sessionData) return;
+
+    const rosterUrl =
+      sessionData.collabFormat === SessionCollabFormat.INTERCLUB
+        ? `/api/sessions/${code}/roster`
+        : sessionData.clubId
+          ? `/api/clubs/${sessionData.clubId}/members`
+          : null;
+    if (!rosterUrl) return;
+
     try {
-      const res = await fetch(
-        `/api/clubs/${sessionData.clubId}/members`
-      );
+      const res = await fetch(rosterUrl);
       const data = await safeJson<unknown>(res);
       if (res.ok) {
         setClubPlayers(parseClubPlayers(data));
@@ -408,15 +425,21 @@ export function useSessionPlayerManagement({
     }
   };
 
-  const addPlayerToSession = async (userId: string) => {
-    setAddingPlayerId(userId);
+  const addPlayerToSession = async (player: ClubUser) => {
+    const rosterEntryId = `${player.id}:${player.representingClubId ?? ""}`;
+
+    setAddingPlayerId(rosterEntryId);
     try {
       const adminRes = await fetch(`/api/sessions/${code}/join`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          userId,
+          userId: player.id,
           pool: sessionData?.poolsEnabled ? rosterPool : SessionPool.A,
+          ...(sessionData?.collabFormat === SessionCollabFormat.INTERCLUB &&
+          player.representingClubId
+            ? { representingClubId: player.representingClubId }
+            : {}),
         }),
       });
 

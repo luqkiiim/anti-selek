@@ -48,7 +48,7 @@ interface SessionRosterModalProps {
   onGuestRepresentingClubChange: (value: string) => void;
   onGuestInitialEloChange: (value: number) => void;
   onAddGuest: () => void;
-  onAddPlayer: (userId: string) => void;
+  onAddPlayer: (player: ClubUser) => void;
 }
 
 export function SessionRosterModal({
@@ -276,9 +276,14 @@ export function SessionRosterModal({
           </div>
         ) : (
           <div className="space-y-2">
-            {playersNotInSession.map((player) => (
+            {playersNotInSession.map((player) => {
+              const rosterEntryId = `${player.id}:${
+                player.representingClubId ?? ""
+              }`;
+
+              return (
               <div
-                key={player.id}
+                key={rosterEntryId}
                 className="app-touch-pan-y flex items-center justify-between gap-3 rounded-xl border border-gray-200 bg-gray-50/70 px-3 py-3 transition"
               >
                 <div className="min-w-0 flex items-center gap-3">
@@ -298,6 +303,11 @@ export function SessionRosterModal({
                           Occasional
                         </span>
                       ) : null}
+                      {isInterclub && player.representingClubName ? (
+                        <span className="app-chip app-chip-accent px-2 py-0.5 text-[10px]">
+                          {player.representingClubName}
+                        </span>
+                      ) : null}
                       {poolsEnabled ? (
                         <span className="app-chip app-chip-accent px-2 py-0.5 text-[10px]">
                           Add to{" "}
@@ -312,14 +322,15 @@ export function SessionRosterModal({
 
                 <button
                   type="button"
-                  onClick={() => onAddPlayer(player.id)}
-                  disabled={addingPlayerId === player.id}
+                  onClick={() => onAddPlayer(player)}
+                  disabled={addingPlayerId === rosterEntryId}
                   className="app-button-primary px-4 py-2.5 disabled:opacity-50"
                 >
-                  {addingPlayerId === player.id ? "Adding..." : "Add"}
+                  {addingPlayerId === rosterEntryId ? "Adding..." : "Add"}
                 </button>
               </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>

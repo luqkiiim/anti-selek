@@ -93,6 +93,8 @@ export interface ClubUser {
   elo: number;
   status: ClubPlayerStatus;
   needsMoreRest: boolean;
+  representingClubId?: string | null;
+  representingClubName?: string | null;
   gender: PlayerGender;
   partnerPreference: PartnerPreference;
   mixedSideOverride?: MixedSide | null;
