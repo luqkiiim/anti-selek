@@ -407,6 +407,7 @@ export function mergeSessionSnapshot(
         : current.queuedMatch,
     viewerCanManage: current.viewerCanManage,
     viewerCanUseAdminSessionControls: current.viewerCanUseAdminSessionControls,
+    viewerIsQuickAccess: current.viewerIsQuickAccess,
     viewerClubRole: current.viewerClubRole,
     isTutorialClub: current.isTutorialClub,
     tutorialOwnerId: current.tutorialOwnerId,

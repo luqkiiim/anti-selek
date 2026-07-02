@@ -11,7 +11,8 @@ import {
   compareCompetitiveStandings,
   compareSessionStandings,
 } from "@/lib/sessionStandings";
-import { canQuickAccessClub, isQuickAccessSession } from "@/lib/quickAccess";
+import { canQuickAccessSessionRead, isQuickAccessSession } from "@/lib/quickAccess";
+import { getSessionMembership } from "@/lib/sessionCollab";
 import { MatchStatus, SessionType } from "@/types/enums";
 import { logError, safeErrorResponse } from "@/lib/errors";
 import { rateLimit, checkInvalidTargetRateLimit, invalidTargetResponse } from "@/lib/rateLimit";
@@ -64,30 +65,29 @@ async function getSessionLeaderboard(
           status: true,
           completedAt: true,
         }
-      }
+      },
+      sessionClubs: {
+        select: {
+          clubId: true,
+          status: true,
+        },
+      },
     },
   });
 
   if (!sessionData) {
     return invalidTargetResponse(request, "api:sessions:code:leaderboard");
   }
-  if (!canQuickAccessClub(session, sessionData.clubId)) {
+  if (!canQuickAccessSessionRead(session, sessionData)) {
     return invalidTargetResponse(request, "api:sessions:code:leaderboard");
   }
 
-  let clubRole: string | null = null;
-  if (sessionData.clubId) {
-    const membership = await prisma.clubMember.findUnique({
-      where: {
-        clubId_userId: {
-          clubId: sessionData.clubId,
-          userId: session.user.id,
-        },
-      },
-      select: { role: true },
-    });
-    clubRole = membership?.role ?? null;
-  }
+  const membership = await getSessionMembership(prisma, {
+    session: sessionData,
+    userId: session.user.id,
+    acceptedOnly: true,
+  });
+  const clubRole = membership?.role ?? null;
 
   const isSessionPlayer = sessionData.players.some((p) => p.userId === session.user.id);
   const canView =

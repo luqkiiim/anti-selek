@@ -14,7 +14,7 @@ import { MatchStatus } from "@/types/enums";
 import { getQueuedMatchUserIds } from "@/lib/sessionQueue";
 import { parseMatchmakingReasonJson } from "@/lib/matchmaking/matchReason";
 import {
-  canQuickAccessClub,
+  canQuickAccessSessionRead,
   getQuickAccessDeniedMessage,
   isQuickAccessSession,
 } from "@/lib/quickAccess";
@@ -139,7 +139,7 @@ async function getSessionRoute(
   ) {
     return invalidTargetResponse(request, "api:sessions:code");
   }
-  if (!canQuickAccessClub(session, sessionData.clubId)) {
+  if (!canQuickAccessSessionRead(session, sessionData)) {
     return invalidTargetResponse(request, "api:sessions:code");
   }
 
@@ -253,6 +253,7 @@ async function getSessionRoute(
     players: serializedPlayers,
     queuedMatch,
     viewerClubRole: clubRole,
+    viewerIsQuickAccess: isQuickAccess,
     viewerCanManage:
       !isQuickAccess && (session.user.isAdmin || !!operatorMembership),
     viewerCanUseAdminSessionControls:

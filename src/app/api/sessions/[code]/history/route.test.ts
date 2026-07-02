@@ -9,6 +9,7 @@ import {
 const mocks = vi.hoisted(() => ({
   auth: vi.fn(),
   canQuickAccessClub: vi.fn(),
+  canQuickAccessSessionRead: vi.fn(),
   getSessionAdminMembership: vi.fn(),
   getSessionMembership: vi.fn(),
   getSessionOperatorMembership: vi.fn(),
@@ -34,7 +35,7 @@ vi.mock("@/lib/prisma", () => ({
 }));
 
 vi.mock("@/lib/quickAccess", () => ({
-  canQuickAccessClub: mocks.canQuickAccessClub,
+  canQuickAccessSessionRead: mocks.canQuickAccessSessionRead,
   isQuickAccessSession: mocks.isQuickAccessSession,
 }));
 
@@ -109,6 +110,30 @@ describe("session history route correction availability", () => {
       user: { id: "admin-1", isAdmin: false },
     });
     mocks.canQuickAccessClub.mockReturnValue(true);
+    mocks.canQuickAccessSessionRead.mockImplementation(
+      (
+        session: { user?: { isQuickAccess?: boolean; quickAccessClubId?: string | null } },
+        data: {
+          clubId?: string | null;
+          sessionClubs?: Array<{ clubId: string; status: string }>;
+        }
+      ) => {
+        if (session.user?.isQuickAccess !== true) {
+          return true;
+        }
+
+        const quickAccessClubId = session.user.quickAccessClubId;
+        return (
+          !!quickAccessClubId &&
+          (data.clubId === quickAccessClubId ||
+            data.sessionClubs?.some(
+              (link) =>
+                link.clubId === quickAccessClubId &&
+                link.status === SessionClubStatus.ACCEPTED
+            ) === true)
+        );
+      }
+    );
     mocks.isQuickAccessSession.mockReturnValue(false);
     mocks.invalidTargetResponse.mockImplementation(async () =>
       Response.json({ error: "Unauthorized" }, { status: 403 })
@@ -155,5 +180,28 @@ describe("session history route correction availability", () => {
     expect(body.canCorrectCompletedScores).toBe(false);
     expect(body.correctionBlockedReason).toBeNull();
     expect(mocks.matchFindFirst).not.toHaveBeenCalled();
+  });
+
+  it("allows quick-access spectators to read accepted session history without management controls", async () => {
+    mocks.auth.mockResolvedValue({
+      user: {
+        id: "quick-1",
+        isAdmin: false,
+        isQuickAccess: true,
+        quickAccessClubId: "community-1",
+      },
+    });
+    mocks.isQuickAccessSession.mockReturnValue(true);
+    mocks.getSessionMembership.mockResolvedValue({ role: "MEMBER" });
+    mocks.getSessionOperatorMembership.mockResolvedValue({ role: "STAFF" });
+    mocks.getSessionAdminMembership.mockResolvedValue({ role: "ADMIN" });
+
+    const response = await getHistory();
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.viewerCanManage).toBe(false);
+    expect(body.canCorrectCompletedScores).toBe(false);
+    expect(body.undoableMatchId).toBeNull();
   });
 });

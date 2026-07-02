@@ -59,6 +59,7 @@ function renderLiveCard(match: Match, matchScores: MatchScores = {}) {
       currentUserId="admin-user"
       isAdmin={true}
       isClaimedUser={true}
+      canSubmitScores={true}
       confirmingScoreMatchId={null}
       reshufflingCourtPlayerId={null}
       replacingCourtPlayerId={null}
@@ -89,6 +90,7 @@ function renderConfirmingLiveCard(
       currentUserId="admin-user"
       isAdmin={true}
       isClaimedUser={true}
+      canSubmitScores={true}
       confirmingScoreMatchId={match.id}
       reshufflingCourtPlayerId={null}
       replacingCourtPlayerId={null}

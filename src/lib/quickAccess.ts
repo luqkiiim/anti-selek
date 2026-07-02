@@ -28,6 +28,37 @@ export function canQuickAccessClub(
   );
 }
 
+export function canQuickAccessSessionRead(
+  session: Session | null | undefined,
+  sessionData: {
+    clubId?: string | null;
+    sessionClubs?: Array<{
+      clubId: string;
+      status: string;
+    }>;
+  }
+): boolean {
+  if (!isQuickAccessSession(session)) {
+    return true;
+  }
+
+  const quickAccessClubId = session?.user?.quickAccessClubId;
+  if (!quickAccessClubId) {
+    return false;
+  }
+
+  if (sessionData.clubId === quickAccessClubId) {
+    return true;
+  }
+
+  return (
+    sessionData.sessionClubs?.some(
+      (link) =>
+        link.clubId === quickAccessClubId && link.status === "ACCEPTED"
+    ) ?? false
+  );
+}
+
 export function getQuickAccessDeniedMessage(): string {
   return "Sign up or log in with a full account to use this feature";
 }

@@ -127,6 +127,7 @@ export interface SessionData {
   crossoverMissThreshold: number;
   viewerCanManage?: boolean;
   viewerCanUseAdminSessionControls?: boolean;
+  viewerIsQuickAccess?: boolean;
   viewerClubRole?: string | null;
   isTutorialClub?: boolean;
   tutorialOwnerId?: string | null;
@@ -147,6 +148,7 @@ export interface CurrentUser {
   id: string;
   isAdmin?: boolean;
   isClaimed?: boolean;
+  isQuickAccess?: boolean;
   avatarUrl?: string | null;
 }
 

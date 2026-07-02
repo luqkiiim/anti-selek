@@ -55,6 +55,9 @@ export async function POST(
     if (!canQuickAccessClub(session, match.session.clubId)) {
       return invalidTargetResponse(request, "api:matches:id:approve");
     }
+    if (isQuickAccessSession(session)) {
+      return invalidTargetResponse(request, "api:matches:id:approve");
+    }
 
     if (match.status !== MatchStatus.PENDING_APPROVAL) {
       return NextResponse.json({ error: "Match not pending approval" }, { status: 400 });

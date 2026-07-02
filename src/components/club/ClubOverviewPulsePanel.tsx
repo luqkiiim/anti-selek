@@ -24,6 +24,7 @@ interface ClubOverviewPulsePanelProps {
   clubPulse: ClubPagePulse | null;
   activeTournaments: ClubPageSession[];
   currentUserId?: string | null;
+  viewerIsQuickAccess?: boolean;
   onJoinTournament: (code: string) => void;
   onOpenTournament: (code: string) => void;
   onOpenTournaments: () => void;
@@ -287,6 +288,7 @@ export function ClubOverviewPulsePanel({
   clubPulse,
   activeTournaments,
   currentUserId,
+  viewerIsQuickAccess = false,
   onJoinTournament,
   onOpenTournament,
   onOpenTournaments,
@@ -428,7 +430,7 @@ export function ClubOverviewPulsePanel({
                 {isParticipant ? "Open" : "View"}
                 <ArrowRight aria-hidden="true" size={15} />
               </button>
-              {!isParticipant ? (
+              {!isParticipant && !viewerIsQuickAccess ? (
                 <button
                   type="button"
                   onClick={() => onJoinTournament(tournament.code)}
@@ -450,6 +452,7 @@ export function ClubOverviewPulsePanel({
       currentUserId,
       onJoinTournament,
       onOpenTournament,
+      viewerIsQuickAccess,
     ]
   );
 

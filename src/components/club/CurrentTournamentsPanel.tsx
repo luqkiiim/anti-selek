@@ -24,6 +24,7 @@ interface CurrentTournamentsPanelProps {
   currentUserId?: string | null;
   currentClubId: string;
   canManageClub: boolean;
+  viewerIsQuickAccess?: boolean;
   onOpenTournament: (code: string) => void;
   onJoinTournament: (code: string) => void;
   onReviewCollabTournament: (
@@ -37,6 +38,7 @@ export function CurrentTournamentsPanel({
   currentUserId,
   currentClubId,
   canManageClub,
+  viewerIsQuickAccess = false,
   onOpenTournament,
   onJoinTournament,
   onReviewCollabTournament,
@@ -193,14 +195,16 @@ export function CurrentTournamentsPanel({
                     >
                       View
                     </button>
-                    <button
-                      type="button"
-                      onClick={() => onJoinTournament(tournament.code)}
-                      disabled={isPendingCollab}
-                      className="app-button-dark px-3 py-1.5 text-sm disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      {isPendingCollab ? "Pending" : "Join"}
-                    </button>
+                    {!viewerIsQuickAccess ? (
+                      <button
+                        type="button"
+                        onClick={() => onJoinTournament(tournament.code)}
+                        disabled={isPendingCollab}
+                        className="app-button-dark px-3 py-1.5 text-sm disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {isPendingCollab ? "Pending" : "Join"}
+                      </button>
+                    ) : null}
                   </div>
                 </div>
               </div>

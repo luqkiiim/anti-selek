@@ -2,7 +2,10 @@ import { NextResponse } from "next/server";
 
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { canQuickAccessClub, isQuickAccessSession } from "@/lib/quickAccess";
+import {
+  canQuickAccessSessionRead,
+  isQuickAccessSession,
+} from "@/lib/quickAccess";
 import {
   getSessionAdminMembership,
   getSessionMembership,
@@ -217,7 +220,7 @@ async function getSessionHistory(
   if (!sessionData) {
     return invalidTargetResponse(_request, "api:sessions:code:history");
   }
-  if (!canQuickAccessClub(session, sessionData.clubId)) {
+  if (!canQuickAccessSessionRead(session, sessionData)) {
     return invalidTargetResponse(_request, "api:sessions:code:history");
   }
 

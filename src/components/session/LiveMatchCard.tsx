@@ -15,6 +15,7 @@ interface LiveMatchCardProps {
   currentUserId: string;
   isAdmin: boolean;
   isClaimedUser: boolean;
+  canSubmitScores: boolean;
   confirmingScoreMatchId: string | null;
   reshufflingCourtPlayerId: string | null;
   replacingCourtPlayerId: string | null;
@@ -218,6 +219,7 @@ export function LiveMatchCard({
   currentUserId,
   isAdmin,
   isClaimedUser,
+  canSubmitScores,
   confirmingScoreMatchId,
   reshufflingCourtPlayerId,
   replacingCourtPlayerId,
@@ -258,8 +260,11 @@ export function LiveMatchCard({
     match.team2User2.id,
   ].includes(currentUserId);
   const canEdit =
-    match.status === MatchStatus.IN_PROGRESS && (isAdmin || isParticipant);
+    canSubmitScores &&
+    match.status === MatchStatus.IN_PROGRESS &&
+    (isAdmin || isParticipant);
   const canConfirmPending =
+    canSubmitScores &&
     match.status === MatchStatus.PENDING_APPROVAL &&
     (match.scoreSubmittedByUserId
       ? canApprovePendingSubmission({

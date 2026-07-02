@@ -51,6 +51,7 @@ interface LiveCourtCardProps {
   currentUserId: string;
   isAdmin: boolean;
   isClaimedUser: boolean;
+  canSubmitScores: boolean;
   confirmingScoreMatchId: string | null;
   reshufflingCourtId: string | null;
   reshufflingCourtPlayerId: string | null;
@@ -92,6 +93,7 @@ export function LiveCourtCard({
   currentUserId,
   isAdmin,
   isClaimedUser,
+  canSubmitScores,
   confirmingScoreMatchId,
   reshufflingCourtId,
   reshufflingCourtPlayerId,
@@ -329,6 +331,7 @@ export function LiveCourtCard({
                 currentUserId={currentUserId}
                 isAdmin={isAdmin}
                 isClaimedUser={isClaimedUser}
+                canSubmitScores={canSubmitScores}
                 confirmingScoreMatchId={confirmingScoreMatchId}
                 reshufflingCourtPlayerId={reshufflingCourtPlayerId}
                 replacingCourtPlayerId={replacingCourtPlayerId}

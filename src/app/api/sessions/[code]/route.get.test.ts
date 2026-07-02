@@ -4,6 +4,7 @@ import { expectAliasPair } from "@/lib/clubContractAliasTestUtils";
 
 const mocks = vi.hoisted(() => ({
   auth: vi.fn(),
+  canQuickAccessSessionRead: vi.fn(),
   sessionFindUnique: vi.fn(),
   getSessionMembership: vi.fn(),
   getSessionAdminMembership: vi.fn(),
@@ -42,9 +43,12 @@ vi.mock("@/lib/clubElo", () => ({
 }));
 
 vi.mock("@/lib/quickAccess", () => ({
-  canQuickAccessClub: vi.fn(() => true),
+  canQuickAccessSessionRead: mocks.canQuickAccessSessionRead,
   getQuickAccessDeniedMessage: vi.fn(() => "Denied"),
-  isQuickAccessSession: vi.fn(() => false),
+  isQuickAccessSession: vi.fn(
+    (session: { user?: { isQuickAccess?: boolean } } | null | undefined) =>
+      session?.user?.isQuickAccess === true
+  ),
 }));
 
 vi.mock("@/lib/sessionQueue", () => ({
@@ -72,6 +76,30 @@ describe("session route GET", () => {
     mocks.auth.mockResolvedValue({
       user: { id: "u1", isAdmin: false },
     });
+    mocks.canQuickAccessSessionRead.mockImplementation(
+      (
+        session: { user?: { isQuickAccess?: boolean; quickAccessClubId?: string | null } },
+        data: {
+          clubId?: string | null;
+          sessionClubs?: Array<{ clubId: string; status: string }>;
+        }
+      ) => {
+        if (session.user?.isQuickAccess !== true) {
+          return true;
+        }
+
+        const quickAccessClubId = session.user.quickAccessClubId;
+        return (
+          !!quickAccessClubId &&
+          (data.clubId === quickAccessClubId ||
+            data.sessionClubs?.some(
+              (link) =>
+                link.clubId === quickAccessClubId &&
+                link.status === "ACCEPTED"
+            ) === true)
+        );
+      }
+    );
     mocks.getSessionMembership.mockResolvedValue({ role: "MEMBER" });
     mocks.getSessionAdminMembership.mockResolvedValue(null);
     mocks.getSessionOperatorMembership.mockResolvedValue(null);
@@ -177,6 +205,125 @@ describe("session route GET", () => {
     expectAliasPair(body, "clubs", "communities");
     expectAliasPair(body, "viewerClubRole", "viewerCommunityRole");
     expect(body.respectPlayerRest).toBe(true);
+  });
+
+  it("allows quick-access host club spectators without management permissions", async () => {
+    mocks.auth.mockResolvedValue({
+      user: {
+        id: "u1",
+        isAdmin: false,
+        isQuickAccess: true,
+        quickAccessClubId: "community-1",
+      },
+    });
+
+    const response = await GET(
+      new Request("http://localhost/api/sessions/ABC123"),
+      {
+        params: Promise.resolve({ code: "ABC123" }),
+      }
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.viewerIsQuickAccess).toBe(true);
+    expect(body.viewerCanManage).toBe(false);
+    expect(body.viewerCanUseAdminSessionControls).toBe(false);
+  });
+
+  it("allows quick-access accepted partner club spectators", async () => {
+    const sessionData = await mocks.sessionFindUnique();
+    mocks.sessionFindUnique.mockClear();
+    mocks.auth.mockResolvedValue({
+      user: {
+        id: "partner-player",
+        isAdmin: false,
+        isQuickAccess: true,
+        quickAccessClubId: "community-2",
+      },
+    });
+    mocks.getSessionMembership.mockResolvedValue({
+      clubId: "community-2",
+      role: "MEMBER",
+    });
+    mocks.sessionFindUnique.mockResolvedValueOnce({
+      ...sessionData,
+      sessionClubs: [
+        {
+          clubId: "community-1",
+          role: "HOST",
+          status: "ACCEPTED",
+          club: {
+            id: "community-1",
+            name: "Northside Club",
+            avatarKey: null,
+            isTutorial: false,
+          },
+        },
+        {
+          clubId: "community-2",
+          role: "PARTNER",
+          status: "ACCEPTED",
+          club: {
+            id: "community-2",
+            name: "Partner Club",
+            avatarKey: null,
+            isTutorial: false,
+          },
+        },
+      ],
+    });
+
+    const response = await GET(
+      new Request("http://localhost/api/sessions/ABC123"),
+      {
+        params: Promise.resolve({ code: "ABC123" }),
+      }
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.viewerClubRole).toBe("MEMBER");
+    expect(body.viewerIsQuickAccess).toBe(true);
+    expect(body.viewerCanManage).toBe(false);
+  });
+
+  it("rejects quick-access pending partner club spectators", async () => {
+    const sessionData = await mocks.sessionFindUnique();
+    mocks.sessionFindUnique.mockClear();
+    mocks.auth.mockResolvedValue({
+      user: {
+        id: "partner-player",
+        isAdmin: false,
+        isQuickAccess: true,
+        quickAccessClubId: "community-2",
+      },
+    });
+    mocks.sessionFindUnique.mockResolvedValueOnce({
+      ...sessionData,
+      sessionClubs: [
+        {
+          clubId: "community-2",
+          role: "PARTNER",
+          status: "PENDING",
+          club: {
+            id: "community-2",
+            name: "Partner Club",
+            avatarKey: null,
+            isTutorial: false,
+          },
+        },
+      ],
+    });
+
+    const response = await GET(
+      new Request("http://localhost/api/sessions/ABC123"),
+      {
+        params: Promise.resolve({ code: "ABC123" }),
+      }
+    );
+
+    expect(response.status).toBe(403);
   });
 
   it("includes avatarUrl in linked session clubs", async () => {

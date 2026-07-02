@@ -140,4 +140,21 @@ describe("CurrentTournamentsPanel", () => {
     expect(pendingButton?.disabled).toBe(true);
     expect(onJoinTournament).not.toHaveBeenCalled();
   });
+
+  it("hides join for quick-access viewers while keeping view available", async () => {
+    const onOpenTournament = vi.fn();
+    const onJoinTournament = vi.fn();
+
+    await renderPanel({
+      viewerIsQuickAccess: true,
+      onOpenTournament,
+      onJoinTournament,
+    });
+
+    await clickButton("View");
+
+    expect(onOpenTournament).toHaveBeenCalledWith("SESSION1");
+    expect(findButton("Join")).toBeUndefined();
+    expect(onJoinTournament).not.toHaveBeenCalled();
+  });
 });

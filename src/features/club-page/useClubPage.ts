@@ -20,7 +20,7 @@ import { useClubPageActions } from "./useClubPageActions";
 import { useClubPageData } from "./useClubPageData";
 
 export function useClubPage() {
-  const { status } = useSession();
+  const { data: authSession, status } = useSession();
   const router = useRouter();
   const params = useParams<{ id: string }>();
   const clubId = typeof params.id === "string" ? params.id : "";
@@ -84,6 +84,7 @@ export function useClubPage() {
   const canManageClub =
     (!!data.club && isClubOperatorRole(data.club.role)) ||
     !!data.user?.isAdmin;
+  const viewerIsQuickAccess = authSession?.user?.isQuickAccess === true;
   const baseSelectablePlayers = useMemo(
     () =>
       data.clubMembers
@@ -164,6 +165,7 @@ export function useClubPage() {
     leaderboardPreview,
     canManageClub,
     canAdminClub,
+    viewerIsQuickAccess,
     testSessions,
     filteredSelectablePlayers,
     currentUserClaimEligibility,

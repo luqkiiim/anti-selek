@@ -446,6 +446,11 @@ export default function SessionPage() {
     !!session?.user?.isAdmin;
   const isClaimedUser = user?.isClaimed === true;
   const currentUserId = session?.user?.id || "";
+  const viewerIsQuickAccess =
+    sessionData?.viewerIsQuickAccess === true ||
+    user?.isQuickAccess === true ||
+    session?.user?.isQuickAccess === true;
+  const canSubmitScores = !viewerIsQuickAccess;
   const isTutorialPlayground =
     sessionData?.isTutorialClub === true &&
     sessionData.tutorialOwnerId === currentUserId;
@@ -1301,6 +1306,7 @@ export default function SessionPage() {
                   currentUserId={currentUserId}
                   isAdmin={isAdmin}
                   isClaimedUser={isClaimedUser}
+                  canSubmitScores={canSubmitScores}
                   confirmingScoreMatchId={scoreActions.confirmingScoreMatchId}
                   activeMatchesCount={sessionView.activeMatchesCount}
                   readyCourtsCount={sessionView.readyCourtsCount}

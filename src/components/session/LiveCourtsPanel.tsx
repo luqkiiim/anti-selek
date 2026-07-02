@@ -34,6 +34,7 @@ interface LiveCourtsPanelProps {
   currentUserId: string;
   isAdmin: boolean;
   isClaimedUser: boolean;
+  canSubmitScores: boolean;
   confirmingScoreMatchId: string | null;
   activeMatchesCount: number;
   readyCourtsCount: number;
@@ -252,6 +253,7 @@ export function LiveCourtsPanel({
   currentUserId,
   isAdmin,
   isClaimedUser,
+  canSubmitScores,
   confirmingScoreMatchId,
   activeMatchesCount,
   readyCourtsCount,
@@ -671,6 +673,7 @@ export function LiveCourtsPanel({
             currentUserId={currentUserId}
             isAdmin={isAdmin}
             isClaimedUser={isClaimedUser}
+            canSubmitScores={canSubmitScores}
             confirmingScoreMatchId={confirmingScoreMatchId}
             reshufflingCourtId={reshufflingCourtId}
             reshufflingCourtPlayerId={reshufflingCourtPlayerId}

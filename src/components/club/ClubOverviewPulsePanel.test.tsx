@@ -49,11 +49,13 @@ describe("ClubOverviewPulsePanel", () => {
     currentUserId = "current-user",
     onJoinTournament = vi.fn(),
     onOpenTournament = vi.fn(),
+    viewerIsQuickAccess = false,
   }: {
     activeTournaments?: ClubPageSession[];
     currentUserId?: string | null;
     onJoinTournament?: (code: string) => void;
     onOpenTournament?: (code: string) => void;
+    viewerIsQuickAccess?: boolean;
   } = {}) {
     await act(async () => {
       root.render(
@@ -62,6 +64,7 @@ describe("ClubOverviewPulsePanel", () => {
           clubPulse={null}
           activeTournaments={activeTournaments}
           currentUserId={currentUserId}
+          viewerIsQuickAccess={viewerIsQuickAccess}
           onJoinTournament={onJoinTournament}
           onOpenTournament={onOpenTournament}
           onOpenTournaments={vi.fn()}
@@ -146,6 +149,23 @@ describe("ClubOverviewPulsePanel", () => {
     expect(onOpenTournament).toHaveBeenCalledWith("SESSION1");
     const pendingButton = findButton("Pending");
     expect(pendingButton?.disabled).toBe(true);
+    expect(onJoinTournament).not.toHaveBeenCalled();
+  });
+
+  it("hides join for quick-access viewers while keeping view available", async () => {
+    const onOpenTournament = vi.fn();
+    const onJoinTournament = vi.fn();
+
+    await renderPanel({
+      viewerIsQuickAccess: true,
+      onOpenTournament,
+      onJoinTournament,
+    });
+
+    await clickButton("View");
+
+    expect(onOpenTournament).toHaveBeenCalledWith("SESSION1");
+    expect(findButton("Join")).toBeUndefined();
     expect(onJoinTournament).not.toHaveBeenCalled();
   });
 });

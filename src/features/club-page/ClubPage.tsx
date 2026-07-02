@@ -180,6 +180,7 @@ export default function ClubPage() {
     clubPulse,
     canManageClub,
     canAdminClub,
+    viewerIsQuickAccess,
     selectablePlayers,
     filteredSelectablePlayers,
     currentUserClaimEligibility,
@@ -821,6 +822,7 @@ export default function ClubPage() {
       clubPulse={clubPulse}
       activeTournaments={activeTournaments}
       currentUserId={user?.id}
+      viewerIsQuickAccess={viewerIsQuickAccess}
       onJoinTournament={joinTournament}
       onOpenTournament={openTournament}
       onOpenTournaments={() => switchClubSection("tournaments")}
@@ -837,6 +839,7 @@ export default function ClubPage() {
         currentUserId={user?.id}
         currentClubId={clubId}
         canManageClub={canAdminClub}
+        viewerIsQuickAccess={viewerIsQuickAccess}
         onOpenTournament={openTournament}
         onJoinTournament={joinTournament}
         onReviewCollabTournament={reviewCollabTournament}
