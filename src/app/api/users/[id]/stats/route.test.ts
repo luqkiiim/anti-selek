@@ -256,6 +256,68 @@ describe("user stats route", () => {
     expect(body.context.communityId).toBe("community-1");
   });
 
+  it("includes accepted partner-club sessions in scoped club profile stats", async () => {
+    mocks.clubMemberFindUnique
+      .mockResolvedValueOnce({ role: "ADMIN" })
+      .mockResolvedValueOnce({
+        elo: 1275,
+        status: "CORE",
+        user: {
+          id: "user-1",
+          name: "Alex Lee",
+        },
+      });
+    mocks.clubMemberFindMany.mockResolvedValueOnce([
+      {
+        userId: "user-1",
+        elo: 1275,
+        user: {
+          name: "Alex Lee",
+        },
+      },
+    ]);
+
+    const response = await GET(
+      new Request("http://localhost/api/users/user-1/stats?clubId=community-2"),
+      {
+        params: Promise.resolve({ id: "user-1" }),
+      }
+    );
+
+    const expectedScopedSession = expect.objectContaining({
+      isTest: false,
+      OR: expect.arrayContaining([
+        { clubId: "community-2" },
+        {
+          sessionClubs: {
+            some: {
+              clubId: "community-2",
+              status: "ACCEPTED",
+            },
+          },
+        },
+      ]),
+    });
+
+    expect(response.status).toBe(200);
+    expect(mocks.matchFindMany).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        where: expect.objectContaining({
+          session: expectedScopedSession,
+        }),
+      })
+    );
+    expect(mocks.matchFindMany).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        where: expect.objectContaining({
+          session: expectedScopedSession,
+        }),
+      })
+    );
+  });
+
   it("excludes scoped profile rank eligibility until the member has a recorded club match", async () => {
     mocks.clubMemberFindUnique
       .mockResolvedValueOnce({ role: "ADMIN" })

@@ -11,11 +11,28 @@ import {
   readAliasedSearchParam,
   withLegacyClubAliases,
 } from "@/lib/clubContractAliases";
-import { ClubPlayerStatus, MatchStatus } from "@/types/enums";
+import { ClubPlayerStatus, MatchStatus, SessionClubStatus } from "@/types/enums";
 import { logError, safeErrorResponse } from "@/lib/errors";
 import { rateLimit, checkInvalidTargetRateLimit, invalidTargetResponse } from "@/lib/rateLimit";
 
 export const dynamic = "force-dynamic";
+
+function getClubScopedSessionWhere(clubId: string) {
+  return {
+    isTest: false,
+    OR: [
+      { clubId },
+      {
+        sessionClubs: {
+          some: {
+            clubId,
+            status: SessionClubStatus.ACCEPTED,
+          },
+        },
+      },
+    ],
+  };
+}
 
 async function getUserStatsRoute(
   request: Request,
@@ -160,10 +177,7 @@ async function getUserStatsRoute(
     const leaderboardMatches = await prisma.match.findMany({
       where: {
         status: MatchStatus.COMPLETED,
-        session: {
-          clubId,
-          isTest: false,
-        },
+        session: getClubScopedSessionWhere(clubId),
       },
       select: {
         team1User1Id: true,
@@ -201,7 +215,7 @@ async function getUserStatsRoute(
     where: {
       status: MatchStatus.COMPLETED,
       session: clubId
-        ? { clubId, isTest: false }
+        ? getClubScopedSessionWhere(clubId)
         : { isTest: false },
       OR: [
         { team1User1Id: id },
@@ -275,8 +289,7 @@ async function getUserStatsRoute(
                 in: recentSessionIds,
               },
               session: {
-                clubId,
-                isTest: false,
+                ...getClubScopedSessionWhere(clubId),
               },
             },
             select: {

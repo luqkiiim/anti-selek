@@ -433,6 +433,53 @@ describe("buildSessionViewModel", () => {
     expect(viewModel.interclubScoreboard).toBeNull();
   });
 
+  it("scopes interclub player profile links to the player's represented club", () => {
+    const players = [
+      createPlayer("club-a-player", "Club A Player", {
+        representingClubId: "community-1",
+        communityBadges: [{ id: "community-1", name: "Northside", elo: 1000 }],
+      }),
+      createPlayer("club-b-player", "Club B Player", {
+        representingClubId: "community-2",
+        communityBadges: [{ id: "community-2", name: "Anti-SeleK", elo: 1000 }],
+      }),
+    ];
+
+    const viewModel = buildSessionViewModel({
+      sessionData: createSessionData({
+        clubId: "community-1",
+        collabFormat: SessionCollabFormat.INTERCLUB,
+        clubs: [
+          {
+            id: "community-1",
+            name: "Northside Club",
+            role: "HOST",
+            status: "ACCEPTED",
+          },
+          {
+            id: "community-2",
+            name: "Anti-SeleK Club",
+            role: "PARTNER",
+            status: "ACCEPTED",
+          },
+        ],
+        players,
+      }),
+      clubPlayers: [],
+      rosterSearch: "",
+      manualMatchForm: emptyManualMatchForm,
+      manualCourtId: null,
+      openPreferenceEditor: null,
+    });
+
+    expect(viewModel.getPlayerProfileHref(players[0])).toBe(
+      "/profile/club-a-player?clubId=community-1"
+    );
+    expect(viewModel.getPlayerProfileHref(players[1])).toBe(
+      "/profile/club-b-player?clubId=community-2"
+    );
+  });
+
   it("sorts ladder standings by record and ignores matches before ladder re-entry", () => {
     const players = [
       createPlayer("u1", "Alice"),

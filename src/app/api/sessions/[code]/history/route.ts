@@ -197,6 +197,8 @@ async function getSessionHistory(
           team1User2Id: true,
           team2User1Id: true,
           team2User2Id: true,
+          team1ClubId: true,
+          team2ClubId: true,
           winnerTeam: true,
           team1Score: true,
           team2Score: true,

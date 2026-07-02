@@ -22,6 +22,8 @@ interface HistoryMatch {
   team2Score?: number | null;
   team1EloChange?: number | null;
   team2EloChange?: number | null;
+  team1ClubId?: string | null;
+  team2ClubId?: string | null;
   court: {
     courtNumber: number;
     label?: string | null;
@@ -255,10 +257,12 @@ export default function SessionHistoryPage() {
 
   const sessionTypeLabel = getSessionTypeLabel(data.session.type);
   const sessionModeLabel = getSessionModeLabel(data.session.mode);
-  const getProfileHref = (userId: string) =>
-    data.session.clubId
-      ? `/profile/${userId}?clubId=${data.session.clubId}`
+  const getProfileHref = (userId: string, clubId?: string | null) => {
+    const profileClubId = clubId ?? data.session.clubId ?? null;
+    return profileClubId
+      ? `/profile/${userId}?clubId=${encodeURIComponent(profileClubId)}`
       : `/profile/${userId}`;
+  };
 
   return (
     <main className="app-page">
@@ -355,11 +359,11 @@ export default function SessionHistoryPage() {
                         }`}
                       >
                         <p className="text-sm font-semibold text-gray-900">
-                          <Link href={getProfileHref(match.team1User1.id)} className="hover:text-blue-600 hover:underline">
+                          <Link href={getProfileHref(match.team1User1.id, match.team1ClubId)} className="hover:text-blue-600 hover:underline">
                             {match.team1User1.name}
                           </Link>
                           {" & "}
-                          <Link href={getProfileHref(match.team1User2.id)} className="hover:text-blue-600 hover:underline">
+                          <Link href={getProfileHref(match.team1User2.id, match.team1ClubId)} className="hover:text-blue-600 hover:underline">
                             {match.team1User2.name}
                           </Link>
                         </p>
@@ -377,11 +381,11 @@ export default function SessionHistoryPage() {
                         }`}
                       >
                         <p className="text-sm font-semibold text-gray-900">
-                          <Link href={getProfileHref(match.team2User1.id)} className="hover:text-blue-600 hover:underline">
+                          <Link href={getProfileHref(match.team2User1.id, match.team2ClubId)} className="hover:text-blue-600 hover:underline">
                             {match.team2User1.name}
                           </Link>
                           {" & "}
-                          <Link href={getProfileHref(match.team2User2.id)} className="hover:text-blue-600 hover:underline">
+                          <Link href={getProfileHref(match.team2User2.id, match.team2ClubId)} className="hover:text-blue-600 hover:underline">
                             {match.team2User2.name}
                           </Link>
                         </p>

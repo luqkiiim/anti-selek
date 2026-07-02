@@ -93,6 +93,49 @@ const EMPTY_PLAYER_STATS: PlayerSessionStats = {
   losses: 0,
 };
 
+function getAcceptedSessionClubIds(sessionData: SessionData) {
+  const clubIds = new Set<string>();
+
+  if (sessionData.clubId) {
+    clubIds.add(sessionData.clubId);
+  }
+
+  sessionData.clubs
+    ?.filter((club) => club.status === "ACCEPTED")
+    .forEach((club) => clubIds.add(club.id));
+
+  return clubIds;
+}
+
+function getPlayerProfileClubId(sessionData: SessionData, player: Player) {
+  if (player.isGuest) return null;
+
+  const acceptedClubIds = getAcceptedSessionClubIds(sessionData);
+
+  if (
+    player.representingClubId &&
+    acceptedClubIds.has(player.representingClubId)
+  ) {
+    return player.representingClubId;
+  }
+
+  const acceptedPlayerBadge = player.communityBadges?.find((badge) =>
+    acceptedClubIds.has(badge.id)
+  );
+  if (acceptedPlayerBadge) {
+    return acceptedPlayerBadge.id;
+  }
+
+  return sessionData.clubId ?? null;
+}
+
+function getPlayerProfileHref(sessionData: SessionData, player: Player) {
+  const profileClubId = getPlayerProfileClubId(sessionData, player);
+  return profileClubId
+    ? `/profile/${player.user.id}?clubId=${encodeURIComponent(profileClubId)}`
+    : `/profile/${player.user.id}`;
+}
+
 function buildBusySessionPlayerIds(sessionData: SessionData) {
   const busySessionPlayerIds = new Set<string>();
 
@@ -447,9 +490,6 @@ export function buildSessionViewModel({
     activePreferencePlayer,
     sessionModeLabel: getSessionModeLabel(sessionData.mode),
     sessionTypeLabel: getSessionTypeLabel(sessionData.type),
-    getPlayerProfileHref: (player) =>
-      sessionData.clubId && !player.isGuest
-        ? `/profile/${player.user.id}?clubId=${sessionData.clubId}`
-        : `/profile/${player.user.id}`,
+    getPlayerProfileHref: (player) => getPlayerProfileHref(sessionData, player),
   };
 }
