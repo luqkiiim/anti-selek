@@ -2,6 +2,7 @@ import { SessionType } from "../../../types/enums";
 
 import type {
   ActiveMatchmakerV3Player,
+  V3BatchPairingRandomMode,
   V3BatchSelection,
   V3DoublesPartition,
   V3SingleCourtSelection,
@@ -100,6 +101,30 @@ export function getBatchPairingRandomScore<
   );
 }
 
+export function getBatchSidePairingRandomScores<
+  T extends ActiveMatchmakerV3Player,
+>(
+  selections: Array<Pick<V3SingleCourtSelection<T>, "partition">>,
+  pairingRandomSalt: number
+): [number, number] {
+  if (pairingRandomSalt === 0) {
+    return [0, 0];
+  }
+
+  const getSideScore = (side: "team1" | "team2") => {
+    const sidePairingKey = selections
+      .map((selection) => getPartnerPairKey(selection.partition[side]))
+      .sort()
+      .join("|");
+
+    return hashUnitInterval(
+      `${formatRandomScore(pairingRandomSalt)}:${side}:${sidePairingKey}`
+    );
+  };
+
+  return [getSideScore("team1"), getSideScore("team2")];
+}
+
 function compareSingleCourtRandomTieBreak<
   T extends ActiveMatchmakerV3Player,
 >(left: V3SingleCourtSelection<T>, right: V3SingleCourtSelection<T>) {
@@ -111,10 +136,29 @@ function compareSingleCourtRandomTieBreak<
 
 function compareBatchRandomTieBreak<T extends ActiveMatchmakerV3Player>(
   left: V3BatchSelection<T>,
-  right: V3BatchSelection<T>
+  right: V3BatchSelection<T>,
+  pairingRandomMode: V3BatchPairingRandomMode
 ) {
+  const selectedPlayerRandomDiff =
+    left.totalRandomScore - right.totalRandomScore;
+  if (selectedPlayerRandomDiff !== 0) {
+    return selectedPlayerRandomDiff;
+  }
+
+  if (pairingRandomMode === "side-balanced") {
+    const leftWorstSideScore = Math.max(...left.sidePairingRandomScores);
+    const rightWorstSideScore = Math.max(...right.sidePairingRandomScores);
+    const leftTotalSideScore = left.sidePairingRandomScores[0] + left.sidePairingRandomScores[1];
+    const rightTotalSideScore = right.sidePairingRandomScores[0] + right.sidePairingRandomScores[1];
+
+    return (
+      leftWorstSideScore - rightWorstSideScore ||
+      leftTotalSideScore - rightTotalSideScore ||
+      left.totalPairingRandomScore - right.totalPairingRandomScore
+    );
+  }
+
   return (
-    left.totalRandomScore - right.totalRandomScore ||
     left.totalPairingRandomScore - right.totalPairingRandomScore
   );
 }
@@ -518,11 +562,15 @@ export function compareBatchSelections<T extends ActiveMatchmakerV3Player>(
   left: V3BatchSelection<T>,
   right: V3BatchSelection<T>,
   sessionType: SessionType,
-  options?: { respectPlayerRest?: boolean }
+  options?: {
+    respectPlayerRest?: boolean;
+    pairingRandomMode?: V3BatchPairingRandomMode;
+  }
 ) {
   const maxBalanceDiff = left.maxBalanceGap - right.maxBalanceGap;
   const totalBalanceDiff = left.totalBalanceGap - right.totalBalanceGap;
   const balanceVarietyTolerance = getBalanceVarietyTolerance(sessionType);
+  const pairingRandomMode = options?.pairingRandomMode ?? "combined";
 
   if (balanceVarietyTolerance !== null) {
     if (Math.abs(maxBalanceDiff) > balanceVarietyTolerance) {
@@ -573,7 +621,7 @@ export function compareBatchSelections<T extends ActiveMatchmakerV3Player>(
       }
     }
 
-    return compareBatchRandomTieBreak(left, right);
+    return compareBatchRandomTieBreak(left, right, pairingRandomMode);
   }
 
   if (shouldRespectPlayerRest(options)) {
@@ -661,7 +709,7 @@ export function compareBatchSelections<T extends ActiveMatchmakerV3Player>(
       return rematchDiff;
     }
 
-    return compareBatchRandomTieBreak(left, right);
+    return compareBatchRandomTieBreak(left, right, pairingRandomMode);
   }
 
   const rematchDiff =
@@ -689,5 +737,5 @@ export function compareBatchSelections<T extends ActiveMatchmakerV3Player>(
     return rematchDiff;
   }
 
-  return compareBatchRandomTieBreak(left, right);
+  return compareBatchRandomTieBreak(left, right, pairingRandomMode);
 }

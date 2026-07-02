@@ -192,6 +192,15 @@ function getClubAPairLayout(selection: ReturnType<typeof selectBatchMatches>) {
     .join("|");
 }
 
+function getClubBPairLayout(selection: ReturnType<typeof selectBatchMatches>) {
+  return selection.selections
+    .map((courtSelection) =>
+      [...courtSelection.partition.team2].sort().join("+")
+    )
+    .sort()
+    .join("|");
+}
+
 describe("generate-match race regressions", () => {
   it("creates a new Mixicano race match after the mixed court finishes while a men's court is still active", async () => {
     const waitingSince = new Date("2026-04-04T00:00:00Z");
@@ -311,7 +320,6 @@ describe("generate-match points batch regressions", () => {
     const { busyPlayerIds, playersById, rotationHistory } =
       await buildMatchmakingState(sessionData);
     const { rankedCandidates } = getRankedCandidates(sessionData, busyPlayerIds);
-
     const firstBatch = selectBatchMatches({
       rankedCandidates,
       playersById,
@@ -368,7 +376,6 @@ describe("generate-match interclub points batch regressions", () => {
     const { busyPlayerIds, playersById, rotationHistory } =
       await buildMatchmakingState(sessionData);
     const { rankedCandidates } = getRankedCandidates(sessionData, busyPlayerIds);
-
     const firstBatch = selectBatchMatches({
       rankedCandidates,
       playersById,
@@ -443,7 +450,7 @@ describe("generate-match interclub points batch regressions", () => {
       randomFn: createSequenceRandom([
         0, 0, 0, 0, 0, 0,
         0, 0, 0, 0, 0, 0,
-        0.123,
+        0.01,
       ]),
     });
     const secondBatch = selectBatchMatches({
@@ -455,7 +462,7 @@ describe("generate-match interclub points batch regressions", () => {
       randomFn: createSequenceRandom([
         0, 0, 0, 0, 0, 0,
         0, 0, 0, 0, 0, 0,
-        0.987,
+        0.02,
       ]),
     });
 
@@ -467,6 +474,9 @@ describe("generate-match interclub points batch regressions", () => {
     );
     expect(getClubAPairLayout(firstBatch)).not.toBe(
       getClubAPairLayout(secondBatch)
+    );
+    expect(getClubBPairLayout(firstBatch)).not.toBe(
+      getClubBPairLayout(secondBatch)
     );
 
     for (const selection of [

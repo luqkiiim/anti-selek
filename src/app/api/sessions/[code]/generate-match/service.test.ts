@@ -1464,6 +1464,7 @@ describe("generate match service", () => {
         totalExactRematchPenalty: 0,
         totalRandomScore: 0,
         totalPairingRandomScore: 0,
+        sidePairingRandomScores: [0, 0],
       };
       vi.mocked(findBestBatchSelectionV3).mockReturnValueOnce({
         selection: batchSelection,
@@ -1529,6 +1530,7 @@ describe("generate match service", () => {
         totalExactRematchPenalty: 0,
         totalRandomScore: 0,
         totalPairingRandomScore: 0,
+        sidePairingRandomScores: [0, 0],
       };
       const randomFn = vi.fn(() => 0.42);
       vi.mocked(findBestBatchSelectionV3).mockReturnValueOnce({

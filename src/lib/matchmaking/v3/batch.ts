@@ -24,6 +24,7 @@ import {
   compareSingleCourtSelections,
   FULL_REPEAT_REST_TOLERANCE,
   getBatchPairingRandomScore,
+  getBatchSidePairingRandomScores,
   getBalanceVarietyTolerance,
   getPartitionPairingRandomScore,
   getQuartetRandomScore,
@@ -31,6 +32,7 @@ import {
 
 import type {
   ActiveMatchmakerV3Player,
+  V3BatchPairingRandomMode,
   V3BatchFailureReason,
   MatchmakerV3Player,
   V3BatchDebug,
@@ -217,6 +219,10 @@ function summarizeBatch<T extends ActiveMatchmakerV3Player>(
       0
     ),
     totalPairingRandomScore: getBatchPairingRandomScore(
+      selections,
+      pairingRandomSalt
+    ),
+    sidePairingRandomScores: getBatchSidePairingRandomScores(
       selections,
       pairingRandomSalt
     ),
@@ -628,7 +634,8 @@ function findGreedyBatchSelection<T extends ActiveMatchmakerV3Player>(
 function chooseBestBatchSelection<T extends ActiveMatchmakerV3Player>(
   selections: V3BatchSelection<T>[],
   sessionType: SessionType,
-  respectPlayerRest: boolean
+  respectPlayerRest: boolean,
+  pairingRandomMode: V3BatchPairingRandomMode
 ) {
   if (selections.length === 0) {
     return null;
@@ -653,6 +660,7 @@ function chooseBestBatchSelection<T extends ActiveMatchmakerV3Player>(
   return [...balanceSafeSelections].sort((left, right) =>
     compareBatchSelections(left, right, sessionType, {
       respectPlayerRest,
+      pairingRandomMode,
     })
   )[0] ?? null;
 }
@@ -700,6 +708,7 @@ function searchBatchCandidatePlayers<T extends MatchmakerV3Player>({
   searchLimits,
   selectionConstraints,
   pairingRandomSalt,
+  pairingRandomMode,
 }: {
   candidatePlayers: ActiveMatchmakerV3Player<T>[];
   lockedIds: Set<string>;
@@ -718,6 +727,7 @@ function searchBatchCandidatePlayers<T extends MatchmakerV3Player>({
   };
   selectionConstraints?: V3SelectionConstraints<ActiveMatchmakerV3Player<T>>;
   pairingRandomSalt: number;
+  pairingRandomMode: V3BatchPairingRandomMode;
 }): BatchSearchAttemptResult<ActiveMatchmakerV3Player<T>> {
   const requiredPlayerCount = courtCount * 4;
   const candidatePlayerIds = candidatePlayers.map((player) => player.userId);
@@ -852,7 +862,8 @@ function searchBatchCandidatePlayers<T extends MatchmakerV3Player>({
   const bestSelection = chooseBestBatchSelection(
     completedSelections,
     sessionType,
-    respectPlayerRest
+    respectPlayerRest,
+    pairingRandomMode
   );
 
   const selection =
@@ -898,6 +909,7 @@ export function findBestBatchSelectionV3<T extends MatchmakerV3Player>(
     candidatePool,
     candidatePoolVariants,
     selectionConstraints,
+    pairingRandomMode = "combined",
   }: {
     courtCount: number;
     sessionMode: SessionMode;
@@ -918,6 +930,7 @@ export function findBestBatchSelectionV3<T extends MatchmakerV3Player>(
       candidatePool: V3CandidatePool<ActiveMatchmakerV3Player<T>>
     ) => Array<V3CandidatePool<ActiveMatchmakerV3Player<T>>>;
     selectionConstraints?: V3SelectionConstraints<ActiveMatchmakerV3Player<T>>;
+    pairingRandomMode?: V3BatchPairingRandomMode;
   }
 ): V3BatchResult<ActiveMatchmakerV3Player<T>> {
   const requiredPlayerCount = courtCount * 4;
@@ -1020,6 +1033,7 @@ export function findBestBatchSelectionV3<T extends MatchmakerV3Player>(
       searchLimits,
       selectionConstraints,
       pairingRandomSalt,
+      pairingRandomMode,
     });
 
     attemptRecords.push({ pool, result: attempt });

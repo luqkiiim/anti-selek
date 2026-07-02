@@ -868,6 +868,7 @@ export function selectInterclubBatchMatches({
     candidatePool: context.candidatePool,
     candidatePoolVariants: (pool) => [pool],
     selectionConstraints: context.selectionConstraints,
+    pairingRandomMode: "side-balanced",
   });
 
   if (!result.selection) {

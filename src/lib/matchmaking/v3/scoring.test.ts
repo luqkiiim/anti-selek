@@ -121,6 +121,7 @@ function createBatchSelection({
   totalExactRematchPenalty = 0,
   totalRandomScore = 0,
   totalPairingRandomScore = 0,
+  sidePairingRandomScores = [totalPairingRandomScore, totalPairingRandomScore],
 }: {
   restTurns?: number[];
   maxBalanceGap: number;
@@ -135,6 +136,7 @@ function createBatchSelection({
   totalExactRematchPenalty?: number;
   totalRandomScore?: number;
   totalPairingRandomScore?: number;
+  sidePairingRandomScores?: [number, number];
 }): V3BatchSelection {
   const selection = createSelection({
     restTurns,
@@ -165,6 +167,7 @@ function createBatchSelection({
     totalExactRematchPenalty,
     totalRandomScore,
     totalPairingRandomScore,
+    sidePairingRandomScores,
   };
 }
 
@@ -222,6 +225,7 @@ function createBatchFromSelections(
       (sum, selection) => sum + selection.pairingRandomScore,
       0
     ),
+    sidePairingRandomScores: [0, 0],
   };
 }
 
@@ -1105,6 +1109,84 @@ describe("matchmaking v3 scoring", () => {
         lowerPairingRandomBatch,
         higherPairingRandomBatch,
         SessionType.POINTS
+      )
+    ).toBeLessThan(0);
+  });
+
+  it("keeps selected-player random ahead of side-balanced layout random", () => {
+    const lowerSelectedPlayerRandom = createBatchSelection({
+      maxBalanceGap: 0,
+      totalBalanceGap: 0,
+      totalRandomScore: 1,
+      totalPairingRandomScore: 10,
+      sidePairingRandomScores: [10, 10],
+    });
+    const lowerSideLayoutRandom = createBatchSelection({
+      maxBalanceGap: 0,
+      totalBalanceGap: 0,
+      totalRandomScore: 2,
+      totalPairingRandomScore: 0,
+      sidePairingRandomScores: [0, 0],
+    });
+
+    expect(
+      compareBatchSelections(
+        lowerSelectedPlayerRandom,
+        lowerSideLayoutRandom,
+        SessionType.POINTS,
+        { pairingRandomMode: "side-balanced" }
+      )
+    ).toBeLessThan(0);
+  });
+
+  it("balances side layout random before combined layout random", () => {
+    const greatFirstSideOnly = createBatchSelection({
+      maxBalanceGap: 0,
+      totalBalanceGap: 0,
+      totalRandomScore: 1,
+      totalPairingRandomScore: 0,
+      sidePairingRandomScores: [0, 10],
+    });
+    const balancedBothSides = createBatchSelection({
+      maxBalanceGap: 0,
+      totalBalanceGap: 0,
+      totalRandomScore: 1,
+      totalPairingRandomScore: 10,
+      sidePairingRandomScores: [5, 5],
+    });
+
+    expect(
+      compareBatchSelections(
+        greatFirstSideOnly,
+        balancedBothSides,
+        SessionType.POINTS,
+        { pairingRandomMode: "side-balanced" }
+      )
+    ).toBeGreaterThan(0);
+  });
+
+  it("uses combined layout random after side-balanced layout scores tie", () => {
+    const lowerCombinedLayoutRandom = createBatchSelection({
+      maxBalanceGap: 0,
+      totalBalanceGap: 0,
+      totalRandomScore: 1,
+      totalPairingRandomScore: 0,
+      sidePairingRandomScores: [5, 5],
+    });
+    const higherCombinedLayoutRandom = createBatchSelection({
+      maxBalanceGap: 0,
+      totalBalanceGap: 0,
+      totalRandomScore: 1,
+      totalPairingRandomScore: 10,
+      sidePairingRandomScores: [5, 5],
+    });
+
+    expect(
+      compareBatchSelections(
+        lowerCombinedLayoutRandom,
+        higherCombinedLayoutRandom,
+        SessionType.POINTS,
+        { pairingRandomMode: "side-balanced" }
       )
     ).toBeLessThan(0);
   });
