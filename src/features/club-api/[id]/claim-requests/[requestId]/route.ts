@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { getClubAdminAccess } from "@/lib/clubAdminPermissions";
+import { cleanupSupersededAvatar } from "@/lib/avatarStorage";
 import { prisma } from "@/lib/prisma";
 import {
   approveClubClaimRequest,
@@ -88,7 +89,22 @@ export async function PATCH(
         })
       );
 
-      return NextResponse.json(approved);
+      if (approved.discardedAvatarKey) {
+        await cleanupSupersededAvatar({
+          previousAvatarKey: approved.discardedAvatarKey,
+          nextAvatarKey: null,
+        });
+      }
+
+      return NextResponse.json({
+        id: approved.id,
+        status: approved.status,
+        requesterUserId: approved.requesterUserId,
+        requesterName: approved.requesterName,
+        targetUserId: approved.targetUserId,
+        targetName: approved.targetName,
+        reviewedAt: approved.reviewedAt,
+      });
     }
 
     const existingRequest = await prisma.claimRequest.findUnique({
@@ -139,4 +155,3 @@ export async function PATCH(
     return safeErrorResponse();
   }
 }
-

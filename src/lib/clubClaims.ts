@@ -89,6 +89,7 @@ export async function approveClubClaimRequest(
           id: true,
           name: true,
           email: true,
+          avatarKey: true,
           isClaimed: true,
         },
       },
@@ -97,6 +98,7 @@ export async function approveClubClaimRequest(
           id: true,
           name: true,
           email: true,
+          avatarKey: true,
           isClaimed: true,
           gender: true,
           partnerPreference: true,
@@ -264,6 +266,13 @@ export async function approveClubClaimRequest(
   }
 
   const reviewedAt = new Date();
+  const placeholderAvatarKey = claimRequest.target.avatarKey;
+  const shouldAdoptPlaceholderAvatar =
+    !claimRequest.requester.avatarKey && !!placeholderAvatarKey;
+  const discardedAvatarKey =
+    claimRequest.requester.avatarKey && placeholderAvatarKey
+      ? placeholderAvatarKey
+      : null;
 
   await tx.clubMember.delete({
     where: {
@@ -350,8 +359,18 @@ export async function approveClubClaimRequest(
       gender: claimRequest.target.gender,
       partnerPreference: claimRequest.target.partnerPreference,
       mixedSideOverride: claimRequest.target.mixedSideOverride,
+      ...(shouldAdoptPlaceholderAvatar
+        ? { avatarKey: placeholderAvatarKey }
+        : {}),
     },
   });
+
+  if (placeholderAvatarKey) {
+    await tx.user.update({
+      where: { id: claimRequest.targetUserId },
+      data: { avatarKey: null },
+    });
+  }
 
   await tx.claimRequest.update({
     where: { id: claimRequest.id },
@@ -408,6 +427,10 @@ export async function approveClubClaimRequest(
     requesterName: claimRequest.requester.name,
     targetUserId: claimRequest.target.id,
     targetName: claimRequest.target.name,
+    adoptedAvatarKey: shouldAdoptPlaceholderAvatar
+      ? placeholderAvatarKey
+      : null,
+    discardedAvatarKey,
     reviewedAt,
   };
 }

@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ClaimRequestStatus, PartnerPreference, PlayerGender } from "@/types/enums";
 import { deleteDisposableUnclaimedUsers } from "./sessionLifecycle";
 import {
@@ -11,7 +11,90 @@ vi.mock("./sessionLifecycle", () => ({
   deleteDisposableUnclaimedUsers: vi.fn(),
 }));
 
+function createClaimApprovalTransactionMock({
+  requesterAvatarKey = null,
+  targetAvatarKey = null,
+}: {
+  requesterAvatarKey?: string | null;
+  targetAvatarKey?: string | null;
+} = {}) {
+  return {
+    claimRequest: {
+      findUnique: vi.fn().mockResolvedValue({
+        id: "claim-1",
+        clubId: "community-1",
+        requesterUserId: "requester-1",
+        targetUserId: "placeholder-1",
+        status: ClaimRequestStatus.PENDING,
+        requester: {
+          id: "requester-1",
+          name: "New Signup",
+          email: "new@example.com",
+          avatarKey: requesterAvatarKey,
+          isClaimed: true,
+        },
+        target: {
+          id: "placeholder-1",
+          name: "Old Member",
+          email: null,
+          avatarKey: targetAvatarKey,
+          isClaimed: false,
+          gender: PlayerGender.FEMALE,
+          partnerPreference: PartnerPreference.OPEN,
+          mixedSideOverride: null,
+        },
+      }),
+      update: vi.fn().mockResolvedValue({}),
+      updateMany: vi.fn().mockResolvedValue({ count: 0 }),
+    },
+    clubMember: {
+      findUnique: vi
+        .fn()
+        .mockResolvedValueOnce({ role: "MEMBER", elo: 1000 })
+        .mockResolvedValueOnce({ role: "MEMBER" }),
+      findMany: vi.fn().mockResolvedValue([
+        {
+          clubId: "community-1",
+          userId: "placeholder-1",
+          role: "MEMBER",
+          elo: 1000,
+        },
+      ]),
+      delete: vi.fn().mockResolvedValue({}),
+      update: vi.fn().mockResolvedValue({}),
+    },
+    offlineIdentityMember: {
+      findUnique: vi.fn().mockResolvedValue(null),
+      findMany: vi.fn().mockResolvedValue([]),
+      deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
+    },
+    offlineIdentity: {
+      updateMany: vi.fn().mockResolvedValue({ count: 0 }),
+    },
+    session: {
+      findMany: vi.fn().mockResolvedValue([]),
+    },
+    sessionPlayer: {
+      findFirst: vi.fn().mockResolvedValue(null),
+      updateMany: vi.fn().mockResolvedValue({ count: 0 }),
+    },
+    match: {
+      updateMany: vi.fn().mockResolvedValue({ count: 0 }),
+    },
+    matchEloAdjustment: {
+      updateMany: vi.fn().mockResolvedValue({ count: 0 }),
+    },
+    user: {
+      update: vi.fn().mockResolvedValue({}),
+    },
+  };
+}
+
 describe("club claim helpers", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
   it("keeps admin role if either side is admin", () => {
     expect(mergeClubRoles("ADMIN", "MEMBER")).toBe("ADMIN");
     expect(mergeClubRoles("ADMIN", "STAFF")).toBe("ADMIN");
@@ -54,76 +137,9 @@ describe("club claim helpers", () => {
   });
 
   it("keeps the requester's chosen name when approving a claim", async () => {
-    const tx = {
-      claimRequest: {
-        findUnique: vi.fn().mockResolvedValue({
-          id: "claim-1",
-          clubId: "community-1",
-          requesterUserId: "requester-1",
-          targetUserId: "placeholder-1",
-          status: ClaimRequestStatus.PENDING,
-          requester: {
-            id: "requester-1",
-            name: "New Signup",
-            email: "new@example.com",
-            isClaimed: true,
-          },
-          target: {
-            id: "placeholder-1",
-            name: "Old Member",
-            email: null,
-            isClaimed: false,
-            gender: PlayerGender.FEMALE,
-            partnerPreference: PartnerPreference.OPEN,
-            mixedSideOverride: null,
-          },
-        }),
-        update: vi.fn().mockResolvedValue({}),
-        updateMany: vi.fn().mockResolvedValue({ count: 0 }),
-      },
-      clubMember: {
-        findUnique: vi
-          .fn()
-          .mockResolvedValueOnce({ role: "MEMBER", elo: 1000 })
-          .mockResolvedValueOnce({ role: "MEMBER" }),
-        findMany: vi.fn().mockResolvedValue([
-          {
-            clubId: "community-1",
-            userId: "placeholder-1",
-            role: "MEMBER",
-            elo: 1000,
-          },
-        ]),
-        delete: vi.fn().mockResolvedValue({}),
-        update: vi.fn().mockResolvedValue({}),
-      },
-      offlineIdentityMember: {
-        findUnique: vi.fn().mockResolvedValue(null),
-        findMany: vi.fn().mockResolvedValue([]),
-        deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
-      },
-      offlineIdentity: {
-        updateMany: vi.fn().mockResolvedValue({ count: 0 }),
-      },
-      session: {
-        findMany: vi.fn().mockResolvedValue([]),
-      },
-      sessionPlayer: {
-        findFirst: vi.fn(),
-        updateMany: vi.fn().mockResolvedValue({ count: 0 }),
-      },
-      match: {
-        updateMany: vi.fn().mockResolvedValue({ count: 0 }),
-      },
-      matchEloAdjustment: {
-        updateMany: vi.fn().mockResolvedValue({ count: 0 }),
-      },
-      user: {
-        update: vi.fn().mockResolvedValue({}),
-      },
-    } as unknown as Parameters<typeof approveClubClaimRequest>[0];
+    const tx = createClaimApprovalTransactionMock();
 
-    const result = await approveClubClaimRequest(tx, {
+    const result = await approveClubClaimRequest(tx as unknown as Parameters<typeof approveClubClaimRequest>[0], {
       clubId: "community-1",
       requestId: "claim-1",
       reviewerUserId: "admin-1",
@@ -139,6 +155,63 @@ describe("club claim helpers", () => {
     });
     expect(result.requesterName).toBe("New Signup");
     expect(deleteDisposableUnclaimedUsers).toHaveBeenCalledWith(tx, ["placeholder-1"]);
+  });
+
+  it("adopts the placeholder avatar when the requester has no avatar", async () => {
+    const tx = createClaimApprovalTransactionMock({
+      targetAvatarKey: "https://cdn.test/placeholder.webp",
+    });
+
+    const result = await approveClubClaimRequest(tx as unknown as Parameters<typeof approveClubClaimRequest>[0], {
+      clubId: "community-1",
+      requestId: "claim-1",
+      reviewerUserId: "admin-1",
+    });
+
+    expect(tx.user.update).toHaveBeenNthCalledWith(1, {
+      where: { id: "requester-1" },
+      data: {
+        gender: PlayerGender.FEMALE,
+        partnerPreference: PartnerPreference.OPEN,
+        mixedSideOverride: null,
+        avatarKey: "https://cdn.test/placeholder.webp",
+      },
+    });
+    expect(tx.user.update).toHaveBeenNthCalledWith(2, {
+      where: { id: "placeholder-1" },
+      data: { avatarKey: null },
+    });
+    expect(result.adoptedAvatarKey).toBe("https://cdn.test/placeholder.webp");
+    expect(result.discardedAvatarKey).toBeNull();
+    expect(deleteDisposableUnclaimedUsers).toHaveBeenCalledWith(tx, ["placeholder-1"]);
+  });
+
+  it("keeps the requester avatar and discards the placeholder avatar when both exist", async () => {
+    const tx = createClaimApprovalTransactionMock({
+      requesterAvatarKey: "https://cdn.test/requester.webp",
+      targetAvatarKey: "https://cdn.test/placeholder.webp",
+    });
+
+    const result = await approveClubClaimRequest(tx as unknown as Parameters<typeof approveClubClaimRequest>[0], {
+      clubId: "community-1",
+      requestId: "claim-1",
+      reviewerUserId: "admin-1",
+    });
+
+    expect(tx.user.update).toHaveBeenNthCalledWith(1, {
+      where: { id: "requester-1" },
+      data: {
+        gender: PlayerGender.FEMALE,
+        partnerPreference: PartnerPreference.OPEN,
+        mixedSideOverride: null,
+      },
+    });
+    expect(tx.user.update).toHaveBeenNthCalledWith(2, {
+      where: { id: "placeholder-1" },
+      data: { avatarKey: null },
+    });
+    expect(result.adoptedAvatarKey).toBeNull();
+    expect(result.discardedAvatarKey).toBe("https://cdn.test/placeholder.webp");
   });
 
   it("requires manual merge for linked profiles spanning multiple clubs", async () => {
