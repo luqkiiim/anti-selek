@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
+import { MoreHorizontal, Pencil, Undo2 } from "lucide-react";
 
 import { SessionActionConfirmModal } from "@/components/session/SessionActionConfirmModal";
 import { EmptyState, FlashMessage, HeroCard, SectionCard } from "@/components/ui/chrome";
@@ -78,6 +79,9 @@ export default function SessionHistoryPage() {
   const [correctingMatchId, setCorrectingMatchId] = useState<string | null>(
     null
   );
+  const [openActionMatchId, setOpenActionMatchId] = useState<string | null>(
+    null
+  );
 
   const fetchHistory = useCallback(
     async ({ showLoading = false }: { showLoading?: boolean } = {}) => {
@@ -133,6 +137,48 @@ export default function SessionHistoryPage() {
     }
   }, [fetchHistory, session]);
 
+  useEffect(() => {
+    setOpenActionMatchId(null);
+  }, [data]);
+
+  useEffect(() => {
+    if (!openActionMatchId) return;
+
+    const handlePointerDown = (event: PointerEvent) => {
+      if (!(event.target instanceof Element)) return;
+
+      const actionRoot = event.target.closest("[data-match-action-root]");
+      if (
+        actionRoot?.getAttribute("data-match-action-root") ===
+        openActionMatchId
+      ) {
+        return;
+      }
+
+      setOpenActionMatchId(null);
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setOpenActionMatchId(null);
+      }
+    };
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [openActionMatchId]);
+
+  useEffect(() => {
+    if (undoDraft || correctionDraft) {
+      setOpenActionMatchId(null);
+    }
+  }, [undoDraft, correctionDraft]);
+
   const closeUndoDraft = () => {
     if (undoDraft && undoingMatchId === undoDraft.id) {
       return;
@@ -142,6 +188,7 @@ export default function SessionHistoryPage() {
   };
 
   const openCorrectionDraft = (match: HistoryMatch) => {
+    setOpenActionMatchId(null);
     setCorrectionDraft(match);
     setCorrectionScores({
       team1:
@@ -308,12 +355,15 @@ export default function SessionHistoryPage() {
                 const canCorrectScore =
                   data.canCorrectCompletedScores === true &&
                   match.status === MatchStatus.COMPLETED;
+                const hasMatchActions = canCorrectScore || canUndoResult;
+                const matchActionMenuOpen = openActionMatchId === match.id;
+                const courtLabel = getCourtDisplayLabel(match.court);
                 return (
                   <article key={match.id} className="app-subcard p-4 sm:p-5">
                     <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                       <div className="flex items-center justify-between gap-3">
                         <p className="text-lg font-semibold text-gray-900">
-                          {getCourtDisplayLabel(match.court)}
+                          {courtLabel}
                         </p>
                         <p className="text-sm text-gray-600">
                           {new Date(matchTimestamp).toLocaleTimeString([], {
@@ -323,31 +373,68 @@ export default function SessionHistoryPage() {
                         </p>
                       </div>
 
-                      {isPendingApproval ? (
+                      {isPendingApproval || hasMatchActions ? (
                         <div className="flex flex-wrap items-center gap-2">
-                          <span className="app-chip app-chip-warning">Awaiting approval</span>
-                        </div>
-                      ) : null}
-                      {canUndoResult ? (
-                        <div className="flex flex-wrap justify-start gap-2 lg:justify-end">
-                          <button
-                            type="button"
-                            onClick={() => setUndoDraft(match)}
-                            className="app-button-danger min-h-10 px-3 py-2 text-xs"
-                          >
-                            Undo result
-                          </button>
-                        </div>
-                      ) : null}
-                      {canCorrectScore ? (
-                        <div className="flex flex-wrap justify-start gap-2 lg:justify-end">
-                          <button
-                            type="button"
-                            onClick={() => openCorrectionDraft(match)}
-                            className="app-button-secondary min-h-10 px-3 py-2 text-xs"
-                          >
-                            Correct score
-                          </button>
+                          {isPendingApproval ? (
+                            <span className="app-chip app-chip-warning">Awaiting approval</span>
+                          ) : null}
+                          {hasMatchActions ? (
+                            <div
+                              className="relative"
+                              data-match-action-root={match.id}
+                            >
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setOpenActionMatchId((current) =>
+                                    current === match.id ? null : match.id
+                                  )
+                                }
+                                aria-label={`Open actions for ${courtLabel}`}
+                                aria-haspopup="menu"
+                                aria-expanded={matchActionMenuOpen}
+                                className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-600 transition hover:border-gray-300 hover:bg-gray-50 hover:text-gray-900 active:scale-95"
+                              >
+                                <MoreHorizontal aria-hidden="true" size={18} />
+                              </button>
+
+                              {matchActionMenuOpen ? (
+                                <div className="absolute right-0 top-full z-20 mt-2 w-44 max-w-[calc(100vw-3rem)]">
+                                  <div
+                                    role="menu"
+                                    aria-label={`${courtLabel} actions`}
+                                    className="overflow-hidden rounded-xl border border-gray-200 bg-white py-1 text-sm font-semibold text-gray-800 shadow-[0_18px_44px_rgba(23,32,31,0.16)]"
+                                  >
+                                    {canCorrectScore ? (
+                                      <button
+                                        type="button"
+                                        role="menuitem"
+                                        onClick={() => openCorrectionDraft(match)}
+                                        className="inline-flex w-full items-center gap-2 px-3 py-2.5 text-left transition hover:bg-[var(--accent-faint)] hover:text-[var(--accent-strong)]"
+                                      >
+                                        <Pencil aria-hidden="true" size={16} />
+                                        Correct score
+                                      </button>
+                                    ) : null}
+                                    {canUndoResult ? (
+                                      <button
+                                        type="button"
+                                        role="menuitem"
+                                        onClick={() => {
+                                          setOpenActionMatchId(null);
+                                          setUndoDraft(match);
+                                        }}
+                                        className="inline-flex w-full items-center gap-2 px-3 py-2.5 text-left text-rose-700 transition hover:bg-rose-50"
+                                      >
+                                        <Undo2 aria-hidden="true" size={16} />
+                                        Undo result
+                                      </button>
+                                    ) : null}
+                                  </div>
+                                </div>
+                              ) : null}
+                            </div>
+                          ) : null}
                         </div>
                       ) : null}
                     </div>
