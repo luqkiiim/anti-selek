@@ -358,26 +358,22 @@ export default function SessionHistoryPage() {
                 const hasMatchActions = canCorrectScore || canUndoResult;
                 const matchActionMenuOpen = openActionMatchId === match.id;
                 const courtLabel = getCourtDisplayLabel(match.court);
+                const matchTime = new Date(matchTimestamp).toLocaleTimeString([], {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                });
                 return (
                   <article key={match.id} className="app-subcard p-4 sm:p-5">
-                    <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                      <div className="flex items-center justify-between gap-3">
-                        <p className="text-lg font-semibold text-gray-900">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="truncate text-lg font-semibold text-gray-900">
                           {courtLabel}
-                        </p>
-                        <p className="text-sm text-gray-600">
-                          {new Date(matchTimestamp).toLocaleTimeString([], {
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })}
                         </p>
                       </div>
 
-                      {isPendingApproval || hasMatchActions ? (
-                        <div className="flex flex-wrap items-center gap-2">
-                          {isPendingApproval ? (
-                            <span className="app-chip app-chip-warning">Awaiting approval</span>
-                          ) : null}
+                      <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+                        <div className="inline-flex items-center gap-1.5">
+                          <p className="text-sm text-gray-600">{matchTime}</p>
                           {hasMatchActions ? (
                             <div
                               className="relative"
@@ -393,9 +389,9 @@ export default function SessionHistoryPage() {
                                 aria-label={`Open actions for ${courtLabel}`}
                                 aria-haspopup="menu"
                                 aria-expanded={matchActionMenuOpen}
-                                className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-600 transition hover:border-gray-300 hover:bg-gray-50 hover:text-gray-900 active:scale-95"
+                                className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-600 transition hover:border-gray-300 hover:bg-gray-50 hover:text-gray-900 active:scale-95"
                               >
-                                <MoreHorizontal aria-hidden="true" size={18} />
+                                <MoreHorizontal aria-hidden="true" size={17} />
                               </button>
 
                               {matchActionMenuOpen ? (
@@ -436,7 +432,10 @@ export default function SessionHistoryPage() {
                             </div>
                           ) : null}
                         </div>
-                      ) : null}
+                        {isPendingApproval ? (
+                          <span className="app-chip app-chip-warning">Awaiting approval</span>
+                        ) : null}
+                      </div>
                     </div>
 
                     <div className="mt-4 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 sm:gap-3">
