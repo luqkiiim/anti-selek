@@ -303,7 +303,7 @@ export function SessionRosterModal({
                           Occasional
                         </span>
                       ) : null}
-                      {isInterclub && player.representingClubName ? (
+                      {player.representingClubName ? (
                         <span className="app-chip app-chip-accent px-2 py-0.5 text-[10px]">
                           {player.representingClubName}
                         </span>

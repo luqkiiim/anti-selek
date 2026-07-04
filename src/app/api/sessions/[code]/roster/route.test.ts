@@ -160,6 +160,29 @@ describe("session roster route", () => {
     );
   });
 
+  it("returns Club B players for a Club B operator in free-play collab", async () => {
+    mocks.sessionFindUnique.mockResolvedValue(
+      makeSession({ collabFormat: SessionCollabFormat.FREE_PLAY })
+    );
+
+    const response = await getRoster();
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body).toHaveLength(1);
+    expect(body[0]).toMatchObject({
+      id: "b-player",
+      name: "B Player",
+      representingClubId: "club-b",
+      representingClubName: "Anti-SeleK",
+    });
+    expect(mocks.clubMemberFindMany).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        where: { clubId: { in: ["club-b"] } },
+      })
+    );
+  });
+
   it("returns Club A players for a Club A operator", async () => {
     mocks.auth.mockResolvedValue({
       user: { id: "club-a-admin", isAdmin: false },
@@ -227,6 +250,44 @@ describe("session roster route", () => {
     );
   });
 
+  it("returns both accepted club rosters for a global admin in free-play collab", async () => {
+    mocks.sessionFindUnique.mockResolvedValue(
+      makeSession({ collabFormat: SessionCollabFormat.FREE_PLAY })
+    );
+    mocks.auth.mockResolvedValue({
+      user: { id: "global-admin", isAdmin: true },
+    });
+    mocks.clubMemberFindMany.mockResolvedValue([
+      makeMembership({
+        clubId: "club-b",
+        clubName: "Anti-SeleK",
+        userId: "b-player",
+        name: "B Player",
+      }),
+      makeMembership({
+        clubId: "club-a",
+        clubName: "Northside",
+        userId: "a-player",
+        name: "A Player",
+      }),
+    ]);
+
+    const response = await getRoster();
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.map((row: { representingClubId: string }) => row.representingClubId)).toEqual([
+      "club-a",
+      "club-b",
+    ]);
+    expect(mocks.clubMemberFindMany).toHaveBeenCalledTimes(1);
+    expect(mocks.clubMemberFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { clubId: { in: ["club-a", "club-b"] } },
+      })
+    );
+  });
+
   it("rejects sessions without two accepted interclub clubs", async () => {
     mocks.sessionFindUnique.mockResolvedValue(
       makeSession({
@@ -252,6 +313,34 @@ describe("session roster route", () => {
 
     expect(response.status).toBe(400);
     expect(body.error).toBe("Club vs club roster requires two accepted clubs");
+  });
+
+  it("rejects free-play collab sessions without an accepted partner club", async () => {
+    mocks.sessionFindUnique.mockResolvedValue(
+      makeSession({
+        collabFormat: SessionCollabFormat.FREE_PLAY,
+        sessionClubs: [
+          {
+            clubId: "club-a",
+            role: SessionClubRole.HOST,
+            status: SessionClubStatus.ACCEPTED,
+            club: { id: "club-a", name: "Northside" },
+          },
+          {
+            clubId: "club-b",
+            role: SessionClubRole.PARTNER,
+            status: SessionClubStatus.PENDING,
+            club: { id: "club-b", name: "Anti-SeleK" },
+          },
+        ],
+      })
+    );
+
+    const response = await getRoster();
+    const body = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(body.error).toBe("Session roster requires accepted collab clubs");
   });
 
   it("rejects non-operators", async () => {

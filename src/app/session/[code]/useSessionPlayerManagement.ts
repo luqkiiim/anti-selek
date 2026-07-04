@@ -129,6 +129,16 @@ function parseClubPlayers(data: unknown): ClubUser[] {
     }, []);
 }
 
+function hasAcceptedCollabRoster(sessionData: SessionData) {
+  const acceptedClubIds = new Set(
+    (sessionData.clubs ?? [])
+      .filter((club) => club.status === "ACCEPTED")
+      .map((club) => club.id)
+  );
+
+  return acceptedClubIds.size > 1;
+}
+
 export function useSessionPlayerManagement({
   code,
   sessionData,
@@ -223,7 +233,7 @@ export function useSessionPlayerManagement({
     if (!sessionData) return;
 
     const rosterUrl =
-      sessionData.collabFormat === SessionCollabFormat.INTERCLUB
+      hasAcceptedCollabRoster(sessionData)
         ? `/api/sessions/${code}/roster`
         : sessionData.clubId
           ? `/api/clubs/${sessionData.clubId}/members`

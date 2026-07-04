@@ -102,12 +102,11 @@ describe("SessionRosterModal", () => {
     expect(document.body.textContent).not.toContain("Add Guest");
   });
 
-  it("shows represented club chips for interclub roster rows", async () => {
+  it("shows club chips for collab roster rows with club metadata", async () => {
     await act(async () => {
       root.render(
         <SessionRosterModal
           {...getDefaultProps()}
-          isInterclub
           playersNotInSession={[interclubPlayer]}
         />
       );

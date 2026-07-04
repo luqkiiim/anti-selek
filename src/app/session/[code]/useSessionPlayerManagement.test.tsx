@@ -71,6 +71,21 @@ const interclubPlayer: ClubUser = {
   mixedSideOverride: null,
 };
 
+const acceptedCollabClubs = [
+  {
+    id: "club-a",
+    name: "Northside",
+    role: "HOST",
+    status: "ACCEPTED",
+  },
+  {
+    id: "club-b",
+    name: "Anti-SeleK",
+    role: "PARTNER",
+    status: "ACCEPTED",
+  },
+];
+
 function Harness({
   sessionData,
   playerToAdd,
@@ -145,6 +160,7 @@ describe("useSessionPlayerManagement", () => {
         <Harness
           sessionData={createSessionData({
             collabFormat: SessionCollabFormat.INTERCLUB,
+            clubs: acceptedCollabClubs,
           })}
         />
       );
@@ -162,7 +178,35 @@ describe("useSessionPlayerManagement", () => {
     expect(document.getElementById("player-count")?.textContent).toBe("1");
   });
 
-  it("keeps using the club members endpoint for non-interclub sessions", async () => {
+  it("loads the session roster for free-play collab sessions", async () => {
+    fetchMock.mockResolvedValue(
+      new Response(JSON.stringify([interclubPlayer]), { status: 200 })
+    );
+
+    await act(async () => {
+      root.render(
+        <Harness
+          sessionData={createSessionData({
+            collabFormat: SessionCollabFormat.FREE_PLAY,
+            clubs: acceptedCollabClubs,
+          })}
+        />
+      );
+    });
+
+    await act(async () => {
+      document.getElementById("open")?.dispatchEvent(
+        new MouseEvent("click", { bubbles: true })
+      );
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith("/api/sessions/ABC/roster");
+    expect(document.getElementById("player-count")?.textContent).toBe("1");
+  });
+
+  it("keeps using the club members endpoint for normal single-club sessions", async () => {
     fetchMock.mockResolvedValue(
       new Response(JSON.stringify([interclubPlayer]), { status: 200 })
     );
@@ -192,6 +236,7 @@ describe("useSessionPlayerManagement", () => {
         <Harness
           sessionData={createSessionData({
             collabFormat: SessionCollabFormat.INTERCLUB,
+            clubs: acceptedCollabClubs,
           })}
           playerToAdd={interclubPlayer}
         />
@@ -214,6 +259,43 @@ describe("useSessionPlayerManagement", () => {
           userId: "club-b-player",
           pool: SessionPool.A,
           representingClubId: "club-b",
+        }),
+      })
+    );
+  });
+
+  it("does not send the represented club when adding a free-play collab roster player", async () => {
+    fetchMock.mockResolvedValue(
+      new Response(JSON.stringify({ players: [] }), { status: 200 })
+    );
+
+    await act(async () => {
+      root.render(
+        <Harness
+          sessionData={createSessionData({
+            collabFormat: SessionCollabFormat.FREE_PLAY,
+            clubs: acceptedCollabClubs,
+          })}
+          playerToAdd={interclubPlayer}
+        />
+      );
+    });
+
+    await act(async () => {
+      document.getElementById("add")?.dispatchEvent(
+        new MouseEvent("click", { bubbles: true })
+      );
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/sessions/ABC/join",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({
+          userId: "club-b-player",
+          pool: SessionPool.A,
         }),
       })
     );

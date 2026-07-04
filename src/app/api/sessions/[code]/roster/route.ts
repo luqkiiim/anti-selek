@@ -79,10 +79,16 @@ export async function GET(
       return invalidTargetResponse(request, "api:sessions:code:roster");
     }
 
-    const acceptedClubIds = getAcceptedInterclubClubIds(sessionData).slice(0, 2);
-    if (!isInterclubSession(sessionData) || acceptedClubIds.length !== 2) {
+    const acceptedClubIds = getAcceptedInterclubClubIds(sessionData);
+    if (isInterclubSession(sessionData) && acceptedClubIds.length !== 2) {
       return NextResponse.json(
         { error: "Club vs club roster requires two accepted clubs" },
+        { status: 400 }
+      );
+    }
+    if (acceptedClubIds.length < 2) {
+      return NextResponse.json(
+        { error: "Session roster requires accepted collab clubs" },
         { status: 400 }
       );
     }
