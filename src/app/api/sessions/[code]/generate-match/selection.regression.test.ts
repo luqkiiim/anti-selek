@@ -409,8 +409,12 @@ describe("generate-match interclub points batch regressions", () => {
     expect(firstBatchIds).not.toEqual(secondBatchIds);
 
     for (const selection of firstBatch.selections) {
-      expect(selection.team1ClubId).toBe("community-1");
-      expect(selection.team2ClubId).toBe("community-2");
+      expect("team1ClubId" in selection ? selection.team1ClubId : null).toBe(
+        "community-1"
+      );
+      expect("team2ClubId" in selection ? selection.team2ClubId : null).toBe(
+        "community-2"
+      );
     }
   });
 

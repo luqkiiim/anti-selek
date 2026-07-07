@@ -61,6 +61,9 @@ export function ManualMatchModal({
   const selectedPlayersCount = selectedManualPlayerIds.size;
   const team1Players = selectedPlayersInOrder.slice(0, 2);
   const team2Players = selectedPlayersInOrder.slice(2, 4);
+  const selectedSkippedPlayers = selectedPlayersInOrder.filter(
+    (player) => player.skipNextMatchAt
+  );
 
   function renderSelectedTeamSummary(
     label: string,
@@ -126,6 +129,14 @@ export function ManualMatchModal({
               {renderSelectedTeamSummary("T1", team1Players, [1, 2])}
               {renderSelectedTeamSummary("T2", team2Players, [3, 4])}
             </div>
+            {selectedSkippedPlayers.length > 0 ? (
+              <div className="app-alert app-alert-warning text-xs font-semibold">
+                Manual override:{" "}
+                {selectedSkippedPlayers.map((player) => player.user.name).join(", ")}
+                {selectedSkippedPlayers.length === 1 ? " is" : " are"} marked to
+                skip next.
+              </div>
+            ) : null}
           </div>
 
           <div className="space-y-2 p-3 sm:p-4">
@@ -160,10 +171,17 @@ export function ManualMatchModal({
                       <p className="truncate text-sm font-semibold text-gray-900">
                         {player.user.name}
                       </p>
-                      <p className="text-xs text-gray-500">
-                        {poolsEnabled ? `${getPoolLabel(player.pool)} - ` : ""}
-                        {`Rating ${player.user.elo}`}
-                      </p>
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <p className="text-xs text-gray-500">
+                          {poolsEnabled ? `${getPoolLabel(player.pool)} - ` : ""}
+                          {`Rating ${player.user.elo}`}
+                        </p>
+                        {player.skipNextMatchAt ? (
+                          <span className="app-chip app-chip-warning px-2 py-0.5 text-[10px]">
+                            Skipping next
+                          </span>
+                        ) : null}
+                      </div>
                     </div>
                   </div>
 

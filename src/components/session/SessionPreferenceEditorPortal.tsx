@@ -20,6 +20,7 @@ interface SessionPreferenceEditorPortalProps {
   poolBName?: string | null;
   renamingGuestId: string | null;
   removingPlayerId: string | null;
+  skippingNextPlayerId: string | null;
   onClose: () => void;
   onUpdatePreference: (
     userId: string,
@@ -30,6 +31,8 @@ interface SessionPreferenceEditorPortalProps {
     nextRepresentingClubId?: string | null
   ) => Promise<void>;
   onRequestRenameGuest: (userId: string, currentName: string) => void;
+  onRequestSkipNext: (userId: string, playerName: string) => void;
+  onToggleSkipNext: (userId: string, hasSkipNext: boolean) => void;
   onRemovePlayer: (userId: string, playerName: string) => void;
 }
 
@@ -54,9 +57,12 @@ export function SessionPreferenceEditorPortal({
   poolBName,
   renamingGuestId,
   removingPlayerId,
+  skippingNextPlayerId,
   onClose,
   onUpdatePreference,
   onRequestRenameGuest,
+  onRequestSkipNext,
+  onToggleSkipNext,
   onRemovePlayer,
 }: SessionPreferenceEditorPortalProps) {
   const panelRef = useRef<HTMLDivElement | null>(null);
@@ -104,6 +110,7 @@ export function SessionPreferenceEditorPortal({
     poolAName,
     poolBName,
   });
+  const hasSkipNext = Boolean(activePreferencePlayer.skipNextMatchAt);
 
   return createPortal(
     <div
@@ -259,6 +266,34 @@ export function SessionPreferenceEditorPortal({
           </span>
         </span>
       </label>
+
+      {!activePreferencePlayer.isPaused ? (
+        <div className="border-t border-gray-100 pt-3">
+          <button
+            type="button"
+            onClick={() => {
+              onClose();
+              if (hasSkipNext) {
+                onToggleSkipNext(activePreferencePlayer.userId, true);
+                return;
+              }
+
+              onRequestSkipNext(
+                activePreferencePlayer.userId,
+                activePreferencePlayer.user.name
+              );
+            }}
+            disabled={skippingNextPlayerId === activePreferencePlayer.userId}
+            className="app-button-secondary w-full px-3 py-2.5 text-sm disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {skippingNextPlayerId === activePreferencePlayer.userId
+              ? "Saving..."
+              : hasSkipNext
+                ? "Cancel Skip Next"
+                : "Skip Next Match"}
+          </button>
+        </div>
+      ) : null}
 
       {activePreferencePlayer.isGuest ? (
         <div className="border-t border-gray-100 pt-3">

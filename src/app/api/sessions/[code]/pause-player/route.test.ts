@@ -167,6 +167,33 @@ describe("pause player route", () => {
     expect(prisma.$transaction).not.toHaveBeenCalled();
   });
 
+  it("clears skip-next state when pausing a player", async () => {
+    vi.mocked(prisma.sessionPlayer.findUnique).mockResolvedValue({
+      pausedAt: null,
+      inactiveSeconds: 0,
+      matchesPlayed: 1,
+      matchmakingMatchesCredit: 0,
+    } as never);
+
+    const updateSpy = vi.fn(async ({ data }) => ({ id: "session-player-1", ...data }));
+    mockTransaction(updateSpy);
+
+    const response = await POST(createRequest("active-player", true), {
+      params: Promise.resolve({ code: "ABC" }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(updateSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          isPaused: true,
+          skipNextMatchAt: null,
+          skipNextMatchRequestedById: null,
+        }),
+      })
+    );
+  });
+
   it("does not reset queue time or credit when no match completed while paused", async () => {
     const now = new Date("2026-05-08T04:10:00.000Z");
     vi.useFakeTimers();

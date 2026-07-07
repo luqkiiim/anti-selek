@@ -144,4 +144,28 @@ describe("ManualMatchModal", () => {
     expect(markup).not.toContain("Remove one to change the lineup.");
     expect(markup.match(/disabled=""/g)?.length ?? 0).toBe(1);
   });
+
+  it("warns but allows manually selected skip-next players", () => {
+    const skippedPlayer = createPlayer("u1", "Alice");
+    skippedPlayer.skipNextMatchAt = "2026-07-08T00:00:00.000Z";
+
+    const markup = renderModal({
+      manualMatchForm: {
+        team1User1Id: "u1",
+        team1User2Id: "",
+        team2User1Id: "",
+        team2User2Id: "",
+      },
+      players: [
+        skippedPlayer,
+        createPlayer("u2", "Bianca"),
+        createPlayer("u3", "Cara"),
+        createPlayer("u4", "Dinesh"),
+      ],
+    });
+
+    expect(markup).toContain("Skipping next");
+    expect(markup).toContain("Manual override");
+    expect(markup).toContain("Alice is marked to skip next");
+  });
 });

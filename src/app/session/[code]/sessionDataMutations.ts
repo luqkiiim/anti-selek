@@ -579,6 +579,8 @@ export function applyGuestAdded(current: SessionData, guest: GuestPayload) {
         sessionPoints: 0,
         ladderEntryAt: guest.ladderEntryAt,
         isPaused: false,
+        skipNextMatchAt: null,
+        skipNextMatchRequestedById: null,
         isGuest: guest.isGuest,
         representingClubId: guest.representingClubId ?? null,
         gender: guest.gender,
@@ -620,6 +622,10 @@ export function applyPlayerPaused(
         ? {
             ...player,
             isPaused,
+            skipNextMatchAt: isPaused ? null : player.skipNextMatchAt ?? null,
+            skipNextMatchRequestedById: isPaused
+              ? null
+              : player.skipNextMatchRequestedById ?? null,
             ladderEntryAt: ladderEntryAt ?? player.ladderEntryAt,
           }
         : player
@@ -680,6 +686,34 @@ export function applyPlayerNameUpdate(
           team2User2: updateParticipantName(current.queuedMatch.team2User2),
         }
       : current.queuedMatch,
+  };
+}
+
+export function applyPlayerSkipNext(
+  current: SessionData,
+  userId: string,
+  skipNextMatchAt?: string | Date | null,
+  skipNextMatchRequestedById?: string | null
+) {
+  const normalizedSkipNextMatchAt =
+    skipNextMatchAt instanceof Date
+      ? skipNextMatchAt.toISOString()
+      : skipNextMatchAt ?? null;
+
+  return {
+    ...current,
+    players: current.players.map((player) =>
+      player.userId === userId
+        ? {
+            ...player,
+            skipNextMatchAt: normalizedSkipNextMatchAt,
+            skipNextMatchRequestedById:
+              normalizedSkipNextMatchAt === null
+                ? null
+                : skipNextMatchRequestedById ?? player.skipNextMatchRequestedById ?? null,
+          }
+        : player
+    ),
   };
 }
 

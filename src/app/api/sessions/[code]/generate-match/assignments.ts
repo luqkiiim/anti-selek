@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { MatchStatus } from "@/types/enums";
 import type { ManualMatchTeams } from "@/lib/matchmaking/manualMatch";
 import { parseMatchmakingReasonJson } from "@/lib/matchmaking/matchReason";
+import { consumeSkipNextMatches } from "@/lib/sessionSkipNext";
 import { GenerateMatchError } from "./shared";
 
 function getAllSelectedIds(
@@ -136,6 +137,7 @@ export async function createMatchesForAssignments(
     team2ClubId?: string | null;
     matchmakingReasonJson?: string | null;
     clearArrivalPriority?: boolean;
+    consumeSkipNextUserIds?: string[];
   }>
 ) {
   return prisma.$transaction(async (tx) => {
@@ -147,6 +149,13 @@ export async function createMatchesForAssignments(
       const match = await createMatchAssignment(tx, sessionId, assignment);
       matches.push(match);
     }
+
+    await consumeSkipNextMatches(tx, {
+      sessionId,
+      userIds: assignments.flatMap(
+        (assignment) => assignment.consumeSkipNextUserIds ?? []
+      ),
+    });
 
     return matches;
   });
@@ -162,6 +171,7 @@ export async function replaceCurrentCourtMatchAssignment({
   team2ClubId,
   matchmakingReasonJson,
   clearArrivalPriority,
+  consumeSkipNextUserIds,
 }: {
   sessionId: string;
   courtId: string;
@@ -172,6 +182,7 @@ export async function replaceCurrentCourtMatchAssignment({
   team2ClubId?: string | null;
   matchmakingReasonJson?: string | null;
   clearArrivalPriority?: boolean;
+  consumeSkipNextUserIds?: string[];
 }) {
   return prisma.$transaction(async (tx) => {
     const deletedMatch = await tx.match.deleteMany({
@@ -208,7 +219,7 @@ export async function replaceCurrentCourtMatchAssignment({
 
     await assertAssignmentsAvailable(tx, sessionId, [{ selectedIds }]);
 
-    return createMatchAssignment(tx, sessionId, {
+    const match = await createMatchAssignment(tx, sessionId, {
       courtId,
       partition,
       team1ClubId,
@@ -216,6 +227,13 @@ export async function replaceCurrentCourtMatchAssignment({
       matchmakingReasonJson,
       clearArrivalPriority,
     });
+
+    await consumeSkipNextMatches(tx, {
+      sessionId,
+      userIds: consumeSkipNextUserIds ?? [],
+    });
+
+    return match;
   });
 }
 
@@ -227,6 +245,7 @@ export async function createQueuedMatchAssignment({
   team1ClubId,
   team2ClubId,
   matchmakingReasonJson,
+  consumeSkipNextUserIds,
 }: {
   sessionId: string;
   queuedMatchId: string;
@@ -235,6 +254,7 @@ export async function createQueuedMatchAssignment({
   team1ClubId?: string | null;
   team2ClubId?: string | null;
   matchmakingReasonJson?: string | null;
+  consumeSkipNextUserIds?: string[];
 }) {
   return prisma.$transaction(async (tx) => {
     await assertAssignmentsAvailable(tx, sessionId, [
@@ -262,6 +282,11 @@ export async function createQueuedMatchAssignment({
         id: queuedMatchId,
         sessionId,
       },
+    });
+
+    await consumeSkipNextMatches(tx, {
+      sessionId,
+      userIds: consumeSkipNextUserIds ?? [],
     });
 
     return match;

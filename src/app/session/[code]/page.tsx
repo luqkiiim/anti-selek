@@ -194,6 +194,8 @@ export default function SessionPage() {
     guestRepresentingClubId,
     addingGuest,
     togglingPausePlayerId,
+    skippingNextPlayerId,
+    skipNextDraft,
     guestRenameDraft,
     guestRenameInput,
     renamingGuestId,
@@ -213,10 +215,14 @@ export default function SessionPage() {
     closeRosterModal,
     requestRenameGuest,
     closeGuestRenameModal,
+    requestSkipNextPlayer,
+    closeSkipNextConfirm,
     handleGuestGenderChange,
     addPlayerToSession,
     addGuestToSession,
     togglePausePlayer,
+    toggleSkipNextPlayer,
+    confirmSkipNextPlayer,
     renameGuestInSession,
     requestRemovePlayerFromSession,
     closeRemovePlayerConfirm,
@@ -1467,12 +1473,15 @@ export default function SessionPage() {
         players={sessionData.players}
         currentUserId={currentUserId}
         canEditPreferences={!sessionView.isCompletedSession}
+        canManagePlayers={isAdmin}
         poolsEnabled={sessionData.poolsEnabled}
         poolAName={sessionData.poolAName}
         poolBName={sessionData.poolBName}
         togglingPausePlayerId={togglingPausePlayerId}
+        skippingNextPlayerId={skippingNextPlayerId}
         onClose={() => setShowPlayersModal(false)}
         onTogglePause={togglePausePlayer}
+        onToggleSkipNext={toggleSkipNextPlayer}
         onOpenPreferenceEditor={togglePreferenceEditor}
       />
 
@@ -1696,6 +1705,37 @@ export default function SessionPage() {
         />
       ) : null}
 
+      {skipNextDraft ? (
+        <SessionActionConfirmModal
+          title="Skip next match?"
+          subtitle="This player will be left out the next time automatic matchmaking would select them."
+          details={
+            <div className="app-panel-muted space-y-2 p-4">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">
+                Player
+              </p>
+              <p className="text-sm font-semibold text-gray-900">
+                {skipNextDraft.playerName}
+              </p>
+              <p className="text-sm text-gray-600">
+                They will not receive catch-up priority after the skip is used.
+              </p>
+              {skipNextDraft.affectsQueuedMatch ? (
+                <p className="text-sm font-semibold text-amber-800">
+                  This will remove them from the queued match and rebuild the
+                  queue.
+                </p>
+              ) : null}
+            </div>
+          }
+          confirmLabel="Skip Next Match"
+          cancelLabel="Keep Player Available"
+          isSubmitting={skippingNextPlayerId === skipNextDraft.userId}
+          onClose={closeSkipNextConfirm}
+          onConfirm={() => void confirmSkipNextPlayer()}
+        />
+      ) : null}
+
       {removePlayerDraft ? (
         <SessionActionConfirmModal
           title="Remove player?"
@@ -1735,9 +1775,12 @@ export default function SessionPage() {
         poolBName={sessionData.poolBName}
         renamingGuestId={renamingGuestId}
         removingPlayerId={removingPlayerId}
+        skippingNextPlayerId={skippingNextPlayerId}
         onClose={() => setOpenPreferenceEditor(null)}
         onUpdatePreference={updatePlayerPreference}
         onRequestRenameGuest={openGuestRename}
+        onRequestSkipNext={requestSkipNextPlayer}
+        onToggleSkipNext={toggleSkipNextPlayer}
         onRemovePlayer={requestRemovePlayerFromSession}
       />
 

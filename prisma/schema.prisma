@@ -195,6 +195,8 @@ model SessionPlayer {
   joinedAt                 DateTime  @default(now())
   ladderEntryAt            DateTime  @default(now())
   arrivalPriorityAt        DateTime?
+  skipNextMatchAt          DateTime?
+  skipNextMatchRequestedById String?
   inactiveSeconds          Int       @default(0)
 
   session Session @relation(fields: [sessionId], references: [id], onDelete: Cascade)

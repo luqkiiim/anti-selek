@@ -20,6 +20,8 @@ export interface Player {
   ladderEntryAt?: string;
   joinedAt?: string;
   isPaused: boolean;
+  skipNextMatchAt?: string | null;
+  skipNextMatchRequestedById?: string | null;
   isGuest: boolean;
   gender: PlayerGender;
   partnerPreference: PartnerPreference;

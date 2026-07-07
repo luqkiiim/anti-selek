@@ -159,6 +159,8 @@ export async function POST(
         data: {
           isPaused,
           pausedAt: isPaused ? now : null,
+          skipNextMatchAt: isPaused ? null : undefined,
+          skipNextMatchRequestedById: isPaused ? null : undefined,
           availableSince: shouldResetResumeQueue ? now : undefined,
           ladderEntryAt: shouldResetResumeQueue ? now : undefined,
           arrivalPriorityAt: shouldSetArrivalPriority ? now : undefined,

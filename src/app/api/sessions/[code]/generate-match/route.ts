@@ -25,9 +25,9 @@ import {
   parseGenerateMatchRequest,
   parseManualTeams,
   replaceCurrentCourtMatchAssignment,
-  selectReplacementMatch,
-  selectBatchMatches,
-  selectSingleCourtMatch,
+  selectReplacementMatchRespectingSkips,
+  selectBatchMatchesRespectingSkips,
+  selectSingleCourtMatchRespectingSkips,
   undoCurrentCourtMatch,
   validateManualMatchRequest,
 } from "./service";
@@ -199,13 +199,14 @@ export async function POST(
         replacementSessionData,
         busyPlayerIds
       );
-      const replacementSelection = selectReplacementMatch({
-        rankedCandidates,
-        playersById,
-        sessionData: replacementSessionData,
-        retainedUserIds: retainedUserIds as [string, string, string],
-        excludedUserIds: currentMatchUserIds,
-      });
+      const { selection: replacementSelection, consumedSkipUserIds } =
+        selectReplacementMatchRespectingSkips({
+          rankedCandidates,
+          playersById,
+          sessionData: replacementSessionData,
+          retainedUserIds: retainedUserIds as [string, string, string],
+          excludedUserIds: currentMatchUserIds,
+        });
 
       return NextResponse.json(
         await replaceCurrentCourtMatchAssignment({
@@ -224,6 +225,7 @@ export async function POST(
               : null,
           matchmakingReasonJson: replacementSelection.matchmakingReasonJson ?? null,
           clearArrivalPriority: true,
+          consumeSkipNextUserIds: consumedSkipUserIds,
         })
       );
     }
@@ -272,13 +274,14 @@ export async function POST(
         1
       );
 
-      const bestSelection = selectSingleCourtMatch({
-        rankedCandidates: eligibleRankedCandidates,
-        playersById,
-        sessionData: reshuffleSessionData,
-        rotationHistory,
-        reshuffleSource,
-      });
+      const { selection: bestSelection, consumedSkipUserIds } =
+        selectSingleCourtMatchRespectingSkips({
+          rankedCandidates: eligibleRankedCandidates,
+          playersById,
+          sessionData: reshuffleSessionData,
+          rotationHistory,
+          reshuffleSource,
+        });
 
       const newMatch = await replaceCurrentCourtMatchAssignment({
         sessionId: sessionData.id,
@@ -292,6 +295,7 @@ export async function POST(
           "team2ClubId" in bestSelection ? bestSelection.team2ClubId : null,
         matchmakingReasonJson: bestSelection.matchmakingReasonJson ?? null,
         clearArrivalPriority: true,
+        consumeSkipNextUserIds: consumedSkipUserIds,
       });
 
       if (sessionData.poolsEnabled && "targetPool" in bestSelection) {
@@ -337,13 +341,14 @@ export async function POST(
     }
 
     if (requestedMatchCount === 1) {
-      const bestSelection = selectSingleCourtMatch({
-        rankedCandidates: eligibleRankedCandidates,
-        playersById,
-        sessionData,
-        rotationHistory,
-        reshuffleSource,
-      });
+      const { selection: bestSelection, consumedSkipUserIds } =
+        selectSingleCourtMatchRespectingSkips({
+          rankedCandidates: eligibleRankedCandidates,
+          playersById,
+          sessionData,
+          rotationHistory,
+          reshuffleSource,
+        });
 
       const [newMatch] = await createMatchesForAssignments(sessionData.id, [
         {
@@ -356,6 +361,7 @@ export async function POST(
             "team2ClubId" in bestSelection ? bestSelection.team2ClubId : null,
           matchmakingReasonJson: bestSelection.matchmakingReasonJson ?? null,
           clearArrivalPriority: true,
+          consumeSkipNextUserIds: consumedSkipUserIds,
         },
       ]);
 
@@ -378,13 +384,14 @@ export async function POST(
       });
     }
 
-    const batchSelection = selectBatchMatches({
-      rankedCandidates,
-      playersById,
-      sessionData,
-      rotationHistory,
-      requestedMatchCount,
-    });
+    const { selection: batchSelection, consumedSkipUserIds } =
+      selectBatchMatchesRespectingSkips({
+        rankedCandidates,
+        playersById,
+        sessionData,
+        rotationHistory,
+        requestedMatchCount,
+      });
     const newMatches = await createMatchesForAssignments(
       sessionData.id,
       requestedOpenCourts.map((court, index) => {
@@ -400,6 +407,7 @@ export async function POST(
             "team2ClubId" in selection ? selection.team2ClubId : null,
           matchmakingReasonJson: selection.matchmakingReasonJson ?? null,
           clearArrivalPriority: true,
+          consumeSkipNextUserIds: consumedSkipUserIds,
         };
       })
     );

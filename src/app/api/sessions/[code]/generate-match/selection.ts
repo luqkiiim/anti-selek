@@ -28,6 +28,10 @@ import { getBusyPlayerIds } from "@/lib/matchmaking/busyFilter";
 import { buildV3MatchmakingReasonJson } from "@/lib/matchmaking/matchReason";
 import { buildRestTurnsByUserId } from "@/lib/matchmaking/restTurns";
 import {
+  getPendingSkipNextUserIds,
+  getSkippedSelectionUserIds,
+} from "@/lib/sessionSkipNext";
+import {
   getCompetitiveEntryAt,
   deriveLadderRecordsByEntryTime,
   deriveRaceRecordsByEntryTime,
@@ -1449,6 +1453,164 @@ export function selectReplacementMatch({
   );
 }
 
+function getSkipNextAlternativeError() {
+  return new GenerateMatchError(
+    409,
+    "No alternative match was available after honoring skip-next requests. Cancel skip next for a player or choose manually."
+  );
+}
+
+function getSelectionUserIds(selection: { ids: readonly string[] }) {
+  return [...selection.ids];
+}
+
+function getBatchSelectionUserIds(selection: {
+  selections: Array<{ ids: readonly string[] }>;
+}) {
+  return selection.selections.flatMap((matchSelection) =>
+    getSelectionUserIds(matchSelection)
+  );
+}
+
+function filterRankedCandidatesByExcludedUserIds(
+  rankedCandidates: RankedCandidates,
+  excludedUserIds: ReadonlySet<string>
+) {
+  if (excludedUserIds.size === 0) {
+    return rankedCandidates;
+  }
+
+  return rankedCandidates.filter(
+    (candidate) => !excludedUserIds.has(candidate.userId)
+  );
+}
+
+function appendUniqueUserIds(target: string[], userIds: readonly string[]) {
+  for (const userId of userIds) {
+    if (!target.includes(userId)) {
+      target.push(userId);
+    }
+  }
+}
+
+export function selectSingleCourtMatchRespectingSkips({
+  rankedCandidates,
+  playersById,
+  sessionData,
+  rotationHistory,
+  reshuffleSource,
+}: {
+  rankedCandidates: RankedCandidates;
+  playersById: Map<string, PartitionCandidate>;
+  sessionData: GenerateMatchSession;
+  rotationHistory: ReturnType<typeof buildRotationHistory>;
+  reshuffleSource: ReshuffleSource | null;
+}) {
+  const pendingSkipUserIds = getPendingSkipNextUserIds(sessionData.players);
+  const excludedSkipUserIds = new Set<string>();
+  const consumedSkipUserIds: string[] = [];
+
+  for (let attempt = 0; attempt <= pendingSkipUserIds.size; attempt += 1) {
+    const eligibleRankedCandidates = filterRankedCandidatesByExcludedUserIds(
+      rankedCandidates,
+      excludedSkipUserIds
+    );
+
+    if (eligibleRankedCandidates.length < 4) {
+      throw getSkipNextAlternativeError();
+    }
+
+    let selection: ReturnType<typeof selectSingleCourtMatch>;
+    try {
+      selection = selectSingleCourtMatch({
+        rankedCandidates: eligibleRankedCandidates,
+        playersById,
+        sessionData,
+        rotationHistory,
+        reshuffleSource,
+      });
+    } catch (error) {
+      if (consumedSkipUserIds.length > 0 && error instanceof GenerateMatchError) {
+        throw getSkipNextAlternativeError();
+      }
+
+      throw error;
+    }
+
+    const selectedSkipUserIds = getSkippedSelectionUserIds(
+      getSelectionUserIds(selection),
+      pendingSkipUserIds,
+      excludedSkipUserIds
+    );
+
+    if (selectedSkipUserIds.length === 0) {
+      return { selection, consumedSkipUserIds };
+    }
+
+    appendUniqueUserIds(consumedSkipUserIds, selectedSkipUserIds);
+    for (const userId of selectedSkipUserIds) {
+      excludedSkipUserIds.add(userId);
+    }
+  }
+
+  throw getSkipNextAlternativeError();
+}
+
+export function selectReplacementMatchRespectingSkips({
+  rankedCandidates,
+  playersById,
+  sessionData,
+  retainedUserIds,
+  excludedUserIds = [],
+}: {
+  rankedCandidates: RankedCandidates;
+  playersById: Map<string, PartitionCandidate>;
+  sessionData: GenerateMatchSession;
+  retainedUserIds: [string, string, string];
+  excludedUserIds?: string[];
+}) {
+  const pendingSkipUserIds = getPendingSkipNextUserIds(sessionData.players);
+  const retainedUserIdSet = new Set(retainedUserIds);
+  const excludedSkipUserIds = new Set<string>();
+  const consumedSkipUserIds: string[] = [];
+
+  for (let attempt = 0; attempt <= pendingSkipUserIds.size; attempt += 1) {
+    let selection: ReturnType<typeof selectReplacementMatch>;
+    try {
+      selection = selectReplacementMatch({
+        rankedCandidates,
+        playersById,
+        sessionData,
+        retainedUserIds,
+        excludedUserIds: [...excludedUserIds, ...excludedSkipUserIds],
+      });
+    } catch (error) {
+      if (consumedSkipUserIds.length > 0 && error instanceof GenerateMatchError) {
+        throw getSkipNextAlternativeError();
+      }
+
+      throw error;
+    }
+
+    const selectedSkipUserIds = getSkippedSelectionUserIds(
+      getSelectionUserIds(selection),
+      pendingSkipUserIds,
+      new Set([...excludedSkipUserIds, ...retainedUserIdSet])
+    );
+
+    if (selectedSkipUserIds.length === 0) {
+      return { selection, consumedSkipUserIds };
+    }
+
+    appendUniqueUserIds(consumedSkipUserIds, selectedSkipUserIds);
+    for (const userId of selectedSkipUserIds) {
+      excludedSkipUserIds.add(userId);
+    }
+  }
+
+  throw getSkipNextAlternativeError();
+}
+
 export function selectBatchMatches({
   rankedCandidates,
   playersById,
@@ -1602,4 +1764,70 @@ export function selectBatchMatches({
       withMatchmakingReason(selection, sessionData)
     ),
   };
+}
+
+export function selectBatchMatchesRespectingSkips({
+  rankedCandidates,
+  playersById,
+  sessionData,
+  rotationHistory,
+  requestedMatchCount,
+  randomFn,
+}: {
+  rankedCandidates: RankedCandidates;
+  playersById: Map<string, PartitionCandidate>;
+  sessionData: GenerateMatchSession;
+  rotationHistory: ReturnType<typeof buildRotationHistory>;
+  requestedMatchCount: number;
+  randomFn?: () => number;
+}) {
+  const pendingSkipUserIds = getPendingSkipNextUserIds(sessionData.players);
+  const excludedSkipUserIds = new Set<string>();
+  const consumedSkipUserIds: string[] = [];
+
+  for (let attempt = 0; attempt <= pendingSkipUserIds.size; attempt += 1) {
+    const eligibleRankedCandidates = filterRankedCandidatesByExcludedUserIds(
+      rankedCandidates,
+      excludedSkipUserIds
+    );
+
+    if (eligibleRankedCandidates.length < requestedMatchCount * 4) {
+      throw getSkipNextAlternativeError();
+    }
+
+    let selection: ReturnType<typeof selectBatchMatches>;
+    try {
+      selection = selectBatchMatches({
+        rankedCandidates: eligibleRankedCandidates,
+        playersById,
+        sessionData,
+        rotationHistory,
+        requestedMatchCount,
+        randomFn,
+      });
+    } catch (error) {
+      if (consumedSkipUserIds.length > 0 && error instanceof GenerateMatchError) {
+        throw getSkipNextAlternativeError();
+      }
+
+      throw error;
+    }
+
+    const selectedSkipUserIds = getSkippedSelectionUserIds(
+      getBatchSelectionUserIds(selection),
+      pendingSkipUserIds,
+      excludedSkipUserIds
+    );
+
+    if (selectedSkipUserIds.length === 0) {
+      return { selection, consumedSkipUserIds };
+    }
+
+    appendUniqueUserIds(consumedSkipUserIds, selectedSkipUserIds);
+    for (const userId of selectedSkipUserIds) {
+      excludedSkipUserIds.add(userId);
+    }
+  }
+
+  throw getSkipNextAlternativeError();
 }

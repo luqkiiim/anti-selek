@@ -67,8 +67,11 @@ describe("SessionPreferenceEditorPortal", () => {
           poolsEnabled={false}
           renamingGuestId={null}
           removingPlayerId={null}
+          skippingNextPlayerId={null}
           onClose={onClose}
           onUpdatePreference={onUpdatePreference}
+          onRequestSkipNext={vi.fn()}
+          onToggleSkipNext={vi.fn()}
           onRequestRenameGuest={vi.fn()}
           onRemovePlayer={vi.fn()}
         />

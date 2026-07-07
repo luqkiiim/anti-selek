@@ -98,6 +98,8 @@ export async function POST(
           joinedAt: resetAt,
           ladderEntryAt: resetAt,
           arrivalPriorityAt: null,
+          skipNextMatchAt: null,
+          skipNextMatchRequestedById: null,
           inactiveSeconds: 0,
         },
       });

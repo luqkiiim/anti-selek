@@ -14,12 +14,15 @@ interface SessionPlayersModalProps {
   players: Player[];
   currentUserId: string;
   canEditPreferences: boolean;
+  canManagePlayers: boolean;
   poolsEnabled: boolean;
   poolAName?: string | null;
   poolBName?: string | null;
   togglingPausePlayerId: string | null;
+  skippingNextPlayerId: string | null;
   onClose: () => void;
   onTogglePause: (userId: string, isPaused: boolean) => void;
+  onToggleSkipNext: (userId: string, hasSkipNext: boolean) => void;
   onOpenPreferenceEditor: (userId: string, triggerEl: HTMLElement) => void;
 }
 
@@ -37,12 +40,15 @@ export function SessionPlayersModal({
   players,
   currentUserId,
   canEditPreferences,
+  canManagePlayers,
   poolsEnabled,
   poolAName,
   poolBName,
   togglingPausePlayerId,
+  skippingNextPlayerId,
   onClose,
   onTogglePause,
+  onToggleSkipNext,
   onOpenPreferenceEditor,
 }: SessionPlayersModalProps) {
   const [search, setSearch] = useState("");
@@ -134,6 +140,9 @@ export function SessionPlayersModal({
         <div className="space-y-2">
           {filteredPlayers.map((player) => {
             const isUpdatingPause = togglingPausePlayerId === player.userId;
+            const hasSkipNext = Boolean(player.skipNextMatchAt);
+            const isUpdatingSkipNext = skippingNextPlayerId === player.userId;
+            const canSelfSkip = player.userId === currentUserId && !player.isPaused;
             const poolLabel =
               player.pool === SessionPool.A
                 ? (poolAName ?? "Open")
@@ -181,13 +190,32 @@ export function SessionPlayersModal({
                         Paused
                       </span>
                     ) : null}
+                    {hasSkipNext ? (
+                      <span className="app-chip app-chip-warning px-2 py-0.5 text-[10px]">
+                        Skipping next
+                      </span>
+                    ) : null}
                   </div>
                   <p className="text-xs text-gray-500">Rating {player.user.elo}</p>
                   </div>
                 </div>
 
                 <div className="flex shrink-0 items-center gap-2">
-                  {canEditPreferences ? (
+                  {canSelfSkip ? (
+                    <button
+                      type="button"
+                      onClick={() => onToggleSkipNext(player.userId, hasSkipNext)}
+                      disabled={skippingNextPlayerId !== null}
+                      className="app-button-secondary px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {isUpdatingSkipNext
+                        ? "Saving..."
+                        : hasSkipNext
+                          ? "Cancel skip"
+                          : "Skip next"}
+                    </button>
+                  ) : null}
+                  {canEditPreferences && canManagePlayers ? (
                     <button
                       type="button"
                       onClick={(event) =>

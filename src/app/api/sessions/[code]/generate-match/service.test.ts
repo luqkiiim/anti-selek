@@ -81,7 +81,9 @@ import {
   parseGenerateMatchRequest,
   parseManualTeams,
   selectBatchMatches,
+  selectBatchMatchesRespectingSkips,
   selectSingleCourtMatch,
+  selectSingleCourtMatchRespectingSkips,
   type GenerateMatchCourt,
   type GenerateMatchSession,
   validateManualMatchRequest,
@@ -104,6 +106,8 @@ function createSessionPlayer(
     joinedAt?: Date;
     availableSince?: Date;
     inactiveSeconds?: number;
+    skipNextMatchAt?: Date | null;
+    skipNextMatchRequestedById?: string | null;
     pool?: SessionPool;
     needsMoreRest?: boolean;
     representingClubId?: string | null;
@@ -124,6 +128,8 @@ function createSessionPlayer(
     joinedAt: options.joinedAt ?? new Date("2026-01-01T00:00:00Z"),
     availableSince: options.availableSince ?? new Date("2026-01-01T00:00:00Z"),
     inactiveSeconds: options.inactiveSeconds ?? 0,
+    skipNextMatchAt: options.skipNextMatchAt ?? null,
+    skipNextMatchRequestedById: options.skipNextMatchRequestedById ?? null,
     pool: options.pool ?? SessionPool.A,
     needsMoreRest: options.needsMoreRest ?? false,
     user: {
@@ -929,6 +935,168 @@ describe("generate match service", () => {
       expect(selection.partition.team2).not.toContain("dual");
     });
 
+    it("keeps skip-next pending when the player would not be selected", () => {
+      const selection = createV3Selection(["A", "B", "C", "D"], {
+        team1: ["A", "B"],
+        team2: ["C", "D"],
+      });
+      vi.mocked(findBestSingleCourtSelectionV3).mockReturnValueOnce({
+        selection,
+        debug: {} as never,
+      });
+      const players = [
+        createSessionPlayer("A"),
+        createSessionPlayer("B"),
+        createSessionPlayer("C"),
+        createSessionPlayer("D"),
+        createSessionPlayer("E", {
+          skipNextMatchAt: new Date("2026-07-08T00:00:00.000Z"),
+        }),
+      ];
+      const sessionData = createSessionData({ players });
+      const { rankedCandidates } = getRankedCandidates(sessionData, new Set());
+
+      const result = selectSingleCourtMatchRespectingSkips({
+        rankedCandidates,
+        playersById: createPlayersById(players),
+        sessionData,
+        rotationHistory: buildRotationHistory([]),
+        reshuffleSource: null,
+      });
+
+      expect(result.selection.ids).toEqual(["A", "B", "C", "D"]);
+      expect(result.consumedSkipUserIds).toEqual([]);
+      expect(findBestSingleCourtSelectionV3).toHaveBeenCalledTimes(1);
+    });
+
+    it("reruns selection and consumes skip-next when the player would be selected", () => {
+      const skippedSelection = createV3Selection(["A", "B", "C", "D"], {
+        team1: ["A", "B"],
+        team2: ["C", "D"],
+      });
+      const replacementSelection = createV3Selection(["B", "C", "D", "E"], {
+        team1: ["B", "C"],
+        team2: ["D", "E"],
+      });
+      vi.mocked(findBestSingleCourtSelectionV3)
+        .mockReturnValueOnce({ selection: skippedSelection, debug: {} as never })
+        .mockReturnValueOnce({ selection: replacementSelection, debug: {} as never });
+      const players = [
+        createSessionPlayer("A", {
+          skipNextMatchAt: new Date("2026-07-08T00:00:00.000Z"),
+        }),
+        createSessionPlayer("B"),
+        createSessionPlayer("C"),
+        createSessionPlayer("D"),
+        createSessionPlayer("E"),
+      ];
+      const sessionData = createSessionData({ players });
+      const { rankedCandidates } = getRankedCandidates(sessionData, new Set());
+
+      const result = selectSingleCourtMatchRespectingSkips({
+        rankedCandidates,
+        playersById: createPlayersById(players),
+        sessionData,
+        rotationHistory: buildRotationHistory([]),
+        reshuffleSource: null,
+      });
+
+      expect(result.selection.ids).toEqual(["B", "C", "D", "E"]);
+      expect(result.consumedSkipUserIds).toEqual(["A"]);
+      expect(
+        vi
+          .mocked(findBestSingleCourtSelectionV3)
+          .mock.calls[1][0].find((player) => player.userId === "A")?.isBusy
+      ).toBe(true);
+    });
+
+    it("cascades multiple pending skip-next players until a clean match is found", () => {
+      const firstSkippedSelection = createV3Selection(["A", "B", "C", "D"], {
+        team1: ["A", "B"],
+        team2: ["C", "D"],
+      });
+      const secondSkippedSelection = createV3Selection(["B", "C", "D", "E"], {
+        team1: ["B", "C"],
+        team2: ["D", "E"],
+      });
+      const replacementSelection = createV3Selection(["B", "C", "D", "F"], {
+        team1: ["B", "C"],
+        team2: ["D", "F"],
+      });
+      vi.mocked(findBestSingleCourtSelectionV3)
+        .mockReturnValueOnce({
+          selection: firstSkippedSelection,
+          debug: {} as never,
+        })
+        .mockReturnValueOnce({
+          selection: secondSkippedSelection,
+          debug: {} as never,
+        })
+        .mockReturnValueOnce({
+          selection: replacementSelection,
+          debug: {} as never,
+        });
+      const players = [
+        createSessionPlayer("A", {
+          skipNextMatchAt: new Date("2026-07-08T00:00:00.000Z"),
+        }),
+        createSessionPlayer("B"),
+        createSessionPlayer("C"),
+        createSessionPlayer("D"),
+        createSessionPlayer("E", {
+          skipNextMatchAt: new Date("2026-07-08T00:00:00.000Z"),
+        }),
+        createSessionPlayer("F"),
+      ];
+      const sessionData = createSessionData({ players });
+      const { rankedCandidates } = getRankedCandidates(sessionData, new Set());
+
+      const result = selectSingleCourtMatchRespectingSkips({
+        rankedCandidates,
+        playersById: createPlayersById(players),
+        sessionData,
+        rotationHistory: buildRotationHistory([]),
+        reshuffleSource: null,
+      });
+
+      expect(result.selection.ids).toEqual(["B", "C", "D", "F"]);
+      expect(result.consumedSkipUserIds).toEqual(["A", "E"]);
+      expect(findBestSingleCourtSelectionV3).toHaveBeenCalledTimes(3);
+    });
+
+    it("returns a clear failure when no skip-free alternative exists", () => {
+      const skippedSelection = createV3Selection(["A", "B", "C", "D"], {
+        team1: ["A", "B"],
+        team2: ["C", "D"],
+      });
+      vi.mocked(findBestSingleCourtSelectionV3).mockReturnValueOnce({
+        selection: skippedSelection,
+        debug: {} as never,
+      });
+      const players = [
+        createSessionPlayer("A", {
+          skipNextMatchAt: new Date("2026-07-08T00:00:00.000Z"),
+        }),
+        createSessionPlayer("B"),
+        createSessionPlayer("C"),
+        createSessionPlayer("D"),
+      ];
+      const sessionData = createSessionData({ players });
+      const { rankedCandidates } = getRankedCandidates(sessionData, new Set());
+
+      expect(() =>
+        selectSingleCourtMatchRespectingSkips({
+          rankedCandidates,
+          playersById: createPlayersById(players),
+          sessionData,
+          rotationHistory: buildRotationHistory([]),
+          reshuffleSource: null,
+        })
+      ).toThrow(
+        "No alternative match was available after honoring skip-next requests."
+      );
+    });
+
     it("reports mixed-rule shortages for club vs club sessions", () => {
       const players = [
         createSessionPlayer("A1", {
@@ -1437,6 +1605,93 @@ describe("generate match service", () => {
   });
 
   describe("selectBatchMatches", () => {
+    it("reruns a batch and consumes skip-next when a skipped player would be selected", () => {
+      const skippedBatchSelection: V3BatchSelection<
+        ActiveMatchmakerV3Player<MatchmakerV3Player>
+      > = {
+        selections: [
+          createV3Selection(["A", "B", "C", "D"], {
+            team1: ["A", "B"],
+            team2: ["C", "D"],
+          }),
+          createV3Selection(["E", "F", "G", "H"], {
+            team1: ["E", "F"],
+            team2: ["G", "H"],
+          }),
+        ],
+        restSummary: {
+          totalRestTurns: 0,
+          minimumRestTurns: 0,
+          restTurnVector: [],
+        },
+        maxBalanceGap: 0,
+        totalBalanceGap: 0,
+        maxPointDiffGap: 0,
+        totalPointDiffGap: 0,
+        totalSharedCourtRepeatPenalty: 0,
+        totalPartnerCoveragePenalty: 0,
+        totalOpponentCoveragePenalty: 0,
+        totalPartnerRepeatPenalty: 0,
+        totalOpponentRepeatPenalty: 0,
+        totalExactRematchPenalty: 0,
+        totalRandomScore: 0,
+        totalPairingRandomScore: 0,
+        sidePairingLayoutKeys: ["team1", "team2"],
+        sidePairingRandomScores: [0, 0],
+      };
+      const replacementBatchSelection: V3BatchSelection<
+        ActiveMatchmakerV3Player<MatchmakerV3Player>
+      > = {
+        ...skippedBatchSelection,
+        selections: [
+          createV3Selection(["B", "C", "D", "E"], {
+            team1: ["B", "C"],
+            team2: ["D", "E"],
+          }),
+          createV3Selection(["F", "G", "H", "I"], {
+            team1: ["F", "G"],
+            team2: ["H", "I"],
+          }),
+        ],
+      };
+      vi.mocked(findBestBatchSelectionV3)
+        .mockReturnValueOnce({
+          selection: skippedBatchSelection,
+          debug: {} as never,
+        })
+        .mockReturnValueOnce({
+          selection: replacementBatchSelection,
+          debug: {} as never,
+        });
+      const players = [
+        createSessionPlayer("A", {
+          skipNextMatchAt: new Date("2026-07-08T00:00:00.000Z"),
+        }),
+        createSessionPlayer("B"),
+        createSessionPlayer("C"),
+        createSessionPlayer("D"),
+        createSessionPlayer("E"),
+        createSessionPlayer("F"),
+        createSessionPlayer("G"),
+        createSessionPlayer("H"),
+        createSessionPlayer("I"),
+      ];
+      const sessionData = createSessionData({ players });
+      const { rankedCandidates } = getRankedCandidates(sessionData, new Set());
+
+      const result = selectBatchMatchesRespectingSkips({
+        rankedCandidates,
+        playersById: createPlayersById(players),
+        sessionData,
+        rotationHistory: buildRotationHistory([]),
+        requestedMatchCount: 2,
+      });
+
+      expect(result.selection.selections.flatMap((selection) => selection.ids))
+        .not.toContain("A");
+      expect(result.consumedSkipUserIds).toEqual(["A"]);
+    });
+
     it("returns the selected batch when one is available", () => {
       const batchSelection: V3BatchSelection<
         ActiveMatchmakerV3Player<MatchmakerV3Player>

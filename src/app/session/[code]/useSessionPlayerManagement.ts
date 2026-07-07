@@ -19,12 +19,14 @@ import {
   applyPlayerPaused,
   applyPlayerPreferenceUpdate,
   applyPlayerRemoval,
+  applyPlayerSkipNext,
   applyQueuedMatch,
   type GuestPayload,
   mergeSessionSnapshot,
   type SessionPlayerPayload,
   type SessionSnapshotLike,
 } from "./sessionDataMutations";
+import { hasQueuedMatchUser } from "@/lib/sessionQueue";
 import {
   ClubPlayerStatus,
   MixedSide,
@@ -47,6 +49,15 @@ interface UseSessionPlayerManagementArgs {
 interface PausePlayerResponse {
   error?: string;
   ladderEntryAt?: string;
+  queuedMatchAffected?: boolean;
+  queuedMatch?: SessionData["queuedMatch"];
+}
+
+interface SkipNextPlayerResponse {
+  error?: string;
+  userId?: string;
+  skipNextMatchAt?: string | null;
+  skipNextMatchRequestedById?: string | null;
   queuedMatchAffected?: boolean;
   queuedMatch?: SessionData["queuedMatch"];
 }
@@ -163,6 +174,14 @@ export function useSessionPlayerManagement({
   const [togglingPausePlayerId, setTogglingPausePlayerId] = useState<string | null>(
     null
   );
+  const [skippingNextPlayerId, setSkippingNextPlayerId] = useState<string | null>(
+    null
+  );
+  const [skipNextDraft, setSkipNextDraft] = useState<{
+    userId: string;
+    playerName: string;
+    affectsQueuedMatch: boolean;
+  } | null>(null);
   const [guestRenameDraft, setGuestRenameDraft] = useState<{
     userId: string;
     currentName: string;
@@ -317,6 +336,83 @@ export function useSessionPlayerManagement({
       return;
     }
     setRemovePlayerDraft(null);
+  };
+
+  const requestSkipNextPlayer = (userId: string, playerName: string) => {
+    setOpenPreferenceEditor(null);
+    setError("");
+    setSkipNextDraft({
+      userId,
+      playerName,
+      affectsQueuedMatch: hasQueuedMatchUser(sessionData?.queuedMatch, userId),
+    });
+  };
+
+  const closeSkipNextConfirm = () => {
+    if (skipNextDraft && skippingNextPlayerId === skipNextDraft.userId) {
+      return;
+    }
+    setSkipNextDraft(null);
+  };
+
+  const updateSkipNextPlayer = async (
+    userId: string,
+    skipNextMatch: boolean
+  ) => {
+    if (skippingNextPlayerId) return;
+
+    setSkippingNextPlayerId(userId);
+    setError("");
+
+    try {
+      const res = await fetch(
+        `/api/sessions/${code}/players/${userId}/skip-next`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ skipNextMatch }),
+        }
+      );
+      const data = await safeJson<SkipNextPlayerResponse>(res);
+      if (!res.ok) {
+        setError(getErrorMessage(data, "Failed to update skip next"));
+        return;
+      }
+
+      patchSessionData((current) => {
+        let updated = applyPlayerSkipNext(
+          current,
+          typeof data.userId === "string" ? data.userId : userId,
+          data.skipNextMatchAt ?? null,
+          data.skipNextMatchRequestedById ?? null
+        );
+
+        if (data.queuedMatchAffected === true) {
+          updated = applyQueuedMatch(updated, data.queuedMatch ?? null);
+        }
+
+        return updated;
+      });
+      setSkipNextDraft(null);
+      scheduleSessionRefresh();
+    } catch (err) {
+      console.error(err);
+      setError("Failed to update skip next");
+    } finally {
+      setSkippingNextPlayerId(null);
+    }
+  };
+
+  const toggleSkipNextPlayer = async (
+    userId: string,
+    currentSkipNext: boolean
+  ) => {
+    await updateSkipNextPlayer(userId, !currentSkipNext);
+  };
+
+  const confirmSkipNextPlayer = async () => {
+    if (!skipNextDraft) return;
+    await updateSkipNextPlayer(skipNextDraft.userId, true);
   };
 
   const togglePausePlayer = async (
@@ -588,6 +684,8 @@ export function useSessionPlayerManagement({
     addingGuest,
     savingPreferencesFor,
     togglingPausePlayerId,
+    skippingNextPlayerId,
+    skipNextDraft,
     guestRenameDraft,
     guestRenameInput,
     renamingGuestId,
@@ -607,10 +705,14 @@ export function useSessionPlayerManagement({
     closeRosterModal,
     requestRenameGuest,
     closeGuestRenameModal,
+    requestSkipNextPlayer,
+    closeSkipNextConfirm,
     handleGuestGenderChange,
     addPlayerToSession,
     addGuestToSession,
     togglePausePlayer,
+    toggleSkipNextPlayer,
+    confirmSkipNextPlayer,
     renameGuestInSession,
     requestRemovePlayerFromSession,
     closeRemovePlayerConfirm,

@@ -33,7 +33,10 @@ export {
   getRankedCandidates,
   getRequestedOpenCourts,
   selectReplacementMatch,
+  selectReplacementMatchRespectingSkips,
   selectBatchMatches,
+  selectBatchMatchesRespectingSkips,
   selectSingleCourtMatch,
+  selectSingleCourtMatchRespectingSkips,
   type MatchmakingState,
 } from "./selection";
