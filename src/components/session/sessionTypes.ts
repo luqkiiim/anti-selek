@@ -167,11 +167,24 @@ export interface ManualMatchFormState {
   team2User2Id: string;
 }
 
-export interface PreferenceEditorState {
-  userId: string;
+export interface PreferenceEditorPopoverAnchor {
   top: number;
+  right: number;
+  bottom: number;
   left: number;
 }
+
+export type PreferenceEditorState = {
+  userId: string;
+} & (
+  | {
+      placement: "sheet";
+    }
+  | {
+      placement: "popover";
+      anchor: PreferenceEditorPopoverAnchor;
+    }
+);
 
 export interface MatchScoreState {
   team1: string;

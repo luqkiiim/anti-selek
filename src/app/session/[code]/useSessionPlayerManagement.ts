@@ -200,35 +200,21 @@ export function useSessionPlayerManagement({
     setOpenPreferenceEditor((prev) => {
       if (prev?.userId === userId) return null;
 
+      if (window.innerWidth < 640) {
+        return { userId, placement: "sheet" };
+      }
+
       const rect = triggerEl.getBoundingClientRect();
-      const panelWidth = 176;
-      const basePanelHeight =
-        sessionData?.mode === SessionMode.MIXICANO
-          ? sessionData?.poolsEnabled
-            ? 280
-            : 220
-          : sessionData?.poolsEnabled
-            ? 184
-            : 124;
-      const panelHeight =
-        basePanelHeight +
-        (sessionData?.collabFormat === SessionCollabFormat.INTERCLUB ? 70 : 0);
-      const margin = 8;
-      const openUp = window.innerHeight - rect.bottom < panelHeight + margin;
-
-      const left = Math.min(
-        Math.max(margin, rect.right - panelWidth),
-        Math.max(margin, window.innerWidth - panelWidth - margin)
-      );
-      const preferredTop = openUp
-        ? rect.top - panelHeight - margin
-        : rect.bottom + margin;
-      const top = Math.min(
-        Math.max(margin, preferredTop),
-        Math.max(margin, window.innerHeight - panelHeight - margin)
-      );
-
-      return { userId, top, left };
+      return {
+        userId,
+        placement: "popover",
+        anchor: {
+          top: rect.top,
+          right: rect.right,
+          bottom: rect.bottom,
+          left: rect.left,
+        },
+      };
     });
   };
 

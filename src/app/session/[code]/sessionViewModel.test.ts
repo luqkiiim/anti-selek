@@ -185,8 +185,13 @@ describe("buildSessionViewModel", () => {
       manualCourtId: "court-2",
       openPreferenceEditor: {
         userId: "u2",
-        top: 16,
-        left: 24,
+        placement: "popover",
+        anchor: {
+          top: 16,
+          right: 248,
+          bottom: 56,
+          left: 24,
+        },
       },
     });
 
