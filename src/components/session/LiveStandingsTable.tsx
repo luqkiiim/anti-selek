@@ -245,11 +245,6 @@ export function LiveStandingsTable({
                             Paused
                           </span>
                         ) : null}
-                        {player.skipNextMatchAt ? (
-                          <span className="rounded-full border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[9px] font-medium text-amber-800 sm:px-2 sm:text-[10px]">
-                            Skipping next
-                          </span>
-                        ) : null}
                         {player.isGuest ? (
                           <span className="rounded-full border border-gray-200 bg-gray-100 px-1.5 py-0.5 text-[9px] font-medium text-gray-700 sm:px-2 sm:text-[10px]">
                             Guest

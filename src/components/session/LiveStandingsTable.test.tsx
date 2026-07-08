@@ -44,13 +44,15 @@ const players = [
 
 function renderTable({
   interclubClubToneById,
+  tablePlayers = players,
 }: {
   interclubClubToneById?: Record<string, "blue" | "red">;
+  tablePlayers?: Player[];
 }) {
   return (
     <LiveStandingsTable
       sessionType={SessionType.ELO}
-      players={players}
+      players={tablePlayers}
       currentUserId="viewer"
       pointDiffByUserId={
         new Map([
@@ -123,5 +125,27 @@ describe("LiveStandingsTable", () => {
     expect(firstCell?.className).toContain("bg-white");
     expect(firstCell?.className).not.toContain("bg-sky-50/70");
     expect(firstCell?.className).not.toContain("bg-rose-50/70");
+  });
+
+  it("does not reveal skip-next state in the standings leaderboard", async () => {
+    await act(async () => {
+      root.render(
+        renderTable({
+          tablePlayers: [
+            createPlayer("u1", "Aiman Rahman", "community-1"),
+            createPlayer("u2", "Haziq Azman", "community-2"),
+          ].map((player, index) =>
+            index === 0
+              ? {
+                  ...player,
+                  skipNextMatchAt: "2026-07-08T00:00:00.000Z",
+                }
+              : player
+          ),
+        })
+      );
+    });
+
+    expect(document.body.textContent).not.toContain("Skipping next");
   });
 });

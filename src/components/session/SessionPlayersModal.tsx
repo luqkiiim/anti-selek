@@ -143,6 +143,8 @@ export function SessionPlayersModal({
             const hasSkipNext = Boolean(player.skipNextMatchAt);
             const isUpdatingSkipNext = skippingNextPlayerId === player.userId;
             const canSelfSkip = player.userId === currentUserId && !player.isPaused;
+            const canSeeSkipNextState =
+              hasSkipNext && (canSelfSkip || canManagePlayers);
             const poolLabel =
               player.pool === SessionPool.A
                 ? (poolAName ?? "Open")
@@ -190,7 +192,7 @@ export function SessionPlayersModal({
                         Paused
                       </span>
                     ) : null}
-                    {hasSkipNext ? (
+                    {canSeeSkipNextState ? (
                       <span className="app-chip app-chip-warning px-2 py-0.5 text-[10px]">
                         Skipping next
                       </span>

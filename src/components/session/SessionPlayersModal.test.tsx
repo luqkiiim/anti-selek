@@ -90,6 +90,58 @@ describe("SessionPlayersModal", () => {
     expect(markup).toContain("Cancel skip");
   });
 
+  it("does not reveal another player's skip-next state to regular players", () => {
+    const markup = renderToStaticMarkup(
+      <SessionPlayersModal
+        open
+        players={[
+          createPlayer("other", "Other Player", {
+            skipNextMatchAt: "2026-07-08T00:00:00.000Z",
+          }),
+        ]}
+        currentUserId="me"
+        canEditPreferences
+        canManagePlayers={false}
+        poolsEnabled={false}
+        togglingPausePlayerId={null}
+        skippingNextPlayerId={null}
+        onClose={vi.fn()}
+        onTogglePause={vi.fn()}
+        onToggleSkipNext={vi.fn()}
+        onOpenPreferenceEditor={vi.fn()}
+      />
+    );
+
+    expect(markup).not.toContain("Skipping next");
+    expect(markup).not.toContain("Cancel skip");
+  });
+
+  it("keeps skip-next state visible to managers in the player list", () => {
+    const markup = renderToStaticMarkup(
+      <SessionPlayersModal
+        open
+        players={[
+          createPlayer("other", "Other Player", {
+            skipNextMatchAt: "2026-07-08T00:00:00.000Z",
+          }),
+        ]}
+        currentUserId="me"
+        canEditPreferences
+        canManagePlayers
+        poolsEnabled={false}
+        togglingPausePlayerId={null}
+        skippingNextPlayerId={null}
+        onClose={vi.fn()}
+        onTogglePause={vi.fn()}
+        onToggleSkipNext={vi.fn()}
+        onOpenPreferenceEditor={vi.fn()}
+      />
+    );
+
+    expect(markup).toContain("Skipping next");
+    expect(markup).toContain(">Edit<");
+  });
+
   it("keeps manager skip behind the player actions popover", () => {
     const markup = renderToStaticMarkup(
       <SessionPlayersModal
