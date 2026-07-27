@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import type { ReactNode } from "react";
 import {
   ClubPlayerStatus,
+  MixedSide,
   PartnerPreference,
   PlayerGender,
 } from "@/types/enums";
@@ -138,6 +139,36 @@ describe("ClubPlayerEditorModal", () => {
       "Default this player to a lighter session rotation."
     );
     expect(markup).toContain('checked=""');
+  });
+
+  it("presents gender-specific player level options without changing stored values", () => {
+    const maleMarkup = renderModal(
+      buildPlayer({
+        gender: PlayerGender.MALE,
+        mixedSideOverride: MixedSide.LOWER,
+      })
+    );
+    const femaleMarkup = renderModal(
+      buildPlayer({
+        gender: PlayerGender.FEMALE,
+        mixedSideOverride: MixedSide.UPPER,
+      })
+    );
+
+    expect(maleMarkup).toContain("Player level");
+    expect(maleMarkup).toContain('<option value="">Default</option>');
+    expect(maleMarkup).toContain(
+      '<option value="LOWER" selected="">Low level</option>'
+    );
+    expect(maleMarkup).toContain("Male/Low");
+    expect(femaleMarkup).toContain("Player level");
+    expect(femaleMarkup).toContain('<option value="">Default</option>');
+    expect(femaleMarkup).toContain(
+      '<option value="UPPER" selected="">High level</option>'
+    );
+    expect(femaleMarkup).toContain("Female/High");
+    expect(maleMarkup).not.toContain("Mixed side");
+    expect(femaleMarkup).not.toContain("Mixed side");
   });
 
   it("keeps name editing available for unclaimed placeholders", () => {

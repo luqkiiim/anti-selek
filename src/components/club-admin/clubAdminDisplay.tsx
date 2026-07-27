@@ -16,7 +16,7 @@ export function getClubAdminGenderPillLabel(
     });
 
     if (mixedSideLabel !== "Default") {
-      return `${player.gender === PlayerGender.FEMALE ? "Female" : "Male"}/${mixedSideLabel === "Upper Side" ? "Upper" : "Lower"}`;
+      return `${player.gender === PlayerGender.FEMALE ? "Female" : "Male"}/${mixedSideLabel === "Upper Side" ? "High" : "Low"}`;
     }
 
     return player.gender === PlayerGender.FEMALE ? "Female" : "Male";

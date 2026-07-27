@@ -3,10 +3,7 @@
 import Link from "next/link";
 import { AvatarUploader } from "@/components/ui/AvatarUploader";
 import { ModalFrame } from "@/components/ui/chrome";
-import {
-  getMixedSideDisplayLabel,
-  getMixedSideOverrideOptionForGender,
-} from "@/lib/mixedSide";
+import { getMixedSideOverrideOptionForGender } from "@/lib/mixedSide";
 import {
   ClubAdminClaimPill,
   ClubAdminGenderPill,
@@ -92,6 +89,8 @@ export function ClubPlayerEditorModal({
   if (!player) return null;
 
   const mixedSideOption = getMixedSideOverrideOptionForGender(player.gender);
+  const playerLevelOptionLabel =
+    player.gender === PlayerGender.FEMALE ? "High level" : "Low level";
   const canEditName = !player.isClaimed;
   const isCurrentUser = player.id === currentUserId;
   const canRemovePlayer =
@@ -252,7 +251,7 @@ export function ClubPlayerEditorModal({
             </label>
 
             <label className="block space-y-2 text-sm font-medium text-gray-900">
-              <span>Mixed side</span>
+              <span>Player level</span>
               {mixedSideOption ? (
                 <select
                   value={player.mixedSideOverride ?? ""}
@@ -267,15 +266,13 @@ export function ClubPlayerEditorModal({
                   className="field"
                 >
                   <option value="">Default</option>
-                  <option value={mixedSideOption.value}>{mixedSideOption.label}</option>
+                  <option value={mixedSideOption.value}>
+                    {playerLevelOptionLabel}
+                  </option>
                 </select>
               ) : (
                 <div className="field flex items-center text-sm text-gray-500">
-                  {getMixedSideDisplayLabel({
-                    gender: player.gender,
-                    mixedSideOverride: player.mixedSideOverride,
-                    partnerPreference: player.partnerPreference,
-                  })}
+                  Default
                 </div>
               )}
             </label>
