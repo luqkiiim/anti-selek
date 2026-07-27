@@ -4,6 +4,7 @@ import type {
   ClubAdminOfflineIdentityLink,
   ClubAdminPlayer,
 } from "./clubAdminTypes";
+import styles from "@/features/club-admin-page/ClubAdminPage.module.css";
 
 interface OfflineIdentityLinksPanelProps {
   links: ClubAdminOfflineIdentityLink[];
@@ -78,31 +79,38 @@ export function OfflineIdentityLinksPanel({
     !!sourceUserId && !!selectedTargetClub && !!targetUserId && !submitting;
 
   return (
-    <div className="space-y-5">
-      <div className="rounded-3xl border border-gray-100 bg-white p-6 shadow-md">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-          <div>
-            <h3 className="text-sm font-black uppercase tracking-widest text-gray-900">
-              Link Offline Players
-            </h3>
-            <p className="mt-1 max-w-2xl text-xs font-semibold text-gray-500">
-              Connect unclaimed placeholders only after both clubs agree they represent the same person.
-            </p>
+    <div
+      className={styles.panelStack}
+      data-owner-admin-panel="links"
+    >
+      <section
+        className={`${styles.adminPanel} ${styles.linkCreatePanel}`}
+        aria-labelledby="offline-links-heading"
+      >
+        <div className={styles.panelHeader}>
+          <div className={styles.panelHeadingCopy}>
+            <p className={styles.panelEyebrow}>Identity links</p>
+            <h3 id="offline-links-heading">Link offline players</h3>
+            <span>
+              Connect placeholders only after both clubs agree they represent
+              the same person.
+            </span>
           </div>
-          <span className="app-chip app-chip-neutral">
+          <span className={styles.countBadge}>
             {acceptedLinks.length} active
           </span>
         </div>
 
-        <div className="mt-5 grid gap-3 lg:grid-cols-3">
-          <label className="block">
-            <span className="mb-1 block text-[10px] font-black uppercase tracking-widest text-gray-500">
-              This club
+        <div className={styles.linkFormGrid}>
+          <label className={styles.fieldGroup}>
+            <span className={styles.fieldLabel}>
+              <b aria-hidden="true">1</b>
+              This club placeholder
             </span>
             <select
               value={sourceUserId}
               onChange={(event) => onSourceUserIdChange(event.target.value)}
-              className="field"
+              className={styles.fieldControl}
             >
               <option value="">Choose placeholder</option>
               {sourcePlaceholderOptions.map((player) => (
@@ -113,19 +121,20 @@ export function OfflineIdentityLinksPanel({
             </select>
           </label>
 
-          <div className="block">
-            <span className="mb-1 block text-[10px] font-black uppercase tracking-widest text-gray-500">
+          <div className={styles.fieldGroup}>
+            <span className={styles.fieldLabel}>
+              <b aria-hidden="true">2</b>
               Partner club
             </span>
             {selectedTargetClub ? (
-              <div className="flex min-h-11 items-center justify-between gap-3 rounded-xl border border-gray-200 bg-gray-50 px-3">
-                <span className="min-w-0 truncate text-sm font-semibold text-gray-900">
+              <div className={styles.selectedClub}>
+                <span>
                   {selectedTargetClub.name}
                 </span>
                 <button
                   type="button"
                   onClick={onClearTargetClub}
-                  className="text-xs font-black uppercase tracking-widest text-blue-600"
+                  className={styles.inlineButton}
                 >
                   Change
                 </button>
@@ -138,14 +147,14 @@ export function OfflineIdentityLinksPanel({
                   onChange={(event) =>
                     onTargetClubSearchChange(event.target.value)
                   }
-                  className="field"
+                  className={styles.fieldControl}
                   placeholder="Search clubs"
                 />
                 {targetClubCandidates.length > 0 ||
                 loadingTargetClubs ? (
-                  <div className="absolute z-20 mt-2 w-full overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-lg">
+                  <div className={styles.searchResults}>
                     {loadingTargetClubs ? (
-                      <p className="px-3 py-2 text-xs font-semibold text-gray-500">
+                      <p className={styles.searchingText}>
                         Searching...
                       </p>
                     ) : (
@@ -154,11 +163,11 @@ export function OfflineIdentityLinksPanel({
                           key={candidate.id}
                           type="button"
                           onClick={() => onSelectTargetClub(candidate)}
-                          className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm font-semibold text-gray-800 hover:bg-gray-50"
+                          className={styles.searchResultButton}
                         >
-                          <span className="truncate">{candidate.name}</span>
-                          <span className="shrink-0 text-xs text-gray-400">
-                            {candidate.membersCount}
+                          <span>{candidate.name}</span>
+                          <span>
+                            {candidate.membersCount} members
                           </span>
                         </button>
                       ))
@@ -169,15 +178,16 @@ export function OfflineIdentityLinksPanel({
             )}
           </div>
 
-          <label className="block">
-            <span className="mb-1 block text-[10px] font-black uppercase tracking-widest text-gray-500">
+          <label className={styles.fieldGroup}>
+            <span className={styles.fieldLabel}>
+              <b aria-hidden="true">3</b>
               Partner placeholder
             </span>
             <select
               value={targetUserId}
               onChange={(event) => onTargetUserIdChange(event.target.value)}
               disabled={!selectedTargetClub || loadingTargetRoster}
-              className="field disabled:cursor-not-allowed disabled:opacity-60"
+              className={styles.fieldControl}
             >
               <option value="">
                 {loadingTargetRoster ? "Loading roster..." : "Choose placeholder"}
@@ -191,39 +201,40 @@ export function OfflineIdentityLinksPanel({
           </label>
         </div>
 
-        <div className="mt-4 flex justify-end">
+        <div className={styles.panelFooter}>
           <button
             type="button"
             onClick={onSubmitLink}
             disabled={!canSubmit}
-            className="app-button-primary px-4 py-2 disabled:cursor-not-allowed disabled:opacity-50"
+            className={styles.primaryAction}
           >
             {submitting ? "Linking..." : "Request link"}
           </button>
         </div>
-      </div>
+      </section>
 
-      <div className="rounded-3xl border border-gray-100 bg-white p-6 shadow-md">
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <h3 className="text-sm font-black uppercase tracking-widest text-gray-900">
-              Link Requests
-            </h3>
-            <p className="mt-1 text-xs font-semibold text-gray-500">
+      <section
+        className={styles.adminPanel}
+        aria-labelledby="link-requests-heading"
+      >
+        <div className={styles.panelHeader}>
+          <div className={styles.panelHeadingCopy}>
+            <p className={styles.panelEyebrow}>Approvals</p>
+            <h3 id="link-requests-heading">Link requests</h3>
+            <span>
               Incoming requests need approval from this club.
-            </p>
+            </span>
           </div>
-          <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">
+          <span className={styles.countBadge}>
             {pendingLinks.length} pending
           </span>
         </div>
 
-        <div className="mt-4 space-y-3">
+        <div className={styles.requestList}>
           {links.length === 0 ? (
-            <div className="rounded-2xl border-2 border-dashed border-gray-100 bg-gray-50 p-4 text-center">
-              <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">
-                No offline identity links yet
-              </p>
+            <div className={styles.compactEmpty}>
+              <p>No offline identity links yet</p>
+              <span>New and accepted requests will appear here.</span>
             </div>
           ) : (
             links.map((link) => {
@@ -235,31 +246,32 @@ export function OfflineIdentityLinksPanel({
               return (
                 <div
                   key={link.id}
-                  className="rounded-2xl border border-gray-100 bg-gray-50 p-4"
+                  className={styles.requestRow}
                 >
-                  <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                    <div>
-                      <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">
-                        {getLinkDirection(link, currentClubId)} - {link.status}
+                  <div className={styles.requestRowMain}>
+                    <div className={styles.requestCopy}>
+                      <p className={styles.requestStatus}>
+                        {getLinkDirection(link, currentClubId)} ·{" "}
+                        {link.status.toLowerCase()}
                       </p>
-                      <p className="mt-1 text-sm font-black text-gray-900">
+                      <p className={styles.requestName}>
                         {link.sourceUserName} in {link.sourceClubName}
                       </p>
-                      <p className="text-sm font-black text-gray-900">
-                        {link.targetUserName} in {link.targetClubName}
+                      <p className={styles.requestTarget}>
+                        to {link.targetUserName} in {link.targetClubName}
                       </p>
-                      <p className="mt-1 text-xs font-semibold text-gray-500">
+                      <p className={styles.requestDate}>
                         Requested {new Date(link.createdAt).toLocaleDateString()}
                       </p>
                     </div>
 
                     {isIncomingPending ? (
-                      <div className="grid grid-cols-2 gap-2 lg:w-64">
+                      <div className={styles.requestActions}>
                         <button
                           type="button"
                           onClick={() => onReviewLink(link, "ACCEPTED")}
                           disabled={reviewingLinkId !== null || isOwnRequest}
-                          className="rounded-xl bg-blue-600 py-2.5 text-[10px] font-black uppercase tracking-widest text-white disabled:cursor-not-allowed disabled:opacity-50"
+                          className={styles.approveButton}
                         >
                           {reviewingLinkId === link.id ? "Working..." : "Approve"}
                         </button>
@@ -267,7 +279,7 @@ export function OfflineIdentityLinksPanel({
                           type="button"
                           onClick={() => onReviewLink(link, "REJECTED")}
                           disabled={reviewingLinkId !== null}
-                          className="rounded-xl border border-red-200 bg-white py-2.5 text-[10px] font-black uppercase tracking-widest text-red-600 disabled:cursor-not-allowed disabled:opacity-50"
+                          className={styles.rejectButton}
                         >
                           Reject
                         </button>
@@ -278,14 +290,14 @@ export function OfflineIdentityLinksPanel({
                         type="button"
                         onClick={() => onUnlink(link)}
                         disabled={reviewingLinkId !== null}
-                        className="rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-[10px] font-black uppercase tracking-widest text-gray-600 disabled:cursor-not-allowed disabled:opacity-50"
+                        className={styles.neutralButton}
                       >
                         {reviewingLinkId === link.id ? "Working..." : "Unlink"}
                       </button>
                     ) : null}
                   </div>
                   {isOwnRequest && isIncomingPending ? (
-                    <p className="mt-3 text-[10px] font-bold uppercase tracking-wider text-amber-600">
+                    <p className={styles.warningNote}>
                       Another admin must approve this request
                     </p>
                   ) : null}
@@ -294,7 +306,7 @@ export function OfflineIdentityLinksPanel({
             })
           )}
         </div>
-      </div>
+      </section>
     </div>
   );
 }

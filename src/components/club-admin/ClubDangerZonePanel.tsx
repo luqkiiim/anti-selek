@@ -1,5 +1,7 @@
 "use client";
 
+import styles from "@/features/club-admin-page/ClubAdminPage.module.css";
+
 interface ClubDangerZonePanelProps {
   isTutorial?: boolean;
   resettingClub: boolean;
@@ -16,34 +18,38 @@ export function ClubDangerZonePanel({
   onDeleteClub,
 }: ClubDangerZonePanelProps) {
   return (
-    <section className="app-panel p-6">
-      <div className="space-y-2">
-        <p className="app-eyebrow">Danger zone</p>
-        <h3 className="text-xl font-semibold text-gray-900">
+    <section
+      className={`${styles.adminPanel} ${styles.dangerPanel}`}
+      data-owner-admin-panel="danger"
+      aria-labelledby="danger-zone-heading"
+    >
+      <div className={styles.panelHeadingCopy}>
+        <p className={styles.dangerEyebrow}>Danger zone</p>
+        <h3 id="danger-zone-heading">
           {isTutorial ? "Reset playground" : "Reset or delete club"}
         </h3>
-        <p className="text-sm text-gray-600">
+        <span>
           {isTutorial
             ? "Reset restores the original practice players, live session, and tutorial progress."
             : "Reset clears tournament history and ratings. Delete removes the whole club permanently."}
-        </p>
+        </span>
       </div>
 
-      <div className="mt-6 space-y-4">
-        <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4">
-          <p className="text-sm font-semibold text-gray-900">
+      <div className={styles.dangerActions}>
+        <div className={styles.dangerAction}>
+          <p>
             {isTutorial ? "Restore practice data" : "Reset tournaments and ratings"}
           </p>
-          <p className="mt-1 text-sm text-gray-600">
+          <span>
             {isTutorial
               ? "Recreates the 13 practice players, the ongoing two-court session, and clears tutorial progress."
               : "Deletes all tournaments in this club and returns member ratings to 1000."}
-          </p>
+          </span>
           <button
             type="button"
             onClick={onResetClub}
             disabled={resettingClub || deletingClub}
-            className="app-button-dark mt-4 px-4 py-2"
+            className={styles.resetButton}
             data-tutorial-target="admin-onboarding-reset-club"
           >
             {resettingClub
@@ -55,21 +61,17 @@ export function ClubDangerZonePanel({
         </div>
 
         {!isTutorial ? (
-          <div className="rounded-2xl border border-red-100 bg-red-50/70 p-4">
-          <p className="text-sm font-semibold text-gray-900">
-            Delete this club
-          </p>
-          <p className="mt-1 text-sm text-gray-600">
-            Permanently removes this club and all related data.
-          </p>
-          <button
-            type="button"
-            onClick={onDeleteClub}
-            disabled={deletingClub || resettingClub}
-            className="app-button-danger mt-4 px-4 py-2"
-          >
-            {deletingClub ? "Deleting..." : "Delete club"}
-          </button>
+          <div className={`${styles.dangerAction} ${styles.deleteAction}`}>
+            <p>Delete this club</p>
+            <span>Permanently removes this club and all related data.</span>
+            <button
+              type="button"
+              onClick={onDeleteClub}
+              disabled={deletingClub || resettingClub}
+              className={styles.deleteButton}
+            >
+              {deletingClub ? "Deleting..." : "Delete club"}
+            </button>
           </div>
         ) : null}
       </div>

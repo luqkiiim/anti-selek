@@ -1,8 +1,8 @@
 "use client";
 
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, type KeyboardEvent } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, LoaderCircle } from "lucide-react";
 import { FlashMessage } from "@/components/ui/chrome";
 import { ClaimRequestsPanel } from "@/components/club-admin/ClaimRequestsPanel";
 import { ClubAdminActionConfirmModal } from "@/components/club-admin/ClubAdminActionConfirmModal";
@@ -18,6 +18,7 @@ import { useAdminOnboardingProgress } from "@/components/onboarding/useAdminOnbo
 import type { ClubAdminSection } from "@/components/club-admin/clubAdminTypes";
 import { ClubRole } from "@/types/enums";
 import { useClubAdminPage } from "./useClubAdminPage";
+import styles from "./ClubAdminPage.module.css";
 
 const tabs: Array<{
   key: ClubAdminSection;
@@ -270,7 +271,6 @@ export default function ClubAdminPage() {
     passwordResetError,
     savingPasswordReset,
     claimedPlayersCount,
-    adminPlayersCount,
     occasionalPlayersCount,
     filteredPlayers,
     pendingPlayerAction,
@@ -357,6 +357,33 @@ export default function ClubAdminPage() {
     },
     [clubId, router, setActiveSection]
   );
+  const handleTabKeyDown = useCallback(
+    (event: KeyboardEvent<HTMLButtonElement>, currentIndex: number) => {
+      let nextIndex: number | null = null;
+
+      if (event.key === "ArrowRight") {
+        nextIndex = (currentIndex + 1) % visibleTabs.length;
+      } else if (event.key === "ArrowLeft") {
+        nextIndex =
+          (currentIndex - 1 + visibleTabs.length) % visibleTabs.length;
+      } else if (event.key === "Home") {
+        nextIndex = 0;
+      } else if (event.key === "End") {
+        nextIndex = visibleTabs.length - 1;
+      }
+
+      if (nextIndex === null) return;
+
+      event.preventDefault();
+      const nextTab = visibleTabs[nextIndex];
+      const nextButton = event.currentTarget.parentElement?.children[
+        nextIndex
+      ] as HTMLButtonElement | undefined;
+      nextButton?.focus();
+      switchAdminSection(nextTab.key);
+    },
+    [switchAdminSection, visibleTabs]
+  );
   const handleAddPlayerWithOnboardingRefresh = useCallback(
     async (event: Parameters<typeof handleAddPlayer>[0]) => {
       await handleAddPlayer(event);
@@ -387,118 +414,103 @@ export default function ClubAdminPage() {
 
   if (status === "loading" || loading) {
     return (
-      <div className="app-page flex items-center justify-center px-6">
-        <div className="app-panel flex flex-col items-center gap-4 px-8 py-8">
-          <div className="h-12 w-12 animate-spin rounded-full border-4 border-blue-600 border-t-transparent"></div>
-          <p className="app-eyebrow">Loading admin</p>
+      <div className={`${styles.page} ${styles.loadingPage}`}>
+        <div className={styles.loadingCard} role="status">
+          <LoaderCircle className={styles.loadingIcon} aria-hidden="true" />
+          <p>Loading club administration</p>
         </div>
       </div>
     );
   }
 
   return (
-    <main className="app-page">
-      <div className="app-topbar">
-        <div className="app-topbar-inner">
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              onClick={handleBack}
-              className="app-button-secondary px-4 py-2"
-            >
-              <ArrowLeft aria-hidden="true" size={17} />
-              Back
-            </button>
-            <div>
-              <h1 className="text-lg font-semibold leading-none tracking-tight text-gray-900">
-                {club?.name || "Club"}
-              </h1>
-              <p className="text-[11px] text-gray-500">Club admin</p>
-            </div>
+    <main className={`${styles.page} app-page`}>
+      <header className={styles.topbar}>
+        <div className={styles.topbarInner}>
+          <button
+            type="button"
+            onClick={handleBack}
+            className={styles.backButton}
+            aria-label="Back to club"
+          >
+            <ArrowLeft aria-hidden="true" size={19} strokeWidth={1.8} />
+            <span className={styles.backLabel}>Back</span>
+          </button>
+          <div className={styles.clubIdentity}>
+            <h1>{club?.name || "Club"}</h1>
+            <p>Club admin</p>
           </div>
-
-          <div className="flex items-center gap-2">
-            {isTutorialPlayground ? (
-              <span className="app-chip app-chip-accent">
-                Tutorial playground
-              </span>
-            ) : null}
-            <span className="app-chip app-chip-danger">Admin only</span>
-            <span
-              className={`app-chip ${
-                club?.isPasswordProtected
-                  ? "app-chip-warning"
-                  : "app-chip-neutral"
-              }`}
-            >
-              {club?.isPasswordProtected ? "Protected" : "Open"}
-            </span>
-          </div>
+          <span className={styles.headerBalance} aria-hidden="true" />
         </div>
-      </div>
+      </header>
 
-      <div className="app-shell space-y-8">
-        <section className="app-panel px-5 py-6 sm:px-6">
-          <div className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
-            <div className="max-w-3xl space-y-3">
-              <p className="app-eyebrow">Admin workspace</p>
-              <h2 className="text-2xl font-semibold text-gray-900 sm:text-3xl">
-                Club controls
-              </h2>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <span className="app-chip app-chip-accent">
-                {players.length} players
-              </span>
-              <span className="app-chip app-chip-neutral">
-                {claimedPlayersCount} claimed
-              </span>
-              <span className="app-chip app-chip-neutral">
-                {occasionalPlayersCount} occasional
-              </span>
-              <span className="app-chip app-chip-neutral">
-                {adminPlayersCount} admins
-              </span>
-              <span
-                className={`app-chip ${
-                  claimRequests.length > 0
-                    ? "app-chip-warning"
-                    : "app-chip-success"
-                }`}
-              >
-                {claimRequests.length} claim requests
-              </span>
-            </div>
+      <div className={styles.shell}>
+        <section className={styles.pageHeading} aria-labelledby="admin-page-title">
+          <div className={styles.pageHeadingCopy}>
+            <p>Club controls</p>
+            <h2 id="admin-page-title">Administration</h2>
+          </div>
+          <div className={styles.statusStack} aria-label="Club access status">
+            {isTutorialPlayground ? (
+              <span className={styles.tutorialStatus}>Tutorial</span>
+            ) : null}
+            <span className={styles.adminStatus}>Admin only</span>
+            <span className={styles.accessStatus}>
+              {club?.isPasswordProtected ? "Protected club" : "Open club"}
+            </span>
           </div>
         </section>
 
-        {error ? <FlashMessage tone="error">{error}</FlashMessage> : null}
-        {success ? <FlashMessage tone="success">{success}</FlashMessage> : null}
-
-        {isTutorialPlayground ? (
-          <AdminOnboardingChecklist
-            progress={adminOnboarding.progress}
-            loading={adminOnboarding.loading}
-            onDismiss={adminOnboarding.dismiss}
-            onReopen={adminOnboarding.reopen}
-            onCompleteStep={adminOnboarding.completeStep}
-          />
+        {error ? (
+          <FlashMessage tone="error" className={styles.flashMessage}>
+            {error}
+          </FlashMessage>
+        ) : null}
+        {success ? (
+          <FlashMessage tone="success" className={styles.flashMessage}>
+            {success}
+          </FlashMessage>
         ) : null}
 
-        <section className="app-panel-soft p-2">
-          <div className="grid gap-2 sm:grid-cols-4">
-            {visibleTabs.map((tab) => {
+        {isTutorialPlayground ? (
+          <div className={styles.tutorialChecklist}>
+            <AdminOnboardingChecklist
+              progress={adminOnboarding.progress}
+              loading={adminOnboarding.loading}
+              onDismiss={adminOnboarding.dismiss}
+              onReopen={adminOnboarding.reopen}
+              onCompleteStep={adminOnboarding.completeStep}
+            />
+          </div>
+        ) : null}
+
+        <nav className={styles.tabSurface} aria-label="Administration sections">
+          <div className={styles.tabList} role="tablist">
+            {visibleTabs.map((tab, index) => {
               const isActive = activeSection === tab.key;
+              const detail = tab.detail({
+                players: players.length,
+                claims: claimRequests.length,
+                links: offlineIdentityLinks.filter(
+                  (link) => link.status === "ACCEPTED"
+                ).length,
+              });
+
               return (
                 <button
                   key={tab.key}
                   type="button"
                   onClick={() => switchAdminSection(tab.key)}
-                  className={`rounded-2xl px-4 py-3 text-left transition ${
-                    isActive
-                      ? "bg-white shadow-sm ring-1 ring-blue-100"
-                      : "bg-transparent text-gray-600 hover:bg-white"
+                  onKeyDown={(event) => handleTabKeyDown(event, index)}
+                  className={`${styles.tab} ${
+                    isActive ? styles.tabActive : ""
                   }`}
+                  id={`admin-tab-${tab.key}`}
+                  role="tab"
+                  aria-selected={isActive}
+                  aria-controls={`admin-panel-${tab.key}`}
+                  aria-label={`${tab.label}, ${detail}`}
+                  tabIndex={isActive ? 0 : -1}
                   data-tutorial-target={
                     isTutorialPlayground && tab.key === "players"
                       ? "admin-onboarding-players-tab"
@@ -507,105 +519,102 @@ export default function ClubAdminPage() {
                         : undefined
                   }
                 >
-                  <p className="text-sm font-semibold text-gray-900">
-                    {tab.label}
-                  </p>
-                  <p className="mt-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">
-                    {tab.detail({
-                      players: players.length,
-                      claims: claimRequests.length,
-                      links: offlineIdentityLinks.filter(
-                        (link) => link.status === "ACCEPTED"
-                      ).length,
-                    })}
-                  </p>
+                  <span>{tab.label}</span>
                 </button>
               );
             })}
           </div>
+        </nav>
+
+        <section
+          className={styles.activePanel}
+          id={`admin-panel-${activeSection}`}
+          role="tabpanel"
+          aria-labelledby={`admin-tab-${activeSection}`}
+          tabIndex={0}
+        >
+          {activeSection === "players" ? (
+            <ClubPlayersPanel
+              players={players}
+              filteredPlayers={filteredPlayers}
+              claimedPlayersCount={claimedPlayersCount}
+              occasionalPlayersCount={occasionalPlayersCount}
+              clubId={clubId}
+              playerSearch={playerSearch}
+              onPlayerSearchChange={setPlayerSearch}
+              onOpenCreatePlayer={openCreatePlayerModal}
+              onOpenPlayerEditor={openPlayerEditor}
+            />
+          ) : null}
+
+          {!isTutorialPlayground && activeSection === "claims" ? (
+            <ClaimRequestsPanel
+              claimRequests={claimRequests}
+              reviewingClaimRequestId={reviewingClaimRequestId}
+              currentUserId={currentUserId}
+              onReviewClaimRequest={handleReviewClaimRequest}
+            />
+          ) : null}
+
+          {!isTutorialPlayground && activeSection === "links" ? (
+            <OfflineIdentityLinksPanel
+              links={offlineIdentityLinks}
+              currentClubId={clubId}
+              currentUserId={currentUserId}
+              sourcePlaceholderOptions={sourcePlaceholderOptions}
+              sourceUserId={linkSourceUserId}
+              onSourceUserIdChange={setLinkSourceUserId}
+              targetClubSearch={targetClubSearch}
+              onTargetClubSearchChange={setTargetClubSearch}
+              selectedTargetClub={selectedTargetClub}
+              targetClubCandidates={targetClubCandidates}
+              loadingTargetClubs={loadingTargetClubs}
+              loadingTargetRoster={loadingTargetRoster}
+              targetPlaceholderOptions={targetPlaceholderOptions}
+              targetUserId={linkTargetUserId}
+              onTargetUserIdChange={setLinkTargetUserId}
+              submitting={submittingOfflineIdentityLink}
+              reviewingLinkId={reviewingOfflineIdentityLinkId}
+              onSelectTargetClub={selectTargetClub}
+              onClearTargetClub={clearTargetClub}
+              onSubmitLink={() => {
+                void submitOfflineIdentityLink();
+              }}
+              onReviewLink={reviewOfflineIdentityLink}
+              onUnlink={unlinkOfflineIdentity}
+            />
+          ) : null}
+
+          {activeSection === "settings" ? (
+            <div className={styles.settingsGrid}>
+              <ClubSettingsPanel
+                isTutorial={isTutorialPlayground}
+                clubName={clubNameInput}
+                clubAvatarUrl={club?.avatarUrl ?? null}
+                onClubNameChange={setClubNameInput}
+                clubPassword={clubPasswordInput}
+                onClubPasswordChange={setClubPasswordInput}
+                passwordProtectionEnabled={clubPasswordProtectionEnabled}
+                onPasswordProtectionEnabledChange={
+                  setClubPasswordProtectionEnabled
+                }
+                isPasswordProtected={club?.isPasswordProtected ?? false}
+                onUploadAvatar={handleUploadClubAvatar}
+                onRemoveAvatar={handleRemoveClubAvatar}
+                onSubmit={handleUpdateClubSettings}
+                saving={savingClubSettings}
+              />
+
+              <ClubDangerZonePanel
+                isTutorial={isTutorialPlayground}
+                resettingClub={resettingClub}
+                deletingClub={deletingClub}
+                onResetClub={handleResetClub}
+                onDeleteClub={handleDeleteClub}
+              />
+            </div>
+          ) : null}
         </section>
-
-        {activeSection === "players" ? (
-          <ClubPlayersPanel
-            players={players}
-            filteredPlayers={filteredPlayers}
-            claimedPlayersCount={claimedPlayersCount}
-            occasionalPlayersCount={occasionalPlayersCount}
-            clubId={clubId}
-            playerSearch={playerSearch}
-            onPlayerSearchChange={setPlayerSearch}
-            onOpenCreatePlayer={openCreatePlayerModal}
-            onOpenPlayerEditor={openPlayerEditor}
-          />
-        ) : null}
-
-        {!isTutorialPlayground && activeSection === "claims" ? (
-          <ClaimRequestsPanel
-            claimRequests={claimRequests}
-            reviewingClaimRequestId={reviewingClaimRequestId}
-            currentUserId={currentUserId}
-            onReviewClaimRequest={handleReviewClaimRequest}
-          />
-        ) : null}
-
-        {!isTutorialPlayground && activeSection === "links" ? (
-          <OfflineIdentityLinksPanel
-            links={offlineIdentityLinks}
-            currentClubId={clubId}
-            currentUserId={currentUserId}
-            sourcePlaceholderOptions={sourcePlaceholderOptions}
-            sourceUserId={linkSourceUserId}
-            onSourceUserIdChange={setLinkSourceUserId}
-            targetClubSearch={targetClubSearch}
-            onTargetClubSearchChange={setTargetClubSearch}
-            selectedTargetClub={selectedTargetClub}
-            targetClubCandidates={targetClubCandidates}
-            loadingTargetClubs={loadingTargetClubs}
-            loadingTargetRoster={loadingTargetRoster}
-            targetPlaceholderOptions={targetPlaceholderOptions}
-            targetUserId={linkTargetUserId}
-            onTargetUserIdChange={setLinkTargetUserId}
-            submitting={submittingOfflineIdentityLink}
-            reviewingLinkId={reviewingOfflineIdentityLinkId}
-            onSelectTargetClub={selectTargetClub}
-            onClearTargetClub={clearTargetClub}
-            onSubmitLink={() => {
-              void submitOfflineIdentityLink();
-            }}
-            onReviewLink={reviewOfflineIdentityLink}
-            onUnlink={unlinkOfflineIdentity}
-          />
-        ) : null}
-
-        {activeSection === "settings" ? (
-          <div className="grid gap-6 xl:grid-cols-[minmax(0,1.25fr)_minmax(0,0.9fr)]">
-            <ClubSettingsPanel
-              isTutorial={isTutorialPlayground}
-              clubName={clubNameInput}
-              clubAvatarUrl={club?.avatarUrl ?? null}
-              onClubNameChange={setClubNameInput}
-              clubPassword={clubPasswordInput}
-              onClubPasswordChange={setClubPasswordInput}
-              passwordProtectionEnabled={clubPasswordProtectionEnabled}
-              onPasswordProtectionEnabledChange={
-                setClubPasswordProtectionEnabled
-              }
-              isPasswordProtected={club?.isPasswordProtected ?? false}
-              onUploadAvatar={handleUploadClubAvatar}
-              onRemoveAvatar={handleRemoveClubAvatar}
-              onSubmit={handleUpdateClubSettings}
-              saving={savingClubSettings}
-            />
-
-            <ClubDangerZonePanel
-              isTutorial={isTutorialPlayground}
-              resettingClub={resettingClub}
-              deletingClub={deletingClub}
-              onResetClub={handleResetClub}
-              onDeleteClub={handleDeleteClub}
-            />
-          </div>
-        ) : null}
       </div>
 
       <CreateClubPlayerModal
@@ -695,7 +704,7 @@ export default function ClubAdminPage() {
           details={pendingClubActionDialog.details}
           confirmLabel={pendingClubActionDialog.confirmLabel}
           confirmationKeyword={pendingClubActionDialog.confirmationKeyword}
-        confirmationValue={clubActionConfirmationValue}
+          confirmationValue={clubActionConfirmationValue}
           onConfirmationValueChange={setClubActionConfirmationValue}
           confirmationInputLabel={`Type ${pendingClubActionDialog.confirmationKeyword} to continue`}
           isSubmitting={

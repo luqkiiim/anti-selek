@@ -2,6 +2,7 @@
 
 import type { FormEvent } from "react";
 import { AvatarUploader } from "@/components/ui/AvatarUploader";
+import styles from "@/features/club-admin-page/ClubAdminPage.module.css";
 
 interface ClubSettingsPanelProps {
   clubName: string;
@@ -36,64 +37,70 @@ export function ClubSettingsPanel({
 }: ClubSettingsPanelProps) {
   if (isTutorial) {
     return (
-      <div className="space-y-4 rounded-3xl border border-gray-100 bg-white p-6 shadow-md">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <h3 className="text-sm font-black uppercase tracking-widest text-gray-900">
-              Tutorial Settings
-            </h3>
-            <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">
+      <section
+        className={styles.adminPanel}
+        data-owner-admin-panel="settings"
+        aria-labelledby="tutorial-settings-heading"
+      >
+        <div className={styles.panelHeader}>
+          <div className={styles.panelHeadingCopy}>
+            <p className={styles.panelEyebrow}>Sandbox controls</p>
+            <h3 id="tutorial-settings-heading">Tutorial Settings</h3>
+            <span>
               This sandbox resets instead of being renamed or password protected.
-            </p>
+            </span>
           </div>
-          <span className="rounded-lg bg-blue-100 px-2 py-1 text-[10px] font-black uppercase tracking-widest text-blue-700">
+          <span className={styles.countBadge}>
             Sandbox
           </span>
         </div>
 
-        <div className="rounded-2xl border-2 border-gray-100 bg-gray-50 px-4 py-3">
-          <p className="text-xs font-black uppercase tracking-wider text-gray-900">
+        <div className={styles.readonlySetting}>
+          <p>
             Display name
           </p>
-          <p className="mt-2 text-base font-bold text-gray-900">
+          <strong>
             {clubName}
-          </p>
-          <p className="mt-1 text-[11px] text-gray-500">
+          </strong>
+          <span>
             The private backend name stays hidden so your tutorial always feels
             like the same playground.
-          </p>
+          </span>
         </div>
-      </div>
+      </section>
     );
   }
 
   return (
-    <div className="bg-white p-6 rounded-3xl shadow-md border border-gray-100 space-y-4">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <h3 className="text-sm font-black text-gray-900 uppercase tracking-widest">
-            Club Settings
-          </h3>
-          <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">
+    <section
+      className={styles.adminPanel}
+      data-owner-admin-panel="settings"
+      aria-labelledby="club-settings-heading"
+    >
+      <div className={styles.panelHeader}>
+        <div className={styles.panelHeadingCopy}>
+          <p className={styles.panelEyebrow}>Club identity</p>
+          <h3 id="club-settings-heading">Club settings</h3>
+          <span>
             Rename the club, update its password, or make it public.
-          </p>
+          </span>
         </div>
         <span
-          className={`text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded-lg ${
+          className={`${styles.countBadge} ${
             isPasswordProtected
-              ? "bg-amber-100 text-amber-700"
-              : "bg-gray-100 text-gray-600"
+              ? styles.protectedBadge
+              : ""
           }`}
         >
           {isPasswordProtected ? "Protected" : "Open"}
         </span>
       </div>
 
-      <div className="rounded-2xl border-2 border-gray-100 bg-gray-50 px-4 py-4">
-        <p className="text-xs font-black uppercase tracking-wider text-gray-900">
+      <div className={styles.avatarSetting}>
+        <p>
           Club profile picture
         </p>
-        <div className="mt-3">
+        <div>
           <AvatarUploader
             name={clubName}
             avatarUrl={clubAvatarUrl}
@@ -105,21 +112,24 @@ export function ClubSettingsPanel({
         </div>
       </div>
 
-      <form onSubmit={onSubmit} className="space-y-3">
-        <input
-          type="text"
-          value={clubName}
-          onChange={(e) => onClubNameChange(e.target.value)}
-          className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl px-4 py-3 font-bold focus:outline-none focus:border-blue-500 transition-all"
-          placeholder="Club name"
-          required
-        />
-        <label className="flex items-center justify-between gap-3 rounded-2xl border-2 border-gray-100 bg-gray-50 px-4 py-3">
+      <form onSubmit={onSubmit} className={styles.settingsForm}>
+        <label className={styles.fieldGroup}>
+          <span className={styles.settingLabel}>Club name</span>
+          <input
+            type="text"
+            value={clubName}
+            onChange={(e) => onClubNameChange(e.target.value)}
+            className={styles.fieldControl}
+            placeholder="Club name"
+            required
+          />
+        </label>
+        <label className={styles.toggleSetting}>
           <div className="min-w-0">
-            <p className="text-xs font-black uppercase tracking-wider text-gray-900">
-              Password Protected
+            <p>
+              Password protected
             </p>
-            <p className="text-[11px] text-gray-500">
+            <span>
               {passwordProtectionEnabled
                 ? isPasswordProtected
                   ? "Members currently need a password to join."
@@ -127,7 +137,7 @@ export function ClubSettingsPanel({
                 : isPasswordProtected
                   ? "Saving will remove the password and make the club public."
                   : "Anyone can join without a password."}
-            </p>
+            </span>
           </div>
           <input
             type="checkbox"
@@ -135,31 +145,34 @@ export function ClubSettingsPanel({
             onChange={(e) =>
               onPasswordProtectionEnabledChange(e.target.checked)
             }
-            className="h-5 w-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+            className={styles.settingsCheckbox}
             aria-label="Password protected"
           />
         </label>
         {passwordProtectionEnabled ? (
-          <input
-            type="password"
-            value={clubPassword}
-            onChange={(e) => onClubPasswordChange(e.target.value)}
-            className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl px-4 py-3 font-bold focus:outline-none focus:border-blue-500 transition-all"
-            placeholder={
-              isPasswordProtected
-                ? "New password (leave blank to keep current)"
-                : "Set a password (min 4 characters)"
-            }
-          />
+          <label className={styles.fieldGroup}>
+            <span className={styles.settingLabel}>Club password</span>
+            <input
+              type="password"
+              value={clubPassword}
+              onChange={(e) => onClubPasswordChange(e.target.value)}
+              className={styles.fieldControl}
+              placeholder={
+                isPasswordProtected
+                  ? "New password (leave blank to keep current)"
+                  : "Set a password (min 4 characters)"
+              }
+            />
+          </label>
         ) : null}
         <button
           type="submit"
           disabled={saving}
-          className="w-full bg-blue-600 text-white py-3 rounded-2xl font-black uppercase tracking-widest text-xs active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+          className={`${styles.primaryAction} ${styles.saveButton}`}
         >
-          {saving ? "Saving..." : "Save Settings"}
+          {saving ? "Saving..." : "Save settings"}
         </button>
       </form>
-    </div>
+    </section>
   );
 }

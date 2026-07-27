@@ -1,14 +1,12 @@
 "use client";
 
 import Link from "next/link";
+import { ChevronRight, Plus, Search } from "lucide-react";
 import { Avatar } from "@/components/ui/Avatar";
-import { EmptyState, SectionCard } from "@/components/ui/chrome";
-import {
-  ClubAdminClaimPill,
-  ClubAdminGenderPill,
-  ClubAdminRolePill,
-  ClubAdminStatusPill,
-} from "./clubAdminDisplay";
+import { EmptyState } from "@/components/ui/chrome";
+import { getClubRoleLabel } from "@/lib/clubRoles";
+import { ClubPlayerStatus } from "@/types/enums";
+import styles from "@/features/club-admin-page/ClubAdminPage.module.css";
 import type { ClubAdminPlayer } from "./clubAdminTypes";
 
 interface ClubPlayersPanelProps {
@@ -35,46 +33,51 @@ export function ClubPlayersPanel({
   onOpenPlayerEditor,
 }: ClubPlayersPanelProps) {
   return (
-    <SectionCard
-      eyebrow="Roster"
-      title="Club players"
-      action={
+    <section
+      className={styles.playersPanel}
+      aria-labelledby="club-players-heading"
+      data-owner-admin-panel="players"
+    >
+      <div className={styles.playersActionCard}>
+        <div className={styles.playersActionCopy}>
+          <p>{players.length} members</p>
+          <h3 id="club-players-heading">Players and roles</h3>
+          <span>Manage roster access, roles, and player details.</span>
+        </div>
         <button
           type="button"
           onClick={onOpenCreatePlayer}
-          className="app-button-primary px-4 py-2"
+          className={styles.primaryAction}
           data-tutorial-target="admin-onboarding-add-player"
         >
+          <Plus aria-hidden="true" size={17} strokeWidth={2} />
           Add player
         </button>
-      }
-    >
-      <div className="mb-5 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-        <label className="block w-full lg:max-w-sm">
+      </div>
+
+      <div className={styles.rosterTools}>
+        <label className={styles.searchField}>
           <span className="sr-only">Search players</span>
+          <Search aria-hidden="true" size={17} strokeWidth={1.8} />
           <input
             type="search"
             value={playerSearch}
             onChange={(event) => onPlayerSearchChange(event.target.value)}
-            className="field"
             placeholder="Search players by name or email"
           />
         </label>
-        <div className="flex flex-wrap gap-2">
-          <span className="app-chip app-chip-neutral">
-            {filteredPlayers.length} shown
-          </span>
-          <span className="app-chip app-chip-neutral">
-            {players.length - claimedPlayersCount} placeholders
-          </span>
-          <span className="app-chip app-chip-neutral">
-            {occasionalPlayersCount} occasional
-          </span>
-        </div>
+        <p className={styles.rosterSummary} aria-live="polite">
+          {filteredPlayers.length} shown
+          <span aria-hidden="true"> · </span>
+          {players.length - claimedPlayersCount} placeholders
+          <span aria-hidden="true"> · </span>
+          {occasionalPlayersCount} occasional
+        </p>
       </div>
 
       {filteredPlayers.length === 0 ? (
         <EmptyState
+          className={styles.rosterEmpty}
           title={
             players.length === 0
               ? "No players in the club yet."
@@ -90,85 +93,69 @@ export function ClubPlayersPanel({
               <button
                 type="button"
                 onClick={onOpenCreatePlayer}
-                className="app-button-primary px-4 py-2"
+                className={styles.primaryAction}
                 data-tutorial-target="admin-onboarding-add-player"
               >
+                <Plus aria-hidden="true" size={17} strokeWidth={2} />
                 Create first player
               </button>
             ) : undefined
           }
         />
       ) : (
-        <div className="space-y-3">
+        <div className={styles.playerList} role="list">
           {filteredPlayers.map((player) => {
+            const roleLabel = player.isOwner
+              ? "Owner"
+              : getClubRoleLabel(player.role);
+            const detailLabels = [
+              roleLabel,
+              player.status === ClubPlayerStatus.OCCASIONAL
+                ? "Occasional"
+                : null,
+              !player.isClaimed ? "Placeholder" : null,
+              !player.isActive ? "Inactive" : null,
+              player.offlineIdentityId ? "Linked" : null,
+              `${player.elo} rating`,
+            ].filter(Boolean);
+
             return (
               <div
                 key={player.id}
-                className="rounded-[28px] border border-gray-100 bg-[linear-gradient(160deg,rgba(255,255,255,0.96),rgba(244,248,252,0.92))] px-4 py-4 shadow-sm transition hover:-translate-y-[1px] hover:border-blue-200 hover:shadow-md sm:px-5"
+                className={styles.playerRow}
+                role="listitem"
               >
-                <div className="flex flex-col gap-4 lg:grid lg:grid-cols-[minmax(0,1.8fr)_120px_minmax(0,1.3fr)_auto] lg:items-center">
-                  <div className="min-w-0 flex items-center gap-3">
-                    <Avatar
-                      name={player.name}
-                      avatarUrl={player.avatarUrl}
-                      size="md"
-                      className="rounded-2xl"
-                    />
-                    <div className="min-w-0">
-                      <p className="truncate text-base font-semibold text-gray-900">
-                        {player.name}
-                      </p>
-                      <p className="truncate text-sm text-gray-600">
-                        {player.email || "No email on file"}
-                      </p>
-                      <Link
-                        href={`/profile/${player.id}?clubId=${clubId}`}
-                        className="mt-1 inline-flex text-[11px] font-semibold uppercase tracking-[0.16em] text-blue-600 hover:text-blue-700"
-                      >
-                        View profile
-                      </Link>
-                    </div>
-                  </div>
-
-                  <div className="rounded-2xl border border-gray-100 bg-white/85 px-3 py-2 lg:text-center">
-                    <p className="text-[10px] font-black uppercase tracking-[0.18em] text-gray-500">
-                      Rating
-                    </p>
-                    <p className="mt-1 text-lg font-semibold leading-none text-gray-900">
-                      {player.elo}
-                    </p>
-                  </div>
-
-                  <div className="flex flex-wrap gap-2 lg:justify-end">
-                    <ClubAdminRolePill
-                      role={player.role}
-                      isOwner={player.isOwner}
-                    />
-                    <ClubAdminStatusPill status={player.status} />
-                    <ClubAdminClaimPill isClaimed={player.isClaimed} />
-                    <ClubAdminGenderPill player={player} />
-                    {player.offlineIdentityId ? (
-                      <span className="app-chip app-chip-accent">
-                        Linked {player.linkedClubBadges?.length ?? 0}
-                      </span>
-                    ) : null}
-                  </div>
-
-                  <div className="flex items-center justify-end">
-                    <button
-                      type="button"
-                      onClick={() => onOpenPlayerEditor(player)}
-                      className="app-button-secondary px-4 py-2"
-                    >
-                      Edit
-                    </button>
-                  </div>
+                <Avatar
+                  name={player.name}
+                  avatarUrl={player.avatarUrl}
+                  size="xs"
+                  appearance="court"
+                  className={styles.playerAvatar}
+                />
+                <div className={styles.playerIdentity}>
+                  <Link href={`/profile/${player.id}?clubId=${clubId}`}>
+                    <span>{player.name}</span>
+                    <small>{detailLabels.join(" · ")}</small>
+                  </Link>
                 </div>
+                <button
+                  type="button"
+                  onClick={() => onOpenPlayerEditor(player)}
+                  className={styles.playerRowAction}
+                  aria-label={`Edit ${player.name}`}
+                  title={`Edit ${player.name}`}
+                >
+                  <ChevronRight
+                    aria-hidden="true"
+                    size={18}
+                    strokeWidth={1.8}
+                  />
+                </button>
               </div>
             );
           })}
         </div>
       )}
-    </SectionCard>
+    </section>
   );
 }

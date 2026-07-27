@@ -1,6 +1,7 @@
 "use client";
 
 import { doClaimNamesMatch } from "@/lib/clubClaimRules";
+import styles from "@/features/club-admin-page/ClubAdminPage.module.css";
 import type { ClubAdminClaimRequest } from "./clubAdminTypes";
 
 interface ClaimRequestsPanelProps {
@@ -20,27 +21,29 @@ export function ClaimRequestsPanel({
   onReviewClaimRequest,
 }: ClaimRequestsPanelProps) {
   return (
-    <div className="bg-white p-6 rounded-3xl shadow-md border border-gray-100 space-y-4">
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <h3 className="text-sm font-black text-gray-900 uppercase tracking-widest">
-            Claim Requests
-          </h3>
-          <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">
+    <section
+      className={styles.adminPanel}
+      aria-labelledby="claim-requests-heading"
+      data-owner-admin-panel="claims"
+    >
+      <div className={styles.panelHeader}>
+        <div className={styles.panelHeadingCopy}>
+          <p className={styles.panelEyebrow}>Profile ownership</p>
+          <h3 id="claim-requests-heading">Claim requests</h3>
+          <span>
             Review member requests to claim placeholder profiles.
-          </p>
+          </span>
         </div>
-        <span className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">
+        <span className={styles.countBadge}>
           {claimRequests.length} pending
         </span>
       </div>
 
-      <div className="space-y-3">
+      <div className={styles.requestList}>
         {claimRequests.length === 0 ? (
-          <div className="bg-gray-50 border-2 border-dashed border-gray-100 rounded-2xl p-4 text-center">
-            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">
-              No pending claim requests
-            </p>
+          <div className={styles.compactEmpty}>
+            <p>No pending claim requests</p>
+            <span>New profile claims will appear here for review.</span>
           </div>
         ) : (
           claimRequests.map((claimRequest) => {
@@ -52,69 +55,71 @@ export function ClaimRequestsPanel({
             return (
               <div
                 key={claimRequest.id}
-                className="rounded-2xl border border-gray-100 bg-gray-50 p-4 space-y-3"
+                className={styles.requestRow}
               >
-                <div className="space-y-1">
-                  <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">
-                    Requester
-                  </p>
-                  <p className="text-sm font-black text-gray-900">
-                    {claimRequest.requesterName}
-                  </p>
-                  <p className="text-xs text-gray-500">
-                    {claimRequest.requesterEmail || "No email"}
-                  </p>
-                </div>
-                <div className="space-y-1">
-                  <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">
-                    Placeholder
-                  </p>
-                  <p className="text-sm font-black text-gray-900">
-                    {claimRequest.targetName}
-                  </p>
-                  <p className="text-xs text-gray-500">
-                    {claimRequest.targetEmail || "No email"}
-                  </p>
+                <div className={styles.claimPeopleGrid}>
+                  <div className={styles.claimPerson}>
+                    <p className={styles.claimLabel}>
+                      Requester
+                    </p>
+                    <p className={styles.claimName}>
+                      {claimRequest.requesterName}
+                    </p>
+                    <p className={styles.claimEmail}>
+                      {claimRequest.requesterEmail || "No email"}
+                    </p>
+                  </div>
+                  <div className={styles.claimPerson}>
+                    <p className={styles.claimLabel}>
+                      Placeholder
+                    </p>
+                    <p className={styles.claimName}>
+                      {claimRequest.targetName}
+                    </p>
+                    <p className={styles.claimEmail}>
+                      {claimRequest.targetEmail || "No email"}
+                    </p>
+                  </div>
                 </div>
                 {hasNameMismatch ? (
-                  <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2">
-                    <p className="text-[10px] font-black uppercase tracking-widest text-amber-700">
+                  <div className={styles.warningNotice}>
+                    <p>
                       Name mismatch
                     </p>
-                    <p className="mt-1 text-xs font-semibold text-amber-800">
+                    <span>
                       Confirm this placeholder belongs to the requester before approving.
-                    </p>
+                    </span>
                   </div>
                 ) : null}
                 {claimRequest.note ? (
-                  <div className="rounded-xl bg-white border border-gray-200 px-3 py-2">
-                    <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">
+                  <div className={styles.noteBox}>
+                    <p>
                       Note
                     </p>
-                    <p className="text-xs text-gray-600 mt-1">{claimRequest.note}</p>
+                    <span>{claimRequest.note}</span>
                   </div>
                 ) : null}
                 {claimRequest.linkedClubNames &&
                 claimRequest.linkedClubNames.length > 1 ? (
-                  <div className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2">
-                    <p className="text-[10px] font-black uppercase tracking-widest text-blue-700">
+                  <div className={styles.infoNotice}>
+                    <p>
                       Linked offline identity
                     </p>
-                    <p className="mt-1 text-xs font-semibold text-blue-800">
+                    <span>
                       Approval also transfers this player in{" "}
                       {claimRequest.linkedClubNames.join(", ")}.
-                    </p>
+                    </span>
                   </div>
                 ) : null}
-                <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">
+                <p className={styles.claimDate}>
                   Requested {new Date(claimRequest.createdAt).toLocaleDateString()}
                 </p>
                 {claimRequest.requesterUserId === currentUserId ? (
-                  <p className="text-[10px] font-bold uppercase tracking-wider text-amber-600">
+                  <p className={styles.warningNote}>
                     Another admin must approve this request
                   </p>
                 ) : null}
-                <div className="grid grid-cols-2 gap-2">
+                <div className={styles.requestActions}>
                   <button
                     type="button"
                     onClick={() => onReviewClaimRequest(claimRequest, "APPROVE")}
@@ -122,7 +127,7 @@ export function ClaimRequestsPanel({
                       reviewingClaimRequestId !== null ||
                       claimRequest.requesterUserId === currentUserId
                     }
-                    className="w-full bg-blue-600 text-white py-2.5 rounded-xl font-black uppercase tracking-widest text-[10px] disabled:opacity-50 disabled:cursor-not-allowed"
+                    className={styles.approveButton}
                   >
                     {reviewingClaimRequestId === claimRequest.id ? "Working..." : "Approve"}
                   </button>
@@ -130,7 +135,7 @@ export function ClaimRequestsPanel({
                     type="button"
                     onClick={() => onReviewClaimRequest(claimRequest, "REJECT")}
                     disabled={reviewingClaimRequestId !== null}
-                    className="w-full bg-white border border-red-200 text-red-600 py-2.5 rounded-xl font-black uppercase tracking-widest text-[10px] disabled:opacity-50 disabled:cursor-not-allowed"
+                    className={styles.rejectButton}
                   >
                     Reject
                   </button>
@@ -140,6 +145,6 @@ export function ClaimRequestsPanel({
           })
         )}
       </div>
-    </div>
+    </section>
   );
 }
