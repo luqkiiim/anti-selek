@@ -20,9 +20,9 @@
   --sun: #fff3d6;
   --success: #15803d;
   --success-soft: #dcfce7;
-  --warning: #b45309;
+  --warning: #92400e;
   --warning-soft: #ffedd5;
-  --danger: #dc2626;
+  --danger: #b42318;
   --danger-soft: #fee2e2;
   --shadow-panel: 0 10px 28px rgba(23, 32, 31, 0.07);
   --shadow-soft: 0 6px 18px rgba(23, 32, 31, 0.06);
@@ -171,7 +171,7 @@ h4 {
 }
 
 .app-muted-soft {
-  color: rgba(16, 34, 54, 0.5);
+  color: rgba(16, 34, 54, 0.68);
 }
 
 .app-title {
@@ -213,7 +213,7 @@ h4 {
 }
 
 .field::placeholder {
-  color: rgba(16, 34, 54, 0.42);
+  color: rgba(16, 34, 54, 0.64);
 }
 
 .field:focus {
@@ -732,11 +732,11 @@ h4 {
   overflow-x: hidden;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
-  touch-action: pan-y;
+  touch-action: pan-y pinch-zoom;
 }
 
 .app-touch-pan-y {
-  touch-action: pan-y;
+  touch-action: pan-y pinch-zoom;
 }
 
 .app-toast {
@@ -882,7 +882,7 @@ h4 {
 }
 
 .text-gray-400 {
-  color: #89948f !important;
+  color: var(--muted) !important;
 }
 
 .text-gray-300 {

@@ -125,7 +125,8 @@ export function LiveStandingsTable({
               <button
                 type="button"
                 onClick={() => setPoolFilter("ALL")}
-                className={`rounded-full border px-3 py-1 text-xs font-semibold ${
+                aria-pressed={poolFilter === "ALL"}
+                className={`min-h-11 rounded-full border px-3 py-1 text-xs font-semibold ${
                   poolFilter === "ALL"
                     ? "border-blue-200 bg-blue-50 text-blue-700"
                     : "border-gray-200 bg-white text-gray-500"
@@ -138,7 +139,8 @@ export function LiveStandingsTable({
                   key={option.value}
                   type="button"
                   onClick={() => setPoolFilter(option.value)}
-                  className={`rounded-full border px-3 py-1 text-xs font-semibold ${
+                  aria-pressed={poolFilter === option.value}
+                  className={`min-h-11 rounded-full border px-3 py-1 text-xs font-semibold ${
                     poolFilter === option.value
                       ? "border-blue-200 bg-blue-50 text-blue-700"
                       : "border-gray-200 bg-white text-gray-500"
@@ -159,13 +161,17 @@ export function LiveStandingsTable({
         <table className="w-full table-fixed border-separate border-spacing-y-[3px] px-2">
           <thead>
             <tr>
-              <th className="w-9 px-2 py-2 text-left text-xs font-semibold text-gray-500 sm:w-11 sm:px-3">
+              <th scope="col" aria-label="Rank" className="w-9 px-2 py-2 text-left text-xs font-semibold text-gray-600 sm:w-11 sm:px-3">
                 #
               </th>
-              <th className="w-[44%] px-2 py-2 text-left text-xs font-semibold text-gray-500 sm:w-auto sm:px-3">
+              <th scope="col" className="w-[44%] px-2 py-2 text-left text-xs font-semibold text-gray-600 sm:w-auto sm:px-3">
                 Player
               </th>
-              <th className="w-11 px-1.5 py-2 text-center text-xs font-semibold text-gray-500 sm:w-[5.25rem] sm:px-4">
+              <th
+                scope="col"
+                aria-label={isLadderSession ? "Ladder score" : "Points"}
+                className="w-11 px-1.5 py-2 text-center text-xs font-semibold text-gray-600 sm:w-[5.25rem] sm:px-4"
+              >
                 {isLadderSession ? (
                   <>
                     <span className="sm:hidden">Ld</span>
@@ -178,14 +184,14 @@ export function LiveStandingsTable({
                   </>
                 )}
               </th>
-              <th className="w-11 px-1.5 py-2 text-center text-xs font-semibold text-gray-500 sm:w-[4.75rem] sm:px-4">
+              <th scope="col" aria-label="Point difference" className="w-11 px-1.5 py-2 text-center text-xs font-semibold text-gray-600 sm:w-[4.75rem] sm:px-4">
                 <span className="sm:hidden">Df</span>
                 <span className="hidden sm:inline">Diff</span>
               </th>
-              <th className="w-11 px-1.5 py-2 text-center text-xs font-semibold text-gray-500 sm:w-[4.5rem] sm:px-4">
+              <th scope="col" aria-label="Matches played" className="w-11 px-1.5 py-2 text-center text-xs font-semibold text-gray-600 sm:w-[4.5rem] sm:px-4">
                 MP
               </th>
-              <th className="w-12 px-1.5 py-2 text-center text-xs font-semibold text-gray-500 sm:w-[5rem] sm:px-4">
+              <th scope="col" aria-label="Wins and losses" className="w-12 px-1.5 py-2 text-center text-xs font-semibold text-gray-600 sm:w-[5rem] sm:px-4">
                 W / L
               </th>
             </tr>

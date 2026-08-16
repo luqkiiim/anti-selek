@@ -148,4 +148,38 @@ describe("LiveStandingsTable", () => {
 
     expect(document.body.textContent).not.toContain("Skipping next");
   });
+
+  it("expands compact column labels and exposes the active pool filter", async () => {
+    await act(async () => {
+      root.render(
+        <LiveStandingsTable
+          sessionType={SessionType.ELO}
+          players={players}
+          currentUserId="viewer"
+          pointDiffByUserId={new Map()}
+          getPlayerProfileHref={(player) => `/profile/${player.userId}`}
+          calculatePlayerSessionStats={() => ({ played: 0, wins: 0, losses: 0 })}
+          poolsEnabled
+          poolAName="Open"
+          poolBName="Regular"
+        />
+      );
+    });
+
+    expect(
+      document.body.querySelector('th[aria-label="Points"]')
+    ).not.toBeNull();
+    expect(
+      document.body.querySelector('th[aria-label="Point difference"]')
+    ).not.toBeNull();
+    expect(
+      document.body.querySelector('th[aria-label="Matches played"]')
+    ).not.toBeNull();
+    expect(
+      document.body.querySelector('th[aria-label="Wins and losses"]')
+    ).not.toBeNull();
+    expect(
+      document.body.querySelector('button[aria-pressed="true"]')?.textContent
+    ).toContain("All");
+  });
 });

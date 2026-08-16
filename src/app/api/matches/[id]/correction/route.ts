@@ -141,13 +141,19 @@ export async function POST(
       match.session.status !== SessionStatus.COMPLETED
     ) {
       return NextResponse.json(
-        { error: "Only active or ended sessions can correct completed scores." },
+        {
+          error:
+            "Only active or ended tournaments can correct completed scores.",
+        },
         { status: 400 }
       );
     }
     if (match.session.isTest) {
       return NextResponse.json(
-        { error: "Test sessions do not support completed score correction." },
+        {
+          error:
+            "Test tournaments do not support completed score correction.",
+        },
         { status: 400 }
       );
     }

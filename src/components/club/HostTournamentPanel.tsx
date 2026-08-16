@@ -54,9 +54,8 @@ interface HostTournamentPanelProps {
   onOpenPlayers: () => void;
   onOpenGuests: () => void;
   onCreateSession: () => void;
-  onExitHostMode: () => void;
-  exitHostModeLabel: string;
   creatingSession: boolean;
+  creationIssues: readonly string[];
 }
 
 const MATCHMAKING_STYLE_ORDER: SessionMatchmakingStyle[] = [
@@ -98,6 +97,7 @@ function SegmentedOption({
   return (
     <button
       type="button"
+      aria-pressed={selected}
       onClick={onClick}
       className={`min-w-0 rounded-lg border px-3 py-2 text-center text-sm font-semibold transition ${
         selected
@@ -256,12 +256,11 @@ export function HostTournamentPanel({
   onOpenPlayers,
   onOpenGuests,
   onCreateSession,
-  onExitHostMode,
-  exitHostModeLabel,
   creatingSession,
+  creationIssues,
 }: HostTournamentPanelProps) {
   const [advancedOpen, setAdvancedOpen] = useState(false);
-  const canCreateSession = Boolean(newSessionName.trim()) && !creatingSession;
+  const canCreateSession = creationIssues.length === 0 && !creatingSession;
   const hasPartnerClub = Boolean(partnerClubId);
   const isInterclub = collabFormat === SessionCollabFormat.INTERCLUB;
   const trimmedPartnerSearch = partnerClubSearch.trim();
@@ -269,20 +268,13 @@ export function HostTournamentPanel({
 
   return (
     <section className="app-panel min-w-0 max-w-full overflow-hidden p-3 sm:p-4">
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex items-center gap-2">
         <div className="flex min-w-0 items-center gap-2">
           <span className="app-chip app-chip-accent">Host</span>
           <span className="truncate text-sm font-semibold text-gray-900">
             New tournament
           </span>
         </div>
-        <button
-          type="button"
-          onClick={onExitHostMode}
-          className="app-button-secondary shrink-0 px-3 py-2 text-sm"
-        >
-          {exitHostModeLabel}
-        </button>
       </div>
 
       <div className="mt-4 grid gap-5">
@@ -426,7 +418,7 @@ export function HostTournamentPanel({
                 <p className="text-sm font-medium text-gray-900">Balance by</p>
                 <div className="grid min-w-0 grid-cols-2 gap-2">
                   <SegmentedOption
-                    label="Session points"
+                    label="Tournament points"
                     selected={
                       balanceMetric === SessionBalanceMetric.SESSION_POINTS
                     }
@@ -448,7 +440,7 @@ export function HostTournamentPanel({
 
               <div className="min-w-0 space-y-2">
                 <SwitchRow
-                  label="Test session"
+                  label="Test tournament"
                   description="Resettable rehearsal."
                   checked={isTestSession}
                   onChange={onIsTestSessionChange}
@@ -642,19 +634,33 @@ export function HostTournamentPanel({
           type="button"
           onClick={onCreateSession}
           disabled={!canCreateSession}
+          aria-describedby={
+            creationIssues.length > 0 ? "host-creation-issues" : undefined
+          }
           className="app-button-primary flex-1 px-4 py-2.5"
           data-tutorial-target="admin-onboarding-create-session"
         >
           {creatingSession
             ? "Creating..."
             : isTestSession
-              ? "Create Test Session"
+              ? "Create Test Tournament"
               : "Create Tournament"}
         </button>
-        {!newSessionName.trim() ? (
-          <p className="text-center text-xs text-gray-500">
-            Add a tournament name to create it.
-          </p>
+        {creationIssues.length > 0 ? (
+          <div
+            id="host-creation-issues"
+            className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-3"
+            aria-live="polite"
+          >
+            <p className="text-xs font-semibold text-amber-900">
+              Complete these steps before creating:
+            </p>
+            <ul className="mt-1.5 list-disc space-y-1 pl-5 text-xs font-medium text-amber-900">
+              {creationIssues.map((issue) => (
+                <li key={issue}>{issue}</li>
+              ))}
+            </ul>
+          </div>
         ) : null}
       </div>
     </section>

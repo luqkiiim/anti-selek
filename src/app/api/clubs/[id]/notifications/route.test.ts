@@ -46,6 +46,14 @@ vi.mock("@/lib/rateLimit", () => ({
 import { GET } from "./route";
 import { POST as MARK_READ } from "./read/route";
 
+function requireResponse(response: Response | undefined): Response {
+  expect(response).toBeDefined();
+  if (!response) {
+    throw new Error("Expected the route handler to return a response");
+  }
+  return response;
+}
+
 describe("club notifications route", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -90,11 +98,13 @@ describe("club notifications route", () => {
   });
 
   it("returns current user notifications and unread count", async () => {
-    const response = await GET(
-      new Request("http://localhost/api/clubs/club-1/notifications"),
-      {
-        params: Promise.resolve({ id: "club-1" }),
-      }
+    const response = requireResponse(
+      await GET(
+        new Request("http://localhost/api/clubs/club-1/notifications"),
+        {
+          params: Promise.resolve({ id: "club-1" }),
+        }
+      )
     );
     const body = await response.json();
 
@@ -125,11 +135,15 @@ describe("club notifications route", () => {
   });
 
   it("supports unread count polling without loading rows", async () => {
-    const response = await GET(
-      new Request("http://localhost/api/clubs/club-1/notifications?countOnly=1"),
-      {
-        params: Promise.resolve({ id: "club-1" }),
-      }
+    const response = requireResponse(
+      await GET(
+        new Request(
+          "http://localhost/api/clubs/club-1/notifications?countOnly=1"
+        ),
+        {
+          params: Promise.resolve({ id: "club-1" }),
+        }
+      )
     );
     const body = await response.json();
 
@@ -139,13 +153,15 @@ describe("club notifications route", () => {
   });
 
   it("marks current user club notifications as read", async () => {
-    const response = await MARK_READ(
-      new Request("http://localhost/api/clubs/club-1/notifications/read", {
-        method: "POST",
-      }),
-      {
-        params: Promise.resolve({ id: "club-1" }),
-      }
+    const response = requireResponse(
+      await MARK_READ(
+        new Request("http://localhost/api/clubs/club-1/notifications/read", {
+          method: "POST",
+        }),
+        {
+          params: Promise.resolve({ id: "club-1" }),
+        }
+      )
     );
     const body = await response.json();
 
@@ -172,11 +188,13 @@ describe("club notifications route", () => {
       tutorialOwnerId: null,
     });
 
-    const response = await GET(
-      new Request("http://localhost/api/clubs/club-1/notifications"),
-      {
-        params: Promise.resolve({ id: "club-1" }),
-      }
+    const response = requireResponse(
+      await GET(
+        new Request("http://localhost/api/clubs/club-1/notifications"),
+        {
+          params: Promise.resolve({ id: "club-1" }),
+        }
+      )
     );
 
     expect(response.status).toBe(403);

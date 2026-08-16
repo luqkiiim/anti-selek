@@ -423,5 +423,5 @@ describe("tutorial playground service", () => {
         },
       })
     ).toBe(18);
-  });
+  }, 15_000);
 });

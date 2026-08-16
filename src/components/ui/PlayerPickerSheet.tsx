@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useId, type ReactNode } from "react";
+import { useEffect, useId, useRef, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
+import { useDialogFocusManagement } from "./useDialogFocusManagement";
 
 type PickerSheetLockSnapshot = {
   bodyOverflow: string;
@@ -101,6 +102,13 @@ export function PlayerPickerSheet({
 }: PlayerPickerSheetProps) {
   const titleId = useId();
   const subtitleId = useId();
+  const panelRef = useRef<HTMLElement | null>(null);
+
+  useDialogFocusManagement({
+    open,
+    containerRef: panelRef,
+    onClose,
+  });
 
   useEffect(() => {
     if (!open) {
@@ -109,19 +117,10 @@ export function PlayerPickerSheet({
 
     const releaseScrollLock = lockPickerSheetDocument();
 
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        onClose();
-      }
-    };
-
-    document.addEventListener("keydown", handleKeyDown);
-
     return () => {
-      document.removeEventListener("keydown", handleKeyDown);
       releaseScrollLock();
     };
-  }, [onClose, open]);
+  }, [open]);
 
   if (!open || typeof document === "undefined") {
     return null;
@@ -136,10 +135,12 @@ export function PlayerPickerSheet({
     >
       <div className="flex h-full w-full items-stretch justify-center lg:p-4">
         <section
+          ref={panelRef}
           role="dialog"
           aria-modal="true"
           aria-labelledby={titleId}
           aria-describedby={subtitle ? subtitleId : undefined}
+          tabIndex={-1}
           className={cx(
             "flex h-full min-h-0 w-full flex-col bg-[var(--surface-strong)] shadow-[0_16px_40px_rgba(23,32,31,0.14)] lg:h-auto lg:max-h-[min(92vh,92dvh)] lg:max-w-[40rem] lg:rounded-[14px] lg:border lg:border-[color:var(--line)]",
             panelClassName
@@ -152,7 +153,7 @@ export function PlayerPickerSheet({
                   {title}
                 </h2>
                 {subtitle ? (
-                  <p id={subtitleId} className="mt-1 text-sm text-gray-500">
+                  <p id={subtitleId} className="mt-1 text-sm text-gray-600">
                     {subtitle}
                   </p>
                 ) : null}
@@ -160,7 +161,7 @@ export function PlayerPickerSheet({
               <button
                 type="button"
                 onClick={onClose}
-                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-500 transition hover:border-[rgba(15,118,110,0.28)] hover:text-[var(--accent-strong)]"
+                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-600 transition hover:border-[rgba(15,118,110,0.28)] hover:text-[var(--accent-strong)]"
                 aria-label="Close"
               >
                 <X aria-hidden="true" size={18} strokeWidth={2.2} />
@@ -174,7 +175,7 @@ export function PlayerPickerSheet({
             </div>
           ) : null}
 
-          <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-4 py-4 sm:px-5 [touch-action:pan-y]">
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-4 py-4 sm:px-5 [touch-action:pan-y_pinch-zoom]">
             {children}
           </div>
 

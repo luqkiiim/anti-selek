@@ -129,26 +129,50 @@ export async function POST(request: Request) {
       );
     } catch (error) {
       if (error instanceof ClubContractAliasConflictError) {
-        return NextResponse.json({ error: error.message }, { status: 400 });
+        return NextResponse.json(
+          { error: error.message, field: "clubName" },
+          { status: 400 }
+        );
       }
       throw error;
     }
     const { password } = bodyRecord as { password?: unknown };
     const name = aliasedName ?? bodyRecord.name;
     if (typeof name !== "string" || name.trim().length < 3) {
-      return NextResponse.json({ error: "Club name must be at least 3 characters" }, { status: 400 });
+      return NextResponse.json(
+        {
+          error: "Club name must be at least 3 characters",
+          field: "clubName",
+        },
+        { status: 400 }
+      );
     }
     if (password !== undefined && typeof password !== "string") {
-      return NextResponse.json({ error: "Invalid password" }, { status: 400 });
+      return NextResponse.json(
+        { error: "Invalid password", field: "password" },
+        { status: 400 }
+      );
     }
     if (typeof password === "string" && password.length > 0 && password.length < 4) {
-      return NextResponse.json({ error: "Password must be at least 4 characters" }, { status: 400 });
+      return NextResponse.json(
+        {
+          error: "Password must be at least 4 characters",
+          field: "password",
+        },
+        { status: 400 }
+      );
     }
 
     const normalizedName = name.trim();
     const normalizedLookupName = normalizeNameLookupKey(normalizedName);
     if (!normalizedLookupName) {
-      return NextResponse.json({ error: "Club name must include letters or numbers" }, { status: 400 });
+      return NextResponse.json(
+        {
+          error: "Club name must include letters or numbers",
+          field: "clubName",
+        },
+        { status: 400 }
+      );
     }
 
     const existingClubs = await prisma.club.findMany({
@@ -158,7 +182,10 @@ export async function POST(request: Request) {
       (club) => normalizeNameLookupKey(club.name) === normalizedLookupName
     );
     if (normalizedNameExists) {
-      return NextResponse.json({ error: "Club name already exists" }, { status: 409 });
+      return NextResponse.json(
+        { error: "Club name already exists", field: "clubName" },
+        { status: 409 }
+      );
     }
 
     const passwordHash = typeof password === "string" && password.length > 0
@@ -202,10 +229,12 @@ export async function POST(request: Request) {
         ? (error as { code?: unknown }).code
         : undefined;
     if (code === "P2002") {
-      return NextResponse.json({ error: "Club name already exists" }, { status: 409 });
+      return NextResponse.json(
+        { error: "Club name already exists", field: "clubName" },
+        { status: 409 }
+      );
     }
     logError("Create club error", error);
     return safeErrorResponse();
   }
 }
-

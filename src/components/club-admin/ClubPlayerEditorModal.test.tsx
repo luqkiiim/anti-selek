@@ -136,7 +136,7 @@ describe("ClubPlayerEditorModal", () => {
 
     expect(markup).toContain("More rest");
     expect(markup).toContain(
-      "Default this player to a lighter session rotation."
+      "Default this player to a lighter tournament rotation."
     );
     expect(markup).toContain('checked=""');
   });

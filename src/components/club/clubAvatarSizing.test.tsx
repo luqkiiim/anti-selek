@@ -206,7 +206,6 @@ describe("club avatar sizing", () => {
           subtitle="Top players"
           players={[member]}
           clubId="community-1"
-          onOpenPlayerProfile={() => undefined}
         />
       );
     });
@@ -232,7 +231,7 @@ describe("club avatar sizing", () => {
     const text = container.textContent ?? "";
     expect(text).toContain("Top rivalry");
     expect(text).toContain("Partner chemistry");
-    expect(text).toContain("Session news");
+    expect(text).toContain("Tournament news");
     expect(text).toContain("Recent matches");
     expect(text).toContain("+11 rating");
     expect(text).toContain("24 - 22");

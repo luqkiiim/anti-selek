@@ -62,7 +62,7 @@ describe("MobileBottomTabs", () => {
       );
     });
     await act(async () => {
-      await new Promise((resolve) => queueMicrotask(resolve));
+      await new Promise<void>((resolve) => queueMicrotask(() => resolve()));
     });
 
     const nav = document.body.querySelector("nav");

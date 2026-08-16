@@ -45,6 +45,7 @@ import Home from "./page";
 describe("dashboard home", () => {
   let container: HTMLDivElement;
   let root: Root;
+  let dashboardState: Record<string, unknown>;
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -57,7 +58,7 @@ describe("dashboard home", () => {
     document.body.appendChild(container);
     root = createRoot(container);
 
-    mocks.useDashboardPage.mockReturnValue({
+    dashboardState = {
       status: "authenticated",
       isQuickAccess: false,
       accountName: "Owner",
@@ -75,14 +76,17 @@ describe("dashboard home", () => {
       creatingClub: false,
       joiningClub: false,
       loading: false,
-      error: "",
+      dashboardError: "",
+      createClubError: null,
+      joinClubError: null,
       openCreateClubModal: vi.fn(),
       closeCreateClubModal: vi.fn(),
       openJoinClubModal: vi.fn(),
       closeJoinClubModal: vi.fn(),
       createClub: vi.fn(),
       joinClub: vi.fn(),
-    });
+    };
+    mocks.useDashboardPage.mockReturnValue(dashboardState);
   });
 
   afterEach(async () => {
@@ -103,5 +107,19 @@ describe("dashboard home", () => {
     );
 
     expect(settingsLink?.textContent).toContain("Settings");
+  });
+
+  it("keeps Quick access limitations visible on the dashboard", async () => {
+    mocks.useDashboardPage.mockReturnValue({
+      ...dashboardState,
+      isQuickAccess: true,
+    });
+
+    await act(async () => {
+      root.render(<Home />);
+    });
+
+    expect(container.textContent).toContain("Quick access is view-only");
+    expect(container.textContent).toContain("cannot join clubs, submit scores");
   });
 });

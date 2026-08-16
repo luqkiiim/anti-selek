@@ -118,7 +118,7 @@ describe("session player preference route", () => {
     const body = await response.json();
 
     expect(response.status).toBe(400);
-    expect(body.error).toBe("Session already completed");
+    expect(body.error).toBe("Tournament already completed");
     expect(mocks.sessionPlayerUpdate).not.toHaveBeenCalled();
   });
 });

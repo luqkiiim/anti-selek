@@ -283,7 +283,11 @@ export function AvatarUploader({
           ) : null}
         </div>
         {helperText ? <p className="text-sm text-gray-600">{helperText}</p> : null}
-        {error ? <p className="text-sm font-semibold text-rose-600">{error}</p> : null}
+        {error ? (
+          <p role="alert" className="text-sm font-semibold text-rose-700">
+            {error}
+          </p>
+        ) : null}
         <AvatarCropModal
           file={cropSourceFile}
           imageUrl={cropSourceUrl}
@@ -333,7 +337,11 @@ export function AvatarUploader({
         ) : null}
       </div>
       {helperText ? <p className="text-sm text-gray-600">{helperText}</p> : null}
-      {error ? <p className="text-sm font-semibold text-rose-600">{error}</p> : null}
+      {error ? (
+        <p role="alert" className="text-sm font-semibold text-rose-700">
+          {error}
+        </p>
+      ) : null}
       <AvatarCropModal
         file={cropSourceFile}
         imageUrl={cropSourceUrl}

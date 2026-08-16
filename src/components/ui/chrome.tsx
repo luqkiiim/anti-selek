@@ -1,5 +1,5 @@
 import Link from "next/link";
-import type { ReactNode } from "react";
+import type { ComponentPropsWithoutRef, ReactNode } from "react";
 
 export { ModalFrame } from "./ModalFrame";
 
@@ -11,13 +11,23 @@ export function FlashMessage({
   tone,
   children,
   className,
+  role,
+  "aria-live": ariaLive,
+  ...props
 }: {
   tone: "success" | "error" | "warning";
   children: ReactNode;
-  className?: string;
-}) {
+} & ComponentPropsWithoutRef<"div">) {
+  const resolvedRole = role ?? (tone === "error" ? "alert" : "status");
+  const resolvedAriaLive =
+    ariaLive ?? (tone === "error" ? "assertive" : "polite");
+
   return (
     <div
+      {...props}
+      role={resolvedRole}
+      aria-live={resolvedAriaLive}
+      aria-atomic="true"
       className={cx(
         "app-alert text-sm font-semibold",
         tone === "success" && "app-alert-success",

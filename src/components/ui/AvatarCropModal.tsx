@@ -220,7 +220,11 @@ export function AvatarCropModal({
           </div>
         </div>
 
-        {error ? <p className="text-sm font-semibold text-rose-600">{error}</p> : null}
+        {error ? (
+          <p role="alert" className="text-sm font-semibold text-rose-700">
+            {error}
+          </p>
+        ) : null}
       </div>
     </ModalFrame>
   );

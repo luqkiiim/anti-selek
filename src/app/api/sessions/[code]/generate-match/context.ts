@@ -46,10 +46,10 @@ export async function loadGenerateMatchContext({
   const sessionData = await loadSessionRecord(code);
 
   if (!sessionData) {
-    throw new GenerateMatchError(404, "Session not found");
+    throw new GenerateMatchError(404, "Tournament not found");
   }
   if (sessionData.status !== SessionStatus.ACTIVE) {
-    throw new GenerateMatchError(400, "Session not active");
+    throw new GenerateMatchError(400, "Tournament not active");
   }
 
   await ensureManagePermission(
@@ -64,7 +64,7 @@ export async function loadGenerateMatchContext({
     requestedCourtIds
   );
   if (targetCourts.length !== requestedCourtIds.length) {
-    throw new GenerateMatchError(404, "Court not found in this session");
+    throw new GenerateMatchError(404, "Court not found in this tournament");
   }
 
   const targetCourtById = new Map(targetCourts.map((court) => [court.id, court]));

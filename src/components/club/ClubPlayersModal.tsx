@@ -119,6 +119,7 @@ export function ClubPlayersModal({
       toolbar={
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
           <SearchField
+            ariaLabel="Search club players"
             value={playerSearch}
             onChange={onPlayerSearchChange}
             placeholder="Search players..."
@@ -181,6 +182,7 @@ export function ClubPlayersModal({
               >
                 <button
                   type="button"
+                  aria-pressed={isSelected}
                   onPointerDownCapture={captureSearchFocusIntent}
                   onMouseDownCapture={captureSearchFocusIntent}
                   onClick={() => {
@@ -252,6 +254,7 @@ export function ClubPlayersModal({
                         <button
                           key={pool}
                           type="button"
+                          aria-pressed={isActive}
                           onPointerDownCapture={captureSearchFocusIntent}
                           onMouseDownCapture={captureSearchFocusIntent}
                           onClick={() => {
@@ -285,6 +288,7 @@ export function ClubPlayersModal({
                           <button
                             key={option.id}
                             type="button"
+                            aria-pressed={isActive}
                             onPointerDownCapture={captureSearchFocusIntent}
                             onMouseDownCapture={captureSearchFocusIntent}
                             onClick={() => {

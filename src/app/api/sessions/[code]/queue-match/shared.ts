@@ -35,7 +35,9 @@ export function buildQueuedMatchResponse(
   const team2User2 = playerById.get(queuedMatch.team2User2Id);
 
   if (!team1User1 || !team1User2 || !team2User1 || !team2User2) {
-    throw new Error("Queued match references players missing from the session.");
+    throw new Error(
+      "Queued match references players missing from the tournament."
+    );
   }
 
   return {
@@ -80,7 +82,7 @@ async function shouldSuppressAutomaticQueueCreation(
 
 async function ensureQueueSlotAvailable(sessionData: QueueSessionRecord) {
   if (sessionData.status !== "ACTIVE") {
-    throw new GenerateMatchError(400, "Session not active");
+    throw new GenerateMatchError(400, "Tournament not active");
   }
 
   if (sessionData.queuedMatch) {
@@ -264,7 +266,7 @@ export async function reshuffleQueuedMatchForSession(
   options?: { excludedUserId?: string }
 ) {
   if (sessionData.status !== "ACTIVE") {
-    throw new GenerateMatchError(400, "Session not active");
+    throw new GenerateMatchError(400, "Tournament not active");
   }
 
   if (!sessionData.queuedMatch) {
@@ -336,7 +338,7 @@ export async function replaceQueuedMatchPlayerForSession(
   replaceUserId: string
 ) {
   if (sessionData.status !== "ACTIVE") {
-    throw new GenerateMatchError(400, "Session not active");
+    throw new GenerateMatchError(400, "Tournament not active");
   }
 
   if (!sessionData.queuedMatch) {

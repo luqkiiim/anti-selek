@@ -59,7 +59,7 @@ export async function PATCH(
     }
     if (sessionData.status === SessionStatus.COMPLETED) {
       return NextResponse.json(
-        { error: "Completed sessions cannot be edited" },
+        { error: "Completed tournaments cannot be edited" },
         { status: 400 }
       );
     }
@@ -93,7 +93,7 @@ export async function PATCH(
 
     if (!existingPlayer.isGuest) {
       return NextResponse.json(
-        { error: "Only guest names can be edited during a live session" },
+        { error: "Only guest names can be edited during a live tournament" },
         { status: 400 }
       );
     }
@@ -155,7 +155,7 @@ export async function DELETE(
     }
     if (sessionData.status === SessionStatus.COMPLETED) {
       return NextResponse.json(
-        { error: "Completed sessions cannot be edited" },
+        { error: "Completed tournaments cannot be edited" },
         { status: 400 }
       );
     }
@@ -236,7 +236,7 @@ export async function DELETE(
       return NextResponse.json(
         {
           error:
-            "This player already has recorded match history in this session and cannot be removed.",
+            "This player already has recorded match history in this tournament and cannot be removed.",
         },
         { status: 409 }
       );

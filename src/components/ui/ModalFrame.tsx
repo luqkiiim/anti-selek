@@ -1,8 +1,15 @@
 "use client";
 
-import { useEffect, useRef, type ReactNode } from "react";
+import {
+  useEffect,
+  useId,
+  useRef,
+  type ReactNode,
+  type RefObject,
+} from "react";
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
+import { useDialogFocusManagement } from "./useDialogFocusManagement";
 
 type ScrollLockSnapshot = {
   bodyOverflow: string;
@@ -74,6 +81,7 @@ interface ModalFrameProps {
   bodyClassName?: string;
   frameClassName?: string;
   fullscreenUntilDesktop?: boolean;
+  initialFocusRef?: RefObject<HTMLElement | null>;
 }
 
 export function ModalFrame({
@@ -87,9 +95,19 @@ export function ModalFrame({
   bodyClassName,
   frameClassName,
   fullscreenUntilDesktop = false,
+  initialFocusRef,
 }: ModalFrameProps) {
   const frameRef = useRef<HTMLDivElement | null>(null);
   const touchStartYRef = useRef<number | null>(null);
+  const titleId = useId();
+  const subtitleId = useId();
+
+  useDialogFocusManagement({
+    open: true,
+    containerRef: frameRef,
+    initialFocusRef,
+    onClose,
+  });
 
   useEffect(() => {
     return lockDocumentScroll();
@@ -204,7 +222,9 @@ export function ModalFrame({
         ref={frameRef}
         role="dialog"
         aria-modal="true"
-        aria-label={title}
+        aria-labelledby={titleId}
+        aria-describedby={subtitle ? subtitleId : undefined}
+        tabIndex={-1}
         className={cx(
           "app-modal-frame",
           frameClassName,
@@ -214,15 +234,19 @@ export function ModalFrame({
         <div className="border-b border-gray-200 bg-gray-50 px-4 pb-4 pt-[calc(1rem+env(safe-area-inset-top))] sm:px-5 sm:pt-4">
           <div className="flex items-start justify-between gap-4">
             <div>
-              <h2 className="text-lg font-semibold text-gray-900">{title}</h2>
+              <h2 id={titleId} className="text-lg font-semibold text-gray-900">
+                {title}
+              </h2>
               {subtitle ? (
-                <p className="mt-1 text-sm text-gray-500">{subtitle}</p>
+                <p id={subtitleId} className="mt-1 text-sm text-gray-600">
+                  {subtitle}
+                </p>
               ) : null}
             </div>
             <button
               type="button"
               onClick={onClose}
-              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-500 transition hover:border-[rgba(15,118,110,0.28)] hover:text-[var(--accent-strong)]"
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-600 transition hover:border-[rgba(15,118,110,0.28)] hover:text-[var(--accent-strong)]"
               aria-label="Close"
             >
               <X aria-hidden="true" size={18} strokeWidth={2.2} />

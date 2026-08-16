@@ -39,7 +39,7 @@ export function useSessionData({
         const data = await safeJson<SessionData | { error?: string }>(res);
         if (!res.ok) {
           if (!silent) {
-            const message = getErrorMessage(data, "Failed to load session");
+            const message = getErrorMessage(data, "Failed to load tournament");
 
             if (hasLoadedSessionRef.current) {
               setError(message);
@@ -63,10 +63,10 @@ export function useSessionData({
         console.error(err);
         if (!silent) {
           if (hasLoadedSessionRef.current) {
-            setError("Failed to load session");
+            setError("Failed to load tournament");
           } else {
             startTransition(() => {
-              setInitialLoadError("Failed to load session");
+              setInitialLoadError("Failed to load tournament");
               setIsInitialLoadPending(false);
             });
           }

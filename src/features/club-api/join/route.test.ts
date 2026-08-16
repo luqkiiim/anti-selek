@@ -94,4 +94,48 @@ describe("club join API", () => {
     expect(body.clubName).toBe("Club One");
     expect(body.communityName).toBe("Club One");
   });
+
+  it("identifies the club-name field when the club cannot be found", async () => {
+    mocks.clubFindMany.mockResolvedValue([]);
+
+    const response = await POST(
+      new Request("http://localhost/api/clubs/join", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ clubName: "Missing Club" }),
+      })
+    );
+
+    expect(response.status).toBe(404);
+    await expect(response.json()).resolves.toEqual({
+      error: "Club not found",
+      field: "clubName",
+    });
+  });
+
+  it("identifies the password field for a protected club", async () => {
+    mocks.clubFindMany.mockResolvedValue([
+      {
+        id: "community-1",
+        name: "Club One",
+        isTutorial: false,
+        isPasswordProtected: true,
+        passwordHash: "hash",
+      },
+    ]);
+
+    const response = await POST(
+      new Request("http://localhost/api/clubs/join", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ clubName: "Club One" }),
+      })
+    );
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      error: "Password is required",
+      field: "password",
+    });
+  });
 });

@@ -8,9 +8,11 @@ import { MoreHorizontal, Pencil, Undo2 } from "lucide-react";
 
 import { SessionActionConfirmModal } from "@/components/session/SessionActionConfirmModal";
 import { EmptyState, FlashMessage, HeroCard, SectionCard } from "@/components/ui/chrome";
+import { getCurrentAppPath, withCallbackUrl } from "@/lib/authCallback";
 import { getCourtDisplayLabel } from "@/lib/courtLabels";
 import { getErrorMessage } from "@/lib/http";
 import { getSessionModeLabel, getSessionTypeLabel } from "@/lib/sessionModeLabels";
+import { getSessionStatusLabel } from "@/lib/sessionStatusLabels";
 import { MatchStatus } from "@/types/enums";
 
 interface HistoryMatch {
@@ -56,7 +58,7 @@ interface SessionHistoryData {
 }
 
 export default function SessionHistoryPage() {
-  const { data: session, status } = useSession();
+  const { status } = useSession();
   const router = useRouter();
   const params = useParams();
   const searchParams = useSearchParams();
@@ -118,7 +120,9 @@ export default function SessionHistoryPage() {
 
   useEffect(() => {
     if (status === "unauthenticated") {
-      router.push("/signin");
+      router.replace(
+        withCallbackUrl("/signin", getCurrentAppPath(window.location))
+      );
     }
   }, [status, router]);
 
@@ -132,10 +136,10 @@ export default function SessionHistoryPage() {
   };
 
   useEffect(() => {
-    if (session?.user) {
+    if (status === "authenticated") {
       void fetchHistory({ showLoading: true });
     }
-  }, [fetchHistory, session]);
+  }, [fetchHistory, status]);
 
   useEffect(() => {
     setOpenActionMatchId(null);
@@ -321,7 +325,9 @@ export default function SessionHistoryPage() {
           backLabel="Back"
           meta={
             <>
-              <span className="app-chip app-chip-neutral">{data.session.status}</span>
+              <span className="app-chip app-chip-neutral">
+                {getSessionStatusLabel(data.session.status)}
+              </span>
               <span className="app-chip app-chip-neutral">{sessionTypeLabel}</span>
               <span className="app-chip app-chip-neutral">{sessionModeLabel}</span>
             </>
@@ -336,7 +342,7 @@ export default function SessionHistoryPage() {
         ) : null}
 
         <SectionCard
-          title="Session matches"
+          title="Tournament matches"
           action={<span className="app-chip app-chip-neutral">{data.matches.length} matches</span>}
         >
           {data.matches.length === 0 ? (
@@ -389,7 +395,7 @@ export default function SessionHistoryPage() {
                                 aria-label={`Open actions for ${courtLabel}`}
                                 aria-haspopup="menu"
                                 aria-expanded={matchActionMenuOpen}
-                                className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-600 transition hover:border-gray-300 hover:bg-gray-50 hover:text-gray-900 active:scale-95"
+                                className="inline-flex h-11 w-11 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-600 transition hover:border-gray-300 hover:bg-gray-50 hover:text-gray-900 active:scale-95"
                               >
                                 <MoreHorizontal aria-hidden="true" size={17} />
                               </button>
@@ -406,7 +412,7 @@ export default function SessionHistoryPage() {
                                         type="button"
                                         role="menuitem"
                                         onClick={() => openCorrectionDraft(match)}
-                                        className="inline-flex w-full items-center gap-2 px-3 py-2.5 text-left transition hover:bg-[var(--accent-faint)] hover:text-[var(--accent-strong)]"
+                                        className="inline-flex min-h-11 w-full items-center gap-2 px-3 py-2.5 text-left transition hover:bg-[var(--accent-faint)] hover:text-[var(--accent-strong)]"
                                       >
                                         <Pencil aria-hidden="true" size={16} />
                                         Correct score
@@ -420,7 +426,7 @@ export default function SessionHistoryPage() {
                                           setOpenActionMatchId(null);
                                           setUndoDraft(match);
                                         }}
-                                        className="inline-flex w-full items-center gap-2 px-3 py-2.5 text-left text-rose-700 transition hover:bg-rose-50"
+                                        className="inline-flex min-h-11 w-full items-center gap-2 px-3 py-2.5 text-left text-rose-700 transition hover:bg-rose-50"
                                       >
                                         <Undo2 aria-hidden="true" size={16} />
                                         Undo result

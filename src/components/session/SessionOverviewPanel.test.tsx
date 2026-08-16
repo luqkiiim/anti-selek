@@ -47,5 +47,8 @@ describe("SessionOverviewPanel", () => {
     });
 
     expect(markup).not.toContain(">Share<");
+    expect(markup).toContain("Live tournament");
+    expect(markup).toContain(">Live<");
+    expect(markup).not.toContain(">ACTIVE<");
   });
 });

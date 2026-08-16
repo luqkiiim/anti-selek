@@ -30,52 +30,17 @@ import { TestSessionsPanel } from "@/components/club/TestSessionsPanel";
 import { AdminOnboardingChecklist } from "@/components/onboarding/AdminOnboardingChecklist";
 import { useAdminOnboardingProgress } from "@/components/onboarding/useAdminOnboardingProgress";
 import type { ClubPageSection } from "@/components/club/clubTypes";
+import {
+  getAuthorizedClubSection,
+  getAuthorizedClubSections,
+} from "@/components/club/clubNavigation";
 import { useClubPage } from "./useClubPage";
-
-const baseSectionTabs: Array<{
-  key: Exclude<ClubPageSection, "host" | "profile">;
-  label: string;
-  detail: (counts: { sessions: number; leaderboard: number }) => string;
-}> = [
-  {
-    key: "overview",
-    label: "Overview",
-    detail: () => "Live snapshot",
-  },
-  {
-    key: "tournaments",
-    label: "Tournaments",
-    detail: ({ sessions }) => `${sessions} total`,
-  },
-  {
-    key: "leaderboard",
-    label: "Leaderboard",
-    detail: ({ leaderboard }) => `${leaderboard} players`,
-  },
-];
 
 function getClubSectionHref(
   clubId: string,
   section: ClubPageSection
 ) {
   return `/club/${clubId}?tab=${section}`;
-}
-
-function getRequestedClubSection(
-  tab: string | null,
-  canManageClub: boolean
-): ClubPageSection | null {
-  switch (tab) {
-    case "overview":
-    case "tournaments":
-    case "leaderboard":
-    case "profile":
-      return tab;
-    case "host":
-      return canManageClub ? "host" : null;
-    default:
-      return null;
-  }
 }
 
 export default function ClubPage() {
@@ -101,6 +66,7 @@ export default function ClubPage() {
   const [clubPagerHeight, setClubPagerHeight] = useState<
     number | null
   >(null);
+  const [retryingClubLoad, setRetryingClubLoad] = useState(false);
   const {
     status,
     clubId,
@@ -159,8 +125,8 @@ export default function ClubPage() {
     guestPoolCounts,
     loading,
     creatingSession,
+    creationIssues,
     activeSection,
-    lastNonHostSection,
     showPlayersModal,
     showGuestsModal,
     playerSearch,
@@ -171,6 +137,7 @@ export default function ClubPage() {
     error,
     setError,
     success,
+    refreshClubData,
     notifications,
     leaderboard,
     activeTournaments,
@@ -205,7 +172,6 @@ export default function ClubPage() {
     openGuestsModal,
     closeGuestsModal,
     switchSection,
-    exitHostMode,
     openClubPlayerProfile,
     openTournament,
   } = useClubPage();
@@ -234,23 +200,16 @@ export default function ClubPage() {
     void adminOnboarding.refresh();
   }, [adminOnboarding, createSession]);
 
-  const mobileSections = useMemo(() => {
-    const sections: ClubPageSection[] = [
-      "overview",
-      "tournaments",
-      "leaderboard",
-    ];
-
-    if (canManageClub) {
-      sections.splice(2, 0, "host");
-    }
-
-    if (user?.id) {
-      sections.push("profile");
-    }
-
-    return sections;
+  const sectionTabs = useMemo(() => {
+    return getAuthorizedClubSections({
+      canManageClub,
+      hasUser: Boolean(user?.id),
+    });
   }, [canManageClub, user?.id]);
+  const mobileSections = useMemo(
+    () => sectionTabs.map((section) => section.key),
+    [sectionTabs]
+  );
   const activeMobileSection = mobileSections.includes(activeSection)
     ? activeSection
     : mobileSections[0] ?? "overview";
@@ -289,6 +248,18 @@ export default function ClubPage() {
 
     router.push("/");
   }, [router]);
+
+  const retryClubLoad = useCallback(async () => {
+    setRetryingClubLoad(true);
+    setError("");
+    try {
+      await refreshClubData();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to load club");
+    } finally {
+      setRetryingClubLoad(false);
+    }
+  }, [refreshClubData, setError]);
 
   const clearProgrammaticClubPagerSync = useCallback(() => {
     if (programmaticClubPagerReleaseTimeoutRef.current) {
@@ -414,21 +385,6 @@ export default function ClubPage() {
     },
     [navigateClubSection]
   );
-
-  const exitClubHostMode = useCallback(() => {
-    exitHostMode();
-    pendingClubSectionRef.current = lastNonHostSection;
-    scrollClubPagerToSection(lastNonHostSection, "smooth");
-    router.replace(getClubSectionHref(clubId, lastNonHostSection), {
-      scroll: false,
-    });
-  }, [
-    clubId,
-    exitHostMode,
-    lastNonHostSection,
-    router,
-    scrollClubPagerToSection,
-  ]);
 
   const settleClubPagerToNearestSection = useCallback(
     (behavior: ScrollBehavior = "smooth") => {
@@ -624,9 +580,9 @@ export default function ClubPage() {
       return;
     }
 
-    const requestedSection = getRequestedClubSection(
+    const requestedSection = getAuthorizedClubSection(
       requestedTab,
-      canManageClub
+      sectionTabs
     );
     const nextSection = requestedSection ?? "overview";
     const pendingSection = pendingClubSectionRef.current;
@@ -650,12 +606,12 @@ export default function ClubPage() {
     }
   }, [
     activeSection,
-    canManageClub,
     club,
     clubId,
     loading,
     requestedTab,
     router,
+    sectionTabs,
     status,
     switchSection,
   ]);
@@ -743,21 +699,42 @@ export default function ClubPage() {
     );
   }
 
-  const clubName = club?.name || "Club";
-  const clubRoleLabel = club?.viewerIsOwner
+  if (!club) {
+    return (
+      <main className="app-page flex items-center justify-center px-6">
+        <section className="app-panel w-full max-w-lg p-6 text-center sm:p-8">
+          <p className="app-eyebrow">Club unavailable</p>
+          <h1 className="mt-3 text-2xl font-semibold text-gray-950">
+            We couldn&apos;t load this club
+          </h1>
+          <p role="alert" className="mt-2 text-sm leading-6 text-gray-600">
+            {error || "The club may no longer exist or you may not have access."}
+          </p>
+          <div className="mt-6 flex flex-wrap justify-center gap-2">
+            <button
+              type="button"
+              onClick={() => void retryClubLoad()}
+              disabled={retryingClubLoad}
+              className="app-button-primary min-h-11 px-4 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {retryingClubLoad ? "Retrying..." : "Retry"}
+            </button>
+            <Link
+              href="/"
+              className="app-button-secondary min-h-11 px-4 py-2 text-sm"
+            >
+              Back to dashboard
+            </Link>
+          </div>
+        </section>
+      </main>
+    );
+  }
+
+  const clubName = club.name;
+  const clubRoleLabel = club.viewerIsOwner
     ? "Owner"
-    : getClubRoleLabel(club?.role);
-  const sectionTabs = canManageClub
-    ? [
-        baseSectionTabs[0],
-        {
-          key: "host" as const,
-          label: "Host",
-          detail: () => "Setup desk",
-        },
-        ...baseSectionTabs.slice(1),
-      ]
-    : baseSectionTabs;
+    : getClubRoleLabel(club.role);
   const hostSetupPanel = canManageClub ? (
     <HostTournamentPanel
       newSessionName={newSessionName}
@@ -802,9 +779,8 @@ export default function ClubPage() {
       onOpenPlayers={openPlayersModal}
       onOpenGuests={openGuestsModal}
       onCreateSession={createSessionWithOnboardingRefresh}
-      onExitHostMode={exitClubHostMode}
-      exitHostModeLabel="Back"
       creatingSession={creatingSession}
+      creationIssues={creationIssues}
     />
   ) : null;
   const interclubClubOptions = partnerClubId
@@ -821,12 +797,19 @@ export default function ClubPage() {
       clubId={clubId}
       clubPulse={clubPulse}
       activeTournaments={activeTournaments}
+      memberCount={club.membersCount}
       currentUserId={user?.id}
       viewerIsQuickAccess={viewerIsQuickAccess}
+      canManageClub={canManageClub}
+      canAdminClub={canAdminClub}
       onJoinTournament={joinTournament}
       onOpenTournament={openTournament}
       onOpenTournaments={() => switchClubSection("tournaments")}
       onOpenPlayerProfile={openClubPlayerProfile}
+      onHostTournament={() => switchClubSection("host")}
+      onManagePlayers={() =>
+        router.push(`/club/${clubId}/admin?tab=players`)
+      }
     />
   );
   const profilePanel = (
@@ -880,7 +863,6 @@ export default function ClubPage() {
         requestingClaimFor,
       }}
       onRequestClaim={requestClaim}
-      onOpenPlayerProfile={openClubPlayerProfile}
     />
   );
   const renderClubSection = (section: ClubPageSection) => {
@@ -929,6 +911,10 @@ export default function ClubPage() {
                     Tutorial playground
                   </span>
                 ) : null}
+                <div className="flex min-h-11 items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700">
+                  <Shield aria-hidden="true" size={15} className="text-gray-600" />
+                  <span>Your role: {clubRoleLabel}</span>
+                </div>
                 {canAdminClub ? (
                   <Link
                     href={`/club/${clubId}/admin`}
@@ -940,14 +926,9 @@ export default function ClubPage() {
                     }
                   >
                     <Shield aria-hidden="true" size={15} />
-                    <span>{clubRoleLabel}</span>
+                    <span>Manage club</span>
                   </Link>
-                ) : (
-                  <div className="flex items-center gap-2 text-sm font-medium text-gray-600">
-                    <Shield aria-hidden="true" size={15} className="text-gray-500" />
-                    <span>{clubRoleLabel}</span>
-                  </div>
-                )}
+                ) : null}
               </div>
             </div>
           }
@@ -973,9 +954,10 @@ export default function ClubPage() {
           className="app-panel-soft hidden p-2 xl:block"
         >
           <div
-            className={`grid gap-2 ${
-              canManageClub ? "xl:grid-cols-4" : "xl:grid-cols-3"
-            }`}
+            className="grid gap-2"
+            style={{
+              gridTemplateColumns: `repeat(${sectionTabs.length}, minmax(0, 1fr))`,
+            }}
           >
             {sectionTabs.map((tab) => {
               const isActive = activeSection === tab.key;
@@ -984,6 +966,7 @@ export default function ClubPage() {
                   key={tab.key}
                   type="button"
                   onClick={() => switchClubSection(tab.key)}
+                  aria-current={isActive ? "page" : undefined}
                   className={`rounded-lg px-4 py-3 text-left transition ${
                     isActive
                       ? "bg-white shadow-sm ring-1 ring-[rgba(15,118,110,0.16)]"
@@ -1000,7 +983,7 @@ export default function ClubPage() {
                   </p>
                   <p className="mt-1 text-xs font-semibold text-gray-500">
                     {tab.detail({
-                      sessions:
+                      tournaments:
                         pastTournaments.length +
                         activeTournaments.length +
                         testSessions.length,
@@ -1035,6 +1018,11 @@ export default function ClubPage() {
                   clubPanelRefs.current[section] = node;
                 }}
                 data-club-section={section}
+                aria-label={
+                  sectionTabs.find((item) => item.key === section)?.label
+                }
+                aria-hidden={section !== activeMobileSection}
+                inert={section !== activeMobileSection}
                 className="min-w-0 max-w-full basis-full shrink-0 snap-center px-1"
               >
                 <div className="min-w-0 space-y-8 pb-28">
@@ -1126,12 +1114,21 @@ export default function ClubPage() {
 
       {error ? (
         <div className="fixed bottom-24 left-6 right-6 z-50 xl:bottom-6">
-          <div className="bg-red-600 text-white px-6 py-4 rounded-2xl shadow-2xl flex justify-between items-center">
+          <div
+            role="alert"
+            aria-live="assertive"
+            className="flex items-center justify-between rounded-2xl bg-red-700 px-4 py-3 text-white shadow-2xl sm:px-6"
+          >
             <p className="text-xs font-black uppercase tracking-wide">
               {error}
             </p>
-            <button onClick={() => setError("")} className="font-black">
-              x
+            <button
+              type="button"
+              onClick={() => setError("")}
+              aria-label="Dismiss error"
+              className="ml-3 inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-xl font-black hover:bg-white/15 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+            >
+              <span aria-hidden="true">×</span>
             </button>
           </div>
         </div>
@@ -1139,9 +1136,8 @@ export default function ClubPage() {
 
       <ClubBottomTabs
         activeTab={activeSection}
-        canManageClub={canManageClub}
         clubId={clubId}
-        currentUserId={user?.id}
+        sections={sectionTabs}
         onSelect={switchClubSection}
       />
     </main>

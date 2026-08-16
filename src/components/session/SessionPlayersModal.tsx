@@ -95,6 +95,7 @@ export function SessionPlayersModal({
       toolbar={
         <div className="space-y-4">
           <SearchField
+            ariaLabel="Search tournament players"
             value={search}
             onChange={setSearch}
             placeholder="Search players..."
@@ -112,6 +113,7 @@ export function SessionPlayersModal({
                 key={value}
                 type="button"
                 onClick={() => setFilter(value)}
+                aria-pressed={filter === value}
                 className={`min-h-9 rounded-lg border px-3 py-1.5 text-xs font-semibold transition ${
                   filter === value
                     ? "border-[rgba(15,118,110,0.24)] bg-[var(--accent-faint)] text-[var(--accent-strong)]"
@@ -208,7 +210,7 @@ export function SessionPlayersModal({
                       type="button"
                       onClick={() => onToggleSkipNext(player.userId, hasSkipNext)}
                       disabled={skippingNextPlayerId !== null}
-                      className="app-button-secondary px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-50"
+                      className="app-button-secondary min-h-11 px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       {isUpdatingSkipNext
                         ? "Saving..."
@@ -223,7 +225,7 @@ export function SessionPlayersModal({
                       onClick={(event) =>
                         onOpenPreferenceEditor(player.userId, event.currentTarget)
                       }
-                      className="app-button-secondary px-3 py-2 text-sm"
+                      className="app-button-secondary min-h-11 px-3 py-2 text-sm"
                     >
                       Edit
                     </button>
@@ -232,7 +234,7 @@ export function SessionPlayersModal({
                     type="button"
                     onClick={() => onTogglePause(player.userId, player.isPaused)}
                     disabled={togglingPausePlayerId !== null}
-                    className={`min-h-10 rounded-lg px-3 py-2 text-sm font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-50 ${
+                    className={`min-h-11 rounded-lg px-3 py-2 text-sm font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-50 ${
                       player.isPaused ? "bg-[var(--warning)]" : "bg-[var(--foreground)]"
                     }`}
                   >

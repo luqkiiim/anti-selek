@@ -22,7 +22,7 @@ import { rateLimit, checkInvalidTargetRateLimit, invalidTargetResponse } from "@
 export const dynamic = "force-dynamic";
 
 const NEWER_OUTSIDE_MATCH_BLOCKED_REASON =
-  "Newer completed matches exist outside this session, so exact ELO replay is blocked.";
+  "Newer completed matches exist outside this tournament, so exact ELO replay is blocked.";
 
 interface CorrectionAvailabilitySession {
   id: string;
@@ -277,7 +277,7 @@ async function getSessionHistory(
   ) {
     if (sessionData.isTest) {
       correctionBlockedReason =
-        "Test sessions do not support completed score correction.";
+        "Test tournaments do not support completed score correction.";
     } else {
       correctionBlockedReason =
         await getCompletedScoreCorrectionBlockedReason(sessionData);

@@ -9,9 +9,13 @@ import {
   SessionPool,
 } from "@/types/enums";
 
-function renderPanel(
-  matchmakingStyle: SessionMatchmakingStyle = SessionMatchmakingStyle.BALANCED
-) {
+function renderPanel({
+  matchmakingStyle = SessionMatchmakingStyle.BALANCED,
+  creationIssues = [],
+}: {
+  matchmakingStyle?: SessionMatchmakingStyle;
+  creationIssues?: string[];
+} = {}) {
   return renderToStaticMarkup(
     <HostTournamentPanel
       newSessionName="Friday Night"
@@ -62,9 +66,8 @@ function renderPanel(
       onOpenPlayers={vi.fn()}
       onOpenGuests={vi.fn()}
       onCreateSession={vi.fn()}
-      onExitHostMode={vi.fn()}
-      exitHostModeLabel="Exit"
       creatingSession={false}
+      creationIssues={creationIssues}
     />
   );
 }
@@ -88,7 +91,9 @@ describe("HostTournamentPanel", () => {
   });
 
   it("shows the selected social helper copy", () => {
-    const markup = renderPanel(SessionMatchmakingStyle.SOCIAL);
+    const markup = renderPanel({
+      matchmakingStyle: SessionMatchmakingStyle.SOCIAL,
+    });
 
     expect(markup).toContain("More variety, less focus on fairness.");
   });
@@ -99,6 +104,8 @@ describe("HostTournamentPanel", () => {
     expect(markup).toContain("app-panel min-w-0 max-w-full overflow-hidden");
     expect(markup).toContain("min-w-0 rounded-lg border");
     expect(markup).not.toContain("Regular tournament / Auto queue on");
+    expect(markup).toContain('aria-pressed="true"');
+    expect(markup).toContain('aria-pressed="false"');
   });
 
   it("exposes tutorial targets for name, roster choice, and creation", () => {
@@ -113,5 +120,23 @@ describe("HostTournamentPanel", () => {
     expect(markup).toContain(
       'data-tutorial-target="admin-onboarding-create-session"'
     );
+  });
+
+  it("shows every creation issue and disables the create action", () => {
+    const markup = renderPanel({
+      creationIssues: [
+        "Add a tournament name.",
+        "Add 2 more players or guests.",
+      ],
+    });
+
+    expect(markup).toContain("Add a tournament name.");
+    expect(markup).toContain("Add 2 more players or guests.");
+    expect(markup).toContain('aria-describedby="host-creation-issues"');
+    expect(markup).toContain("disabled");
+  });
+
+  it("does not render the redundant host back control", () => {
+    expect(renderPanel()).not.toContain(">Exit<");
   });
 });

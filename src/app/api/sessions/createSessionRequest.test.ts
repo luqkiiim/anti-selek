@@ -169,7 +169,7 @@ describe("parseCreateSessionRequest", () => {
     );
     expect(() =>
       parseCreateSessionRequest({ name: "", clubId: "community-1" })
-    ).toThrowError(new SessionRouteError("Session name required", 400));
+    ).toThrowError(new SessionRouteError("Tournament name required", 400));
     expect(() =>
       parseCreateSessionRequest({ name: "Session", clubId: "" })
     ).toThrowError(new SessionRouteError("Club is required", 400));
@@ -201,7 +201,7 @@ describe("parseCreateSessionRequest", () => {
         clubId: "community-1",
         mode: "BAD_MODE",
       })
-    ).toThrowError(new SessionRouteError("Invalid session mode", 400));
+    ).toThrowError(new SessionRouteError("Invalid tournament mode", 400));
   });
 
   it("normalizes legacy social mix, ladder, and race session types", () => {
@@ -335,7 +335,7 @@ describe("parseCreateSessionRequest", () => {
       })
     ).toThrowError(
       new SessionRouteError(
-        "Club vs club sessions require a partner club",
+        "Club vs club tournaments require a partner club",
         400
       )
     );
@@ -349,7 +349,7 @@ describe("parseCreateSessionRequest", () => {
         poolsEnabled: true,
       })
     ).toThrowError(
-      new SessionRouteError("Club vs club sessions do not support pools", 400)
+      new SessionRouteError("Club vs club tournaments do not support pools", 400)
     );
   });
 
@@ -399,7 +399,7 @@ describe("parseCreateSessionRequest", () => {
         clubId: "community-1",
         type: "BAD_TYPE",
       })
-    ).toThrowError(new SessionRouteError("Invalid session type", 400));
+    ).toThrowError(new SessionRouteError("Invalid tournament type", 400));
   });
 
   it("rejects invalid new matchmaking settings", () => {

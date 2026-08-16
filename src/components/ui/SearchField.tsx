@@ -4,6 +4,7 @@ import { useRef, type RefObject } from "react";
 import { X } from "lucide-react";
 
 interface SearchFieldProps {
+  ariaLabel: string;
   value: string;
   onChange: (value: string) => void;
   placeholder?: string;
@@ -18,6 +19,7 @@ function cx(...values: Array<string | false | null | undefined>) {
 }
 
 export function SearchField({
+  ariaLabel,
   value,
   onChange,
   placeholder = "Search...",
@@ -28,7 +30,6 @@ export function SearchField({
 }: SearchFieldProps) {
   const fallbackInputRef = useRef<HTMLInputElement | null>(null);
   const resolvedInputRef = inputRef ?? fallbackInputRef;
-  const shouldRestoreFocusRef = useRef(false);
 
   function focusInput() {
     resolvedInputRef.current?.focus();
@@ -37,26 +38,12 @@ export function SearchField({
     });
   }
 
-  function captureFocusIntent() {
-    shouldRestoreFocusRef.current = document.activeElement === resolvedInputRef.current;
-  }
-
-  function restoreFocusIfNeeded() {
-    const shouldRestoreFocus = shouldRestoreFocusRef.current;
-    shouldRestoreFocusRef.current = false;
-
-    if (!shouldRestoreFocus) {
-      return;
-    }
-
-    focusInput();
-  }
-
   return (
     <div className={cx("relative", className)}>
       <input
         ref={resolvedInputRef}
         type="text"
+        aria-label={ariaLabel}
         value={value}
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
@@ -66,14 +53,12 @@ export function SearchField({
       {value ? (
         <button
           type="button"
-          onPointerDownCapture={captureFocusIntent}
-          onMouseDownCapture={captureFocusIntent}
           onClick={() => {
             onChange("");
-            restoreFocusIfNeeded();
+            focusInput();
           }}
-          className="absolute right-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-lg bg-gray-100 text-gray-500 transition hover:text-[var(--accent-strong)]"
-          aria-label="Clear search"
+          className="absolute right-0 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-lg bg-gray-100 text-gray-600 transition hover:text-[var(--accent-strong)]"
+          aria-label={`Clear ${ariaLabel.toLowerCase()}`}
         >
           <X aria-hidden="true" size={16} strokeWidth={2.2} />
         </button>

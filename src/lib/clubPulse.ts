@@ -1225,7 +1225,7 @@ function buildSessionNews(
         type: "PERFECT_SESSION",
         latestSession,
         title: perfectSession.user.name,
-        detail: "Perfect session",
+        detail: "Perfect tournament",
         value: `${perfectSession.wins}W/0L`,
         players: [perfectSession.user],
       })

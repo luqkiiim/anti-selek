@@ -638,7 +638,7 @@ function buildAchievementsFromSessions(
     }),
     buildAchievement({
       id: "perfect-session",
-      title: "Perfect Session",
+      title: "Perfect Tournament",
       description: "Go unbeaten with 3+ matches.",
       progressLabel: "wins",
       target: 3,

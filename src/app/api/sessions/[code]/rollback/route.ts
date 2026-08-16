@@ -58,7 +58,7 @@ export async function POST(
     }
     if (targetSession.isTest) {
       return NextResponse.json(
-        { error: "Test sessions use reset or delete instead of rollback" },
+        { error: "Test tournaments use reset or delete instead of rollback" },
         { status: 400 }
       );
     }
@@ -301,7 +301,7 @@ export async function POST(
     }
     if (message === "IS_TEST") {
       return NextResponse.json(
-        { error: "Test sessions use reset or delete instead of rollback" },
+        { error: "Test tournaments use reset or delete instead of rollback" },
         { status: 400 }
       );
     }

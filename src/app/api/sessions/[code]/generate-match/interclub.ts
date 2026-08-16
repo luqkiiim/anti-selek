@@ -79,7 +79,7 @@ function getInterclubClubIds(sessionData: SessionInterclubSource) {
   if (clubIds.length !== 2) {
     throw new GenerateMatchError(
       400,
-      "Club vs club sessions require exactly two accepted clubs."
+      "Club vs club tournaments require exactly two accepted clubs."
     );
   }
 
@@ -693,7 +693,7 @@ export function selectInterclubSingleCourtMatch({
 }) {
   const clubIds = getInterclubClubIds(sessionData);
   if (!clubIds) {
-    throw new GenerateMatchError(400, "Club vs club session is not ready.");
+    throw new GenerateMatchError(400, "Club vs club tournament is not ready.");
   }
 
   const initialSelection = findInterclubSingleCourtSelection({
@@ -782,7 +782,7 @@ export function selectInterclubReplacementMatch({
 
   const clubIds = getInterclubClubIds(sessionData);
   if (!clubIds) {
-    throw new GenerateMatchError(400, "Club vs club session is not ready.");
+    throw new GenerateMatchError(400, "Club vs club tournament is not ready.");
   }
 
   ensureInterclubSessionReady(sessionData);
@@ -843,7 +843,7 @@ export function selectInterclubBatchMatches({
 }) {
   const clubIds = getInterclubClubIds(sessionData);
   if (!clubIds) {
-    throw new GenerateMatchError(400, "Club vs club session is not ready.");
+    throw new GenerateMatchError(400, "Club vs club tournament is not ready.");
   }
 
   const context = buildInterclubSelectionContext({
@@ -855,7 +855,7 @@ export function selectInterclubBatchMatches({
   });
 
   if (!context) {
-    throw new GenerateMatchError(400, "Club vs club session is not ready.");
+    throw new GenerateMatchError(400, "Club vs club tournament is not ready.");
   }
 
   const result = findBestBatchSelectionV3(context.players, {

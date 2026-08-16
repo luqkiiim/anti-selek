@@ -73,7 +73,7 @@ function createHistorySessionBase() {
     type: SessionType.POINTS,
     mode: "MEXICANO",
     createdAt: new Date("2026-05-02T09:00:00.000Z"),
-    endedAt: new Date("2026-05-02T11:00:00.000Z"),
+    endedAt: new Date("2026-05-02T11:00:00.000Z") as Date | null,
     sessionClubs: [
       {
         clubId: "community-1",
@@ -188,7 +188,7 @@ describe("session history route correction availability", () => {
     expect(response.status).toBe(200);
     expect(body.canCorrectCompletedScores).toBe(false);
     expect(body.correctionBlockedReason).toBe(
-      "Newer completed matches exist outside this session, so exact ELO replay is blocked."
+      "Newer completed matches exist outside this tournament, so exact ELO replay is blocked."
     );
   });
 

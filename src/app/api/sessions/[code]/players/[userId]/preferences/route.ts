@@ -123,7 +123,10 @@ export async function PATCH(
       return invalidTargetResponse(request, "api:sessions:code:players:userId:preferences");
     }
     if (sessionData.status === SessionStatus.COMPLETED) {
-      return NextResponse.json({ error: "Session already completed" }, { status: 400 });
+      return NextResponse.json(
+        { error: "Tournament already completed" },
+        { status: 400 }
+      );
     }
 
     const operatorMembership = await getSessionOperatorMembership(prisma, {
@@ -176,7 +179,10 @@ export async function PATCH(
       if (!isInterclubSession(sessionData)) {
         if (representingClubId !== null && representingClubId !== "") {
           return NextResponse.json(
-            { error: "Representing club only applies to club vs club sessions" },
+            {
+              error:
+                "Representing club only applies to club vs club tournaments",
+            },
             { status: 400 }
           );
         }

@@ -17,18 +17,24 @@ import {
 } from "lucide-react";
 import { Avatar } from "@/components/ui/Avatar";
 import { getSessionTypeLabel } from "@/lib/sessionModeLabels";
+import { getSessionStatusLabel } from "@/lib/sessionStatusLabels";
 import type { ClubPagePulse, ClubPageSession } from "./clubTypes";
 
 interface ClubOverviewPulsePanelProps {
   clubId: string;
   clubPulse: ClubPagePulse | null;
   activeTournaments: ClubPageSession[];
+  memberCount?: number;
   currentUserId?: string | null;
   viewerIsQuickAccess?: boolean;
+  canManageClub?: boolean;
+  canAdminClub?: boolean;
   onJoinTournament: (code: string) => void;
   onOpenTournament: (code: string) => void;
   onOpenTournaments: () => void;
   onOpenPlayerProfile: (playerId: string) => void;
+  onHostTournament?: () => void;
+  onManagePlayers?: () => void;
 }
 
 type OverviewPlayerPair = ClubPagePulse["rivalries"][number]["players"];
@@ -287,12 +293,17 @@ export function ClubOverviewPulsePanel({
   clubId,
   clubPulse,
   activeTournaments,
+  memberCount,
   currentUserId,
   viewerIsQuickAccess = false,
+  canManageClub = false,
+  canAdminClub = false,
   onJoinTournament,
   onOpenTournament,
   onOpenTournaments,
   onOpenPlayerProfile,
+  onHostTournament,
+  onManagePlayers,
 }: ClubOverviewPulsePanelProps) {
   const metrics = clubPulse?.metrics ?? {
     members: 0,
@@ -415,7 +426,7 @@ export function ClubOverviewPulsePanel({
               <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm font-medium text-gray-500">
                 <span className="inline-flex items-center gap-1">
                   <span className="h-1.5 w-1.5 rounded-full bg-[var(--accent)]" />
-                  {tournament.status}
+                  {getSessionStatusLabel(tournament.status)}
                 </span>
                 <span>{tournament.players.length} players</span>
                 <span>{getSessionTypeLabel(tournament.type)}</span>
@@ -456,28 +467,90 @@ export function ClubOverviewPulsePanel({
     ]
   );
 
+  const currentTournamentSection = (
+    <section className="space-y-2">
+      {sessionCards.length > 0 ? (
+        <>
+          {sessionCards}
+          {activeTournaments.length > currentTournaments.length ? (
+            <button
+              type="button"
+              onClick={onOpenTournaments}
+              className="app-button-secondary w-full justify-center px-4 py-2 text-sm"
+            >
+              View all tournaments
+            </button>
+          ) : null}
+        </>
+      ) : (
+        <div className="rounded-xl border border-[var(--line)] bg-white px-4 py-4 text-sm font-medium text-gray-600">
+          No active tournament
+        </div>
+      )}
+    </section>
+  );
+
+  if (metrics.totalMatches === 0) {
+    const hasActiveTournament = activeTournaments.length > 0;
+    const needsPlayers = canAdminClub && (memberCount ?? metrics.members) < 2;
+    const title = hasActiveTournament
+      ? "Insights unlock after the first result"
+      : canManageClub
+        ? needsPlayers
+          ? "Build your first tournament"
+          : "Ready for your first tournament?"
+        : "No tournament activity yet";
+    const description = hasActiveTournament
+      ? "Once the first match is completed, form, ratings, partnerships, and recent results will appear here."
+      : canManageClub
+        ? needsPlayers
+          ? "Add club players now, or host immediately with guests."
+          : "Choose the roster and courts, then start the club's first tournament."
+        : viewerIsQuickAccess
+          ? "An organizer needs to run a tournament before club activity and insights appear."
+          : "Club activity and insights will appear after an organizer runs a tournament.";
+
+    return (
+      <div className="space-y-4 sm:space-y-5">
+        {currentTournamentSection}
+        <section className="rounded-2xl border border-[var(--line)] bg-white p-5 shadow-[0_14px_34px_rgba(23,32,31,0.06)] sm:p-6">
+          <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-[var(--accent-faint)] text-[var(--accent-strong)]">
+            <Trophy aria-hidden="true" size={22} />
+          </span>
+          <h2 className="mt-4 text-xl font-semibold text-gray-950">{title}</h2>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-gray-600">
+            {description}
+          </p>
+          {!hasActiveTournament && canManageClub ? (
+            <div className="mt-5 flex flex-wrap gap-2">
+              {needsPlayers && onManagePlayers ? (
+                <button
+                  type="button"
+                  onClick={onManagePlayers}
+                  className="app-button-secondary min-h-11 px-4 py-2 text-sm"
+                >
+                  Add players
+                </button>
+              ) : null}
+              {onHostTournament ? (
+                <button
+                  type="button"
+                  onClick={onHostTournament}
+                  className="app-button-primary min-h-11 px-4 py-2 text-sm"
+                >
+                  {needsPlayers ? "Host with guests" : "Host a tournament"}
+                </button>
+              ) : null}
+            </div>
+          ) : null}
+        </section>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4 sm:space-y-5">
-      <section className="space-y-2">
-        {sessionCards.length > 0 ? (
-          <>
-            {sessionCards}
-            {activeTournaments.length > currentTournaments.length ? (
-              <button
-                type="button"
-                onClick={onOpenTournaments}
-                className="app-button-secondary w-full justify-center px-4 py-2 text-sm"
-              >
-                View all sessions
-              </button>
-            ) : null}
-          </>
-        ) : (
-          <div className="rounded-xl border border-[var(--line)] bg-white px-4 py-4 text-sm font-medium text-gray-500">
-            No current tournament
-          </div>
-        )}
-      </section>
+      {currentTournamentSection}
 
       <section className="grid grid-cols-4 overflow-hidden rounded-2xl border border-[var(--line)] bg-white shadow-[0_14px_34px_rgba(23,32,31,0.06)]">
         <PulseMetric
@@ -492,7 +565,7 @@ export function ClubOverviewPulsePanel({
         />
         <PulseMetric
           icon={<CalendarDays aria-hidden="true" size={18} />}
-          label="Sessions"
+          label="Tournaments"
           value={metrics.totalSessions}
         />
         <PulseMetric
@@ -506,7 +579,7 @@ export function ClubOverviewPulsePanel({
         <section className="overflow-hidden rounded-2xl border border-[var(--line)] bg-white shadow-[0_14px_34px_rgba(23,32,31,0.06)]">
           <SectionHeader
             icon={<Newspaper aria-hidden="true" size={28} />}
-            title="Session news"
+            title="Tournament news"
             action={
               sessionNews.length > 0 ? (
                 <ViewAllButton onClick={() => setOpenModal("news")} />
@@ -525,7 +598,7 @@ export function ClubOverviewPulsePanel({
               ))}
             </div>
           ) : (
-            <EmptyPulseState>No session news yet</EmptyPulseState>
+            <EmptyPulseState>No tournament news yet</EmptyPulseState>
           )}
         </section>
       ) : null}
@@ -624,7 +697,7 @@ export function ClubOverviewPulsePanel({
       <section className="overflow-hidden rounded-2xl border border-[var(--line)] bg-white shadow-[0_14px_34px_rgba(23,32,31,0.06)]">
         <SectionHeader
           icon={<CalendarDays aria-hidden="true" size={28} />}
-          title="Latest session"
+          title="Latest tournament"
           action={
             latestStory ? (
               <button
@@ -675,7 +748,7 @@ export function ClubOverviewPulsePanel({
             </div>
           </div>
         ) : (
-          <EmptyPulseState>No completed session yet</EmptyPulseState>
+          <EmptyPulseState>No completed tournament yet</EmptyPulseState>
         )}
       </section>
 
@@ -828,7 +901,7 @@ export function ClubOverviewPulsePanel({
       </section>
 
       {openModal === "news" ? (
-        <OverviewModal title="Session news" onClose={() => setOpenModal(null)}>
+        <OverviewModal title="Tournament news" onClose={() => setOpenModal(null)}>
           {sessionNews.map((item) => (
             <NewsRow
               key={item.id}

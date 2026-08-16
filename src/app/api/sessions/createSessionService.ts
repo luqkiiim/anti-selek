@@ -65,7 +65,7 @@ function buildMemberSessionConfigs({
             rawGender as PlayerGender
           )
           ? (rawGender as PlayerGender)
-          : PlayerGender.MALE
+          : PlayerGender.UNSPECIFIED
         : [PlayerGender.MALE, PlayerGender.FEMALE, PlayerGender.UNSPECIFIED].includes(
               rawGender as PlayerGender
             )
@@ -133,7 +133,7 @@ function getGuestRepresentingClubId(
   }
 
   throw new SessionRouteError(
-    "Guests in club vs club sessions must represent a club",
+    "Guests in club vs club tournaments must represent a club",
     400
   );
 }
@@ -184,7 +184,7 @@ export async function createSessionForUser({
   }
   if (hostClub?.isTutorial && input.partnerClubId) {
     throw new SessionRouteError(
-      "Tutorial playground sessions cannot invite collab clubs",
+      "Tutorial playground tournaments cannot invite partner clubs",
       400
     );
   }
@@ -282,6 +282,20 @@ export async function createSessionForUser({
   });
 
   if (input.mode === SessionMode.MIXICANO) {
+    const invalidMember = memberSessionConfigs.find(
+      (player) =>
+        ![PlayerGender.MALE, PlayerGender.FEMALE].includes(player.gender)
+    );
+    if (invalidMember) {
+      const playerName =
+        selectedUsers.find((user) => user.id === invalidMember.userId)?.name ??
+        "a selected player";
+      throw new SessionRouteError(
+        `${mixedModeLabel} requires player gender for ${playerName}`,
+        400
+      );
+    }
+
     const invalidGuest = input.normalizedGuests.find(
       (guest) => ![PlayerGender.MALE, PlayerGender.FEMALE].includes(guest.gender)
     );

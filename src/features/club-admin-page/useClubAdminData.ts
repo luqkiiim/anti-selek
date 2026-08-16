@@ -7,6 +7,7 @@ import type {
   ClubAdminOfflineIdentityLink,
   ClubAdminPlayer,
 } from "@/components/club-admin/clubAdminTypes";
+import { getCurrentAppPath, withCallbackUrl } from "@/lib/authCallback";
 import { fetchClubAdminSnapshot } from "./clubAdminApi";
 
 interface ClubAdminRouter {
@@ -52,7 +53,9 @@ export function useClubAdminData({
 
   useEffect(() => {
     if (status === "unauthenticated") {
-      router.push("/signin");
+      router.replace(
+        withCallbackUrl("/signin", getCurrentAppPath(window.location))
+      );
       return;
     }
 

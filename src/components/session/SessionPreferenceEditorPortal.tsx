@@ -12,6 +12,7 @@ import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import { getMixedSideOverrideOptionForGender } from "@/lib/mixedSide";
 import { getSessionPoolOptions } from "@/lib/sessionPools";
+import { useDialogFocusManagement } from "@/components/ui/useDialogFocusManagement";
 import { MixedSide, PlayerGender, SessionPool } from "@/types/enums";
 import type { Player, PreferenceEditorState } from "./sessionTypes";
 
@@ -133,6 +134,12 @@ export function SessionPreferenceEditorPortal({
         ].join(":")
       : null;
 
+  useDialogFocusManagement({
+    open: canRender,
+    containerRef: panelRef,
+    onClose,
+  });
+
   useEffect(() => {
     if (!canRender) {
       return;
@@ -149,21 +156,13 @@ export function SessionPreferenceEditorPortal({
       }
     };
 
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        onClose();
-      }
-    };
-
     const attachListenerTimeout = window.setTimeout(() => {
       document.addEventListener("pointerdown", handlePointerDown);
-      document.addEventListener("keydown", handleKeyDown);
     }, 0);
 
     return () => {
       window.clearTimeout(attachListenerTimeout);
       document.removeEventListener("pointerdown", handlePointerDown);
-      document.removeEventListener("keydown", handleKeyDown);
     };
   }, [canRender, isSheet, onClose]);
 
@@ -244,8 +243,7 @@ export function SessionPreferenceEditorPortal({
   });
   const hasSkipNext = Boolean(activePreferencePlayer.skipNextMatchAt);
   const actionButtonClassName = cx(
-    "w-full px-3 text-sm",
-    isSheet ? "min-h-11 py-2.5" : "py-2.5"
+    "min-h-11 w-full px-3 py-2.5 text-sm"
   );
 
   const preferenceControls = (
@@ -386,7 +384,7 @@ export function SessionPreferenceEditorPortal({
         />
         <span>
           <span className="block font-semibold text-gray-900">
-            More rest this session
+            More rest this tournament
           </span>
           <span className="mt-0.5 block">
             Prefer a lighter rotation for this player.
@@ -508,7 +506,7 @@ export function SessionPreferenceEditorPortal({
               </button>
             </div>
 
-            <div className="min-h-0 overflow-y-auto overscroll-y-contain px-4 py-4 pb-[calc(1rem+env(safe-area-inset-bottom))] [touch-action:pan-y]">
+            <div className="min-h-0 overflow-y-auto overscroll-y-contain px-4 py-4 pb-[calc(1rem+env(safe-area-inset-bottom))] [touch-action:pan-y_pinch-zoom]">
               <div className="space-y-5">
                 <ActionSection title="Preferences">
                   {preferenceControls}
@@ -580,7 +578,7 @@ export function SessionPreferenceEditorPortal({
         <button
           type="button"
           onClick={onClose}
-          className="flex h-9 w-full items-center justify-center rounded-lg text-sm font-semibold text-gray-500 transition hover:text-[var(--accent-strong)]"
+          className="flex h-11 w-full items-center justify-center rounded-lg text-sm font-semibold text-gray-600 transition hover:text-[var(--accent-strong)]"
         >
           Close
         </button>

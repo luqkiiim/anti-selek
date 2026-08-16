@@ -88,7 +88,7 @@ export async function GET(
     }
     if (acceptedClubIds.length < 2) {
       return NextResponse.json(
-        { error: "Session roster requires accepted collab clubs" },
+        { error: "Tournament roster requires accepted partner clubs" },
         { status: 400 }
       );
     }

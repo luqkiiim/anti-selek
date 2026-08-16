@@ -19,6 +19,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { getErrorMessage, safeJson } from "@/lib/http";
+import { getCurrentAppPath, withCallbackUrl } from "@/lib/authCallback";
 import { FlashMessage } from "@/components/ui/chrome";
 import { MobileBottomTabs } from "@/components/ui/MobileBottomTabs";
 import { InterclubScoreboard } from "@/components/session/InterclubScoreboard";
@@ -33,6 +34,7 @@ import { SessionPreferenceEditorPortal } from "@/components/session/SessionPrefe
 import { SessionGuestRenameModal } from "@/components/session/SessionGuestRenameModal";
 import { SessionRosterModal } from "@/components/session/SessionRosterModal";
 import { SessionSettingsModal } from "@/components/session/SessionSettingsModal";
+import { syncSessionPagerAccessibility } from "@/components/session/sessionPagerAccessibility";
 import { AdminOnboardingChecklist } from "@/components/onboarding/AdminOnboardingChecklist";
 import { useAdminOnboardingProgress } from "@/components/onboarding/useAdminOnboardingProgress";
 import type { CurrentUser } from "@/components/session/sessionTypes";
@@ -61,7 +63,7 @@ const LIVE_MOBILE_SECTIONS: Array<{
   label: string;
   icon: LucideIcon;
 }> = [
-  { id: "session", label: "Session", icon: ClipboardList },
+  { id: "session", label: "Overview", icon: ClipboardList },
   { id: "courts", label: "Courts", icon: Grid3X3 },
   { id: "standings", label: "Standings", icon: Trophy },
 ];
@@ -71,7 +73,7 @@ const COMPLETED_MOBILE_SECTIONS: Array<{
   label: string;
   icon: LucideIcon;
 }> = [
-  { id: "session", label: "Session", icon: ClipboardList },
+  { id: "session", label: "Overview", icon: ClipboardList },
   { id: "results", label: "Results", icon: Medal },
 ];
 
@@ -249,7 +251,7 @@ export default function SessionPage() {
 
   useEffect(() => {
     if (status === "unauthenticated") {
-      router.push("/signin");
+      router.replace(withCallbackUrl("/signin", getCurrentAppPath(window.location)));
     }
   }, [status, router]);
 
@@ -268,7 +270,7 @@ export default function SessionPage() {
         scheduleSessionRefresh();
       } else {
         const data = await safeJson<SessionSnapshotResponse>(res);
-        setError(getErrorMessage(data, "Failed to start session"));
+        setError(getErrorMessage(data, "Failed to start tournament"));
       }
     } catch (err) {
       console.error(err);
@@ -302,11 +304,11 @@ export default function SessionPage() {
         scheduleSessionRefresh();
       } else {
         const data = await safeJson<SessionSnapshotResponse>(res);
-        setError(getErrorMessage(data, "Failed to end session"));
+        setError(getErrorMessage(data, "Failed to end tournament"));
       }
     } catch (err) {
       console.error(err);
-      setError("Failed to end session");
+      setError("Failed to end tournament");
     } finally {
       setEndingSession(false);
     }
@@ -331,7 +333,7 @@ export default function SessionPage() {
       const res = await fetch(`/api/sessions/${code}/reset`, { method: "POST" });
       const data = await safeJson<SessionSnapshotResponse>(res);
       if (!res.ok) {
-        setError(getErrorMessage(data, "Failed to reset test session"));
+        setError(getErrorMessage(data, "Failed to reset test tournament"));
         return;
       }
 
@@ -340,7 +342,7 @@ export default function SessionPage() {
       scheduleSessionRefresh();
     } catch (err) {
       console.error(err);
-      setError("Failed to reset test session");
+      setError("Failed to reset test tournament");
     } finally {
       setResettingTestSession(false);
     }
@@ -379,12 +381,12 @@ export default function SessionPage() {
       });
       const data = await safeJson<SessionCodeResponse>(res);
       if (!res.ok) {
-        setError(getErrorMessage(data, "Failed to create real session"));
+        setError(getErrorMessage(data, "Failed to create real tournament"));
         return;
       }
 
       if (typeof data.code !== "string") {
-        setError("Failed to create real session");
+        setError("Failed to create real tournament");
         return;
       }
 
@@ -392,7 +394,7 @@ export default function SessionPage() {
       router.push(`/session/${data.code}`);
     } catch (err) {
       console.error(err);
-      setError("Failed to create real session");
+      setError("Failed to create real tournament");
     } finally {
       setCreatingRealSession(false);
     }
@@ -419,7 +421,7 @@ export default function SessionPage() {
       });
       const data = await safeJson<SessionCodeResponse>(res);
       if (!res.ok) {
-        setError(getErrorMessage(data, "Failed to delete test session"));
+        setError(getErrorMessage(data, "Failed to delete test tournament"));
         return;
       }
 
@@ -429,7 +431,7 @@ export default function SessionPage() {
       );
     } catch (err) {
       console.error(err);
-      setError("Failed to delete test session");
+      setError("Failed to delete test tournament");
     } finally {
       setDeletingTestSession(false);
     }
@@ -624,6 +626,38 @@ export default function SessionPage() {
   )
     ? mobileSection
     : mobileSections[0]?.id ?? "session";
+
+  useEffect(() => {
+    const pager = mobilePagerRef.current;
+    if (!pager || typeof window.matchMedia !== "function") {
+      return;
+    }
+
+    const wideLayout = window.matchMedia("(min-width: 80rem)");
+    const syncPanelAccessibility = () => {
+      const activeTab = document.querySelector<HTMLElement>(
+        'nav[aria-label="Tournament navigation"] button[aria-current="page"]'
+      );
+      syncSessionPagerAccessibility({
+        pager,
+        activeSection: activeMobileSection,
+        isWideLayout: wideLayout.matches,
+        focusFallback: activeTab,
+      });
+    };
+
+    syncPanelAccessibility();
+    wideLayout.addEventListener("change", syncPanelAccessibility);
+
+    return () => {
+      wideLayout.removeEventListener("change", syncPanelAccessibility);
+      syncSessionPagerAccessibility({
+        pager,
+        activeSection: activeMobileSection,
+        isWideLayout: true,
+      });
+    };
+  }, [activeMobileSection]);
   const hasCourtLabelChanges = useMemo(() => {
     if (!sessionData) {
       return false;
@@ -764,7 +798,7 @@ export default function SessionPage() {
       scheduleSessionRefresh();
     } catch (err) {
       console.error(err);
-      setError("Failed to update session settings");
+      setError("Failed to update tournament settings");
     } finally {
       setSavingSettings(false);
     }
@@ -1188,7 +1222,7 @@ export default function SessionPage() {
       <div className="app-page flex items-center justify-center px-6">
         <div className="app-panel flex flex-col items-center gap-4 px-8 py-8">
           <div className="h-12 w-12 animate-spin rounded-full border-4 border-blue-600 border-t-transparent"></div>
-          <p className="app-eyebrow">Loading session</p>
+          <p className="app-eyebrow">Loading tournament</p>
         </div>
       </div>
     );
@@ -1198,10 +1232,10 @@ export default function SessionPage() {
     return (
       <div className="app-page flex items-center justify-center px-6">
         <div className="app-panel w-full max-w-lg px-6 py-8 text-center">
-          <p className="app-eyebrow">Unable to load session</p>
+          <p className="app-eyebrow">Unable to load tournament</p>
           <p className="mt-3 text-sm text-gray-600">
             {initialLoadError ??
-              "The session could not be loaded right now. Try again."}
+              "The tournament could not be loaded right now. Try again."}
           </p>
           <div className="mt-6 flex flex-col gap-2 sm:flex-row sm:justify-center">
             <button
@@ -1273,7 +1307,10 @@ export default function SessionPage() {
           className="app-swipe-track -mx-1 overflow-x-auto overscroll-x-none xl:mx-0 xl:overflow-visible"
         >
           <div className="flex snap-x snap-mandatory xl:block xl:space-y-6">
-            <section className="w-full shrink-0 snap-center pb-24 xl:w-auto xl:shrink xl:snap-none xl:pb-0">
+            <section
+              data-session-pager-section="session"
+              className="w-full shrink-0 snap-center pb-24 xl:w-auto xl:shrink xl:snap-none xl:pb-0"
+            >
               <SessionOverviewPanel
                 sessionTypeLabel={sessionView.sessionTypeLabel}
                 sessionModeLabel={sessionView.sessionModeLabel}
@@ -1300,7 +1337,10 @@ export default function SessionPage() {
             </section>
 
             {!sessionView.isCompletedSession ? (
-              <section className="w-full shrink-0 snap-center pb-24 xl:w-auto xl:shrink xl:snap-none xl:pb-0">
+              <section
+                data-session-pager-section="courts"
+                className="w-full shrink-0 snap-center pb-24 xl:w-auto xl:shrink xl:snap-none xl:pb-0"
+              >
                 <LiveCourtsPanel
                   sessionStatus={sessionData.status}
                   courts={sessionData.courts}
@@ -1380,7 +1420,12 @@ export default function SessionPage() {
               </section>
             ) : null}
 
-            <section className="w-full shrink-0 snap-center pb-24 xl:w-auto xl:shrink xl:snap-none xl:pb-0">
+            <section
+              data-session-pager-section={
+                sessionView.isCompletedSession ? "results" : "standings"
+              }
+              className="w-full shrink-0 snap-center pb-24 xl:w-auto xl:shrink xl:snap-none xl:pb-0"
+            >
               <div className="space-y-6">
                 {sessionView.interclubScoreboard ? (
                   <InterclubScoreboard
@@ -1430,7 +1475,7 @@ export default function SessionPage() {
         items={mobileSections}
         activeId={activeMobileSection}
         onSelect={(sectionId) => updateMobileSection(sectionId)}
-        ariaLabel="Session navigation"
+        ariaLabel="Tournament navigation"
         visibilityClassName="xl:hidden"
       />
 
@@ -1537,12 +1582,12 @@ export default function SessionPage() {
 
       {showEndSessionConfirm ? (
         <SessionActionConfirmModal
-          title="End session?"
-          subtitle="Closes the session and locks standings."
+          title="End tournament?"
+          subtitle="Closes the tournament and locks standings."
           details={
             <div className="app-panel-muted space-y-2 p-4">
               <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">
-                Session summary
+                Tournament summary
               </p>
               <p className="text-sm font-semibold text-gray-900">
                 {sessionView.activeMatchesCount} active courts
@@ -1553,9 +1598,9 @@ export default function SessionPage() {
               </p>
             </div>
           }
-          confirmLabel="Confirm End Session"
+          confirmLabel="Confirm End Tournament"
           confirmTutorialTarget="admin-onboarding-end-session"
-          cancelLabel="Keep Session Live"
+          cancelLabel="Keep Tournament Live"
           isSubmitting={endingSession}
           onClose={closeEndSessionConfirm}
           onConfirm={() => void endSessionWithOnboardingRefresh()}
@@ -1564,12 +1609,12 @@ export default function SessionPage() {
 
       {showResetTestConfirm ? (
         <SessionActionConfirmModal
-          title="Reset test session?"
+          title="Reset test tournament?"
           subtitle="Clears results and keeps setup."
           details={
             <div className="app-panel-muted space-y-2 p-4">
               <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">
-                Test session
+                Test tournament
               </p>
               <p className="text-sm font-semibold text-gray-900">
                 {sessionData.name}
@@ -1580,7 +1625,7 @@ export default function SessionPage() {
             </div>
           }
           confirmLabel="Confirm Reset"
-          cancelLabel="Keep Test Session"
+          cancelLabel="Keep Test Tournament"
           isSubmitting={resettingTestSession}
           onClose={closeResetTestConfirm}
           onConfirm={() => void resetTestSession()}
@@ -1589,7 +1634,7 @@ export default function SessionPage() {
 
       {showCreateRealSessionConfirm ? (
         <SessionActionConfirmModal
-          title="Create real session?"
+          title="Create real tournament?"
           subtitle="Start clean or include test results."
           details={
             <div className="space-y-3">
@@ -1603,7 +1648,7 @@ export default function SessionPage() {
                 <p className="text-sm text-gray-600">
                   {completedScoredTestMatchesCount} completed scored{" "}
                   {completedScoredTestMatchesCount === 1 ? "match" : "matches"}{" "}
-                  found in this test session.
+                  found in this test tournament.
                 </p>
               </div>
 
@@ -1664,7 +1709,7 @@ export default function SessionPage() {
               </div>
 
               <p className="text-xs text-gray-500">
-                Active, pending, and unscored matches stay in the test session.
+                Active, pending, and unscored matches stay in the test tournament.
               </p>
             </div>
           }
@@ -1673,7 +1718,7 @@ export default function SessionPage() {
               ? "Create With Results"
               : "Create Setup Copy"
           }
-          cancelLabel="Stay In Test Session"
+          cancelLabel="Stay In Test Tournament"
           isSubmitting={creatingRealSession}
           onClose={closeCreateRealSessionConfirm}
           onConfirm={() => void createRealSessionFromTest()}
@@ -1682,12 +1727,12 @@ export default function SessionPage() {
 
       {showDeleteTestConfirm ? (
         <SessionActionConfirmModal
-          title="Delete test session?"
-          subtitle="Permanently removes this test session."
+          title="Delete test tournament?"
+          subtitle="Permanently removes this test tournament."
           details={
             <div className="app-panel-muted space-y-2 p-4">
               <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">
-                Test session
+                Test tournament
               </p>
               <p className="text-sm font-semibold text-gray-900">
                 {sessionData.name}
@@ -1697,8 +1742,8 @@ export default function SessionPage() {
               </p>
             </div>
           }
-          confirmLabel="Delete Test Session"
-          cancelLabel="Keep Test Session"
+          confirmLabel="Delete Test Tournament"
+          cancelLabel="Keep Test Tournament"
           isSubmitting={deletingTestSession}
           onClose={closeDeleteTestConfirm}
           onConfirm={() => void deleteTestSession()}
@@ -1739,7 +1784,7 @@ export default function SessionPage() {
       {removePlayerDraft ? (
         <SessionActionConfirmModal
           title="Remove player?"
-          subtitle="Removes the player from this session."
+          subtitle="Removes the player from this tournament."
           details={
             <div className="app-panel-muted space-y-2 p-4">
               <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">
@@ -1836,6 +1881,7 @@ export default function SessionPage() {
         manualMatchPlayerOptions={sessionView.manualMatchPlayerOptions}
         selectedManualPlayerIds={sessionView.selectedManualPlayerIds}
         creatingManualMatch={courtActions.creatingManualMatch}
+        error={courtActions.manualMatchError}
         poolsEnabled={sessionData.poolsEnabled}
         poolAName={sessionData.poolAName}
         poolBName={sessionData.poolBName}

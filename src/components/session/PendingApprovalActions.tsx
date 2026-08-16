@@ -29,7 +29,7 @@ export function PendingApprovalActions({
               onClick={onApprove}
               className="app-button-primary min-h-12 w-full py-3"
             >
-              Confirm Results
+              Approve score
             </button>
           ) : null}
           {isAdmin ? (
@@ -39,13 +39,17 @@ export function PendingApprovalActions({
               disabled={isReopening}
               className="app-button-secondary min-h-12 w-full py-3"
             >
-              {isReopening ? "Opening..." : "Back To Edit"}
+              {isReopening ? "Opening..." : "Edit score"}
             </button>
           ) : null}
         </div>
       ) : null}
-      <div className="rounded-lg border border-orange-100 bg-orange-50 py-2 text-center text-sm font-semibold text-orange-700">
-        Awaiting Confirmation
+      <div
+        role="status"
+        aria-live="polite"
+        className="rounded-lg border border-orange-100 bg-orange-50 py-2 text-center text-sm font-semibold text-orange-700"
+      >
+        Waiting for opponent or admin approval
       </div>
     </div>
   );

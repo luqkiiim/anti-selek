@@ -340,7 +340,9 @@ describe("session roster route", () => {
     const body = await response.json();
 
     expect(response.status).toBe(400);
-    expect(body.error).toBe("Session roster requires accepted collab clubs");
+    expect(body.error).toBe(
+      "Tournament roster requires accepted partner clubs"
+    );
   });
 
   it("rejects non-operators", async () => {

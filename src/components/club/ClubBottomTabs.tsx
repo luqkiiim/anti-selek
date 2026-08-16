@@ -10,16 +10,24 @@ import {
 } from "lucide-react";
 import { MobileBottomTabs } from "@/components/ui/MobileBottomTabs";
 import type { ClubPageSection } from "./clubTypes";
+import type { ClubSectionDescriptor } from "./clubNavigation";
 
 export type ClubBottomTabKey = ClubPageSection;
 
 interface ClubBottomTabsProps {
   activeTab: ClubBottomTabKey;
-  canManageClub: boolean;
   clubId: string;
-  currentUserId?: string | null;
+  sections: readonly ClubSectionDescriptor[];
   onSelect?: (tab: ClubBottomTabKey) => void;
 }
+
+const SECTION_ICONS = {
+  overview: Home,
+  tournaments: Trophy,
+  host: SlidersHorizontal,
+  leaderboard: Medal,
+  profile: User,
+} satisfies Record<ClubBottomTabKey, typeof Home>;
 
 function getClubTabHref(clubId: string, tab: ClubBottomTabKey) {
   return `/club/${clubId}?tab=${tab}`;
@@ -27,9 +35,8 @@ function getClubTabHref(clubId: string, tab: ClubBottomTabKey) {
 
 export function ClubBottomTabs({
   activeTab,
-  canManageClub,
   clubId,
-  currentUserId,
+  sections,
   onSelect,
 }: ClubBottomTabsProps) {
   const router = useRouter();
@@ -38,43 +45,17 @@ export function ClubBottomTabs({
     return null;
   }
 
-  const items = [
-    {
-      id: "overview" as const,
-      label: "Overview",
-      icon: Home,
-    },
-    {
-      id: "tournaments" as const,
-      label: "Tournaments",
-      icon: Trophy,
-    },
-    ...(canManageClub
-      ? [
-          {
-            id: "host" as const,
-            label: "Host setup",
-            shortLabel: "Host",
-            icon: SlidersHorizontal,
-          },
-        ]
-      : []),
-    {
-      id: "leaderboard" as const,
-      label: "Leaderboard",
-      icon: Medal,
-    },
-    ...(currentUserId
-      ? [
-          {
-            id: "profile" as const,
-            label: "Player profile",
-            shortLabel: "Profile",
-            icon: User,
-          },
-        ]
-      : []),
-  ];
+  const items = sections.map((section) => ({
+    id: section.key,
+    label:
+      section.key === "host"
+        ? "Host setup"
+        : section.key === "profile"
+          ? "Player profile"
+          : section.label,
+    shortLabel: section.shortLabel,
+    icon: SECTION_ICONS[section.key],
+  }));
 
   const handleSelect = (tab: ClubBottomTabKey) => {
     if (onSelect) {

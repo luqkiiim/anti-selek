@@ -47,7 +47,7 @@ describe("session share image client helpers", () => {
   it("surfaces server error copy from JSON responses", async () => {
     const fetchImpl = vi.fn().mockResolvedValue(
       Response.json(
-        { error: "Final standings are available after the session ends." },
+        { error: "Final standings are available after the tournament ends." },
         { status: 400 }
       )
     );
@@ -57,7 +57,9 @@ describe("session share image client helpers", () => {
         code: "ABC123",
         fetchImpl,
       })
-    ).rejects.toThrow("Final standings are available after the session ends.");
+    ).rejects.toThrow(
+      "Final standings are available after the tournament ends."
+    );
   });
 
   it("prefers native file share when supported", async () => {

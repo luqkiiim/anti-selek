@@ -43,6 +43,57 @@ describe("createSessionForUser", () => {
     vi.clearAllMocks();
   });
 
+  it("rejects mixed tournaments when a selected member has no explicit gender", async () => {
+    const input = parseCreateSessionRequest({
+      name: "Mixed Friday",
+      clubId: "community-1",
+      type: SessionType.POINTS,
+      mode: SessionMode.MIXICANO,
+      courtCount: 1,
+      playerIds: ["player-2", "player-3"],
+    });
+
+    vi.mocked(prisma.clubMember.findUnique).mockResolvedValue({
+      clubId: "community-1",
+      userId: "host-1",
+      role: "ADMIN",
+    } as never);
+    vi.mocked(prisma.club.findUnique).mockResolvedValue({
+      isTutorial: false,
+      tutorialOwnerId: null,
+    } as never);
+    vi.mocked(prisma.clubMember.findMany).mockResolvedValue([
+      { userId: "player-2", needsMoreRest: false },
+      { userId: "player-3", needsMoreRest: false },
+    ] as never);
+    vi.mocked(prisma.user.findMany).mockResolvedValue([
+      {
+        id: "player-2",
+        name: "Player Two",
+        gender: "UNSPECIFIED",
+        partnerPreference: "OPEN",
+        mixedSideOverride: null,
+      },
+      {
+        id: "player-3",
+        name: "Player Three",
+        gender: "FEMALE",
+        partnerPreference: "OPEN",
+        mixedSideOverride: null,
+      },
+    ] as never);
+    vi.mocked(prisma.offlineIdentityMember.findMany).mockResolvedValue([] as never);
+
+    await expect(
+      createSessionForUser({
+        requesterId: "host-1",
+        requesterIsAdmin: false,
+        input,
+      })
+    ).rejects.toThrow("Mixed requires player gender for Player Two");
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
   it("allows staff to host without auto-adding the requester to the tournament player list", async () => {
     const input = parseCreateSessionRequest({
       name: "Friday Night",

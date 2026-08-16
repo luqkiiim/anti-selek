@@ -30,7 +30,7 @@ export function ClubDangerZonePanel({
         </h3>
         <span>
           {isTutorial
-            ? "Reset restores the original practice players, live session, and tutorial progress."
+            ? "Reset restores the original practice players, live tournament, and tutorial progress."
             : "Reset clears tournament history and ratings. Delete removes the whole club permanently."}
         </span>
       </div>
@@ -42,7 +42,7 @@ export function ClubDangerZonePanel({
           </p>
           <span>
             {isTutorial
-              ? "Recreates the 13 practice players, the ongoing two-court session, and clears tutorial progress."
+              ? "Recreates the 13 practice players, the ongoing two-court tournament, and clears tutorial progress."
               : "Deletes all tournaments in this club and returns member ratings to 1000."}
           </span>
           <button

@@ -209,7 +209,7 @@ export function LiveCourtCard({
   };
 
   const liveActionClass =
-    "inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-gray-700 transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-50 md:px-3";
+    "inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-gray-700 transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-50 md:px-3";
   const leftAction = canManageLiveCourt ? (
     <button
       type="button"
@@ -231,7 +231,7 @@ export function LiveCourtCard({
         onClick={handleCreateMenuToggle}
         disabled={createActionDisabled}
         aria-expanded={createMenuOpen}
-        className="inline-flex min-h-9 items-center gap-1.5 rounded-lg bg-gray-900 px-2.5 py-1.5 text-xs font-semibold text-white transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-50 md:px-3"
+        className="inline-flex min-h-11 items-center gap-1.5 rounded-lg bg-gray-900 px-2.5 py-1.5 text-xs font-semibold text-white transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-50 md:px-3"
         data-tutorial-target="admin-onboarding-score-input"
       >
         <Plus aria-hidden="true" size={14} />
@@ -248,7 +248,7 @@ export function LiveCourtCard({
                 type="button"
                 onClick={() => handleCreateOption(option)}
                 disabled={option.disabled || createActionDisabled}
-                className={`flex w-full flex-col rounded-lg border px-3 py-2 text-left transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-60 ${
+                className={`flex min-h-11 w-full flex-col justify-center rounded-lg border px-3 py-2 text-left transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-60 ${
                   option.key === "MANUAL"
                     ? "border-slate-200 bg-slate-50 text-slate-800"
                     : option.key === "WOMENS"
@@ -278,7 +278,7 @@ export function LiveCourtCard({
       type="button"
       onClick={() => onUndoMatchSelection(court.id)}
       disabled={undoingCourtId === court.id || courtPlayerActionActive}
-      className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-1.5 text-xs font-semibold text-rose-700 transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-50 md:px-3"
+      className="inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-1.5 text-xs font-semibold text-rose-700 transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-50 md:px-3"
       title="Put selected players back in pool"
     >
       <Undo2 aria-hidden="true" size={14} />

@@ -177,7 +177,7 @@ export function getMatchmakingStyleLabel(style: SessionMatchmakingStyle | string
 export function getBalanceMetricLabel(metric: SessionBalanceMetric | string) {
   switch (metric) {
     case SessionBalanceMetric.SESSION_POINTS:
-      return "Session points";
+      return "Tournament points";
     case SessionBalanceMetric.RATING:
       return "Rating";
     default:

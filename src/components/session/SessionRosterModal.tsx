@@ -123,12 +123,14 @@ export function SessionRosterModal({
         >
           <input
             type="text"
+            aria-label="Guest name"
             placeholder="Guest name"
             value={guestName}
             onChange={(event) => onGuestNameChange(event.target.value)}
             className="field px-3 py-2.5 text-sm"
           />
           <select
+            aria-label="Guest starting rating"
             value={guestInitialElo}
             onChange={(event) =>
               onGuestInitialEloChange(parseInt(event.target.value, 10))
@@ -143,6 +145,7 @@ export function SessionRosterModal({
           </select>
           {poolsEnabled ? (
             <select
+              aria-label="Guest pool"
               value={rosterPool}
               onChange={(event) =>
                 onRosterPoolChange(event.target.value as SessionPool)
@@ -172,6 +175,7 @@ export function SessionRosterModal({
           {isMixicano ? (
             <>
               <select
+                aria-label="Guest gender"
                 value={guestGender}
                 onChange={(event) =>
                   onGuestGenderChange(event.target.value as PlayerGender)
@@ -182,6 +186,7 @@ export function SessionRosterModal({
                 <option value={PlayerGender.FEMALE}>Female</option>
               </select>
               <select
+                aria-label="Guest mixed doubles side"
                 value={guestMixedSideOverride ?? ""}
                 onChange={(event) =>
                   onGuestMixedSideOverrideChange(
@@ -231,6 +236,7 @@ export function SessionRosterModal({
       toolbar={
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
           <SearchField
+            ariaLabel="Search available club players"
             value={rosterSearch}
             onChange={onRosterSearchChange}
             placeholder="Search players..."
@@ -238,6 +244,7 @@ export function SessionRosterModal({
           />
           {poolsEnabled ? (
             <select
+              aria-label="Pool for added players"
               value={rosterPool}
               onChange={(event) =>
                 onRosterPoolChange(event.target.value as SessionPool)

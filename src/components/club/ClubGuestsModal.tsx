@@ -91,6 +91,7 @@ export function ClubGuestsModal({
           >
             <input
               type="text"
+              aria-label="Guest name"
               value={guestNameInput}
               onChange={(event) => onGuestNameChange(event.target.value)}
               onKeyDown={(event) => {
@@ -103,6 +104,7 @@ export function ClubGuestsModal({
               className="field px-3 py-2.5 text-sm"
             />
             <select
+              aria-label="Guest gender"
               value={guestGenderInput}
               onChange={(event) =>
                 onGuestGenderChange(event.target.value as PlayerGender)
@@ -114,6 +116,7 @@ export function ClubGuestsModal({
             </select>
             {poolsEnabled ? (
               <select
+                aria-label="Guest pool"
                 value={guestPoolInput}
                 onChange={(event) =>
                   onGuestPoolChange(event.target.value as SessionPool)
@@ -142,6 +145,7 @@ export function ClubGuestsModal({
             ) : null}
             {mixedSideOption ? (
               <select
+                aria-label="Guest mixed doubles side"
                 value={guestMixedSideOverrideInput ?? ""}
                 onChange={(event) =>
                   onGuestMixedSideOverrideChange(

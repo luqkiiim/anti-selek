@@ -90,8 +90,8 @@ function getPlayerActionDialogCopy(action: {
       title: `Change ${action.player.name} to ${targetRole}?`,
       subtitle:
         action.role === ClubRole.STAFF
-          ? "They will keep live session controls, but lose club admin access."
-          : "They will lose club admin access and live session operator controls.",
+          ? "They will keep live tournament controls, but lose club admin access."
+          : "They will lose club admin access and live tournament operator controls.",
       confirmLabel:
         action.role === ClubRole.STAFF
           ? "Change to Staff"
@@ -144,7 +144,7 @@ function getClubActionDialogCopy(
       return {
         title: "Reset playground?",
         subtitle:
-          "This restores the practice players, ongoing session, and tutorial progress.",
+          "This restores the practice players, ongoing tournament, and tutorial progress.",
         confirmLabel: "Reset Playground",
         confirmationKeyword: "RESET",
         details: (

@@ -64,7 +64,7 @@ export async function POST(
 
     if (!targetSession.isTest) {
       return NextResponse.json(
-        { error: "Only test sessions can be reset" },
+        { error: "Only test tournaments can be reset" },
         { status: 400 }
       );
     }

@@ -10,3 +10,10 @@ export interface DashboardClub {
   membersCount: number;
   sessionsCount: number;
 }
+
+export type ClubFormField = "clubName" | "password";
+
+export interface ClubFormError {
+  error: string;
+  field?: ClubFormField;
+}

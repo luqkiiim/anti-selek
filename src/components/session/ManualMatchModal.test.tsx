@@ -13,6 +13,9 @@ import {
 import { ManualMatchModal } from "./ManualMatchModal";
 
 vi.mock("@/components/ui/chrome", () => ({
+  FlashMessage: ({ children }: { children: ReactNode }) => (
+    <div role="alert">{children}</div>
+  ),
   ModalFrame: ({
     title,
     subtitle,
@@ -60,9 +63,11 @@ function createPlayer(userId: string, name: string, pool = SessionPool.A): Playe
 function renderModal({
   manualMatchForm,
   players,
+  error,
 }: {
   manualMatchForm: ManualMatchFormState;
   players: Player[];
+  error?: string;
 }) {
   return renderToStaticMarkup(
     <ManualMatchModal
@@ -74,6 +79,7 @@ function renderModal({
         new Set(Object.values(manualMatchForm).filter((value) => value.length > 0))
       }
       creatingManualMatch={false}
+      error={error}
       poolsEnabled={false}
       onClose={vi.fn()}
       onTogglePlayer={vi.fn()}
@@ -167,5 +173,29 @@ describe("ManualMatchModal", () => {
     expect(markup).toContain("Skipping next");
     expect(markup).toContain("Manual override");
     expect(markup).toContain("Alice is marked to skip next");
+  });
+
+  it("requires exactly four selections and keeps errors inside the dialog", () => {
+    const markup = renderModal({
+      manualMatchForm: {
+        team1User1Id: "u1",
+        team1User2Id: "u2",
+        team2User1Id: "",
+        team2User2Id: "",
+      },
+      players: [
+        createPlayer("u1", "Alice"),
+        createPlayer("u2", "Bianca"),
+        createPlayer("u3", "Cara"),
+        createPlayer("u4", "Dinesh"),
+      ],
+      error: "Court is no longer available",
+    });
+
+    expect(markup).toContain("Select 2 more players.");
+    expect(markup).toContain('role="alert"');
+    expect(markup).toContain("Court is no longer available");
+    expect(markup).toMatch(/<button[^>]*disabled=""[^>]*>Create Match<\/button>/);
+    expect(markup.match(/aria-pressed="true"/g)).toHaveLength(2);
   });
 });

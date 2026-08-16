@@ -151,6 +151,7 @@ test.describe("tutorial playground mobile walkthrough", () => {
     page,
   }) => {
     await signInAsAdmin(page);
+    await resetPlayground(page);
 
     await page.goto("/");
     await expect(
@@ -192,11 +193,11 @@ test.describe("tutorial playground mobile walkthrough", () => {
       "Weekend Cup"
     );
 
-    await expect(page.getByText("Hot players").first()).toBeVisible();
+    await expect(page.getByText("In form").first()).toBeVisible();
     await expect(page.getByText("Top rivalry").first()).toBeVisible();
     await expect(page.getByText("Partner chemistry").first()).toBeVisible();
-    await expect(page.getByText("Latest story").first()).toBeVisible();
-    await expect(page.getByText("Power rankings").first()).toBeVisible();
+    await expect(page.getByText("Latest tournament").first()).toBeVisible();
+    await expect(page.getByText("Rating movers").first()).toBeVisible();
     await expect(page.getByText("Farah").first()).toBeVisible();
     await expect(page.getByText("Danish").first()).toBeVisible();
     await expect(page.getByText("Aiman").first()).toBeVisible();
@@ -232,7 +233,7 @@ test.describe("tutorial playground mobile walkthrough", () => {
     await expect(page.getByRole("button", { name: "Rollback" })).toHaveCount(0);
 
     await page.goto(`/club/${playground.clubId}/admin?tab=players`);
-    await expect(page.getByRole("heading", { name: "Club controls" }))
+    await expect(page.getByRole("heading", { name: "Administration" }))
       .toBeVisible();
     await expect
       .poll(async () => (await getAdminOnboardingProgress(page)).completedStepIds)
@@ -285,15 +286,15 @@ test.describe("tutorial playground mobile walkthrough", () => {
     await expect(scoreInputs.first()).toBeVisible();
     await scoreInputs.nth(0).fill("21");
     await scoreInputs.nth(1).fill("15");
-    await page.getByRole("button", { name: "Submit Score" }).first().click();
-    await page.getByRole("button", { name: "Confirm", exact: true }).click();
+    await page.getByRole("button", { name: "Review result" }).first().click();
+    await page.getByRole("button", { name: "Submit result", exact: true }).click();
     await expect
       .poll(async () => (await getAdminOnboardingProgress(page)).completedStepIds)
       .toContain("score-match");
 
     await page.getByRole("button", { name: "Settings" }).click();
-    await page.getByRole("button", { name: "End Session" }).click();
-    await page.getByRole("button", { name: "Confirm End Session" }).click();
+    await page.getByRole("button", { name: "End Tournament" }).click();
+    await page.getByRole("button", { name: "Confirm End Tournament" }).click();
     await expect
       .poll(async () => (await getAdminOnboardingProgress(page)).completedStepIds)
       .toContain("end-session");

@@ -136,7 +136,7 @@ describe("undo completed match route", () => {
 
     expect(response.status).toBe(400);
     await expect(response.json()).resolves.toEqual({
-      error: "Only active sessions can undo completed matches.",
+      error: "Only active tournaments can undo completed matches.",
     });
     expect(mocks.undoCompletedMatchResult).not.toHaveBeenCalled();
   });

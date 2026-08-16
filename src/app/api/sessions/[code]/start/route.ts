@@ -64,7 +64,10 @@ export async function POST(
     }
 
     if (sessionData.status !== SessionStatus.WAITING) {
-      return NextResponse.json({ error: "Session already started" }, { status: 400 });
+      return NextResponse.json(
+        { error: "Tournament already started" },
+        { status: 400 }
+      );
     }
     const clubLinks = await getSessionClubLinks(prisma, sessionData);
     const pendingPartner = clubLinks.find(

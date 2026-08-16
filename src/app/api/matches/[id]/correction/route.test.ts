@@ -180,7 +180,7 @@ describe("completed match score correction route", () => {
 
     expect(response.status).toBe(400);
     await expect(response.json()).resolves.toEqual({
-      error: "Only active or ended sessions can correct completed scores.",
+      error: "Only active or ended tournaments can correct completed scores.",
     });
     expect(mocks.correctCompletedMatchScore).not.toHaveBeenCalled();
   });
@@ -199,7 +199,7 @@ describe("completed match score correction route", () => {
     mocks.correctCompletedMatchScore.mockRejectedValue(
       new CorrectCompletedMatchScoreError(
         "NEWER_OUTSIDE_MATCHES",
-        "Newer completed matches exist outside this session, so exact ELO replay is blocked."
+        "Newer completed matches exist outside this tournament, so exact ELO replay is blocked."
       )
     );
 
@@ -208,7 +208,7 @@ describe("completed match score correction route", () => {
     expect(response.status).toBe(409);
     await expect(response.json()).resolves.toEqual({
       error:
-        "Newer completed matches exist outside this session, so exact ELO replay is blocked.",
+        "Newer completed matches exist outside this tournament, so exact ELO replay is blocked.",
     });
   });
 });

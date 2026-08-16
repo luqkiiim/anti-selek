@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { getSessionTypeLabel } from "@/lib/sessionModeLabels";
+import { getSessionStatusLabel } from "@/lib/sessionStatusLabels";
 
 interface Tournament {
   id: string;
@@ -148,7 +149,7 @@ export function CurrentTournamentsPanel({
                 <div className="mb-2 flex items-start justify-between gap-3">
                   <h4 className="font-semibold text-gray-900">{tournament.name}</h4>
                   <span className="rounded-lg bg-blue-50 px-2 py-1 text-xs font-semibold text-blue-600">
-                    {tournament.status}
+                    {getSessionStatusLabel(tournament.status)}
                   </span>
                 </div>
                 <p className="text-xs font-semibold text-gray-500">
@@ -168,7 +169,7 @@ export function CurrentTournamentsPanel({
                 <div className="mb-2 flex items-start justify-between">
                   <h4 className="font-semibold text-gray-900">{tournament.name}</h4>
                   <span className="rounded-lg bg-blue-50 px-2 py-1 text-xs font-semibold text-blue-600">
-                    {tournament.status}
+                    {getSessionStatusLabel(tournament.status)}
                   </span>
                 </div>
                 <div className="flex flex-wrap items-center justify-between gap-3">

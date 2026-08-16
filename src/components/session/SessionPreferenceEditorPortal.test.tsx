@@ -1,8 +1,16 @@
 // @vitest-environment jsdom
 
-import { act } from "react";
+import { act, type ComponentProps } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  type Mock,
+  vi,
+} from "vitest";
 import {
   PartnerPreference,
   PlayerGender,
@@ -10,6 +18,11 @@ import {
 } from "@/types/enums";
 import type { Player, PreferenceEditorState } from "./sessionTypes";
 import { SessionPreferenceEditorPortal } from "./SessionPreferenceEditorPortal";
+
+type PortalProps = ComponentProps<typeof SessionPreferenceEditorPortal>;
+type PortalCallbackMock<Key extends keyof PortalProps> = Mock<
+  Extract<PortalProps[Key], (...args: never[]) => unknown>
+>;
 
 function createPlayer(overrides: Partial<Player> = {}): Player {
   return {
@@ -87,12 +100,12 @@ describe("SessionPreferenceEditorPortal", () => {
         left: 144,
       },
     } satisfies PreferenceEditorState,
-    onClose = vi.fn(),
-    onUpdatePreference = vi.fn(async () => {}),
-    onRequestSkipNext = vi.fn(),
-    onToggleSkipNext = vi.fn(),
-    onRequestRenameGuest = vi.fn(),
-    onRemovePlayer = vi.fn(),
+    onClose = vi.fn<PortalProps["onClose"]>(),
+    onUpdatePreference = vi.fn<PortalProps["onUpdatePreference"]>(async () => {}),
+    onRequestSkipNext = vi.fn<PortalProps["onRequestSkipNext"]>(),
+    onToggleSkipNext = vi.fn<PortalProps["onToggleSkipNext"]>(),
+    onRequestRenameGuest = vi.fn<PortalProps["onRequestRenameGuest"]>(),
+    onRemovePlayer = vi.fn<PortalProps["onRemovePlayer"]>(),
     isMixicano = false,
     isInterclub = false,
     poolsEnabled = false,
@@ -102,12 +115,12 @@ describe("SessionPreferenceEditorPortal", () => {
   }: {
     player?: Player;
     openPreferenceEditor?: PreferenceEditorState;
-    onClose?: ReturnType<typeof vi.fn>;
-    onUpdatePreference?: ReturnType<typeof vi.fn>;
-    onRequestSkipNext?: ReturnType<typeof vi.fn>;
-    onToggleSkipNext?: ReturnType<typeof vi.fn>;
-    onRequestRenameGuest?: ReturnType<typeof vi.fn>;
-    onRemovePlayer?: ReturnType<typeof vi.fn>;
+    onClose?: PortalCallbackMock<"onClose">;
+    onUpdatePreference?: PortalCallbackMock<"onUpdatePreference">;
+    onRequestSkipNext?: PortalCallbackMock<"onRequestSkipNext">;
+    onToggleSkipNext?: PortalCallbackMock<"onToggleSkipNext">;
+    onRequestRenameGuest?: PortalCallbackMock<"onRequestRenameGuest">;
+    onRemovePlayer?: PortalCallbackMock<"onRemovePlayer">;
     isMixicano?: boolean;
     isInterclub?: boolean;
     poolsEnabled?: boolean;

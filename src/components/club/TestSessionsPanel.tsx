@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { getSessionTypeLabel } from "@/lib/sessionModeLabels";
+import { getSessionStatusLabel } from "@/lib/sessionStatusLabels";
 import type { ClubPageSession } from "./clubTypes";
 
 interface TestSessionsPanelProps {
@@ -29,7 +30,7 @@ export function TestSessionsPanel({
       <div className="flex items-center justify-between gap-3">
         <div>
           <h3 className="app-section-eyebrow">
-            Test Sessions
+            Test Tournaments
           </h3>
           <p className="mt-1 text-xs font-semibold text-gray-500">
             Rehearsals kept separate from real tournament history
@@ -42,7 +43,7 @@ export function TestSessionsPanel({
         {sessions.length === 0 ? (
           <div className="app-empty p-4 text-center">
             <p className="text-sm font-semibold text-gray-500">
-              No test sessions
+              No test tournaments
             </p>
           </div>
         ) : (
@@ -140,7 +141,7 @@ export function TestSessionsPanel({
                       Test
                     </span>
                     <span className="rounded-lg bg-gray-200 px-2 py-1 text-xs font-semibold text-gray-600">
-                      {session.status}
+                      {getSessionStatusLabel(session.status)}
                     </span>
                   </div>
                 </div>
@@ -165,7 +166,7 @@ export function TestSessionsPanel({
                       Test
                     </span>
                     <span className="rounded-lg bg-gray-200 px-2 py-1 text-xs font-semibold text-gray-600">
-                      {session.status}
+                      {getSessionStatusLabel(session.status)}
                     </span>
                   </div>
                 </div>

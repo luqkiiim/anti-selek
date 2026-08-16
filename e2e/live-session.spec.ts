@@ -325,7 +325,13 @@ test("admin can end and rollback the latest completed tournament", async ({
   page,
 }) => {
   await signInAsAdmin(page);
-  const sessionName = "E2E Rollback Session";
+  const baselineRatings = new Map(
+    (await readClubMembersSnapshot(page, hostClubId)).map((member) => [
+      member.id,
+      member.elo,
+    ])
+  );
+  const sessionName = `E2E Rollback ${Date.now()}`;
   const sessionCode = await createStartedHostSession(page, {
     sessionName,
   });
@@ -350,28 +356,33 @@ test("admin can end and rollback the latest completed tournament", async ({
   await expect
     .poll(async () => {
       const snapshot = await readClubMembersSnapshot(page, hostClubId);
-      return snapshot.some((member) => member.elo !== 1000);
+      return snapshot.some(
+        (member) => member.elo !== baselineRatings.get(member.id)
+      );
     })
     .toBe(true);
 
   const settingsModal = await openSessionSettings(page);
-  await settingsModal.getByRole("button", { name: "End Session" }).click();
-  await expect(page.getByRole("heading", { name: "End session?" })).toBeVisible();
-  await page.getByRole("button", { name: "Confirm End Session" }).click();
-  await expect(page.getByText("Completed session")).toBeVisible();
+  await settingsModal.getByRole("button", { name: "End Tournament" }).click();
+  await expect(page.getByRole("heading", { name: "End tournament?" })).toBeVisible();
+  await page.getByRole("button", { name: "Confirm End Tournament" }).click();
+  await expect(page.getByText("Completed tournament")).toBeVisible();
   await expect(page.getByRole("button", { name: "Match History" })).toBeVisible();
 
   await page.getByRole("button", { name: "Back" }).click();
   await expect(page).toHaveURL(
     new RegExp(`/club/${hostClubId}(\\?tab=host)?$`)
   );
-  await page.getByRole("button", { name: "Tournaments" }).click();
+  await page
+    .getByRole("region", { name: "Club section tabs" })
+    .getByRole("button", { name: /^Tournaments/ })
+    .click();
   await expect(
     page.getByText(sessionName).filter({ visible: true }).first()
   ).toBeVisible();
 
   await page
-    .getByRole("button", { name: "Rollback" })
+    .getByRole("button", { name: "Rollback", exact: true })
     .filter({ visible: true })
     .first()
     .click();
@@ -382,8 +393,8 @@ test("admin can end and rollback the latest completed tournament", async ({
 
   await expect(page.getByText(`Rolled back "${sessionName}".`)).toBeVisible();
   await expect(
-    page.getByText("No past tournaments").filter({ visible: true }).first()
-  ).toBeVisible();
+    page.getByRole("button", { name: new RegExp(`^${sessionName}`) })
+  ).toHaveCount(0);
 
   await expect
     .poll(async () => {
@@ -393,12 +404,14 @@ test("admin can end and rollback the latest completed tournament", async ({
       ]);
 
       return {
-        allRatingsReset: members.every((member) => member.elo === 1000),
+        ratingsRestored: members.every(
+          (member) => member.elo === baselineRatings.get(member.id)
+        ),
         sessionRemoved: !sessions.some((session) => session.code === sessionCode),
       };
     })
     .toEqual({
-      allRatingsReset: true,
+      ratingsRestored: true,
       sessionRemoved: true,
     });
 });
@@ -409,7 +422,9 @@ test("score entry auto-advances to the opponent box after two digits", async ({
   await signInAsAdmin(page);
   await page.goto(`/session/${scoreSessionCode}`);
 
-  const scoreInputs = page.locator('input[type="number"]');
+  const scoreInputs = page.getByRole("spinbutton", {
+    name: /^Team [12] score/,
+  });
   await expect(scoreInputs).toHaveCount(2);
 
   await scoreInputs.nth(0).click();
@@ -445,5 +460,7 @@ test("admin can submit and approve a pending score", async ({ page }) => {
       adminPoints: 3,
     });
 
-  await expect(page.getByText("Awaiting Confirmation")).toHaveCount(0);
+  await expect(
+    page.getByText("Waiting for opponent or admin approval")
+  ).toHaveCount(0);
 });

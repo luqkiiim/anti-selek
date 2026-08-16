@@ -2,6 +2,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
 import { ClubBottomTabs } from "./ClubBottomTabs";
+import { getAuthorizedClubSections } from "./clubNavigation";
 
 const routerPush = vi.hoisted(() => vi.fn());
 
@@ -16,14 +17,28 @@ describe("ClubBottomTabs", () => {
     const markup = renderToStaticMarkup(
       <ClubBottomTabs
         activeTab="overview"
-        canManageClub
         clubId="club-1"
-        currentUserId="user-1"
+        sections={getAuthorizedClubSections({
+          canManageClub: true,
+          hasUser: true,
+        })}
       />
     );
 
     expect(markup).toContain('aria-label="Club navigation"');
     expect(markup).toContain("xl:hidden");
     expect(markup).not.toContain("sm:hidden");
+    expect(markup.indexOf("Overview")).toBeLessThan(
+      markup.indexOf("Tournaments")
+    );
+    expect(markup.indexOf("Tournaments")).toBeLessThan(
+      markup.indexOf("Host")
+    );
+    expect(markup.indexOf("Host")).toBeLessThan(
+      markup.indexOf("Leaderboard")
+    );
+    expect(markup.indexOf("Leaderboard")).toBeLessThan(
+      markup.indexOf("Profile")
+    );
   });
 });

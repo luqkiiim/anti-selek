@@ -63,6 +63,7 @@ export function useSessionCourtMatchCreation({
   const [manualCourtId, setManualCourtId] = useState<string | null>(null);
   const [manualQueueOpen, setManualQueueOpen] = useState(false);
   const [creatingManualMatch, setCreatingManualMatch] = useState(false);
+  const [manualMatchError, setManualMatchError] = useState("");
   const [manualMatchForm, setManualMatchForm] =
     useState<ManualMatchFormState>(emptyManualMatchForm);
 
@@ -91,7 +92,7 @@ export function useSessionCourtMatchCreation({
     const { team1User1Id, team1User2Id, team2User1Id, team2User2Id } =
       manualMatchForm;
     if (!team1User1Id || !team1User2Id || !team2User1Id || !team2User2Id) {
-      setError(missingPlayersMessage);
+      setManualMatchError(missingPlayersMessage);
       return null;
     }
 
@@ -177,6 +178,7 @@ export function useSessionCourtMatchCreation({
     setManualQueueOpen(false);
     setManualCourtId(courtId);
     setManualMatchForm(emptyManualMatchForm());
+    setManualMatchError("");
     setError("");
   };
 
@@ -184,6 +186,7 @@ export function useSessionCourtMatchCreation({
     setManualCourtId(null);
     setManualQueueOpen(true);
     setManualMatchForm(emptyManualMatchForm());
+    setManualMatchError("");
     setError("");
   };
 
@@ -192,9 +195,11 @@ export function useSessionCourtMatchCreation({
     setManualQueueOpen(false);
     setCreatingManualMatch(false);
     setManualMatchForm(emptyManualMatchForm());
+    setManualMatchError("");
   };
 
   const toggleManualMatchPlayerSelection = (userId: string) => {
+    setManualMatchError("");
     setManualMatchForm((prev) => toggleManualMatchPlayer(prev, userId));
   };
 
@@ -209,7 +214,7 @@ export function useSessionCourtMatchCreation({
     }
 
     setCreatingManualMatch(true);
-    setError("");
+    setManualMatchError("");
     try {
       const { res, data } = await postGenerateMatchAction<
         SingleMatchGenerationResponse
@@ -223,7 +228,9 @@ export function useSessionCourtMatchCreation({
       });
 
       if (!res.ok) {
-        setError(getErrorMessage(data, "Failed to create manual match"));
+        setManualMatchError(
+          getErrorMessage(data, "Failed to create manual match")
+        );
         return;
       }
 
@@ -231,7 +238,7 @@ export function useSessionCourtMatchCreation({
       syncMatchGenerationResult([data], data.queuedMatch ?? null);
     } catch (err) {
       console.error(err);
-      setError("Network error creating manual match");
+      setManualMatchError("Network error creating manual match");
     } finally {
       setCreatingManualMatch(false);
     }
@@ -248,7 +255,7 @@ export function useSessionCourtMatchCreation({
     }
 
     setCreatingManualMatch(true);
-    setError("");
+    setManualMatchError("");
     try {
       const { res, data } = await postSessionActionTyped<QueuedMatchResponse>(
         `/api/sessions/${code}/queue-match`,
@@ -261,7 +268,9 @@ export function useSessionCourtMatchCreation({
       );
 
       if (!res.ok) {
-        setError(getErrorMessage(data, "Failed to queue manual match"));
+        setManualMatchError(
+          getErrorMessage(data, "Failed to queue manual match")
+        );
         return;
       }
 
@@ -269,7 +278,7 @@ export function useSessionCourtMatchCreation({
       syncQueuedMatch(data.queuedMatch ?? null);
     } catch (err) {
       console.error(err);
-      setError("Network error queueing manual match");
+      setManualMatchError("Network error queueing manual match");
     } finally {
       setCreatingManualMatch(false);
     }
@@ -450,6 +459,7 @@ export function useSessionCourtMatchCreation({
     manualCourtId,
     manualQueueOpen,
     creatingManualMatch,
+    manualMatchError,
     manualMatchForm,
     createMatchesForCourts,
     createMatchForCourt,

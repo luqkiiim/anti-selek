@@ -64,7 +64,6 @@ function renderPanel(
       clubId="community-1"
       claimState={claimState}
       onRequestClaim={vi.fn()}
-      onOpenPlayerProfile={vi.fn()}
     />
   );
 }
@@ -75,6 +74,21 @@ describe("ClubLeaderboardPanel", () => {
 
     expect(markup).toContain("Request Claim");
     expect(markup).toContain("Admin will verify this claim manually.");
+    expect(markup).toContain(">Member<");
+    expect(markup).not.toContain(">MEMBER<");
+    expect(markup).toContain(
+      'href="/profile/placeholder-1?clubId=community-1"'
+    );
+  });
+
+  it("labels the club owner without exposing the raw role enum", () => {
+    const markup = renderPanel(
+      buildPlayer({ isOwner: true, role: "ADMIN" }),
+      buildClaimState()
+    );
+
+    expect(markup).toContain(">Owner<");
+    expect(markup).not.toContain(">ADMIN<");
   });
 
   it("does not show the manual-review warning when names match", () => {

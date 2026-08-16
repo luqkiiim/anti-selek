@@ -3,6 +3,7 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { PlayerProfileConnectionSummary } from "@/lib/profileStats";
 
 const mocks = vi.hoisted(() => ({
   deleteUserAvatar: vi.fn(),
@@ -192,10 +193,10 @@ function buildProfileResponse(overrides?: Partial<{
       worstSession: null,
     },
     partners: {
-      best: [],
+      best: [] as PlayerProfileConnectionSummary[],
     },
     opponents: {
-      toughest: [],
+      toughest: [] as PlayerProfileConnectionSummary[],
     },
     sessions: {
       latest: null,
@@ -617,13 +618,34 @@ describe("PlayerProfileView", () => {
     expect(document.body.textContent).toContain("Peak");
     expect(document.body.textContent).toContain("Lowest");
     expect(document.body.textContent).toContain("30D change");
-    expect(document.body.textContent).toContain("Session form");
+    expect(document.body.textContent).toContain("Tournament form");
     expect(document.body.textContent).toContain("3-1");
     expect(document.body.textContent).toContain("+24 diff");
     expect(document.body.textContent).toContain("+18 rating");
     expect(document.body.textContent).toContain("1-3");
     expect(document.body.textContent).toContain("-14 diff");
     expect(document.body.textContent).toContain("-11 rating");
+
+    const ratingChart = container.querySelector<HTMLElement>(
+      '[data-rating-chart-root="true"]'
+    );
+    expect(ratingChart?.getAttribute("role")).toBe("slider");
+    expect(ratingChart?.getAttribute("tabindex")).toBe("0");
+    expect(ratingChart?.getAttribute("aria-valuetext")).toContain("rating");
+
+    await act(async () => {
+      ratingChart?.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "Home", bubbles: true })
+      );
+    });
+    expect(ratingChart?.getAttribute("aria-valuenow")).toBe("0");
+
+    await act(async () => {
+      ratingChart?.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true })
+      );
+    });
+    expect(ratingChart?.getAttribute("aria-valuenow")).toBe("1");
 
     expect(document.body.textContent).not.toContain("Performance");
     expect(document.body.textContent).not.toContain("Partners & opponents");

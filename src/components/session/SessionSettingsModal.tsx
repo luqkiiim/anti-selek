@@ -69,7 +69,7 @@ export function SessionSettingsModal({
 
   return (
     <ModalFrame
-      title="Session settings"
+      title="Tournament settings"
       subtitle="Roster, courts, controls."
       onClose={onClose}
       footer={
@@ -115,7 +115,7 @@ export function SessionSettingsModal({
               className="app-button-danger justify-center"
               data-tutorial-target="admin-onboarding-end-session"
             >
-                End Session
+                End Tournament
               </button>
             ) : null}
             {canResetTestSession ? (
@@ -124,7 +124,7 @@ export function SessionSettingsModal({
                 onClick={onResetTestSession}
                 className="app-button-secondary justify-center"
               >
-                Reset Test Session
+                Reset Test Tournament
               </button>
             ) : null}
             {canCreateRealSession ? (
@@ -133,7 +133,7 @@ export function SessionSettingsModal({
                 onClick={onCreateRealSession}
                 className="app-button-primary justify-center"
               >
-                Create Real Session
+                Create Real Tournament
               </button>
             ) : null}
             {canDeleteTestSession ? (
@@ -142,14 +142,14 @@ export function SessionSettingsModal({
                 onClick={onDeleteTestSession}
                 className="app-button-danger justify-center"
               >
-                Delete Test Session
+                Delete Test Tournament
               </button>
             ) : null}
           </div>
           {isTestSession ? (
             <p className="text-sm text-gray-500">
-              Test sessions are safe for rehearsal. Reset clears simulated play,
-              and creating a real session copies this setup into a fresh live
+              Test tournaments are safe for rehearsal. Reset clears simulated play,
+              and creating a real tournament copies this setup into a fresh live
               tournament.
             </p>
           ) : null}
@@ -164,15 +164,22 @@ export function SessionSettingsModal({
                 court is busy.
               </p>
               {autoQueueEnabled && !autoQueueDraft ? (
-                <p className="text-xs font-medium text-amber-700">
+                <p
+                  role="status"
+                  aria-live="polite"
+                  className="text-xs font-medium text-amber-700"
+                >
                   Turning this off clears the current queued match.
                 </p>
               ) : null}
             </div>
             <button
               type="button"
+              role="switch"
+              aria-checked={autoQueueDraft}
+              aria-label="Auto queue"
               onClick={() => onAutoQueueChange(!autoQueueDraft)}
-              className={`shrink-0 rounded-lg border px-3 py-2 text-sm font-semibold transition ${
+              className={`min-h-11 shrink-0 rounded-lg border px-3 py-2 text-sm font-semibold transition ${
                 autoQueueDraft
                   ? "border-blue-200 bg-blue-50 text-blue-700"
                   : "border-gray-200 bg-white text-gray-500"
@@ -191,17 +198,24 @@ export function SessionSettingsModal({
                 immediate back-to-back play.
               </p>
               {!respectPlayerRest && respectPlayerRestDraft ? (
-                <p className="text-xs font-medium text-blue-700">
+                <p
+                  role="status"
+                  aria-live="polite"
+                  className="text-xs font-medium text-blue-700"
+                >
                   Turning this back on restores rest-aware matchmaking.
                 </p>
               ) : null}
             </div>
             <button
               type="button"
+              role="switch"
+              aria-checked={respectPlayerRestDraft}
+              aria-label="Respect player rest"
               onClick={() =>
                 onRespectPlayerRestChange(!respectPlayerRestDraft)
               }
-              className={`shrink-0 rounded-lg border px-3 py-2 text-sm font-semibold transition ${
+              className={`min-h-11 shrink-0 rounded-lg border px-3 py-2 text-sm font-semibold transition ${
                 respectPlayerRestDraft
                   ? "border-blue-200 bg-blue-50 text-blue-700"
                   : "border-gray-200 bg-white text-gray-500"
@@ -212,7 +226,7 @@ export function SessionSettingsModal({
           </div>
           {(hasAutoQueueChange || hasRespectPlayerRestChange) &&
           !hasCourtLabelChanges ? (
-            <p className="text-xs text-gray-500">
+            <p role="status" aria-live="polite" className="text-xs text-gray-500">
               Matchmaking settings will update when you save.
             </p>
           ) : null}

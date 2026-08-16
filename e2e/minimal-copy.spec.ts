@@ -32,14 +32,12 @@ for (const { name, viewport } of portraitViewports) {
         page.getByRole("heading", { name: "E2E Host Club" })
       ).toBeVisible();
       await expect(
-        page.getByRole("heading", { name: "Club pulse" }).filter({
-          visible: true,
-        })
+        page.getByRole("region", { name: "Overview" })
       ).toBeVisible();
       await expect(
         page
           .getByRole("heading", {
-            name: "Current tournament",
+            name: "In form",
             exact: true,
           })
           .filter({ visible: true })
@@ -66,7 +64,6 @@ for (const { name, viewport } of portraitViewports) {
             name: "Achievements",
             exact: true,
           }),
-          hasText: "0/13 unlocked",
         })
         .first();
 

@@ -167,6 +167,23 @@ describe("SessionRosterModal", () => {
     expect(document.body.textContent).toContain("Add Guest");
     expect(document.body.textContent).toContain("Beginner (850)");
     expect(document.body.textContent).toContain("Regular");
+    expect(
+      document.body.querySelector('input[aria-label="Guest name"]')
+    ).not.toBeNull();
+    expect(
+      document.body.querySelector('select[aria-label="Guest starting rating"]')
+    ).not.toBeNull();
+    expect(
+      document.body.querySelector('select[aria-label="Guest pool"]')
+    ).not.toBeNull();
+    expect(
+      document.body.querySelector('select[aria-label="Guest gender"]')
+    ).not.toBeNull();
+    expect(
+      document.body.querySelector(
+        'select[aria-label="Guest mixed doubles side"]'
+      )
+    ).not.toBeNull();
   });
 
   it("collapses guest creation again after the sheet is closed", async () => {

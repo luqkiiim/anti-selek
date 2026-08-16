@@ -118,7 +118,7 @@ function TeamPlayers({
                     type="button"
                     onClick={() => onReshuffleQueuedPlayer(player.id)}
                     disabled={queueActionDisabled}
-                    className="w-full rounded-lg border border-blue-200/80 bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-800 transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="min-h-11 w-full rounded-lg border border-blue-200/80 bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-800 transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     {isReshuffling ? "Reshuffling..." : "Reshuffle Without"}
                   </button>
@@ -126,7 +126,7 @@ function TeamPlayers({
                     type="button"
                     onClick={() => onReplaceQueuedPlayer(player.id)}
                     disabled={queueActionDisabled}
-                    className="w-full rounded-lg border border-emerald-200/80 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-800 transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="min-h-11 w-full rounded-lg border border-emerald-200/80 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-800 transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     {isReplacing ? "Replacing..." : "Replace"}
                   </button>
@@ -233,7 +233,7 @@ export function QueuedMatchCard({
       type="button"
       onClick={onReshuffleQueuedMatch}
       disabled={queueActionDisabled}
-      className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-gray-700 transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-50 md:px-3"
+      className="inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-gray-700 transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-50 md:px-3"
     >
       <RefreshCw aria-hidden="true" size={14} />
       {reshufflingQueuedMatch ? "Reshuffling..." : "Reshuffle"}
@@ -243,7 +243,7 @@ export function QueuedMatchCard({
       type="button"
       onClick={onOpenManualQueuedMatchModal}
       disabled={queueActionDisabled}
-      className="inline-flex min-h-9 items-center gap-1.5 rounded-lg bg-gray-900 px-2.5 py-1.5 text-xs font-semibold text-white transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-50 md:px-3"
+      className="inline-flex min-h-11 items-center gap-1.5 rounded-lg bg-gray-900 px-2.5 py-1.5 text-xs font-semibold text-white transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-50 md:px-3"
     >
       <Plus aria-hidden="true" size={14} />
       {creatingManualQueuedMatch ? "Opening..." : "Manual"}
@@ -254,7 +254,7 @@ export function QueuedMatchCard({
       type="button"
       onClick={onClearQueuedMatch}
       disabled={queueActionDisabled}
-      className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-1.5 text-xs font-semibold text-rose-700 transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-50 md:px-3"
+      className="inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-1.5 text-xs font-semibold text-rose-700 transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-50 md:px-3"
     >
       <Undo2 aria-hidden="true" size={14} />
       {clearingQueuedMatch ? "Undoing..." : "Undo"}

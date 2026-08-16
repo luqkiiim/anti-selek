@@ -118,7 +118,10 @@ export async function POST(
       return invalidTargetResponse(request, "api:sessions:code:guests");
     }
     if (sessionData.status === SessionStatus.COMPLETED) {
-      return NextResponse.json({ error: "Session already ended" }, { status: 400 });
+      return NextResponse.json(
+        { error: "Tournament already ended" },
+        { status: 400 }
+      );
     }
     if (
       sessionData.mode === SessionMode.MIXICANO &&
@@ -164,7 +167,10 @@ export async function POST(
         !acceptedInterclubClubIds.includes(representingClubId)
       ) {
         return NextResponse.json(
-          { error: "Guests in club vs club sessions must represent one club" },
+          {
+            error:
+              "Guests in club vs club tournaments must represent one club",
+          },
           { status: 400 }
         );
       }

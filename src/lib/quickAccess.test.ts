@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import type { Session } from "next-auth";
 import {
   canQuickAccessSessionRead,
   normalizeNameLookupKey,
@@ -17,12 +18,14 @@ describe("quick access name lookup", () => {
 });
 
 describe("quick access session reads", () => {
-  const quickAccessSession = {
+  const quickAccessSession: Session = {
     user: {
       id: "quick-user",
+      isAdmin: false,
       isQuickAccess: true,
       quickAccessClubId: "club-b",
     },
+    expires: "2099-01-01T00:00:00.000Z",
   };
 
   it("allows reads for the host club", () => {

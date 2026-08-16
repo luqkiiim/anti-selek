@@ -1,8 +1,21 @@
 // @vitest-environment jsdom
 
-import { act, useEffect } from "react";
+import {
+  act,
+  useEffect,
+  type Dispatch,
+  type SetStateAction,
+} from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+  type Mock,
+} from "vitest";
 import type { ClubAdminClub } from "@/components/club-admin/clubAdminTypes";
 import { useClubAdminClubActions } from "./useClubAdminClubActions";
 
@@ -33,9 +46,9 @@ describe("useClubAdminClubActions", () => {
   let container: HTMLDivElement;
   let root: Root;
   let actions: ReturnType<typeof useClubAdminClubActions> | null = null;
-  let refreshClubData: ReturnType<typeof vi.fn>;
-  let setError: ReturnType<typeof vi.fn>;
-  let setSuccess: ReturnType<typeof vi.fn>;
+  let refreshClubData: Mock<() => Promise<void>>;
+  let setError: Mock<Dispatch<SetStateAction<string>>>;
+  let setSuccess: Mock<Dispatch<SetStateAction<string>>>;
 
   function Harness() {
     const currentActions = useClubAdminClubActions({
@@ -61,9 +74,9 @@ describe("useClubAdminClubActions", () => {
       }
     ).IS_REACT_ACT_ENVIRONMENT = true;
     vi.clearAllMocks();
-    refreshClubData = vi.fn(async () => undefined);
-    setError = vi.fn();
-    setSuccess = vi.fn();
+    refreshClubData = vi.fn<() => Promise<void>>(async () => undefined);
+    setError = vi.fn<Dispatch<SetStateAction<string>>>();
+    setSuccess = vi.fn<Dispatch<SetStateAction<string>>>();
     mocks.uploadClubAvatar.mockResolvedValue({
       avatarUrl: "https://cdn.test/club-one-new.png",
     });

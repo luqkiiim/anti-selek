@@ -11,6 +11,10 @@ import {
 } from "@/lib/mixedSide";
 import { safeJson } from "./clubPageApi";
 import {
+  getSessionCreationIssues,
+  hasMissingRequiredGender,
+} from "./sessionCreationIssues";
+import {
   MixedSide,
   PlayerGender,
   SessionBalanceMetric,
@@ -272,6 +276,50 @@ export function useClubHostSetup({
     return eligibleClubIds.length === 1 ? eligibleClubIds[0] : null;
   }
 
+  const hasMissingMixedGender =
+    sessionMode === SessionMode.MIXICANO &&
+    hasMissingRequiredGender({
+      players: effectiveSelectablePlayers,
+      selectedPlayerIds,
+      guestGenders: guestConfigs.map((guest) => guest.gender),
+    });
+
+  const hasInvalidInterclubRepresentation =
+    isInterclub &&
+    (selectedPlayerIds.some((playerId) => {
+      const player = effectiveSelectablePlayers.find(
+        (candidate) => candidate.id === playerId
+      );
+      if (!player) return true;
+
+      const representingClubId =
+        selectedPlayerRepresentingClubs[player.id] ??
+        getDefaultRepresentingClubId(player.id);
+      return (
+        !representingClubId ||
+        !getEligibleRepresentingClubIds(player).includes(representingClubId)
+      );
+    }) ||
+      guestConfigs.some(
+        (guest) =>
+          !guest.representingClubId ||
+          !interclubClubIds.includes(guest.representingClubId)
+      ));
+
+  const creationIssues = getSessionCreationIssues({
+    name: newSessionName,
+    participantCount: selectedPlayerIds.length + guestConfigs.length,
+    poolsEnabled,
+    poolAName,
+    poolBName,
+    isMixed: sessionMode === SessionMode.MIXICANO,
+    hasMissingMixedGender,
+    mixedModeLabel,
+    isInterclub,
+    hasPartnerClub: Boolean(partnerClubId),
+    hasInvalidInterclubRepresentation,
+  });
+
   useEffect(() => {
     const availableIds = new Set(
       effectiveSelectablePlayers.map((player) => player.id)
@@ -336,55 +384,11 @@ export function useClubHostSetup({
   };
 
   const createSession = async () => {
-    if (!newSessionName.trim() || !clubId) return false;
+    if (!clubId) return false;
 
-    if (sessionMode === SessionMode.MIXICANO) {
-      const invalidGuest = guestConfigs.find(
-        (guest) =>
-          ![PlayerGender.MALE, PlayerGender.FEMALE].includes(guest.gender)
-      );
-      if (invalidGuest) {
-        setError(
-          `${mixedModeLabel} requires MALE/FEMALE gender for guest ${invalidGuest.name}`
-        );
-        return false;
-      }
-    }
-
-    if (isInterclub) {
-      if (!partnerClubId) {
-        setError("Choose a partner club before creating club vs club.");
-        return false;
-      }
-
-      const invalidPlayer = selectedPlayerIds
-        .map((playerId) =>
-          effectiveSelectablePlayers.find((player) => player.id === playerId)
-        )
-        .find((player) => {
-          if (!player) return true;
-          const representingClubId =
-            selectedPlayerRepresentingClubs[player.id] ??
-            getDefaultRepresentingClubId(player.id);
-          return (
-            !representingClubId ||
-            !getEligibleRepresentingClubIds(player).includes(representingClubId)
-          );
-        });
-
-      if (invalidPlayer) {
-        setError("Assign every selected player to a club side.");
-        return false;
-      }
-
-      if (
-        guestConfigs.some(
-          (guest) => !guest.representingClubId || !interclubClubIds.includes(guest.representingClubId)
-        )
-      ) {
-        setError("Assign every guest to a club side.");
-        return false;
-      }
+    if (creationIssues.length > 0) {
+      setError(creationIssues[0]);
+      return false;
     }
 
     setCreatingSession(true);
@@ -724,6 +728,7 @@ export function useClubHostSetup({
     guestConfigs,
     guestPoolCounts,
     creatingSession,
+    creationIssues,
     showPlayersModal,
     showGuestsModal,
     playerSearch,

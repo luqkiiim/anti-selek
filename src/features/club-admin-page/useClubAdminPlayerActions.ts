@@ -301,7 +301,7 @@ export function useClubAdminPlayerActions({
     updatePlayerRole(
       player,
       ClubRole.STAFF,
-      `${player.name} can now host and run live sessions.`
+      `${player.name} can now host and run live tournaments.`
     );
 
   const handleRevokeStaff = (player: ClubAdminPlayer) =>

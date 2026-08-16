@@ -60,7 +60,14 @@ function AdminOnboardingSpotlight({
     const selector = `[data-tutorial-target="${step.targetId}"]`;
 
     const updateRect = (shouldScroll = false) => {
-      const target = document.querySelector(selector);
+      const target = Array.from(document.querySelectorAll(selector))
+        .filter(
+          (candidate): candidate is HTMLElement =>
+            candidate instanceof HTMLElement &&
+            candidate.getClientRects().length > 0 &&
+            getComputedStyle(candidate).visibility !== "hidden"
+        )
+        .at(-1);
       if (!(target instanceof HTMLElement)) {
         setTargetFound(false);
         setRect(null);

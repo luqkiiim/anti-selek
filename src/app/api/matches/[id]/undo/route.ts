@@ -70,7 +70,7 @@ export async function POST(
 
     if (match.session.status !== SessionStatus.ACTIVE) {
       return NextResponse.json(
-        { error: "Only active sessions can undo completed matches." },
+        { error: "Only active tournaments can undo completed matches." },
         { status: 400 }
       );
     }

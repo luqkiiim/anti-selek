@@ -102,7 +102,10 @@ export async function POST(
     }
 
     if (sessionData.status === SessionStatus.COMPLETED) {
-      return NextResponse.json({ error: "Session already ended" }, { status: 400 });
+      return NextResponse.json(
+        { error: "Tournament already ended" },
+        { status: 400 }
+      );
     }
 
     const requesterMembership = await getSessionMembership(prisma, {

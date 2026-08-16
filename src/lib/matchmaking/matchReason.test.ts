@@ -68,6 +68,7 @@ function createSelection(
     consecutivePlayMaxBurden: 0,
     consecutivePlayTotalBurden: 0,
     randomScore: 0,
+    pairingRandomScore: 0,
     ...overrides,
   };
 }

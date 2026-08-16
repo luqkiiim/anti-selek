@@ -34,7 +34,12 @@ function renderPanel({
 
 describe("PastTournamentsPanel", () => {
   it("shows rollback for admins when rollback is enabled", () => {
-    expect(renderPanel({ canManageClub: true })).toContain("Rollback");
+    const markup = renderPanel({ canManageClub: true });
+
+    expect(markup).toContain("Rollback");
+    expect(markup).toContain(">Completed<");
+    expect(markup).not.toContain(">COMPLETED<");
+    expect(markup).not.toContain('role="link"');
   });
 
   it("hides rollback when management is disabled for tutorial history", () => {

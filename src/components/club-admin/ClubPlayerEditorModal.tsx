@@ -305,7 +305,7 @@ export function ClubPlayerEditorModal({
                 </select>
               </label>
               <p className="text-sm text-gray-600">
-                Occasional players stay in the club and session pickers, but
+                Occasional players stay in the club and tournament pickers, but
                 are hidden from the club leaderboard.
               </p>
             </div>
@@ -328,7 +328,7 @@ export function ClubPlayerEditorModal({
                     More rest
                   </span>
                   <span className="mt-1 block text-xs text-gray-600">
-                    Default this player to a lighter session rotation.
+                    Default this player to a lighter tournament rotation.
                   </span>
                 </span>
               </label>
@@ -338,7 +338,7 @@ export function ClubPlayerEditorModal({
                   Club role
                 </p>
                 <p className="mt-1 text-sm text-gray-600">
-                  Staff can host and run live sessions. Admins keep club
+                  Staff can host and run live tournaments. Admins keep club
                   settings, player editing, claims, and resets.
                 </p>
               </div>

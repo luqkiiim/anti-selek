@@ -230,11 +230,13 @@ export async function GET(
               preferred.status === ClubPlayerStatus.OCCASIONAL
                 ? ClubPlayerStatus.OCCASIONAL
                 : ClubPlayerStatus.CORE,
-            gender: [PlayerGender.MALE, PlayerGender.FEMALE].includes(
-              user.gender as PlayerGender
-            )
+            gender: [
+              PlayerGender.MALE,
+              PlayerGender.FEMALE,
+              PlayerGender.UNSPECIFIED,
+            ].includes(user.gender as PlayerGender)
               ? user.gender
-              : PlayerGender.MALE,
+              : PlayerGender.UNSPECIFIED,
             partnerPreference: user.partnerPreference,
             mixedSideOverride:
               typeof user.mixedSideOverride === "string"

@@ -61,7 +61,7 @@ describe("LiveMatchCard", () => {
     const markup = renderCard({ canSubmitScores: false });
 
     expect(markup).not.toContain("data-live-score-input");
-    expect(markup).not.toContain("Submit Score");
+    expect(markup).not.toContain("Review result");
   });
 
   it("keeps full-account participants able to submit active scores", () => {
@@ -72,7 +72,16 @@ describe("LiveMatchCard", () => {
     });
 
     expect(markup).toContain("data-live-score-input");
-    expect(markup).toContain("Submit Score");
+    expect(markup).toContain("Review result");
+    expect(markup).toContain(
+      'aria-label="Team 1 score, Quick Player and Player Two"'
+    );
+    expect(markup).toContain('name="match-1-team1-score"');
+    expect(markup).toContain(
+      'aria-label="Team 2 score, Player Three and Player Four"'
+    );
+    expect(markup).toContain('name="match-1-team2-score"');
+    expect(markup).toContain("line-clamp-2");
   });
 
   it("keeps quick-access viewers from confirming pending scores", () => {
@@ -86,7 +95,7 @@ describe("LiveMatchCard", () => {
       }),
     });
 
-    expect(markup).toContain("Awaiting Confirmation");
-    expect(markup).not.toContain("Confirm Results");
+    expect(markup).toContain("Waiting for opponent or admin approval");
+    expect(markup).not.toContain("Approve score");
   });
 });

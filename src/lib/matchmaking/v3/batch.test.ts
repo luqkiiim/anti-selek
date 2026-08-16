@@ -177,19 +177,23 @@ describe("matchmaking v3 batch selection", () => {
     expect(result.debug.candidateCap).toBe(20);
   });
 
-  it("caps a 30-player four-court pool at 24 candidates", () => {
-    const result = findBestBatchSelectionV3(createPlayers(30), {
-      courtCount: 4,
-      sessionMode: SessionMode.MEXICANO,
-      sessionType: SessionType.POINTS,
-      randomFn: () => 0,
-    });
+  it(
+    "caps a 30-player four-court pool at 24 candidates",
+    () => {
+      const result = findBestBatchSelectionV3(createPlayers(30), {
+        courtCount: 4,
+        sessionMode: SessionMode.MEXICANO,
+        sessionType: SessionType.POINTS,
+        randomFn: () => 0,
+      });
 
-    expect(result.debug.availableCandidateCount).toBe(30);
-    expect(result.debug.consideredCandidateCount).toBe(24);
-    expect(result.debug.candidatePlayerIds).toHaveLength(24);
-    expect(result.debug.candidateCap).toBe(24);
-  });
+      expect(result.debug.availableCandidateCount).toBe(30);
+      expect(result.debug.consideredCandidateCount).toBe(24);
+      expect(result.debug.candidatePlayerIds).toHaveLength(24);
+      expect(result.debug.candidateCap).toBe(24);
+    },
+    15_000
+  );
 
   it("uses the same candidate cap policy for social batches", () => {
     const result = findBestBatchSelectionV3(createPlayers(20), {

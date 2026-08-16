@@ -45,6 +45,7 @@ test("club mobile swiper pages one tab at a time", async ({
   const client = await context.newCDPSession(page);
 
   await expectActiveTab(nav, "Overview");
+  await expectOnlyAccessiblePanel(pager, "overview");
 
   await swipePager(page, client, pager, {
     name: "hard-left-1",
@@ -52,6 +53,7 @@ test("club mobile swiper pages one tab at a time", async ({
     toX: 0.14,
   });
   await expectActiveTab(nav, "Tournaments");
+  await expectOnlyAccessiblePanel(pager, "tournaments");
   await expectPagerHeightToMatchActiveSection(pager, "tournaments", {
     expectInactivePanelTaller: true,
   });
@@ -62,6 +64,7 @@ test("club mobile swiper pages one tab at a time", async ({
     toX: 0.14,
   });
   await expectActiveTab(nav, "Host setup");
+  await expectOnlyAccessiblePanel(pager, "host");
 
   await swipePager(page, client, pager, {
     name: "hard-left-3",
@@ -69,6 +72,7 @@ test("club mobile swiper pages one tab at a time", async ({
     toX: 0.14,
   });
   await expectActiveTab(nav, "Leaderboard");
+  await expectOnlyAccessiblePanel(pager, "leaderboard");
 
   await swipePager(page, client, pager, {
     name: "hard-left-4",
@@ -76,6 +80,7 @@ test("club mobile swiper pages one tab at a time", async ({
     toX: 0.14,
   });
   await expectActiveTab(nav, "Player profile");
+  await expectOnlyAccessiblePanel(pager, "profile");
 
   await swipePager(page, client, pager, {
     name: "extra-left-at-edge",
@@ -185,6 +190,13 @@ async function getActiveTab(nav: Locator) {
 
 async function expectActiveTab(nav: Locator, expectedTab: string) {
   await expect.poll(() => getActiveTab(nav)).toBe(expectedTab);
+}
+
+async function expectOnlyAccessiblePanel(pager: Locator, section: string) {
+  await expect(
+    pager.locator(`[data-club-section="${section}"]`)
+  ).not.toHaveAttribute("aria-hidden", "true");
+  await expect(pager.locator("[data-club-section][inert]")).toHaveCount(4);
 }
 
 async function expectPagerHeightToMatchActiveSection(

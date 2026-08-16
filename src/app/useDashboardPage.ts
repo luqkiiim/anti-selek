@@ -3,7 +3,16 @@
 import { useCallback, useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import type { DashboardClub } from "@/components/dashboard/dashboardTypes";
+import {
+  validateCreateClubInput,
+  validateJoinClubInput,
+} from "@/components/dashboard/clubFormValidation";
+import type {
+  ClubFormError,
+  ClubFormField,
+  DashboardClub,
+} from "@/components/dashboard/dashboardTypes";
+import { getCurrentAppPath, withCallbackUrl } from "@/lib/authCallback";
 
 interface TutorialPlaygroundSummary {
   clubId: string;
@@ -33,7 +42,11 @@ export function useDashboardPage() {
   const [tutorialPlayground, setTutorialPlayground] =
     useState<TutorialPlaygroundSummary | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const [dashboardError, setDashboardError] = useState("");
+  const [createClubError, setCreateClubError] =
+    useState<ClubFormError | null>(null);
+  const [joinClubError, setJoinClubError] =
+    useState<ClubFormError | null>(null);
 
   const safeJson = useCallback(async (res: Response) => {
     const text = await res.text();
@@ -73,7 +86,9 @@ export function useDashboardPage() {
 
   useEffect(() => {
     if (status === "unauthenticated") {
-      router.push("/signin");
+      router.replace(
+        withCallbackUrl("/signin", getCurrentAppPath(window.location))
+      );
       return;
     }
 
@@ -83,10 +98,10 @@ export function useDashboardPage() {
 
     void (async () => {
       try {
-        setError("");
+        setDashboardError("");
         await Promise.all([fetchClubs(), fetchTutorialPlayground()]);
       } catch (err: unknown) {
-        setError(
+        setDashboardError(
           err instanceof Error ? err.message : "Failed to load dashboard"
         );
       } finally {
@@ -96,94 +111,173 @@ export function useDashboardPage() {
   }, [fetchClubs, fetchTutorialPlayground, router, status]);
 
   const openCreateClubModal = () => {
-    setError("");
+    setCreateClubError(null);
     setIsCreateClubOpen(true);
   };
 
   const closeCreateClubModal = () => {
     if (creatingClub) return;
     setIsCreateClubOpen(false);
+    setCreateClubError(null);
   };
 
   const openJoinClubModal = () => {
-    setError("");
+    setJoinClubError(null);
     setIsJoinClubOpen(true);
   };
 
   const closeJoinClubModal = () => {
     if (joiningClub) return;
     setIsJoinClubOpen(false);
+    setJoinClubError(null);
   };
 
+  const clearMatchingFormError = (
+    currentError: ClubFormError | null,
+    field: ClubFormField
+  ) => {
+    if (!currentError || (currentError.field && currentError.field !== field)) {
+      return currentError;
+    }
+
+    return null;
+  };
+
+  const updateNewClubName = (value: string) => {
+    setNewClubName(value);
+    setCreateClubError((current) =>
+      clearMatchingFormError(current, "clubName")
+    );
+  };
+
+  const updateNewClubPassword = (value: string) => {
+    setNewClubPassword(value);
+    setCreateClubError((current) =>
+      clearMatchingFormError(current, "password")
+    );
+  };
+
+  const updateJoinClubName = (value: string) => {
+    setJoinClubName(value);
+    setJoinClubError((current) =>
+      clearMatchingFormError(current, "clubName")
+    );
+  };
+
+  const updateJoinClubPassword = (value: string) => {
+    setJoinClubPassword(value);
+    setJoinClubError((current) =>
+      clearMatchingFormError(current, "password")
+    );
+  };
+
+  const readClubFormError = (
+    data: Record<string, unknown>,
+    fallback: string
+  ): ClubFormError => ({
+    error: typeof data.error === "string" ? data.error : fallback,
+    field:
+      data.field === "clubName" || data.field === "password"
+        ? data.field
+        : undefined,
+  });
+
   const createClub = async () => {
-    if (!newClubName.trim()) return;
+    if (creatingClub) return;
+
+    const validationError = validateCreateClubInput(
+      newClubName,
+      newClubPassword
+    );
+    if (validationError) {
+      setCreateClubError(validationError);
+      return;
+    }
 
     setCreatingClub(true);
-    setError("");
+    setCreateClubError(null);
     try {
       const res = await fetch("/api/clubs", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          name: newClubName,
+          name: newClubName.trim(),
           password: newClubPassword || undefined,
         }),
       });
-      const data = await safeJson(res);
+      const data = (await safeJson(res)) as Record<string, unknown>;
       if (!res.ok) {
-        setError(data.error || "Failed to create club");
+        setCreateClubError(
+          readClubFormError(data, "Failed to create club")
+        );
         return;
       }
 
       setNewClubName("");
       setNewClubPassword("");
       setIsCreateClubOpen(false);
-      await fetchClubs();
-
-      if (data?.id) {
+      if (typeof data.id === "string") {
         router.push(`/club/${data.id}`);
       }
+      void fetchClubs().catch((err: unknown) => {
+        setDashboardError(
+          err instanceof Error ? err.message : "Failed to refresh clubs"
+        );
+      });
     } catch (err: unknown) {
-      setError(
-        err instanceof Error ? err.message : "Failed to create club"
-      );
+      setCreateClubError({
+        error:
+          err instanceof Error ? err.message : "Failed to create club",
+      });
     } finally {
       setCreatingClub(false);
     }
   };
 
   const joinClub = async () => {
-    if (!joinClubName.trim()) return;
+    if (joiningClub) return;
+
+    const validationError = validateJoinClubInput(
+      joinClubName,
+      joinClubPassword
+    );
+    if (validationError) {
+      setJoinClubError(validationError);
+      return;
+    }
 
     setJoiningClub(true);
-    setError("");
+    setJoinClubError(null);
     try {
       const res = await fetch("/api/clubs/join", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          name: joinClubName,
+          name: joinClubName.trim(),
           password: joinClubPassword || undefined,
         }),
       });
-      const data = await safeJson(res);
+      const data = (await safeJson(res)) as Record<string, unknown>;
       if (!res.ok) {
-        setError(data.error || "Failed to join club");
+        setJoinClubError(readClubFormError(data, "Failed to join club"));
         return;
       }
 
       setJoinClubName("");
       setJoinClubPassword("");
       setIsJoinClubOpen(false);
-      await fetchClubs();
-
-      if (data?.id) {
+      if (typeof data.id === "string") {
         router.push(`/club/${data.id}`);
       }
+      void fetchClubs().catch((err: unknown) => {
+        setDashboardError(
+          err instanceof Error ? err.message : "Failed to refresh clubs"
+        );
+      });
     } catch (err: unknown) {
-      setError(
-        err instanceof Error ? err.message : "Failed to join club"
-      );
+      setJoinClubError({
+        error: err instanceof Error ? err.message : "Failed to join club",
+      });
     } finally {
       setJoiningClub(false);
     }
@@ -191,25 +285,25 @@ export function useDashboardPage() {
 
   const openTutorialPlayground = async () => {
     setOpeningTutorialPlayground(true);
-    setError("");
+    setDashboardError("");
     try {
       const res = await fetch("/api/tutorial-playground", { method: "POST" });
       const data = await safeJson(res);
       if (!res.ok) {
-        setError(data.error || "Failed to open tutorial playground");
+        setDashboardError(data.error || "Failed to open tutorial playground");
         return;
       }
 
       const playground = data?.playground as TutorialPlaygroundSummary | null;
       if (!playground?.clubId) {
-        setError("Failed to open tutorial playground");
+        setDashboardError("Failed to open tutorial playground");
         return;
       }
 
       setTutorialPlayground(playground);
       router.push(`/club/${playground.clubId}`);
     } catch (err: unknown) {
-      setError(
+      setDashboardError(
         err instanceof Error
           ? err.message
           : "Failed to open tutorial playground"
@@ -225,13 +319,13 @@ export function useDashboardPage() {
     accountName: session?.user?.name ?? "",
     clubs,
     newClubName,
-    setNewClubName,
+    setNewClubName: updateNewClubName,
     newClubPassword,
-    setNewClubPassword,
+    setNewClubPassword: updateNewClubPassword,
     joinClubName,
-    setJoinClubName,
+    setJoinClubName: updateJoinClubName,
     joinClubPassword,
-    setJoinClubPassword,
+    setJoinClubPassword: updateJoinClubPassword,
     isCreateClubOpen,
     isJoinClubOpen,
     creatingClub,
@@ -239,8 +333,9 @@ export function useDashboardPage() {
     openingTutorialPlayground,
     tutorialPlayground,
     loading,
-    error,
-    setError,
+    dashboardError,
+    createClubError,
+    joinClubError,
     openCreateClubModal,
     closeCreateClubModal,
     openJoinClubModal,

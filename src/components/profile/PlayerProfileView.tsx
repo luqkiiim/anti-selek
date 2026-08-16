@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import {
+  type KeyboardEvent as ReactKeyboardEvent,
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
   useEffect,
@@ -41,6 +42,7 @@ import type {
   PlayerProfileTrendSummary,
 } from "@/lib/profileStats";
 import { deleteUserAvatar, uploadUserAvatar } from "@/lib/avatarClient";
+import { getCurrentAppPath, withCallbackUrl } from "@/lib/authCallback";
 import { EmptyState, FlashMessage } from "@/components/ui/chrome";
 
 interface UserProfileResponse {
@@ -406,6 +408,7 @@ function RatingSparkline({
   const activePoint = activeIndex !== null ? points[activeIndex] : points.at(-1);
   const activeValue =
     activeIndex !== null ? series[activeIndex] : series.at(-1) ?? series[0];
+  const resolvedActiveIndex = activeIndex ?? Math.max(0, series.length - 1);
   const firstPoint = points[0];
   const lastPoint = points.at(-1) ?? points[0];
   const firstLabel = series[0]?.label ?? "Start";
@@ -464,6 +467,27 @@ function RatingSparkline({
     }
   };
 
+  const handleKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    let nextIndex: number | null = null;
+
+    if (event.key === "Home") {
+      nextIndex = 0;
+    } else if (event.key === "End") {
+      nextIndex = series.length - 1;
+    } else if (event.key === "ArrowLeft" || event.key === "ArrowDown") {
+      nextIndex = Math.max(0, resolvedActiveIndex - 1);
+    } else if (event.key === "ArrowRight" || event.key === "ArrowUp") {
+      nextIndex = Math.min(series.length - 1, resolvedActiveIndex + 1);
+    }
+
+    if (nextIndex === null) {
+      return;
+    }
+
+    event.preventDefault();
+    setActiveIndex(nextIndex);
+  };
+
   return (
     <div
       ref={containerRef}
@@ -474,9 +498,21 @@ function RatingSparkline({
       onPointerUp={endScrub}
       onPointerCancel={endScrub}
       onPointerLeave={clearMouseScrub}
-      style={{ touchAction: "pan-y" }}
+      onKeyDown={handleKeyDown}
+      onFocus={() => setActiveIndex(resolvedActiveIndex)}
+      style={{ touchAction: "pan-y pinch-zoom" }}
+      role="slider"
+      tabIndex={0}
       aria-label="Rating trend"
-      role="img"
+      aria-orientation="horizontal"
+      aria-valuemin={0}
+      aria-valuemax={Math.max(0, series.length - 1)}
+      aria-valuenow={resolvedActiveIndex}
+      aria-valuetext={
+        activeValue
+          ? `${activeValue.label}: rating ${activeValue.value}`
+          : "No rating data"
+      }
     >
       <svg
         viewBox={`0 0 ${width} ${height}`}
@@ -1589,7 +1625,7 @@ function RatingLedgerSection({
 
 function SessionFormSection({ data }: { data: UserProfileResponse }) {
   return (
-    <ProfileSection icon={CalendarDays} title="Session form">
+    <ProfileSection icon={CalendarDays} title="Tournament form">
       {data.recentSessions.length > 0 ? (
         <div className="grid">
           {data.recentSessions.map((recentSession) => (
@@ -1620,7 +1656,7 @@ function SessionFormSection({ data }: { data: UserProfileResponse }) {
           ))}
         </div>
       ) : (
-        <EmptyState title="No sessions yet" />
+        <EmptyState title="No tournaments yet" />
       )}
     </ProfileSection>
   );
@@ -1706,7 +1742,7 @@ export function PlayerProfileView({
 
   useEffect(() => {
     if (status === "unauthenticated") {
-      router.push("/signin");
+      router.replace(withCallbackUrl("/signin", getCurrentAppPath(window.location)));
     }
   }, [status, router]);
 

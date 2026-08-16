@@ -2,7 +2,7 @@
 
 import { getManualMatchSelectionOrder } from "@/app/session/[code]/manualMatchSelection";
 import { Avatar } from "@/components/ui/Avatar";
-import { ModalFrame } from "@/components/ui/chrome";
+import { FlashMessage, ModalFrame } from "@/components/ui/chrome";
 import { getCourtDisplayLabel } from "@/lib/courtLabels";
 import { SessionPool } from "@/types/enums";
 import type {
@@ -21,6 +21,7 @@ interface ManualMatchModalProps {
   manualMatchPlayerOptions: Player[];
   selectedManualPlayerIds: Set<string>;
   creatingManualMatch: boolean;
+  error?: string;
   poolsEnabled: boolean;
   poolAName?: string | null;
   poolBName?: string | null;
@@ -39,6 +40,7 @@ export function ManualMatchModal({
   manualMatchPlayerOptions,
   selectedManualPlayerIds,
   creatingManualMatch,
+  error,
   poolsEnabled,
   poolAName,
   poolBName,
@@ -59,6 +61,7 @@ export function ManualMatchModal({
     )
     .filter((player): player is Player => player !== null);
   const selectedPlayersCount = selectedManualPlayerIds.size;
+  const remainingPlayersCount = Math.max(0, 4 - selectedPlayersCount);
   const team1Players = selectedPlayersInOrder.slice(0, 2);
   const team2Players = selectedPlayersInOrder.slice(2, 4);
   const selectedSkippedPlayers = selectedPlayersInOrder.filter(
@@ -107,7 +110,7 @@ export function ManualMatchModal({
           <button
             type="button"
             onClick={onCreateMatch}
-            disabled={creatingManualMatch || manualMatchPlayerOptions.length < 4}
+            disabled={creatingManualMatch || selectedPlayersCount !== 4}
             className="app-button-primary"
           >
             {creatingManualMatch ? "Saving..." : submitLabel}
@@ -116,6 +119,7 @@ export function ManualMatchModal({
       }
     >
       <div className="space-y-3 px-2 py-3 sm:space-y-4 sm:px-5 sm:py-4">
+        {error ? <FlashMessage tone="error">{error}</FlashMessage> : null}
         <div className="app-popup-card">
           <div className="sticky top-0 z-10 space-y-2.5 border-b border-gray-200 bg-[var(--surface-strong)] px-3 py-3 shadow-[0_10px_24px_rgba(23,32,31,0.06)] sm:space-y-3 sm:px-4">
             <div className="flex flex-wrap items-center justify-between gap-2">
@@ -153,6 +157,7 @@ export function ManualMatchModal({
                   type="button"
                   onClick={() => onTogglePlayer(player.userId)}
                   disabled={isDisabled}
+                  aria-pressed={isSelected}
                   className={`app-touch-pan-y flex w-full items-center justify-between gap-2 rounded-xl border px-2.5 py-2.5 text-left transition sm:gap-3 sm:px-3 sm:py-3 ${
                     isSelected
                       ? "border-blue-200 bg-blue-50"
@@ -207,7 +212,15 @@ export function ManualMatchModal({
             At least 4 available, unpaused players are required to create a
             manual match.
           </div>
-        ) : null}
+        ) : remainingPlayersCount > 0 ? (
+          <p className="text-sm font-semibold text-gray-700" aria-live="polite">
+            Select {remainingPlayersCount} more {remainingPlayersCount === 1 ? "player" : "players"}.
+          </p>
+        ) : (
+          <p className="text-sm font-semibold text-emerald-700" aria-live="polite">
+            Four players selected. Ready to create the match.
+          </p>
+        )}
       </div>
     </ModalFrame>
   );

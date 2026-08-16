@@ -83,7 +83,7 @@ export async function PATCH(
     }
     if (sessionData.status === SessionStatus.COMPLETED) {
       return NextResponse.json(
-        { error: "Completed sessions cannot be edited" },
+        { error: "Completed tournaments cannot be edited" },
         { status: 400 }
       );
     }

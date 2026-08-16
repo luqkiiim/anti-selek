@@ -3,6 +3,7 @@
 import { History, Play, Settings, Users } from "lucide-react";
 import { SessionStatus } from "@/types/enums";
 import { StatCard } from "@/components/ui/chrome";
+import { getSessionStatusLabel } from "@/lib/sessionStatusLabels";
 
 interface SessionTutorialHint {
   title: string;
@@ -55,6 +56,7 @@ export function SessionOverviewPanel({
     : isWaiting
       ? "app-chip-warning"
       : "app-chip-accent";
+  const statusLabel = getSessionStatusLabel(sessionStatus);
   const statusCardValue = isCompleted ? (
     <span className="text-lg font-semibold leading-tight tracking-tight sm:text-2xl">
       Completed
@@ -62,9 +64,9 @@ export function SessionOverviewPanel({
   ) : isWaiting ? (
     "Waiting"
   ) : sessionStatus === SessionStatus.ACTIVE ? (
-    "Active"
+    "Live"
   ) : (
-    sessionStatus
+    statusLabel
   );
 
   return (
@@ -76,15 +78,15 @@ export function SessionOverviewPanel({
         <div className="flex flex-wrap items-center gap-2.5">
           <p className="app-section-eyebrow">
             {isCompleted
-              ? "Completed session"
+              ? "Completed tournament"
               : isWaiting
                 ? "Ready to start"
-                : "Live session"}
+                : "Live tournament"}
           </p>
-          <span className={`app-chip ${statusChipClass}`}>{sessionStatus}</span>
+          <span className={`app-chip ${statusChipClass}`}>{statusLabel}</span>
           {isTestSession ? (
             <span className="app-chip border-amber-200 bg-amber-50 text-amber-700">
-              Test Session
+              Test Tournament
             </span>
           ) : null}
           <span className="app-chip app-chip-neutral">{sessionTypeLabel}</span>
@@ -100,7 +102,7 @@ export function SessionOverviewPanel({
               data-tutorial-target="admin-onboarding-start-session"
             >
               <Play aria-hidden="true" size={17} />
-              Start Session
+              Start Tournament
             </button>
           ) : null}
           {canOpenSettings ? (

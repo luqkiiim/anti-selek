@@ -2,12 +2,13 @@
 
 import Link from "next/link";
 import { ArrowDown, ArrowUp } from "lucide-react";
-import type { KeyboardEvent, MouseEvent, ReactNode } from "react";
+import type { ReactNode } from "react";
 import { Avatar } from "@/components/ui/Avatar";
 import {
   doClaimNamesMatch,
   type ClaimRequesterEligibility,
 } from "@/lib/clubClaimRules";
+import { getClubRoleLabel } from "@/lib/clubRoles";
 import type {
   ClubClaimRequest,
   ClubLeaderboardClaimState,
@@ -24,14 +25,6 @@ interface ClubLeaderboardPanelProps {
   showClaimControls?: boolean;
   claimState?: ClubLeaderboardClaimState;
   onRequestClaim?: (player: ClubPageMember) => void;
-  onOpenPlayerProfile: (playerId: string) => void;
-}
-
-function shouldIgnoreCardNavigation(target: EventTarget | null) {
-  return (
-    target instanceof HTMLElement &&
-    !!target.closest("button, a, select, input, option")
-  );
 }
 
 function RankMovementIndicator({ rankDelta }: { rankDelta?: number | null }) {
@@ -159,7 +152,6 @@ export function ClubLeaderboardPanel({
   showClaimControls = true,
   claimState,
   onRequestClaim,
-  onOpenPlayerProfile,
 }: ClubLeaderboardPanelProps) {
   return (
     <div className="app-panel space-y-4 p-5 sm:p-6">
@@ -188,27 +180,13 @@ export function ClubLeaderboardPanel({
           players.map((player, index) => (
             <div
               key={player.id}
-              role="link"
-              tabIndex={0}
-              onClick={(event: MouseEvent<HTMLDivElement>) => {
-                if (shouldIgnoreCardNavigation(event.target)) {
-                  return;
-                }
-                onOpenPlayerProfile(player.id);
-              }}
-              onKeyDown={(event: KeyboardEvent<HTMLDivElement>) => {
-                if (shouldIgnoreCardNavigation(event.target)) {
-                  return;
-                }
-
-                if (event.key === "Enter" || event.key === " ") {
-                  event.preventDefault();
-                  onOpenPlayerProfile(player.id);
-                }
-              }}
-              className="cursor-pointer rounded-xl border border-gray-200 bg-gray-50 px-4 py-2 transition hover:-translate-y-0.5 hover:border-blue-300 hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 focus-visible:ring-offset-2"
+              className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-2"
             >
-              <div className="flex items-center justify-between gap-3">
+              <Link
+                href={`/profile/${player.id}?clubId=${clubId}`}
+                className="flex min-h-14 items-center justify-between gap-3 rounded-lg transition hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 focus-visible:ring-offset-2"
+                aria-label={`Open ${player.name}'s profile`}
+              >
                 <div className="flex min-w-0 items-center gap-3">
                   <div className="flex w-12 shrink-0 items-center gap-1">
                     <RankMovementIndicator rankDelta={player.rankDelta} />
@@ -218,14 +196,11 @@ export function ClubLeaderboardPanel({
                   </div>
                   <Avatar name={player.name} avatarUrl={player.avatarUrl} size="md" />
                   <div className="min-w-0">
-                    <Link
-                      href={`/profile/${player.id}?clubId=${clubId}`}
-                      className="text-sm font-semibold text-gray-900 hover:text-blue-600 hover:underline"
-                    >
+                    <span className="text-sm font-semibold text-gray-900">
                       {player.name}
-                    </Link>
+                    </span>
                     <p className="mt-1 text-xs font-semibold text-gray-500">
-                      {player.role}
+                      {player.isOwner ? "Owner" : getClubRoleLabel(player.role)}
                     </p>
                   </div>
                 </div>
@@ -239,7 +214,7 @@ export function ClubLeaderboardPanel({
                     <span className="text-red-600">L {player.losses}</span>
                   </p>
                 </div>
-              </div>
+              </Link>
 
               {showClaimControls && claimState
                 ? renderClaimControls({

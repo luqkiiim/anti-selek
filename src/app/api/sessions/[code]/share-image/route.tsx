@@ -172,7 +172,7 @@ async function getSessionShareImageRoute(
 
   if (sessionData.status !== SessionStatus.COMPLETED) {
     return NextResponse.json(
-      { error: "Final standings are available after the session ends." },
+      { error: "Final standings are available after the tournament ends." },
       { status: 400 }
     );
   }

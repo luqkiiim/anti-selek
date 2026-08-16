@@ -67,7 +67,7 @@ export async function DELETE(
 
     if (!targetSession.isTest) {
       return NextResponse.json(
-        { error: "Only test sessions can be deleted here" },
+        { error: "Only test tournaments can be deleted here" },
         { status: 400 }
       );
     }

@@ -974,7 +974,7 @@ async function assertNoNewerOutsideRatingMatches(
   if (newerOutsideMatch) {
     throw new CorrectCompletedMatchScoreError(
       "NEWER_OUTSIDE_MATCHES",
-      "Newer completed matches exist outside this session, so exact ELO replay is blocked."
+      "Newer completed matches exist outside this tournament, so exact ELO replay is blocked."
     );
   }
 }
@@ -1115,7 +1115,7 @@ async function reverseReplayRatingEffectsInTransaction(
     if (clubIds.length > 1) {
       throw new CorrectCompletedMatchScoreError(
         "LEGACY_COLLAB_REPLAY_UNSUPPORTED",
-        "This completed match is missing rating ledger rows for a multi-club session, so exact ELO replay is blocked."
+        "This completed match is missing rating ledger rows for a multi-club tournament, so exact ELO replay is blocked."
       );
     }
     await reverseLegacyMatchRatingInTransaction(tx, {
@@ -1227,13 +1227,13 @@ export async function correctCompletedMatchScoreInTransaction(
   ) {
     throw new CorrectCompletedMatchScoreError(
       "SESSION_NOT_CORRECTABLE",
-      "Only active or ended sessions can correct completed scores."
+      "Only active or ended tournaments can correct completed scores."
     );
   }
   if (targetMatch.session.isTest) {
     throw new CorrectCompletedMatchScoreError(
       "TEST_SESSION",
-      "Test sessions do not support completed score correction."
+      "Test tournaments do not support completed score correction."
     );
   }
   if (
@@ -1409,7 +1409,7 @@ export async function undoCompletedMatchResultInTransaction(
   if (match.session.status !== SessionStatus.ACTIVE) {
     throw new UndoCompletedMatchError(
       "SESSION_NOT_ACTIVE",
-      "Only active sessions can undo completed matches."
+      "Only active tournaments can undo completed matches."
     );
   }
 

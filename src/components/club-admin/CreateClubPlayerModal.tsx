@@ -160,7 +160,7 @@ export function CreateClubPlayerModal({
             <span className="block font-semibold text-gray-900">More rest</span>
             <span className="mt-1 block text-xs text-gray-600">
               Use as the default lighter-rotation marker when this player is
-              added to sessions.
+              added to tournaments.
             </span>
           </span>
         </label>

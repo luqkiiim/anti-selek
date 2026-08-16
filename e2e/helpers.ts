@@ -204,8 +204,8 @@ export async function createStartedHostSession(
 
   await hostPanel.getByRole("button", { name: "Create Tournament" }).click();
   await expect(page).toHaveURL(/\/session\/.+/);
-  await expect(page.getByRole("button", { name: "Start Session" })).toBeVisible();
-  await page.getByRole("button", { name: "Start Session" }).click();
+  await expect(page.getByRole("button", { name: "Start Tournament" })).toBeVisible();
+  await page.getByRole("button", { name: "Start Tournament" }).click();
 
   const sessionCode = page.url().split("/").pop();
   if (!sessionCode) {
@@ -219,9 +219,9 @@ export async function openSessionSettings(page: Page) {
   await page.getByRole("button", { name: "Settings" }).click();
   const settingsModal = page
     .locator(".app-modal-frame")
-    .filter({ has: page.getByRole("heading", { name: "Session settings" }) });
+    .filter({ has: page.getByRole("heading", { name: "Tournament settings" }) });
   await expect(
-    settingsModal.getByRole("heading", { name: "Session settings" })
+    settingsModal.getByRole("heading", { name: "Tournament settings" })
   ).toBeVisible();
   return settingsModal;
 }
@@ -384,18 +384,22 @@ export async function submitAndApproveVisibleMatch(
     team2Score: number;
   }
 ) {
-  const scoreInputs = page.locator('input[type="number"]');
+  const scoreInputs = page.getByRole("spinbutton", {
+    name: /^Team [12] score/,
+  });
   await expect(scoreInputs).toHaveCount(2);
   await scoreInputs.nth(0).fill(String(team1Score));
   await scoreInputs.nth(1).fill(String(team2Score));
-  await page.getByRole("button", { name: "Submit Score" }).click();
-  await expect(page.getByRole("button", { name: "Confirm", exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "Confirm", exact: true }).click();
+  await page.getByRole("button", { name: "Review result" }).click();
+  await expect(page.getByRole("button", { name: "Submit result", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Submit result", exact: true }).click();
   const confirmResultsButton = page.getByRole("button", {
-    name: "Confirm Results",
+    name: "Approve score",
   });
   if (await confirmResultsButton.isVisible({ timeout: 1000 }).catch(() => false)) {
-    await expect(page.getByText("Awaiting Confirmation")).toBeVisible();
+    await expect(
+      page.getByText("Waiting for opponent or admin approval")
+    ).toBeVisible();
     await confirmResultsButton.click();
   }
 }

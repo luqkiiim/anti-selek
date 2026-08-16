@@ -208,7 +208,7 @@ describe("session share image route", () => {
 
     expect(response.status).toBe(400);
     expect(body.error).toBe(
-      "Final standings are available after the session ends."
+      "Final standings are available after the tournament ends."
     );
     expect(mocks.imageResponses).toHaveLength(0);
   });

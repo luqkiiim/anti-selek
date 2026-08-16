@@ -10,10 +10,12 @@ import type {
   ClubPageSession,
   ClubPageUser,
 } from "@/components/club/clubTypes";
+import { getCurrentAppPath, withCallbackUrl } from "@/lib/authCallback";
 import { fetchClubPageSnapshot } from "./clubPageApi";
 
 interface ClubPageRouter {
   push: (href: string) => void;
+  replace: (href: string) => void;
 }
 
 export function useClubPageData({
@@ -54,7 +56,9 @@ export function useClubPageData({
 
   useEffect(() => {
     if (status === "unauthenticated") {
-      router.push("/signin");
+      router.replace(
+        withCallbackUrl("/signin", getCurrentAppPath(window.location))
+      );
       return;
     }
 

@@ -15,7 +15,7 @@ function slugifyFileName(input: string) {
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
 
-  return normalized || "session-standings";
+  return normalized || "tournament-standings";
 }
 
 function buildDownloadName(fileName: string) {

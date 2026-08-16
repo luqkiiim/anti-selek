@@ -73,8 +73,8 @@ export function getHostSessionOnboardingOverride({
   return {
     stepId: "host-session",
     targetId: "admin-onboarding-create-session",
-    coachmark: "Now the setup is ready. Press Create Test Session to open the live session.",
-    actionLabel: "Create test session",
+    coachmark: "Now the setup is ready. Press Create Test Tournament to open the live tournament.",
+    actionLabel: "Create test tournament",
   };
 }
 
@@ -183,20 +183,20 @@ export function buildAdminOnboardingProgress({
       actionLabel: "Open host setup",
       href: hostHref,
       targetId: "admin-onboarding-create-session",
-      coachmark: "Name a practice tournament, keep it as a test session, then create it.",
+      coachmark: "Name a practice tournament, keep it as a test tournament, then create it.",
       manual: false,
     },
     {
       id: "session-workflow",
-      title: "Explore a live practice session",
-      detail: "Open a live playground session and get familiar with the session controls.",
-      actionLabel: primarySessionCode ? "Open live session" : "Open host setup",
+      title: "Explore a live practice tournament",
+      detail: "Open a live playground tournament and get familiar with the tournament controls.",
+      actionLabel: primarySessionCode ? "Open live tournament" : "Open host setup",
       href: sessionHref,
       targetId: primarySessionCode
         ? "admin-onboarding-session-panel"
         : "admin-onboarding-host-players",
       coachmark: primarySessionCode
-        ? "Review the live practice session, player count, active courts, and settings."
+        ? "Review the live practice tournament, player count, active courts, and settings."
         : "Press Choose to select players for the tournament.",
       manual: false,
     },
@@ -212,12 +212,12 @@ export function buildAdminOnboardingProgress({
     },
     {
       id: "end-session",
-      title: "End the test session",
-      detail: "Close the practice session once scoring is done to see final standings.",
-      actionLabel: "Open session settings",
+      title: "End the test tournament",
+      detail: "Close the practice tournament once scoring is done to see final standings.",
+      actionLabel: "Open tournament settings",
       href: sessionHref,
       targetId: "admin-onboarding-end-session",
-      coachmark: "Open session settings and press End Session when practice is complete.",
+      coachmark: "Open tournament settings and press End Tournament when practice is complete.",
       manual: false,
     },
     {

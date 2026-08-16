@@ -50,12 +50,20 @@ describe("ClubOverviewPulsePanel", () => {
     onJoinTournament = vi.fn(),
     onOpenTournament = vi.fn(),
     viewerIsQuickAccess = false,
+    canManageClub = false,
+    canAdminClub = false,
+    onHostTournament = vi.fn(),
+    onManagePlayers = vi.fn(),
   }: {
     activeTournaments?: ClubPageSession[];
     currentUserId?: string | null;
     onJoinTournament?: (code: string) => void;
     onOpenTournament?: (code: string) => void;
     viewerIsQuickAccess?: boolean;
+    canManageClub?: boolean;
+    canAdminClub?: boolean;
+    onHostTournament?: () => void;
+    onManagePlayers?: () => void;
   } = {}) {
     await act(async () => {
       root.render(
@@ -65,10 +73,14 @@ describe("ClubOverviewPulsePanel", () => {
           activeTournaments={activeTournaments}
           currentUserId={currentUserId}
           viewerIsQuickAccess={viewerIsQuickAccess}
+          canManageClub={canManageClub}
+          canAdminClub={canAdminClub}
           onJoinTournament={onJoinTournament}
           onOpenTournament={onOpenTournament}
           onOpenTournaments={vi.fn()}
           onOpenPlayerProfile={vi.fn()}
+          onHostTournament={onHostTournament}
+          onManagePlayers={onManagePlayers}
         />
       );
     });
@@ -105,6 +117,8 @@ describe("ClubOverviewPulsePanel", () => {
     await clickButton("Join");
 
     expect(onJoinTournament).toHaveBeenCalledWith("SESSION1");
+    expect(container.textContent).toContain("Live");
+    expect(container.textContent).not.toContain("ACTIVE");
   });
 
   it("keeps participants on the existing open action", async () => {
@@ -167,5 +181,35 @@ describe("ClubOverviewPulsePanel", () => {
     expect(onOpenTournament).toHaveBeenCalledWith("SESSION1");
     expect(findButton("Join")).toBeUndefined();
     expect(onJoinTournament).not.toHaveBeenCalled();
+  });
+
+  it("guides admins with a small roster to add players or host with guests", async () => {
+    const onHostTournament = vi.fn();
+    const onManagePlayers = vi.fn();
+
+    await renderPanel({
+      activeTournaments: [],
+      canManageClub: true,
+      canAdminClub: true,
+      onHostTournament,
+      onManagePlayers,
+    });
+
+    expect(container.textContent).toContain("Build your first tournament");
+    await clickButton("Add players");
+    await clickButton("Host with guests");
+    expect(onManagePlayers).toHaveBeenCalledOnce();
+    expect(onHostTournament).toHaveBeenCalledOnce();
+    expect(container.textContent).not.toContain("No form data yet");
+  });
+
+  it("gives members one passive organizer-aware next step", async () => {
+    await renderPanel({ activeTournaments: [], canManageClub: false });
+
+    expect(container.textContent).toContain("No tournament activity yet");
+    expect(container.textContent).toContain(
+      "after an organizer runs a tournament"
+    );
+    expect(findButton("Host a tournament")).toBeUndefined();
   });
 });

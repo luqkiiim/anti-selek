@@ -98,7 +98,9 @@ function TeamNames({
                   size="court"
                   appearance="court"
                 />
-                <span className="min-w-0 flex-1 truncate">{player.name}</span>
+                <span className="min-w-0 flex-1 line-clamp-2 break-words leading-snug">
+                  {player.name}
+                </span>
               </button>
             ) : (
               <div className={`flex min-w-0 items-center gap-1.5 sm:gap-2 ${rowDirectionClass}`}>
@@ -109,7 +111,7 @@ function TeamNames({
                   appearance="court"
                 />
                 <p
-                  className="min-w-0 flex-1 truncate text-[0.95rem] font-semibold leading-tight text-gray-900 sm:text-base lg:text-lg xl:text-base"
+                  className="min-w-0 flex-1 line-clamp-2 break-words text-[0.95rem] font-semibold leading-snug text-gray-900 sm:text-base lg:text-lg xl:text-base"
                   title={player.name}
                 >
                   {player.name}
@@ -131,7 +133,7 @@ function TeamNames({
                     type="button"
                     onClick={() => onReshuffleWithoutPlayer(player.id)}
                     disabled={actionDisabled}
-                    className="w-full rounded-lg border border-blue-200/80 bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-800 transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="min-h-11 w-full rounded-lg border border-blue-200/80 bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-800 transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     {isReshuffling ? "Reshuffling..." : "Reshuffle Without"}
                   </button>
@@ -139,7 +141,7 @@ function TeamNames({
                     type="button"
                     onClick={() => onReplacePlayer(player.id)}
                     disabled={actionDisabled}
-                    className="w-full rounded-lg border border-emerald-200/80 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-800 transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="min-h-11 w-full rounded-lg border border-emerald-200/80 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-800 transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     {isReplacing ? "Replacing..." : "Replace"}
                   </button>
@@ -155,6 +157,8 @@ function TeamNames({
 
 interface ScoreSlotProps {
   matchId: string;
+  teamKey: "team1" | "team2";
+  accessibleLabel: string;
   canEdit: boolean;
   scoreValue: string;
   readonlyScore?: string | number;
@@ -167,6 +171,8 @@ interface ScoreSlotProps {
 
 function ScoreSlot({
   matchId,
+  teamKey,
+  accessibleLabel,
   canEdit,
   scoreValue,
   readonlyScore,
@@ -181,6 +187,8 @@ function ScoreSlot({
       <input
         ref={inputRef}
         type="number"
+        name={`${matchId}-${teamKey}-score`}
+        aria-label={accessibleLabel}
         inputMode="numeric"
         min={0}
         step={1}
@@ -202,7 +210,8 @@ function ScoreSlot({
     (typeof pendingScore === "number" ? pendingScore.toString() : null);
 
   return (
-    <div
+    <output
+      aria-label={`${accessibleLabel}: ${displayScore ?? "not entered"}`}
       className={`flex h-11 w-11 items-center justify-center rounded-xl border bg-white text-[1.55rem] font-semibold tabular-nums sm:h-12 sm:w-12 sm:text-2xl md:h-[3.25rem] md:w-[3.25rem] xl:h-14 xl:w-14 ${
         displayScore !== null
           ? "border-gray-200 text-gray-900"
@@ -210,7 +219,7 @@ function ScoreSlot({
       }`}
     >
       {displayScore ?? "-"}
-    </div>
+    </output>
   );
 }
 
@@ -281,6 +290,8 @@ export function LiveMatchCard({
         })
       : isAdmin || isParticipant);
   const scores = matchScores[match.id] || { team1: "", team2: "" };
+  const team1Names = `${match.team1User1.name} and ${match.team1User2.name}`;
+  const team2Names = `${match.team2User1.name} and ${match.team2User2.name}`;
   const isPendingApproval = match.status === MatchStatus.PENDING_APPROVAL;
   const isConfirmingSubmission = confirmingScoreMatchId === match.id;
   const canEditScores = canEdit && !isConfirmingSubmission;
@@ -543,6 +554,8 @@ export function LiveMatchCard({
       />
       <ScoreSlot
         matchId={match.id}
+        teamKey="team1"
+        accessibleLabel={`Team 1 score, ${team1Names}`}
         canEdit={canEditScores}
         scoreValue={scores.team1}
         readonlyScore={isConfirmingSubmission ? scores.team1 : undefined}
@@ -554,6 +567,8 @@ export function LiveMatchCard({
       />
       <ScoreSlot
         matchId={match.id}
+        teamKey="team2"
+        accessibleLabel={`Team 2 score, ${team2Names}`}
         canEdit={canEditScores}
         scoreValue={scores.team2}
         readonlyScore={isConfirmingSubmission ? scores.team2 : undefined}

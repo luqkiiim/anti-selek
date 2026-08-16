@@ -30,7 +30,9 @@ export default function Home() {
     openingTutorialPlayground,
     tutorialPlayground,
     loading,
-    error,
+    dashboardError,
+    createClubError,
+    joinClubError,
     openCreateClubModal,
     closeCreateClubModal,
     openJoinClubModal,
@@ -120,6 +122,14 @@ export default function Home() {
           </div>
         </section>
 
+        {isQuickAccess ? (
+          <FlashMessage tone="warning">
+            Quick access is view-only and limited to this club profile. You can
+            follow tournaments and standings, but you cannot join clubs, submit
+            scores, or manage a club. Sign in with an account for full access.
+          </FlashMessage>
+        ) : null}
+
         {!isQuickAccess ? (
           <section className="app-panel p-5 sm:p-6">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -158,7 +168,9 @@ export default function Home() {
           </section>
         ) : null}
 
-        {error ? <FlashMessage tone="error">{error}</FlashMessage> : null}
+        {dashboardError ? (
+          <FlashMessage tone="error">{dashboardError}</FlashMessage>
+        ) : null}
 
         <SectionCard
           eyebrow="Your spaces"
@@ -241,6 +253,7 @@ export default function Home() {
         clubName={newClubName}
         clubPassword={newClubPassword}
         creatingClub={creatingClub}
+        error={createClubError}
         onClubNameChange={setNewClubName}
         onClubPasswordChange={setNewClubPassword}
         onClose={closeCreateClubModal}
@@ -252,6 +265,7 @@ export default function Home() {
         clubName={joinClubName}
         clubPassword={joinClubPassword}
         joiningClub={joiningClub}
+        error={joinClubError}
         onClubNameChange={setJoinClubName}
         onClubPasswordChange={setJoinClubPassword}
         onClose={closeJoinClubModal}

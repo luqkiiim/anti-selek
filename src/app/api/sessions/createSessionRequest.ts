@@ -299,7 +299,7 @@ export function parseCreateSessionRequest(
   }
 
   if (typeof name !== "string" || !name.trim()) {
-    throw new SessionRouteError("Session name required", 400);
+    throw new SessionRouteError("Tournament name required", 400);
   }
   if (typeof clubId !== "string" || !clubId) {
     throw new SessionRouteError("Club is required", 400);
@@ -331,7 +331,7 @@ export function parseCreateSessionRequest(
       legacyModeInput as SessionMode
     )
   ) {
-    throw new SessionRouteError("Invalid session mode", 400);
+    throw new SessionRouteError("Invalid tournament mode", 400);
   }
   if (
     ![
@@ -344,7 +344,7 @@ export function parseCreateSessionRequest(
       legacyTypeInput as SessionType
     )
   ) {
-    throw new SessionRouteError("Invalid session type", 400);
+    throw new SessionRouteError("Invalid tournament type", 400);
   }
   if (
     scoringType !== undefined &&
@@ -399,13 +399,13 @@ export function parseCreateSessionRequest(
   if (normalizedCollabFormat === SessionCollabFormat.INTERCLUB) {
     if (typeof partnerClubId !== "string" || !partnerClubId) {
       throw new SessionRouteError(
-        "Club vs club sessions require a partner club",
+        "Club vs club tournaments require a partner club",
         400
       );
     }
     if (normalizedPoolsEnabled) {
       throw new SessionRouteError(
-        "Club vs club sessions do not support pools",
+        "Club vs club tournaments do not support pools",
         400
       );
     }

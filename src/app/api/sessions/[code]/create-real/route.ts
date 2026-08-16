@@ -119,21 +119,24 @@ export async function POST(
 
     if (!sourceSession.isTest) {
       return NextResponse.json(
-        { error: "Only test sessions can create a real session copy" },
+        { error: "Only test tournaments can create a real tournament copy" },
         { status: 400 }
       );
     }
 
     if (sourceSession.club?.isTutorial) {
       return NextResponse.json(
-        { error: "Tutorial playground sessions cannot create real sessions" },
+        {
+          error:
+            "Tutorial playground tournaments cannot create real tournaments",
+        },
         { status: 400 }
       );
     }
 
     if (sourceSession.players.length < 2) {
       return NextResponse.json(
-        { error: "Need at least 2 players to create a real session" },
+        { error: "Need at least 2 players to create a real tournament" },
         { status: 400 }
       );
     }
@@ -168,7 +171,7 @@ export async function POST(
         return NextResponse.json(
           {
             error:
-              "Cannot copy results because the test session contains an invalid completed score.",
+              "Cannot copy results because the test tournament contains an invalid completed score.",
           },
           { status: 400 }
         );
@@ -203,7 +206,7 @@ export async function POST(
         return NextResponse.json(
           {
             error:
-              "Cannot copy results because a completed match references a court that is no longer in the test session.",
+              "Cannot copy results because a completed match references a court that is no longer in the test tournament.",
           },
           { status: 400 }
         );
@@ -229,7 +232,7 @@ export async function POST(
           return NextResponse.json(
             {
               error:
-                "This test session already has a real copy with results. Use that session to avoid double-counting standings or ratings.",
+                "This test tournament already has a real copy with results. Use that tournament to avoid double-counting standings or ratings.",
               code: existingResultCopy.code,
             },
             { status: 409 }
@@ -440,8 +443,10 @@ export async function POST(
 
     if (!createdSession) {
       logError(
-        "Create real session returned no session",
-        new Error("Session transaction completed without a created session")
+        "Create real tournament returned no tournament",
+        new Error(
+          "Tournament transaction completed without a created tournament"
+        )
       );
       return safeErrorResponse();
     }

@@ -120,4 +120,36 @@ describe("club collection API", () => {
     expect(body.clubName).toBe("New Club");
     expect(body.communityName).toBe("New Club");
   });
+
+  it("identifies the club-name field when create validation fails", async () => {
+    const response = await POST(
+      new Request("http://localhost/api/clubs", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ clubName: "--" }),
+      })
+    );
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      error: "Club name must be at least 3 characters",
+      field: "clubName",
+    });
+  });
+
+  it("identifies the password field when create validation fails", async () => {
+    const response = await POST(
+      new Request("http://localhost/api/clubs", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ clubName: "New Club", password: "123" }),
+      })
+    );
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      error: "Password must be at least 4 characters",
+      field: "password",
+    });
+  });
 });

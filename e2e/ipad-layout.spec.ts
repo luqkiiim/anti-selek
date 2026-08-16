@@ -73,9 +73,16 @@ test.describe("iPad session navigation layout", () => {
     });
 
     await expect(
-      page.locator('nav[aria-label="Session navigation"]')
+      page.locator('nav[aria-label="Tournament navigation"]')
     ).toBeVisible();
     await expect(page.getByText("Court board")).toBeVisible();
+
+    const sessionPanels = page.locator("[data-session-pager-section]");
+    await expect(sessionPanels).toHaveCount(3);
+    await expect(page.locator("[data-session-pager-section][inert]")).toHaveCount(2);
+    await expect(
+      page.locator('[data-session-pager-section="courts"]')
+    ).not.toHaveAttribute("aria-hidden", "true");
 
     const courtCards = page.locator("[data-live-court-card]");
     await expect(courtCards).toHaveCount(2);
@@ -115,5 +122,24 @@ test.describe("desktop club navigation layout", () => {
     await expect(
       page.locator("div.app-swipe-track.overflow-x-auto").first()
     ).toBeHidden();
+  });
+
+  test("all tournament sections remain exposed in the desktop layout", async ({
+    page,
+  }) => {
+    await signInAsAdmin(page);
+    await createStartedHostSession(page, {
+      sessionName: "E2E Desktop Accessible Tournament",
+      courtCount: 1,
+    });
+
+    const sessionPanels = page.locator("[data-session-pager-section]");
+    await expect(sessionPanels).toHaveCount(3);
+    await expect(
+      page.locator("[data-session-pager-section][inert]")
+    ).toHaveCount(0);
+    await expect(
+      page.locator('[data-session-pager-section][aria-hidden="true"]')
+    ).toHaveCount(0);
   });
 });

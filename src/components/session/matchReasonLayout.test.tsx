@@ -177,8 +177,8 @@ describe("match reason layout", () => {
     );
 
     expect(markup).not.toContain("data-live-match-reason-button");
-    expect(markup).toContain(">Edit<");
-    expect(markup).toContain(">Confirm<");
+    expect(markup).toContain(">Edit score<");
+    expect(markup).toContain(">Submit result<");
   });
 
   it("keeps the live footer layout with eight-character names", () => {
@@ -231,8 +231,7 @@ describe("match reason layout", () => {
 
     expect(markup).toContain(`title="${longName}"`);
     expect(markup).toContain(`aria-label="Open actions for ${longName}"`);
-    expect(markup).toContain("min-w-0 flex-1 truncate");
-    expect(markup).not.toContain("whitespace-normal break-words");
+    expect(markup).toContain("min-w-0 flex-1 line-clamp-2 break-words");
   });
 
   it("truncates long queued match names while preserving full-name access", () => {

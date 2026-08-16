@@ -209,7 +209,7 @@ export async function mergeDuplicateUnclaimedClubPlayer(
 
     if (targetSessionPlayer || targetMatch || targetQueuedMatch) {
       throw new ClubPlayerMergeError(
-        "Target player already appears in this club's session history",
+        "Target player already appears in this club's tournament history",
         409
       );
     }

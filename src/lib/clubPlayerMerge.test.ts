@@ -462,7 +462,8 @@ describe("mergeDuplicateUnclaimedCommunityPlayer", () => {
         })
       )
     ).rejects.toMatchObject({
-      message: "Target player already appears in this club's session history",
+      message:
+        "Target player already appears in this club's tournament history",
       statusCode: 409,
     });
 

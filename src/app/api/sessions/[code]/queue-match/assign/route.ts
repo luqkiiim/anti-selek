@@ -76,7 +76,7 @@ export async function POST(
     );
 
     if (sessionData.status !== "ACTIVE") {
-      throw new GenerateMatchError(400, "Session not active");
+      throw new GenerateMatchError(400, "Tournament not active");
     }
 
     if (!sessionData.queuedMatch) {

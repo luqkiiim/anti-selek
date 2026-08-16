@@ -33,7 +33,7 @@ describe("getHostSessionOnboardingOverride", () => {
     });
   });
 
-  it("points to session creation only after setup has a name and roster", () => {
+  it("points to tournament creation only after setup has a name and roster", () => {
     expect(
       getHostSessionOnboardingOverride({
         newSessionName: "Tutorial Test",
@@ -43,7 +43,7 @@ describe("getHostSessionOnboardingOverride", () => {
     ).toMatchObject({
       stepId: "host-session",
       targetId: "admin-onboarding-create-session",
-      actionLabel: "Create test session",
+      actionLabel: "Create test tournament",
     });
   });
 });
@@ -64,18 +64,18 @@ describe("buildAdminOnboardingProgress", () => {
       "Open tutorial playground",
       "Open players",
       "Open host setup",
-      "Open live session",
+      "Open live tournament",
       "Open scoring",
-      "Open session settings",
+      "Open tournament settings",
       "Reset playground",
     ]);
     expect(progress.steps.map((step) => step.title)).toEqual([
       "Open playground",
       "Review practice players",
       "Create a test tournament",
-      "Explore a live practice session",
+      "Explore a live practice tournament",
       "Score a practice match",
-      "End the test session",
+      "End the test tournament",
       "Reset playground",
     ]);
   });

@@ -53,19 +53,28 @@ export async function POST(request: Request) {
       );
     } catch (error) {
       if (error instanceof ClubContractAliasConflictError) {
-        return NextResponse.json({ error: error.message }, { status: 400 });
+        return NextResponse.json(
+          { error: error.message, field: "clubName" },
+          { status: 400 }
+        );
       }
       throw error;
     }
     const { password } = bodyRecord as { password?: unknown };
     const name = aliasedName ?? bodyRecord.name;
     if (typeof name !== "string" || !name.trim()) {
-      return NextResponse.json({ error: "Club name is required" }, { status: 400 });
+      return NextResponse.json(
+        { error: "Club name is required", field: "clubName" },
+        { status: 400 }
+      );
     }
 
     const normalizedLookupName = normalizeNameLookupKey(name);
     if (!normalizedLookupName) {
-      return NextResponse.json({ error: "Club name is required" }, { status: 400 });
+      return NextResponse.json(
+        { error: "Club name is required", field: "clubName" },
+        { status: 400 }
+      );
     }
 
     const matchingClubs = (
@@ -85,22 +94,34 @@ export async function POST(request: Request) {
     );
 
     if (matchingClubs.length > 1) {
-      return NextResponse.json({ error: "Club name is ambiguous" }, { status: 409 });
+      return NextResponse.json(
+        { error: "Club name is ambiguous", field: "clubName" },
+        { status: 409 }
+      );
     }
 
     const club = matchingClubs[0] ?? null;
 
     if (!club) {
-      return NextResponse.json({ error: "Club not found" }, { status: 404 });
+      return NextResponse.json(
+        { error: "Club not found", field: "clubName" },
+        { status: 404 }
+      );
     }
 
     if (club.isPasswordProtected) {
       if (typeof password !== "string" || password.length === 0) {
-        return NextResponse.json({ error: "Password is required" }, { status: 400 });
+        return NextResponse.json(
+          { error: "Password is required", field: "password" },
+          { status: 400 }
+        );
       }
       const ok = await bcrypt.compare(password, club.passwordHash || "");
       if (!ok) {
-        return NextResponse.json({ error: "Invalid password" }, { status: 403 });
+        return NextResponse.json(
+          { error: "Invalid password", field: "password" },
+          { status: 403 }
+        );
       }
     }
     const shouldBeAdmin =
@@ -146,4 +167,3 @@ export async function POST(request: Request) {
     return safeErrorResponse();
   }
 }
-

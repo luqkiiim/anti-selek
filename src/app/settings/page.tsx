@@ -8,6 +8,7 @@ import { useRouter } from "next/navigation";
 import { AvatarUploader } from "@/components/ui/AvatarUploader";
 import { FlashMessage, HeroCard, SectionCard } from "@/components/ui/chrome";
 import { deleteUserAvatar, uploadUserAvatar } from "@/lib/avatarClient";
+import { getCurrentAppPath, withCallbackUrl } from "@/lib/authCallback";
 import { normalizeNameLookupKey } from "@/lib/quickAccess";
 
 interface CurrentUserSettingsPayload {
@@ -76,7 +77,9 @@ export default function SettingsPage() {
 
   useEffect(() => {
     if (status === "unauthenticated") {
-      router.push("/signin");
+      router.replace(
+        withCallbackUrl("/signin", getCurrentAppPath(window.location))
+      );
     }
   }, [router, status]);
 
@@ -292,7 +295,7 @@ export default function SettingsPage() {
             <SectionCard
               eyebrow="Display name"
               title="One-time player rename"
-              description="This updates the name shown across your profile, clubs, and sessions."
+              description="This updates the name shown across your profile, clubs, and tournaments."
               action={
                 <span
                   className={`app-chip ${
@@ -371,7 +374,7 @@ export default function SettingsPage() {
               <AvatarUploader
                 name={user.name}
                 avatarUrl={user.avatarUrl}
-                helperText="Use a clear photo so other players can recognize you across clubs and sessions. We compress the final cropped avatar before saving."
+                helperText="Use a clear photo so other players can recognize you across clubs and tournaments. We compress the final cropped avatar before saving."
                 onUpload={handleUploadAvatar}
                 onRemove={handleRemoveAvatar}
               />
