@@ -149,6 +149,25 @@ describe("LiveStandingsTable", () => {
     expect(document.body.textContent).not.toContain("Skipping next");
   });
 
+  it("does not label guest players in the standings leaderboard", async () => {
+    await act(async () => {
+      root.render(
+        renderTable({
+          tablePlayers: [
+            {
+              ...createPlayer("guest-1", "Temporary Player"),
+              isGuest: true,
+            },
+          ],
+        })
+      );
+    });
+
+    expect(document.body.querySelector("tbody")?.textContent).not.toContain(
+      "Guest"
+    );
+  });
+
   it("expands compact column labels and exposes fixed game-group filters", async () => {
     await act(async () => {
       root.render(
