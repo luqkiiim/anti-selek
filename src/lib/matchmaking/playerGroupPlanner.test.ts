@@ -28,7 +28,7 @@ describe("player-group court composition planner", () => {
     expect(plan.overflowCourtCount).toBe(0);
   });
 
-  it("corrects cumulative rounding on the next 12/9 allocation", () => {
+  it("keeps one deliberate Crossover while correcting cumulative 12/9 allocation", () => {
     const [plan] = buildPlayerGroupCourtPlans({
       requestedCourtCount: 3,
       activePoolAPlayerCount: 12,
@@ -56,10 +56,37 @@ describe("player-group court composition planner", () => {
     const types = plan.compositions.map((court) => court.courtGroupType);
 
     expect(countTypes(types, CourtGroupType.COMPETITIVE)).toBe(1);
-    expect(countTypes(types, CourtGroupType.CROSSOVER)).toBe(2);
-    expect(plan.compositions.reduce((sum, court) => sum + court.poolASeatCount, 0)).toBe(8);
-    expect(plan.compositions.reduce((sum, court) => sum + court.poolBSeatCount, 0)).toBe(4);
-    expect(plan.projectedCompetitiveSeatShare).toBeCloseTo(14 / 24);
+    expect(countTypes(types, CourtGroupType.SOCIAL)).toBe(1);
+    expect(countTypes(types, CourtGroupType.CROSSOVER)).toBe(1);
+    expect(plan.compositions.reduce((sum, court) => sum + court.poolASeatCount, 0)).toBe(6);
+    expect(plan.compositions.reduce((sum, court) => sum + court.poolBSeatCount, 0)).toBe(6);
+    expect(plan.projectedCompetitiveSeatShare).toBeCloseTo(12 / 24);
+  });
+
+  it("uses dedicated lanes for the first two single-court assignments, then crosses over", () => {
+    const history: Array<{
+      courtGroupType: CourtGroupType;
+      poolASeatCount: number;
+      poolBSeatCount: number;
+    }> = [];
+
+    for (let assignment = 0; assignment < 3; assignment += 1) {
+      const [plan] = buildPlayerGroupCourtPlans({
+        requestedCourtCount: 1,
+        activePoolAPlayerCount: 12,
+        activePoolBPlayerCount: 9,
+        waitingPoolAPlayerCount: 12,
+        waitingPoolBPlayerCount: 9,
+        history,
+      });
+      history.push(plan.compositions[0]);
+    }
+
+    expect(history.map((court) => court.courtGroupType)).toEqual([
+      CourtGroupType.COMPETITIVE,
+      CourtGroupType.SOCIAL,
+      CourtGroupType.CROSSOVER,
+    ]);
   });
 
   it("uses a feasible Crossover to closely track an 18/3 active ratio", () => {

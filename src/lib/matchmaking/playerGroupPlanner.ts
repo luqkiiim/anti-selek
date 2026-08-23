@@ -261,11 +261,11 @@ function comparePlans(left: PlayerGroupCourtPlan, right: PlayerGroupCourtPlan) {
   if (left.cadenceViolationCount !== right.cadenceViolationCount) {
     return left.cadenceViolationCount - right.cadenceViolationCount;
   }
-  if (Math.abs(left.ratioError - right.ratioError) > Number.EPSILON) {
-    return left.ratioError - right.ratioError;
-  }
   if (left.crossoverCourtCount !== right.crossoverCourtCount) {
     return left.crossoverCourtCount - right.crossoverCourtCount;
+  }
+  if (Math.abs(left.ratioError - right.ratioError) > Number.EPSILON) {
+    return left.ratioError - right.ratioError;
   }
 
   return left.compositions
