@@ -184,5 +184,11 @@ describe("LiveStandingsTable", () => {
     expect(document.body.textContent).toContain("Competitive");
     expect(document.body.textContent).toContain("Social");
     expect(document.body.textContent).not.toContain("Regular");
+    expect(document.body.querySelector("tbody")?.textContent).not.toContain(
+      "Competitive"
+    );
+    expect(document.body.querySelector("tbody")?.textContent).not.toContain(
+      "Social"
+    );
   });
 });

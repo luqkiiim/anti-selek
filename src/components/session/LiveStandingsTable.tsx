@@ -3,7 +3,6 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { Avatar } from "@/components/ui/Avatar";
-import { getPlayerGroupLabel } from "@/lib/playerGroups";
 import { getSessionPoolOptions } from "@/lib/sessionPools";
 import { getSessionTypeLabel } from "@/lib/sessionModeLabels";
 import type { Player } from "./sessionTypes";
@@ -197,7 +196,6 @@ export function LiveStandingsTable({
               const isMe = player.userId === currentUserId;
               const pointDiff = pointDiffByUserId.get(player.userId) ?? 0;
               const standingValue = getStandingValue(sessionType, player, stats);
-              const poolLabel = getPlayerGroupLabel(player.pool);
               const interclubTone = player.representingClubId
                 ? interclubClubToneById?.[player.representingClubId]
                 : undefined;
@@ -248,11 +246,6 @@ export function LiveStandingsTable({
                         {player.isGuest ? (
                           <span className="rounded-full border border-gray-200 bg-gray-100 px-1.5 py-0.5 text-[9px] font-medium text-gray-700 sm:px-2 sm:text-[10px]">
                             Guest
-                          </span>
-                        ) : null}
-                        {poolsEnabled ? (
-                          <span className="rounded-full border border-indigo-200 bg-indigo-50 px-1.5 py-0.5 text-[9px] font-medium text-indigo-700 sm:px-2 sm:text-[10px]">
-                            {poolLabel}
                           </span>
                         ) : null}
                       </div>
