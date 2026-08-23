@@ -11,7 +11,7 @@ import type {
   SessionData,
 } from "@/components/session/sessionTypes";
 import type { MatchmakingReason } from "@/lib/matchmaking/matchReason";
-import { SessionType } from "@/types/enums";
+import { CourtGroupType, SessionType } from "@/types/enums";
 
 type LiveMatch = NonNullable<SessionData["courts"][number]["currentMatch"]>;
 
@@ -48,6 +48,9 @@ export interface MatchPayload {
   team2User1?: MatchParticipant;
   team2User2?: MatchParticipant;
   matchmakingReason?: MatchmakingReason | null;
+  courtGroupType?: CourtGroupType | null;
+  poolASeatCount?: number | null;
+  poolBSeatCount?: number | null;
 }
 
 export interface SessionSnapshotLike {
@@ -76,6 +79,7 @@ export interface GuestPayload {
   partnerPreference: Player["partnerPreference"];
   mixedSideOverride?: Player["mixedSideOverride"];
   pool?: Player["pool"];
+  pendingPool?: Player["pendingPool"];
   representingClubId?: string | null;
   needsMoreRest?: boolean;
 }
@@ -86,6 +90,7 @@ export interface SessionPlayerPayload {
   partnerPreference: Player["partnerPreference"];
   mixedSideOverride?: Player["mixedSideOverride"];
   pool?: Player["pool"];
+  pendingPool?: Player["pendingPool"];
   representingClubId?: string | null;
   needsMoreRest?: boolean;
 }
@@ -209,6 +214,12 @@ function buildLiveMatch(
     completedAt: normalizeOptionalDate(payload.completedAt),
     matchmakingReason:
       payload.matchmakingReason ?? fallbackMatch?.matchmakingReason ?? null,
+    courtGroupType:
+      payload.courtGroupType ?? fallbackMatch?.courtGroupType ?? null,
+    poolASeatCount:
+      payload.poolASeatCount ?? fallbackMatch?.poolASeatCount ?? null,
+    poolBSeatCount:
+      payload.poolBSeatCount ?? fallbackMatch?.poolBSeatCount ?? null,
   };
 }
 
@@ -263,7 +274,11 @@ function buildQueuedMatch(
   return {
     id: queuedMatch.id,
     createdAt: normalizeOptionalDate(queuedMatch.createdAt),
+    isAutomatic: queuedMatch.isAutomatic ?? false,
     targetPool: queuedMatch.targetPool ?? null,
+    courtGroupType: queuedMatch.courtGroupType ?? null,
+    poolASeatCount: queuedMatch.poolASeatCount ?? null,
+    poolBSeatCount: queuedMatch.poolBSeatCount ?? null,
     team1ClubId: queuedMatch.team1ClubId ?? null,
     team2ClubId: queuedMatch.team2ClubId ?? null,
     team1User1: withAvatar(queuedMatch.team1User1),
@@ -587,6 +602,7 @@ export function applyGuestAdded(current: SessionData, guest: GuestPayload) {
         partnerPreference: guest.partnerPreference,
         mixedSideOverride: guest.mixedSideOverride ?? null,
         pool: getNormalizedSessionPool(guest.pool),
+        pendingPool: null,
         needsMoreRest: guest.needsMoreRest ?? false,
         user: {
           id: guest.id,
@@ -731,6 +747,10 @@ export function applyPlayerPreferenceUpdate(
             partnerPreference: payload.partnerPreference,
             mixedSideOverride: payload.mixedSideOverride ?? null,
             pool: payload.pool ?? player.pool,
+            pendingPool:
+              payload.pendingPool === undefined
+                ? player.pendingPool ?? null
+                : payload.pendingPool,
             representingClubId:
               Object.prototype.hasOwnProperty.call(payload, "representingClubId")
                 ? payload.representingClubId ?? null

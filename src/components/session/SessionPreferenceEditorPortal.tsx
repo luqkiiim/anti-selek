@@ -98,8 +98,6 @@ export function SessionPreferenceEditorPortal({
   isInterclub,
   interclubClubOptions,
   poolsEnabled,
-  poolAName,
-  poolBName,
   renamingGuestId,
   removingPlayerId,
   skippingNextPlayerId,
@@ -236,11 +234,7 @@ export function SessionPreferenceEditorPortal({
   const mixedSideOption = getMixedSideOverrideOptionForGender(
     activePreferencePlayer.gender
   );
-  const poolOptions = getSessionPoolOptions({
-    poolsEnabled,
-    poolAName,
-    poolBName,
-  });
+  const poolOptions = getSessionPoolOptions({ poolsEnabled });
   const hasSkipNext = Boolean(activePreferencePlayer.skipNextMatchAt);
   const actionButtonClassName = cx(
     "min-h-11 w-full px-3 py-2.5 text-sm"
@@ -307,7 +301,7 @@ export function SessionPreferenceEditorPortal({
 
       {poolsEnabled ? (
         <label className="block space-y-1.5">
-          <span className={labelClassName()}>Pool</span>
+          <span className={labelClassName()}>Game group</span>
           <select
             value={activePreferencePlayer.pool}
             onChange={async (event) => {
@@ -329,6 +323,14 @@ export function SessionPreferenceEditorPortal({
               </option>
             ))}
           </select>
+          <span className="block text-[11px] text-gray-500">
+            Tournament-only override; the saved club preference is unchanged.
+          </span>
+          {activePreferencePlayer.pendingPool ? (
+            <span className="block text-[11px] font-semibold text-amber-700">
+              Switches to {activePreferencePlayer.pendingPool === SessionPool.A ? "Competitive" : "Social"} after current match.
+            </span>
+          ) : null}
         </label>
       ) : null}
 

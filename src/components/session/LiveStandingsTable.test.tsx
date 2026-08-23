@@ -149,7 +149,7 @@ describe("LiveStandingsTable", () => {
     expect(document.body.textContent).not.toContain("Skipping next");
   });
 
-  it("expands compact column labels and exposes the active pool filter", async () => {
+  it("expands compact column labels and exposes fixed game-group filters", async () => {
     await act(async () => {
       root.render(
         <LiveStandingsTable
@@ -181,5 +181,8 @@ describe("LiveStandingsTable", () => {
     expect(
       document.body.querySelector('button[aria-pressed="true"]')?.textContent
     ).toContain("All");
+    expect(document.body.textContent).toContain("Competitive");
+    expect(document.body.textContent).toContain("Social");
+    expect(document.body.textContent).not.toContain("Regular");
   });
 });

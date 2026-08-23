@@ -15,14 +15,22 @@ vi.mock("@/lib/prisma", () => ({
   },
 }));
 
+vi.mock("@/lib/playerGroupPreferences", () => ({
+  applyPendingPlayerGroupChangesInTransaction: vi.fn(),
+}));
+
 vi.mock("../queue-match/shared", () => ({
   tryRebuildAutomaticQueuedMatchForCode: vi.fn(),
   tryRebuildQueuedMatchForCode: vi.fn(),
 }));
 
 import { auth } from "@/lib/auth";
+import { applyPendingPlayerGroupChangesInTransaction } from "@/lib/playerGroupPreferences";
 import { prisma } from "@/lib/prisma";
-import { tryRebuildAutomaticQueuedMatchForCode } from "../queue-match/shared";
+import {
+  tryRebuildAutomaticQueuedMatchForCode,
+  tryRebuildQueuedMatchForCode,
+} from "../queue-match/shared";
 import { POST } from "./route";
 
 function createRequest(userId: string, isPaused: boolean) {
@@ -32,18 +40,23 @@ function createRequest(userId: string, isPaused: boolean) {
   });
 }
 
-function mockTransaction(updateSpy: ReturnType<typeof vi.fn>) {
+function mockTransaction(
+  updateSpy: ReturnType<typeof vi.fn>,
+  queuedMatch: Record<string, unknown> | null = null
+) {
+  const tx = {
+    sessionPlayer: {
+      update: updateSpy,
+    },
+    queuedMatch: {
+      findUnique: vi.fn().mockResolvedValue(queuedMatch),
+      delete: vi.fn().mockResolvedValue({}),
+    },
+  };
   vi.mocked(prisma.$transaction).mockImplementation(async (callback) =>
-    callback({
-      sessionPlayer: {
-        update: updateSpy,
-      },
-      queuedMatch: {
-        findUnique: vi.fn(),
-        delete: vi.fn(),
-      },
-    } as never)
+    callback(tx as never)
   );
+  return tx;
 }
 
 describe("pause player route", () => {
@@ -60,6 +73,12 @@ describe("pause player route", () => {
     } as never);
     vi.mocked(prisma.match.findFirst).mockResolvedValue(null);
     vi.mocked(tryRebuildAutomaticQueuedMatchForCode).mockResolvedValue(null);
+    vi.mocked(tryRebuildQueuedMatchForCode).mockResolvedValue(null);
+    vi.mocked(applyPendingPlayerGroupChangesInTransaction).mockResolvedValue({
+      appliedCount: 0,
+      appliedUserIds: [],
+      automaticQueueInvalidated: false,
+    });
   });
 
   afterEach(() => {
@@ -192,6 +211,66 @@ describe("pause player route", () => {
         }),
       })
     );
+  });
+
+  it("releases all pending players when pausing cancels a manual queue", async () => {
+    vi.mocked(prisma.sessionPlayer.findUnique).mockResolvedValue({
+      pausedAt: null,
+      inactiveSeconds: 0,
+      matchesPlayed: 1,
+      matchmakingMatchesCredit: 0,
+    } as never);
+    const manualQueue = {
+      id: "queue-1",
+      isAutomatic: false,
+      matchmakingReasonJson: JSON.stringify({ legacy: "present" }),
+      team1User1Id: "active-player",
+      team1User2Id: "p2",
+      team2User1Id: "p3",
+      team2User2Id: "p4",
+    };
+    const updateSpy = vi.fn(async ({ data }) => ({ id: "player-1", ...data }));
+    const tx = mockTransaction(updateSpy, manualQueue);
+
+    const response = await POST(createRequest("active-player", true), {
+      params: Promise.resolve({ code: "ABC" }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(applyPendingPlayerGroupChangesInTransaction).toHaveBeenCalledWith(
+      tx,
+      {
+        sessionId: "session-1",
+        userIds: ["active-player", "p2", "p3", "p4"],
+      }
+    );
+    expect(tryRebuildQueuedMatchForCode).toHaveBeenCalledWith("ABC");
+  });
+
+  it("does not release pending groups when pausing cancels an automatic queue", async () => {
+    vi.mocked(prisma.sessionPlayer.findUnique).mockResolvedValue({
+      pausedAt: null,
+      inactiveSeconds: 0,
+      matchesPlayed: 1,
+      matchmakingMatchesCredit: 0,
+    } as never);
+    const updateSpy = vi.fn(async ({ data }) => ({ id: "player-1", ...data }));
+    mockTransaction(updateSpy, {
+      id: "queue-1",
+      isAutomatic: true,
+      matchmakingReasonJson: null,
+      team1User1Id: "active-player",
+      team1User2Id: "p2",
+      team2User1Id: "p3",
+      team2User2Id: "p4",
+    });
+
+    const response = await POST(createRequest("active-player", true), {
+      params: Promise.resolve({ code: "ABC" }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(applyPendingPlayerGroupChangesInTransaction).not.toHaveBeenCalled();
   });
 
   it("does not reset queue time or credit when no match completed while paused", async () => {

@@ -87,6 +87,7 @@ model ClubMember {
   userId        String
   role          String   @default("MEMBER") // MEMBER, STAFF, or ADMIN
   status        String   @default("CORE") // CORE or OCCASIONAL
+  preferredPool String   @default("B") // A = Competitive, B = Social
   needsMoreRest Boolean  @default(false)
   elo           Int      @default(1000)
   createdAt     DateTime @default(now())
@@ -181,6 +182,7 @@ model SessionPlayer {
   partnerPreference  String  @default("OPEN") // legacy MIXICANO preference fallback: OPEN, FEMALE_FLEX
   mixedSideOverride  String? // UPPER, LOWER
   pool               String  @default("A") // A, B
+  pendingPool        String? // deferred A/B change while playing or manually queued
   needsMoreRest      Boolean @default(false)
   sessionPoints      Int     @default(0)
   lastPartnerId      String? // player ID of last partner (for repeat-partner penalty)
@@ -228,6 +230,9 @@ model Match {
   winnerTeam            Int? // 1 or 2
   team1EloChange        Int?
   team2EloChange        Int?
+  courtGroupType        String? // COMPETITIVE, SOCIAL, CROSSOVER, OPEN_OVERFLOW
+  poolASeatCount        Int?
+  poolBSeatCount        Int?
   matchmakingReasonJson String?
 
   createdAt   DateTime  @default(now())
@@ -275,6 +280,10 @@ model QueuedMatch {
   team2User2Id          String
   team2ClubId           String?
   targetPool            String? // A, B
+  courtGroupType        String? // COMPETITIVE, SOCIAL, CROSSOVER, OPEN_OVERFLOW
+  poolASeatCount        Int?
+  poolBSeatCount        Int?
+  isAutomatic           Boolean  @default(false)
   matchmakingReasonJson String?
   createdAt             DateTime @default(now())
 

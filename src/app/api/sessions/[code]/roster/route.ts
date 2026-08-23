@@ -17,8 +17,10 @@ import {
 import {
   ClubPlayerStatus,
   PlayerGender,
+  SessionPool,
   SessionClubStatus,
 } from "@/types/enums";
+import { isValidSessionPool } from "@/lib/sessionPools";
 
 export const dynamic = "force-dynamic";
 
@@ -162,6 +164,9 @@ export async function GET(
           name: membership.user.name,
           email: membership.user.email,
           avatarUrl: serializeAvatarEntity(membership.user).avatarUrl,
+          preferredPool: isValidSessionPool(membership.preferredPool)
+            ? membership.preferredPool
+            : SessionPool.B,
           needsMoreRest: membership.needsMoreRest,
           status:
             membership.status === ClubPlayerStatus.OCCASIONAL

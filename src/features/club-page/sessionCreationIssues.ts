@@ -1,8 +1,3 @@
-import {
-  DEFAULT_SESSION_POOL_A_NAME,
-  DEFAULT_SESSION_POOL_B_NAME,
-  normalizeSessionPoolName,
-} from "@/lib/sessionPools";
 import { PlayerGender } from "@/types/enums";
 
 export function hasMissingRequiredGender({
@@ -29,8 +24,8 @@ export interface SessionCreationIssueInput {
   name: string;
   participantCount: number;
   poolsEnabled: boolean;
-  poolAName: string;
-  poolBName: string;
+  competitiveCount: number;
+  socialCount: number;
   isMixed: boolean;
   hasMissingMixedGender: boolean;
   mixedModeLabel: string;
@@ -43,8 +38,8 @@ export function getSessionCreationIssues({
   name,
   participantCount,
   poolsEnabled,
-  poolAName,
-  poolBName,
+  competitiveCount,
+  socialCount,
   isMixed,
   hasMissingMixedGender,
   mixedModeLabel,
@@ -65,12 +60,12 @@ export function getSessionCreationIssues({
     );
   }
 
-  if (
-    poolsEnabled &&
-    normalizeSessionPoolName(poolAName, DEFAULT_SESSION_POOL_A_NAME) ===
-      normalizeSessionPoolName(poolBName, DEFAULT_SESSION_POOL_B_NAME)
-  ) {
-    issues.push("Use different names for Pool A and Pool B.");
+  if (poolsEnabled && competitiveCount < 2) {
+    issues.push("Add at least 2 Competitive players or guests.");
+  }
+
+  if (poolsEnabled && socialCount < 2) {
+    issues.push("Add at least 2 Social players or guests.");
   }
 
   if (isMixed && hasMissingMixedGender) {

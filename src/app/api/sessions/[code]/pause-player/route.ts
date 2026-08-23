@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { calculateNoCatchUpMatchmakingCredit } from "@/lib/matchmaking/matchmakingCredit";
+import { applyPendingPlayerGroupChangesInTransaction } from "@/lib/playerGroupPreferences";
 import { prisma } from "@/lib/prisma";
 import { getSessionOperatorMembership } from "@/lib/sessionCollab";
-import { hasQueuedMatchUser } from "@/lib/sessionQueue";
+import { getQueuedMatchUserIds, hasQueuedMatchUser } from "@/lib/sessionQueue";
 import { isQuickAccessSession } from "@/lib/quickAccess";
 import {
   tryRebuildAutomaticQueuedMatchForCode,
@@ -179,6 +180,12 @@ export async function POST(
           await tx.queuedMatch.delete({
             where: { sessionId: sessionData.id },
           });
+          if (queuedMatch && !queuedMatch.isAutomatic) {
+            await applyPendingPlayerGroupChangesInTransaction(tx, {
+              sessionId: sessionData.id,
+              userIds: getQueuedMatchUserIds(queuedMatch),
+            });
+          }
           queuedMatchAffected = true;
         }
       }

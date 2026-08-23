@@ -16,6 +16,7 @@ import {
   ClubRole,
   MixedSide,
   PlayerGender,
+  SessionPool,
 } from "@/types/enums";
 
 interface ClubPlayerEditorModalProps {
@@ -42,6 +43,7 @@ interface ClubPlayerEditorModalProps {
       mixedSideOverride?: MixedSide | null;
       status?: ClubPlayerStatus;
       needsMoreRest?: boolean;
+      preferredPool?: SessionPool;
     }
   ) => Promise<void>;
   onPromotePlayer: (player: ClubAdminPlayer) => void;
@@ -286,6 +288,28 @@ export function ClubPlayerEditorModal({
 
           <div className="app-panel-muted space-y-4 p-4">
             <div className="space-y-2">
+              <label className="block space-y-2 text-sm font-medium text-gray-900">
+                <span>Preferred game group</span>
+                <select
+                  value={player.preferredPool ?? SessionPool.B}
+                  onChange={async (event) => {
+                    await onUpdatePreferences(player, {
+                      preferredPool: event.target.value as SessionPool,
+                    });
+                  }}
+                  disabled={savingPreferences}
+                  className="field"
+                >
+                  <option value={SessionPool.A}>Competitive</option>
+                  <option value={SessionPool.B}>Social</option>
+                </select>
+              </label>
+              <p className="text-sm text-gray-600">
+                Preferred game experience for new tournaments. Hosts can override it per tournament.
+              </p>
+            </div>
+
+            <div className="space-y-2 border-t border-gray-200 pt-4">
               <label className="block space-y-2 text-sm font-medium text-gray-900">
                 <span>Roster status</span>
                 <select

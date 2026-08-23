@@ -142,8 +142,16 @@ export async function POST(
         finalTeam2Score,
       });
 
+      const automaticQueueInvalidated =
+        !!result &&
+        "automaticQueueInvalidated" in result &&
+        result.automaticQueueInvalidated === true;
       const { autoAssignedMatch, queuedMatchCleared, queuedMatch } =
-        await reconcileSessionQueueAfterCourtChange(match.sessionId);
+        await (automaticQueueInvalidated
+          ? reconcileSessionQueueAfterCourtChange(match.sessionId, {
+              generateAutomaticIfMissing: true,
+            })
+          : reconcileSessionQueueAfterCourtChange(match.sessionId));
 
       return NextResponse.json({
         ...result,

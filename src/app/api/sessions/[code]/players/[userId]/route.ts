@@ -1,12 +1,14 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
+import { applyPendingPlayerGroupChangesInTransaction } from "@/lib/playerGroupPreferences";
 import { prisma } from "@/lib/prisma";
-import { hasQueuedMatchUser } from "@/lib/sessionQueue";
+import { getQueuedMatchUserIds, hasQueuedMatchUser } from "@/lib/sessionQueue";
 import { deleteEphemeralGuestUsers } from "@/lib/sessionLifecycle";
 import { getSessionOperatorMembership } from "@/lib/sessionCollab";
 import { MatchStatus, SessionStatus } from "@/types/enums";
 import { logError, safeErrorResponse } from "@/lib/errors";
 import { rateLimit, checkInvalidTargetRateLimit, invalidTargetResponse } from "@/lib/rateLimit";
+import { tryRebuildQueuedMatchForSessionId } from "../../queue-match/shared";
 
 export const dynamic = "force-dynamic";
 
@@ -260,20 +262,36 @@ export async function DELETE(
         ? await deleteEphemeralGuestUsers(tx, [userId])
         : 0;
 
-      if (hasQueuedMatchUser(queuedMatch, userId)) {
+      const queuedMatchAffected = hasQueuedMatchUser(queuedMatch, userId);
+      if (queuedMatchAffected) {
         await tx.queuedMatch.delete({
           where: { sessionId: sessionData.id },
         });
+        if (queuedMatch && !queuedMatch.isAutomatic) {
+          await applyPendingPlayerGroupChangesInTransaction(tx, {
+            sessionId: sessionData.id,
+            userIds: getQueuedMatchUserIds(queuedMatch),
+          });
+        }
       }
 
       return {
         removedUserId: userId,
         removedName: existingPlayer.user.name,
         deletedGuestUsers,
+        queuedMatchAffected,
       };
     });
 
-    return NextResponse.json({ ok: true, ...result });
+    const queuedMatch = result.queuedMatchAffected
+      ? await tryRebuildQueuedMatchForSessionId(sessionData.id)
+      : undefined;
+
+    return NextResponse.json({
+      ok: true,
+      ...result,
+      ...(result.queuedMatchAffected ? { queuedMatch } : {}),
+    });
   } catch (error) {
     logError("Remove player from session error", error);
     return safeErrorResponse();

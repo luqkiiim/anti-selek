@@ -64,6 +64,7 @@ const interclubPlayer: ClubUser = {
   elo: 1110,
   status: ClubPlayerStatus.CORE,
   needsMoreRest: false,
+  preferredPool: SessionPool.B,
   representingClubId: "club-b",
   representingClubName: "Anti-SeleK",
   gender: PlayerGender.MALE,
@@ -296,6 +297,39 @@ describe("useSessionPlayerManagement", () => {
         body: JSON.stringify({
           userId: "club-b-player",
           pool: SessionPool.A,
+        }),
+      })
+    );
+  });
+
+  it("uses a late-joining member's saved game group when groups are enabled", async () => {
+    fetchMock.mockResolvedValue(
+      new Response(JSON.stringify({ players: [] }), { status: 200 })
+    );
+
+    await act(async () => {
+      root.render(
+        <Harness
+          sessionData={createSessionData({ poolsEnabled: true })}
+          playerToAdd={interclubPlayer}
+        />
+      );
+    });
+
+    await act(async () => {
+      document.getElementById("add")?.dispatchEvent(
+        new MouseEvent("click", { bubbles: true })
+      );
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/sessions/ABC/join",
+      expect.objectContaining({
+        body: JSON.stringify({
+          userId: "club-b-player",
+          pool: SessionPool.B,
         }),
       })
     );

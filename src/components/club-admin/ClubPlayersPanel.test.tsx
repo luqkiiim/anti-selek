@@ -4,6 +4,7 @@ import {
   ClubPlayerStatus,
   PartnerPreference,
   PlayerGender,
+  SessionPool,
 } from "@/types/enums";
 import type { ClubAdminPlayer } from "./clubAdminTypes";
 import { ClubPlayersPanel } from "./ClubPlayersPanel";
@@ -18,6 +19,7 @@ function buildPlayer(
     avatarUrl: null,
     status: ClubPlayerStatus.CORE,
     needsMoreRest: false,
+    preferredPool: SessionPool.B,
     gender: PlayerGender.FEMALE,
     partnerPreference: PartnerPreference.OPEN,
     mixedSideOverride: null,

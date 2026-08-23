@@ -21,6 +21,7 @@ interface SessionOverviewPanelProps {
   pausedPlayersCount: number;
   sessionStatus: string;
   canStartSession: boolean;
+  startBlockedReason?: string | null;
   canOpenPlayerManager: boolean;
   canOpenSettings: boolean;
   tutorialHint?: SessionTutorialHint | null;
@@ -41,6 +42,7 @@ export function SessionOverviewPanel({
   pausedPlayersCount,
   sessionStatus,
   canStartSession,
+  startBlockedReason = null,
   canOpenPlayerManager,
   canOpenSettings,
   tutorialHint = null,
@@ -98,7 +100,11 @@ export function SessionOverviewPanel({
             <button
               type="button"
               onClick={onStartSession}
-              className="app-button-primary"
+              disabled={Boolean(startBlockedReason)}
+              aria-describedby={
+                startBlockedReason ? "session-start-blocked-reason" : undefined
+              }
+              className="app-button-primary disabled:cursor-not-allowed disabled:opacity-50"
               data-tutorial-target="admin-onboarding-start-session"
             >
               <Play aria-hidden="true" size={17} />
@@ -136,6 +142,16 @@ export function SessionOverviewPanel({
           ) : null}
         </div>
       </div>
+
+      {canStartSession && startBlockedReason ? (
+        <div
+          id="session-start-blocked-reason"
+          className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-3 py-3 text-sm font-semibold text-amber-800"
+          role="status"
+        >
+          {startBlockedReason}
+        </div>
+      ) : null}
 
       {tutorialHint ? (
         <div className="mt-5 rounded-xl border border-teal-100 bg-teal-50/70 px-3 py-3">

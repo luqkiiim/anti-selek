@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { logError, safeErrorResponse } from "@/lib/errors";
+import { applyPendingPlayerGroupChangesInTransaction } from "@/lib/playerGroupPreferences";
 import { prisma } from "@/lib/prisma";
 import { isQuickAccessSession } from "@/lib/quickAccess";
 import { checkInvalidTargetRateLimit, invalidTargetResponse, rateLimit } from "@/lib/rateLimit";
 import { getSessionOperatorMembership } from "@/lib/sessionCollab";
-import { hasQueuedMatchUser } from "@/lib/sessionQueue";
+import { getQueuedMatchUserIds, hasQueuedMatchUser } from "@/lib/sessionQueue";
 import { consumeSkipNextMatches } from "@/lib/sessionSkipNext";
 import { SessionStatus } from "@/types/enums";
 import { tryRebuildQueuedMatchForSessionId } from "../../../queue-match/shared";
@@ -150,6 +151,12 @@ export async function PATCH(
         await tx.queuedMatch.delete({
           where: { sessionId: sessionData.id },
         });
+        if (queuedMatch && !queuedMatch.isAutomatic) {
+          await applyPendingPlayerGroupChangesInTransaction(tx, {
+            sessionId: sessionData.id,
+            userIds: getQueuedMatchUserIds(queuedMatch),
+          });
+        }
       }
 
       return affectsQueuedMatch;

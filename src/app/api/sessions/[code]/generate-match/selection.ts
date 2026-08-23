@@ -18,12 +18,17 @@ import { getQueuedMatchUserIds } from "@/lib/sessionQueue";
 import { getEffectiveMixedSide } from "@/lib/mixedSide";
 import {
   getNormalizedSessionPool,
-  getOppositeSessionPool,
-  getSessionPoolCourtAssignments,
-  getSessionPoolCrossoverMissThreshold,
-  getSessionPoolMissedTurns,
-  SESSION_POOL_IDS,
 } from "@/lib/sessionPools";
+import {
+  classifyCourtGroupSnapshot,
+  type CourtGroupSnapshot,
+} from "@/lib/playerGroups";
+import {
+  buildPlayerGroupCourtPlans,
+  getPlayerGroupSelectionConstraints,
+  type PlayerGroupCourtComposition,
+  type PlayerGroupHistorySnapshot,
+} from "@/lib/matchmaking/playerGroupPlanner";
 import { getBusyPlayerIds } from "@/lib/matchmaking/busyFilter";
 import { buildV3MatchmakingReasonJson } from "@/lib/matchmaking/matchReason";
 import { buildRestTurnsByUserId } from "@/lib/matchmaking/restTurns";
@@ -53,6 +58,7 @@ import {
 } from "@/lib/matchmaking/v3";
 import { getExactPartitionKey } from "@/lib/matchmaking/v3/rematch";
 import {
+  CourtGroupType,
   MixedSide,
   MatchStatus,
   SessionMode,
@@ -96,7 +102,7 @@ export interface MatchmakingState {
   rotationHistory: ReturnType<typeof buildRotationHistory>;
 }
 
-interface PoolAwareSelection {
+interface PoolAwareSelection extends CourtGroupSnapshot {
   ids: [string, string, string, string];
   partition: {
     team1: [string, string];
@@ -104,10 +110,29 @@ interface PoolAwareSelection {
   };
   targetPool?: SessionPool | null;
   missedPool?: SessionPool | null;
+  competitiveTargetRatio: number;
   matchmakingReasonJson?: string | null;
 }
 
+type MatchSelectionBase = {
+  ids: [string, string, string, string];
+  partition: {
+    team1: [string, string];
+    team2: [string, string];
+  };
+  targetPool?: SessionPool | null;
+  missedPool?: SessionPool | null;
+  courtGroupType?: CourtGroupType | null;
+  poolASeatCount?: number | null;
+  poolBSeatCount?: number | null;
+  competitiveTargetRatio?: number;
+  matchmakingReasonJson?: string | null;
+};
+
 const MAX_POOL_SELECTION_OPTIONS_PER_PLAN = 64;
+const MAX_GROUP_QUOTA_COMBINATIONS_PER_POOL = 64;
+const MAX_GROUP_BATCH_SEARCH_BRANCHES = 20_000;
+const MAX_GROUP_BATCH_SEARCH_MS = 100;
 
 function getMatchmakerSessionType(sessionData: GenerateMatchSession) {
   return getEffectiveSessionType(sessionData);
@@ -122,7 +147,7 @@ function getV3QuartetKey(ids: readonly string[]) {
 }
 
 function isV3Selection(
-  selection: PoolAwareSelection | V3SingleCourtSelection
+  selection: MatchSelectionBase | V3SingleCourtSelection
 ): selection is PoolAwareSelection & V3SingleCourtSelection {
   return (
     "players" in selection &&
@@ -137,26 +162,61 @@ function isV3Selection(
 }
 
 function withMatchmakingReason<
-  TSelection extends PoolAwareSelection | V3SingleCourtSelection,
+  TSelection extends MatchSelectionBase,
 >(selection: TSelection, sessionData: GenerateMatchSession) {
+  const groupSnapshot = sessionData.poolsEnabled
+    ? {
+        courtGroupType:
+          "courtGroupType" in selection ? selection.courtGroupType : null,
+        poolASeatCount:
+          "poolASeatCount" in selection ? selection.poolASeatCount : null,
+        poolBSeatCount:
+          "poolBSeatCount" in selection ? selection.poolBSeatCount : null,
+      }
+    : {
+        courtGroupType: null,
+        poolASeatCount: null,
+        poolBSeatCount: null,
+      };
+
   if (!isV3Selection(selection)) {
     return {
       ...selection,
+      ...groupSnapshot,
       matchmakingReasonJson: null,
     };
   }
 
-    return {
-      ...selection,
-      matchmakingReasonJson: buildV3MatchmakingReasonJson(selection, {
-        sessionType: getMatchmakerSessionType(sessionData),
-        sessionMode: getMatchmakerSessionMode(sessionData),
-        targetPool: "targetPool" in selection ? selection.targetPool ?? null : null,
-        missedPool: "missedPool" in selection ? selection.missedPool ?? null : null,
-        respectPlayerRest: sessionData.respectPlayerRest,
-      }),
-    };
-  }
+  return {
+    ...selection,
+    ...groupSnapshot,
+    matchmakingReasonJson: buildV3MatchmakingReasonJson(selection, {
+      sessionType: getMatchmakerSessionType(sessionData),
+      sessionMode: getMatchmakerSessionMode(sessionData),
+      targetPool:
+        "targetPool" in selection ? selection.targetPool ?? null : null,
+      missedPool:
+        "missedPool" in selection ? selection.missedPool ?? null : null,
+      courtGroupType: groupSnapshot.courtGroupType,
+      poolASeatCount: groupSnapshot.poolASeatCount ?? undefined,
+      poolBSeatCount: groupSnapshot.poolBSeatCount ?? undefined,
+      competitiveTargetRatio:
+        "competitiveTargetRatio" in selection
+          ? selection.competitiveTargetRatio
+          : undefined,
+      respectPlayerRest: sessionData.respectPlayerRest,
+    }),
+  };
+}
+
+function withNoPlayerGroupSnapshot<TSelection>(selection: TSelection) {
+  return {
+    ...selection,
+    courtGroupType: null,
+    poolASeatCount: null,
+    poolBSeatCount: null,
+  };
+}
 
 function getPlayerBalanceInput({
   sessionType,
@@ -232,68 +292,8 @@ function getSessionCourtCount(sessionData: GenerateMatchSession) {
   return Math.max(1, sessionData.courts?.length ?? 0);
 }
 
-function getPlayerMoreRestTarget(
-  sessionData: GenerateMatchSession,
-  pool: SessionPool | string | null | undefined
-) {
-  const sessionCourtCount = getSessionCourtCount(sessionData);
-
-  if (!sessionData.poolsEnabled) {
-    return sessionCourtCount;
-  }
-
-  const poolCourtCount = getSessionPoolCourtAssignments(
-    sessionData,
-    getNormalizedSessionPool(pool)
-  );
-
-  return poolCourtCount > 0 ? poolCourtCount : sessionCourtCount;
-}
-
-function chooseDuePool(
-  sessionData: GenerateMatchSession,
-  rankedCandidates: RankedCandidates
-) {
-  if (!sessionData.poolsEnabled) {
-    return null;
-  }
-
-  const activeCounts = getPoolActiveCounts(sessionData);
-  const waitingCounts = getPoolWaitingCounts(sessionData, rankedCandidates);
-  const poolsWithWaiting = SESSION_POOL_IDS.filter(
-    (pool) => waitingCounts[pool] > 0 && activeCounts[pool] > 0
-  );
-
-  if (poolsWithWaiting.length === 0) {
-    return null;
-  }
-
-  return poolsWithWaiting.sort((left, right) => {
-    const leftAssignments = getSessionPoolCourtAssignments(sessionData, left);
-    const rightAssignments = getSessionPoolCourtAssignments(sessionData, right);
-    const leftRatio = leftAssignments / Math.max(activeCounts[left], 1);
-    const rightRatio = rightAssignments / Math.max(activeCounts[right], 1);
-
-    if (leftRatio !== rightRatio) {
-      return leftRatio - rightRatio;
-    }
-
-    const leftMissedTurns = getSessionPoolMissedTurns(sessionData, left);
-    const rightMissedTurns = getSessionPoolMissedTurns(sessionData, right);
-    if (leftMissedTurns !== rightMissedTurns) {
-      return rightMissedTurns - leftMissedTurns;
-    }
-
-    if (waitingCounts[left] !== waitingCounts[right]) {
-      return waitingCounts[right] - waitingCounts[left];
-    }
-
-    if (leftAssignments !== rightAssignments) {
-      return leftAssignments - rightAssignments;
-    }
-
-    return left === SessionPool.A ? -1 : 1;
-  })[0];
+function getPlayerMoreRestTarget(sessionData: GenerateMatchSession) {
+  return getSessionCourtCount(sessionData);
 }
 
 function buildV3Players(
@@ -341,7 +341,7 @@ function buildV3Players(
     isBusy: !player.isPaused && !availableUserIds.has(player.userId),
     isPaused: player.isPaused,
     needsMoreRest: player.needsMoreRest,
-    moreRestTarget: getPlayerMoreRestTarget(sessionData, player.pool),
+    moreRestTarget: getPlayerMoreRestTarget(sessionData),
     gender: player.gender,
     partnerPreference: player.partnerPreference,
     mixedSideOverride: player.mixedSideOverride,
@@ -404,7 +404,7 @@ function buildLadderPlayers(
       isBusy: !player.isPaused && !availableUserIds.has(player.userId),
       isPaused: player.isPaused,
       needsMoreRest: player.needsMoreRest,
-      moreRestTarget: getPlayerMoreRestTarget(sessionData, player.pool),
+      moreRestTarget: getPlayerMoreRestTarget(sessionData),
       gender: player.gender,
       partnerPreference: player.partnerPreference,
       mixedSideOverride: player.mixedSideOverride,
@@ -564,7 +564,7 @@ export function getRankedCandidates(
       strength: 0,
       pool: player.pool,
       needsMoreRest: player.needsMoreRest,
-      moreRestTarget: getPlayerMoreRestTarget(sessionData, player.pool),
+      moreRestTarget: getPlayerMoreRestTarget(sessionData),
       isBusy: false,
       isPaused: false,
     }));
@@ -781,15 +781,391 @@ function applyReshuffleExclusions<TSelection extends PoolAwareSelection>(
   });
 }
 
-function getMissedPoolOutcome(
-  duePool: SessionPool,
-  selectedPool: SessionPool,
-  waitingCounts: Record<SessionPool, number>
-) {
-  return selectedPool !== duePool && waitingCounts[duePool] > 0 ? duePool : null;
+function getPlayerGroupHistory(
+  sessionData: GenerateMatchSession
+): PlayerGroupHistorySnapshot[] {
+  return [...sessionData.matches]
+    .sort(
+      (left, right) =>
+        left.createdAt.getTime() - right.createdAt.getTime() ||
+        left.id.localeCompare(right.id)
+    )
+    .map((match) => {
+      const snapshot = match as typeof match & PlayerGroupHistorySnapshot;
+      return {
+        courtGroupType: snapshot.courtGroupType ?? null,
+        poolASeatCount: snapshot.poolASeatCount ?? null,
+        poolBSeatCount: snapshot.poolBSeatCount ?? null,
+      };
+    })
+    .filter(
+      (snapshot) =>
+        typeof snapshot.poolASeatCount === "number" &&
+        typeof snapshot.poolBSeatCount === "number" &&
+        snapshot.poolASeatCount + snapshot.poolBSeatCount === 4
+    );
 }
 
-function buildPoolSelectionPlanner({
+function getCompositionTargetPool(
+  composition: PlayerGroupCourtComposition
+) {
+  switch (composition.courtGroupType) {
+    case CourtGroupType.COMPETITIVE:
+      return SessionPool.A;
+    case CourtGroupType.SOCIAL:
+      return SessionPool.B;
+    case CourtGroupType.CROSSOVER:
+    case CourtGroupType.OPEN_OVERFLOW:
+      return null;
+  }
+}
+
+function getNormalizedCourtGroupType(
+  value: CourtGroupType | string | null | undefined
+) {
+  return Object.values(CourtGroupType).includes(value as CourtGroupType)
+    ? (value as CourtGroupType)
+    : null;
+}
+
+function getSelectionSnapshot(
+  sessionData: GenerateMatchSession,
+  partition: { team1: [string, string]; team2: [string, string] }
+) {
+  return classifyCourtGroupSnapshot(
+    partition.team1,
+    partition.team2,
+    new Map(
+      sessionData.players.map((player) => [player.userId, player.pool])
+    )
+  );
+}
+
+type QuotaFairnessPlayer = {
+  userId: string;
+  pool?: string | null;
+  matchesPlayed: number;
+  matchmakingBaseline: number;
+  restTurns?: number;
+  needsMoreRest?: boolean;
+  moreRestTarget?: number;
+  arrivalPriorityAt?: Date | string | null;
+  availableSince: Date;
+  isBusy?: boolean;
+  isPaused?: boolean;
+};
+
+type QuotaCombination<T extends QuotaFairnessPlayer> = {
+  players: T[];
+  missingArrivalPriorityCount: number;
+  effectiveMatchCountVector: number[];
+  moreRestDeficitTotal: number;
+  restTurnVector: number[];
+  waitTimeVector: number[];
+};
+
+function buildCombinations<T>(items: readonly T[], size: number): T[][] {
+  if (size === 0) return [[]];
+  if (items.length < size) return [];
+
+  const combinations: T[][] = [];
+  for (let index = 0; index <= items.length - size; index += 1) {
+    for (const tail of buildCombinations(items.slice(index + 1), size - 1)) {
+      combinations.push([items[index], ...tail]);
+    }
+  }
+  return combinations;
+}
+
+function getArrivalPriorityTime(value: Date | string | null | undefined) {
+  if (!value) return null;
+  const time = value instanceof Date ? value.getTime() : new Date(value).getTime();
+  return Number.isFinite(time) ? time : null;
+}
+
+function compareNumberVectors(
+  left: readonly number[],
+  right: readonly number[],
+  direction: 1 | -1 = 1
+) {
+  for (let index = 0; index < Math.max(left.length, right.length); index += 1) {
+    const leftValue = left[index] ?? Number.POSITIVE_INFINITY;
+    const rightValue = right[index] ?? Number.POSITIVE_INFINITY;
+    if (leftValue !== rightValue) return (leftValue - rightValue) * direction;
+  }
+  return 0;
+}
+
+function compareQuotaCombinations<T extends QuotaFairnessPlayer>(
+  left: QuotaCombination<T>,
+  right: QuotaCombination<T>,
+  includeStableTieBreak = true
+) {
+  if (left.missingArrivalPriorityCount !== right.missingArrivalPriorityCount) {
+    return left.missingArrivalPriorityCount - right.missingArrivalPriorityCount;
+  }
+  const matchCountCompare = compareNumberVectors(
+    left.effectiveMatchCountVector,
+    right.effectiveMatchCountVector
+  );
+  if (matchCountCompare !== 0) return matchCountCompare;
+  if (left.moreRestDeficitTotal !== right.moreRestDeficitTotal) {
+    return left.moreRestDeficitTotal - right.moreRestDeficitTotal;
+  }
+  const restCompare = compareNumberVectors(
+    left.restTurnVector,
+    right.restTurnVector,
+    -1
+  );
+  if (restCompare !== 0) return restCompare;
+  const waitCompare = compareNumberVectors(
+    left.waitTimeVector,
+    right.waitTimeVector
+  );
+  if (waitCompare !== 0) return waitCompare;
+
+  return includeStableTieBreak
+    ? left.players
+        .map((player) => player.userId)
+        .sort()
+        .join("|")
+        .localeCompare(
+          right.players.map((player) => player.userId).sort().join("|")
+        )
+    : 0;
+}
+
+function buildQuotaCombinations<T extends QuotaFairnessPlayer>(
+  players: readonly T[],
+  requiredCount: number,
+  respectPlayerRest: boolean
+) {
+  if (requiredCount === 0) {
+    return [{
+      players: [],
+      missingArrivalPriorityCount: 0,
+      effectiveMatchCountVector: [],
+      moreRestDeficitTotal: 0,
+      restTurnVector: [],
+      waitTimeVector: [],
+    } satisfies QuotaCombination<T>];
+  }
+
+  const activePlayers = players.filter(
+    (player) => !player.isBusy && !player.isPaused
+  );
+  const requiredPriorityIds = new Set(
+    [...activePlayers]
+      .filter(
+        (player) => getArrivalPriorityTime(player.arrivalPriorityAt) !== null
+      )
+      .sort(
+        (left, right) =>
+          (getArrivalPriorityTime(left.arrivalPriorityAt) ?? 0) -
+            (getArrivalPriorityTime(right.arrivalPriorityAt) ?? 0) ||
+          left.userId.localeCompare(right.userId)
+      )
+      .slice(0, requiredCount)
+      .map((player) => player.userId)
+  );
+
+  return buildCombinations(activePlayers, requiredCount)
+    .map((combination): QuotaCombination<T> => {
+      const selectedIds = new Set(combination.map((player) => player.userId));
+      const restTurnVector = combination
+        .map((player) => Math.max(0, player.restTurns ?? 0))
+        .sort((left, right) => right - left);
+
+      return {
+        players: combination,
+        missingArrivalPriorityCount: [...requiredPriorityIds].filter(
+          (userId) => !selectedIds.has(userId)
+        ).length,
+        effectiveMatchCountVector: combination
+          .map((player) =>
+            Math.max(player.matchesPlayed, player.matchmakingBaseline)
+          )
+          .sort((left, right) => left - right),
+        moreRestDeficitTotal: respectPlayerRest
+          ? combination.reduce(
+              (total, player) =>
+                total +
+                (player.needsMoreRest
+                  ? Math.max(
+                      0,
+                      Math.max(1, player.moreRestTarget ?? 1) -
+                        Math.max(0, player.restTurns ?? 0)
+                    )
+                  : 0),
+              0
+            )
+          : 0,
+        restTurnVector: respectPlayerRest ? restTurnVector : [],
+        waitTimeVector: combination
+          .map((player) => player.availableSince.getTime())
+          .sort((left, right) => left - right),
+      };
+    })
+    .sort((left, right) => compareQuotaCombinations(left, right))
+    .slice(0, MAX_GROUP_QUOTA_COMBINATIONS_PER_POOL);
+}
+
+function combineQuotaFairness<T extends QuotaFairnessPlayer>(
+  players: [T, T, T, T],
+  poolACombination: QuotaCombination<T>,
+  poolBCombination: QuotaCombination<T>
+): QuotaCombination<T> {
+  return {
+    players,
+    missingArrivalPriorityCount:
+      poolACombination.missingArrivalPriorityCount +
+      poolBCombination.missingArrivalPriorityCount,
+    effectiveMatchCountVector: [
+      ...poolACombination.effectiveMatchCountVector,
+      ...poolBCombination.effectiveMatchCountVector,
+    ].sort((a, b) => a - b),
+    moreRestDeficitTotal:
+      poolACombination.moreRestDeficitTotal +
+      poolBCombination.moreRestDeficitTotal,
+    restTurnVector: [
+      ...poolACombination.restTurnVector,
+      ...poolBCombination.restTurnVector,
+    ].sort((a, b) => b - a),
+    waitTimeVector: [
+      ...poolACombination.waitTimeVector,
+      ...poolBCombination.waitTimeVector,
+    ].sort((a, b) => a - b),
+  };
+}
+
+function buildQuotaAwareQuartets<T extends QuotaFairnessPlayer>(
+  players: readonly T[],
+  composition: PlayerGroupCourtComposition,
+  respectPlayerRest: boolean
+) {
+  const poolACombinations = buildQuotaCombinations(
+    players.filter(
+      (player) => getNormalizedSessionPool(player.pool) === SessionPool.A
+    ),
+    composition.poolASeatCount,
+    respectPlayerRest
+  );
+  const poolBCombinations = buildQuotaCombinations(
+    players.filter(
+      (player) => getNormalizedSessionPool(player.pool) === SessionPool.B
+    ),
+    composition.poolBSeatCount,
+    respectPlayerRest
+  );
+
+  return poolACombinations
+    .flatMap((poolACombination) =>
+      poolBCombinations.map((poolBCombination) => {
+        const players = [...poolACombination.players, ...poolBCombination.players] as [
+          T,
+          T,
+          T,
+          T,
+        ];
+        return {
+          players,
+          fairness: combineQuotaFairness(
+            players,
+            poolACombination,
+            poolBCombination
+          ),
+        };
+      })
+    )
+    .filter((quartet) => quartet.players.length === 4)
+    .sort((left, right) =>
+      compareQuotaCombinations(left.fairness, right.fairness)
+    );
+}
+
+function buildQuotaAwareQuartetTiers<T extends QuotaFairnessPlayer>(
+  players: readonly T[],
+  composition: PlayerGroupCourtComposition,
+  respectPlayerRest: boolean,
+  excludedQuartetKey?: string,
+  excludedQuartetKeys?: ReadonlySet<string>
+) {
+  const tiers: Array<
+    ReturnType<typeof buildQuotaAwareQuartets<T>>
+  > = [];
+
+  for (const quartet of buildQuotaAwareQuartets(
+    players,
+    composition,
+    respectPlayerRest
+  )) {
+    const quartetKey = getV3QuartetKey(
+      quartet.players.map((player) => player.userId)
+    );
+    if (
+      quartetKey === excludedQuartetKey ||
+      excludedQuartetKeys?.has(quartetKey)
+    ) {
+      continue;
+    }
+
+    const currentTier = tiers.at(-1);
+    if (
+      !currentTier ||
+      compareQuotaCombinations(
+        quartet.fairness,
+        currentTier[0].fairness,
+        false
+      ) !== 0
+    ) {
+      tiers.push([quartet]);
+      continue;
+    }
+
+    currentTier.push(quartet);
+  }
+
+  return tiers;
+}
+
+function buildQuotaTierConstraints<T extends QuotaFairnessPlayer>(
+  composition: PlayerGroupCourtComposition,
+  tier: ReturnType<typeof buildQuotaAwareQuartets<T>>
+) {
+  const compositionConstraints = getPlayerGroupSelectionConstraints<T>(
+    composition
+  );
+  const allowedQuartetKeys = new Set(
+    tier.map((quartet) =>
+      getV3QuartetKey(quartet.players.map((player) => player.userId))
+    )
+  );
+
+  return {
+    ...compositionConstraints,
+    isQuartetAllowed(players: [T, T, T, T]) {
+      return (
+        allowedQuartetKeys.has(
+          getV3QuartetKey(players.map((player) => player.userId))
+        ) && compositionConstraints.isQuartetAllowed(players)
+      );
+    },
+  };
+}
+
+function getQuotaTierPlayers<T extends QuotaFairnessPlayer>(
+  tier: ReturnType<typeof buildQuotaAwareQuartets<T>>
+) {
+  return [
+    ...new Map(
+      tier.flatMap((quartet) =>
+        quartet.players.map((player) => [player.userId, player] as const)
+      )
+    ).values(),
+  ];
+}
+
+function buildPlayerGroupSelectionRunner({
   rankedCandidates,
   playersById,
   sessionData,
@@ -803,11 +1179,12 @@ function buildPoolSelectionPlanner({
     getMatchmakerSessionType(sessionData) === SessionType.LADDER ||
     getMatchmakerSessionType(sessionData) === SessionType.RACE;
   const waitingCounts = getPoolWaitingCounts(sessionData, rankedCandidates);
-  const duePool = chooseDuePool(sessionData, rankedCandidates);
-
-  if (!duePool) {
-    return null;
-  }
+  const activeCounts = getPoolActiveCounts(sessionData);
+  const activePlayerCount = activeCounts[SessionPool.A] + activeCounts[SessionPool.B];
+  const competitiveTargetRatio =
+    activePlayerCount > 0
+      ? activeCounts[SessionPool.A] / activePlayerCount
+      : 0.5;
 
   const v3Players = usesCompetitiveGrouping
     ? null
@@ -817,196 +1194,170 @@ function buildPoolSelectionPlanner({
     : null;
 
   const runSelection = ({
-    targetPool,
-    restrictToPool = false,
-    minimumTargetPoolPlayers,
+    composition,
     excludedQuartetKey,
     excludedQuartetKeys,
     excludedPartitionKey,
   }: {
-    targetPool: SessionPool;
-    restrictToPool?: boolean;
-    minimumTargetPoolPlayers?: number;
+    composition: PlayerGroupCourtComposition;
     excludedQuartetKey?: string;
     excludedQuartetKeys?: ReadonlySet<string>;
     excludedPartitionKey?: string;
   }): PoolAwareSelection | null => {
+    const targetPool = getCompositionTargetPool(composition);
+    const selectionConstraints = getPlayerGroupSelectionConstraints(composition);
+
+    const finishSelection = <TSelection extends MatchSelectionBase>(
+      selection: TSelection | null
+    ): PoolAwareSelection | null => {
+      if (!selection) return null;
+      const snapshot = getSelectionSnapshot(sessionData, selection.partition);
+      if (snapshot.courtGroupType !== composition.courtGroupType) return null;
+
+      return {
+        ...selection,
+        ...snapshot,
+        targetPool,
+        missedPool: null,
+        competitiveTargetRatio,
+      } as PoolAwareSelection;
+    };
+
     if (usesCompetitiveGrouping && ladderPlayers) {
-      const sourcePlayers = restrictToPool
-        ? ladderPlayers.filter(
-            (player) => getNormalizedSessionPool(player.pool) === targetPool
+      const runLadder = (
+        sourcePlayers: MatchmakerLadderPlayer[],
+        constraints = selectionConstraints,
+        useAllActivePlayers = false
+      ) =>
+        findBestSingleCourtSelectionLadder(sourcePlayers, {
+          sessionMode: getMatchmakerSessionMode(sessionData),
+          respectPlayerRest: sessionData.respectPlayerRest,
+          excludedQuartetKey,
+          excludedQuartetKeys,
+          excludedPartitionKey,
+          candidatePoolVariants: useAllActivePlayers
+            ? (candidatePool) => [
+                {
+                  ...candidatePool,
+                  includedBandValues: [
+                    ...new Set(
+                      candidatePool.activePlayers.map(
+                        (player) => player.effectiveMatchCount
+                      )
+                    ),
+                  ].sort((left, right) => left - right),
+                  widened: true,
+                  lockedPlayers: [],
+                  requiredSelectableCount: 4,
+                  selectablePlayers: [...candidatePool.activePlayers],
+                  candidatePlayers: [...candidatePool.activePlayers],
+                  tieZone: null,
+                },
+              ]
+            : undefined,
+          selectionConstraints: constraints,
+        }).selection;
+
+      if (targetPool) {
+        return finishSelection(
+          runLadder(
+            ladderPlayers.filter(
+              (player) => getNormalizedSessionPool(player.pool) === targetPool
+            )
           )
-        : ladderPlayers;
-      const result = findBestSingleCourtSelectionLadder(sourcePlayers, {
-        sessionMode: getMatchmakerSessionMode(sessionData),
-        respectPlayerRest: sessionData.respectPlayerRest,
+        );
+      }
+
+      for (const tier of buildQuotaAwareQuartetTiers(
+        ladderPlayers,
+        composition,
+        sessionData.respectPlayerRest,
         excludedQuartetKey,
-        excludedQuartetKeys,
-        excludedPartitionKey,
-        targetPool: restrictToPool ? undefined : targetPool,
-        minimumTargetPoolPlayers,
-      });
-      return result.selection
-        ? {
-            ...result.selection,
-            targetPool,
-          }
-        : null;
+        excludedQuartetKeys
+      )) {
+        const selection = runLadder(
+          getQuotaTierPlayers(tier),
+          buildQuotaTierConstraints(composition, tier),
+          true
+        );
+        if (selection) return finishSelection(selection);
+      }
+      return null;
     }
 
     if (!v3Players) {
       return null;
     }
 
-    const sourcePlayers = restrictToPool
-      ? v3Players.filter(
-          (player) => getNormalizedSessionPool(player.pool) === targetPool
+    const runV3 = (
+      sourcePlayers: MatchmakerV3Player[],
+      constraints = selectionConstraints,
+      useAllActivePlayers = false
+    ) =>
+      findBestSingleCourtSelectionV3(sourcePlayers, {
+        sessionMode: getMatchmakerSessionMode(sessionData),
+        sessionType: getMatchmakerSessionType(sessionData),
+        respectPlayerRest: sessionData.respectPlayerRest,
+        completedMatches,
+        excludedQuartetKey,
+        excludedQuartetKeys,
+        excludedPartitionKey,
+        candidatePoolVariants: useAllActivePlayers
+          ? (candidatePool) => [
+              {
+                ...candidatePool,
+                includedBandValues: [
+                  ...new Set(
+                    candidatePool.activePlayers.map(
+                      (player) => player.effectiveMatchCount
+                    )
+                  ),
+                ].sort((left, right) => left - right),
+                widened: true,
+                lockedPlayers: [],
+                requiredSelectableCount: 4,
+                selectablePlayers: [...candidatePool.activePlayers],
+                candidatePlayers: [...candidatePool.activePlayers],
+                tieZone: null,
+              },
+            ]
+          : undefined,
+        selectionConstraints: constraints,
+      }).selection;
+
+    if (targetPool) {
+      return finishSelection(
+        runV3(
+          v3Players.filter(
+            (player) => getNormalizedSessionPool(player.pool) === targetPool
+          )
         )
-      : v3Players;
-    const result = findBestSingleCourtSelectionV3(sourcePlayers, {
-      sessionMode: getMatchmakerSessionMode(sessionData),
-      sessionType: getMatchmakerSessionType(sessionData),
-      respectPlayerRest: sessionData.respectPlayerRest,
-      completedMatches,
+      );
+    }
+
+    for (const tier of buildQuotaAwareQuartetTiers(
+      v3Players,
+      composition,
+      sessionData.respectPlayerRest,
       excludedQuartetKey,
-      excludedQuartetKeys,
-      excludedPartitionKey,
-      targetPool: restrictToPool ? undefined : targetPool,
-      minimumTargetPoolPlayers,
-    });
-    return result.selection
-      ? {
-          ...result.selection,
-          targetPool,
-        }
-      : null;
+      excludedQuartetKeys
+    )) {
+      const selection = runV3(
+        getQuotaTierPlayers(tier),
+        buildQuotaTierConstraints(composition, tier),
+        true
+      );
+      if (selection) return finishSelection(selection);
+    }
+    return null;
   };
 
   return {
-    duePool,
+    activeCounts,
     waitingCounts,
+    competitiveTargetRatio,
     runSelection,
   };
-}
-
-function collectPoolPlanSelections({
-  runSelection,
-  targetPool,
-  restrictToPool,
-  minimumTargetPoolPlayers,
-}: {
-  runSelection: NonNullable<
-    ReturnType<typeof buildPoolSelectionPlanner>
-  >["runSelection"];
-  targetPool: SessionPool;
-  restrictToPool: boolean;
-  minimumTargetPoolPlayers?: number;
-}) {
-  const selections: PoolAwareSelection[] = [];
-  const excludedQuartetKeys = new Set<string>();
-
-  while (selections.length < MAX_POOL_SELECTION_OPTIONS_PER_PLAN) {
-    const selection = runSelection({
-      targetPool,
-      restrictToPool,
-      minimumTargetPoolPlayers,
-      excludedQuartetKeys,
-    });
-
-    if (!selection) {
-      break;
-    }
-
-    const quartetKey = getV3QuartetKey(selection.ids);
-    if (excludedQuartetKeys.has(quartetKey)) {
-      break;
-    }
-
-    excludedQuartetKeys.add(quartetKey);
-    selections.push(selection);
-  }
-
-  return selections;
-}
-
-function listPoolEnabledSingleCourtMatches({
-  rankedCandidates,
-  playersById,
-  sessionData,
-}: {
-  rankedCandidates: RankedCandidates;
-  playersById: Map<string, PartitionCandidate>;
-  sessionData: GenerateMatchSession;
-}) {
-  const planner = buildPoolSelectionPlanner({
-    rankedCandidates,
-    playersById,
-    sessionData,
-  });
-
-  if (!planner) {
-    return [];
-  }
-
-  const { duePool, waitingCounts, runSelection } = planner;
-  const crossoverThreshold = getSessionPoolCrossoverMissThreshold(sessionData);
-  const totalWaitingPlayers =
-    waitingCounts[SessionPool.A] + waitingCounts[SessionPool.B];
-  const orderedPools = [duePool, getOppositeSessionPool(duePool)] as const;
-  const samePoolSelections: PoolAwareSelection[] = [];
-
-  for (const pool of orderedPools) {
-    const selectionsForPool = collectPoolPlanSelections({
-      runSelection,
-      targetPool: pool,
-      restrictToPool: true,
-    });
-
-    samePoolSelections.push(
-      ...selectionsForPool.map((selection) => ({
-        ...selection,
-        missedPool: getMissedPoolOutcome(duePool, pool, waitingCounts),
-      })).map((selection) => withMatchmakingReason(selection, sessionData))
-    );
-  }
-
-  const allowEmergencyCrossover = samePoolSelections.length === 0;
-  const crossoverSelections: PoolAwareSelection[] = [];
-
-  for (const pool of orderedPools) {
-    const waitingInPool = waitingCounts[pool];
-    const missedTurns = getSessionPoolMissedTurns(sessionData, pool);
-    const canCrossPool =
-      waitingInPool > 0 &&
-      totalWaitingPlayers >= 4 &&
-      (missedTurns >= crossoverThreshold || allowEmergencyCrossover);
-
-    if (!canCrossPool) {
-      continue;
-    }
-
-    for (
-      let minimumTargetPoolPlayers = Math.min(waitingInPool, 3);
-      minimumTargetPoolPlayers >= 1;
-      minimumTargetPoolPlayers -= 1
-    ) {
-      const selectionsForPool = collectPoolPlanSelections({
-        runSelection,
-        targetPool: pool,
-        restrictToPool: false,
-        minimumTargetPoolPlayers,
-      });
-
-      crossoverSelections.push(
-        ...selectionsForPool.map((selection) => ({
-          ...selection,
-          missedPool: getMissedPoolOutcome(duePool, pool, waitingCounts),
-        })).map((selection) => withMatchmakingReason(selection, sessionData))
-      );
-    }
-  }
-
-  return [...samePoolSelections, ...crossoverSelections];
 }
 
 function selectPoolEnabledSingleCourtMatch({
@@ -1014,115 +1365,62 @@ function selectPoolEnabledSingleCourtMatch({
   playersById,
   sessionData,
   reshuffleSource,
+  requiredCourtGroupType,
 }: {
   rankedCandidates: RankedCandidates;
   playersById: Map<string, PartitionCandidate>;
   sessionData: GenerateMatchSession;
   reshuffleSource: ReshuffleSource | null;
+  requiredCourtGroupType?: CourtGroupType | string | null;
 }): PoolAwareSelection {
-  const planner = buildPoolSelectionPlanner({
+  const runner = buildPlayerGroupSelectionRunner({
     rankedCandidates,
     playersById,
     sessionData,
   });
 
-  if (!planner) {
-    throw new GenerateMatchError(
-      400,
-      `No valid pairing found for current ${getSessionModeLabel(
-        getMatchmakerSessionMode(sessionData)
-      )} session rules. Try changing player preferences.`
-    );
-  }
+  const normalizedRequiredCourtGroupType = getNormalizedCourtGroupType(
+    requiredCourtGroupType
+  );
+  const plans = buildPlayerGroupCourtPlans({
+    requestedCourtCount: 1,
+    activePoolAPlayerCount: runner.activeCounts[SessionPool.A],
+    activePoolBPlayerCount: runner.activeCounts[SessionPool.B],
+    waitingPoolAPlayerCount: runner.waitingCounts[SessionPool.A],
+    waitingPoolBPlayerCount: runner.waitingCounts[SessionPool.B],
+    history: getPlayerGroupHistory(sessionData),
+  }).filter(
+    (plan) =>
+      !normalizedRequiredCourtGroupType ||
+      plan.compositions[0]?.courtGroupType === normalizedRequiredCourtGroupType
+  );
 
-  const { duePool, waitingCounts, runSelection } = planner;
+  for (const plan of plans) {
+    const composition = plan.compositions[0];
+    if (!composition) {
+      continue;
+    }
 
-  const tryPlan = ({
-    targetPool,
-    restrictToPool,
-    minimumTargetPoolPlayers,
-  }: {
-    targetPool: SessionPool;
-    restrictToPool: boolean;
-    minimumTargetPoolPlayers?: number;
-  }) =>
-    applyReshuffleExclusions(
-      runSelection({
-        targetPool,
-        restrictToPool,
-        minimumTargetPoolPlayers,
-      }),
+    const selection = applyReshuffleExclusions(
+      runner.runSelection({ composition }),
       reshuffleSource,
       ({ excludedQuartetKey, excludedPartitionKey }) =>
-        runSelection({
-          targetPool,
-          restrictToPool,
-          minimumTargetPoolPlayers,
+        runner.runSelection({
+          composition,
           excludedQuartetKey,
           excludedPartitionKey,
         })
     );
 
-  const crossoverThreshold = getSessionPoolCrossoverMissThreshold(sessionData);
-  const totalWaitingPlayers =
-    waitingCounts[SessionPool.A] + waitingCounts[SessionPool.B];
-  const orderedPools = [duePool, getOppositeSessionPool(duePool)] as const;
-  let foundSamePoolSelection = false;
-
-  for (const pool of orderedPools) {
-    const samePoolSelection = tryPlan({
-      targetPool: pool,
-      restrictToPool: true,
-    });
-    if (samePoolSelection) {
-      foundSamePoolSelection = true;
-      return withMatchmakingReason(
-        {
-          ...samePoolSelection,
-          missedPool: getMissedPoolOutcome(duePool, pool, waitingCounts),
-        },
-        sessionData
-      );
+    if (selection) {
+      return withMatchmakingReason(selection, sessionData);
     }
   }
 
-  const allowEmergencyCrossover = !foundSamePoolSelection;
-
-  for (const pool of orderedPools) {
-    const waitingInPool = waitingCounts[pool];
-    const missedTurns = getSessionPoolMissedTurns(sessionData, pool);
-    if (
-      waitingInPool > 0 &&
-      totalWaitingPlayers >= 4 &&
-      (missedTurns >= crossoverThreshold || allowEmergencyCrossover)
-    ) {
-      for (
-        let minimumTargetPoolPlayers = Math.min(waitingInPool, 3);
-        minimumTargetPoolPlayers >= 1;
-        minimumTargetPoolPlayers -= 1
-      ) {
-        const crossoverSelection = tryPlan({
-          targetPool: pool,
-          restrictToPool: false,
-          minimumTargetPoolPlayers,
-        });
-        if (crossoverSelection) {
-          return withMatchmakingReason(
-            {
-              ...crossoverSelection,
-              missedPool: getMissedPoolOutcome(duePool, pool, waitingCounts),
-            },
-            sessionData
-          );
-        }
-      }
-    }
-  }
-
-  if (reshuffleSource) {
+  if (reshuffleSource || normalizedRequiredCourtGroupType) {
     throw new GenerateMatchError(
       409,
-      "No alternative reshuffle was available. Undo this match if you want the same players returned to the pool."
+      "No alternative reshuffle preserving this court type was available. Undo this match if you want the same players returned to the pool."
     );
   }
 
@@ -1176,20 +1474,24 @@ export function selectSingleCourtMatch({
   playersById,
   sessionData,
   reshuffleSource,
+  requiredCourtGroupType,
 }: {
   rankedCandidates: RankedCandidates;
   playersById: Map<string, PartitionCandidate>;
   sessionData: GenerateMatchSession;
   rotationHistory: ReturnType<typeof buildRotationHistory>;
   reshuffleSource: ReshuffleSource | null;
+  requiredCourtGroupType?: CourtGroupType | string | null;
 }) {
   if (isInterclubSession(sessionData)) {
-    return selectInterclubSingleCourtMatch({
-      rankedCandidates,
-      playersById,
-      sessionData,
-      reshuffleSource,
-    });
+    return withNoPlayerGroupSnapshot(
+      selectInterclubSingleCourtMatch({
+        rankedCandidates,
+        playersById,
+        sessionData,
+        reshuffleSource,
+      })
+    );
   }
 
   if (sessionData.poolsEnabled) {
@@ -1198,6 +1500,7 @@ export function selectSingleCourtMatch({
       playersById,
       sessionData,
       reshuffleSource,
+      requiredCourtGroupType,
     });
   }
 
@@ -1340,12 +1643,14 @@ function selectExactQuartetMatch({
   playersById,
   sessionData,
   selectedIds,
+  requiredCourtGroupType,
 }: {
   rankedCandidates: RankedCandidates;
   playersById: Map<string, PartitionCandidate>;
   sessionData: GenerateMatchSession;
   selectedIds: [string, string, string, string];
-}): PoolAwareSelection | null {
+  requiredCourtGroupType?: CourtGroupType | string | null;
+}) {
   const selectedUserIds = new Set(selectedIds);
   const exactRankedCandidates = rankedCandidates.filter((candidate) =>
     selectedUserIds.has(candidate.userId)
@@ -1358,6 +1663,80 @@ function selectExactQuartetMatch({
   const usesCompetitiveGrouping =
     getMatchmakerSessionType(sessionData) === SessionType.LADDER ||
     getMatchmakerSessionType(sessionData) === SessionType.RACE;
+  const activeCounts = getPoolActiveCounts(sessionData);
+  const activePlayerCount = activeCounts[SessionPool.A] + activeCounts[SessionPool.B];
+  const competitiveTargetRatio =
+    activePlayerCount > 0
+      ? activeCounts[SessionPool.A] / activePlayerCount
+      : 0.5;
+  const selectedPoolACount = exactRankedCandidates.filter(
+    (candidate) => getNormalizedSessionPool(candidate.pool) === SessionPool.A
+  ).length;
+  const normalizedRequiredCourtGroupType = getNormalizedCourtGroupType(
+    requiredCourtGroupType
+  );
+  const requiredComposition =
+    sessionData.poolsEnabled && normalizedRequiredCourtGroupType
+      ? {
+          courtGroupType: normalizedRequiredCourtGroupType,
+          poolASeatCount:
+            normalizedRequiredCourtGroupType === CourtGroupType.COMPETITIVE
+              ? 4
+              : normalizedRequiredCourtGroupType === CourtGroupType.SOCIAL
+                ? 0
+                : normalizedRequiredCourtGroupType === CourtGroupType.CROSSOVER
+                  ? 2
+                  : selectedPoolACount,
+          poolBSeatCount:
+            normalizedRequiredCourtGroupType === CourtGroupType.COMPETITIVE
+              ? 0
+              : normalizedRequiredCourtGroupType === CourtGroupType.SOCIAL
+                ? 4
+                : normalizedRequiredCourtGroupType === CourtGroupType.CROSSOVER
+                  ? 2
+                  : 4 - selectedPoolACount,
+        }
+      : null;
+  const selectionConstraints = requiredComposition
+    ? getPlayerGroupSelectionConstraints(requiredComposition)
+    : undefined;
+
+  const finishSelection = <TSelection extends {
+    ids: [string, string, string, string];
+    partition: { team1: [string, string]; team2: [string, string] };
+  }>(selection: TSelection | null) => {
+    if (!selection) {
+      return null;
+    }
+
+    if (!sessionData.poolsEnabled) {
+      return withMatchmakingReason(selection, sessionData);
+    }
+
+    const snapshot = getSelectionSnapshot(sessionData, selection.partition);
+    if (
+      normalizedRequiredCourtGroupType &&
+      snapshot.courtGroupType !== normalizedRequiredCourtGroupType
+    ) {
+      return null;
+    }
+
+    return withMatchmakingReason(
+      {
+        ...selection,
+        ...snapshot,
+        targetPool:
+          snapshot.courtGroupType === CourtGroupType.COMPETITIVE
+            ? SessionPool.A
+            : snapshot.courtGroupType === CourtGroupType.SOCIAL
+              ? SessionPool.B
+              : null,
+        missedPool: null,
+        competitiveTargetRatio,
+      },
+      sessionData
+    );
+  };
 
   if (usesCompetitiveGrouping) {
     const result = findBestSingleCourtSelectionLadder(
@@ -1365,18 +1744,11 @@ function selectExactQuartetMatch({
       {
         sessionMode: getMatchmakerSessionMode(sessionData),
         respectPlayerRest: sessionData.respectPlayerRest,
+        selectionConstraints,
       }
     );
 
-    return result.selection
-      ? withMatchmakingReason(
-          {
-            ids: result.selection.ids,
-            partition: result.selection.partition,
-          },
-          sessionData
-        )
-      : null;
+    return finishSelection(result.selection);
   }
 
   const result = findBestSingleCourtSelectionV3(
@@ -1386,12 +1758,11 @@ function selectExactQuartetMatch({
       sessionType: getMatchmakerSessionType(sessionData),
       respectPlayerRest: sessionData.respectPlayerRest,
       completedMatches: buildCompletedMatches(sessionData),
+      selectionConstraints,
     }
   );
 
-  return result.selection
-    ? withMatchmakingReason(result.selection, sessionData)
-    : null;
+  return finishSelection(result.selection);
 }
 
 export function selectReplacementMatch({
@@ -1400,21 +1771,25 @@ export function selectReplacementMatch({
   sessionData,
   retainedUserIds,
   excludedUserIds = [],
+  requiredCourtGroupType,
 }: {
   rankedCandidates: RankedCandidates;
   playersById: Map<string, PartitionCandidate>;
   sessionData: GenerateMatchSession;
   retainedUserIds: [string, string, string];
   excludedUserIds?: string[];
+  requiredCourtGroupType?: CourtGroupType | string | null;
 }) {
   if (isInterclubSession(sessionData)) {
-    return selectInterclubReplacementMatch({
-      rankedCandidates,
-      playersById,
-      sessionData,
-      retainedUserIds,
-      excludedUserIds,
-    });
+    return withNoPlayerGroupSnapshot(
+      selectInterclubReplacementMatch({
+        rankedCandidates,
+        playersById,
+        sessionData,
+        retainedUserIds,
+        excludedUserIds,
+      })
+    );
   }
 
   const retainedUserIdSet = new Set(retainedUserIds);
@@ -1440,6 +1815,7 @@ export function selectReplacementMatch({
       playersById,
       sessionData,
       selectedIds: [...retainedUserIds, candidate.userId],
+      requiredCourtGroupType,
     });
 
     if (selection) {
@@ -1499,12 +1875,14 @@ export function selectSingleCourtMatchRespectingSkips({
   sessionData,
   rotationHistory,
   reshuffleSource,
+  requiredCourtGroupType,
 }: {
   rankedCandidates: RankedCandidates;
   playersById: Map<string, PartitionCandidate>;
   sessionData: GenerateMatchSession;
   rotationHistory: ReturnType<typeof buildRotationHistory>;
   reshuffleSource: ReshuffleSource | null;
+  requiredCourtGroupType?: CourtGroupType | string | null;
 }) {
   const pendingSkipUserIds = getPendingSkipNextUserIds(sessionData.players);
   const excludedSkipUserIds = new Set<string>();
@@ -1528,6 +1906,7 @@ export function selectSingleCourtMatchRespectingSkips({
         sessionData,
         rotationHistory,
         reshuffleSource,
+        requiredCourtGroupType,
       });
     } catch (error) {
       if (consumedSkipUserIds.length > 0 && error instanceof GenerateMatchError) {
@@ -1562,12 +1941,14 @@ export function selectReplacementMatchRespectingSkips({
   sessionData,
   retainedUserIds,
   excludedUserIds = [],
+  requiredCourtGroupType,
 }: {
   rankedCandidates: RankedCandidates;
   playersById: Map<string, PartitionCandidate>;
   sessionData: GenerateMatchSession;
   retainedUserIds: [string, string, string];
   excludedUserIds?: string[];
+  requiredCourtGroupType?: CourtGroupType | string | null;
 }) {
   const pendingSkipUserIds = getPendingSkipNextUserIds(sessionData.players);
   const retainedUserIdSet = new Set(retainedUserIds);
@@ -1583,6 +1964,7 @@ export function selectReplacementMatchRespectingSkips({
         sessionData,
         retainedUserIds,
         excludedUserIds: [...excludedUserIds, ...excludedSkipUserIds],
+        requiredCourtGroupType,
       });
     } catch (error) {
       if (consumedSkipUserIds.length > 0 && error instanceof GenerateMatchError) {
@@ -1611,11 +1993,174 @@ export function selectReplacementMatchRespectingSkips({
   throw getSkipNextAlternativeError();
 }
 
+function compareGroupedBatchSelections(
+  left: readonly PoolAwareSelection[],
+  right: readonly PoolAwareSelection[],
+  sessionData: GenerateMatchSession
+) {
+  const getPlayers = (selections: readonly PoolAwareSelection[]) =>
+    selections.flatMap((selection) =>
+      "players" in selection && Array.isArray(selection.players)
+        ? (selection.players as Array<{
+            effectiveMatchCount?: number;
+            moreRestDeficit?: number;
+            restTurns?: number;
+            arrivalPriorityAt?: Date | string | null;
+          }>)
+        : []
+    );
+  const leftPlayers = getPlayers(left);
+  const rightPlayers = getPlayers(right);
+  const fairnessCompare = compareNumberVectors(
+    leftPlayers
+      .map((player) => player.effectiveMatchCount ?? 0)
+      .sort((a, b) => a - b),
+    rightPlayers
+      .map((player) => player.effectiveMatchCount ?? 0)
+      .sort((a, b) => a - b)
+  );
+  if (fairnessCompare !== 0) return fairnessCompare;
+
+  const leftPriorityTimes = leftPlayers
+    .map((player) => getArrivalPriorityTime(player.arrivalPriorityAt))
+    .filter((time): time is number => time !== null)
+    .sort((a, b) => a - b);
+  const rightPriorityTimes = rightPlayers
+    .map((player) => getArrivalPriorityTime(player.arrivalPriorityAt))
+    .filter((time): time is number => time !== null)
+    .sort((a, b) => a - b);
+  if (leftPriorityTimes.length !== rightPriorityTimes.length) {
+    return rightPriorityTimes.length - leftPriorityTimes.length;
+  }
+  const priorityCompare = compareNumberVectors(
+    leftPriorityTimes,
+    rightPriorityTimes
+  );
+  if (priorityCompare !== 0) return priorityCompare;
+
+  if (sessionData.respectPlayerRest) {
+    const leftDeficit = leftPlayers.reduce(
+      (sum, player) => sum + (player.moreRestDeficit ?? 0),
+      0
+    );
+    const rightDeficit = rightPlayers.reduce(
+      (sum, player) => sum + (player.moreRestDeficit ?? 0),
+      0
+    );
+    if (leftDeficit !== rightDeficit) return leftDeficit - rightDeficit;
+
+    const restCompare = compareNumberVectors(
+      leftPlayers.map((player) => player.restTurns ?? 0).sort((a, b) => b - a),
+      rightPlayers.map((player) => player.restTurns ?? 0).sort((a, b) => b - a),
+      -1
+    );
+    if (restCompare !== 0) return restCompare;
+  }
+
+  const usesLevelMatch =
+    getMatchmakerSessionType(sessionData) === SessionType.LADDER ||
+    getMatchmakerSessionType(sessionData) === SessionType.RACE;
+
+  if (usesLevelMatch) {
+    const getLadderMetrics = (selections: readonly PoolAwareSelection[]) => {
+      const typed = selections as Array<
+        PoolAwareSelection & {
+          groupingSummary?: {
+            maxLadderGap: number;
+            totalLadderGap: number;
+            totalPointDiffGap: number;
+          };
+          balanceGap?: number;
+          pointDiffGap?: number;
+          strengthGap?: number;
+          randomScore?: number;
+        }
+      >;
+      const values = typed.map((selection) => ({
+        maxLadderGap: selection.groupingSummary?.maxLadderGap ?? 0,
+        totalLadderGap: selection.groupingSummary?.totalLadderGap ?? 0,
+        totalPointDiffGap:
+          selection.groupingSummary?.totalPointDiffGap ?? 0,
+        balanceGap: selection.balanceGap ?? 0,
+        pointDiffGap: selection.pointDiffGap ?? 0,
+        strengthGap: selection.strengthGap ?? 0,
+        randomScore: selection.randomScore ?? 0,
+      }));
+      return [
+        Math.max(...values.map((value) => value.maxLadderGap), 0),
+        values.reduce((sum, value) => sum + value.totalLadderGap, 0),
+        values.reduce((sum, value) => sum + value.totalPointDiffGap, 0),
+        Math.max(...values.map((value) => value.balanceGap), 0),
+        values.reduce((sum, value) => sum + value.balanceGap, 0),
+        Math.max(...values.map((value) => value.pointDiffGap), 0),
+        values.reduce((sum, value) => sum + value.pointDiffGap, 0),
+        Math.max(...values.map((value) => value.strengthGap), 0),
+        values.reduce((sum, value) => sum + value.strengthGap, 0),
+        values.reduce((sum, value) => sum + value.randomScore, 0),
+      ];
+    };
+
+    return compareNumberVectors(
+      getLadderMetrics(left),
+      getLadderMetrics(right)
+    );
+  }
+
+  const getV3Metrics = (selections: readonly PoolAwareSelection[]) => {
+    const typed = selections as Array<
+      PoolAwareSelection & {
+        balanceGap?: number;
+        pointDiffGap?: number;
+        sharedCourtRepeatPenalty?: number;
+        partnerCoveragePenalty?: number;
+        opponentCoveragePenalty?: number;
+        partnerRepeatPenalty?: number;
+        opponentRepeatPenalty?: number;
+        exactRematchPenalty?: number;
+        randomScore?: number;
+      }
+    >;
+    const values = typed.map((selection) => ({
+      balanceGap: selection.balanceGap ?? 0,
+      pointDiffGap: selection.pointDiffGap ?? 0,
+      shared: selection.sharedCourtRepeatPenalty ?? 0,
+      partnerCoverage: selection.partnerCoveragePenalty ?? 0,
+      opponentCoverage: selection.opponentCoveragePenalty ?? 0,
+      partner: selection.partnerRepeatPenalty ?? 0,
+      opponent: selection.opponentRepeatPenalty ?? 0,
+      rematch: selection.exactRematchPenalty ?? 0,
+      random: selection.randomScore ?? 0,
+    }));
+    const balance = [
+      Math.max(...values.map((value) => value.balanceGap), 0),
+      values.reduce((sum, value) => sum + value.balanceGap, 0),
+      Math.max(...values.map((value) => value.pointDiffGap), 0),
+      values.reduce((sum, value) => sum + value.pointDiffGap, 0),
+    ];
+    const variety = [
+      values.reduce((sum, value) => sum + value.shared, 0),
+      values.reduce((sum, value) => sum + value.partnerCoverage, 0),
+      values.reduce((sum, value) => sum + value.opponentCoverage, 0),
+      values.reduce((sum, value) => sum + value.partner, 0),
+      values.reduce((sum, value) => sum + value.opponent, 0),
+      values.reduce((sum, value) => sum + value.rematch, 0),
+    ];
+    const random = values.reduce((sum, value) => sum + value.random, 0);
+
+    return getMatchmakerSessionType(sessionData) === SessionType.SOCIAL_MIX
+      ? [...variety, ...balance, random]
+      : [...balance, ...variety, random];
+  };
+
+  return compareNumberVectors(getV3Metrics(left), getV3Metrics(right));
+}
+
 export function selectBatchMatches({
   rankedCandidates,
   playersById,
   sessionData,
   requestedMatchCount,
+  requestedCourtIds,
   randomFn,
 }: {
   rankedCandidates: RankedCandidates;
@@ -1623,85 +2168,217 @@ export function selectBatchMatches({
   sessionData: GenerateMatchSession;
   rotationHistory: ReturnType<typeof buildRotationHistory>;
   requestedMatchCount: number;
+  requestedCourtIds?: string[];
   randomFn?: () => number;
 }) {
   if (isInterclubSession(sessionData)) {
-    return selectInterclubBatchMatches({
+    const result = selectInterclubBatchMatches({
       rankedCandidates,
       playersById,
       sessionData,
       requestedMatchCount,
       randomFn,
     });
+
+    return {
+      ...result,
+      selections: result.selections.map(withNoPlayerGroupSnapshot),
+    };
   }
 
   if (sessionData.poolsEnabled) {
-    const search = ({
-      workingSessionData,
-      workingRankedCandidates,
-      selections,
-    }: {
-      workingSessionData: GenerateMatchSession;
-      workingRankedCandidates: RankedCandidates;
-      selections: PoolAwareSelection[];
-    }): { selections: PoolAwareSelection[]; poolSchedulingState: GenerateMatchSession } | null => {
-      if (selections.length === requestedMatchCount) {
-        return {
-          selections,
-          poolSchedulingState: workingSessionData,
-        };
+    const activeCounts = getPoolActiveCounts(sessionData);
+    const waitingCounts = getPoolWaitingCounts(sessionData, rankedCandidates);
+    const plans = buildPlayerGroupCourtPlans({
+      requestedCourtCount: requestedMatchCount,
+      activePoolAPlayerCount: activeCounts[SessionPool.A],
+      activePoolBPlayerCount: activeCounts[SessionPool.B],
+      waitingPoolAPlayerCount: waitingCounts[SessionPool.A],
+      waitingPoolBPlayerCount: waitingCounts[SessionPool.B],
+      history: getPlayerGroupHistory(sessionData),
+    });
+
+    const orderForPhysicalCourts = (
+      compositions: readonly PlayerGroupCourtComposition[]
+    ) => {
+      const physicalCourtIds = requestedCourtIds?.slice(0, compositions.length);
+      if (!physicalCourtIds || physicalCourtIds.length !== compositions.length) {
+        return [...compositions];
       }
 
-      const remainingCourts = requestedMatchCount - selections.length;
-      if (workingRankedCandidates.length < remainingCourts * 4) {
-        return null;
+      const matchesByCreatedAt = [...sessionData.matches].sort(
+        (left, right) =>
+          left.createdAt.getTime() - right.createdAt.getTime() ||
+          left.id.localeCompare(right.id)
+      );
+      const courtTypeHistory = new Map<string, Array<CourtGroupType | string>>();
+
+      for (const match of matchesByCreatedAt) {
+        const snapshot = match as typeof match & PlayerGroupHistorySnapshot;
+        if (!snapshot.courtGroupType) {
+          continue;
+        }
+        const history = courtTypeHistory.get(match.courtId) ?? [];
+        history.push(snapshot.courtGroupType);
+        courtTypeHistory.set(match.courtId, history);
       }
 
-      const candidateSelections = listPoolEnabledSingleCourtMatches({
-        rankedCandidates: workingRankedCandidates,
-        playersById,
-        sessionData: workingSessionData,
-      });
+      const recentTypes = getPlayerGroupHistory(sessionData)
+        .slice(-2)
+        .map((snapshot) => snapshot.courtGroupType ?? null);
+      const remaining = [...compositions];
+      const ordered: PlayerGroupCourtComposition[] = [];
 
-      for (const selection of candidateSelections) {
-        const selectedIds = new Set(selection.ids);
-        const nextRankedCandidates = workingRankedCandidates.filter(
-          (candidate) => !selectedIds.has(candidate.userId)
-        );
-        const nextSessionData = applyPoolSelectionOutcome(
-          workingSessionData,
-          selection
-        );
-        const result = search({
-          workingSessionData: nextSessionData,
-          workingRankedCandidates: nextRankedCandidates,
-          selections: [...selections, selection],
+      for (const courtId of physicalCourtIds) {
+        const crossoverDue =
+          recentTypes.length >= 2 &&
+          recentTypes
+            .slice(-2)
+            .every((type) => type !== CourtGroupType.CROSSOVER) &&
+          remaining.some(
+            (composition) =>
+              composition.courtGroupType === CourtGroupType.CROSSOVER
+          );
+        const candidateIndexes = remaining
+          .map((_, index) => index)
+          .filter(
+            (index) =>
+              !crossoverDue ||
+              remaining[index].courtGroupType === CourtGroupType.CROSSOVER
+          );
+        const physicalHistory = courtTypeHistory.get(courtId) ?? [];
+
+        candidateIndexes.sort((leftIndex, rightIndex) => {
+          const left = remaining[leftIndex];
+          const right = remaining[rightIndex];
+          const lastType = physicalHistory.at(-1);
+          const leftLastRepeat = lastType === left.courtGroupType ? 1 : 0;
+          const rightLastRepeat = lastType === right.courtGroupType ? 1 : 0;
+          if (leftLastRepeat !== rightLastRepeat) {
+            return leftLastRepeat - rightLastRepeat;
+          }
+
+          const leftHistoryCount = physicalHistory.filter(
+            (type) => type === left.courtGroupType
+          ).length;
+          const rightHistoryCount = physicalHistory.filter(
+            (type) => type === right.courtGroupType
+          ).length;
+          if (leftHistoryCount !== rightHistoryCount) {
+            return leftHistoryCount - rightHistoryCount;
+          }
+
+          return leftIndex - rightIndex;
         });
 
-        if (result) {
-          return result;
+        const [selected] = remaining.splice(candidateIndexes[0], 1);
+        ordered.push(selected);
+        recentTypes.push(selected.courtGroupType);
+        if (recentTypes.length > 2) {
+          recentTypes.shift();
         }
       }
 
-      return null;
+      return ordered;
     };
 
-    const result = search({
-      workingSessionData: sessionData,
-      workingRankedCandidates: rankedCandidates,
-      selections: [],
-    });
+    const searchPlan = (
+      compositions: readonly PlayerGroupCourtComposition[]
+    ): PoolAwareSelection[] | null => {
+      let bestSelections: PoolAwareSelection[] | null = null;
+      let exploredBranches = 0;
+      const deadline = Date.now() + MAX_GROUP_BATCH_SEARCH_MS;
 
-    if (!result) {
-      throw new GenerateMatchError(
-        400,
-        `No valid set of matches found for current ${getSessionModeLabel(
-          getMatchmakerSessionMode(sessionData)
-        )} session rules. Try changing player preferences.`
-      );
+      const backtrack = (
+        workingRankedCandidates: RankedCandidates,
+        selections: PoolAwareSelection[]
+      ) => {
+        exploredBranches += 1;
+        if (selections.length === compositions.length) {
+          if (
+            !bestSelections ||
+            compareGroupedBatchSelections(
+              selections,
+              bestSelections,
+              sessionData
+            ) < 0
+          ) {
+            bestSelections = selections;
+          }
+          return;
+        }
+
+        if (
+          exploredBranches > MAX_GROUP_BATCH_SEARCH_BRANCHES ||
+          (bestSelections && Date.now() >= deadline)
+        ) {
+          return;
+        }
+
+        const remainingCourts = compositions.length - selections.length;
+        if (workingRankedCandidates.length < remainingCourts * 4) return;
+
+        const composition = compositions[selections.length];
+        const runner = buildPlayerGroupSelectionRunner({
+          rankedCandidates: workingRankedCandidates,
+          playersById,
+          sessionData,
+        });
+        const excludedQuartetKeys = new Set<string>();
+        while (
+          excludedQuartetKeys.size < MAX_POOL_SELECTION_OPTIONS_PER_PLAN
+        ) {
+          const selection = runner.runSelection({
+            composition,
+            excludedQuartetKeys,
+          });
+          if (!selection) break;
+
+          const quartetKey = getV3QuartetKey(selection.ids);
+          if (excludedQuartetKeys.has(quartetKey)) break;
+          excludedQuartetKeys.add(quartetKey);
+
+          const selectedIds = new Set(selection.ids);
+          backtrack(
+            workingRankedCandidates.filter(
+              (candidate) => !selectedIds.has(candidate.userId)
+            ),
+            [...selections, selection]
+          );
+          if (
+            exploredBranches > MAX_GROUP_BATCH_SEARCH_BRANCHES ||
+            Date.now() >= deadline
+          ) {
+            break;
+          }
+        }
+      };
+
+      backtrack(rankedCandidates, []);
+      return bestSelections;
+    };
+
+    for (const plan of plans) {
+      const compositions = orderForPhysicalCourts(plan.compositions);
+      const selections = searchPlan(compositions);
+
+      if (selections) {
+        return {
+          selections: selections.map((selection) =>
+            withMatchmakingReason(selection, sessionData)
+          ),
+          poolSchedulingState: sessionData,
+          competitiveTargetRatio: plan.competitiveTargetRatio,
+        };
+      }
     }
 
-    return result;
+    throw new GenerateMatchError(
+      400,
+      `No valid set of matches found for current ${getSessionModeLabel(
+        getMatchmakerSessionMode(sessionData)
+      )} session rules. Try changing player preferences.`
+    );
   }
 
   if (
@@ -1772,6 +2449,7 @@ export function selectBatchMatchesRespectingSkips({
   sessionData,
   rotationHistory,
   requestedMatchCount,
+  requestedCourtIds,
   randomFn,
 }: {
   rankedCandidates: RankedCandidates;
@@ -1779,6 +2457,7 @@ export function selectBatchMatchesRespectingSkips({
   sessionData: GenerateMatchSession;
   rotationHistory: ReturnType<typeof buildRotationHistory>;
   requestedMatchCount: number;
+  requestedCourtIds?: string[];
   randomFn?: () => number;
 }) {
   const pendingSkipUserIds = getPendingSkipNextUserIds(sessionData.players);
@@ -1791,7 +2470,10 @@ export function selectBatchMatchesRespectingSkips({
       excludedSkipUserIds
     );
 
-    if (eligibleRankedCandidates.length < requestedMatchCount * 4) {
+    const minimumRequiredPlayerCount = sessionData.poolsEnabled
+      ? 4
+      : requestedMatchCount * 4;
+    if (eligibleRankedCandidates.length < minimumRequiredPlayerCount) {
       throw getSkipNextAlternativeError();
     }
 
@@ -1803,6 +2485,7 @@ export function selectBatchMatchesRespectingSkips({
         sessionData,
         rotationHistory,
         requestedMatchCount,
+        requestedCourtIds,
         randomFn,
       });
     } catch (error) {

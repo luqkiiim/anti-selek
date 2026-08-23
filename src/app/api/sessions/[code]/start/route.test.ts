@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { SessionStatus } from "@/types/enums";
+import { SessionPool, SessionStatus } from "@/types/enums";
 
 vi.mock("@/lib/auth", () => ({
   auth: vi.fn(),
@@ -63,5 +63,32 @@ describe("start session route", () => {
         }),
       })
     );
+  });
+
+  it("revalidates the minimum active roster for player groups", async () => {
+    vi.mocked(auth).mockResolvedValue({
+      user: { id: "admin-1", isAdmin: true },
+    } as never);
+    vi.mocked(prisma.session.findUnique).mockResolvedValue({
+      code: "session-1",
+      clubId: null,
+      status: SessionStatus.WAITING,
+      poolsEnabled: true,
+      players: [
+        { id: "player-1", pool: SessionPool.A, isPaused: false },
+        { id: "player-2", pool: SessionPool.B, isPaused: false },
+        { id: "player-3", pool: SessionPool.B, isPaused: false },
+        { id: "player-4", pool: SessionPool.A, isPaused: true },
+      ],
+    } as never);
+
+    const response = await POST(new Request("http://localhost/session/start"), {
+      params: Promise.resolve({ code: "session-1" }),
+    });
+    const body = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(body.error).toContain("at least 2 Competitive and 2 Social");
+    expect(prisma.session.update).not.toHaveBeenCalled();
   });
 });

@@ -140,8 +140,16 @@ export async function POST(
           finalTeam2Score: team2Score,
           scoreSubmittedByUserId: session.user.id,
         });
+        const automaticQueueInvalidated =
+          !!updated &&
+          "automaticQueueInvalidated" in updated &&
+          updated.automaticQueueInvalidated === true;
         const { autoAssignedMatch, queuedMatchCleared, queuedMatch } =
-          await reconcileSessionQueueAfterCourtChange(match.sessionId);
+          await (automaticQueueInvalidated
+            ? reconcileSessionQueueAfterCourtChange(match.sessionId, {
+                generateAutomaticIfMissing: true,
+              })
+            : reconcileSessionQueueAfterCourtChange(match.sessionId));
         return NextResponse.json({
           ...updated,
           autoAssignedMatch,

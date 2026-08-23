@@ -4,7 +4,7 @@ import { getManualMatchSelectionOrder } from "@/app/session/[code]/manualMatchSe
 import { Avatar } from "@/components/ui/Avatar";
 import { FlashMessage, ModalFrame } from "@/components/ui/chrome";
 import { getCourtDisplayLabel } from "@/lib/courtLabels";
-import { SessionPool } from "@/types/enums";
+import { getPlayerGroupLabel } from "@/lib/playerGroups";
 import type {
   Court,
   ManualMatchFormState,
@@ -42,16 +42,12 @@ export function ManualMatchModal({
   creatingManualMatch,
   error,
   poolsEnabled,
-  poolAName,
-  poolBName,
   onClose,
   onTogglePlayer,
   onCreateMatch,
 }: ManualMatchModalProps) {
   if (!open) return null;
 
-  const getPoolLabel = (pool: SessionPool) =>
-    pool === SessionPool.A ? (poolAName ?? "Open") : (poolBName ?? "Regular");
   const subtitle =
     locationLabel ?? (court ? getCourtDisplayLabel(court) : "Select teams");
   const selectedPlayerIdsInOrder = getManualMatchSelectionOrder(manualMatchForm);
@@ -178,7 +174,7 @@ export function ManualMatchModal({
                       </p>
                       <div className="flex flex-wrap items-center gap-1.5">
                         <p className="text-xs text-gray-500">
-                          {poolsEnabled ? `${getPoolLabel(player.pool)} - ` : ""}
+                          {poolsEnabled ? `${getPlayerGroupLabel(player.pool)} - ` : ""}
                           {`Rating ${player.user.elo}`}
                         </p>
                         {player.skipNextMatchAt ? (

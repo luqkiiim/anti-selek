@@ -1,16 +1,11 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { getSideSpecificCourtCreateLabel } from "@/lib/courtCreate";
-import { prisma } from "@/lib/prisma";
-import {
-  buildSessionPoolMap,
-  summarizeSessionPoolMembership,
-} from "@/lib/sessionPools";
+import { rankOpenCourtsForGroupType } from "@/lib/courtGroupRotation";
 import { tryRebuildQueuedMatchForSessionId } from "../queue-match/shared";
 import { logError, safeErrorResponse } from "@/lib/errors";
 import { rateLimit, checkInvalidTargetRateLimit, invalidTargetResponse } from "@/lib/rateLimit";
 import {
-  applyPoolSelectionOutcome,
   buildMatchmakingState,
   createMatchesForAssignments,
   ensureEnoughPlayers,
@@ -121,32 +116,6 @@ export async function POST(
         },
       ]);
 
-      if (sessionData.poolsEnabled) {
-        const poolSummary = summarizeSessionPoolMembership(
-          selectedIds,
-          buildSessionPoolMap(
-            sessionData.players,
-            (player) => player.userId,
-            (player) => player.pool
-          )
-        );
-        if (poolSummary.dominantPool) {
-          const nextPoolState = applyPoolSelectionOutcome(sessionData, {
-            targetPool: poolSummary.dominantPool,
-            missedPool: null,
-          });
-          await prisma.session.update({
-            where: { id: sessionData.id },
-            data: {
-              poolACourtAssignments: nextPoolState.poolACourtAssignments,
-              poolBCourtAssignments: nextPoolState.poolBCourtAssignments,
-              poolAMissedTurns: nextPoolState.poolAMissedTurns,
-              poolBMissedTurns: nextPoolState.poolBMissedTurns,
-            },
-          });
-        }
-      }
-
       return NextResponse.json({
         ...createdMatch,
         queuedMatch: await tryRebuildQueuedMatchForSessionId(sessionData.id),
@@ -206,10 +175,10 @@ export async function POST(
           sessionData: replacementSessionData,
           retainedUserIds: retainedUserIds as [string, string, string],
           excludedUserIds: currentMatchUserIds,
+          requiredCourtGroupType: targetCourt.currentMatch.courtGroupType,
         });
 
-      return NextResponse.json(
-        await replaceCurrentCourtMatchAssignment({
+      const replacementMatch = await replaceCurrentCourtMatchAssignment({
           sessionId: sessionData.id,
           courtId: targetCourt.id,
           currentMatchId: targetCourt.currentMatch.id,
@@ -224,10 +193,27 @@ export async function POST(
               ? replacementSelection.team2ClubId
               : null,
           matchmakingReasonJson: replacementSelection.matchmakingReasonJson ?? null,
+          courtGroupType:
+            "courtGroupType" in replacementSelection
+              ? replacementSelection.courtGroupType
+              : null,
+          poolASeatCount:
+            "poolASeatCount" in replacementSelection
+              ? replacementSelection.poolASeatCount
+              : null,
+          poolBSeatCount:
+            "poolBSeatCount" in replacementSelection
+              ? replacementSelection.poolBSeatCount
+              : null,
           clearArrivalPriority: true,
           consumeSkipNextUserIds: consumedSkipUserIds,
-        })
-      );
+          releasePendingUserIds: [replaceUserId],
+        });
+
+      return NextResponse.json({
+        ...replacementMatch,
+        queuedMatch: await tryRebuildQueuedMatchForSessionId(sessionData.id),
+      });
     }
 
     if (forceReshuffle && targetCourt.currentMatch) {
@@ -281,6 +267,7 @@ export async function POST(
           sessionData: reshuffleSessionData,
           rotationHistory,
           reshuffleSource,
+          requiredCourtGroupType: targetCourt.currentMatch.courtGroupType,
         });
 
       const newMatch = await replaceCurrentCourtMatchAssignment({
@@ -294,24 +281,23 @@ export async function POST(
         team2ClubId:
           "team2ClubId" in bestSelection ? bestSelection.team2ClubId : null,
         matchmakingReasonJson: bestSelection.matchmakingReasonJson ?? null,
+        courtGroupType:
+          "courtGroupType" in bestSelection ? bestSelection.courtGroupType : null,
+        poolASeatCount:
+          "poolASeatCount" in bestSelection ? bestSelection.poolASeatCount : null,
+        poolBSeatCount:
+          "poolBSeatCount" in bestSelection ? bestSelection.poolBSeatCount : null,
         clearArrivalPriority: true,
         consumeSkipNextUserIds: consumedSkipUserIds,
+        releasePendingUserIds: reshuffleUserIds.filter(
+          (userId) => !bestSelection.ids.includes(userId)
+        ),
       });
 
-      if (sessionData.poolsEnabled && "targetPool" in bestSelection) {
-        const nextPoolState = applyPoolSelectionOutcome(sessionData, bestSelection);
-        await prisma.session.update({
-          where: { id: sessionData.id },
-          data: {
-            poolACourtAssignments: nextPoolState.poolACourtAssignments,
-            poolBCourtAssignments: nextPoolState.poolBCourtAssignments,
-            poolAMissedTurns: nextPoolState.poolAMissedTurns,
-            poolBMissedTurns: nextPoolState.poolBMissedTurns,
-          },
-        });
-      }
-
-      return NextResponse.json(newMatch);
+      return NextResponse.json({
+        ...newMatch,
+        queuedMatch: await tryRebuildQueuedMatchForSessionId(sessionData.id),
+      });
     }
 
     const { busyPlayerIds, playersById, rotationHistory } =
@@ -336,7 +322,7 @@ export async function POST(
       ensureEnoughPlayers(
         availableCandidates.length,
         rankedCandidates.length,
-        requestedMatchCount
+        sessionData.poolsEnabled ? 1 : requestedMatchCount
       );
     }
 
@@ -360,23 +346,22 @@ export async function POST(
           team2ClubId:
             "team2ClubId" in bestSelection ? bestSelection.team2ClubId : null,
           matchmakingReasonJson: bestSelection.matchmakingReasonJson ?? null,
+          courtGroupType:
+            "courtGroupType" in bestSelection
+              ? bestSelection.courtGroupType
+              : null,
+          poolASeatCount:
+            "poolASeatCount" in bestSelection
+              ? bestSelection.poolASeatCount
+              : null,
+          poolBSeatCount:
+            "poolBSeatCount" in bestSelection
+              ? bestSelection.poolBSeatCount
+              : null,
           clearArrivalPriority: true,
           consumeSkipNextUserIds: consumedSkipUserIds,
         },
       ]);
-
-      if (sessionData.poolsEnabled && "targetPool" in bestSelection) {
-        const nextPoolState = applyPoolSelectionOutcome(sessionData, bestSelection);
-        await prisma.session.update({
-          where: { id: sessionData.id },
-          data: {
-            poolACourtAssignments: nextPoolState.poolACourtAssignments,
-            poolBCourtAssignments: nextPoolState.poolBCourtAssignments,
-            poolAMissedTurns: nextPoolState.poolAMissedTurns,
-            poolBMissedTurns: nextPoolState.poolBMissedTurns,
-          },
-        });
-      }
 
       return NextResponse.json({
         ...newMatch,
@@ -386,17 +371,38 @@ export async function POST(
 
     const { selection: batchSelection, consumedSkipUserIds } =
       selectBatchMatchesRespectingSkips({
-        rankedCandidates,
+        rankedCandidates: eligibleRankedCandidates,
         playersById,
         sessionData,
         rotationHistory,
         requestedMatchCount,
+        requestedCourtIds: requestedOpenCourts.map((court) => court.id),
       });
-    const newMatches = await createMatchesForAssignments(
+    const selectedCourtAssignments =
+      batchSelection.selections.length === requestedOpenCourts.length
+        ? batchSelection.selections.map((selection, index) => ({
+            court: requestedOpenCourts[index],
+            selection,
+          }))
+        : (() => {
+            let remainingCourts = [...requestedOpenCourts];
+            return batchSelection.selections.map((selection) => {
+              const court = rankOpenCourtsForGroupType(
+                remainingCourts,
+                sessionData.matches,
+                "courtGroupType" in selection
+                  ? selection.courtGroupType
+                  : null
+              )[0];
+              remainingCourts = remainingCourts.filter(
+                (candidate) => candidate.id !== court.id
+              );
+              return { court, selection };
+            });
+          })();
+    const createdMatches = await createMatchesForAssignments(
       sessionData.id,
-      requestedOpenCourts.map((court, index) => {
-        const selection = batchSelection.selections[index];
-
+      selectedCourtAssignments.map(({ court, selection }) => {
         return {
           courtId: court.id,
           selectedIds: [...selection.ids],
@@ -406,29 +412,25 @@ export async function POST(
           team2ClubId:
             "team2ClubId" in selection ? selection.team2ClubId : null,
           matchmakingReasonJson: selection.matchmakingReasonJson ?? null,
+          courtGroupType:
+            "courtGroupType" in selection ? selection.courtGroupType : null,
+          poolASeatCount:
+            "poolASeatCount" in selection ? selection.poolASeatCount : null,
+          poolBSeatCount:
+            "poolBSeatCount" in selection ? selection.poolBSeatCount : null,
           clearArrivalPriority: true,
           consumeSkipNextUserIds: consumedSkipUserIds,
         };
       })
     );
-
-    if (
-      sessionData.poolsEnabled &&
-      "poolSchedulingState" in batchSelection &&
-      batchSelection.poolSchedulingState
-    ) {
-      await prisma.session.update({
-        where: { id: sessionData.id },
-        data: {
-          poolACourtAssignments:
-            batchSelection.poolSchedulingState.poolACourtAssignments,
-          poolBCourtAssignments:
-            batchSelection.poolSchedulingState.poolBCourtAssignments,
-          poolAMissedTurns: batchSelection.poolSchedulingState.poolAMissedTurns,
-          poolBMissedTurns: batchSelection.poolSchedulingState.poolBMissedTurns,
-        },
-      });
-    }
+    const requestedCourtOrder = new Map(
+      requestedOpenCourts.map((court, index) => [court.id, index])
+    );
+    const newMatches = createdMatches.sort(
+      (left, right) =>
+        (requestedCourtOrder.get(left.courtId) ?? Number.MAX_SAFE_INTEGER) -
+        (requestedCourtOrder.get(right.courtId) ?? Number.MAX_SAFE_INTEGER)
+    );
 
     return NextResponse.json({
       matches: newMatches,

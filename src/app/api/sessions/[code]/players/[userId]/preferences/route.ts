@@ -20,6 +20,8 @@ import { getSessionModeLabel } from "@/lib/sessionModeLabels";
 import { PlayerGender, SessionMode, SessionPool, SessionStatus } from "@/types/enums";
 import { logError, safeErrorResponse } from "@/lib/errors";
 import { rateLimit, checkInvalidTargetRateLimit, invalidTargetResponse } from "@/lib/rateLimit";
+import { hasQueuedMatchUser } from "@/lib/sessionQueue";
+import { tryRebuildAutomaticQueuedMatchForSessionId } from "../../../queue-match/shared";
 
 export const dynamic = "force-dynamic";
 
@@ -115,7 +117,29 @@ export async function PATCH(
         status: true,
         poolsEnabled: true,
         sessionClubs: true,
-        queuedMatch: { select: { id: true } },
+        queuedMatch: {
+          select: {
+            id: true,
+            createdAt: true,
+            isAutomatic: true,
+            team1User1Id: true,
+            team1User2Id: true,
+            team2User1Id: true,
+            team2User2Id: true,
+          },
+        },
+        courts: {
+          select: {
+            currentMatch: {
+              select: {
+                team1User1Id: true,
+                team1User2Id: true,
+                team2User1Id: true,
+                team2User2Id: true,
+              },
+            },
+          },
+        },
         _count: { select: { matches: true } },
       },
     });
@@ -151,6 +175,7 @@ export async function PATCH(
         partnerPreference: true,
         mixedSideOverride: true,
         pool: true,
+        pendingPool: true,
         representingClubId: true,
         isGuest: true,
       },
@@ -158,6 +183,8 @@ export async function PATCH(
     if (!existing) {
       return invalidTargetResponse(request, "api:sessions:code:players:userId:preferences");
     }
+
+    const hasPoolInput = isValidSessionPool(pool);
 
     const nextGender =
       typeof gender === "string"
@@ -260,35 +287,175 @@ export async function PATCH(
           : existing.partnerPreference,
     });
 
-    const updated = await prisma.sessionPlayer.update({
-      where: {
-        sessionId_userId: {
-          sessionId: sessionData.id,
-          userId,
+    const mutation = await prisma.$transaction(async (tx) => {
+      const [freshSession, freshPlayer] = await Promise.all([
+        tx.session.findUnique({
+          where: { id: sessionData.id },
+          select: {
+            status: true,
+            poolsEnabled: true,
+            queuedMatch: {
+              select: {
+                id: true,
+                createdAt: true,
+                isAutomatic: true,
+                team1User1Id: true,
+                team1User2Id: true,
+                team2User1Id: true,
+                team2User2Id: true,
+              },
+            },
+            courts: {
+              select: {
+                currentMatch: {
+                  select: {
+                    team1User1Id: true,
+                    team1User2Id: true,
+                    team2User1Id: true,
+                    team2User2Id: true,
+                  },
+                },
+              },
+            },
+          },
+        }),
+        tx.sessionPlayer.findUnique({
+          where: {
+            sessionId_userId: {
+              sessionId: sessionData.id,
+              userId,
+            },
+          },
+          select: { pool: true, pendingPool: true },
+        }),
+      ]);
+
+      if (!freshSession || !freshPlayer) {
+        return { kind: "missing" } as const;
+      }
+      if (freshSession.status === SessionStatus.COMPLETED) {
+        return { kind: "completed" } as const;
+      }
+
+      const changesCurrentPool =
+        freshSession.poolsEnabled &&
+        hasPoolInput &&
+        pool !== freshPlayer.pool;
+      const changesGroupState =
+        freshSession.poolsEnabled &&
+        hasPoolInput &&
+        (changesCurrentPool || freshPlayer.pendingPool !== null);
+
+      if (changesGroupState) {
+        const isPlaying = freshSession.courts.some((court) => {
+          const match = court.currentMatch;
+          return (
+            !!match &&
+            [
+              match.team1User1Id,
+              match.team1User2Id,
+              match.team2User1Id,
+              match.team2User2Id,
+            ].includes(userId)
+          );
+        });
+        if (isPlaying) {
+          return { kind: "live-match-conflict" } as const;
+        }
+        if (
+          freshSession.queuedMatch &&
+          !freshSession.queuedMatch.isAutomatic &&
+          hasQueuedMatchUser(freshSession.queuedMatch, userId)
+        ) {
+          return { kind: "manual-queue-conflict" } as const;
+        }
+      }
+
+      const updated = await tx.sessionPlayer.update({
+        where: {
+          sessionId_userId: {
+            sessionId: sessionData.id,
+            userId,
+          },
         },
-      },
-      data: {
-        gender: typeof gender === "string" ? gender : undefined,
-        partnerPreference: resolvedMixedState.partnerPreference,
-        mixedSideOverride: resolvedMixedState.mixedSideOverride,
-        pool:
-          sessionData.poolsEnabled && isValidSessionPool(pool)
-            ? pool
-            : sessionData.poolsEnabled
-              ? existing.pool
-              : SessionPool.A,
-        needsMoreRest:
-          typeof needsMoreRest === "boolean" ? needsMoreRest : undefined,
-        representingClubId: hasRepresentingClubInput
-          ? nextRepresentingClubId ?? null
-          : undefined,
-      },
-      include: {
-        user: { select: { id: true, name: true } },
-      },
+        data: {
+          gender: typeof gender === "string" ? gender : undefined,
+          partnerPreference: resolvedMixedState.partnerPreference,
+          mixedSideOverride: resolvedMixedState.mixedSideOverride,
+          pool: freshSession.poolsEnabled
+            ? hasPoolInput
+              ? pool
+              : undefined
+            : SessionPool.A,
+          pendingPool:
+            freshSession.poolsEnabled && hasPoolInput ? null : undefined,
+          needsMoreRest:
+            typeof needsMoreRest === "boolean" ? needsMoreRest : undefined,
+          representingClubId: hasRepresentingClubInput
+            ? nextRepresentingClubId ?? null
+            : undefined,
+        },
+        include: {
+          user: { select: { id: true, name: true } },
+        },
+      });
+
+      let automaticQueueInvalidated = false;
+      if (changesCurrentPool && freshSession.queuedMatch?.isAutomatic) {
+        const deleted = await tx.queuedMatch.deleteMany({
+          where: {
+            id: freshSession.queuedMatch.id,
+            sessionId: sessionData.id,
+            isAutomatic: true,
+          },
+        });
+        automaticQueueInvalidated = deleted.count > 0;
+      }
+
+      return {
+        kind: "updated",
+        updated,
+        automaticQueueInvalidated,
+      } as const;
     });
 
-    return NextResponse.json(updated);
+    if (mutation.kind === "missing") {
+      return invalidTargetResponse(
+        request,
+        "api:sessions:code:players:userId:preferences"
+      );
+    }
+    if (mutation.kind === "completed") {
+      return NextResponse.json(
+        { error: "Tournament already completed" },
+        { status: 400 }
+      );
+    }
+    if (mutation.kind === "live-match-conflict") {
+      return NextResponse.json(
+        { error: "Player group cannot be changed during a live match" },
+        { status: 409 }
+      );
+    }
+    if (mutation.kind === "manual-queue-conflict") {
+      return NextResponse.json(
+        { error: "Player group cannot be changed while manually queued" },
+        { status: 409 }
+      );
+    }
+
+    const updated = mutation.updated;
+    let queuedMatch: unknown = undefined;
+    if (mutation.automaticQueueInvalidated) {
+      queuedMatch = await tryRebuildAutomaticQueuedMatchForSessionId(
+        sessionData.id
+      );
+    }
+
+    return NextResponse.json({
+      ...updated,
+      ...(queuedMatch !== undefined ? { queuedMatch } : {}),
+    });
   } catch (error) {
     logError("Update session preference error", error);
     return safeErrorResponse();

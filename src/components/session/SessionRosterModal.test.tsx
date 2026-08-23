@@ -24,6 +24,7 @@ const availablePlayer: ClubUser = {
   partnerPreference: PartnerPreference.OPEN,
   mixedSideOverride: null,
   needsMoreRest: false,
+  preferredPool: SessionPool.B,
 };
 const interclubPlayer: ClubUser = {
   ...availablePlayer,
@@ -39,10 +40,9 @@ function getDefaultProps() {
     isInterclub: false,
     interclubClubOptions: [],
     poolsEnabled: false,
-    poolAName: "Open",
-    poolBName: "Regular",
     rosterSearch: "",
-    rosterPool: SessionPool.A,
+    rosterPool: SessionPool.B,
+    rosterPlayerPools: {},
     guestName: "",
     guestGender: PlayerGender.MALE,
     guestMixedSideOverride: null,
@@ -54,6 +54,7 @@ function getDefaultProps() {
     onClose: vi.fn(),
     onRosterSearchChange: vi.fn(),
     onRosterPoolChange: vi.fn(),
+    onRosterPlayerPoolChange: vi.fn(),
     onGuestNameChange: vi.fn(),
     onGuestGenderChange: vi.fn(),
     onGuestMixedSideOverrideChange: vi.fn(),
@@ -166,7 +167,7 @@ describe("SessionRosterModal", () => {
     ).not.toBeNull();
     expect(document.body.textContent).toContain("Add Guest");
     expect(document.body.textContent).toContain("Beginner (850)");
-    expect(document.body.textContent).toContain("Regular");
+    expect(document.body.textContent).toContain("Social");
     expect(
       document.body.querySelector('input[aria-label="Guest name"]')
     ).not.toBeNull();
@@ -174,7 +175,7 @@ describe("SessionRosterModal", () => {
       document.body.querySelector('select[aria-label="Guest starting rating"]')
     ).not.toBeNull();
     expect(
-      document.body.querySelector('select[aria-label="Guest pool"]')
+      document.body.querySelector('select[aria-label="Guest game group"]')
     ).not.toBeNull();
     expect(
       document.body.querySelector('select[aria-label="Guest gender"]')
@@ -184,6 +185,37 @@ describe("SessionRosterModal", () => {
         'select[aria-label="Guest mixed doubles side"]'
       )
     ).not.toBeNull();
+  });
+
+  it("starts each late-joining member in their saved group and allows an override", async () => {
+    const onRosterPlayerPoolChange = vi.fn();
+
+    await act(async () => {
+      root.render(
+        <SessionRosterModal
+          {...getDefaultProps()}
+          poolsEnabled
+          onRosterPlayerPoolChange={onRosterPlayerPoolChange}
+        />
+      );
+    });
+
+    const groupSelect = document.body.querySelector(
+      'select[aria-label="Game group for Host Player 4"]'
+    ) as HTMLSelectElement | null;
+    expect(groupSelect?.value).toBe(SessionPool.B);
+
+    await act(async () => {
+      if (groupSelect) {
+        groupSelect.value = SessionPool.A;
+        groupSelect.dispatchEvent(new Event("change", { bubbles: true }));
+      }
+    });
+
+    expect(onRosterPlayerPoolChange).toHaveBeenCalledWith(
+      "player-1",
+      SessionPool.A
+    );
   });
 
   it("collapses guest creation again after the sheet is closed", async () => {

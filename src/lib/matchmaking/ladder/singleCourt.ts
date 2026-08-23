@@ -13,6 +13,7 @@ import {
 import type {
   ActiveMatchmakerLadderPlayer,
   LadderCandidatePool,
+  LadderSelectionConstraints,
   LadderSingleCourtDebug,
   LadderSingleCourtResult,
   LadderSingleCourtSelection,
@@ -157,6 +158,8 @@ export function findBestSingleCourtSelectionLadder<
     minimumTargetPoolPlayers,
     respectPlayerRest = true,
     randomFn = Math.random,
+    candidatePoolVariants,
+    selectionConstraints,
   }: {
     sessionMode: SessionMode;
     excludedQuartetKey?: string;
@@ -166,6 +169,12 @@ export function findBestSingleCourtSelectionLadder<
     minimumTargetPoolPlayers?: number;
     respectPlayerRest?: boolean;
     randomFn?: () => number;
+    candidatePoolVariants?: (
+      candidatePool: LadderCandidatePool<ActiveMatchmakerLadderPlayer<T>>
+    ) => Array<LadderCandidatePool<ActiveMatchmakerLadderPlayer<T>>>;
+    selectionConstraints?: LadderSelectionConstraints<
+      ActiveMatchmakerLadderPlayer<T>
+    >;
   }
 ): LadderSingleCourtResult<ActiveMatchmakerLadderPlayer<T>> {
   const initialCandidatePool = buildCandidatePool(players, {
@@ -205,10 +214,12 @@ export function findBestSingleCourtSelectionLadder<
     };
   }
 
-  const candidatePools = [
-    ...buildArrivalPriorityCandidatePools(initialCandidatePool),
-    ...buildFeasibilityCandidatePools(initialCandidatePool),
-  ];
+  const candidatePools = candidatePoolVariants
+    ? candidatePoolVariants(initialCandidatePool)
+    : [
+        ...buildArrivalPriorityCandidatePools(initialCandidatePool),
+        ...buildFeasibilityCandidatePools(initialCandidatePool),
+      ];
   let searchedCandidatePool = initialCandidatePool;
   let totalQuartetCount = 0;
   let totalValidPartitionCount = 0;
@@ -240,6 +251,13 @@ export function findBestSingleCourtSelectionLadder<
     for (const group of quartetGroups) {
       const quartetPlayers = toQuartet(group);
       if (!quartetPlayers) {
+        continue;
+      }
+
+      if (
+        selectionConstraints?.isQuartetAllowed &&
+        !selectionConstraints.isQuartetAllowed(quartetPlayers)
+      ) {
         continue;
       }
 
@@ -278,9 +296,21 @@ export function findBestSingleCourtSelectionLadder<
         playersById,
         sessionMode
       )) {
+        const partition = selectionConstraints?.normalizePartition
+          ? selectionConstraints.normalizePartition({
+              partition: evaluation.partition,
+              players: quartetPlayers,
+              playersById,
+            })
+          : evaluation.partition;
+
+        if (!partition) {
+          continue;
+        }
+
         if (
           excludedPartitionKey &&
-          getExactPartitionKey(evaluation.partition) === excludedPartitionKey
+          getExactPartitionKey(partition) === excludedPartitionKey
         ) {
           continue;
         }
@@ -292,7 +322,7 @@ export function findBestSingleCourtSelectionLadder<
         > = {
           ids,
           players: quartetPlayers,
-          partition: evaluation.partition,
+          partition,
           restSummary,
           groupingSummary,
           balanceGap: evaluation.balanceGap,

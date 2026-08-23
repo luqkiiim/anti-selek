@@ -8,6 +8,10 @@ import {
 } from "@/lib/matchCompletion";
 import { isValidMatchScore } from "@/lib/matchRules";
 import { prisma } from "@/lib/prisma";
+import {
+  DEFAULT_SESSION_POOL_A_NAME,
+  DEFAULT_SESSION_POOL_B_NAME,
+} from "@/lib/sessionPools";
 import { MatchStatus, SessionPool, SessionStatus } from "@/types/enums";
 import { logError, safeErrorResponse } from "@/lib/errors";
 import { rateLimit, checkInvalidTargetRateLimit, invalidTargetResponse } from "@/lib/rateLimit";
@@ -82,6 +86,9 @@ export async function POST(
             team2User2Id: true,
             team1Score: true,
             team2Score: true,
+            courtGroupType: true,
+            poolASeatCount: true,
+            poolBSeatCount: true,
             createdAt: true,
             completedAt: true,
           },
@@ -271,8 +278,8 @@ export async function POST(
           sourceSessionId: sourceSession.id,
           autoQueueEnabled: sourceSession.autoQueueEnabled,
           poolsEnabled: sourceSession.poolsEnabled,
-          poolAName: sourceSession.poolAName,
-          poolBName: sourceSession.poolBName,
+          poolAName: DEFAULT_SESSION_POOL_A_NAME,
+          poolBName: DEFAULT_SESSION_POOL_B_NAME,
           poolACourtAssignments: includeResults
             ? sourceSession.poolACourtAssignments
             : 0,
@@ -382,6 +389,9 @@ export async function POST(
               team1User2Id: mappedTeam1User2Id,
               team2User1Id: mappedTeam2User1Id,
               team2User2Id: mappedTeam2User2Id,
+              courtGroupType: sourceMatch.courtGroupType,
+              poolASeatCount: sourceMatch.poolASeatCount,
+              poolBSeatCount: sourceMatch.poolBSeatCount,
               createdAt: sourceMatch.createdAt,
             },
             include: {

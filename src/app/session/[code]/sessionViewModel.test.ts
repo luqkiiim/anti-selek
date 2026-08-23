@@ -107,6 +107,7 @@ describe("buildSessionViewModel", () => {
           gender: player.gender,
           partnerPreference: player.partnerPreference,
           needsMoreRest: player.needsMoreRest,
+          preferredPool: SessionPool.B,
         })),
       {
         id: "u10",
@@ -116,6 +117,7 @@ describe("buildSessionViewModel", () => {
         gender: PlayerGender.FEMALE,
         partnerPreference: PartnerPreference.FEMALE_FLEX,
         needsMoreRest: false,
+        preferredPool: SessionPool.B,
       },
     ];
 

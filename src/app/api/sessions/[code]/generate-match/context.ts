@@ -1,4 +1,5 @@
 import { reconcileSessionQueueAfterCourtChange } from "@/app/api/matches/_lib/reconcileSessionQueue";
+import { applyPendingPlayerGroupChangesInTransaction } from "@/lib/playerGroupPreferences";
 import { prisma } from "@/lib/prisma";
 import { getSessionOperatorMembership } from "@/lib/sessionCollab";
 import { MatchStatus, SessionStatus } from "@/types/enums";
@@ -113,16 +114,29 @@ export async function undoCurrentCourtMatch(targetCourt: GenerateMatchCourt) {
     throw new GenerateMatchError(400, "Only unscored matches can be undone.");
   }
 
-  await prisma.$transaction([
-    prisma.match.delete({ where: { id: targetCourt.currentMatch.id } }),
-    prisma.court.update({
+  const pendingPlayerGroupChanges = await prisma.$transaction(async (tx) => {
+    await tx.match.delete({ where: { id: targetCourt.currentMatch!.id } });
+    await tx.court.update({
       where: { id: targetCourt.id },
       data: { currentMatchId: null },
-    }),
-  ]);
+    });
+    return applyPendingPlayerGroupChangesInTransaction(tx, {
+      sessionId: targetCourt.sessionId,
+      userIds: [
+        targetCourt.currentMatch!.team1User1Id,
+        targetCourt.currentMatch!.team1User2Id,
+        targetCourt.currentMatch!.team2User1Id,
+        targetCourt.currentMatch!.team2User2Id,
+      ],
+    });
+  });
 
   const { autoAssignedMatch, queuedMatchCleared, queuedMatch } =
-    await reconcileSessionQueueAfterCourtChange(targetCourt.sessionId);
+    await (pendingPlayerGroupChanges.automaticQueueInvalidated
+      ? reconcileSessionQueueAfterCourtChange(targetCourt.sessionId, {
+          generateAutomaticIfMissing: true,
+        })
+      : reconcileSessionQueueAfterCourtChange(targetCourt.sessionId));
 
   return {
     ok: true,

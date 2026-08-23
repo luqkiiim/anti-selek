@@ -6,6 +6,7 @@ import {
   SessionClubStatus,
   SessionCollabFormat,
   SessionMode,
+  SessionPool,
   SessionStatus,
 } from "@/types/enums";
 
@@ -260,7 +261,7 @@ describe("join session route", () => {
     vi.useRealTimers();
   });
 
-  it("copies the club more-rest default when a member joins", async () => {
+  it("copies club rest and game-group defaults when a member joins", async () => {
     mocks.auth.mockResolvedValue({
       user: {
         id: "rest-player",
@@ -272,13 +273,14 @@ describe("join session route", () => {
       clubId: "community-1",
       status: SessionStatus.WAITING,
       mode: SessionMode.MEXICANO,
-      poolsEnabled: false,
+      poolsEnabled: true,
       players: [],
     });
     mocks.clubMemberFindUnique.mockResolvedValue({
       clubId: "community-1",
       role: "MEMBER",
       needsMoreRest: true,
+      preferredPool: SessionPool.A,
     });
     mocks.sessionPlayerFindUnique.mockResolvedValue(null);
     mocks.userFindUnique.mockResolvedValue({
@@ -302,11 +304,37 @@ describe("join session route", () => {
             create: expect.objectContaining({
               userId: "rest-player",
               needsMoreRest: true,
+              pool: SessionPool.A,
             }),
           },
         },
       })
     );
+  });
+
+  it("does not let a self-joining member override the saved game group", async () => {
+    mocks.auth.mockResolvedValue({
+      user: { id: "member-1", isAdmin: false },
+    });
+    mocks.sessionFindUnique.mockResolvedValue({
+      id: "session-1",
+      clubId: "community-1",
+      status: SessionStatus.WAITING,
+      mode: SessionMode.MEXICANO,
+      poolsEnabled: true,
+      players: [],
+    });
+    mocks.clubMemberFindUnique.mockResolvedValue({
+      clubId: "community-1",
+      role: "MEMBER",
+      needsMoreRest: false,
+      preferredPool: SessionPool.A,
+    });
+
+    const response = await postJoin({ pool: SessionPool.B });
+
+    expect(response.status).toBe(403);
+    expect(mocks.sessionUpdate).not.toHaveBeenCalled();
   });
 
   it("lets a Club B admin add a Club B player with Club B representation", async () => {

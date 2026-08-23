@@ -9,7 +9,7 @@ import {
   getSessionClubLinks,
   withPlayerClubBadges,
 } from "@/lib/sessionCollab";
-import { SessionStatus } from "@/types/enums";
+import { SessionPool, SessionStatus } from "@/types/enums";
 import { SessionClubStatus } from "@/types/enums";
 import {
   ensureInterclubSessionReady,
@@ -80,6 +80,26 @@ export async function POST(
       );
     }
     ensureInterclubSessionReady(sessionData);
+    if (sessionData.poolsEnabled) {
+      const activeRoster = sessionData.players.filter(
+        (player) => !player.isPaused
+      );
+      const competitiveCount = activeRoster.filter(
+        (player) => player.pool === SessionPool.A
+      ).length;
+      const socialCount = activeRoster.filter(
+        (player) => player.pool === SessionPool.B
+      ).length;
+      if (competitiveCount < 2 || socialCount < 2) {
+        return NextResponse.json(
+          {
+            error:
+              "Player groups require at least 2 Competitive and 2 Social players before starting",
+          },
+          { status: 400 }
+        );
+      }
+    }
 
     const startedAt = new Date();
     const updated = await prisma.session.update({

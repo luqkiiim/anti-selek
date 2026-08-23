@@ -5,8 +5,12 @@ import { SessionStatus } from "@/types/enums";
 
 function renderOverviewPanel({
   sessionStatus = SessionStatus.ACTIVE,
+  canStartSession = false,
+  startBlockedReason = null,
 }: {
   sessionStatus?: SessionStatus;
+  canStartSession?: boolean;
+  startBlockedReason?: string | null;
 } = {}) {
   return renderToStaticMarkup(
     <SessionOverviewPanel
@@ -19,7 +23,8 @@ function renderOverviewPanel({
       completedMatchesCount={6}
       pausedPlayersCount={0}
       sessionStatus={sessionStatus}
-      canStartSession={false}
+      canStartSession={canStartSession}
+      startBlockedReason={startBlockedReason}
       canOpenPlayerManager={true}
       canOpenSettings={true}
       onStartSession={vi.fn()}
@@ -50,5 +55,20 @@ describe("SessionOverviewPanel", () => {
     expect(markup).toContain("Live tournament");
     expect(markup).toContain(">Live<");
     expect(markup).not.toContain(">ACTIVE<");
+  });
+
+  it("keeps start visible but disabled when a player group is under minimum", () => {
+    const reason =
+      "Player groups need at least 2 active Competitive and 2 active Social players.";
+    const markup = renderOverviewPanel({
+      sessionStatus: SessionStatus.WAITING,
+      canStartSession: true,
+      startBlockedReason: reason,
+    });
+
+    expect(markup).toContain("Start Tournament");
+    expect(markup).toContain("disabled");
+    expect(markup).toContain(reason);
+    expect(markup).toContain('aria-describedby="session-start-blocked-reason"');
   });
 });

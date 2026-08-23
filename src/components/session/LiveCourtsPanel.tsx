@@ -14,9 +14,9 @@ import type { QueuePromotionAnimation } from "@/app/session/[code]/sessionMatchA
 import { SectionCard } from "@/components/ui/chrome";
 import type { SideSpecificCourtCreateType } from "@/lib/courtCreate";
 import {
-  getSessionPoolBadgeLabel,
-  summarizeSessionPoolMembership,
-} from "@/lib/sessionPools";
+  classifyCourtGroupSnapshot,
+  getCourtGroupTypeLabel,
+} from "@/lib/playerGroups";
 import { buildCourtCreateOptionStates } from "./courtCreateOptions";
 import { SessionStatus } from "@/types/enums";
 import type { Court, Match, MatchScores, Player, QueuedMatch } from "./sessionTypes";
@@ -248,8 +248,6 @@ export function LiveCourtsPanel({
   players,
   queuedMatch,
   poolsEnabled,
-  poolAName,
-  poolBName,
   currentUserId,
   isAdmin,
   isClaimedUser,
@@ -570,45 +568,27 @@ export function LiveCourtsPanel({
       return null;
     }
 
-    return getSessionPoolBadgeLabel(
-      {
-        poolsEnabled,
-        poolAName,
-        poolBName,
-      },
-      summarizeSessionPoolMembership(
-        [
-          match.team1User1.id,
-          match.team1User2.id,
-          match.team2User1.id,
-          match.team2User2.id,
-        ],
-        playerPoolById
+    return (
+      getCourtGroupTypeLabel(match.courtGroupType ?? null) ??
+      getCourtGroupTypeLabel(
+        classifyCourtGroupSnapshot(
+          [match.team1User1.id, match.team1User2.id],
+          [match.team2User1.id, match.team2User2.id],
+          playerPoolById
+        ).courtGroupType
       )
     );
   };
   const queuedPoolLabel =
     poolsEnabled && queuedMatch
-      ? queuedMatch.targetPool
-        ? (queuedMatch.targetPool === "A"
-            ? (poolAName ?? "Open")
-            : (poolBName ?? "Regular"))
-        : getSessionPoolBadgeLabel(
-            {
-              poolsEnabled,
-              poolAName,
-              poolBName,
-            },
-            summarizeSessionPoolMembership(
-              [
-                queuedMatch.team1User1.id,
-                queuedMatch.team1User2.id,
-                queuedMatch.team2User1.id,
-                queuedMatch.team2User2.id,
-              ],
-              playerPoolById
-            )
-          )
+      ? getCourtGroupTypeLabel(queuedMatch.courtGroupType ?? null) ??
+        getCourtGroupTypeLabel(
+          classifyCourtGroupSnapshot(
+            [queuedMatch.team1User1.id, queuedMatch.team1User2.id],
+            [queuedMatch.team2User1.id, queuedMatch.team2User2.id],
+            playerPoolById
+          ).courtGroupType
+        )
       : null;
   const getCourtPromotionState = (courtId: string): PromotionSurfaceState =>
     targetPromotionCourtId === courtId ? targetPromotionState : "normal";

@@ -116,6 +116,21 @@ describe("parseCreateSessionRequest", () => {
     ]);
   });
 
+  it("uses fixed player-group labels and defaults grouped guests to Social", () => {
+    const parsed = parseCreateSessionRequest({
+      name: "Grouped Night",
+      clubId: "community-1",
+      poolsEnabled: true,
+      poolAName: "Legacy A",
+      poolBName: "Legacy B",
+      guestNames: ["Social Guest"],
+    });
+
+    expect(parsed.poolAName).toBe("Competitive");
+    expect(parsed.poolBName).toBe("Social");
+    expect(parsed.normalizedGuests[0].pool).toBe(SessionPool.B);
+  });
+
   it("defaults to two courts when court count is omitted", () => {
     const parsed = parseCreateSessionRequest({
       name: "Default Courts",
@@ -349,7 +364,10 @@ describe("parseCreateSessionRequest", () => {
         poolsEnabled: true,
       })
     ).toThrowError(
-      new SessionRouteError("Club vs club tournaments do not support pools", 400)
+      new SessionRouteError(
+        "Club vs club tournaments do not support player groups",
+        400
+      )
     );
   });
 

@@ -8,7 +8,6 @@ import {
 } from "@/lib/mixedSide";
 import {
   isValidSessionPool,
-  normalizeSessionPoolName,
 } from "@/lib/sessionPools";
 import {
   getLegacySessionModeForSettings,
@@ -141,7 +140,7 @@ function normalizeGuests(
     partnerPreference: PartnerPreference = defaultPartnerPreferenceForGender(
       gender
     ),
-    pool: SessionPool = SessionPool.A,
+    pool: SessionPool = poolsEnabled ? SessionPool.B : SessionPool.A,
     initialElo = 1000,
     overwrite = false
   ) => {
@@ -210,7 +209,9 @@ function normalizeGuests(
       const pool =
         poolsEnabled && isValidSessionPool(candidate.pool)
           ? candidate.pool
-          : SessionPool.A;
+          : poolsEnabled
+            ? SessionPool.B
+            : SessionPool.A;
       const hasRepresentingClubId = Object.prototype.hasOwnProperty.call(
         candidate,
         "representingClubId"
@@ -271,8 +272,6 @@ export function parseCreateSessionRequest(
     autoQueueEnabled = false,
     respectPlayerRest = true,
     poolsEnabled = false,
-    poolAName = DEFAULT_SESSION_POOL_A_NAME,
-    poolBName = DEFAULT_SESSION_POOL_B_NAME,
   } = bodyRecord;
   let clubId: unknown;
   let partnerClubId: unknown;
@@ -380,18 +379,8 @@ export function parseCreateSessionRequest(
   const normalizedAutoQueueEnabled = autoQueueEnabled === true;
   const normalizedRespectPlayerRest = respectPlayerRest !== false;
   const normalizedPoolsEnabled = poolsEnabled === true;
-  const normalizedPoolAName = normalizeSessionPoolName(
-    typeof poolAName === "string" ? poolAName : null,
-    DEFAULT_SESSION_POOL_A_NAME
-  );
-  const normalizedPoolBName = normalizeSessionPoolName(
-    typeof poolBName === "string" ? poolBName : null,
-    DEFAULT_SESSION_POOL_B_NAME
-  );
-
-  if (normalizedPoolsEnabled && normalizedPoolAName === normalizedPoolBName) {
-    throw new SessionRouteError("Pool names must be different", 400);
-  }
+  const normalizedPoolAName = DEFAULT_SESSION_POOL_A_NAME;
+  const normalizedPoolBName = DEFAULT_SESSION_POOL_B_NAME;
   const normalizedCollabFormat =
     typeof collabFormat === "string"
       ? (collabFormat as SessionCollabFormat)
@@ -405,7 +394,7 @@ export function parseCreateSessionRequest(
     }
     if (normalizedPoolsEnabled) {
       throw new SessionRouteError(
-        "Club vs club tournaments do not support pools",
+        "Club vs club tournaments do not support player groups",
         400
       );
     }

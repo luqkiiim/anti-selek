@@ -1,6 +1,12 @@
 "use client";
 
-import { useEffect, useState, type Dispatch, type SetStateAction } from "react";
+import {
+  useEffect,
+  useMemo,
+  useState,
+  type Dispatch,
+  type SetStateAction,
+} from "react";
 import type {
   ClubCollabCandidate,
   ClubGuestConfig,
@@ -14,6 +20,11 @@ import {
   getSessionCreationIssues,
   hasMissingRequiredGender,
 } from "./sessionCreationIssues";
+import {
+  DEFAULT_SESSION_POOL_A_NAME,
+  DEFAULT_SESSION_POOL_B_NAME,
+} from "@/lib/sessionPools";
+import { getPlayerGroupLabel } from "@/lib/playerGroups";
 import {
   MixedSide,
   PlayerGender,
@@ -40,6 +51,7 @@ export function useClubHostSetup({
   mixedModeLabel,
   setError,
   setSuccess,
+  refreshClubData,
 }: {
   clubId: string;
   router: ClubPageRouter;
@@ -47,6 +59,7 @@ export function useClubHostSetup({
   mixedModeLabel: string;
   setError: Dispatch<SetStateAction<string>>;
   setSuccess: Dispatch<SetStateAction<string>>;
+  refreshClubData: () => Promise<void>;
 }) {
   const [newSessionName, setNewSessionName] = useState("");
   const [matchmakingStyle, setMatchmakingStyle] =
@@ -71,8 +84,8 @@ export function useClubHostSetup({
   const [collabFormat, setCollabFormatState] = useState<SessionCollabFormat>(
     SessionCollabFormat.FREE_PLAY
   );
-  const [poolAName, setPoolAName] = useState("Open");
-  const [poolBName, setPoolBName] = useState("Regular");
+  const poolAName = DEFAULT_SESSION_POOL_A_NAME;
+  const poolBName = DEFAULT_SESSION_POOL_B_NAME;
   const [selectedPlayerIds, setSelectedPlayerIds] = useState<string[]>([]);
   const [partnerClubId, setPartnerClubId] = useState("");
   const [partnerClubSearch, setPartnerClubSearch] = useState("");
@@ -98,7 +111,7 @@ export function useClubHostSetup({
   const [guestMixedSideOverrideInput, setGuestMixedSideOverrideInput] =
     useState<MixedSide | null>(null);
   const [guestPoolInput, setGuestPoolInput] = useState<SessionPool>(
-    SessionPool.A
+    SessionPool.B
   );
   const [guestRepresentingClubInput, setGuestRepresentingClubInput] =
     useState("");
@@ -107,6 +120,8 @@ export function useClubHostSetup({
   const [showPlayersModal, setShowPlayersModal] = useState(false);
   const [showGuestsModal, setShowGuestsModal] = useState(false);
   const [playerSearch, setPlayerSearch] = useState("");
+  const [savingPreferredPoolPlayerId, setSavingPreferredPoolPlayerId] =
+    useState<string | null>(null);
 
   useEffect(() => {
     setNewSessionName("");
@@ -119,8 +134,6 @@ export function useClubHostSetup({
     setCourtCount(DEFAULT_COURT_COUNT);
     setPoolsEnabled(false);
     setCollabFormatState(SessionCollabFormat.FREE_PLAY);
-    setPoolAName("Open");
-    setPoolBName("Regular");
     setSelectedPlayerIds([]);
     setPartnerClubId("");
     setPartnerClubSearch("");
@@ -135,7 +148,7 @@ export function useClubHostSetup({
     setGuestNameInput("");
     setGuestGenderInput(PlayerGender.MALE);
     setGuestMixedSideOverrideInput(null);
-    setGuestPoolInput(SessionPool.A);
+    setGuestPoolInput(SessionPool.B);
     setGuestRepresentingClubInput("");
     setPlayerSearch("");
     setShowPlayersModal(false);
@@ -239,6 +252,19 @@ export function useClubHostSetup({
     : selectablePlayers;
   const interclubClubIds = partnerClubId ? [clubId, partnerClubId] : [];
   const isInterclub = collabFormat === SessionCollabFormat.INTERCLUB;
+  const preferredPoolByPlayerId = useMemo(
+    () =>
+      new Map(
+        effectiveSelectablePlayers.map((player) => [
+          player.id,
+          player.preferredPool ?? SessionPool.B,
+        ])
+      ),
+    [effectiveSelectablePlayers]
+  );
+
+  const getPreferredPool = (playerId: string) =>
+    preferredPoolByPlayerId.get(playerId) ?? SessionPool.B;
 
   function getEligibleRepresentingClubIds(player: ClubPageMember) {
     if (!partnerClubId) {
@@ -306,12 +332,38 @@ export function useClubHostSetup({
           !interclubClubIds.includes(guest.representingClubId)
       ));
 
+  const selectedPoolCounts = selectedPlayerIds.reduce(
+    (counts, playerId) => {
+      const pool =
+        selectedPlayerPools[playerId] ?? getPreferredPool(playerId);
+      counts[pool] += 1;
+      return counts;
+    },
+    {
+      [SessionPool.A]: 0,
+      [SessionPool.B]: 0,
+    }
+  );
+
+  const guestPoolCounts = guestConfigs.reduce(
+    (counts, guest) => {
+      counts[guest.pool] += 1;
+      return counts;
+    },
+    {
+      [SessionPool.A]: 0,
+      [SessionPool.B]: 0,
+    }
+  );
+
   const creationIssues = getSessionCreationIssues({
     name: newSessionName,
     participantCount: selectedPlayerIds.length + guestConfigs.length,
     poolsEnabled,
-    poolAName,
-    poolBName,
+    competitiveCount:
+      selectedPoolCounts[SessionPool.A] + guestPoolCounts[SessionPool.A],
+    socialCount:
+      selectedPoolCounts[SessionPool.B] + guestPoolCounts[SessionPool.B],
     isMixed: sessionMode === SessionMode.MIXICANO,
     hasMissingMixedGender,
     mixedModeLabel,
@@ -415,7 +467,7 @@ export function useClubHostSetup({
           playerConfigs: selectedPlayerIds.map((userId) => ({
             userId,
             pool: poolsEnabled
-              ? (selectedPlayerPools[userId] ?? SessionPool.A)
+              ? (selectedPlayerPools[userId] ?? getPreferredPool(userId))
               : SessionPool.A,
             representingClubId: isInterclub
               ? (selectedPlayerRepresentingClubs[userId] ??
@@ -440,7 +492,7 @@ export function useClubHostSetup({
       setGuestNameInput("");
       setGuestGenderInput(PlayerGender.MALE);
       setGuestMixedSideOverrideInput(null);
-      setGuestPoolInput(SessionPool.A);
+      setGuestPoolInput(SessionPool.B);
       setAutoQueueEnabled(false);
       setRespectPlayerRest(true);
       setCourtCount(DEFAULT_COURT_COUNT);
@@ -476,7 +528,7 @@ export function useClubHostSetup({
           ? current
           : {
               ...current,
-              [playerId]: SessionPool.A,
+              [playerId]: getPreferredPool(playerId),
             }
       );
       setSelectedPlayerRepresentingClubs((current) => {
@@ -514,7 +566,7 @@ export function useClubHostSetup({
       const next = { ...current };
       for (const playerId of allOtherIds) {
         if (!next[playerId]) {
-          next[playerId] = SessionPool.A;
+          next[playerId] = getPreferredPool(playerId);
         }
       }
       return next;
@@ -538,6 +590,49 @@ export function useClubHostSetup({
       ...current,
       [playerId]: pool,
     }));
+  };
+
+  const updateSavedPlayerPreferredPool = async (
+    playerId: string,
+    preferredPool: SessionPool
+  ) => {
+    if (!clubId || savingPreferredPoolPlayerId) return;
+
+    setSavingPreferredPoolPlayerId(playerId);
+    setError("");
+    setSuccess("");
+    try {
+      const res = await fetch(`/api/clubs/${clubId}/members/${playerId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ preferredPool }),
+      });
+      const data = await safeJson(res);
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to update preferred game group");
+      }
+
+      const immediateCount =
+        typeof data.preferencePropagation?.immediateSessionCount === "number"
+          ? data.preferencePropagation.immediateSessionCount
+          : 0;
+      const deferredCount =
+        typeof data.preferencePropagation?.deferredSessionCount === "number"
+          ? data.preferencePropagation.deferredSessionCount
+          : 0;
+      await refreshClubData();
+      setSuccess(
+        `Saved ${getPlayerGroupLabel(preferredPool)} as the club preference. ${immediateCount} current tournament${immediateCount === 1 ? "" : "s"} updated now; ${deferredCount} change${deferredCount === 1 ? "" : "s"} deferred.`
+      );
+    } catch (err: unknown) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Failed to update preferred game group"
+      );
+    } finally {
+      setSavingPreferredPoolPlayerId(null);
+    }
   };
 
   const updateSelectedPlayerRepresentingClub = (
@@ -581,7 +676,7 @@ export function useClubHostSetup({
         gender: guestGenderInput,
         partnerPreference: resolvedMixedState.partnerPreference,
         mixedSideOverride: resolvedMixedState.mixedSideOverride,
-        pool: poolsEnabled ? guestPoolInput : SessionPool.A,
+        pool: guestPoolInput,
         initialElo: DEFAULT_GUEST_INITIAL_ELO,
         representingClubId: isInterclub
           ? guestRepresentingClubInput || interclubClubIds[0] || null
@@ -591,7 +686,7 @@ export function useClubHostSetup({
     setGuestNameInput("");
     setGuestGenderInput(PlayerGender.MALE);
     setGuestMixedSideOverrideInput(null);
-    setGuestPoolInput(SessionPool.A);
+    setGuestPoolInput(SessionPool.B);
     if (isInterclub) {
       setGuestRepresentingClubInput(interclubClubIds[0] ?? "");
     }
@@ -607,29 +702,6 @@ export function useClubHostSetup({
     setGuestGenderInput(nextGender);
     setGuestMixedSideOverrideInput(null);
   };
-
-  const selectedPoolCounts = selectedPlayerIds.reduce(
-    (counts, playerId) => {
-      const pool = selectedPlayerPools[playerId] ?? SessionPool.A;
-      counts[pool] += 1;
-      return counts;
-    },
-    {
-      [SessionPool.A]: 0,
-      [SessionPool.B]: 0,
-    }
-  );
-
-  const guestPoolCounts = guestConfigs.reduce(
-    (counts, guest) => {
-      counts[guest.pool] += 1;
-      return counts;
-    },
-    {
-      [SessionPool.A]: 0,
-      [SessionPool.B]: 0,
-    }
-  );
 
   const openPlayersModal = () => {
     setShowPlayersModal(true);
@@ -698,10 +770,6 @@ export function useClubHostSetup({
     setPoolsEnabled: setPoolsEnabledForFormat,
     collabFormat,
     setCollabFormat,
-    poolAName,
-    setPoolAName,
-    poolBName,
-    setPoolBName,
     partnerClubId,
     partnerClubSearch,
     setPartnerClubSearch,
@@ -714,6 +782,7 @@ export function useClubHostSetup({
     selectablePlayers: effectiveSelectablePlayers,
     selectedPlayerIds,
     selectedPlayerPools,
+    savingPreferredPoolPlayerId,
     selectedPlayerRepresentingClubs,
     selectedPoolCounts,
     guestNameInput,
@@ -737,6 +806,7 @@ export function useClubHostSetup({
     togglePlayerSelection,
     toggleAllPlayers,
     updateSelectedPlayerPool,
+    updateSavedPlayerPreferredPool,
     updateSelectedPlayerRepresentingClub,
     addGuestName,
     removeGuestName,

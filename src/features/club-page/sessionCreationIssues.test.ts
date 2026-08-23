@@ -12,8 +12,8 @@ function getIssues(
     name: "Friday Night",
     participantCount: 4,
     poolsEnabled: false,
-    poolAName: "Open",
-    poolBName: "Regular",
+    competitiveCount: 0,
+    socialCount: 4,
     isMixed: false,
     hasMissingMixedGender: false,
     mixedModeLabel: "Mixicano",
@@ -46,8 +46,8 @@ describe("getSessionCreationIssues", () => {
         name: " ",
         participantCount: 1,
         poolsEnabled: true,
-        poolAName: "Open",
-        poolBName: "Open",
+        competitiveCount: 1,
+        socialCount: 0,
         isMixed: true,
         hasMissingMixedGender: true,
         isInterclub: true,
@@ -56,7 +56,8 @@ describe("getSessionCreationIssues", () => {
     ).toEqual([
       "Add a tournament name.",
       "Add 1 more player or guest.",
-      "Use different names for Pool A and Pool B.",
+      "Add at least 2 Competitive players or guests.",
+      "Add at least 2 Social players or guests.",
       "Set Male or Female for every selected player and guest in Mixicano.",
       "Choose a partner club for club vs club.",
     ]);
@@ -76,5 +77,15 @@ describe("getSessionCreationIssues", () => {
 
   it("returns no issues when setup is ready", () => {
     expect(getIssues()).toEqual([]);
+  });
+
+  it("requires both player groups when groups are enabled", () => {
+    expect(
+      getIssues({
+        poolsEnabled: true,
+        competitiveCount: 3,
+        socialCount: 1,
+      })
+    ).toEqual(["Add at least 2 Social players or guests."]);
   });
 });

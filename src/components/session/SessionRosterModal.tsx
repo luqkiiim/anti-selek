@@ -6,6 +6,7 @@ import { Avatar } from "@/components/ui/Avatar";
 import { PlayerPickerSheet } from "@/components/ui/PlayerPickerSheet";
 import { SearchField } from "@/components/ui/SearchField";
 import { getMixedSideOverrideOptionForGender } from "@/lib/mixedSide";
+import { getPlayerGroupLabel } from "@/lib/playerGroups";
 import {
   ClubPlayerStatus,
   MixedSide,
@@ -27,10 +28,9 @@ interface SessionRosterModalProps {
   isInterclub: boolean;
   interclubClubOptions: Array<{ id: string; name: string }>;
   poolsEnabled: boolean;
-  poolAName?: string | null;
-  poolBName?: string | null;
   rosterSearch: string;
   rosterPool: SessionPool;
+  rosterPlayerPools: Record<string, SessionPool>;
   guestName: string;
   guestGender: PlayerGender;
   guestMixedSideOverride: MixedSide | null;
@@ -42,6 +42,7 @@ interface SessionRosterModalProps {
   onClose: () => void;
   onRosterSearchChange: (value: string) => void;
   onRosterPoolChange: (value: SessionPool) => void;
+  onRosterPlayerPoolChange: (userId: string, value: SessionPool) => void;
   onGuestNameChange: (value: string) => void;
   onGuestGenderChange: (value: PlayerGender) => void;
   onGuestMixedSideOverrideChange: (value: MixedSide | null) => void;
@@ -58,10 +59,9 @@ export function SessionRosterModal({
   isInterclub,
   interclubClubOptions,
   poolsEnabled,
-  poolAName,
-  poolBName,
   rosterSearch,
   rosterPool,
+  rosterPlayerPools,
   guestName,
   guestGender,
   guestMixedSideOverride,
@@ -73,6 +73,7 @@ export function SessionRosterModal({
   onClose,
   onRosterSearchChange,
   onRosterPoolChange,
+  onRosterPlayerPoolChange,
   onGuestNameChange,
   onGuestGenderChange,
   onGuestMixedSideOverrideChange,
@@ -145,15 +146,15 @@ export function SessionRosterModal({
           </select>
           {poolsEnabled ? (
             <select
-              aria-label="Guest pool"
+              aria-label="Guest game group"
               value={rosterPool}
               onChange={(event) =>
                 onRosterPoolChange(event.target.value as SessionPool)
               }
               className="field px-3 py-2.5 text-sm"
             >
-              <option value={SessionPool.A}>{poolAName ?? "Open"}</option>
-              <option value={SessionPool.B}>{poolBName ?? "Regular"}</option>
+              <option value={SessionPool.A}>Competitive</option>
+              <option value={SessionPool.B}>Social</option>
             </select>
           ) : null}
           {isInterclub ? (
@@ -242,19 +243,6 @@ export function SessionRosterModal({
             placeholder="Search players..."
             className="flex-1"
           />
-          {poolsEnabled ? (
-            <select
-              aria-label="Pool for added players"
-              value={rosterPool}
-              onChange={(event) =>
-                onRosterPoolChange(event.target.value as SessionPool)
-              }
-              className="field px-3 py-2.5 text-sm sm:max-w-[12rem]"
-            >
-              <option value={SessionPool.A}>{poolAName ?? "Open"}</option>
-              <option value={SessionPool.B}>{poolBName ?? "Regular"}</option>
-            </select>
-          ) : null}
         </div>
       }
       footer={
@@ -287,11 +275,15 @@ export function SessionRosterModal({
               const rosterEntryId = `${player.id}:${
                 player.representingClubId ?? ""
               }`;
+              const selectedGroup =
+                rosterPlayerPools[player.id] ??
+                player.preferredPool ??
+                SessionPool.B;
 
               return (
               <div
                 key={rosterEntryId}
-                className="app-touch-pan-y flex items-center justify-between gap-3 rounded-xl border border-gray-200 bg-gray-50/70 px-3 py-3 transition"
+                className="app-touch-pan-y flex flex-col gap-3 rounded-xl border border-gray-200 bg-gray-50/70 px-3 py-3 transition sm:flex-row sm:items-center sm:justify-between"
               >
                 <div className="min-w-0 flex items-center gap-3">
                   <Avatar
@@ -317,24 +309,39 @@ export function SessionRosterModal({
                       ) : null}
                       {poolsEnabled ? (
                         <span className="app-chip app-chip-accent px-2 py-0.5 text-[10px]">
-                          Add to{" "}
-                          {rosterPool === SessionPool.A
-                            ? poolAName ?? "Open"
-                            : poolBName ?? "Regular"}
+                          {getPlayerGroupLabel(selectedGroup)}
                         </span>
                       ) : null}
                     </div>
                   </div>
                 </div>
 
-                <button
-                  type="button"
-                  onClick={() => onAddPlayer(player)}
-                  disabled={addingPlayerId === rosterEntryId}
-                  className="app-button-primary px-4 py-2.5 disabled:opacity-50"
-                >
-                  {addingPlayerId === rosterEntryId ? "Adding..." : "Add"}
-                </button>
+                <div className="flex w-full shrink-0 items-center justify-end gap-2 sm:w-auto">
+                  {poolsEnabled ? (
+                    <select
+                      aria-label={`Game group for ${player.name}`}
+                      value={selectedGroup}
+                      onChange={(event) =>
+                        onRosterPlayerPoolChange(
+                          player.id,
+                          event.target.value as SessionPool
+                        )
+                      }
+                      className="field max-w-[8.5rem] px-2 py-2 text-xs"
+                    >
+                      <option value={SessionPool.A}>Competitive</option>
+                      <option value={SessionPool.B}>Social</option>
+                    </select>
+                  ) : null}
+                  <button
+                    type="button"
+                    onClick={() => onAddPlayer(player)}
+                    disabled={addingPlayerId === rosterEntryId}
+                    className="app-button-primary px-4 py-2.5 disabled:opacity-50"
+                  >
+                    {addingPlayerId === rosterEntryId ? "Adding..." : "Add"}
+                  </button>
+                </div>
               </div>
               );
             })}

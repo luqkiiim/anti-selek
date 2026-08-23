@@ -1,11 +1,8 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { applyPendingPlayerGroupChangesInTransaction } from "@/lib/playerGroupPreferences";
 import { getSessionOperatorMembership } from "@/lib/sessionCollab";
-import {
-  buildSessionPoolMap,
-  summarizeSessionPoolMembership,
-} from "@/lib/sessionPools";
 import {
   GenerateMatchError,
   loadSessionRecord,
@@ -181,25 +178,10 @@ export async function POST(
         parsedTeams
       );
 
-      const poolSummary = summarizeSessionPoolMembership(
-        [
-          parsedTeams.team1[0],
-          parsedTeams.team1[1],
-          parsedTeams.team2[0],
-          parsedTeams.team2[1],
-        ],
-        buildSessionPoolMap(
-          sessionData.players,
-          (player) => player.userId,
-          (player) => player.pool
-        )
-      );
-
       return NextResponse.json({
         queuedMatch: await createManualQueuedMatchForSession(
           sessionData,
           parsedTeams,
-          poolSummary.dominantPool,
           teamClubIds
         ),
       });
@@ -257,8 +239,23 @@ export async function DELETE(
       !!session.user.isAdmin
     );
 
-    await prisma.queuedMatch.deleteMany({
-      where: { sessionId: sessionData.id },
+    await prisma.$transaction(async (tx) => {
+      const queuedMatch = sessionData.queuedMatch;
+      await tx.queuedMatch.deleteMany({
+        where: { sessionId: sessionData.id },
+      });
+
+      if (queuedMatch && !queuedMatch.isAutomatic) {
+        await applyPendingPlayerGroupChangesInTransaction(tx, {
+          sessionId: sessionData.id,
+          userIds: [
+            queuedMatch.team1User1Id,
+            queuedMatch.team1User2Id,
+            queuedMatch.team2User1Id,
+            queuedMatch.team2User2Id,
+          ],
+        });
+      }
     });
 
     return NextResponse.json({ ok: true, queuedMatch: null });

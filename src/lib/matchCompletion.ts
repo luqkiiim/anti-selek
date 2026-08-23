@@ -3,6 +3,7 @@ import { isValidMatchScore } from "@/lib/matchRules";
 import { getLinkedClubUserResolver } from "@/lib/offlineIdentities";
 import { getAcceptedSessionClubIds } from "@/lib/sessionCollab";
 import { getStandingPointsForTeam } from "@/lib/sessionStandings";
+import { applyPendingPlayerGroupChangesInTransaction } from "@/lib/playerGroupPreferences";
 import {
   MatchStatus,
   SessionClubStatus,
@@ -774,12 +775,28 @@ export async function finalizeMatchResultInTransaction(
     data: { currentMatchId: null },
   });
 
+  const pendingPlayerGroupChanges =
+    await applyPendingPlayerGroupChangesInTransaction(tx, {
+    sessionId: match.sessionId,
+    userIds: [
+      match.team1User1Id,
+      match.team1User2Id,
+      match.team2User1Id,
+      match.team2User2Id,
+    ],
+    });
+
+  if (!updatedMatch) {
+    return updatedMatch;
+  }
+
   if (
-    !updatedMatch ||
     match.session.isTest ||
     outcome.clubEloResult.adjustments.length === 0
   ) {
-    return updatedMatch;
+    return pendingPlayerGroupChanges.automaticQueueInvalidated
+      ? { ...updatedMatch, automaticQueueInvalidated: true as const }
+      : updatedMatch;
   }
 
   return {
@@ -789,6 +806,9 @@ export async function finalizeMatchResultInTransaction(
       preferredClubId: match.session.clubId,
     }),
     eloAdjustments: outcome.clubEloResult.adjustments,
+    ...(pendingPlayerGroupChanges.automaticQueueInvalidated
+      ? { automaticQueueInvalidated: true as const }
+      : {}),
   };
 }
 

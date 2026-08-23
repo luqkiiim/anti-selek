@@ -11,10 +11,13 @@ export interface SessionQueueReconciliation {
 }
 
 export async function reconcileSessionQueueAfterCourtChange(
-  sessionId: string
+  sessionId: string,
+  options?: { generateAutomaticIfMissing?: boolean }
 ): Promise<SessionQueueReconciliation> {
   const { autoAssignedMatch, queuedMatchCleared } =
-    await autoAssignQueuedMatch(sessionId);
+    await autoAssignQueuedMatch(sessionId, {
+      generateIfMissing: options?.generateAutomaticIfMissing,
+    });
   const queuedMatch = await tryRebuildQueuedMatchForSessionId(sessionId);
 
   return {

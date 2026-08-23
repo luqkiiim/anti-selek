@@ -6,6 +6,7 @@ import {
   MixedSide,
   PartnerPreference,
   PlayerGender,
+  SessionPool,
 } from "@/types/enums";
 import type { ClubAdminPlayer } from "./clubAdminTypes";
 import { ClubPlayerEditorModal } from "./ClubPlayerEditorModal";
@@ -41,6 +42,7 @@ function buildPlayer(
     avatarUrl: null,
     status: ClubPlayerStatus.CORE,
     needsMoreRest: false,
+    preferredPool: SessionPool.B,
     gender: PlayerGender.MALE,
     partnerPreference: PartnerPreference.OPEN,
     mixedSideOverride: null,
@@ -139,6 +141,18 @@ describe("ClubPlayerEditorModal", () => {
       "Default this player to a lighter tournament rotation."
     );
     expect(markup).toContain('checked=""');
+  });
+
+  it("shows the saved preferred game group as a tournament default", () => {
+    const markup = renderModal(
+      buildPlayer({ preferredPool: SessionPool.A })
+    );
+
+    expect(markup).toContain("Preferred game group");
+    expect(markup).toContain(
+      '<option value="A" selected="">Competitive</option>'
+    );
+    expect(markup).toContain("Hosts can override it per tournament.");
   });
 
   it("presents gender-specific player level options without changing stored values", () => {

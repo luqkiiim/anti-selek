@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import {
   ClubPlayerStatus,
   PlayerGender,
+  SessionPool,
 } from "@/types/enums";
 import { CreateClubPlayerModal } from "./CreateClubPlayerModal";
 
@@ -38,11 +39,13 @@ describe("CreateClubPlayerModal", () => {
         newPlayerMixedSideOverride={null}
         newPlayerStatus={ClubPlayerStatus.CORE}
         newPlayerNeedsMoreRest={false}
+        newPlayerPreferredPool={SessionPool.B}
         onNameChange={vi.fn()}
         onNewPlayerGenderChange={vi.fn()}
         onNewPlayerMixedSideOverrideChange={vi.fn()}
         onNewPlayerStatusChange={vi.fn()}
         onNewPlayerNeedsMoreRestChange={vi.fn()}
+        onNewPlayerPreferredPoolChange={vi.fn()}
         onClose={vi.fn()}
         onSubmit={vi.fn()}
       />
@@ -50,6 +53,8 @@ describe("CreateClubPlayerModal", () => {
 
     expect(markup).toContain("Local placeholder only");
     expect(markup).toContain("More rest");
+    expect(markup).toContain("Preferred game group");
+    expect(markup).toContain('<option value="B" selected="">Social</option>');
     expect(markup).toContain(
       "Players who already belong in this club should join it themselves and request a claim on their placeholder profile."
     );

@@ -1,4 +1,5 @@
-import { SessionMode, SessionType } from "@/types/enums";
+import { CourtGroupType, SessionMode, SessionType } from "@/types/enums";
+import { getCourtGroupTypeLabel } from "@/lib/playerGroups";
 import type {
   ActiveMatchmakerV3Player,
   V3SingleCourtSelection,
@@ -36,6 +37,10 @@ export interface MatchmakingReason {
     waitToleranceSeconds?: number;
     targetPool?: string | null;
     missedPool?: string | null;
+    courtGroupType?: CourtGroupType | string | null;
+    poolASeatCount?: number;
+    poolBSeatCount?: number;
+    competitiveTargetRatio?: number;
     mixedMode: boolean;
   };
 }
@@ -45,6 +50,10 @@ type V3ReasonContext = {
   sessionMode: SessionMode | string;
   targetPool?: string | null;
   missedPool?: string | null;
+  courtGroupType?: CourtGroupType | string | null;
+  poolASeatCount?: number;
+  poolBSeatCount?: number;
+  competitiveTargetRatio?: number;
   respectPlayerRest?: boolean;
 };
 
@@ -199,11 +208,32 @@ function buildReasonSummary({
     summary.push("Mixed court legality was satisfied before scoring.");
   }
 
-  if (metrics.targetPool) {
+  // targetPool/missedPool are retained only for legacy reason payloads. New
+  // player-group matches describe the immutable court composition below.
+  if (metrics.targetPool && !metrics.courtGroupType) {
     summary.push(
       metrics.missedPool
         ? `Served pool ${metrics.targetPool}; pool ${metrics.missedPool} still had waiting players.`
         : `Served pool ${metrics.targetPool}.`
+    );
+  }
+
+  const courtGroupLabel = getCourtGroupTypeLabel(
+    metrics.courtGroupType ?? null
+  );
+  if (courtGroupLabel) {
+    summary.push(
+      `${courtGroupLabel} court: ${metrics.poolASeatCount ?? 0} Competitive and ${
+        metrics.poolBSeatCount ?? 0
+      } Social seats.`
+    );
+  }
+
+  if (typeof metrics.competitiveTargetRatio === "number") {
+    summary.push(
+      `Active-player target is ${Math.round(
+        metrics.competitiveTargetRatio * 100
+      )}% Competitive seats.`
     );
   }
 
@@ -239,6 +269,10 @@ export function buildV3MatchmakingReason<
     totalRestTurns: selection.restSummary.totalRestTurns,
     targetPool: context.targetPool ?? null,
     missedPool: context.missedPool ?? null,
+    courtGroupType: context.courtGroupType ?? null,
+    poolASeatCount: context.poolASeatCount,
+    poolBSeatCount: context.poolBSeatCount,
+    competitiveTargetRatio: context.competitiveTargetRatio,
     mixedMode: context.sessionMode === SessionMode.MIXICANO,
   };
 
@@ -396,6 +430,24 @@ export function parseMatchmakingReasonJson(
     return null;
   }
 
+  if (
+    metrics.courtGroupType !== undefined &&
+    metrics.courtGroupType !== null &&
+    typeof metrics.courtGroupType !== "string"
+  ) {
+    return null;
+  }
+
+  for (const value of [
+    metrics.poolASeatCount,
+    metrics.poolBSeatCount,
+    metrics.competitiveTargetRatio,
+  ]) {
+    if (value !== undefined && typeof value !== "number") {
+      return null;
+    }
+  }
+
   const restTurnRange = hasRestTurnMetrics
     ? (metrics.restTurnRange as number)
     : 0;
@@ -449,6 +501,22 @@ export function parseMatchmakingReasonJson(
         typeof metrics.targetPool === "string" ? metrics.targetPool : null,
       missedPool:
         typeof metrics.missedPool === "string" ? metrics.missedPool : null,
+      courtGroupType:
+        typeof metrics.courtGroupType === "string"
+          ? metrics.courtGroupType
+          : null,
+      poolASeatCount:
+        typeof metrics.poolASeatCount === "number"
+          ? metrics.poolASeatCount
+          : undefined,
+      poolBSeatCount:
+        typeof metrics.poolBSeatCount === "number"
+          ? metrics.poolBSeatCount
+          : undefined,
+      competitiveTargetRatio:
+        typeof metrics.competitiveTargetRatio === "number"
+          ? metrics.competitiveTargetRatio
+          : undefined,
       mixedMode: metrics.mixedMode,
     },
   };

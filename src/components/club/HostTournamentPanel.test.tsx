@@ -49,10 +49,6 @@ function renderPanel({
       onCourtCountChange={vi.fn()}
       poolsEnabled={false}
       onPoolsEnabledChange={vi.fn()}
-      poolAName="Open"
-      onPoolANameChange={vi.fn()}
-      poolBName="Regular"
-      onPoolBNameChange={vi.fn()}
       selectedPoolCounts={{
         [SessionPool.A]: 0,
         [SessionPool.B]: 0,
@@ -139,4 +135,5 @@ describe("HostTournamentPanel", () => {
   it("does not render the redundant host back control", () => {
     expect(renderPanel()).not.toContain(">Exit<");
   });
+
 });

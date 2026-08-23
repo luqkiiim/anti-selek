@@ -18,7 +18,9 @@ import {
 import {
   ClubPlayerStatus,
   PlayerGender,
+  SessionPool,
 } from "@/types/enums";
+import { isValidSessionPool } from "@/lib/sessionPools";
 import {
   getQuickAccessDeniedMessage,
   isQuickAccessSession,
@@ -214,6 +216,9 @@ export async function GET(
           name: m.user.name,
           email: m.user.email,
           avatarUrl: serializeAvatarEntity(m.user).avatarUrl,
+          preferredPool: isValidSessionPool(m.preferredPool)
+            ? m.preferredPool
+            : SessionPool.B,
           needsMoreRest: m.needsMoreRest,
           status:
             m.status === ClubPlayerStatus.OCCASIONAL
@@ -301,6 +306,7 @@ export async function POST(
       mixedSideOverride,
       status,
       needsMoreRest,
+      preferredPool,
     } =
       body as {
       name?: unknown;
@@ -311,6 +317,7 @@ export async function POST(
       mixedSideOverride?: unknown;
       status?: unknown;
       needsMoreRest?: unknown;
+      preferredPool?: unknown;
     };
     if (typeof name !== "string" || name.trim().length < 2) {
       return NextResponse.json({ error: "Player name must be at least 2 characters" }, { status: 400 });
@@ -342,6 +349,9 @@ export async function POST(
     }
     if (needsMoreRest !== undefined && typeof needsMoreRest !== "boolean") {
       return NextResponse.json({ error: "Invalid more rest value" }, { status: 400 });
+    }
+    if (preferredPool !== undefined && !isValidSessionPool(preferredPool)) {
+      return NextResponse.json({ error: "Invalid preferred game group" }, { status: 400 });
     }
 
     const normalizedName = name.trim();
@@ -504,12 +514,16 @@ export async function POST(
           : ClubPlayerStatus.CORE,
         needsMoreRest:
           typeof needsMoreRest === "boolean" ? needsMoreRest : false,
+        preferredPool: isValidSessionPool(preferredPool)
+          ? preferredPool
+          : SessionPool.B,
       },
       select: {
         role: true,
         elo: true,
         status: true,
         needsMoreRest: true,
+        preferredPool: true,
       },
     });
 
@@ -518,6 +532,9 @@ export async function POST(
       name: user.name,
       email: user.email,
       avatarUrl: serializeAvatarEntity(user).avatarUrl,
+      preferredPool: isValidSessionPool(membership.preferredPool)
+        ? membership.preferredPool
+        : SessionPool.B,
       needsMoreRest: membership.needsMoreRest,
       status:
         membership.status === ClubPlayerStatus.OCCASIONAL

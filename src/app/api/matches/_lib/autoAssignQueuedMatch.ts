@@ -1,15 +1,21 @@
 import { prisma } from "@/lib/prisma";
-import { createQueuedMatchAssignment } from "@/app/api/sessions/[code]/generate-match/assignments";
+import { rankOpenCourtsForGroupType } from "@/lib/courtGroupRotation";
+import { applyPendingPlayerGroupChangesInTransaction } from "@/lib/playerGroupPreferences";
+import { getQueuedMatchUserIds } from "@/lib/sessionQueue";
 import {
-  applyPoolSelectionOutcome,
-  buildMatchmakingState,
-} from "@/app/api/sessions/[code]/generate-match/selection";
+  createMatchesForAssignments,
+  createQueuedMatchAssignment,
+} from "@/app/api/sessions/[code]/generate-match/assignments";
+import { buildMatchmakingState } from "@/app/api/sessions/[code]/generate-match/selection";
+import { selectAutomaticMatchForSession } from "@/app/api/sessions/[code]/queue-match/shared";
 import { validateManualMatchRequest } from "@/app/api/sessions/[code]/generate-match/manual";
 import { GenerateMatchError } from "@/app/api/sessions/[code]/generate-match/shared";
 import { getInterclubTeamClubIdsForPartition } from "@/app/api/sessions/[code]/generate-match/interclub";
-import { SessionPool } from "@/types/enums";
 
-export async function autoAssignQueuedMatch(sessionId: string) {
+export async function autoAssignQueuedMatch(
+  sessionId: string,
+  options?: { generateIfMissing?: boolean }
+) {
   const sessionData = await prisma.session.findUnique({
     where: { id: sessionId },
     include: {
@@ -29,13 +35,59 @@ export async function autoAssignQueuedMatch(sessionId: string) {
     },
   });
 
-  if (!sessionData?.queuedMatch) {
+  if (!sessionData) {
     return { autoAssignedMatch: null, queuedMatchCleared: false };
   }
 
-  const targetCourt = sessionData.courts
-    .filter((court) => !court.currentMatchId)
-    .sort((left, right) => left.courtNumber - right.courtNumber)[0];
+  if (!sessionData.queuedMatch) {
+    if (!options?.generateIfMissing || !sessionData.autoQueueEnabled) {
+      return {
+        autoAssignedMatch: null,
+        queuedMatchCleared: options?.generateIfMissing === true,
+      };
+    }
+
+    try {
+      const selection = await selectAutomaticMatchForSession(sessionData);
+      const targetCourt = rankOpenCourtsForGroupType(
+        sessionData.courts.filter((court) => !court.currentMatchId),
+        sessionData.matches,
+        selection.courtGroupType
+      )[0];
+      if (!targetCourt) {
+        return { autoAssignedMatch: null, queuedMatchCleared: true };
+      }
+
+      const [autoAssignedMatch] = await createMatchesForAssignments(sessionId, [
+        {
+          courtId: targetCourt.id,
+          selectedIds: selection.selectedIds,
+          partition: selection.partition,
+          team1ClubId: selection.team1ClubId,
+          team2ClubId: selection.team2ClubId,
+          matchmakingReasonJson: selection.matchmakingReasonJson,
+          courtGroupType: selection.courtGroupType,
+          poolASeatCount: selection.poolASeatCount,
+          poolBSeatCount: selection.poolBSeatCount,
+          clearArrivalPriority: true,
+          consumeSkipNextUserIds: selection.consumedSkipUserIds,
+        },
+      ]);
+
+      return { autoAssignedMatch, queuedMatchCleared: true };
+    } catch (error) {
+      if (error instanceof GenerateMatchError) {
+        return { autoAssignedMatch: null, queuedMatchCleared: true };
+      }
+      throw error;
+    }
+  }
+
+  const targetCourt = rankOpenCourtsForGroupType(
+    sessionData.courts.filter((court) => !court.currentMatchId),
+    sessionData.matches,
+    sessionData.queuedMatch.courtGroupType
+  )[0];
 
   if (!targetCourt) {
     return { autoAssignedMatch: null, queuedMatchCleared: false };
@@ -68,11 +120,22 @@ export async function autoAssignQueuedMatch(sessionId: string) {
     teamClubIds = getInterclubTeamClubIdsForPartition(sessionData, partition);
   } catch (error) {
     if (error instanceof GenerateMatchError) {
-      await prisma.queuedMatch.deleteMany({
-        where: {
-          id: sessionData.queuedMatch.id,
-          sessionId,
-        },
+      await prisma.$transaction(async (tx) => {
+        const deletedQueuedMatch = await tx.queuedMatch.deleteMany({
+          where: {
+            id: sessionData.queuedMatch!.id,
+            sessionId,
+          },
+        });
+        if (
+          deletedQueuedMatch.count > 0 &&
+          !sessionData.queuedMatch!.isAutomatic
+        ) {
+          await applyPendingPlayerGroupChangesInTransaction(tx, {
+            sessionId,
+            userIds: getQueuedMatchUserIds(sessionData.queuedMatch),
+          });
+        }
       });
       return { autoAssignedMatch: null, queuedMatchCleared: true };
     }
@@ -87,23 +150,11 @@ export async function autoAssignQueuedMatch(sessionId: string) {
     partition,
     ...teamClubIds,
     matchmakingReasonJson: sessionData.queuedMatch.matchmakingReasonJson ?? null,
+    courtGroupType: sessionData.queuedMatch.courtGroupType,
+    poolASeatCount: sessionData.queuedMatch.poolASeatCount,
+    poolBSeatCount: sessionData.queuedMatch.poolBSeatCount,
+    isAutomatic: sessionData.queuedMatch.isAutomatic,
   });
-
-  if (sessionData.poolsEnabled && sessionData.queuedMatch.targetPool) {
-    const nextPoolState = applyPoolSelectionOutcome(sessionData, {
-      targetPool: sessionData.queuedMatch.targetPool as SessionPool,
-      missedPool: null,
-    });
-    await prisma.session.update({
-      where: { id: sessionId },
-      data: {
-        poolACourtAssignments: nextPoolState.poolACourtAssignments,
-        poolBCourtAssignments: nextPoolState.poolBCourtAssignments,
-        poolAMissedTurns: nextPoolState.poolAMissedTurns,
-        poolBMissedTurns: nextPoolState.poolBMissedTurns,
-      },
-    });
-  }
 
   return { autoAssignedMatch, queuedMatchCleared: false };
 }

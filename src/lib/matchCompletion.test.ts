@@ -3,6 +3,7 @@ import {
   MatchStatus,
   SessionClubRole,
   SessionClubStatus,
+  SessionPool,
   SessionStatus,
   SessionType,
 } from "@/types/enums";
@@ -514,6 +515,70 @@ describe("finalizeMatchResult", () => {
     expect(tx.user.updateMany).toHaveBeenNthCalledWith(2, {
       where: { id: { in: ["b1", "b2"] } },
       data: { elo: { increment: expect.any(Number) } },
+    });
+  });
+
+  it("applies deferred groups on completion and signals automatic queue invalidation", async () => {
+    const storedMatch = {
+      id: "match-1",
+      team1Score: 21,
+      team2Score: 18,
+      winnerTeam: 1,
+      status: MatchStatus.COMPLETED,
+    };
+    const baseTx = createTransactionMock(storedMatch);
+    baseTx.sessionPlayer.findMany
+      .mockResolvedValueOnce([
+        { userId: "a1", isGuest: false },
+        { userId: "a2", isGuest: false },
+        { userId: "b1", isGuest: false },
+        { userId: "b2", isGuest: false },
+      ])
+      .mockResolvedValueOnce([
+        { userId: "a1", pendingPool: SessionPool.B },
+      ]);
+    const tx = {
+      ...baseTx,
+      queuedMatch: {
+        findUnique: vi.fn().mockResolvedValue({
+          id: "queue-1",
+          isAutomatic: true,
+          team1User1Id: "waiting-1",
+          team1User2Id: "waiting-2",
+          team2User1Id: "waiting-3",
+          team2User2Id: "waiting-4",
+        }),
+        deleteMany: vi.fn().mockResolvedValue({ count: 1 }),
+      },
+    };
+    mocks.transaction.mockImplementation((callback: (tx: unknown) => unknown) =>
+      callback(tx)
+    );
+
+    const result = await finalizeMatchResult({
+      match: finalizableMatch,
+      expectedStatus: MatchStatus.IN_PROGRESS,
+      finalTeam1Score: 21,
+      finalTeam2Score: 18,
+    });
+
+    expect(tx.sessionPlayer.updateMany).toHaveBeenCalledWith({
+      where: {
+        sessionId: "session-1",
+        userId: { in: ["a1"] },
+      },
+      data: { pool: SessionPool.B, pendingPool: null },
+    });
+    expect(tx.queuedMatch.deleteMany).toHaveBeenCalledWith({
+      where: {
+        id: "queue-1",
+        sessionId: "session-1",
+        isAutomatic: true,
+      },
+    });
+    expect(result).toEqual({
+      ...storedMatch,
+      automaticQueueInvalidated: true,
     });
   });
 });

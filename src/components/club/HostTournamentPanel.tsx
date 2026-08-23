@@ -43,10 +43,6 @@ interface HostTournamentPanelProps {
   onCourtCountChange: (count: number) => void;
   poolsEnabled: boolean;
   onPoolsEnabledChange: (enabled: boolean) => void;
-  poolAName: string;
-  onPoolANameChange: (value: string) => void;
-  poolBName: string;
-  onPoolBNameChange: (value: string) => void;
   selectedPoolCounts: Record<SessionPool, number>;
   guestPoolCounts: Record<SessionPool, number>;
   selectedPlayerCount: number;
@@ -245,10 +241,6 @@ export function HostTournamentPanel({
   onCourtCountChange,
   poolsEnabled,
   onPoolsEnabledChange,
-  poolAName,
-  onPoolANameChange,
-  poolBName,
-  onPoolBNameChange,
   selectedPoolCounts,
   guestPoolCounts,
   selectedPlayerCount,
@@ -367,7 +359,7 @@ export function HostTournamentPanel({
                 loadingCollabRoster
                   ? "Loading collab roster"
                   : poolsEnabled
-                    ? `${selectedPlayerCount} selected across ${poolAName.trim() || "Open"} and ${poolBName.trim() || "Regular"}`
+                    ? `${selectedPlayerCount} selected · ${selectedPoolCounts[SessionPool.A]} Competitive · ${selectedPoolCounts[SessionPool.B]} Social`
                     : `${selectedPlayerCount} selected`
               }
               actionLabel="Choose"
@@ -377,7 +369,7 @@ export function HostTournamentPanel({
               label="Guests"
               countLabel={
                 poolsEnabled
-                  ? `${guestCount} added across ${poolAName.trim() || "Open"} and ${poolBName.trim() || "Regular"}`
+                  ? `${guestCount} added · ${guestPoolCounts[SessionPool.A]} Competitive · ${guestPoolCounts[SessionPool.B]} Social`
                   : `${guestCount} added`
               }
               actionLabel="Manage"
@@ -458,11 +450,11 @@ export function HostTournamentPanel({
                   onChange={onRespectPlayerRestChange}
                 />
                 <SwitchRow
-                  label="Pools"
+                  label="Player groups"
                   description={
                     isInterclub
                       ? "Off for club vs club."
-                      : "Two soft groups."
+                      : "Balance Competitive, Social, and mixed Crossover courts from the active-player ratio."
                   }
                   checked={poolsEnabled}
                   onChange={onPoolsEnabledChange}
@@ -471,33 +463,31 @@ export function HostTournamentPanel({
               </div>
 
               {poolsEnabled ? (
-                <div className="grid gap-3 rounded-xl border border-gray-200 bg-white p-3 sm:grid-cols-2 sm:p-4">
-                  <label className="block space-y-1.5 text-sm font-medium text-gray-900">
-                    <span>Pool A</span>
-                    <input
-                      type="text"
-                      value={poolAName}
-                      onChange={(event) => onPoolANameChange(event.target.value)}
-                      className="field"
-                    />
-                    <p className="text-xs text-gray-500">
-                      {selectedPoolCounts[SessionPool.A]} players,{" "}
-                      {guestPoolCounts[SessionPool.A]} guests
-                    </p>
-                  </label>
-                  <label className="block space-y-1.5 text-sm font-medium text-gray-900">
-                    <span>Pool B</span>
-                    <input
-                      type="text"
-                      value={poolBName}
-                      onChange={(event) => onPoolBNameChange(event.target.value)}
-                      className="field"
-                    />
-                    <p className="text-xs text-gray-500">
-                      {selectedPoolCounts[SessionPool.B]} players,{" "}
-                      {guestPoolCounts[SessionPool.B]} guests
-                    </p>
-                  </label>
+                <div className="space-y-3 rounded-xl border border-gray-200 bg-white p-3 sm:p-4">
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="rounded-xl border border-blue-100 bg-blue-50/60 p-3">
+                      <p className="text-sm font-semibold text-blue-900">
+                        Competitive
+                      </p>
+                      <p className="mt-1 text-xs text-blue-700">
+                        {selectedPoolCounts[SessionPool.A]} players,{" "}
+                        {guestPoolCounts[SessionPool.A]} guests
+                      </p>
+                    </div>
+                    <div className="rounded-xl border border-emerald-100 bg-emerald-50/60 p-3">
+                      <p className="text-sm font-semibold text-emerald-900">
+                        Social
+                      </p>
+                      <p className="mt-1 text-xs text-emerald-700">
+                        {selectedPoolCounts[SessionPool.B]} players,{" "}
+                        {guestPoolCounts[SessionPool.B]} guests
+                      </p>
+                    </div>
+                  </div>
+                  <p className="text-xs leading-5 text-gray-500">
+                    Crossover courts pair one Competitive and one Social player
+                    on each team. Add at least two people to each group.
+                  </p>
                 </div>
               ) : null}
 

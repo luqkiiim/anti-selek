@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
   queuedMatchDeleteMany: vi.fn(),
   courtUpdateMany: vi.fn(),
   matchDeleteMany: vi.fn(),
+  sessionPlayerUpdateMany: vi.fn(),
   transaction: vi.fn(),
   getSessionOperatorMembership: vi.fn(),
   getAcceptedSessionClubIds: vi.fn(),
@@ -109,6 +110,7 @@ describe("session end route", () => {
     mocks.queuedMatchDeleteMany.mockResolvedValue({ count: 1 });
     mocks.courtUpdateMany.mockResolvedValue({ count: 2 });
     mocks.matchDeleteMany.mockResolvedValue({ count: 3 });
+    mocks.sessionPlayerUpdateMany.mockResolvedValue({ count: 1 });
     mocks.sessionUpdate.mockResolvedValue(updatedSession);
     mocks.transaction.mockImplementation(async (callback) =>
       callback({
@@ -120,6 +122,9 @@ describe("session end route", () => {
         },
         match: {
           deleteMany: mocks.matchDeleteMany,
+        },
+        sessionPlayer: {
+          updateMany: mocks.sessionPlayerUpdateMany,
         },
         session: {
           update: mocks.sessionUpdate,

@@ -19,7 +19,9 @@ import {
   ClubPlayerStatus,
   OfflineIdentityLinkStatus,
   PlayerGender,
+  SessionPool,
 } from "@/types/enums";
+import { isValidSessionPool } from "@/lib/sessionPools";
 
 export async function GET(
   request: Request,
@@ -183,6 +185,7 @@ export async function GET(
           status: string;
           role: string;
           needsMoreRest: boolean;
+          preferredPool: string;
         }>;
       }
     >();
@@ -207,6 +210,7 @@ export async function GET(
         status: membership.status,
         role: membership.role,
         needsMoreRest: membership.needsMoreRest,
+        preferredPool: membership.preferredPool,
       });
       if (membership.club.id === hostClubId) {
         current.user = membership.user;
@@ -244,6 +248,9 @@ export async function GET(
                 : null,
             elo: preferred.elo,
             needsMoreRest: preferred.needsMoreRest,
+            preferredPool: isValidSessionPool(preferred.preferredPool)
+              ? preferred.preferredPool
+              : SessionPool.B,
             isActive: user.isActive,
             isClaimed: user.isClaimed,
             createdAt: user.createdAt,

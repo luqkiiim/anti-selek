@@ -1,9 +1,34 @@
 import { prisma } from "@/lib/prisma";
-import { MatchStatus } from "@/types/enums";
+import { CourtGroupType, MatchStatus } from "@/types/enums";
 import type { ManualMatchTeams } from "@/lib/matchmaking/manualMatch";
 import { parseMatchmakingReasonJson } from "@/lib/matchmaking/matchReason";
+import { applyPendingPlayerGroupChangesInTransaction } from "@/lib/playerGroupPreferences";
+import { classifyCourtGroupSnapshot } from "@/lib/playerGroups";
+import { buildSessionPoolMap } from "@/lib/sessionPools";
 import { consumeSkipNextMatches } from "@/lib/sessionSkipNext";
 import { GenerateMatchError } from "./shared";
+
+type MatchTimingDelegate = {
+  findFirst?: (args: unknown) => Promise<{ createdAt: Date } | null>;
+  findUnique?: (args: unknown) => Promise<{ createdAt?: Date } | null>;
+};
+
+async function getNextMatchCreatedAt(
+  tx: Parameters<Parameters<typeof prisma.$transaction>[0]>[0],
+  sessionId: string
+) {
+  const delegate = tx.match as unknown as MatchTimingDelegate;
+  if (!delegate.findFirst) return undefined;
+
+  const latest = await delegate.findFirst({
+    where: { sessionId },
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+    select: { createdAt: true },
+  });
+  return new Date(
+    Math.max(Date.now(), (latest?.createdAt.getTime() ?? 0) + 1)
+  );
+}
 
 function getAllSelectedIds(
   assignments: Array<{
@@ -67,8 +92,71 @@ async function createMatchAssignment(
     team2ClubId?: string | null;
     matchmakingReasonJson?: string | null;
     clearArrivalPriority?: boolean;
+    courtGroupType?: CourtGroupType | string | null;
+    poolASeatCount?: number | null;
+    poolBSeatCount?: number | null;
+    createdAt?: Date;
   }
 ) {
+  let groupSnapshot =
+    assignment.courtGroupType &&
+    typeof assignment.poolASeatCount === "number" &&
+    typeof assignment.poolBSeatCount === "number"
+      ? {
+          courtGroupType: assignment.courtGroupType,
+          poolASeatCount: assignment.poolASeatCount,
+          poolBSeatCount: assignment.poolBSeatCount,
+        }
+      : null;
+
+  const session = await tx.session.findUnique({
+    where: { id: sessionId },
+    select: { poolsEnabled: true },
+  });
+  if (session?.poolsEnabled) {
+    const selectedPlayers = await tx.sessionPlayer.findMany({
+      where: {
+        sessionId,
+        userId: {
+          in: [
+            assignment.partition.team1[0],
+            assignment.partition.team1[1],
+            assignment.partition.team2[0],
+            assignment.partition.team2[1],
+          ],
+        },
+      },
+      select: { userId: true, pool: true },
+    });
+    const currentSnapshot = classifyCourtGroupSnapshot(
+      assignment.partition.team1,
+      assignment.partition.team2,
+      buildSessionPoolMap(
+        selectedPlayers,
+        (player) => player.userId,
+        (player) => player.pool
+      )
+    );
+
+    if (
+      groupSnapshot &&
+      (groupSnapshot.courtGroupType !== currentSnapshot.courtGroupType ||
+        groupSnapshot.poolASeatCount !== currentSnapshot.poolASeatCount ||
+        groupSnapshot.poolBSeatCount !== currentSnapshot.poolBSeatCount)
+    ) {
+      throw new GenerateMatchError(
+        409,
+        "Player groups changed while this match was being created. Please retry."
+      );
+    }
+    groupSnapshot = currentSnapshot;
+  } else {
+    groupSnapshot = null;
+  }
+
+  const createdAt =
+    assignment.createdAt ?? (await getNextMatchCreatedAt(tx, sessionId));
+
   const match = await tx.match.create({
     data: {
       sessionId,
@@ -81,6 +169,10 @@ async function createMatchAssignment(
       team2User2Id: assignment.partition.team2[1],
       team2ClubId: assignment.team2ClubId ?? null,
       matchmakingReasonJson: assignment.matchmakingReasonJson ?? null,
+      courtGroupType: groupSnapshot?.courtGroupType ?? null,
+      poolASeatCount: groupSnapshot?.poolASeatCount ?? null,
+      poolBSeatCount: groupSnapshot?.poolBSeatCount ?? null,
+      ...(createdAt ? { createdAt } : {}),
     },
     include: {
       team1User1: { select: { id: true, name: true } },
@@ -138,6 +230,9 @@ export async function createMatchesForAssignments(
     matchmakingReasonJson?: string | null;
     clearArrivalPriority?: boolean;
     consumeSkipNextUserIds?: string[];
+    courtGroupType?: CourtGroupType | string | null;
+    poolASeatCount?: number | null;
+    poolBSeatCount?: number | null;
   }>
 ) {
   return prisma.$transaction(async (tx) => {
@@ -170,8 +265,12 @@ export async function replaceCurrentCourtMatchAssignment({
   team1ClubId,
   team2ClubId,
   matchmakingReasonJson,
+  courtGroupType,
+  poolASeatCount,
+  poolBSeatCount,
   clearArrivalPriority,
   consumeSkipNextUserIds,
+  releasePendingUserIds,
 }: {
   sessionId: string;
   courtId: string;
@@ -181,10 +280,21 @@ export async function replaceCurrentCourtMatchAssignment({
   team1ClubId?: string | null;
   team2ClubId?: string | null;
   matchmakingReasonJson?: string | null;
+  courtGroupType?: CourtGroupType | string | null;
+  poolASeatCount?: number | null;
+  poolBSeatCount?: number | null;
   clearArrivalPriority?: boolean;
   consumeSkipNextUserIds?: string[];
+  releasePendingUserIds?: string[];
 }) {
   return prisma.$transaction(async (tx) => {
+    const matchTimingDelegate = tx.match as unknown as MatchTimingDelegate;
+    const replacedMatch = matchTimingDelegate.findUnique
+      ? await matchTimingDelegate.findUnique({
+          where: { id: currentMatchId },
+          select: { createdAt: true },
+        })
+      : null;
     const deletedMatch = await tx.match.deleteMany({
       where: {
         id: currentMatchId,
@@ -225,12 +335,21 @@ export async function replaceCurrentCourtMatchAssignment({
       team1ClubId,
       team2ClubId,
       matchmakingReasonJson,
+      courtGroupType,
+      poolASeatCount,
+      poolBSeatCount,
       clearArrivalPriority,
+      createdAt: replacedMatch?.createdAt,
     });
 
     await consumeSkipNextMatches(tx, {
       sessionId,
       userIds: consumeSkipNextUserIds ?? [],
+    });
+
+    await applyPendingPlayerGroupChangesInTransaction(tx, {
+      sessionId,
+      userIds: releasePendingUserIds ?? [],
     });
 
     return match;
@@ -245,6 +364,10 @@ export async function createQueuedMatchAssignment({
   team1ClubId,
   team2ClubId,
   matchmakingReasonJson,
+  courtGroupType,
+  poolASeatCount,
+  poolBSeatCount,
+  isAutomatic,
   consumeSkipNextUserIds,
 }: {
   sessionId: string;
@@ -254,6 +377,10 @@ export async function createQueuedMatchAssignment({
   team1ClubId?: string | null;
   team2ClubId?: string | null;
   matchmakingReasonJson?: string | null;
+  courtGroupType?: CourtGroupType | string | null;
+  poolASeatCount?: number | null;
+  poolBSeatCount?: number | null;
+  isAutomatic?: boolean;
   consumeSkipNextUserIds?: string[];
 }) {
   return prisma.$transaction(async (tx) => {
@@ -268,20 +395,29 @@ export async function createQueuedMatchAssignment({
       },
     ]);
 
+    const removedQueue = await tx.queuedMatch.deleteMany({
+      where: {
+        id: queuedMatchId,
+        sessionId,
+      },
+    });
+    if (removedQueue.count === 0) {
+      throw new GenerateMatchError(
+        409,
+        "This queued match is no longer available. Please refresh and retry."
+      );
+    }
+
     const match = await createMatchAssignment(tx, sessionId, {
       courtId,
       partition,
       team1ClubId,
       team2ClubId,
       matchmakingReasonJson,
-      clearArrivalPriority: matchmakingReasonJson != null,
-    });
-
-    await tx.queuedMatch.deleteMany({
-      where: {
-        id: queuedMatchId,
-        sessionId,
-      },
+      courtGroupType,
+      poolASeatCount,
+      poolBSeatCount,
+      clearArrivalPriority: isAutomatic ?? matchmakingReasonJson != null,
     });
 
     await consumeSkipNextMatches(tx, {

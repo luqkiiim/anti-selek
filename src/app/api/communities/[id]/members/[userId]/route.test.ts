@@ -23,6 +23,8 @@ const mocks = vi.hoisted(() => ({
   userUpdate: vi.fn(),
   resolveMixedSideState: vi.fn(),
   serializeAvatarEntity: vi.fn(),
+  propagatePreferredPoolToClubSessions: vi.fn(),
+  tryRebuildAutomaticQueuedMatchForSessionId: vi.fn(),
 }));
 
 vi.mock("@/lib/auth", () => ({
@@ -67,6 +69,16 @@ vi.mock("@/lib/mixedSide", () => ({
 
 vi.mock("@/lib/avatar", () => ({
   serializeAvatarEntity: mocks.serializeAvatarEntity,
+}));
+
+vi.mock("@/lib/playerGroupPreferences", () => ({
+  propagatePreferredPoolToClubSessions:
+    mocks.propagatePreferredPoolToClubSessions,
+}));
+
+vi.mock("@/app/api/sessions/[code]/queue-match/shared", () => ({
+  tryRebuildAutomaticQueuedMatchForSessionId:
+    mocks.tryRebuildAutomaticQueuedMatchForSessionId,
 }));
 
 vi.mock("@/lib/rateLimit", () => ({
@@ -138,6 +150,79 @@ describe("club admin update member route", () => {
     mocks.serializeAvatarEntity.mockImplementation((entity: { avatarKey?: string | null }) => ({
       avatarUrl: entity.avatarKey ?? null,
     }));
+    mocks.propagatePreferredPoolToClubSessions.mockResolvedValue({
+      immediateSessionCount: 0,
+      deferredSessionCount: 0,
+      automaticQueueSessionIds: [],
+    });
+    mocks.tryRebuildAutomaticQueuedMatchForSessionId.mockResolvedValue(null);
+  });
+
+  it("reconciles sessions when staff retries the already-saved game group", async () => {
+    const createdAt = new Date("2026-08-23T00:00:00.000Z");
+    mocks.clubFindUnique.mockResolvedValue({ createdById: "owner-1" });
+    mocks.clubMemberFindUnique
+      .mockResolvedValueOnce({ role: "STAFF" })
+      .mockResolvedValueOnce({
+        id: "membership-1",
+        role: "MEMBER",
+        elo: 1000,
+        status: ClubPlayerStatus.CORE,
+        needsMoreRest: false,
+        preferredPool: "A",
+      });
+    mocks.userFindUnique.mockResolvedValue({
+      name: "Competitive Player",
+      email: null,
+      avatarKey: null,
+      isClaimed: false,
+      isActive: true,
+      gender: PlayerGender.MALE,
+      partnerPreference: PartnerPreference.OPEN,
+      mixedSideOverride: null,
+    });
+    mocks.clubMemberFindMany.mockResolvedValue([]);
+    mocks.userUpdate.mockResolvedValue({
+      id: "user-1",
+      name: "Competitive Player",
+      email: null,
+      avatarKey: null,
+      gender: PlayerGender.MALE,
+      partnerPreference: PartnerPreference.OPEN,
+      mixedSideOverride: null,
+      isActive: true,
+      isClaimed: false,
+      createdAt,
+    });
+    mocks.clubMemberUpdate.mockResolvedValue({
+      role: "MEMBER",
+      elo: 1000,
+      status: ClubPlayerStatus.CORE,
+      needsMoreRest: false,
+      preferredPool: "A",
+    });
+    mocks.propagatePreferredPoolToClubSessions.mockResolvedValue({
+      immediateSessionCount: 2,
+      deferredSessionCount: 1,
+      automaticQueueSessionIds: ["session-1"],
+    });
+
+    const response = await patchMember({ preferredPool: "A" });
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.preferredPool).toBe("A");
+    expect(body.preferencePropagation).toEqual({
+      immediateSessionCount: 2,
+      deferredSessionCount: 1,
+    });
+    expect(mocks.propagatePreferredPoolToClubSessions).toHaveBeenCalledWith(
+      expect.anything(),
+      { clubId: "community-1", userId: "user-1", preferredPool: "A" }
+    );
+    expect(mocks.tryRebuildAutomaticQueuedMatchForSessionId).toHaveBeenCalledWith(
+      "session-1"
+    );
   });
 
   it("rejects renaming claimed members", async () => {
@@ -345,7 +430,13 @@ describe("club admin update member route", () => {
       data: {
         needsMoreRest: true,
       },
-      select: { role: true, elo: true, status: true, needsMoreRest: true },
+      select: {
+        role: true,
+        elo: true,
+        status: true,
+        needsMoreRest: true,
+        preferredPool: true,
+      },
     });
     expect(body.needsMoreRest).toBe(true);
   });

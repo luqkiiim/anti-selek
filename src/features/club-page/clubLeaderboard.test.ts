@@ -4,6 +4,7 @@ import {
   ClubPlayerStatus,
   PartnerPreference,
   PlayerGender,
+  SessionPool,
 } from "@/types/enums";
 import { getClubLeaderboard } from "./clubLeaderboard";
 
@@ -13,6 +14,7 @@ function createMember(overrides: Partial<ClubPageMember> = {}): ClubPageMember {
     name: "Player One",
     status: ClubPlayerStatus.CORE,
     needsMoreRest: false,
+    preferredPool: SessionPool.B,
     gender: PlayerGender.MALE,
     partnerPreference: PartnerPreference.OPEN,
     elo: 1000,

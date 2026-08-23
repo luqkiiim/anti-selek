@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { Avatar } from "@/components/ui/Avatar";
+import { getPlayerGroupLabel } from "@/lib/playerGroups";
 import { getSessionPoolOptions } from "@/lib/sessionPools";
 import { getSessionTypeLabel } from "@/lib/sessionModeLabels";
 import type { Player } from "./sessionTypes";
@@ -96,17 +97,11 @@ export function LiveStandingsTable({
   getPlayerProfileHref,
   calculatePlayerSessionStats,
   poolsEnabled,
-  poolAName,
-  poolBName,
   interclubClubToneById,
 }: LiveStandingsTableProps) {
   const isLadderSession = sessionType === SessionType.LADDER;
   const [poolFilter, setPoolFilter] = useState<"ALL" | SessionPool>("ALL");
-  const poolOptions = getSessionPoolOptions({
-    poolsEnabled,
-    poolAName,
-    poolBName,
-  });
+  const poolOptions = getSessionPoolOptions({ poolsEnabled });
   const visiblePlayers = useMemo(
     () =>
       poolsEnabled && poolFilter !== "ALL"
@@ -202,8 +197,7 @@ export function LiveStandingsTable({
               const isMe = player.userId === currentUserId;
               const pointDiff = pointDiffByUserId.get(player.userId) ?? 0;
               const standingValue = getStandingValue(sessionType, player, stats);
-              const poolLabel =
-                player.pool === SessionPool.A ? poolAName ?? "Open" : poolBName ?? "Regular";
+              const poolLabel = getPlayerGroupLabel(player.pool);
               const interclubTone = player.representingClubId
                 ? interclubClubToneById?.[player.representingClubId]
                 : undefined;
@@ -299,7 +293,7 @@ export function LiveStandingsTable({
 
       {visiblePlayers.length === 0 ? (
         <div className="border-t border-gray-100 px-5 py-6 text-sm text-gray-500">
-          No players in this pool yet.
+          No players in this group yet.
         </div>
       ) : null}
     </div>

@@ -70,6 +70,13 @@ export enum SessionPool {
   B = "B",
 }
 
+export enum CourtGroupType {
+  COMPETITIVE = "COMPETITIVE",
+  SOCIAL = "SOCIAL",
+  CROSSOVER = "CROSSOVER",
+  OPEN_OVERFLOW = "OPEN_OVERFLOW",
+}
+
 export enum ClubPlayerStatus {
   CORE = "CORE",
   OCCASIONAL = "OCCASIONAL",

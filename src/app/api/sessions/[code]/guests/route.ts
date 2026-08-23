@@ -238,7 +238,9 @@ export async function POST(
           pool:
             sessionData.poolsEnabled && isValidSessionPool(pool)
               ? pool
-              : SessionPool.A,
+              : sessionData.poolsEnabled
+                ? SessionPool.B
+                : SessionPool.A,
           sessionPoints: 0,
           matchmakingMatchesCredit,
           joinedAt,
@@ -268,7 +270,9 @@ export async function POST(
       pool:
         sessionData.poolsEnabled && isValidSessionPool(pool)
           ? pool
-          : SessionPool.A,
+          : sessionData.poolsEnabled
+            ? SessionPool.B
+            : SessionPool.A,
       ladderEntryAt: joinedAt.toISOString(),
       queuedMatch,
     });

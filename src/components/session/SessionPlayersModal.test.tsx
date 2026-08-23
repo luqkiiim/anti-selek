@@ -163,4 +163,33 @@ describe("SessionPlayersModal", () => {
     expect(markup).toContain(">Edit<");
     expect(markup).not.toContain("Skip next");
   });
+
+  it("shows deferred game-group changes on the live roster", () => {
+    const markup = renderToStaticMarkup(
+      <SessionPlayersModal
+        open
+        players={[
+          createPlayer("other", "Other Player", {
+            pool: SessionPool.A,
+            pendingPool: SessionPool.B,
+          }),
+        ]}
+        currentUserId="me"
+        canEditPreferences
+        canManagePlayers
+        poolsEnabled
+        togglingPausePlayerId={null}
+        skippingNextPlayerId={null}
+        onClose={vi.fn()}
+        onTogglePause={vi.fn()}
+        onToggleSkipNext={vi.fn()}
+        onOpenPreferenceEditor={vi.fn()}
+      />
+    );
+
+    expect(markup).toContain("Competitive");
+    expect(markup).toContain(
+      "Switches to Social after current match"
+    );
+  });
 });

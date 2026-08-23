@@ -3,6 +3,7 @@ import {
   PartnerPreference,
   PlayerGender,
   SessionMode,
+  SessionPool,
   SessionStatus,
 } from "@/types/enums";
 
@@ -162,5 +163,24 @@ describe("guest route", () => {
     expect(
       mocks.tryRebuildAutomaticQueuedMatchForSessionId
     ).not.toHaveBeenCalled();
+  });
+
+  it("defaults guests in grouped sessions to Social", async () => {
+    mocks.sessionFindUnique.mockResolvedValue({
+      id: "session-1",
+      clubId: null,
+      status: SessionStatus.WAITING,
+      mode: SessionMode.MEXICANO,
+      poolsEnabled: true,
+    });
+
+    const response = await postGuest();
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(mocks.sessionPlayerCreate).toHaveBeenCalledWith({
+      data: expect.objectContaining({ pool: SessionPool.B }),
+    });
+    expect(body.pool).toBe(SessionPool.B);
   });
 });

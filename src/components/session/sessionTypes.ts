@@ -1,5 +1,6 @@
 import {
   ClubPlayerStatus,
+  CourtGroupType,
   MixedSide,
   PartnerPreference,
   PlayerGender,
@@ -27,6 +28,7 @@ export interface Player {
   partnerPreference: PartnerPreference;
   mixedSideOverride?: MixedSide | null;
   pool: SessionPool;
+  pendingPool?: SessionPool | null;
   needsMoreRest: boolean;
   user: {
     id: string;
@@ -51,11 +53,15 @@ export interface Match {
   team2Score?: number;
   completedAt?: string;
   matchmakingReason?: MatchmakingReason | null;
+  courtGroupType?: CourtGroupType | null;
+  poolASeatCount?: number | null;
+  poolBSeatCount?: number | null;
 }
 
 export interface QueuedMatch {
   id: string;
   createdAt?: string;
+  isAutomatic?: boolean;
   targetPool?: SessionPool | null;
   team1ClubId?: string | null;
   team2ClubId?: string | null;
@@ -64,6 +70,9 @@ export interface QueuedMatch {
   team2User1: { id: string; name: string; avatarUrl?: string | null };
   team2User2: { id: string; name: string; avatarUrl?: string | null };
   matchmakingReason?: MatchmakingReason | null;
+  courtGroupType?: CourtGroupType | null;
+  poolASeatCount?: number | null;
+  poolBSeatCount?: number | null;
 }
 
 export interface CompletedMatchInfo {
@@ -95,6 +104,7 @@ export interface ClubUser {
   elo: number;
   status: ClubPlayerStatus;
   needsMoreRest: boolean;
+  preferredPool: SessionPool;
   representingClubId?: string | null;
   representingClubName?: string | null;
   gender: PlayerGender;

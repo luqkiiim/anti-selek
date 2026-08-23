@@ -5,6 +5,7 @@ import {
   getMixedSideDisplayLabel,
   getMixedSideOverrideOptionForGender,
 } from "@/lib/mixedSide";
+import { getPlayerGroupLabel } from "@/lib/playerGroups";
 import {
   MixedSide,
   PlayerGender,
@@ -24,8 +25,6 @@ interface ClubGuestsModalProps {
   guestPoolInput: SessionPool;
   guestRepresentingClubInput: string;
   poolsEnabled: boolean;
-  poolAName: string;
-  poolBName: string;
   collabFormat: SessionCollabFormat;
   interclubClubOptions: Array<{ id: string; name: string }>;
   onGuestNameChange: (value: string) => void;
@@ -48,8 +47,6 @@ export function ClubGuestsModal({
   guestPoolInput,
   guestRepresentingClubInput,
   poolsEnabled,
-  poolAName,
-  poolBName,
   collabFormat,
   interclubClubOptions,
   onGuestNameChange,
@@ -116,15 +113,15 @@ export function ClubGuestsModal({
             </select>
             {poolsEnabled ? (
               <select
-                aria-label="Guest pool"
+                aria-label="Guest game group"
                 value={guestPoolInput}
                 onChange={(event) =>
                   onGuestPoolChange(event.target.value as SessionPool)
                 }
                 className="field px-3 py-2.5 text-sm"
               >
-                <option value={SessionPool.A}>{poolAName}</option>
-                <option value={SessionPool.B}>{poolBName}</option>
+                <option value={SessionPool.A}>Competitive</option>
+                <option value={SessionPool.B}>Social</option>
               </select>
             ) : null}
             {isInterclub ? (
@@ -205,7 +202,7 @@ export function ClubGuestsModal({
                   </span>
                   {poolsEnabled ? (
                     <span className="app-chip app-chip-accent px-2 py-0.5 text-[10px]">
-                      {guest.pool === SessionPool.A ? poolAName : poolBName}
+                      {getPlayerGroupLabel(guest.pool)}
                     </span>
                   ) : null}
                   {isInterclub && guest.representingClubId ? (

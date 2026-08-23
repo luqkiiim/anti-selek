@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { resolveAvatarUrl, serializeAvatarEntity } from "@/lib/avatar";
+import { applyPendingPlayerGroupChangesInTransaction } from "@/lib/playerGroupPreferences";
 import { prisma } from "@/lib/prisma";
 import { getClubEloByUserId, withClubElo } from "@/lib/clubElo";
 import {
@@ -73,6 +74,9 @@ async function getSessionRoute(
               completedAt: true,
               scoreSubmittedByUserId: true,
               matchmakingReasonJson: true,
+              courtGroupType: true,
+              poolASeatCount: true,
+              poolBSeatCount: true,
               team1User1: { select: { id: true, name: true, avatarKey: true } },
               team1User2: { select: { id: true, name: true, avatarKey: true } },
               team2User1: { select: { id: true, name: true, avatarKey: true } },
@@ -124,6 +128,9 @@ async function getSessionRoute(
           winnerTeam: true,
           status: true,
           completedAt: true,
+          courtGroupType: true,
+          poolASeatCount: true,
+          poolBSeatCount: true,
         },
       },
       queuedMatch: true,
@@ -215,6 +222,10 @@ async function getSessionRoute(
           id: sessionData.queuedMatch.id,
           createdAt: sessionData.queuedMatch.createdAt,
           targetPool: sessionData.queuedMatch.targetPool,
+          courtGroupType: sessionData.queuedMatch.courtGroupType,
+          poolASeatCount: sessionData.queuedMatch.poolASeatCount,
+          poolBSeatCount: sessionData.queuedMatch.poolBSeatCount,
+          isAutomatic: sessionData.queuedMatch.isAutomatic,
           team1ClubId: sessionData.queuedMatch.team1ClubId,
           team2ClubId: sessionData.queuedMatch.team2ClubId,
           matchmakingReason: parseMatchmakingReasonJson(
@@ -316,6 +327,8 @@ export async function PATCH(
         { status: 400 }
       );
     }
+    const autoQueueEnabled = body.autoQueueEnabled;
+    const respectPlayerRest = body.respectPlayerRest;
 
     const { code } = await params;
 
@@ -348,23 +361,36 @@ export async function PATCH(
       return invalidTargetResponse(request, "api:sessions:code");
     }
 
-    if (!body.autoQueueEnabled) {
-      await prisma.$transaction([
-        prisma.session.update({
+    if (!autoQueueEnabled) {
+      await prisma.$transaction(async (tx) => {
+        await tx.session.update({
           where: { id: sessionData.id },
           data: {
             autoQueueEnabled: false,
-            respectPlayerRest: body.respectPlayerRest,
+            respectPlayerRest,
           },
-        }),
-        prisma.queuedMatch.deleteMany({
+        });
+        const queuedMatch = await tx.queuedMatch.findUnique({
           where: { sessionId: sessionData.id },
-        }),
-      ]);
+        });
+        const deletedQueuedMatch = await tx.queuedMatch.deleteMany({
+          where: { sessionId: sessionData.id },
+        });
+        if (
+          deletedQueuedMatch.count > 0 &&
+          queuedMatch &&
+          !queuedMatch.isAutomatic
+        ) {
+          await applyPendingPlayerGroupChangesInTransaction(tx, {
+            sessionId: sessionData.id,
+            userIds: getQueuedMatchUserIds(queuedMatch),
+          });
+        }
+      });
 
       return NextResponse.json({
         autoQueueEnabled: false,
-        respectPlayerRest: body.respectPlayerRest,
+        respectPlayerRest,
         queuedMatch: null,
       });
     }
@@ -373,13 +399,13 @@ export async function PATCH(
       where: { id: sessionData.id },
       data: {
         autoQueueEnabled: true,
-        respectPlayerRest: body.respectPlayerRest,
+        respectPlayerRest,
       },
     });
 
     return NextResponse.json({
       autoQueueEnabled: true,
-      respectPlayerRest: body.respectPlayerRest,
+      respectPlayerRest,
       queuedMatch: await tryRebuildQueuedMatchForSessionId(sessionData.id),
     });
   } catch (error) {

@@ -104,12 +104,9 @@ export default function ClubPage() {
     setCourtCount,
     poolsEnabled,
     setPoolsEnabled,
-    poolAName,
-    setPoolAName,
-    poolBName,
-    setPoolBName,
     selectedPlayerIds,
     selectedPlayerPools,
+    savingPreferredPoolPlayerId,
     selectedPlayerRepresentingClubs,
     selectedPoolCounts,
     guestNameInput,
@@ -163,6 +160,7 @@ export default function ClubPage() {
     togglePlayerSelection,
     toggleAllPlayers,
     updateSelectedPlayerPool,
+    updateSavedPlayerPreferredPool,
     updateSelectedPlayerRepresentingClub,
     addGuestName,
     removeGuestName,
@@ -768,10 +766,6 @@ export default function ClubPage() {
       onCourtCountChange={setCourtCount}
       poolsEnabled={poolsEnabled}
       onPoolsEnabledChange={setPoolsEnabled}
-      poolAName={poolAName}
-      onPoolANameChange={setPoolAName}
-      poolBName={poolBName}
-      onPoolBNameChange={setPoolBName}
       selectedPoolCounts={selectedPoolCounts}
       guestPoolCounts={guestPoolCounts}
       selectedPlayerCount={selectedPlayerIds.length}
@@ -1044,14 +1038,15 @@ export default function ClubPage() {
         selectedPlayerPools={selectedPlayerPools}
         playerSearch={playerSearch}
         poolsEnabled={poolsEnabled}
-        poolAName={poolAName}
-        poolBName={poolBName}
+        canSavePreferredPools={canManageClub}
+        savingPreferredPoolPlayerId={savingPreferredPoolPlayerId}
         selectablePlayers={selectablePlayers}
         filteredSelectablePlayers={filteredSelectablePlayers}
         onPlayerSearchChange={setPlayerSearch}
         onToggleAllPlayers={toggleAllPlayers}
         onTogglePlayerSelection={togglePlayerSelection}
         onChangePlayerPool={updateSelectedPlayerPool}
+        onSavePlayerPreferredPool={updateSavedPlayerPreferredPool}
         collabFormat={collabFormat}
         hostClubId={clubId}
         hostClubName={club?.name ?? "Host club"}
@@ -1071,8 +1066,6 @@ export default function ClubPage() {
         guestPoolInput={guestPoolInput}
         guestRepresentingClubInput={guestRepresentingClubInput}
         poolsEnabled={poolsEnabled}
-        poolAName={poolAName}
-        poolBName={poolBName}
         collabFormat={collabFormat}
         interclubClubOptions={interclubClubOptions}
         onGuestNameChange={setGuestNameInput}

@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { Avatar } from "@/components/ui/Avatar";
 import { PlayerPickerSheet } from "@/components/ui/PlayerPickerSheet";
 import { SearchField } from "@/components/ui/SearchField";
+import { getPlayerGroupLabel } from "@/lib/playerGroups";
 import { SessionPool } from "@/types/enums";
 import type { Player } from "./sessionTypes";
 
@@ -42,8 +43,6 @@ export function SessionPlayersModal({
   canEditPreferences,
   canManagePlayers,
   poolsEnabled,
-  poolAName,
-  poolBName,
   togglingPausePlayerId,
   skippingNextPlayerId,
   onClose,
@@ -147,10 +146,7 @@ export function SessionPlayersModal({
             const canSelfSkip = player.userId === currentUserId && !player.isPaused;
             const canSeeSkipNextState =
               hasSkipNext && (canSelfSkip || canManagePlayers);
-            const poolLabel =
-              player.pool === SessionPool.A
-                ? (poolAName ?? "Open")
-                : (poolBName ?? "Regular");
+            const poolLabel = getPlayerGroupLabel(player.pool);
             const poolBadgeClass =
               player.pool === SessionPool.A
                 ? "app-chip-accent"
@@ -187,6 +183,11 @@ export function SessionPlayersModal({
                         className={`app-chip px-2 py-0.5 text-[10px] ${poolBadgeClass}`}
                       >
                         {poolLabel}
+                      </span>
+                    ) : null}
+                    {poolsEnabled && player.pendingPool ? (
+                      <span className="app-chip app-chip-warning px-2 py-0.5 text-[10px]">
+                        Switches to {getPlayerGroupLabel(player.pendingPool)} after current match
                       </span>
                     ) : null}
                     {player.isPaused ? (

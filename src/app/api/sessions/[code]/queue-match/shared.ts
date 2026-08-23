@@ -2,7 +2,11 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import type { ManualMatchTeams } from "@/lib/matchmaking/manualMatch";
 import { parseMatchmakingReasonJson } from "@/lib/matchmaking/matchReason";
+import { applyPendingPlayerGroupChangesInTransaction } from "@/lib/playerGroupPreferences";
+import { classifyCourtGroupSnapshot } from "@/lib/playerGroups";
+import { buildSessionPoolMap } from "@/lib/sessionPools";
 import { consumeSkipNextMatches } from "@/lib/sessionSkipNext";
+import type { CourtGroupType } from "@/types/enums";
 import {
   buildMatchmakingState,
   ensureEnoughPlayers,
@@ -17,7 +21,7 @@ import {
   type ReshuffleSource,
 } from "../generate-match/shared";
 
-type QueueSessionRecord = NonNullable<
+export type QueueSessionRecord = NonNullable<
   Awaited<ReturnType<typeof loadSessionRecordById>>
 >;
 type QueueRecord = NonNullable<QueueSessionRecord["queuedMatch"]>;
@@ -44,6 +48,10 @@ export function buildQueuedMatchResponse(
     id: queuedMatch.id,
     createdAt: queuedMatch.createdAt,
     targetPool: queuedMatch.targetPool ?? null,
+    courtGroupType: queuedMatch.courtGroupType ?? null,
+    poolASeatCount: queuedMatch.poolASeatCount ?? null,
+    poolBSeatCount: queuedMatch.poolBSeatCount ?? null,
+    isAutomatic: queuedMatch.isAutomatic,
     team1ClubId: queuedMatch.team1ClubId ?? null,
     team2ClubId: queuedMatch.team2ClubId ?? null,
     matchmakingReason: parseMatchmakingReasonJson(
@@ -105,16 +113,115 @@ async function ensureQueueSlotAvailable(sessionData: QueueSessionRecord) {
   }
 }
 
-async function createQueuedMatchRecord(
-  sessionId: string,
-  partition: ManualMatchTeams,
-  targetPool?: string | null,
-  matchmakingReasonJson?: string | null,
-  teamClubIds?: { team1ClubId?: string | null; team2ClubId?: string | null },
-  consumeSkipNextUserIds: string[] = []
+interface QueuedMatchRecordInput {
+  sessionId: string;
+  partition: ManualMatchTeams;
+  targetPool?: string | null;
+  courtGroupType?: CourtGroupType | string | null;
+  poolASeatCount?: number | null;
+  poolBSeatCount?: number | null;
+  isAutomatic: boolean;
+  matchmakingReasonJson?: string | null;
+  teamClubIds?: { team1ClubId?: string | null; team2ClubId?: string | null };
+  consumeSkipNextUserIds?: string[];
+}
+
+async function resolveQueuedGroupSnapshot(
+  tx: Parameters<Parameters<typeof prisma.$transaction>[0]>[0],
+  {
+    sessionId,
+    partition,
+    isAutomatic,
+    courtGroupType,
+    poolASeatCount,
+    poolBSeatCount,
+  }: Pick<
+    QueuedMatchRecordInput,
+    | "sessionId"
+    | "partition"
+    | "isAutomatic"
+    | "courtGroupType"
+    | "poolASeatCount"
+    | "poolBSeatCount"
+  >
 ) {
+  const session = await tx.session.findUnique({
+    where: { id: sessionId },
+    select: { poolsEnabled: true },
+  });
+  if (!session) {
+    throw new GenerateMatchError(404, "Tournament not found");
+  }
+  if (!session.poolsEnabled) return null;
+
+  const selectedUserIds = [
+    partition.team1[0],
+    partition.team1[1],
+    partition.team2[0],
+    partition.team2[1],
+  ];
+  const selectedPlayers = await tx.sessionPlayer.findMany({
+    where: { sessionId, userId: { in: selectedUserIds } },
+    select: { userId: true, pool: true },
+  });
+  if (
+    selectedPlayers.length !== selectedUserIds.length ||
+    new Set(selectedPlayers.map((player) => player.userId)).size !==
+      selectedUserIds.length
+  ) {
+    throw new GenerateMatchError(
+      409,
+      "The queued lineup changed while it was being created. Please retry."
+    );
+  }
+
+  const currentSnapshot = classifyCourtGroupSnapshot(
+    partition.team1,
+    partition.team2,
+    buildSessionPoolMap(
+      selectedPlayers,
+      (player) => player.userId,
+      (player) => player.pool
+    )
+  );
+
+  if (
+    isAutomatic &&
+    (courtGroupType !== currentSnapshot.courtGroupType ||
+      poolASeatCount !== currentSnapshot.poolASeatCount ||
+      poolBSeatCount !== currentSnapshot.poolBSeatCount)
+  ) {
+    throw new GenerateMatchError(
+      409,
+      "Player groups changed while the next match was being queued. Please retry."
+    );
+  }
+
+  return currentSnapshot;
+}
+
+async function createQueuedMatchRecord({
+  sessionId,
+  partition,
+  targetPool,
+  courtGroupType,
+  poolASeatCount,
+  poolBSeatCount,
+  isAutomatic,
+  matchmakingReasonJson,
+  teamClubIds,
+  consumeSkipNextUserIds = [],
+}: QueuedMatchRecordInput) {
   try {
     return await prisma.$transaction(async (tx) => {
+      const groupSnapshot = await resolveQueuedGroupSnapshot(tx, {
+        sessionId,
+        partition,
+        isAutomatic,
+        courtGroupType,
+        poolASeatCount,
+        poolBSeatCount,
+      });
       const queuedMatch = await tx.queuedMatch.create({
         data: {
           sessionId,
@@ -125,6 +232,10 @@ async function createQueuedMatchRecord(
           team2User2Id: partition.team2[1],
           team2ClubId: teamClubIds?.team2ClubId ?? null,
           targetPool: targetPool ?? null,
+          courtGroupType: groupSnapshot?.courtGroupType ?? null,
+          poolASeatCount: groupSnapshot?.poolASeatCount ?? null,
+          poolBSeatCount: groupSnapshot?.poolBSeatCount ?? null,
+          isAutomatic,
           matchmakingReasonJson: matchmakingReasonJson ?? null,
         },
       });
@@ -148,7 +259,9 @@ async function createQueuedMatchRecord(
   }
 }
 
-async function selectQueuedMatchForSession(sessionData: QueueSessionRecord) {
+export async function selectAutomaticMatchForSession(
+  sessionData: QueueSessionRecord
+) {
   const { busyPlayerIds, playersById, rotationHistory } =
     await buildMatchmakingState(sessionData);
   const { availableCandidates, rankedCandidates } = getRankedCandidates(
@@ -167,8 +280,20 @@ async function selectQueuedMatchForSession(sessionData: QueueSessionRecord) {
   });
 
   return {
+    selectedIds: [
+      selection.partition.team1[0],
+      selection.partition.team1[1],
+      selection.partition.team2[0],
+      selection.partition.team2[1],
+    ],
     partition: selection.partition,
     targetPool: "targetPool" in selection ? selection.targetPool : null,
+    courtGroupType:
+      "courtGroupType" in selection ? selection.courtGroupType : null,
+    poolASeatCount:
+      "poolASeatCount" in selection ? selection.poolASeatCount : null,
+    poolBSeatCount:
+      "poolBSeatCount" in selection ? selection.poolBSeatCount : null,
     team1ClubId: "team1ClubId" in selection ? selection.team1ClubId : null,
     team2ClubId: "team2ClubId" in selection ? selection.team2ClubId : null,
     matchmakingReasonJson: selection.matchmakingReasonJson ?? null,
@@ -177,23 +302,43 @@ async function selectQueuedMatchForSession(sessionData: QueueSessionRecord) {
 }
 
 async function updateQueuedMatchRecord({
+  sessionId,
   queuedMatchId,
   partition,
   targetPool,
+  courtGroupType,
+  poolASeatCount,
+  poolBSeatCount,
+  isAutomatic,
   matchmakingReasonJson,
   team1ClubId,
   team2ClubId,
   consumeSkipNextUserIds = [],
+  releasePendingUserIds = [],
 }: {
+  sessionId: string;
   queuedMatchId: string;
   partition: ManualMatchTeams;
   targetPool?: string | null;
+  courtGroupType?: CourtGroupType | string | null;
+  poolASeatCount?: number | null;
+  poolBSeatCount?: number | null;
+  isAutomatic: boolean;
   matchmakingReasonJson?: string | null;
   team1ClubId?: string | null;
   team2ClubId?: string | null;
   consumeSkipNextUserIds?: string[];
+  releasePendingUserIds?: string[];
 }) {
   return prisma.$transaction(async (tx) => {
+    const groupSnapshot = await resolveQueuedGroupSnapshot(tx, {
+      sessionId,
+      partition,
+      isAutomatic,
+      courtGroupType,
+      poolASeatCount,
+      poolBSeatCount,
+    });
     const queuedMatch = await tx.queuedMatch.update({
       where: { id: queuedMatchId },
       data: {
@@ -204,6 +349,10 @@ async function updateQueuedMatchRecord({
         team2User2Id: partition.team2[1],
         team2ClubId: team2ClubId ?? null,
         targetPool: targetPool ?? null,
+        courtGroupType: groupSnapshot?.courtGroupType ?? null,
+        poolASeatCount: groupSnapshot?.poolASeatCount ?? null,
+        poolBSeatCount: groupSnapshot?.poolBSeatCount ?? null,
+        isAutomatic,
         matchmakingReasonJson: matchmakingReasonJson ?? null,
       },
     });
@@ -211,6 +360,11 @@ async function updateQueuedMatchRecord({
     await consumeSkipNextMatches(tx, {
       sessionId: queuedMatch.sessionId,
       userIds: consumeSkipNextUserIds,
+    });
+
+    await applyPendingPlayerGroupChangesInTransaction(tx, {
+      sessionId: queuedMatch.sessionId,
+      userIds: releasePendingUserIds,
     });
 
     return queuedMatch;
@@ -245,18 +399,22 @@ function getQueuedReshuffleSource(sessionData: QueueSessionRecord): ReshuffleSou
 export async function createQueuedMatchForSession(sessionData: QueueSessionRecord) {
   await ensureQueueSlotAvailable(sessionData);
 
-  const selection = await selectQueuedMatchForSession(sessionData);
-  const queuedMatch = await createQueuedMatchRecord(
-    sessionData.id,
-    selection.partition,
-    selection.targetPool,
-    selection.matchmakingReasonJson ?? null,
-    {
+  const selection = await selectAutomaticMatchForSession(sessionData);
+  const queuedMatch = await createQueuedMatchRecord({
+    sessionId: sessionData.id,
+    partition: selection.partition,
+    targetPool: selection.targetPool,
+    courtGroupType: selection.courtGroupType,
+    poolASeatCount: selection.poolASeatCount,
+    poolBSeatCount: selection.poolBSeatCount,
+    isAutomatic: true,
+    matchmakingReasonJson: selection.matchmakingReasonJson ?? null,
+    teamClubIds: {
       team1ClubId: selection.team1ClubId,
       team2ClubId: selection.team2ClubId,
     },
-    selection.consumedSkipUserIds
-  );
+    consumeSkipNextUserIds: selection.consumedSkipUserIds,
+  });
 
   return buildQueuedMatchResponse(sessionData, queuedMatch);
 }
@@ -319,15 +477,35 @@ export async function reshuffleQueuedMatchForSession(
     sessionData: reshuffleSessionData,
     rotationHistory,
     reshuffleSource: getQueuedReshuffleSource(sessionData),
+    requiredCourtGroupType: sessionData.queuedMatch.courtGroupType,
   });
   const queuedMatch = await updateQueuedMatchRecord({
+    sessionId: sessionData.id,
     queuedMatchId: sessionData.queuedMatch.id,
     partition: selection.partition,
     targetPool: "targetPool" in selection ? selection.targetPool : null,
+    courtGroupType:
+      "courtGroupType" in selection ? selection.courtGroupType : null,
+    poolASeatCount:
+      "poolASeatCount" in selection ? selection.poolASeatCount : null,
+    poolBSeatCount:
+      "poolBSeatCount" in selection ? selection.poolBSeatCount : null,
+    isAutomatic: sessionData.queuedMatch.isAutomatic,
     matchmakingReasonJson: selection.matchmakingReasonJson ?? null,
     team1ClubId: "team1ClubId" in selection ? selection.team1ClubId : null,
     team2ClubId: "team2ClubId" in selection ? selection.team2ClubId : null,
     consumeSkipNextUserIds: consumedSkipUserIds,
+    releasePendingUserIds: sessionData.queuedMatch.isAutomatic
+      ? []
+      : reshuffleUserIds.filter(
+          (userId) =>
+            ![
+              selection.partition.team1[0],
+              selection.partition.team1[1],
+              selection.partition.team2[0],
+              selection.partition.team2[1],
+            ].includes(userId)
+        ),
   });
 
   return buildQueuedMatchResponse(sessionData, queuedMatch);
@@ -388,15 +566,30 @@ export async function replaceQueuedMatchPlayerForSession(
     selectReplacementMatchRespectingSkips({
       rankedCandidates,
       playersById,
-      sessionData: replacementSessionData,
-      retainedUserIds: retainedUserIds as [string, string, string],
-      excludedUserIds: currentQueuedUserIds,
+    sessionData: replacementSessionData,
+    retainedUserIds: retainedUserIds as [string, string, string],
+    excludedUserIds: currentQueuedUserIds,
+    requiredCourtGroupType: sessionData.queuedMatch.courtGroupType,
     });
 
   const queuedMatch = await updateQueuedMatchRecord({
+    sessionId: sessionData.id,
     queuedMatchId: sessionData.queuedMatch.id,
     partition: replacementSelection.partition,
     targetPool: sessionData.queuedMatch.targetPool ?? null,
+    courtGroupType:
+      "courtGroupType" in replacementSelection
+        ? replacementSelection.courtGroupType
+        : sessionData.queuedMatch.courtGroupType,
+    poolASeatCount:
+      "poolASeatCount" in replacementSelection
+        ? replacementSelection.poolASeatCount
+        : sessionData.queuedMatch.poolASeatCount,
+    poolBSeatCount:
+      "poolBSeatCount" in replacementSelection
+        ? replacementSelection.poolBSeatCount
+        : sessionData.queuedMatch.poolBSeatCount,
+    isAutomatic: sessionData.queuedMatch.isAutomatic,
     matchmakingReasonJson: replacementSelection.matchmakingReasonJson ?? null,
     team1ClubId:
       "team1ClubId" in replacementSelection
@@ -407,6 +600,9 @@ export async function replaceQueuedMatchPlayerForSession(
         ? replacementSelection.team2ClubId
         : sessionData.queuedMatch.team2ClubId ?? null,
     consumeSkipNextUserIds: consumedSkipUserIds,
+    releasePendingUserIds: sessionData.queuedMatch.isAutomatic
+      ? []
+      : [replaceUserId],
   });
 
   return buildQueuedMatchResponse(sessionData, queuedMatch);
@@ -415,17 +611,31 @@ export async function replaceQueuedMatchPlayerForSession(
 export async function createManualQueuedMatchForSession(
   sessionData: QueueSessionRecord,
   partition: ManualMatchTeams,
-  targetPool?: string | null,
   teamClubIds?: { team1ClubId?: string | null; team2ClubId?: string | null }
 ) {
   await ensureQueueSlotAvailable(sessionData);
-  const queuedMatch = await createQueuedMatchRecord(
-    sessionData.id,
+  const groupSnapshot = sessionData.poolsEnabled
+    ? classifyCourtGroupSnapshot(
+        partition.team1,
+        partition.team2,
+        buildSessionPoolMap(
+          sessionData.players,
+          (player) => player.userId,
+          (player) => player.pool
+        )
+      )
+    : null;
+  const queuedMatch = await createQueuedMatchRecord({
+    sessionId: sessionData.id,
     partition,
-    targetPool,
-    null,
-    teamClubIds
-  );
+    targetPool: null,
+    courtGroupType: groupSnapshot?.courtGroupType ?? null,
+    poolASeatCount: groupSnapshot?.poolASeatCount ?? null,
+    poolBSeatCount: groupSnapshot?.poolBSeatCount ?? null,
+    isAutomatic: false,
+    matchmakingReasonJson: null,
+    teamClubIds,
+  });
   return buildQueuedMatchResponse(sessionData, queuedMatch);
 }
 
@@ -441,7 +651,7 @@ async function tryRebuildAutomaticQueuedMatch(
     return tryRebuildQueuedMatch(loadSessionData);
   }
 
-  if (sessionData.queuedMatch.matchmakingReasonJson === null) {
+  if (!sessionData.queuedMatch.isAutomatic) {
     return buildQueuedMatchResponse(sessionData, sessionData.queuedMatch);
   }
 
@@ -456,11 +666,16 @@ async function tryRebuildAutomaticQueuedMatch(
 
   try {
     await ensureQueueSlotAvailable(rebuildSessionData);
-    const selection = await selectQueuedMatchForSession(rebuildSessionData);
+    const selection = await selectAutomaticMatchForSession(rebuildSessionData);
     const queuedMatch = await updateQueuedMatchRecord({
+      sessionId: sessionData.id,
       queuedMatchId: sessionData.queuedMatch.id,
       partition: selection.partition,
       targetPool: selection.targetPool,
+      courtGroupType: selection.courtGroupType,
+      poolASeatCount: selection.poolASeatCount,
+      poolBSeatCount: selection.poolBSeatCount,
+      isAutomatic: true,
       matchmakingReasonJson: selection.matchmakingReasonJson,
       team1ClubId: selection.team1ClubId,
       team2ClubId: selection.team2ClubId,

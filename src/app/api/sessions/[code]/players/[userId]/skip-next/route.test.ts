@@ -13,6 +13,10 @@ vi.mock("@/lib/prisma", () => ({
   },
 }));
 
+vi.mock("@/lib/playerGroupPreferences", () => ({
+  applyPendingPlayerGroupChangesInTransaction: vi.fn(),
+}));
+
 vi.mock("@/lib/sessionCollab", () => ({
   getSessionOperatorMembership: vi.fn(),
 }));
@@ -22,6 +26,7 @@ vi.mock("../../../queue-match/shared", () => ({
 }));
 
 import { auth } from "@/lib/auth";
+import { applyPendingPlayerGroupChangesInTransaction } from "@/lib/playerGroupPreferences";
 import { prisma } from "@/lib/prisma";
 import { getSessionOperatorMembership } from "@/lib/sessionCollab";
 import { tryRebuildQueuedMatchForSessionId } from "../../../queue-match/shared";
@@ -43,20 +48,22 @@ function mockTransactions({
   const updateMany = vi.fn();
   const deleteQueued = vi.fn();
 
+  const tx = {
+    queuedMatch: {
+      findUnique: vi.fn().mockResolvedValue(queuedMatch),
+      delete: deleteQueued,
+    },
+    sessionPlayer: {
+      update,
+      updateMany,
+    },
+  };
+
   vi.mocked(prisma.$transaction).mockImplementation(async (callback) =>
-    callback({
-      queuedMatch: {
-        findUnique: vi.fn().mockResolvedValue(queuedMatch),
-        delete: deleteQueued,
-      },
-      sessionPlayer: {
-        update,
-        updateMany,
-      },
-    } as never)
+    callback(tx as never)
   );
 
-  return { update, updateMany, deleteQueued };
+  return { update, updateMany, deleteQueued, tx };
 }
 
 describe("skip next match route", () => {
@@ -75,6 +82,11 @@ describe("skip next match route", () => {
       .mockResolvedValue({ userId: "p1", skipNextMatchAt: null } as never);
     vi.mocked(getSessionOperatorMembership).mockResolvedValue(null as never);
     vi.mocked(tryRebuildQueuedMatchForSessionId).mockResolvedValue(null);
+    vi.mocked(applyPendingPlayerGroupChangesInTransaction).mockResolvedValue({
+      appliedCount: 0,
+      appliedUserIds: [],
+      automaticQueueInvalidated: false,
+    });
   });
 
   it("allows a player to skip themselves", async () => {
@@ -171,6 +183,7 @@ describe("skip next match route", () => {
     const { deleteQueued, updateMany } = mockTransactions({
       queuedMatch: {
         id: "queue-1",
+        isAutomatic: true,
         team1User1Id: "p1",
         team1User2Id: "p2",
         team2User1Id: "p3",
@@ -195,5 +208,35 @@ describe("skip next match route", () => {
         }),
       })
     );
+  });
+
+  it("releases all pending players when skip-next cancels a manual queue", async () => {
+    vi.mocked(tryRebuildQueuedMatchForSessionId).mockResolvedValue({
+      id: "rebuilt-queue",
+    } as never);
+    const manualQueue = {
+      id: "queue-1",
+      isAutomatic: false,
+      matchmakingReasonJson: JSON.stringify({ legacy: "present" }),
+      team1User1Id: "p1",
+      team1User2Id: "p2",
+      team2User1Id: "p3",
+      team2User2Id: "p4",
+    };
+    const { tx } = mockTransactions({ queuedMatch: manualQueue });
+
+    const response = await PATCH(createRequest(true), {
+      params: Promise.resolve({ code: "ABC", userId: "p1" }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(applyPendingPlayerGroupChangesInTransaction).toHaveBeenCalledWith(
+      tx,
+      {
+        sessionId: "session-1",
+        userIds: ["p1", "p2", "p3", "p4"],
+      }
+    );
+    expect(tryRebuildQueuedMatchForSessionId).toHaveBeenCalledWith("session-1");
   });
 });

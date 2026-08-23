@@ -1,15 +1,12 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { getCourtDisplayLabel } from "@/lib/courtLabels";
+import { rankOpenCourtsForGroupType } from "@/lib/courtGroupRotation";
 import { prisma } from "@/lib/prisma";
 import { getSessionOperatorMembership } from "@/lib/sessionCollab";
-import { SessionPool } from "@/types/enums";
 import { tryRebuildQueuedMatchForSessionId } from "../shared";
 import { createQueuedMatchAssignment } from "../../generate-match/assignments";
-import {
-  applyPoolSelectionOutcome,
-  buildMatchmakingState,
-} from "../../generate-match/selection";
+import { buildMatchmakingState } from "../../generate-match/selection";
 import {
   GenerateMatchError,
   loadSessionRecord,
@@ -92,7 +89,11 @@ export async function POST(
       include: { currentMatch: true },
     });
 
-    const targetCourt = openCourts[0];
+    const targetCourt = rankOpenCourtsForGroupType(
+      openCourts,
+      sessionData.matches,
+      sessionData.queuedMatch.courtGroupType
+    )[0];
     if (!targetCourt) {
       throw new GenerateMatchError(409, "No free court available for the queued match.");
     }
@@ -132,23 +133,11 @@ export async function POST(
       team2ClubId:
         teamClubIds.team2ClubId ?? sessionData.queuedMatch.team2ClubId ?? null,
       matchmakingReasonJson: sessionData.queuedMatch.matchmakingReasonJson,
+      courtGroupType: sessionData.queuedMatch.courtGroupType,
+      poolASeatCount: sessionData.queuedMatch.poolASeatCount,
+      poolBSeatCount: sessionData.queuedMatch.poolBSeatCount,
+      isAutomatic: sessionData.queuedMatch.isAutomatic,
     });
-
-    if (sessionData.poolsEnabled && sessionData.queuedMatch.targetPool) {
-      const nextPoolState = applyPoolSelectionOutcome(sessionData, {
-        targetPool: sessionData.queuedMatch.targetPool as SessionPool,
-        missedPool: null,
-      });
-      await prisma.session.update({
-        where: { id: sessionData.id },
-        data: {
-          poolACourtAssignments: nextPoolState.poolACourtAssignments,
-          poolBCourtAssignments: nextPoolState.poolBCourtAssignments,
-          poolAMissedTurns: nextPoolState.poolAMissedTurns,
-          poolBMissedTurns: nextPoolState.poolBMissedTurns,
-        },
-      });
-    }
 
     return NextResponse.json({
       ...match,

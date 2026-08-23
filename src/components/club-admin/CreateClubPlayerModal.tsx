@@ -7,6 +7,7 @@ import {
   ClubPlayerStatus,
   MixedSide,
   PlayerGender,
+  SessionPool,
 } from "@/types/enums";
 
 interface CreateClubPlayerModalProps {
@@ -16,11 +17,13 @@ interface CreateClubPlayerModalProps {
   newPlayerMixedSideOverride: MixedSide | null;
   newPlayerStatus: ClubPlayerStatus;
   newPlayerNeedsMoreRest: boolean;
+  newPlayerPreferredPool: SessionPool;
   onNameChange: (value: string) => void;
   onNewPlayerGenderChange: (value: PlayerGender) => void;
   onNewPlayerMixedSideOverrideChange: (value: MixedSide | null) => void;
   onNewPlayerStatusChange: (value: ClubPlayerStatus) => void;
   onNewPlayerNeedsMoreRestChange: (value: boolean) => void;
+  onNewPlayerPreferredPoolChange: (value: SessionPool) => void;
   onClose: () => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 }
@@ -32,11 +35,13 @@ export function CreateClubPlayerModal({
   newPlayerMixedSideOverride,
   newPlayerStatus,
   newPlayerNeedsMoreRest,
+  newPlayerPreferredPool,
   onNameChange,
   onNewPlayerGenderChange,
   onNewPlayerMixedSideOverrideChange,
   onNewPlayerStatusChange,
   onNewPlayerNeedsMoreRestChange,
+  onNewPlayerPreferredPoolChange,
   onClose,
   onSubmit,
 }: CreateClubPlayerModalProps) {
@@ -145,6 +150,25 @@ export function CreateClubPlayerModal({
               Occasional
             </option>
           </select>
+        </label>
+
+        <label className="block space-y-2 text-sm font-medium text-gray-900">
+          <span>Preferred game group</span>
+          <select
+            value={newPlayerPreferredPool}
+            onChange={(event) =>
+              onNewPlayerPreferredPoolChange(
+                event.target.value as SessionPool
+              )
+            }
+            className="field"
+          >
+            <option value={SessionPool.A}>Competitive</option>
+            <option value={SessionPool.B}>Social</option>
+          </select>
+          <span className="block text-xs font-normal text-gray-600">
+            Sets the player&apos;s preferred game experience. A host can override it for an individual tournament.
+          </span>
         </label>
 
         <label className="flex items-start gap-3 rounded-xl border border-gray-200 bg-gray-50/80 p-3 text-sm text-gray-700">

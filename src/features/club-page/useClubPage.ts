@@ -132,6 +132,7 @@ export function useClubPage() {
     mixedModeLabel,
     setError: data.setError,
     setSuccess: data.setSuccess,
+    refreshClubData: data.refreshClubData,
   });
 
   const filteredSelectablePlayers = useMemo(

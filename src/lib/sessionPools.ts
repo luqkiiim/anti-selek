@@ -1,7 +1,7 @@
 import { SessionPool } from "@/types/enums";
 
-export const DEFAULT_SESSION_POOL_A_NAME = "Open";
-export const DEFAULT_SESSION_POOL_B_NAME = "Regular";
+export const DEFAULT_SESSION_POOL_A_NAME = "Competitive";
+export const DEFAULT_SESSION_POOL_B_NAME = "Social";
 export const DEFAULT_SESSION_POOL_CROSSOVER_MISS_THRESHOLD = 1;
 export const SESSION_POOL_IDS = [SessionPool.A, SessionPool.B] as const;
 
@@ -23,7 +23,7 @@ export function isValidSessionPool(value: unknown): value is SessionPool {
 export function getNormalizedSessionPool(
   value: SessionPool | string | null | undefined
 ): SessionPool {
-  return isValidSessionPool(value) ? value : SessionPool.A;
+  return isValidSessionPool(value) ? value : SessionPool.B;
 }
 
 export function normalizeSessionPoolName(
@@ -34,12 +34,12 @@ export function normalizeSessionPoolName(
 }
 
 export function getSessionPoolName(
-  config: SessionPoolConfigLike,
+  _config: SessionPoolConfigLike,
   pool: SessionPool
 ) {
   return pool === SessionPool.A
-    ? normalizeSessionPoolName(config.poolAName, DEFAULT_SESSION_POOL_A_NAME)
-    : normalizeSessionPoolName(config.poolBName, DEFAULT_SESSION_POOL_B_NAME);
+    ? DEFAULT_SESSION_POOL_A_NAME
+    : DEFAULT_SESSION_POOL_B_NAME;
 }
 
 export function getSessionPoolNames(config: SessionPoolConfigLike) {
@@ -155,7 +155,7 @@ export function getSessionPoolBadgeLabel(
   }
 
   if (summary.isCrossPool) {
-    return "Cross Pool";
+    return "Open Overflow";
   }
 
   const pool = summary.dominantPool;

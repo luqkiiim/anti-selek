@@ -114,12 +114,40 @@ function buildMetricRows(reason: MatchmakingReason) {
     });
   }
 
-  if (metrics.targetPool) {
+  if (metrics.targetPool && !metrics.courtGroupType) {
     rows.push({
-      label: "Pool",
+      label: "Group target",
       value: metrics.missedPool
         ? `${metrics.targetPool} over ${metrics.missedPool}`
         : metrics.targetPool,
+    });
+  }
+
+  if (metrics.courtGroupType) {
+    rows.push({
+      label: "Court type",
+      value:
+        metrics.courtGroupType === "OPEN_OVERFLOW"
+          ? "Open Overflow"
+          : metrics.courtGroupType.charAt(0) +
+            metrics.courtGroupType.slice(1).toLowerCase(),
+    });
+  }
+
+  if (
+    typeof metrics.poolASeatCount === "number" &&
+    typeof metrics.poolBSeatCount === "number"
+  ) {
+    rows.push({
+      label: "Group seats",
+      value: `${metrics.poolASeatCount} Competitive / ${metrics.poolBSeatCount} Social`,
+    });
+  }
+
+  if (typeof metrics.competitiveTargetRatio === "number") {
+    rows.push({
+      label: "Competitive target",
+      value: `${Math.round(metrics.competitiveTargetRatio * 100)}%`,
     });
   }
 

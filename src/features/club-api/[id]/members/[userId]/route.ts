@@ -10,7 +10,12 @@ import {
   isValidPlayerGender,
   resolveMixedSideState,
 } from "@/lib/mixedSide";
-import { ClubPlayerStatus, ClubRole, PlayerGender } from "@/types/enums";
+import {
+  ClubPlayerStatus,
+  ClubRole,
+  PlayerGender,
+  SessionPool,
+} from "@/types/enums";
 import { logError, safeErrorResponse } from "@/lib/errors";
 import { rateLimit, checkInvalidTargetRateLimit, invalidTargetResponse } from "@/lib/rateLimit";
 import {
@@ -18,6 +23,9 @@ import {
   isQuickAccessSession,
   normalizeNameLookupKey,
 } from "@/lib/quickAccess";
+import { isValidSessionPool } from "@/lib/sessionPools";
+import { propagatePreferredPoolToClubSessions } from "@/lib/playerGroupPreferences";
+import { tryRebuildAutomaticQueuedMatchForSessionId } from "@/app/api/sessions/[code]/queue-match/shared";
 
 function isValidClubPlayerStatus(
   value: unknown
@@ -98,7 +106,7 @@ export async function PATCH(
       userId: session.user.id,
       isGlobalAdmin: !!session.user.isAdmin,
     });
-    if (!adminAccess?.canAdmin) {
+    if (!adminAccess) {
       return invalidTargetResponse(request, "api:communities:id:members:userId");
     }
 
@@ -129,6 +137,7 @@ export async function PATCH(
       mixedSideOverride,
       status,
       needsMoreRest,
+      preferredPool,
       role,
     } = body as {
       name?: unknown;
@@ -140,8 +149,18 @@ export async function PATCH(
       mixedSideOverride?: unknown;
       status?: unknown;
       needsMoreRest?: unknown;
+      preferredPool?: unknown;
       role?: unknown;
     };
+
+    const requestKeys = Object.keys(body as Record<string, unknown>);
+    const isStaffPreferenceOnly =
+      adminAccess.membershipRole === ClubRole.STAFF &&
+      requestKeys.length === 1 &&
+      requestKeys[0] === "preferredPool";
+    if (!adminAccess.canAdmin && !isStaffPreferenceOnly) {
+      return invalidTargetResponse(request, "api:communities:id:members:userId");
+    }
 
     if (name !== undefined && (typeof name !== "string" || name.trim().length === 0)) {
       return NextResponse.json({ error: "Invalid name" }, { status: 400 });
@@ -183,6 +202,12 @@ export async function PATCH(
     }
     if (needsMoreRest !== undefined && typeof needsMoreRest !== "boolean") {
       return NextResponse.json({ error: "Invalid more rest value" }, { status: 400 });
+    }
+    if (preferredPool !== undefined && !isValidSessionPool(preferredPool)) {
+      return NextResponse.json(
+        { error: "Invalid preferred game group" },
+        { status: 400 }
+      );
     }
     if (role !== undefined && !isValidClubRole(role)) {
       return NextResponse.json({ error: "Invalid role update" }, { status: 400 });
@@ -389,7 +414,8 @@ export async function PATCH(
       shouldGrantStaff ||
       shouldRevokeStaff ||
       isValidClubPlayerStatus(status) ||
-      typeof needsMoreRest === "boolean"
+      typeof needsMoreRest === "boolean" ||
+      isValidSessionPool(preferredPool)
         ? await prisma.clubMember.update({
             where: {
               clubId_userId: {
@@ -401,9 +427,16 @@ export async function PATCH(
               ...(typeof elo === "number" ? { elo } : {}),
               ...(isValidClubPlayerStatus(status) ? { status } : {}),
               ...(typeof needsMoreRest === "boolean" ? { needsMoreRest } : {}),
+              ...(isValidSessionPool(preferredPool) ? { preferredPool } : {}),
               ...(nextRole ? { role: nextRole } : {}),
             },
-            select: { role: true, elo: true, status: true, needsMoreRest: true },
+            select: {
+              role: true,
+              elo: true,
+              status: true,
+              needsMoreRest: true,
+              preferredPool: true,
+            },
           })
         : await prisma.clubMember.findUnique({
             where: {
@@ -412,8 +445,35 @@ export async function PATCH(
                 userId,
               },
             },
-            select: { role: true, elo: true, status: true, needsMoreRest: true },
+            select: {
+              role: true,
+              elo: true,
+              status: true,
+              needsMoreRest: true,
+              preferredPool: true,
+            },
           });
+
+    let preferencePropagation = {
+      immediateSessionCount: 0,
+      deferredSessionCount: 0,
+    };
+    if (isValidSessionPool(preferredPool)) {
+      const propagation = await propagatePreferredPoolToClubSessions(prisma, {
+        clubId,
+        userId,
+        preferredPool,
+      });
+      preferencePropagation = {
+        immediateSessionCount: propagation.immediateSessionCount,
+        deferredSessionCount: propagation.deferredSessionCount,
+      };
+      await Promise.all(
+        propagation.automaticQueueSessionIds.map((sessionId) =>
+          tryRebuildAutomaticQueuedMatchForSessionId(sessionId)
+        )
+      );
+    }
 
     return NextResponse.json({
       id: updatedUser.id,
@@ -429,6 +489,12 @@ export async function PATCH(
       role: updatedMembership?.role ?? membership.role,
       isOwner: targetIsOwner,
       elo: updatedMembership?.elo ?? membership.elo,
+      preferredPool: isValidSessionPool(updatedMembership?.preferredPool)
+        ? updatedMembership.preferredPool
+        : isValidSessionPool(membership.preferredPool)
+          ? membership.preferredPool
+          : SessionPool.B,
+      preferencePropagation,
       needsMoreRest: updatedMembership?.needsMoreRest ?? membership.needsMoreRest,
       status:
         updatedMembership?.status === ClubPlayerStatus.OCCASIONAL

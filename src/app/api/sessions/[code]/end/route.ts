@@ -83,6 +83,14 @@ export async function POST(
         },
       });
 
+      await tx.sessionPlayer.updateMany({
+        where: {
+          sessionId: sessionData.id,
+          pendingPool: { not: null },
+        },
+        data: { pendingPool: null },
+      });
+
       return tx.session.update({
         where: { code },
         data: { status: SessionStatus.COMPLETED, endedAt },

@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { serializeAvatarEntity } from "@/lib/avatar";
 import { getClubEloByUserId, withClubElo } from "@/lib/clubElo";
 import { prisma } from "@/lib/prisma";
+import { applyPendingPlayerGroupChangesInTransaction } from "@/lib/playerGroupPreferences";
 import { MatchStatus, SessionStatus } from "@/types/enums";
 import { logError, safeErrorResponse } from "@/lib/errors";
 import { rateLimit, checkInvalidTargetRateLimit, invalidTargetResponse } from "@/lib/rateLimit";
@@ -82,6 +83,18 @@ export async function POST(
 
       await tx.match.deleteMany({
         where: { sessionId: targetSession.id },
+      });
+
+      const pendingPlayers = await tx.sessionPlayer.findMany({
+        where: {
+          sessionId: targetSession.id,
+          pendingPool: { not: null },
+        },
+        select: { userId: true },
+      });
+      await applyPendingPlayerGroupChangesInTransaction(tx, {
+        sessionId: targetSession.id,
+        userIds: pendingPlayers.map((player) => player.userId),
       });
 
       await tx.sessionPlayer.updateMany({

@@ -36,6 +36,7 @@ import {
   SessionCollabFormat,
 } from "@/types/enums";
 import { getSessionModeLabel } from "@/lib/sessionModeLabels";
+import { isValidSessionPool } from "@/lib/sessionPools";
 
 interface UseSessionPlayerManagementArgs {
   code: string;
@@ -86,6 +87,7 @@ function parseClubPlayers(data: unknown): ClubUser[] {
         needsMoreRest?: unknown;
         representingClubId?: unknown;
         representingClubName?: unknown;
+        preferredPool?: unknown;
       };
 
       if (
@@ -126,6 +128,9 @@ function parseClubPlayers(data: unknown): ClubUser[] {
         partnerPreference,
         mixedSideOverride,
         needsMoreRest: candidate.needsMoreRest === true,
+        preferredPool: isValidSessionPool(candidate.preferredPool)
+          ? candidate.preferredPool
+          : SessionPool.B,
         representingClubId:
           typeof candidate.representingClubId === "string"
             ? candidate.representingClubId
@@ -166,7 +171,10 @@ export function useSessionPlayerManagement({
   const [guestGender, setGuestGender] = useState<PlayerGender>(PlayerGender.MALE);
   const [guestMixedSideOverride, setGuestMixedSideOverride] =
     useState<MixedSide | null>(null);
-  const [rosterPool, setRosterPool] = useState<SessionPool>(SessionPool.A);
+  const [rosterPool, setRosterPool] = useState<SessionPool>(SessionPool.B);
+  const [rosterPlayerPools, setRosterPlayerPools] = useState<
+    Record<string, SessionPool>
+  >({});
   const [guestInitialElo, setGuestInitialElo] = useState<number>(1000);
   const [guestRepresentingClubId, setGuestRepresentingClubId] = useState("");
   const [addingGuest, setAddingGuest] = useState(false);
@@ -267,7 +275,8 @@ export function useSessionPlayerManagement({
     setGuestGender(PlayerGender.MALE);
     setGuestMixedSideOverride(null);
     setGuestInitialElo(1000);
-    setRosterPool(SessionPool.A);
+    setRosterPool(SessionPool.B);
+    setRosterPlayerPools({});
     setGuestRepresentingClubId(defaultRepresentingClubId);
   };
 
@@ -527,7 +536,9 @@ export function useSessionPlayerManagement({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           userId: player.id,
-          pool: sessionData?.poolsEnabled ? rosterPool : SessionPool.A,
+          pool: sessionData?.poolsEnabled
+            ? (rosterPlayerPools[player.id] ?? player.preferredPool)
+            : SessionPool.A,
           ...(sessionData?.collabFormat === SessionCollabFormat.INTERCLUB &&
           player.representingClubId
             ? { representingClubId: player.representingClubId }
@@ -641,12 +652,22 @@ export function useSessionPlayerManagement({
           }),
         }
       );
-      const data = await safeJson<SessionPlayerPayload & { error?: string }>(res);
+      const data = await safeJson<
+        SessionPlayerPayload & {
+          error?: string;
+          queuedMatch?: SessionData["queuedMatch"];
+        }
+      >(res);
       if (!res.ok) {
         setError(getErrorMessage(data, "Failed to update preference"));
         return;
       }
-      patchSessionData((current) => applyPlayerPreferenceUpdate(current, data));
+      patchSessionData((current) => {
+        const updated = applyPlayerPreferenceUpdate(current, data);
+        return "queuedMatch" in data
+          ? applyQueuedMatch(updated, data.queuedMatch ?? null)
+          : updated;
+      });
       scheduleSessionRefresh();
     } catch (err) {
       console.error(err);
@@ -665,6 +686,7 @@ export function useSessionPlayerManagement({
     guestGender,
     guestMixedSideOverride,
     rosterPool,
+    rosterPlayerPools,
     guestInitialElo,
     guestRepresentingClubId,
     addingGuest,
@@ -682,6 +704,8 @@ export function useSessionPlayerManagement({
     setGuestName,
     setGuestMixedSideOverride,
     setRosterPool,
+    setRosterPlayerPool: (userId: string, pool: SessionPool) =>
+      setRosterPlayerPools((current) => ({ ...current, [userId]: pool })),
     setGuestInitialElo,
     setGuestRepresentingClubId,
     setGuestRenameInput,

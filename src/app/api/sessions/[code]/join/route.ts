@@ -132,6 +132,24 @@ export async function POST(
       userIdToJoin = targetUserId;
     }
 
+    if (overridePool !== undefined && !isValidSessionPool(overridePool)) {
+      return NextResponse.json(
+        { error: "Invalid player group" },
+        { status: 400 }
+      );
+    }
+    if (
+      sessionData.poolsEnabled &&
+      isValidSessionPool(overridePool) &&
+      !session.user.isAdmin &&
+      !requesterOperatorMembership
+    ) {
+      return NextResponse.json(
+        { error: "Only club admins or staff can override a player group" },
+        { status: 403 }
+      );
+    }
+
     // Check if already in session
     const existing = await prisma.sessionPlayer.findUnique({
       where: {
@@ -203,6 +221,7 @@ export async function POST(
       sessionData.status === SessionStatus.ACTIVE ? joinedAt : null;
     let normalizedRepresentingClubId: string | null = null;
     let targetNeedsMoreRest = false;
+    let targetPreferredPool = SessionPool.B;
 
     if (isInterclubSession(sessionData)) {
       const acceptedInterclubClubIds = getAcceptedInterclubClubIds(sessionData);
@@ -258,6 +277,7 @@ export async function POST(
         },
         select: {
           needsMoreRest: true,
+          preferredPool: true,
         },
       });
       if (!targetMembership) {
@@ -268,6 +288,10 @@ export async function POST(
       }
 
       targetNeedsMoreRest = targetMembership.needsMoreRest ?? false;
+      targetPreferredPool =
+        targetMembership.preferredPool === SessionPool.A
+          ? SessionPool.A
+          : SessionPool.B;
     } else if (sessionData.clubId) {
       const targetMembership = await getSessionMembership(prisma, {
         session: sessionData,
@@ -278,6 +302,10 @@ export async function POST(
         return NextResponse.json({ error: "Target player is not a member of this club" }, { status: 400 });
       }
       targetNeedsMoreRest = targetMembership.needsMoreRest ?? false;
+      targetPreferredPool =
+        targetMembership.preferredPool === SessionPool.A
+          ? SessionPool.A
+          : SessionPool.B;
     }
 
     const updatedSession = await prisma.session.update({
@@ -295,7 +323,9 @@ export async function POST(
             pool:
               sessionData.poolsEnabled && isValidSessionPool(overridePool)
                 ? overridePool
-                : SessionPool.A,
+                : sessionData.poolsEnabled
+                  ? targetPreferredPool
+                  : SessionPool.A,
             sessionPoints: 0,
             matchmakingMatchesCredit,
             joinedAt,

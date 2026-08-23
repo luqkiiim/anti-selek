@@ -15,6 +15,7 @@ import {
   PartnerPreference,
   PlayerGender,
   SessionCollabFormat,
+  SessionPool,
 } from "@/types/enums";
 
 function countMdAvatars(markup: string) {
@@ -31,6 +32,7 @@ const member: ClubPageMember = {
   avatarUrl: "https://cdn.test/alex.jpg",
   status: ClubPlayerStatus.CORE,
   needsMoreRest: false,
+  preferredPool: SessionPool.B,
   gender: PlayerGender.UNSPECIFIED,
   partnerPreference: PartnerPreference.OPEN,
   elo: 1640,
@@ -255,14 +257,15 @@ describe("club avatar sizing", () => {
           selectedPlayerPools={{}}
           playerSearch=""
           poolsEnabled={false}
-          poolAName="Pool A"
-          poolBName="Pool B"
+          canSavePreferredPools={false}
+          savingPreferredPoolPlayerId={null}
           selectablePlayers={[member]}
           filteredSelectablePlayers={[member]}
           onPlayerSearchChange={() => undefined}
           onToggleAllPlayers={() => undefined}
           onTogglePlayerSelection={() => undefined}
           onChangePlayerPool={() => undefined}
+          onSavePlayerPreferredPool={async () => undefined}
           collabFormat={SessionCollabFormat.FREE_PLAY}
           hostClubId="club-1"
           hostClubName="Host Club"

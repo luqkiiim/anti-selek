@@ -30,8 +30,10 @@ import {
   ClubPlayerStatus,
   PartnerPreference,
   PlayerGender,
+  SessionPool,
   SessionStatus,
 } from "@/types/enums";
+import { isValidSessionPool } from "@/lib/sessionPools";
 
 function toClaimRequestResponse(request: {
   id: string;
@@ -382,6 +384,9 @@ export async function GET(
         name: member.user.name,
         email: member.user.email,
         avatarUrl: serializeAvatarEntity(member.user).avatarUrl,
+        preferredPool: isValidSessionPool(member.preferredPool)
+          ? member.preferredPool
+          : SessionPool.B,
         needsMoreRest: member.needsMoreRest,
         status:
           member.status === ClubPlayerStatus.OCCASIONAL

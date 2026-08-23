@@ -38,7 +38,12 @@ import { syncSessionPagerAccessibility } from "@/components/session/sessionPager
 import { AdminOnboardingChecklist } from "@/components/onboarding/AdminOnboardingChecklist";
 import { useAdminOnboardingProgress } from "@/components/onboarding/useAdminOnboardingProgress";
 import type { CurrentUser } from "@/components/session/sessionTypes";
-import { MatchStatus, SessionCollabFormat, SessionStatus } from "@/types/enums";
+import {
+  MatchStatus,
+  SessionCollabFormat,
+  SessionPool,
+  SessionStatus,
+} from "@/types/enums";
 import { shareSessionStandingsImage } from "@/lib/sessionShareImageClient";
 import {
   applyCourtLabelUpdates,
@@ -192,6 +197,7 @@ export default function SessionPage() {
     guestGender,
     guestMixedSideOverride,
     rosterPool,
+    rosterPlayerPools,
     guestInitialElo,
     guestRepresentingClubId,
     addingGuest,
@@ -208,6 +214,7 @@ export default function SessionPage() {
     setGuestName,
     setGuestMixedSideOverride,
     setRosterPool,
+    setRosterPlayerPool,
     setGuestInitialElo,
     setGuestRepresentingClubId,
     setGuestRenameInput,
@@ -479,6 +486,17 @@ export default function SessionPage() {
     await startSession();
     void adminOnboarding.refresh();
   }, [adminOnboarding, startSession]);
+  const activeCompetitiveCount = (sessionData?.players ?? []).filter(
+    (player) => !player.isPaused && player.pool === SessionPool.A
+  ).length;
+  const activeSocialCount = (sessionData?.players ?? []).filter(
+    (player) => !player.isPaused && player.pool === SessionPool.B
+  ).length;
+  const startBlockedReason =
+    sessionData?.poolsEnabled &&
+    (activeCompetitiveCount < 2 || activeSocialCount < 2)
+      ? `Player groups need at least 2 active Competitive and 2 active Social players. Current roster: ${activeCompetitiveCount} Competitive, ${activeSocialCount} Social.`
+      : null;
   const createMatchesForCourtsWithOnboardingRefresh = useCallback(
     async (...args: Parameters<typeof courtActions.createMatchesForCourts>) => {
       await courtActions.createMatchesForCourts(...args);
@@ -1324,6 +1342,7 @@ export default function SessionPage() {
                 canStartSession={
                   isAdmin && sessionData.status === SessionStatus.WAITING
                 }
+                startBlockedReason={startBlockedReason}
                 canOpenPlayerManager={Boolean(canOpenPlayerManager)}
                 canOpenSettings={Boolean(canOpenSettings)}
                 tutorialHint={sessionTutorialHint}
@@ -1643,7 +1662,7 @@ export default function SessionPage() {
                   What gets copied
                 </p>
                 <p className="text-sm text-gray-600">
-                  Players, guests, courts, format, mode, and pools will carry over.
+                  Players, guests, courts, format, mode, and player groups will carry over.
                 </p>
                 <p className="text-sm text-gray-600">
                   {completedScoredTestMatchesCount} completed scored{" "}
@@ -1845,10 +1864,9 @@ export default function SessionPage() {
         isInterclub={isInterclubSession}
         interclubClubOptions={interclubClubOptions}
         poolsEnabled={sessionData.poolsEnabled}
-        poolAName={sessionData.poolAName}
-        poolBName={sessionData.poolBName}
         rosterSearch={rosterSearch}
         rosterPool={rosterPool}
+        rosterPlayerPools={rosterPlayerPools}
         guestName={guestName}
         guestGender={guestGender}
         guestMixedSideOverride={guestMixedSideOverride}
@@ -1860,6 +1878,7 @@ export default function SessionPage() {
         onClose={closeRosterModal}
         onRosterSearchChange={setRosterSearch}
         onRosterPoolChange={setRosterPool}
+        onRosterPlayerPoolChange={setRosterPlayerPool}
         onGuestNameChange={setGuestName}
         onGuestGenderChange={handleGuestGenderChange}
         onGuestMixedSideOverrideChange={setGuestMixedSideOverride}

@@ -279,7 +279,7 @@ export function LiveCourtCard({
       onClick={() => onUndoMatchSelection(court.id)}
       disabled={undoingCourtId === court.id || courtPlayerActionActive}
       className="inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-1.5 text-xs font-semibold text-rose-700 transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-50 md:px-3"
-      title="Put selected players back in pool"
+      title="Put selected players back in the available roster"
     >
       <Undo2 aria-hidden="true" size={14} />
       {undoingCourtId === court.id ? "Undoing..." : "Undo"}

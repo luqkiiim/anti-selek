@@ -8,7 +8,6 @@ import {
   withPlayerClubBadges,
 } from "@/lib/sessionCollab";
 import { resolveMixedSideState } from "@/lib/mixedSide";
-import { getNormalizedSessionPool } from "@/lib/sessionPools";
 import {
   MixedSide,
   PlayerGender,
@@ -43,6 +42,7 @@ function buildMemberSessionConfigs({
     partnerPreference: string;
     mixedSideOverride: string | null;
     needsMoreRest: boolean;
+    preferredPool: string;
   }>;
   playerConfigMap: ParsedCreateSessionRequest["playerConfigMap"];
   mode: SessionMode;
@@ -113,7 +113,10 @@ function buildMemberSessionConfigs({
       partnerPreference: resolvedMixedState.partnerPreference,
       mixedSideOverride: resolvedMixedState.mixedSideOverride,
       pool: poolsEnabled
-        ? getNormalizedSessionPool(override?.pool)
+        ? override?.pool ??
+          (selectedUser?.preferredPool === SessionPool.A
+            ? SessionPool.A
+            : SessionPool.B)
         : SessionPool.A,
       needsMoreRest: selectedUser?.needsMoreRest ?? false,
       sessionPoints: 0,
@@ -215,16 +218,33 @@ export async function createSessionForUser({
 
   const memberRows = await prisma.clubMember.findMany({
     where: { clubId: { in: involvedClubIds } },
-    select: { userId: true, needsMoreRest: true },
+    select: {
+      clubId: true,
+      userId: true,
+      needsMoreRest: true,
+      preferredPool: true,
+    },
   });
   const memberSet = new Set(memberRows.map((member) => member.userId));
   const needsMoreRestByUserId = new Map<string, boolean>();
+  const preferredPoolByUserId = new Map<string, SessionPool>();
   for (const member of memberRows) {
     needsMoreRestByUserId.set(
       member.userId,
       (needsMoreRestByUserId.get(member.userId) ?? false) ||
         member.needsMoreRest
     );
+    if (
+      member.clubId === input.clubId ||
+      !preferredPoolByUserId.has(member.userId)
+    ) {
+      preferredPoolByUserId.set(
+        member.userId,
+        member.preferredPool === SessionPool.A
+          ? SessionPool.A
+          : SessionPool.B
+      );
+    }
   }
   const uniquePlayerIds = Array.from(new Set(input.requestedPlayerIds)).filter(
     (id) => memberSet.has(id)
@@ -263,6 +283,8 @@ export async function createSessionForUser({
   const selectedUsersWithRest = selectedUsers.map((user) => ({
     ...user,
     needsMoreRest: needsMoreRestByUserId.get(user.id) ?? false,
+    preferredPool:
+      preferredPoolByUserId.get(user.id) ?? SessionPool.B,
   }));
   const clubBadgesByUserId =
     input.collabFormat === SessionCollabFormat.INTERCLUB &&
@@ -280,6 +302,25 @@ export async function createSessionForUser({
     interclubClubIds,
     clubBadgesByUserId,
   });
+
+  if (input.poolsEnabled) {
+    const allPools = [
+      ...memberSessionConfigs.map((player) => player.pool),
+      ...input.normalizedGuests.map((guest) => guest.pool),
+    ];
+    const competitiveCount = allPools.filter(
+      (pool) => pool === SessionPool.A
+    ).length;
+    const socialCount = allPools.filter(
+      (pool) => pool === SessionPool.B
+    ).length;
+    if (competitiveCount < 2 || socialCount < 2) {
+      throw new SessionRouteError(
+        "Player groups require at least 2 Competitive and 2 Social players",
+        400
+      );
+    }
+  }
 
   if (input.mode === SessionMode.MIXICANO) {
     const invalidMember = memberSessionConfigs.find(
@@ -327,8 +368,8 @@ export async function createSessionForUser({
         autoQueueEnabled: input.autoQueueEnabled,
         respectPlayerRest: input.respectPlayerRest,
         poolsEnabled: input.poolsEnabled,
-        poolAName: input.poolAName,
-        poolBName: input.poolBName,
+        poolAName: "Competitive",
+        poolBName: "Social",
         crossoverMissThreshold: input.crossoverMissThreshold,
         courts: {
           create: Array.from({ length: input.courtCount }, (_, index) => ({

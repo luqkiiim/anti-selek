@@ -41,6 +41,7 @@ export interface ClubPageMember {
   avatarUrl?: string | null;
   status: ClubPlayerStatus;
   needsMoreRest: boolean;
+  preferredPool: SessionPool;
   gender: PlayerGender;
   partnerPreference: PartnerPreference;
   mixedSideOverride?: MixedSide | null;

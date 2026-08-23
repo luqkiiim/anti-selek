@@ -186,12 +186,14 @@ function getClubMemberDelegate(tx: DbClient) {
             role: true;
             elo?: true;
             needsMoreRest?: true;
+            preferredPool?: true;
           };
         }) => Promise<{
           clubId?: string;
           role: string;
           elo?: number;
           needsMoreRest?: boolean;
+          preferredPool?: string;
         } | null>;
         findUnique?: (args: {
           where: {
@@ -205,12 +207,14 @@ function getClubMemberDelegate(tx: DbClient) {
             role: true;
             elo?: true;
             needsMoreRest?: true;
+            preferredPool?: true;
           };
         }) => Promise<{
           clubId?: string;
           role: string;
           elo?: number;
           needsMoreRest?: boolean;
+          preferredPool?: string;
         } | null>;
       };
     }
@@ -348,8 +352,35 @@ export async function getSessionMembership(
   }
 
   const clubMemberDelegate = getClubMemberDelegate(tx);
-  if (clubMemberDelegate?.findFirst) {
-    return clubMemberDelegate.findFirst({
+  if (clubMemberDelegate?.findUnique) {
+    for (const clubId of clubIds) {
+      const membership = await clubMemberDelegate.findUnique({
+        where: {
+          clubId_userId: {
+            clubId,
+            userId,
+          },
+        },
+        select: {
+          clubId: true,
+          role: true,
+          elo: true,
+          needsMoreRest: true,
+          preferredPool: true,
+        },
+      });
+
+      if (membership) {
+        return {
+          ...membership,
+          clubId: membership.clubId ?? clubId,
+        };
+      }
+    }
+  }
+
+  return (
+    (await clubMemberDelegate?.findFirst?.({
       where: {
         clubId: { in: clubIds },
         userId,
@@ -359,39 +390,10 @@ export async function getSessionMembership(
         role: true,
         elo: true,
         needsMoreRest: true,
+        preferredPool: true,
       },
-    });
-  }
-
-  if (!clubMemberDelegate?.findUnique) {
-    return null;
-  }
-
-  for (const clubId of clubIds) {
-    const membership = await clubMemberDelegate.findUnique({
-      where: {
-        clubId_userId: {
-          clubId,
-          userId,
-        },
-      },
-      select: {
-        clubId: true,
-        role: true,
-        elo: true,
-        needsMoreRest: true,
-      },
-    });
-
-    if (membership) {
-      return {
-        ...membership,
-        clubId: membership.clubId ?? clubId,
-      };
-    }
-  }
-
-  return null;
+    })) ?? null
+  );
 }
 
 export async function getPlayerClubBadges(

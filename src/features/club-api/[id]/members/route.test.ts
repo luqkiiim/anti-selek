@@ -129,6 +129,7 @@ describe("club admin create member route", () => {
       elo: 1000,
       status: ClubPlayerStatus.CORE,
       needsMoreRest: true,
+      preferredPool: "B",
     });
 
     const response = await postMember({
@@ -151,9 +152,11 @@ describe("club admin create member route", () => {
           elo: true,
           status: true,
           needsMoreRest: true,
+          preferredPool: true,
         },
       })
     );
     expect(body.needsMoreRest).toBe(true);
+    expect(body.preferredPool).toBe("B");
   });
 });

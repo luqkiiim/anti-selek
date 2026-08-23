@@ -4,6 +4,7 @@ import { useRef } from "react";
 import { Avatar } from "@/components/ui/Avatar";
 import { PlayerPickerSheet } from "@/components/ui/PlayerPickerSheet";
 import { SearchField } from "@/components/ui/SearchField";
+import { getPlayerGroupLabel } from "@/lib/playerGroups";
 import type { ClubCollabCandidate, ClubPageMember } from "./clubTypes";
 import { ClubPlayerStatus, SessionCollabFormat, SessionPool } from "@/types/enums";
 
@@ -13,14 +14,18 @@ interface ClubPlayersModalProps {
   selectedPlayerPools: Record<string, SessionPool>;
   playerSearch: string;
   poolsEnabled: boolean;
-  poolAName: string;
-  poolBName: string;
+  canSavePreferredPools: boolean;
+  savingPreferredPoolPlayerId: string | null;
   selectablePlayers: ClubPageMember[];
   filteredSelectablePlayers: ClubPageMember[];
   onPlayerSearchChange: (value: string) => void;
   onToggleAllPlayers: () => void;
   onTogglePlayerSelection: (playerId: string) => void;
   onChangePlayerPool: (playerId: string, pool: SessionPool) => void;
+  onSavePlayerPreferredPool: (
+    playerId: string,
+    pool: SessionPool
+  ) => Promise<void>;
   collabFormat: SessionCollabFormat;
   hostClubId: string;
   hostClubName: string;
@@ -39,14 +44,15 @@ export function ClubPlayersModal({
   selectedPlayerPools,
   playerSearch,
   poolsEnabled,
-  poolAName,
-  poolBName,
+  canSavePreferredPools,
+  savingPreferredPoolPlayerId,
   selectablePlayers,
   filteredSelectablePlayers,
   onPlayerSearchChange,
   onToggleAllPlayers,
   onTogglePlayerSelection,
   onChangePlayerPool,
+  onSavePlayerPreferredPool,
   collabFormat,
   hostClubId,
   hostClubName,
@@ -161,10 +167,20 @@ export function ClubPlayersModal({
         <div className="space-y-2">
           {filteredSelectablePlayers.map((player) => {
             const isSelected = selectedPlayerIds.includes(player.id);
-            const selectedPool = selectedPlayerPools[player.id] ?? SessionPool.A;
+            const selectedPool =
+              selectedPlayerPools[player.id] ??
+              player.preferredPool ??
+              SessionPool.B;
             const representingOptions = isInterclub
               ? getRepresentingClubOptions(player)
               : [];
+            const hasHostClubMembership =
+              !selectedPartnerClub ||
+              (player.communityBadges ?? []).some(
+                (badge) =>
+                  badge.id === hostClubId &&
+                  (!badge.userId || badge.userId === player.id)
+              );
             const selectedRepresentingClubId =
               selectedPlayerRepresentingClubs[player.id] ??
               (representingOptions.length === 1
@@ -205,7 +221,7 @@ export function ClubPlayersModal({
                         ) : null}
                         {poolsEnabled && isSelected ? (
                           <span className="app-chip app-chip-accent px-2 py-0.5 text-[10px]">
-                            {selectedPool === SessionPool.A ? poolAName : poolBName}
+                            {getPlayerGroupLabel(selectedPool)}
                           </span>
                         ) : null}
                       </div>
@@ -244,11 +260,11 @@ export function ClubPlayersModal({
                 {poolsEnabled && isSelected ? (
                   <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-gray-200 pt-3">
                     <span className="text-xs font-semibold text-gray-500">
-                      Pool
+                      Game group
                     </span>
                     {[SessionPool.A, SessionPool.B].map((pool) => {
                       const isActive = selectedPool === pool;
-                      const label = pool === SessionPool.A ? poolAName : poolBName;
+                      const label = getPlayerGroupLabel(pool);
 
                       return (
                         <button
@@ -271,6 +287,51 @@ export function ClubPlayersModal({
                         </button>
                       );
                     })}
+                  </div>
+                ) : null}
+
+                {canSavePreferredPools && hasHostClubMembership ? (
+                  <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-gray-200 pt-3">
+                    <span className="text-xs font-semibold text-gray-500">
+                      Saved club preference
+                    </span>
+                    {[SessionPool.A, SessionPool.B].map((pool) => {
+                      const isSaved =
+                        (player.preferredPool ?? SessionPool.B) === pool;
+                      const isSaving =
+                        savingPreferredPoolPlayerId === player.id;
+
+                      return (
+                        <button
+                          key={pool}
+                          type="button"
+                          aria-pressed={isSaved}
+                          disabled={
+                            savingPreferredPoolPlayerId !== null
+                          }
+                          onPointerDownCapture={captureSearchFocusIntent}
+                          onMouseDownCapture={captureSearchFocusIntent}
+                          onClick={() => {
+                            if (!isSaved) {
+                              void onSavePlayerPreferredPool(player.id, pool);
+                            }
+                            restoreSearchFocusIfNeeded();
+                          }}
+                          className={`min-h-9 rounded-lg border px-3 py-2 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-60 ${
+                            isSaved
+                              ? "border-amber-200 bg-amber-50 text-amber-800"
+                              : "border-gray-200 bg-white text-gray-500"
+                          }`}
+                        >
+                          {isSaving && !isSaved
+                            ? "Saving..."
+                            : getPlayerGroupLabel(pool)}
+                        </button>
+                      );
+                    })}
+                    <span className="basis-full text-[11px] leading-4 text-gray-500">
+                      Used for future tournaments; session overrides stay separate.
+                    </span>
                   </div>
                 ) : null}
 

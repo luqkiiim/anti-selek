@@ -6,6 +6,7 @@ import {
   MixedSide,
   PartnerPreference,
   PlayerGender,
+  SessionPool,
 } from "@/types/enums";
 
 export interface ClubAdminClub {
@@ -28,6 +29,7 @@ export interface ClubAdminPlayer {
   avatarUrl?: string | null;
   status: ClubPlayerStatus;
   needsMoreRest: boolean;
+  preferredPool: SessionPool;
   gender: PlayerGender;
   partnerPreference: PartnerPreference;
   mixedSideOverride?: MixedSide | null;

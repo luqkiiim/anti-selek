@@ -9,6 +9,7 @@ import {
   PartnerPreference,
   PlayerGender,
   SessionMode,
+  SessionPool,
   SessionStatus,
   SessionType,
 } from "@/types/enums";
@@ -190,6 +191,7 @@ async function createSessionWithCourtsAndPlayers({
   type,
   mode,
   autoQueueEnabled = true,
+  poolsEnabled = false,
   players,
   courtIds,
 }: {
@@ -198,6 +200,7 @@ async function createSessionWithCourtsAndPlayers({
   type: SessionType;
   mode: SessionMode;
   autoQueueEnabled?: boolean;
+  poolsEnabled?: boolean;
   players: Array<{
     userId: string;
     gender?: PlayerGender;
@@ -208,6 +211,7 @@ async function createSessionWithCourtsAndPlayers({
     availableSince?: Date;
     joinedAt?: Date;
     arrivalPriorityAt?: Date | null;
+    pool?: SessionPool;
   }>;
   courtIds: string[];
 }) {
@@ -224,6 +228,9 @@ async function createSessionWithCourtsAndPlayers({
       mode,
       status: SessionStatus.ACTIVE,
       autoQueueEnabled,
+      poolsEnabled,
+      poolAName: poolsEnabled ? "Competitive" : null,
+      poolBName: poolsEnabled ? "Social" : null,
       players: {
         create: players.map((player) => ({
           userId: player.userId,
@@ -238,6 +245,9 @@ async function createSessionWithCourtsAndPlayers({
             player.availableSince ?? new Date("2026-04-04T00:00:00Z"),
           joinedAt: player.joinedAt ?? new Date("2026-04-04T00:00:00Z"),
           arrivalPriorityAt: player.arrivalPriorityAt ?? null,
+          pool: poolsEnabled
+            ? player.pool ?? SessionPool.B
+            : SessionPool.A,
         })),
       },
       courts: {
@@ -686,6 +696,7 @@ describe("generate match route integration", () => {
         team1User2Id: playerIds[5],
         team2User1Id: playerIds[6],
         team2User2Id: playerIds[7],
+        isAutomatic: true,
         matchmakingReasonJson: createReasonJson({
           selectedIds: [playerIds[4], playerIds[5], playerIds[6], playerIds[7]],
           team1: [playerIds[4], playerIds[5]],
@@ -855,6 +866,55 @@ describe("generate match route integration", () => {
     expect(storedMatches).toHaveLength(2);
     expect(storedCourts.map((court) => court.currentMatchId).every(Boolean)).toBe(
       true
+    );
+  });
+
+  it("fills the maximum feasible grouped courts when more courts are requested", async () => {
+    const prefix = `group-partial-${randomUUID().slice(0, 8)}`;
+    const { clubId } = await createClubAdmin(prefix);
+    const playerKeys = ["a1", "a2", "a3", "a4", "b1", "b2", "b3", "b4"];
+    const playerIds = playerKeys.map((key) => `${prefix}-${key}`);
+    const courtIds = [
+      `${prefix}-court-1`,
+      `${prefix}-court-2`,
+      `${prefix}-court-3`,
+    ];
+
+    await createUsers(
+      prefix,
+      playerKeys.map((key) => ({ key }))
+    );
+    const { sessionId, code } = await createSessionWithCourtsAndPlayers({
+      prefix,
+      clubId,
+      type: SessionType.POINTS,
+      mode: SessionMode.MEXICANO,
+      autoQueueEnabled: false,
+      poolsEnabled: true,
+      players: playerIds.map((userId, index) => ({
+        userId,
+        pool: index < 4 ? SessionPool.A : SessionPool.B,
+      })),
+      courtIds,
+    });
+
+    const response = await postGenerateMatch(code, { courtIds });
+    const payload = await response.json();
+
+    expect(response.status, JSON.stringify(payload)).toBe(200);
+    expect(payload.matches).toHaveLength(2);
+    expect(new Set(payload.matches.flatMap(getSelectedIds)).size).toBe(8);
+    const storedCourts = await prisma.court.findMany({
+      where: { id: { in: courtIds } },
+    });
+    expect(storedCourts.filter((court) => court.currentMatchId)).toHaveLength(2);
+    const storedMatches = await prisma.match.findMany({
+      where: { sessionId },
+      orderBy: { createdAt: "asc" },
+    });
+    expect(storedMatches).toHaveLength(2);
+    expect(storedMatches[1].createdAt.getTime()).toBeGreaterThan(
+      storedMatches[0].createdAt.getTime()
     );
   });
 

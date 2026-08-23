@@ -14,6 +14,7 @@ import {
   ClubPlayerStatus,
   MixedSide,
   PlayerGender,
+  SessionPool,
 } from "@/types/enums";
 import { safeJson } from "./clubAdminApi";
 
@@ -57,6 +58,8 @@ export function useClubAdminPlayerActions({
     ClubPlayerStatus.CORE
   );
   const [newPlayerNeedsMoreRest, setNewPlayerNeedsMoreRest] = useState(false);
+  const [newPlayerPreferredPool, setNewPlayerPreferredPool] =
+    useState<SessionPool>(SessionPool.B);
 
   const [editingPlayerId, setEditingPlayerId] = useState<string | null>(null);
   const [editorName, setEditorName] = useState("");
@@ -91,6 +94,7 @@ export function useClubAdminPlayerActions({
     setNewPlayerMixedSideOverride(null);
     setNewPlayerStatus(ClubPlayerStatus.CORE);
     setNewPlayerNeedsMoreRest(false);
+    setNewPlayerPreferredPool(SessionPool.B);
     setIsCreatePlayerOpen(true);
   };
 
@@ -148,6 +152,7 @@ export function useClubAdminPlayerActions({
           mixedSideOverride: newPlayerMixedSideOverride,
           status: newPlayerStatus,
           needsMoreRest: newPlayerNeedsMoreRest,
+          preferredPool: newPlayerPreferredPool,
         }),
       });
 
@@ -162,6 +167,7 @@ export function useClubAdminPlayerActions({
       setNewPlayerMixedSideOverride(null);
       setNewPlayerStatus(ClubPlayerStatus.CORE);
       setNewPlayerNeedsMoreRest(false);
+      setNewPlayerPreferredPool(SessionPool.B);
       setIsCreatePlayerOpen(false);
       await refreshClubData();
     } catch (err: unknown) {
@@ -469,13 +475,15 @@ export function useClubAdminPlayerActions({
       mixedSideOverride?: MixedSide | null;
       status?: ClubPlayerStatus;
       needsMoreRest?: boolean;
+      preferredPool?: SessionPool;
     }
   ) => {
     if (
       updates.gender === undefined &&
       updates.mixedSideOverride === undefined &&
       updates.status === undefined &&
-      updates.needsMoreRest === undefined
+      updates.needsMoreRest === undefined &&
+      updates.preferredPool === undefined
     ) {
       return;
     }
@@ -524,11 +532,29 @@ export function useClubAdminPlayerActions({
                   typeof data.needsMoreRest === "boolean"
                     ? data.needsMoreRest
                     : item.needsMoreRest,
+                preferredPool:
+                  data.preferredPool === SessionPool.A
+                    ? SessionPool.A
+                    : data.preferredPool === SessionPool.B
+                      ? SessionPool.B
+                      : item.preferredPool,
               }
             : item
         )
       );
-      setSuccess("Player preferences updated.");
+      const immediateCount =
+        typeof data.preferencePropagation?.immediateSessionCount === "number"
+          ? data.preferencePropagation.immediateSessionCount
+          : 0;
+      const deferredCount =
+        typeof data.preferencePropagation?.deferredSessionCount === "number"
+          ? data.preferencePropagation.deferredSessionCount
+          : 0;
+      setSuccess(
+        updates.preferredPool !== undefined
+          ? `Preferred game group updated. ${immediateCount} current tournament${immediateCount === 1 ? "" : "s"} updated now; ${deferredCount} change${deferredCount === 1 ? "" : "s"} will apply after the current match.`
+          : "Player preferences updated."
+      );
     } catch (err: unknown) {
       setError(
         err instanceof Error
@@ -591,6 +617,8 @@ export function useClubAdminPlayerActions({
     setNewPlayerStatus,
     newPlayerNeedsMoreRest,
     setNewPlayerNeedsMoreRest,
+    newPlayerPreferredPool,
+    setNewPlayerPreferredPool,
     editingPlayer,
     editorName,
     setEditorName,

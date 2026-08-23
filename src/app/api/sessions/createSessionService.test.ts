@@ -4,6 +4,7 @@ import {
   SessionMatchmakingStyle,
   SessionMode,
   SessionPairingMode,
+  SessionPool,
   SessionScoringType,
   SessionStatus,
   SessionType,
@@ -41,6 +42,135 @@ import { createSessionForUser } from "./createSessionService";
 describe("createSessionForUser", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+  });
+
+  it("requires at least two players in each enabled player group", async () => {
+    const playerIds = ["player-1", "player-2", "player-3", "player-4"];
+    const input = parseCreateSessionRequest({
+      name: "Grouped Friday",
+      clubId: "community-1",
+      poolsEnabled: true,
+      playerIds,
+      playerConfigs: [{ userId: "player-1", pool: SessionPool.A }],
+    });
+
+    vi.mocked(prisma.clubMember.findUnique).mockResolvedValue({
+      clubId: "community-1",
+      userId: "host-1",
+      role: "ADMIN",
+    } as never);
+    vi.mocked(prisma.club.findUnique).mockResolvedValue({
+      isTutorial: false,
+      tutorialOwnerId: null,
+    } as never);
+    vi.mocked(prisma.clubMember.findMany).mockResolvedValue(
+      playerIds.map((userId) => ({
+        userId,
+        needsMoreRest: false,
+        preferredPool: SessionPool.B,
+      })) as never
+    );
+    vi.mocked(prisma.user.findMany).mockResolvedValue(
+      playerIds.map((id) => ({
+        id,
+        name: id,
+        gender: "UNSPECIFIED",
+        partnerPreference: "OPEN",
+        mixedSideOverride: null,
+      })) as never
+    );
+    vi.mocked(prisma.offlineIdentityMember.findMany).mockResolvedValue([] as never);
+
+    await expect(
+      createSessionForUser({
+        requesterId: "host-1",
+        requesterIsAdmin: false,
+        input,
+      })
+    ).rejects.toThrow(
+      "Player groups require at least 2 Competitive and 2 Social players"
+    );
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it("uses explicit group overrides before saved club preferences", async () => {
+    const playerIds = ["player-1", "player-2", "player-3", "player-4"];
+    const input = parseCreateSessionRequest({
+      name: "Grouped Friday",
+      clubId: "community-1",
+      poolsEnabled: true,
+      poolAName: "Ignored A",
+      poolBName: "Ignored B",
+      playerIds,
+      playerConfigs: [
+        { userId: "player-2", pool: SessionPool.B },
+        { userId: "player-3", pool: SessionPool.A },
+      ],
+    });
+    vi.mocked(prisma.clubMember.findUnique).mockResolvedValue({
+      clubId: "community-1",
+      userId: "host-1",
+      role: "ADMIN",
+    } as never);
+    vi.mocked(prisma.club.findUnique).mockResolvedValue({
+      isTutorial: false,
+      tutorialOwnerId: null,
+    } as never);
+    vi.mocked(prisma.clubMember.findMany).mockResolvedValue([
+      { userId: "player-1", needsMoreRest: false, preferredPool: SessionPool.A },
+      { userId: "player-2", needsMoreRest: false, preferredPool: SessionPool.A },
+      { userId: "player-3", needsMoreRest: false, preferredPool: SessionPool.B },
+      { userId: "player-4", needsMoreRest: false, preferredPool: SessionPool.B },
+    ] as never);
+    vi.mocked(prisma.user.findMany).mockResolvedValue(
+      playerIds.map((id) => ({
+        id,
+        name: id,
+        gender: "UNSPECIFIED",
+        partnerPreference: "OPEN",
+        mixedSideOverride: null,
+      })) as never
+    );
+    vi.mocked(prisma.offlineIdentityMember.findMany).mockResolvedValue([] as never);
+    const sessionCreate = vi.fn().mockResolvedValue({ id: "session-1" });
+    vi.mocked(prisma.$transaction).mockImplementation(async (callback) =>
+      callback({
+        session: {
+          create: sessionCreate,
+          findUnique: vi.fn().mockResolvedValue({
+            id: "session-1",
+            clubId: "community-1",
+            players: [],
+            courts: [],
+            sessionClubs: [],
+          }),
+        },
+        user: { create: vi.fn() },
+        sessionPlayer: { createMany: vi.fn() },
+      } as never)
+    );
+
+    await createSessionForUser({
+      requesterId: "host-1",
+      requesterIsAdmin: false,
+      input,
+    });
+
+    const createdPlayers = sessionCreate.mock.calls[0][0].data.players.create;
+    expect(createdPlayers.map((player: { pool: SessionPool }) => player.pool)).toEqual([
+      SessionPool.A,
+      SessionPool.B,
+      SessionPool.A,
+      SessionPool.B,
+    ]);
+    expect(sessionCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          poolAName: "Competitive",
+          poolBName: "Social",
+        }),
+      })
+    );
   });
 
   it("rejects mixed tournaments when a selected member has no explicit gender", async () => {

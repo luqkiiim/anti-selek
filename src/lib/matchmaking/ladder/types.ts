@@ -84,6 +84,21 @@ export interface LadderDoublesPartition {
   team2: [string, string];
 }
 
+export interface LadderSelectionConstraints<
+  T extends ActiveMatchmakerLadderPlayer = ActiveMatchmakerLadderPlayer,
+> {
+  isQuartetAllowed?: (players: [T, T, T, T]) => boolean;
+  normalizePartition?: ({
+    partition,
+    players,
+    playersById,
+  }: {
+    partition: LadderDoublesPartition;
+    players: [T, T, T, T];
+    playersById: Map<string, T>;
+  }) => LadderDoublesPartition | null;
+}
+
 export interface LadderBalancedPartition {
   partition: LadderDoublesPartition;
   balanceGap: number;
