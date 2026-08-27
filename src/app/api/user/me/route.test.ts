@@ -231,6 +231,57 @@ describe("current user route", () => {
     expect(mocks.userUpdate).not.toHaveBeenCalled();
   });
 
+  it("lets a full-account user set their own Mixed-pairing gender", async () => {
+    mocks.auth.mockResolvedValue(buildSession());
+    mocks.userFindUnique.mockResolvedValue(
+      buildUser({ gender: "UNSPECIFIED" })
+    );
+    mocks.userUpdate.mockResolvedValue(buildUser({ gender: "MALE" }));
+
+    const response = await PATCH(
+      new Request("http://localhost/api/user/me", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ gender: "MALE" }),
+      })
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(mocks.userUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: "user-1" },
+        data: expect.objectContaining({ gender: "MALE" }),
+      })
+    );
+    expect(body.user.gender).toBe("MALE");
+    expect(mocks.logAuditEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "user.update_gender_self",
+        details: {
+          previousGender: "UNSPECIFIED",
+          nextGender: "MALE",
+        },
+      })
+    );
+  });
+
+  it("rejects an unsupported self-declared gender value", async () => {
+    mocks.auth.mockResolvedValue(buildSession());
+
+    const response = await PATCH(
+      new Request("http://localhost/api/user/me", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ gender: "UNSPECIFIED" }),
+      })
+    );
+
+    expect(response.status).toBe(400);
+    expect(mocks.userFindUnique).not.toHaveBeenCalled();
+    expect(mocks.userUpdate).not.toHaveBeenCalled();
+  });
+
   it("rejects quick-access users", async () => {
     mocks.auth.mockResolvedValue(
       buildSession({

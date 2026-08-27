@@ -31,6 +31,7 @@ describe("signup route rate limiting", () => {
       new Request("http://localhost/api/auth/signup", {
         body: JSON.stringify({
           email: "user@example.com",
+          gender: "MALE",
           name: "User",
           password: "password123",
         }),

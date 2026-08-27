@@ -73,6 +73,7 @@ describe("signup route", () => {
 
     const response = await postSignup({
       email: "admin@example.com",
+      gender: "MALE",
       name: "Admin",
       password: "password123",
     });
@@ -95,12 +96,14 @@ describe("signup route", () => {
     mocks.userCreate.mockResolvedValue({
       id: "user-1",
       email: "player@example.com",
+      gender: "FEMALE",
       name: "Player",
       isClaimed: true,
     });
 
     const response = await postSignup({
       email: "Player@Example.com",
+      gender: "FEMALE",
       name: " Player ",
       password: "password123",
     });
@@ -110,11 +113,28 @@ describe("signup route", () => {
     expect(mocks.userCreate).toHaveBeenCalledWith({
       data: {
         email: "player@example.com",
+        gender: "FEMALE",
         passwordHash: "password-hash",
         name: "Player",
         isClaimed: true,
       },
     });
     expect(body.email).toBe("player@example.com");
+    expect(body.gender).toBe("FEMALE");
+  });
+
+  it("rejects signup without a Mixed-pairing gender", async () => {
+    const response = await postSignup({
+      email: "player@example.com",
+      name: "Player",
+      password: "password123",
+    });
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      error: "Choose Male or Female for Mixed pairing",
+    });
+    expect(mocks.userCreate).not.toHaveBeenCalled();
+    expect(mocks.userUpdate).not.toHaveBeenCalled();
   });
 });

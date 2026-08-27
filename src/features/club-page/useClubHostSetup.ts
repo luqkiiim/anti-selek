@@ -309,6 +309,26 @@ export function useClubHostSetup({
       selectedPlayerIds,
       guestGenders: guestConfigs.map((guest) => guest.gender),
     });
+  const missingMixedGenderNames =
+    sessionMode === SessionMode.MIXICANO
+      ? [
+          ...selectedPlayerIds.flatMap((playerId) => {
+            const player = effectiveSelectablePlayers.find(
+              (candidate) => candidate.id === playerId
+            );
+            return player &&
+              ![PlayerGender.MALE, PlayerGender.FEMALE].includes(player.gender)
+              ? [player.name]
+              : [];
+          }),
+          ...guestConfigs
+            .filter(
+              (guest) =>
+                ![PlayerGender.MALE, PlayerGender.FEMALE].includes(guest.gender)
+            )
+            .map((guest) => guest.name),
+        ]
+      : [];
 
   const hasInvalidInterclubRepresentation =
     isInterclub &&
@@ -366,6 +386,7 @@ export function useClubHostSetup({
       selectedPoolCounts[SessionPool.B] + guestPoolCounts[SessionPool.B],
     isMixed: sessionMode === SessionMode.MIXICANO,
     hasMissingMixedGender,
+    missingMixedGenderNames,
     mixedModeLabel,
     isInterclub,
     hasPartnerClub: Boolean(partnerClubId),

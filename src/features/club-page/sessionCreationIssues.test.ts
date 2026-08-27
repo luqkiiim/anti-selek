@@ -35,8 +35,14 @@ describe("getSessionCreationIssues", () => {
       guestGenders: [],
     });
 
-    expect(getIssues({ isMixed: true, hasMissingMixedGender })).toContain(
-      "Set Male or Female for every selected player and guest in Mixicano."
+    expect(
+      getIssues({
+        isMixed: true,
+        hasMissingMixedGender,
+        missingMixedGenderNames: ["Missing Player"],
+      })
+    ).toContain(
+      "Missing Player must set their gender in Account settings before playing Mixicano."
     );
   });
 

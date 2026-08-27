@@ -28,6 +28,7 @@ export interface SessionCreationIssueInput {
   socialCount: number;
   isMixed: boolean;
   hasMissingMixedGender: boolean;
+  missingMixedGenderNames?: string[];
   mixedModeLabel: string;
   isInterclub: boolean;
   hasPartnerClub: boolean;
@@ -42,6 +43,7 @@ export function getSessionCreationIssues({
   socialCount,
   isMixed,
   hasMissingMixedGender,
+  missingMixedGenderNames = [],
   mixedModeLabel,
   isInterclub,
   hasPartnerClub,
@@ -70,7 +72,9 @@ export function getSessionCreationIssues({
 
   if (isMixed && hasMissingMixedGender) {
     issues.push(
-      `Set Male or Female for every selected player and guest in ${mixedModeLabel}.`
+      missingMixedGenderNames.length > 0
+        ? `${missingMixedGenderNames.join(", ")} must set their gender in Account settings before playing ${mixedModeLabel}.`
+        : `Set Male or Female for every selected player and guest in ${mixedModeLabel}.`
     );
   }
 

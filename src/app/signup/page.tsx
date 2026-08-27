@@ -7,8 +7,9 @@ import { UserPlus } from "lucide-react";
 
 import { FlashMessage } from "@/components/ui/chrome";
 import { getSafeCallbackUrl, withCallbackUrl } from "@/lib/authCallback";
+import { PlayerGender } from "@/types/enums";
 
-type SignupField = "name" | "email" | "password" | "confirmPassword";
+type SignupField = "name" | "gender" | "email" | "password" | "confirmPassword";
 
 interface SignupError {
   message: string;
@@ -20,6 +21,7 @@ function SignupForm() {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [name, setName] = useState("");
+  const [gender, setGender] = useState<PlayerGender | "">("");
   const [error, setError] = useState<SignupError | null>(null);
   const [loading, setLoading] = useState(false);
   const router = useRouter();
@@ -29,6 +31,7 @@ function SignupForm() {
     ""
   );
   const nameRef = useRef<HTMLInputElement | null>(null);
+  const genderRef = useRef<HTMLSelectElement | null>(null);
   const emailRef = useRef<HTMLInputElement | null>(null);
   const passwordRef = useRef<HTMLInputElement | null>(null);
   const confirmPasswordRef = useRef<HTMLInputElement | null>(null);
@@ -37,8 +40,12 @@ function SignupForm() {
   useEffect(() => {
     if (!error) return;
 
-    const fieldRefs: Record<SignupField, React.RefObject<HTMLInputElement | null>> = {
+    const fieldRefs: Record<
+      SignupField,
+      React.RefObject<HTMLInputElement | HTMLSelectElement | null>
+    > = {
       name: nameRef,
+      gender: genderRef,
       email: emailRef,
       password: passwordRef,
       confirmPassword: confirmPasswordRef,
@@ -67,6 +74,12 @@ function SignupForm() {
     }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
       return { message: "Enter a valid email address", field: "email" };
+    }
+    if (![PlayerGender.MALE, PlayerGender.FEMALE].includes(gender as PlayerGender)) {
+      return {
+        message: "Choose your gender for Mixed pairing",
+        field: "gender",
+      };
     }
     if (password.length < 8) {
       return {
@@ -104,6 +117,7 @@ function SignupForm() {
           email: email.trim(),
           password,
           name: name.trim(),
+          gender,
         }),
       });
 
@@ -197,6 +211,32 @@ function SignupForm() {
                   aria-describedby={error?.field === "email" ? "signup-error" : undefined}
                   required
                 />
+              </label>
+
+              <label className="block space-y-2 text-sm font-medium text-gray-900">
+                <span>Gender for Mixed pairing</span>
+                <select
+                  ref={genderRef}
+                  value={gender}
+                  onChange={(event) => {
+                    setGender(event.target.value as PlayerGender | "");
+                    clearErrorFor("gender");
+                  }}
+                  className="field"
+                  disabled={loading}
+                  aria-invalid={error?.field === "gender" || undefined}
+                  aria-describedby={`signup-gender-help${
+                    error?.field === "gender" ? " signup-error" : ""
+                  }`}
+                  required
+                >
+                  <option value="">Choose gender</option>
+                  <option value={PlayerGender.MALE}>Male</option>
+                  <option value={PlayerGender.FEMALE}>Female</option>
+                </select>
+                <span id="signup-gender-help" className="block text-xs text-gray-600">
+                  Used for Mixed team rules and carried into clubs you join.
+                </span>
               </label>
 
               <label className="block space-y-2 text-sm font-medium text-gray-900">

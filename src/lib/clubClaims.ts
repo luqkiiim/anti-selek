@@ -100,9 +100,6 @@ export async function approveClubClaimRequest(
           email: true,
           avatarKey: true,
           isClaimed: true,
-          gender: true,
-          partnerPreference: true,
-          mixedSideOverride: true,
         },
       },
     },
@@ -353,17 +350,12 @@ export async function approveClubClaimRequest(
     },
   });
 
-  await tx.user.update({
-    where: { id: claimRequest.requesterUserId },
-    data: {
-      gender: claimRequest.target.gender,
-      partnerPreference: claimRequest.target.partnerPreference,
-      mixedSideOverride: claimRequest.target.mixedSideOverride,
-      ...(shouldAdoptPlaceholderAvatar
-        ? { avatarKey: placeholderAvatarKey }
-        : {}),
-    },
-  });
+  if (shouldAdoptPlaceholderAvatar) {
+    await tx.user.update({
+      where: { id: claimRequest.requesterUserId },
+      data: { avatarKey: placeholderAvatarKey },
+    });
+  }
 
   if (placeholderAvatarKey) {
     await tx.user.update({

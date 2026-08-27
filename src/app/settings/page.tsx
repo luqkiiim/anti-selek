@@ -10,6 +10,7 @@ import { FlashMessage, HeroCard, SectionCard } from "@/components/ui/chrome";
 import { deleteUserAvatar, uploadUserAvatar } from "@/lib/avatarClient";
 import { getCurrentAppPath, withCallbackUrl } from "@/lib/authCallback";
 import { normalizeNameLookupKey } from "@/lib/quickAccess";
+import { PlayerGender } from "@/types/enums";
 
 interface CurrentUserSettingsPayload {
   user: {
@@ -20,6 +21,7 @@ interface CurrentUserSettingsPayload {
     isQuickAccess: boolean;
     selfNameChangedAt: string | null;
     canRenameName: boolean;
+    gender: PlayerGender;
   };
 }
 
@@ -74,6 +76,8 @@ export default function SettingsPage() {
   const [nameError, setNameError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
   const [savingName, setSavingName] = useState(false);
+  const [savingGender, setSavingGender] = useState(false);
+  const [genderError, setGenderError] = useState("");
 
   useEffect(() => {
     if (status === "unauthenticated") {
@@ -216,6 +220,36 @@ export default function SettingsPage() {
     router.refresh();
   };
 
+  const handleSaveGender = async (gender: PlayerGender) => {
+    if (!user || savingGender) return;
+
+    setPageError("");
+    setSuccessMessage("");
+    setGenderError("");
+    setSavingGender(true);
+    try {
+      const response = await fetch("/api/user/me", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ gender }),
+      });
+      const payload = (await safeJson(response)) as Partial<CurrentUserSettingsPayload>;
+      if (!response.ok || !payload.user) {
+        throw new Error(getResponseError(payload, "Failed to update gender"));
+      }
+
+      setUser(payload.user);
+      setSuccessMessage("Gender for Mixed pairing updated.");
+      router.refresh();
+    } catch (error) {
+      setGenderError(
+        error instanceof Error ? error.message : "Failed to update gender"
+      );
+    } finally {
+      setSavingGender(false);
+    }
+  };
+
   const handleRemoveAvatar = async () => {
     if (!user) {
       throw new Error("Settings are still loading.");
@@ -292,6 +326,58 @@ export default function SettingsPage() {
           </SectionCard>
         ) : (
           <>
+            <SectionCard
+              eyebrow="Mixed pairing"
+              title="Gender"
+              description="This is your profile value and takes priority over any placeholder a club host created for you."
+              action={
+                <span
+                  className={`app-chip ${
+                    user.gender === PlayerGender.UNSPECIFIED
+                      ? "app-chip-warning"
+                      : "app-chip-neutral"
+                  }`}
+                >
+                  {user.gender === PlayerGender.UNSPECIFIED
+                    ? "Required"
+                    : "Saved"}
+                </span>
+              }
+            >
+              <div className="space-y-3">
+                <div className="grid grid-cols-2 gap-2">
+                  {[PlayerGender.MALE, PlayerGender.FEMALE].map((gender) => {
+                    const selected = user.gender === gender;
+                    return (
+                      <button
+                        key={gender}
+                        type="button"
+                        aria-pressed={selected}
+                        disabled={savingGender}
+                        onClick={() => void handleSaveGender(gender)}
+                        className={`min-h-11 rounded-xl border px-4 py-2 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-60 ${
+                          selected
+                            ? "border-blue-300 bg-blue-50 text-blue-700"
+                            : "border-gray-200 bg-white text-gray-700 hover:border-blue-200"
+                        }`}
+                      >
+                        {gender === PlayerGender.FEMALE ? "Female" : "Male"}
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className="text-sm text-gray-600">
+                  Used for Mixed team rules. Changing it affects future
+                  tournaments, not completed match history.
+                </p>
+                {genderError ? (
+                  <p className="text-sm font-semibold text-rose-600">
+                    {genderError}
+                  </p>
+                ) : null}
+              </div>
+            </SectionCard>
+
             <SectionCard
               eyebrow="Display name"
               title="One-time player rename"

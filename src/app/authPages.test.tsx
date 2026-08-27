@@ -51,6 +51,15 @@ function changeInput(input: HTMLInputElement, value: string) {
   input.dispatchEvent(new Event("input", { bubbles: true }));
 }
 
+function changeSelect(select: HTMLSelectElement, value: string) {
+  const valueSetter = Object.getOwnPropertyDescriptor(
+    HTMLSelectElement.prototype,
+    "value"
+  )?.set;
+  valueSetter?.call(select, value);
+  select.dispatchEvent(new Event("change", { bubbles: true }));
+}
+
 describe("authentication pages", () => {
   let container: HTMLDivElement;
   let root: Root;
@@ -143,9 +152,11 @@ describe("authentication pages", () => {
     await act(async () => root.render(<SignupPage />));
 
     const inputs = container.querySelectorAll<HTMLInputElement>("form input");
+    const gender = container.querySelector<HTMLSelectElement>("form select");
     await act(async () => {
       changeInput(inputs[0], "Sam Player");
       changeInput(inputs[1], "sam@example.com");
+      if (gender) changeSelect(gender, "MALE");
       changeInput(inputs[2], "short");
       changeInput(inputs[3], "short");
     });
@@ -168,9 +179,11 @@ describe("authentication pages", () => {
     await act(async () => root.render(<SignupPage />));
 
     const inputs = container.querySelectorAll<HTMLInputElement>("form input");
+    const gender = container.querySelector<HTMLSelectElement>("form select");
     await act(async () => {
       changeInput(inputs[0], "Sam Player");
       changeInput(inputs[1], "sam@example.com");
+      if (gender) changeSelect(gender, "FEMALE");
       changeInput(inputs[2], "password123");
       changeInput(inputs[3], "password124");
       container
@@ -204,9 +217,11 @@ describe("authentication pages", () => {
     await act(async () => root.render(<SignupPage />));
 
     const inputs = container.querySelectorAll<HTMLInputElement>("form input");
+    const gender = container.querySelector<HTMLSelectElement>("form select");
     await act(async () => {
       changeInput(inputs[0], "Sam Player");
       changeInput(inputs[1], "sam@example.com");
+      if (gender) changeSelect(gender, "MALE");
       changeInput(inputs[2], "password123");
       changeInput(inputs[3], "password123");
     });
@@ -218,6 +233,31 @@ describe("authentication pages", () => {
 
     expect(mocks.push).toHaveBeenCalledWith(
       "/signin?registered=true&callbackUrl=%2Fsession%2FABC123%3Ftab%3Dstandings"
+    );
+  });
+
+  it("requires gender for Mixed pairing during signup", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    await act(async () => root.render(<SignupPage />));
+
+    const inputs = container.querySelectorAll<HTMLInputElement>("form input");
+    await act(async () => {
+      changeInput(inputs[0], "Sam Player");
+      changeInput(inputs[1], "sam@example.com");
+      changeInput(inputs[2], "password123");
+      changeInput(inputs[3], "password123");
+      container
+        .querySelector("form")
+        ?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    });
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(container.textContent).toContain(
+      "Choose your gender for Mixed pairing"
+    );
+    expect(document.activeElement).toBe(
+      container.querySelector("form select")
     );
   });
 });

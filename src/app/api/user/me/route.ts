@@ -8,6 +8,7 @@ import { logError, safeErrorResponse } from "@/lib/errors";
 import { withLegacyClubAliases } from "@/lib/clubContractAliases";
 import { rateLimit } from "@/lib/rateLimit";
 import { logAuditEvent } from "@/lib/serverAudit";
+import { PlayerGender } from "@/types/enums";
 import {
   getQuickAccessDeniedMessage,
   isQuickAccessSession,
@@ -113,17 +114,25 @@ async function updateCurrentUserRoute(request: Request) {
     return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
   }
 
-  const { name } = body as { name?: unknown };
-  if (typeof name !== "string") {
-    return NextResponse.json({ error: "Invalid name" }, { status: 400 });
+  const { name, gender } = body as { name?: unknown; gender?: unknown };
+  const hasNameInput = name !== undefined;
+  const hasGenderInput = gender !== undefined;
+  if (!hasNameInput && !hasGenderInput) {
+    return NextResponse.json({ error: "No profile changes supplied" }, { status: 400 });
   }
 
-  const nextName = name.trim();
-  if (!normalizeNameLookupKey(nextName)) {
+  const nextName = typeof name === "string" ? name.trim() : null;
+  if (hasNameInput && (!nextName || !normalizeNameLookupKey(nextName))) {
     return NextResponse.json(
       { error: "Player name must include letters or numbers" },
       { status: 400 }
     );
+  }
+  if (
+    hasGenderInput &&
+    ![PlayerGender.MALE, PlayerGender.FEMALE].includes(gender as PlayerGender)
+  ) {
+    return NextResponse.json({ error: "Invalid gender" }, { status: 400 });
   }
 
   const currentUser = await prisma.user.findUnique({
@@ -154,13 +163,15 @@ async function updateCurrentUserRoute(request: Request) {
     );
   }
 
-  if (nextName === currentUser.name) {
+  const nameChanged = nextName !== null && nextName !== currentUser.name;
+  const genderChanged = hasGenderInput && gender !== currentUser.gender;
+  if (!nameChanged && !genderChanged) {
     return NextResponse.json({
       user: toCurrentUserPayload(currentUser, session),
     });
   }
 
-  if (currentUser.selfNameChangedAt !== null) {
+  if (nameChanged && currentUser.selfNameChangedAt !== null) {
     return NextResponse.json(
       { error: "Player name can only be changed once" },
       { status: 409 }
@@ -170,8 +181,9 @@ async function updateCurrentUserRoute(request: Request) {
   const updatedUser = await prisma.user.update({
     where: { id: currentUser.id },
     data: {
-      name: nextName,
-      selfNameChangedAt: new Date(),
+      name: nameChanged ? nextName : undefined,
+      selfNameChangedAt: nameChanged ? new Date() : undefined,
+      gender: genderChanged ? (gender as PlayerGender) : undefined,
     },
     select: {
       id: true,
@@ -189,15 +201,19 @@ async function updateCurrentUserRoute(request: Request) {
   });
 
   logAuditEvent({
-    action: "user.rename_self",
+    action: nameChanged ? "user.rename_self" : "user.update_gender_self",
     actor: {
       email: currentUser.email ?? session.user.email ?? null,
       isGlobalAdmin: !!session.user.isAdmin,
       userId: currentUser.id,
     },
     details: {
-      previousName: currentUser.name,
-      nextName,
+      ...(nameChanged
+        ? { previousName: currentUser.name, nextName }
+        : {
+            previousGender: currentUser.gender,
+            nextGender: gender,
+          }),
     },
     outcome: "success",
     request,

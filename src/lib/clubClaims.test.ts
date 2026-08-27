@@ -32,6 +32,9 @@ function createClaimApprovalTransactionMock({
           email: "new@example.com",
           avatarKey: requesterAvatarKey,
           isClaimed: true,
+          gender: PlayerGender.MALE,
+          partnerPreference: PartnerPreference.OPEN,
+          mixedSideOverride: null,
         },
         target: {
           id: "placeholder-1",
@@ -136,7 +139,7 @@ describe("club claim helpers", () => {
     ).toBe(false);
   });
 
-  it("keeps the requester's chosen name when approving a claim", async () => {
+  it("keeps the requester's self-declared identity when approving a claim", async () => {
     const tx = createClaimApprovalTransactionMock();
 
     const result = await approveClubClaimRequest(tx as unknown as Parameters<typeof approveClubClaimRequest>[0], {
@@ -145,14 +148,7 @@ describe("club claim helpers", () => {
       reviewerUserId: "admin-1",
     });
 
-    expect(tx.user.update).toHaveBeenCalledWith({
-      where: { id: "requester-1" },
-      data: {
-        gender: PlayerGender.FEMALE,
-        partnerPreference: PartnerPreference.OPEN,
-        mixedSideOverride: null,
-      },
-    });
+    expect(tx.user.update).not.toHaveBeenCalled();
     expect(result.requesterName).toBe("New Signup");
     expect(deleteDisposableUnclaimedUsers).toHaveBeenCalledWith(tx, ["placeholder-1"]);
   });
@@ -170,12 +166,7 @@ describe("club claim helpers", () => {
 
     expect(tx.user.update).toHaveBeenNthCalledWith(1, {
       where: { id: "requester-1" },
-      data: {
-        gender: PlayerGender.FEMALE,
-        partnerPreference: PartnerPreference.OPEN,
-        mixedSideOverride: null,
-        avatarKey: "https://cdn.test/placeholder.webp",
-      },
+      data: { avatarKey: "https://cdn.test/placeholder.webp" },
     });
     expect(tx.user.update).toHaveBeenNthCalledWith(2, {
       where: { id: "placeholder-1" },
@@ -198,15 +189,8 @@ describe("club claim helpers", () => {
       reviewerUserId: "admin-1",
     });
 
-    expect(tx.user.update).toHaveBeenNthCalledWith(1, {
-      where: { id: "requester-1" },
-      data: {
-        gender: PlayerGender.FEMALE,
-        partnerPreference: PartnerPreference.OPEN,
-        mixedSideOverride: null,
-      },
-    });
-    expect(tx.user.update).toHaveBeenNthCalledWith(2, {
+    expect(tx.user.update).toHaveBeenCalledTimes(1);
+    expect(tx.user.update).toHaveBeenCalledWith({
       where: { id: "placeholder-1" },
       data: { avatarKey: null },
     });

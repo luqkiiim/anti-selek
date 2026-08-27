@@ -5,6 +5,7 @@ import { checkRateLimit, rateLimit } from "@/lib/rateLimit";
 import { logAuditEvent } from "@/lib/serverAudit";
 import { logError, safeErrorResponse } from "@/lib/errors";
 import { isGlobalAdminEmail } from "@/lib/globalAdmin";
+import { PlayerGender } from "@/types/enums";
 
 export const dynamic = "force-dynamic";
 
@@ -22,10 +23,11 @@ export async function POST(request: Request) {
     if (!body || typeof body !== "object") {
       return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
     }
-    const { email, password, name } = body as {
+    const { email, password, name, gender } = body as {
       email?: unknown;
       password?: unknown;
       name?: unknown;
+      gender?: unknown;
     };
 
     if (
@@ -38,6 +40,17 @@ export async function POST(request: Request) {
         { status: 400 }
       );
     }
+    if (
+      ![PlayerGender.MALE, PlayerGender.FEMALE].includes(
+        gender as PlayerGender
+      )
+    ) {
+      return NextResponse.json(
+        { error: "Choose Male or Female for Mixed pairing" },
+        { status: 400 }
+      );
+    }
+    const resolvedGender = gender as PlayerGender;
 
     normalizedEmail = email.trim().toLowerCase();
     const normalizedName = name.trim();
@@ -93,7 +106,6 @@ export async function POST(request: Request) {
         }
       );
     }
-
     if (isGlobalAdminEmail(normalizedEmail)) {
       logAuditEvent({
         action: "auth.sign_up",
@@ -156,6 +168,7 @@ export async function POST(request: Request) {
         where: { id: existingByEmail.id },
         data: {
           name: normalizedName,
+          gender: resolvedGender,
           passwordHash,
           isClaimed: true,
         },
@@ -166,6 +179,7 @@ export async function POST(request: Request) {
           email: normalizedEmail,
           passwordHash,
           name: normalizedName,
+          gender: resolvedGender,
           isClaimed: true,
         },
       });
@@ -193,6 +207,7 @@ export async function POST(request: Request) {
       id: user.id,
       email: user.email,
       name: user.name,
+      gender: user.gender,
       isClaimed: user.isClaimed,
     });
   } catch (error) {

@@ -62,6 +62,7 @@ function createJsonResponse(body: unknown, status = 200) {
 function buildCurrentUser(overrides?: Partial<{
   avatarUrl: string | null;
   canRenameName: boolean;
+  gender: string;
   id: string;
   isClaimed: boolean;
   isQuickAccess: boolean;
@@ -76,6 +77,7 @@ function buildCurrentUser(overrides?: Partial<{
     isQuickAccess: false,
     selfNameChangedAt: null,
     canRenameName: true,
+    gender: "MALE",
     ...overrides,
   };
 }
@@ -158,5 +160,34 @@ describe("settings page", () => {
     expect(container.textContent).toContain("Rename used");
     expect(container.textContent).toContain("Your one-time rename was used on");
     expect(input.disabled).toBe(true);
+  });
+
+  it("lets a legacy full account complete its missing gender", async () => {
+    await renderPage({ gender: "UNSPECIFIED" });
+    mocks.fetch.mockResolvedValueOnce(
+      createJsonResponse({
+        user: buildCurrentUser({ gender: "FEMALE" }),
+      })
+    );
+
+    expect(container.textContent).toContain("Required");
+    const femaleButton = Array.from(container.querySelectorAll("button")).find(
+      (button) => button.textContent === "Female"
+    );
+    await act(async () => {
+      femaleButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    expect(mocks.fetch).toHaveBeenLastCalledWith(
+      "/api/user/me",
+      expect.objectContaining({
+        method: "PATCH",
+        body: JSON.stringify({ gender: "FEMALE" }),
+      })
+    );
+    expect(container.textContent).toContain(
+      "Gender for Mixed pairing updated."
+    );
   });
 });
