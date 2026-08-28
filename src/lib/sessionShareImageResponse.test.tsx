@@ -31,4 +31,26 @@ describe("session share image response", () => {
     expect(response.headers.get("content-type")).toContain("image/png");
     expect(bytes.byteLength).toBeGreaterThan(1_000);
   });
+
+  it("renders the two-column standings layout into PNG bytes", async () => {
+    const viewModel = buildSessionShareImageViewModel({
+      sessionName: "Championship Finals",
+      clubName: "Badminton Usuals",
+      sessionType: SessionType.POINTS,
+      players: Array.from({ length: 12 }, (_, index) => ({
+        userId: `u${index + 1}`,
+        sessionPoints: 24 - index,
+        user: { name: `Player ${index + 1}` },
+      })),
+      matches: [],
+    });
+    const response = new ImageResponse(renderSessionShareImage(viewModel), {
+      width: SESSION_SHARE_IMAGE_WIDTH,
+      height: SESSION_SHARE_IMAGE_HEIGHT,
+    });
+    const bytes = await response.arrayBuffer();
+
+    expect(response.headers.get("content-type")).toContain("image/png");
+    expect(bytes.byteLength).toBeGreaterThan(1_000);
+  });
 });
