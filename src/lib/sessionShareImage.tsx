@@ -10,6 +10,7 @@ import {
 import { getSessionTypeLabel } from "@/lib/sessionModeLabels";
 import {
   AVATAR_MAX_FILE_BYTES,
+  isSupportedAvatarMimeType,
 } from "@/lib/avatar";
 import { MatchStatus, SessionType } from "@/types/enums";
 
@@ -20,7 +21,6 @@ export const SESSION_SHARE_IMAGE_PLAYER_LIMIT = 13;
 const SHARE_AVATAR_FETCH_TIMEOUT_MS = 4_000;
 const SHARE_PODIUM_AVATAR_SIZE = 136;
 const SHARE_ROW_AVATAR_SIZE = 92;
-const SHARE_IMAGE_AVATAR_MIME_TYPES = new Set(["image/jpeg", "image/png"]);
 
 export interface SessionShareImagePlayer {
   userId: string;
@@ -314,9 +314,23 @@ export function buildSessionShareImageViewModel({
   };
 }
 
-async function readBlobAsDataUrl(blob: Blob, contentType: string) {
-  const bytes = Buffer.from(await blob.arrayBuffer()).toString("base64");
-  return `data:${contentType};base64,${bytes}`;
+async function readBlobAsShareImageDataUrl(blob: Blob, contentType: string) {
+  let bytes = Buffer.from(await blob.arrayBuffer());
+  let outputContentType = contentType;
+
+  if (contentType === "image/webp") {
+    const { default: sharp } = await import("sharp");
+    bytes = await sharp(bytes)
+      .rotate()
+      .resize(SHARE_PODIUM_AVATAR_SIZE, SHARE_PODIUM_AVATAR_SIZE, {
+        fit: "cover",
+      })
+      .png()
+      .toBuffer();
+    outputContentType = "image/png";
+  }
+
+  return `data:${outputContentType};base64,${bytes.toString("base64")}`;
 }
 
 export async function fetchShareImageAvatarDataUrls(
@@ -353,10 +367,7 @@ export async function fetchShareImageAvatarDataUrls(
           .get("content-type")
           ?.split(";")[0]
           .trim();
-        // next/og cannot reliably decode embedded WebP data URLs. Keep the
-        // source-avatar feature broad, but use initials for formats it cannot
-        // render in this server-generated PNG.
-        if (!contentType || !SHARE_IMAGE_AVATAR_MIME_TYPES.has(contentType)) {
+        if (!contentType || !isSupportedAvatarMimeType(contentType)) {
           return;
         }
 
@@ -375,7 +386,7 @@ export async function fetchShareImageAvatarDataUrls(
 
         avatarDataUrlsByUserId.set(
           standing.userId,
-          await readBlobAsDataUrl(blob, contentType)
+          await readBlobAsShareImageDataUrl(blob, contentType)
         );
       } catch {
         // Avatar rendering is best-effort; initials keep the share image useful.

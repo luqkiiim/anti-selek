@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
+import { ImageResponse } from "next/og";
+import sharp from "sharp";
 import { MatchStatus, SessionType } from "@/types/enums";
 import {
   buildSessionShareImageViewModel,
@@ -204,12 +206,22 @@ describe("session share image", () => {
     expect(avatarMap.has("u2")).toBe(false);
   });
 
-  it("skips WebP avatars because next/og cannot render their data URLs", async () => {
+  it("converts WebP avatars to PNG data URLs that next/og can render", async () => {
+    const webpBytes = await sharp({
+      create: {
+        width: 2,
+        height: 2,
+        channels: 4,
+        background: { r: 15, g: 118, b: 110, alpha: 1 },
+      },
+    })
+      .webp()
+      .toBuffer();
     const fetchImpl = vi.fn().mockResolvedValue(
-      new Response(new Blob(["webp"], { type: "image/webp" }), {
+      new Response(new Blob([new Uint8Array(webpBytes)], { type: "image/webp" }), {
         headers: {
           "content-type": "image/webp",
-          "content-length": "4",
+          "content-length": String(webpBytes.byteLength),
         },
       })
     );
@@ -234,6 +246,20 @@ describe("session share image", () => {
     );
 
     expect(fetchImpl).toHaveBeenCalledTimes(1);
-    expect(avatarMap.has("u1")).toBe(false);
+    expect(avatarMap.get("u1")).toMatch(/^data:image\/png;base64,/);
+
+    const viewModel = buildSessionShareImageViewModel({
+      sessionName: "Weekend Cup",
+      clubName: "Badminton Usuals",
+      sessionType: SessionType.POINTS,
+      players: [{ userId: "u1", sessionPoints: 12, user: { name: "Lina" } }],
+      matches: [],
+    });
+    const response = new ImageResponse(
+      renderSessionShareImage(viewModel, avatarMap),
+      { width: 1080, height: 1920 }
+    );
+
+    expect((await response.arrayBuffer()).byteLength).toBeGreaterThan(1_000);
   });
 });
