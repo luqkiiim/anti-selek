@@ -315,22 +315,22 @@ export function buildSessionShareImageViewModel({
 }
 
 async function readBlobAsShareImageDataUrl(blob: Blob, contentType: string) {
-  let bytes = Buffer.from(await blob.arrayBuffer());
-  let outputContentType = contentType;
+  const bytes = Buffer.from(await blob.arrayBuffer());
 
   if (contentType === "image/webp") {
     const { default: sharp } = await import("sharp");
-    bytes = await sharp(bytes)
+    const pngBytes = await sharp(bytes)
       .rotate()
       .resize(SHARE_PODIUM_AVATAR_SIZE, SHARE_PODIUM_AVATAR_SIZE, {
         fit: "cover",
       })
       .png()
       .toBuffer();
-    outputContentType = "image/png";
+
+    return `data:image/png;base64,${pngBytes.toString("base64")}`;
   }
 
-  return `data:${outputContentType};base64,${bytes.toString("base64")}`;
+  return `data:${contentType};base64,${bytes.toString("base64")}`;
 }
 
 export async function fetchShareImageAvatarDataUrls(
