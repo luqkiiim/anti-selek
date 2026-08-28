@@ -212,8 +212,17 @@ async function getSessionShareImageRoute(
     }
   );
 
-  imageResponse.headers.set("Cache-Control", "private, no-store");
-  return imageResponse;
+  // ImageResponse encodes its JSX body asynchronously. Consume it before
+  // returning so encoder failures are caught by GET and logged rather than
+  // becoming an unobservable Vercel 500 after this handler has returned.
+  const imageBytes = await imageResponse.arrayBuffer();
+
+  return new Response(imageBytes, {
+    headers: {
+      "Cache-Control": "private, no-store",
+      "Content-Type": "image/png",
+    },
+  });
 }
 
 export async function GET(...args: Parameters<typeof getSessionShareImageRoute>) {
