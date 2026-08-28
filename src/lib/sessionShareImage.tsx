@@ -10,7 +10,6 @@ import {
 import { getSessionTypeLabel } from "@/lib/sessionModeLabels";
 import {
   AVATAR_MAX_FILE_BYTES,
-  isSupportedAvatarMimeType,
 } from "@/lib/avatar";
 import { MatchStatus, SessionType } from "@/types/enums";
 
@@ -21,6 +20,7 @@ export const SESSION_SHARE_IMAGE_PLAYER_LIMIT = 13;
 const SHARE_AVATAR_FETCH_TIMEOUT_MS = 4_000;
 const SHARE_PODIUM_AVATAR_SIZE = 136;
 const SHARE_ROW_AVATAR_SIZE = 92;
+const SHARE_IMAGE_AVATAR_MIME_TYPES = new Set(["image/jpeg", "image/png"]);
 
 export interface SessionShareImagePlayer {
   userId: string;
@@ -353,7 +353,10 @@ export async function fetchShareImageAvatarDataUrls(
           .get("content-type")
           ?.split(";")[0]
           .trim();
-        if (!contentType || !isSupportedAvatarMimeType(contentType)) {
+        // next/og cannot reliably decode embedded WebP data URLs. Keep the
+        // source-avatar feature broad, but use initials for formats it cannot
+        // render in this server-generated PNG.
+        if (!contentType || !SHARE_IMAGE_AVATAR_MIME_TYPES.has(contentType)) {
           return;
         }
 

@@ -203,4 +203,37 @@ describe("session share image", () => {
     expect(avatarMap.get("u1")).toMatch(/^data:image\/png;base64,/);
     expect(avatarMap.has("u2")).toBe(false);
   });
+
+  it("skips WebP avatars because next/og cannot render their data URLs", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(
+      new Response(new Blob(["webp"], { type: "image/webp" }), {
+        headers: {
+          "content-type": "image/webp",
+          "content-length": "4",
+        },
+      })
+    );
+
+    const avatarMap = await fetchShareImageAvatarDataUrls(
+      [
+        {
+          rank: 1,
+          userId: "u1",
+          name: "Lina",
+          initials: "L",
+          avatarUrl: "https://cdn.test/lina.webp",
+          isGuest: false,
+          score: 12,
+          scoreLabel: "Points",
+          wins: 3,
+          losses: 1,
+          pointDiff: 7,
+        },
+      ],
+      { fetchImpl: fetchImpl as unknown as typeof fetch }
+    );
+
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    expect(avatarMap.has("u1")).toBe(false);
+  });
 });
