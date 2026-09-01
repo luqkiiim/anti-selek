@@ -249,7 +249,7 @@ test.describe("tutorial playground mobile walkthrough", () => {
       .click();
     const playersModal = page
       .getByRole("dialog")
-      .filter({ has: page.getByRole("heading", { name: "Add Players" }) });
+      .filter({ has: page.getByRole("heading", { name: "Add players" }) });
     await expect(playersModal).toBeVisible();
     await playersModal.getByRole("button", { name: "Select All" }).click();
     await playersModal.getByRole("button", { name: "Done" }).click();

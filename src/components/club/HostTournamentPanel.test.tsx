@@ -12,9 +12,15 @@ import {
 function renderPanel({
   matchmakingStyle = SessionMatchmakingStyle.BALANCED,
   creationIssues = [],
+  poolsEnabled = false,
+  selectedPlayerCount = 0,
+  guestCount = 0,
 }: {
   matchmakingStyle?: SessionMatchmakingStyle;
   creationIssues?: string[];
+  poolsEnabled?: boolean;
+  selectedPlayerCount?: number;
+  guestCount?: number;
 } = {}) {
   return renderToStaticMarkup(
     <HostTournamentPanel
@@ -47,20 +53,19 @@ function renderPanel({
       mixedModeLabel="Mixed"
       courtCount={2}
       onCourtCountChange={vi.fn()}
-      poolsEnabled={false}
+      poolsEnabled={poolsEnabled}
       onPoolsEnabledChange={vi.fn()}
       selectedPoolCounts={{
-        [SessionPool.A]: 0,
-        [SessionPool.B]: 0,
+        [SessionPool.A]: poolsEnabled ? 2 : 0,
+        [SessionPool.B]: poolsEnabled ? 1 : 0,
       }}
       guestPoolCounts={{
         [SessionPool.A]: 0,
-        [SessionPool.B]: 0,
+        [SessionPool.B]: poolsEnabled ? guestCount : 0,
       }}
-      selectedPlayerCount={0}
-      guestCount={0}
+      selectedPlayerCount={selectedPlayerCount}
+      guestCount={guestCount}
       onOpenPlayers={vi.fn()}
-      onOpenGuests={vi.fn()}
       onCreateSession={vi.fn()}
       creatingSession={false}
       creationIssues={creationIssues}
@@ -115,6 +120,27 @@ describe("HostTournamentPanel", () => {
     );
     expect(markup).toContain(
       'data-tutorial-target="admin-onboarding-create-session"'
+    );
+  });
+
+  it("uses one Add players roster action", () => {
+    const markup = renderPanel();
+
+    expect(markup).toContain(">Add players<");
+    expect(markup).toContain("0 added");
+    expect(markup).not.toContain(">Guests<");
+    expect(markup).not.toContain(">Manage<");
+  });
+
+  it("combines member, guest, and group counts", () => {
+    const markup = renderPanel({
+      poolsEnabled: true,
+      selectedPlayerCount: 3,
+      guestCount: 1,
+    });
+
+    expect(markup).toContain(
+      "4 added · 2 Competitive · 2 Social · 1 guest"
     );
   });
 

@@ -48,9 +48,11 @@ function getDefaultProps() {
     guestMixedSideOverride: null,
     guestRepresentingClubId: "",
     guestInitialElo: 1000,
+    guestFormError: "",
     addingGuest: false,
     addingPlayerId: null,
     playersNotInSession: [availablePlayer],
+    existingParticipantNames: [],
     onClose: vi.fn(),
     onRosterSearchChange: vi.fn(),
     onRosterPoolChange: vi.fn(),
@@ -60,7 +62,8 @@ function getDefaultProps() {
     onGuestMixedSideOverrideChange: vi.fn(),
     onGuestRepresentingClubChange: vi.fn(),
     onGuestInitialEloChange: vi.fn(),
-    onAddGuest: vi.fn(),
+    onResetGuestDraft: vi.fn(),
+    onAddGuest: vi.fn(async () => true),
     onAddPlayer: vi.fn(),
   };
 }
@@ -88,17 +91,18 @@ describe("SessionRosterModal", () => {
     document.body.innerHTML = "";
   });
 
-  it("renders available club players while keeping guest creation collapsed", async () => {
+  it("renders available club players without a permanent guest form", async () => {
     await act(async () => {
       root.render(<SessionRosterModal {...getDefaultProps()} />);
     });
 
     expect(document.body.textContent).toContain("Host Player 4");
     expect(document.body.textContent).toContain("Rating 1120");
-    expect(document.body.textContent).toContain("Add guest instead");
+    expect(document.body.textContent).not.toContain("Add guest instead");
+    expect(document.body.textContent).not.toContain("as a guest");
     expect(document.body.textContent).not.toContain("Anti-SeleK");
     expect(
-      document.body.querySelector('input[placeholder="Guest name"]')
+      document.body.querySelector('input[aria-label="Guest starting rating"]')
     ).toBeNull();
     expect(document.body.textContent).not.toContain("Add Guest");
   });
@@ -141,20 +145,21 @@ describe("SessionRosterModal", () => {
     expect(onAddPlayer).toHaveBeenCalledWith(interclubPlayer);
   });
 
-  it("shows the guest form after expanding the secondary guest action", async () => {
+  it("shows the guest dialog from a missing-name search result", async () => {
     await act(async () => {
       root.render(
         <SessionRosterModal
           {...getDefaultProps()}
           isMixicano
           poolsEnabled
+          rosterSearch="New Guest"
           guestMixedSideOverride={MixedSide.UPPER}
         />
       );
     });
 
     const toggle = Array.from(document.body.querySelectorAll("button")).find(
-      (button) => button.textContent?.includes("Add guest instead")
+      (button) => button.textContent?.includes("Add “New Guest” as a guest")
     );
     expect(toggle).toBeDefined();
 
@@ -163,9 +168,9 @@ describe("SessionRosterModal", () => {
     });
 
     expect(
-      document.body.querySelector('input[placeholder="Guest name"]')
+      document.body.querySelector('input[type="text"]')
     ).not.toBeNull();
-    expect(document.body.textContent).toContain("Add Guest");
+    expect(document.body.textContent).toContain("Add guest");
     expect(document.body.textContent).toContain("Beginner (850)");
     expect(document.body.textContent).toContain("Social");
     expect(
@@ -218,22 +223,22 @@ describe("SessionRosterModal", () => {
     );
   });
 
-  it("collapses guest creation again after the sheet is closed", async () => {
-    const props = getDefaultProps();
+  it("closes guest creation again after the picker is closed", async () => {
+    const props = { ...getDefaultProps(), rosterSearch: "New Guest" };
 
     await act(async () => {
       root.render(<SessionRosterModal {...props} />);
     });
 
     const toggle = Array.from(document.body.querySelectorAll("button")).find(
-      (button) => button.textContent?.includes("Add guest instead")
+      (button) => button.textContent?.includes("Add “New Guest” as a guest")
     );
 
     await act(async () => {
       toggle?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
     expect(
-      document.body.querySelector('input[placeholder="Guest name"]')
+      document.body.querySelector('input[type="text"]')
     ).not.toBeNull();
 
     const doneButton = Array.from(document.body.querySelectorAll("button")).find(
@@ -250,11 +255,11 @@ describe("SessionRosterModal", () => {
     });
 
     expect(
-      document.body.querySelector('input[placeholder="Guest name"]')
+      document.body.querySelector('select[aria-label="Guest starting rating"]')
     ).toBeNull();
   });
 
-  it("uses clear empty-state copy when no club players are available", async () => {
+  it("offers a guest action when no club player matches", async () => {
     await act(async () => {
       root.render(
         <SessionRosterModal
@@ -265,14 +270,7 @@ describe("SessionRosterModal", () => {
       );
     });
 
-    expect(document.body.textContent).toContain(
-      "No available club players."
-    );
-    expect(document.body.textContent).toContain(
-      "Try another search or add a guest instead."
-    );
-    expect(document.body.textContent).not.toContain(
-      "Everyone is already playing"
-    );
+    expect(document.body.textContent).toContain("Add “zzz” as a guest");
+    expect(document.body.textContent).toContain("No exact club player match.");
   });
 });

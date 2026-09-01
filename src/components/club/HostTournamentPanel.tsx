@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronDown, SlidersHorizontal, UserPlus, Users, X } from "lucide-react";
+import { ChevronDown, SlidersHorizontal, Users, X } from "lucide-react";
 import type { ClubCollabCandidate } from "./clubTypes";
 import {
   SessionBalanceMetric,
@@ -48,7 +48,6 @@ interface HostTournamentPanelProps {
   selectedPlayerCount: number;
   guestCount: number;
   onOpenPlayers: () => void;
-  onOpenGuests: () => void;
   onCreateSession: () => void;
   creatingSession: boolean;
   creationIssues: readonly string[];
@@ -132,13 +131,11 @@ function RosterRow({
   actionLabel: string;
   onClick: () => void;
 }) {
-  const Icon = label === "Players" ? Users : UserPlus;
-
   return (
     <div className="flex items-center justify-between gap-3 rounded-xl border border-gray-200 bg-gray-50/80 px-3 py-3 sm:px-4">
       <div className="flex min-w-0 items-center gap-3">
         <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-blue-200 bg-blue-50 text-blue-700">
-          <Icon aria-hidden="true" size={18} />
+          <Users aria-hidden="true" size={18} />
         </span>
         <div className="min-w-0">
           <p className="text-sm font-semibold text-gray-900">{label}</p>
@@ -149,9 +146,7 @@ function RosterRow({
         type="button"
         onClick={onClick}
         className="app-button-secondary shrink-0 px-3 py-2 text-sm"
-        data-tutorial-target={
-          label === "Players" ? "admin-onboarding-host-players" : undefined
-        }
+        data-tutorial-target="admin-onboarding-host-players"
       >
         {actionLabel}
       </button>
@@ -246,7 +241,6 @@ export function HostTournamentPanel({
   selectedPlayerCount,
   guestCount,
   onOpenPlayers,
-  onOpenGuests,
   onCreateSession,
   creatingSession,
   creationIssues,
@@ -257,6 +251,15 @@ export function HostTournamentPanel({
   const isInterclub = collabFormat === SessionCollabFormat.INTERCLUB;
   const trimmedPartnerSearch = partnerClubSearch.trim();
   const selectedStyleInfo = MATCHMAKING_STYLE_INFO[matchmakingStyle];
+  const participantCount = selectedPlayerCount + guestCount;
+  const competitiveCount =
+    selectedPoolCounts[SessionPool.A] + guestPoolCounts[SessionPool.A];
+  const socialCount =
+    selectedPoolCounts[SessionPool.B] + guestPoolCounts[SessionPool.B];
+  const guestCountLabel = `${guestCount} ${guestCount === 1 ? "guest" : "guests"}`;
+  const rosterCountLabel = poolsEnabled
+    ? `${participantCount} added · ${competitiveCount} Competitive · ${socialCount} Social${guestCount > 0 ? ` · ${guestCountLabel}` : ""}`
+    : `${participantCount} added${guestCount > 0 ? ` · ${guestCountLabel}` : ""}`;
 
   return (
     <section className="app-panel min-w-0 max-w-full overflow-hidden p-3 sm:p-4">
@@ -355,25 +358,9 @@ export function HostTournamentPanel({
           <div className="grid gap-2">
             <RosterRow
               label="Players"
-              countLabel={
-                loadingCollabRoster
-                  ? "Loading collab roster"
-                  : poolsEnabled
-                    ? `${selectedPlayerCount} selected · ${selectedPoolCounts[SessionPool.A]} Competitive · ${selectedPoolCounts[SessionPool.B]} Social`
-                    : `${selectedPlayerCount} selected`
-              }
-              actionLabel="Choose"
+              countLabel={loadingCollabRoster ? "Loading collab roster" : rosterCountLabel}
+              actionLabel="Add players"
               onClick={onOpenPlayers}
-            />
-            <RosterRow
-              label="Guests"
-              countLabel={
-                poolsEnabled
-                  ? `${guestCount} added · ${guestPoolCounts[SessionPool.A]} Competitive · ${guestPoolCounts[SessionPool.B]} Social`
-                  : `${guestCount} added`
-              }
-              actionLabel="Manage"
-              onClick={onOpenGuests}
             />
           </div>
         </div>

@@ -113,12 +113,15 @@ export function useClubHostSetup({
   const [guestPoolInput, setGuestPoolInput] = useState<SessionPool>(
     SessionPool.B
   );
+  const [guestInitialEloInput, setGuestInitialEloInput] = useState(
+    DEFAULT_GUEST_INITIAL_ELO
+  );
   const [guestRepresentingClubInput, setGuestRepresentingClubInput] =
     useState("");
   const [guestConfigs, setGuestConfigs] = useState<ClubGuestConfig[]>([]);
+  const [guestFormError, setGuestFormError] = useState("");
   const [creatingSession, setCreatingSession] = useState(false);
   const [showPlayersModal, setShowPlayersModal] = useState(false);
-  const [showGuestsModal, setShowGuestsModal] = useState(false);
   const [playerSearch, setPlayerSearch] = useState("");
   const [savingPreferredPoolPlayerId, setSavingPreferredPoolPlayerId] =
     useState<string | null>(null);
@@ -149,10 +152,11 @@ export function useClubHostSetup({
     setGuestGenderInput(PlayerGender.MALE);
     setGuestMixedSideOverrideInput(null);
     setGuestPoolInput(SessionPool.B);
+    setGuestInitialEloInput(DEFAULT_GUEST_INITIAL_ELO);
     setGuestRepresentingClubInput("");
+    setGuestFormError("");
     setPlayerSearch("");
     setShowPlayersModal(false);
-    setShowGuestsModal(false);
   }, [clubId]);
 
   useEffect(() => {
@@ -514,6 +518,8 @@ export function useClubHostSetup({
       setGuestGenderInput(PlayerGender.MALE);
       setGuestMixedSideOverrideInput(null);
       setGuestPoolInput(SessionPool.B);
+      setGuestInitialEloInput(DEFAULT_GUEST_INITIAL_ELO);
+      setGuestFormError("");
       setAutoQueueEnabled(false);
       setRespectPlayerRest(true);
       setCourtCount(DEFAULT_COURT_COUNT);
@@ -666,25 +672,53 @@ export function useClubHostSetup({
     }));
   };
 
+  const resetGuestDraft = () => {
+    setGuestNameInput("");
+    setGuestGenderInput(PlayerGender.MALE);
+    setGuestMixedSideOverrideInput(null);
+    setGuestPoolInput(SessionPool.B);
+    setGuestInitialEloInput(DEFAULT_GUEST_INITIAL_ELO);
+    setGuestFormError("");
+    if (isInterclub) {
+      setGuestRepresentingClubInput(interclubClubIds[0] ?? "");
+    }
+  };
+
   const addGuestName = () => {
     const trimmed = guestNameInput.trim();
-    if (!trimmed) return;
+    setGuestFormError("");
+    if (trimmed.length < 2) {
+      setGuestFormError("Guest name must be at least 2 characters.");
+      return false;
+    }
+    if (
+      effectiveSelectablePlayers.some(
+        (player) => player.name.trim().toLowerCase() === trimmed.toLowerCase()
+      )
+    ) {
+      setGuestFormError("A club player with this name already exists.");
+      return false;
+    }
     if (
       sessionMode === SessionMode.MIXICANO &&
       ![PlayerGender.MALE, PlayerGender.FEMALE].includes(guestGenderInput)
     ) {
-      setError(
+      setGuestFormError(
         `Choose MALE/FEMALE for guest before adding in ${mixedModeLabel}`
       );
-      return;
+      return false;
     }
     if (
       guestConfigs.some(
         (guest) => guest.name.toLowerCase() === trimmed.toLowerCase()
       )
     ) {
-      setGuestNameInput("");
-      return;
+      setGuestFormError("This guest has already been added.");
+      return false;
+    }
+    if (isInterclub && !guestRepresentingClubInput) {
+      setGuestFormError("Choose a club side for this guest.");
+      return false;
     }
     const resolvedMixedState = resolveMixedSideState({
       gender: guestGenderInput,
@@ -698,19 +732,14 @@ export function useClubHostSetup({
         partnerPreference: resolvedMixedState.partnerPreference,
         mixedSideOverride: resolvedMixedState.mixedSideOverride,
         pool: guestPoolInput,
-        initialElo: DEFAULT_GUEST_INITIAL_ELO,
+        initialElo: guestInitialEloInput,
         representingClubId: isInterclub
           ? guestRepresentingClubInput || interclubClubIds[0] || null
           : null,
       },
     ]);
-    setGuestNameInput("");
-    setGuestGenderInput(PlayerGender.MALE);
-    setGuestMixedSideOverrideInput(null);
-    setGuestPoolInput(SessionPool.B);
-    if (isInterclub) {
-      setGuestRepresentingClubInput(interclubClubIds[0] ?? "");
-    }
+    resetGuestDraft();
+    return true;
   };
 
   const removeGuestName = (nameToRemove: string) => {
@@ -731,15 +760,7 @@ export function useClubHostSetup({
   const closePlayersModal = () => {
     setShowPlayersModal(false);
     setPlayerSearch("");
-  };
-
-  const openGuestsModal = () => {
-    setShowGuestsModal(true);
-  };
-
-  const closeGuestsModal = () => {
-    setShowGuestsModal(false);
-    setGuestNameInput("");
+    resetGuestDraft();
   };
 
   const selectPartnerClub = (candidate: ClubCollabCandidate) => {
@@ -813,14 +834,17 @@ export function useClubHostSetup({
     setGuestMixedSideOverrideInput,
     guestPoolInput,
     setGuestPoolInput,
+    guestInitialEloInput,
+    setGuestInitialEloInput,
     guestRepresentingClubInput,
     setGuestRepresentingClubInput,
     guestConfigs,
     guestPoolCounts,
+    guestFormError,
+    setGuestFormError,
     creatingSession,
     creationIssues,
     showPlayersModal,
-    showGuestsModal,
     playerSearch,
     setPlayerSearch,
     createSession,
@@ -831,10 +855,9 @@ export function useClubHostSetup({
     updateSelectedPlayerRepresentingClub,
     addGuestName,
     removeGuestName,
+    resetGuestDraft,
     handleGuestGenderChange,
     openPlayersModal,
     closePlayersModal,
-    openGuestsModal,
-    closeGuestsModal,
   };
 }

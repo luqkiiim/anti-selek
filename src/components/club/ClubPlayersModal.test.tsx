@@ -10,7 +10,7 @@ import {
   SessionCollabFormat,
   SessionPool,
 } from "@/types/enums";
-import type { ClubPageMember } from "./clubTypes";
+import type { ClubGuestConfig, ClubPageMember } from "./clubTypes";
 import { ClubPlayersModal } from "./ClubPlayersModal";
 
 vi.mock("@/components/ui/PlayerPickerSheet", () => ({
@@ -39,6 +39,11 @@ function renderModal({
   onSavePlayerPreferredPool = vi.fn(async () => undefined),
   modalPlayer = player,
   selectedPartnerClub = null,
+  playerSearch = "",
+  filteredPlayers = [modalPlayer],
+  guestConfigs = [],
+  onGuestNameChange = vi.fn(),
+  onRemoveGuest = vi.fn(),
 }: {
   canSavePreferredPools: boolean;
   onSavePlayerPreferredPool?: (
@@ -47,18 +52,23 @@ function renderModal({
   ) => Promise<void>;
   modalPlayer?: ClubPageMember;
   selectedPartnerClub?: { id: string; name: string; membersCount: number } | null;
+  playerSearch?: string;
+  filteredPlayers?: ClubPageMember[];
+  guestConfigs?: ClubGuestConfig[];
+  onGuestNameChange?: (value: string) => void;
+  onRemoveGuest?: (name: string) => void;
 }) {
   return (
     <ClubPlayersModal
       open
       selectedPlayerIds={[]}
       selectedPlayerPools={{}}
-      playerSearch=""
+      playerSearch={playerSearch}
       poolsEnabled={false}
       canSavePreferredPools={canSavePreferredPools}
       savingPreferredPoolPlayerId={null}
       selectablePlayers={[modalPlayer]}
-      filteredSelectablePlayers={[modalPlayer]}
+      filteredSelectablePlayers={filteredPlayers}
       onPlayerSearchChange={vi.fn()}
       onToggleAllPlayers={vi.fn()}
       onTogglePlayerSelection={vi.fn()}
@@ -69,7 +79,26 @@ function renderModal({
       hostClubName="Club One"
       selectedPartnerClub={selectedPartnerClub}
       selectedPlayerRepresentingClubs={{}}
+      guestConfigs={guestConfigs}
+      guestNameInput=""
+      guestInitialEloInput={1000}
+      guestGenderInput={PlayerGender.MALE}
+      guestMixedSideOverrideInput={null}
+      guestPoolInput={SessionPool.B}
+      guestRepresentingClubInput=""
+      guestFormError=""
+      isMixed={false}
+      interclubClubOptions={[]}
       onChangePlayerRepresentingClub={vi.fn()}
+      onGuestNameChange={onGuestNameChange}
+      onGuestInitialEloChange={vi.fn()}
+      onGuestGenderChange={vi.fn()}
+      onGuestMixedSideOverrideChange={vi.fn()}
+      onGuestPoolChange={vi.fn()}
+      onGuestRepresentingClubChange={vi.fn()}
+      onAddGuest={vi.fn(() => true)}
+      onRemoveGuest={onRemoveGuest}
+      onResetGuestDraft={vi.fn()}
       onClose={vi.fn()}
     />
   );
@@ -93,6 +122,7 @@ describe("ClubPlayersModal saved group preference", () => {
   afterEach(async () => {
     await act(async () => root.unmount());
     container.remove();
+    document.body.innerHTML = "";
   });
 
   it("lets club operators update only the saved game-group preference", async () => {
@@ -156,5 +186,75 @@ describe("ClubPlayersModal saved group preference", () => {
     });
 
     expect(container.textContent).not.toContain("Saved club preference");
+  });
+
+  it("offers a guest result only when the search has no exact member match", async () => {
+    const onGuestNameChange = vi.fn();
+    await act(async () => {
+      root.render(
+        renderModal({
+          canSavePreferredPools: false,
+          playerSearch: "New Guest",
+          filteredPlayers: [],
+          onGuestNameChange,
+        })
+      );
+    });
+
+    const guestButton = Array.from(document.body.querySelectorAll("button")).find(
+      (button) => button.textContent?.includes("Add “New Guest” as a guest")
+    );
+    expect(guestButton).toBeDefined();
+
+    await act(async () => {
+      guestButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(onGuestNameChange).toHaveBeenCalledWith("New Guest");
+    expect(document.body.textContent).toContain("Average (1000)");
+
+    await act(async () => {
+      root.render(
+        renderModal({
+          canSavePreferredPools: false,
+          playerSearch: "Alex Lee",
+          filteredPlayers: [player],
+        })
+      );
+    });
+    expect(document.body.textContent).not.toContain("Add “Alex Lee” as a guest");
+  });
+
+  it("shows and removes pre-added guests", async () => {
+    const onRemoveGuest = vi.fn();
+    const guest: ClubGuestConfig = {
+      name: "Jamie Guest",
+      gender: PlayerGender.MALE,
+      partnerPreference: PartnerPreference.OPEN,
+      mixedSideOverride: null,
+      pool: SessionPool.B,
+      initialElo: 1000,
+      representingClubId: null,
+    };
+
+    await act(async () => {
+      root.render(
+        renderModal({
+          canSavePreferredPools: false,
+          guestConfigs: [guest],
+          onRemoveGuest,
+        })
+      );
+    });
+
+    expect(document.body.textContent).toContain("Jamie Guest");
+    expect(document.body.textContent).toContain("Guest");
+    const removeButton = Array.from(document.body.querySelectorAll("button")).find(
+      (button) => button.textContent === "Remove"
+    );
+    await act(async () => {
+      removeButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    expect(onRemoveGuest).toHaveBeenCalledWith("Jamie Guest");
   });
 });

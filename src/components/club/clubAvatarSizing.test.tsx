@@ -271,7 +271,26 @@ describe("club avatar sizing", () => {
           hostClubName="Host Club"
           selectedPartnerClub={null}
           selectedPlayerRepresentingClubs={{}}
+          guestConfigs={[]}
+          guestNameInput=""
+          guestInitialEloInput={1000}
+          guestGenderInput={PlayerGender.MALE}
+          guestMixedSideOverrideInput={null}
+          guestPoolInput={SessionPool.B}
+          guestRepresentingClubInput=""
+          guestFormError=""
+          isMixed={false}
+          interclubClubOptions={[]}
           onChangePlayerRepresentingClub={() => undefined}
+          onGuestNameChange={() => undefined}
+          onGuestInitialEloChange={() => undefined}
+          onGuestGenderChange={() => undefined}
+          onGuestMixedSideOverrideChange={() => undefined}
+          onGuestPoolChange={() => undefined}
+          onGuestRepresentingClubChange={() => undefined}
+          onAddGuest={() => true}
+          onRemoveGuest={() => undefined}
+          onResetGuestDraft={() => undefined}
           onClose={() => undefined}
         />
       );

@@ -1,11 +1,10 @@
 "use client";
 
-import { useState } from "react";
-import { ChevronDown } from "lucide-react";
+import { useRef, useState } from "react";
 import { Avatar } from "@/components/ui/Avatar";
+import { GuestDefinitionModal } from "@/components/ui/GuestDefinitionModal";
 import { PlayerPickerSheet } from "@/components/ui/PlayerPickerSheet";
 import { SearchField } from "@/components/ui/SearchField";
-import { getMixedSideOverrideOptionForGender } from "@/lib/mixedSide";
 import { getPlayerGroupLabel } from "@/lib/playerGroups";
 import {
   ClubPlayerStatus,
@@ -14,12 +13,6 @@ import {
   SessionPool,
 } from "@/types/enums";
 import type { ClubUser } from "./sessionTypes";
-
-const GUEST_ELO_PRESETS = [
-  { label: "Beginner", value: 850 },
-  { label: "Average", value: 1000 },
-  { label: "Advanced", value: 1200 },
-] as const;
 
 interface SessionRosterModalProps {
   open: boolean;
@@ -36,9 +29,11 @@ interface SessionRosterModalProps {
   guestMixedSideOverride: MixedSide | null;
   guestRepresentingClubId: string;
   guestInitialElo: number;
+  guestFormError: string;
   addingGuest: boolean;
   addingPlayerId: string | null;
   playersNotInSession: ClubUser[];
+  existingParticipantNames: string[];
   onClose: () => void;
   onRosterSearchChange: (value: string) => void;
   onRosterPoolChange: (value: SessionPool) => void;
@@ -48,7 +43,8 @@ interface SessionRosterModalProps {
   onGuestMixedSideOverrideChange: (value: MixedSide | null) => void;
   onGuestRepresentingClubChange: (value: string) => void;
   onGuestInitialEloChange: (value: number) => void;
-  onAddGuest: () => void;
+  onResetGuestDraft: () => void;
+  onAddGuest: () => Promise<boolean>;
   onAddPlayer: (player: ClubUser) => void;
 }
 
@@ -67,9 +63,11 @@ export function SessionRosterModal({
   guestMixedSideOverride,
   guestRepresentingClubId,
   guestInitialElo,
+  guestFormError,
   addingGuest,
   addingPlayerId,
   playersNotInSession,
+  existingParticipantNames,
   onClose,
   onRosterSearchChange,
   onRosterPoolChange,
@@ -79,275 +77,210 @@ export function SessionRosterModal({
   onGuestMixedSideOverrideChange,
   onGuestRepresentingClubChange,
   onGuestInitialEloChange,
+  onResetGuestDraft,
   onAddGuest,
   onAddPlayer,
 }: SessionRosterModalProps) {
-  const [guestFormOpen, setGuestFormOpen] = useState(false);
+  const [guestModalOpen, setGuestModalOpen] = useState(false);
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
 
   if (!open) return null;
 
-  const mixedSideOption = getMixedSideOverrideOptionForGender(guestGender);
-  const handleClose = () => {
-    setGuestFormOpen(false);
-    onClose();
-  };
-  const guestForm = isAdmin ? (
-    <div className="app-subcard space-y-3 p-3 sm:p-4">
-      <button
-        type="button"
-        onClick={() => setGuestFormOpen((isOpen) => !isOpen)}
-        aria-expanded={guestFormOpen}
-        className="flex w-full items-center justify-between gap-3 text-left"
-      >
-        <span className="flex min-w-0 items-center gap-2">
-          <span className="app-chip app-chip-accent">Guest</span>
-          <span className="text-sm font-semibold text-gray-900">
-            Add guest instead
-          </span>
-        </span>
-        <ChevronDown
-          aria-hidden="true"
-          size={18}
-          className={`shrink-0 text-gray-500 transition ${
-            guestFormOpen ? "rotate-180" : ""
-          }`}
-        />
-      </button>
+  const trimmedSearch = rosterSearch.trim();
+  const normalizedSearch = trimmedSearch.toLowerCase();
+  const hasExactAvailableMemberMatch = playersNotInSession.some(
+    (player) => player.name.trim().toLowerCase() === normalizedSearch
+  );
+  const hasExactParticipantMatch = existingParticipantNames.some(
+    (name) => name.trim().toLowerCase() === normalizedSearch
+  );
+  const canAddGuest =
+    isAdmin &&
+    trimmedSearch.length >= 2 &&
+    !hasExactAvailableMemberMatch &&
+    !hasExactParticipantMatch;
 
-      {guestFormOpen ? (
-        <div
-          className={`grid gap-2 ${
-            isMixicano
-              ? "grid-cols-1 sm:grid-cols-2"
-              : "grid-cols-1 sm:grid-cols-[minmax(0,1fr)_minmax(0,11rem)_auto]"
-          }`}
-        >
-          <input
-            type="text"
-            aria-label="Guest name"
-            placeholder="Guest name"
-            value={guestName}
-            onChange={(event) => onGuestNameChange(event.target.value)}
-            className="field px-3 py-2.5 text-sm"
-          />
-          <select
-            aria-label="Guest starting rating"
-            value={guestInitialElo}
-            onChange={(event) =>
-              onGuestInitialEloChange(parseInt(event.target.value, 10))
-            }
-            className="field px-3 py-2.5 text-sm"
-          >
-            {GUEST_ELO_PRESETS.map((preset) => (
-              <option key={preset.label} value={preset.value}>
-                {preset.label} ({preset.value})
-              </option>
-            ))}
-          </select>
-          {poolsEnabled ? (
-            <select
-              aria-label="Guest game group"
-              value={rosterPool}
-              onChange={(event) =>
-                onRosterPoolChange(event.target.value as SessionPool)
-              }
-              className="field px-3 py-2.5 text-sm"
-            >
-              <option value={SessionPool.A}>Competitive</option>
-              <option value={SessionPool.B}>Social</option>
-            </select>
-          ) : null}
-          {isInterclub ? (
-            <select
-              aria-label="Guest representing club"
-              value={guestRepresentingClubId}
-              onChange={(event) =>
-                onGuestRepresentingClubChange(event.target.value)
-              }
-              className="field px-3 py-2.5 text-sm"
-            >
-              {interclubClubOptions.map((option) => (
-                <option key={option.id} value={option.id}>
-                  {option.name}
-                </option>
-              ))}
-            </select>
-          ) : null}
-          {isMixicano ? (
-            <>
-              <select
-                aria-label="Guest gender"
-                value={guestGender}
-                onChange={(event) =>
-                  onGuestGenderChange(event.target.value as PlayerGender)
-                }
-                className="field px-3 py-2.5 text-sm"
-              >
-                <option value={PlayerGender.MALE}>Male</option>
-                <option value={PlayerGender.FEMALE}>Female</option>
-              </select>
-              <select
-                aria-label="Guest mixed doubles side"
-                value={guestMixedSideOverride ?? ""}
-                onChange={(event) =>
-                  onGuestMixedSideOverrideChange(
-                    event.target.value
-                      ? (event.target.value as MixedSide)
-                      : null
-                  )
-                }
-                className="field px-3 py-2.5 text-sm"
-              >
-                <option value="">Default</option>
-                {mixedSideOption ? (
-                  <option value={mixedSideOption.value}>
-                    {mixedSideOption.label}
-                  </option>
-                ) : null}
-              </select>
-            </>
-          ) : null}
-          <button
-            type="button"
-            onClick={onAddGuest}
-            disabled={addingGuest || !guestName.trim()}
-            className="app-button-secondary px-4 py-2.5 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {addingGuest ? "Adding..." : "Add Guest"}
-          </button>
-        </div>
-      ) : (
-        <p className="text-xs leading-5 text-gray-500">
-          Use this when someone is not in the club roster.
-        </p>
-      )}
-    </div>
-  ) : null;
+  function openGuestModal() {
+    onResetGuestDraft();
+    onGuestNameChange(trimmedSearch);
+    setGuestModalOpen(true);
+  }
+
+  function closeGuestModal() {
+    if (addingGuest) return;
+    setGuestModalOpen(false);
+    onResetGuestDraft();
+  }
+
+  async function submitGuest() {
+    if (!(await onAddGuest())) return;
+    setGuestModalOpen(false);
+    onRosterSearchChange("");
+    requestAnimationFrame(() => searchInputRef.current?.focus());
+  }
+
+  function closePicker() {
+    setGuestModalOpen(false);
+    onClose();
+  }
 
   return (
-    <PlayerPickerSheet
-      open={open}
-      title="Add Players"
-      subtitle={
-        isAdmin
-          ? "Members or guests."
-          : "Members"
-      }
-      onClose={handleClose}
-      toolbar={
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+    <>
+      <PlayerPickerSheet
+        open={open}
+        title="Add players"
+        subtitle={isAdmin ? "Members or guests." : "Members"}
+        onClose={closePicker}
+        toolbar={
           <SearchField
             ariaLabel="Search available club players"
             value={rosterSearch}
             onChange={onRosterSearchChange}
             placeholder="Search players..."
             className="flex-1"
+            inputRef={searchInputRef}
           />
-        </div>
-      }
-      footer={
-        <div className="flex justify-end">
-          <button
-            type="button"
-            onClick={handleClose}
-            className="app-button-primary"
-          >
-            Done
-          </button>
-        </div>
-      }
-    >
-      <div className="space-y-3">
-        {guestForm}
-
-        {playersNotInSession.length === 0 ? (
-          <div className="app-empty px-4 py-10 text-center">
-            <p className="text-sm font-semibold text-gray-900">
-              No available club players.
-            </p>
-            <p className="mt-2 text-sm text-gray-500">
-              Try another search or add a guest instead.
-            </p>
+        }
+        footer={
+          <div className="flex justify-end">
+            <button type="button" onClick={closePicker} className="app-button-primary">
+              Done
+            </button>
           </div>
-        ) : (
-          <div className="space-y-2">
-            {playersNotInSession.map((player) => {
-              const rosterEntryId = `${player.id}:${
-                player.representingClubId ?? ""
-              }`;
-              const selectedGroup =
-                rosterPlayerPools[player.id] ??
-                player.preferredPool ??
-                SessionPool.B;
+        }
+      >
+        <div className="space-y-3">
+          {playersNotInSession.length > 0 ? (
+            <div className="space-y-2">
+              {playersNotInSession.map((player) => {
+                const rosterEntryId = `${player.id}:${player.representingClubId ?? ""}`;
+                const selectedGroup =
+                  rosterPlayerPools[player.id] ?? player.preferredPool ?? SessionPool.B;
 
-              return (
-              <div
-                key={rosterEntryId}
-                className="app-touch-pan-y flex flex-col gap-3 rounded-xl border border-gray-200 bg-gray-50/70 px-3 py-3 transition sm:flex-row sm:items-center sm:justify-between"
-              >
-                <div className="min-w-0 flex items-center gap-3">
-                  <Avatar
-                    name={player.name}
-                    avatarUrl={player.avatarUrl}
-                    size="sm"
-                  />
-                  <div className="min-w-0 space-y-1">
-                    <p className="truncate text-sm font-semibold text-gray-900">
-                      {player.name}
-                    </p>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <p className="text-xs text-gray-500">Rating {player.elo}</p>
-                      {player.status === ClubPlayerStatus.OCCASIONAL ? (
-                        <span className="app-chip app-chip-success px-2 py-0.5 text-[10px]">
-                          Occasional
-                        </span>
-                      ) : null}
-                      {player.representingClubName ? (
-                        <span className="app-chip app-chip-accent px-2 py-0.5 text-[10px]">
-                          {player.representingClubName}
-                        </span>
-                      ) : null}
+                return (
+                  <div
+                    key={rosterEntryId}
+                    className="app-touch-pan-y flex flex-col gap-3 rounded-xl border border-gray-200 bg-gray-50/70 px-3 py-3 transition sm:flex-row sm:items-center sm:justify-between"
+                  >
+                    <div className="min-w-0 flex items-center gap-3">
+                      <Avatar name={player.name} avatarUrl={player.avatarUrl} size="sm" />
+                      <div className="min-w-0 space-y-1">
+                        <p className="truncate text-sm font-semibold text-gray-900">
+                          {player.name}
+                        </p>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="text-xs text-gray-500">Rating {player.elo}</p>
+                          {player.status === ClubPlayerStatus.OCCASIONAL ? (
+                            <span className="app-chip app-chip-success px-2 py-0.5 text-[10px]">
+                              Occasional
+                            </span>
+                          ) : null}
+                          {player.representingClubName ? (
+                            <span className="app-chip app-chip-accent px-2 py-0.5 text-[10px]">
+                              {player.representingClubName}
+                            </span>
+                          ) : null}
+                          {poolsEnabled ? (
+                            <span className="app-chip app-chip-accent px-2 py-0.5 text-[10px]">
+                              {getPlayerGroupLabel(selectedGroup)}
+                            </span>
+                          ) : null}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex w-full shrink-0 items-center justify-end gap-2 sm:w-auto">
                       {poolsEnabled ? (
-                        <span className="app-chip app-chip-accent px-2 py-0.5 text-[10px]">
-                          {getPlayerGroupLabel(selectedGroup)}
-                        </span>
+                        <select
+                          aria-label={`Game group for ${player.name}`}
+                          value={selectedGroup}
+                          onChange={(event) =>
+                            onRosterPlayerPoolChange(
+                              player.id,
+                              event.target.value as SessionPool
+                            )
+                          }
+                          className="field max-w-[8.5rem] px-2 py-2 text-xs"
+                        >
+                          <option value={SessionPool.A}>Competitive</option>
+                          <option value={SessionPool.B}>Social</option>
+                        </select>
                       ) : null}
+                      <button
+                        type="button"
+                        onClick={() => onAddPlayer(player)}
+                        disabled={addingPlayerId === rosterEntryId}
+                        className="app-button-primary px-4 py-2.5 disabled:opacity-50"
+                      >
+                        {addingPlayerId === rosterEntryId ? "Adding..." : "Add"}
+                      </button>
                     </div>
                   </div>
-                </div>
+                );
+              })}
+            </div>
+          ) : null}
 
-                <div className="flex w-full shrink-0 items-center justify-end gap-2 sm:w-auto">
-                  {poolsEnabled ? (
-                    <select
-                      aria-label={`Game group for ${player.name}`}
-                      value={selectedGroup}
-                      onChange={(event) =>
-                        onRosterPlayerPoolChange(
-                          player.id,
-                          event.target.value as SessionPool
-                        )
-                      }
-                      className="field max-w-[8.5rem] px-2 py-2 text-xs"
-                    >
-                      <option value={SessionPool.A}>Competitive</option>
-                      <option value={SessionPool.B}>Social</option>
-                    </select>
-                  ) : null}
-                  <button
-                    type="button"
-                    onClick={() => onAddPlayer(player)}
-                    disabled={addingPlayerId === rosterEntryId}
-                    className="app-button-primary px-4 py-2.5 disabled:opacity-50"
-                  >
-                    {addingPlayerId === rosterEntryId ? "Adding..." : "Add"}
-                  </button>
-                </div>
-              </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
-    </PlayerPickerSheet>
+          {canAddGuest ? (
+            <button
+              type="button"
+              onClick={openGuestModal}
+              className="flex w-full items-center justify-between gap-3 rounded-xl border border-dashed border-[rgba(15,118,110,0.32)] bg-[var(--accent-faint)] px-4 py-4 text-left transition hover:border-[var(--accent)] hover:bg-white"
+            >
+              <span>
+                <span className="block text-sm font-semibold text-gray-900">
+                  Add “{trimmedSearch}” as a guest
+                </span>
+                <span className="mt-1 block text-xs text-gray-500">
+                  No exact club player match.
+                </span>
+              </span>
+              <span className="app-chip app-chip-accent shrink-0">Guest</span>
+            </button>
+          ) : null}
+
+          {playersNotInSession.length === 0 && !canAddGuest ? (
+            <div className="app-empty px-4 py-10 text-center">
+              <p className="text-sm font-semibold text-gray-900">
+                {hasExactParticipantMatch
+                  ? "This player is already in the tournament."
+                  : "No available club players."}
+              </p>
+              <p className="mt-2 text-sm text-gray-500">
+                {isAdmin && trimmedSearch.length > 0 && trimmedSearch.length < 2
+                  ? "Type at least 2 characters to add a guest."
+                  : isAdmin
+                    ? "Search for someone to add them as a guest."
+                    : "Try another search."}
+              </p>
+            </div>
+          ) : null}
+        </div>
+      </PlayerPickerSheet>
+
+      <GuestDefinitionModal
+        open={guestModalOpen}
+        name={guestName}
+        initialElo={guestInitialElo}
+        gender={guestGender}
+        mixedSideOverride={guestMixedSideOverride}
+        pool={rosterPool}
+        representingClubId={guestRepresentingClubId}
+        isMixed={isMixicano}
+        poolsEnabled={poolsEnabled}
+        isInterclub={isInterclub}
+        interclubClubOptions={interclubClubOptions}
+        submitting={addingGuest}
+        error={guestFormError}
+        onNameChange={onGuestNameChange}
+        onInitialEloChange={onGuestInitialEloChange}
+        onGenderChange={onGuestGenderChange}
+        onMixedSideOverrideChange={onGuestMixedSideOverrideChange}
+        onPoolChange={onRosterPoolChange}
+        onRepresentingClubChange={onGuestRepresentingClubChange}
+        onClose={closeGuestModal}
+        onSubmit={() => void submitGuest()}
+      />
+    </>
   );
 }

@@ -178,6 +178,7 @@ export function useSessionPlayerManagement({
   const [guestInitialElo, setGuestInitialElo] = useState<number>(1000);
   const [guestRepresentingClubId, setGuestRepresentingClubId] = useState("");
   const [addingGuest, setAddingGuest] = useState(false);
+  const [guestFormError, setGuestFormError] = useState("");
   const [savingPreferencesFor, setSavingPreferencesFor] = useState<string | null>(null);
   const [togglingPausePlayerId, setTogglingPausePlayerId] = useState<string | null>(
     null
@@ -278,6 +279,7 @@ export function useSessionPlayerManagement({
     setRosterPool(SessionPool.B);
     setRosterPlayerPools({});
     setGuestRepresentingClubId(defaultRepresentingClubId);
+    setGuestFormError("");
   };
 
   const resetRosterInputs = () => {
@@ -563,15 +565,27 @@ export function useSessionPlayerManagement({
 
   const addGuestToSession = async () => {
     const name = guestName.trim();
-    if (!name) return;
+    setGuestFormError("");
+    if (name.length < 2) {
+      setGuestFormError("Guest name must be at least 2 characters.");
+      return false;
+    }
+    if (
+      sessionData?.players.some(
+        (player) => player.user.name.trim().toLowerCase() === name.toLowerCase()
+      )
+    ) {
+      setGuestFormError("A player with this name is already in the tournament.");
+      return false;
+    }
     if (
       sessionData?.mode === SessionMode.MIXICANO &&
       ![PlayerGender.MALE, PlayerGender.FEMALE].includes(guestGender)
     ) {
-      setError(
+      setGuestFormError(
         `${getSessionModeLabel(SessionMode.MIXICANO)} requires selecting MALE/FEMALE for guests`
       );
-      return;
+      return false;
     }
 
     setAddingGuest(true);
@@ -605,8 +619,8 @@ export function useSessionPlayerManagement({
         }
       >(res);
       if (!res.ok) {
-        setError(getErrorMessage(data, "Failed to add guest"));
-        return;
+        setGuestFormError(getErrorMessage(data, "Failed to add guest"));
+        return false;
       }
 
       resetGuestInputs();
@@ -617,9 +631,11 @@ export function useSessionPlayerManagement({
           : updated;
       });
       scheduleSessionRefresh();
+      return true;
     } catch (err) {
       console.error(err);
-      setError("Failed to add guest");
+      setGuestFormError("Failed to add guest");
+      return false;
     } finally {
       setAddingGuest(false);
     }
@@ -690,6 +706,7 @@ export function useSessionPlayerManagement({
     guestInitialElo,
     guestRepresentingClubId,
     addingGuest,
+    guestFormError,
     savingPreferencesFor,
     togglingPausePlayerId,
     skippingNextPlayerId,
@@ -708,6 +725,7 @@ export function useSessionPlayerManagement({
       setRosterPlayerPools((current) => ({ ...current, [userId]: pool })),
     setGuestInitialElo,
     setGuestRepresentingClubId,
+    resetGuestInputs,
     setGuestRenameInput,
     setOpenPreferenceEditor,
     togglePreferenceEditor,

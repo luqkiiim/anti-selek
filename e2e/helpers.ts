@@ -176,11 +176,11 @@ export async function createStartedHostSession(
     .getByRole("combobox", { name: "Courts" })
     .selectOption(String(courtCount));
 
-  await hostPanel.getByRole("button", { name: "Choose" }).click();
+  await hostPanel.getByRole("button", { name: "Add players" }).click();
   const playersModal = page
     .getByRole("dialog")
-    .filter({ has: page.getByRole("heading", { name: "Add Players" }) });
-  await expect(playersModal.getByRole("heading", { name: "Add Players" })).toBeVisible();
+    .filter({ has: page.getByRole("heading", { name: "Add players" }) });
+  await expect(playersModal.getByRole("heading", { name: "Add players" })).toBeVisible();
 
   const playerNamesToSelect =
     selectedPlayerNames && selectedPlayerNames.length > 0
@@ -232,8 +232,8 @@ export async function openSessionRoster(page: Page) {
 
   const rosterModal = page
     .getByRole("dialog")
-    .filter({ has: page.getByRole("heading", { name: "Add Players" }) });
-  await expect(rosterModal.getByRole("heading", { name: "Add Players" })).toBeVisible();
+    .filter({ has: page.getByRole("heading", { name: "Add players" }) });
+  await expect(rosterModal.getByRole("heading", { name: "Add players" })).toBeVisible();
   return rosterModal;
 }
 

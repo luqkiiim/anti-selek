@@ -254,11 +254,14 @@ test("admin can add a guest into an active session", async ({ page }) => {
   });
 
   const rosterModal = await openSessionRoster(page);
-  await rosterModal.getByRole("button", { name: "Add guest instead" }).click();
-  await rosterModal.getByPlaceholder("Guest name").fill("Late Guest");
+  await rosterModal.getByLabel("Search available club players").fill("Late Guest");
   await rosterModal
-    .getByRole("button", { name: "Add Guest", exact: true })
+    .getByRole("button", { name: "Add “Late Guest” as a guest" })
     .click();
+  const guestModal = page
+    .getByRole("dialog")
+    .filter({ has: page.getByRole("heading", { name: "Add guest" }) });
+  await guestModal.getByRole("button", { name: "Add guest", exact: true }).click();
 
   await expect
     .poll(async () => {

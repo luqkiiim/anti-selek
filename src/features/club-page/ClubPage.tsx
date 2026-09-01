@@ -17,7 +17,6 @@ import { getSessionTypeLabel } from "@/lib/sessionModeLabels";
 import { FlashMessage, HeroCard } from "@/components/ui/chrome";
 import { ClubActionConfirmModal } from "@/components/club/ClubActionConfirmModal";
 import { ClubBottomTabs } from "@/components/club/ClubBottomTabs";
-import { ClubGuestsModal } from "@/components/club/ClubGuestsModal";
 import { ClubLeaderboardPanel } from "@/components/club/ClubLeaderboardPanel";
 import { ClubNotificationsButton } from "@/components/club/ClubNotificationsButton";
 import { ClubOverviewPulsePanel } from "@/components/club/ClubOverviewPulsePanel";
@@ -30,6 +29,7 @@ import { TestSessionsPanel } from "@/components/club/TestSessionsPanel";
 import { AdminOnboardingChecklist } from "@/components/onboarding/AdminOnboardingChecklist";
 import { useAdminOnboardingProgress } from "@/components/onboarding/useAdminOnboardingProgress";
 import type { ClubPageSection } from "@/components/club/clubTypes";
+import { SessionMode } from "@/types/enums";
 import {
   getAuthorizedClubSection,
   getAuthorizedClubSections,
@@ -116,16 +116,18 @@ export default function ClubPage() {
     setGuestMixedSideOverrideInput,
     guestPoolInput,
     setGuestPoolInput,
+    guestInitialEloInput,
+    setGuestInitialEloInput,
     guestRepresentingClubInput,
     setGuestRepresentingClubInput,
     guestConfigs,
     guestPoolCounts,
+    guestFormError,
     loading,
     creatingSession,
     creationIssues,
     activeSection,
     showPlayersModal,
-    showGuestsModal,
     playerSearch,
     setPlayerSearch,
     rollingBackTournamentCode,
@@ -164,11 +166,10 @@ export default function ClubPage() {
     updateSelectedPlayerRepresentingClub,
     addGuestName,
     removeGuestName,
+    resetGuestDraft,
     handleGuestGenderChange,
     openPlayersModal,
     closePlayersModal,
-    openGuestsModal,
-    closeGuestsModal,
     switchSection,
     openClubPlayerProfile,
     openTournament,
@@ -771,7 +772,6 @@ export default function ClubPage() {
       selectedPlayerCount={selectedPlayerIds.length}
       guestCount={guestConfigs.length}
       onOpenPlayers={openPlayersModal}
-      onOpenGuests={openGuestsModal}
       onCreateSession={createSessionWithOnboardingRefresh}
       creatingSession={creatingSession}
       creationIssues={creationIssues}
@@ -1052,30 +1052,27 @@ export default function ClubPage() {
         hostClubName={club?.name ?? "Host club"}
         selectedPartnerClub={selectedPartnerClub}
         selectedPlayerRepresentingClubs={selectedPlayerRepresentingClubs}
-        onChangePlayerRepresentingClub={updateSelectedPlayerRepresentingClub}
-        onClose={closePlayersModal}
-      />
-
-      <ClubGuestsModal
-        open={showGuestsModal}
         guestConfigs={guestConfigs}
-        sessionMode={sessionMode}
         guestNameInput={guestNameInput}
+        guestInitialEloInput={guestInitialEloInput}
         guestGenderInput={guestGenderInput}
         guestMixedSideOverrideInput={guestMixedSideOverrideInput}
         guestPoolInput={guestPoolInput}
         guestRepresentingClubInput={guestRepresentingClubInput}
-        poolsEnabled={poolsEnabled}
-        collabFormat={collabFormat}
+        guestFormError={guestFormError}
+        isMixed={sessionMode === SessionMode.MIXICANO}
         interclubClubOptions={interclubClubOptions}
+        onChangePlayerRepresentingClub={updateSelectedPlayerRepresentingClub}
         onGuestNameChange={setGuestNameInput}
+        onGuestInitialEloChange={setGuestInitialEloInput}
         onGuestGenderChange={handleGuestGenderChange}
         onGuestMixedSideOverrideChange={setGuestMixedSideOverrideInput}
         onGuestPoolChange={setGuestPoolInput}
         onGuestRepresentingClubChange={setGuestRepresentingClubInput}
         onAddGuest={addGuestName}
         onRemoveGuest={removeGuestName}
-        onClose={closeGuestsModal}
+        onResetGuestDraft={resetGuestDraft}
+        onClose={closePlayersModal}
       />
 
       {pendingRollbackTournament ? (

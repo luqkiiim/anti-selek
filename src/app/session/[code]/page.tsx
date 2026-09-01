@@ -201,6 +201,7 @@ export default function SessionPage() {
     guestInitialElo,
     guestRepresentingClubId,
     addingGuest,
+    guestFormError,
     togglingPausePlayerId,
     skippingNextPlayerId,
     skipNextDraft,
@@ -217,6 +218,7 @@ export default function SessionPage() {
     setRosterPlayerPool,
     setGuestInitialElo,
     setGuestRepresentingClubId,
+    resetGuestInputs,
     setGuestRenameInput,
     setOpenPreferenceEditor,
     togglePreferenceEditor,
@@ -1872,9 +1874,13 @@ export default function SessionPage() {
         guestMixedSideOverride={guestMixedSideOverride}
         guestRepresentingClubId={guestRepresentingClubId}
         guestInitialElo={guestInitialElo}
+        guestFormError={guestFormError}
         addingGuest={addingGuest}
         addingPlayerId={addingPlayerId}
         playersNotInSession={sessionView.playersNotInSession}
+        existingParticipantNames={sessionData.players.map(
+          (player) => player.user.name
+        )}
         onClose={closeRosterModal}
         onRosterSearchChange={setRosterSearch}
         onRosterPoolChange={setRosterPool}
@@ -1884,6 +1890,7 @@ export default function SessionPage() {
         onGuestMixedSideOverrideChange={setGuestMixedSideOverride}
         onGuestRepresentingClubChange={setGuestRepresentingClubId}
         onGuestInitialEloChange={setGuestInitialElo}
+        onResetGuestDraft={resetGuestInputs}
         onAddGuest={addGuestToSession}
         onAddPlayer={addPlayerToSession}
       />
