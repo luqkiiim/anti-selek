@@ -7,7 +7,9 @@ import {
   resolveMixedSideState,
 } from "@/lib/mixedSide";
 import {
+  DEFAULT_SESSION_CROSSOVER_FREQUENCY,
   isValidSessionPool,
+  isValidSessionCrossoverFrequency,
 } from "@/lib/sessionPools";
 import {
   getLegacySessionModeForSettings,
@@ -65,6 +67,7 @@ interface CreateSessionBody {
   partnerCommunityId?: unknown;
   courtCount?: unknown;
   poolsEnabled?: unknown;
+  crossoverFrequency?: unknown;
   poolAName?: unknown;
   poolBName?: unknown;
 }
@@ -272,6 +275,7 @@ export function parseCreateSessionRequest(
     autoQueueEnabled = false,
     respectPlayerRest = true,
     poolsEnabled = false,
+    crossoverFrequency = DEFAULT_SESSION_CROSSOVER_FREQUENCY,
   } = bodyRecord;
   let clubId: unknown;
   let partnerClubId: unknown;
@@ -372,6 +376,9 @@ export function parseCreateSessionRequest(
   ) {
     throw new SessionRouteError("Invalid collab format", 400);
   }
+  if (!isValidSessionCrossoverFrequency(crossoverFrequency)) {
+    throw new SessionRouteError("Invalid crossover frequency", 400);
+  }
 
   const requestedPlayerIds = Array.isArray(playerIds)
     ? playerIds.filter((id): id is string => typeof id === "string")
@@ -441,5 +448,8 @@ export function parseCreateSessionRequest(
     poolAName: normalizedPoolAName,
     poolBName: normalizedPoolBName,
     crossoverMissThreshold: DEFAULT_SESSION_POOL_CROSSOVER_MISS_THRESHOLD,
+    crossoverFrequency: normalizedPoolsEnabled
+      ? crossoverFrequency
+      : DEFAULT_SESSION_CROSSOVER_FREQUENCY,
   };
 }

@@ -18,6 +18,7 @@ import { getQueuedMatchUserIds } from "@/lib/sessionQueue";
 import { getEffectiveMixedSide } from "@/lib/mixedSide";
 import {
   getNormalizedSessionPool,
+  getSessionCrossoverTarget,
 } from "@/lib/sessionPools";
 import {
   classifyCourtGroupSnapshot,
@@ -853,6 +854,7 @@ type QuotaFairnessPlayer = {
   availableSince: Date;
   isBusy?: boolean;
   isPaused?: boolean;
+  crossoverAppearances?: number;
 };
 
 type QuotaCombination<T extends QuotaFairnessPlayer> = {
@@ -861,6 +863,7 @@ type QuotaCombination<T extends QuotaFairnessPlayer> = {
   effectiveMatchCountVector: number[];
   moreRestDeficitTotal: number;
   restTurnVector: number[];
+  crossoverDebtVector: number[];
   waitTimeVector: number[];
 };
 
@@ -918,6 +921,12 @@ function compareQuotaCombinations<T extends QuotaFairnessPlayer>(
     -1
   );
   if (restCompare !== 0) return restCompare;
+  const crossoverDebtCompare = compareNumberVectors(
+    left.crossoverDebtVector,
+    right.crossoverDebtVector,
+    -1
+  );
+  if (crossoverDebtCompare !== 0) return crossoverDebtCompare;
   const waitCompare = compareNumberVectors(
     left.waitTimeVector,
     right.waitTimeVector
@@ -938,7 +947,8 @@ function compareQuotaCombinations<T extends QuotaFairnessPlayer>(
 function buildQuotaCombinations<T extends QuotaFairnessPlayer>(
   players: readonly T[],
   requiredCount: number,
-  respectPlayerRest: boolean
+  respectPlayerRest: boolean,
+  crossoverTargetRatio: number | null
 ) {
   if (requiredCount === 0) {
     return [{
@@ -947,6 +957,7 @@ function buildQuotaCombinations<T extends QuotaFairnessPlayer>(
       effectiveMatchCountVector: [],
       moreRestDeficitTotal: 0,
       restTurnVector: [],
+      crossoverDebtVector: [],
       waitTimeVector: [],
     } satisfies QuotaCombination<T>];
   }
@@ -1001,6 +1012,20 @@ function buildQuotaCombinations<T extends QuotaFairnessPlayer>(
             )
           : 0,
         restTurnVector: respectPlayerRest ? restTurnVector : [],
+        crossoverDebtVector:
+          crossoverTargetRatio === null
+            ? []
+            : combination
+                .map(
+                  (player) =>
+                    crossoverTargetRatio *
+                      Math.max(
+                        player.matchesPlayed,
+                        player.matchmakingBaseline
+                      ) -
+                    Math.max(0, player.crossoverAppearances ?? 0)
+                )
+                .sort((left, right) => right - left),
         waitTimeVector: combination
           .map((player) => player.availableSince.getTime())
           .sort((left, right) => left - right),
@@ -1031,6 +1056,10 @@ function combineQuotaFairness<T extends QuotaFairnessPlayer>(
       ...poolACombination.restTurnVector,
       ...poolBCombination.restTurnVector,
     ].sort((a, b) => b - a),
+    crossoverDebtVector: [
+      ...poolACombination.crossoverDebtVector,
+      ...poolBCombination.crossoverDebtVector,
+    ].sort((a, b) => b - a),
     waitTimeVector: [
       ...poolACombination.waitTimeVector,
       ...poolBCombination.waitTimeVector,
@@ -1041,21 +1070,28 @@ function combineQuotaFairness<T extends QuotaFairnessPlayer>(
 function buildQuotaAwareQuartets<T extends QuotaFairnessPlayer>(
   players: readonly T[],
   composition: PlayerGroupCourtComposition,
-  respectPlayerRest: boolean
+  respectPlayerRest: boolean,
+  sessionCrossoverTargetRatio: number
 ) {
+  const crossoverTargetRatio =
+    composition.courtGroupType === CourtGroupType.CROSSOVER
+      ? sessionCrossoverTargetRatio
+      : null;
   const poolACombinations = buildQuotaCombinations(
     players.filter(
       (player) => getNormalizedSessionPool(player.pool) === SessionPool.A
     ),
     composition.poolASeatCount,
-    respectPlayerRest
+    respectPlayerRest,
+    crossoverTargetRatio
   );
   const poolBCombinations = buildQuotaCombinations(
     players.filter(
       (player) => getNormalizedSessionPool(player.pool) === SessionPool.B
     ),
     composition.poolBSeatCount,
-    respectPlayerRest
+    respectPlayerRest,
+    crossoverTargetRatio
   );
 
   return poolACombinations
@@ -1087,6 +1123,7 @@ function buildQuotaAwareQuartetTiers<T extends QuotaFairnessPlayer>(
   players: readonly T[],
   composition: PlayerGroupCourtComposition,
   respectPlayerRest: boolean,
+  crossoverTargetRatio: number,
   excludedQuartetKey?: string,
   excludedQuartetKeys?: ReadonlySet<string>
 ) {
@@ -1097,7 +1134,8 @@ function buildQuotaAwareQuartetTiers<T extends QuotaFairnessPlayer>(
   for (const quartet of buildQuotaAwareQuartets(
     players,
     composition,
-    respectPlayerRest
+    respectPlayerRest,
+    crossoverTargetRatio
   )) {
     const quartetKey = getV3QuartetKey(
       quartet.players.map((player) => player.userId)
@@ -1185,12 +1223,44 @@ function buildPlayerGroupSelectionRunner({
     activePlayerCount > 0
       ? activeCounts[SessionPool.A] / activePlayerCount
       : 0.5;
+  const crossoverTarget = getSessionCrossoverTarget(
+    sessionData.crossoverFrequency
+  );
+  const crossoverTargetRatio =
+    crossoverTarget.numerator / crossoverTarget.denominator;
+  const crossoverAppearancesByUserId = new Map<string, number>();
+  for (const match of sessionData.matches) {
+    if (match.courtGroupType !== CourtGroupType.CROSSOVER) continue;
+    for (const userId of [
+      match.team1User1Id,
+      match.team1User2Id,
+      match.team2User1Id,
+      match.team2User2Id,
+    ]) {
+      crossoverAppearancesByUserId.set(
+        userId,
+        (crossoverAppearancesByUserId.get(userId) ?? 0) + 1
+      );
+    }
+  }
 
   const v3Players = usesCompetitiveGrouping
     ? null
-    : buildV3Players(sessionData, playersById, rankedCandidates);
+    : buildV3Players(sessionData, playersById, rankedCandidates).map(
+        (player) => ({
+          ...player,
+          crossoverAppearances:
+            crossoverAppearancesByUserId.get(player.userId) ?? 0,
+        })
+      );
   const ladderPlayers = usesCompetitiveGrouping
-    ? buildLadderPlayers(sessionData, playersById, rankedCandidates)
+    ? buildLadderPlayers(sessionData, playersById, rankedCandidates).map(
+        (player) => ({
+          ...player,
+          crossoverAppearances:
+            crossoverAppearancesByUserId.get(player.userId) ?? 0,
+        })
+      )
     : null;
 
   const runSelection = ({
@@ -1272,6 +1342,7 @@ function buildPlayerGroupSelectionRunner({
         ladderPlayers,
         composition,
         sessionData.respectPlayerRest,
+        crossoverTargetRatio,
         excludedQuartetKey,
         excludedQuartetKeys
       )) {
@@ -1339,6 +1410,7 @@ function buildPlayerGroupSelectionRunner({
       v3Players,
       composition,
       sessionData.respectPlayerRest,
+      crossoverTargetRatio,
       excludedQuartetKey,
       excludedQuartetKeys
     )) {
@@ -1389,6 +1461,7 @@ function selectPoolEnabledSingleCourtMatch({
     waitingPoolAPlayerCount: runner.waitingCounts[SessionPool.A],
     waitingPoolBPlayerCount: runner.waitingCounts[SessionPool.B],
     history: getPlayerGroupHistory(sessionData),
+    crossoverFrequency: sessionData.crossoverFrequency,
   }).filter(
     (plan) =>
       !normalizedRequiredCourtGroupType ||
@@ -2196,6 +2269,7 @@ export function selectBatchMatches({
       waitingPoolAPlayerCount: waitingCounts[SessionPool.A],
       waitingPoolBPlayerCount: waitingCounts[SessionPool.B],
       history: getPlayerGroupHistory(sessionData),
+      crossoverFrequency: sessionData.crossoverFrequency,
     });
 
     const orderForPhysicalCourts = (
@@ -2223,18 +2297,30 @@ export function selectBatchMatches({
         courtTypeHistory.set(match.courtId, history);
       }
 
-      const recentTypes = getPlayerGroupHistory(sessionData)
-        .slice(-2)
-        .map((snapshot) => snapshot.courtGroupType ?? null);
+      const groupHistory = getPlayerGroupHistory(sessionData);
+      const crossoverTarget = getSessionCrossoverTarget(
+        sessionData.crossoverFrequency
+      );
+      const historyCrossoverCount = groupHistory.filter(
+        (snapshot) => snapshot.courtGroupType === CourtGroupType.CROSSOVER
+      ).length;
       const remaining = [...compositions];
       const ordered: PlayerGroupCourtComposition[] = [];
 
       for (const courtId of physicalCourtIds) {
+        const projectedMatchCount = groupHistory.length + ordered.length + 1;
+        const projectedCrossoverCount =
+          historyCrossoverCount +
+          ordered.filter(
+            (composition) =>
+              composition.courtGroupType === CourtGroupType.CROSSOVER
+          ).length;
+        const desiredCrossoverCount = Math.floor(
+          (projectedMatchCount * crossoverTarget.numerator) /
+            crossoverTarget.denominator
+        );
         const crossoverDue =
-          recentTypes.length >= 2 &&
-          recentTypes
-            .slice(-2)
-            .every((type) => type !== CourtGroupType.CROSSOVER) &&
+          projectedCrossoverCount < desiredCrossoverCount &&
           remaining.some(
             (composition) =>
               composition.courtGroupType === CourtGroupType.CROSSOVER
@@ -2273,10 +2359,6 @@ export function selectBatchMatches({
 
         const [selected] = remaining.splice(candidateIndexes[0], 1);
         ordered.push(selected);
-        recentTypes.push(selected.courtGroupType);
-        if (recentTypes.length > 2) {
-          recentTypes.shift();
-        }
       }
 
       return ordered;

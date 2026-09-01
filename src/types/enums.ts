@@ -70,6 +70,12 @@ export enum SessionPool {
   B = "B",
 }
 
+export enum SessionCrossoverFrequency {
+  OCCASIONAL = "OCCASIONAL",
+  BALANCED = "BALANCED",
+  FREQUENT = "FREQUENT",
+}
+
 export enum CourtGroupType {
   COMPETITIVE = "COMPETITIVE",
   SOCIAL = "SOCIAL",

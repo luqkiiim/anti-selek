@@ -9,6 +9,7 @@ import {
   PlayerGender,
   SessionBalanceMetric,
   SessionCollabFormat,
+  SessionCrossoverFrequency,
   SessionMatchmakingStyle,
   SessionMode,
   SessionPairingMode,
@@ -72,6 +73,7 @@ export interface ParsedCreateSessionRequest {
   poolAName: string;
   poolBName: string;
   crossoverMissThreshold: number;
+  crossoverFrequency: SessionCrossoverFrequency;
 }
 
 export const mixedModeLabel = getSessionModeLabel(SessionMode.MIXICANO);

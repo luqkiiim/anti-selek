@@ -168,6 +168,7 @@ async function getSessionHistory(
       matchmakingStyle: true,
       balanceMetric: true,
       pairingMode: true,
+      crossoverFrequency: true,
       createdAt: true,
       endedAt: true,
       sessionClubs: {
@@ -299,6 +300,7 @@ async function getSessionHistory(
       matchmakingStyle: sessionData.matchmakingStyle,
       balanceMetric: sessionData.balanceMetric,
       pairingMode: sessionData.pairingMode,
+      crossoverFrequency: sessionData.crossoverFrequency,
       createdAt: sessionData.createdAt,
       endedAt: sessionData.endedAt,
     },

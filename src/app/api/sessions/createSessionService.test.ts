@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   SessionBalanceMetric,
+  SessionCrossoverFrequency,
   SessionMatchmakingStyle,
   SessionMode,
   SessionPairingMode,
@@ -338,6 +339,7 @@ describe("createSessionForUser", () => {
           matchmakingStyle: SessionMatchmakingStyle.BALANCED,
           balanceMetric: SessionBalanceMetric.SESSION_POINTS,
           pairingMode: SessionPairingMode.OPEN,
+          crossoverFrequency: SessionCrossoverFrequency.BALANCED,
           players: {
             create: [
               expect.objectContaining({

@@ -124,6 +124,7 @@ model Session {
   poolAMissedTurns       Int       @default(0)
   poolBMissedTurns       Int       @default(0)
   crossoverMissThreshold Int       @default(1)
+  crossoverFrequency     String    @default("BALANCED")
   createdAt              DateTime  @default(now())
   endedAt                DateTime?
 

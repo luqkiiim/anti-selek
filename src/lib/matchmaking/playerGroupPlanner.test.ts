@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { CourtGroupType, SessionPool } from "@/types/enums";
+import {
+  CourtGroupType,
+  SessionCrossoverFrequency,
+  SessionPool,
+} from "@/types/enums";
 import {
   buildPlayerGroupCourtPlans,
   getPlayerGroupSelectionConstraints,
@@ -10,6 +14,98 @@ function countTypes(types: CourtGroupType[], type: CourtGroupType) {
 }
 
 describe("player-group court composition planner", () => {
+  it.each([
+    [SessionCrossoverFrequency.OCCASIONAL, 21, 4],
+    [SessionCrossoverFrequency.OCCASIONAL, 24, 4],
+    [SessionCrossoverFrequency.BALANCED, 21, 7],
+    [SessionCrossoverFrequency.BALANCED, 24, 8],
+    [SessionCrossoverFrequency.FREQUENT, 21, 10],
+    [SessionCrossoverFrequency.FREQUENT, 24, 12],
+  ])(
+    "tracks %s crossover debt across %i asynchronous assignments",
+    (crossoverFrequency, assignmentCount, expectedCrossovers) => {
+      const history: Array<{
+        courtGroupType: CourtGroupType;
+        poolASeatCount: number;
+        poolBSeatCount: number;
+      }> = [];
+
+      for (let assignment = 0; assignment < assignmentCount; assignment += 1) {
+        const [plan] = buildPlayerGroupCourtPlans({
+          requestedCourtCount: 1,
+          activePoolAPlayerCount: 7,
+          activePoolBPlayerCount: 7,
+          waitingPoolAPlayerCount: 7,
+          waitingPoolBPlayerCount: 7,
+          history,
+          crossoverFrequency,
+        });
+        history.push(plan.compositions[0]);
+      }
+
+      expect(
+        history.filter(
+          (court) => court.courtGroupType === CourtGroupType.CROSSOVER
+        )
+      ).toHaveLength(expectedCrossovers);
+    }
+  );
+
+  it("carries missed crossover debt until a legal 2/2 court is feasible", () => {
+    const history = [
+      {
+        courtGroupType: CourtGroupType.COMPETITIVE,
+        poolASeatCount: 4,
+        poolBSeatCount: 0,
+      },
+      {
+        courtGroupType: CourtGroupType.SOCIAL,
+        poolASeatCount: 0,
+        poolBSeatCount: 4,
+      },
+    ];
+    const [missedPlan] = buildPlayerGroupCourtPlans({
+      requestedCourtCount: 1,
+      activePoolAPlayerCount: 7,
+      activePoolBPlayerCount: 7,
+      waitingPoolAPlayerCount: 7,
+      waitingPoolBPlayerCount: 1,
+      history,
+      crossoverFrequency: SessionCrossoverFrequency.BALANCED,
+    });
+    history.push(missedPlan.compositions[0]);
+
+    const [recoveryPlan] = buildPlayerGroupCourtPlans({
+      requestedCourtCount: 1,
+      activePoolAPlayerCount: 7,
+      activePoolBPlayerCount: 7,
+      waitingPoolAPlayerCount: 7,
+      waitingPoolBPlayerCount: 7,
+      history,
+      crossoverFrequency: SessionCrossoverFrequency.BALANCED,
+    });
+
+    expect(missedPlan.compositions[0].courtGroupType).toBe(
+      CourtGroupType.COMPETITIVE
+    );
+    expect(recoveryPlan.compositions[0].courtGroupType).toBe(
+      CourtGroupType.CROSSOVER
+    );
+  });
+
+  it("includes earlier courts in a Frequent batch target", () => {
+    const [plan] = buildPlayerGroupCourtPlans({
+      requestedCourtCount: 2,
+      activePoolAPlayerCount: 7,
+      activePoolBPlayerCount: 7,
+      waitingPoolAPlayerCount: 7,
+      waitingPoolBPlayerCount: 7,
+      crossoverFrequency: SessionCrossoverFrequency.FREQUENT,
+    });
+
+    expect(plan.crossoverCourtCount).toBe(1);
+  });
+
   it("allocates one Competitive, one Social, and one Crossover court for 12/9", () => {
     const [plan] = buildPlayerGroupCourtPlans({
       requestedCourtCount: 3,

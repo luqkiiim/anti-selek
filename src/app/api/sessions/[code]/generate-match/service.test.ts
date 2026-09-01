@@ -6,6 +6,7 @@ import {
   PartnerPreference,
   PlayerGender,
   SessionCollabFormat,
+  SessionCrossoverFrequency,
   SessionMode,
   SessionPool,
   SessionStatus,
@@ -1503,6 +1504,111 @@ describe("generate match service", () => {
         ).toBe(CourtGroupType.CROSSOVER);
       }
     );
+
+    it("softly prefers players who are behind their crossover target", () => {
+      const players = [
+        ...["A1", "A2", "A3", "A4"].map((id) =>
+          createSessionPlayer(id, {
+            pool: SessionPool.A,
+            matchesPlayed: 5,
+          })
+        ),
+        ...["B1", "B2", "B3", "B4"].map((id) =>
+          createSessionPlayer(id, {
+            pool: SessionPool.B,
+            matchesPlayed: 5,
+          })
+        ),
+      ];
+      const snapshots = [
+        {
+          id: "history-crossover",
+          courtGroupType: CourtGroupType.CROSSOVER,
+          poolASeatCount: 2,
+          poolBSeatCount: 2,
+          team1User1Id: "A1",
+          team1User2Id: "B1",
+          team2User1Id: "A2",
+          team2User2Id: "B2",
+        },
+        ...Array.from({ length: 4 }, (_, index) => ({
+          id: `history-dedicated-${index}`,
+          courtGroupType:
+            index % 2 === 0
+              ? CourtGroupType.COMPETITIVE
+              : CourtGroupType.SOCIAL,
+          poolASeatCount: index % 2 === 0 ? 4 : 0,
+          poolBSeatCount: index % 2 === 0 ? 0 : 4,
+          team1User1Id: "A1",
+          team1User2Id: "A2",
+          team2User1Id: "A3",
+          team2User2Id: "A4",
+        })),
+      ].map((match, index) => ({
+        ...match,
+        sessionId: "session-1",
+        courtId: "court-1",
+        status: MatchStatus.IN_PROGRESS,
+        scoreSubmittedByUserId: null,
+        team1ClubId: null,
+        team1Score: null,
+        team2ClubId: null,
+        team2Score: null,
+        winnerTeam: null,
+        team1EloChange: null,
+        team2EloChange: null,
+        matchmakingReasonJson: null,
+        createdAt: new Date(`2026-01-01T00:00:0${index}Z`),
+        completedAt: null,
+      })) as GenerateMatchSession["matches"];
+
+      vi.mocked(findBestSingleCourtSelectionV3).mockImplementation(
+        (matchmakerPlayers) => {
+          const poolAIds = matchmakerPlayers
+            .filter((player) => player.pool === SessionPool.A)
+            .map((player) => player.userId);
+          const poolBIds = matchmakerPlayers
+            .filter((player) => player.pool === SessionPool.B)
+            .map((player) => player.userId);
+          const ids = [...poolAIds, ...poolBIds] as [
+            string,
+            string,
+            string,
+            string,
+          ];
+          return {
+            selection: createV3Selection(ids, {
+              team1: [poolAIds[0], poolBIds[0]],
+              team2: [poolAIds[1], poolBIds[1]],
+            }),
+            debug: {} as never,
+          };
+        }
+      );
+
+      const sessionData = createSessionData({
+        poolsEnabled: true,
+        crossoverFrequency: SessionCrossoverFrequency.BALANCED,
+        respectPlayerRest: false,
+        players,
+        matches: snapshots,
+      });
+      const { rankedCandidates } = getRankedCandidates(sessionData, new Set());
+      const result = selectSingleCourtMatch({
+        rankedCandidates,
+        playersById: createPlayersById(players),
+        sessionData,
+        rotationHistory: buildRotationHistory([]),
+        reshuffleSource: null,
+      });
+
+      expect(result.ids).toEqual(
+        expect.arrayContaining(["A3", "A4", "B3", "B4"])
+      );
+      expect(result.ids).not.toEqual(
+        expect.arrayContaining(["A1", "A2", "B1", "B2"])
+      );
+    });
 
     it("reshuffles ladder sessions to an alternative quartet when possible", () => {
       const initial = createLadderSelection(["A", "B", "C", "D"], {

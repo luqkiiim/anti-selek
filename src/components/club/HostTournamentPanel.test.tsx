@@ -1,28 +1,35 @@
+// @vitest-environment jsdom
+
+import { act } from "react";
+import { createRoot } from "react-dom/client";
 import { describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import { HostTournamentPanel } from "./HostTournamentPanel";
 import {
   SessionBalanceMetric,
   SessionCollabFormat,
+  SessionCrossoverFrequency,
   SessionMatchmakingStyle,
   SessionPairingMode,
   SessionPool,
 } from "@/types/enums";
 
-function renderPanel({
-  matchmakingStyle = SessionMatchmakingStyle.BALANCED,
-  creationIssues = [],
-  poolsEnabled = false,
-  selectedPlayerCount = 0,
-  guestCount = 0,
-}: {
+type PanelOptions = {
   matchmakingStyle?: SessionMatchmakingStyle;
   creationIssues?: string[];
   poolsEnabled?: boolean;
   selectedPlayerCount?: number;
   guestCount?: number;
-} = {}) {
-  return renderToStaticMarkup(
+};
+
+function createPanel({
+  matchmakingStyle = SessionMatchmakingStyle.BALANCED,
+  creationIssues = [],
+  poolsEnabled = false,
+  selectedPlayerCount = 0,
+  guestCount = 0,
+}: PanelOptions = {}) {
+  return (
     <HostTournamentPanel
       newSessionName="Friday Night"
       onNewSessionNameChange={vi.fn()}
@@ -55,6 +62,8 @@ function renderPanel({
       onCourtCountChange={vi.fn()}
       poolsEnabled={poolsEnabled}
       onPoolsEnabledChange={vi.fn()}
+      crossoverFrequency={SessionCrossoverFrequency.BALANCED}
+      onCrossoverFrequencyChange={vi.fn()}
       selectedPoolCounts={{
         [SessionPool.A]: poolsEnabled ? 2 : 0,
         [SessionPool.B]: poolsEnabled ? 1 : 0,
@@ -71,6 +80,10 @@ function renderPanel({
       creationIssues={creationIssues}
     />
   );
+}
+
+function renderPanel(options: PanelOptions = {}) {
+  return renderToStaticMarkup(createPanel(options));
 }
 
 describe("HostTournamentPanel", () => {
@@ -142,6 +155,29 @@ describe("HostTournamentPanel", () => {
     expect(markup).toContain(
       "4 added · 2 Competitive · 2 Social · 1 guest"
     );
+  });
+
+  it("shows the three crossover frequency presets only for player groups", async () => {
+    const container = document.createElement("div");
+    const root = createRoot(container);
+    await act(async () => {
+      root.render(createPanel({ poolsEnabled: true }));
+    });
+    const advancedButton = Array.from(container.querySelectorAll("button")).find(
+      (button) => button.textContent?.includes("Advanced setup")
+    );
+    await act(async () => {
+      advancedButton?.click();
+    });
+
+    expect(container.textContent).toContain("Crossover frequency");
+    expect(container.textContent).toContain("Occasional");
+    expect(container.textContent).toContain("Balanced");
+    expect(container.textContent).toContain("Frequent");
+    expect(container.textContent).toContain(
+      "Availability and pairing rules may affect the actual rate."
+    );
+    await act(async () => root.unmount());
   });
 
   it("shows every creation issue and disables the create action", () => {

@@ -5,6 +5,7 @@ import {
   PlayerGender,
   SessionBalanceMetric,
   SessionCollabFormat,
+  SessionCrossoverFrequency,
   SessionMatchmakingStyle,
   SessionMode,
   SessionPairingMode,
@@ -61,6 +62,9 @@ describe("parseCreateSessionRequest", () => {
     expect(parsed.courtCount).toBe(4);
     expect(parsed.autoQueueEnabled).toBe(false);
     expect(parsed.respectPlayerRest).toBe(true);
+    expect(parsed.crossoverFrequency).toBe(
+      SessionCrossoverFrequency.BALANCED
+    );
     expect(parsed.requestedPlayerIds).toEqual(["user-1", "user-2"]);
     expect(parsed.playerConfigMap.get("user-1")).toEqual({
       gender: PlayerGender.FEMALE,
@@ -94,6 +98,41 @@ describe("parseCreateSessionRequest", () => {
         initialElo: 1000,
       },
     ]);
+  });
+
+  it("accepts a supported crossover frequency", () => {
+    const parsed = parseCreateSessionRequest({
+      name: "Group night",
+      clubId: "community-1",
+      poolsEnabled: true,
+      crossoverFrequency: SessionCrossoverFrequency.FREQUENT,
+    });
+
+    expect(parsed.crossoverFrequency).toBe(
+      SessionCrossoverFrequency.FREQUENT
+    );
+  });
+
+  it("rejects an unsupported crossover frequency", () => {
+    expect(() =>
+      parseCreateSessionRequest({
+        name: "Group night",
+        clubId: "community-1",
+        crossoverFrequency: "ALWAYS",
+      })
+    ).toThrowError(new SessionRouteError("Invalid crossover frequency", 400));
+  });
+
+  it("keeps non-group sessions on the Balanced crossover default", () => {
+    const parsed = parseCreateSessionRequest({
+      name: "Open night",
+      clubId: "community-1",
+      crossoverFrequency: SessionCrossoverFrequency.FREQUENT,
+    });
+
+    expect(parsed.crossoverFrequency).toBe(
+      SessionCrossoverFrequency.BALANCED
+    );
   });
 
   it("defaults open mode guests to unspecified gender", () => {

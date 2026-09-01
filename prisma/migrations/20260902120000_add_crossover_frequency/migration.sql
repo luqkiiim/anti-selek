@@ -1,0 +1,1 @@
+ALTER TABLE "Session" ADD COLUMN "crossoverFrequency" TEXT NOT NULL DEFAULT 'BALANCED';

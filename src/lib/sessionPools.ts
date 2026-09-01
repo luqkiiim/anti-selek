@@ -1,8 +1,10 @@
-import { SessionPool } from "@/types/enums";
+import { SessionCrossoverFrequency, SessionPool } from "@/types/enums";
 
 export const DEFAULT_SESSION_POOL_A_NAME = "Competitive";
 export const DEFAULT_SESSION_POOL_B_NAME = "Social";
 export const DEFAULT_SESSION_POOL_CROSSOVER_MISS_THRESHOLD = 1;
+export const DEFAULT_SESSION_CROSSOVER_FREQUENCY =
+  SessionCrossoverFrequency.BALANCED;
 export const SESSION_POOL_IDS = [SessionPool.A, SessionPool.B] as const;
 
 export interface SessionPoolConfigLike {
@@ -14,6 +16,33 @@ export interface SessionPoolConfigLike {
   poolAMissedTurns?: number | null;
   poolBMissedTurns?: number | null;
   crossoverMissThreshold?: number | null;
+  crossoverFrequency?: SessionCrossoverFrequency | string | null;
+}
+
+const crossoverFrequencyTargets = {
+  [SessionCrossoverFrequency.OCCASIONAL]: { numerator: 1, denominator: 5 },
+  [SessionCrossoverFrequency.BALANCED]: { numerator: 1, denominator: 3 },
+  [SessionCrossoverFrequency.FREQUENT]: { numerator: 1, denominator: 2 },
+} as const;
+
+export function isValidSessionCrossoverFrequency(
+  value: unknown
+): value is SessionCrossoverFrequency {
+  return Object.values(SessionCrossoverFrequency).includes(
+    value as SessionCrossoverFrequency
+  );
+}
+
+export function getSessionCrossoverFrequency(
+  value: unknown
+): SessionCrossoverFrequency {
+  return isValidSessionCrossoverFrequency(value)
+    ? value
+    : DEFAULT_SESSION_CROSSOVER_FREQUENCY;
+}
+
+export function getSessionCrossoverTarget(value: unknown) {
+  return crossoverFrequencyTargets[getSessionCrossoverFrequency(value)];
 }
 
 export function isValidSessionPool(value: unknown): value is SessionPool {

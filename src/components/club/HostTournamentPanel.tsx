@@ -6,6 +6,7 @@ import type { ClubCollabCandidate } from "./clubTypes";
 import {
   SessionBalanceMetric,
   SessionCollabFormat,
+  SessionCrossoverFrequency,
   SessionMatchmakingStyle,
   SessionPairingMode,
   SessionPool,
@@ -43,6 +44,8 @@ interface HostTournamentPanelProps {
   onCourtCountChange: (count: number) => void;
   poolsEnabled: boolean;
   onPoolsEnabledChange: (enabled: boolean) => void;
+  crossoverFrequency: SessionCrossoverFrequency;
+  onCrossoverFrequencyChange: (frequency: SessionCrossoverFrequency) => void;
   selectedPoolCounts: Record<SessionPool, number>;
   guestPoolCounts: Record<SessionPool, number>;
   selectedPlayerCount: number;
@@ -236,6 +239,8 @@ export function HostTournamentPanel({
   onCourtCountChange,
   poolsEnabled,
   onPoolsEnabledChange,
+  crossoverFrequency,
+  onCrossoverFrequencyChange,
   selectedPoolCounts,
   guestPoolCounts,
   selectedPlayerCount,
@@ -475,6 +480,57 @@ export function HostTournamentPanel({
                     Crossover courts pair one Competitive and one Social player
                     on each team. Add at least two people to each group.
                   </p>
+                  <div className="space-y-2 border-t border-gray-100 pt-3">
+                    <p className="text-sm font-medium text-gray-900">
+                      Crossover frequency
+                    </p>
+                    <div
+                      role="group"
+                      aria-label="Crossover frequency"
+                      className="flex flex-wrap gap-2"
+                    >
+                      <SegmentedOption
+                        label="Occasional"
+                        selected={
+                          crossoverFrequency ===
+                          SessionCrossoverFrequency.OCCASIONAL
+                        }
+                        onClick={() =>
+                          onCrossoverFrequencyChange(
+                            SessionCrossoverFrequency.OCCASIONAL
+                          )
+                        }
+                      />
+                      <SegmentedOption
+                        label="Balanced"
+                        selected={
+                          crossoverFrequency ===
+                          SessionCrossoverFrequency.BALANCED
+                        }
+                        onClick={() =>
+                          onCrossoverFrequencyChange(
+                            SessionCrossoverFrequency.BALANCED
+                          )
+                        }
+                      />
+                      <SegmentedOption
+                        label="Frequent"
+                        selected={
+                          crossoverFrequency ===
+                          SessionCrossoverFrequency.FREQUENT
+                        }
+                        onClick={() =>
+                          onCrossoverFrequencyChange(
+                            SessionCrossoverFrequency.FREQUENT
+                          )
+                        }
+                      />
+                    </div>
+                    <p className="text-xs leading-5 text-gray-500">
+                      Target crossover frequency. Availability and pairing
+                      rules may affect the actual rate.
+                    </p>
+                  </div>
                 </div>
               ) : null}
 

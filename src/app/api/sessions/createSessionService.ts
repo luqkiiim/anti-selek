@@ -371,6 +371,7 @@ export async function createSessionForUser({
         poolAName: "Competitive",
         poolBName: "Social",
         crossoverMissThreshold: input.crossoverMissThreshold,
+        crossoverFrequency: input.crossoverFrequency,
         courts: {
           create: Array.from({ length: input.courtCount }, (_, index) => ({
             courtNumber: index + 1,

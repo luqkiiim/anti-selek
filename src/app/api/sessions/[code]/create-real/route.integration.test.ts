@@ -17,6 +17,7 @@ import {
   PartnerPreference,
   PlayerGender,
   SessionMode,
+  SessionCrossoverFrequency,
   SessionStatus,
   SessionType,
 } from "@/types/enums";
@@ -146,6 +147,7 @@ async function createTestSessionWithMatch(prefix: string, clubId: string) {
       mode: SessionMode.MEXICANO,
       status: SessionStatus.ACTIVE,
       isTest: true,
+      crossoverFrequency: SessionCrossoverFrequency.FREQUENT,
       players: {
         create: playerIds.map((userId) => ({
           userId,
@@ -292,6 +294,9 @@ describe("create real session route integration", () => {
     expect(payload.isTest).toBe(false);
     expect(payload.sourceSessionId).toBe(sessionId);
     expect(payload.status).toBe(SessionStatus.WAITING);
+    expect(payload.crossoverFrequency).toBe(
+      SessionCrossoverFrequency.FREQUENT
+    );
 
     const copiedMatches = await prisma.match.findMany({
       where: { sessionId: payload.id },

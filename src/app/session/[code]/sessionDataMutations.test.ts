@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   PartnerPreference,
   PlayerGender,
+  SessionCrossoverFrequency,
   SessionMode,
   SessionPool,
   SessionType,
@@ -42,6 +43,7 @@ function createSessionData(): SessionData {
     poolAMissedTurns: 0,
     poolBMissedTurns: 0,
     crossoverMissThreshold: 1,
+    crossoverFrequency: SessionCrossoverFrequency.BALANCED,
     viewerCanManage: true,
     viewerClubRole: "ADMIN",
     courts: [

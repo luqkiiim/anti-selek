@@ -289,6 +289,7 @@ export async function POST(
           poolAMissedTurns: includeResults ? sourceSession.poolAMissedTurns : 0,
           poolBMissedTurns: includeResults ? sourceSession.poolBMissedTurns : 0,
           crossoverMissThreshold: sourceSession.crossoverMissThreshold,
+          crossoverFrequency: sourceSession.crossoverFrequency,
           endedAt: includeResults ? sourceSession.endedAt : null,
           courts: {
             create: sourceSession.courts.map((court) => ({

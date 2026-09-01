@@ -1,4 +1,7 @@
-import { getNormalizedSessionPool } from "@/lib/sessionPools";
+import {
+  getNormalizedSessionPool,
+  getSessionCrossoverTarget,
+} from "@/lib/sessionPools";
 import { CourtGroupType, SessionPool } from "@/types/enums";
 
 export interface PlayerGroupCourtComposition {
@@ -18,6 +21,8 @@ export interface PlayerGroupCourtPlan {
   filledCourtCount: number;
   overflowCourtCount: number;
   crossoverCourtCount: number;
+  crossoverShortfall: number;
+  crossoverExcess: number;
   cadenceViolationCount: number;
   projectedCompetitiveSeatShare: number;
   competitiveTargetRatio: number;
@@ -31,6 +36,7 @@ export interface PlayerGroupPlannerInput {
   waitingPoolAPlayerCount: number;
   waitingPoolBPlayerCount: number;
   history?: readonly PlayerGroupHistorySnapshot[];
+  crossoverFrequency?: unknown;
 }
 
 type GroupPlayer = {
@@ -111,9 +117,10 @@ function getHistorySummary(history: readonly PlayerGroupHistorySnapshot[]) {
       (total, snapshot) => total + snapshot.poolBSeatCount,
       0
     ),
-    recentCourtTypes: counted
-      .slice(-2)
-      .map((snapshot) => snapshot.courtGroupType ?? null),
+    matchCount: counted.length,
+    crossoverCount: counted.filter((snapshot) =>
+      isCrossoverType(snapshot.courtGroupType)
+    ).length,
   };
 }
 
@@ -134,59 +141,39 @@ function getStableCompositionRank(composition: PlayerGroupCourtComposition) {
   }
 }
 
-type RecentCourtAssignment = {
-  courtGroupType: CourtGroupType | string | null;
-  availablePoolASeatsBefore: number;
-  availablePoolBSeatsBefore: number;
-};
-
-function isCrossoverDue(recentAssignments: readonly RecentCourtAssignment[]) {
-  return (
-    recentAssignments.length >= 2 &&
-    recentAssignments
-      .slice(-2)
-      .every((assignment) => !isCrossoverType(assignment.courtGroupType)) &&
-    recentAssignments[recentAssignments.length - 2]
-      .availablePoolASeatsBefore >= 2 &&
-    recentAssignments[recentAssignments.length - 2]
-      .availablePoolBSeatsBefore >= 2
-  );
-}
-
 function orderCompositions({
   compositions,
-  recentCourtTypes,
+  historyMatchCount,
+  historyCrossoverCount,
+  crossoverTarget,
   historyPoolASeats,
   historyPoolBSeats,
   targetRatio,
-  waitingPoolASeats,
-  waitingPoolBSeats,
 }: {
   compositions: readonly PlayerGroupCourtComposition[];
-  recentCourtTypes: readonly (CourtGroupType | string | null)[];
+  historyMatchCount: number;
+  historyCrossoverCount: number;
+  crossoverTarget: { numerator: number; denominator: number };
   historyPoolASeats: number;
   historyPoolBSeats: number;
   targetRatio: number;
-  waitingPoolASeats: number;
-  waitingPoolBSeats: number;
 }) {
   const remaining = [...compositions];
   const ordered: PlayerGroupCourtComposition[] = [];
-  const recent: RecentCourtAssignment[] = [...recentCourtTypes]
-    .slice(-2)
-    .map((courtGroupType) => ({
-      courtGroupType,
-      availablePoolASeatsBefore: waitingPoolASeats,
-      availablePoolBSeatsBefore: waitingPoolBSeats,
-    }));
   let cadenceViolationCount = 0;
   let allocatedPoolASeats = 0;
   let allocatedPoolBSeats = 0;
+  let allocatedCrossoverCount = 0;
 
   while (remaining.length > 0) {
-    const remainingPoolASeats = waitingPoolASeats - allocatedPoolASeats;
-    const remainingPoolBSeats = waitingPoolBSeats - allocatedPoolBSeats;
-    const crossoverDue = isCrossoverDue(recent);
+    const projectedMatchCount = historyMatchCount + ordered.length + 1;
+    const desiredCrossoverCount = Math.floor(
+      (projectedMatchCount * crossoverTarget.numerator) /
+        crossoverTarget.denominator
+    );
+    const crossoverDue =
+      historyCrossoverCount + allocatedCrossoverCount <
+      desiredCrossoverCount;
     const hasPlannedCrossover = remaining.some(
       (composition) =>
         composition.courtGroupType === CourtGroupType.CROSSOVER
@@ -238,13 +225,8 @@ function orderCompositions({
     ordered.push(selected);
     allocatedPoolASeats += selected.poolASeatCount;
     allocatedPoolBSeats += selected.poolBSeatCount;
-    recent.push({
-      courtGroupType: selected.courtGroupType,
-      availablePoolASeatsBefore: remainingPoolASeats,
-      availablePoolBSeatsBefore: remainingPoolBSeats,
-    });
-    if (recent.length > 2) {
-      recent.shift();
+    if (selected.courtGroupType === CourtGroupType.CROSSOVER) {
+      allocatedCrossoverCount += 1;
     }
   }
 
@@ -258,11 +240,11 @@ function comparePlans(left: PlayerGroupCourtPlan, right: PlayerGroupCourtPlan) {
   if (left.overflowCourtCount !== right.overflowCourtCount) {
     return left.overflowCourtCount - right.overflowCourtCount;
   }
-  if (left.cadenceViolationCount !== right.cadenceViolationCount) {
-    return left.cadenceViolationCount - right.cadenceViolationCount;
+  if (left.crossoverShortfall !== right.crossoverShortfall) {
+    return left.crossoverShortfall - right.crossoverShortfall;
   }
-  if (left.crossoverCourtCount !== right.crossoverCourtCount) {
-    return left.crossoverCourtCount - right.crossoverCourtCount;
+  if (left.crossoverExcess !== right.crossoverExcess) {
+    return left.crossoverExcess - right.crossoverExcess;
   }
   if (Math.abs(left.ratioError - right.ratioError) > Number.EPSILON) {
     return left.ratioError - right.ratioError;
@@ -286,6 +268,7 @@ export function buildPlayerGroupCourtPlans({
   waitingPoolAPlayerCount,
   waitingPoolBPlayerCount,
   history = [],
+  crossoverFrequency,
 }: PlayerGroupPlannerInput): PlayerGroupCourtPlan[] {
   const waitingPoolASeats = clampCount(waitingPoolAPlayerCount);
   const waitingPoolBSeats = clampCount(waitingPoolBPlayerCount);
@@ -303,6 +286,7 @@ export function buildPlayerGroupCourtPlans({
   const competitiveTargetRatio =
     activePlayerCount > 0 ? activePoolACount / activePlayerCount : 0.5;
   const historySummary = getHistorySummary(history);
+  const crossoverTarget = getSessionCrossoverTarget(crossoverFrequency);
   const plans: PlayerGroupCourtPlan[] = [];
   const optionCounts = Array(COMPOSITION_OPTIONS.length).fill(0) as number[];
 
@@ -327,12 +311,12 @@ export function buildPlayerGroupCourtPlans({
 
       const { ordered, cadenceViolationCount } = orderCompositions({
         compositions,
-        recentCourtTypes: historySummary.recentCourtTypes,
+        historyMatchCount: historySummary.matchCount,
+        historyCrossoverCount: historySummary.crossoverCount,
+        crossoverTarget,
         historyPoolASeats: historySummary.poolASeats,
         historyPoolBSeats: historySummary.poolBSeats,
         targetRatio: competitiveTargetRatio,
-        waitingPoolASeats,
-        waitingPoolBSeats,
       });
       const totalPoolASeats = historySummary.poolASeats + poolASeatCount;
       const totalSeatCount =
@@ -341,6 +325,17 @@ export function buildPlayerGroupCourtPlans({
         compositions.length * 4;
       const projectedCompetitiveSeatShare =
         totalSeatCount > 0 ? totalPoolASeats / totalSeatCount : 0;
+      const crossoverCourtCount = compositions.filter(
+        (composition) =>
+          composition.courtGroupType === CourtGroupType.CROSSOVER
+      ).length;
+      const desiredCrossoverCount = Math.floor(
+        ((historySummary.matchCount + compositions.length) *
+          crossoverTarget.numerator) /
+          crossoverTarget.denominator
+      );
+      const projectedCrossoverCount =
+        historySummary.crossoverCount + crossoverCourtCount;
 
       plans.push({
         compositions: ordered,
@@ -349,10 +344,15 @@ export function buildPlayerGroupCourtPlans({
           (composition) =>
             composition.courtGroupType === CourtGroupType.OPEN_OVERFLOW
         ).length,
-        crossoverCourtCount: compositions.filter(
-          (composition) =>
-            composition.courtGroupType === CourtGroupType.CROSSOVER
-        ).length,
+        crossoverCourtCount,
+        crossoverShortfall: Math.max(
+          0,
+          desiredCrossoverCount - projectedCrossoverCount
+        ),
+        crossoverExcess: Math.max(
+          0,
+          projectedCrossoverCount - desiredCrossoverCount
+        ),
         cadenceViolationCount,
         projectedCompetitiveSeatShare,
         competitiveTargetRatio,

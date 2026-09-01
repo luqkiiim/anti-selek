@@ -29,6 +29,7 @@ import {
   MixedSide,
   PlayerGender,
   SessionBalanceMetric,
+  SessionCrossoverFrequency,
   SessionCollabFormat,
   SessionMatchmakingStyle,
   SessionMode,
@@ -81,6 +82,10 @@ export function useClubHostSetup({
   const [respectPlayerRest, setRespectPlayerRest] = useState(true);
   const [courtCount, setCourtCount] = useState(DEFAULT_COURT_COUNT);
   const [poolsEnabled, setPoolsEnabled] = useState(false);
+  const [crossoverFrequency, setCrossoverFrequency] =
+    useState<SessionCrossoverFrequency>(
+      SessionCrossoverFrequency.BALANCED
+    );
   const [collabFormat, setCollabFormatState] = useState<SessionCollabFormat>(
     SessionCollabFormat.FREE_PLAY
   );
@@ -420,6 +425,7 @@ export function useClubHostSetup({
 
     if (nextFormat === SessionCollabFormat.INTERCLUB) {
       setPoolsEnabled(false);
+      setCrossoverFrequency(SessionCrossoverFrequency.BALANCED);
       setMatchmakingStyle(SessionMatchmakingStyle.BALANCED);
       setBalanceMetric(SessionBalanceMetric.RATING);
       setSelectedPlayerRepresentingClubs((current) => {
@@ -458,6 +464,9 @@ export function useClubHostSetup({
     }
 
     setPoolsEnabled(nextPoolsEnabled);
+    if (!nextPoolsEnabled) {
+      setCrossoverFrequency(SessionCrossoverFrequency.BALANCED);
+    }
   };
 
   const createSession = async () => {
@@ -501,6 +510,7 @@ export function useClubHostSetup({
           })),
           guestConfigs,
           poolsEnabled,
+          crossoverFrequency,
           poolAName,
           poolBName,
         }),
@@ -526,6 +536,7 @@ export function useClubHostSetup({
       setMatchmakingStyle(SessionMatchmakingStyle.BALANCED);
       setBalanceMetric(SessionBalanceMetric.SESSION_POINTS);
       setPairingMode(SessionPairingMode.OPEN);
+      setCrossoverFrequency(SessionCrossoverFrequency.BALANCED);
       setCollabFormatState(SessionCollabFormat.FREE_PLAY);
       setPartnerClubId("");
       setPartnerClubSearch("");
@@ -810,6 +821,8 @@ export function useClubHostSetup({
     setCourtCount,
     poolsEnabled,
     setPoolsEnabled: setPoolsEnabledForFormat,
+    crossoverFrequency,
+    setCrossoverFrequency,
     collabFormat,
     setCollabFormat,
     partnerClubId,

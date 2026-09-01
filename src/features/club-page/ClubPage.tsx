@@ -104,6 +104,8 @@ export default function ClubPage() {
     setCourtCount,
     poolsEnabled,
     setPoolsEnabled,
+    crossoverFrequency,
+    setCrossoverFrequency,
     selectedPlayerIds,
     selectedPlayerPools,
     savingPreferredPoolPlayerId,
@@ -767,6 +769,8 @@ export default function ClubPage() {
       onCourtCountChange={setCourtCount}
       poolsEnabled={poolsEnabled}
       onPoolsEnabledChange={setPoolsEnabled}
+      crossoverFrequency={crossoverFrequency}
+      onCrossoverFrequencyChange={setCrossoverFrequency}
       selectedPoolCounts={selectedPoolCounts}
       guestPoolCounts={guestPoolCounts}
       selectedPlayerCount={selectedPlayerIds.length}

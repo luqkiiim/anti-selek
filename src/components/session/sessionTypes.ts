@@ -9,6 +9,7 @@ import {
   SessionMatchmakingStyle,
   SessionMode,
   SessionPairingMode,
+  SessionCrossoverFrequency,
   SessionPool,
   SessionScoringType,
 } from "@/types/enums";
@@ -137,6 +138,7 @@ export interface SessionData {
   poolAMissedTurns: number;
   poolBMissedTurns: number;
   crossoverMissThreshold: number;
+  crossoverFrequency: SessionCrossoverFrequency;
   viewerCanManage?: boolean;
   viewerCanUseAdminSessionControls?: boolean;
   viewerIsQuickAccess?: boolean;
