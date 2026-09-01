@@ -7,6 +7,7 @@ import { applyPendingPlayerGroupChangesInTransaction } from "@/lib/playerGroupPr
 import { MatchStatus, SessionStatus } from "@/types/enums";
 import { logError, safeErrorResponse } from "@/lib/errors";
 import { rateLimit, checkInvalidTargetRateLimit, invalidTargetResponse } from "@/lib/rateLimit";
+import { reverseSessionEloChanges } from "@/lib/sessionLifecycle";
 
 export const dynamic = "force-dynamic";
 
@@ -38,6 +39,7 @@ export async function POST(
         id: true,
         clubId: true,
         isTest: true,
+        status: true,
       },
     });
 
@@ -63,15 +65,25 @@ export async function POST(
       return NextResponse.json({ error: "Admin only" }, { status: 403 });
     }
 
-    if (!targetSession.isTest) {
+    if (
+      !targetSession.isTest &&
+      targetSession.status !== SessionStatus.ACTIVE
+    ) {
       return NextResponse.json(
-        { error: "Only test tournaments can be reset" },
+        { error: "Only active tournaments can be reset" },
         { status: 400 }
       );
     }
 
     const resetAt = new Date();
     const updatedSession = await prisma.$transaction(async (tx) => {
+      if (!targetSession.isTest) {
+        await reverseSessionEloChanges(tx, {
+          sessionId: targetSession.id,
+          clubId: targetSession.clubId,
+        });
+      }
+
       await tx.queuedMatch.deleteMany({
         where: { sessionId: targetSession.id },
       });

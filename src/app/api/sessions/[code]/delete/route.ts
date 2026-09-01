@@ -7,7 +7,9 @@ import { rateLimit, checkInvalidTargetRateLimit, invalidTargetResponse } from "@
 import {
   collectGuestUserIds,
   deleteEphemeralGuestUsers,
+  reverseSessionEloChanges,
 } from "@/lib/sessionLifecycle";
+import { SessionStatus } from "@/types/enums";
 
 export const dynamic = "force-dynamic";
 
@@ -40,6 +42,7 @@ export async function DELETE(
         code: true,
         clubId: true,
         isTest: true,
+        status: true,
       },
     });
 
@@ -65,9 +68,14 @@ export async function DELETE(
       return NextResponse.json({ error: "Admin only" }, { status: 403 });
     }
 
-    if (!targetSession.isTest) {
+    if (
+      !targetSession.isTest &&
+      targetSession.status === SessionStatus.COMPLETED
+    ) {
       return NextResponse.json(
-        { error: "Only test tournaments can be deleted here" },
+        {
+          error: "Completed tournaments must be rolled back from club history",
+        },
         { status: 400 }
       );
     }
@@ -78,6 +86,13 @@ export async function DELETE(
         select: { userId: true, isGuest: true },
       });
       const guestUserIds = collectGuestUserIds(sessionPlayers);
+
+      if (!targetSession.isTest) {
+        await reverseSessionEloChanges(tx, {
+          sessionId: targetSession.id,
+          clubId: targetSession.clubId,
+        });
+      }
 
       await tx.court.updateMany({
         where: { sessionId: targetSession.id },
@@ -96,7 +111,7 @@ export async function DELETE(
     });
 
     logAuditEvent({
-      action: "session.delete_test",
+      action: targetSession.isTest ? "session.delete_test" : "session.cancel",
       actor: {
         email: session.user.email ?? null,
         isGlobalAdmin: !!session.user.isAdmin,
@@ -121,7 +136,7 @@ export async function DELETE(
       clubId: targetSession.clubId,
     });
   } catch (error) {
-    logError("Delete test session error", error);
+    logError("Delete session error", error);
     return safeErrorResponse();
   }
 }

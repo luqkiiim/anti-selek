@@ -1,7 +1,8 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   collectGuestUserIds,
   computeRollbackEloDeltas,
+  reverseSessionEloChanges,
   type CompletedMatchEloChange,
 } from "./sessionLifecycle";
 
@@ -76,5 +77,54 @@ describe("session lifecycle rollback", () => {
     ]);
 
     expect(guestUserIds).toEqual(["GUEST_X", "GUEST_Y"]);
+  });
+
+  it("reverses club rating ledger entries before a live session is cleared", async () => {
+    const updateMany = vi.fn().mockResolvedValue({ count: 1 });
+    const tx = {
+      sessionPlayer: {
+        findMany: vi.fn().mockResolvedValue([
+          { userId: "A", isGuest: false },
+          { userId: "B", isGuest: false },
+        ]),
+      },
+      match: {
+        findMany: vi.fn().mockResolvedValue([
+          {
+            id: "match-1",
+            team1User1Id: "A",
+            team1User2Id: "B",
+            team2User1Id: "C",
+            team2User2Id: "D",
+            team1EloChange: 7,
+            team2EloChange: -7,
+          },
+        ]),
+      },
+      matchEloAdjustment: {
+        findMany: vi.fn().mockResolvedValue([
+          { clubId: "club-1", userId: "A", delta: 7 },
+          { clubId: "club-1", userId: "A", delta: 2 },
+          { clubId: "club-1", userId: "B", delta: -7 },
+        ]),
+      },
+      clubMember: { updateMany },
+      user: { updateMany: vi.fn() },
+    };
+
+    const reversedPlayers = await reverseSessionEloChanges(tx as never, {
+      sessionId: "session-1",
+      clubId: "club-1",
+    });
+
+    expect(reversedPlayers).toBe(2);
+    expect(updateMany).toHaveBeenCalledWith({
+      where: { clubId: "club-1", userId: "A" },
+      data: { elo: { increment: -9 } },
+    });
+    expect(updateMany).toHaveBeenCalledWith({
+      where: { clubId: "club-1", userId: "B" },
+      data: { elo: { increment: 7 } },
+    });
   });
 });

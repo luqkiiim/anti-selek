@@ -36,9 +36,9 @@ describe("SessionSettingsModal", () => {
         respectPlayerRestDraft={false}
         canOpenRoster
         canEndSession
-        canResetTestSession
+        canResetSession
         canCreateRealSession
-        canDeleteTestSession
+        canDeleteSession
         courtLabelDrafts={{ "court-1": "" }}
         hasAutoQueueChange
         hasRespectPlayerRestChange={false}
@@ -48,9 +48,9 @@ describe("SessionSettingsModal", () => {
         onClose={vi.fn()}
         onOpenRoster={vi.fn()}
         onEndSession={vi.fn()}
-        onResetTestSession={vi.fn()}
+        onResetSession={vi.fn()}
         onCreateRealSession={vi.fn()}
-        onDeleteTestSession={vi.fn()}
+        onDeleteSession={vi.fn()}
         onAutoQueueChange={vi.fn()}
         onRespectPlayerRestChange={vi.fn()}
         onCourtLabelChange={vi.fn()}
@@ -65,5 +65,43 @@ describe("SessionSettingsModal", () => {
     expect(markup).toContain('aria-checked="true"');
     expect(markup).toContain('aria-label="Respect player rest"');
     expect(markup).toContain('role="status"');
+  });
+
+  it("offers reset and cancellation controls for a real tournament", () => {
+    const markup = renderToStaticMarkup(
+      <SessionSettingsModal
+        open
+        courts={[]}
+        isTestSession={false}
+        autoQueueEnabled
+        autoQueueDraft
+        respectPlayerRest
+        respectPlayerRestDraft
+        canOpenRoster
+        canEndSession
+        canResetSession
+        canCreateRealSession={false}
+        canDeleteSession
+        courtLabelDrafts={{}}
+        hasAutoQueueChange={false}
+        hasRespectPlayerRestChange={false}
+        hasCourtLabelChanges={false}
+        hasSettingsChanges={false}
+        savingSettings={false}
+        onClose={vi.fn()}
+        onOpenRoster={vi.fn()}
+        onEndSession={vi.fn()}
+        onResetSession={vi.fn()}
+        onCreateRealSession={vi.fn()}
+        onDeleteSession={vi.fn()}
+        onAutoQueueChange={vi.fn()}
+        onRespectPlayerRestChange={vi.fn()}
+        onCourtLabelChange={vi.fn()}
+        onSaveSettings={vi.fn()}
+      />
+    );
+
+    expect(markup).toContain("Reset Tournament");
+    expect(markup).toContain("Cancel &amp; Delete Tournament");
   });
 });

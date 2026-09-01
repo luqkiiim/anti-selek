@@ -419,6 +419,43 @@ test("admin can end and rollback the latest completed tournament", async ({
     });
 });
 
+test("host admin can reset, then cancel and delete a live tournament", async ({
+  page,
+}) => {
+  await signInAsAdmin(page);
+  const sessionName = `E2E Cancel Live ${Date.now()}`;
+  const sessionCode = await createStartedHostSession(page, { sessionName });
+
+  let settingsModal = await openSessionSettings(page);
+  await settingsModal.getByRole("button", { name: "Reset Tournament" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Reset tournament?" })
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Confirm Reset" }).click();
+  await expect(
+    page.getByRole("button", { name: "Start Tournament" })
+  ).toBeVisible();
+
+  settingsModal = await openSessionSettings(page);
+  await settingsModal
+    .getByRole("button", { name: "Cancel & Delete Tournament" })
+    .click();
+  await expect(
+    page.getByRole("heading", { name: "Cancel tournament?" })
+  ).toBeVisible();
+  await page
+    .getByRole("button", { name: "Cancel & Delete Tournament" })
+    .click();
+
+  await expect(page).toHaveURL(new RegExp(`/club/${hostClubId}`));
+  await expect
+    .poll(async () => {
+      const sessions = await readClubSessionsSnapshot(page, hostClubId);
+      return sessions.some((session) => session.code === sessionCode);
+    })
+    .toBe(false);
+});
+
 test("score entry auto-advances to the opponent box after two digits", async ({
   page,
 }) => {

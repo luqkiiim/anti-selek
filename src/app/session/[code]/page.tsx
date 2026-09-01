@@ -342,7 +342,7 @@ export default function SessionPage() {
       const res = await fetch(`/api/sessions/${code}/reset`, { method: "POST" });
       const data = await safeJson<SessionSnapshotResponse>(res);
       if (!res.ok) {
-        setError(getErrorMessage(data, "Failed to reset test tournament"));
+        setError(getErrorMessage(data, "Failed to reset tournament"));
         return;
       }
 
@@ -351,7 +351,7 @@ export default function SessionPage() {
       scheduleSessionRefresh();
     } catch (err) {
       console.error(err);
-      setError("Failed to reset test tournament");
+      setError("Failed to reset tournament");
     } finally {
       setResettingTestSession(false);
     }
@@ -430,7 +430,7 @@ export default function SessionPage() {
       });
       const data = await safeJson<SessionCodeResponse>(res);
       if (!res.ok) {
-        setError(getErrorMessage(data, "Failed to delete test tournament"));
+        setError(getErrorMessage(data, "Failed to delete tournament"));
         return;
       }
 
@@ -440,7 +440,7 @@ export default function SessionPage() {
       );
     } catch (err) {
       console.error(err);
-      setError("Failed to delete test tournament");
+      setError("Failed to delete tournament");
     } finally {
       setDeletingTestSession(false);
     }
@@ -1510,11 +1510,15 @@ export default function SessionPage() {
         respectPlayerRestDraft={respectPlayerRestDraft}
         canOpenRoster={isAdmin && !sessionView.isCompletedSession}
         canEndSession={isAdmin && sessionData.status === SessionStatus.ACTIVE}
-        canResetTestSession={canUseAdminSessionControls && sessionData.isTest}
+        canResetSession={
+          canUseAdminSessionControls && sessionData.status === SessionStatus.ACTIVE
+        }
         canCreateRealSession={
           canUseAdminSessionControls && sessionData.isTest && !isTutorialPlayground
         }
-        canDeleteTestSession={canUseAdminSessionControls && sessionData.isTest}
+        canDeleteSession={
+          canUseAdminSessionControls && !sessionView.isCompletedSession
+        }
         courtLabelDrafts={courtLabelDrafts}
         hasAutoQueueChange={hasAutoQueueChange}
         hasRespectPlayerRestChange={hasRespectPlayerRestChange}
@@ -1524,9 +1528,9 @@ export default function SessionPage() {
         onClose={closeSettingsModal}
         onOpenRoster={openRosterFromSettings}
         onEndSession={openEndSessionConfirm}
-        onResetTestSession={openResetTestConfirm}
+        onResetSession={openResetTestConfirm}
         onCreateRealSession={openCreateRealSessionConfirm}
-        onDeleteTestSession={openDeleteTestConfirm}
+        onDeleteSession={openDeleteTestConfirm}
         onAutoQueueChange={setAutoQueueDraft}
         onRespectPlayerRestChange={setRespectPlayerRestDraft}
         onCourtLabelChange={handleCourtLabelChange}
@@ -1630,12 +1634,16 @@ export default function SessionPage() {
 
       {showResetTestConfirm ? (
         <SessionActionConfirmModal
-          title="Reset test tournament?"
+          title={
+            sessionData.isTest
+              ? "Reset test tournament?"
+              : "Reset tournament?"
+          }
           subtitle="Clears results and keeps setup."
           details={
             <div className="app-panel-muted space-y-2 p-4">
               <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">
-                Test tournament
+                {sessionData.isTest ? "Test tournament" : "Tournament"}
               </p>
               <p className="text-sm font-semibold text-gray-900">
                 {sessionData.name}
@@ -1646,7 +1654,9 @@ export default function SessionPage() {
             </div>
           }
           confirmLabel="Confirm Reset"
-          cancelLabel="Keep Test Tournament"
+          cancelLabel={
+            sessionData.isTest ? "Keep Test Tournament" : "Keep Tournament"
+          }
           isSubmitting={resettingTestSession}
           onClose={closeResetTestConfirm}
           onConfirm={() => void resetTestSession()}
@@ -1748,12 +1758,20 @@ export default function SessionPage() {
 
       {showDeleteTestConfirm ? (
         <SessionActionConfirmModal
-          title="Delete test tournament?"
-          subtitle="Permanently removes this test tournament."
+          title={
+            sessionData.isTest
+              ? "Delete test tournament?"
+              : "Cancel tournament?"
+          }
+          subtitle={
+            sessionData.isTest
+              ? "Permanently removes this test tournament."
+              : "Cancels and permanently removes this tournament."
+          }
           details={
             <div className="app-panel-muted space-y-2 p-4">
               <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">
-                Test tournament
+                {sessionData.isTest ? "Test tournament" : "Tournament"}
               </p>
               <p className="text-sm font-semibold text-gray-900">
                 {sessionData.name}
@@ -1763,8 +1781,14 @@ export default function SessionPage() {
               </p>
             </div>
           }
-          confirmLabel="Delete Test Tournament"
-          cancelLabel="Keep Test Tournament"
+          confirmLabel={
+            sessionData.isTest
+              ? "Delete Test Tournament"
+              : "Cancel & Delete Tournament"
+          }
+          cancelLabel={
+            sessionData.isTest ? "Keep Test Tournament" : "Keep Tournament"
+          }
           isSubmitting={deletingTestSession}
           onClose={closeDeleteTestConfirm}
           onConfirm={() => void deleteTestSession()}

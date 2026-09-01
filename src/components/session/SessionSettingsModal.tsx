@@ -14,9 +14,9 @@ interface SessionSettingsModalProps {
   respectPlayerRestDraft: boolean;
   canOpenRoster: boolean;
   canEndSession: boolean;
-  canResetTestSession: boolean;
+  canResetSession: boolean;
   canCreateRealSession: boolean;
-  canDeleteTestSession: boolean;
+  canDeleteSession: boolean;
   courtLabelDrafts: Record<string, string>;
   hasAutoQueueChange: boolean;
   hasRespectPlayerRestChange: boolean;
@@ -26,9 +26,9 @@ interface SessionSettingsModalProps {
   onClose: () => void;
   onOpenRoster: () => void;
   onEndSession: () => void;
-  onResetTestSession: () => void;
+  onResetSession: () => void;
   onCreateRealSession: () => void;
-  onDeleteTestSession: () => void;
+  onDeleteSession: () => void;
   onAutoQueueChange: (enabled: boolean) => void;
   onRespectPlayerRestChange: (enabled: boolean) => void;
   onCourtLabelChange: (courtId: string, value: string) => void;
@@ -45,9 +45,9 @@ export function SessionSettingsModal({
   respectPlayerRestDraft,
   canOpenRoster,
   canEndSession,
-  canResetTestSession,
+  canResetSession,
   canCreateRealSession,
-  canDeleteTestSession,
+  canDeleteSession,
   courtLabelDrafts,
   hasAutoQueueChange,
   hasRespectPlayerRestChange,
@@ -57,9 +57,9 @@ export function SessionSettingsModal({
   onClose,
   onOpenRoster,
   onEndSession,
-  onResetTestSession,
+  onResetSession,
   onCreateRealSession,
-  onDeleteTestSession,
+  onDeleteSession,
   onAutoQueueChange,
   onRespectPlayerRestChange,
   onCourtLabelChange,
@@ -118,13 +118,13 @@ export function SessionSettingsModal({
                 End Tournament
               </button>
             ) : null}
-            {canResetTestSession ? (
+            {canResetSession ? (
               <button
                 type="button"
-                onClick={onResetTestSession}
+                onClick={onResetSession}
                 className="app-button-secondary justify-center"
               >
-                Reset Test Tournament
+                {isTestSession ? "Reset Test Tournament" : "Reset Tournament"}
               </button>
             ) : null}
             {canCreateRealSession ? (
@@ -136,13 +136,15 @@ export function SessionSettingsModal({
                 Create Real Tournament
               </button>
             ) : null}
-            {canDeleteTestSession ? (
+            {canDeleteSession ? (
               <button
                 type="button"
-                onClick={onDeleteTestSession}
+                onClick={onDeleteSession}
                 className="app-button-danger justify-center"
               >
-                Delete Test Tournament
+                {isTestSession
+                  ? "Delete Test Tournament"
+                  : "Cancel & Delete Tournament"}
               </button>
             ) : null}
           </div>
