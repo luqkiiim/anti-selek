@@ -3,6 +3,26 @@
 import { getCourtDisplayLabel } from "@/lib/courtLabels";
 import { ModalFrame } from "@/components/ui/chrome";
 import type { Court } from "./sessionTypes";
+import {
+  SessionBalanceMetric,
+  SessionCollabFormat,
+  SessionCrossoverFrequency,
+  SessionMatchmakingStyle,
+  SessionPairingMode,
+} from "@/types/enums";
+import {
+  BalanceMetricControl,
+  CourtCountControl,
+  CrossoverFrequencyControl,
+  MatchmakingStyleControl,
+  PairingModeControl,
+  PlayerGroupsControl,
+} from "./GameplaySettingsControls";
+import {
+  getBalanceMetricLabel,
+  getMatchmakingStyleLabel,
+  getPairingModeLabel,
+} from "@/lib/sessionSettings";
 
 interface SessionSettingsModalProps {
   open: boolean;
@@ -12,12 +32,21 @@ interface SessionSettingsModalProps {
   autoQueueDraft: boolean;
   respectPlayerRest: boolean;
   respectPlayerRestDraft: boolean;
+  canEditGameplay: boolean;
+  collabFormat: SessionCollabFormat;
+  matchmakingStyleDraft: SessionMatchmakingStyle;
+  balanceMetricDraft: SessionBalanceMetric;
+  pairingModeDraft: SessionPairingMode;
+  poolsEnabledDraft: boolean;
+  crossoverFrequencyDraft: SessionCrossoverFrequency;
+  courtCountDraft: number;
   canOpenRoster: boolean;
   canEndSession: boolean;
   canResetSession: boolean;
   canCreateRealSession: boolean;
   canDeleteSession: boolean;
-  courtLabelDrafts: Record<string, string>;
+  courtLabelDrafts: Record<number, string>;
+  hasGameplayChanges: boolean;
   hasAutoQueueChange: boolean;
   hasRespectPlayerRestChange: boolean;
   hasCourtLabelChanges: boolean;
@@ -31,7 +60,13 @@ interface SessionSettingsModalProps {
   onDeleteSession: () => void;
   onAutoQueueChange: (enabled: boolean) => void;
   onRespectPlayerRestChange: (enabled: boolean) => void;
-  onCourtLabelChange: (courtId: string, value: string) => void;
+  onMatchmakingStyleChange: (value: SessionMatchmakingStyle) => void;
+  onBalanceMetricChange: (value: SessionBalanceMetric) => void;
+  onPairingModeChange: (value: SessionPairingMode) => void;
+  onPoolsEnabledChange: (value: boolean) => void;
+  onCrossoverFrequencyChange: (value: SessionCrossoverFrequency) => void;
+  onCourtCountChange: (value: number) => void;
+  onCourtLabelChange: (courtNumber: number, value: string) => void;
   onSaveSettings: () => void;
 }
 
@@ -43,12 +78,21 @@ export function SessionSettingsModal({
   autoQueueDraft,
   respectPlayerRest,
   respectPlayerRestDraft,
+  canEditGameplay,
+  collabFormat,
+  matchmakingStyleDraft,
+  balanceMetricDraft,
+  pairingModeDraft,
+  poolsEnabledDraft,
+  crossoverFrequencyDraft,
+  courtCountDraft,
   canOpenRoster,
   canEndSession,
   canResetSession,
   canCreateRealSession,
   canDeleteSession,
   courtLabelDrafts,
+  hasGameplayChanges,
   hasAutoQueueChange,
   hasRespectPlayerRestChange,
   hasCourtLabelChanges,
@@ -62,6 +106,12 @@ export function SessionSettingsModal({
   onDeleteSession,
   onAutoQueueChange,
   onRespectPlayerRestChange,
+  onMatchmakingStyleChange,
+  onBalanceMetricChange,
+  onPairingModeChange,
+  onPoolsEnabledChange,
+  onCrossoverFrequencyChange,
+  onCourtCountChange,
   onCourtLabelChange,
   onSaveSettings,
 }: SessionSettingsModalProps) {
@@ -158,6 +208,93 @@ export function SessionSettingsModal({
         </section>
 
         <section className="space-y-3">
+          <div>
+            <h3 className="text-sm font-semibold text-gray-900">
+              Gameplay setup
+            </h3>
+            <p className="mt-1 text-sm text-gray-500">
+              {canEditGameplay
+                ? "Adjust how matches are formed before the tournament starts."
+                : "Reset the tournament to change these gameplay settings."}
+            </p>
+          </div>
+          {canEditGameplay ? (
+            <div className="space-y-4 rounded-xl border border-gray-200 bg-gray-50/70 p-3 sm:p-4">
+              <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_120px]">
+                <MatchmakingStyleControl
+                  value={matchmakingStyleDraft}
+                  onChange={onMatchmakingStyleChange}
+                />
+                <CourtCountControl
+                  value={courtCountDraft}
+                  onChange={onCourtCountChange}
+                />
+              </div>
+              <PairingModeControl
+                value={pairingModeDraft}
+                onChange={onPairingModeChange}
+                openLabel="Open"
+                mixedLabel="Mixed"
+              />
+              <BalanceMetricControl
+                value={balanceMetricDraft}
+                onChange={onBalanceMetricChange}
+              />
+              <PlayerGroupsControl
+                enabled={poolsEnabledDraft}
+                disabled={collabFormat === SessionCollabFormat.INTERCLUB}
+                onChange={onPoolsEnabledChange}
+                description={
+                  collabFormat === SessionCollabFormat.INTERCLUB
+                    ? "Off for club vs club."
+                    : "Balance Competitive, Social, and mixed Crossover courts from the active-player ratio."
+                }
+              />
+              {poolsEnabledDraft ? (
+                <div className="rounded-xl border border-gray-200 bg-white p-3">
+                  <CrossoverFrequencyControl
+                    value={crossoverFrequencyDraft}
+                    onChange={onCrossoverFrequencyChange}
+                  />
+                </div>
+              ) : null}
+              {hasGameplayChanges ? (
+                <p role="status" aria-live="polite" className="text-xs text-blue-700">
+                  Gameplay changes will apply when you save.
+                </p>
+              ) : null}
+            </div>
+          ) : (
+            <dl className="grid gap-2 rounded-xl border border-gray-200 bg-gray-50/80 p-3 text-sm sm:grid-cols-2">
+              <div>
+                <dt className="text-gray-500">Matchmaking</dt>
+                <dd className="font-semibold text-gray-900">
+                  {getMatchmakingStyleLabel(matchmakingStyleDraft)}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-gray-500">Balance by</dt>
+                <dd className="font-semibold text-gray-900">
+                  {getBalanceMetricLabel(balanceMetricDraft)}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-gray-500">Pairing</dt>
+                <dd className="font-semibold text-gray-900">
+                  {getPairingModeLabel(pairingModeDraft)}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-gray-500">Player groups</dt>
+                <dd className="font-semibold text-gray-900">
+                  {poolsEnabledDraft ? "On" : "Off"}
+                </dd>
+              </div>
+            </dl>
+          )}
+        </section>
+
+        <section className="space-y-3">
           <div className="flex items-start justify-between gap-4 rounded-xl border border-gray-200 bg-gray-50/80 px-4 py-4">
             <div className="space-y-1">
               <h3 className="text-sm font-semibold text-gray-900">Auto queue</h3>
@@ -243,29 +380,36 @@ export function SessionSettingsModal({
           </div>
 
           <div className="space-y-2">
-            {courts
-              .slice()
-              .sort((left, right) => left.courtNumber - right.courtNumber)
-              .map((court) => (
+            {Array.from(
+              {
+                length: canEditGameplay ? courtCountDraft : courts.length,
+              },
+              (_, index) => index + 1
+            ).map((courtNumber) => {
+              const court = courts.find(
+                (item) => item.courtNumber === courtNumber
+              );
+              return (
                 <label
-                  key={court.id}
+                  key={courtNumber}
                   className="flex items-center gap-3 rounded-xl border border-gray-200 bg-gray-50/80 px-3 py-3"
                 >
                   <span className="min-w-0 flex-1 text-sm font-semibold text-gray-900">
-                    {getCourtDisplayLabel(court)}
+                    {court ? getCourtDisplayLabel(court) : `Court ${courtNumber}`}
                   </span>
                   <input
                     type="text"
-                    value={courtLabelDrafts[court.id] ?? ""}
+                    value={courtLabelDrafts[courtNumber] ?? ""}
                     onChange={(event) =>
-                      onCourtLabelChange(court.id, event.target.value)
+                      onCourtLabelChange(courtNumber, event.target.value)
                     }
                     maxLength={24}
-                    placeholder={`Court ${court.courtNumber}`}
+                    placeholder={`Court ${courtNumber}`}
                     className="field max-w-[13rem] px-3 py-2 text-sm"
                   />
                 </label>
-              ))}
+              );
+            })}
           </div>
         </section>
       </div>

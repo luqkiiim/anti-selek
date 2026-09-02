@@ -500,9 +500,7 @@ export function useClubHostSetup({
           playerIds: selectedPlayerIds,
           playerConfigs: selectedPlayerIds.map((userId) => ({
             userId,
-            pool: poolsEnabled
-              ? (selectedPlayerPools[userId] ?? getPreferredPool(userId))
-              : SessionPool.A,
+            pool: selectedPlayerPools[userId] ?? getPreferredPool(userId),
             representingClubId: isInterclub
               ? (selectedPlayerRepresentingClubs[userId] ??
                 getDefaultRepresentingClubId(userId))

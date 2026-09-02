@@ -340,15 +340,18 @@ describe("createSessionForUser", () => {
           balanceMetric: SessionBalanceMetric.SESSION_POINTS,
           pairingMode: SessionPairingMode.OPEN,
           crossoverFrequency: SessionCrossoverFrequency.BALANCED,
+          poolAssignmentsInitialized: true,
           players: {
             create: [
               expect.objectContaining({
                 userId: "player-2",
                 needsMoreRest: false,
+                pool: SessionPool.B,
               }),
               expect.objectContaining({
                 userId: "player-3",
                 needsMoreRest: true,
+                pool: SessionPool.B,
               }),
             ],
           },

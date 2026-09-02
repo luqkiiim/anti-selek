@@ -11,7 +11,13 @@ import {
   getSessionOperatorMembership,
   withPlayerClubBadges,
 } from "@/lib/sessionCollab";
-import { MatchStatus } from "@/types/enums";
+import {
+  MatchStatus,
+  SessionCollabFormat,
+  SessionPool,
+  SessionScoringType,
+  SessionStatus,
+} from "@/types/enums";
 import { getQueuedMatchUserIds } from "@/lib/sessionQueue";
 import { parseMatchmakingReasonJson } from "@/lib/matchmaking/matchReason";
 import {
@@ -24,12 +30,98 @@ import { logError, safeErrorResponse } from "@/lib/errors";
 import { withLegacyClubAliases } from "@/lib/clubContractAliases";
 import { rateLimit, checkInvalidTargetRateLimit, invalidTargetResponse } from "@/lib/rateLimit";
 import { getTutorialClubDisplayName } from "@/lib/tutorialPlayground";
+import {
+  getLegacySessionModeForSettings,
+  getLegacySessionTypeForSettings,
+  isValidSessionBalanceMetric,
+  isValidSessionMatchmakingStyle,
+  isValidSessionPairingMode,
+  type SessionSettings,
+} from "@/lib/sessionSettings";
+import { isValidSessionCrossoverFrequency } from "@/lib/sessionPools";
+import { SessionRouteError } from "../sessionRouteShared";
 
 export const dynamic = "force-dynamic";
 
 interface UpdateSessionSettingsRequest {
   autoQueueEnabled?: unknown;
   respectPlayerRest?: unknown;
+  courtLabels?: unknown;
+  gameplaySettings?: unknown;
+}
+
+interface ParsedCourtLabel {
+  courtNumber: number;
+  label: string | null;
+}
+
+interface ParsedGameplaySettings extends SessionSettings {
+  poolsEnabled: boolean;
+  crossoverFrequency: string;
+  courtCount: number;
+}
+
+function parseCourtLabels(value: unknown): ParsedCourtLabel[] {
+  if (!Array.isArray(value)) {
+    throw new SessionRouteError("Court labels must be provided as a list", 400);
+  }
+
+  const seenCourtNumbers = new Set<number>();
+  return value.map((item) => {
+    if (!item || typeof item !== "object") {
+      throw new SessionRouteError("Invalid court label", 400);
+    }
+    const candidate = item as { courtNumber?: unknown; label?: unknown };
+    if (
+      !Number.isInteger(candidate.courtNumber) ||
+      (candidate.courtNumber as number) < 1 ||
+      (candidate.courtNumber as number) > 10 ||
+      (typeof candidate.label !== "string" && candidate.label !== null)
+    ) {
+      throw new SessionRouteError("Invalid court label", 400);
+    }
+    const courtNumber = candidate.courtNumber as number;
+    if (seenCourtNumbers.has(courtNumber)) {
+      throw new SessionRouteError("Court numbers must be unique", 400);
+    }
+    seenCourtNumbers.add(courtNumber);
+    const trimmedLabel = candidate.label?.trim() ?? "";
+    if (trimmedLabel.length > 24) {
+      throw new SessionRouteError("Court labels must be 24 characters or fewer", 400);
+    }
+    return { courtNumber, label: trimmedLabel || null };
+  });
+}
+
+function parseGameplaySettings(value: unknown): ParsedGameplaySettings | null {
+  if (value === undefined) return null;
+  if (!value || typeof value !== "object") {
+    throw new SessionRouteError("Invalid gameplay settings", 400);
+  }
+
+  const candidate = value as Record<string, unknown>;
+  if (
+    !isValidSessionMatchmakingStyle(candidate.matchmakingStyle) ||
+    !isValidSessionBalanceMetric(candidate.balanceMetric) ||
+    !isValidSessionPairingMode(candidate.pairingMode) ||
+    typeof candidate.poolsEnabled !== "boolean" ||
+    !isValidSessionCrossoverFrequency(candidate.crossoverFrequency) ||
+    !Number.isInteger(candidate.courtCount) ||
+    (candidate.courtCount as number) < 1 ||
+    (candidate.courtCount as number) > 10
+  ) {
+    throw new SessionRouteError("Invalid gameplay settings", 400);
+  }
+
+  return {
+    scoringType: SessionScoringType.POINTS,
+    matchmakingStyle: candidate.matchmakingStyle,
+    balanceMetric: candidate.balanceMetric,
+    pairingMode: candidate.pairingMode,
+    poolsEnabled: candidate.poolsEnabled,
+    crossoverFrequency: candidate.crossoverFrequency,
+    courtCount: candidate.courtCount as number,
+  };
 }
 
 async function getSessionRoute(
@@ -312,8 +404,9 @@ export async function PATCH(
       );
     }
 
-    const body =
-      (await request.json().catch(() => null)) as UpdateSessionSettingsRequest | null;
+    const body = (await request.json().catch(
+      () => null
+    )) as UpdateSessionSettingsRequest | null;
     if (
       !body ||
       typeof body.autoQueueEnabled !== "boolean" ||
@@ -329,6 +422,8 @@ export async function PATCH(
     }
     const autoQueueEnabled = body.autoQueueEnabled;
     const respectPlayerRest = body.respectPlayerRest;
+    const courtLabels = parseCourtLabels(body.courtLabels ?? []);
+    const gameplaySettings = parseGameplaySettings(body.gameplaySettings);
 
     const { code } = await params;
 
@@ -344,6 +439,17 @@ export async function PATCH(
       select: {
         id: true,
         clubId: true,
+        status: true,
+        collabFormat: true,
+        poolAssignmentsInitialized: true,
+        courts: {
+          select: {
+            id: true,
+            courtNumber: true,
+            currentMatchId: true,
+            _count: { select: { matches: true } },
+          },
+        },
       },
     });
 
@@ -361,15 +467,159 @@ export async function PATCH(
       return invalidTargetResponse(request, "api:sessions:code");
     }
 
-    if (!autoQueueEnabled) {
-      await prisma.$transaction(async (tx) => {
-        await tx.session.update({
-          where: { id: sessionData.id },
-          data: {
-            autoQueueEnabled: false,
-            respectPlayerRest,
-          },
+    if (gameplaySettings && sessionData.status !== SessionStatus.WAITING) {
+      return NextResponse.json(
+        { error: "Reset the tournament before changing gameplay settings" },
+        { status: 409 }
+      );
+    }
+    if (
+      gameplaySettings?.poolsEnabled &&
+      sessionData.collabFormat === SessionCollabFormat.INTERCLUB
+    ) {
+      return NextResponse.json(
+        { error: "Club vs club tournaments do not support player groups" },
+        { status: 400 }
+      );
+    }
+    if (
+      gameplaySettings &&
+      courtLabels.some(
+        (court) => court.courtNumber > gameplaySettings.courtCount
+      )
+    ) {
+      return NextResponse.json(
+        { error: "Court labels must match the selected court count" },
+        { status: 400 }
+      );
+    }
+
+    const courtsToRemove = gameplaySettings
+      ? sessionData.courts.filter(
+          (court) => court.courtNumber > gameplaySettings.courtCount
+        )
+      : [];
+    if (
+      courtsToRemove.some(
+        (court) => court.currentMatchId || court._count.matches > 0
+      )
+    ) {
+      return NextResponse.json(
+        { error: "Courts with match history cannot be removed" },
+        { status: 409 }
+      );
+    }
+
+    await prisma.$transaction(async (tx) => {
+      let initializeLegacyPools = false;
+      if (
+        gameplaySettings?.poolsEnabled &&
+        !sessionData.poolAssignmentsInitialized
+      ) {
+        initializeLegacyPools = true;
+        const players = await tx.sessionPlayer.findMany({
+          where: { sessionId: sessionData.id },
+          select: { userId: true, isGuest: true },
         });
+        const memberUserIds = players
+          .filter((player) => !player.isGuest)
+          .map((player) => player.userId);
+        const memberships = sessionData.clubId
+          ? await tx.clubMember.findMany({
+              where: {
+                clubId: sessionData.clubId,
+                userId: { in: memberUserIds },
+              },
+              select: { userId: true, preferredPool: true },
+            })
+          : [];
+        const preferredPoolByUserId = new Map(
+          memberships.map((membership) => [
+            membership.userId,
+            membership.preferredPool === SessionPool.A
+              ? SessionPool.A
+              : SessionPool.B,
+          ])
+        );
+        const competitiveUserIds = players
+          .filter(
+            (player) =>
+              !player.isGuest &&
+              preferredPoolByUserId.get(player.userId) === SessionPool.A
+          )
+          .map((player) => player.userId);
+        await tx.sessionPlayer.updateMany({
+          where: { sessionId: sessionData.id },
+          data: { pool: SessionPool.B, pendingPool: null },
+        });
+        if (competitiveUserIds.length > 0) {
+          await tx.sessionPlayer.updateMany({
+            where: {
+              sessionId: sessionData.id,
+              userId: { in: competitiveUserIds },
+            },
+            data: { pool: SessionPool.A, pendingPool: null },
+          });
+        }
+      }
+
+      await tx.session.update({
+        where: { id: sessionData.id },
+        data: {
+          autoQueueEnabled,
+          respectPlayerRest,
+          ...(gameplaySettings
+            ? {
+                type: getLegacySessionTypeForSettings(gameplaySettings),
+                mode: getLegacySessionModeForSettings(gameplaySettings),
+                scoringType: gameplaySettings.scoringType,
+                matchmakingStyle: gameplaySettings.matchmakingStyle,
+                balanceMetric: gameplaySettings.balanceMetric,
+                pairingMode: gameplaySettings.pairingMode,
+                poolsEnabled: gameplaySettings.poolsEnabled,
+                crossoverFrequency: gameplaySettings.crossoverFrequency,
+                poolAssignmentsInitialized:
+                  initializeLegacyPools ||
+                  sessionData.poolAssignmentsInitialized,
+              }
+            : {}),
+        },
+      });
+
+      if (gameplaySettings) {
+        const existingCourtNumbers = new Set(
+          sessionData.courts.map((court) => court.courtNumber)
+        );
+        const newCourts = Array.from(
+          { length: gameplaySettings.courtCount },
+          (_, index) => index + 1
+        ).filter((courtNumber) => !existingCourtNumbers.has(courtNumber));
+        if (newCourts.length > 0) {
+          await tx.court.createMany({
+            data: newCourts.map((courtNumber) => ({
+              sessionId: sessionData.id,
+              courtNumber,
+            })),
+          });
+        }
+        if (courtsToRemove.length > 0) {
+          await tx.court.deleteMany({
+            where: { id: { in: courtsToRemove.map((court) => court.id) } },
+          });
+        }
+      }
+
+      for (const courtLabel of courtLabels) {
+        await tx.court.updateMany({
+          where: {
+            sessionId: sessionData.id,
+            courtNumber: courtLabel.courtNumber,
+          },
+          data: { label: courtLabel.label },
+        });
+      }
+
+      if (!autoQueueEnabled) {
         const queuedMatch = await tx.queuedMatch.findUnique({
           where: { sessionId: sessionData.id },
         });
@@ -386,29 +636,70 @@ export async function PATCH(
             userIds: getQueuedMatchUserIds(queuedMatch),
           });
         }
-      });
+      }
+    });
 
-      return NextResponse.json({
-        autoQueueEnabled: false,
-        respectPlayerRest,
-        queuedMatch: null,
-      });
-    }
-
-    await prisma.session.update({
+    const updatedSession = await prisma.session.findUnique({
       where: { id: sessionData.id },
-      data: {
-        autoQueueEnabled: true,
-        respectPlayerRest,
+      include: {
+        courts: { orderBy: { courtNumber: "asc" } },
+        players: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                name: true,
+                avatarKey: true,
+                elo: true,
+              },
+            },
+          },
+          orderBy: { sessionPoints: "desc" },
+        },
       },
     });
+    if (!updatedSession) {
+      return invalidTargetResponse(request, "api:sessions:code");
+    }
 
     return NextResponse.json({
-      autoQueueEnabled: true,
-      respectPlayerRest,
-      queuedMatch: await tryRebuildQueuedMatchForSessionId(sessionData.id),
+      type: updatedSession.type,
+      mode: updatedSession.mode,
+      scoringType: updatedSession.scoringType,
+      matchmakingStyle: updatedSession.matchmakingStyle,
+      balanceMetric: updatedSession.balanceMetric,
+      pairingMode: updatedSession.pairingMode,
+      autoQueueEnabled: updatedSession.autoQueueEnabled,
+      respectPlayerRest: updatedSession.respectPlayerRest,
+      poolsEnabled: updatedSession.poolsEnabled,
+      crossoverFrequency: updatedSession.crossoverFrequency,
+      courtLabels: updatedSession.courts.map((court) => ({
+        id: court.id,
+        label: court.label,
+      })),
+      ...(gameplaySettings
+        ? {
+            courts: updatedSession.courts.map((court) => ({
+              ...court,
+              currentMatch: null,
+            })),
+            players: updatedSession.players.map((player) => ({
+              ...player,
+              user: serializeAvatarEntity(player.user),
+            })),
+          }
+        : {}),
+      queuedMatch: autoQueueEnabled
+        ? await tryRebuildQueuedMatchForSessionId(sessionData.id)
+        : null,
     });
   } catch (error) {
+    if (error instanceof SessionRouteError) {
+      return NextResponse.json(
+        { error: error.message },
+        { status: error.status }
+      );
+    }
     logError("Update session settings error", error);
     return safeErrorResponse();
   }

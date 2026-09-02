@@ -117,6 +117,7 @@ model Session {
   autoQueueEnabled       Boolean   @default(true)
   respectPlayerRest      Boolean   @default(true)
   poolsEnabled           Boolean   @default(false)
+  poolAssignmentsInitialized Boolean @default(false)
   poolAName              String?
   poolBName              String?
   poolACourtAssignments  Int       @default(0)

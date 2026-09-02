@@ -2,6 +2,13 @@ import type { ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import { SessionSettingsModal } from "./SessionSettingsModal";
+import {
+  SessionBalanceMetric,
+  SessionCollabFormat,
+  SessionCrossoverFrequency,
+  SessionMatchmakingStyle,
+  SessionPairingMode,
+} from "@/types/enums";
 
 vi.mock("@/components/ui/chrome", () => ({
   ModalFrame: ({
@@ -34,12 +41,21 @@ describe("SessionSettingsModal", () => {
         autoQueueDraft
         respectPlayerRest={false}
         respectPlayerRestDraft={false}
+        canEditGameplay
+        collabFormat={SessionCollabFormat.FREE_PLAY}
+        matchmakingStyleDraft={SessionMatchmakingStyle.BALANCED}
+        balanceMetricDraft={SessionBalanceMetric.SESSION_POINTS}
+        pairingModeDraft={SessionPairingMode.OPEN}
+        poolsEnabledDraft={false}
+        crossoverFrequencyDraft={SessionCrossoverFrequency.BALANCED}
+        courtCountDraft={1}
         canOpenRoster
         canEndSession
         canResetSession
         canCreateRealSession
         canDeleteSession
-        courtLabelDrafts={{ "court-1": "" }}
+        courtLabelDrafts={{ 1: "" }}
+        hasGameplayChanges
         hasAutoQueueChange
         hasRespectPlayerRestChange={false}
         hasCourtLabelChanges={false}
@@ -53,6 +69,12 @@ describe("SessionSettingsModal", () => {
         onDeleteSession={vi.fn()}
         onAutoQueueChange={vi.fn()}
         onRespectPlayerRestChange={vi.fn()}
+        onMatchmakingStyleChange={vi.fn()}
+        onBalanceMetricChange={vi.fn()}
+        onPairingModeChange={vi.fn()}
+        onPoolsEnabledChange={vi.fn()}
+        onCrossoverFrequencyChange={vi.fn()}
+        onCourtCountChange={vi.fn()}
         onCourtLabelChange={vi.fn()}
         onSaveSettings={vi.fn()}
       />
@@ -65,6 +87,9 @@ describe("SessionSettingsModal", () => {
     expect(markup).toContain('aria-checked="true"');
     expect(markup).toContain('aria-label="Respect player rest"');
     expect(markup).toContain('role="status"');
+    expect(markup).toContain("Gameplay setup");
+    expect(markup).toContain("Gameplay changes will apply when you save.");
+    expect(markup).toContain("Matchmaking style");
   });
 
   it("offers reset and cancellation controls for a real tournament", () => {
@@ -77,12 +102,21 @@ describe("SessionSettingsModal", () => {
         autoQueueDraft
         respectPlayerRest
         respectPlayerRestDraft
+        canEditGameplay={false}
+        collabFormat={SessionCollabFormat.FREE_PLAY}
+        matchmakingStyleDraft={SessionMatchmakingStyle.BALANCED}
+        balanceMetricDraft={SessionBalanceMetric.SESSION_POINTS}
+        pairingModeDraft={SessionPairingMode.OPEN}
+        poolsEnabledDraft={false}
+        crossoverFrequencyDraft={SessionCrossoverFrequency.BALANCED}
+        courtCountDraft={0}
         canOpenRoster
         canEndSession
         canResetSession
         canCreateRealSession={false}
         canDeleteSession
         courtLabelDrafts={{}}
+        hasGameplayChanges={false}
         hasAutoQueueChange={false}
         hasRespectPlayerRestChange={false}
         hasCourtLabelChanges={false}
@@ -96,6 +130,12 @@ describe("SessionSettingsModal", () => {
         onDeleteSession={vi.fn()}
         onAutoQueueChange={vi.fn()}
         onRespectPlayerRestChange={vi.fn()}
+        onMatchmakingStyleChange={vi.fn()}
+        onBalanceMetricChange={vi.fn()}
+        onPairingModeChange={vi.fn()}
+        onPoolsEnabledChange={vi.fn()}
+        onCrossoverFrequencyChange={vi.fn()}
+        onCourtCountChange={vi.fn()}
         onCourtLabelChange={vi.fn()}
         onSaveSettings={vi.fn()}
       />
@@ -103,5 +143,9 @@ describe("SessionSettingsModal", () => {
 
     expect(markup).toContain("Reset Tournament");
     expect(markup).toContain("Cancel &amp; Delete Tournament");
+    expect(markup).toContain(
+      "Reset the tournament to change these gameplay settings."
+    );
+    expect(markup).not.toContain("Gameplay changes will apply when you save.");
   });
 });

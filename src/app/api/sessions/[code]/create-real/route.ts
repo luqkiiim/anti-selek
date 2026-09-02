@@ -278,6 +278,7 @@ export async function POST(
           sourceSessionId: sourceSession.id,
           autoQueueEnabled: sourceSession.autoQueueEnabled,
           poolsEnabled: sourceSession.poolsEnabled,
+          poolAssignmentsInitialized: true,
           poolAName: DEFAULT_SESSION_POOL_A_NAME,
           poolBName: DEFAULT_SESSION_POOL_B_NAME,
           poolACourtAssignments: includeResults

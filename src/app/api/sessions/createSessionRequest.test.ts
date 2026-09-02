@@ -78,7 +78,7 @@ describe("parseCreateSessionRequest", () => {
         gender: PlayerGender.FEMALE,
         partnerPreference: PartnerPreference.FEMALE_FLEX,
         mixedSideOverride: null,
-        pool: SessionPool.A,
+        pool: SessionPool.B,
         initialElo: 1200,
       },
       {
@@ -86,7 +86,7 @@ describe("parseCreateSessionRequest", () => {
         gender: PlayerGender.MALE,
         partnerPreference: PartnerPreference.OPEN,
         mixedSideOverride: null,
-        pool: SessionPool.A,
+        pool: SessionPool.B,
         initialElo: 1000,
       },
       {
@@ -94,7 +94,7 @@ describe("parseCreateSessionRequest", () => {
         gender: PlayerGender.MALE,
         partnerPreference: PartnerPreference.OPEN,
         mixedSideOverride: null,
-        pool: SessionPool.A,
+        pool: SessionPool.B,
         initialElo: 1000,
       },
     ]);
@@ -149,7 +149,7 @@ describe("parseCreateSessionRequest", () => {
         gender: PlayerGender.UNSPECIFIED,
         partnerPreference: PartnerPreference.OPEN,
         mixedSideOverride: null,
-        pool: SessionPool.A,
+        pool: SessionPool.B,
         initialElo: 1000,
       },
     ]);
@@ -211,7 +211,7 @@ describe("parseCreateSessionRequest", () => {
         gender: PlayerGender.FEMALE,
         partnerPreference: PartnerPreference.OPEN,
         mixedSideOverride: MixedSide.UPPER,
-        pool: SessionPool.A,
+        pool: SessionPool.B,
         initialElo: 1000,
       },
     ]);

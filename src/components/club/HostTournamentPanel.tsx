@@ -11,6 +11,15 @@ import {
   SessionPairingMode,
   SessionPool,
 } from "@/types/enums";
+import {
+  BalanceMetricControl,
+  CourtCountControl,
+  CrossoverFrequencyControl,
+  MatchmakingStyleControl,
+  PairingModeControl,
+  PlayerGroupsControl,
+  SegmentedGameplayOption,
+} from "@/components/session/GameplaySettingsControls";
 
 interface HostTournamentPanelProps {
   newSessionName: string;
@@ -54,58 +63,6 @@ interface HostTournamentPanelProps {
   onCreateSession: () => void;
   creatingSession: boolean;
   creationIssues: readonly string[];
-}
-
-const MATCHMAKING_STYLE_ORDER: SessionMatchmakingStyle[] = [
-  SessionMatchmakingStyle.BALANCED,
-  SessionMatchmakingStyle.SOCIAL,
-  SessionMatchmakingStyle.LEVEL_MATCH,
-];
-
-const MATCHMAKING_STYLE_INFO: Record<
-  SessionMatchmakingStyle,
-  {
-    label: string;
-    lines: string[];
-  }
-> = {
-  [SessionMatchmakingStyle.BALANCED]: {
-    label: "Balanced",
-    lines: ["Fair games with some variety."],
-  },
-  [SessionMatchmakingStyle.SOCIAL]: {
-    label: "Social",
-    lines: ["More variety, less focus on fairness."],
-  },
-  [SessionMatchmakingStyle.LEVEL_MATCH]: {
-    label: "Level Match",
-    lines: ["Play mostly with people close to your level."],
-  },
-};
-
-function SegmentedOption({
-  label,
-  selected,
-  onClick,
-}: {
-  label: string;
-  selected: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      aria-pressed={selected}
-      onClick={onClick}
-      className={`min-w-0 rounded-lg border px-3 py-2 text-center text-sm font-semibold transition ${
-        selected
-          ? "border-blue-300 bg-blue-50 text-blue-700 shadow-sm"
-          : "border-gray-200 bg-white text-gray-700 hover:border-blue-200 hover:bg-blue-50/40"
-      }`}
-    >
-      {label}
-    </button>
-  );
 }
 
 function SectionIntro({
@@ -255,7 +212,6 @@ export function HostTournamentPanel({
   const hasPartnerClub = Boolean(partnerClubId);
   const isInterclub = collabFormat === SessionCollabFormat.INTERCLUB;
   const trimmedPartnerSearch = partnerClubSearch.trim();
-  const selectedStyleInfo = MATCHMAKING_STYLE_INFO[matchmakingStyle];
   const participantCount = selectedPlayerCount + guestCount;
   const competitiveCount =
     selectedPoolCounts[SessionPool.A] + guestPoolCounts[SessionPool.A];
@@ -291,71 +247,19 @@ export function HostTournamentPanel({
           </label>
 
           <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_120px]">
-            <div className="space-y-1.5">
-              <p className="text-sm font-medium text-gray-900">
-                Matchmaking style
-              </p>
-              <select
-                value={matchmakingStyle}
-                onChange={(event) =>
-                  onMatchmakingStyleChange(
-                    event.target.value as SessionMatchmakingStyle
-                  )
-                }
-                className="field"
-              >
-                {MATCHMAKING_STYLE_ORDER.map((style) => (
-                  <option key={style} value={style}>
-                    {MATCHMAKING_STYLE_INFO[style].label}
-                  </option>
-                ))}
-              </select>
-              <div className="rounded-xl border border-gray-200 bg-gray-50/80 px-3 py-3">
-                <div className="space-y-1.5">
-                  {selectedStyleInfo.lines.map((line) => (
-                    <p key={line} className="text-sm leading-5 text-gray-700">
-                      {line}
-                    </p>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            <label className="block space-y-1.5 text-sm font-medium text-gray-900">
-              <span>Courts</span>
-              <select
-                value={courtCount}
-                onChange={(event) =>
-                  onCourtCountChange(parseInt(event.target.value, 10))
-                }
-                className="field"
-              >
-                {Array.from({ length: 10 }, (_, index) => index + 1).map(
-                  (count) => (
-                    <option key={count} value={count}>
-                      {count}
-                    </option>
-                  )
-                )}
-              </select>
-            </label>
+            <MatchmakingStyleControl
+              value={matchmakingStyle}
+              onChange={onMatchmakingStyleChange}
+            />
+            <CourtCountControl value={courtCount} onChange={onCourtCountChange} />
           </div>
 
-          <div className="space-y-1.5">
-            <p className="text-sm font-medium text-gray-900">Pairing</p>
-            <div className="flex flex-wrap gap-2">
-              <SegmentedOption
-                label={openModeLabel}
-                selected={pairingMode === SessionPairingMode.OPEN}
-                onClick={() => onPairingModeChange(SessionPairingMode.OPEN)}
-              />
-              <SegmentedOption
-                label={mixedModeLabel}
-                selected={pairingMode === SessionPairingMode.MIXED}
-                onClick={() => onPairingModeChange(SessionPairingMode.MIXED)}
-              />
-            </div>
-          </div>
+          <PairingModeControl
+            value={pairingMode}
+            onChange={onPairingModeChange}
+            openLabel={openModeLabel}
+            mixedLabel={mixedModeLabel}
+          />
         </div>
 
         <div className="grid gap-3">
@@ -399,27 +303,10 @@ export function HostTournamentPanel({
           {advancedOpen ? (
             <div className="min-w-0 space-y-3 border-t border-gray-200 px-3 py-3 sm:px-4">
               <div className="min-w-0 space-y-1.5 rounded-xl border border-gray-200 bg-white p-3 sm:p-4">
-                <p className="text-sm font-medium text-gray-900">Balance by</p>
-                <div className="grid min-w-0 grid-cols-2 gap-2">
-                  <SegmentedOption
-                    label="Tournament points"
-                    selected={
-                      balanceMetric === SessionBalanceMetric.SESSION_POINTS
-                    }
-                    onClick={() =>
-                      onBalanceMetricChange(
-                        SessionBalanceMetric.SESSION_POINTS
-                      )
-                    }
-                  />
-                  <SegmentedOption
-                    label="Rating"
-                    selected={balanceMetric === SessionBalanceMetric.RATING}
-                    onClick={() =>
-                      onBalanceMetricChange(SessionBalanceMetric.RATING)
-                    }
-                  />
-                </div>
+                <BalanceMetricControl
+                  value={balanceMetric}
+                  onChange={onBalanceMetricChange}
+                />
               </div>
 
               <div className="min-w-0 space-y-2">
@@ -441,16 +328,15 @@ export function HostTournamentPanel({
                   checked={respectPlayerRest}
                   onChange={onRespectPlayerRestChange}
                 />
-                <SwitchRow
-                  label="Player groups"
+                <PlayerGroupsControl
+                  enabled={poolsEnabled}
+                  onChange={onPoolsEnabledChange}
+                  disabled={isInterclub}
                   description={
                     isInterclub
                       ? "Off for club vs club."
                       : "Balance Competitive, Social, and mixed Crossover courts from the active-player ratio."
                   }
-                  checked={poolsEnabled}
-                  onChange={onPoolsEnabledChange}
-                  disabled={isInterclub}
                 />
               </div>
 
@@ -481,55 +367,10 @@ export function HostTournamentPanel({
                     on each team. Add at least two people to each group.
                   </p>
                   <div className="space-y-2 border-t border-gray-100 pt-3">
-                    <p className="text-sm font-medium text-gray-900">
-                      Crossover frequency
-                    </p>
-                    <div
-                      role="group"
-                      aria-label="Crossover frequency"
-                      className="flex flex-wrap gap-2"
-                    >
-                      <SegmentedOption
-                        label="Occasional"
-                        selected={
-                          crossoverFrequency ===
-                          SessionCrossoverFrequency.OCCASIONAL
-                        }
-                        onClick={() =>
-                          onCrossoverFrequencyChange(
-                            SessionCrossoverFrequency.OCCASIONAL
-                          )
-                        }
-                      />
-                      <SegmentedOption
-                        label="Balanced"
-                        selected={
-                          crossoverFrequency ===
-                          SessionCrossoverFrequency.BALANCED
-                        }
-                        onClick={() =>
-                          onCrossoverFrequencyChange(
-                            SessionCrossoverFrequency.BALANCED
-                          )
-                        }
-                      />
-                      <SegmentedOption
-                        label="Frequent"
-                        selected={
-                          crossoverFrequency ===
-                          SessionCrossoverFrequency.FREQUENT
-                        }
-                        onClick={() =>
-                          onCrossoverFrequencyChange(
-                            SessionCrossoverFrequency.FREQUENT
-                          )
-                        }
-                      />
-                    </div>
-                    <p className="text-xs leading-5 text-gray-500">
-                      Target crossover frequency. Availability and pairing
-                      rules may affect the actual rate.
-                    </p>
+                    <CrossoverFrequencyControl
+                      value={crossoverFrequency}
+                      onChange={onCrossoverFrequencyChange}
+                    />
                   </div>
                 </div>
               ) : null}
@@ -639,14 +480,14 @@ export function HostTournamentPanel({
                       Collab format
                     </p>
                     <div className="grid grid-cols-2 gap-2">
-                      <SegmentedOption
+                      <SegmentedGameplayOption
                         label="Free play"
                         selected={collabFormat === SessionCollabFormat.FREE_PLAY}
                         onClick={() =>
                           onCollabFormatChange(SessionCollabFormat.FREE_PLAY)
                         }
                       />
-                      <SegmentedOption
+                      <SegmentedGameplayOption
                         label="Club vs club"
                         selected={collabFormat === SessionCollabFormat.INTERCLUB}
                         onClick={() =>

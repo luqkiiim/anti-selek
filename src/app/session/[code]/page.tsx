@@ -40,7 +40,11 @@ import { useAdminOnboardingProgress } from "@/components/onboarding/useAdminOnbo
 import type { CurrentUser } from "@/components/session/sessionTypes";
 import {
   MatchStatus,
+  SessionBalanceMetric,
   SessionCollabFormat,
+  SessionCrossoverFrequency,
+  SessionMatchmakingStyle,
+  SessionPairingMode,
   SessionPool,
   SessionStatus,
 } from "@/types/enums";
@@ -54,6 +58,7 @@ import { buildSessionViewModel } from "./sessionViewModel";
 import { useSessionData } from "./useSessionData";
 import { useSessionMatchActions } from "./useSessionMatchActions";
 import { useSessionPlayerManagement } from "./useSessionPlayerManagement";
+import { getSessionSettings } from "@/lib/sessionSettings";
 
 const EMPTY_PLAYER_SESSION_STATS = {
   played: 0,
@@ -89,19 +94,15 @@ interface SessionUserResponse {
 
 type SessionSnapshotResponse = SessionSnapshotLike & {
   error?: string;
+  courtLabels?: Array<{
+    id: string;
+    label?: string | null;
+  }>;
 };
 
 interface SessionCodeResponse {
   code?: string;
   error?: string;
-}
-
-interface CourtLabelUpdatesResponse {
-  error?: string;
-  courts?: Array<{
-    id: string;
-    label?: string | null;
-  }>;
 }
 
 export default function SessionPage() {
@@ -138,8 +139,18 @@ export default function SessionPage() {
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [autoQueueDraft, setAutoQueueDraft] = useState(true);
   const [respectPlayerRestDraft, setRespectPlayerRestDraft] = useState(true);
+  const [matchmakingStyleDraft, setMatchmakingStyleDraft] =
+    useState<SessionMatchmakingStyle>(SessionMatchmakingStyle.BALANCED);
+  const [balanceMetricDraft, setBalanceMetricDraft] =
+    useState<SessionBalanceMetric>(SessionBalanceMetric.SESSION_POINTS);
+  const [pairingModeDraft, setPairingModeDraft] =
+    useState<SessionPairingMode>(SessionPairingMode.OPEN);
+  const [poolsEnabledDraft, setPoolsEnabledDraft] = useState(false);
+  const [crossoverFrequencyDraft, setCrossoverFrequencyDraft] =
+    useState<SessionCrossoverFrequency>(SessionCrossoverFrequency.BALANCED);
+  const [courtCountDraft, setCourtCountDraft] = useState(2);
   const [courtLabelDrafts, setCourtLabelDrafts] = useState<
-    Record<string, string>
+    Record<number, string>
   >({});
   const [savingSettings, setSavingSettings] = useState(false);
   const [mobileSection, setMobileSection] =
@@ -678,6 +689,18 @@ export default function SessionPage() {
       });
     };
   }, [activeMobileSection]);
+  const currentGameplaySettings = useMemo(
+    () =>
+      sessionData
+        ? getSessionSettings(sessionData)
+        : {
+            scoringType: "POINTS" as const,
+            matchmakingStyle: SessionMatchmakingStyle.BALANCED,
+            balanceMetric: SessionBalanceMetric.SESSION_POINTS,
+            pairingMode: SessionPairingMode.OPEN,
+          },
+    [sessionData]
+  );
   const hasCourtLabelChanges = useMemo(() => {
     if (!sessionData) {
       return false;
@@ -685,9 +708,33 @@ export default function SessionPage() {
 
     return sessionData.courts.some(
       (court) =>
-        (courtLabelDrafts[court.id] ?? "").trim() !== (court.label ?? "").trim()
+        (courtLabelDrafts[court.courtNumber] ?? "").trim() !==
+        (court.label ?? "").trim()
     );
   }, [courtLabelDrafts, sessionData]);
+  const hasGameplayChanges = useMemo(() => {
+    if (!sessionData || sessionData.status !== SessionStatus.WAITING) {
+      return false;
+    }
+
+    return (
+      matchmakingStyleDraft !== currentGameplaySettings.matchmakingStyle ||
+      balanceMetricDraft !== currentGameplaySettings.balanceMetric ||
+      pairingModeDraft !== currentGameplaySettings.pairingMode ||
+      poolsEnabledDraft !== sessionData.poolsEnabled ||
+      crossoverFrequencyDraft !== sessionData.crossoverFrequency ||
+      courtCountDraft !== sessionData.courts.length
+    );
+  }, [
+    balanceMetricDraft,
+    courtCountDraft,
+    crossoverFrequencyDraft,
+    currentGameplaySettings,
+    matchmakingStyleDraft,
+    pairingModeDraft,
+    poolsEnabledDraft,
+    sessionData,
+  ]);
   const hasAutoQueueChange = useMemo(() => {
     if (!sessionData) {
       return false;
@@ -703,7 +750,10 @@ export default function SessionPage() {
     return respectPlayerRestDraft !== sessionData.respectPlayerRest;
   }, [respectPlayerRestDraft, sessionData]);
   const hasSettingsChanges =
-    hasCourtLabelChanges || hasAutoQueueChange || hasRespectPlayerRestChange;
+    hasCourtLabelChanges ||
+    hasGameplayChanges ||
+    hasAutoQueueChange ||
+    hasRespectPlayerRestChange;
   const completedScoredTestMatchesCount = useMemo(
     () =>
       (sessionData?.matches ?? []).filter(
@@ -723,13 +773,22 @@ export default function SessionPage() {
     setError("");
     setAutoQueueDraft(sessionData.autoQueueEnabled);
     setRespectPlayerRestDraft(sessionData.respectPlayerRest);
+    setMatchmakingStyleDraft(currentGameplaySettings.matchmakingStyle);
+    setBalanceMetricDraft(currentGameplaySettings.balanceMetric);
+    setPairingModeDraft(currentGameplaySettings.pairingMode);
+    setPoolsEnabledDraft(sessionData.poolsEnabled);
+    setCrossoverFrequencyDraft(sessionData.crossoverFrequency);
+    setCourtCountDraft(sessionData.courts.length);
     setCourtLabelDrafts(
       Object.fromEntries(
-        sessionData.courts.map((court) => [court.id, court.label ?? ""])
+        sessionData.courts.map((court) => [
+          court.courtNumber,
+          court.label ?? "",
+        ])
       )
     );
     setShowSettingsModal(true);
-  }, [canOpenSettings, sessionData]);
+  }, [canOpenSettings, currentGameplaySettings, sessionData]);
 
   const closeSettingsModal = useCallback(() => {
     if (savingSettings) {
@@ -752,10 +811,10 @@ export default function SessionPage() {
   );
 
   const handleCourtLabelChange = useCallback(
-    (courtId: string, value: string) => {
+    (courtNumber: number, value: string) => {
       setCourtLabelDrafts((current) => ({
         ...current,
-        [courtId]: value,
+        [courtNumber]: value,
       }));
     },
     []
@@ -770,49 +829,51 @@ export default function SessionPage() {
     setError("");
 
     try {
-      if (hasCourtLabelChanges) {
-        const res = await fetch(`/api/sessions/${code}/courts/labels`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            courts: sessionData.courts.map((court) => ({
-              courtId: court.id,
-              label: courtLabelDrafts[court.id] ?? "",
-            })),
-          }),
-        });
-        const data = await safeJson<CourtLabelUpdatesResponse>(res);
+      const labelCourtCount =
+        sessionData.status === SessionStatus.WAITING
+          ? courtCountDraft
+          : sessionData.courts.length;
+      const res = await fetch(`/api/sessions/${code}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          autoQueueEnabled: autoQueueDraft,
+          respectPlayerRest: respectPlayerRestDraft,
+          courtLabels: Array.from(
+            { length: labelCourtCount },
+            (_, index) => ({
+              courtNumber: index + 1,
+              label: courtLabelDrafts[index + 1] ?? "",
+            })
+          ),
+          ...(hasGameplayChanges
+            ? {
+                gameplaySettings: {
+                  matchmakingStyle: matchmakingStyleDraft,
+                  balanceMetric: balanceMetricDraft,
+                  pairingMode: pairingModeDraft,
+                  poolsEnabled: poolsEnabledDraft,
+                  crossoverFrequency: crossoverFrequencyDraft,
+                  courtCount: courtCountDraft,
+                },
+              }
+            : {}),
+        }),
+      });
+      const data = await safeJson<SessionSnapshotResponse>(res);
 
-        if (!res.ok) {
-          setError(getErrorMessage(data, "Failed to update court labels"));
-          return;
-        }
-
-        patchSessionData((current) =>
-          applyCourtLabelUpdates(current, data.courts ?? [])
-        );
+      if (!res.ok) {
+        setError(getErrorMessage(data, "Failed to update tournament settings"));
+        return;
       }
 
-      if (hasAutoQueueChange || hasRespectPlayerRestChange) {
-        const res = await fetch(`/api/sessions/${code}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            autoQueueEnabled: autoQueueDraft,
-            respectPlayerRest: respectPlayerRestDraft,
-          }),
-        });
-        const data = await safeJson<SessionSnapshotResponse>(res);
-
-        if (!res.ok) {
-          setError(
-            getErrorMessage(data, "Failed to update matchmaking settings")
-          );
-          return;
-        }
-
-        patchSessionData((current) => mergeSessionSnapshot(current, data));
-      }
+      const { courtLabels, ...snapshot } = data;
+      patchSessionData((current) =>
+        mergeSessionSnapshot(
+          applyCourtLabelUpdates(current, courtLabels ?? []),
+          snapshot
+        )
+      );
 
       setShowSettingsModal(false);
       scheduleSessionRefresh();
@@ -824,13 +885,17 @@ export default function SessionPage() {
     }
   }, [
     autoQueueDraft,
+    balanceMetricDraft,
     code,
+    courtCountDraft,
     courtLabelDrafts,
-    hasAutoQueueChange,
-    hasCourtLabelChanges,
-    hasRespectPlayerRestChange,
+    crossoverFrequencyDraft,
+    hasGameplayChanges,
     hasSettingsChanges,
+    matchmakingStyleDraft,
+    pairingModeDraft,
     patchSessionData,
+    poolsEnabledDraft,
     respectPlayerRestDraft,
     scheduleSessionRefresh,
     sessionData,
@@ -1508,6 +1573,16 @@ export default function SessionPage() {
         autoQueueDraft={autoQueueDraft}
         respectPlayerRest={sessionData.respectPlayerRest}
         respectPlayerRestDraft={respectPlayerRestDraft}
+        canEditGameplay={sessionData.status === SessionStatus.WAITING}
+        collabFormat={
+          sessionData.collabFormat ?? SessionCollabFormat.FREE_PLAY
+        }
+        matchmakingStyleDraft={matchmakingStyleDraft}
+        balanceMetricDraft={balanceMetricDraft}
+        pairingModeDraft={pairingModeDraft}
+        poolsEnabledDraft={poolsEnabledDraft}
+        crossoverFrequencyDraft={crossoverFrequencyDraft}
+        courtCountDraft={courtCountDraft}
         canOpenRoster={isAdmin && !sessionView.isCompletedSession}
         canEndSession={isAdmin && sessionData.status === SessionStatus.ACTIVE}
         canResetSession={
@@ -1520,6 +1595,7 @@ export default function SessionPage() {
           canUseAdminSessionControls && !sessionView.isCompletedSession
         }
         courtLabelDrafts={courtLabelDrafts}
+        hasGameplayChanges={hasGameplayChanges}
         hasAutoQueueChange={hasAutoQueueChange}
         hasRespectPlayerRestChange={hasRespectPlayerRestChange}
         hasCourtLabelChanges={hasCourtLabelChanges}
@@ -1533,6 +1609,12 @@ export default function SessionPage() {
         onDeleteSession={openDeleteTestConfirm}
         onAutoQueueChange={setAutoQueueDraft}
         onRespectPlayerRestChange={setRespectPlayerRestDraft}
+        onMatchmakingStyleChange={setMatchmakingStyleDraft}
+        onBalanceMetricChange={setBalanceMetricDraft}
+        onPairingModeChange={setPairingModeDraft}
+        onPoolsEnabledChange={setPoolsEnabledDraft}
+        onCrossoverFrequencyChange={setCrossoverFrequencyDraft}
+        onCourtCountChange={setCourtCountDraft}
         onCourtLabelChange={handleCourtLabelChange}
         onSaveSettings={() => void saveSessionSettings()}
       />
@@ -1649,7 +1731,8 @@ export default function SessionPage() {
                 {sessionData.name}
               </p>
               <p className="text-sm text-gray-600">
-                Match history, standings, queue, and live courts will be reset.
+                Players and settings will be kept. Matches, scores, standings,
+                and queue will be cleared.
               </p>
             </div>
           }

@@ -29,7 +29,6 @@ function buildMemberSessionConfigs({
   selectedUsers,
   playerConfigMap,
   mode,
-  poolsEnabled,
   collabFormat,
   interclubClubIds,
   clubBadgesByUserId,
@@ -46,7 +45,6 @@ function buildMemberSessionConfigs({
   }>;
   playerConfigMap: ParsedCreateSessionRequest["playerConfigMap"];
   mode: SessionMode;
-  poolsEnabled: boolean;
   collabFormat: SessionCollabFormat;
   interclubClubIds: string[];
   clubBadgesByUserId: Map<string, Array<{ id: string; name: string; elo: number }>>;
@@ -112,12 +110,11 @@ function buildMemberSessionConfigs({
       gender: sessionGender,
       partnerPreference: resolvedMixedState.partnerPreference,
       mixedSideOverride: resolvedMixedState.mixedSideOverride,
-      pool: poolsEnabled
-        ? override?.pool ??
-          (selectedUser?.preferredPool === SessionPool.A
-            ? SessionPool.A
-            : SessionPool.B)
-        : SessionPool.A,
+      pool:
+        override?.pool ??
+        (selectedUser?.preferredPool === SessionPool.A
+          ? SessionPool.A
+          : SessionPool.B),
       needsMoreRest: selectedUser?.needsMoreRest ?? false,
       sessionPoints: 0,
     };
@@ -297,7 +294,6 @@ export async function createSessionForUser({
     selectedUsers: selectedUsersWithRest,
     playerConfigMap: input.playerConfigMap,
     mode: input.mode,
-    poolsEnabled: input.poolsEnabled,
     collabFormat: input.collabFormat,
     interclubClubIds,
     clubBadgesByUserId,
@@ -368,6 +364,7 @@ export async function createSessionForUser({
         autoQueueEnabled: input.autoQueueEnabled,
         respectPlayerRest: input.respectPlayerRest,
         poolsEnabled: input.poolsEnabled,
+        poolAssignmentsInitialized: true,
         poolAName: "Competitive",
         poolBName: "Social",
         crossoverMissThreshold: input.crossoverMissThreshold,

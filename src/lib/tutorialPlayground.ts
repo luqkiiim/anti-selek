@@ -498,6 +498,7 @@ async function seedCompletedPracticeSessions(
         status: SessionStatus.COMPLETED,
         isTest: false,
         autoQueueEnabled: true,
+        poolAssignmentsInitialized: true,
         createdAt,
         endedAt,
         courts: {
@@ -655,6 +656,7 @@ async function seedActiveTutorialSession(
       status: SessionStatus.ACTIVE,
       isTest: true,
       autoQueueEnabled: true,
+      poolAssignmentsInitialized: true,
       courts: {
         create: courtIds.map((id, index) => ({
           id,

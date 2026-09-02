@@ -55,8 +55,16 @@ export interface MatchPayload {
 
 export interface SessionSnapshotLike {
   status?: string;
+  type?: string;
+  mode?: SessionData["mode"];
+  scoringType?: SessionData["scoringType"];
+  matchmakingStyle?: SessionData["matchmakingStyle"];
+  balanceMetric?: SessionData["balanceMetric"];
+  pairingMode?: SessionData["pairingMode"];
   autoQueueEnabled?: boolean;
   respectPlayerRest?: boolean;
+  poolsEnabled?: boolean;
+  crossoverFrequency?: SessionData["crossoverFrequency"];
   courts?: Array<{
     id: string;
     courtNumber: number;

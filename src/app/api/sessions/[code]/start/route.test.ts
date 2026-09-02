@@ -1,5 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { SessionPool, SessionStatus } from "@/types/enums";
+import {
+  PlayerGender,
+  SessionPairingMode,
+  SessionPool,
+  SessionStatus,
+} from "@/types/enums";
 
 vi.mock("@/lib/auth", () => ({
   auth: vi.fn(),
@@ -89,6 +94,36 @@ describe("start session route", () => {
 
     expect(response.status).toBe(400);
     expect(body.error).toContain("at least 2 Competitive and 2 Social");
+    expect(prisma.session.update).not.toHaveBeenCalled();
+  });
+
+  it("names the player whose gender blocks mixed pairing", async () => {
+    vi.mocked(auth).mockResolvedValue({
+      user: { id: "admin-1", isAdmin: true },
+    } as never);
+    vi.mocked(prisma.session.findUnique).mockResolvedValue({
+      code: "session-1",
+      clubId: null,
+      status: SessionStatus.WAITING,
+      poolsEnabled: false,
+      pairingMode: SessionPairingMode.MIXED,
+      players: [
+        {
+          id: "player-1",
+          gender: PlayerGender.UNSPECIFIED,
+          user: { name: "Alex" },
+        },
+      ],
+      sessionClubs: [],
+    } as never);
+
+    const response = await POST(new Request("http://localhost/session/start"), {
+      params: Promise.resolve({ code: "session-1" }),
+    });
+    const body = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(body.error).toContain("Alex");
     expect(prisma.session.update).not.toHaveBeenCalled();
   });
 });

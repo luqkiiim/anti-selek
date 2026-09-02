@@ -128,8 +128,7 @@ function normalizePlayerConfigMap(playerConfigs: unknown) {
 function normalizeGuests(
   guestNames: unknown,
   guestConfigs: unknown,
-  mode: SessionMode,
-  poolsEnabled: boolean
+  mode: SessionMode
 ) {
   const normalizedGuestsByName = new Map<string, NormalizedGuestConfig>();
 
@@ -143,7 +142,7 @@ function normalizeGuests(
     partnerPreference: PartnerPreference = defaultPartnerPreferenceForGender(
       gender
     ),
-    pool: SessionPool = poolsEnabled ? SessionPool.B : SessionPool.A,
+    pool: SessionPool = SessionPool.B,
     initialElo = 1000,
     overwrite = false
   ) => {
@@ -209,12 +208,9 @@ function normalizeGuests(
         candidate.initialElo <= 5000
           ? candidate.initialElo
           : 1000;
-      const pool =
-        poolsEnabled && isValidSessionPool(candidate.pool)
-          ? candidate.pool
-          : poolsEnabled
-            ? SessionPool.B
-            : SessionPool.A;
+      const pool = isValidSessionPool(candidate.pool)
+        ? candidate.pool
+        : SessionPool.B;
       const hasRepresentingClubId = Object.prototype.hasOwnProperty.call(
         candidate,
         "representingClubId"
@@ -439,8 +435,7 @@ export function parseCreateSessionRequest(
     normalizedGuests: normalizeGuests(
       guestNames,
       guestConfigs,
-      legacyMode,
-      normalizedPoolsEnabled
+      legacyMode
     ),
     autoQueueEnabled: normalizedAutoQueueEnabled,
     respectPlayerRest: normalizedRespectPlayerRest,

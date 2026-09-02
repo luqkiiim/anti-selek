@@ -9,7 +9,12 @@ import {
   getSessionClubLinks,
   withPlayerClubBadges,
 } from "@/lib/sessionCollab";
-import { SessionPool, SessionStatus } from "@/types/enums";
+import {
+  PlayerGender,
+  SessionPairingMode,
+  SessionPool,
+  SessionStatus,
+} from "@/types/enums";
 import { SessionClubStatus } from "@/types/enums";
 import {
   ensureInterclubSessionReady,
@@ -45,7 +50,9 @@ export async function POST(
     const sessionData = await prisma.session.findUnique({
       where: { code },
       include: {
-        players: true,
+        players: {
+          include: { user: { select: { name: true } } },
+        },
         sessionClubs: true,
       },
     });
@@ -95,6 +102,22 @@ export async function POST(
           {
             error:
               "Player groups require at least 2 Competitive and 2 Social players before starting",
+          },
+          { status: 400 }
+        );
+      }
+    }
+    if (sessionData.pairingMode === SessionPairingMode.MIXED) {
+      const playerMissingGender = sessionData.players.find(
+        (player) =>
+          player.gender !== PlayerGender.MALE &&
+          player.gender !== PlayerGender.FEMALE
+      );
+      if (playerMissingGender) {
+        return NextResponse.json(
+          {
+            error:
+              `Mixed pairing requires a gender for ${playerMissingGender.user.name}`,
           },
           { status: 400 }
         );
