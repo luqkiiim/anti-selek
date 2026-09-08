@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { clubGuestWhere } from "@/lib/clubGuest";
 import { auth } from "@/lib/auth";
 import { serializeAvatarEntity } from "@/lib/avatar";
 import { getClubStatUserResolver } from "@/lib/offlineIdentities";
@@ -85,6 +86,7 @@ async function getUserStatsRoute(
     | {
         clubId: string;
         viewerCanManageClub: boolean;
+        canAddGuestToClub: boolean;
         rankContext: {
           leaderboardSize: number;
           currentRank: number | null;
@@ -94,6 +96,7 @@ async function getUserStatsRoute(
       }
     | null = null;
   let viewerCanManageClub = false;
+  let canAddGuestToClub = false;
   let leaderboardMembers: Array<{
     userId: string;
     elo: number;
@@ -144,13 +147,15 @@ async function getUserStatsRoute(
     }
 
     if (!targetMembership) {
-      return invalidTargetResponse(request, "api:users:id:stats");
+      const guest = await prisma.sessionPlayer.findFirst({ where: clubGuestWhere(clubId, id), select: { id: true } });
+      if (!guest) return invalidTargetResponse(request, "api:users:id:stats");
     }
 
     viewerCanManageClub =
       !isQuickAccessSession(session) &&
       (requesterMembership.role === "ADMIN" || !!session.user.isAdmin);
-    effectiveElo = targetMembership.elo;
+    canAddGuestToClub = !targetMembership && viewerCanManageClub;
+    effectiveElo = targetMembership?.elo ?? user.elo;
 
     leaderboardMembers = await prisma.clubMember.findMany({
       where: {
@@ -306,6 +311,7 @@ async function getUserStatsRoute(
     context = withLegacyClubAliases({
       clubId,
       viewerCanManageClub,
+      canAddGuestToClub,
       rankContext: buildProfileClubRankWindow(
         id,
         leaderboardMembers.map((member) => ({

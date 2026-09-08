@@ -679,4 +679,10 @@ describe("buildSessionViewModel", () => {
     });
     expect(viewModel.pointDiffByUserId.get("u1")).toBe(-2);
   });
+
+  it('keeps the club context for a guest in completed standings', () => {
+    const guest = createPlayer('guest-one', 'Alex', { isGuest: true });
+    const view = buildSessionViewModel({ sessionData: createSessionData({ status: SessionStatus.COMPLETED, players: [guest] }), clubPlayers: [], rosterSearch: '', manualMatchForm: emptyManualMatchForm, manualCourtId: null, openPreferenceEditor: null });
+    expect(view.getPlayerProfileHref(guest)).toBe('/profile/guest-one?clubId=community-1');
+  });
 });

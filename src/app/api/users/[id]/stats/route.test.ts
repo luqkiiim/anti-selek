@@ -4,6 +4,7 @@ import { expectAliasPair } from "@/lib/clubContractAliasTestUtils";
 
 const mocks = vi.hoisted(() => ({
   auth: vi.fn(),
+  sessionPlayerFindFirst: vi.fn(),
   clubMemberFindMany: vi.fn(),
   clubMemberFindUnique: vi.fn(),
   userFindUnique: vi.fn(),
@@ -24,6 +25,7 @@ vi.mock("@/lib/auth", () => ({
 
 vi.mock("@/lib/prisma", () => ({
   prisma: {
+    sessionPlayer: { findFirst: mocks.sessionPlayerFindFirst },
     user: {
       findUnique: mocks.userFindUnique,
     },
@@ -61,6 +63,7 @@ import { GET } from "./route";
 describe("user stats route", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.sessionPlayerFindFirst.mockResolvedValue(null);
 
     mocks.auth.mockResolvedValue({
       user: { id: "viewer-1", isAdmin: false },
@@ -378,5 +381,14 @@ describe("user stats route", () => {
       ],
       []
     );
+  });
+
+  it.each([['ADMIN', true], ['MEMBER', false]])('shows a club guest profile to %s with appropriate promotion access', async (role, canAdd) => {
+    mocks.clubMemberFindUnique.mockResolvedValueOnce({ role }).mockResolvedValueOnce(null);
+    mocks.sessionPlayerFindFirst.mockResolvedValue({ id: 'appearance-one' });
+    const response = await GET(new Request('http://localhost/api/users/user-1/stats?clubId=community-1'), { params: Promise.resolve({ id: 'user-1' }) });
+    expect(response.status).toBe(200);
+    expect((await response.json()).context.canAddGuestToClub).toBe(canAdd);
+    expect(mocks.sessionPlayerFindFirst).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ userId: 'user-1', isGuest: true }) }));
   });
 });

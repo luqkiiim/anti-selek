@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { AddGuestToClub } from "./AddGuestToClub";
 import {
   type KeyboardEvent as ReactKeyboardEvent,
   type PointerEvent as ReactPointerEvent,
@@ -56,6 +57,7 @@ interface UserProfileResponse {
   context?: {
     clubId: string;
     viewerCanManageClub: boolean;
+    canAddGuestToClub?: boolean;
     rankContext: {
       leaderboardSize: number;
       currentRank: number | null;
@@ -1965,6 +1967,10 @@ export function PlayerProfileView({
         onRemoveAvatar={handleRemoveAvatar}
         onBack={isEmbedded ? undefined : handleBack}
       />
+
+      {data.context?.canAddGuestToClub ? (
+        <AddGuestToClub key={`${clubId}:${userId}`} clubId={clubId} userId={userId} name={data.user.name} />
+      ) : null}
 
       <AvatarPreviewModal
         name={data.user.name}
