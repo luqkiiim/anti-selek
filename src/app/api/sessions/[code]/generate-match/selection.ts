@@ -1,3 +1,4 @@
+import { getGuestRatingsByUserId } from "@/lib/guestRating";
 import {
   getSideSpecificCourtCreateMixedSide,
   getSideSpecificCourtCreateShortageMessage,
@@ -481,6 +482,12 @@ export async function buildMatchmakingState(
     }
   }
 
+  const guestRatings = getMatchmakerSessionType(sessionData) === SessionType.ELO
+    ? await getGuestRatingsByUserId(prisma, sessionData.players
+      .filter(player => player.isGuest)
+      .map(player => ({ userId: player.userId, startingRating: player.user.elo })))
+    : new Map<string, number>();
+
   const playersById = new Map<string, PartitionCandidate>(
     sessionData.players.map((player) => [
       player.userId,
@@ -490,6 +497,7 @@ export async function buildMatchmakingState(
           sessionType: getMatchmakerSessionType(sessionData),
           sessionPoints: player.sessionPoints,
         clubElo:
+          guestRatings.get(player.userId) ??
           legacyClubEloByUserId.get(player.userId) ??
           communityBadgesByUserId
             .get(player.userId)

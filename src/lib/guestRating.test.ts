@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { Prisma } from "@prisma/client";
-import { guestRatingFromMatches, getGuestRating } from "./guestRating";
+import { guestRatingFromMatches, getGuestRating, getGuestRatingsByUserId } from "./guestRating";
 const match = { team1User1Id: 'guest-one', team1User2Id: 'a', team2User1Id: 'b', team2User2Id: 'c', team1EloChange: 12, team2EloChange: -12 };
 describe('earned guest ratings', () => {
   it('adds wins and losses to the assigned starting rating', () => {
@@ -24,5 +24,20 @@ describe('earned guest ratings', () => {
     const tx = { match: { findMany } } as unknown as Prisma.TransactionClient;
     expect(await getGuestRating(tx, 'guest-one', 1000)).toBe(1012);
     expect(findMany).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ status: 'COMPLETED', session: { isTest: false, players: { some: { userId: 'guest-one', isGuest: true } } } }) }));
+  });
+
+  it('batches guest history without counting another identity or member appearances', async () => {
+    const findMany = vi.fn(async () => [{...match, session: {players: [{userId: 'guest-one'}]}}]);
+    const tx = {match: {findMany}} as unknown as Prisma.TransactionClient;
+    const ratings = await getGuestRatingsByUserId(tx, [{userId:'guest-one',startingRating:1000},{userId:'b',startingRating:1000},{userId:'same-name-other-id',startingRating:1000}]);
+    expect(ratings.get('guest-one')).toBe(1012);
+    expect(ratings.get('b')).toBe(1000);
+    expect(ratings.get('same-name-other-id')).toBe(1000);
+    expect(findMany).toHaveBeenCalledTimes(1);
+  });
+  it('does not query history when there are no guests', async () => {
+    const findMany = vi.fn();
+    expect(await getGuestRatingsByUserId({match:{findMany}} as unknown as Prisma.TransactionClient, [])).toEqual(new Map());
+    expect(findMany).not.toHaveBeenCalled();
   });
 });

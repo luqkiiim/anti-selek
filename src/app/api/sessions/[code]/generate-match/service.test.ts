@@ -1,3 +1,4 @@
+import { prisma } from "@/lib/prisma";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   CourtGroupType,
@@ -367,6 +368,7 @@ function createLadderSelection(
 describe("generate match service", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(prisma.match.findMany).mockResolvedValue([]);
   });
 
   describe("parseGenerateMatchRequest", () => {
@@ -818,6 +820,22 @@ describe("generate match service", () => {
       expect(getClubEloByUserId).toHaveBeenCalledTimes(1);
       expect(eloState.playersById.get("A")?.elo).toBe(1440);
       expect(eloState.playersById.get("B")?.elo).toBe(1330);
+    });
+
+
+    it("uses the guest's earned rating and refreshes it for the next selection", async () => {
+      vi.mocked(getClubEloByUserId).mockResolvedValue(new Map([["B", 1330]]));
+      const players = [createSessionPlayer("A", { elo: 1000, isGuest: true }), createSessionPlayer("B", { elo: 1080 })];
+      const match = { team1User1Id: "A", team1User2Id: "B", team2User1Id: "C", team2User2Id: "D", team1EloChange: 70, team2EloChange: -70, session: { players: [{userId: "A"}] } };
+      vi.mocked(prisma.match.findMany).mockResolvedValue([match] as never);
+      const session = createSessionData({ type: SessionType.ELO, players });
+      const first = await buildMatchmakingState(session);
+      expect(first.playersById.get("A")?.elo).toBe(1070);
+      expect(first.playersById.get("B")?.elo).toBe(1330);
+      vi.mocked(prisma.match.findMany).mockResolvedValue([match, {...match, team1EloChange: -20}] as never);
+      const next = await buildMatchmakingState(session, {reserveQueuedPlayers: false});
+      expect(next.playersById.get("A")?.elo).toBe(1050);
+      expect(next.playersById.get("B")?.elo).toBe(1330);
     });
 
     it("ignores external elo for race sessions", async () => {

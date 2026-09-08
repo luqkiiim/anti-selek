@@ -29,3 +29,27 @@ export async function getGuestRating(tx: Prisma.TransactionClient, userId: strin
   });
   return guestRatingFromMatches(userId, startingRating, matches);
 }
+
+export async function getGuestRatingsByUserId(
+  tx: Prisma.TransactionClient,
+  guests: Array<{ userId: string; startingRating: number }>
+): Promise<Map<string, number>> {
+  if (!guests.length) return new Map();
+  const userIds = [...new Set(guests.map(guest => guest.userId))];
+  const matches = await tx.match.findMany({
+    where: {
+      status: "COMPLETED",
+      session: { isTest: false, players: { some: { userId: { in: userIds }, isGuest: true } } },
+      OR: [{ team1User1Id: { in: userIds } }, { team1User2Id: { in: userIds } }, { team2User1Id: { in: userIds } }, { team2User2Id: { in: userIds } }],
+    },
+    select: {
+      team1User1Id: true, team1User2Id: true, team2User1Id: true, team2User2Id: true,
+      team1EloChange: true, team2EloChange: true,
+      session: { select: { players: { where: { userId: { in: userIds }, isGuest: true }, select: { userId: true } } } },
+    },
+  });
+  return new Map(guests.map(guest => [guest.userId, guestRatingFromMatches(
+    guest.userId, guest.startingRating,
+    matches.filter(match => match.session.players.some(player => player.userId === guest.userId))
+  )]));
+}
