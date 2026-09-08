@@ -69,6 +69,8 @@ describe("buildAdminOnboardingProgress", () => {
       "Open tournament settings",
       "Reset playground",
     ]);
+    expect(progress.steps.find((step) => step.id === "end-session")?.href)
+      .toBe("/session/SESSION1#settings");
     expect(progress.steps.map((step) => step.title)).toEqual([
       "Open playground",
       "Review practice players",

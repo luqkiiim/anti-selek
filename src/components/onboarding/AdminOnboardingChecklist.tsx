@@ -24,6 +24,8 @@ interface AdminOnboardingChecklistProps {
   onReopen: () => void;
   onCompleteStep: (stepId: AdminOnboardingStepId) => void;
   activeStepOverride?: AdminOnboardingStepOverride | null;
+  onStepAction?: (step: AdminOnboardingStep) => boolean;
+  spotlightEnabled?: boolean;
 }
 
 interface SpotlightRect {
@@ -47,9 +49,13 @@ function clamp(value: number, min: number, max: number) {
 function AdminOnboardingSpotlight({
   step,
   onCompleteStep,
+  onStepAction,
+  onDismiss,
 }: {
   step: AdminOnboardingStep;
   onCompleteStep: (stepId: AdminOnboardingStepId) => void;
+  onStepAction?: (step: AdminOnboardingStep) => boolean;
+  onDismiss: () => void;
 }) {
   const [rect, setRect] = useState<SpotlightRect | null>(null);
   const [targetFound, setTargetFound] = useState(false);
@@ -64,6 +70,7 @@ function AdminOnboardingSpotlight({
         .filter(
           (candidate): candidate is HTMLElement =>
             candidate instanceof HTMLElement &&
+            !candidate.closest('[inert], [aria-hidden="true"]') &&
             candidate.getClientRects().length > 0 &&
             getComputedStyle(candidate).visibility !== "hidden"
         )
@@ -84,6 +91,12 @@ function AdminOnboardingSpotlight({
       }
 
       const bounds = target.getBoundingClientRect();
+      if (bounds.right <= 0 || bounds.left >= window.innerWidth ||
+          bounds.bottom <= 0 || bounds.top >= window.innerHeight) {
+        setTargetFound(false);
+        setRect(null);
+        return;
+      }
       setRect({
         top: Math.max(SPOTLIGHT_MARGIN, bounds.top - 8),
         left: Math.max(SPOTLIGHT_MARGIN, bounds.left - 8),
@@ -111,6 +124,11 @@ function AdminOnboardingSpotlight({
 
     window.addEventListener("resize", scheduleUpdate);
     window.addEventListener("scroll", scheduleUpdate, true);
+    const observer = new MutationObserver(scheduleUpdate);
+    observer.observe(document.body, {
+      subtree: true, childList: true, attributes: true,
+      attributeFilter: ["inert", "aria-hidden", "hidden", "class"],
+    });
 
     return () => {
       if (frameId !== null) {
@@ -121,6 +139,7 @@ function AdminOnboardingSpotlight({
       }
       window.removeEventListener("resize", scheduleUpdate);
       window.removeEventListener("scroll", scheduleUpdate, true);
+      observer.disconnect();
     };
   }, [step.targetId]);
 
@@ -194,7 +213,12 @@ function AdminOnboardingSpotlight({
               Mark reviewed
             </button>
           ) : null}
-          <Link href={step.href} className="app-button-primary px-3 py-2 text-xs">
+          <button type="button" onClick={onDismiss} className="app-button-secondary px-3 py-2 text-xs">
+            Hide guide
+          </button>
+          <Link href={step.href} onClick={(event) => {
+            if (onStepAction?.(step)) event.preventDefault();
+          }} className="app-button-primary px-3 py-2 text-xs">
             {step.actionLabel}
             <ChevronRight aria-hidden="true" size={14} />
           </Link>
@@ -211,6 +235,8 @@ export function AdminOnboardingChecklist({
   onReopen,
   onCompleteStep,
   activeStepOverride = null,
+  onStepAction,
+  spotlightEnabled = true,
 }: AdminOnboardingChecklistProps) {
   if (loading || !progress?.visible) {
     return null;
@@ -284,6 +310,7 @@ export function AdminOnboardingChecklist({
           ) : null}
           <Link
             href={step.href}
+            onClick={(event) => { if (onStepAction?.(step)) event.preventDefault(); }}
             className="app-button-secondary px-3 py-2 text-xs"
           >
             {step.actionLabel}
@@ -296,10 +323,12 @@ export function AdminOnboardingChecklist({
 
   return (
     <section className="app-panel p-4 sm:p-5">
-      {displayedActiveStep ? (
+      {displayedActiveStep && spotlightEnabled ? (
         <AdminOnboardingSpotlight
           step={displayedActiveStep}
           onCompleteStep={onCompleteStep}
+          onStepAction={onStepAction}
+          onDismiss={onDismiss}
         />
       ) : null}
 
@@ -356,6 +385,7 @@ export function AdminOnboardingChecklist({
               ) : null}
               <Link
                 href={displayedActiveStep.href}
+                onClick={(event) => { if (onStepAction?.(displayedActiveStep)) event.preventDefault(); }}
                 className="app-button-primary px-3 py-2 text-xs"
               >
                 {displayedActiveStep.actionLabel}

@@ -12,6 +12,8 @@ import {
   SessionPool,
 } from "@/types/enums";
 import {
+  AUTO_QUEUE_DESCRIPTION,
+  PLAYER_GROUPS_DESCRIPTION,
   BalanceMetricControl,
   CourtCountControl,
   CrossoverFrequencyControl,
@@ -318,7 +320,7 @@ export function HostTournamentPanel({
                 />
                 <SwitchRow
                   label="Auto queue"
-                  description="Fill open courts automatically."
+                  description={AUTO_QUEUE_DESCRIPTION}
                   checked={autoQueueEnabled}
                   onChange={onAutoQueueEnabledChange}
                 />
@@ -335,7 +337,7 @@ export function HostTournamentPanel({
                   description={
                     isInterclub
                       ? "Off for club vs club."
-                      : "Balance Competitive, Social, and mixed Crossover courts from the active-player ratio."
+                      : PLAYER_GROUPS_DESCRIPTION
                   }
                 />
               </div>

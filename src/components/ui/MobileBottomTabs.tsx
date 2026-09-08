@@ -85,7 +85,7 @@ export function MobileBottomTabs<T extends string>({
               } ${item.disabled ? "cursor-not-allowed opacity-45" : ""}`}
             >
               <Icon aria-hidden="true" size={20} strokeWidth={2.15} />
-              <span className="max-w-full truncate text-[10px] font-semibold">
+              <span className="max-w-full text-center text-[11px] leading-tight font-semibold">
                 {item.shortLabel ?? item.label}
               </span>
             </button>

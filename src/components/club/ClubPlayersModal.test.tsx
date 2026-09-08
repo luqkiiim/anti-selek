@@ -125,36 +125,16 @@ describe("ClubPlayersModal saved group preference", () => {
     document.body.innerHTML = "";
   });
 
-  it("lets club operators update only the saved game-group preference", async () => {
+  it("keeps attendance selection separate from saved preferences", async () => {
     const onSavePlayerPreferredPool = vi.fn(async () => undefined);
-
     await act(async () => {
-      root.render(
-        renderModal({
-          canSavePreferredPools: true,
-          onSavePlayerPreferredPool,
-        })
-      );
+      root.render(renderModal({ canSavePreferredPools: true, onSavePlayerPreferredPool }));
     });
-
-    expect(container.textContent).toContain("Saved club preference");
-    expect(container.textContent).toContain("future tournaments");
-    expect(container.textContent).not.toContain("Roster status");
-    expect(container.textContent).not.toContain("Club role");
-
-    const competitiveButton = Array.from(
-      container.querySelectorAll("button")
-    ).find((button) => button.textContent === "Competitive");
-    await act(async () => {
-      competitiveButton?.dispatchEvent(
-        new MouseEvent("click", { bubbles: true })
-      );
-    });
-
-    expect(onSavePlayerPreferredPool).toHaveBeenCalledWith(
-      "player-1",
-      SessionPool.A
-    );
+    expect(container.textContent).toContain("Select who is playing");
+    expect(container.textContent).toContain("Manage club");
+    expect(container.textContent).not.toContain("Saved club preference");
+    expect(container.textContent).not.toContain("Competitive");
+    expect(onSavePlayerPreferredPool).not.toHaveBeenCalled();
   });
 
   it("keeps the saved-preference controls hidden without operator access", async () => {

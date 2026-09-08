@@ -282,7 +282,7 @@ export function LiveCourtCard({
       title="Put selected players back in the available roster"
     >
       <Undo2 aria-hidden="true" size={14} />
-      {undoingCourtId === court.id ? "Undoing..." : "Undo"}
+      {undoingCourtId === court.id ? "Clearing..." : "Clear match"}
     </button>
   ) : null;
   const matchContentVisibilityClass =
@@ -362,7 +362,7 @@ export function LiveCourtCard({
           <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 px-3 py-10 text-center">
             <p className="text-sm font-semibold text-gray-500">
               {sessionStatus === SessionStatus.ACTIVE
-                ? "Next match soon"
+                ? isAdmin ? "Court available — choose Create to pick players." : "Court available — waiting for the host to create a match."
                 : "Court Inactive"}
             </p>
           </div>

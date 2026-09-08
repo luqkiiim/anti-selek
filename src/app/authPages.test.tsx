@@ -89,7 +89,7 @@ describe("authentication pages", () => {
     await act(async () => root.render(<SigninPage />));
 
     const sections = container.querySelectorAll("main section");
-    expect(sections[0]?.textContent).toContain("Welcome back");
+    expect(sections[0]?.textContent).toContain("Welcome to Anti-Selek");
     expect(sections[0]?.className).toContain("order-1");
     expect(sections[1]?.textContent).toContain(
       "Your club, courts, and standings"
@@ -126,11 +126,11 @@ describe("authentication pages", () => {
     await act(async () => root.render(<SigninPage />));
 
     const quickButton = Array.from(container.querySelectorAll("button")).find(
-      (button) => button.textContent?.trim() === "Quick access"
+      (button) => button.textContent?.trim() === "View-only access"
     );
     await act(async () => quickButton?.click());
 
-    expect(container.textContent).toContain("Quick access is view-only");
+    expect(container.textContent).toContain("View-only access needs no password");
 
     const inputs = container.querySelectorAll<HTMLInputElement>("form input");
     await act(async () => {

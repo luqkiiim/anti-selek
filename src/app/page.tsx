@@ -148,7 +148,7 @@ export default function Home() {
                   </h2>
                   <p className="mt-1 text-sm text-gray-600">
                     {tutorialPlayground
-                      ? `${tutorialPlayground.playersCount} players, ${tutorialPlayground.courtsCount} courts`
+                      ? "Your saved practice club"
                       : "Practice club"}
                   </p>
                 </div>
@@ -162,9 +162,13 @@ export default function Home() {
                 <Sparkles aria-hidden="true" size={17} />
                 {openingTutorialPlayground
                   ? "Opening..."
-                  : "Open tutorial playground"}
+                  : tutorialPlayground ? "Resume practice" : "Start practice"}
               </button>
             </div>
+            <p className="mt-3 text-sm leading-6 text-gray-600">
+              Practice stays separate from your real clubs. Opening it resumes your saved progress.
+              Start over from Manage club, then Settings, then Reset playground.
+            </p>
           </section>
         ) : null}
 

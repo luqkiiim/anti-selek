@@ -7,6 +7,11 @@ import {
   SessionPairingMode,
 } from "@/types/enums";
 
+export const AUTO_QUEUE_DESCRIPTION =
+  "Once every court is busy, the app reserves the next four eligible players and moves their match onto the next free court. Use Create Matches to start play.";
+export const PLAYER_GROUPS_DESCRIPTION =
+  "Let players choose Competitive or Social games. Crossover games put one player from each group on each team. Leave off to use one shared player list.";
+
 const MATCHMAKING_STYLES = [
   SessionMatchmakingStyle.BALANCED,
   SessionMatchmakingStyle.SOCIAL,
@@ -16,15 +21,15 @@ const MATCHMAKING_STYLES = [
 const MATCHMAKING_STYLE_INFO = {
   [SessionMatchmakingStyle.BALANCED]: {
     label: "Balanced",
-    description: "Fair games with some variety.",
+    description: "Recommended for most club nights: balanced teams with a mix of partners and opponents.",
   },
   [SessionMatchmakingStyle.SOCIAL]: {
     label: "Social",
-    description: "More variety, less focus on fairness.",
+    description: "Prioritize meeting different partners and opponents; skill levels may be less evenly matched.",
   },
   [SessionMatchmakingStyle.LEVEL_MATCH]: {
     label: "Level Match",
-    description: "Play mostly with people close to your level.",
+    description: "Keep games mostly between players close in level, even if that means less variety.",
   },
 } as const;
 
@@ -137,6 +142,11 @@ export function PairingModeControl({
           onClick={() => onChange(SessionPairingMode.MIXED)}
         />
       </div>
+      <p className="text-sm leading-5 text-gray-600">
+        {value === SessionPairingMode.OPEN
+          ? "Any combination of players can form a team, regardless of gender."
+          : "Each doubles team uses one player from each mixed-pairing side (normally a man and a woman). Check player pairing settings if needed."}
+      </p>
     </div>
   );
 }
@@ -163,6 +173,11 @@ export function BalanceMetricControl({
           onClick={() => onChange(SessionBalanceMetric.RATING)}
         />
       </div>
+      <p className="text-sm leading-5 text-gray-600">
+        {value === SessionBalanceMetric.SESSION_POINTS
+          ? "Use results from this tournament to balance the next games. Everyone starts on equal points."
+          : "Use saved player ratings to balance games from the start. Useful when your club already has match history."}
+      </p>
     </div>
   );
 }

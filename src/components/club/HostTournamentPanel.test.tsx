@@ -109,7 +109,7 @@ describe("HostTournamentPanel", () => {
       matchmakingStyle: SessionMatchmakingStyle.SOCIAL,
     });
 
-    expect(markup).toContain("More variety, less focus on fairness.");
+    expect(markup).toContain("Prioritize meeting different partners and opponents; skill levels may be less evenly matched.");
   });
 
   it("keeps advanced setup controls constrained on mobile", () => {

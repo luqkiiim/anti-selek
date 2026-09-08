@@ -75,14 +75,12 @@ export function ClubPlayersModal({
   playerSearch,
   poolsEnabled,
   canSavePreferredPools,
-  savingPreferredPoolPlayerId,
   selectablePlayers,
   filteredSelectablePlayers,
   onPlayerSearchChange,
   onToggleAllPlayers,
   onTogglePlayerSelection,
   onChangePlayerPool,
-  onSavePlayerPreferredPool,
   collabFormat,
   hostClubId,
   hostClubName,
@@ -249,7 +247,12 @@ export function ClubPlayersModal({
         </div>
       }
     >
-      <div className="space-y-4">
+      <div className="space-y-3">
+        <p className="text-sm leading-5 text-gray-600">Select who is playing. To add a guest, search their name.</p>
+        {poolsEnabled ? <p className="text-sm leading-5 text-gray-600">Game groups below apply only to this tournament.</p> : null}
+        {canSavePreferredPools ? (
+          <p className="text-sm text-gray-600">Edit saved preferences under Manage club, then Players.</p>
+        ) : null}
         {visibleGuests.length > 0 ? (
           <section aria-labelledby="added-guests-heading" className="space-y-2">
             <h3
@@ -309,13 +312,6 @@ export function ClubPlayersModal({
             const representingOptions = isInterclub
               ? getRepresentingClubOptions(player)
               : [];
-            const hasHostClubMembership =
-              !selectedPartnerClub ||
-              (player.communityBadges ?? []).some(
-                (badge) =>
-                  badge.id === hostClubId &&
-                  (!badge.userId || badge.userId === player.id)
-              );
             const selectedRepresentingClubId =
               selectedPlayerRepresentingClubs[player.id] ??
               (representingOptions.length === 1
@@ -395,7 +391,7 @@ export function ClubPlayersModal({
                 {poolsEnabled && isSelected ? (
                   <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-gray-200 pt-3">
                     <span className="text-xs font-semibold text-gray-500">
-                      Game group
+                      Group for this tournament
                     </span>
                     {[SessionPool.A, SessionPool.B].map((pool) => {
                       const isActive = selectedPool === pool;
@@ -406,6 +402,7 @@ export function ClubPlayersModal({
                           key={pool}
                           type="button"
                           aria-pressed={isActive}
+                          aria-label={`${player.name}: ${label} for this tournament`}
                           onPointerDownCapture={captureSearchFocusIntent}
                           onMouseDownCapture={captureSearchFocusIntent}
                           onClick={() => {
@@ -422,51 +419,6 @@ export function ClubPlayersModal({
                         </button>
                       );
                     })}
-                  </div>
-                ) : null}
-
-                {canSavePreferredPools && hasHostClubMembership ? (
-                  <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-gray-200 pt-3">
-                    <span className="text-xs font-semibold text-gray-500">
-                      Saved club preference
-                    </span>
-                    {[SessionPool.A, SessionPool.B].map((pool) => {
-                      const isSaved =
-                        (player.preferredPool ?? SessionPool.B) === pool;
-                      const isSaving =
-                        savingPreferredPoolPlayerId === player.id;
-
-                      return (
-                        <button
-                          key={pool}
-                          type="button"
-                          aria-pressed={isSaved}
-                          disabled={
-                            savingPreferredPoolPlayerId !== null
-                          }
-                          onPointerDownCapture={captureSearchFocusIntent}
-                          onMouseDownCapture={captureSearchFocusIntent}
-                          onClick={() => {
-                            if (!isSaved) {
-                              void onSavePlayerPreferredPool(player.id, pool);
-                            }
-                            restoreSearchFocusIfNeeded();
-                          }}
-                          className={`min-h-9 rounded-lg border px-3 py-2 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-60 ${
-                            isSaved
-                              ? "border-amber-200 bg-amber-50 text-amber-800"
-                              : "border-gray-200 bg-white text-gray-500"
-                          }`}
-                        >
-                          {isSaving && !isSaved
-                            ? "Saving..."
-                            : getPlayerGroupLabel(pool)}
-                        </button>
-                      );
-                    })}
-                    <span className="basis-full text-[11px] leading-4 text-gray-500">
-                      Used for future tournaments; session overrides stay separate.
-                    </span>
                   </div>
                 ) : null}
 

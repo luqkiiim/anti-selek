@@ -512,12 +512,12 @@ describe("PlayerProfileView", () => {
     expect(snapshot?.textContent).toContain("Club rating");
     expect(snapshot?.textContent).toContain("1320");
     expect(document.body.textContent).toContain("#4");
-    expect(document.body.textContent).toContain("Up 2");
+    expect(document.body.textContent).toContain("Rank up 2");
     expect(document.body.textContent).toContain("+10 rating");
 
     expect(document.body.textContent).not.toContain("Rating story");
     expect((document.body.textContent?.match(/Rank #4/g) ?? []).length).toBe(0);
-    expect((document.body.textContent?.match(/Club rating/g) ?? []).length).toBe(1);
+    expect((snapshot?.textContent?.match(/Club rating/g) ?? []).length).toBe(1);
   });
 
   it("does not render unsupported prototype-only stats or tournament metadata", async () => {

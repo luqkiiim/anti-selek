@@ -226,11 +226,11 @@ function getSignedChipClass(value: number) {
 function getTrendDirectionLabel(direction: PlayerProfileTrendSummary["direction"]) {
   switch (direction) {
     case "RISING":
-      return "Rising";
+      return "Recent results up";
     case "SLIPPING":
-      return "Slipping";
+      return "Recent results down";
     default:
-      return "Flat";
+      return "Recent results steady";
   }
 }
 
@@ -252,7 +252,7 @@ function getRankMovementLabel(rankDelta: number | null) {
     return "No change";
   }
 
-  return rankDelta > 0 ? `Up ${rankDelta}` : `Down ${Math.abs(rankDelta)}`;
+  return rankDelta > 0 ? `Rank up ${rankDelta}` : `Rank down ${Math.abs(rankDelta)}`;
 }
 
 function getRankMovementChipClass(rankDelta: number | null) {
@@ -267,7 +267,7 @@ function getTierLabel(elo: number) {
   if (elo >= 1700) return "Premier";
   if (elo >= 1450) return "Elite";
   if (elo >= 1200) return "Contender";
-  if (elo >= 1000) return "Rising";
+  if (elo >= 1000) return "Recent results up";
   return "Developing";
 }
 
@@ -613,8 +613,8 @@ function RatingSparkline({
           data-rating-tooltip="true"
           style={{
             left: `${(activePoint.x / width) * 100}%`,
-            top: `${Math.max(activePoint.y - 9, 8)}px`,
-            transform: "translate(-50%, -100%)",
+            top: "4px",
+            transform: "translateX(-50%)",
           }}
         >
           <span className="block">{activeValue.value}</span>
@@ -645,7 +645,8 @@ function ProfileHero({
   onRemoveAvatar: () => Promise<void>;
 }) {
   const ratingDelta = data.trend.ratingChange;
-  const tier = getTierLabel(data.user.elo);
+  const provisional = data.stats.totalMatches < 5;
+  const tier = provisional ? "Provisional" : getTierLabel(data.user.elo);
 
   return (
     <section className="relative rounded-none bg-[linear-gradient(180deg,#eef8f5_0%,#f7faf8_68%,transparent_100%)] px-4 pb-4 pt-3 sm:rounded-[1.35rem] sm:px-6 sm:pt-4">
@@ -720,7 +721,7 @@ function ProfileHero({
             <span className="inline-flex min-h-9 items-center rounded-xl bg-[var(--accent)] px-3 text-sm font-bold text-white">
               {rankContext?.currentRank ? `#${rankContext.currentRank}` : "Rank building"}
             </span>
-            <span className={getTrendDirectionChipClass(data.trend.direction)}>
+            <span className={provisional ? "app-chip app-chip-neutral" : getTrendDirectionChipClass(data.trend.direction)}>
               <TrendingUp aria-hidden="true" size={15} strokeWidth={2.3} />
               {tier}
             </span>
@@ -743,7 +744,7 @@ function ProfileHero({
                 {recentStreakSummary}
               </p>
               <p className="mt-1 text-sm font-semibold text-gray-600">
-                Recent form
+                Current streak
               </p>
             </div>
           </div>
@@ -760,6 +761,15 @@ function ProfileHero({
         </div>
       </div>
 
+      <details className="mx-4 mb-4 rounded-xl border border-gray-200 bg-white/80 px-4 py-2 text-sm text-gray-600">
+        <summary className="min-h-11 cursor-pointer py-3 font-semibold text-teal-800">Understanding your rating</summary>
+        <div className="space-y-2 pb-3 leading-6">
+          <p>Rating estimates playing strength from recorded results. Higher means stronger; it is not a percentage. Club ratings are specific to each club.</p>
+          <p>{provisional ? "With fewer than 5 matches, this profile is provisional. More games will give your results context." : "Rating bands: Developing below 1000, Rising 1000-1199, Contender 1200-1449, Elite 1450-1699, Premier 1700+."}</p>
+          <p>W3 means 3 wins in a row; L1 means 1 loss. Rank movement compares your position before and after the recent tournaments shown here.</p>
+          <p>Rating change shown here covers the {data.trend.sessions} recent tournaments in this profile.</p>
+        </div>
+      </details>
       <StatStrip data={data} recentStreakSummary={recentStreakSummary} />
     </section>
   );
@@ -902,7 +912,7 @@ function SummaryMetric({
     <div className="grid min-h-[4.25rem] grid-cols-[2rem_minmax(0,1fr)] items-center gap-2 border-b border-[var(--line)] px-3 py-2.5 odd:border-r sm:px-4">
       <Icon aria-hidden="true" size={21} strokeWidth={1.7} />
       <div className="min-w-0">
-        <span className="block truncate text-sm font-semibold leading-tight text-gray-600">
+        <span className="block text-sm font-semibold leading-tight text-gray-600">
           {label}
         </span>
         <strong className={cx("mt-1 block text-2xl font-[760] leading-none", toneClass)}>
@@ -947,8 +957,8 @@ function PerformanceSummary({
       <div className="px-4 pb-4 pt-3">
         <div className="mb-1 flex items-center justify-between gap-3">
           <h3 className="text-base font-[760] text-gray-700">Rating trend</h3>
-          <span className={getTrendDirectionChipClass(data.trend.direction)}>
-            {getTrendDirectionLabel(data.trend.direction)}
+          <span className={data.trend.matches < 5 ? "app-chip app-chip-neutral" : getTrendDirectionChipClass(data.trend.direction)}>
+            {data.trend.matches < 5 ? "Not enough games for a trend" : getTrendDirectionLabel(data.trend.direction)}
           </span>
         </div>
         <RatingSparkline series={ratingSeries} className="h-36 w-full" />

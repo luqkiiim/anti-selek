@@ -790,6 +790,18 @@ export default function SessionPage() {
     setShowSettingsModal(true);
   }, [canOpenSettings, currentGameplaySettings, sessionData]);
 
+  useEffect(() => {
+    const openLinkedSettings = () => {
+      if (window.location.hash !== "#settings" || !sessionData || !canOpenSettings) return;
+      window.history.replaceState(window.history.state, "", window.location.pathname + window.location.search);
+      setMobileSection("session");
+      openSettingsModal();
+    };
+    openLinkedSettings();
+    window.addEventListener("hashchange", openLinkedSettings);
+    return () => window.removeEventListener("hashchange", openLinkedSettings);
+  }, [canOpenSettings, openSettingsModal, sessionData]);
+
   const closeSettingsModal = useCallback(() => {
     if (savingSettings) {
       return;
@@ -1379,6 +1391,16 @@ export default function SessionPage() {
             onDismiss={adminOnboarding.dismiss}
             onReopen={adminOnboarding.reopen}
             onCompleteStep={adminOnboarding.completeStep}
+            spotlightEnabled={!showSettingsModal && !showEndSessionConfirm &&
+              (activeAdminOnboardingStep?.id === "score-match"
+                ? activeMobileSection === "courts"
+                : activeMobileSection === "session")}
+            onStepAction={(step) => {
+              if (step.id !== "end-session" || step.href !== `/session/${code}#settings`) return false;
+              updateMobileSection("session", "auto");
+              openSettingsModal();
+              return true;
+            }}
           />
         ) : null}
 
@@ -1416,6 +1438,8 @@ export default function SessionPage() {
                 onStartSession={startSessionWithOnboardingRefresh}
                 onOpenPlayerManager={() => setShowPlayersModal(true)}
                 onOpenSettings={openSettingsModal}
+                onEndSession={isAdmin && sessionData.status === SessionStatus.ACTIVE
+                  ? () => setShowEndSessionConfirm(true) : undefined}
                 onOpenMatchHistory={() =>
                   router.push(`/session/${code}/history?from=session`)
                 }

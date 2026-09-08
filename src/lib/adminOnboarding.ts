@@ -65,7 +65,7 @@ export function getHostSessionOnboardingOverride({
     return {
       stepId: "host-session",
       targetId: "admin-onboarding-host-players",
-      coachmark: "Next, press Choose and select the players for this test tournament.",
+      coachmark: "Next, press Add players and select who will play in this test tournament.",
       actionLabel: "Choose players",
     };
   }
@@ -215,7 +215,7 @@ export function buildAdminOnboardingProgress({
       title: "End the test tournament",
       detail: "Close the practice tournament once scoring is done to see final standings.",
       actionLabel: "Open tournament settings",
-      href: sessionHref,
+      href: primarySessionCode ? `${sessionHref}#settings` : hostHref,
       targetId: "admin-onboarding-end-session",
       coachmark: "Open tournament settings and press End Tournament when practice is complete.",
       manual: false,

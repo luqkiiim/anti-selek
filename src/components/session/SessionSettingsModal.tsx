@@ -11,6 +11,8 @@ import {
   SessionPairingMode,
 } from "@/types/enums";
 import {
+  AUTO_QUEUE_DESCRIPTION,
+  PLAYER_GROUPS_DESCRIPTION,
   BalanceMetricControl,
   CourtCountControl,
   CrossoverFrequencyControl,
@@ -160,21 +162,12 @@ export function SessionSettingsModal({
             ) : null}
             {canEndSession ? (
               <button
-              type="button"
-              onClick={onEndSession}
-              className="app-button-danger justify-center"
-              data-tutorial-target="admin-onboarding-end-session"
-            >
-                End Tournament
-              </button>
-            ) : null}
-            {canResetSession ? (
-              <button
                 type="button"
-                onClick={onResetSession}
+                onClick={onEndSession}
                 className="app-button-secondary justify-center"
+                data-tutorial-target="admin-onboarding-end-session"
               >
-                {isTestSession ? "Reset Test Tournament" : "Reset Tournament"}
+                End Tournament
               </button>
             ) : null}
             {canCreateRealSession ? (
@@ -184,6 +177,30 @@ export function SessionSettingsModal({
                 className="app-button-primary justify-center"
               >
                 Create Real Tournament
+              </button>
+            ) : null}
+          </div>
+          {isTestSession ? (
+            <p className="text-sm text-gray-500">
+              Test tournaments are safe for rehearsal. Reset clears simulated play,
+              and creating a real tournament copies this setup into a fresh live
+              tournament.
+            </p>
+          ) : null}
+        </section>
+
+        {canResetSession || canDeleteSession ? (
+          <section className="space-y-3 border-t border-gray-200 pt-4">
+            <h3 className="text-sm font-semibold text-gray-900">Reset or delete</h3>
+            <p className="text-sm text-gray-600">These actions clear play or remove the tournament. To keep final standings, use End Tournament instead.</p>
+            <div className="grid gap-2 sm:grid-cols-2">
+            {canResetSession ? (
+              <button
+                type="button"
+                onClick={onResetSession}
+                className="app-button-secondary justify-center"
+              >
+                {isTestSession ? "Reset Test Tournament" : "Reset Tournament"}
               </button>
             ) : null}
             {canDeleteSession ? (
@@ -197,15 +214,9 @@ export function SessionSettingsModal({
                   : "Cancel & Delete Tournament"}
               </button>
             ) : null}
-          </div>
-          {isTestSession ? (
-            <p className="text-sm text-gray-500">
-              Test tournaments are safe for rehearsal. Reset clears simulated play,
-              and creating a real tournament copies this setup into a fresh live
-              tournament.
-            </p>
-          ) : null}
-        </section>
+            </div>
+          </section>
+        ) : null}
 
         <section className="space-y-3">
           <div>
@@ -247,7 +258,7 @@ export function SessionSettingsModal({
                 description={
                   collabFormat === SessionCollabFormat.INTERCLUB
                     ? "Off for club vs club."
-                    : "Balance Competitive, Social, and mixed Crossover courts from the active-player ratio."
+                    : PLAYER_GROUPS_DESCRIPTION
                 }
               />
               {poolsEnabledDraft ? (
@@ -299,8 +310,7 @@ export function SessionSettingsModal({
             <div className="space-y-1">
               <h3 className="text-sm font-semibold text-gray-900">Auto queue</h3>
               <p className="text-sm text-gray-500">
-                When on, the app locks the next quartet automatically once every
-                court is busy.
+                {AUTO_QUEUE_DESCRIPTION}
               </p>
               {autoQueueEnabled && !autoQueueDraft ? (
                 <p

@@ -109,11 +109,11 @@ function SigninForm() {
           <section className="app-panel order-1 px-6 py-8 sm:px-8 lg:order-2">
             <p className="app-eyebrow">Account access</p>
             <h1 className="mt-3 text-2xl font-semibold text-gray-900">
-              Welcome back
+              Welcome to Anti-Selek
             </h1>
             <p className="mt-2 text-sm text-gray-600">
-              Sign in to manage your clubs, or use a player profile your host
-              already added.
+              Sign in to play and manage clubs, or view a club using the player
+              profile your host already added. New here? Create an account below.
             </p>
 
             <div
@@ -143,7 +143,7 @@ function SigninForm() {
                     : "text-gray-600 hover:bg-white/70"
                 }`}
               >
-                Quick access
+                View-only access
               </button>
             </div>
 
@@ -224,7 +224,7 @@ function SigninForm() {
             ) : (
               <div className="mt-6 space-y-4">
                 <FlashMessage tone="warning">
-                  Quick access is view-only and tied to one club profile. You
+                  View-only access needs no password and is tied to one club profile. You
                   can follow tournaments and standings, but you cannot join
                   clubs, submit scores, or manage a club.
                 </FlashMessage>
@@ -233,7 +233,8 @@ function SigninForm() {
                   aria-busy={quickLoading}
                   className="space-y-4"
                 >
-                  <label className="block space-y-2 text-sm font-medium text-gray-900">
+                  <p className="text-sm leading-6 text-gray-600">Use the club and player names your host registered. Ask your host for the spelling if you are unsure. To submit scores or join another club, create an account.</p>
+                <label className="block space-y-2 text-sm font-medium text-gray-900">
                     <span>Club name</span>
                     <input
                       type="text"

@@ -1,6 +1,6 @@
 "use client";
 
-import { History, Play, Settings, Users } from "lucide-react";
+import { Flag, History, Play, Settings, Users } from "lucide-react";
 import { SessionStatus } from "@/types/enums";
 import { StatCard } from "@/components/ui/chrome";
 import { getSessionStatusLabel } from "@/lib/sessionStatusLabels";
@@ -29,6 +29,7 @@ interface SessionOverviewPanelProps {
   onOpenPlayerManager: () => void;
   onOpenSettings: () => void;
   onOpenMatchHistory: () => void;
+  onEndSession?: () => void;
 }
 
 export function SessionOverviewPanel({
@@ -50,6 +51,7 @@ export function SessionOverviewPanel({
   onOpenPlayerManager,
   onOpenSettings,
   onOpenMatchHistory,
+  onEndSession,
 }: SessionOverviewPanelProps) {
   const isCompleted = sessionStatus === SessionStatus.COMPLETED;
   const isWaiting = sessionStatus === SessionStatus.WAITING;
@@ -150,6 +152,15 @@ export function SessionOverviewPanel({
           role="status"
         >
           {startBlockedReason}
+        </div>
+      ) : null}
+
+      {onEndSession && sessionStatus === SessionStatus.ACTIVE ? (
+        <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-gray-200 pt-4">
+          <p className="text-sm text-gray-600">Finished playing? Review and close this tournament to see the final standings.</p>
+          <button type="button" onClick={onEndSession} className="app-button-secondary">
+            <Flag aria-hidden="true" size={17} /> End Tournament
+          </button>
         </div>
       ) : null}
 

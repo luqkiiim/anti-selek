@@ -151,6 +151,16 @@ export function LiveStandingsTable({
         </span>
       </div>
 
+      <details className="border-b border-gray-200 px-4 py-3 text-sm text-gray-600">
+        <summary className="min-h-11 cursor-pointer py-3 font-semibold text-teal-800">How rankings work</summary>
+        <div className="space-y-2 pb-2 leading-6">
+          <p>{isLadderSession
+            ? "Ladder score = wins minus losses. A win adds 1; a loss subtracts 1."
+            : "Each player earns 3 points for a win and 0 for a loss. These are tournament points, not the rally score."}</p>
+          <p>Players are ranked by {isLadderSession ? "ladder score" : "tournament points"}, then point difference (points scored minus points conceded). Exact ties are listed alphabetically by name.</p>
+          <p>MP = matches played. W/L = wins/losses. Df = point difference. Only completed results count.</p>
+        </div>
+      </details>
       <div className="overflow-x-auto overscroll-x-contain">
         <table className="w-full table-fixed border-separate border-spacing-y-[3px] px-2">
           <thead>
