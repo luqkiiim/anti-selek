@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { getGuestRating } from "@/lib/guestRating";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getClubAdminAccess } from "@/lib/clubAdminPermissions";
@@ -25,10 +26,11 @@ export async function POST(request: Request, { params }: {
         select: { user: { select: { elo: true } } },
       });
       if (!guest) return null;
+      const elo = await getGuestRating(tx, userId, guest.user.elo);
       return tx.clubMember.upsert({
         where: { clubId_userId: { clubId, userId } },
         update: {},
-        create: { clubId, userId, role: "MEMBER", status: "OCCASIONAL", elo: guest.user.elo },
+        create: { clubId, userId, role: "MEMBER", status: "OCCASIONAL", elo },
         select: { userId: true },
       });
     });

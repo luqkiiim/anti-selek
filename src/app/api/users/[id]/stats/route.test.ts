@@ -391,4 +391,17 @@ describe("user stats route", () => {
     expect((await response.json()).context.canAddGuestToClub).toBe(canAdd);
     expect(mocks.sessionPlayerFindFirst).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ userId: 'user-1', isGuest: true }) }));
   });
+
+  it.each([true, false])('applies historical changes only to guest appearances (guest=%s)', async (isGuest) => {
+    const player = { id: 'user-1', name: 'Alex', avatarKey: null };
+    mocks.matchFindMany.mockResolvedValueOnce([{
+      team1User1Id: 'user-1', team1User2Id: 'other', team2User1Id: 'b', team2User2Id: 'c',
+      team1EloChange: 18, team2EloChange: -18,
+      team1User1: player, team1User2: player, team2User1: player, team2User2: player,
+      session: { players: [{ userId: 'user-1', isGuest, user: player }] },
+    }]);
+    const response = await GET(new Request('http://localhost/api/users/user-1/stats'), { params: Promise.resolve({ id: 'user-1' }) });
+    expect(response.status).toBe(200);
+    expect((await response.json()).user.elo).toBe(isGuest ? 1351 : 1333);
+  });
 });

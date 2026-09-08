@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { clubGuestWhere } from "@/lib/clubGuest";
+import { guestRatingFromMatches } from "@/lib/guestRating";
 import { auth } from "@/lib/auth";
 import { serializeAvatarEntity } from "@/lib/avatar";
 import { getClubStatUserResolver } from "@/lib/offlineIdentities";
@@ -82,6 +83,7 @@ async function getUserStatsRoute(
   }
 
   let effectiveElo = user.elo;
+  let usesClubRating = false;
   let context:
     | {
         clubId: string;
@@ -155,6 +157,7 @@ async function getUserStatsRoute(
       !isQuickAccessSession(session) &&
       (requesterMembership.role === "ADMIN" || !!session.user.isAdmin);
     canAddGuestToClub = !targetMembership && viewerCanManageClub;
+    usesClubRating = !!targetMembership;
     effectiveElo = targetMembership?.elo ?? user.elo;
 
     leaderboardMembers = await prisma.clubMember.findMany({
@@ -265,6 +268,11 @@ async function getUserStatsRoute(
       },
     },
   });
+  if (!usesClubRating) {
+    effectiveElo = guestRatingFromMatches(id, effectiveElo, matches.filter((match) =>
+      match.session.players.some((player) => player.userId === id && player.isGuest)
+    ));
+  }
   const profileData = buildPlayerProfileDerivedData(
     id,
     matches.map((match) => ({
