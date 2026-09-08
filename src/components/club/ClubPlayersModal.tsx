@@ -248,11 +248,6 @@ export function ClubPlayersModal({
       }
     >
       <div className="space-y-3">
-        <p className="text-sm leading-5 text-gray-600">Select who is playing. To add a guest, search their name.</p>
-        {poolsEnabled ? <p className="text-sm leading-5 text-gray-600">Game groups below apply only to this tournament.</p> : null}
-        {canSavePreferredPools ? (
-          <p className="text-sm text-gray-600">Edit saved preferences under Manage club, then Players.</p>
-        ) : null}
         {visibleGuests.length > 0 ? (
           <section aria-labelledby="added-guests-heading" className="space-y-2">
             <h3
@@ -500,6 +495,16 @@ export function ClubPlayersModal({
             </p>
           </div>
         ) : null}
+        <details className="border-t border-gray-100 text-sm text-gray-600">
+          <summary className="min-h-11 cursor-pointer py-3 font-medium text-gray-500">Player selection help</summary>
+          <div className="space-y-2 pb-3">
+        <p className="text-sm leading-5 text-gray-600">Select who is playing. To add a guest, search their name.</p>
+        {poolsEnabled ? <p className="text-sm leading-5 text-gray-600">Game groups below apply only to this tournament.</p> : null}
+        {canSavePreferredPools ? (
+          <p className="text-sm text-gray-600">Edit saved preferences under Manage club, then Players.</p>
+        ) : null}
+          </div>
+        </details>
       </div>
     </PlayerPickerSheet>
 

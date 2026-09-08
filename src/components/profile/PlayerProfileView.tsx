@@ -761,15 +761,7 @@ function ProfileHero({
         </div>
       </div>
 
-      <details className="mx-4 mb-4 rounded-xl border border-gray-200 bg-white/80 px-4 py-2 text-sm text-gray-600">
-        <summary className="min-h-11 cursor-pointer py-3 font-semibold text-teal-800">Understanding your rating</summary>
-        <div className="space-y-2 pb-3 leading-6">
-          <p>Rating estimates playing strength from recorded results. Higher means stronger; it is not a percentage. Club ratings are specific to each club.</p>
-          <p>{provisional ? "With fewer than 5 matches, this profile is provisional. More games will give your results context." : "Rating bands: Developing below 1000, Rising 1000-1199, Contender 1200-1449, Elite 1450-1699, Premier 1700+."}</p>
-          <p>W3 means 3 wins in a row; L1 means 1 loss. Rank movement compares your position before and after the recent tournaments shown here.</p>
-          <p>Rating change shown here covers the {data.trend.sessions} recent tournaments in this profile.</p>
-        </div>
-      </details>
+
       <StatStrip data={data} recentStreakSummary={recentStreakSummary} />
     </section>
   );
@@ -2007,6 +1999,15 @@ export function PlayerProfileView({
           <AchievementsTab achievements={achievements} />
         ) : null}
       </div>
+      <details className="mx-4 border-t border-gray-100 py-1 sm:mx-0 text-sm text-gray-600">
+        <summary className="min-h-11 cursor-pointer py-3 font-medium text-gray-500">Understanding your rating</summary>
+        <div className="space-y-2 pb-3 leading-6">
+          <p>Rating estimates playing strength from recorded results. Higher means stronger; it is not a percentage. Club ratings are specific to each club.</p>
+          <p>{data.stats.totalMatches < 5 ? "With fewer than 5 matches, this profile is provisional. More games will give your results context." : "Rating bands: Developing below 1000, Rising 1000-1199, Contender 1200-1449, Elite 1450-1699, Premier 1700+."}</p>
+          <p>W3 means 3 wins in a row; L1 means 1 loss. Rank movement compares your position before and after the recent tournaments shown here.</p>
+          <p>Rating change shown here covers the {data.trend.sessions} recent tournaments in this profile.</p>
+        </div>
+      </details>
     </div>
   );
 

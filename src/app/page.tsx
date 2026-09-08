@@ -166,8 +166,7 @@ export default function Home() {
               </button>
             </div>
             <p className="mt-3 text-sm leading-6 text-gray-600">
-              Practice stays separate from your real clubs. Opening it resumes your saved progress.
-              Start over from Manage club, then Settings, then Reset playground.
+              A practice space separate from your real clubs.
             </p>
           </section>
         ) : null}

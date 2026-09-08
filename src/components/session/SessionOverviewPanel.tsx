@@ -157,7 +157,6 @@ export function SessionOverviewPanel({
 
       {onEndSession && sessionStatus === SessionStatus.ACTIVE ? (
         <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-gray-200 pt-4">
-          <p className="text-sm text-gray-600">Finished playing? Review and close this tournament to see the final standings.</p>
           <button type="button" onClick={onEndSession} className="app-button-secondary">
             <Flag aria-hidden="true" size={17} /> End Tournament
           </button>

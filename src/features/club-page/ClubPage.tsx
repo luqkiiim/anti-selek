@@ -935,16 +935,15 @@ export default function ClubPage() {
         {success ? <FlashMessage tone="success">{success}</FlashMessage> : null}
 
         {isTutorialPlayground ? (
-          <section className="app-panel p-4 text-sm text-gray-600">
-            <p className="font-semibold text-gray-900">Your saved practice playground</p>
-            <p className="mt-1 leading-6">Your practice players, tournaments, and progress are kept here. Getting started resumes your next unfinished step.</p>
-            <div className="mt-3 flex flex-wrap gap-2">
+          <section aria-label="Practice options" className="flex flex-wrap items-center gap-3 text-sm text-gray-500">
+            <span>Progress saved</span>
+            <div className="flex flex-wrap gap-3">
               {adminOnboarding.progress?.primarySessionCode ? (
-                <Link className="app-button-primary" href={`/session/${adminOnboarding.progress.primarySessionCode}`}>
+                <Link className="inline-flex min-h-11 items-center font-medium text-teal-800 hover:underline" href={`/session/${adminOnboarding.progress.primarySessionCode}`}>
                   Open guided practice
                 </Link>
               ) : null}
-              <Link className="app-button-secondary" href={`/club/${club.id}/admin?tab=settings`}>Restart options</Link>
+              <Link className="inline-flex min-h-11 items-center hover:underline" href={`/club/${club.id}/admin?tab=settings`}>Restart options</Link>
             </div>
           </section>
         ) : null}
