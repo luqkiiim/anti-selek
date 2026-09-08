@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { AdjustClubRating } from "./AdjustClubRating";
 import { AddGuestToClub } from "./AddGuestToClub";
 import {
   type KeyboardEvent as ReactKeyboardEvent,
@@ -1740,6 +1741,7 @@ export function PlayerProfileView({
     null
   );
   const [previewAvatarUrl, setPreviewAvatarUrl] = useState<string | null>(null);
+  const [ratingRevision, setRatingRevision] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [activeTab, setActiveTab] = useState<ProfileTab>("overview");
@@ -1788,7 +1790,7 @@ export function PlayerProfileView({
     if (session?.user) {
       void fetchData();
     }
-  }, [userId, session, clubId]);
+  }, [userId, session, clubId, ratingRevision]);
 
   const handleUploadAvatar = async (file: File) => {
     const canUseClubAdminRoute =
@@ -1968,6 +1970,9 @@ export function PlayerProfileView({
         onBack={isEmbedded ? undefined : handleBack}
       />
 
+      {data.context?.viewerCanManageClub && !data.context.canAddGuestToClub ? (
+        <div className="px-4 sm:px-0"><AdjustClubRating key={`${clubId}:${userId}`} clubId={clubId} userId={userId} name={data.user.name} onChanged={() => setRatingRevision(value => value + 1)} /></div>
+      ) : null}
       {data.context?.canAddGuestToClub ? (
         <AddGuestToClub key={`${clubId}:${userId}`} clubId={clubId} userId={userId} name={data.user.name} />
       ) : null}

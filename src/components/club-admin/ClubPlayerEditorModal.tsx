@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { AdjustClubRating } from "@/components/profile/AdjustClubRating";
 import { AvatarUploader } from "@/components/ui/AvatarUploader";
 import { ModalFrame } from "@/components/ui/chrome";
 import { getMixedSideOverrideOptionForGender } from "@/lib/mixedSide";
@@ -36,6 +37,7 @@ interface ClubPlayerEditorModalProps {
   onRemovePlayer: (player: ClubAdminPlayer) => void;
   onSavePlayerName: (player: ClubAdminPlayer) => Promise<void>;
   onSavePlayerRating: (player: ClubAdminPlayer) => Promise<void>;
+  onRatingChanged?: () => void;
   onUpdatePreferences: (
     player: ClubAdminPlayer,
     updates: {
@@ -65,18 +67,15 @@ export function ClubPlayerEditorModal({
   clubId,
   currentUserId,
   editorName,
-  editorRating,
   savingName,
-  savingRating,
   savingRole,
   savingPreferences,
   removingPlayer,
   onEditorNameChange,
-  onEditorRatingChange,
   onClose,
   onRemovePlayer,
   onSavePlayerName,
-  onSavePlayerRating,
+  onRatingChanged,
   onUpdatePreferences,
   onPromotePlayer,
   onDemoteAdmin,
@@ -211,23 +210,7 @@ export function ClubPlayerEditorModal({
           </div>
 
           <div className="app-panel-muted space-y-3 p-4">
-            <label className="block space-y-2 text-sm font-medium text-gray-900">
-              <span>Rating</span>
-              <input
-                type="number"
-                value={editorRating}
-                onChange={(event) => onEditorRatingChange(event.target.value)}
-                className="field"
-              />
-            </label>
-            <button
-              type="button"
-              onClick={() => void onSavePlayerRating(player)}
-              disabled={savingRating || editorRating === `${player.elo}`}
-              className="app-button-primary px-4 py-2"
-            >
-              {savingRating ? "Saving..." : "Save rating"}
-            </button>
+            <AdjustClubRating key={player.id} clubId={clubId} userId={player.id} name={player.name} onChanged={onRatingChanged} />
           </div>
         </div>
 

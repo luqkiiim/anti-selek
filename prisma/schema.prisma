@@ -81,7 +81,22 @@ model Club {
   @@map("Community")
 }
 
+model ClubRatingAdjustment {
+  id String @id @default(cuid())
+  memberId String
+  actorId String
+  actorName String
+  beforeElo Int
+  afterElo Int
+  reason String
+  createdAt DateTime @default(now())
+  member ClubMember @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  @@index([memberId, createdAt])
+}
+
 model ClubMember {
+  ratingAdjustments ClubRatingAdjustment[]
   id            String   @id @default(cuid())
   clubId        String   @map("communityId")
   userId        String

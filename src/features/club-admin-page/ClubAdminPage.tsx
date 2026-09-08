@@ -292,6 +292,7 @@ export default function ClubAdminPage() {
     handleAddPlayer,
     handleSavePlayerName,
     handleSavePlayerRating,
+    fetchClubAndPlayers,
     handleRemovePlayer,
     handleUploadPlayerAvatar,
     handleRemovePlayerAvatar,
@@ -657,6 +658,7 @@ export default function ClubAdminPage() {
         onRemovePlayer={(player) => void handleRemovePlayer(player)}
         onSavePlayerName={handleSavePlayerName}
         onSavePlayerRating={handleSavePlayerRating}
+        onRatingChanged={() => { closePlayerEditor(); void fetchClubAndPlayers(); }}
         onUpdatePreferences={handleUpdatePreferences}
         onPromotePlayer={handlePromotePlayer}
         onDemoteAdmin={handleDemoteAdmin}
