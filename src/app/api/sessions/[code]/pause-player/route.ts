@@ -70,6 +70,10 @@ export async function POST(
       return invalidTargetResponse(request, "api:sessions:code:pause-player");
     }
 
+    if (sessionData.status === SessionStatus.COMPLETED) {
+      return NextResponse.json({ error: "Tournament already ended" }, { status: 400 });
+    }
+
     const existingPlayer = await prisma.sessionPlayer.findUnique({
       where: {
         sessionId_userId: {

@@ -438,4 +438,11 @@ describe("pause player route", () => {
       })
     );
   });
+
+  it('rejects pause changes after the session ends', async () => {
+    vi.mocked(prisma.session.findUnique).mockResolvedValue({id:'session-1',clubId:null,type:'POINTS',status:'COMPLETED'} as never);
+    const response = await POST(createRequest('player-1', true), {params:Promise.resolve({code:'ABC'})});
+    expect(response.status).toBe(400);
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
 });

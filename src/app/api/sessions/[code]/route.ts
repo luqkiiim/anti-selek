@@ -291,6 +291,9 @@ async function getSessionRoute(
         : sessionData.players;
   const serializedPlayers = players.map((player) => ({
     ...player,
+    ...(sessionData.status === SessionStatus.COMPLETED
+      ? { isPaused: false, pausedAt: null }
+      : {}),
     user: serializeAvatarEntity(player.user),
   }));
 

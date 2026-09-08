@@ -145,5 +145,9 @@ describe("session end route", () => {
     );
     expect(body.players[0].user.avatarKey).toBeUndefined();
     expect(body.queuedMatch).toBeNull();
+    expect(mocks.sessionPlayerUpdateMany).toHaveBeenCalledWith({
+      where: { sessionId: "session-1" },
+      data: { pendingPool: null, isPaused: false, pausedAt: null },
+    });
   });
 });

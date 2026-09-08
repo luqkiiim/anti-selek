@@ -445,4 +445,14 @@ describe("session route GET", () => {
     expectAliasPair(body, "clubs", "communities");
     expect(body.communities[0].name).toBe("Tutorial playground");
   });
+
+  it.each(["COMPLETED", "ACTIVE"])("normalizes old paused players only when the session is %s", async (status) => {
+    const existing = await mocks.sessionFindUnique();
+    mocks.sessionFindUnique.mockResolvedValue({ ...existing, status, players: existing.players.map((player: { userId: string }) => ({...player, isPaused: true, pausedAt: new Date('2026-09-08T10:00:00Z')})) });
+    const response = await GET(new Request('http://localhost/api/sessions/ABC123'), {params: Promise.resolve({code:'ABC123'})});
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.players[0].isPaused).toBe(status === 'ACTIVE');
+    if (status === 'COMPLETED') expect(body.players[0].pausedAt).toBeNull();
+  });
 });
