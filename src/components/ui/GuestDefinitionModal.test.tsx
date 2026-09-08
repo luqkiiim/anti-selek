@@ -52,14 +52,15 @@ describe("GuestDefinitionModal", () => {
     document.body.innerHTML = "";
   });
 
-  it("defaults to the shared rating presets and hides irrelevant fields", async () => {
+  it("shows an editable starting rating of 1000 and hides irrelevant fields", async () => {
     await act(async () => {
       root.render(<GuestDefinitionModal {...getProps()} />);
     });
 
-    expect(document.body.textContent).toContain("Beginner (850)");
-    expect(document.body.textContent).toContain("Average (1000)");
-    expect(document.body.textContent).toContain("Advanced (1200)");
+    const rating = document.body.querySelector<HTMLInputElement>('input[aria-label="Guest starting rating"]');
+    expect(rating?.type).toBe("number");
+    expect(rating?.value).toBe("1000");
+    expect(document.body.querySelector('select[aria-label="Guest starting rating"]')).toBeNull();
     expect(
       document.body.querySelector('select[aria-label="Guest gender"]')
     ).toBeNull();
@@ -105,5 +106,10 @@ describe("GuestDefinitionModal", () => {
         (button) => button.textContent === "Adding..."
       )?.disabled
     ).toBe(true);
+  });
+
+  it.each([NaN, -1, 5001, 1000.5])("prevents submitting invalid rating %s", async (initialElo) => {
+    await act(async () => root.render(<GuestDefinitionModal {...getProps()} initialElo={initialElo} />));
+    expect(Array.from(document.body.querySelectorAll("button")).find(button => button.textContent === "Add guest")?.disabled).toBe(true);
   });
 });

@@ -9,12 +9,6 @@ import {
   SessionPool,
 } from "@/types/enums";
 
-export const GUEST_ELO_PRESETS = [
-  { label: "Beginner", value: 850 },
-  { label: "Average", value: 1000 },
-  { label: "Advanced", value: 1200 },
-] as const;
-
 interface GuestDefinitionModalProps {
   open: boolean;
   name: string;
@@ -90,7 +84,7 @@ export function GuestDefinitionModal({
           <button
             type="button"
             onClick={onSubmit}
-            disabled={submitting || name.trim().length < 2}
+            disabled={submitting || name.trim().length < 2 || !Number.isInteger(initialElo) || initialElo < 0 || initialElo > 5000}
             className="app-button-primary disabled:cursor-not-allowed disabled:opacity-50"
           >
             {submitting ? "Adding..." : "Add guest"}
@@ -115,20 +109,18 @@ export function GuestDefinitionModal({
 
         <label className="block space-y-1.5 text-sm font-medium text-gray-900">
           <span>Starting rating</span>
-          <select
+          <input
+            type="number"
+            inputMode="numeric"
+            min={0}
+            max={5000}
+            step={1}
             aria-label="Guest starting rating"
-            value={initialElo}
-            onChange={(event) =>
-              onInitialEloChange(parseInt(event.target.value, 10))
-            }
+            value={Number.isFinite(initialElo) ? initialElo : ""}
+            onChange={(event) => onInitialEloChange(event.target.valueAsNumber)}
+            disabled={submitting}
             className="field"
-          >
-            {GUEST_ELO_PRESETS.map((preset) => (
-              <option key={preset.label} value={preset.value}>
-                {preset.label} ({preset.value})
-              </option>
-            ))}
-          </select>
+          />
         </label>
 
         {poolsEnabled ? (
