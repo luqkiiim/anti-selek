@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   MatchStatus,
+  SessionBalanceMetric,
   SessionClubRole,
   SessionClubStatus,
   SessionPool,
@@ -580,6 +581,26 @@ describe("finalizeMatchResult", () => {
       ...storedMatch,
       automaticQueueInvalidated: true,
     });
+  });
+});
+
+describe("guest rating impact by balancing metric", () => {
+  it.each([
+    [SessionBalanceMetric.RATING, 0, 17],
+    [SessionBalanceMetric.RATING, 1, 17],
+    [SessionBalanceMetric.RATING, 2, 17],
+    [SessionBalanceMetric.RATING, 4, 17],
+    [SessionBalanceMetric.SESSION_POINTS, 0, 17],
+    [SessionBalanceMetric.SESSION_POINTS, 1, 13],
+    [SessionBalanceMetric.SESSION_POINTS, 2, 9],
+  ])("%s with %i guests persists a rating change of %i", async (balanceMetric, guestCount, delta) => {
+    for (const expectedStatus of [MatchStatus.IN_PROGRESS, MatchStatus.PENDING_APPROVAL] as const) {
+      const tx = createTransactionMock({ id: "match-1" });
+      tx.sessionPlayer.findMany.mockResolvedValue(["a1", "a2", "b1", "b2"].map((userId, index) => ({ userId, isGuest: index < guestCount })));
+      mocks.transaction.mockImplementation((callback: (tx: unknown) => unknown) => callback(tx));
+      await finalizeMatchResult({ match: { ...finalizableMatch, session: { clubId: null, type: SessionType.POINTS, isTest: false, balanceMetric } }, expectedStatus, finalTeam1Score: 21, finalTeam2Score: 18 });
+      expect(tx.match.updateMany).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ team1EloChange: delta, team2EloChange: -delta }) }));
+    }
   });
 });
 

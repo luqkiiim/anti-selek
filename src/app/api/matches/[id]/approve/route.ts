@@ -40,7 +40,7 @@ export async function POST(
       where: { id },
       include: {
         session: {
-          select: { clubId: true, type: true, isTest: true },
+          select: { clubId: true, type: true, balanceMetric: true, isTest: true },
         },
         team1User1: { select: { id: true, name: true, elo: true } },
         team1User2: { select: { id: true, name: true, elo: true } },

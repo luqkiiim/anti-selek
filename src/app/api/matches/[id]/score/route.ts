@@ -56,6 +56,7 @@ export async function POST(
           select: {
             clubId: true,
             type: true,
+            balanceMetric: true,
             isTest: true,
           },
         },

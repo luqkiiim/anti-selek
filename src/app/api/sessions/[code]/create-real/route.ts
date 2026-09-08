@@ -409,6 +409,7 @@ export async function POST(
             session: {
               clubId: nextSession.clubId,
               type: nextSession.type,
+              balanceMetric: nextSession.balanceMetric,
               isTest: false,
             },
           };

@@ -6,6 +6,7 @@ import { getStandingPointsForTeam } from "@/lib/sessionStandings";
 import { applyPendingPlayerGroupChangesInTransaction } from "@/lib/playerGroupPreferences";
 import {
   MatchStatus,
+  SessionBalanceMetric,
   SessionClubStatus,
   SessionStatus,
   SessionType,
@@ -60,6 +61,7 @@ export interface FinalizableMatch {
   session: {
     clubId: string | null;
     type: string;
+    balanceMetric?: string;
     isTest: boolean;
   };
   team1User1: MatchUserSnapshot;
@@ -513,7 +515,9 @@ async function buildMatchRatingOutcomeInTransaction(
   const guestCount = playerIds.filter(
     (userId) => isGuestByUserId.get(userId) === true
   ).length;
-  const guestImpactMultiplier = getGuestImpactMultiplier(guestCount);
+  const guestImpactMultiplier = match.session.balanceMetric === SessionBalanceMetric.RATING
+    ? 1
+    : getGuestImpactMultiplier(guestCount);
   const userEloByUserId = await getUserEloByUserIdInTransaction(tx, playerIds);
   const clubEloResult = await buildClubEloAdjustments({
     tx,
@@ -1220,6 +1224,7 @@ export async function correctCompletedMatchScoreInTransaction(
           isTest: true,
           status: true,
           type: true,
+          balanceMetric: true,
         },
       },
       team1User1: { select: { id: true, name: true, elo: true } },
@@ -1278,6 +1283,7 @@ export async function correctCompletedMatchScoreInTransaction(
           isTest: true,
           status: true,
           type: true,
+          balanceMetric: true,
         },
       },
       team1User1: { select: { id: true, name: true, elo: true } },
@@ -1410,6 +1416,7 @@ export async function undoCompletedMatchResultInTransaction(
           isTest: true,
           status: true,
           type: true,
+          balanceMetric: true,
         },
       },
     },
