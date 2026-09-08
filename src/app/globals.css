@@ -212,6 +212,15 @@ h4 {
     transform 0.15s ease;
 }
 
+/* Keep native select text clear of padding on compact player editors. */
+.field.session-player-select {
+  height: auto;
+  min-height: 3rem;
+  padding: 0.625rem 0.75rem;
+  font-size: 1rem;
+  line-height: 1.5;
+}
+
 .field::placeholder {
   color: rgba(16, 34, 54, 0.64);
 }

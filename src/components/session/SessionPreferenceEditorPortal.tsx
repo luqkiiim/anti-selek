@@ -66,8 +66,8 @@ function labelClassName() {
   return "text-[11px] font-semibold text-gray-500";
 }
 
-function selectClassName(isSheet: boolean) {
-  return cx("field px-3 py-2 text-sm", isSheet ? "h-11" : "h-10");
+function selectClassName() {
+  return "field session-player-select";
 }
 
 function sectionTitleClassName() {
@@ -260,7 +260,7 @@ export function SessionPreferenceEditorPortal({
                   activePreferencePlayer.representingClubId ?? null
                 );
               }}
-              className={selectClassName(Boolean(isSheet))}
+              className={selectClassName()}
             >
               <option value={PlayerGender.MALE}>Male</option>
               <option value={PlayerGender.FEMALE}>Female</option>
@@ -283,7 +283,7 @@ export function SessionPreferenceEditorPortal({
                     activePreferencePlayer.representingClubId ?? null
                   );
                 }}
-                className={selectClassName(Boolean(isSheet))}
+                className={selectClassName()}
               >
                 <option value="">Default</option>
                 <option value={mixedSideOption.value}>
@@ -315,7 +315,7 @@ export function SessionPreferenceEditorPortal({
                 activePreferencePlayer.representingClubId ?? null
               );
             }}
-            className={selectClassName(Boolean(isSheet))}
+            className={selectClassName()}
           >
             {poolOptions.map((option) => (
               <option key={option.value} value={option.value}>
@@ -350,7 +350,7 @@ export function SessionPreferenceEditorPortal({
                 event.target.value || null
               );
             }}
-            className={selectClassName(Boolean(isSheet))}
+            className={selectClassName()}
           >
             <option value="">Unassigned</option>
             {interclubClubOptions.map((option) => (
@@ -508,25 +508,17 @@ export function SessionPreferenceEditorPortal({
               </button>
             </div>
 
-            <div className="min-h-0 overflow-y-auto overscroll-y-contain px-4 py-4 pb-[calc(1rem+env(safe-area-inset-bottom))] [touch-action:pan-y_pinch-zoom]">
+            <div className="min-h-0 overflow-y-auto overscroll-y-contain px-4 py-4 [touch-action:pan-y_pinch-zoom]">
               <div className="space-y-5">
                 <ActionSection title="Preferences">
                   {preferenceControls}
                 </ActionSection>
 
-                {rotationControls ? (
-                  <ActionSection title="Rotation">
-                    {rotationControls}
-                  </ActionSection>
-                ) : null}
-
-                <ActionSection
-                  title="Danger"
-                  className="border-t border-gray-200 pt-4"
-                >
-                  {dangerControls}
-                </ActionSection>
               </div>
+            </div>
+            <div data-player-actions-footer className="grid shrink-0 grid-cols-2 gap-2 border-t border-gray-200 bg-white px-4 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))]">
+              {rotationControls}
+              <div className={rotationControls ? undefined : "col-span-2"}>{dangerControls}</div>
             </div>
           </div>
         </div>

@@ -63,12 +63,6 @@ function findButton(label: string) {
   ) as HTMLButtonElement | undefined;
 }
 
-function findHeading(label: string) {
-  return Array.from(document.querySelectorAll("h3")).find(
-    (heading) => heading.textContent?.trim() === label
-  ) as HTMLHeadingElement | undefined;
-}
-
 describe("SessionPreferenceEditorPortal", () => {
   let container: HTMLDivElement;
   let root: Root;
@@ -211,19 +205,20 @@ describe("SessionPreferenceEditorPortal", () => {
       '[data-session-player-actions-layout="sheet"]'
     ) as HTMLElement | null;
     const dialog = document.querySelector('[role="dialog"]') as HTMLElement | null;
-    const dangerHeading = findHeading("Danger");
+    const footer = document.querySelector("[data-player-actions-footer]");
 
     expect(sheet).not.toBeNull();
     expect(sheet?.className).toContain("z-[90]");
     expect(sheet?.textContent).toContain("Preferences");
-    expect(sheet?.textContent).toContain("Rotation");
-    expect(sheet?.textContent).toContain("Danger");
+    expect(footer?.textContent).toContain("Cancel Skip Next");
     expect(sheet?.textContent).toContain("Cancel Skip Next");
     expect(sheet?.textContent).toContain("Rename Guest");
     expect(dialog?.style.left).toBe("");
     expect(dialog?.style.top).toBe("");
     expect(dialog?.className).toContain("flex");
-    expect(dangerHeading?.parentElement?.textContent).toContain("Remove Player");
+    expect(footer?.textContent).toContain("Remove Player");
+    expect(footer?.className).toContain("shrink-0");
+    expect(footer?.closest(".overflow-y-auto")).toBeNull();
   });
 
   it("renders desktop player actions as a clamped 224px popover", async () => {
