@@ -21,7 +21,7 @@ const MATCHMAKING_STYLES = [
 const MATCHMAKING_STYLE_INFO = {
   [SessionMatchmakingStyle.BALANCED]: {
     label: "Balanced",
-    description: "Recommended for most club nights: balanced teams with a mix of partners and opponents.",
+    description: "Maximize variety in partners and opponents while keeping teams balanced.",
   },
   [SessionMatchmakingStyle.SOCIAL]: {
     label: "Social",
