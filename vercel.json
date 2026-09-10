@@ -1,0 +1,12 @@
+{
+  "framework": null,
+  "installCommand": "npm ci --prefix prototype",
+  "buildCommand": "npm run build --prefix prototype",
+  "outputDirectory": "prototype/dist/client",
+  "rewrites": [
+    {
+      "source": "/((?!assets/).*)",
+      "destination": "/index.html"
+    }
+  ]
+}
