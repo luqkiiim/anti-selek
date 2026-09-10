@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, type KeyboardEvent } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ArrowLeft, LoaderCircle } from "lucide-react";
+import { LoaderCircle } from "lucide-react";
+import { PlayShell } from "@/components/play/PlayShell";
 import { FlashMessage } from "@/components/ui/chrome";
 import { ClaimRequestsPanel } from "@/components/club-admin/ClaimRequestsPanel";
 import { ClubAdminActionConfirmModal } from "@/components/club-admin/ClubAdminActionConfirmModal";
@@ -23,7 +24,11 @@ import styles from "./ClubAdminPage.module.css";
 const tabs: Array<{
   key: ClubAdminSection;
   label: string;
-  detail: (counts: { players: number; claims: number; links: number }) => string;
+  detail: (counts: {
+    players: number;
+    claims: number;
+    links: number;
+  }) => string;
 }> = [
   {
     key: "players",
@@ -37,7 +42,7 @@ const tabs: Array<{
   },
   {
     key: "claims",
-    label: "Claims",
+    label: "Requests",
     detail: ({ claims }) => `${claims} pending`,
   },
   {
@@ -47,18 +52,19 @@ const tabs: Array<{
   },
 ];
 
-function getPlayerActionDialogCopy(action: {
-  kind: "remove" | "promote" | "demote-admin";
-  player: { id: string; name: string; email: string | null };
-  role?: ClubRole.STAFF | ClubRole.MEMBER;
-}, currentUserId?: string | null) {
+function getPlayerActionDialogCopy(
+  action: {
+    kind: "remove" | "promote" | "demote-admin";
+    player: { id: string; name: string; email: string | null };
+    role?: ClubRole.STAFF | ClubRole.MEMBER;
+  },
+  currentUserId?: string | null,
+) {
   if (action.kind === "remove") {
     const isSelfRemoval = action.player.id === currentUserId;
 
     return {
-      title: isSelfRemoval
-        ? "Leave club?"
-        : `Remove ${action.player.name}?`,
+      title: isSelfRemoval ? "Leave club?" : `Remove ${action.player.name}?`,
       subtitle: isSelfRemoval
         ? "This removes your membership and admin access for this club."
         : "This takes the player out of the club roster.",
@@ -83,8 +89,7 @@ function getPlayerActionDialogCopy(action: {
   }
 
   if (action.kind === "demote-admin") {
-    const targetRole =
-      action.role === ClubRole.STAFF ? "staff" : "member";
+    const targetRole = action.role === ClubRole.STAFF ? "staff" : "member";
 
     return {
       title: `Change ${action.player.name} to ${targetRole}?`,
@@ -93,9 +98,7 @@ function getPlayerActionDialogCopy(action: {
           ? "They will keep live tournament controls, but lose club admin access."
           : "They will lose club admin access and live tournament operator controls.",
       confirmLabel:
-        action.role === ClubRole.STAFF
-          ? "Change to Staff"
-          : "Change to Member",
+        action.role === ClubRole.STAFF ? "Change to Staff" : "Change to Member",
       confirmTone: "danger" as const,
       details: (
         <div className="app-panel-muted space-y-2 p-4">
@@ -137,7 +140,7 @@ function getPlayerActionDialogCopy(action: {
 function getClubActionDialogCopy(
   action: { kind: "reset" | "delete" },
   clubName: string,
-  isTutorial: boolean
+  isTutorial: boolean,
 ) {
   if (action.kind === "reset") {
     if (isTutorial) {
@@ -149,9 +152,7 @@ function getClubActionDialogCopy(
         confirmationKeyword: "RESET",
         details: (
           <div className="app-panel-muted space-y-2 p-4">
-            <p className="text-sm font-semibold text-gray-900">
-              {clubName}
-            </p>
+            <p className="text-sm font-semibold text-gray-900">{clubName}</p>
             <p className="text-sm text-gray-600">
               The playground will return to its original seeded state.
             </p>
@@ -170,7 +171,8 @@ function getClubActionDialogCopy(
         <div className="app-panel-muted space-y-2 p-4">
           <p className="text-sm font-semibold text-gray-900">{clubName}</p>
           <p className="text-sm text-gray-600">
-            Tournament history will be removed for this club. This cannot be undone.
+            Tournament history will be removed for this club. This cannot be
+            undone.
           </p>
         </div>
       ),
@@ -310,17 +312,16 @@ export default function ClubAdminPage() {
     handleReviewClaimRequest,
   } = useClubAdminPage();
   const isTutorialPlayground =
-    club?.isTutorial === true &&
-    club.tutorialOwnerId === currentUserId;
+    club?.isTutorial === true && club.tutorialOwnerId === currentUserId;
   const adminOnboarding = useAdminOnboardingProgress(
     status === "authenticated" &&
       club?.role === "ADMIN" &&
       isTutorialPlayground &&
-      !loading
+      !loading,
   );
   const visibleTabs = isTutorialPlayground
     ? tabs.filter((tab) => tab.key === "players" || tab.key === "settings")
-    : tabs;
+    : tabs.filter((tab) => tab.key !== "links");
 
   useEffect(() => {
     const requestedTab = searchParams.get("tab");
@@ -358,7 +359,7 @@ export default function ClubAdminPage() {
         });
       }
     },
-    [clubId, router, setActiveSection]
+    [clubId, router, setActiveSection],
   );
   const handleTabKeyDown = useCallback(
     (event: KeyboardEvent<HTMLButtonElement>, currentIndex: number) => {
@@ -385,24 +386,15 @@ export default function ClubAdminPage() {
       nextButton?.focus();
       switchAdminSection(nextTab.key);
     },
-    [switchAdminSection, visibleTabs]
+    [switchAdminSection, visibleTabs],
   );
   const handleAddPlayerWithOnboardingRefresh = useCallback(
     async (event: Parameters<typeof handleAddPlayer>[0]) => {
       await handleAddPlayer(event);
       void adminOnboarding.refresh();
     },
-    [adminOnboarding, handleAddPlayer]
+    [adminOnboarding, handleAddPlayer],
   );
-
-  const handleBack = useCallback(() => {
-    if (typeof window !== "undefined" && window.history.length > 1) {
-      router.back();
-      return;
-    }
-
-    router.push(clubId ? `/club/${clubId}` : "/");
-  }, [clubId, router]);
 
   const pendingPlayerActionDialog = pendingPlayerAction
     ? getPlayerActionDialogCopy(pendingPlayerAction, currentUserId)
@@ -411,7 +403,7 @@ export default function ClubAdminPage() {
     ? getClubActionDialogCopy(
         pendingClubAction,
         club?.name || "Club",
-        isTutorialPlayground
+        isTutorialPlayground,
       )
     : null;
 
@@ -427,43 +419,15 @@ export default function ClubAdminPage() {
   }
 
   return (
-    <main className={`${styles.page} app-page`}>
-      <header className={styles.topbar}>
-        <div className={styles.topbarInner}>
-          <button
-            type="button"
-            onClick={handleBack}
-            className={styles.backButton}
-            aria-label="Back to club"
-          >
-            <ArrowLeft aria-hidden="true" size={19} strokeWidth={1.8} />
-            <span className={styles.backLabel}>Back</span>
-          </button>
-          <div className={styles.clubIdentity}>
-            <h1>{club?.name || "Club"}</h1>
-            <p>Club admin</p>
-          </div>
-          <span className={styles.headerBalance} aria-hidden="true" />
-        </div>
-      </header>
-
-      <div className={styles.shell}>
-        <section className={styles.pageHeading} aria-labelledby="admin-page-title">
-          <div className={styles.pageHeadingCopy}>
-            <p>Club controls</p>
-            <h2 id="admin-page-title">Administration</h2>
-          </div>
-          <div className={styles.statusStack} aria-label="Club access status">
-            {isTutorialPlayground ? (
-              <span className={styles.tutorialStatus}>Tutorial</span>
-            ) : null}
-            <span className={styles.adminStatus}>Admin only</span>
-            <span className={styles.accessStatus}>
-              {club?.isPasswordProtected ? "Protected club" : "Open club"}
-            </span>
-          </div>
-        </section>
-
+    <PlayShell
+      clubId={clubId}
+      active="club"
+      backHref={`/club/${clubId}`}
+      title={club?.name || "Club"}
+    >
+      <div className="play-admin">
+        <span className="eyebrow">MAKE IT YOUR CLUB</span>
+        <h1>Manage club</h1>
         {error ? (
           <FlashMessage tone="error" className={styles.flashMessage}>
             {error}
@@ -487,15 +451,17 @@ export default function ClubAdminPage() {
           </div>
         ) : null}
 
-        <nav className={styles.tabSurface} aria-label="Administration sections">
-          <div className={styles.tabList} role="tablist">
+        <nav className="admin-tab-wrap" aria-label="Administration sections">
+          <div className="local-tabs" role="tablist">
             {visibleTabs.map((tab, index) => {
-              const isActive = activeSection === tab.key;
+              const isActive =
+                activeSection === tab.key ||
+                (tab.key === "claims" && activeSection === "links");
               const detail = tab.detail({
                 players: players.length,
                 claims: claimRequests.length,
                 links: offlineIdentityLinks.filter(
-                  (link) => link.status === "ACCEPTED"
+                  (link) => link.status === "ACCEPTED",
                 ).length,
               });
 
@@ -505,9 +471,7 @@ export default function ClubAdminPage() {
                   type="button"
                   onClick={() => switchAdminSection(tab.key)}
                   onKeyDown={(event) => handleTabKeyDown(event, index)}
-                  className={`${styles.tab} ${
-                    isActive ? styles.tabActive : ""
-                  }`}
+                  className={isActive ? "active" : ""}
                   id={`admin-tab-${tab.key}`}
                   role="tab"
                   aria-selected={isActive}
@@ -531,9 +495,9 @@ export default function ClubAdminPage() {
 
         <section
           className={styles.activePanel}
-          id={`admin-panel-${activeSection}`}
+          id={`admin-panel-${activeSection === "links" ? "claims" : activeSection}`}
           role="tabpanel"
-          aria-labelledby={`admin-tab-${activeSection}`}
+          aria-labelledby={`admin-tab-${activeSection === "links" ? "claims" : activeSection}`}
           tabIndex={0}
         >
           {activeSection === "players" ? (
@@ -559,33 +523,37 @@ export default function ClubAdminPage() {
             />
           ) : null}
 
-          {!isTutorialPlayground && activeSection === "links" ? (
-            <OfflineIdentityLinksPanel
-              links={offlineIdentityLinks}
-              currentClubId={clubId}
-              currentUserId={currentUserId}
-              sourcePlaceholderOptions={sourcePlaceholderOptions}
-              sourceUserId={linkSourceUserId}
-              onSourceUserIdChange={setLinkSourceUserId}
-              targetClubSearch={targetClubSearch}
-              onTargetClubSearchChange={setTargetClubSearch}
-              selectedTargetClub={selectedTargetClub}
-              targetClubCandidates={targetClubCandidates}
-              loadingTargetClubs={loadingTargetClubs}
-              loadingTargetRoster={loadingTargetRoster}
-              targetPlaceholderOptions={targetPlaceholderOptions}
-              targetUserId={linkTargetUserId}
-              onTargetUserIdChange={setLinkTargetUserId}
-              submitting={submittingOfflineIdentityLink}
-              reviewingLinkId={reviewingOfflineIdentityLinkId}
-              onSelectTargetClub={selectTargetClub}
-              onClearTargetClub={clearTargetClub}
-              onSubmitLink={() => {
-                void submitOfflineIdentityLink();
-              }}
-              onReviewLink={reviewOfflineIdentityLink}
-              onUnlink={unlinkOfflineIdentity}
-            />
+          {!isTutorialPlayground &&
+          (activeSection === "links" || activeSection === "claims") ? (
+            <details className="surface" open={activeSection === "links"}>
+              <summary>Link player identities across clubs</summary>
+              <OfflineIdentityLinksPanel
+                links={offlineIdentityLinks}
+                currentClubId={clubId}
+                currentUserId={currentUserId}
+                sourcePlaceholderOptions={sourcePlaceholderOptions}
+                sourceUserId={linkSourceUserId}
+                onSourceUserIdChange={setLinkSourceUserId}
+                targetClubSearch={targetClubSearch}
+                onTargetClubSearchChange={setTargetClubSearch}
+                selectedTargetClub={selectedTargetClub}
+                targetClubCandidates={targetClubCandidates}
+                loadingTargetClubs={loadingTargetClubs}
+                loadingTargetRoster={loadingTargetRoster}
+                targetPlaceholderOptions={targetPlaceholderOptions}
+                targetUserId={linkTargetUserId}
+                onTargetUserIdChange={setLinkTargetUserId}
+                submitting={submittingOfflineIdentityLink}
+                reviewingLinkId={reviewingOfflineIdentityLinkId}
+                onSelectTargetClub={selectTargetClub}
+                onClearTargetClub={clearTargetClub}
+                onSubmitLink={() => {
+                  void submitOfflineIdentityLink();
+                }}
+                onReviewLink={reviewOfflineIdentityLink}
+                onUnlink={unlinkOfflineIdentity}
+              />
+            </details>
           ) : null}
 
           {activeSection === "settings" ? (
@@ -658,7 +626,10 @@ export default function ClubAdminPage() {
         onRemovePlayer={(player) => void handleRemovePlayer(player)}
         onSavePlayerName={handleSavePlayerName}
         onSavePlayerRating={handleSavePlayerRating}
-        onRatingChanged={() => { closePlayerEditor(); void fetchClubAndPlayers(); }}
+        onRatingChanged={() => {
+          closePlayerEditor();
+          void fetchClubAndPlayers();
+        }}
         onUpdatePreferences={handleUpdatePreferences}
         onPromotePlayer={handlePromotePlayer}
         onDemoteAdmin={handleDemoteAdmin}
@@ -714,9 +685,7 @@ export default function ClubAdminPage() {
           onConfirmationValueChange={setClubActionConfirmationValue}
           confirmationInputLabel={`Type ${pendingClubActionDialog.confirmationKeyword} to continue`}
           isSubmitting={
-            pendingClubAction.kind === "reset"
-              ? resettingClub
-              : deletingClub
+            pendingClubAction.kind === "reset" ? resettingClub : deletingClub
           }
           onClose={closePendingClubAction}
           onConfirm={() => {
@@ -724,6 +693,6 @@ export default function ClubAdminPage() {
           }}
         />
       ) : null}
-    </main>
+    </PlayShell>
   );
 }

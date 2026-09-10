@@ -1,72 +1,40 @@
 "use client";
-
-import {
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { useEffect } from "react";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
-import { ArrowLeft, Shield } from "lucide-react";
-import { getHostSessionOnboardingOverride } from "@/lib/adminOnboarding";
-import { getClubRoleLabel } from "@/lib/clubRoles";
-import { getSessionTypeLabel } from "@/lib/sessionModeLabels";
-import { FlashMessage, HeroCard } from "@/components/ui/chrome";
-import { ClubActionConfirmModal } from "@/components/club/ClubActionConfirmModal";
-import { ClubBottomTabs } from "@/components/club/ClubBottomTabs";
-import { ClubLeaderboardPanel } from "@/components/club/ClubLeaderboardPanel";
-import { ClubNotificationsButton } from "@/components/club/ClubNotificationsButton";
-import { ClubOverviewPulsePanel } from "@/components/club/ClubOverviewPulsePanel";
-import { ClubPlayersModal } from "@/components/club/ClubPlayersModal";
-import { ClubProfilePanel } from "@/components/club/ClubProfilePanel";
-import { CurrentTournamentsPanel } from "@/components/club/CurrentTournamentsPanel";
-import { HostTournamentPanel } from "@/components/club/HostTournamentPanel";
-import { PastTournamentsPanel } from "@/components/club/PastTournamentsPanel";
-import { TestSessionsPanel } from "@/components/club/TestSessionsPanel";
-import { AdminOnboardingChecklist } from "@/components/onboarding/AdminOnboardingChecklist";
-import { useAdminOnboardingProgress } from "@/components/onboarding/useAdminOnboardingProgress";
-import type { ClubPageSection } from "@/components/club/clubTypes";
-import { SessionMode } from "@/types/enums";
+import { useSearchParams } from "next/navigation";
 import {
-  getAuthorizedClubSection,
-  getAuthorizedClubSections,
-} from "@/components/club/clubNavigation";
+  CaretDown,
+  UserCircle,
+  CalendarBlank,
+  Plus,
+} from "@phosphor-icons/react";
+import { PlayShell, PlayRow } from "@/components/play/PlayShell";
+import { ClubNotificationsButton } from "@/components/club/ClubNotificationsButton";
+import { ClubHome } from "@/components/play/ClubHome";
+import { ClubProfilePanel } from "@/components/club/ClubProfilePanel";
+import { ClubActionConfirmModal } from "@/components/club/ClubActionConfirmModal";
+import { ClubLeaderboardPanel } from "@/components/club/ClubLeaderboardPanel";
+import { ClubInsights } from "@/components/play/ClubInsights";
+import { ClubPlayersModal } from "@/components/club/ClubPlayersModal";
+import { HostTournamentPanel } from "@/components/club/HostTournamentPanel";
+import { FlashMessage } from "@/components/ui/chrome";
+import { getSessionTypeLabel } from "@/lib/sessionModeLabels";
+import { SessionMode } from "@/types/enums";
 import { useClubPage } from "./useClubPage";
-
-function getClubSectionHref(
-  clubId: string,
-  section: ClubPageSection
-) {
-  return `/club/${clubId}?tab=${section}`;
-}
-
 export default function ClubPage() {
-  const router = useRouter();
-  const searchParams = useSearchParams();
-  const requestedTab = searchParams.get("tab");
-  const clubPagerRef = useRef<HTMLDivElement | null>(null);
-  const clubPanelRefs = useRef<
-    Partial<Record<ClubPageSection, HTMLElement | null>>
-  >({});
-  const clubPanelMeasureFrameRef = useRef<number | null>(null);
-  const clubPagerSnapTimeoutRef = useRef<ReturnType<
-    typeof setTimeout
-  > | null>(null);
-  const programmaticClubPagerTargetRef =
-    useRef<ClubPageSection | null>(null);
-  const programmaticClubPagerReleaseTimeoutRef =
-    useRef<ReturnType<typeof setTimeout> | null>(null);
-  const clubPagerStartXRef = useRef<number | null>(null);
-  const clubPagerStartIndexRef = useRef<number | null>(null);
-  const clubPagerIsDraggingRef = useRef(false);
-  const pendingClubSectionRef = useRef<ClubPageSection | null>(null);
-  const [clubPagerHeight, setClubPagerHeight] = useState<
-    number | null
-  >(null);
-  const [retryingClubLoad, setRetryingClubLoad] = useState(false);
+  const c = useClubPage();
+  const search = useSearchParams();
+  const requestedSection = search.get("tab") ?? "overview";
+  const section = [
+    "overview",
+    "host",
+    "profile",
+    "tournaments",
+    "leaderboard",
+    "insights",
+  ].includes(requestedSection)
+    ? requestedSection
+    : "overview";
   const {
     status,
     clubId,
@@ -128,7 +96,6 @@ export default function ClubPage() {
     loading,
     creatingSession,
     creationIssues,
-    activeSection,
     showPlayersModal,
     playerSearch,
     setPlayerSearch,
@@ -139,7 +106,6 @@ export default function ClubPage() {
     setError,
     success,
     refreshClubData,
-    notifications,
     leaderboard,
     activeTournaments,
     pastTournaments,
@@ -172,570 +138,34 @@ export default function ClubPage() {
     handleGuestGenderChange,
     openPlayersModal,
     closePlayersModal,
-    switchSection,
-    openClubPlayerProfile,
-    openTournament,
-  } = useClubPage();
-  const isTutorialPlayground =
-    club?.isTutorial === true && club.tutorialOwnerId === user?.id;
-  const adminOnboarding = useAdminOnboardingProgress(
-    status === "authenticated" &&
-      canManageClub &&
-      isTutorialPlayground &&
-      !loading
-  );
-  const hostOnboardingOverride = useMemo(
-    () =>
-      getHostSessionOnboardingOverride({
-        newSessionName,
-        selectedPlayerCount: selectedPlayerIds.length,
-        guestCount: guestConfigs.length,
-      }),
-    [guestConfigs.length, newSessionName, selectedPlayerIds.length]
-  );
-  const createSessionWithOnboardingRefresh = useCallback(async () => {
-    const created = await createSession();
-    if (created) {
-      adminOnboarding.completeStep("host-session");
-    }
-    void adminOnboarding.refresh();
-  }, [adminOnboarding, createSession]);
+  } = c;
 
-  const sectionTabs = useMemo(() => {
-    return getAuthorizedClubSections({
-      canManageClub,
-      hasUser: Boolean(user?.id),
-    });
-  }, [canManageClub, user?.id]);
-  const mobileSections = useMemo(
-    () => sectionTabs.map((section) => section.key),
-    [sectionTabs]
-  );
-  const activeMobileSection = mobileSections.includes(activeSection)
-    ? activeSection
-    : mobileSections[0] ?? "overview";
-
-  const measureActiveClubPanel = useCallback(() => {
-    const activePanel = clubPanelRefs.current[activeMobileSection];
-    if (!activePanel) {
-      setClubPagerHeight(null);
-      return;
-    }
-
-    const nextHeight = Math.ceil(activePanel.getBoundingClientRect().height);
-    setClubPagerHeight((currentHeight) =>
-      currentHeight !== null && Math.abs(currentHeight - nextHeight) < 1
-        ? currentHeight
-        : nextHeight
-    );
-  }, [activeMobileSection]);
-
-  const scheduleMeasureActiveClubPanel = useCallback(() => {
-    if (clubPanelMeasureFrameRef.current !== null) {
-      cancelAnimationFrame(clubPanelMeasureFrameRef.current);
-    }
-
-    clubPanelMeasureFrameRef.current = requestAnimationFrame(() => {
-      clubPanelMeasureFrameRef.current = null;
-      measureActiveClubPanel();
-    });
-  }, [measureActiveClubPanel]);
-
-  const handleBack = useCallback(() => {
-    if (typeof window !== "undefined" && window.history.length > 1) {
-      router.back();
-      return;
-    }
-
-    router.push("/");
-  }, [router]);
-
-  const retryClubLoad = useCallback(async () => {
-    setRetryingClubLoad(true);
-    setError("");
-    try {
-      await refreshClubData();
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Failed to load club");
-    } finally {
-      setRetryingClubLoad(false);
-    }
-  }, [refreshClubData, setError]);
-
-  const clearProgrammaticClubPagerSync = useCallback(() => {
-    if (programmaticClubPagerReleaseTimeoutRef.current) {
-      clearTimeout(programmaticClubPagerReleaseTimeoutRef.current);
-      programmaticClubPagerReleaseTimeoutRef.current = null;
-    }
-
-    programmaticClubPagerTargetRef.current = null;
-  }, []);
-
-  const markProgrammaticClubPagerSync = useCallback(
-    (section: ClubPageSection, behavior: ScrollBehavior) => {
-      if (programmaticClubPagerReleaseTimeoutRef.current) {
-        clearTimeout(programmaticClubPagerReleaseTimeoutRef.current);
-      }
-
-      programmaticClubPagerTargetRef.current = section;
-      programmaticClubPagerReleaseTimeoutRef.current = setTimeout(() => {
-        if (programmaticClubPagerTargetRef.current === section) {
-          programmaticClubPagerTargetRef.current = null;
-        }
-
-        programmaticClubPagerReleaseTimeoutRef.current = null;
-      }, behavior === "smooth" ? 280 : 80);
-    },
-    []
-  );
-
-  const scrollClubPagerToSection = useCallback(
-    (section: ClubPageSection, behavior: ScrollBehavior = "auto") => {
-      const container = clubPagerRef.current;
-      if (!container) return;
-
-      if (clubPagerSnapTimeoutRef.current) {
-        clearTimeout(clubPagerSnapTimeoutRef.current);
-        clubPagerSnapTimeoutRef.current = null;
-      }
-
-      const sectionIndex = mobileSections.findIndex(
-        (sectionItem) => sectionItem === section
-      );
-      if (sectionIndex < 0) return;
-
-      if (container.clientWidth <= 0) {
-        requestAnimationFrame(() => {
-          const retryContainer = clubPagerRef.current;
-          if (!retryContainer || retryContainer.clientWidth <= 0) return;
-
-          const retryIndex = mobileSections.findIndex(
-            (sectionItem) => sectionItem === section
-          );
-          if (retryIndex < 0) return;
-
-          const retryLeft = retryIndex * retryContainer.clientWidth;
-          if (Math.abs(retryContainer.scrollLeft - retryLeft) < 4) {
-            clearProgrammaticClubPagerSync();
-            return;
-          }
-
-          markProgrammaticClubPagerSync(section, behavior);
-          retryContainer.scrollTo({
-            left: retryLeft,
-            behavior,
-          });
-        });
-        return;
-      }
-
-      const nextLeft = sectionIndex * container.clientWidth;
-      if (Math.abs(container.scrollLeft - nextLeft) < 4) {
-        clearProgrammaticClubPagerSync();
-        return;
-      }
-
-      markProgrammaticClubPagerSync(section, behavior);
-      container.scrollTo({
-        left: nextLeft,
-        behavior,
-      });
-    },
-    [
-      clearProgrammaticClubPagerSync,
-      markProgrammaticClubPagerSync,
-      mobileSections,
-    ]
-  );
-
-  const getNearestClubSection = useCallback(
-    (container: HTMLDivElement) => {
-      const pageWidth = Math.max(container.clientWidth, 1);
-      const sectionIndex = Math.min(
-        mobileSections.length - 1,
-        Math.max(0, Math.round(container.scrollLeft / pageWidth))
-      );
-
-      return {
-        sectionIndex,
-        section: mobileSections[sectionIndex] ?? null,
-        targetLeft: sectionIndex * pageWidth,
-      };
-    },
-    [mobileSections]
-  );
-
-  const navigateClubSection = useCallback(
-    (
-      section: ClubPageSection,
-      behavior: ScrollBehavior = "smooth"
-    ) => {
-      pendingClubSectionRef.current = section;
-      switchSection(section);
-      scrollClubPagerToSection(section, behavior);
-      router.replace(getClubSectionHref(clubId, section), {
-        scroll: false,
-      });
-    },
-    [clubId, router, scrollClubPagerToSection, switchSection]
-  );
-
-  const switchClubSection = useCallback(
-    (section: ClubPageSection) => {
-      navigateClubSection(section, "smooth");
-    },
-    [navigateClubSection]
-  );
-
-  const settleClubPagerToNearestSection = useCallback(
-    (behavior: ScrollBehavior = "smooth") => {
-      const container = clubPagerRef.current;
-      if (!container) {
-        return;
-      }
-
-      const { section, targetLeft } = getNearestClubSection(container);
-      if (!section) {
-        return;
-      }
-
-      const isAligned = Math.abs(container.scrollLeft - targetLeft) < 4;
-
-      if (section !== activeMobileSection) {
-        if (isAligned) {
-          navigateClubSection(section, "auto");
-          return;
-        }
-
-        navigateClubSection(section, behavior);
-        return;
-      }
-
-      if (!isAligned) {
-        scrollClubPagerToSection(section, behavior);
-      }
-    },
-    [
-      activeMobileSection,
-      getNearestClubSection,
-      navigateClubSection,
-      scrollClubPagerToSection,
-    ]
-  );
-
-  const settleClubPagerFromSwipe = useCallback(
-    (endX: number | null) => {
-      const container = clubPagerRef.current;
-      const startX = clubPagerStartXRef.current;
-      const startIndex = clubPagerStartIndexRef.current;
-
-      clubPagerIsDraggingRef.current = false;
-      clubPagerStartXRef.current = null;
-      clubPagerStartIndexRef.current = null;
-
-      if (!container || startX === null || startIndex === null) {
-        return;
-      }
-
-      const swipeDelta = endX === null ? 0 : startX - endX;
-      const swipeThreshold = Math.max(container.clientWidth * 0.16, 32);
-      let targetIndex = getNearestClubSection(container).sectionIndex;
-
-      if (Math.abs(swipeDelta) >= swipeThreshold) {
-        targetIndex = Math.min(
-          mobileSections.length - 1,
-          Math.max(0, startIndex + (swipeDelta > 0 ? 1 : -1))
-        );
-      }
-
-      const targetSection = mobileSections[targetIndex];
-      if (!targetSection) {
-        return;
-      }
-
-      navigateClubSection(targetSection, "smooth");
-    },
-    [
-      getNearestClubSection,
-      mobileSections,
-      navigateClubSection,
-    ]
-  );
-
-  const handleClubPagerScroll = useCallback(() => {
-    const container = clubPagerRef.current;
-    if (!container) return;
-
-    const programmaticTarget = programmaticClubPagerTargetRef.current;
-    if (programmaticTarget) {
-      const targetIndex = mobileSections.findIndex(
-        (section) => section === programmaticTarget
-      );
-      if (targetIndex >= 0) {
-        const targetLeft = targetIndex * Math.max(container.clientWidth, 1);
-        if (Math.abs(container.scrollLeft - targetLeft) > 4) {
-          return;
-        }
-      }
-
-      clearProgrammaticClubPagerSync();
-    }
-
-    if (clubPagerIsDraggingRef.current) {
-      return;
-    }
-
-    if (clubPagerSnapTimeoutRef.current) {
-      clearTimeout(clubPagerSnapTimeoutRef.current);
-    }
-
-    clubPagerSnapTimeoutRef.current = setTimeout(() => {
-      settleClubPagerToNearestSection("smooth");
-    }, 140);
-  }, [
-    clearProgrammaticClubPagerSync,
-    mobileSections,
-    settleClubPagerToNearestSection,
-  ]);
-
-  const handleClubPagerTouchStart = useCallback(
-    (event: React.TouchEvent<HTMLDivElement>) => {
-      const container = clubPagerRef.current;
-      const touch = event.touches[0];
-      if (!container || !touch) return;
-
-      clearProgrammaticClubPagerSync();
-      if (clubPagerSnapTimeoutRef.current) {
-        clearTimeout(clubPagerSnapTimeoutRef.current);
-        clubPagerSnapTimeoutRef.current = null;
-      }
-
-      clubPagerIsDraggingRef.current = true;
-      clubPagerStartXRef.current = touch.clientX;
-      clubPagerStartIndexRef.current = Math.round(
-        container.scrollLeft / Math.max(container.clientWidth, 1)
-      );
-    },
-    [clearProgrammaticClubPagerSync]
-  );
-
-  const handleClubPagerTouchMove = useCallback(
-    (event: React.TouchEvent<HTMLDivElement>) => {
-      const container = clubPagerRef.current;
-      const touch = event.touches[0];
-      const startX = clubPagerStartXRef.current;
-      const startIndex = clubPagerStartIndexRef.current;
-
-      if (!container || !touch || startX === null || startIndex === null) {
-        return;
-      }
-
-      const deltaX = touch.clientX - startX;
-      const isAtFirstSection = startIndex === 0;
-      const isAtLastSection = startIndex === mobileSections.length - 1;
-      const isPushingPastFirst = isAtFirstSection && deltaX > 0;
-      const isPushingPastLast = isAtLastSection && deltaX < 0;
-
-      if (!isPushingPastFirst && !isPushingPastLast) {
-        return;
-      }
-
-      event.preventDefault();
-
-      const lockedLeft = startIndex * container.clientWidth;
-      if (Math.abs(container.scrollLeft - lockedLeft) > 1) {
-        container.scrollLeft = lockedLeft;
-      }
-    },
-    [mobileSections.length]
-  );
-
-  const handleClubPagerTouchEnd = useCallback(
-    (event: React.TouchEvent<HTMLDivElement>) => {
-      const touch = event.changedTouches[0];
-      settleClubPagerFromSwipe(touch ? touch.clientX : null);
-    },
-    [settleClubPagerFromSwipe]
-  );
-
-  const handleClubPagerTouchCancel = useCallback(() => {
-    settleClubPagerFromSwipe(null);
-  }, [settleClubPagerFromSwipe]);
+  const isTutorialPlayground = club?.isTutorial === true;
 
   useEffect(() => {
-    router.prefetch("/");
-
-    const sessionCodes = new Set([
-      ...activeTournaments.map((tournament) => tournament.code),
-      ...pastTournaments.slice(0, 6).map((tournament) => tournament.code),
-      ...testSessions.slice(0, 6).map((sessionItem) => sessionItem.code),
-    ]);
-
-    sessionCodes.forEach((code) => {
-      router.prefetch(`/session/${code}`);
-    });
-  }, [activeTournaments, pastTournaments, router, testSessions]);
-
-  useEffect(() => {
-    if (status === "loading" || loading || !club || !clubId) {
-      return;
+    if (club && !club.isTutorial && user?.id) {
+      try {
+        localStorage.setItem(`pc:last-club:v1:${user.id}`, clubId);
+      } catch {}
     }
-
-    const requestedSection = getAuthorizedClubSection(
-      requestedTab,
-      sectionTabs
-    );
-    const nextSection = requestedSection ?? "overview";
-    const pendingSection = pendingClubSectionRef.current;
-
-    if (pendingSection) {
-      if (requestedSection === pendingSection) {
-        pendingClubSectionRef.current = null;
-      } else {
-        return;
-      }
-    }
-
-    if (requestedTab && !requestedSection) {
-      router.replace(getClubSectionHref(clubId, "overview"), {
-        scroll: false,
-      });
-    }
-
-    if (activeSection !== nextSection) {
-      switchSection(nextSection);
-    }
-  }, [
-    activeSection,
-    club,
-    clubId,
-    loading,
-    requestedTab,
-    router,
-    sectionTabs,
-    status,
-    switchSection,
-  ]);
-
-  useLayoutEffect(() => {
-    if (status === "loading" || loading || !club) {
-      return;
-    }
-
-    scheduleMeasureActiveClubPanel();
-
-    if (
-      programmaticClubPagerTargetRef.current ||
-      clubPagerIsDraggingRef.current
-    ) {
-      return;
-    }
-
-    scrollClubPagerToSection(activeMobileSection, "auto");
-  }, [
-    activeMobileSection,
-    club,
-    loading,
-    scheduleMeasureActiveClubPanel,
-    scrollClubPagerToSection,
-    status,
-  ]);
-
-  useEffect(() => {
-    const activePanel = clubPanelRefs.current[activeMobileSection];
-    if (!activePanel || typeof ResizeObserver === "undefined") {
-      scheduleMeasureActiveClubPanel();
-      return;
-    }
-
-    const observer = new ResizeObserver(() => {
-      scheduleMeasureActiveClubPanel();
-    });
-    observer.observe(activePanel);
-    scheduleMeasureActiveClubPanel();
-
-    return () => {
-      observer.disconnect();
-    };
-  }, [activeMobileSection, scheduleMeasureActiveClubPanel, mobileSections]);
-
-  useEffect(() => {
-    const handleResize = () => {
-      scrollClubPagerToSection(activeMobileSection, "auto");
-      scheduleMeasureActiveClubPanel();
-    };
-
-    window.addEventListener("resize", handleResize);
-    return () => {
-      window.removeEventListener("resize", handleResize);
-    };
-  }, [
-    activeMobileSection,
-    scheduleMeasureActiveClubPanel,
-    scrollClubPagerToSection,
-  ]);
-
-  useEffect(() => {
-    return () => {
-      if (clubPagerSnapTimeoutRef.current) {
-        clearTimeout(clubPagerSnapTimeoutRef.current);
-      }
-
-      if (clubPanelMeasureFrameRef.current !== null) {
-        cancelAnimationFrame(clubPanelMeasureFrameRef.current);
-      }
-
-      clearProgrammaticClubPagerSync();
-    };
-  }, [clearProgrammaticClubPagerSync]);
-
-  if (status === "loading" || loading) {
+  }, [club, clubId, user?.id]);
+  if (status === "loading" || loading)
     return (
-      <div className="app-page flex items-center justify-center px-6">
-        <div className="app-panel flex flex-col items-center gap-4 px-8 py-8">
-          <div className="h-12 w-12 animate-spin rounded-full border-4 border-blue-600 border-t-transparent"></div>
-          <p className="app-eyebrow">Loading club</p>
-        </div>
-      </div>
+      <PlayShell title="Your club">
+        <div className="loading">Loading your club...</div>
+      </PlayShell>
     );
-  }
-
-  if (!club) {
+  if (!club)
     return (
-      <main className="app-page flex items-center justify-center px-6">
-        <section className="app-panel w-full max-w-lg p-6 text-center sm:p-8">
-          <p className="app-eyebrow">Club unavailable</p>
-          <h1 className="mt-3 text-2xl font-semibold text-gray-950">
-            We couldn&apos;t load this club
-          </h1>
-          <p role="alert" className="mt-2 text-sm leading-6 text-gray-600">
-            {error || "The club may no longer exist or you may not have access."}
-          </p>
-          <div className="mt-6 flex flex-wrap justify-center gap-2">
-            <button
-              type="button"
-              onClick={() => void retryClubLoad()}
-              disabled={retryingClubLoad}
-              className="app-button-primary min-h-11 px-4 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {retryingClubLoad ? "Retrying..." : "Retry"}
-            </button>
-            <Link
-              href="/"
-              className="app-button-secondary min-h-11 px-4 py-2 text-sm"
-            >
-              Back to dashboard
-            </Link>
-          </div>
-        </section>
-      </main>
+      <PlayShell title="Club unavailable">
+        <p className="error" role="alert">
+          {error || "Unable to load this club."}
+        </p>
+        <button className="primary" onClick={() => refreshClubData()}>
+          Try again
+        </button>
+      </PlayShell>
     );
-  }
-
-  const clubName = club.name;
-  const clubRoleLabel = club.viewerIsOwner
-    ? "Owner"
-    : getClubRoleLabel(club.role);
   const hostSetupPanel = canManageClub ? (
     <HostTournamentPanel
       newSessionName={newSessionName}
@@ -776,7 +206,7 @@ export default function ClubPage() {
       selectedPlayerCount={selectedPlayerIds.length}
       guestCount={guestConfigs.length}
       onOpenPlayers={openPlayersModal}
-      onCreateSession={createSessionWithOnboardingRefresh}
+      onCreateSession={createSession}
       creatingSession={creatingSession}
       creationIssues={creationIssues}
     />
@@ -790,266 +220,198 @@ export default function ClubPage() {
         },
       ]
     : [];
-  const overviewPanel = (
-    <ClubOverviewPulsePanel
-      clubId={clubId}
-      clubPulse={clubPulse}
-      activeTournaments={activeTournaments}
-      memberCount={club.membersCount}
-      currentUserId={user?.id}
-      viewerIsQuickAccess={viewerIsQuickAccess}
-      canManageClub={canManageClub}
-      canAdminClub={canAdminClub}
-      onJoinTournament={joinTournament}
-      onOpenTournament={openTournament}
-      onOpenTournaments={() => switchClubSection("tournaments")}
-      onOpenPlayerProfile={openClubPlayerProfile}
-      onHostTournament={() => switchClubSection("host")}
-      onManagePlayers={() =>
-        router.push(`/club/${clubId}/admin?tab=players`)
-      }
-    />
-  );
-  const profilePanel = (
-    <ClubProfilePanel userId={user?.id} clubId={clubId} />
-  );
-  const tournamentsPanel = (
-    <div className="space-y-8">
-      <CurrentTournamentsPanel
-        tournaments={activeTournaments}
-        currentUserId={user?.id}
-        currentClubId={clubId}
-        canManageClub={canAdminClub}
-        viewerIsQuickAccess={viewerIsQuickAccess}
-        onOpenTournament={openTournament}
-        onJoinTournament={joinTournament}
-        onReviewCollabTournament={reviewCollabTournament}
-      />
-      <TestSessionsPanel
-        sessions={testSessions}
-        currentUserId={user?.id}
-        currentClubId={clubId}
-        canReviewCollabs={canAdminClub}
-        onOpenSession={openTournament}
-        onReviewCollabTournament={reviewCollabTournament}
-      />
-      <PastTournamentsPanel
-        tournaments={pastTournaments}
-        canManageClub={canAdminClub && !isTutorialPlayground}
-        latestPastTournamentId={latestPastTournamentId}
-        rollingBackTournamentCode={rollingBackTournamentCode}
-        onOpenTournament={openTournament}
-        onRollbackTournament={requestRollbackTournament}
-      />
-    </div>
-  );
-  const leaderboardPanel = (
-    <ClubLeaderboardPanel
-      title="Leaderboard"
-      players={leaderboard}
-      clubId={clubId}
-      action={
-        <span className="app-chip app-chip-neutral">
-          {leaderboard.length} players
-        </span>
-      }
-      claimState={{
-        currentUser: user,
-        currentUserClaimEligibility,
-        myPendingClaimRequest,
-        pendingClaimByTargetId,
-        requestingClaimFor,
-      }}
-      onRequestClaim={requestClaim}
-    />
-  );
-  const renderClubSection = (section: ClubPageSection) => {
-    switch (section) {
-      case "overview":
-        return overviewPanel;
-      case "host":
-        return hostSetupPanel;
-      case "tournaments":
-        return tournamentsPanel;
-      case "leaderboard":
-        return leaderboardPanel;
-      case "profile":
-        return profilePanel;
-      default:
-        return null;
-    }
-  };
 
   return (
-    <main className="app-page">
-      <div className="app-shell space-y-8">
-        <HeroCard
-          title={clubName}
-          headingAlign="center"
-          actionsPosition="below"
-          meta={
-            <div className="flex w-full items-center justify-between gap-3">
-              <div>
-                <button
-                  type="button"
-                  onClick={handleBack}
-                  className="app-button-secondary px-3 py-2 text-sm"
-                >
-                  <ArrowLeft aria-hidden="true" size={17} />
-                  Back
-                </button>
-              </div>
-              <div className="flex flex-wrap items-center justify-end gap-2">
-                <ClubNotificationsButton
-                  clubId={clubId}
-                  initialUnreadCount={notifications.unreadCount}
-                />
-                {isTutorialPlayground ? (
-                  <span className="app-chip app-chip-accent">
-                    Tutorial playground
-                  </span>
-                ) : null}
-                <div className="flex min-h-11 items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700">
-                  <Shield aria-hidden="true" size={15} className="text-gray-600" />
-                  <span>Your role: {clubRoleLabel}</span>
-                </div>
-                {canAdminClub ? (
-                  <Link
-                    href={`/club/${clubId}/admin`}
-                    className="app-button-secondary px-3 py-2 text-sm"
-                    data-tutorial-target={
-                      isTutorialPlayground
-                        ? "admin-onboarding-club-admin"
-                        : undefined
-                    }
-                  >
-                    <Shield aria-hidden="true" size={15} />
-                    <span>Manage club</span>
-                  </Link>
-                ) : null}
-              </div>
-            </div>
-          }
-        />
-
-        {success ? <FlashMessage tone="success">{success}</FlashMessage> : null}
-
-        {isTutorialPlayground ? (
-          <section aria-label="Practice options" className="flex flex-wrap items-center gap-3 text-sm text-gray-500">
-            <span>Progress saved</span>
-            <div className="flex flex-wrap gap-3">
-              {adminOnboarding.progress?.primarySessionCode ? (
-                <Link className="inline-flex min-h-11 items-center font-medium text-teal-800 hover:underline" href={`/session/${adminOnboarding.progress.primarySessionCode}`}>
-                  Open guided practice
-                </Link>
-              ) : null}
-              <Link className="inline-flex min-h-11 items-center hover:underline" href={`/club/${club.id}/admin?tab=settings`}>Restart options</Link>
-            </div>
-          </section>
-        ) : null}
-
-        {isTutorialPlayground ? (
-          <AdminOnboardingChecklist
-            progress={adminOnboarding.progress}
-            loading={adminOnboarding.loading}
-            onDismiss={adminOnboarding.dismiss}
-            onReopen={adminOnboarding.reopen}
-            onCompleteStep={adminOnboarding.completeStep}
-            activeStepOverride={
-              activeSection === "host" ? hostOnboardingOverride : null
-            }
-          />
-        ) : null}
-
-        <section
-          aria-label="Club section tabs"
-          className="app-panel-soft hidden p-2 xl:block"
-        >
-          <div
-            className="grid gap-2"
-            style={{
-              gridTemplateColumns: `repeat(${sectionTabs.length}, minmax(0, 1fr))`,
-            }}
-          >
-            {sectionTabs.map((tab) => {
-              const isActive = activeSection === tab.key;
-              return (
-                <button
-                  key={tab.key}
-                  type="button"
-                  onClick={() => switchClubSection(tab.key)}
-                  aria-current={isActive ? "page" : undefined}
-                  className={`rounded-lg px-4 py-3 text-left transition ${
-                    isActive
-                      ? "bg-white shadow-sm ring-1 ring-[rgba(15,118,110,0.16)]"
-                      : "bg-transparent text-gray-600 hover:bg-white"
-                  }`}
-                  data-tutorial-target={
-                    isTutorialPlayground && tab.key === "host"
-                      ? "admin-onboarding-host-tab"
-                      : undefined
-                  }
-                >
-                  <p className="text-sm font-semibold text-gray-900">
-                    {tab.label}
-                  </p>
-                  <p className="mt-1 text-xs font-semibold text-gray-500">
-                    {tab.detail({
-                      tournaments:
-                        pastTournaments.length +
-                        activeTournaments.length +
-                        testSessions.length,
-                      leaderboard: leaderboard.length,
-                    })}
-                  </p>
-                </button>
-              );
-            })}
-          </div>
-        </section>
-
-        <div
-          ref={clubPagerRef}
-          onScroll={handleClubPagerScroll}
-          onTouchStart={handleClubPagerTouchStart}
-          onTouchMove={handleClubPagerTouchMove}
-          onTouchEnd={handleClubPagerTouchEnd}
-          onTouchCancel={handleClubPagerTouchCancel}
-          className="app-swipe-track -mx-1 overflow-x-auto overflow-y-hidden overscroll-x-none xl:hidden"
-          style={
-            clubPagerHeight !== null
-              ? { height: `${clubPagerHeight}px` }
-              : undefined
-          }
-        >
-          <div className="flex snap-x snap-mandatory items-start">
-            {mobileSections.map((section) => (
-              <section
-                key={section}
-                ref={(node) => {
-                  clubPanelRefs.current[section] = node;
-                }}
-                data-club-section={section}
-                aria-label={
-                  sectionTabs.find((item) => item.key === section)?.label
-                }
-                aria-hidden={section !== activeMobileSection}
-                inert={section !== activeMobileSection}
-                className="min-w-0 max-w-full basis-full shrink-0 snap-center px-1"
+    <>
+      <PlayShell
+        clubId={clubId}
+        active={
+          section === "profile"
+            ? "profile"
+            : section === "tournaments" || section === "host"
+              ? "sessions"
+              : "club"
+        }
+        header={
+          <>
+            <Link
+              href="/?choose=1"
+              className="club-switcher"
+              aria-label={`Switch club, current ${club.name}`}
+            >
+              <small>YOUR CLUB</small>
+              <strong>
+                {club.name}
+                <CaretDown size={15} />
+              </strong>
+            </Link>
+            <div className="header-actions">
+              <ClubNotificationsButton
+                key={clubId}
+                clubId={clubId}
+                initialUnreadCount={c.notifications.unreadCount}
+              />
+              <Link
+                href="/settings"
+                className="icon-button"
+                aria-label="Account settings"
               >
-                <div className="min-w-0 space-y-8 pb-28">
-                  {renderClubSection(section)}
+                <UserCircle size={28} />
+              </Link>
+            </div>
+          </>
+        }
+      >
+        {success && <FlashMessage tone="success">{success}</FlashMessage>}
+        {section === "overview" && <ClubHome c={c} />}
+        {section === "host" &&
+          (canManageClub ? (
+            <>
+              <h1>Let’s play.</h1>
+              {hostSetupPanel}
+            </>
+          ) : (
+            <p className="error">Only club hosts can create sessions.</p>
+          ))}
+        {section === "profile" && (
+          <ClubProfilePanel userId={user?.id} clubId={clubId} />
+        )}
+        {section === "tournaments" && (
+          <>
+            <div className="section-head">
+              <h1>Sessions</h1>
+              {canManageClub && (
+                <Link href={`/club/${clubId}?tab=host`} className="text-button">
+                  <Plus size={20} />
+                  Host
+                </Link>
+              )}
+            </div>
+            <h3>On now</h3>
+            <div className="link-group">
+              {activeTournaments.map((t) => (
+                <div key={t.id}>
+                  <PlayRow
+                    title={t.name}
+                    sub={`${t.players.length} players · ${getSessionTypeLabel(t.type)}`}
+                    icon={<CalendarBlank size={24} />}
+                    href={`/session/${t.code}`}
+                  />
+                  {!viewerIsQuickAccess &&
+                    !t.players.some((p) => p.user.id === user?.id) && (
+                      <button
+                        className="text-button"
+                        onClick={() => void joinTournament(t.code)}
+                      >
+                        Join session
+                      </button>
+                    )}
+                  {canAdminClub &&
+                    t.clubs?.some(
+                      (link) => link.id === clubId && link.status === "PENDING",
+                    ) && (
+                      <div className="surface">
+                        <p>Invitation to play together</p>
+                        <div className="button-pair">
+                          <button
+                            className="primary"
+                            onClick={() =>
+                              void reviewCollabTournament(t.code, "ACCEPTED")
+                            }
+                          >
+                            Accept
+                          </button>
+                          <button
+                            className="secondary"
+                            onClick={() =>
+                              void reviewCollabTournament(t.code, "REJECTED")
+                            }
+                          >
+                            Decline
+                          </button>
+                        </div>
+                      </div>
+                    )}
                 </div>
-              </section>
-            ))}
-          </div>
-        </div>
-
-        <div className="hidden space-y-8 xl:block">
-          {renderClubSection(activeSection)}
-        </div>
-      </div>
-
+              ))}
+            </div>
+            {activeTournaments.length === 0 && (
+              <p className="quiet">Nothing live right now.</p>
+            )}
+            <h3>Past sessions</h3>
+            <div className="link-group">
+              {pastTournaments.map((t) => (
+                <div key={t.id}>
+                  <PlayRow
+                    title={t.name}
+                    sub={new Date(
+                      t.endedAt ?? t.createdAt,
+                    ).toLocaleDateString()}
+                    icon={<CalendarBlank size={24} />}
+                    href={`/session/${t.code}`}
+                  />
+                  {canAdminClub &&
+                    !isTutorialPlayground &&
+                    t.id === latestPastTournamentId && (
+                      <details className="px-4">
+                        <summary className="quiet">Session options</summary>
+                        <button
+                          className="text-button"
+                          onClick={() => requestRollbackTournament(t)}
+                        >
+                          Rollback session
+                        </button>
+                      </details>
+                    )}
+                </div>
+              ))}
+            </div>
+            {pastTournaments.length === 0 && (
+              <p className="quiet">Completed sessions will appear here.</p>
+            )}
+            {testSessions.length > 0 && (
+              <details>
+                <summary>Practice sessions ({testSessions.length})</summary>
+                {testSessions.map((t) => (
+                  <PlayRow
+                    key={t.id}
+                    title={t.name}
+                    href={`/session/${t.code}`}
+                  />
+                ))}
+              </details>
+            )}
+          </>
+        )}
+        {section === "leaderboard" && (
+          <>
+            <h1>Club standings</h1>
+            <ClubLeaderboardPanel
+              title=""
+              players={leaderboard}
+              clubId={clubId}
+              claimState={{
+                currentUser: user,
+                currentUserClaimEligibility,
+                myPendingClaimRequest,
+                pendingClaimByTargetId,
+                requestingClaimFor,
+              }}
+              onRequestClaim={requestClaim}
+            />
+          </>
+        )}
+        {section === "insights" && (
+          <>
+            <h1>Club overview</h1>
+            <ClubInsights
+              pulse={clubPulse}
+              clubId={clubId}
+              readOnly={viewerIsQuickAccess}
+            />
+          </>
+        )}
+      </PlayShell>
       <ClubPlayersModal
         open={showPlayersModal}
         selectedPlayerIds={selectedPlayerIds}
@@ -1141,13 +503,6 @@ export default function ClubPage() {
           </div>
         </div>
       ) : null}
-
-      <ClubBottomTabs
-        activeTab={activeSection}
-        clubId={clubId}
-        sections={sectionTabs}
-        onSelect={switchClubSection}
-      />
-    </main>
+    </>
   );
 }

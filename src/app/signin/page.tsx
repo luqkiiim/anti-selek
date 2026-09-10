@@ -1,5 +1,7 @@
 "use client";
 
+import Image from "next/image";
+import { PlayShell } from "@/components/play/PlayShell";
 import Link from "next/link";
 import { Suspense, useState } from "react";
 import { getSession, signIn } from "next-auth/react";
@@ -103,19 +105,10 @@ function SigninForm() {
   };
 
   return (
-    <main className="app-page flex items-center justify-center px-4 py-10">
-      <div className="w-full max-w-5xl">
-        <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
-          <section className="app-panel order-1 px-6 py-8 sm:px-8 lg:order-2">
-            <p className="app-eyebrow">Account access</p>
-            <h1 className="mt-3 text-2xl font-semibold text-gray-900">
-              Welcome to Anti-Selek
-            </h1>
-            <p className="mt-2 text-sm text-gray-600">
-              Sign in to play and manage clubs, or view a club using the player
-              profile your host already added. New here? Create an account below.
-            </p>
-
+    <PlayShell header={<span className="brand">Anti-Selek<span>.</span></span>}>
+      <div className="play-auth">
+          <section>
+            <div className="greeting"><div><span className="eyebrow">MORE GOOD GAMES</span><h1>Your next<br/>rally starts here.</h1></div><Image src="/play/spark.png" alt="" width={110} height={110} priority/></div>
             <div
               className="mt-6 grid grid-cols-2 gap-2 rounded-2xl border border-gray-200 bg-gray-50 p-1"
               role="group"
@@ -291,42 +284,8 @@ function SigninForm() {
             </p>
           </section>
 
-          <section className="app-panel order-2 relative overflow-hidden px-6 py-8 sm:px-8 lg:order-1">
-            <div className="relative">
-              <p className="app-eyebrow">Court control</p>
-              <h2 className="mt-3 app-title text-gray-900">
-                Your club, courts, and standings in one place.
-              </h2>
-              <p className="mt-4 max-w-xl text-sm text-gray-600 sm:text-base">
-                Return to a live tournament, check results, or prepare the next
-                club night from any device.
-              </p>
-
-              <div className="mt-8 grid gap-3 sm:grid-cols-3">
-                <div className="app-panel-muted p-4">
-                  <p className="text-xs font-semibold text-gray-600">Resume quickly</p>
-                  <p className="mt-2 text-sm font-semibold text-gray-900">
-                    Pick up an active tournament where you left off.
-                  </p>
-                </div>
-                <div className="app-panel-muted p-4">
-                  <p className="text-xs font-semibold text-gray-600">Clear standings</p>
-                  <p className="mt-2 text-sm font-semibold text-gray-900">
-                    Follow points, ratings, and history.
-                  </p>
-                </div>
-                <div className="app-panel-muted p-4">
-                  <p className="text-xs font-semibold text-gray-600">Court-side ready</p>
-                  <p className="mt-2 text-sm font-semibold text-gray-900">
-                    Comfortable controls on phones and tablets.
-                  </p>
-                </div>
-              </div>
-            </div>
-          </section>
-        </div>
       </div>
-    </main>
+    </PlayShell>
   );
 }
 

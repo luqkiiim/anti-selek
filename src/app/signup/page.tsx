@@ -1,5 +1,6 @@
 "use client";
 
+import {PlayShell} from "@/components/play/PlayShell";
 import Link from "next/link";
 import { Suspense, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -148,19 +149,8 @@ function SignupForm() {
   };
 
   return (
-    <main className="app-page flex items-center justify-center px-4 py-10">
-      <div className="w-full max-w-5xl">
-        <div className="grid gap-6 lg:grid-cols-[1.05fr_0.95fr]">
-          <section className="app-panel order-1 px-6 py-8 sm:px-8 lg:order-2">
-            <p className="app-eyebrow">Create account</p>
-            <h1 className="mt-3 text-2xl font-semibold text-gray-900">
-              Get full player access
-            </h1>
-            <p className="mt-2 text-sm text-gray-600">
-              Use the name your club knows so it is easy to connect your
-              account to your results.
-            </p>
-
+    <PlayShell title="Join Anti-Selek" backHref="/signin"><div className="play-auth"><section>
+      <span className="eyebrow">YOUR NEXT CHAPTER</span><h1>Let’s get you playing.</h1><p className="quiet">Use the name your club knows.</p>
             {error ? (
               <div ref={genericErrorRef} tabIndex={-1} className="mt-6 outline-none">
                 <FlashMessage id="signup-error" tone="error">
@@ -312,42 +302,7 @@ function SignupForm() {
             </p>
           </section>
 
-          <section className="app-panel order-2 relative overflow-hidden px-6 py-8 sm:px-8 lg:order-1">
-            <div className="relative">
-              <p className="app-eyebrow">Your badminton profile</p>
-              <h2 className="mt-3 app-title text-gray-900">
-                Keep your club activity connected.
-              </h2>
-              <p className="mt-4 max-w-xl text-sm text-gray-600 sm:text-base">
-                Your account gives you full access to clubs, tournament actions,
-                ratings, and match history.
-              </p>
-
-              <div className="mt-8 space-y-3">
-                <div className="app-panel-muted p-4">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-600">
-                    Already listed in a club?
-                  </p>
-                  <p className="mt-2 text-sm font-semibold text-gray-900">
-                    After signing up, join the club and request to connect your
-                    account to the existing player profile on its leaderboard.
-                  </p>
-                </div>
-                <div className="app-panel-muted p-4">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-600">
-                    Your history stays together
-                  </p>
-                  <p className="mt-2 text-sm font-semibold text-gray-900">
-                    Once a club admin approves the connection, its existing
-                    ratings and tournament results remain with you.
-                  </p>
-                </div>
-              </div>
-            </div>
-          </section>
-        </div>
-      </div>
-    </main>
+      </div></PlayShell>
   );
 }
 

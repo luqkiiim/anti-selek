@@ -6,11 +6,19 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   signOut: vi.fn(),
+  replace: vi.fn(),
+  useSearchParams: vi.fn(),
   useDashboardPage: vi.fn(),
 }));
 
 vi.mock("next-auth/react", () => ({
   signOut: mocks.signOut,
+  useSession: () => ({ data: { user: { id: "viewer-1" } } }),
+}));
+
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ replace: mocks.replace }),
+  useSearchParams: mocks.useSearchParams,
 }));
 
 vi.mock("next/link", () => ({
@@ -49,6 +57,8 @@ describe("dashboard home", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    localStorage.clear();
+    mocks.useSearchParams.mockReturnValue(new URLSearchParams());
     (
       globalThis as typeof globalThis & {
         IS_REACT_ACT_ENVIRONMENT?: boolean;
@@ -103,10 +113,10 @@ describe("dashboard home", () => {
     });
 
     const settingsLink = Array.from(container.querySelectorAll("a")).find(
-      (node) => node.getAttribute("href") === "/settings"
+      (node) => node.getAttribute("href") === "/settings",
     );
 
-    expect(settingsLink?.textContent).toContain("Settings");
+    expect(settingsLink?.getAttribute("aria-label")).toBe("Account settings");
   });
 
   it("keeps Quick access limitations visible on the dashboard", async () => {
@@ -121,5 +131,44 @@ describe("dashboard home", () => {
 
     expect(container.textContent).toContain("Quick access is view-only");
     expect(container.textContent).toContain("cannot join clubs, submit scores");
+  });
+  it("opens the only club unless the chooser is explicitly requested", async () => {
+    dashboardState.clubs = [
+      { id: "club-1", name: "First club", role: "MEMBER", membersCount: 4 },
+    ];
+    await act(async () => {
+      root.render(<Home />);
+    });
+    expect(mocks.replace).toHaveBeenCalledWith("/club/club-1");
+    mocks.replace.mockClear();
+    mocks.useSearchParams.mockReturnValue(new URLSearchParams("choose=1"));
+    await act(async () => {
+      root.render(<Home />);
+    });
+    expect(mocks.replace).not.toHaveBeenCalled();
+  });
+  it("uses only the current account's saved club and verifies membership", async () => {
+    dashboardState.clubs = [
+      { id: "club-1", name: "One", role: "MEMBER", membersCount: 4 },
+      { id: "club-2", name: "Two", role: "MEMBER", membersCount: 4 },
+    ];
+    localStorage.setItem("pc:last-club:v1:other-user", "club-1");
+    await act(async () => {
+      root.render(<Home />);
+    });
+    expect(mocks.replace).not.toHaveBeenCalled();
+    localStorage.setItem("pc:last-club:v1:viewer-1", "club-2");
+    mocks.useSearchParams.mockReturnValue(new URLSearchParams());
+    await act(async () => {
+      root.render(<Home />);
+    });
+    expect(mocks.replace).toHaveBeenCalledWith("/club/club-2");
+    mocks.replace.mockClear();
+    localStorage.setItem("pc:last-club:v1:viewer-1", "removed-club");
+    mocks.useSearchParams.mockReturnValue(new URLSearchParams());
+    await act(async () => {
+      root.render(<Home />);
+    });
+    expect(mocks.replace).not.toHaveBeenCalled();
   });
 });

@@ -225,22 +225,14 @@ export function HostTournamentPanel({
     : `${participantCount} added${guestCount > 0 ? ` · ${guestCountLabel}` : ""}`;
 
   return (
-    <section className="app-panel min-w-0 max-w-full overflow-hidden p-3 sm:p-4">
-      <div className="flex items-center gap-2">
-        <div className="flex min-w-0 items-center gap-2">
-          <span className="app-chip app-chip-accent">Host</span>
-          <span className="truncate text-sm font-semibold text-gray-900">
-            New tournament
-          </span>
-        </div>
-      </div>
-
+    <section className="play-setup min-w-0 max-w-full">
       <div className="mt-4 grid gap-5">
         <div className="grid gap-3">
           <label className="block space-y-1.5 text-sm font-medium text-gray-900">
-            <span>Name</span>
+            <span>Session name</span>
             <input
               type="text"
+              placeholder="e.g. Friday evening"
               value={newSessionName}
               onChange={(event) => onNewSessionNameChange(event.target.value)}
               className="field"

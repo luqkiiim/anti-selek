@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ComponentProps } from "react";
 import { Avatar } from "@/components/ui/Avatar";
 import { PlayerPickerSheet } from "@/components/ui/PlayerPickerSheet";
 import { SearchField } from "@/components/ui/SearchField";
@@ -12,6 +12,7 @@ type PlayerFilter = "all" | "active" | "paused";
 
 interface SessionPlayersModalProps {
   open: boolean;
+  embedded?: boolean;
   players: Player[];
   currentUserId: string;
   canEditPreferences: boolean;
@@ -38,6 +39,7 @@ function getPlayerFilterCounts(players: Player[]) {
 
 export function SessionPlayersModal({
   open,
+  embedded=false,
   players,
   currentUserId,
   canEditPreferences,
@@ -83,10 +85,11 @@ export function SessionPlayersModal({
       });
   }, [filter, players, search]);
 
+  const Frame=embedded?InlinePlayers:PlayerPickerSheet;
   if (!open) return null;
 
   return (
-    <PlayerPickerSheet
+    <Frame
       open={open}
       title="Players"
       subtitle="Roster and preferences."
@@ -143,7 +146,7 @@ export function SessionPlayersModal({
             const isUpdatingPause = togglingPausePlayerId === player.userId;
             const hasSkipNext = Boolean(player.skipNextMatchAt);
             const isUpdatingSkipNext = skippingNextPlayerId === player.userId;
-            const canSelfSkip = player.userId === currentUserId && !player.isPaused;
+            const canSelfSkip = canEditPreferences && !canManagePlayers && player.userId === currentUserId && !player.isPaused;
             const canSeeSkipNextState =
               hasSkipNext && (canSelfSkip || canManagePlayers);
             const poolLabel = getPlayerGroupLabel(player.pool);
@@ -165,7 +168,7 @@ export function SessionPlayersModal({
                   />
                   <div className="min-w-0 space-y-1">
                   <div className="flex min-w-0 flex-wrap items-center gap-1.5">
-                    <p className="truncate text-sm font-semibold text-gray-900">
+                    <p className="break-words text-sm font-semibold text-gray-900">
                       {player.user.name}
                     </p>
                     {player.userId === currentUserId ? (
@@ -251,6 +254,8 @@ export function SessionPlayersModal({
           })}
         </div>
       )}
-    </PlayerPickerSheet>
+    </Frame>
   );
 }
+
+function InlinePlayers({toolbar,children}:ComponentProps<typeof PlayerPickerSheet>){return <section className="inline-players"><div className="mb-5">{toolbar}</div>{children}</section>;}

@@ -11,7 +11,6 @@ import {
 import { useSession } from "next-auth/react";
 import { useParams, useRouter } from "next/navigation";
 import {
-  ArrowLeft,
   ClipboardList,
   Grid3X3,
   Medal,
@@ -21,7 +20,14 @@ import {
 import { getErrorMessage, safeJson } from "@/lib/http";
 import { getCurrentAppPath, withCallbackUrl } from "@/lib/authCallback";
 import { FlashMessage } from "@/components/ui/chrome";
-import { MobileBottomTabs } from "@/components/ui/MobileBottomTabs";
+import { PlayShell } from "@/components/play/PlayShell";
+import {
+  GearSix,
+  UsersThree,
+  SquaresFour,
+  Trophy as PlayTrophy,
+  ArrowLeft as PlayBack,
+} from "@phosphor-icons/react";
 import { InterclubScoreboard } from "@/components/session/InterclubScoreboard";
 import { LiveCourtsPanel } from "@/components/session/LiveCourtsPanel";
 import { LiveStandingsTable } from "@/components/session/LiveStandingsTable";
@@ -34,7 +40,6 @@ import { SessionPreferenceEditorPortal } from "@/components/session/SessionPrefe
 import { SessionGuestRenameModal } from "@/components/session/SessionGuestRenameModal";
 import { SessionRosterModal } from "@/components/session/SessionRosterModal";
 import { SessionSettingsModal } from "@/components/session/SessionSettingsModal";
-import { syncSessionPagerAccessibility } from "@/components/session/sessionPagerAccessibility";
 import { AdminOnboardingChecklist } from "@/components/onboarding/AdminOnboardingChecklist";
 import { useAdminOnboardingProgress } from "@/components/onboarding/useAdminOnboardingProgress";
 import type { CurrentUser } from "@/components/session/sessionTypes";
@@ -111,15 +116,7 @@ export default function SessionPage() {
   const params = useParams();
   const code = params?.code as string;
 
-  const mobilePagerRef = useRef<HTMLDivElement | null>(null);
   const previousSessionStatusRef = useRef<string | null>(null);
-  const pagerSnapTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const programmaticPagerTargetRef = useRef<SessionMobileSection | null>(null);
-  const programmaticPagerReleaseTimeoutRef =
-    useRef<ReturnType<typeof setTimeout> | null>(null);
-  const pagerTouchStartXRef = useRef<number | null>(null);
-  const pagerTouchStartIndexRef = useRef<number | null>(null);
-  const pagerIsDraggingRef = useRef(false);
   const [user, setUser] = useState<CurrentUser | null>(null);
   const [error, setError] = useState("");
   const [endingSession, setEndingSession] = useState(false);
@@ -143,8 +140,9 @@ export default function SessionPage() {
     useState<SessionMatchmakingStyle>(SessionMatchmakingStyle.BALANCED);
   const [balanceMetricDraft, setBalanceMetricDraft] =
     useState<SessionBalanceMetric>(SessionBalanceMetric.SESSION_POINTS);
-  const [pairingModeDraft, setPairingModeDraft] =
-    useState<SessionPairingMode>(SessionPairingMode.OPEN);
+  const [pairingModeDraft, setPairingModeDraft] = useState<SessionPairingMode>(
+    SessionPairingMode.OPEN,
+  );
   const [poolsEnabledDraft, setPoolsEnabledDraft] = useState(false);
   const [crossoverFrequencyDraft, setCrossoverFrequencyDraft] =
     useState<SessionCrossoverFrequency>(SessionCrossoverFrequency.BALANCED);
@@ -154,7 +152,7 @@ export default function SessionPage() {
   >({});
   const [savingSettings, setSavingSettings] = useState(false);
   const [mobileSection, setMobileSection] =
-    useState<SessionMobileSection>("session");
+    useState<SessionMobileSection>("courts");
   const [celebrationRunId, setCelebrationRunId] = useState(0);
   const [sharingResults, setSharingResults] = useState(false);
 
@@ -266,12 +264,14 @@ export default function SessionPage() {
         .filter((club) => club.status === "ACCEPTED")
         .slice(0, 2)
         .map((club) => ({ id: club.id, name: club.name })),
-    [sessionData?.clubs]
+    [sessionData?.clubs],
   );
 
   useEffect(() => {
     if (status === "unauthenticated") {
-      router.replace(withCallbackUrl("/signin", getCurrentAppPath(window.location)));
+      router.replace(
+        withCallbackUrl("/signin", getCurrentAppPath(window.location)),
+      );
     }
   }, [status, router]);
 
@@ -283,7 +283,9 @@ export default function SessionPage() {
 
   const startSession = useCallback(async () => {
     try {
-      const res = await fetch(`/api/sessions/${code}/start`, { method: "POST" });
+      const res = await fetch(`/api/sessions/${code}/start`, {
+        method: "POST",
+      });
       if (res.ok) {
         const data = await safeJson<SessionSnapshotResponse>(res);
         patchSessionData((current) => mergeSessionSnapshot(current, data));
@@ -350,7 +352,9 @@ export default function SessionPage() {
     setError("");
 
     try {
-      const res = await fetch(`/api/sessions/${code}/reset`, { method: "POST" });
+      const res = await fetch(`/api/sessions/${code}/reset`, {
+        method: "POST",
+      });
       const data = await safeJson<SessionSnapshotResponse>(res);
       if (!res.ok) {
         setError(getErrorMessage(data, "Failed to reset tournament"));
@@ -376,8 +380,8 @@ export default function SessionPage() {
         (match) =>
           match.status === MatchStatus.COMPLETED &&
           typeof match.team1Score === "number" &&
-          typeof match.team2Score === "number"
-      )
+          typeof match.team2Score === "number",
+      ),
     );
     setShowCreateRealSessionConfirm(true);
   }, [sessionData?.matches]);
@@ -446,9 +450,7 @@ export default function SessionPage() {
       }
 
       setShowDeleteTestConfirm(false);
-      router.push(
-        sessionData?.clubId ? `/club/${sessionData.clubId}` : "/"
-      );
+      router.push(sessionData?.clubId ? `/club/${sessionData.clubId}` : "/");
     } catch (err) {
       console.error(err);
       setError("Failed to delete tournament");
@@ -467,7 +469,9 @@ export default function SessionPage() {
   }, [router, sessionData?.clubId]);
 
   const isAdmin =
-    !!sessionData?.viewerCanManage || !!user?.isAdmin || !!session?.user?.isAdmin;
+    !!sessionData?.viewerCanManage ||
+    !!user?.isAdmin ||
+    !!session?.user?.isAdmin;
   const canUseAdminSessionControls =
     !!sessionData?.viewerCanUseAdminSessionControls ||
     !!user?.isAdmin ||
@@ -487,23 +491,22 @@ export default function SessionPage() {
   const canOpenSettings =
     isAdmin &&
     (sessionData?.status !== SessionStatus.COMPLETED || sessionData?.isTest);
-  const isPlayerPickerOpen = showPlayersModal || showRosterModal;
   const adminOnboarding = useAdminOnboardingProgress(
     status === "authenticated" &&
       isAdmin &&
       isTutorialPlayground &&
       !!sessionData &&
-      sessionData.status !== SessionStatus.COMPLETED
+      sessionData.status !== SessionStatus.COMPLETED,
   );
   const startSessionWithOnboardingRefresh = useCallback(async () => {
     await startSession();
     void adminOnboarding.refresh();
   }, [adminOnboarding, startSession]);
   const activeCompetitiveCount = (sessionData?.players ?? []).filter(
-    (player) => !player.isPaused && player.pool === SessionPool.A
+    (player) => !player.isPaused && player.pool === SessionPool.A,
   ).length;
   const activeSocialCount = (sessionData?.players ?? []).filter(
-    (player) => !player.isPaused && player.pool === SessionPool.B
+    (player) => !player.isPaused && player.pool === SessionPool.B,
   ).length;
   const startBlockedReason =
     sessionData?.poolsEnabled &&
@@ -515,28 +518,31 @@ export default function SessionPage() {
       await courtActions.createMatchesForCourts(...args);
       void adminOnboarding.refresh();
     },
-    [adminOnboarding, courtActions]
+    [adminOnboarding, courtActions],
   );
   const createMatchForCourtWithOnboardingRefresh = useCallback(
     async (...args: Parameters<typeof courtActions.createMatchForCourt>) => {
       await courtActions.createMatchForCourt(...args);
       void adminOnboarding.refresh();
     },
-    [adminOnboarding, courtActions]
+    [adminOnboarding, courtActions],
   );
   const submitScoreWithOnboardingRefresh = useCallback(
     async (...args: Parameters<typeof scoreActions.submitScore>) => {
       await scoreActions.submitScore(...args);
       void adminOnboarding.refresh();
     },
-    [adminOnboarding, scoreActions]
+    [adminOnboarding, scoreActions],
   );
   const endSessionWithOnboardingRefresh = useCallback(async () => {
     await endSession();
     void adminOnboarding.refresh();
   }, [adminOnboarding, endSession]);
   useEffect(() => {
-    if (isTutorialPlayground && sessionData?.status !== SessionStatus.COMPLETED) {
+    if (
+      isTutorialPlayground &&
+      sessionData?.status !== SessionStatus.COMPLETED
+    ) {
       adminOnboarding.completeStep("session-workflow");
     }
   }, [adminOnboarding, isTutorialPlayground, sessionData?.status]);
@@ -627,7 +633,7 @@ export default function SessionPage() {
         setError(
           err instanceof Error && err.message.trim().length > 0
             ? err.message
-            : "Failed to share standings"
+            : "Failed to share standings",
         );
       }
     } finally {
@@ -639,7 +645,7 @@ export default function SessionPage() {
       sessionView?.isCompletedSession
         ? COMPLETED_MOBILE_SECTIONS
         : LIVE_MOBILE_SECTIONS,
-    [sessionView?.isCompletedSession]
+    [sessionView?.isCompletedSession],
   );
   const preferredMobileSection = useMemo<SessionMobileSection>(() => {
     if (!sessionData || !sessionView) {
@@ -653,42 +659,11 @@ export default function SessionPage() {
     return sessionData.status === SessionStatus.ACTIVE ? "courts" : "session";
   }, [sessionData, sessionView]);
   const activeMobileSection = mobileSections.some(
-    (section) => section.id === mobileSection
+    (section) => section.id === mobileSection,
   )
     ? mobileSection
-    : mobileSections[0]?.id ?? "session";
+    : (mobileSections[0]?.id ?? "session");
 
-  useEffect(() => {
-    const pager = mobilePagerRef.current;
-    if (!pager || typeof window.matchMedia !== "function") {
-      return;
-    }
-
-    const wideLayout = window.matchMedia("(min-width: 80rem)");
-    const syncPanelAccessibility = () => {
-      const activeTab = document.querySelector<HTMLElement>(
-        'nav[aria-label="Tournament navigation"] button[aria-current="page"]'
-      );
-      syncSessionPagerAccessibility({
-        pager,
-        activeSection: activeMobileSection,
-        isWideLayout: wideLayout.matches,
-        focusFallback: activeTab,
-      });
-    };
-
-    syncPanelAccessibility();
-    wideLayout.addEventListener("change", syncPanelAccessibility);
-
-    return () => {
-      wideLayout.removeEventListener("change", syncPanelAccessibility);
-      syncSessionPagerAccessibility({
-        pager,
-        activeSection: activeMobileSection,
-        isWideLayout: true,
-      });
-    };
-  }, [activeMobileSection]);
   const currentGameplaySettings = useMemo(
     () =>
       sessionData
@@ -699,7 +674,7 @@ export default function SessionPage() {
             balanceMetric: SessionBalanceMetric.SESSION_POINTS,
             pairingMode: SessionPairingMode.OPEN,
           },
-    [sessionData]
+    [sessionData],
   );
   const hasCourtLabelChanges = useMemo(() => {
     if (!sessionData) {
@@ -709,7 +684,7 @@ export default function SessionPage() {
     return sessionData.courts.some(
       (court) =>
         (courtLabelDrafts[court.courtNumber] ?? "").trim() !==
-        (court.label ?? "").trim()
+        (court.label ?? "").trim(),
     );
   }, [courtLabelDrafts, sessionData]);
   const hasGameplayChanges = useMemo(() => {
@@ -760,9 +735,9 @@ export default function SessionPage() {
         (match) =>
           match.status === MatchStatus.COMPLETED &&
           typeof match.team1Score === "number" &&
-          typeof match.team2Score === "number"
+          typeof match.team2Score === "number",
       ).length,
-    [sessionData?.matches]
+    [sessionData?.matches],
   );
 
   const openSettingsModal = useCallback(() => {
@@ -784,16 +759,25 @@ export default function SessionPage() {
         sessionData.courts.map((court) => [
           court.courtNumber,
           court.label ?? "",
-        ])
-      )
+        ]),
+      ),
     );
     setShowSettingsModal(true);
   }, [canOpenSettings, currentGameplaySettings, sessionData]);
 
   useEffect(() => {
     const openLinkedSettings = () => {
-      if (window.location.hash !== "#settings" || !sessionData || !canOpenSettings) return;
-      window.history.replaceState(window.history.state, "", window.location.pathname + window.location.search);
+      if (
+        window.location.hash !== "#settings" ||
+        !sessionData ||
+        !canOpenSettings
+      )
+        return;
+      window.history.replaceState(
+        window.history.state,
+        "",
+        window.location.pathname + window.location.search,
+      );
       setMobileSection("session");
       openSettingsModal();
     };
@@ -819,7 +803,7 @@ export default function SessionPage() {
     (userId: string, currentName: string) => {
       requestRenameGuest(userId, currentName);
     },
-    [requestRenameGuest]
+    [requestRenameGuest],
   );
 
   const handleCourtLabelChange = useCallback(
@@ -829,7 +813,7 @@ export default function SessionPage() {
         [courtNumber]: value,
       }));
     },
-    []
+    [],
   );
 
   const saveSessionSettings = useCallback(async () => {
@@ -851,13 +835,10 @@ export default function SessionPage() {
         body: JSON.stringify({
           autoQueueEnabled: autoQueueDraft,
           respectPlayerRest: respectPlayerRestDraft,
-          courtLabels: Array.from(
-            { length: labelCourtCount },
-            (_, index) => ({
-              courtNumber: index + 1,
-              label: courtLabelDrafts[index + 1] ?? "",
-            })
-          ),
+          courtLabels: Array.from({ length: labelCourtCount }, (_, index) => ({
+            courtNumber: index + 1,
+            label: courtLabelDrafts[index + 1] ?? "",
+          })),
           ...(hasGameplayChanges
             ? {
                 gameplaySettings: {
@@ -883,8 +864,8 @@ export default function SessionPage() {
       patchSessionData((current) =>
         mergeSessionSnapshot(
           applyCourtLabelUpdates(current, courtLabels ?? []),
-          snapshot
-        )
+          snapshot,
+        ),
       );
 
       setShowSettingsModal(false);
@@ -913,214 +894,18 @@ export default function SessionPage() {
     sessionData,
   ]);
 
-  const clearProgrammaticPagerSync = useCallback(() => {
-    if (programmaticPagerReleaseTimeoutRef.current) {
-      clearTimeout(programmaticPagerReleaseTimeoutRef.current);
-      programmaticPagerReleaseTimeoutRef.current = null;
-    }
-
-    programmaticPagerTargetRef.current = null;
+  const updateMobileSection = useCallback((sectionId: SessionMobileSection) => {
+    setMobileSection(sectionId);
   }, []);
-
-  const markProgrammaticPagerSync = useCallback(
-    (sectionId: SessionMobileSection, behavior: ScrollBehavior) => {
-      if (programmaticPagerReleaseTimeoutRef.current) {
-        clearTimeout(programmaticPagerReleaseTimeoutRef.current);
-      }
-
-      programmaticPagerTargetRef.current = sectionId;
-      programmaticPagerReleaseTimeoutRef.current = setTimeout(() => {
-        if (programmaticPagerTargetRef.current === sectionId) {
-          programmaticPagerTargetRef.current = null;
-        }
-
-        programmaticPagerReleaseTimeoutRef.current = null;
-      }, behavior === "smooth" ? 280 : 80);
-    },
-    []
-  );
-
-  const scrollMobilePagerToSection = useCallback(
-    (sectionId: SessionMobileSection, behavior: ScrollBehavior = "auto") => {
-      const container = mobilePagerRef.current;
-      if (!container) return;
-
-      if (pagerSnapTimeoutRef.current) {
-        clearTimeout(pagerSnapTimeoutRef.current);
-        pagerSnapTimeoutRef.current = null;
-      }
-
-      const sectionIndex = mobileSections.findIndex(
-        (section) => section.id === sectionId
-      );
-      if (sectionIndex < 0) return;
-
-      if (container.clientWidth <= 0) {
-        requestAnimationFrame(() => {
-          const retryContainer = mobilePagerRef.current;
-          if (!retryContainer || retryContainer.clientWidth <= 0) return;
-
-          const retryIndex = mobileSections.findIndex(
-            (section) => section.id === sectionId
-          );
-          if (retryIndex < 0) return;
-
-          const retryLeft = retryIndex * retryContainer.clientWidth;
-          if (Math.abs(retryContainer.scrollLeft - retryLeft) < 4) {
-            clearProgrammaticPagerSync();
-            return;
-          }
-
-          markProgrammaticPagerSync(sectionId, behavior);
-          if (typeof retryContainer.scrollTo === "function") {
-            retryContainer.scrollTo({
-              left: retryLeft,
-              behavior,
-            });
-            return;
-          }
-
-          retryContainer.scrollLeft = retryLeft;
-        });
-        return;
-      }
-
-      const nextLeft = sectionIndex * container.clientWidth;
-      if (Math.abs(container.scrollLeft - nextLeft) < 4) {
-        clearProgrammaticPagerSync();
-        return;
-      }
-
-      markProgrammaticPagerSync(sectionId, behavior);
-      if (typeof container.scrollTo === "function") {
-        container.scrollTo({
-          left: nextLeft,
-          behavior,
-        });
-        return;
-      }
-
-      container.scrollLeft = nextLeft;
-    },
-    [clearProgrammaticPagerSync, markProgrammaticPagerSync, mobileSections]
-  );
-
-  const getNearestMobileSection = useCallback(
-    (container: HTMLDivElement) => {
-      const pageWidth = Math.max(container.clientWidth, 1);
-      const sectionIndex = Math.min(
-        mobileSections.length - 1,
-        Math.max(0, Math.round(container.scrollLeft / pageWidth))
-      );
-
-      return {
-        sectionIndex,
-        sectionId: mobileSections[sectionIndex]?.id ?? null,
-        targetLeft: sectionIndex * pageWidth,
-      };
-    },
-    [mobileSections]
-  );
-
-  const updateMobileSection = useCallback(
-    (sectionId: SessionMobileSection, behavior: ScrollBehavior = "smooth") => {
-      setMobileSection(sectionId);
-      scrollMobilePagerToSection(sectionId, behavior);
-    },
-    [scrollMobilePagerToSection]
-  );
-
   useEffect(() => {
-    if (
+    if (activeAdminOnboardingStep?.id === "score-match")
+      setMobileSection("courts");
+    else if (
       activeAdminOnboardingStep?.id === "session-workflow" ||
       activeAdminOnboardingStep?.id === "end-session"
-    ) {
-      updateMobileSection("session", "auto");
-      return;
-    }
-
-    if (activeAdminOnboardingStep?.id === "score-match") {
-      updateMobileSection("courts", "auto");
-    }
-  }, [activeAdminOnboardingStep?.id, updateMobileSection]);
-
-  const settleMobilePagerToNearestSection = useCallback(
-    (behavior: ScrollBehavior = "smooth") => {
-      const container = mobilePagerRef.current;
-      if (!container) {
-        return;
-      }
-
-      const { sectionId, targetLeft } = getNearestMobileSection(container);
-      if (!sectionId) {
-        return;
-      }
-
-      const isAligned = Math.abs(container.scrollLeft - targetLeft) < 4;
-
-      if (sectionId !== activeMobileSection) {
-        if (isAligned) {
-          setMobileSection(sectionId);
-          return;
-        }
-
-        updateMobileSection(sectionId, behavior);
-        return;
-      }
-
-      if (!isAligned) {
-        scrollMobilePagerToSection(sectionId, behavior);
-      }
-    },
-    [
-      activeMobileSection,
-      getNearestMobileSection,
-      scrollMobilePagerToSection,
-      updateMobileSection,
-    ]
-  );
-
-  const settleMobilePagerFromSwipe = useCallback(
-    (endX: number | null) => {
-      const container = mobilePagerRef.current;
-      const startX = pagerTouchStartXRef.current;
-      const startIndex = pagerTouchStartIndexRef.current;
-
-      pagerIsDraggingRef.current = false;
-      pagerTouchStartXRef.current = null;
-      pagerTouchStartIndexRef.current = null;
-
-      if (!container || startX === null || startIndex === null) {
-        return;
-      }
-
-      const swipeDelta = endX === null ? 0 : startX - endX;
-      const swipeThreshold = Math.max(container.clientWidth * 0.16, 32);
-      let targetIndex = getNearestMobileSection(container).sectionIndex;
-
-      if (Math.abs(swipeDelta) >= swipeThreshold) {
-        targetIndex = Math.min(
-          mobileSections.length - 1,
-          Math.max(0, startIndex + (swipeDelta > 0 ? 1 : -1))
-        );
-      }
-
-      const targetSection = mobileSections[targetIndex]?.id;
-      if (!targetSection) {
-        return;
-      }
-
-      const targetLeft = targetIndex * Math.max(container.clientWidth, 1);
-      if (Math.abs(container.scrollLeft - targetLeft) < 4) {
-        setMobileSection(targetSection);
-        return;
-      }
-
-      updateMobileSection(targetSection, "smooth");
-    },
-    [getNearestMobileSection, mobileSections, updateMobileSection]
-  );
-
+    )
+      setMobileSection("session");
+  }, [activeAdminOnboardingStep?.id]);
   useLayoutEffect(() => {
     if (!sessionData || !sessionView) {
       previousSessionStatusRef.current = null;
@@ -1141,7 +926,6 @@ export default function SessionPage() {
 
     if (isInitialEntry || becameCompleted || becameActive) {
       setMobileSection(preferredMobileSection);
-      scrollMobilePagerToSection(preferredMobileSection, "auto");
     }
 
     if (enteredCompletedSession || becameCompleted) {
@@ -1149,166 +933,7 @@ export default function SessionPage() {
     }
 
     previousSessionStatusRef.current = sessionData.status;
-  }, [
-    preferredMobileSection,
-    scrollMobilePagerToSection,
-    sessionData,
-    sessionView,
-  ]);
-
-  useEffect(() => {
-    const handleResize = () => {
-      scrollMobilePagerToSection(activeMobileSection, "auto");
-    };
-
-    window.addEventListener("resize", handleResize);
-    return () => {
-      window.removeEventListener("resize", handleResize);
-    };
-  }, [activeMobileSection, scrollMobilePagerToSection]);
-
-  useEffect(() => {
-    return () => {
-      if (pagerSnapTimeoutRef.current) {
-        clearTimeout(pagerSnapTimeoutRef.current);
-      }
-
-      clearProgrammaticPagerSync();
-    };
-  }, [clearProgrammaticPagerSync]);
-
-  const handleMobilePagerScroll = useCallback(() => {
-    if (isPlayerPickerOpen) {
-      return;
-    }
-
-    const container = mobilePagerRef.current;
-    if (!container) return;
-
-    const programmaticTarget = programmaticPagerTargetRef.current;
-    if (programmaticTarget) {
-      const targetIndex = mobileSections.findIndex(
-        (section) => section.id === programmaticTarget
-      );
-      if (targetIndex >= 0) {
-        const targetLeft = targetIndex * Math.max(container.clientWidth, 1);
-        if (Math.abs(container.scrollLeft - targetLeft) > 4) {
-          return;
-        }
-      }
-
-      clearProgrammaticPagerSync();
-    }
-
-    if (pagerIsDraggingRef.current) {
-      return;
-    }
-
-    if (pagerSnapTimeoutRef.current) {
-      clearTimeout(pagerSnapTimeoutRef.current);
-    }
-
-    pagerSnapTimeoutRef.current = setTimeout(() => {
-      settleMobilePagerToNearestSection("smooth");
-    }, 140);
-  }, [
-    clearProgrammaticPagerSync,
-    isPlayerPickerOpen,
-    mobileSections,
-    settleMobilePagerToNearestSection,
-  ]);
-
-  const handleMobilePagerTouchStart = useCallback(
-    (event: React.TouchEvent<HTMLDivElement>) => {
-      if (isPlayerPickerOpen) {
-        pagerIsDraggingRef.current = false;
-        pagerTouchStartXRef.current = null;
-        pagerTouchStartIndexRef.current = null;
-        return;
-      }
-
-      const container = mobilePagerRef.current;
-      const touch = event.touches[0];
-      if (!container || !touch) {
-        return;
-      }
-
-      clearProgrammaticPagerSync();
-      if (pagerSnapTimeoutRef.current) {
-        clearTimeout(pagerSnapTimeoutRef.current);
-        pagerSnapTimeoutRef.current = null;
-      }
-
-      pagerIsDraggingRef.current = true;
-      pagerTouchStartXRef.current = touch.clientX;
-      pagerTouchStartIndexRef.current = Math.round(
-        container.scrollLeft / Math.max(container.clientWidth, 1)
-      );
-    },
-    [clearProgrammaticPagerSync, isPlayerPickerOpen]
-  );
-
-  const handleMobilePagerTouchMove = useCallback(
-    (event: React.TouchEvent<HTMLDivElement>) => {
-      if (isPlayerPickerOpen) {
-        event.preventDefault();
-        return;
-      }
-
-      const container = mobilePagerRef.current;
-      const touch = event.touches[0];
-      const startX = pagerTouchStartXRef.current;
-      const startIndex = pagerTouchStartIndexRef.current;
-
-      if (!container || !touch || startX === null || startIndex === null) {
-        return;
-      }
-
-      const deltaX = touch.clientX - startX;
-      const isAtFirstSection = startIndex === 0;
-      const isAtLastSection = startIndex === mobileSections.length - 1;
-      const isPushingPastFirst = isAtFirstSection && deltaX > 0;
-      const isPushingPastLast = isAtLastSection && deltaX < 0;
-
-      if (!isPushingPastFirst && !isPushingPastLast) {
-        return;
-      }
-
-      event.preventDefault();
-
-      const lockedLeft = startIndex * container.clientWidth;
-      if (Math.abs(container.scrollLeft - lockedLeft) > 1) {
-        container.scrollLeft = lockedLeft;
-      }
-    },
-    [isPlayerPickerOpen, mobileSections.length]
-  );
-
-  const handleMobilePagerTouchEnd = useCallback(
-    (event: React.TouchEvent<HTMLDivElement>) => {
-      if (isPlayerPickerOpen) {
-        pagerIsDraggingRef.current = false;
-        pagerTouchStartXRef.current = null;
-        pagerTouchStartIndexRef.current = null;
-        return;
-      }
-
-      const touch = event.changedTouches[0];
-      settleMobilePagerFromSwipe(touch ? touch.clientX : null);
-    },
-    [isPlayerPickerOpen, settleMobilePagerFromSwipe]
-  );
-
-  const handleMobilePagerTouchCancel = useCallback(() => {
-    if (isPlayerPickerOpen) {
-      pagerIsDraggingRef.current = false;
-      pagerTouchStartXRef.current = null;
-      pagerTouchStartIndexRef.current = null;
-      return;
-    }
-
-    settleMobilePagerFromSwipe(null);
-  }, [isPlayerPickerOpen, settleMobilePagerFromSwipe]);
+  }, [preferredMobileSection, sessionData, sessionView]);
 
   if (
     status === "loading" ||
@@ -1356,32 +981,60 @@ export default function SessionPage() {
   }
 
   return (
-    <div className="app-page">
-      <nav className="app-topbar">
-        <div className="app-topbar-inner max-w-7xl">
-          <div className="min-w-0 flex items-center gap-3">
-            <button
-              onClick={handleBack}
-              className="app-button-secondary px-4 py-2"
-            >
-              <ArrowLeft aria-hidden="true" size={17} />
-              Back
-            </button>
-            <div className="min-w-0 flex flex-col">
-              <h1 className="whitespace-normal break-words text-base font-semibold leading-tight text-gray-900 sm:text-xl">
-                {sessionData.name}
-              </h1>
-              {isTutorialPlayground ? (
-                <span className="mt-1 w-fit app-chip app-chip-accent">
-                  Tutorial playground
-                </span>
-              ) : null}
-            </div>
+    <PlayShell
+      header={
+        <>
+          <button
+            className="icon-button"
+            onClick={handleBack}
+            aria-label="Back to club"
+          >
+            <PlayBack size={23} />
+          </button>
+          <div className="session-identity">
+            <small>
+              {sessionView.isCompletedSession
+                ? "SESSION COMPLETE"
+                : sessionData.status === SessionStatus.ACTIVE
+                  ? "LIVE SESSION"
+                  : "READY TO PLAY"}
+            </small>
+            <strong>{sessionData.name}</strong>
           </div>
-        </div>
-      </nav>
-
-      <main className="app-shell max-w-7xl space-y-4 sm:space-y-6">
+          {canOpenSettings ? (
+            <button
+              className="icon-button"
+              aria-label="Session settings"
+              onClick={openSettingsModal}
+            >
+              <GearSix size={24} />
+            </button>
+          ) : (
+            <span />
+          )}
+        </>
+      }
+    >
+      <div className="host-workspace">
+        {sessionData.status === SessionStatus.WAITING && isAdmin && (
+          <div className="surface">
+            <h2>Everyone ready?</h2>
+            <p className="quiet">
+              {sessionData.players.length} players · {sessionData.courts.length}{" "}
+              courts
+            </p>
+            <button
+              className="primary"
+              disabled={Boolean(startBlockedReason)}
+              onClick={() => void startSessionWithOnboardingRefresh()}
+            >
+              Start session
+            </button>
+            {startBlockedReason && (
+              <p className="quiet">{startBlockedReason}</p>
+            )}
+          </div>
+        )}
         {error ? <FlashMessage tone="error">{error}</FlashMessage> : null}
 
         {isTutorialPlayground ? (
@@ -1391,66 +1044,99 @@ export default function SessionPage() {
             onDismiss={adminOnboarding.dismiss}
             onReopen={adminOnboarding.reopen}
             onCompleteStep={adminOnboarding.completeStep}
-            spotlightEnabled={!showSettingsModal && !showEndSessionConfirm &&
+            spotlightEnabled={
+              !showSettingsModal &&
+              !showEndSessionConfirm &&
               (activeAdminOnboardingStep?.id === "score-match"
                 ? activeMobileSection === "courts"
-                : activeMobileSection === "session")}
+                : activeMobileSection === "session")
+            }
             onStepAction={(step) => {
-              if (step.id !== "end-session" || step.href !== `/session/${code}#settings`) return false;
-              updateMobileSection("session", "auto");
+              if (
+                step.id !== "end-session" ||
+                step.href !== `/session/${code}#settings`
+              )
+                return false;
+              updateMobileSection("session");
               openSettingsModal();
               return true;
             }}
           />
         ) : null}
 
-        <div
-          ref={mobilePagerRef}
-          onScroll={handleMobilePagerScroll}
-          onTouchStart={handleMobilePagerTouchStart}
-          onTouchMove={handleMobilePagerTouchMove}
-          onTouchEnd={handleMobilePagerTouchEnd}
-          onTouchCancel={handleMobilePagerTouchCancel}
-          className="app-swipe-track -mx-1 overflow-x-auto overscroll-x-none xl:mx-0 xl:overflow-visible"
-        >
-          <div className="flex snap-x snap-mandatory xl:block xl:space-y-6">
-            <section
-              data-session-pager-section="session"
-              className="w-full shrink-0 snap-center pb-24 xl:w-auto xl:shrink xl:snap-none xl:pb-0"
-            >
-              <SessionOverviewPanel
-                sessionTypeLabel={sessionView.sessionTypeLabel}
-                sessionModeLabel={sessionView.sessionModeLabel}
-                isTestSession={sessionData.isTest}
-                playersCount={sessionData.players.length}
-                guestPlayersCount={sessionView.guestPlayersCount}
-                activeMatchesCount={sessionView.activeMatchesCount}
-                completedMatchesCount={sessionView.completedMatchesCount}
-                pausedPlayersCount={sessionView.pausedPlayersCount}
-                sessionStatus={sessionData.status}
-                canStartSession={
-                  isAdmin && sessionData.status === SessionStatus.WAITING
+        <div className="host-sections">
+          <div>
+            <section hidden={activeMobileSection !== "session"}>
+              <div className="section-head">
+                <h1>Players</h1>
+                {canOpenSettings && (
+                  <button
+                    className="text-button"
+                    onClick={openRosterFromSettings}
+                  >
+                    Add / remove
+                  </button>
+                )}
+              </div>
+              <SessionPlayersModal
+                embedded
+                open
+                players={sessionData.players}
+                currentUserId={currentUserId}
+                canEditPreferences={
+                  !viewerIsQuickAccess && !sessionView.isCompletedSession
                 }
-                startBlockedReason={startBlockedReason}
-                canOpenPlayerManager={Boolean(canOpenPlayerManager)}
-                canOpenSettings={Boolean(canOpenSettings)}
-                tutorialHint={sessionTutorialHint}
-                onStartSession={startSessionWithOnboardingRefresh}
-                onOpenPlayerManager={() => setShowPlayersModal(true)}
-                onOpenSettings={openSettingsModal}
-                onEndSession={isAdmin && sessionData.status === SessionStatus.ACTIVE
-                  ? () => setShowEndSessionConfirm(true) : undefined}
-                onOpenMatchHistory={() =>
-                  router.push(`/session/${code}/history?from=session`)
+                canManagePlayers={
+                  isAdmin &&
+                  !viewerIsQuickAccess &&
+                  !sessionView.isCompletedSession
                 }
+                poolsEnabled={sessionData.poolsEnabled}
+                poolAName={sessionData.poolAName}
+                poolBName={sessionData.poolBName}
+                togglingPausePlayerId={togglingPausePlayerId}
+                skippingNextPlayerId={skippingNextPlayerId}
+                onClose={() => {}}
+                onTogglePause={togglePausePlayer}
+                onToggleSkipNext={toggleSkipNextPlayer}
+                onOpenPreferenceEditor={togglePreferenceEditor}
               />
+              <details className="surface">
+                <summary>Session details & actions</summary>
+                <SessionOverviewPanel
+                  sessionTypeLabel={sessionView.sessionTypeLabel}
+                  sessionModeLabel={sessionView.sessionModeLabel}
+                  isTestSession={sessionData.isTest}
+                  playersCount={sessionData.players.length}
+                  guestPlayersCount={sessionView.guestPlayersCount}
+                  activeMatchesCount={sessionView.activeMatchesCount}
+                  completedMatchesCount={sessionView.completedMatchesCount}
+                  pausedPlayersCount={sessionView.pausedPlayersCount}
+                  sessionStatus={sessionData.status}
+                  canStartSession={
+                    isAdmin && sessionData.status === SessionStatus.WAITING
+                  }
+                  startBlockedReason={startBlockedReason}
+                  canOpenPlayerManager={Boolean(canOpenPlayerManager)}
+                  canOpenSettings={Boolean(canOpenSettings)}
+                  tutorialHint={sessionTutorialHint}
+                  onStartSession={startSessionWithOnboardingRefresh}
+                  onOpenPlayerManager={() => setShowPlayersModal(true)}
+                  onOpenSettings={openSettingsModal}
+                  onEndSession={
+                    isAdmin && sessionData.status === SessionStatus.ACTIVE
+                      ? () => setShowEndSessionConfirm(true)
+                      : undefined
+                  }
+                  onOpenMatchHistory={() =>
+                    router.push(`/session/${code}/history?from=session`)
+                  }
+                />
+              </details>
             </section>
 
             {!sessionView.isCompletedSession ? (
-              <section
-                data-session-pager-section="courts"
-                className="w-full shrink-0 snap-center pb-24 xl:w-auto xl:shrink xl:snap-none xl:pb-0"
-              >
+              <section hidden={activeMobileSection !== "courts"}>
                 <LiveCourtsPanel
                   sessionStatus={sessionData.status}
                   courts={sessionData.courts}
@@ -1531,10 +1217,10 @@ export default function SessionPage() {
             ) : null}
 
             <section
-              data-session-pager-section={
-                sessionView.isCompletedSession ? "results" : "standings"
+              hidden={
+                activeMobileSection !==
+                (sessionView.isCompletedSession ? "results" : "standings")
               }
-              className="w-full shrink-0 snap-center pb-24 xl:w-auto xl:shrink xl:snap-none xl:pb-0"
             >
               <div className="space-y-6">
                 {sessionView.interclubScoreboard ? (
@@ -1579,15 +1265,37 @@ export default function SessionPage() {
             </section>
           </div>
         </div>
-      </main>
+      </div>
 
-      <MobileBottomTabs
-        items={mobileSections}
-        activeId={activeMobileSection}
-        onSelect={(sectionId) => updateMobileSection(sectionId)}
-        ariaLabel="Tournament navigation"
-        visibilityClassName="xl:hidden"
-      />
+      <nav className="bottom-nav" aria-label="Session navigation">
+        {(sessionView.isCompletedSession
+          ? [
+              { id: "results", label: "Results", icon: PlayTrophy },
+              { id: "session", label: "Players", icon: UsersThree },
+            ]
+          : [
+              { id: "courts", label: "Courts", icon: SquaresFour },
+              { id: "session", label: "Players", icon: UsersThree },
+              { id: "standings", label: "Standings", icon: PlayTrophy },
+            ]
+        ).map(({ id, label, icon: Icon }) => (
+          <button
+            key={id}
+            className={activeMobileSection === id ? "active" : ""}
+            aria-current={activeMobileSection === id ? "page" : undefined}
+            onClick={() => {
+              updateMobileSection(id as SessionMobileSection);
+              window.scrollTo({ top: 0, behavior: "instant" });
+            }}
+          >
+            <Icon
+              size={25}
+              weight={activeMobileSection === id ? "fill" : "regular"}
+            />
+            <span>{label}</span>
+          </button>
+        ))}
+      </nav>
 
       <SessionSettingsModal
         open={showSettingsModal}
@@ -1598,9 +1306,7 @@ export default function SessionPage() {
         respectPlayerRest={sessionData.respectPlayerRest}
         respectPlayerRestDraft={respectPlayerRestDraft}
         canEditGameplay={sessionData.status === SessionStatus.WAITING}
-        collabFormat={
-          sessionData.collabFormat ?? SessionCollabFormat.FREE_PLAY
-        }
+        collabFormat={sessionData.collabFormat ?? SessionCollabFormat.FREE_PLAY}
         matchmakingStyleDraft={matchmakingStyleDraft}
         balanceMetricDraft={balanceMetricDraft}
         pairingModeDraft={pairingModeDraft}
@@ -1610,10 +1316,13 @@ export default function SessionPage() {
         canOpenRoster={isAdmin && !sessionView.isCompletedSession}
         canEndSession={isAdmin && sessionData.status === SessionStatus.ACTIVE}
         canResetSession={
-          canUseAdminSessionControls && sessionData.status === SessionStatus.ACTIVE
+          canUseAdminSessionControls &&
+          sessionData.status === SessionStatus.ACTIVE
         }
         canCreateRealSession={
-          canUseAdminSessionControls && sessionData.isTest && !isTutorialPlayground
+          canUseAdminSessionControls &&
+          sessionData.isTest &&
+          !isTutorialPlayground
         }
         canDeleteSession={
           canUseAdminSessionControls && !sessionView.isCompletedSession
@@ -1644,11 +1353,15 @@ export default function SessionPage() {
       />
 
       <SessionPlayersModal
-        key={showPlayersModal ? "session-players-open" : "session-players-closed"}
+        key={
+          showPlayersModal ? "session-players-open" : "session-players-closed"
+        }
         open={showPlayersModal}
         players={sessionData.players}
         currentUserId={currentUserId}
-        canEditPreferences={!sessionView.isCompletedSession}
+        canEditPreferences={
+          !viewerIsQuickAccess && !sessionView.isCompletedSession
+        }
         canManagePlayers={isAdmin}
         poolsEnabled={sessionData.poolsEnabled}
         poolAName={sessionData.poolAName}
@@ -1741,9 +1454,7 @@ export default function SessionPage() {
       {showResetTestConfirm ? (
         <SessionActionConfirmModal
           title={
-            sessionData.isTest
-              ? "Reset test tournament?"
-              : "Reset tournament?"
+            sessionData.isTest ? "Reset test tournament?" : "Reset tournament?"
           }
           subtitle="Clears results and keeps setup."
           details={
@@ -1781,7 +1492,8 @@ export default function SessionPage() {
                   What gets copied
                 </p>
                 <p className="text-sm text-gray-600">
-                  Players, guests, courts, format, mode, and player groups will carry over.
+                  Players, guests, courts, format, mode, and player groups will
+                  carry over.
                 </p>
                 <p className="text-sm text-gray-600">
                   {completedScoredTestMatchesCount} completed scored{" "}
@@ -1830,7 +1542,8 @@ export default function SessionPage() {
                     name="create-real-session-mode"
                     checked={createRealSessionIncludesResults}
                     disabled={
-                      creatingRealSession || completedScoredTestMatchesCount === 0
+                      creatingRealSession ||
+                      completedScoredTestMatchesCount === 0
                     }
                     onChange={() => setCreateRealSessionIncludesResults(true)}
                     className="mt-1"
@@ -1847,7 +1560,8 @@ export default function SessionPage() {
               </div>
 
               <p className="text-xs text-gray-500">
-                Active, pending, and unscored matches stay in the test tournament.
+                Active, pending, and unscored matches stay in the test
+                tournament.
               </p>
             </div>
           }
@@ -1883,9 +1597,7 @@ export default function SessionPage() {
               <p className="text-sm font-semibold text-gray-900">
                 {sessionData.name}
               </p>
-              <p className="text-sm text-gray-600">
-                This cannot be undone.
-              </p>
+              <p className="text-sm text-gray-600">This cannot be undone.</p>
             </div>
           }
           confirmLabel={
@@ -2010,7 +1722,7 @@ export default function SessionPage() {
         addingPlayerId={addingPlayerId}
         playersNotInSession={sessionView.playersNotInSession}
         existingParticipantNames={sessionData.players.map(
-          (player) => player.user.name
+          (player) => player.user.name,
         )}
         onClose={closeRosterModal}
         onRosterSearchChange={setRosterSearch}
@@ -2027,7 +1739,9 @@ export default function SessionPage() {
       />
 
       <ManualMatchModal
-        open={courtActions.manualCourtId !== null || courtActions.manualQueueOpen}
+        open={
+          courtActions.manualCourtId !== null || courtActions.manualQueueOpen
+        }
         court={
           courtActions.manualQueueOpen ? null : sessionView.activeManualCourt
         }
@@ -2050,7 +1764,6 @@ export default function SessionPage() {
             : courtActions.createManualMatch
         }
       />
-
-    </div>
+    </PlayShell>
   );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { PlayerProfileView } from "@/components/profile/PlayerProfileView";
+import { PlayProfile } from "@/components/play/PlayProfile";
 import { EmptyState, SectionCard } from "@/components/ui/chrome";
 
 export function ClubProfilePanel({
@@ -22,10 +22,9 @@ export function ClubProfilePanel({
   }
 
   return (
-    <PlayerProfileView
+    <PlayProfile
       userId={userId}
       clubId={clubId}
-      mode="embedded"
     />
   );
 }

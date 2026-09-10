@@ -1,5 +1,6 @@
 "use client";
 
+import {PlayShell} from "@/components/play/PlayShell";
 import type { FormEvent } from "react";
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
@@ -282,7 +283,7 @@ export default function SettingsPage() {
   if (pageError && !user) {
     return (
       <main className="app-page">
-        <div className="app-shell-narrow space-y-6">
+        <div className="space-y-6">
           <HeroCard
             eyebrow="Player settings"
             title="Account settings"
@@ -300,14 +301,10 @@ export default function SettingsPage() {
   }
 
   return (
-    <main className="app-page">
-      <div className="app-shell-narrow space-y-6">
-        <HeroCard
-          eyebrow="Player settings"
-          title="Account settings"
-          description="Manage the global player identity tied to your full account."
-          backHref="/"
-        />
+    <PlayShell title="Account settings">
+      <div className="space-y-6">
+        <h1>Your account</h1>
+
 
         {successMessage ? (
           <FlashMessage tone="success">{successMessage}</FlashMessage>
@@ -468,6 +465,6 @@ export default function SettingsPage() {
           </>
         )}
       </div>
-    </main>
+    </PlayShell>
   );
 }

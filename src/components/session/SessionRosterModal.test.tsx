@@ -171,13 +171,13 @@ describe("SessionRosterModal", () => {
       document.body.querySelector('input[type="text"]')
     ).not.toBeNull();
     expect(document.body.textContent).toContain("Add guest");
-    expect(document.body.textContent).toContain("Beginner (850)");
+    expect(document.body.textContent).toContain("Starting rating");
     expect(document.body.textContent).toContain("Social");
     expect(
       document.body.querySelector('input[aria-label="Guest name"]')
     ).not.toBeNull();
     expect(
-      document.body.querySelector('select[aria-label="Guest starting rating"]')
+      document.body.querySelector('input[aria-label="Guest starting rating"]')
     ).not.toBeNull();
     expect(
       document.body.querySelector('select[aria-label="Guest game group"]')

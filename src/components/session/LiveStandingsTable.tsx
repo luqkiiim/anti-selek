@@ -30,7 +30,7 @@ interface LiveStandingsTableProps {
 function getStandingValue(
   sessionType: string,
   player: Player,
-  stats: PlayerStats
+  stats: PlayerStats,
 ) {
   if (sessionType === SessionType.LADDER) {
     const ladderScore = stats.wins - stats.losses;
@@ -42,50 +42,6 @@ function getStandingValue(
 
 function formatPointDiff(pointDiff: number) {
   return pointDiff > 0 ? `+${pointDiff}` : `${pointDiff}`;
-}
-
-function getStandingBadgeClass(sessionType: string) {
-  if (sessionType === SessionType.LADDER) {
-    return "border-sky-200 bg-sky-50 text-sky-700";
-  }
-
-  if (sessionType === SessionType.RACE) {
-    return "border-emerald-200 bg-emerald-50 text-emerald-700";
-  }
-
-  if (sessionType === SessionType.ELO) {
-    return "border-violet-200 bg-violet-50 text-violet-700";
-  }
-
-  return "border-blue-200 bg-blue-50 text-blue-700";
-}
-
-function getRankBadgeClass(rank: number) {
-  if (rank === 1) {
-    return "border-amber-300 bg-amber-100 text-amber-700";
-  }
-
-  if (rank === 2) {
-    return "border-slate-300 bg-slate-100 text-slate-700";
-  }
-
-  if (rank === 3) {
-    return "border-orange-300 bg-orange-100 text-orange-700";
-  }
-
-  return "border-gray-300 bg-white text-gray-500";
-}
-
-function getInterclubRowCellClass(tone?: "blue" | "red") {
-  if (tone === "blue") {
-    return "border-sky-200/70 bg-sky-50/70";
-  }
-
-  if (tone === "red") {
-    return "border-rose-200/70 bg-rose-50/70";
-  }
-
-  return "border-gray-100 bg-white";
 }
 
 export function LiveStandingsTable({
@@ -106,11 +62,11 @@ export function LiveStandingsTable({
       poolsEnabled && poolFilter !== "ALL"
         ? players.filter((player) => player.pool === poolFilter)
         : players,
-    [players, poolFilter, poolsEnabled]
+    [players, poolFilter, poolsEnabled],
   );
 
   return (
-    <div className="app-panel overflow-hidden">
+    <div className="play-live-standings">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-200 bg-gray-50 px-5 py-4">
         <div className="flex flex-wrap items-center gap-3">
           <p className="app-section-eyebrow">Standings</p>
@@ -151,133 +107,46 @@ export function LiveStandingsTable({
         </span>
       </div>
 
-
-      <div className="overflow-x-auto overscroll-x-contain">
-        <table className="w-full table-fixed border-separate border-spacing-y-[3px] px-2">
-          <thead>
-            <tr>
-              <th scope="col" aria-label="Rank" className="w-9 px-2 py-2 text-left text-xs font-semibold text-gray-600 sm:w-11 sm:px-3">
-                #
-              </th>
-              <th scope="col" className="w-[44%] px-2 py-2 text-left text-xs font-semibold text-gray-600 sm:w-auto sm:px-3">
-                Player
-              </th>
-              <th
-                scope="col"
-                aria-label={isLadderSession ? "Ladder score" : "Points"}
-                className="w-11 px-1.5 py-2 text-center text-xs font-semibold text-gray-600 sm:w-[5.25rem] sm:px-4"
+      <div className="play-standings" role="list">
+        {visiblePlayers.map((player, idx) => {
+          const stats = calculatePlayerSessionStats(player.userId);
+          const diff = pointDiffByUserId.get(player.userId) ?? 0;
+          const tone = player.representingClubId
+            ? interclubClubToneById?.[player.representingClubId]
+            : undefined;
+          return (
+            <div role="listitem" key={player.userId}>
+              <Link
+                href={getPlayerProfileHref(player)}
+                className={`standing-person ${player.userId === currentUserId ? "is-me" : ""}`}
+                data-interclub-club-tone={tone}
               >
-                {isLadderSession ? (
-                  <>
-                    <span className="sm:hidden">Ld</span>
-                    <span className="hidden sm:inline">Ladder</span>
-                  </>
-                ) : (
-                  <>
-                    <span className="sm:hidden">Pts</span>
-                    <span className="hidden sm:inline">Points</span>
-                  </>
-                )}
-              </th>
-              <th scope="col" aria-label="Point difference" className="w-11 px-1.5 py-2 text-center text-xs font-semibold text-gray-600 sm:w-[4.75rem] sm:px-4">
-                <span className="sm:hidden">Df</span>
-                <span className="hidden sm:inline">Diff</span>
-              </th>
-              <th scope="col" aria-label="Matches played" className="w-11 px-1.5 py-2 text-center text-xs font-semibold text-gray-600 sm:w-[4.5rem] sm:px-4">
-                MP
-              </th>
-              <th scope="col" aria-label="Wins and losses" className="w-12 px-1.5 py-2 text-center text-xs font-semibold text-gray-600 sm:w-[5rem] sm:px-4">
-                W / L
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {visiblePlayers.map((player, idx) => {
-              const stats = calculatePlayerSessionStats(player.userId);
-              const isMe = player.userId === currentUserId;
-              const pointDiff = pointDiffByUserId.get(player.userId) ?? 0;
-              const standingValue = getStandingValue(sessionType, player, stats);
-              const interclubTone = player.representingClubId
-                ? interclubClubToneById?.[player.representingClubId]
-                : undefined;
-              const rowCellClass = getInterclubRowCellClass(interclubTone);
-
-              return (
-                <tr
-                  key={player.userId}
-                  data-interclub-club-tone={interclubTone}
-                  className={`transition-colors ${
-                    isMe ? "text-blue-950" : "text-gray-900"
-                  } ${player.isPaused ? "opacity-60" : ""}`}
-                >
-                  <td className={`whitespace-nowrap rounded-l-2xl border-y border-l px-2 py-2 align-middle sm:px-3 ${rowCellClass}`}>
-                    <span
-                      className={`flex h-5 w-5 items-center justify-center rounded-lg border text-[10px] font-semibold sm:h-6 sm:w-6 sm:text-[11px] ${getRankBadgeClass(
-                        idx + 1
-                      )}`}
-                    >
-                      {idx + 1}
-                    </span>
-                  </td>
-                  <td className={`border-y px-2 py-2 align-middle sm:px-3 ${rowCellClass}`}>
-                    <div className="space-y-1">
-                      <div className="flex min-w-0 flex-wrap items-center gap-1.5 leading-tight sm:gap-2">
-                        <Avatar
-                          name={player.user.name}
-                          avatarUrl={player.user.avatarUrl}
-                          size="xs"
-                        />
-                        <Link
-                          href={getPlayerProfileHref(player)}
-                          title={player.user.name}
-                          className="min-w-0 max-w-full truncate text-[13px] font-bold leading-tight text-gray-900 hover:text-blue-600 sm:text-sm"
-                        >
-                          {player.user.name}
-                        </Link>
-                        {isMe ? (
-                          <span className="rounded-full border border-blue-200 bg-blue-50 px-1.5 py-0.5 text-[9px] font-medium text-blue-700 sm:px-2 sm:text-[10px]">
-                            Me
-                          </span>
-                        ) : null}
-                        {player.isPaused ? (
-                          <span className="rounded-full border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[9px] font-medium text-amber-800 sm:px-2 sm:text-[10px]">
-                            Paused
-                          </span>
-                        ) : null}
-                      </div>
-                    </div>
-                  </td>
-                  <td className={`whitespace-nowrap border-y px-1.5 py-2 text-center align-middle sm:w-[5.25rem] sm:px-4 ${rowCellClass}`}>
-                    <span
-                      className={`inline-flex min-w-[2.85rem] items-center justify-center rounded-full border px-2.5 py-1 text-[12px] font-semibold tabular-nums sm:min-w-[3.2rem] sm:text-sm ${getStandingBadgeClass(
-                        sessionType
-                      )}`}
-                    >
-                      {standingValue}
-                    </span>
-                  </td>
-                  <td className={`whitespace-nowrap border-y px-1.5 py-2 text-center align-middle sm:w-[4.75rem] sm:px-4 ${rowCellClass}`}>
-                    <span
-                      className={`text-[12px] font-medium tabular-nums sm:text-sm ${
-                        pointDiff >= 0 ? "text-green-600" : "text-red-500"
-                      }`}
-                    >
-                      {formatPointDiff(pointDiff)}
-                    </span>
-                  </td>
-                  <td className={`whitespace-nowrap border-y px-1.5 py-2 text-center align-middle text-[12px] font-medium tabular-nums text-gray-700 sm:w-[4.5rem] sm:px-4 sm:text-sm ${rowCellClass}`}>
-                    {stats.played}
-                  </td>
-                  <td className={`whitespace-nowrap rounded-r-2xl border-y border-r px-1.5 py-2 text-center align-middle text-[12px] font-medium tabular-nums text-gray-700 sm:w-[5rem] sm:px-4 sm:text-sm ${rowCellClass}`}>
-                    <span className="text-green-600">{stats.wins}</span>
-                    <span className="mx-0.5 text-gray-300 sm:mx-1">/</span>
-                    <span className="text-red-500">{stats.losses}</span>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+                <span className="standing-rank">{idx + 1}</span>
+                <Avatar
+                  name={player.user.name}
+                  avatarUrl={player.user.avatarUrl}
+                  size="sm"
+                />
+                <div>
+                  <strong>
+                    {player.user.name}
+                    {player.userId === currentUserId ? (
+                      <small> · You</small>
+                    ) : null}
+                  </strong>
+                  <small>
+                    {stats.wins}W / {stats.losses}L · {stats.played} games ·{" "}
+                    {formatPointDiff(diff)} diff
+                  </small>
+                </div>
+                <b>
+                  {getStandingValue(sessionType, player, stats)}
+                  <small>{isLadderSession ? "score" : "pts"}</small>
+                </b>
+              </Link>
+            </div>
+          );
+        })}
       </div>
 
       {visiblePlayers.length === 0 ? (
@@ -286,13 +155,25 @@ export function LiveStandingsTable({
         </div>
       ) : null}
       <details className="border-t border-gray-100 px-4 py-1 text-sm text-gray-600">
-        <summary className="min-h-11 cursor-pointer py-3 font-medium text-gray-500">How rankings work</summary>
+        <summary className="min-h-11 cursor-pointer py-3 font-medium text-gray-500">
+          How rankings work
+        </summary>
         <div className="space-y-2 pb-2 leading-6">
-          <p>{isLadderSession
-            ? "Ladder score = wins minus losses. A win adds 1; a loss subtracts 1."
-            : "Each player earns 3 points for a win and 0 for a loss. These are tournament points, not the rally score."}</p>
-          <p>Players are ranked by {isLadderSession ? "ladder score" : "tournament points"}, then point difference (points scored minus points conceded). Exact ties are listed alphabetically by name.</p>
-          <p>MP = matches played. W/L = wins/losses. Df = point difference. Only completed results count.</p>
+          <p>
+            {isLadderSession
+              ? "Ladder score = wins minus losses. A win adds 1; a loss subtracts 1."
+              : "Each player earns 3 points for a win and 0 for a loss. These are tournament points, not the rally score."}
+          </p>
+          <p>
+            Players are ranked by{" "}
+            {isLadderSession ? "ladder score" : "tournament points"}, then point
+            difference (points scored minus points conceded). Exact ties are
+            listed alphabetically by name.
+          </p>
+          <p>
+            MP = matches played. W/L = wins/losses. Df = point difference. Only
+            completed results count.
+          </p>
         </div>
       </details>
     </div>

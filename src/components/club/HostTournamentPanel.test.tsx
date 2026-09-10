@@ -115,7 +115,7 @@ describe("HostTournamentPanel", () => {
   it("keeps advanced setup controls constrained on mobile", () => {
     const markup = renderPanel();
 
-    expect(markup).toContain("app-panel min-w-0 max-w-full overflow-hidden");
+    expect(markup).toContain("play-setup min-w-0 max-w-full");
     expect(markup).toContain("min-w-0 rounded-lg border");
     expect(markup).not.toContain("Regular tournament / Auto queue on");
     expect(markup).toContain('aria-pressed="true"');

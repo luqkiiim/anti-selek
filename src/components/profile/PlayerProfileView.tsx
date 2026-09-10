@@ -47,7 +47,7 @@ import { deleteUserAvatar, uploadUserAvatar } from "@/lib/avatarClient";
 import { getCurrentAppPath, withCallbackUrl } from "@/lib/authCallback";
 import { EmptyState, FlashMessage } from "@/components/ui/chrome";
 
-interface UserProfileResponse {
+export interface UserProfileResponse {
   user: {
     id: string;
     name: string;

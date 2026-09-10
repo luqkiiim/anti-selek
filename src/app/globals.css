@@ -2,19 +2,19 @@
 
 :root {
   color-scheme: light;
-  --background: #f5f7f6;
-  --foreground: #17201f;
+  --background: #fffaf3;
+  --foreground: #291440;
   --surface: #ffffff;
   --surface-strong: #ffffff;
-  --surface-muted: #f0f3f2;
+  --surface-muted: #fffdfb;
   --panel: #ffffff;
   --line: rgba(23, 32, 31, 0.1);
   --line-strong: rgba(23, 32, 31, 0.18);
-  --muted: #64706d;
-  --accent: #0f766e;
-  --accent-strong: #0b4f49;
-  --accent-soft: #d9f3ee;
-  --accent-faint: #eef8f5;
+  --muted: #80718b;
+  --accent: #7443cf;
+  --accent-strong: #5f31b4;
+  --accent-soft: #eee4ff;
+  --accent-faint: #f5effb;
   --sand: #edf1ef;
   --blush: #e5f5eb;
   --sun: #fff3d6;
@@ -57,7 +57,7 @@ body {
 }
 
 ::selection {
-  background: rgba(15, 118, 110, 0.18);
+  background: rgba(116, 67, 207, 0.18);
 }
 
 h1,
@@ -227,7 +227,7 @@ h4 {
 
 .field:focus {
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.14);
+  box-shadow: 0 0 0 3px rgba(116, 67, 207, 0.14);
 }
 
 .app-button-primary,
@@ -267,7 +267,7 @@ h4 {
   border: 1px solid transparent;
   background: var(--accent);
   color: white;
-  box-shadow: 0 8px 18px rgba(15, 118, 110, 0.16);
+  box-shadow: 0 8px 18px rgba(116, 67, 207, 0.16);
 }
 
 .app-button-primary:hover {
@@ -281,13 +281,13 @@ h4 {
 }
 
 .app-button-secondary:hover {
-  border-color: rgba(15, 118, 110, 0.34);
+  border-color: rgba(116, 67, 207, 0.34);
   color: var(--accent-strong);
 }
 
 .app-button-dark {
   border: 1px solid transparent;
-  background: #17201f;
+  background: #291440;
   color: white;
 }
 
@@ -358,7 +358,7 @@ h4 {
 
 .app-chip-accent {
   background: var(--accent-soft);
-  border-color: rgba(15, 118, 110, 0.18);
+  border-color: rgba(116, 67, 207, 0.18);
   color: var(--accent-strong);
 }
 
@@ -466,7 +466,7 @@ h4 {
   content: "";
   background:
     radial-gradient(circle at 50% 45%, rgba(255, 214, 102, 0.24), transparent 38%),
-    radial-gradient(circle at 30% 35%, rgba(15, 118, 110, 0.13), transparent 34%),
+    radial-gradient(circle at 30% 35%, rgba(116, 67, 207, 0.13), transparent 34%),
     radial-gradient(circle at 72% 40%, rgba(245, 158, 11, 0.15), transparent 30%);
 }
 
@@ -518,7 +518,7 @@ h4 {
   height: 0.8rem;
   border-radius: 0.18rem;
   content: "";
-  background: rgba(15, 118, 110, 0.5);
+  background: rgba(116, 67, 207, 0.5);
   transform: rotate(45deg);
 }
 
@@ -554,7 +554,7 @@ h4 {
   --burst-end-x: -7rem;
   --burst-rotate-start: -24deg;
   --burst-rotate-end: -240deg;
-  background: linear-gradient(180deg, #0f766e, #99f6e4);
+  background: linear-gradient(180deg, #7443cf, #99f6e4);
   animation-delay: calc(var(--podium-finale-delay, 0ms) + 210ms);
 }
 
@@ -969,23 +969,23 @@ h4 {
 }
 
 .border-blue-100 {
-  border-color: rgba(15, 118, 110, 0.14) !important;
+  border-color: rgba(116, 67, 207, 0.14) !important;
 }
 
 .border-blue-200 {
-  border-color: rgba(15, 118, 110, 0.24) !important;
+  border-color: rgba(116, 67, 207, 0.24) !important;
 }
 
 .border-blue-200\/70 {
-  border-color: rgba(15, 118, 110, 0.22) !important;
+  border-color: rgba(116, 67, 207, 0.22) !important;
 }
 
 .border-blue-300 {
-  border-color: rgba(15, 118, 110, 0.38) !important;
+  border-color: rgba(116, 67, 207, 0.38) !important;
 }
 
 .border-blue-400\/30 {
-  border-color: rgba(15, 118, 110, 0.3) !important;
+  border-color: rgba(116, 67, 207, 0.3) !important;
 }
 
 .border-blue-500 {
@@ -998,11 +998,11 @@ h4 {
 }
 
 .focus\:ring-blue-500:focus {
-  --tw-ring-color: rgb(15 118 110 / 40%) !important;
+  --tw-ring-color: rgb(116 67 207 / 40%) !important;
 }
 
 .focus-visible\:ring-blue-300:focus-visible {
-  --tw-ring-color: rgb(15 118 110 / 35%) !important;
+  --tw-ring-color: rgb(116 67 207 / 35%) !important;
 }
 
 .hover\:text-blue-600:hover {
@@ -1012,7 +1012,7 @@ h4 {
 .hover\:border-blue-300:hover,
 .hover\:border-blue-400:hover,
 .hover\:border-blue-500:hover {
-  border-color: rgba(15, 118, 110, 0.42) !important;
+  border-color: rgba(116, 67, 207, 0.42) !important;
 }
 
 .hover\:bg-blue-50:hover {
@@ -1119,11 +1119,11 @@ h4 {
 
 .selection\:bg-blue-100::selection,
 .selection\:bg-purple-100::selection {
-  background-color: rgba(15, 118, 110, 0.18) !important;
+  background-color: rgba(116, 67, 207, 0.18) !important;
 }
 
 .shadow-blue-100 {
-  --tw-shadow-color: rgba(15, 118, 110, 0.16) !important;
+  --tw-shadow-color: rgba(116, 67, 207, 0.16) !important;
 }
 
 .tracking-wide,
@@ -1159,3 +1159,5 @@ h4 {
 .shadow-2xl {
   box-shadow: var(--shadow-soft) !important;
 }
+
+.app-button-primary,.app-button-secondary{min-height:48px;border-radius:15px;font-weight:800}.app-button-primary{box-shadow:0 3px 0 #5f31b4}.app-panel,.app-panel-soft{border-radius:18px;box-shadow:none}.app-title{font-weight:900}.pc-app .app-panel{padding:18px}.pc-app .app-shell{padding:0}.pc-app .app-page{min-height:0}.pc-app h1{line-height:1.16}

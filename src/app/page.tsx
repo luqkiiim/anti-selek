@@ -1,15 +1,25 @@
 "use client";
-
+import { useEffect, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useSession } from "next-auth/react";
 import Link from "next/link";
+import {
+  Plus,
+  UsersThree,
+  CaretRight,
+  UserCircle,
+  SignOut,
+} from "@phosphor-icons/react";
 import { signOut } from "next-auth/react";
-import { LogIn, LogOut, Plus, Settings, Sparkles } from "lucide-react";
-import { EmptyState, FlashMessage, SectionCard } from "@/components/ui/chrome";
+import { PlayShell } from "@/components/play/PlayShell";
 import { CreateClubModal } from "@/components/dashboard/CreateClubModal";
 import { JoinClubModal } from "@/components/dashboard/JoinClubModal";
 import { getClubRoleLabel } from "@/lib/clubRoles";
 import { useDashboardPage } from "./useDashboardPage";
-
-export default function Home() {
+function Home() {
+  const router = useRouter();
+  const query = useSearchParams();
+  const { data: viewer } = useSession();
   const {
     status,
     isQuickAccess,
@@ -42,215 +52,123 @@ export default function Home() {
     openTutorialPlayground,
   } = useDashboardPage();
 
-  if (status === "loading" || loading) {
+  useEffect(() => {
+    if (
+      loading ||
+      status !== "authenticated" ||
+      query.get("choose") === "1" ||
+      !viewer?.user?.id ||
+      !clubs.length
+    )
+      return;
+    let remembered: string | null = null;
+    try {
+      remembered = localStorage.getItem(`pc:last-club:v1:${viewer.user.id}`);
+    } catch {}
+    const target =
+      clubs.find((c) => c.id === remembered) ??
+      (clubs.length === 1 ? clubs[0] : null);
+    if (target) router.replace(`/club/${target.id}`);
+  }, [clubs, loading, query, router, status, viewer?.user?.id]);
+  if (status === "loading" || loading)
     return (
-      <div className="app-page flex items-center justify-center px-6">
-        <div className="app-panel flex flex-col items-center gap-4 px-8 py-8">
-          <div className="h-12 w-12 animate-spin rounded-full border-4 border-blue-600 border-t-transparent" />
-          <p className="app-eyebrow">Loading dashboard</p>
-        </div>
-      </div>
+      <PlayShell title="Anti-Selek">
+        <div className="loading">Loading your clubs...</div>
+      </PlayShell>
     );
-  }
-
   return (
-    <main className="app-page">
-      <div className="app-shell-narrow space-y-6">
-        <div className="flex justify-end">
-          <div className="app-panel-soft flex items-center gap-3 px-4 py-3">
-            {accountName ? (
-              <div className="text-right">
-                <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-gray-500">
-                  Account
-                </p>
-                <p className="mt-1 text-sm font-semibold text-gray-900">
-                  {accountName}
-                </p>
-              </div>
-            ) : null}
-            {!isQuickAccess ? (
-              <Link
-                href="/settings"
-                className="app-button-secondary px-4 py-2"
-              >
-                <Settings aria-hidden="true" size={16} />
-                Settings
-              </Link>
-            ) : null}
-            <button
-              type="button"
-              onClick={() => signOut()}
-              className="app-button-secondary px-4 py-2"
+    <>
+      <PlayShell
+        header={
+          <>
+            <span className="brand">
+              Anti-Selek<span>.</span>
+            </span>
+            <Link
+              href="/settings"
+              className="icon-button"
+              aria-label="Account settings"
             >
-              <LogOut aria-hidden="true" size={16} />
-              Logout
+              <UserCircle size={29} />
+            </Link>
+          </>
+        }
+      >
+        <div className="chooser-intro">
+          <span className="eyebrow">YOUR CLUBS</span>
+          <h1>
+            Where are we
+            <br />
+            playing?
+          </h1>
+          <p className="quiet">Choose your club to get started.</p>
+        </div>
+        {isQuickAccess && (
+          <p className="quiet">
+            Quick access is view-only. You cannot join clubs, submit scores, or
+            manage players.
+          </p>
+        )}
+        {dashboardError && (
+          <p role="alert" className="error">
+            {dashboardError}
+          </p>
+        )}
+        <div className="link-group">
+          {clubs.map((club) => (
+            <Link className="link-row" key={club.id} href={`/club/${club.id}`}>
+              <span className="club-icon">
+                <UsersThree size={25} />
+              </span>
+              <span>
+                <strong>{club.name}</strong>
+                <small>
+                  {club.viewerIsOwner ? "Owner" : getClubRoleLabel(club.role)} ·{" "}
+                  {club.membersCount} players
+                </small>
+              </span>
+              <CaretRight size={19} />
+            </Link>
+          ))}
+        </div>
+        {clubs.length === 0 && (
+          <p className="quiet">
+            Your next group starts here. Join a club or create your own.
+          </p>
+        )}
+        {!isQuickAccess && (
+          <div className="button-pair">
+            <button className="secondary" onClick={openCreateClubModal}>
+              <Plus size={19} />
+              Create club
+            </button>
+            <button className="text-button" onClick={openJoinClubModal}>
+              Join a club
             </button>
           </div>
-        </div>
-
-        <section className="app-panel px-5 py-6 sm:px-6">
-          <div className="space-y-6 text-center">
-            <div className="flex flex-wrap items-center justify-center gap-3">
-              <p className="app-eyebrow">Dashboard</p>
-              <span className="app-chip app-chip-neutral">
-                Club tournaments
-              </span>
-            </div>
-            <div className="space-y-3">
-              <h1 className="app-title text-gray-900">Anti-Selek</h1>
-            </div>
-            {!isQuickAccess ? (
-              <div className="flex flex-wrap justify-center gap-3">
-                <button
-                  type="button"
-                  onClick={openJoinClubModal}
-                  className="app-button-secondary"
-                >
-                  <LogIn aria-hidden="true" size={17} />
-                  Join Club
-                </button>
-                <button
-                  type="button"
-                  onClick={openCreateClubModal}
-                  className="app-button-primary"
-                >
-                  <Plus aria-hidden="true" size={17} />
-                  Create Club
-                </button>
-              </div>
-            ) : null}
-          </div>
-        </section>
-
-        {isQuickAccess ? (
-          <FlashMessage tone="warning">
-            Quick access is view-only and limited to this club profile. You can
-            follow tournaments and standings, but you cannot join clubs, submit
-            scores, or manage a club. Sign in with an account for full access.
-          </FlashMessage>
-        ) : null}
-
-        {!isQuickAccess ? (
-          <section className="app-panel p-5 sm:p-6">
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-              <div className="min-w-0 space-y-2">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="flex h-9 w-9 items-center justify-center rounded-xl border border-teal-200 bg-teal-50 text-teal-700">
-                    <Sparkles aria-hidden="true" size={17} />
-                  </span>
-                  <span className="app-chip app-chip-accent">
-                    Tutorial playground
-                  </span>
-                </div>
-                <div>
-                  <h2 className="text-lg font-semibold text-gray-900">
-                    Tutorial playground
-                  </h2>
-                  <p className="mt-1 text-sm text-gray-600">
-                    {tutorialPlayground
-                      ? "Your saved practice club"
-                      : "Practice club"}
-                  </p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={openTutorialPlayground}
-                disabled={openingTutorialPlayground}
-                className="app-button-primary shrink-0 px-4 py-2.5"
-              >
-                <Sparkles aria-hidden="true" size={17} />
-                {openingTutorialPlayground
-                  ? "Opening..."
-                  : tutorialPlayground ? "Resume practice" : "Start practice"}
-              </button>
-            </div>
-            <p className="mt-3 text-sm leading-6 text-gray-600">
-              A practice space separate from your real clubs.
-            </p>
-          </section>
-        ) : null}
-
-        {dashboardError ? (
-          <FlashMessage tone="error">{dashboardError}</FlashMessage>
-        ) : null}
-
-        <SectionCard
-          eyebrow="Your spaces"
-          title="Clubs"
-          action={
-            <span className="app-chip app-chip-neutral">
-              {clubs.length} listed
-            </span>
-          }
-        >
-          {clubs.length === 0 ? (
-            <EmptyState
-              title="No clubs yet"
-            />
-          ) : (
-            <div className="grid gap-4">
-              {clubs.map((club) => (
-                <Link
-                  key={club.id}
-                  href={`/club/${club.id}`}
-                  className="app-subcard block p-4 transition hover:-translate-y-0.5 hover:border-blue-300 hover:bg-blue-50"
-                >
-                  <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                    <div className="min-w-0">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <h3 className="text-lg font-semibold text-gray-900">
-                          {club.name}
-                        </h3>
-                        <span
-                          className={`app-chip ${
-                            club.viewerIsOwner
-                              ? "app-chip-accent"
-                              : club.role === "ADMIN"
-                              ? "app-chip-accent"
-                              : club.role === "STAFF"
-                                ? "app-chip-warning"
-                              : "app-chip-neutral"
-                          }`}
-                        >
-                          {club.viewerIsOwner
-                            ? "Owner"
-                            : getClubRoleLabel(club.role)}
-                        </span>
-                        {club.isPasswordProtected ? (
-                          <span className="app-chip app-chip-warning">
-                            Protected
-                          </span>
-                        ) : null}
-                      </div>
-                    </div>
-
-                    <div className="grid shrink-0 grid-cols-2 gap-3 sm:min-w-[12rem]">
-                      <div className="app-panel-muted px-3 py-3">
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">
-                          Members
-                        </p>
-                        <p className="mt-2 text-lg font-semibold text-gray-900">
-                          {club.membersCount}
-                        </p>
-                      </div>
-                      <div className="app-panel-muted px-3 py-3">
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">
-                          Tournaments
-                        </p>
-                        <p className="mt-2 text-lg font-semibold text-gray-900">
-                          {club.sessionsCount}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                </Link>
-              ))}
-            </div>
+        )}
+        <details className="practice-options">
+          <summary>Practice & account</summary>
+          <p className="quiet">{accountName}</p>
+          {!isQuickAccess && (
+            <button
+              className="secondary full"
+              onClick={openTutorialPlayground}
+              disabled={openingTutorialPlayground}
+            >
+              {openingTutorialPlayground
+                ? "Opening..."
+                : tutorialPlayground
+                  ? "Resume practice"
+                  : "Try a practice club"}
+            </button>
           )}
-        </SectionCard>
-      </div>
-
+          <button className="text-button" onClick={() => signOut()}>
+            <SignOut size={17} />
+            Sign out
+          </button>
+        </details>
+      </PlayShell>{" "}
       <CreateClubModal
         open={isCreateClubOpen}
         clubName={newClubName}
@@ -262,7 +180,6 @@ export default function Home() {
         onClose={closeCreateClubModal}
         onCreateClub={createClub}
       />
-
       <JoinClubModal
         open={isJoinClubOpen}
         clubName={joinClubName}
@@ -274,6 +191,20 @@ export default function Home() {
         onClose={closeJoinClubModal}
         onJoinClub={joinClub}
       />
-    </main>
+    </>
+  );
+}
+
+export default function HomePage() {
+  return (
+    <Suspense
+      fallback={
+        <PlayShell title="Anti-Selek">
+          <p>Loading your clubs…</p>
+        </PlayShell>
+      }
+    >
+      <Home />
+    </Suspense>
   );
 }

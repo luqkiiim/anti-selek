@@ -1,31 +1,17 @@
 "use client";
-
-import { useRouter, useParams, useSearchParams } from "next/navigation";
-import { PlayerProfileView } from "@/components/profile/PlayerProfileView";
-
+import { useParams, useSearchParams } from "next/navigation";
+import { PlayProfile } from "@/components/play/PlayProfile";
+import { PlayShell } from "@/components/play/PlayShell";
 export default function ProfilePage() {
-  const router = useRouter();
-  const params = useParams<{ id: string }>();
-  const searchParams = useSearchParams();
-  const userId = typeof params.id === "string" ? params.id : "";
-  const clubId = searchParams.get("clubId") || "";
-  const fallbackBackHref = clubId ? `/club/${clubId}` : "/";
-
-  const handleBack = () => {
-    if (typeof window !== "undefined" && window.history.length > 1) {
-      router.back();
-      return;
-    }
-
-    router.push(fallbackBackHref);
-  };
-
+  const { id } = useParams<{ id: string }>();
+  const clubId = useSearchParams().get("clubId") || undefined;
   return (
-    <PlayerProfileView
-      userId={userId}
+    <PlayShell
+      title="Player profile"
+      backHref={clubId ? `/club/${clubId}` : "/"}
       clubId={clubId}
-      mode="standalone"
-      onBack={handleBack}
-    />
+    >
+      <PlayProfile userId={id} clubId={clubId} />
+    </PlayShell>
   );
 }

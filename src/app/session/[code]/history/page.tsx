@@ -1,5 +1,6 @@
 "use client";
 
+import {PlayShell} from "@/components/play/PlayShell";
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
@@ -7,7 +8,7 @@ import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { MoreHorizontal, Pencil, Undo2 } from "lucide-react";
 
 import { SessionActionConfirmModal } from "@/components/session/SessionActionConfirmModal";
-import { EmptyState, FlashMessage, HeroCard, SectionCard } from "@/components/ui/chrome";
+import { EmptyState, FlashMessage, SectionCard } from "@/components/ui/chrome";
 import { getCurrentAppPath, withCallbackUrl } from "@/lib/authCallback";
 import { getCourtDisplayLabel } from "@/lib/courtLabels";
 import { getErrorMessage } from "@/lib/http";
@@ -316,24 +317,9 @@ export default function SessionHistoryPage() {
   };
 
   return (
-    <main className="app-page">
-      <div className="app-shell space-y-6">
-        <HeroCard
-          eyebrow="Match history"
-          title={data.session.name}
-          onBack={handleBack}
-          backLabel="Back"
-          meta={
-            <>
-              <span className="app-chip app-chip-neutral">
-                {getSessionStatusLabel(data.session.status)}
-              </span>
-              <span className="app-chip app-chip-neutral">{sessionTypeLabel}</span>
-              <span className="app-chip app-chip-neutral">{sessionModeLabel}</span>
-            </>
-          }
-        />
-
+    <PlayShell title={data.session.name} backHref={`/session/${code}`}>
+      <div className="space-y-6">
+        <span className="eyebrow">{getSessionStatusLabel(data.session.status)} · {sessionTypeLabel} · {sessionModeLabel}</span><h1>Match history</h1>
         {success ? <FlashMessage tone="success">{success}</FlashMessage> : null}
         {data.correctionBlockedReason ? (
           <FlashMessage tone="warning">
@@ -597,6 +583,6 @@ export default function SessionHistoryPage() {
           onConfirm={() => void confirmScoreCorrection()}
         />
       ) : null}
-    </main>
+    </PlayShell>
   );
 }

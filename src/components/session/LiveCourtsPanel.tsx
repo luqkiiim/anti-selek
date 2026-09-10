@@ -597,7 +597,7 @@ export function LiveCourtsPanel({
     <SectionCard
       eyebrow={sessionStatus === SessionStatus.ACTIVE ? "Court board" : "Court layout"}
       eyebrowClassName="app-section-eyebrow"
-      className="!p-3 sm:!p-6"
+      className="play-courts-panel"
       action={
         <div className="flex w-full min-w-0 flex-wrap items-center justify-between gap-2 sm:w-auto sm:justify-end">
           <span className="app-chip app-chip-accent">
@@ -643,7 +643,7 @@ export function LiveCourtsPanel({
           </p>
         </div>
       ) : null}
-      <div className="grid grid-cols-1 gap-2.5 md:gap-4 min-[900px]:grid-cols-2 xl:grid-cols-3">
+      <div className="play-courts-list">
         {orderedCourts.map((court) => (
           <LiveCourtCard
             key={court.id}

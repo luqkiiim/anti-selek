@@ -172,7 +172,7 @@ export function ClubNotificationsButton({
   const badgeText = unreadCount > 99 ? "99+" : String(unreadCount);
 
   return (
-    <div ref={rootRef} className="relative">
+    <div ref={rootRef} className="relative play-notifications">
       <button
         type="button"
         onClick={() => {

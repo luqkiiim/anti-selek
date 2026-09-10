@@ -293,7 +293,7 @@ export function LiveCourtCard({
   return (
     <div
       data-live-court-card={court.id}
-      className={`flex min-w-0 flex-col overflow-visible rounded-xl border border-gray-200 bg-white shadow-sm transition-shadow ${
+      className={`play-court ${
         isPromotionTarget ? "app-court-promotion-target" : ""
       }`}
     >

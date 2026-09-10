@@ -107,11 +107,9 @@ describe("LiveStandingsTable", () => {
       );
     });
 
-    const rows = Array.from(document.body.querySelectorAll("tbody tr"));
+    const rows = Array.from(document.body.querySelectorAll(".standing-person"));
     expect(rows[0]?.getAttribute("data-interclub-club-tone")).toBe("blue");
     expect(rows[1]?.getAttribute("data-interclub-club-tone")).toBe("red");
-    expect(rows[0]?.querySelector("td")?.className).toContain("bg-sky-50/70");
-    expect(rows[1]?.querySelector("td")?.className).toContain("bg-rose-50/70");
     expect(document.body.textContent).not.toContain("Northside");
     expect(document.body.textContent).not.toContain("Anti-SeleK");
   });
@@ -121,10 +119,9 @@ describe("LiveStandingsTable", () => {
       root.render(renderTable({}));
     });
 
-    const firstCell = document.body.querySelector("tbody tr td");
-    expect(firstCell?.className).toContain("bg-white");
-    expect(firstCell?.className).not.toContain("bg-sky-50/70");
-    expect(firstCell?.className).not.toContain("bg-rose-50/70");
+    const row = document.body.querySelector(".standing-person");
+    expect(row?.hasAttribute("data-interclub-club-tone")).toBe(false);
+    expect(row?.getAttribute("href")).toBe("/profile/u1");
   });
 
   it("does not reveal skip-next state in the standings leaderboard", async () => {
@@ -163,12 +160,12 @@ describe("LiveStandingsTable", () => {
       );
     });
 
-    expect(document.body.querySelector("tbody")?.textContent).not.toContain(
+    expect(document.body.querySelector(".play-standings")?.textContent).not.toContain(
       "Guest"
     );
   });
 
-  it("expands compact column labels and exposes fixed game-group filters", async () => {
+  it("shows records without cramped table columns and exposes fixed game-group filters", async () => {
     await act(async () => {
       root.render(
         <LiveStandingsTable
@@ -185,28 +182,19 @@ describe("LiveStandingsTable", () => {
       );
     });
 
-    expect(
-      document.body.querySelector('th[aria-label="Points"]')
-    ).not.toBeNull();
-    expect(
-      document.body.querySelector('th[aria-label="Point difference"]')
-    ).not.toBeNull();
-    expect(
-      document.body.querySelector('th[aria-label="Matches played"]')
-    ).not.toBeNull();
-    expect(
-      document.body.querySelector('th[aria-label="Wins and losses"]')
-    ).not.toBeNull();
+    expect(document.body.querySelectorAll(".standing-person")).toHaveLength(2);
+    expect(document.body.querySelector(".standing-person")?.textContent).toContain("0W / 0L · 0 games · 0 diff");
+    expect(document.body.querySelector(".standing-person")?.textContent).toContain("pts");
     expect(
       document.body.querySelector('button[aria-pressed="true"]')?.textContent
     ).toContain("All");
     expect(document.body.textContent).toContain("Competitive");
     expect(document.body.textContent).toContain("Social");
     expect(document.body.textContent).not.toContain("Regular");
-    expect(document.body.querySelector("tbody")?.textContent).not.toContain(
+    expect(document.body.querySelector(".play-standings")?.textContent).not.toContain(
       "Competitive"
     );
-    expect(document.body.querySelector("tbody")?.textContent).not.toContain(
+    expect(document.body.querySelector(".play-standings")?.textContent).not.toContain(
       "Social"
     );
   });

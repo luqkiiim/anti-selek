@@ -154,7 +154,7 @@ export function ClubLeaderboardPanel({
   onRequestClaim,
 }: ClubLeaderboardPanelProps) {
   return (
-    <div className="app-panel space-y-4 p-5 sm:p-6">
+    <div className="play-leaderboard space-y-4">
       <div className="flex items-center justify-between gap-3">
         <div>
           <h3 className="app-section-eyebrow">
@@ -180,7 +180,7 @@ export function ClubLeaderboardPanel({
           players.map((player, index) => (
             <div
               key={player.id}
-              className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-2"
+              className="play-ranking-row"
             >
               <Link
                 href={`/profile/${player.id}?clubId=${clubId}`}
@@ -188,7 +188,7 @@ export function ClubLeaderboardPanel({
                 aria-label={`Open ${player.name}'s profile`}
               >
                 <div className="flex min-w-0 items-center gap-3">
-                  <div className="flex w-12 shrink-0 items-center gap-1">
+                  <div className="flex w-9 shrink-0 items-center gap-1">
                     <RankMovementIndicator rankDelta={player.rankDelta} />
                     <span className="w-6 text-xs font-semibold text-blue-600">
                       #{index + 1}

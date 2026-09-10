@@ -1352,3 +1352,7 @@
     transform: rotate(360deg);
   }
 }
+
+/* Secondary administration forms extend the Play Collective components. */
+.adminPanel,.dangerPanel{border-radius:20px;background:#fffdfb;border-color:#e8ddec;box-shadow:none;padding:18px}
+.panelHeadingCopy h3{color:#291440;font-size:19px;font-weight:900}.panelEyebrow,.requestStatus{color:#7744c7}.panelHeadingCopy>span{color:#80718b}.requestRow,.compactEmpty{background:#faf5fc;border-color:#e8ddec;border-radius:16px}.requestName,.requestTarget{color:#402751}.primaryAction{background:#7443cf;border-color:#7443cf;box-shadow:0 3px 0 #5f31b4;border-radius:14px;min-height:46px}.primaryAction:hover{background:#6635bd}.countBadge{background:#eee3fa;color:#6537a9;border-color:#e0d0ed}.settingsGrid{display:grid;grid-template-columns:1fr;gap:22px}.field input,.field select{border-radius:13px;min-height:46px;font-size:16px}.field input:focus,.field select:focus{border-color:#9e73d9;box-shadow:0 0 0 3px #eaddf9}.activePanel{padding:0;min-width:0}.loadingPage{background:#fffaf3}.loadingIcon{color:#7443cf}

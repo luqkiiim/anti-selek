@@ -1,9 +1,10 @@
 import type { Metadata, Viewport } from "next";
-import { IBM_Plex_Mono, Space_Grotesk } from "next/font/google";
+import { IBM_Plex_Mono, Nunito_Sans } from "next/font/google";
 import "./globals.css";
+import "@/components/play/play.css";
 import { Providers } from "@/components/Providers";
 
-const headingFont = Space_Grotesk({
+const headingFont = Nunito_Sans({
   variable: "--font-heading",
   subsets: ["latin"],
 });
@@ -27,7 +28,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#102236",
+  themeColor: "#fffaf3",
   viewportFit: "cover",
 };
 

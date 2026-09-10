@@ -60,8 +60,8 @@ describe("ClubPlayersPanel", () => {
     const markup = renderPanel([buildPlayer()]);
 
     expect(markup).toContain('data-owner-admin-panel="players"');
-    expect(markup).toContain("Players and roles");
-    expect(markup).toContain('placeholder="Search players by name or email"');
+    expect(markup).toContain("Players");
+    expect(markup).toContain('placeholder="Find a player"');
     expect(markup).toContain('href="/profile/player-1?clubId=club-1"');
     expect(markup).toContain("Owner · 1280 rating");
     expect(markup).toContain('aria-label="Edit Jane Doe"');
@@ -80,7 +80,7 @@ describe("ClubPlayersPanel", () => {
     ]);
 
     expect(markup).toContain(
-      "Member · Occasional · Placeholder · Inactive · Linked · 1280 rating"
+      "Member · 1280 rating · Unclaimed · Occasional · Inactive · Linked"
     );
   });
 });
