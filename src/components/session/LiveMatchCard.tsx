@@ -539,7 +539,7 @@ export function LiveMatchCard({
   }, [clearSavedScoreInputScrollPosition]);
 
   const matchLineup = (
-    <div className="grid grid-cols-[minmax(0,1fr)_2.75rem_2.75rem_minmax(0,1fr)] items-center gap-1.5 sm:grid-cols-[minmax(0,1fr)_3rem_3rem_minmax(0,1fr)] sm:gap-2 md:grid-cols-[minmax(0,1fr)_3.25rem_3.25rem_minmax(0,1fr)] lg:gap-3 xl:grid-cols-[minmax(0,1fr)_3.5rem_3.5rem_minmax(0,1fr)]">
+    <div className="pc-match-lineup">
       <TeamNames
         matchId={match.id}
         players={[match.team1User1, match.team1User2]}
@@ -581,7 +581,6 @@ export function LiveMatchCard({
       <TeamNames
         matchId={match.id}
         players={[match.team2User1, match.team2User2]}
-        align="right"
         canReshuffleWithoutPlayer={canReshuffleWithoutPlayer}
         activeActionPlayerId={activeActionPlayerId}
         reshufflingCourtPlayerId={reshufflingCourtPlayerId}

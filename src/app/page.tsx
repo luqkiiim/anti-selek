@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { signOut } from "next-auth/react";
 import { LogIn, LogOut, Plus, Settings, Sparkles } from "lucide-react";
 import { EmptyState, FlashMessage, SectionCard } from "@/components/ui/chrome";
@@ -88,39 +89,14 @@ export default function Home() {
           </div>
         </div>
 
-        <section className="app-panel px-5 py-6 sm:px-6">
-          <div className="space-y-6 text-center">
-            <div className="flex flex-wrap items-center justify-center gap-3">
-              <p className="app-eyebrow">Dashboard</p>
-              <span className="app-chip app-chip-neutral">
-                Club tournaments
-              </span>
-            </div>
-            <div className="space-y-3">
-              <h1 className="app-title text-gray-900">Anti-Selek</h1>
-            </div>
-            {!isQuickAccess ? (
-              <div className="flex flex-wrap justify-center gap-3">
-                <button
-                  type="button"
-                  onClick={openJoinClubModal}
-                  className="app-button-secondary"
-                >
-                  <LogIn aria-hidden="true" size={17} />
-                  Join Club
-                </button>
-                <button
-                  type="button"
-                  onClick={openCreateClubModal}
-                  className="app-button-primary"
-                >
-                  <Plus aria-hidden="true" size={17} />
-                  Create Club
-                </button>
-              </div>
-            ) : null}
-          </div>
+        <section className="pc-welcome">
+          <div><p className="app-eyebrow">Anti-Selek</p><h1 className="app-title mt-2">Your clubs</h1><p className="mt-3 text-sm text-gray-600">Choose where you play.</p></div>
+          <Image src="/play-collective/spark.png" width={100} height={100} alt="" priority />
         </section>
+        {!isQuickAccess && <div className="pc-section-actions">
+          <button type="button" onClick={openJoinClubModal} className="app-button-primary"><LogIn size={17} aria-hidden="true" />Join Club</button>
+          <button type="button" onClick={openCreateClubModal} className="app-button-secondary"><Plus size={17} aria-hidden="true" />Create Club</button>
+        </div>}
 
         {isQuickAccess ? (
           <FlashMessage tone="warning">
@@ -130,125 +106,30 @@ export default function Home() {
           </FlashMessage>
         ) : null}
 
-        {!isQuickAccess ? (
-          <section className="app-panel p-5 sm:p-6">
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-              <div className="min-w-0 space-y-2">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="flex h-9 w-9 items-center justify-center rounded-xl border border-teal-200 bg-teal-50 text-teal-700">
-                    <Sparkles aria-hidden="true" size={17} />
-                  </span>
-                  <span className="app-chip app-chip-accent">
-                    Tutorial playground
-                  </span>
-                </div>
-                <div>
-                  <h2 className="text-lg font-semibold text-gray-900">
-                    Tutorial playground
-                  </h2>
-                  <p className="mt-1 text-sm text-gray-600">
-                    {tutorialPlayground
-                      ? "Your saved practice club"
-                      : "Practice club"}
-                  </p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={openTutorialPlayground}
-                disabled={openingTutorialPlayground}
-                className="app-button-primary shrink-0 px-4 py-2.5"
-              >
-                <Sparkles aria-hidden="true" size={17} />
-                {openingTutorialPlayground
-                  ? "Opening..."
-                  : tutorialPlayground ? "Resume practice" : "Start practice"}
-              </button>
-            </div>
-            <p className="mt-3 text-sm leading-6 text-gray-600">
-              A practice space separate from your real clubs.
-            </p>
-          </section>
-        ) : null}
-
         {dashboardError ? (
           <FlashMessage tone="error">{dashboardError}</FlashMessage>
         ) : null}
 
-        <SectionCard
-          eyebrow="Your spaces"
-          title="Clubs"
-          action={
-            <span className="app-chip app-chip-neutral">
-              {clubs.length} listed
-            </span>
-          }
-        >
-          {clubs.length === 0 ? (
-            <EmptyState
-              title="No clubs yet"
-            />
-          ) : (
-            <div className="grid gap-4">
-              {clubs.map((club) => (
-                <Link
-                  key={club.id}
-                  href={`/club/${club.id}`}
-                  className="app-subcard block p-4 transition hover:-translate-y-0.5 hover:border-blue-300 hover:bg-blue-50"
-                >
-                  <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                    <div className="min-w-0">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <h3 className="text-lg font-semibold text-gray-900">
-                          {club.name}
-                        </h3>
-                        <span
-                          className={`app-chip ${
-                            club.viewerIsOwner
-                              ? "app-chip-accent"
-                              : club.role === "ADMIN"
-                              ? "app-chip-accent"
-                              : club.role === "STAFF"
-                                ? "app-chip-warning"
-                              : "app-chip-neutral"
-                          }`}
-                        >
-                          {club.viewerIsOwner
-                            ? "Owner"
-                            : getClubRoleLabel(club.role)}
-                        </span>
-                        {club.isPasswordProtected ? (
-                          <span className="app-chip app-chip-warning">
-                            Protected
-                          </span>
-                        ) : null}
-                      </div>
-                    </div>
-
-                    <div className="grid shrink-0 grid-cols-2 gap-3 sm:min-w-[12rem]">
-                      <div className="app-panel-muted px-3 py-3">
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">
-                          Members
-                        </p>
-                        <p className="mt-2 text-lg font-semibold text-gray-900">
-                          {club.membersCount}
-                        </p>
-                      </div>
-                      <div className="app-panel-muted px-3 py-3">
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">
-                          Tournaments
-                        </p>
-                        <p className="mt-2 text-lg font-semibold text-gray-900">
-                          {club.sessionsCount}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                </Link>
-              ))}
-            </div>
+        <SectionCard title="Clubs">
+          {clubs.length === 0 ? <EmptyState title="No clubs yet" detail="Join your group or create a club to start playing." /> : (
+            <div className="pc-club-list">{clubs.map((club) => (
+              <Link key={club.id} href={`/club/${club.id}`} className="app-subcard pc-club-link">
+                <div className="min-w-0"><h3 className="text-lg font-extrabold">{club.name}</h3><p className="mt-1 text-sm text-gray-500">{club.membersCount} members · {club.sessionsCount} sessions</p></div>
+                <span className="app-chip app-chip-accent">{club.viewerIsOwner ? "Owner" : getClubRoleLabel(club.role)}</span>
+              </Link>
+            ))}</div>
           )}
         </SectionCard>
+        {!isQuickAccess && (
+          <details className="app-panel p-5">
+            <summary className="min-h-11 cursor-pointer font-bold">Practice & learn</summary>
+            <p className="mb-4 text-sm text-gray-600">A practice space separate from your real clubs.</p>
+            <button type="button" onClick={openTutorialPlayground} disabled={openingTutorialPlayground} className="app-button-secondary">
+              <Sparkles aria-hidden="true" size={17} />
+              {openingTutorialPlayground ? "Opening..." : tutorialPlayground ? "Resume practice" : "Start practice"}
+            </button>
+          </details>
+        )}
       </div>
 
       <CreateClubModal

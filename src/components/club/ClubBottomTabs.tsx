@@ -45,7 +45,7 @@ export function ClubBottomTabs({
     return null;
   }
 
-  const items = sections.map((section) => ({
+  const items = sections.filter((section) => ["overview", "tournaments", "profile"].includes(section.key)).map((section) => ({
     id: section.key,
     label:
       section.key === "host"
@@ -69,7 +69,7 @@ export function ClubBottomTabs({
   return (
     <MobileBottomTabs
       items={items}
-      activeId={activeTab}
+      activeId={activeTab === "host" ? "tournaments" : activeTab === "leaderboard" ? "overview" : activeTab}
       onSelect={handleSelect}
       ariaLabel="Club navigation"
       visibilityClassName="xl:hidden"

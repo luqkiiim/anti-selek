@@ -62,7 +62,7 @@ export function MobileBottomTabs<T extends string>({
   const nav = (
     <nav
       aria-label={ariaLabel}
-      className={`fixed inset-x-0 bottom-0 z-40 transform-gpu rounded-t-2xl border-t border-gray-200 bg-white/95 px-3 pb-[env(safe-area-inset-bottom)] pt-1 shadow-[0_-12px_28px_rgba(23,32,31,0.12)] backdrop-blur-md will-change-transform ${visibilityClassName}`}
+      className={`fixed inset-x-0 bottom-0 z-40 transform-gpu rounded-t-2xl border-t border-gray-200 bg-white/95 px-3 pb-[env(safe-area-inset-bottom)] pt-1 shadow-[0_-4px_20px_rgba(41,20,64,0.04)] backdrop-blur-md will-change-transform ${visibilityClassName}`}
     >
       <div className="mx-auto flex max-w-md items-center justify-around gap-1 px-2 py-1.5">
         {items.map((item) => {
@@ -80,7 +80,7 @@ export function MobileBottomTabs<T extends string>({
               onClick={() => onSelect(item.id)}
               className={`flex min-h-12 flex-1 flex-col items-center justify-center gap-0.5 rounded-lg px-2 transition ${
                 isActive
-                  ? "bg-[var(--accent)] text-white shadow-sm"
+                  ? "bg-[var(--accent-soft)] text-[var(--accent-strong)]"
                   : "text-gray-500 hover:bg-gray-50 hover:text-gray-700"
               } ${item.disabled ? "cursor-not-allowed opacity-45" : ""}`}
             >

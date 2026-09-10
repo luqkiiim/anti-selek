@@ -64,8 +64,15 @@ export function useDashboardPage() {
       throw new Error(data.error || "Failed to load clubs");
     }
 
-    setClubs(Array.isArray(data) ? (data as DashboardClub[]) : []);
-  }, [safeJson]);
+    const available = Array.isArray(data) ? (data as DashboardClub[]) : [];
+    setClubs(available);
+    if (!new URLSearchParams(window.location.search).has("choose")) {
+      let saved: string | null = null;
+      try { saved = localStorage.getItem(`pc:last-club:v1:${session?.user?.id}`); } catch { /* Storage is optional. */ }
+      const destination = available.find((club) => club.id === saved) ?? (available.length === 1 ? available[0] : null);
+      if (destination) router.replace(`/club/${destination.id}`);
+    }
+  }, [safeJson, router, session?.user?.id]);
 
   const fetchTutorialPlayground = useCallback(async () => {
     if (isQuickAccess) {

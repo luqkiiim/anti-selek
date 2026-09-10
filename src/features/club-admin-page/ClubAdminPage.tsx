@@ -37,7 +37,7 @@ const tabs: Array<{
   },
   {
     key: "claims",
-    label: "Claims",
+    label: "Requests",
     detail: ({ claims }) => `${claims} pending`,
   },
   {
@@ -320,7 +320,7 @@ export default function ClubAdminPage() {
   );
   const visibleTabs = isTutorialPlayground
     ? tabs.filter((tab) => tab.key === "players" || tab.key === "settings")
-    : tabs;
+    : tabs.filter((tab) => tab.key !== "links");
 
   useEffect(() => {
     const requestedTab = searchParams.get("tab");
@@ -490,7 +490,7 @@ export default function ClubAdminPage() {
         <nav className={styles.tabSurface} aria-label="Administration sections">
           <div className={styles.tabList} role="tablist">
             {visibleTabs.map((tab, index) => {
-              const isActive = activeSection === tab.key;
+              const isActive = activeSection === tab.key || (activeSection === "links" && tab.key === "claims");
               const detail = tab.detail({
                 players: players.length,
                 claims: claimRequests.length,
@@ -531,9 +531,9 @@ export default function ClubAdminPage() {
 
         <section
           className={styles.activePanel}
-          id={`admin-panel-${activeSection}`}
+          id={`admin-panel-${activeSection === "links" ? "claims" : activeSection}`}
           role="tabpanel"
-          aria-labelledby={`admin-tab-${activeSection}`}
+          aria-labelledby={`admin-tab-${activeSection === "links" ? "claims" : activeSection}`}
           tabIndex={0}
         >
           {activeSection === "players" ? (
@@ -550,7 +550,7 @@ export default function ClubAdminPage() {
             />
           ) : null}
 
-          {!isTutorialPlayground && activeSection === "claims" ? (
+          {!isTutorialPlayground && (activeSection === "claims" || activeSection === "links") ? (
             <ClaimRequestsPanel
               claimRequests={claimRequests}
               reviewingClaimRequestId={reviewingClaimRequestId}
@@ -559,7 +559,7 @@ export default function ClubAdminPage() {
             />
           ) : null}
 
-          {!isTutorialPlayground && activeSection === "links" ? (
+          {!isTutorialPlayground && (activeSection === "claims" || activeSection === "links") ? (
             <OfflineIdentityLinksPanel
               links={offlineIdentityLinks}
               currentClubId={clubId}

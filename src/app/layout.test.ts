@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 
 vi.mock("next/font/google", () => ({
   IBM_Plex_Mono: () => ({ variable: "mock-mono" }),
-  Space_Grotesk: () => ({ variable: "mock-heading" }),
+  Nunito_Sans: () => ({ variable: "mock-heading" }),
 }));
 
 vi.mock("./globals.css", () => ({}));
@@ -17,7 +17,7 @@ describe("root layout viewport", () => {
     const { viewport } = await import("./layout");
 
     expect(viewport).toMatchObject({
-      themeColor: "#102236",
+      themeColor: "#fffaf3",
       viewportFit: "cover",
     });
   });

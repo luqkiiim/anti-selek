@@ -233,7 +233,7 @@ describe("club avatar sizing", () => {
     const text = container.textContent ?? "";
     expect(text).toContain("Top rivalry");
     expect(text).toContain("Partner chemistry");
-    expect(text).toContain("Tournament news");
+    expect(text).toContain("Club activity");
     expect(text).toContain("Recent matches");
     expect(text).toContain("+11 rating");
     expect(text).toContain("24 - 22");

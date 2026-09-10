@@ -77,7 +77,7 @@ describe("MobileBottomTabs", () => {
     expect(nav?.className).toContain("border-t");
     expect(nav?.className).toContain("bg-white/95");
     expect(nav?.className).toContain(
-      "shadow-[0_-12px_28px_rgba(23,32,31,0.12)]"
+      "shadow-[0_-4px_20px_rgba(41,20,64,0.04)]"
     );
     expect(nav?.className).toContain("backdrop-blur-md");
     expect(nav?.className).toContain("pb-[env(safe-area-inset-bottom)]");

@@ -17,12 +17,12 @@ export interface ClubSectionDescriptor {
 export const CLUB_SECTION_DESCRIPTORS: readonly ClubSectionDescriptor[] = [
   {
     key: "overview",
-    label: "Overview",
+    label: "Club",
     detail: () => "Live snapshot",
   },
   {
     key: "tournaments",
-    label: "Tournaments",
+    label: "Sessions",
     detail: ({ tournaments }) => `${tournaments} total`,
   },
   {

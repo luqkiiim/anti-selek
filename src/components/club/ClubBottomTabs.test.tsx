@@ -28,17 +28,9 @@ describe("ClubBottomTabs", () => {
     expect(markup).toContain('aria-label="Club navigation"');
     expect(markup).toContain("xl:hidden");
     expect(markup).not.toContain("sm:hidden");
-    expect(markup.indexOf("Overview")).toBeLessThan(
-      markup.indexOf("Tournaments")
-    );
-    expect(markup.indexOf("Tournaments")).toBeLessThan(
-      markup.indexOf("Host")
-    );
-    expect(markup.indexOf("Host")).toBeLessThan(
-      markup.indexOf("Leaderboard")
-    );
-    expect(markup.indexOf("Leaderboard")).toBeLessThan(
-      markup.indexOf("Profile")
-    );
+    expect(markup.indexOf('aria-label="Club"')).toBeLessThan(markup.indexOf('aria-label="Sessions"'));
+    expect(markup.indexOf('aria-label="Sessions"')).toBeLessThan(markup.indexOf('aria-label="Player profile"'));
+    expect(markup).not.toContain('aria-label="Host setup"');
+    expect(markup).not.toContain('aria-label="Leaderboard"');
   });
 });

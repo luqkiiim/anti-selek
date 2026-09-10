@@ -20,9 +20,9 @@ const AVATAR_SIZE_CLASSES = {
 
 const AVATAR_APPEARANCE_CLASSES = {
   default:
-    "border border-[rgba(15,118,110,0.18)] bg-[linear-gradient(145deg,#d7f4ed,#eef9f6)] text-[var(--accent-strong)] shadow-[0_4px_14px_rgba(15,118,110,0.12)]",
+    "border border-[rgba(116,67,207,0.18)] bg-[linear-gradient(145deg,#eee4ff,#fff1e6)] text-[var(--accent-strong)] shadow-[0_4px_14px_rgba(116,67,207,0.12)]",
   court:
-    "border border-[rgba(15,118,110,0.12)] bg-[linear-gradient(145deg,#ebfbf6,#f7fcfa)] text-[var(--accent-strong)] shadow-none",
+    "border border-[rgba(116,67,207,0.12)] bg-[linear-gradient(145deg,#f3eaff,#fffaf3)] text-[var(--accent-strong)] shadow-none",
 } as const;
 
 export function getAvatarInitials(name: string) {

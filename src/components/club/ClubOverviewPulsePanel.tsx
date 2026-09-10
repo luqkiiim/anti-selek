@@ -22,6 +22,7 @@ import type { ClubPagePulse, ClubPageSession } from "./clubTypes";
 
 interface ClubOverviewPulsePanelProps {
   clubId: string;
+  leaderboardPreview?: ReactNode;
   clubPulse: ClubPagePulse | null;
   activeTournaments: ClubPageSession[];
   memberCount?: number;
@@ -291,6 +292,7 @@ function getRivalryDisplay(rivalry: ClubPagePulse["rivalries"][number]) {
 
 export function ClubOverviewPulsePanel({
   clubId,
+  leaderboardPreview,
   clubPulse,
   activeTournaments,
   memberCount,
@@ -552,6 +554,65 @@ export function ClubOverviewPulsePanel({
     <div className="space-y-4 sm:space-y-5">
       {currentTournamentSection}
 
+      <section className="overflow-hidden rounded-2xl border border-[var(--line)] bg-white shadow-[0_14px_34px_rgba(23,32,31,0.06)]">
+        <SectionHeader
+          icon={<CalendarDays aria-hidden="true" size={28} />}
+          title="Latest session"
+          action={
+            latestStory ? (
+              <button
+                type="button"
+                onClick={() => onOpenTournament(latestStory.session.code)}
+                className="app-button-primary px-4 py-2 text-sm"
+              >
+                Results
+                <ArrowRight aria-hidden="true" size={15} />
+              </button>
+            ) : null
+          }
+        />
+        {latestStory ? (
+          <div className="grid grid-cols-[4rem_minmax(0,1fr)] items-center gap-4 px-4 py-4 sm:grid-cols-[4rem_minmax(0,1fr)_auto]">
+            <span className="flex h-16 w-16 items-center justify-center rounded-xl bg-[var(--accent)] text-white">
+              <Trophy aria-hidden="true" size={34} />
+            </span>
+            <div className="min-w-0">
+              <p className="truncate text-xl font-semibold text-gray-950">
+                {latestStory.session.name}
+              </p>
+              <p className="mt-1 text-sm font-medium text-gray-500">
+                {formatDate(latestStory.session.date)}
+              </p>
+              {latestStory.topPerformer ? (
+                <button
+                  type="button"
+                  onClick={() =>
+                    onOpenPlayerProfile(latestStory.topPerformer!.user.id)
+                  }
+                  className="mt-2 inline-flex max-w-full items-center gap-2 text-sm font-medium text-gray-600 transition hover:text-[var(--accent-strong)]"
+                >
+                  <span>MVP</span>
+                  <Avatar
+                    name={latestStory.topPerformer.user.name}
+                    avatarUrl={latestStory.topPerformer.user.avatarUrl}
+                    size="match"
+                  />
+                  <span className="truncate">
+                    {latestStory.topPerformer.user.name}
+                  </span>
+                  <span className="shrink-0 text-[var(--accent-strong)]">
+                    {formatSigned(latestStory.topPerformer.ratingChange)} rating
+                  </span>
+                </button>
+              ) : null}
+            </div>
+          </div>
+        ) : (
+          <EmptyPulseState>No completed tournament yet</EmptyPulseState>
+        )}
+      </section>
+
+      {leaderboardPreview}
       <section className="grid grid-cols-4 overflow-hidden rounded-2xl border border-[var(--line)] bg-white shadow-[0_14px_34px_rgba(23,32,31,0.06)]">
         <PulseMetric
           icon={<Users aria-hidden="true" size={18} />}
@@ -575,11 +636,13 @@ export function ClubOverviewPulsePanel({
         />
       </section>
 
+      <details className="app-panel p-4"><summary className="min-h-11 cursor-pointer font-bold">Club insights & activity</summary>
+      <div className="space-y-4">
       {sessionNews.length > 0 || shouldShowEmptyNews ? (
         <section className="overflow-hidden rounded-2xl border border-[var(--line)] bg-white shadow-[0_14px_34px_rgba(23,32,31,0.06)]">
           <SectionHeader
             icon={<Newspaper aria-hidden="true" size={28} />}
-            title="Tournament news"
+            title="Club activity"
             action={
               sessionNews.length > 0 ? (
                 <ViewAllButton onClick={() => setOpenModal("news")} />
@@ -693,64 +756,6 @@ export function ClubOverviewPulsePanel({
           )}
         </section>
       </div>
-
-      <section className="overflow-hidden rounded-2xl border border-[var(--line)] bg-white shadow-[0_14px_34px_rgba(23,32,31,0.06)]">
-        <SectionHeader
-          icon={<CalendarDays aria-hidden="true" size={28} />}
-          title="Latest tournament"
-          action={
-            latestStory ? (
-              <button
-                type="button"
-                onClick={() => onOpenTournament(latestStory.session.code)}
-                className="app-button-primary px-4 py-2 text-sm"
-              >
-                Results
-                <ArrowRight aria-hidden="true" size={15} />
-              </button>
-            ) : null
-          }
-        />
-        {latestStory ? (
-          <div className="grid grid-cols-[4rem_minmax(0,1fr)] items-center gap-4 px-4 py-4 sm:grid-cols-[4rem_minmax(0,1fr)_auto]">
-            <span className="flex h-16 w-16 items-center justify-center rounded-xl bg-[var(--accent)] text-white">
-              <Trophy aria-hidden="true" size={34} />
-            </span>
-            <div className="min-w-0">
-              <p className="truncate text-xl font-semibold text-gray-950">
-                {latestStory.session.name}
-              </p>
-              <p className="mt-1 text-sm font-medium text-gray-500">
-                {formatDate(latestStory.session.date)}
-              </p>
-              {latestStory.topPerformer ? (
-                <button
-                  type="button"
-                  onClick={() =>
-                    onOpenPlayerProfile(latestStory.topPerformer!.user.id)
-                  }
-                  className="mt-2 inline-flex max-w-full items-center gap-2 text-sm font-medium text-gray-600 transition hover:text-[var(--accent-strong)]"
-                >
-                  <span>MVP</span>
-                  <Avatar
-                    name={latestStory.topPerformer.user.name}
-                    avatarUrl={latestStory.topPerformer.user.avatarUrl}
-                    size="match"
-                  />
-                  <span className="truncate">
-                    {latestStory.topPerformer.user.name}
-                  </span>
-                  <span className="shrink-0 text-[var(--accent-strong)]">
-                    {formatSigned(latestStory.topPerformer.ratingChange)} rating
-                  </span>
-                </button>
-              ) : null}
-            </div>
-          </div>
-        ) : (
-          <EmptyPulseState>No completed tournament yet</EmptyPulseState>
-        )}
-      </section>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <section className="overflow-hidden rounded-2xl border border-[var(--line)] bg-white shadow-[0_14px_34px_rgba(23,32,31,0.06)]">
@@ -900,8 +905,9 @@ export function ClubOverviewPulsePanel({
         )}
       </section>
 
+      </div></details>
       {openModal === "news" ? (
-        <OverviewModal title="Tournament news" onClose={() => setOpenModal(null)}>
+        <OverviewModal title="Club activity" onClose={() => setOpenModal(null)}>
           {sessionNews.map((item) => (
             <NewsRow
               key={item.id}

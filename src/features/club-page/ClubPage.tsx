@@ -14,7 +14,7 @@ import { ArrowLeft, Shield } from "lucide-react";
 import { getHostSessionOnboardingOverride } from "@/lib/adminOnboarding";
 import { getClubRoleLabel } from "@/lib/clubRoles";
 import { getSessionTypeLabel } from "@/lib/sessionModeLabels";
-import { FlashMessage, HeroCard } from "@/components/ui/chrome";
+import { FlashMessage } from "@/components/ui/chrome";
 import { ClubActionConfirmModal } from "@/components/club/ClubActionConfirmModal";
 import { ClubBottomTabs } from "@/components/club/ClubBottomTabs";
 import { ClubLeaderboardPanel } from "@/components/club/ClubLeaderboardPanel";
@@ -201,6 +201,11 @@ export default function ClubPage() {
     void adminOnboarding.refresh();
   }, [adminOnboarding, createSession]);
 
+  useEffect(() => {
+    if (!club || !user?.id || club.isTutorial) return;
+    try { localStorage.setItem(`pc:last-club:v1:${user.id}`, clubId); } catch { /* Storage is optional. */ }
+  }, [club, clubId, user?.id]);
+
   const sectionTabs = useMemo(() => {
     return getAuthorizedClubSections({
       canManageClub,
@@ -242,12 +247,7 @@ export default function ClubPage() {
   }, [measureActiveClubPanel]);
 
   const handleBack = useCallback(() => {
-    if (typeof window !== "undefined" && window.history.length > 1) {
-      router.back();
-      return;
-    }
-
-    router.push("/");
+    router.push("/?choose=1");
   }, [router]);
 
   const retryClubLoad = useCallback(async () => {
@@ -792,6 +792,7 @@ export default function ClubPage() {
     : [];
   const overviewPanel = (
     <ClubOverviewPulsePanel
+      leaderboardPreview={leaderboard.length > 0 ? <ClubLeaderboardPanel title="Club leaders" players={leaderboard.slice(0, 3)} clubId={clubId} showClaimControls={false} action={<button type="button" className="app-button-secondary" onClick={() => switchClubSection("leaderboard")}>View all</button>} /> : null}
       clubId={clubId}
       clubPulse={clubPulse}
       activeTournaments={activeTournaments}
@@ -815,6 +816,7 @@ export default function ClubPage() {
   );
   const tournamentsPanel = (
     <div className="space-y-8">
+      {canManageClub && <button type="button" className="app-button-primary" onClick={() => switchClubSection("host")}>Host a session</button>}
       <CurrentTournamentsPanel
         tournaments={activeTournaments}
         currentUserId={user?.id}
@@ -866,13 +868,19 @@ export default function ClubPage() {
   const renderClubSection = (section: ClubPageSection) => {
     switch (section) {
       case "overview":
-        return overviewPanel;
+        return <>
+          <div className="pc-section-actions">
+            <button type="button" className="app-button-secondary" onClick={() => switchClubSection("leaderboard")}>Club leaderboard</button>
+            {canManageClub && <button type="button" className="app-button-primary" onClick={() => switchClubSection("host")}>Host a session</button>}
+          </div>
+          {overviewPanel}
+        </>;
       case "host":
-        return hostSetupPanel;
+        return <><button type="button" className="app-button-secondary" onClick={() => switchClubSection("tournaments")}>Back to sessions</button>{hostSetupPanel}</>;
       case "tournaments":
         return tournamentsPanel;
       case "leaderboard":
-        return leaderboardPanel;
+        return <><button type="button" className="app-button-secondary" onClick={() => switchClubSection("overview")}>Back to club</button>{leaderboardPanel}</>;
       case "profile":
         return profilePanel;
       default:
@@ -883,54 +891,16 @@ export default function ClubPage() {
   return (
     <main className="app-page">
       <div className="app-shell space-y-8">
-        <HeroCard
-          title={clubName}
-          headingAlign="center"
-          actionsPosition="below"
-          meta={
-            <div className="flex w-full items-center justify-between gap-3">
-              <div>
-                <button
-                  type="button"
-                  onClick={handleBack}
-                  className="app-button-secondary px-3 py-2 text-sm"
-                >
-                  <ArrowLeft aria-hidden="true" size={17} />
-                  Back
-                </button>
-              </div>
-              <div className="flex flex-wrap items-center justify-end gap-2">
-                <ClubNotificationsButton
-                  clubId={clubId}
-                  initialUnreadCount={notifications.unreadCount}
-                />
-                {isTutorialPlayground ? (
-                  <span className="app-chip app-chip-accent">
-                    Tutorial playground
-                  </span>
-                ) : null}
-                <div className="flex min-h-11 items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700">
-                  <Shield aria-hidden="true" size={15} className="text-gray-600" />
-                  <span>Your role: {clubRoleLabel}</span>
-                </div>
-                {canAdminClub ? (
-                  <Link
-                    href={`/club/${clubId}/admin`}
-                    className="app-button-secondary px-3 py-2 text-sm"
-                    data-tutorial-target={
-                      isTutorialPlayground
-                        ? "admin-onboarding-club-admin"
-                        : undefined
-                    }
-                  >
-                    <Shield aria-hidden="true" size={15} />
-                    <span>Manage club</span>
-                  </Link>
-                ) : null}
-              </div>
-            </div>
-          }
-        />
+        <header className="space-y-4 px-1 pt-2">
+          <div className="flex items-center justify-between gap-3">
+            <button type="button" onClick={handleBack} className="app-button-secondary px-3 py-2 text-sm"><ArrowLeft size={17} aria-hidden="true" />Switch club</button>
+            <ClubNotificationsButton clubId={clubId} initialUnreadCount={notifications.unreadCount} />
+          </div>
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <div className="min-w-0"><p className="app-eyebrow">{isTutorialPlayground ? "Practice club" : clubRoleLabel}</p><h1 className="app-title mt-1 break-words">{clubName}</h1></div>
+            {canAdminClub && <Link href={`/club/${clubId}/admin`} className="inline-flex min-h-11 items-center gap-2 text-sm font-bold text-[var(--accent)]" data-tutorial-target={isTutorialPlayground ? "admin-onboarding-club-admin" : undefined}><Shield size={16} aria-hidden="true" />Manage club</Link>}
+          </div>
+        </header>
 
         {success ? <FlashMessage tone="success">{success}</FlashMessage> : null}
 
@@ -968,11 +938,11 @@ export default function ClubPage() {
           <div
             className="grid gap-2"
             style={{
-              gridTemplateColumns: `repeat(${sectionTabs.length}, minmax(0, 1fr))`,
+              gridTemplateColumns: `repeat(${sectionTabs.filter((tab) => ["overview", "tournaments", "profile"].includes(tab.key)).length}, minmax(0, 1fr))`,
             }}
           >
-            {sectionTabs.map((tab) => {
-              const isActive = activeSection === tab.key;
+            {sectionTabs.filter((tab) => ["overview", "tournaments", "profile"].includes(tab.key)).map((tab) => {
+              const isActive = activeSection === tab.key || (activeSection === "host" && tab.key === "tournaments") || (activeSection === "leaderboard" && tab.key === "overview");
               return (
                 <button
                   key={tab.key}

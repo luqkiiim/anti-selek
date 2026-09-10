@@ -73,8 +73,8 @@ const LIVE_MOBILE_SECTIONS: Array<{
   label: string;
   icon: LucideIcon;
 }> = [
-  { id: "session", label: "Overview", icon: ClipboardList },
   { id: "courts", label: "Courts", icon: Grid3X3 },
+  { id: "session", label: "Players", icon: ClipboardList },
   { id: "standings", label: "Standings", icon: Trophy },
 ];
 
@@ -1418,6 +1418,24 @@ export default function SessionPage() {
               data-session-pager-section="session"
               className="w-full shrink-0 snap-center pb-24 xl:w-auto xl:shrink xl:snap-none xl:pb-0"
             >
+              {!sessionView.isCompletedSession && (
+                <section className="app-panel mb-4 p-5">
+                  <div className="mb-4 flex items-center justify-between gap-3">
+                    <h2 className="text-xl font-extrabold">Players <span className="text-sm text-gray-500">{sessionData.players.length}</span></h2>
+                    {canOpenPlayerManager && <button type="button" className="app-button-primary" onClick={() => setShowPlayersModal(true)}>{isAdmin ? "Manage players" : "Player preferences"}</button>}
+                  </div>
+                  <ul className="divide-y divide-[var(--line)]">
+                    {sessionData.players.map((player) => (
+                      <li key={player.user.id} className="flex min-h-14 items-center justify-between gap-3 py-3">
+                        <span className="min-w-0 break-words font-bold">{player.user.name}</span>
+                        <span className="shrink-0 text-xs text-gray-500">{player.isPaused ? "Paused" : player.isGuest ? "Guest" : "Member"}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              )}
+              <details open={sessionData.status !== SessionStatus.ACTIVE} className="app-panel p-4">
+                <summary className="min-h-11 cursor-pointer font-bold">Session controls & details</summary>
               <SessionOverviewPanel
                 sessionTypeLabel={sessionView.sessionTypeLabel}
                 sessionModeLabel={sessionView.sessionModeLabel}
@@ -1444,12 +1462,13 @@ export default function SessionPage() {
                   router.push(`/session/${code}/history?from=session`)
                 }
               />
+              </details>
             </section>
 
             {!sessionView.isCompletedSession ? (
               <section
                 data-session-pager-section="courts"
-                className="w-full shrink-0 snap-center pb-24 xl:w-auto xl:shrink xl:snap-none xl:pb-0"
+                className="order-first xl:order-none w-full shrink-0 snap-center pb-24 xl:w-auto xl:shrink xl:snap-none xl:pb-0"
               >
                 <LiveCourtsPanel
                   sessionStatus={sessionData.status}

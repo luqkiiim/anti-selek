@@ -652,7 +652,7 @@ function ProfileHero({
   const tier = provisional ? "Provisional" : getTierLabel(data.user.elo);
 
   return (
-    <section className="relative rounded-none bg-[linear-gradient(180deg,#eef8f5_0%,#f7faf8_68%,transparent_100%)] px-4 pb-4 pt-3 sm:rounded-[1.35rem] sm:px-6 sm:pt-4">
+    <section className="relative rounded-none bg-[linear-gradient(180deg,#eee4ff_0%,#fffaf3_68%,transparent_100%)] px-4 pb-4 pt-3 sm:rounded-[1.35rem] sm:px-6 sm:pt-4">
       {onBack ? (
         <div className="mb-4 flex items-center justify-between">
           <button
