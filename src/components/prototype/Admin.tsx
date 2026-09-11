@@ -1,10 +1,8 @@
 "use client";
 import { useState } from "react";
+import { MainNav } from "./MainNav";
 import {
   ArrowLeft,
-  UsersThree,
-  CalendarBlank,
-  UserCircle,
   MagnifyingGlass,
   Plus,
   LinkSimple,
@@ -317,22 +315,7 @@ export default function Admin({
           )}
         </main>
       </div>
-      <nav className="bottom-nav" aria-label="Main navigation">
-        {[
-          { p: "club", label: "Club", Icon: UsersThree },
-          { p: "sessions", label: "Sessions", Icon: CalendarBlank },
-          { p: "profile", label: "Profile", Icon: UserCircle },
-        ].map((n) => (
-          <button
-            key={n.p}
-            className={n.p === "club" ? "active" : ""}
-            onClick={() => onNavigate(n.p)}
-          >
-            <n.Icon size={25} />
-            <span>{n.label}</span>
-          </button>
-        ))}
-      </nav>
+      <MainNav active="club" onNavigate={onNavigate} />
       <Sheet open={!!sheet}
           title={
             sheet === "player"

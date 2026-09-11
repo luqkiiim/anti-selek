@@ -3,7 +3,6 @@ import Image from "next/image";
 import { useState } from "react";
 import { signOut } from "next-auth/react";
 import {
-  UsersThree,
   UserCircle,
   CalendarBlank,
   CaretRight,
@@ -34,6 +33,8 @@ import {
 } from "./Primitives";
 import { Pager } from "./Pager";
 import Admin from "./Admin";
+import { MainNav, mainPages } from "./MainNav";
+import { Rankings } from "./Rankings";
 import { PartnerChemistry } from "./PartnerChemistry";
 import { TopRivalries } from "./TopRivalries";
 import type { ClubPulseSnapshot } from "@/lib/clubPulse";
@@ -77,7 +78,6 @@ export default function Club({
     [sessionCode, setSessionCode] = useState(""),
     [sessionName, setSessionName] = useState(""),
     [recap, setRecap] = useState<PlayerProfileSessionSummary | null>(null);
-  const mainPages = ["club", "sessions", "profile"] as const;
   async function refresh() {
     await Promise.all([resource.refresh(), profile.refresh()]);
   }
@@ -197,7 +197,7 @@ export default function Club({
   return (
     <div className="pc-app">
       <header className="pc-header">
-        {["club", "sessions", "profile"].includes(page) ? (
+        {mainPages.includes(page as (typeof mainPages)[number]) ? (
           <>
             <button
               className="club-switcher"
@@ -281,22 +281,14 @@ export default function Club({
                   </button>
                 </div>
               )}
-              <div className="link-group">
-                {canAdmin && (
+              {canAdmin && <div className="link-group">
                   <Row
                     title="Manage club"
                     sub="Players, requests and settings"
                     icon={GearSix}
                     onClick={() => go("admin")}
                   />
-                )}
-                <Row
-                  title="Club standings"
-                  sub="Ratings in this club"
-                  icon={Trophy}
-                  onClick={() => setSheet("standings")}
-                />
-              </div>
+              </div>}
               <PartnerChemistry pairs={data.clubPulse?.partnerships ?? []} />
               <TopRivalries rivalries={data.clubPulse?.rivalries ?? []} />
               <div className="section-heading">
@@ -374,6 +366,7 @@ export default function Club({
               )}
             </>
           )}
+          {data && page === "rankings" && <Rankings members={data.clubMembers} viewerId={data.viewer.id} clubName={data.club.name} />}
           {data && page === "profile" && (
             <>
               <div className="profile-heading">
@@ -522,31 +515,13 @@ export default function Club({
           )}
       </>}</Pager>
       {!["setup", "recap"].includes(page) && (
-        <nav className="bottom-nav" aria-label="Main navigation">
-          {[
-            { name: "Club", page: "club", Icon: UsersThree },
-            { name: "Sessions", page: "sessions", Icon: CalendarBlank },
-            { name: "Profile", page: "profile", Icon: UserCircle },
-          ].map((n) => (
-            <button
-              key={n.page}
-              aria-current={page === n.page ? "page" : undefined}
-              className={page === n.page ? "active" : ""}
-              onClick={() => go(n.page)}
-            >
-              <n.Icon size={25} weight={page === n.page ? "fill" : "regular"} />
-              <span>{n.name}</span>
-            </button>
-          ))}
-        </nav>
+        <MainNav active={page} onNavigate={go} />
       )}
       <Sheet open={!!sheet}
           title={
             sheet === "account"
               ? "Your account"
-              : sheet === "achievement"
-                ? "Strong Start"
-                : "Club standings"
+              : "Strong Start"
           }
           onClose={() => setSheet("")}
         >
@@ -569,7 +544,7 @@ export default function Club({
                 Sign out
               </button>
             </>
-          ) : sheet === "achievement" ? (
+          ) : (
             <>
               <Image width={240} height={240}
                 className="achievement-art"
@@ -582,20 +557,6 @@ export default function Club({
                 Nice!
               </button>
             </>
-          ) : (
-            <div className="roster">
-              {data?.clubMembers
-                .slice()
-                .sort((a, b) => b.elo - a.elo)
-                .map((p, i) => (
-                  <div className="person" key={p.id}>
-                    <span className="rank">{i + 1}</span>
-                    <Avatar name={p.name} url={p.avatarUrl} />
-                    <strong className="person-info">{p.name}</strong>
-                    <strong>{p.elo}</strong>
-                  </div>
-                ))}
-            </div>
           )}
         </Sheet>
     </div>

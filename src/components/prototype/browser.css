@@ -295,3 +295,18 @@
 
 .rivalry-list-joined.chemistry-card { padding: 0 14px; }
 .rivalry-list-joined .rivalry-faceoff { flex: 1; min-width: 0; align-items: center; }
+
+.rankings-page h1 { margin-bottom: 4px; }
+.rankings-context { margin-top: 0; margin-bottom: 24px; font-size: 14px; }
+.rankings-columns { display: flex; justify-content: space-between; padding: 0 16px 10px; color: #80718b; font-size: 12px; }
+.rankings-list { list-style: none; margin: 0; padding: 0 14px; background: #fffdfb; border: 1px solid #eee5ef; border-radius: 20px; overflow: hidden; }
+.rankings-row { display: flex; align-items: center; gap: 12px; padding: 16px 0; }
+.rankings-row + .rankings-row { border-top: 1px solid #eee5ef; }
+.rankings-row .avatar { width: 40px; height: 40px; }
+.rankings-you { background: #f1e8fb; margin-inline: -14px; padding-inline: 14px; }
+.rankings-name { flex: 1; min-width: 0; }
+.rankings-name strong { display: block; overflow-wrap: anywhere; font-size: 15px; }
+.rankings-name small { color: #7040bc; font-size: 12px; }
+.rankings-rating { font-size: 20px; color: #7040bc; font-weight: 900; }
+.rankings-page details { margin-top: 22px; }
+.rankings-note { font-size: 13px; color: #80718b; }
