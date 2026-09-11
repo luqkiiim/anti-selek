@@ -333,8 +333,7 @@ export default function Admin({
           </button>
         ))}
       </nav>
-      {sheet && (
-        <Sheet
+      <Sheet open={!!sheet}
           title={
             sheet === "player"
               ? edit
@@ -466,7 +465,6 @@ export default function Admin({
             </>
           )}
         </Sheet>
-      )}
     </div>
   );
 }

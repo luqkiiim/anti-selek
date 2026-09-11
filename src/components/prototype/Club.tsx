@@ -31,9 +31,8 @@ import {
   Row,
   Sheet,
   ErrorText,
-  useHorizontalSwipe,
 } from "./Primitives";
-import { getAdjacentSwipeIndex, type SwipeDirection } from "./gesture";
+import { Pager } from "./Pager";
 import Admin from "./Admin";
 import LiveSession from "./LiveSession";
 export type Snapshot = {
@@ -74,7 +73,6 @@ export default function Club({
     [sessionCode, setSessionCode] = useState(""),
     [sessionName, setSessionName] = useState(""),
     [recap, setRecap] = useState<PlayerProfileSessionSummary | null>(null);
-  const [pageMotion, setPageMotion] = useState<"next" | "previous">("next");
   const mainPages = ["club", "sessions", "profile"] as const;
   async function refresh() {
     await Promise.all([resource.refresh(), profile.refresh()]);
@@ -93,18 +91,9 @@ export default function Club({
   const rank = profile.data?.context?.rankContext;
   function go(p: string) {
     setSheet("");
-    const from = mainPages.indexOf(page as (typeof mainPages)[number]);
-    const to = mainPages.indexOf(p as (typeof mainPages)[number]);
-    setPageMotion(from >= 0 && to >= 0 && to < from ? "previous" : "next");
     setPage(p);
   }
-  const swipeHandlers = useHorizontalSwipe((direction: SwipeDirection) => {
-    const current = mainPages.indexOf(page as (typeof mainPages)[number]);
-    if (current < 0) return;
-    const next = getAdjacentSwipeIndex(current, mainPages.length, direction);
-    if (next === null) return;
-    go(mainPages[next]);
-  });
+
   function openSession(code: string) {
     setSessionCode(code);
     go("session");
@@ -241,11 +230,7 @@ export default function Club({
           </>
         )}
       </header>
-      <div className="pc-scroll" {...swipeHandlers}>
-        <main
-          key={page}
-          className={`pc-content page-transition page-transition-${pageMotion}`}
-        >
+      <Pager pages={mainPages.includes(page as (typeof mainPages)[number]) ? mainPages : [page]} active={page} onChange={go}>{page => <>
           <ErrorText error={resource.error || profile.error || action.error} />
           {!data && <p role="status">Loading club…</p>}
           {data && page === "club" && (
@@ -529,8 +514,7 @@ export default function Club({
               </button>
             </>
           )}
-        </main>
-      </div>
+      </>}</Pager>
       {!["setup", "recap"].includes(page) && (
         <nav className="bottom-nav" aria-label="Main navigation">
           {[
@@ -550,8 +534,7 @@ export default function Club({
           ))}
         </nav>
       )}
-      {sheet && (
-        <Sheet
+      <Sheet open={!!sheet}
           title={
             sheet === "account"
               ? "Your account"
@@ -609,7 +592,6 @@ export default function Club({
             </div>
           )}
         </Sheet>
-      )}
     </div>
   );
 }

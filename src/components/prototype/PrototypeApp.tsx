@@ -154,8 +154,7 @@ export default function PrototypeApp() {
           </div>
         </div>
       )}
-      {form && (
-        <Sheet
+      <Sheet open={!!form}
           title={
             form === "create"
               ? "Create club"
@@ -233,7 +232,6 @@ export default function PrototypeApp() {
             </>
           )}
         </Sheet>
-      )}
     </div>
   );
 }

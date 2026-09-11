@@ -3,75 +3,10 @@ import Image from "next/image";
 import {
   useEffect,
   useRef,
-  useState,
-  type PointerEventHandler,
   type ReactNode,
 } from "react";
 import { CaretRight, X, UsersThree, type Icon } from "@phosphor-icons/react";
-import {
-  getHorizontalSwipeDirection,
-  isSwipeProtectedTarget,
-  type SwipeDirection,
-} from "./gesture";
-
-export function useHorizontalSwipe(
-  onSwipe: (direction: SwipeDirection) => void,
-): {
-  onPointerDown: PointerEventHandler<HTMLElement>;
-  onPointerMove: PointerEventHandler<HTMLElement>;
-  onPointerUp: PointerEventHandler<HTMLElement>;
-  onPointerCancel: PointerEventHandler<HTMLElement>;
-} {
-  const start = useRef<{ x: number; y: number; pointerId: number } | null>(
-    null,
-  );
-
-  return {
-    onPointerDown: (event) => {
-      if (
-        event.pointerType === "mouse" ||
-        isSwipeProtectedTarget(event.target)
-      ) {
-        start.current = null;
-        return;
-      }
-      start.current = {
-        x: event.clientX,
-        y: event.clientY,
-        pointerId: event.pointerId,
-      };
-    },
-    onPointerMove: (event) => {
-      const initial = start.current;
-      if (!initial || initial.pointerId !== event.pointerId) return;
-
-      const deltaX = event.clientX - initial.x;
-      const deltaY = event.clientY - initial.y;
-      if (Math.abs(deltaY) > Math.abs(deltaX) + 12) {
-        start.current = null;
-        return;
-      }
-
-      const direction = getHorizontalSwipeDirection(
-        initial.x,
-        initial.y,
-        event.clientX,
-        event.clientY,
-      );
-      if (direction) {
-        start.current = null;
-        event.preventDefault();
-        onSwipe(direction);
-      }
-    },
-    onPointerUp: (event) => {
-      if (start.current?.pointerId === event.pointerId) start.current = null;
-    },
-    onPointerCancel: () => {
-      start.current = null;
-    },
-  };
-}
+import { AnimatePresence, motion, useDragControls, useReducedMotion } from "motion/react";
 
 export function Avatar({
   name,
@@ -121,69 +56,42 @@ export function Row({
     </button>
   );
 }
-export function Sheet({
-  title,
-  onClose,
-  children,
-  busy = false,
-}: {
+type SheetProps = {
   title: string;
   onClose: () => void;
   children: ReactNode;
   busy?: boolean;
-}) {
+  open?: boolean;
+};
+export function Sheet({ open = true, ...props }: SheetProps) {
+  return <AnimatePresence>{open && <SheetDialog {...props} />}</AnimatePresence>;
+}
+function SheetDialog({ title, onClose, children, busy = false }: SheetProps) {
   const ref = useRef<HTMLDialogElement>(null);
-  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [closing, setClosing] = useState(false);
+  const controls = useDragControls();
+  const reduced = useReducedMotion();
   useEffect(() => {
     const node = ref.current;
     node?.showModal();
-    return () => {
-      if (closeTimer.current) clearTimeout(closeTimer.current);
-      if (node?.open) node.close();
-    };
+    return () => { if (node?.open) node.close(); };
   }, []);
-  function close() {
-    if (busy || closing) return;
-    const reducedMotion =
-      typeof window !== "undefined" &&
-      window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
-    if (reducedMotion) {
-      onClose();
-      return;
-    }
-    setClosing(true);
-    closeTimer.current = setTimeout(onClose, 220);
-  }
+  const close = () => { if (!busy) onClose(); };
   return (
-    <dialog
-      ref={ref}
-      aria-label={title}
-      className={`prototype-sheet${closing ? " is-closing" : ""}`}
-      onCancel={(e) => {
-        e.preventDefault();
-        close();
-      }}
-      onClick={(e) => {
-        if (e.target === e.currentTarget) close();
-      }}
-    >
-      <div className="sheet-panel">
-        <header>
-          <h2>{title}</h2>
-          <button
-            disabled={busy}
-            className="icon-button"
-            aria-label="Close"
-            onClick={close}
-          >
-            <X size={22} />
-          </button>
-        </header>
-        <fieldset disabled={busy} className="sheet-content">
-          {children}
-        </fieldset>
-      </div>
+    <dialog ref={ref} aria-label={title} className="prototype-sheet"
+      onCancel={e => { e.preventDefault(); close(); }}>
+      <motion.div className="sheet-shade" initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }} transition={{ duration: reduced ? 0 : 0.16 }} onClick={close} />
+      <motion.div className="sheet-panel" style={{ touchAction: "pan-y" }}
+        initial={{ y: reduced ? 0 : "calc(100% + 36px)" }} animate={{ y: 0 }}
+        exit={{ y: reduced ? 0 : "calc(100% + 36px)", transition: reduced ? { duration: 0 } : { type: "spring", stiffness: 250, damping: 30, mass: 1.05 } }}
+        transition={reduced ? { duration: 0 } : { type: "spring", stiffness: 500, damping: 43, mass: 0.9 }}
+        drag={busy ? false : "y"} dragControls={controls} dragListener={false}
+        dragConstraints={{ top: 0, bottom: 0 }} dragElastic={{ top: 0, bottom: 1 }}
+        onDragEnd={(_, info) => { if (info.offset.y > 96 || info.velocity.y > 550) close(); }}>
+        <div className="sheet-handle-zone" onPointerDown={e => controls.start(e)}><div className="sheet-handle" /></div>
+        <header><h2>{title}</h2><button disabled={busy} className="icon-button" aria-label="Close" onClick={close}><X size={22} /></button></header>
+        <fieldset disabled={busy} className="sheet-content">{children}</fieldset>
+      </motion.div>
     </dialog>
   );
 }

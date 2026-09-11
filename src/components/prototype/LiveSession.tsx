@@ -28,9 +28,8 @@ import {
   Sheet,
   Row,
   ErrorText,
-  useHorizontalSwipe,
 } from "./Primitives";
-import { getAdjacentSwipeIndex, type SwipeDirection } from "./gesture";
+import { Pager } from "./Pager";
 type ScoreTarget = { match: Match; court: Court; correct: boolean };
 export default function LiveSession({
   code,
@@ -59,13 +58,7 @@ export default function LiveSession({
   const [name, setName] = useState(""),
     [rating, setRating] = useState("1000");
   const sessionTabs = ["Courts", "Players", "Standings"] as const;
-  const [tabMotion, setTabMotion] = useState<"next" | "previous">("next");
-  function navigateTab(nextTab: (typeof sessionTabs)[number]) {
-    const current = sessionTabs.indexOf(tab as (typeof sessionTabs)[number]);
-    const next = sessionTabs.indexOf(nextTab);
-    setTabMotion(next < current ? "previous" : "next");
-    setTab(nextTab);
-  }
+  function navigateTab(nextTab: string) { setTab(nextTab); }
   async function refresh() {
     await Promise.all([resource.refresh(), standings.refresh()]);
   }
@@ -82,13 +75,7 @@ export default function LiveSession({
   }, [refreshSession, refreshStandings, action.busy]);
   const canManage = !!s?.viewerCanManage && !s?.viewerIsQuickAccess;
   const ended = s?.status === "COMPLETED";
-  const swipeHandlers = useHorizontalSwipe((direction: SwipeDirection) => {
-    if (ended) return;
-    const current = sessionTabs.indexOf(tab as (typeof sessionTabs)[number]);
-    const next = getAdjacentSwipeIndex(current, sessionTabs.length, direction);
-    if (next === null) return;
-    navigateTab(sessionTabs[next]);
-  });
+
   function score(m: Match): [string, string] {
     return (
       scores[m.id] ?? [String(m.team1Score ?? 0), String(m.team2Score ?? 0)]
@@ -154,11 +141,7 @@ export default function LiveSession({
           <span />
         )}
       </header>
-      <div className="pc-scroll" {...swipeHandlers}>
-        <main
-          key={tab}
-          className={`pc-content page-transition page-transition-${tabMotion}`}
-        >
+      <Pager pages={ended ? [tab] : sessionTabs} active={tab} onChange={navigateTab}>{tab => <>
           <ErrorText
             error={resource.error || standings.error || action.error}
           />
@@ -468,8 +451,7 @@ export default function LiveSession({
               </>
             )
           )}
-        </main>
-      </div>
+      </>}</Pager>
       {!ended && (
         <nav className="bottom-nav" aria-label="Session navigation">
           {sessionTabs.map((t, i) => {
@@ -488,8 +470,7 @@ export default function LiveSession({
           })}
         </nav>
       )}
-      {sheet && (
-        <Sheet
+      <Sheet open={!!sheet}
           title={
             sheet === "score"
               ? "Confirm result"
@@ -668,7 +649,6 @@ export default function LiveSession({
             <p>No match queued yet.</p>
           )}
         </Sheet>
-      )}
     </div>
   );
 }
