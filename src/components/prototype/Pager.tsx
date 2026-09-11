@@ -23,7 +23,8 @@ export function Pager({ pages, active, onChange, children }: {
       return;
     }
     const index = pagesKey.split("|").indexOf(active);
-    navigationTarget.current = Math.max(0, index);
+    navigationTarget.current = Math.abs(node.scrollLeft - Math.max(0, index) * node.clientWidth) > 1
+      ? Math.max(0, index) : null;
     node.scrollTo({ left: Math.max(0, index) * node.clientWidth,
       behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth" });
   }, [active, pagesKey]);
