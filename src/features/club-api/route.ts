@@ -136,7 +136,10 @@ export async function POST(request: Request) {
       }
       throw error;
     }
-    const { password } = bodyRecord as { password?: unknown };
+    const { password, allowJoinRequests } = bodyRecord as {
+      password?: unknown;
+      allowJoinRequests?: unknown;
+    };
     const name = aliasedName ?? bodyRecord.name;
     if (typeof name !== "string" || name.trim().length < 3) {
       return NextResponse.json(
@@ -150,6 +153,12 @@ export async function POST(request: Request) {
     if (password !== undefined && typeof password !== "string") {
       return NextResponse.json(
         { error: "Invalid password", field: "password" },
+        { status: 400 }
+      );
+    }
+    if (allowJoinRequests !== undefined && typeof allowJoinRequests !== "boolean") {
+      return NextResponse.json(
+        { error: "Invalid join request setting", field: "allowJoinRequests" },
         { status: 400 }
       );
     }
@@ -197,6 +206,7 @@ export async function POST(request: Request) {
         name: normalizedName,
         isPasswordProtected: !!passwordHash,
         passwordHash,
+        allowJoinRequests: allowJoinRequests === true,
         createdById: session.user.id,
         members: {
           create: {

@@ -1,0 +1,179 @@
+.prototype-root {
+  position: fixed;
+  inset: 0;
+  background: #fffaf3;
+  z-index: 10;
+  color: #291440;
+  font-family: "Nunito Sans", sans-serif;
+  --font-heading: "Nunito Sans", sans-serif;
+  --mobile-safe-area-height: env(safe-area-inset-bottom, 0px);
+}
+.prototype-root .pc-app {
+  position: absolute;
+  inset: 0;
+  max-width: 480px;
+  margin: auto;
+  overflow: hidden;
+}
+.prototype-root .pc-header {
+  top: env(safe-area-inset-top, 0px);
+  height: 72px;
+  min-height: 72px;
+}
+.prototype-root .pc-scroll {
+  inset: calc(72px + env(safe-area-inset-top, 0px)) 0 0 !important;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  scrollbar-width: none;
+}
+.prototype-root .pc-scroll.with-tabs {
+  top: calc(123px + env(safe-area-inset-top, 0px)) !important;
+}
+.prototype-root .local-tabs {
+  top: calc(72px + env(safe-area-inset-top, 0px));
+}
+.prototype-root .pc-content {
+  padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px));
+  min-height: 100%;
+}
+.prototype-root .bottom-nav {
+  padding-bottom: calc(9px + env(safe-area-inset-bottom, 0px));
+}
+.prototype-root button {
+  letter-spacing: normal;
+}
+.prototype-root h1,
+.prototype-root h2,
+.prototype-root h3 {
+  font-family: inherit;
+  color: inherit;
+}
+.prototype-root input,
+.prototype-root select {
+  font-family: inherit;
+  font-size: 16px;
+  color: #291440;
+}
+.prototype-root .avatar {
+  overflow: hidden;
+  aspect-ratio: 1;
+  flex-shrink: 0;
+}
+.prototype-root .avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.prototype-root .person-info strong {
+  overflow-wrap: anywhere;
+}
+.prototype-root .card {
+  padding: 18px;
+}
+.prototype-sheet {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  max-width: none;
+  height: 100%;
+  max-height: none;
+  margin: 0;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: #291440;
+  font:
+    15px/1.4 "Nunito Sans",
+    sans-serif;
+}
+.prototype-sheet::backdrop {
+  background: #29144066;
+  backdrop-filter: blur(3px);
+}
+.prototype-sheet .sheet-panel {
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(100%, 480px);
+  background: #fffaf3;
+  border-radius: 24px 24px 0 0;
+  max-height: 90dvh;
+  overflow: auto;
+  padding: 20px 20px calc(20px + env(safe-area-inset-bottom, 0px));
+}
+.prototype-sheet header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+.prototype-sheet h2 {
+  font:
+    900 22px "Nunito Sans",
+    sans-serif;
+  margin: 0;
+}
+.prototype-sheet fieldset {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+.prototype-sheet .field-label input,
+.prototype-sheet .field-label select {
+  width: 100%;
+  min-height: 48px;
+  line-height: 1.5;
+  font:
+    16px "Nunito Sans",
+    sans-serif;
+  border: 1px solid #e7ddea;
+  border-radius: 12px;
+  padding: 12px;
+  background: white;
+}
+.prototype-error {
+  color: #a32946 !important;
+  background: #fff0f2;
+  border-radius: 12px;
+  padding: 12px !important;
+  font-size: 14px;
+}
+.prototype-sheet .avatar {
+  overflow: hidden;
+}
+.prototype-sheet .avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.prototype-root .gain.negative {
+  color: #a32946;
+}
+.prototype-root .team-row strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.prototype-root .team-row input {
+  font-size: 28px;
+}
+.prototype-root .prototype-note {
+  font-size: 12px;
+  color: #80718b;
+}
+.prototype-root fieldset {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+}
+@media (prefers-reduced-motion: reduce) {
+  .prototype-root * {
+    animation: none !important;
+    transition: none !important;
+  }
+}

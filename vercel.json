@@ -1,12 +1,1 @@
-{
-  "framework": null,
-  "installCommand": "npm ci --prefix prototype",
-  "buildCommand": "npm run build --prefix prototype",
-  "outputDirectory": "prototype/dist/client",
-  "rewrites": [
-    {
-      "source": "/((?!assets/).*)",
-      "destination": "/index.html"
-    }
-  ]
-}
+{"framework":"nextjs","installCommand":"npm ci","buildCommand":"npm run build","outputDirectory":".next"}

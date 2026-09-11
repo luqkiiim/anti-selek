@@ -9,6 +9,7 @@ datasource db {
 }
 
 model User {
+  clubJoinRequests ClubJoinRequest[]
   id                String    @id @default(cuid())
   email             String?   @unique
   passwordHash      String?
@@ -54,6 +55,8 @@ model User {
 }
 
 model Club {
+  allowJoinRequests Boolean @default(false)
+  joinRequests ClubJoinRequest[]
   id                  String   @id @default(cuid())
   name                String   @unique
   avatarKey           String?
@@ -471,4 +474,18 @@ model ClubNotification {
   @@unique([type, newsItemId, actorUserId, recipientUserId])
   @@index([clubId, recipientUserId, readAt, createdAt])
   @@index([recipientUserId, createdAt])
+}
+
+model ClubJoinRequest {
+  id String @id @default(cuid())
+  clubId String
+  userId String
+  status String @default("PENDING")
+  createdAt DateTime @default(now())
+  reviewedAt DateTime?
+  reviewedById String?
+  club Club @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@unique([clubId, userId])
+  @@index([clubId, status])
 }
