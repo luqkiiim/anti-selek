@@ -34,6 +34,8 @@ import {
 } from "./Primitives";
 import { Pager } from "./Pager";
 import Admin from "./Admin";
+import { PartnerChemistry } from "./PartnerChemistry";
+import type { ClubPulseSnapshot } from "@/lib/clubPulse";
 import LiveSession from "./LiveSession";
 export type Snapshot = {
   viewer: ClubPageUser;
@@ -41,6 +43,7 @@ export type Snapshot = {
   clubMembers: ClubPageMember[];
   sessions: ClubPageSession[];
   claimRequests: ClubClaimRequest[];
+  clubPulse?: ClubPulseSnapshot;
 };
 type Profile = {
   user: { name: string; avatarUrl: string | null; elo: number };
@@ -293,6 +296,7 @@ export default function Club({
                   onClick={() => setSheet("standings")}
                 />
               </div>
+              <PartnerChemistry pairs={data.clubPulse?.partnerships ?? []} />
               <div className="section-heading">
                 <h3>Your progress here</h3>
                 <button className="text-button" onClick={() => go("profile")}>

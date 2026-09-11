@@ -251,3 +251,25 @@
 }
 .prototype-root .pager-page input, .prototype-root .pager-page select,
 .prototype-root .pager-page textarea { touch-action: pan-y; }
+
+.chemistry-section .section-heading { margin-bottom: 10px; }
+.chemistry-list { list-style: none; padding: 0; margin: 0; }
+.chemistry-card { background: #fffdfb; border: 1px solid #eee5ef; border-radius: 20px; padding: 0 14px; }
+.chemistry-pair { display: flex; align-items: center; gap: 10px; padding: 16px 0; }
+.chemistry-pair + .chemistry-pair { border-top: 1px solid #eee5ef; }
+.chemistry-rank { flex: 0 0 12px; font-size: 12px; color: #80718b; font-weight: 800; }
+.chemistry-avatars { display: flex; flex: 0 0 auto; padding-right: 0; }
+.chemistry-avatars .avatar { width: 34px; height: 34px; font-size: 14px; border: 2px solid #fffdfb; }
+.chemistry-avatars .avatar + .avatar { margin-left: -12px; }
+.chemistry-names { flex: 1; min-width: 0; }
+.chemistry-names strong { display: block; font-size: 14px; line-height: 1.35; overflow-wrap: anywhere; }
+.chemistry-and { color: #80718b; font-weight: 600; }
+.chemistry-names small, .chemistry-rate small { display: block; color: #80718b; font-size: 11px; line-height: 1.4; margin-top: 3px; }
+.chemistry-rate { flex: 0 0 auto; text-align: right; }
+.chemistry-rate strong { font-size: 19px; color: #7040bc; font-weight: 900; }
+.chemistry-empty { display: flex; align-items: center; gap: 12px; border-radius: 18px; background: #f4eef9; padding: 16px; color: #80718b; }
+.chemistry-empty svg { flex-shrink: 0; color: #8657bc; }
+.chemistry-empty p { font-size: 13px; line-height: 1.5; margin: 0; }
+.chemistry-explanation { border-top: 1px solid #eee5ef; padding-top: 14px; font-size: 13px; color: #80718b; }
+.chemistry-explanation summary { cursor: pointer; color: #5e4772; }
+.chemistry-explanation p { margin-top: 10px; line-height: 1.6; }
