@@ -258,9 +258,8 @@
 .chemistry-pair { display: flex; align-items: center; gap: 10px; padding: 16px 0; }
 .chemistry-pair + .chemistry-pair { border-top: 1px solid #eee5ef; }
 .chemistry-rank { flex: 0 0 12px; font-size: 12px; color: #80718b; font-weight: 800; }
-.chemistry-avatars { display: flex; flex: 0 0 auto; padding-right: 0; }
-.chemistry-avatars .avatar { width: 34px; height: 34px; font-size: 14px; border: 2px solid #fffdfb; }
-.chemistry-avatars .avatar + .avatar { margin-left: -12px; }
+.chemistry-avatars { display: flex; flex: 0 0 auto; gap: 5px; }
+.chemistry-avatars .avatar { width: 40px; height: 40px; font-size: 16px; }
 .chemistry-names { flex: 1; min-width: 0; }
 .chemistry-names strong { display: block; font-size: 14px; line-height: 1.35; overflow-wrap: anywhere; }
 .chemistry-and { color: #80718b; font-weight: 600; }
