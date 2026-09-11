@@ -288,9 +288,10 @@
 .rivalry-score b:last-child { color: #ad523b; }
 .rivalry-score span { color: #b9acbf; font-size: 17px; }
 .rivalry-score small { display: block; font-size: 9px; line-height: 1.35; color: #80718b; margin-top: 5px; }
-.rivalry-record { display: flex; height: 4px; border-radius: 4px; overflow: hidden; gap: 3px; margin-top: 14px; }
-.rivalry-record span:first-child { background: #9869d3; }
-.rivalry-record span:last-child { background: #e9a188; }
 .rivalry-empty { display: flex; align-items: center; gap: 12px; padding: 16px; border-radius: 18px; background: #fff1e7; color: #80718b; }
 .rivalry-empty svg { flex-shrink: 0; color: #ad523b; }
 .rivalry-empty p { margin: 0; font-size: 13px; line-height: 1.5; }
+
+.rivalry-list-joined { gap: 0; }
+.rivalry-list-joined .rivalry-card { background: transparent; border: 0; border-radius: 0; padding: 16px 0; }
+.rivalry-list-joined .rivalry-card + .rivalry-card { border-top: 1px solid #eee5ef; }
