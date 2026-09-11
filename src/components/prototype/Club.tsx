@@ -26,7 +26,14 @@ import type {
   PlayerProfileMatchHistoryEntry,
 } from "@/lib/profileStats";
 import { api, useResource, useAction } from "./api";
-import { Avatar, Row, Sheet, ErrorText } from "./Primitives";
+import {
+  Avatar,
+  Row,
+  Sheet,
+  ErrorText,
+  useHorizontalSwipe,
+} from "./Primitives";
+import { getAdjacentSwipeIndex, type SwipeDirection } from "./gesture";
 import Admin from "./Admin";
 import LiveSession from "./LiveSession";
 export type Snapshot = {
@@ -67,6 +74,8 @@ export default function Club({
     [sessionCode, setSessionCode] = useState(""),
     [sessionName, setSessionName] = useState(""),
     [recap, setRecap] = useState<PlayerProfileSessionSummary | null>(null);
+  const [pageMotion, setPageMotion] = useState<"next" | "previous">("next");
+  const mainPages = ["club", "sessions", "profile"] as const;
   async function refresh() {
     await Promise.all([resource.refresh(), profile.refresh()]);
   }
@@ -84,8 +93,18 @@ export default function Club({
   const rank = profile.data?.context?.rankContext;
   function go(p: string) {
     setSheet("");
+    const from = mainPages.indexOf(page as (typeof mainPages)[number]);
+    const to = mainPages.indexOf(p as (typeof mainPages)[number]);
+    setPageMotion(from >= 0 && to >= 0 && to < from ? "previous" : "next");
     setPage(p);
   }
+  const swipeHandlers = useHorizontalSwipe((direction: SwipeDirection) => {
+    const current = mainPages.indexOf(page as (typeof mainPages)[number]);
+    if (current < 0) return;
+    const next = getAdjacentSwipeIndex(current, mainPages.length, direction);
+    if (next === null) return;
+    go(mainPages[next]);
+  });
   function openSession(code: string) {
     setSessionCode(code);
     go("session");
@@ -222,8 +241,11 @@ export default function Club({
           </>
         )}
       </header>
-      <div className="pc-scroll">
-        <main className="pc-content">
+      <div className="pc-scroll" {...swipeHandlers}>
+        <main
+          key={page}
+          className={`pc-content page-transition page-transition-${pageMotion}`}
+        >
           <ErrorText error={resource.error || profile.error || action.error} />
           {!data && <p role="status">Loading club…</p>}
           {data && page === "club" && (

@@ -23,7 +23,14 @@ import type {
   Court,
 } from "@/components/session/sessionTypes";
 import { api, useResource, useAction } from "./api";
-import { Avatar, Sheet, Row, ErrorText } from "./Primitives";
+import {
+  Avatar,
+  Sheet,
+  Row,
+  ErrorText,
+  useHorizontalSwipe,
+} from "./Primitives";
+import { getAdjacentSwipeIndex, type SwipeDirection } from "./gesture";
 type ScoreTarget = { match: Match; court: Court; correct: boolean };
 export default function LiveSession({
   code,
@@ -51,6 +58,14 @@ export default function LiveSession({
     [saved, setSaved] = useState<Record<string, Match>>({});
   const [name, setName] = useState(""),
     [rating, setRating] = useState("1000");
+  const sessionTabs = ["Courts", "Players", "Standings"] as const;
+  const [tabMotion, setTabMotion] = useState<"next" | "previous">("next");
+  function navigateTab(nextTab: (typeof sessionTabs)[number]) {
+    const current = sessionTabs.indexOf(tab as (typeof sessionTabs)[number]);
+    const next = sessionTabs.indexOf(nextTab);
+    setTabMotion(next < current ? "previous" : "next");
+    setTab(nextTab);
+  }
   async function refresh() {
     await Promise.all([resource.refresh(), standings.refresh()]);
   }
@@ -67,6 +82,13 @@ export default function LiveSession({
   }, [refreshSession, refreshStandings, action.busy]);
   const canManage = !!s?.viewerCanManage && !s?.viewerIsQuickAccess;
   const ended = s?.status === "COMPLETED";
+  const swipeHandlers = useHorizontalSwipe((direction: SwipeDirection) => {
+    if (ended) return;
+    const current = sessionTabs.indexOf(tab as (typeof sessionTabs)[number]);
+    const next = getAdjacentSwipeIndex(current, sessionTabs.length, direction);
+    if (next === null) return;
+    navigateTab(sessionTabs[next]);
+  });
   function score(m: Match): [string, string] {
     return (
       scores[m.id] ?? [String(m.team1Score ?? 0), String(m.team2Score ?? 0)]
@@ -132,8 +154,11 @@ export default function LiveSession({
           <span />
         )}
       </header>
-      <div className="pc-scroll">
-        <main className="pc-content">
+      <div className="pc-scroll" {...swipeHandlers}>
+        <main
+          key={tab}
+          className={`pc-content page-transition page-transition-${tabMotion}`}
+        >
           <ErrorText
             error={resource.error || standings.error || action.error}
           />
@@ -447,14 +472,14 @@ export default function LiveSession({
       </div>
       {!ended && (
         <nav className="bottom-nav" aria-label="Session navigation">
-          {["Courts", "Players", "Standings"].map((t, i) => {
+          {sessionTabs.map((t, i) => {
             const Icon = [House, UsersThree, ChartBar][i];
             return (
               <button
                 key={t}
                 className={tab === t ? "active" : ""}
                 aria-current={tab === t ? "page" : undefined}
-                onClick={() => setTab(t)}
+                onClick={() => navigateTab(t)}
               >
                 <Icon size={25} weight={tab === t ? "fill" : "regular"} />
                 <span>{t}</span>
