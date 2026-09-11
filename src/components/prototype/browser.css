@@ -272,3 +272,25 @@
 .chemistry-explanation { border-top: 1px solid #eee5ef; padding-top: 14px; font-size: 13px; color: #80718b; }
 .chemistry-explanation summary { cursor: pointer; color: #5e4772; }
 .chemistry-explanation p { margin-top: 10px; line-height: 1.6; }
+
+.rivalries-section .section-heading { margin-bottom: 10px; }
+.rivalry-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.rivalry-card { background: #fffdfb; border: 1px solid #eee5ef; border-radius: 20px; padding: 14px; }
+.rivalry-caption { display: flex; justify-content: space-between; gap: 8px; color: #80718b; font-size: 11px; margin-bottom: 12px; }
+.rivalry-caption > :first-child { font-weight: 900; color: #7040bc; }
+.rivalry-faceoff { display: grid; grid-template-columns: minmax(0, 1fr) minmax(80px, .9fr) minmax(0, 1fr); align-items: start; gap: 8px; }
+.rivalry-player { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 7px; min-width: 0; }
+.rivalry-player .avatar { width: 44px; height: 44px; }
+.rivalry-player strong { font-size: 13px; line-height: 1.35; overflow-wrap: anywhere; }
+.rivalry-score { text-align: center; padding-top: 4px; }
+.rivalry-score > div { display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 27px; line-height: 1.3; }
+.rivalry-score b { font-weight: 900; color: #7040bc; }
+.rivalry-score b:last-child { color: #ad523b; }
+.rivalry-score span { color: #b9acbf; font-size: 17px; }
+.rivalry-score small { display: block; font-size: 9px; line-height: 1.35; color: #80718b; margin-top: 5px; }
+.rivalry-record { display: flex; height: 4px; border-radius: 4px; overflow: hidden; gap: 3px; margin-top: 14px; }
+.rivalry-record span:first-child { background: #9869d3; }
+.rivalry-record span:last-child { background: #e9a188; }
+.rivalry-empty { display: flex; align-items: center; gap: 12px; padding: 16px; border-radius: 18px; background: #fff1e7; color: #80718b; }
+.rivalry-empty svg { flex-shrink: 0; color: #ad523b; }
+.rivalry-empty p { margin: 0; font-size: 13px; line-height: 1.5; }

@@ -35,6 +35,7 @@ import {
 import { Pager } from "./Pager";
 import Admin from "./Admin";
 import { PartnerChemistry } from "./PartnerChemistry";
+import { TopRivalries } from "./TopRivalries";
 import type { ClubPulseSnapshot } from "@/lib/clubPulse";
 import LiveSession from "./LiveSession";
 export type Snapshot = {
@@ -297,6 +298,7 @@ export default function Club({
                 />
               </div>
               <PartnerChemistry pairs={data.clubPulse?.partnerships ?? []} />
+              <TopRivalries rivalries={data.clubPulse?.rivalries ?? []} />
               <div className="section-heading">
                 <h3>Your progress here</h3>
                 <button className="text-button" onClick={() => go("profile")}>
