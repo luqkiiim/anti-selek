@@ -33,6 +33,7 @@ import {
 } from "./Primitives";
 import { Pager } from "./Pager";
 import { SessionUpdate } from "./SessionUpdate";
+import { ClubHighlights } from "./ClubHighlights";
 import Admin from "./Admin";
 import { MainNav, mainPages } from "./MainNav";
 import { Rankings } from "./Rankings";
@@ -282,7 +283,6 @@ export default function Club({
                   </button>
                 </div>
               )}
-              {recent && <SessionUpdate session={recent} onOpen={() => { setRecap(recent); go("recap"); }} />}
               {canAdmin && <div className="link-group">
                   <Row
                     title="Manage club"
@@ -291,8 +291,8 @@ export default function Club({
                     onClick={() => go("admin")}
                   />
               </div>}
-              <PartnerChemistry pairs={data.clubPulse?.partnerships ?? []} />
-              <TopRivalries rivalries={data.clubPulse?.rivalries ?? []} />
+              {recent && <SessionUpdate session={recent} onOpen={() => { setRecap(recent); go("recap"); }} />}
+              <ClubHighlights items={data.clubPulse?.sessionNews ?? []} onOpen={openSession} />
               <div className="section-heading">
                 <h3>Your progress here</h3>
                 <button className="text-button" onClick={() => go("profile")}>
@@ -300,6 +300,8 @@ export default function Club({
                 </button>
               </div>
               {renderStats()}
+              <PartnerChemistry pairs={data.clubPulse?.partnerships ?? []} />
+              <TopRivalries rivalries={data.clubPulse?.rivalries ?? []} />
             </>
           )}
           {data && page === "sessions" && (

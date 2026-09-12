@@ -340,3 +340,21 @@
 .session-update-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; color: #766486; font-size: 12px; }
 .session-update-footer > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .session-update-footer > span:last-child { display: flex; gap: 3px; align-items: center; flex-shrink: 0; font-weight: 800; color: #7543c5; }
+
+.club-highlights { margin: 24px 0; }
+.club-highlights .section-heading { margin-bottom: 4px; }
+.club-highlights .section-heading > svg { color: #bd784b; }
+.highlights-context { margin: 0 0 12px; color: #887a94; font-size: 12px; overflow-wrap: anywhere; }
+.highlights-list { list-style: none; margin: 0; padding: 0 16px; background: #fff; border: 1px solid #eee5dd; border-radius: 22px; }
+.highlights-list li + li { border-top: 1px solid #f1eae4; }
+.prototype-root .highlight-row { display: flex; align-items: center; gap: 12px; width: 100%; padding: 17px 0; border: 0; background: transparent; text-align: left; color: #291440; }
+.highlight-avatars { display: flex; flex-shrink: 0; gap: 5px; }
+.highlight-avatars .avatar { width: 40px; height: 40px; font-size: 15px; }
+.highlight-copy { display: grid; gap: 4px; flex: 1; min-width: 0; }
+.highlight-copy strong { font-size: 15px; line-height: 1.35; overflow-wrap: anywhere; }
+.highlight-label { font-size: 11px; font-weight: 800; color: #a0653e; }
+.highlight-value { font-size: 12px; color: #786486; }
+.highlight-row > svg { color: #a99bb5; flex-shrink: 0; }
+.highlights-empty { display: flex; align-items: center; gap: 12px; padding: 16px; border-radius: 18px; background: #fbefe3; color: #987656; }
+.highlights-empty p { margin: 0; font-size: 13px; line-height: 1.5; }
+.highlights-empty > svg { flex-shrink: 0; }
