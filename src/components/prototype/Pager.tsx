@@ -34,6 +34,8 @@ export function Pager({ pages, active, onChange, children }: {
     const names = pagesKey.split("|");
     let gesture: { id: number; x: number; y: number; offset: number; horizontal: boolean; lastX: number; time: number; velocity: number } | null = null;
     let suppressClick = false;
+    let wheelStart: number | null = null;
+    let wheelTimer: ReturnType<typeof setTimeout> | undefined;
     const settle = (index: number) => {
       cancelAnimationFrame(frame.current);
       const from = node.scrollLeft;
@@ -52,9 +54,28 @@ export function Pager({ pages, active, onChange, children }: {
         callback.current(names[index]);
       }
     };
+    const wheel = (event: WheelEvent) => {
+      if (event.ctrlKey || Math.abs(event.deltaX) <= Math.abs(event.deltaY)) return;
+      event.preventDefault();
+      cancelAnimationFrame(frame.current);
+      if (wheelStart === null) wheelStart = Math.round(node.scrollLeft / node.clientWidth);
+      const pixels = event.deltaX * (event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? node.clientWidth : 1);
+      node.scrollTo({ left: node.scrollLeft + pixels, behavior: "instant" });
+      clearTimeout(wheelTimer);
+      wheelTimer = setTimeout(() => {
+        if (wheelStart === null) return;
+        const distance = node.scrollLeft - wheelStart * node.clientWidth;
+        const advance = Math.abs(distance) > node.clientWidth * swipeSettings.distanceThreshold;
+        settle(Math.max(0, Math.min(names.length - 1, wheelStart + (advance ? Math.sign(distance) : 0))));
+        wheelStart = null;
+      }, swipeSettings.trackpadIdleMs);
+    };
+    const preventDrag = (event: DragEvent) => { event.preventDefault(); };
     const down = (event: PointerEvent) => {
       if (!event.isPrimary || event.button !== 0) return;
       if ((event.target as Element).closest("input, select, textarea, [role=slider]")) return;
+      clearTimeout(wheelTimer);
+      wheelStart = null;
       suppressClick = false;
       gesture = { id: event.pointerId, x: event.clientX, y: event.clientY,
         offset: -node.scrollLeft,
@@ -101,6 +122,8 @@ export function Pager({ pages, active, onChange, children }: {
       node.scrollTo({ left: Math.max(0, names.indexOf(activeRef.current)) * node.clientWidth, behavior: "instant" });
     });
     resize.observe(node);
+    node.addEventListener("wheel", wheel, { passive: false });
+    node.addEventListener("dragstart", preventDrag);
     node.addEventListener("pointerdown", down);
     node.addEventListener("pointermove", move);
     node.addEventListener("pointerup", finish);
@@ -108,7 +131,10 @@ export function Pager({ pages, active, onChange, children }: {
     node.addEventListener("click", click, true);
     return () => {
       cancelAnimationFrame(frame.current);
+      clearTimeout(wheelTimer);
       resize.disconnect();
+      node.removeEventListener("wheel", wheel);
+      node.removeEventListener("dragstart", preventDrag);
       node.removeEventListener("pointerdown", down);
       node.removeEventListener("pointermove", move);
       node.removeEventListener("pointerup", finish);
