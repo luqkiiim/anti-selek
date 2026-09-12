@@ -34,6 +34,7 @@ import {
 import { Pager } from "./Pager";
 import { SessionUpdate } from "./SessionUpdate";
 import { ClubHighlights } from "./ClubHighlights";
+import { UpcomingSessions } from "./UpcomingSessions";
 import Admin from "./Admin";
 import { MainNav, mainPages } from "./MainNav";
 import { Rankings } from "./Rankings";
@@ -90,7 +91,8 @@ export default function Club({
     data?.viewer.isAdmin;
   const canAdmin = data?.club.role === "ADMIN" || data?.viewer.isAdmin;
   const sessions = data?.sessions.filter((s) => !s.isTest) || [];
-  const live = sessions.filter((s) => s.status !== "COMPLETED");
+  const live = sessions.filter((s) => s.status === "ACTIVE");
+  const upcoming = sessions.filter((s) => s.status === "WAITING");
   const recent = profile.data?.recentSessions?.find(r=>sessions.some(s=>s.id===r.id&&s.status==="COMPLETED"));
   const member = data?.clubMembers.find((p) => p.id === data.viewer.id);
   const rating = profile.data?.user.elo ?? member?.elo;
@@ -267,7 +269,7 @@ export default function Club({
                     <CaretRight size={19} />
                   </button>
                 </div>
-              ) : (
+              ) : !upcoming.length ? (
                 <div className="card">
                   <h2>
                     {sessions.length
@@ -279,10 +281,11 @@ export default function Club({
                     className="primary"
                     onClick={() => go(canManage ? "setup" : "sessions")}
                   >
-                    {canManage ? "Start a session" : "Browse sessions"}
+                    {canManage ? "Prepare a session" : "Browse sessions"}
                   </button>
                 </div>
-              )}
+              ) : null}
+              <UpcomingSessions sessions={upcoming} canManage={!!canManage} onOpen={openSession} onViewAll={() => go("sessions")} />
               {canAdmin && <div className="link-group">
                   <Row
                     title="Manage club"
@@ -318,7 +321,7 @@ export default function Club({
               {live.map((s) => (
                 <div className="session-tile" key={s.code}>
                   <span className="eyebrow">
-                    {s.status === "WAITING" ? "UP NEXT" : "LIVE NOW"}
+                    LIVE NOW
                   </span>
                   <h2>{s.name}</h2>
                   <p>{s.players.length} players</p>
@@ -330,6 +333,7 @@ export default function Club({
                   </button>
                 </div>
               ))}
+              <UpcomingSessions sessions={upcoming} canManage={!!canManage} onOpen={openSession} />
               <details className="past-sessions">
                 <summary>
                   <span>Past sessions <span className="past-sessions-count">{sessions.filter((s) => s.status === "COMPLETED").length}</span></span>
@@ -484,7 +488,7 @@ export default function Club({
                 disabled={
                   action.busy ||
                   !sessionName.trim() ||
-                  data.clubMembers.length < 4
+                  data.clubMembers.length < 2
                 }
                 onClick={() =>
                   void action.run(
@@ -504,7 +508,6 @@ export default function Club({
                           autoQueueEnabled: true,
                         },
                       );
-                      await api(`/api/sessions/${created.code}/start`, "POST");
                       setSessionCode(created.code);
                       go("session");
                     },
@@ -512,7 +515,7 @@ export default function Club({
                   )
                 }
               >
-                Start session
+                Prepare session
               </button>
             </>
           )}

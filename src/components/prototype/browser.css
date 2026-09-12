@@ -358,3 +358,15 @@
 .highlights-empty { display: flex; align-items: center; gap: 12px; padding: 16px; border-radius: 18px; background: #fbefe3; color: #987656; }
 .highlights-empty p { margin: 0; font-size: 13px; line-height: 1.5; }
 .highlights-empty > svg { flex-shrink: 0; }
+
+.upcoming-sessions { margin: 20px 0; }
+.upcoming-session { padding: 17px; margin-top: 12px; border: 1px solid #e8dff1; border-radius: 22px; background: #fff; }
+.upcoming-session-title { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.upcoming-session-title h2 { flex: 1; min-width: 100px; margin: 0; font-size: 18px; overflow-wrap: anywhere; }
+.upcoming-icon { color: #8254ba; display: flex; }
+.upcoming-status { color: #8c6943; background: #fbf0de; padding: 5px 8px; border-radius: 8px; font-size: 10px; font-weight: 800; white-space: nowrap; }
+.upcoming-roster { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 16px 0; color: #877690; font-size: 12px; }
+.upcoming-avatars { display: flex; gap: 5px; align-items: center; }
+.upcoming-avatars .avatar, .upcoming-more { width: 36px; height: 36px; font-size: 13px; }
+.upcoming-more { display: grid; place-items: center; background: #f1e9fb; color: #7543c5; border-radius: 50%; font-weight: 800; }
+.prototype-root .upcoming-open { width: 100%; justify-content: center; min-height: 44px; }
