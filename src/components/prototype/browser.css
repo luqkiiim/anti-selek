@@ -310,3 +310,18 @@
 .rankings-rating { font-size: 20px; color: #7040bc; font-weight: 900; }
 .rankings-page details { margin-top: 22px; }
 .rankings-note { font-size: 13px; color: #80718b; }
+
+.prototype-root .past-sessions { margin-top: 24px; }
+.prototype-root .past-sessions > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 48px;
+  cursor: pointer;
+  list-style: none;
+  font-size: 18px;
+  font-weight: 800;
+}
+.prototype-root .past-sessions > summary::-webkit-details-marker { display: none; }
+.prototype-root .past-sessions-count { margin-left: 6px; color: #887a94; font-size: 14px; font-weight: 600; }
+.prototype-root .past-sessions[open] > summary > svg { transform: rotate(90deg); }

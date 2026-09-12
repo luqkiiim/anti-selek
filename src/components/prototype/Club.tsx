@@ -332,7 +332,11 @@ export default function Club({
                   </button>
                 </div>
               ))}
-              <h3>Past sessions</h3>
+              <details className="past-sessions">
+                <summary>
+                  <span>Past sessions <span className="past-sessions-count">{sessions.filter((s) => s.status === "COMPLETED").length}</span></span>
+                  <CaretRight size={20} aria-hidden="true" />
+                </summary>
               {sessions
                 .filter((s) => s.status === "COMPLETED")
                 .map((s) => (
@@ -364,6 +368,7 @@ export default function Club({
               {!sessions.some((s) => s.status === "COMPLETED") && (
                 <p className="muted">No completed sessions yet.</p>
               )}
+              </details>
             </>
           )}
           {data && page === "rankings" && <Rankings members={data.clubMembers} viewerId={data.viewer.id} clubName={data.club.name} />}
