@@ -99,6 +99,7 @@ model ClubRatingAdjustment {
 }
 
 model ClubMember {
+  achievementPreferencesJson String @default("{}")
   ratingAdjustments ClubRatingAdjustment[]
   id            String   @id @default(cuid())
   clubId        String   @map("communityId")
@@ -118,6 +119,7 @@ model ClubMember {
 }
 
 model Session {
+  achievementEligibilityJson String @default("{}")
   id                     String    @id @default(cuid())
   code                   String    @unique
   clubId                 String?   @map("communityId")

@@ -9,7 +9,6 @@ import {
   ArrowLeft,
   ArrowUp,
   GearSix,
-  Trophy,
   Plus,
 } from "@phosphor-icons/react";
 import type { DashboardClub } from "@/components/dashboard/dashboardTypes";
@@ -35,6 +34,8 @@ import { Pager } from "./Pager";
 import { SessionUpdate } from "./SessionUpdate";
 import { ClubHighlights } from "./ClubHighlights";
 import { UpcomingSessions } from "./UpcomingSessions";
+import { NextMilestone, AchievementCabinet } from "./Achievements";
+import type { AchievementCollection, AchievementId } from "@/lib/clubAchievements";
 import Admin from "./Admin";
 import { MainNav, mainPages } from "./MainNav";
 import { Rankings } from "./Rankings";
@@ -76,13 +77,19 @@ export default function Club({
       ? `/api/users/${data.viewer.id}/stats?clubId=${club.id}`
       : null,
   );
+  const achievements = useResource<AchievementCollection>(data?.viewer ? `/api/clubs/${club.id}/achievements` : null);
+  const [achievementRequest, setAchievementRequest] = useState<{id:AchievementId;nonce:number}>();
+  async function saveAchievementPreferences(body: unknown) {
+    await api(`/api/clubs/${club.id}/achievements`, "PATCH", body);
+    await achievements.refresh();
+  }
   const [page, setPage] = useState("club"),
     [sheet, setSheet] = useState(""),
     [sessionCode, setSessionCode] = useState(""),
     [sessionName, setSessionName] = useState(""),
     [recap, setRecap] = useState<PlayerProfileSessionSummary | null>(null);
   async function refresh() {
-    await Promise.all([resource.refresh(), profile.refresh()]);
+    await Promise.all([resource.refresh(), profile.refresh(), achievements.refresh()]);
   }
   const action = useAction(refresh);
   const canManage =
@@ -164,16 +171,10 @@ export default function Club({
     ) : null;
   }
   function renderAchievement() {
-    return (
-      <button className="achievement" onClick={() => setSheet("achievement")}>
-        <Trophy size={32} weight="duotone" />
-        <span>
-          <small>Achievement preview</small>
-          <strong>Strong Start</strong>
-        </span>
-        <CaretRight size={18} />
-      </button>
-    );
+    return achievements.data ? <AchievementCabinet collection={achievements.data} openRequest={achievementRequest}
+      onSaveShowcase={showcase => saveAchievementPreferences({showcase})}
+      onSeen={seen => saveAchievementPreferences({seen})}
+      onOpenSession={openSession} /> : <ErrorText error={achievements.error} />;
   }
   if (page === "session")
     return (
@@ -239,7 +240,7 @@ export default function Club({
         )}
       </header>
       <Pager pages={mainPages.includes(page as (typeof mainPages)[number]) ? mainPages : [page]} active={page} onChange={go}>{page => <>
-          <ErrorText error={resource.error || profile.error || action.error} />
+          <ErrorText error={resource.error || profile.error || achievements.error || action.error} />
           {!data && <p role="status">Loading club…</p>}
           {data && page === "club" && (
             <>
@@ -303,6 +304,7 @@ export default function Club({
                 </button>
               </div>
               {renderStats()}
+              {achievements.data && <NextMilestone collection={achievements.data} onOpen={id => { go("profile"); setAchievementRequest({id,nonce:Date.now()}); }} />}
               <PartnerChemistry pairs={data.clubPulse?.partnerships ?? []} />
               <TopRivalries rivalries={data.clubPulse?.rivalries ?? []} />
             </>
@@ -404,7 +406,6 @@ export default function Club({
                 ))}
               </div>
               {renderRecent()}
-              <h3>Achievements</h3>
               {renderAchievement()}
               <div className="link-group">
                 <Row
@@ -550,20 +551,7 @@ export default function Club({
                 Sign out
               </button>
             </>
-          ) : (
-            <>
-              <Image width={240} height={240}
-                className="achievement-art"
-                src="/spark.png"
-                alt="Happy spark"
-              />
-              <h2>A strong start.</h2>
-              <p>Preview only. New achievements are coming later.</p>
-              <button className="primary" onClick={() => setSheet("")}>
-                Nice!
-              </button>
-            </>
-          )}
+          ) : null}
         </Sheet>
     </div>
   );

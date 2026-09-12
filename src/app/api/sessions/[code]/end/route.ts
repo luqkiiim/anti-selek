@@ -1,3 +1,4 @@
+import { captureAchievementEligibility } from "@/lib/clubAchievementService";
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { serializeAvatarEntity } from "@/lib/avatar";
@@ -90,7 +91,7 @@ export async function POST(
         data: { pendingPool: null, isPaused: false, pausedAt: null },
       });
 
-      return tx.session.update({
+      const ended = await tx.session.update({
         where: { code },
         data: { status: SessionStatus.COMPLETED, endedAt },
         include: {
@@ -104,6 +105,9 @@ export async function POST(
           },
         },
       });
+      const achievementClubIds = await getAcceptedSessionClubIds(tx, ended);
+      await captureAchievementEligibility(tx, ended.id, achievementClubIds);
+      return ended;
     });
 
     const linkedClubIds = await getAcceptedSessionClubIds(
