@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useRef, type ReactNode } from "react";
+import { swipeSettings } from "./swipeSettings";
 
 /** Horizontal movement is controlled; vertical scrolling stays native. */
 export function Pager({ pages, active, onChange, children }: {
@@ -38,7 +39,7 @@ export function Pager({ pages, active, onChange, children }: {
       const from = node.scrollLeft;
       const to = index * node.clientWidth;
       const started = performance.now();
-      const duration = matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 220;
+      const duration = matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : swipeSettings.settleDurationMs;
       const step = (now: number) => {
         const progress = duration ? Math.min(1, (now - started) / duration) : 1;
         node.scrollTo({ left: from + (to - from) * (1 - Math.pow(1 - progress, 3)), behavior: "instant" });
@@ -64,7 +65,7 @@ export function Pager({ pages, active, onChange, children }: {
       const dx = event.clientX - gesture.x;
       const dy = event.clientY - gesture.y;
       if (!gesture.horizontal) {
-        if (Math.max(Math.abs(dx), Math.abs(dy)) < 8) return;
+        if (Math.max(Math.abs(dx), Math.abs(dy)) < swipeSettings.directionLockPx) return;
         if (Math.abs(dy) >= Math.abs(dx)) { gesture = null; return; }
         gesture.horizontal = true;
         suppressClick = true;
@@ -85,9 +86,9 @@ export function Pager({ pages, active, onChange, children }: {
       if (!current.horizontal) return;
       const dx = event.clientX - current.x;
       const start = Math.round(-current.offset / node.clientWidth);
-      const flick = event.timeStamp - current.time < 100 && Math.abs(current.velocity) > .45 && Math.abs(dx) > 24;
+      const flick = event.timeStamp - current.time < swipeSettings.flickMaxAgeMs && Math.abs(current.velocity) > swipeSettings.flickVelocityPxPerMs && Math.abs(dx) > swipeSettings.flickMinDistancePx;
       const direction = flick ? -Math.sign(current.velocity) : -Math.sign(dx);
-      const advance = event.type !== "pointercancel" && (Math.abs(dx) > node.clientWidth * .25 || flick);
+      const advance = event.type !== "pointercancel" && (Math.abs(dx) > node.clientWidth * swipeSettings.distanceThreshold || flick);
       settle(Math.max(0, Math.min(names.length - 1, start + (advance ? direction : 0))));
       if (node.hasPointerCapture(event.pointerId)) node.releasePointerCapture(event.pointerId);
     };
