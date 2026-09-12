@@ -208,19 +208,25 @@
   position: absolute;
   inset: calc(72px + env(safe-area-inset-top, 0px)) 0 calc(70px + env(safe-area-inset-bottom, 0px));
   display: flex;
-  overflow-x: auto;
-  overflow-y: hidden;
-  scroll-snap-type: x mandatory;
+  overflow: hidden;
+  touch-action: pan-y pinch-zoom;
   overscroll-behavior-x: contain;
   scrollbar-width: none;
 }
+.prototype-root .pager-track {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  flex-shrink: 0;
+  will-change: transform;
+}
 .prototype-root .pager-page {
+  touch-action: pan-y pinch-zoom;
   flex: 0 0 100%;
   min-width: 0;
   height: 100%;
   overflow-y: auto;
-  scroll-snap-align: start;
-  scroll-snap-stop: always;
+
   overscroll-behavior-y: contain;
   scrollbar-width: none;
 }
