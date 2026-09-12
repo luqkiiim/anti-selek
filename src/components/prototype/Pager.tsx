@@ -9,30 +9,44 @@ export function Pager({ pages, active, onChange, children }: {
   children: (page: string) => ReactNode;
 }) {
   const ref = useRef<HTMLDivElement>(null);
-  const trackRef = useRef<HTMLDivElement>(null);
+  const swipeSelection = useRef<string | null>(null);
+  const frame = useRef<number>(0);
   const callback = useRef(onChange);
   const activeRef = useRef(active);
   useEffect(() => { callback.current = onChange; activeRef.current = active; }, [onChange, active]);
   const pagesKey = pages.join("|");
   useEffect(() => {
-    const track = trackRef.current;
-    if (!track) return;
-    track.style.transition = matchMedia("(prefers-reduced-motion: reduce)").matches
-      ? "none" : "transform 220ms cubic-bezier(.22, 1, .36, 1)";
-    track.style.transform = `translate3d(${-Math.max(0, pagesKey.split("|").indexOf(active)) * 100}%, 0, 0)`;
+    const node = ref.current;
+    if (!node) return;
+    if (swipeSelection.current === active) {
+      swipeSelection.current = null;
+      return;
+    }
+    cancelAnimationFrame(frame.current);
+    // Preserve the original browser-native transition for tab taps.
+    node.scrollTo({ left: Math.max(0, pagesKey.split("|").indexOf(active)) * node.clientWidth,
+      behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth" });
   }, [active, pagesKey]);
   useEffect(() => {
     const node = ref.current;
-    const track = trackRef.current;
-    if (!node || !track) return;
+    if (!node) return;
     const names = pagesKey.split("|");
     let gesture: { id: number; x: number; y: number; offset: number; horizontal: boolean; lastX: number; time: number; velocity: number } | null = null;
     let suppressClick = false;
     const settle = (index: number) => {
-      track.style.transition = matchMedia("(prefers-reduced-motion: reduce)").matches
-        ? "none" : "transform 220ms cubic-bezier(.22, 1, .36, 1)";
-      track.style.transform = `translate3d(${-index * 100}%, 0, 0)`;
+      cancelAnimationFrame(frame.current);
+      const from = node.scrollLeft;
+      const to = index * node.clientWidth;
+      const started = performance.now();
+      const duration = matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 220;
+      const step = (now: number) => {
+        const progress = duration ? Math.min(1, (now - started) / duration) : 1;
+        node.scrollTo({ left: from + (to - from) * (1 - Math.pow(1 - progress, 3)), behavior: "instant" });
+        if (progress < 1) frame.current = requestAnimationFrame(step);
+      };
+      frame.current = requestAnimationFrame(step);
       if (names[index] !== activeRef.current) {
+        swipeSelection.current = names[index];
         activeRef.current = names[index];
         callback.current(names[index]);
       }
@@ -42,7 +56,7 @@ export function Pager({ pages, active, onChange, children }: {
       if ((event.target as Element).closest("input, select, textarea, [role=slider]")) return;
       suppressClick = false;
       gesture = { id: event.pointerId, x: event.clientX, y: event.clientY,
-        offset: new DOMMatrixReadOnly(getComputedStyle(track).transform).m41,
+        offset: -node.scrollLeft,
         horizontal: false, lastX: event.clientX, time: event.timeStamp, velocity: 0 };
     };
     const move = (event: PointerEvent) => {
@@ -55,13 +69,14 @@ export function Pager({ pages, active, onChange, children }: {
         gesture.horizontal = true;
         suppressClick = true;
         node.setPointerCapture(event.pointerId);
-        track.style.transition = "none";
+        cancelAnimationFrame(frame.current);
+        node.scrollTo({ left: node.scrollLeft, behavior: "instant" });
       }
       gesture.velocity = (event.clientX - gesture.lastX) / Math.max(1, event.timeStamp - gesture.time);
       gesture.lastX = event.clientX;
       gesture.time = event.timeStamp;
       const offset = Math.max(-(names.length - 1) * node.clientWidth, Math.min(0, gesture.offset + dx));
-      track.style.transform = `translate3d(${offset}px, 0, 0)`;
+      node.scrollTo({ left: -offset, behavior: "instant" });
     };
     const finish = (event: PointerEvent) => {
       if (!gesture || event.pointerId !== gesture.id) return;
@@ -81,8 +96,8 @@ export function Pager({ pages, active, onChange, children }: {
     };
     const resize = new ResizeObserver(() => {
       gesture = null;
-      track.style.transition = "none";
-      track.style.transform = `translate3d(${-Math.max(0, names.indexOf(activeRef.current)) * 100}%, 0, 0)`;
+      cancelAnimationFrame(frame.current);
+      node.scrollTo({ left: Math.max(0, names.indexOf(activeRef.current)) * node.clientWidth, behavior: "instant" });
     });
     resize.observe(node);
     node.addEventListener("pointerdown", down);
@@ -91,6 +106,7 @@ export function Pager({ pages, active, onChange, children }: {
     node.addEventListener("pointercancel", finish);
     node.addEventListener("click", click, true);
     return () => {
+      cancelAnimationFrame(frame.current);
       resize.disconnect();
       node.removeEventListener("pointerdown", down);
       node.removeEventListener("pointermove", move);
@@ -99,7 +115,7 @@ export function Pager({ pages, active, onChange, children }: {
       node.removeEventListener("click", click, true);
     };
   }, [pagesKey]);
-  return <div className="page-pager" ref={ref}><div className="pager-track" ref={trackRef}>{pages.map(page => (
+  return <div className="page-pager" ref={ref}><div className="pager-track">{pages.map(page => (
     <div className="pager-page" key={page} inert={page !== active} aria-hidden={page !== active}>
       <main className="pc-content">{children(page)}</main>
     </div>
