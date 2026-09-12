@@ -32,6 +32,7 @@ import {
   ErrorText,
 } from "./Primitives";
 import { Pager } from "./Pager";
+import { SessionUpdate } from "./SessionUpdate";
 import Admin from "./Admin";
 import { MainNav, mainPages } from "./MainNav";
 import { Rankings } from "./Rankings";
@@ -281,6 +282,7 @@ export default function Club({
                   </button>
                 </div>
               )}
+              {recent && <SessionUpdate session={recent} onOpen={() => { setRecap(recent); go("recap"); }} />}
               {canAdmin && <div className="link-group">
                   <Row
                     title="Manage club"
@@ -298,12 +300,6 @@ export default function Club({
                 </button>
               </div>
               {renderStats()}
-              {recent && (
-                <>
-                  <h3>Recent activity</h3>
-                  {renderRecent()}
-                </>
-              )}
             </>
           )}
           {data && page === "sessions" && (
