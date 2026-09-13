@@ -1,9 +1,7 @@
 "use client";
 import Image from "next/image";
 import { useState } from "react";
-import { signOut } from "next-auth/react";
 import {
-  UserCircle,
   CalendarBlank,
   CaretRight,
   ArrowLeft,
@@ -27,7 +25,6 @@ import { api, useResource, useAction } from "./api";
 import {
   Avatar,
   Row,
-  Sheet,
   ErrorText,
 } from "./Primitives";
 import { Pager } from "./Pager";
@@ -39,6 +36,7 @@ import type { AchievementCollection, AchievementId } from "@/lib/clubAchievement
 import Admin from "./Admin";
 import { MainNav, mainPages } from "./MainNav";
 import { Rankings } from "./Rankings";
+import { AccountSettings } from "./AccountSettings";
 import { SessionSetup } from "./SessionSetup";
 import { PartnerChemistry } from "./PartnerChemistry";
 import { TopRivalries } from "./TopRivalries";
@@ -67,9 +65,11 @@ type Profile = {
 export default function Club({
   club,
   onSwitch,
+  onAccountSaved,
 }: {
   club: DashboardClub;
   onSwitch: () => void;
+  onAccountSaved: () => Promise<unknown>;
 }) {
   const resource = useResource<Snapshot>("/api/clubs/" + club.id);
   const data = resource.data;
@@ -231,7 +231,7 @@ export default function Club({
               aria-label="Account settings"
               onClick={() => setSheet("account")}
             >
-              <UserCircle size={26} />
+              <Avatar name={data?.viewer.name || ""} url={data?.viewer.avatarUrl} />
             </button>
             </div>
           </>
@@ -397,7 +397,7 @@ export default function Club({
               <div className="link-group">
                 <Row
                   title="Account settings"
-                  sub="Your name and preferences"
+                  sub="Photo, name and gender"
                   icon={GearSix}
                   onClick={() => setSheet("account")}
                 />
@@ -448,35 +448,7 @@ export default function Club({
       {!["setup", "recap"].includes(page) && (
         <MainNav active={page} onNavigate={go} />
       )}
-      <Sheet open={!!sheet}
-          title={
-            sheet === "account"
-              ? "Your account"
-              : "Strong Start"
-          }
-          onClose={() => setSheet("")}
-        >
-          {sheet === "account" ? (
-            <>
-              <Avatar
-                large
-                name={data?.viewer.name || ""}
-                url={data?.viewer.avatarUrl}
-              />
-              <p>{data?.viewer.name}</p>
-              <p className="muted">{data?.viewer.email}</p>
-              <button className="primary" onClick={() => setSheet("")}>
-                Done
-              </button>
-              <button
-                className="text-button"
-                onClick={() => void signOut({ callbackUrl: "/signin" })}
-              >
-                Sign out
-              </button>
-            </>
-          ) : null}
-        </Sheet>
+      <AccountSettings open={sheet === "account"} onClose={() => setSheet("")} onSaved={async () => { await Promise.all([refresh(), onAccountSaved()]); }} />
     </div>
   );
 }

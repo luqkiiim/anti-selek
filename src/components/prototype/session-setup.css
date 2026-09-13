@@ -91,3 +91,6 @@
 
 .sheet-content .setup-search input:focus { outline: none; box-shadow: none; }
 .setup-search-clear { display: grid; place-items: center; flex: 0 0 44px; height: 44px; padding: 0; border: 0; border-radius: 10px; background: transparent; color: #80718b; }
+
+.session-setup .setup-name { font-size: 18px; font-weight: 900; }
+.session-setup .setup-name input { margin-top: 10px; font-weight: 600; }

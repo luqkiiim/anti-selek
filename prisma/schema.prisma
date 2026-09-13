@@ -16,6 +16,7 @@ model User {
   name              String
   avatarKey         String?
   selfNameChangedAt DateTime?
+  selfGenderChangedAt DateTime?
   isClaimed         Boolean   @default(false)
   gender            String    @default("UNSPECIFIED") // MALE, FEMALE, UNSPECIFIED
   partnerPreference String    @default("OPEN") // legacy MIXICANO preference fallback: OPEN, FEMALE_FLEX

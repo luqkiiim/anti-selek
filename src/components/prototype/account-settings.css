@@ -1,0 +1,17 @@
+.account-settings > fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
+.account-photo { display: flex; flex-direction: column; align-items: center; gap: 8px; margin: 4px 0 24px; }
+.account-photo-button { position: relative; border: 0; padding: 0; border-radius: 50%; background: transparent; }
+.account-photo .avatar.large { display: block; width: 88px; height: 88px; border-radius: 50%; overflow: hidden; line-height: 88px; }
+.account-photo-button > span:last-child:not(.avatar) { position: absolute; display: grid; place-items: center; right: -2px; bottom: 0; width: 30px; height: 30px; border: 3px solid #fffaf3; border-radius: 50%; background: #7040cf; color: white; }
+.account-photo > div { display: flex; gap: 14px; }
+.account-photo .text-button { min-height: 44px; padding: 0; font-size: 13px; }
+.account-settings .field-label { margin-bottom: 0; }
+.account-settings .field-label input:not([type=range]), .account-settings select { width: 100%; min-height: 48px; border: 1px solid #e8ddef; border-radius: 12px; background: #fffdfb; padding: 12px; font-size: 16px; color: #291440; }
+.account-settings input:disabled, .account-settings select:disabled { opacity: .65; }
+.account-field-note { margin: 7px 0 20px; color: #80718b; font-size: 12px; }
+.account-signout { display: block; margin: 18px auto 0; min-height: 44px; }
+.account-notice { color: #426c4c; font-size: 13px; text-align: center; }
+.account-crop-area { position: relative; height: 280px; max-height: 40dvh; border-radius: 16px; overflow: hidden; background: #291440; margin-bottom: 18px; }
+.account-crop input[type=range] { width: 100%; min-height: 44px; accent-color: #7040cf; }
+.account-actions { display: flex; gap: 12px; margin-top: 16px; }
+.account-actions > button { flex: 1; min-height: 48px; }

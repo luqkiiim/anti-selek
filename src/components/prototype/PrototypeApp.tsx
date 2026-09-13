@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import Image from "next/image";
-import { useSession, signOut } from "next-auth/react";
+import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import {
   UsersThree,
@@ -13,6 +13,7 @@ import type { DashboardClub } from "@/components/dashboard/dashboardTypes";
 import { api, useResource, useAction } from "./api";
 import { Avatar, Sheet, ErrorText } from "./Primitives";
 import Club from "./Club";
+import { AccountSettings, type AccountUser } from "./AccountSettings";
 import "@fontsource/nunito-sans/400.css";
 import "@fontsource/nunito-sans/600.css";
 import "@fontsource/nunito-sans/700.css";
@@ -36,6 +37,7 @@ function ClubMark({ url, tone }: { url?: string | null; tone: number }) {
 export default function PrototypeApp() {
   const { data: auth, status } = useSession();
   const router = useRouter();
+  const account = useResource<{ user: AccountUser }>(status === "authenticated" ? "/api/user/me" : null);
   const clubs = useResource<DashboardClub[]>(
     status === "authenticated" ? "/api/clubs" : null,
   );
@@ -84,7 +86,7 @@ export default function PrototypeApp() {
   return (
     <div className="prototype-root">
       {club ? (
-        <Club key={club.id} club={club} onSwitch={switchClub} />
+        <Club key={club.id} club={club} onSwitch={switchClub} onAccountSaved={account.refresh} />
       ) : (
         <div className="pc-app">
           <header className="pc-header">
@@ -96,7 +98,7 @@ export default function PrototypeApp() {
               aria-label="Account"
               onClick={() => setForm("account")}
             >
-              <Avatar name={auth?.user?.name || ""} />
+              <Avatar name={account.data?.user.name || auth?.user?.name || ""} url={account.data?.user.avatarUrl} />
             </button>
           </header>
           <div className="pc-scroll">
@@ -166,7 +168,8 @@ export default function PrototypeApp() {
           </div>
         </div>
       )}
-      <Sheet open={!!form}
+      <AccountSettings open={form === "account"} onClose={() => setForm("")} onSaved={account.refresh} />
+      <Sheet open={!!form && form !== "account"}
           title={
             form === "create"
               ? "Create club"
@@ -178,20 +181,6 @@ export default function PrototypeApp() {
           onClose={() => setForm("")}
         >
           <ErrorText error={action.error} />
-          {form === "account" ? (
-            <>
-              <p>{auth?.user?.name}</p>
-              <button className="primary" onClick={() => setForm("")}>
-                Done
-              </button>
-              <button
-                className="text-button"
-                onClick={() => void signOut({ callbackUrl: "/signin" })}
-              >
-                Sign out
-              </button>
-            </>
-          ) : (
             <>
               <label className="field-label">
                 {form === "create" ? "Club name" : "Invite link"}
@@ -242,7 +231,6 @@ export default function PrototypeApp() {
                 {form === "create" ? "Create club" : "Request to join"}
               </button>
             </>
-          )}
         </Sheet>
     </div>
   );

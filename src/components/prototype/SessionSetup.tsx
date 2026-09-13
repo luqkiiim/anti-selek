@@ -41,7 +41,6 @@ export function SessionSetup({ clubId, members: rosterMembers, onCreated }: { cl
   const [autoQueue, setAutoQueue] = useState(false);
   const [respectRest, setRespectRest] = useState(true);
   const [pools, setPools] = useState<Record<string, Pool>>({});
-  const [genders, setGenders] = useState<Record<string, Gender>>({});
   const [rosterOpen, setRosterOpen] = useState(false);
   const [search, setSearch] = useState("");
   const searchInput = useRef<HTMLInputElement>(null);
@@ -54,7 +53,7 @@ export function SessionSetup({ clubId, members: rosterMembers, onCreated }: { cl
   const players = members.filter(p => selected.includes(p.id));
   const count = players.length + guests.length;
   const getPool = (p: ClubPageMember) => pools[p.id] ?? p.preferredPool ?? "B";
-  const getGender = (p: ClubPageMember) => genders[p.id] ?? p.gender ?? "UNSPECIFIED";
+  const getGender = (p: ClubPageMember) => p.gender ?? "UNSPECIFIED";
   const competitive = players.filter(p => getPool(p) === "A").length + guests.filter(g => g.pool === "A").length;
   const visibleMembers = members.filter(p => p.name.toLowerCase().includes(search.trim().toLowerCase()));
   function togglePlayer(id: string) { setSelected(ids => ids.includes(id) ? ids.filter(p => p !== id) : [...ids, id]); }
@@ -72,12 +71,13 @@ export function SessionSetup({ clubId, members: rosterMembers, onCreated }: { cl
     void action.run(async () => {
       if (!name.trim()) throw new Error("Give this session a name.");
       if (count < 2) throw new Error("Choose at least two players or guests.");
-      if (mixed && (players.some(p => getGender(p) === "UNSPECIFIED") || guests.some(g => g.gender === "UNSPECIFIED"))) throw new Error("Open the player list and set a gender for everyone before using mixed pairs.");
+      if (mixed && players.some(p => getGender(p) === "UNSPECIFIED")) throw new Error("Some players haven’t set their gender. Ask them to update their account before using mixed pairs.");
+      if (mixed && guests.some(g => g.gender === "UNSPECIFIED")) throw new Error("Set a gender for each guest in the player list before using mixed pairs.");
       if (groups && (competitive < 2 || count - competitive < 2)) throw new Error("Open the player list and assign at least two players to each group.");
       const created = await api<{ code: string }>("/api/sessions", "POST", {
         name: name.trim(), clubId, courtCount: courts, scoringType: "POINTS", matchmakingStyle: style,
         balanceMetric: metric, pairingMode: mixed ? "MIXED" : "OPEN", collabFormat: "FREE_PLAY",
-        playerIds: players.map(p => p.id), playerConfigs: players.map(p => ({ userId: p.id, pool: getPool(p), ...(genders[p.id] ? { gender: genders[p.id] } : {}) })),
+        playerIds: players.map(p => p.id), playerConfigs: players.map(p => ({ userId: p.id, pool: getPool(p) })),
         guestConfigs: guests.map(({ name, initialElo, gender, pool }) => ({ name, initialElo, gender, pool })),
         poolsEnabled: groups, crossoverFrequency: crossover, autoQueueEnabled: autoQueue, respectPlayerRest: respectRest, isTest: false,
       });
@@ -88,9 +88,8 @@ export function SessionSetup({ clubId, members: rosterMembers, onCreated }: { cl
     <div className="setup-intro"><span className="eyebrow">LET’S PLAY</span><h1>Make it your session.</h1></div>
     <form onSubmit={e => { e.preventDefault(); prepare(); }}>
       <fieldset disabled={action.busy} className="setup-fields">
-        <section className="setup-section" aria-labelledby="setup-basics">
-          <h2 id="setup-basics">The essentials</h2>
-          <label className="field-label">Session name<input value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Sunday rallies" required /></label>
+        <section className="setup-section" aria-label="Session details">
+          <label className="field-label setup-name">Session name<input value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Sunday rallies" required /></label>
           <div className="setup-courts"><span><strong>Courts</strong><small>Available for this session</small></span><div className="setup-stepper"><button type="button" aria-label="Fewer courts" disabled={courts === 1} onClick={() => setCourts(n => n - 1)}><Minus size={18} /></button><output aria-label="Court count" aria-live="polite">{courts}</output><button type="button" aria-label="More courts" disabled={courts === 10} onClick={() => setCourts(n => n + 1)}><Plus size={18} /></button></div></div>
         </section>
 
@@ -109,7 +108,6 @@ export function SessionSetup({ clubId, members: rosterMembers, onCreated }: { cl
 
         <details className="setup-options"><summary><span><strong>More options</strong><small>Pairing, groups & session controls</small></span><CaretRight size={18} /></summary><div className="setup-options-content">
           <Toggle title="Mixed pairs" hint="Build mixed-gender teams." checked={mixed} onChange={setMixed} />
-          {mixed && <button type="button" className="setup-inline-action" onClick={() => setRosterOpen(true)}>Review player genders<CaretRight size={16} /></button>}
           <Toggle title="Player groups" hint="Separate Competitive and Social groups." checked={groups} onChange={setGroups} />
           {groups && <div className="setup-group-options"><button type="button" className="setup-inline-action" onClick={() => setRosterOpen(true)}>{competitive} Competitive · {count - competitive} Social<CaretRight size={16} /></button><label className="field-label">Mix groups<select aria-label="Mix groups" value={crossover} onChange={e => setCrossover(e.target.value)}><option value="OCCASIONAL">Occasionally</option><option value="BALANCED">Sometimes</option><option value="FREQUENT">Often</option></select></label></div>}
           <Toggle title="Prepare the next game" hint="Automatically keep the next match queued." checked={autoQueue} onChange={setAutoQueue} />
@@ -122,7 +120,7 @@ export function SessionSetup({ clubId, members: rosterMembers, onCreated }: { cl
     <Sheet open={rosterOpen} title="Who’s playing?" onClose={() => { setRosterOpen(false); setAddingGuest(false); }}>
       <div className="setup-roster-sheet"><div className="setup-roster-tools"><strong>{count} selected</strong></div>
         <div className="setup-search"><MagnifyingGlass size={18} aria-hidden="true" /><input ref={searchInput} aria-label="Find a player" value={search} onChange={e => setSearch(e.target.value)} placeholder="Find a player" />{search && <button type="button" className="setup-search-clear" aria-label="Clear player search" onClick={() => { setSearch(""); searchInput.current?.focus(); }}><X size={18} aria-hidden="true" /></button>}</div>
-        <div className="setup-roster-list">{visibleMembers.map(p => <div key={p.id} className="setup-person"><label className="setup-person-select"><input type="checkbox" checked={selected.includes(p.id)} onChange={() => togglePlayer(p.id)} /><Avatar name={p.name} url={p.avatarUrl} /><span><strong>{p.name}</strong><small>{p.status === "CORE" ? "Core" : "Occasional"} · {p.elo}</small></span></label>{selected.includes(p.id) && (mixed || groups) && <div className="setup-person-options">{mixed && <label>Gender<select value={getGender(p)} onChange={e => setGenders(g => ({ ...g, [p.id]: e.target.value as Gender }))} aria-label={`Gender for ${p.name}`}><option value="UNSPECIFIED">Choose</option><option value="MALE">Male</option><option value="FEMALE">Female</option></select></label>}{groups && <label>Group<select value={getPool(p)} onChange={e => setPools(g => ({ ...g, [p.id]: e.target.value as Pool }))} aria-label={`Group for ${p.name}`}><option value="A">Competitive</option><option value="B">Social</option></select></label>}</div>}</div>)}{!visibleMembers.length && <p className="setup-hint">No players found.</p>}</div>
+        <div className="setup-roster-list">{visibleMembers.map(p => <div key={p.id} className="setup-person"><label className="setup-person-select"><input type="checkbox" checked={selected.includes(p.id)} onChange={() => togglePlayer(p.id)} /><Avatar name={p.name} url={p.avatarUrl} /><span><strong>{p.name}</strong><small>{p.status === "CORE" ? "Core" : "Occasional"} · {p.elo}</small></span></label>{selected.includes(p.id) && groups && <div className="setup-person-options">{groups && <label>Group<select value={getPool(p)} onChange={e => setPools(g => ({ ...g, [p.id]: e.target.value as Pool }))} aria-label={`Group for ${p.name}`}><option value="A">Competitive</option><option value="B">Social</option></select></label>}</div>}</div>)}{!visibleMembers.length && <p className="setup-hint">No players found.</p>}</div>
         {guests.length > 0 && <div className="setup-guests"><h3>Guests</h3>{guests.map(g => <div className="setup-person" key={g.id}><div className="setup-guest-heading"><Avatar name={g.name} /><span><strong>{g.name}</strong><small>Guest · {g.initialElo}</small></span><button type="button" className="icon-button" aria-label={`Remove guest ${g.name}`} onClick={() => setGuests(list => list.filter(item => item.id !== g.id))}><Trash size={18} /></button></div>{(mixed || groups) && <div className="setup-person-options">{mixed && <label>Gender<select aria-label={`Gender for ${g.name}`} value={g.gender} onChange={e => setGuests(list => list.map(item => item.id === g.id ? { ...item, gender: e.target.value as Gender } : item))}><option value="UNSPECIFIED">Choose</option><option value="MALE">Male</option><option value="FEMALE">Female</option></select></label>}{groups && <label>Group<select aria-label={`Group for ${g.name}`} value={g.pool} onChange={e => setGuests(list => list.map(item => item.id === g.id ? { ...item, pool: e.target.value as Pool } : item))}><option value="A">Competitive</option><option value="B">Social</option></select></label>}</div>}</div>)}</div>}
         {addingGuest ? <div className="setup-add-guest"><h3>Add a guest</h3><label className="field-label">Guest name<input value={guestName} onChange={e => setGuestName(e.target.value)} placeholder="Name" /></label><label className="field-label">Starting rating<input type="number" inputMode="numeric" min={0} max={5000} step={1} value={guestRating} onChange={e => setGuestRating(e.target.value)} /></label>{mixed && <label className="field-label">Gender<select value={guestGender} onChange={e => setGuestGender(e.target.value as Gender)}><option value="UNSPECIFIED">Choose</option><option value="MALE">Male</option><option value="FEMALE">Female</option></select></label>}<ErrorText error={guestError} /><div className="setup-guest-actions"><button type="button" className="secondary" onClick={() => setAddingGuest(false)}>Cancel</button><button type="button" className="primary" onClick={addGuest}>Add guest</button></div></div> : <button type="button" className="secondary full" onClick={() => setAddingGuest(true)}><Plus size={18} />Add guest</button>}
         <div className="setup-roster-done"><button type="button" className="primary full" onClick={() => setRosterOpen(false)}>Done · {count} players</button></div>

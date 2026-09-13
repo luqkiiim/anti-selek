@@ -45,6 +45,7 @@ function buildUser(overrides?: Partial<{
   elo: number;
   createdAt: Date;
   selfNameChangedAt: Date | null;
+  selfGenderChangedAt: Date | null;
 }>) {
   return {
     id: "user-1",
@@ -58,6 +59,7 @@ function buildUser(overrides?: Partial<{
     elo: 1200,
     createdAt: new Date("2026-05-18T00:00:00.000Z"),
     selfNameChangedAt: null,
+    selfGenderChangedAt: null,
     ...overrides,
   };
 }
@@ -109,6 +111,7 @@ describe("current user route", () => {
 
     expect(response.status).toBe(200);
     expect(body.user.canRenameName).toBe(true);
+    expect(body.user.canChangeGender).toBe(true);
     expect(body.user.selfNameChangedAt).toBeNull();
   });
 
@@ -130,6 +133,7 @@ describe("current user route", () => {
 
     expect(response.status).toBe(200);
     expect(body.user.canRenameName).toBe(false);
+    expect(body.user.canChangeGender).toBe(false);
     expect(body.user.isQuickAccess).toBe(true);
     expectAliasPair(body.user, "quickAccessClubId", "quickAccessCommunityId");
     expect(body.user.quickAccessClubId).toBe("community-1");
@@ -162,7 +166,7 @@ describe("current user route", () => {
     expect(response.status).toBe(200);
     expect(mocks.userUpdate).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { id: "user-1" },
+        where: expect.objectContaining({ id: "user-1", selfNameChangedAt: null }),
         data: expect.objectContaining({
           name: "Alex Tan",
           selfNameChangedAt: expect.any(Date),
@@ -250,7 +254,7 @@ describe("current user route", () => {
     expect(response.status).toBe(200);
     expect(mocks.userUpdate).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { id: "user-1" },
+        where: expect.objectContaining({ id: "user-1", selfGenderChangedAt: null }),
         data: expect.objectContaining({ gender: "MALE" }),
       })
     );
@@ -264,6 +268,80 @@ describe("current user route", () => {
         },
       })
     );
+  });
+
+  it("marks the first self-declared gender change as used", async () => {
+    mocks.auth.mockResolvedValue(buildSession());
+    mocks.userFindUnique.mockResolvedValue(buildUser({ gender: "UNSPECIFIED" }));
+    mocks.userUpdate.mockResolvedValue(
+      buildUser({
+        gender: "FEMALE",
+        selfGenderChangedAt: new Date("2026-05-23T09:00:00.000Z"),
+      })
+    );
+
+    const response = await PATCH(
+      new Request("http://localhost/api/user/me", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ gender: "FEMALE" }),
+      })
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(mocks.userUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ selfGenderChangedAt: null }),
+        data: expect.objectContaining({
+          gender: "FEMALE",
+          selfGenderChangedAt: expect.any(Date),
+        }),
+      })
+    );
+    expect(body.user.canChangeGender).toBe(false);
+  });
+
+  it("rejects a second self-declared gender change", async () => {
+    mocks.auth.mockResolvedValue(buildSession());
+    mocks.userFindUnique.mockResolvedValue(
+      buildUser({
+        gender: "MALE",
+        selfGenderChangedAt: new Date("2026-05-22T09:00:00.000Z"),
+      })
+    );
+
+    const response = await PATCH(
+      new Request("http://localhost/api/user/me", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ gender: "FEMALE" }),
+      })
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(409);
+    expect(body.error).toBe("Player gender can only be changed once");
+    expect(mocks.userUpdate).not.toHaveBeenCalled();
+  });
+
+  it("turns a concurrent gender update race into a one-time-change conflict", async () => {
+    mocks.auth.mockResolvedValue(buildSession());
+    mocks.userFindUnique.mockResolvedValue(buildUser({ gender: "UNSPECIFIED" }));
+    const raceError = Object.assign(new Error("record not found"), { code: "P2025" });
+    mocks.userUpdate.mockRejectedValue(raceError);
+
+    const response = await PATCH(
+      new Request("http://localhost/api/user/me", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ gender: "MALE" }),
+      })
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(409);
+    expect(body.error).toBe("Player gender can only be changed once");
   });
 
   it("rejects an unsupported self-declared gender value", async () => {
