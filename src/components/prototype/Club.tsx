@@ -39,6 +39,7 @@ import type { AchievementCollection, AchievementId } from "@/lib/clubAchievement
 import Admin from "./Admin";
 import { MainNav, mainPages } from "./MainNav";
 import { Rankings } from "./Rankings";
+import { SessionSetup } from "./SessionSetup";
 import { PartnerChemistry } from "./PartnerChemistry";
 import { TopRivalries } from "./TopRivalries";
 import type { ClubPulseSnapshot } from "@/lib/clubPulse";
@@ -86,7 +87,6 @@ export default function Club({
   const [page, setPage] = useState("club"),
     [sheet, setSheet] = useState(""),
     [sessionCode, setSessionCode] = useState(""),
-    [sessionName, setSessionName] = useState(""),
     [recap, setRecap] = useState<PlayerProfileSessionSummary | null>(null);
   async function refresh() {
     await Promise.all([resource.refresh(), profile.refresh(), achievements.refresh()]);
@@ -443,70 +443,7 @@ export default function Club({
               </button>
             </>
           )}
-          {data && page === "setup" && canManage && (
-            <>
-              <h1>Get everyone playing.</h1>
-              <p className="muted">A few details, then you&apos;re ready.</p>
-              <label className="field-label">
-                Session name
-                <input
-                  value={sessionName}
-                  onChange={(e) => setSessionName(e.target.value)}
-                />
-              </label>
-              <div className="setting-line">
-                <span>Courts</span>
-                <strong>2</strong>
-              </div>
-              <div className="setting-line">
-                <span>Matchmaking</span>
-                <strong>Balanced</strong>
-              </div>
-              <div className="setting-line">
-                <span>Players</span>
-                <strong>{data.clubMembers.length} selected</strong>
-              </div>
-              {canAdmin && (
-                <button className="secondary full" onClick={() => go("admin")}>
-                  Manage roster
-                </button>
-              )}
-              <button
-                className="primary"
-                disabled={
-                  action.busy ||
-                  !sessionName.trim() ||
-                  data.clubMembers.length < 2
-                }
-                onClick={() =>
-                  void action.run(
-                    async () => {
-                      const created = await api<{ code: string }>(
-                        "/api/sessions",
-                        "POST",
-                        {
-                          name: sessionName,
-                          clubId: club.id,
-                          courtCount: 2,
-                          matchmakingStyle: "BALANCED",
-                          balanceMetric: "RATING",
-                          scoringType: "POINTS",
-                          pairingMode: "OPEN",
-                          playerIds: data.clubMembers.map((p) => p.id),
-                          autoQueueEnabled: true,
-                        },
-                      );
-                      setSessionCode(created.code);
-                      go("session");
-                    },
-                    () => go("session"),
-                  )
-                }
-              >
-                Prepare session
-              </button>
-            </>
-          )}
+          {data && page === "setup" && canManage && <SessionSetup clubId={club.id} members={data.clubMembers} onCreated={openSession} />}
       </>}</Pager>
       {!["setup", "recap"].includes(page) && (
         <MainNav active={page} onNavigate={go} />

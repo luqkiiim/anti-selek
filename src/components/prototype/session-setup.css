@@ -1,0 +1,90 @@
+.session-setup { color: var(--ink); }
+.setup-intro { margin: 4px 0 26px; }
+.setup-intro h1 { margin: 6px 0 0; font-size: 29px; letter-spacing: -1px; }
+.setup-fields { min-width: 0; margin: 0; padding: 0; border: 0; }
+.setup-section { margin-bottom: 28px; }
+.setup-section h2 { margin: 0 0 13px; font-size: 16px; font-weight: 900; }
+.session-setup .field-label { margin: 0; font-size: 13px; }
+.session-setup input:not([type=checkbox]):not([type=radio]), .session-setup select,
+.setup-roster-sheet input:not([type=checkbox]):not([type=radio]), .setup-roster-sheet select { min-height: 48px; height: auto; line-height: 1.4; font-size: 16px; }
+.setup-courts { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-top: 17px; }
+.setup-courts strong, .setup-roster-summary strong { display: block; font-size: 15px; }
+.setup-courts small, .setup-roster-summary small, .setup-format small, .setup-toggle small, .setup-options summary small { display: block; color: #80718b; font-size: 12px; line-height: 1.45; margin-top: 3px; }
+.setup-stepper { display: flex; align-items: center; border: 1px solid #e8ddef; border-radius: 14px; background: #fffdfb; }
+.setup-stepper button { display: grid; place-items: center; width: 44px; height: 46px; padding: 0; border: 0; background: transparent; color: var(--purple); border-radius: 12px; }
+.setup-stepper button:disabled { opacity: .3; }
+.setup-stepper output { min-width: 25px; text-align: center; font-size: 18px; font-weight: 900; font-variant-numeric: tabular-nums; }
+.setup-roster-summary { display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; border: 1px solid #e8ddef; border-radius: 18px; background: #fffdfb; padding: 15px 12px; color: var(--ink); }
+.setup-roster-summary > span:nth-child(2) { flex: 1; min-width: 0; }
+.setup-roster-summary > svg { flex-shrink: 0; color: var(--purple); }
+.setup-roster-faces { display: flex; gap: 4px; color: var(--purple); }
+.setup-roster-faces .avatar { width: 34px; height: 34px; flex: 0 0 34px; border-radius: 10px; font-size: 12px; }
+.setup-roster-faces .avatar-image { border-radius: inherit; }
+.setup-format-list { overflow: hidden; border: 1px solid #e8ddef; border-radius: 18px; background: #fffdfb; }
+.setup-format { position: relative; display: flex; align-items: center; gap: 12px; padding: 15px; cursor: pointer; }
+.setup-format + .setup-format { border-top: 1px solid #eee5ef; }
+.setup-format > svg { flex-shrink: 0; color: #8e75a3; }
+.setup-format > span:first-of-type { flex: 1; }
+.setup-format strong { font-size: 14px; font-weight: 800; }
+.setup-format.is-selected { background: #f2eafb; }
+.setup-format.is-selected > svg { color: var(--purple); }
+.setup-format input, .setup-segments input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.setup-format:focus-within, .setup-segments label:focus-within { outline: 2px solid var(--purple); outline-offset: -3px; border-radius: 12px; }
+.setup-radio-mark { width: 18px; height: 18px; display: grid; place-items: center; flex-shrink: 0; border: 1px solid #cdbbdf; border-radius: 50%; color: white; }
+.setup-format.is-selected .setup-radio-mark { background: var(--purple); border-color: var(--purple); }
+.setup-metric { border: 0; padding: 0; margin: 18px 0 0; min-width: 0; }
+.setup-metric legend { font-size: 13px; font-weight: 800; margin-bottom: 9px; }
+.setup-segments { display: flex; padding: 4px; border-radius: 14px; background: #efe7f5; }
+.setup-segments label { flex: 1; position: relative; cursor: pointer; }
+.setup-segments span { min-height: 44px; padding: 9px 4px; display: flex; justify-content: center; align-items: center; text-align: center; font-size: 13px; border-radius: 10px; color: #80718b; font-weight: 800; }
+.setup-segments input:checked + span { background: #fffdfb; color: #7040bc; box-shadow: 0 2px 6px #49256d0c; }
+.setup-hint { margin: 8px 0 0; font-size: 12px; color: #80718b; line-height: 1.5; }
+.session-setup .setup-options { border-top: 1px solid #e8ddef; border-bottom: 1px solid #e8ddef; color: var(--ink); padding-top: 0; }
+.setup-options > summary { display: flex; justify-content: space-between; align-items: center; list-style: none; gap: 12px; padding: 18px 0; cursor: pointer; }
+.setup-options > summary::-webkit-details-marker { display: none; }
+.setup-options > summary strong { font-size: 14px; }
+.setup-options > summary > svg { color: var(--purple); transition: transform .18s ease; }
+.setup-options[open] > summary > svg { transform: rotate(90deg); }
+.setup-options-content { padding-bottom: 12px; }
+.setup-toggle { display: flex; align-items: center; gap: 12px; position: relative; min-height: 68px; padding: 12px 0; cursor: pointer; }
+.setup-toggle + .setup-toggle { border-top: 1px solid #eee5ef; }
+.setup-toggle > span:first-child { flex: 1; }
+.setup-toggle strong { font-size: 14px; }
+.setup-toggle input { position: absolute; right: 0; width: 44px; height: 44px; opacity: 0; }
+.setup-switch { flex: 0 0 42px; height: 25px; border-radius: 20px; background: #d7c9e2; position: relative; transition: background .18s ease; pointer-events: none; }
+.setup-switch::after { content: ''; width: 19px; height: 19px; position: absolute; top: 3px; left: 3px; background: white; border-radius: 50%; transition: transform .18s ease; }
+.setup-toggle input:checked + .setup-switch { background: var(--purple); }
+.setup-toggle input:checked + .setup-switch::after { transform: translateX(17px); }
+.setup-toggle input:focus-visible + .setup-switch { outline: 2px solid var(--purple); outline-offset: 4px; }
+.setup-inline-action { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 44px; width: 100%; padding: 7px 0; font-size: 12px; font-weight: 800; border: 0; background: transparent; color: #7040bc; text-align: left; }
+.setup-group-options { padding: 0 0 12px; }
+.setup-submit { margin-top: 23px; padding-bottom: 12px; }
+.setup-submit .primary { min-height: 52px; }
+.setup-submit > p { font-size: 11px; text-align: center; color: #80718b; margin: 12px 0 0; }
+.setup-roster-sheet { min-width: 0; }
+.setup-roster-tools { display: flex; align-items: center; gap: 4px; margin: 0 0 12px; }
+.setup-roster-tools strong { margin-right: auto; font-size: 13px; }
+.setup-roster-tools button { min-width: 44px; min-height: 44px; padding: 5px; border: 0; border-radius: 10px; background: #f1e8f8; color: #7040bc; font-size: 12px; font-weight: 800; }
+.setup-search { display: flex; align-items: center; gap: 8px; background: #fffdfb; padding-left: 12px; border: 1px solid #e8ddef; border-radius: 12px; color: #80718b; }
+.setup-search input { border: 0 !important; margin: 0 !important; background: transparent !important; }
+.setup-person { padding: 10px 0; border-bottom: 1px solid #eee5ef; }
+.setup-person-select, .setup-guest-heading { display: flex; gap: 10px; align-items: center; min-height: 48px; }
+.setup-person-select { cursor: pointer; }
+.setup-person-select input { width: 19px; height: 19px; accent-color: var(--purple); flex-shrink: 0; }
+.setup-person-select .avatar, .setup-guest-heading .avatar { width: 38px; height: 38px; flex-shrink: 0; }
+.setup-person-select > span:last-child, .setup-guest-heading > span:nth-child(2) { min-width: 0; flex: 1; }
+.setup-person strong { display: block; font-size: 14px; overflow-wrap: anywhere; }
+.setup-person small { display: block; color: #80718b; font-size: 12px; margin-top: 2px; }
+.setup-person-options { display: flex; gap: 8px; margin: 8px 0 2px; }
+.setup-person-options label { flex: 1; min-width: 0; color: #80718b; font-size: 11px; }
+.setup-person-options select { width: 100%; padding: 10px 7px; margin-top: 4px; border-radius: 10px; border: 1px solid #e8ddef; background: #fffdfb; color: var(--ink); }
+.setup-guests, .setup-add-guest { margin-top: 18px; }
+.setup-guests h3, .setup-add-guest h3 { font-size: 14px; margin: 0 0 9px; }
+.setup-roster-sheet > .secondary { margin-top: 16px; min-height: 46px; }
+.setup-add-guest { border: 1px solid #e8ddef; border-radius: 15px; padding: 14px; background: #f8f3fb; }
+.setup-add-guest .field-label { margin-bottom: 12px; }
+.setup-guest-actions { display: flex; gap: 8px; }
+.setup-guest-actions button { flex: 1; min-height: 44px; padding: 10px 8px; font-size: 13px; }
+.setup-roster-done { position: sticky; bottom: -24px; background: #fffaf3; padding: 14px 0 24px; margin-top: 8px; }
+@media (max-width: 350px) { .setup-roster-faces .avatar:nth-child(n+2) { display: none; } .setup-format { padding: 13px 11px; gap: 9px; } }
+@media (prefers-reduced-motion: reduce) { .setup-options > summary > svg, .setup-switch, .setup-switch::after { transition: none; } }
