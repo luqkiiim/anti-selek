@@ -109,6 +109,7 @@ async function buildCurrentClubPulse({
       name: member.user.name,
       avatarUrl: serializeAvatarEntity(member.user).avatarUrl,
       elo: member.elo,
+      status: member.status,
     })),
     sessions,
     completedMatches: completedMatches.map((match) => ({

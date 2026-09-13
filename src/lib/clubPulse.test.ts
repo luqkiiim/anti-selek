@@ -148,6 +148,34 @@ function createRivalrySeries({
 }
 
 describe("clubPulse", () => {
+  it("ranks only current core-member pairs while retaining their games with other players", () => {
+    const session = createSession("core-only", {
+      players: Object.values(players).map(user => ({ user, isGuest: user.id === players.cara.id })),
+    });
+    const completedMatches = Array.from({ length: 4 }, (_, index) => createMatch(`core-${index}`, {
+      session,
+      completedAt: `2026-05-0${index + 1}T10:00:00.000Z`,
+      team1: [players.alice, players.ben],
+      team2: [players.cara, players.dan],
+      team1Score: index % 2 ? 19 : 21,
+      team2Score: index % 2 ? 21 : 19,
+      winnerTeam: index % 2 ? 2 : 1,
+    }));
+    const members = [players.alice, players.ben, players.cara, players.dan].map(user => ({
+      ...createMember(user), status: user.id === players.ben.id ? "OCCASIONAL" : "CORE",
+    }));
+    const result = buildClubPulse({ members, sessions: [session], completedMatches });
+    expect(result.partnerships).toEqual([]);
+    expect(result.rivalries).toHaveLength(1);
+    expect(result.rivalries[0].players).toEqual([players.alice, players.dan]);
+    expect(result.rivalries[0].matches).toBe(4);
+
+    const promoted = buildClubPulse({ members: members.map(m => ({ ...m, status: "CORE" })), sessions: [session], completedMatches });
+    expect(promoted.partnerships.map(p => p.players)).toEqual([[players.alice, players.ben]]);
+    const departed = buildClubPulse({ members: members.filter(m => m.id !== players.dan.id), sessions: [session], completedMatches });
+    expect(departed.rivalries).toEqual([]);
+  });
+
   it("returns quiet empty-state data when a club has no matches", () => {
     const result = buildClubPulse({
       members: [createMember(players.alice), createMember(players.ben)],

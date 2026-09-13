@@ -425,6 +425,7 @@ export async function GET(
         name: member.name,
         avatarUrl: member.avatarUrl,
         elo: member.elo,
+        status: member.status,
       })),
       sessions,
       completedMatches: completedMatches.map((match) => ({

@@ -15,6 +15,7 @@ export interface ClubPulseParticipant {
 
 export interface ClubPulseMemberSource extends ClubPulseParticipant {
   elo: number;
+  status?: string;
 }
 
 export interface ClubPulseSessionSource {
@@ -602,17 +603,18 @@ function getRivalryStrength(rivalry: RivalryAggregate) {
 
 function buildRivalries(
   matches: ClubPulseMatchSource[],
-  guestIdsBySessionId: GuestIdsBySessionId
+  guestIdsBySessionId: GuestIdsBySessionId,
+  coreMemberIds: Set<string>
 ) {
   const aggregates = new Map<string, RivalryAggregate>();
 
   for (const match of matches) {
     const { team1, team2 } = getMatchTeams(match);
     const eligibleTeam1 = team1.filter(
-      (player) => !isMatchGuest(guestIdsBySessionId, match, player.id)
+      (player) => coreMemberIds.has(player.id) && !isMatchGuest(guestIdsBySessionId, match, player.id)
     );
     const eligibleTeam2 = team2.filter(
-      (player) => !isMatchGuest(guestIdsBySessionId, match, player.id)
+      (player) => coreMemberIds.has(player.id) && !isMatchGuest(guestIdsBySessionId, match, player.id)
     );
     const winnerIds = new Set(
       match.winnerTeam === 1
@@ -701,7 +703,8 @@ function updatePartnership(
 
 function buildPartnerships(
   matches: ClubPulseMatchSource[],
-  guestIdsBySessionId: GuestIdsBySessionId
+  guestIdsBySessionId: GuestIdsBySessionId,
+  coreMemberIds: Set<string>
 ) {
   const aggregates = new Map<string, PartnershipAggregate>();
 
@@ -712,7 +715,7 @@ function buildPartnerships(
     const team1Result = match.winnerTeam === 1 ? "WIN" : "LOSS";
     const team2Result = match.winnerTeam === 2 ? "WIN" : "LOSS";
 
-    if (isTeamGuestFree(guestIdsBySessionId, match, team1)) {
+    if (team1.every(player => coreMemberIds.has(player.id)) && isTeamGuestFree(guestIdsBySessionId, match, team1)) {
       updatePartnership(
         aggregates,
         team1[0],
@@ -725,7 +728,7 @@ function buildPartnerships(
       );
     }
 
-    if (isTeamGuestFree(guestIdsBySessionId, match, team2)) {
+    if (team2.every(player => coreMemberIds.has(player.id)) && isTeamGuestFree(guestIdsBySessionId, match, team2)) {
       updatePartnership(
         aggregates,
         team2[0],
@@ -1408,6 +1411,7 @@ export function buildClubPulse({
   sessions: ClubPulseSessionSource[];
   completedMatches: ClubPulseMatchSource[];
 }): ClubPulseSnapshot {
+  const coreMemberIds = new Set(members.filter(member => (member.status ?? "CORE") === "CORE").map(member => member.id));
   const activeSessions = getActiveSessions(sessions);
   const completedSessions = getCompletedSessions(sessions);
   const guestIdsBySessionId = getGuestIdsBySessionId(sessions);
@@ -1448,10 +1452,11 @@ export function buildClubPulse({
       sortedCompletedMatches,
       guestIdsBySessionId
     ),
-    rivalries: buildRivalries(sortedCompletedMatches, guestIdsBySessionId),
+    rivalries: buildRivalries(sortedCompletedMatches, guestIdsBySessionId, coreMemberIds),
     partnerships: buildPartnerships(
       sortedCompletedMatches,
-      guestIdsBySessionId
+      guestIdsBySessionId,
+      coreMemberIds
     ),
     recentMatches: buildRecentMatches(sortedCompletedMatches),
     sessionNews: buildSessionNews(
