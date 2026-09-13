@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { resolveAvatarUrl } from "@/lib/avatar";
 import bcrypt from "bcryptjs";
 import { isGlobalAdminEmail } from "@/lib/globalAdmin";
 import { logError, safeErrorResponse } from "@/lib/errors";
@@ -47,6 +48,7 @@ export async function GET(request: Request) {
           select: {
             id: true,
             name: true,
+            avatarKey: true,
             createdById: true,
             isTutorial: true,
             isPasswordProtected: true,
@@ -70,6 +72,7 @@ export async function GET(request: Request) {
         return withLegacyClubAliases({
           id: m.club.id,
           name: m.club.name,
+          avatarUrl: resolveAvatarUrl(m.club.avatarKey),
           clubId: m.club.id,
           clubName: m.club.name,
           role:

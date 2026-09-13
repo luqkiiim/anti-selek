@@ -270,21 +270,6 @@ export default function Club({
                     <CaretRight size={19} />
                   </button>
                 </div>
-              ) : !upcoming.length ? (
-                <div className="card">
-                  <h2>
-                    {sessions.length
-                      ? "All caught up."
-                      : "Make your first session."}
-                  </h2>
-                  <p className="muted">No live session in this club.</p>
-                  <button
-                    className="primary"
-                    onClick={() => go(canManage ? "setup" : "sessions")}
-                  >
-                    {canManage ? "Prepare a session" : "Browse sessions"}
-                  </button>
-                </div>
               ) : null}
               <UpcomingSessions sessions={upcoming} canManage={!!canManage} onOpen={openSession} onViewAll={() => go("sessions")} />
               {canAdmin && <div className="link-group">

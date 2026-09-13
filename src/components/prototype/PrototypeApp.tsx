@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import Image from "next/image";
 import { useSession, signOut } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import {
@@ -19,6 +20,19 @@ import "@fontsource/nunito-sans/800.css";
 import "@fontsource/nunito-sans/900.css";
 import "./prototype.css";
 import "./browser.css";
+
+function ClubMark({ url, tone }: { url?: string | null; tone: number }) {
+  const [failedUrl, setFailedUrl] = useState<string | null>(null);
+  return (
+    <span className={`club-mark tone${tone}`} aria-hidden="true">
+      {url && failedUrl !== url ? (
+        <Image src={url} alt="" width={60} height={60} unoptimized
+          className="club-mark-image" onError={() => setFailedUrl(url)} />
+      ) : <UsersThree size={28} weight="duotone" />}
+    </span>
+  );
+}
+
 export default function PrototypeApp() {
   const { data: auth, status } = useSession();
   const router = useRouter();
@@ -107,9 +121,7 @@ export default function PrototypeApp() {
                   key={c.id}
                   onClick={() => select(c.id)}
                 >
-                  <span className={"club-mark tone" + (i % 5)}>
-                    <UsersThree size={28} weight="duotone" />
-                  </span>
+                  <ClubMark url={c.avatarUrl} tone={i % 5} />
                   <span>
                     <strong>{c.name}</strong>
                     <small>
