@@ -64,9 +64,9 @@
 .setup-roster-sheet { min-width: 0; }
 .setup-roster-tools { display: flex; align-items: center; gap: 4px; margin: 0 0 12px; }
 .setup-roster-tools strong { margin-right: auto; font-size: 13px; }
-.setup-roster-tools button { min-width: 44px; min-height: 44px; padding: 5px; border: 0; border-radius: 10px; background: #f1e8f8; color: #7040bc; font-size: 12px; font-weight: 800; }
 .setup-search { display: flex; align-items: center; gap: 8px; background: #fffdfb; padding-left: 12px; border: 1px solid #e8ddef; border-radius: 12px; color: #80718b; }
-.setup-search input { border: 0 !important; margin: 0 !important; background: transparent !important; }
+.setup-search > svg { flex-shrink: 0; }
+.setup-search input { flex: 1; min-width: 0; border: 0 !important; margin: 0 !important; background: transparent !important; }
 .setup-person { padding: 10px 0; border-bottom: 1px solid #eee5ef; }
 .setup-person-select, .setup-guest-heading { display: flex; gap: 10px; align-items: center; min-height: 48px; }
 .setup-person-select { cursor: pointer; }
@@ -88,3 +88,6 @@
 .setup-roster-done { position: sticky; bottom: -24px; background: #fffaf3; padding: 14px 0 24px; margin-top: 8px; }
 @media (max-width: 350px) { .setup-roster-faces .avatar:nth-child(n+2) { display: none; } .setup-format { padding: 13px 11px; gap: 9px; } }
 @media (prefers-reduced-motion: reduce) { .setup-options > summary > svg, .setup-switch, .setup-switch::after { transition: none; } }
+
+.sheet-content .setup-search input:focus { outline: none; box-shadow: none; }
+.setup-search-clear { display: grid; place-items: center; flex: 0 0 44px; height: 44px; padding: 0; border: 0; border-radius: 10px; background: transparent; color: #80718b; }

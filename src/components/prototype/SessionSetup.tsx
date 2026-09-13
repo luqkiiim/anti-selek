@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { CaretRight, Check, Minus, Plus, MagnifyingGlass, Shuffle, Scales, ChartBar, UsersThree, Trash } from "@phosphor-icons/react";
+import { useRef, useState } from "react";
+import { CaretRight, Check, Minus, Plus, MagnifyingGlass, Shuffle, Scales, ChartBar, UsersThree, Trash, X } from "@phosphor-icons/react";
 import type { ClubPageMember } from "@/components/club/clubTypes";
 import { Avatar, Sheet, ErrorText } from "./Primitives";
 import { api, useAction } from "./api";
@@ -31,20 +31,20 @@ export function SessionSetup({ clubId, members: rosterMembers, onCreated }: { cl
   const members = rosterMembers.filter(member => memberIds.has(member.id));
   const [name, setName] = useState("");
   const [courts, setCourts] = useState(2);
-  const [selected, setSelected] = useState(() => members.map(p => p.id));
+  const [selected, setSelected] = useState<string[]>([]);
   const [guests, setGuests] = useState<Guest[]>([]);
   const [style, setStyle] = useState<(typeof formats)[number]["id"]>("BALANCED");
   const [metric, setMetric] = useState("RATING");
   const [mixed, setMixed] = useState(false);
   const [groups, setGroups] = useState(false);
   const [crossover, setCrossover] = useState("BALANCED");
-  const [autoQueue, setAutoQueue] = useState(true);
+  const [autoQueue, setAutoQueue] = useState(false);
   const [respectRest, setRespectRest] = useState(true);
-  const [practice, setPractice] = useState(false);
   const [pools, setPools] = useState<Record<string, Pool>>({});
   const [genders, setGenders] = useState<Record<string, Gender>>({});
   const [rosterOpen, setRosterOpen] = useState(false);
   const [search, setSearch] = useState("");
+  const searchInput = useRef<HTMLInputElement>(null);
   const [addingGuest, setAddingGuest] = useState(false);
   const [guestName, setGuestName] = useState("");
   const [guestRating, setGuestRating] = useState("1000");
@@ -79,7 +79,7 @@ export function SessionSetup({ clubId, members: rosterMembers, onCreated }: { cl
         balanceMetric: metric, pairingMode: mixed ? "MIXED" : "OPEN", collabFormat: "FREE_PLAY",
         playerIds: players.map(p => p.id), playerConfigs: players.map(p => ({ userId: p.id, pool: getPool(p), ...(genders[p.id] ? { gender: genders[p.id] } : {}) })),
         guestConfigs: guests.map(({ name, initialElo, gender, pool }) => ({ name, initialElo, gender, pool })),
-        poolsEnabled: groups, crossoverFrequency: crossover, autoQueueEnabled: autoQueue, respectPlayerRest: respectRest, isTest: practice,
+        poolsEnabled: groups, crossoverFrequency: crossover, autoQueueEnabled: autoQueue, respectPlayerRest: respectRest, isTest: false,
       });
       onCreated(created.code);
     });
@@ -114,15 +114,14 @@ export function SessionSetup({ clubId, members: rosterMembers, onCreated }: { cl
           {groups && <div className="setup-group-options"><button type="button" className="setup-inline-action" onClick={() => setRosterOpen(true)}>{competitive} Competitive · {count - competitive} Social<CaretRight size={16} /></button><label className="field-label">Mix groups<select aria-label="Mix groups" value={crossover} onChange={e => setCrossover(e.target.value)}><option value="OCCASIONAL">Occasionally</option><option value="BALANCED">Sometimes</option><option value="FREQUENT">Often</option></select></label></div>}
           <Toggle title="Prepare the next game" hint="Automatically keep the next match queued." checked={autoQueue} onChange={setAutoQueue} />
           <Toggle title="Respect extra rest" hint="Use players’ saved rest preferences." checked={respectRest} onChange={setRespectRest} />
-          <Toggle title="Practice session" hint="Try the setup without affecting club ratings or achievements." checked={practice} onChange={setPractice} />
         </div></details>
       </fieldset>
-      <div className="setup-submit"><ErrorText error={action.error} /><button className="primary full" type="submit" disabled={action.busy}>{action.busy ? "Preparing…" : practice ? "Prepare practice session" : "Prepare session"}<CaretRight size={18} /></button><p>Players won’t start until you’re ready.</p></div>
+      <div className="setup-submit"><ErrorText error={action.error} /><button className="primary full" type="submit" disabled={action.busy}>{action.busy ? "Preparing…" : "Prepare session"}<CaretRight size={18} /></button><p>Players won’t start until you’re ready.</p></div>
     </form>
 
     <Sheet open={rosterOpen} title="Who’s playing?" onClose={() => { setRosterOpen(false); setAddingGuest(false); }}>
-      <div className="setup-roster-sheet"><div className="setup-roster-tools"><strong>{count} selected</strong><button type="button" onClick={() => setSelected(members.map(p => p.id))}>All</button><button type="button" onClick={() => setSelected(members.filter(p => p.status === "CORE").map(p => p.id))}>Core</button><button type="button" onClick={() => setSelected([])}>Clear</button></div>
-        <label className="setup-search"><MagnifyingGlass size={18} aria-hidden="true" /><input aria-label="Find a player" value={search} onChange={e => setSearch(e.target.value)} placeholder="Find a player" /></label>
+      <div className="setup-roster-sheet"><div className="setup-roster-tools"><strong>{count} selected</strong></div>
+        <div className="setup-search"><MagnifyingGlass size={18} aria-hidden="true" /><input ref={searchInput} aria-label="Find a player" value={search} onChange={e => setSearch(e.target.value)} placeholder="Find a player" />{search && <button type="button" className="setup-search-clear" aria-label="Clear player search" onClick={() => { setSearch(""); searchInput.current?.focus(); }}><X size={18} aria-hidden="true" /></button>}</div>
         <div className="setup-roster-list">{visibleMembers.map(p => <div key={p.id} className="setup-person"><label className="setup-person-select"><input type="checkbox" checked={selected.includes(p.id)} onChange={() => togglePlayer(p.id)} /><Avatar name={p.name} url={p.avatarUrl} /><span><strong>{p.name}</strong><small>{p.status === "CORE" ? "Core" : "Occasional"} · {p.elo}</small></span></label>{selected.includes(p.id) && (mixed || groups) && <div className="setup-person-options">{mixed && <label>Gender<select value={getGender(p)} onChange={e => setGenders(g => ({ ...g, [p.id]: e.target.value as Gender }))} aria-label={`Gender for ${p.name}`}><option value="UNSPECIFIED">Choose</option><option value="MALE">Male</option><option value="FEMALE">Female</option></select></label>}{groups && <label>Group<select value={getPool(p)} onChange={e => setPools(g => ({ ...g, [p.id]: e.target.value as Pool }))} aria-label={`Group for ${p.name}`}><option value="A">Competitive</option><option value="B">Social</option></select></label>}</div>}</div>)}{!visibleMembers.length && <p className="setup-hint">No players found.</p>}</div>
         {guests.length > 0 && <div className="setup-guests"><h3>Guests</h3>{guests.map(g => <div className="setup-person" key={g.id}><div className="setup-guest-heading"><Avatar name={g.name} /><span><strong>{g.name}</strong><small>Guest · {g.initialElo}</small></span><button type="button" className="icon-button" aria-label={`Remove guest ${g.name}`} onClick={() => setGuests(list => list.filter(item => item.id !== g.id))}><Trash size={18} /></button></div>{(mixed || groups) && <div className="setup-person-options">{mixed && <label>Gender<select aria-label={`Gender for ${g.name}`} value={g.gender} onChange={e => setGuests(list => list.map(item => item.id === g.id ? { ...item, gender: e.target.value as Gender } : item))}><option value="UNSPECIFIED">Choose</option><option value="MALE">Male</option><option value="FEMALE">Female</option></select></label>}{groups && <label>Group<select aria-label={`Group for ${g.name}`} value={g.pool} onChange={e => setGuests(list => list.map(item => item.id === g.id ? { ...item, pool: e.target.value as Pool } : item))}><option value="A">Competitive</option><option value="B">Social</option></select></label>}</div>}</div>)}</div>}
         {addingGuest ? <div className="setup-add-guest"><h3>Add a guest</h3><label className="field-label">Guest name<input value={guestName} onChange={e => setGuestName(e.target.value)} placeholder="Name" /></label><label className="field-label">Starting rating<input type="number" inputMode="numeric" min={0} max={5000} step={1} value={guestRating} onChange={e => setGuestRating(e.target.value)} /></label>{mixed && <label className="field-label">Gender<select value={guestGender} onChange={e => setGuestGender(e.target.value as Gender)}><option value="UNSPECIFIED">Choose</option><option value="MALE">Male</option><option value="FEMALE">Female</option></select></label>}<ErrorText error={guestError} /><div className="setup-guest-actions"><button type="button" className="secondary" onClick={() => setAddingGuest(false)}>Cancel</button><button type="button" className="primary" onClick={addGuest}>Add guest</button></div></div> : <button type="button" className="secondary full" onClick={() => setAddingGuest(true)}><Plus size={18} />Add guest</button>}
