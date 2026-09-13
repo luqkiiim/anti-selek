@@ -12,17 +12,21 @@ import {
 import type { ClubPageMember } from "@/components/club/clubTypes";
 import type { Snapshot } from "./Club";
 import { api, useAction, useResource } from "./api";
+import { ClubSettings } from "./ClubSettings";
+import "./manage-club.css";
 import { Avatar, Sheet, ErrorText } from "./Primitives";
 export default function Admin({
   snapshot,
   refresh,
   onBack,
   onNavigate,
+  onDeleted,
 }: {
   snapshot: Snapshot;
   refresh: () => Promise<unknown>;
   onBack: () => void;
   onNavigate: (p: string) => void;
+  onDeleted: () => Promise<void>;
 }) {
   const { club, clubMembers: players, claimRequests = [] } = snapshot;
   const [tab, setTab] = useState("Players"),
@@ -32,7 +36,7 @@ export default function Admin({
     [name, setName] = useState(""),
     [rating, setRating] = useState("1000"),
     [membership, setMembership] = useState("CORE"),
-    [clubName, setClubName] = useState(club.name);
+    [gender, setGender] = useState("");
   const joins = useResource<{
     allowJoinRequests: boolean;
     requests: { id: string; name: string }[];
@@ -51,6 +55,7 @@ export default function Admin({
     setName(player?.name || "");
     setRating(String(player?.elo ?? 1000));
     setMembership(player?.status || "CORE");
+    setGender(player?.gender || "");
     setSheet("player");
     action.setError("");
   }
@@ -63,11 +68,13 @@ export default function Admin({
       Number(rating) > 5000
     )
       throw new Error("Enter a name and a whole rating from 0 to 5000.");
+    if (!edit && !["MALE", "FEMALE"].includes(gender)) throw new Error("Choose the player’s gender.");
     let player = edit;
     if (!player) {
       player = await api<ClubPageMember>(endpoint + "/members", "POST", {
         name: name.trim(),
         status: membership,
+        gender,
       });
       setEdit(player);
     } else
@@ -85,14 +92,13 @@ export default function Admin({
       });
   }
   return (
-    <div className="pc-app">
+    <div className="pc-app manage-club">
       <header className="pc-header">
         <button className="icon-button" aria-label="Back" onClick={onBack}>
           <ArrowLeft size={23} />
         </button>
         <div>
           <strong>Manage club</strong>
-          <small>{club.name}</small>
         </div>
         <span />
       </header>
@@ -120,6 +126,7 @@ export default function Admin({
           <ErrorText error={action.error || joins.error} />
           {tab === "Players" ? (
             <>
+              <button className="manage-club-identity" onClick={() => setTab("Settings")} aria-label="Edit club details"><Avatar large name={club.name} url={club.avatarUrl} /><span><strong>{club.name}</strong><small>{players.length} players</small></span><PencilSimple size={19} /></button>
               <label className="search">
                 <MagnifyingGlass size={20} />
                 <input
@@ -129,50 +136,18 @@ export default function Admin({
                   onChange={(e) => setQuery(e.target.value)}
                 />
               </label>
-              <div className="button-pair">
-                <button className="primary" onClick={() => editor(null)}>
-                  <Plus size={20} />
-                  Add player
-                </button>
-                <button
-                  className="secondary"
-                  onClick={() => setSheet("invite")}
-                >
-                  <LinkSimple size={19} />
-                  Invite link
-                </button>
-              </div>
-              <div className="roster">
-                {players
-                  .filter((p) =>
-                    p.name.toLowerCase().includes(query.toLowerCase()),
-                  )
-                  .map((p) => (
-                    <div className="person" key={p.id}>
-                      <Avatar name={p.name} url={p.avatarUrl} />
-                      <span className="person-info">
-                        <strong>{p.name}</strong>
-                        <small>
-                          {p.isOwner
-                            ? "Owner"
-                            : p.status === "OCCASIONAL"
-                              ? "Occasional"
-                              : p.isClaimed
-                                ? "Member"
-                                : "No account"}{" "}
-                          · {p.elo}
-                        </small>
-                      </span>
-                      <button
-                        className="icon-button"
-                        aria-label={"Edit " + p.name}
-                        onClick={() => editor(p)}
-                      >
-                        <PencilSimple size={20} />
-                      </button>
-                    </div>
-                  ))}
-              </div>
+              <div className="manage-player-action"><button className="primary" onClick={() => editor(null)}><Plus size={20} />Add player</button></div>
+              {(["CORE", "OCCASIONAL"] as const).map(status => {
+                const group = players.filter(p => p.status === status && p.name.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase())).sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base", numeric: true }) || a.id.localeCompare(b.id));
+                return group.length ? <section className="manage-player-group" key={status} aria-label={status === "CORE" ? "Core members" : "Occasional members"}>
+                  <h3>{status === "CORE" ? "Core" : "Occasional"}<span>{group.length}</span></h3>
+                  <div className="roster">{group.map(p => <div className="person" key={p.id}>
+                    <Avatar name={p.name} url={p.avatarUrl} /><span className="person-info"><strong>{p.name}</strong><small>{p.elo} rating</small></span>
+                    <button className="icon-button" aria-label={"Edit " + p.name} onClick={() => editor(p)}><PencilSimple size={20} /></button>
+                  </div>)}</div>
+                </section> : null;
+              })}
+              {!players.some(p => p.name.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase())) && <p className="muted">No players found.</p>}
             </>
           ) : tab === "Requests" ? (
             <>
@@ -255,63 +230,7 @@ export default function Admin({
               )}
             </>
           ) : (
-            <>
-              <h2>Club settings</h2>
-              <label className="field-label">
-                Club name
-                <input
-                  value={clubName}
-                  onChange={(e) => setClubName(e.target.value)}
-                />
-              </label>
-              <button
-                disabled={action.busy || !joins.data}
-                role="switch"
-                aria-checked={joins.data?.allowJoinRequests || false}
-                className="toggle-row"
-                onClick={() =>
-                  void action.run(() =>
-                    api(endpoint + "/join-requests", "PATCH", {
-                      allowJoinRequests: !joins.data?.allowJoinRequests,
-                    }),
-                  )
-                }
-              >
-                <span>
-                  <strong>Allow join requests</strong>
-                  <small>New players can request access</small>
-                </span>
-                <span
-                  className={
-                    "switch " + (joins.data?.allowJoinRequests ? "on" : "")
-                  }
-                />
-              </button>
-              <button
-                className="primary"
-                disabled={action.busy || clubName.trim().length < 3}
-                onClick={() =>
-                  void action.run(() =>
-                    api(endpoint, "PATCH", { name: clubName.trim() }),
-                  )
-                }
-              >
-                Save changes
-              </button>
-              <details>
-                <summary>Advanced settings</summary>
-                <p>
-                  Connect profiles across clubs only when both clubs confirm
-                  they belong to the same person.
-                </p>
-                <button
-                  className="secondary"
-                  onClick={() => setSheet("identity")}
-                >
-                  Connect player profiles
-                </button>
-              </details>
-            </>
+            <ClubSettings club={club} allowJoinRequests={joins.data?.allowJoinRequests} busy={action.busy} onInvite={() => setSheet("invite")} onToggleJoins={() => void action.run(() => api(endpoint + "/join-requests", "PATCH", { allowJoinRequests: !joins.data?.allowJoinRequests }))} refresh={refresh} onDeleted={onDeleted} />
           )}
         </main>
       </div>
@@ -347,6 +266,7 @@ export default function Admin({
                   Account holders manage their own name.
                 </small>
               )}
+              {!edit && <label className="field-label">Gender<select aria-label="Gender" value={gender} onChange={e => setGender(e.target.value)} required><option value="" disabled>Choose gender</option><option value="MALE">Male</option><option value="FEMALE">Female</option></select></label>}
               <label className="field-label">
                 Rating
                 <input
@@ -364,7 +284,7 @@ export default function Admin({
                   value={membership}
                   onChange={(e) => setMembership(e.target.value)}
                 >
-                  <option value="CORE">Member</option>
+                  <option value="CORE">Core</option>
                   <option value="OCCASIONAL">Occasional</option>
                 </select>
               </label>

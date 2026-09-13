@@ -60,6 +60,7 @@ model Club {
   joinRequests ClubJoinRequest[]
   id                  String   @id @default(cuid())
   name                String   @unique
+  rules               String   @default("")
   avatarKey           String?
   isPasswordProtected Boolean  @default(false)
   passwordHash        String?

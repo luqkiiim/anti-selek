@@ -66,10 +66,12 @@ export default function Club({
   club,
   onSwitch,
   onAccountSaved,
+  onClubsChanged,
 }: {
   club: DashboardClub;
   onSwitch: () => void;
   onAccountSaved: () => Promise<unknown>;
+  onClubsChanged: () => Promise<unknown>;
 }) {
   const resource = useResource<Snapshot>("/api/clubs/" + club.id);
   const data = resource.data;
@@ -194,7 +196,8 @@ export default function Club({
     return (
       <Admin
         snapshot={data}
-        refresh={refresh}
+        refresh={async () => { await Promise.all([refresh(), onClubsChanged()]); }}
+        onDeleted={async () => { await onClubsChanged(); onSwitch(); }}
         onBack={() => go("club")}
         onNavigate={go}
       />
@@ -294,6 +297,7 @@ export default function Club({
               {achievements.data && <NextMilestone collection={achievements.data} onOpen={id => { go("profile"); setAchievementRequest({id,nonce:Date.now()}); }} />}
               <PartnerChemistry pairs={data.clubPulse?.partnerships ?? []} />
               <TopRivalries rivalries={data.clubPulse?.rivalries ?? []} />
+              {data.club.rules && <details className="club-rules"><summary>Club rules</summary><p style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{data.club.rules}</p></details>}
             </>
           )}
           {data && page === "sessions" && (

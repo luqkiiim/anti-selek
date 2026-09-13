@@ -86,7 +86,7 @@ export default function PrototypeApp() {
   return (
     <div className="prototype-root">
       {club ? (
-        <Club key={club.id} club={club} onSwitch={switchClub} onAccountSaved={account.refresh} />
+        <Club key={club.id} club={club} onSwitch={switchClub} onAccountSaved={account.refresh} onClubsChanged={clubs.refresh} />
       ) : (
         <div className="pc-app">
           <header className="pc-header">
