@@ -362,7 +362,7 @@ export default function Club({
               </details>
             </>
           )}
-          {data && page === "rankings" && <Rankings members={data.clubMembers} viewerId={data.viewer.id} clubName={data.club.name} />}
+          {data && page === "rankings" && <Rankings members={data.clubMembers} viewerId={data.viewer.id} clubName={data.club.name} hasCompletedSession={data.sessions.some(session => session.status === "COMPLETED" && !session.isTest)} />}
           {data && page === "profile" && (
             <>
               <div className="profile-heading">
