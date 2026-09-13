@@ -217,6 +217,15 @@ export default function Club({
                 <CaretRight size={16} />
               </strong>
             </button>
+            <div className="club-header-actions">
+            {canAdmin && <button
+              className="icon-button"
+              aria-label="Manage club"
+              title="Manage club"
+              onClick={() => go("admin")}
+            >
+              <GearSix size={25} />
+            </button>}
             <button
               className="icon-button"
               aria-label="Account settings"
@@ -224,6 +233,7 @@ export default function Club({
             >
               <UserCircle size={26} />
             </button>
+            </div>
           </>
         ) : (
           <>
@@ -272,14 +282,6 @@ export default function Club({
                 </div>
               ) : null}
               <UpcomingSessions sessions={upcoming} canManage={!!canManage} onOpen={openSession} onViewAll={() => go("sessions")} />
-              {canAdmin && <div className="link-group">
-                  <Row
-                    title="Manage club"
-                    sub="Players, requests and settings"
-                    icon={GearSix}
-                    onClick={() => go("admin")}
-                  />
-              </div>}
               {recent && <SessionUpdate session={recent} onOpen={() => { setRecap(recent); go("recap"); }} />}
               <ClubHighlights items={data.clubPulse?.sessionNews ?? []} onOpen={openSession} />
               <div className="section-heading">

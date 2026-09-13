@@ -75,6 +75,19 @@
 .pc-header > div {
   text-align: center;
 }
+.club-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+.pc-header .club-switcher {
+  min-width: 0;
+  margin-right: 8px;
+}
+.pc-header .club-switcher strong {
+  overflow-wrap: anywhere;
+}
 .pc-header strong {
   font-size: 17px;
   font-weight: 900;
