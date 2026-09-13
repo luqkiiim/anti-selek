@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import Image from "next/image";
 import {
   ArrowCounterClockwise,
   ArrowLeft,
@@ -36,6 +37,8 @@ type UnseenAchievement = AchievementCollection["unseen"];
 
 const tierNames = ["Bronze", "Silver", "Gold"];
 const tierColors = ["bronze", "silver", "gold"];
+
+const enamelAchievements = new Set<AchievementId>(["first-serve", "mix-it-up", "back-in-business"]);
 
 function AchievementPictogram({ id, size }: { id: AchievementId; size: number }) {
   const props = { className: "achievement-badge-pictogram", size, weight: "duotone" as const };
@@ -90,6 +93,16 @@ function BadgeIcon({ achievement, tier = 0, size = "regular" }: {
   const color = tier > 0
     ? tierColors[Math.max(0, Math.min(tier - 1, tierColors.length - 1))] || "locked"
     : "locked";
+  if (enamelAchievements.has(achievement.id)) {
+    const variant = achievement.id === "first-serve"
+      ? achievement.id
+      : `${achievement.id}-${tierColors[Math.max(0, Math.min(tier - 1, 2))]}`;
+    return (
+      <span className={`achievement-badge-icon achievement-badge-icon--${size} achievement-enamel${tier === 0 ? " achievement-enamel--locked" : ""}`} aria-hidden="true">
+        <Image src={`/achievements/enamel/${variant}.png`} alt="" width={256} height={256} sizes={size === "large" ? "96px" : "72px"} className="achievement-enamel-image" />
+      </span>
+    );
+  }
   return (
     <span
       className={`achievement-badge-icon achievement-badge-icon--${color} achievement-badge-icon--${size}`}
@@ -154,9 +167,9 @@ function AchievementDetails({
             const earned = tier.tier <= currentTier;
             return (
               <li className={`achievement-tier-row ${earned ? "is-earned" : ""}`} key={tier.tier}>
-                <span className={`achievement-tier-dot achievement-tier-dot--${tierColors[tier.tier - 1] || "locked"}`} aria-hidden="true">
+                {enamelAchievements.has(achievement.id) ? <BadgeIcon achievement={achievement} tier={tier.tier} /> : <span className={`achievement-tier-dot achievement-tier-dot--${tierColors[tier.tier - 1] || "locked"}`} aria-hidden="true">
                   {earned ? <Check size={13} weight="bold" /> : tier.tier}
-                </span>
+                </span>}
                 <span className="achievement-tier-copy">
                   <strong>{tierName(tier.tier, achievement)} · {targetCopy(tier, achievement)}</strong>
                   {tier.earnedAt ? (

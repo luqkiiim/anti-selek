@@ -237,6 +237,37 @@
   flex-basis: 90px;
 }
 
+.achievement-enamel {
+  width: 72px;
+  height: 72px;
+  flex-basis: 72px;
+  mix-blend-mode: multiply;
+}
+
+.achievement-enamel.achievement-badge-icon--large {
+  width: 96px;
+  height: 96px;
+  flex-basis: 96px;
+}
+
+.achievement-enamel-image {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.achievement-enamel--locked .achievement-enamel-image {
+  filter: grayscale(1);
+  opacity: 0.4;
+}
+
+.achievement-tier-row .achievement-enamel {
+  width: 56px;
+  height: 56px;
+  flex-basis: 56px;
+}
+
 .achievement-badge-medal {
   position: absolute;
 }
