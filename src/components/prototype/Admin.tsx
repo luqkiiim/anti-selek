@@ -10,6 +10,7 @@ import {
   Check,
 } from "@phosphor-icons/react";
 import type { ClubPageMember } from "@/components/club/clubTypes";
+import { getMixedSideOverrideOptionForGender, getStoredPartnerPreference, normalizeMixedSideOverrideForGender } from "@/lib/mixedSide";
 import type { Snapshot } from "./Club";
 import { api, useAction, useResource } from "./api";
 import { ClubSettings } from "./ClubSettings";
@@ -36,7 +37,9 @@ export default function Admin({
     [name, setName] = useState(""),
     [rating, setRating] = useState("1000"),
     [membership, setMembership] = useState("CORE"),
-    [gender, setGender] = useState("");
+    [gender, setGender] = useState(""),
+    [playerLevel, setPlayerLevel] = useState(""),
+    [preferredGroup, setPreferredGroup] = useState("B");
   const joins = useResource<{
     allowJoinRequests: boolean;
     requests: { id: string; name: string }[];
@@ -44,6 +47,7 @@ export default function Admin({
   const action = useAction(async () => {
     await Promise.all([refresh(), joins.refresh()]);
   });
+  const levelOption = edit ? getMixedSideOverrideOptionForGender(edit.gender) : null;
   const endpoint = "/api/clubs/" + club.id;
   const requests = claimRequests.filter((r) => r.status === "PENDING");
   const invite =
@@ -56,6 +60,8 @@ export default function Admin({
     setRating(String(player?.elo ?? 1000));
     setMembership(player?.status || "CORE");
     setGender(player?.gender || "");
+    setPlayerLevel(player ? normalizeMixedSideOverrideForGender(player.gender, player.mixedSideOverride, player.partnerPreference) ?? "" : "");
+    setPreferredGroup(player?.preferredPool ?? "B");
     setSheet("player");
     action.setError("");
   }
@@ -83,6 +89,8 @@ export default function Admin({
           ? { name: name.trim() }
           : {}),
         status: membership,
+        ...(levelOption ? { mixedSideOverride: playerLevel || null, partnerPreference: getStoredPartnerPreference(player.gender, playerLevel || null) } : {}),
+        preferredPool: preferredGroup,
       });
     if (Number(rating) !== player.elo)
       await api(endpoint + "/members/" + player.id + "/rating", "POST", {
@@ -288,6 +296,11 @@ export default function Admin({
                   <option value="OCCASIONAL">Occasional</option>
                 </select>
               </label>
+              {edit && <div className="manage-player-preferences">
+                <label className="field-label">Player level<select aria-label="Player level" value={playerLevel} onChange={e => setPlayerLevel(e.target.value)} disabled={!levelOption}><option value="">Default</option>{levelOption && <option value={levelOption.value}>{edit.gender === "FEMALE" ? "High level" : "Low level"}</option>}</select></label>
+                <p className="manage-preference-hint">Used when forming mixed pairs.</p>
+                <label className="field-label">Preferred game group<select aria-label="Preferred game group" value={preferredGroup} onChange={e => setPreferredGroup(e.target.value)}><option value="A">Competitive</option><option value="B">Social</option></select></label>
+              </div>}
               <button
                 className="primary"
                 onClick={() => void action.run(save, () => setSheet(""))}

@@ -40,3 +40,7 @@
 .club-settings-danger button { display: flex; gap: 8px; align-items: center; min-height: 44px; font-size: 13px; }
 .club-settings .club-settings-notice { margin-top: 14px; color: #426c4c; font-size: 13px; }
 .club-crop-area { height: 280px; max-height: 40dvh; position: relative; background: #291440; border-radius: 16px; overflow: hidden; margin-bottom: 18px; }
+
+.manage-player-preferences { margin: 16px 0; padding-top: 4px; border-top: 1px solid #eee5ef; }
+.manage-player-preferences select { width: 100%; min-height: 48px; font-size: 16px; line-height: 1.4; }
+.manage-preference-hint { margin: -6px 0 14px; font-size: 12px; color: #80718b; }
