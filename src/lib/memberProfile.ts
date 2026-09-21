@@ -1,3 +1,4 @@
+import { reconstructLegacyRatings } from "./legacyRatingHistory";
 import {
   getWeightedRecordScore,
   PREFERRED_CONNECTION_MIN_MATCHES,
@@ -11,6 +12,7 @@ import {
 
 export interface MemberProfileTimelineEntry {
   id: string;
+  reconstructed?: boolean;
   kind: "SESSION" | "MANUAL" | "ACTIVE" | "GAP";
   date: string | null;
   rating: number | null;
@@ -47,11 +49,13 @@ export interface MemberProfileRatingAdjustmentSource {
 export interface MemberProfileMatchEloAdjustmentSource
   extends MemberProfileRatingAdjustmentSource {
   matchId: string;
+  reconstructed?: boolean;
   clubId?: string;
 }
 
 export interface MemberProfileMatchSource extends ProfileMatchSource {
   session: ProfileMatchSource["session"] & {
+    clubId?: string | null;
     status?: string | null;
     isTest?: boolean;
     type?: string | null;
@@ -104,6 +108,7 @@ export interface MemberProfileData {
 }
 
 export interface BuildMemberProfileInput {
+  clubId?: string;
   userId: string;
   memberStatus?: string | null;
   currentCoreMemberIds?: Iterable<string>;
@@ -360,6 +365,7 @@ function buildTimeline(
     const summary = sessionSummaries.get(sessionId);
     points.push({
       id: adjustment.id || `match:${match.id}:${userId}`,
+      ...(adjustment.reconstructed ? { reconstructed: true } : {}),
       kind: match.session.status === "COMPLETED" ? "SESSION" : "ACTIVE",
       date: asIso(adjustment.createdAt),
       rating: adjustment.afterElo,
@@ -496,6 +502,7 @@ function buildRecords(
 }
 
 export function buildMemberProfileData({
+  clubId,
   userId,
   memberStatus,
   currentCoreMemberIds,
@@ -507,6 +514,8 @@ export function buildMemberProfileData({
   historyLimit = 3,
 }: BuildMemberProfileInput): MemberProfileData | null {
   matches = matches.filter(m => !m.session.isTest && m.session.type !== "PRACTICE");
+  const recordedAdjustments = matchEloAdjustments;
+  matchEloAdjustments = [...recordedAdjustments, ...reconstructLegacyRatings(userId, clubId, matches, recordedAdjustments, manualRatingAdjustments)];
   const completedMatches = matches.filter(m => m.session.status === "COMPLETED");
 
   const sessions = inputSessions.slice();
@@ -601,7 +610,7 @@ export function buildMemberProfileData({
       userId,
       matches,
       sessions,
-      matchEloAdjustments,
+      recordedAdjustments,
       manualRatingAdjustments,
       profileData.sessions.best
     ),

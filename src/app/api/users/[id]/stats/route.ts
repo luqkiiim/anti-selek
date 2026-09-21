@@ -250,6 +250,7 @@ async function getUserStatsRoute(
           code: true,
           name: true,
           status: true,
+          clubId: true,
           isTest: true,
           type: true,
           createdAt: true,
@@ -346,6 +347,7 @@ async function getUserStatsRoute(
   }
 
   const profile = clubId && targetMemberId ? buildMemberProfileData({
+    clubId,
     userId: id,
     memberStatus: targetMemberStatus,
     currentCoreMemberIds: leaderboardMembers.map(member => member.userId),
