@@ -6,6 +6,8 @@ import type { PlayerProfileSessionSummary, PlayerProfileMatchHistoryEntry } from
 import type { MemberProfileData, RecordedSessionSummary } from "@/lib/memberProfile";
 import { Avatar, ErrorText, Sheet } from "./Primitives";
 import { useResource } from "./api";
+import { MemberPins, type PublicAchievementCollection } from "./MemberPins";
+import { ProfilePeople, ProfileRecords } from "./ProfileHighlights";
 import { MainNav } from "./MainNav";
 import "./player-profile.css";
 
@@ -16,17 +18,18 @@ export type MemberProfileResponse = {
 const dateLabel = (date: string | null) => date ? new Date(date).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }) : "Date unavailable";
 const signed = (n: number) => `${n > 0 ? "+" : ""}${n}`;
 
-export function PlayerProfilePage({ clubId, clubName, member, isSelf, identityPins, achievements, milestone }: {
+export function PlayerProfilePage({ clubId, clubName, member, isSelf, identityPins, achievements, milestone, onOpenMember }: {
   clubId: string; clubName: string; member: ClubPageMember; isSelf: boolean;
   identityPins?: ReactNode; achievements?: ReactNode; milestone?: ReactNode; onOpenMember: (id: string) => void;
 }) {
   const resource = useResource<MemberProfileResponse>(`/api/users/${member.id}/stats?clubId=${encodeURIComponent(clubId)}`);
+  const pins = useResource<PublicAchievementCollection>(isSelf ? null : `/api/clubs/${clubId}/achievements?userId=${encodeURIComponent(member.id)}`);
   const data = resource.data?.profile;
   const user = resource.data?.user;
   const [recap, setRecap] = useState<PlayerProfileSessionSummary | null>(null);
   const [match, setMatch] = useState<PlayerProfileMatchHistoryEntry | null>(null);
   return <article className="player-profile" aria-label={`${member.name}’s club profile`}>
-    <header className="player-profile-identity"><span className="eyebrow">{clubName}</span><Avatar large name={user?.name ?? member.name} url={user?.avatarUrl ?? member.avatarUrl} /><h1>{user?.name ?? member.name}</h1><span className="player-profile-membership">{isSelf ? "Your club profile" : member.status === "CORE" ? "Core member" : "Occasional member"}</span>{identityPins}</header>
+    <header className="player-profile-identity"><span className="eyebrow">{clubName}</span><Avatar large name={user?.name ?? member.name} url={user?.avatarUrl ?? member.avatarUrl} /><h1>{user?.name ?? member.name}</h1><span className="player-profile-membership">{isSelf ? "Your club profile" : member.status === "CORE" ? "Core member" : "Occasional member"}</span>{isSelf ? identityPins : pins.data && <MemberPins collection={pins.data} compact />}</header>
     <div className="player-standing"><div><span>Club rating</span><strong>{user?.elo ?? member.elo}</strong></div><div><span>Club rank</span><strong>{(member as RankedMember).currentRank ? `#${(member as RankedMember).currentRank}` : "—"}</strong>{member.rankDelta != null && member.rankDelta !== 0 && member.previousRank != null && <small className={member.rankDelta > 0 ? "positive" : "negative"}>{member.rankDelta > 0 ? <ArrowUp size={12} /> : <ArrowDown size={12} />}{Math.abs(member.rankDelta)} {Math.abs(member.rankDelta) === 1 ? "place" : "places"}</small>}</div></div>
     {resource.error && <div className="profile-load-error"><ErrorText error={resource.error} /><button className="secondary" onClick={() => void resource.refresh().catch(() => {})}>Try again</button></div>}
     {!data && !resource.error && <div className="profile-loading" role="status">Loading the story so far…</div>}
@@ -34,10 +37,12 @@ export function PlayerProfilePage({ clubId, clubName, member, isSelf, identityPi
       {data.latestSession ? <section className="profile-latest"><div className="section-heading"><h2>{isSelf ? "Your latest session" : "Latest session"}</h2><span>{dateLabel(data.latestSession.date)}</span></div><button className="profile-latest-card" onClick={() => setRecap(data.latestSession)}><span className="eyebrow">{data.latestSession.name}</span><strong>{data.latestSession.wins === data.latestSession.matches && data.latestSession.matches > 1 ? "A clean sweep." : data.latestSession.ratingChange > 0 ? "Moving up." : "Another chapter played."}</strong><span className="profile-latest-result"><b>{data.latestSession.wins}W <span>·</span> {data.latestSession.losses}L</b><span className={data.latestSession.ratingChange >= 0 ? "positive" : "negative"}>{data.latestSession.ratingVerified === false ? "Rating unavailable" : `${signed(data.latestSession.ratingChange)} rating`}</span></span><span className="profile-card-link">View session<CaretRight size={17} /></span></button></section> : <div className="profile-empty"><CalendarBlank size={28} weight="duotone" /><h2>The story starts on court.</h2><p>{isSelf ? "Your first completed session will appear here." : "No completed sessions in this club yet."}</p></div>}
       {!!data.recentForm.length && <section className="profile-form"><div className="section-heading"><h2>Recent form</h2><small>Latest first</small></div><div>{data.recentForm.map(m => <button key={m.id} className={m.result === "WIN" ? "win" : "loss"} aria-label={`${m.result === "WIN" ? "Win" : "Loss"}, ${m.score}, ${m.sessionName}`} onClick={() => setMatch(m)}>{m.result === "WIN" ? "W" : "L"}</button>)}</div></section>}
       <RatingJourney timeline={data.timeline} onOpenSession={id => { const session = data.timeline.find(p => p.sessionId === id && p.session)?.session ?? data.history.items.find(s => s.id === id); if (session) setRecap(session); }} />
-      {milestone}{achievements}
+      {isSelf ? <>{milestone}{achievements}</> : pins.data ? <MemberPins collection={pins.data} /> : <ErrorText error={pins.error} />}
+      <ProfilePeople relationships={data.relationships} isSelf={isSelf} onOpenMember={onOpenMember} />
+      <ProfileRecords records={data.records} onOpenSession={setRecap} />
     </>}
     <details className="profile-rating-help"><summary>How ratings work</summary><p>Ratings and ranks belong to this club. Match results change your rating; manual adjustments are marked separately. Achievements are separate from matchmaking ratings.</p></details>
-    <Sheet open={!!recap} title="Session recap" onClose={() => setRecap(null)}>{recap && <div className="profile-recap"><Avatar name={user?.name ?? member.name} url={user?.avatarUrl ?? member.avatarUrl} /><h3>{user?.name ?? member.name}</h3><h2>{recap.name}</h2><p className="muted">{dateLabel(recap.date)}</p><div className="player-standing"><div><span>Result</span><strong>{recap.wins}W · {recap.losses}L</strong></div><div><span>Rating change</span><strong>{(recap as RecordedSessionSummary).ratingVerified === false ? "—" : signed(recap.ratingChange)}</strong></div></div></div>}</Sheet>
+    <Sheet open={!!recap} title="Session recap" onClose={() => setRecap(null)}>{recap && <div className="profile-recap"><Avatar name={user?.name ?? member.name} url={user?.avatarUrl ?? member.avatarUrl} /><h3>{user?.name ?? member.name}</h3><h2>{recap.name}</h2><p className="muted">{dateLabel(recap.date)}</p><div className="player-standing"><div><span>Result</span><strong>{recap.wins}W · {recap.losses}L</strong></div><div><span>Rating change</span><strong>{(recap as RecordedSessionSummary).ratingVerified === false ? "—" : signed(recap.ratingChange)}</strong></div></div>{recap.id === data?.records.bestSession?.id && <details className="profile-rating-help"><summary>What makes this the best session?</summary><p>Most wins first, then win rate, point difference, games played, and most recent session to break ties.</p></details>}</div>}</Sheet>
     <Sheet open={!!match} title="Match details" onClose={() => setMatch(null)}>{match && <div className="profile-match"><span className="eyebrow">{match.sessionName}</span><h2>{match.result === "WIN" ? "Win" : "Loss"} · {match.score}</h2><p className="muted">{dateLabel(match.date)}</p><h3>Partners</h3><p>{member.name} & {match.partner.name}</p><h3>Opponents</h3><p>{match.opponents.map(p => p.name).join(" & ")}</p><p>{match.eloChange === null ? "Rating change unavailable" : `${signed(match.eloChange)} rating`}</p></div>}</Sheet>
   </article>;
 }

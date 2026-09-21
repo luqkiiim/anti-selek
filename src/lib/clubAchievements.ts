@@ -2,6 +2,22 @@ export type AchievementId = "first-serve" | "familiar-face" | "mix-it-up" | "rhy
 export interface AchievementTier { tier: number; target: number; earnedAt: string | null; sessionCode: string | null; sessionName: string | null; }
 export interface ClubAchievement { id: AchievementId; name: string; description: string; unit: string; progress: number; progressLabel: string; tiers: AchievementTier[]; earnedTier: number; optional: boolean; }
 export interface AchievementCollection { achievements: ClubAchievement[]; showcase: AchievementId[]; unseen: { id: AchievementId; tier: number }[]; }
+export interface PublicAchievementTier {
+  tier: number;
+  earnedAt: string;
+  sessionCode: string | null;
+  sessionName: string | null;
+}
+export interface PublicAchievement {
+  id: AchievementId;
+  title: string;
+  description: string;
+  tiers: PublicAchievementTier[];
+}
+export interface PublicAchievementCollection {
+  showcase: AchievementId[];
+  earned: PublicAchievement[];
+}
 
 export interface AchievementMatch { id: string; date: string; team1: string[]; team2: string[]; winner: number; score1: number; score2: number; ratingDelta: Record<string, number>; }
 export interface AchievementSession { id: string; code: string; name: string; date: string; hostId: string | null; eligibleIds: string[]; guests: string[]; matches: AchievementMatch[]; }

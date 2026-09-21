@@ -66,3 +66,21 @@
 
 .rankings-profile-row { width: 100%; text-align: left; border: 0; background: transparent; color: inherit; }
 .rankings-list li + li .rankings-profile-row { border-top: 1px solid #eee5ef; }
+
+.profile-people, .profile-records, .profile-history { margin: 28px 0; }
+.profile-joined-list { border: 1px solid #e8dcef; border-radius: 18px; overflow: hidden; background: #fffdfb; }
+.profile-person-row, .profile-history-row { display: flex; align-items: center; gap: 12px; width: 100%; padding: 15px 13px; border: 0; background: transparent; text-align: left; color: #291440; }
+.profile-person-row + .profile-person-row, .profile-history-row + .profile-history-row { border-top: 1px solid #eee5ef; }
+.profile-person-row > span:not(.avatar), .profile-history-row > span { flex: 1; min-width: 0; }
+.profile-person-row strong, .profile-history-row strong { display: block; font-size: 14px; overflow-wrap: anywhere; }
+.profile-person-row small, .profile-history-row small { display: block; font-size: 11px; color: #80718b; }
+.profile-person-row em { display: block; font-style: normal; font-size: 11px; margin-top: 3px; color: #7040cf; }
+.profile-person-row .avatar { width: 46px; height: 46px; flex: 0 0 46px; }
+.profile-record-grid { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 7px; }
+.profile-record-grid button { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 16px 5px; border: 1px solid #e8dcef; border-radius: 16px; color: #7040cf; background: #fffdfb; }
+.profile-record-grid strong { font-size: 24px; line-height: 1; color: #291440; }
+.profile-record-grid span { font-size: 11px; color: #80718b; }
+.profile-record-grid button:disabled { opacity: .6; }
+.profile-record-detail > strong { display: block; font-size: 40px; color: #7040cf; }
+.profile-record-detail p { margin: 12px 0; line-height: 1.5; font-size: 14px; }
+.profile-record-detail small { color: #80718b; }
