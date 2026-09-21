@@ -2,6 +2,7 @@ import type { MemberProfileTimelineEntry } from "./memberProfile";
 
 /** One point per session, selected by session date rather than ledger insertion date. */
 export function ratingJourneyPoints(timeline: MemberProfileTimelineEntry[], allTime: boolean) {
+  if (allTime) return [...timeline].sort((a,b) => Date.parse(a.date ?? "") - Date.parse(b.date ?? ""));
   const groups = new Map<string, MemberProfileTimelineEntry[]>();
   for (const point of timeline) {
     if (!point.sessionId) continue;

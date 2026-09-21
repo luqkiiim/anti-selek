@@ -8,7 +8,9 @@ it("uses the latest ten sessions, with one point per session rather than every m
   }))).flat();
   expect(ratingJourneyPoints(points,false).map(p=>p.sessionId)).toEqual(Array.from({length:10},(_,i)=>`s${i+2}`));
   expect(ratingJourneyPoints(points,false)[0].rating).toBe(1011);
-  expect(ratingJourneyPoints(points,true)).toHaveLength(12);
+  expect(ratingJourneyPoints(points,true)).toHaveLength(48);
+  expect(ratingJourneyPoints(points,true)[0].id).toBe("0-0");
+  expect(ratingJourneyPoints(points,true).at(-1)?.id).toBe("11-3");
 });
 
 it("does not pull an old session into the range when its ledger was corrected recently", () => {
