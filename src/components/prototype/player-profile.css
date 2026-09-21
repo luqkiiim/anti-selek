@@ -129,3 +129,5 @@
 .profile-achievements small { color: #716079; font-size: 12px; }
 .profile-history .profile-chart-tabs { margin-bottom: 12px; }
 .player-profile .profile-rating-help summary { min-height: 44px; align-content: center; }
+
+.profile-history-row small { overflow-wrap: anywhere; }

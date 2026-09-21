@@ -11,7 +11,7 @@ function MatchRow({ match, onOpen }: { match: PlayerProfileMatchHistoryEntry; on
   const win = match.result === "WIN";
   return <button className="profile-history-row" onClick={() => onOpen(match)}>
     <b className={`profile-match-result ${win ? "win" : "loss"}`}>{win ? "W" : "L"}</b>
-    <span><strong>{match.score}</strong><small>With {match.partner.name}</small><small>{formatProfileDate(match.date)}</small></span>
+    <span><strong>{match.score}</strong><small>With {match.partner.name}</small><small>vs {match.opponents.map(player => player.name).join(" & ")}</small><small>{formatProfileDate(match.date)}</small></span>
     <CaretRight size={16} />
   </button>;
 }
