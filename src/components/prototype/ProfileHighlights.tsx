@@ -1,4 +1,5 @@
 "use client";
+import { formatProfileDate } from "./profileDate";
 import { useState } from "react";
 import { CaretRight, Fire, Trophy, ChartLineUp, UsersThree } from "@phosphor-icons/react";
 import type { MemberProfileData } from "@/lib/memberProfile";
@@ -22,5 +23,5 @@ export function ProfileRecords({records,onOpenSession}:{records:MemberProfileDat
     <button disabled={!records.highestRating} onClick={()=>setDetail("rating")}><ChartLineUp size={25} weight="duotone"/><strong>{records.highestRating?.value??"—"}</strong><span>Highest rating</span></button>
     <button disabled={!records.longestStreak} onClick={()=>setDetail("streak")}><Fire size={25} weight="duotone"/><strong>{records.longestStreak?.value??"—"}</strong><span>Winning streak</span></button>
     <button disabled={!records.bestSession} onClick={()=>records.bestSession&&onOpenSession(records.bestSession)}><Trophy size={25} weight="duotone"/><strong>{records.bestSession?`${records.bestSession.wins}W`:"—"}</strong><span>Best session</span></button>
-  </div><Sheet open={!!detail} title={detail==="rating"?"Highest recorded rating":"Longest winning streak"} onClose={()=>setDetail(null)}><div className="profile-record-detail"><strong>{detail==="rating"?records.highestRating?.value:records.longestStreak?.value}</strong><p>{detail==="rating"?"The highest rating in this club’s saved records, including manual adjustments.":"Consecutive wins across completed sessions. A loss ends the streak."}</p><small>{(detail==="rating"?records.highestRating?.date:records.longestStreak?.date)?new Date((detail==="rating"?records.highestRating?.date:records.longestStreak?.date)!).toLocaleDateString():"Date unavailable"}</small></div></Sheet></section>;
+  </div><Sheet open={!!detail} title={detail==="rating"?"Highest recorded rating":"Longest winning streak"} onClose={()=>setDetail(null)}><div className="profile-record-detail"><strong>{detail==="rating"?records.highestRating?.value:records.longestStreak?.value}</strong><p>{detail==="rating"?"The highest rating in this club’s saved records, including manual adjustments.":"Consecutive wins across completed sessions. A loss ends the streak."}</p><small>{formatProfileDate(detail==="rating"?records.highestRating?.date:records.longestStreak?.date)}</small></div></Sheet></section>;
 }

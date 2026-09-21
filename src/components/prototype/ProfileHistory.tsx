@@ -1,17 +1,18 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { CalendarBlank, CaretRight } from "@phosphor-icons/react";
 import type { PlayerProfileSessionSummary } from "@/lib/profileStats";
 import type { MemberProfileData, RecordedSessionSummary } from "@/lib/memberProfile";
+import { formatProfileDate } from "./profileDate";
 import { api } from "./api";
 import { ErrorText, Sheet } from "./Primitives";
 
 function SessionRow({ session, onOpen }: { session: PlayerProfileSessionSummary; onOpen: (session: PlayerProfileSessionSummary) => void }) {
-  return <button className="profile-history-row" onClick={() => onOpen(session)}><CalendarBlank size={22} weight="duotone" /><span><strong>{session.name}</strong><small>{session.date ? new Date(session.date).toLocaleDateString() : "Date unavailable"} · {session.wins}W–{session.losses}L</small></span><b className={session.ratingChange >= 0 ? "positive" : "negative"}>{(session as RecordedSessionSummary).ratingVerified === false ? "—" : `${session.ratingChange > 0 ? "+" : ""}${session.ratingChange}`}</b><CaretRight size={16} /></button>;
+  return <button className="profile-history-row" onClick={() => onOpen(session)}><CalendarBlank size={22} weight="duotone" /><span><strong>{session.name}</strong><small>{formatProfileDate(session.date)} · {session.wins}W–{session.losses}L</small></span><b className={session.ratingChange >= 0 ? "positive" : "negative"}>{(session as RecordedSessionSummary).ratingVerified === false ? "—" : `${session.ratingChange > 0 ? "+" : ""}${session.ratingChange}`}</b><CaretRight size={16} /></button>;
 }
-export function ProfileHistory({ clubId, userId, history, onOpen }: { clubId: string; userId: string; history: MemberProfileData["history"]; onOpen: (session: PlayerProfileSessionSummary) => void }) {
+export function ProfileHistory({ clubId, userId, history, onOpen, controls, title = "Session history" }: { controls?: ReactNode; title?: string; clubId: string; userId: string; history: MemberProfileData["history"]; onOpen: (session: PlayerProfileSessionSummary) => void }) {
   const [open,setOpen]=useState(false);
-  return <section className="profile-history"><div className="section-heading"><h2>Session history</h2>{history.items.length > 0 && <button className="text-button" onClick={() => setOpen(true)}>View history<CaretRight size={15} /></button>}</div>{history.items.length ? <div className="profile-joined-list">{history.items.slice(0,3).map(s => <SessionRow key={s.id} session={s} onOpen={onOpen} />)}</div> : <p className="profile-footnote">Completed sessions will appear here.</p>}
+  return <section className="profile-history"><div className="section-heading"><h2>{title}</h2>{history.items.length > 0 && <button className="text-button" onClick={() => setOpen(true)}>View history<CaretRight size={15} /></button>}</div>{controls}{history.items.length ? <div className="profile-joined-list">{history.items.slice(0,3).map(s => <SessionRow key={s.id} session={s} onOpen={onOpen} />)}</div> : <p className="profile-footnote">Completed sessions will appear here.</p>}
     <Sheet open={open} title="Session history" onClose={() => setOpen(false)}><HistoryContents clubId={clubId} userId={userId} onOpen={onOpen} /></Sheet>
   </section>;
 }

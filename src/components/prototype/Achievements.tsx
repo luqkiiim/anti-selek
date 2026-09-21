@@ -1,4 +1,5 @@
 "use client";
+import { formatProfileDate as formatDate } from "./profileDate";
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -65,16 +66,6 @@ function nextTier(achievement: ClubAchievement) {
   return achievement.tiers.find((tier) => tier.tier > earnedTier(achievement)) || null;
 }
 
-function formatDate(value: string) {
-  const date = new Date(value);
-  if (Number.isNaN(date.valueOf())) return value;
-  return new Intl.DateTimeFormat("en", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    timeZone: "UTC",
-  }).format(date);
-}
 
 function tierName(tier: number, achievement?: ClubAchievement) {
   if (achievement?.tiers.length === 1) return "Milestone";
@@ -258,7 +249,8 @@ function CollectionList({
   );
 }
 
-export function NextMilestone({ collection, onOpen }: {
+export function NextMilestone({ collection, onOpen, embedded = false }: {
+  embedded?: boolean;
   collection: AchievementCollection;
   onOpen: (id: AchievementId) => void;
 }) {
@@ -281,7 +273,7 @@ export function NextMilestone({ collection, onOpen }: {
   if (!milestone) {
     return (
       <section className="next-milestone next-milestone--complete" aria-label="Next milestone">
-        <div className="section-heading"><h3>Next milestone</h3><Sparkle size={20} weight="duotone" aria-hidden="true" /></div>
+        <div className="section-heading">{embedded ? <span>Next milestone</span> : <h3>Next milestone</h3>}<Sparkle size={20} weight="duotone" aria-hidden="true" /></div>
         <p>Every available club achievement is complete. Keep playing to make the next one count.</p>
       </section>
     );
@@ -290,7 +282,7 @@ export function NextMilestone({ collection, onOpen }: {
   if (!tier) return null;
   return (
     <section className="next-milestone" aria-label="Next milestone">
-      <div className="section-heading"><h3>Next milestone</h3><span className="achievement-eyebrow">{tierName(tier.tier, achievement)} target</span></div>
+      <div className="section-heading">{embedded ? <span>Next milestone</span> : <h3>Next milestone</h3>}<span className="achievement-eyebrow">{tierName(tier.tier, achievement)} target</span></div>
       <button className="next-milestone-card" onClick={() => onOpen(achievement.id)} aria-label={`View ${achievement.name}, ${tierName(tier.tier, achievement)} target`}>
         <BadgeIcon achievement={achievement} tier={tier.tier} />
         <span className="next-milestone-copy">
@@ -304,6 +296,7 @@ export function NextMilestone({ collection, onOpen }: {
 }
 
 export type AchievementCabinetProps = {
+  embedded?: boolean;
   collection: AchievementCollection;
   onSaveShowcase: (ids: AchievementId[]) => Promise<void> | void;
   onOpenSession: (code: string) => void;
@@ -317,7 +310,7 @@ function fillShowcase(collection: Pick<AchievementCollection, "showcase" | "achi
   return selected.slice(0, 3);
 }
 
-export function AchievementCabinet({ collection, onSaveShowcase, onOpenSession, onSeen, openRequest }: AchievementCabinetProps) {
+export function AchievementCabinet({ collection, onSaveShowcase, onOpenSession, onSeen, openRequest, embedded = false }: AchievementCabinetProps) {
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<"browse" | "edit">("browse");
   const [detail, setDetail] = useState<ClubAchievement | null>(null);
@@ -407,7 +400,7 @@ export function AchievementCabinet({ collection, onSaveShowcase, onOpenSession, 
     <>
       <section className="achievement-cabinet" aria-label="Achievement cabinet">
           <div className="section-heading">
-            <div><h3>Achievement cabinet</h3><small>{collection.achievements.filter((achievement) => earnedTier(achievement) > 0).length} of {collection.achievements.length} badges earned</small></div>
+            <div>{!embedded && <h3>Achievement cabinet</h3>}<small>{collection.achievements.filter((achievement) => earnedTier(achievement) > 0).length} badges unlocked</small></div>
           <button className="text-button achievement-edit-button" onClick={openEdit}><PencilSimple size={16} aria-hidden="true" /> Edit</button>
         </div>
         {selectedAchievements.length ? (

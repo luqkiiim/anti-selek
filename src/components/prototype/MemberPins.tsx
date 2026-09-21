@@ -1,4 +1,5 @@
 "use client";
+import { formatProfileDate as formatDate } from "./profileDate";
 
 import { useState } from "react";
 import { createPortal } from "react-dom";
@@ -24,16 +25,6 @@ function tierName(tier: number, achievement: PublicAchievement) {
   return ["Bronze", "Silver", "Gold"][tier - 1] || `Tier ${tier}`;
 }
 
-function formatDate(value: string) {
-  const date = new Date(value);
-  if (Number.isNaN(date.valueOf())) return value;
-  return new Intl.DateTimeFormat("en", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    timeZone: "UTC",
-  }).format(date);
-}
 
 function highestTier(achievement: PublicAchievement) {
   return achievement.tiers.reduce((highest, tier) => Math.max(highest, tier.tier), 0);
@@ -77,11 +68,11 @@ export function MemberPins({ collection, compact = false }: MemberPinsProps) {
 
   return (
     <>
-      <section className="member-pins member-pins--full" aria-label="Achievement cabinet">
+      <section className="member-pins member-pins--full" aria-label="Achievements">
         <div className="member-pins__heading">
           <div>
-            <h3>Achievement cabinet</h3>
-            <small>{collection.earned.length} {collection.earned.length === 1 ? "badge" : "badges"} earned</small>
+            <h3>Achievements</h3>
+            <small>{collection.earned.length} {collection.earned.length === 1 ? "badge" : "badges"} unlocked</small>
           </div>
         </div>
         {visible.length ? (

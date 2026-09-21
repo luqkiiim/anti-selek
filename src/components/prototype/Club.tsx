@@ -162,10 +162,10 @@ export default function Club({
     );
   }
   function renderMilestone() {
-    return achievements.data ? <NextMilestone collection={achievements.data} onOpen={id => setAchievementRequest({id,nonce:Date.now()})} /> : null;
+    return achievements.data ? <NextMilestone embedded collection={achievements.data} onOpen={id => setAchievementRequest({id,nonce:Date.now()})} /> : null;
   }
   function renderAchievement() {
-    return achievements.data ? <AchievementCabinet collection={achievements.data} openRequest={achievementRequest}
+    return achievements.data ? <AchievementCabinet embedded collection={achievements.data} openRequest={achievementRequest}
       onSaveShowcase={showcase => saveAchievementPreferences({showcase})}
       onSeen={seen => saveAchievementPreferences({seen})}
       onOpenSession={openSession} /> : <ErrorText error={achievements.error} />;
