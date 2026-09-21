@@ -23,7 +23,7 @@
 .profile-latest-result b span { color: #a08aae; }
 .profile-card-link { display: flex; align-items: center; justify-content: space-between; font-size: 12px; margin-top: 3px; color: #7040cf; font-weight: 800; }
 .profile-form > div:last-child { display: flex; gap: 7px; }
-.profile-form button { flex: 1; max-width: 48px; height: 44px; padding: 0; border: 0; border-radius: 12px; font-weight: 900; }
+.profile-form button { flex: 1; min-width: 0; height: 44px; padding: 0; border: 0; border-radius: 12px; font-weight: 900; }
 .profile-form .win { color: #317548; background: #e4eedb; }
 .profile-form .loss { color: #995264; background: #f3e3e7; }
 .profile-journey { background: #fffdfb; border: 1px solid #e8dcef; border-radius: 21px; padding: 17px; }
@@ -94,3 +94,9 @@
 .chemistry-avatars .profile-person-link { display: flex; align-items: center; }
 .player-profile button:focus-visible, .member-profile-dialog button:focus-visible { outline: 2px solid #7040cf; outline-offset: 3px; }
 .profile-chart-selection select:focus-visible { outline: 2px solid #7040cf; outline-offset: 2px; }
+
+.profile-people-group { margin-top: 20px; }
+.profile-people-group .section-heading h3 { font-size: 14px; }
+.profile-person-row > span.profile-person-stat { flex: 0 0 auto; text-align: right; color: #7040cf; font-size: 15px; font-weight: 800; }
+.profile-person-row > span.chemistry-rank { flex: 0 0 14px; }
+.profile-people-group .text-button { min-height: 44px; font-size: 12px; }

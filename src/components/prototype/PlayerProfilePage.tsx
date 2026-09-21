@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode, type PointerEvent } from "react";
 import { ArrowLeft, ArrowUp, ArrowDown, CaretRight, ChartLineUp, CalendarBlank } from "@phosphor-icons/react";
 import type { ClubPageMember } from "@/components/club/clubTypes";
 import type { PlayerProfileSessionSummary, PlayerProfileMatchHistoryEntry } from "@/lib/profileStats";
@@ -9,6 +9,7 @@ import { useResource } from "./api";
 import { MemberPins, type PublicAchievementCollection } from "./MemberPins";
 import { ProfileHistory } from "./ProfileHistory";
 import { ProfilePeople, ProfileRecords } from "./ProfileHighlights";
+import { ratingJourneyPoints } from "@/lib/ratingJourney";
 import { MainNav } from "./MainNav";
 import "./player-profile.css";
 
@@ -53,20 +54,24 @@ export type RankedMember = ClubPageMember & { currentRank?: number | null };
 function RatingJourney({ timeline, onOpenSession }: { timeline: MemberProfileData["timeline"]; onOpenSession: (id: string) => void }) {
   const [all, setAll] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const seenSessions = new Set<string>();
-  const sessions = timeline.filter(p => { if ((p.kind !== "SESSION" && p.kind !== "GAP") || !p.sessionId || seenSessions.has(p.sessionId)) return false; seenSessions.add(p.sessionId); return true; });
-  const cutoff = sessions.length > 10 ? timeline.indexOf(sessions[sessions.length - 10]) : 0;
-  const points = all ? timeline : timeline.slice(cutoff);
+  const points = ratingJourneyPoints(timeline, all);
   const selected = points.find(p => p.id === selectedId) ?? points.at(-1);
   const known = points.filter(p => p.rating !== null);
   const ratings = known.map(p => p.rating!);
   const min = Math.min(...ratings), max = Math.max(...ratings);
   const x = (i: number) => 18 + (points.length <= 1 ? 142 : i / (points.length - 1) * 284);
   const y = (n: number) => 118 - (max === min ? .5 : (n - min) / (max - min)) * 96;
+  function trackPoint(event: PointerEvent<SVGSVGElement>) {
+    if (!points.length) return;
+    const bounds=event.currentTarget.getBoundingClientRect();
+    const position=(event.clientX-bounds.left)/bounds.width*320;
+    const index=Math.max(0,Math.min(points.length-1,Math.round((position-18)/284*(points.length-1))));
+    setSelectedId(points[index].id);
+  }
   const lines: string[] = []; let current: string[] = [];
   points.forEach((p, i) => { if (p.rating === null) { if (current.length) lines.push(current.join(" ")); current = []; } else current.push(`${x(i)},${y(p.rating)}`); }); if (current.length) lines.push(current.join(" "));
   return <section className="profile-journey"><div className="section-heading"><h2>Rating journey</h2><ChartLineUp size={22} weight="duotone" /></div><div className="profile-chart-tabs" aria-label="Rating history range"><button aria-pressed={!all} onClick={() => { setAll(false); setSelectedId(null); }}>Last 10 sessions</button><button aria-pressed={all} onClick={() => { setAll(true); setSelectedId(null); }}>All time</button></div>
-    {points.length ? <><svg viewBox="0 0 320 140" className="profile-chart" role="img" aria-label="Recorded club rating over time"><path d="M18 118H302" stroke="#e7dcef" />{lines.map((line, i) => <polyline key={i} points={line} fill="none" stroke="#7040cf" strokeWidth="3" strokeLinejoin="round" strokeLinecap="round" />)}{points.map((p,i) => p.rating === null ? null : <g key={p.id} onClick={() => setSelectedId(p.id)}><circle cx={x(i)} cy={y(p.rating)} r="24" fill="transparent" /><circle cx={x(i)} cy={y(p.rating)} r={selected?.id === p.id ? 5 : 3} fill={p.kind === "MANUAL" ? "#ad731c" : p.kind === "ACTIVE" ? "#80718b" : "#7040cf"} /></g>)}</svg><div className="profile-chart-selection"><label>Selected point<select aria-label="Rating history point" value={selected?.id ?? ""} onChange={e => setSelectedId(e.target.value)}>{points.map(p => <option key={p.id} value={p.id}>{p.label} · {dateLabel(p.date)}</option>)}</select></label>{selected && <><div><strong>{selected.rating ?? "—"}</strong><span>{selected.kind === "MANUAL" ? "Manual adjustment" : selected.kind === "ACTIVE" ? "Session in progress" : selected.kind === "GAP" ? "Historical rating unavailable" : "Club rating"}</span></div><small>{dateLabel(selected.date)}{selected.delta !== null ? ` · ${signed(selected.delta)} rating` : ""}</small>{selected.sessionId && (selected.kind === "SESSION" || selected.kind === "GAP") && <button className="text-button" onClick={() => onOpenSession(selected.sessionId!)}>View session<CaretRight size={15} /></button>}</>}</div>{points.some(p => p.kind === "GAP") && <p className="profile-footnote">Gaps indicate ratings that were not recorded.</p>}</> : <p className="profile-footnote">The journey appears once a rating change is recorded.</p>}
+    {points.length ? <><svg viewBox="0 0 320 140" className="profile-chart" onPointerDown={event => { event.currentTarget.setPointerCapture(event.pointerId); trackPoint(event); }} onPointerMove={trackPoint} role="img" aria-label="Recorded club rating over time">{selected && <line x1={x(points.indexOf(selected))} x2={x(points.indexOf(selected))} y1="12" y2="124" stroke="#bca6dc" strokeDasharray="3 4" />}<path d="M18 118H302" stroke="#e7dcef" />{lines.map((line, i) => <polyline key={i} points={line} fill="none" stroke="#7040cf" strokeWidth="3" strokeLinejoin="round" strokeLinecap="round" />)}{points.map((p,i) => p.rating === null ? null : <g key={p.id} onClick={() => setSelectedId(p.id)}><circle cx={x(i)} cy={y(p.rating)} r="24" fill="transparent" /><circle cx={x(i)} cy={y(p.rating)} r={selected?.id === p.id ? 5 : 3} fill={p.kind === "MANUAL" ? "#ad731c" : p.kind === "ACTIVE" ? "#80718b" : "#7040cf"} /></g>)}</svg><div className="profile-chart-selection"><label>Selected point<select aria-label="Rating history point" value={selected?.id ?? ""} onChange={e => setSelectedId(e.target.value)}>{points.map(p => <option key={p.id} value={p.id}>{p.label} · {dateLabel(p.date)}</option>)}</select></label>{selected && <><div><strong>{selected.rating ?? "—"}</strong><span>{selected.kind === "MANUAL" ? "Manual adjustment" : selected.kind === "ACTIVE" ? "Session in progress" : selected.kind === "GAP" ? "Historical rating unavailable" : "Club rating"}</span></div><small>{dateLabel(selected.date)}{selected.delta !== null ? ` · ${signed(selected.delta)} rating` : ""}</small>{selected.sessionId && (selected.kind === "SESSION" || selected.kind === "GAP") && <button className="text-button" onClick={() => onOpenSession(selected.sessionId!)}>View session<CaretRight size={15} /></button>}</>}</div>{points.some(p => p.kind === "GAP") && <p className="profile-footnote">Gaps indicate ratings that were not recorded.</p>}</> : <p className="profile-footnote">The journey appears once a rating change is recorded.</p>}
   </section>;
 }
 

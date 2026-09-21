@@ -83,6 +83,8 @@ export interface MemberProfileData {
   };
   matchHistory: PlayerProfileMatchHistoryEntry[];
   relationships: {
+    partners: Array<{ id:string; name:string; avatarUrl?:string|null; matches:number; wins:number; losses:number }>;
+    rivals: Array<{ id:string; name:string; avatarUrl?:string|null; wins:number; losses:number }>;
     partner: {
       id: string;
       name: string;
@@ -296,7 +298,7 @@ function buildRelationships(
         right.pointDifferential - left.pointDifferential ||
         right.lastPlayedAtMs - left.lastPlayedAtMs ||
         compareConnectionNames(left, right)
-    )[0];
+    );
 
   const rival = [...rivals.values()]
     .filter((entry) => entry.matches >= 2)
@@ -310,17 +312,19 @@ function buildRelationships(
         Math.abs(left.wins - left.losses) - Math.abs(right.wins - right.losses) ||
         right.lastPlayedAtMs - left.lastPlayedAtMs ||
         compareConnectionNames(left, right)
-    )[0];
+    );
 
   return {
-    partner: partner ? makeConnection(partner) : null,
-    rival: rival
+    partners: partner.map(makeConnection),
+    rivals: rival.map(entry => ({id:entry.participant.id,name:entry.participant.name,avatarUrl:entry.participant.avatarUrl,wins:entry.wins,losses:entry.losses})),
+    partner: partner[0] ? makeConnection(partner[0]) : null,
+    rival: rival[0]
       ? {
-          id: rival.participant.id,
-          name: rival.participant.name,
-          avatarUrl: rival.participant.avatarUrl,
-          wins: rival.wins,
-          losses: rival.losses,
+          id: rival[0].participant.id,
+          name: rival[0].participant.name,
+          avatarUrl: rival[0].participant.avatarUrl,
+          wins: rival[0].wins,
+          losses: rival[0].losses,
         }
       : null,
   };
@@ -614,7 +618,7 @@ export function buildMemberProfileData({
       userId,
       completedMatches,
       new Set(currentCoreMemberIds ?? [])
-    ) : { partner: null, rival: null },
+    ) : { partner: null, rival: null, partners: [], rivals: [] },
   };
 }
 

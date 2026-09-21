@@ -6,9 +6,16 @@ import type { PlayerProfileSessionSummary } from "@/lib/profileStats";
 import { Avatar, Sheet } from "./Primitives";
 
 export function ProfilePeople({relationships,onOpenMember,isSelf}:{isSelf:boolean;relationships:MemberProfileData["relationships"];onOpenMember:(id:string)=>void}) {
-  const {partner,rival}=relationships;
-  return <section className="profile-people"><div className="section-heading"><h2>{isSelf ? "Your people" : "Connections"}</h2><UsersThree size={22} weight="duotone" /></div><div className="profile-joined-list">{partner&&<button className="profile-person-row" onClick={()=>onOpenMember(partner.id)}><Avatar name={partner.name} url={partner.avatarUrl}/><span><small>Best partner</small><strong>{partner.name}</strong><em>{partner.wins} wins together</em></span><CaretRight size={18}/></button>}{rival&&<button className="profile-person-row" onClick={()=>onOpenMember(rival.id)}><Avatar name={rival.name} url={rival.avatarUrl}/><span><small>Closest rivalry</small><strong>{rival.name}</strong><em>{rival.wins}–{rival.losses} head-to-head</em></span><CaretRight size={18}/></button>}</div>{!partner&&!rival&&<p className="profile-footnote">Partnerships and rivalries appear after more games with core members.</p>}</section>;
+  const [expanded,setExpanded]=useState<"partners"|"rivals"|null>(null);
+  const partners=relationships.partners ?? (relationships.partner ? [relationships.partner] : []);
+  const rivals=relationships.rivals ?? (relationships.rival ? [relationships.rival] : []);
+  function rows(kind:"partners"|"rivals", full=false) {
+    const list=kind==="partners"?partners:rivals;
+    return <div className="profile-joined-list">{(full?list:list.slice(0,3)).map((person,index)=><button key={person.id} className="profile-person-row" onClick={()=>onOpenMember(person.id)}><span className="chemistry-rank">{index+1}</span><Avatar name={person.name} url={person.avatarUrl}/><span><strong>{person.name}</strong>{kind==="partners" && <small>{person.wins} wins together</small>}</span><span className="profile-person-stat">{kind==="partners"?`${Math.round(person.wins/Math.max(1,person.wins+person.losses)*100)}%`:`${person.wins}–${person.losses}`}{kind==="partners"&&<small>win rate</small>}</span><CaretRight size={16}/></button>)}</div>;
+  }
+  return <section className="profile-people"><div className="section-heading"><h2>{isSelf ? "Your people" : "Connections"}</h2><UsersThree size={22} weight="duotone" /></div>{(["partners","rivals"] as const).map(kind=><div key={kind} className="profile-people-group"><div className="section-heading"><h3>{kind==="partners"?"Best partners":"Top rivalries"}</h3>{(kind==="partners"?partners:rivals).length>3&&<button className="text-button" onClick={()=>setExpanded(kind)}>View all</button>}</div>{(kind==="partners"?partners:rivals).length?rows(kind):<p className="profile-footnote">More games with core members will build this list.</p>}</div>)}<Sheet open={!!expanded} title={expanded==="partners"?"Best partners":"Top rivalries"} onClose={()=>setExpanded(null)}>{expanded&&rows(expanded,true)}</Sheet></section>;
 }
+
 export function ProfileRecords({records,onOpenSession}:{records:MemberProfileData["records"];onOpenSession:(session:PlayerProfileSessionSummary)=>void}) {
   const [detail,setDetail]=useState<"rating"|"streak"|null>(null);
   return <section className="profile-records"><div className="section-heading"><h2>Personal bests</h2><Trophy size={22} weight="duotone" /></div><div className="profile-record-grid">

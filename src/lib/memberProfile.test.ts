@@ -32,7 +32,7 @@ describe("member profile", () => {
   it("serves occasional and new members without core relationship summaries", () => {
     const data=buildMemberProfileData({userId:"a",memberStatus:"OCCASIONAL",matches:[match(0),match(1)],currentCoreMemberIds:["a","b","c","d"]})!;
     expect(data.latestSession).not.toBeNull();
-    expect(data.relationships).toEqual({partner:null,rival:null});
+    expect(data.relationships).toEqual({partner:null,rival:null,partners:[],rivals:[]});
     expect(buildMemberProfileData({userId:"new",memberStatus:"CORE",matches:[]})?.latestSession).toBeNull();
   });
   it("excludes guest partners and occasional opponents", () => {
@@ -41,6 +41,7 @@ describe("member profile", () => {
     const data=buildMemberProfileData({userId:"a",memberStatus:"CORE",matches,currentCoreMemberIds:["a","b","c"]})!;
     expect(data.relationships.partner).toBeNull();
     expect(data.relationships.rival?.id).toBe("c");
+    expect(data.relationships.rivals.map(p=>p.id)).toEqual(["c"]);
   });
   it("uses corrected results and marks active rating events separately", () => {
     const corrected = {...match(0), winnerTeam:2, team1Score:15, team2Score:21};
