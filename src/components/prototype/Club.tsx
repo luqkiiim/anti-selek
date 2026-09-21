@@ -36,7 +36,6 @@ import Admin from "./Admin";
 import { MainNav, mainPages } from "./MainNav";
 import { PlayerProfilePage, MemberProfileOverlay, type RankedMember } from "./PlayerProfilePage";
 import { Rankings } from "./Rankings";
-import { AccountSettings } from "./AccountSettings";
 import { SessionSetup } from "./SessionSetup";
 import { PartnerChemistry } from "./PartnerChemistry";
 import { TopRivalries } from "./TopRivalries";
@@ -88,7 +87,6 @@ export default function Club({
   }
   const [memberStack, setMemberStack] = useState<string[]>([]);
   const [page, setPage] = useState("club"),
-    [sheet, setSheet] = useState(""),
     [sessionCode, setSessionCode] = useState(""),
     [recap, setRecap] = useState<PlayerProfileSessionSummary | null>(null);
   async function refresh() {
@@ -118,12 +116,11 @@ export default function Club({
 
 
   function go(p: string) {
-    setSheet("");
     setMemberStack([]);
     setPage(p);
   }
 
-  const memberOverlay = data ? memberStack.map((id,index) => { const target=rankedMember(id); return target ? <MemberProfileOverlay key={id} member={target} clubId={club.id} clubName={data.club.name} onBack={() => setMemberStack(stack => stack.slice(0,index))} onNavigate={go}><PlayerProfilePage clubId={club.id} clubName={data.club.name} member={target} isSelf={target.id===data.viewer.id} onOpenMember={openMember} achievements={target.id===data.viewer.id ? renderAchievement() : undefined} milestone={target.id===data.viewer.id ? renderMilestone() : undefined} /></MemberProfileOverlay> : null; }) : null;
+  const memberOverlay = data ? memberStack.map((id,index) => { const target=rankedMember(id); return target ? <MemberProfileOverlay key={id} member={target} clubId={club.id} clubName={data.club.name} onBack={() => setMemberStack(stack => stack.slice(0,index))} onNavigate={go}><PlayerProfilePage clubId={club.id} clubName={data.club.name} member={target} isSelf={target.id===data.viewer.id} onOpenMember={openMember} onAccountSaved={async () => { await Promise.all([refresh(), onAccountSaved()]); }} achievements={target.id===data.viewer.id ? renderAchievement() : undefined} milestone={target.id===data.viewer.id ? renderMilestone() : undefined} /></MemberProfileOverlay> : null; }) : null;
   function openSession(code: string) {
     setSessionCode(code);
     go("session");
@@ -222,13 +219,7 @@ export default function Club({
             >
               <GearSix size={25} />
             </button>}
-            <button
-              className="icon-button"
-              aria-label="Account settings"
-              onClick={() => setSheet("account")}
-            >
-              <Avatar name={data?.viewer.name || ""} url={data?.viewer.avatarUrl} />
-            </button>
+            <span aria-label={`${data?.club.name || club.name} club photo`}><Avatar name={data?.club.name || club.name} url={data ? data.club.avatarUrl : club.avatarUrl} /></span>
             </div>
           </>
         ) : (
@@ -360,7 +351,7 @@ export default function Club({
             </>
           )}
           {data && page === "rankings" && <Rankings onOpenProfile={openMember} members={data.clubMembers} viewerId={data.viewer.id} clubName={data.club.name} hasCompletedSession={data.sessions.some(session => session.status === "COMPLETED" && !session.isTest)} />}
-          {data && page === "profile" && member && <PlayerProfilePage clubId={club.id} clubName={data.club.name} member={rankedMember(data.viewer.id)!} isSelf onOpenMember={openMember} achievements={renderAchievement()} milestone={renderMilestone()} />}
+          {data && page === "profile" && member && <PlayerProfilePage clubId={club.id} clubName={data.club.name} member={rankedMember(data.viewer.id)!} isSelf onOpenMember={openMember} onAccountSaved={async () => { await Promise.all([refresh(), onAccountSaved()]); }} achievements={renderAchievement()} milestone={renderMilestone()} />}
           {page === "recap" && recap && (
             <>
               <div className="celebration">
@@ -399,7 +390,6 @@ export default function Club({
         <MainNav active={page} onNavigate={go} />
       )}
       {memberOverlay}
-      <AccountSettings open={sheet === "account"} onClose={() => setSheet("")} onSaved={async () => { await Promise.all([refresh(), onAccountSaved()]); }} />
     </div>
   );
 }

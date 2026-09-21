@@ -131,3 +131,5 @@
 .player-profile .profile-rating-help summary { min-height: 44px; align-content: center; }
 
 .profile-history-row small { overflow-wrap: anywhere; }
+
+.profile-account-button { display: flex; border: 0; padding: 0; border-radius: 50%; background: transparent; color: inherit; cursor: pointer; }

@@ -11,6 +11,7 @@ import { ProfileActivityHistory } from "./ProfileActivityHistory";
 import { formatProfileDate as dateLabel } from "./profileDate";
 import { ProfilePeople, ProfileRecords } from "./ProfileHighlights";
 import { ratingJourneyPoints } from "@/lib/ratingJourney";
+import { AccountSettings } from "./AccountSettings";
 import { MainNav } from "./MainNav";
 import "./player-profile.css";
 
@@ -20,18 +21,20 @@ export type MemberProfileResponse = {
 };
 const signed = (n: number) => `${n > 0 ? "+" : ""}${n}`;
 
-export function PlayerProfilePage({ clubId, clubName, member, isSelf, achievements, milestone, onOpenMember }: {
+export function PlayerProfilePage({ clubId, clubName, member, isSelf, achievements, milestone, onOpenMember, onAccountSaved }: {
   clubId: string; clubName: string; member: ClubPageMember; isSelf: boolean;
+  onAccountSaved?: () => Promise<unknown>;
   achievements?: ReactNode; milestone?: ReactNode; onOpenMember: (id: string) => void;
 }) {
   const resource = useResource<MemberProfileResponse>(`/api/users/${member.id}/stats?clubId=${encodeURIComponent(clubId)}`);
   const pins = useResource<PublicAchievementCollection>(isSelf ? null : `/api/clubs/${clubId}/achievements?userId=${encodeURIComponent(member.id)}`);
   const data = resource.data?.profile;
   const user = resource.data?.user;
+  const [accountOpen, setAccountOpen] = useState(false);
   const [recap, setRecap] = useState<PlayerProfileSessionSummary | null>(null);
   const [match, setMatch] = useState<PlayerProfileMatchHistoryEntry | null>(null);
   return <article className="player-profile" aria-label={`${member.name}’s club profile`}>
-    <header className="player-profile-identity">{!isSelf && <span className="eyebrow">{clubName}</span>}<Avatar large name={user?.name ?? member.name} url={user?.avatarUrl ?? member.avatarUrl} /><h1>{user?.name ?? member.name}</h1>{!isSelf && <span className="player-profile-membership">{member.status === "CORE" ? "Core member" : "Occasional member"}</span>}</header>
+    <header className="player-profile-identity">{!isSelf && <span className="eyebrow">{clubName}</span>}{isSelf ? <button className="profile-account-button" aria-label="Account settings" onClick={() => setAccountOpen(true)}><Avatar large name={user?.name ?? member.name} url={user?.avatarUrl ?? member.avatarUrl} /></button> : <Avatar large name={user?.name ?? member.name} url={user?.avatarUrl ?? member.avatarUrl} />}<h1>{user?.name ?? member.name}</h1>{!isSelf && <span className="player-profile-membership">{member.status === "CORE" ? "Core member" : "Occasional member"}</span>}</header>
     <div className="player-standing profile-overview-stats"><div><span>Club rating</span><strong>{user?.elo ?? member.elo}</strong></div><div><span>Club rank</span><strong>{(member as RankedMember).currentRank ? `#${(member as RankedMember).currentRank}` : "—"}</strong>{member.rankDelta != null && member.rankDelta !== 0 && member.previousRank != null && <small className={member.rankDelta > 0 ? "positive" : "negative"}>{member.rankDelta > 0 ? <ArrowUp size={12} /> : <ArrowDown size={12} />}{Math.abs(member.rankDelta)} {Math.abs(member.rankDelta) === 1 ? "place" : "places"}</small>}</div><p className="profile-activity-totals">{data ? new Set(data.matchHistory.map(m => m.sessionId)).size : "\u2014"} sessions {"\u00b7"} {data?.matchHistory.length ?? "\u2014"} matches</p></div>
     {resource.error && <div className="profile-load-error"><ErrorText error={resource.error} /><button className="secondary" onClick={() => void resource.refresh().catch(() => {})}>Try again</button></div>}
     {!data && !resource.error && <div className="profile-loading" role="status">Loading the story so far…</div>}
@@ -45,6 +48,7 @@ export function PlayerProfilePage({ clubId, clubName, member, isSelf, achievemen
       <ProfileActivityHistory key={member.id} clubId={clubId} userId={member.id} history={data.history} onOpen={setRecap} matches={data.matchHistory} onOpenMatch={setMatch} />
     </>}
     <details className="profile-rating-help"><summary>How ratings work</summary><p>Ratings and ranks belong to this club. Match results change your rating; manual adjustments are marked separately. Achievements are separate from matchmaking ratings.</p></details>
+    {isSelf && <AccountSettings open={accountOpen} onClose={() => setAccountOpen(false)} onSaved={async () => { await Promise.all([resource.refresh(), onAccountSaved?.()]); }} />}
     <Sheet open={!!recap} title="Session recap" onClose={() => setRecap(null)}>{recap && <div className="profile-recap"><Avatar name={user?.name ?? member.name} url={user?.avatarUrl ?? member.avatarUrl} /><h3>{user?.name ?? member.name}</h3><h2>{recap.name}</h2><p className="muted">{dateLabel(recap.date)}</p><div className="player-standing"><div><span>Result</span><strong>{recap.wins}W · {recap.losses}L</strong></div><div><span>Rating change</span><strong>{(recap as RecordedSessionSummary).ratingVerified === false ? "—" : signed(recap.ratingChange)}</strong></div></div><div className="profile-joined-list profile-recap-matches">{data?.matchHistory.filter(m => m.sessionId === recap.id).map(m => <button className="profile-history-row" key={m.id} onClick={() => setMatch(m)}><b className={m.result === "WIN" ? "positive" : "negative"}>{m.result === "WIN" ? "W" : "L"}</b><span><strong>{m.score}</strong><small>With {m.partner.name}</small><small>vs {m.opponents.map(p => p.name).join(" & ")}</small></span><CaretRight size={18} /></button>)}</div>{recap.id === data?.records.bestSession?.id && <details className="profile-rating-help"><summary>What makes this the best session?</summary><p>Most wins first, then win rate, point difference, games played, and most recent session to break ties.</p></details>}</div>}</Sheet>
     <Sheet open={!!match} title="Match details" onClose={() => setMatch(null)}>{match && <div className="profile-match"><span className="eyebrow">{match.sessionName}</span><h2>{match.result === "WIN" ? "Win" : "Loss"} · {match.score}</h2><p className="muted">{dateLabel(match.date)}</p><h3>Partners</h3><p>{member.name} & {match.partner.name}</p><h3>Opponents</h3><p>{match.opponents.map(p => p.name).join(" & ")}</p><p>{match.eloChange === null ? "Rating change unavailable" : `${signed(match.eloChange)} rating`}</p></div>}</Sheet>
   </article>;

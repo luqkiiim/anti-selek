@@ -13,6 +13,7 @@ import type { ClubPageMember } from "@/components/club/clubTypes";
 import { getMixedSideOverrideOptionForGender, getStoredPartnerPreference, normalizeMixedSideOverrideForGender } from "@/lib/mixedSide";
 import type { Snapshot } from "./Club";
 import { api, useAction, useResource } from "./api";
+import { MemberPhotoEditor } from "./MemberPhotoEditor";
 import { ClubSettings } from "./ClubSettings";
 import "./manage-club.css";
 import { Avatar, Sheet, ErrorText } from "./Primitives";
@@ -263,6 +264,7 @@ export default function Admin({
           <ErrorText error={action.error} />
           {sheet === "player" ? (
             <>
+              {edit && <MemberPhotoEditor key={edit.id} member={edit} clubId={club.id} onSaved={async avatarUrl => { setEdit(current => current?.id === edit.id ? { ...current, avatarUrl } : current); await refresh(); }} />}
               <label className="field-label">
                 Name
                 <input
