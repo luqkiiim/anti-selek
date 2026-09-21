@@ -121,7 +121,7 @@
 .profile-chart-value span { max-width: 150px; }
 .profile-chart-summary .text-button { margin-left: auto; flex-shrink: 0; }
 .profile-achievements { margin: 28px 0; }
-.profile-achievements .next-milestone { margin: 0 0 16px; }
+.profile-achievements .next-milestone { margin: 16px 0 0; }
 .profile-achievements .next-milestone .section-heading { margin-bottom: 8px; font-size: 12px; }
 .profile-achievements .achievement-cabinet { margin: 0; }
 .profile-achievements .achievement-cabinet .section-heading { margin-bottom: 8px; }
