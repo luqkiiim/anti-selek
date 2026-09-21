@@ -104,3 +104,12 @@
 /* The graph owns scrubbing gestures; scrolling and nav swipes remain native outside it. */
 .profile-chart-touch { touch-action: none; user-select: none; margin-top: 16px; }
 .profile-chart-touch .profile-chart { touch-action: none; margin-top: 0; }
+
+.profile-overview-stats { grid-template-columns: repeat(4,minmax(0,1fr)); padding: 18px 4px; }
+.profile-overview-stats strong { font-size: 24px; }
+.profile-overview-stats span { font-size: 11px; }
+.profile-overview-stats small { font-size: 10px; }
+.profile-match-result { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 10px; flex: 0 0 32px; font-size: 12px; }
+.profile-match-result.win { color: #317548; background: #e4eedb; }
+.profile-match-result.loss { color: #995264; background: #f3e3e7; }
+.profile-match-history .secondary { margin-top: 16px; }

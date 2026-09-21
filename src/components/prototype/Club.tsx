@@ -30,7 +30,7 @@ import { Pager } from "./Pager";
 import { SessionUpdate } from "./SessionUpdate";
 import { ClubHighlights } from "./ClubHighlights";
 import { UpcomingSessions } from "./UpcomingSessions";
-import { NextMilestone, AchievementCabinet, BadgeIcon } from "./Achievements";
+import { NextMilestone, AchievementCabinet } from "./Achievements";
 import type { AchievementCollection, AchievementId } from "@/lib/clubAchievements";
 import Admin from "./Admin";
 import { MainNav, mainPages } from "./MainNav";
@@ -123,7 +123,7 @@ export default function Club({
     setPage(p);
   }
 
-  const memberOverlay = data ? memberStack.map((id,index) => { const target=rankedMember(id); return target ? <MemberProfileOverlay key={id} member={target} clubId={club.id} clubName={data.club.name} onBack={() => setMemberStack(stack => stack.slice(0,index))} onNavigate={go}><PlayerProfilePage clubId={club.id} clubName={data.club.name} member={target} isSelf={target.id===data.viewer.id} onOpenMember={openMember} identityPins={target.id===data.viewer.id ? renderIdentityPins() : undefined} achievements={target.id===data.viewer.id ? renderAchievement() : undefined} milestone={target.id===data.viewer.id ? renderMilestone() : undefined} /></MemberProfileOverlay> : null; }) : null;
+  const memberOverlay = data ? memberStack.map((id,index) => { const target=rankedMember(id); return target ? <MemberProfileOverlay key={id} member={target} clubId={club.id} clubName={data.club.name} onBack={() => setMemberStack(stack => stack.slice(0,index))} onNavigate={go}><PlayerProfilePage clubId={club.id} clubName={data.club.name} member={target} isSelf={target.id===data.viewer.id} onOpenMember={openMember} achievements={target.id===data.viewer.id ? renderAchievement() : undefined} milestone={target.id===data.viewer.id ? renderMilestone() : undefined} /></MemberProfileOverlay> : null; }) : null;
   function openSession(code: string) {
     setSessionCode(code);
     go("session");
@@ -160,9 +160,6 @@ export default function Club({
         </div>
       </div>
     );
-  }
-  function renderIdentityPins() {
-    return <div className="profile-showcase">{achievements.data?.showcase.slice(0,3).map(id => { const badge=achievements.data!.achievements.find(a=>a.id===id && a.earnedTier>0); return badge ? <button key={id} aria-label={badge.name} onClick={() => setAchievementRequest({id,nonce:Date.now()})}><BadgeIcon achievement={badge} tier={badge.earnedTier} /></button> : null; })}</div>;
   }
   function renderMilestone() {
     return achievements.data ? <NextMilestone collection={achievements.data} onOpen={id => setAchievementRequest({id,nonce:Date.now()})} /> : null;
@@ -363,7 +360,7 @@ export default function Club({
             </>
           )}
           {data && page === "rankings" && <Rankings onOpenProfile={openMember} members={data.clubMembers} viewerId={data.viewer.id} clubName={data.club.name} hasCompletedSession={data.sessions.some(session => session.status === "COMPLETED" && !session.isTest)} />}
-          {data && page === "profile" && member && <PlayerProfilePage clubId={club.id} clubName={data.club.name} member={rankedMember(data.viewer.id)!} isSelf onOpenMember={openMember} identityPins={renderIdentityPins()} achievements={renderAchievement()} milestone={renderMilestone()} />}
+          {data && page === "profile" && member && <PlayerProfilePage clubId={club.id} clubName={data.club.name} member={rankedMember(data.viewer.id)!} isSelf onOpenMember={openMember} achievements={renderAchievement()} milestone={renderMilestone()} />}
           {page === "recap" && recap && (
             <>
               <div className="celebration">
