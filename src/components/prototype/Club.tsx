@@ -291,8 +291,8 @@ export default function Club({
               </div>
               {renderStats()}
               {achievements.data && <NextMilestone collection={achievements.data} onOpen={id => { go("profile"); setAchievementRequest({id,nonce:Date.now()}); }} />}
-              <PartnerChemistry pairs={data.clubPulse?.partnerships ?? []} />
-              <TopRivalries rivalries={data.clubPulse?.rivalries ?? []} />
+              <PartnerChemistry onOpenProfile={openMember} pairs={data.clubPulse?.partnerships ?? []} />
+              <TopRivalries onOpenProfile={openMember} rivalries={data.clubPulse?.rivalries ?? []} />
               {data.club.rules && <details className="club-rules"><summary>Club rules</summary><p style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{data.club.rules}</p></details>}
             </>
           )}

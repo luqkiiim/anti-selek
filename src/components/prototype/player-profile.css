@@ -84,3 +84,13 @@
 .profile-record-detail > strong { display: block; font-size: 40px; color: #7040cf; }
 .profile-record-detail p { margin: 12px 0; line-height: 1.5; font-size: 14px; }
 .profile-record-detail small { color: #80718b; }
+
+.profile-history .text-button { min-height: 44px; display: flex; align-items: center; gap: 3px; font-size: 12px; }
+.profile-history-contents > .secondary { margin-top: 16px; }
+.profile-history-row > svg { flex-shrink: 0; color: #7040cf; }
+.profile-history-row > b { font-size: 13px; }
+.profile-recap-matches { margin: 16px 0; }
+.profile-person-link { border: 0; padding: 0; background: transparent; color: inherit; font: inherit; text-align: inherit; min-height: 44px; }
+.chemistry-avatars .profile-person-link { display: flex; align-items: center; }
+.player-profile button:focus-visible, .member-profile-dialog button:focus-visible { outline: 2px solid #7040cf; outline-offset: 3px; }
+.profile-chart-selection select:focus-visible { outline: 2px solid #7040cf; outline-offset: 2px; }

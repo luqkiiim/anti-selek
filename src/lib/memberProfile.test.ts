@@ -42,4 +42,23 @@ describe("member profile", () => {
     expect(data.relationships.partner).toBeNull();
     expect(data.relationships.rival?.id).toBe("c");
   });
+  it("uses corrected results and marks active rating events separately", () => {
+    const corrected = {...match(0), winnerTeam:2, team1Score:15, team2Score:21};
+    const data=buildMemberProfileData({userId:"a",matches:[corrected,match(1,"ACTIVE")],matchEloAdjustments:[
+      {id:"corrected",matchId:"m0",userId:"a",beforeElo:1000,afterElo:992,createdAt:new Date(2026,0,1)},
+      {id:"active",matchId:"m1",userId:"a",beforeElo:992,afterElo:1001,createdAt:new Date(2026,0,2)},
+    ]})!;
+    expect(data.latestSession?.losses).toBe(1);
+    expect(data.latestSession?.ratingChange).toBe(-8);
+    expect(data.recentForm).toHaveLength(1);
+    expect(data.timeline.find(p=>p.id==="active")?.kind).toBe("ACTIVE");
+    expect(data.records.longestStreak).toBeNull();
+  });
+  it("bounds large history pages without losing older sessions", () => {
+    const data=buildMemberProfileData({userId:"a",matches:Array.from({length:130},(_,i)=>match(i)),historyOffset:120,historyLimit:100})!;
+    expect(data.history.items).toHaveLength(10);
+    expect(data.history.nextOffset).toBeNull();
+    expect(data.history.items.at(-1)?.id).toBe("s0");
+    expect(data.timeline).toHaveLength(130);
+  });
 });

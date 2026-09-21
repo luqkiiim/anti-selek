@@ -346,7 +346,7 @@ function buildTimeline(
     );
     const adjustment = getMatchAdjustment(match, userId, matchAdjustments);
     if (!adjustment) {
-      if (match.session.status === "COMPLETED") points.push({ id: `gap:${match.id}`, kind: "GAP", date: asIso(match.completedAt), rating: null, delta: null, sessionId, sessionCode: match.session.code, label: `${match.session.name} - rating unavailable` });
+      if (match.session.status === "COMPLETED") points.push({ id: `gap:${match.id}`, kind: "GAP", date: asIso(match.completedAt), rating: null, delta: null, sessionId, sessionCode: match.session.code, session: sessionSummaries.get(sessionId), label: `${match.session.name} - rating unavailable` });
       continue;
     }
     adjustedMatchesBySession.set(
