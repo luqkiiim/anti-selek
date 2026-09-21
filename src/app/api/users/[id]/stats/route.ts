@@ -6,6 +6,7 @@ import { serializeAvatarEntity } from "@/lib/avatar";
 import { getClubStatUserResolver } from "@/lib/offlineIdentities";
 import { prisma } from "@/lib/prisma";
 import { buildProfileClubRankWindow } from "@/lib/profileClubRank";
+import { buildMemberProfileData } from "@/lib/memberProfile";
 import { buildPlayerProfileDerivedData } from "@/lib/profileStats";
 import { canQuickAccessClub, isQuickAccessSession } from "@/lib/quickAccess";
 import {
@@ -82,6 +83,8 @@ async function getUserStatsRoute(
     return invalidTargetResponse(request, "api:users:id:stats");
   }
 
+  let targetMemberStatus: string | null = null;
+  let targetMemberId: string | null = null;
   let effectiveElo = user.elo;
   let usesClubRating = false;
   let context:
@@ -132,6 +135,7 @@ async function getUserStatsRoute(
           },
         },
         select: {
+          id: true,
           elo: true,
           status: true,
           user: {
@@ -157,6 +161,8 @@ async function getUserStatsRoute(
       !isQuickAccessSession(session) &&
       (requesterMembership.role === "ADMIN" || !!session.user.isAdmin);
     canAddGuestToClub = !targetMembership && viewerCanManageClub;
+    targetMemberStatus = targetMembership?.status ?? null;
+    targetMemberId = targetMembership?.id ?? null;
     usesClubRating = !!targetMembership;
     effectiveElo = targetMembership?.elo ?? user.elo;
 
@@ -243,6 +249,11 @@ async function getUserStatsRoute(
           id: true,
           code: true,
           name: true,
+          status: true,
+          isTest: true,
+          type: true,
+          createdAt: true,
+          endedAt: true,
           players: {
             select: {
               userId: true,
@@ -334,6 +345,22 @@ async function getUserStatsRoute(
     });
   }
 
+  const profile = clubId && targetMemberId ? buildMemberProfileData({
+    userId: id,
+    memberStatus: targetMemberStatus,
+    currentCoreMemberIds: leaderboardMembers.map(member => member.userId),
+    matches: matches.map(match => ({ ...match,
+      team1User1: serializeAvatarEntity(match.team1User1),
+      team1User2: serializeAvatarEntity(match.team1User2),
+      team2User1: serializeAvatarEntity(match.team2User1),
+      team2User2: serializeAvatarEntity(match.team2User2),
+    })),
+    matchEloAdjustments: await prisma.matchEloAdjustment.findMany({ where: { clubId, userId: id } }),
+    manualRatingAdjustments: await prisma.clubRatingAdjustment.findMany({ where: { memberId: targetMemberId } }),
+    historyOffset: Number(url.searchParams.get("historyOffset") ?? 0),
+    historyLimit: Number(url.searchParams.get("historyLimit") ?? 3),
+  }) : undefined;
+
   return NextResponse.json({
     user: {
       ...serializeAvatarEntity(user),
@@ -341,6 +368,7 @@ async function getUserStatsRoute(
     },
     context,
     ...profileData,
+    ...(profile ? { profile } : {}),
   });
 }
 

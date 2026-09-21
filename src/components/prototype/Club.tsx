@@ -24,17 +24,17 @@ import type {
 import { api, useResource, useAction } from "./api";
 import {
   Avatar,
-  Row,
   ErrorText,
 } from "./Primitives";
 import { Pager } from "./Pager";
 import { SessionUpdate } from "./SessionUpdate";
 import { ClubHighlights } from "./ClubHighlights";
 import { UpcomingSessions } from "./UpcomingSessions";
-import { NextMilestone, AchievementCabinet } from "./Achievements";
+import { NextMilestone, AchievementCabinet, BadgeIcon } from "./Achievements";
 import type { AchievementCollection, AchievementId } from "@/lib/clubAchievements";
 import Admin from "./Admin";
 import { MainNav, mainPages } from "./MainNav";
+import { PlayerProfilePage, MemberProfileOverlay, type RankedMember } from "./PlayerProfilePage";
 import { Rankings } from "./Rankings";
 import { AccountSettings } from "./AccountSettings";
 import { SessionSetup } from "./SessionSetup";
@@ -86,6 +86,7 @@ export default function Club({
     await api(`/api/clubs/${club.id}/achievements`, "PATCH", body);
     await achievements.refresh();
   }
+  const [memberStack, setMemberStack] = useState<string[]>([]);
   const [page, setPage] = useState("club"),
     [sheet, setSheet] = useState(""),
     [sessionCode, setSessionCode] = useState(""),
@@ -106,11 +107,23 @@ export default function Club({
   const member = data?.clubMembers.find((p) => p.id === data.viewer.id);
   const rating = profile.data?.user.elo ?? member?.elo;
   const rank = profile.data?.context?.rankContext;
+  function openMember(id: string) { setMemberStack(stack => stack.includes(id) ? stack.slice(0, stack.indexOf(id) + 1) : [...stack, id]); }
+  function rankedMember(id: string): RankedMember | undefined {
+    const found = data?.clubMembers.find(p => p.id === id);
+    if (!found) return undefined;
+    const ranked = data!.clubMembers.filter(p => p.status === "CORE" && (p.matchesPlayed ?? 0) > 0).sort((a,b) => b.elo-a.elo || a.name.localeCompare(b.name,undefined,{sensitivity:"base"}));
+    const index=ranked.findIndex(p => p.id===id);
+    return {...found,currentRank:index<0?null:index+1};
+  }
+
+
   function go(p: string) {
     setSheet("");
+    setMemberStack([]);
     setPage(p);
   }
 
+  const memberOverlay = data ? memberStack.map((id,index) => { const target=rankedMember(id); return target ? <MemberProfileOverlay key={id} member={target} clubId={club.id} clubName={data.club.name} onBack={() => setMemberStack(stack => stack.slice(0,index))} onNavigate={go}><PlayerProfilePage clubId={club.id} clubName={data.club.name} member={target} isSelf={target.id===data.viewer.id} onOpenMember={openMember} /></MemberProfileOverlay> : null; }) : null;
   function openSession(code: string) {
     setSessionCode(code);
     go("session");
@@ -148,29 +161,8 @@ export default function Club({
       </div>
     );
   }
-  function renderRecent(item = recent) {
-    return item ? (
-      <button
-        className="recent-card"
-        onClick={() => {
-          setRecap(item);
-          go("recap");
-        }}
-      >
-        <CalendarBlank size={22} />
-        <span>
-          <small>Recent session</small>
-          <strong>{item.name}</strong>
-          <span className="result">
-            <b>
-              {item.wins} / {item.matches}
-            </b>{" "}
-            wins
-          </span>
-        </span>
-        <CaretRight size={18} />
-      </button>
-    ) : null;
+  function renderIdentityPins() {
+    return <div className="profile-showcase">{achievements.data?.showcase.slice(0,3).map(id => { const badge=achievements.data!.achievements.find(a=>a.id===id && a.earnedTier>0); return badge ? <button key={id} aria-label={badge.name} onClick={() => setAchievementRequest({id,nonce:Date.now()})}><BadgeIcon achievement={badge} tier={badge.earnedTier} /></button> : null; })}</div>;
   }
   function renderAchievement() {
     return achievements.data ? <AchievementCabinet collection={achievements.data} openRequest={achievementRequest}
@@ -194,13 +186,14 @@ export default function Club({
     );
   if (page === "admin" && data && canAdmin)
     return (
-      <Admin
+      <><Admin
         snapshot={data}
         refresh={async () => { await Promise.all([refresh(), onClubsChanged()]); }}
         onDeleted={async () => { await onClubsChanged(); onSwitch(); }}
         onBack={() => go("club")}
         onNavigate={go}
-      />
+        onOpenProfile={openMember}
+      />{memberOverlay}</>
     );
   return (
     <div className="pc-app">
@@ -366,55 +359,8 @@ export default function Club({
               </details>
             </>
           )}
-          {data && page === "rankings" && <Rankings members={data.clubMembers} viewerId={data.viewer.id} clubName={data.club.name} hasCompletedSession={data.sessions.some(session => session.status === "COMPLETED" && !session.isTest)} />}
-          {data && page === "profile" && (
-            <>
-              <div className="profile-heading">
-                <Avatar
-                  large
-                  name={data.viewer.name}
-                  url={profile.data?.user.avatarUrl || data.viewer.avatarUrl}
-                />
-                <h1>{data.viewer.name}</h1>
-                <p>{data.club.name}</p>
-              </div>
-              {renderStats()}
-              <div className="section-heading">
-                <h3>Recent form</h3>
-                <small>
-                  Last {profile.data?.matchHistory.slice(0, 6).length || 0}{" "}
-                  matches
-                </small>
-              </div>
-              <div className="form-strip">
-                {profile.data?.matchHistory.slice(0, 6).map((m) => (
-                  <span
-                    key={m.id}
-                    className={m.result === "WIN" ? "win" : "loss"}
-                  >
-                    {m.result === "WIN" ? "W" : "L"}
-                  </span>
-                ))}
-              </div>
-              {renderRecent()}
-              {renderAchievement()}
-              <div className="link-group">
-                <Row
-                  title="Account settings"
-                  sub="Photo, name and gender"
-                  icon={GearSix}
-                  onClick={() => setSheet("account")}
-                />
-              </div>
-              <details>
-                <summary>How ratings work</summary>
-                <p>
-                  Club ratings reflect match results. Achievements are separate
-                  from the rating used to balance teams.
-                </p>
-              </details>
-            </>
-          )}
+          {data && page === "rankings" && <Rankings onOpenProfile={openMember} members={data.clubMembers} viewerId={data.viewer.id} clubName={data.club.name} hasCompletedSession={data.sessions.some(session => session.status === "COMPLETED" && !session.isTest)} />}
+          {data && page === "profile" && member && <PlayerProfilePage clubId={club.id} clubName={data.club.name} member={rankedMember(data.viewer.id)!} isSelf onOpenMember={openMember} identityPins={renderIdentityPins()} achievements={renderAchievement()} />}
           {page === "recap" && recap && (
             <>
               <div className="celebration">
@@ -452,6 +398,7 @@ export default function Club({
       {!["setup", "recap"].includes(page) && (
         <MainNav active={page} onNavigate={go} />
       )}
+      {memberOverlay}
       <AccountSettings open={sheet === "account"} onClose={() => setSheet("")} onSaved={async () => { await Promise.all([refresh(), onAccountSaved()]); }} />
     </div>
   );

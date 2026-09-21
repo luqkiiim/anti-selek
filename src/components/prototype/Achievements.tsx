@@ -85,8 +85,8 @@ function targetCopy(tier: AchievementTier, achievement: ClubAchievement) {
   return `${tier.target} ${tier.target === 1 ? achievement.unit.replace(/s$/, "") : achievement.unit}`;
 }
 
-function BadgeIcon({ achievement, tier = 0, size = "regular" }: {
-  achievement: ClubAchievement;
+export function BadgeIcon({ achievement, tier = 0, size = "regular" }: {
+  achievement: Pick<ClubAchievement, "id">;
   tier?: number;
   size?: "regular" | "large";
 }) {

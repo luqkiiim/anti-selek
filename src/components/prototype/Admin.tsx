@@ -22,12 +22,14 @@ export default function Admin({
   onBack,
   onNavigate,
   onDeleted,
+  onOpenProfile,
 }: {
   snapshot: Snapshot;
   refresh: () => Promise<unknown>;
   onBack: () => void;
   onNavigate: (p: string) => void;
   onDeleted: () => Promise<void>;
+  onOpenProfile: (id: string) => void;
 }) {
   const { club, clubMembers: players, claimRequests = [] } = snapshot;
   const [tab, setTab] = useState("Players"),
@@ -150,7 +152,7 @@ export default function Admin({
                 return group.length ? <section className="manage-player-group" key={status} aria-label={status === "CORE" ? "Core members" : "Occasional members"}>
                   <h3>{status === "CORE" ? "Core" : "Occasional"}<span>{group.length}</span></h3>
                   <div className="roster">{group.map(p => <div className="person" key={p.id}>
-                    <Avatar name={p.name} url={p.avatarUrl} /><span className="person-info"><strong>{p.name}</strong><small>{p.elo} rating</small></span>
+                    <button className="manage-profile-link" onClick={() => onOpenProfile(p.id)} aria-label={`View ${p.name} profile`}><Avatar name={p.name} url={p.avatarUrl} /><span className="person-info"><strong>{p.name}</strong><small>{p.elo} rating</small></span></button>
                     <button className="icon-button" aria-label={"Edit " + p.name} onClick={() => editor(p)}><PencilSimple size={20} /></button>
                   </div>)}</div>
                 </section> : null;
