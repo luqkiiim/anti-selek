@@ -381,6 +381,8 @@
 }
 .recent-card {
   display: flex;
+  width: 100%;
+  min-width: 0;
   align-items: flex-start;
   gap: 12px;
   border: 1px solid var(--line);
@@ -392,6 +394,7 @@
 }
 .recent-card > span {
   flex: 1;
+  min-width: 0;
 }
 .recent-card small,
 .recent-card strong {
