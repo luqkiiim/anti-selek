@@ -194,6 +194,46 @@ describe("join session route", () => {
     vi.useRealTimers();
   });
 
+  it("uses the joining player's group baseline in active grouped sessions", async () => {
+    mocks.auth.mockResolvedValue({
+      user: { id: "late-player", isAdmin: true },
+    });
+    mocks.sessionFindUnique.mockResolvedValue({
+      id: "session-1",
+      clubId: null,
+      status: SessionStatus.ACTIVE,
+      mode: SessionMode.MEXICANO,
+      poolsEnabled: true,
+      players: [
+        { isPaused: false, pool: SessionPool.A, matchesPlayed: 6, matchmakingMatchesCredit: 0 },
+        { isPaused: false, pool: SessionPool.B, matchesPlayed: 2, matchmakingMatchesCredit: 0 },
+      ],
+    });
+    mocks.sessionPlayerFindUnique.mockResolvedValue(null);
+    mocks.userFindUnique.mockResolvedValue({
+      gender: PlayerGender.MALE,
+      partnerPreference: PartnerPreference.OPEN,
+      mixedSideOverride: null,
+    });
+    mocks.sessionUpdate.mockResolvedValue({ id: "session-1", clubId: null, courts: [], players: [] });
+
+    const response = await postJoin({ pool: SessionPool.A });
+
+    expect(response.status).toBe(200);
+    expect(mocks.sessionUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: {
+          players: {
+            create: expect.objectContaining({
+              pool: SessionPool.A,
+              matchmakingMatchesCredit: 6,
+            }),
+          },
+        },
+      })
+    );
+  });
+
   it("does not set arrival priority for waiting-session joins", async () => {
     const now = new Date("2026-05-08T04:10:00.000Z");
     vi.useFakeTimers();

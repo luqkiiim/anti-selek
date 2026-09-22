@@ -136,6 +136,40 @@ describe("guest route", () => {
     );
   });
 
+  it("uses the guest's group baseline in active grouped sessions", async () => {
+    mocks.sessionFindUnique.mockResolvedValue({
+      id: "session-1",
+      clubId: null,
+      status: SessionStatus.ACTIVE,
+      mode: SessionMode.MEXICANO,
+      poolsEnabled: true,
+    });
+    mocks.sessionPlayerFindMany.mockResolvedValue([
+      { matchesPlayed: 6, matchmakingMatchesCredit: 0 },
+    ]);
+
+    const response = await postGuest({ name: "Late Guest", pool: SessionPool.A });
+
+    expect(response.status).toBe(200);
+    expect(mocks.sessionPlayerFindMany).toHaveBeenCalledWith({
+      where: {
+        sessionId: "session-1",
+        isPaused: false,
+        pool: SessionPool.A,
+      },
+      select: {
+        matchesPlayed: true,
+        matchmakingMatchesCredit: true,
+      },
+    });
+    expect(mocks.sessionPlayerCreate).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        pool: SessionPool.A,
+        matchmakingMatchesCredit: 6,
+      }),
+    });
+  });
+
   it("does not set arrival priority for waiting-session guests", async () => {
     const now = new Date("2026-05-08T04:10:00.000Z");
     vi.useFakeTimers();

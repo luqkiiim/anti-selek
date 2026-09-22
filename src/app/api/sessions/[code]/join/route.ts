@@ -6,7 +6,10 @@ import {
   isValidPlayerGender,
   resolveMixedSideState,
 } from "@/lib/mixedSide";
-import { isValidSessionPool } from "@/lib/sessionPools";
+import {
+  getNormalizedSessionPool,
+  isValidSessionPool,
+} from "@/lib/sessionPools";
 import { prisma } from "@/lib/prisma";
 import { getClubEloByUserId, withClubElo } from "@/lib/clubElo";
 import {
@@ -204,18 +207,6 @@ export async function POST(
             ? undefined
             : userProfile.partnerPreference,
     });
-    const matchmakingMatchesCredit =
-      sessionData.status === SessionStatus.ACTIVE
-        ? calculateNoCatchUpMatchmakingCredit({
-            player: { matchesPlayed: 0, matchmakingMatchesCredit: 0 },
-            activePlayers: sessionData.players
-              .filter((player) => !player.isPaused)
-              .map((player) => ({
-                matchesPlayed: player.matchesPlayed,
-                matchmakingMatchesCredit: player.matchmakingMatchesCredit,
-              })),
-          })
-        : 0;
     const joinedAt = new Date();
     const arrivalPriorityAt =
       sessionData.status === SessionStatus.ACTIVE ? joinedAt : null;
@@ -308,6 +299,30 @@ export async function POST(
           : SessionPool.B;
     }
 
+    const targetPool =
+      sessionData.poolsEnabled && isValidSessionPool(overridePool)
+        ? overridePool
+        : sessionData.poolsEnabled
+          ? targetPreferredPool
+          : SessionPool.A;
+    const matchmakingMatchesCredit =
+      sessionData.status === SessionStatus.ACTIVE
+        ? calculateNoCatchUpMatchmakingCredit({
+            player: { matchesPlayed: 0, matchmakingMatchesCredit: 0 },
+            activePlayers: sessionData.players
+              .filter(
+                (player) =>
+                  !player.isPaused &&
+                  (!sessionData.poolsEnabled ||
+                    getNormalizedSessionPool(player.pool) === targetPool)
+              )
+              .map((player) => ({
+                matchesPlayed: player.matchesPlayed,
+                matchmakingMatchesCredit: player.matchmakingMatchesCredit,
+              })),
+          })
+        : 0;
+
     const updatedSession = await prisma.session.update({
       where: { id: sessionData.id },
       data: {
@@ -320,12 +335,7 @@ export async function POST(
             partnerPreference: resolvedMixedState.partnerPreference,
             mixedSideOverride: resolvedMixedState.mixedSideOverride,
             needsMoreRest: targetNeedsMoreRest,
-            pool:
-              sessionData.poolsEnabled && isValidSessionPool(overridePool)
-                ? overridePool
-                : sessionData.poolsEnabled
-                  ? targetPreferredPool
-                  : SessionPool.A,
+            pool: targetPool,
             sessionPoints: 0,
             matchmakingMatchesCredit,
             joinedAt,

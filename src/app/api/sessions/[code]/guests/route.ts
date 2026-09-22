@@ -179,12 +179,19 @@ export async function POST(
     }
 
     const guestName = name.trim();
+    const targetPool =
+      sessionData.poolsEnabled && isValidSessionPool(pool)
+        ? pool
+        : sessionData.poolsEnabled
+          ? SessionPool.B
+          : SessionPool.A;
     const activePlayers =
       sessionData.status === SessionStatus.ACTIVE
         ? await prisma.sessionPlayer.findMany({
             where: {
               sessionId: sessionData.id,
               isPaused: false,
+              ...(sessionData.poolsEnabled ? { pool: targetPool } : {}),
             },
             select: {
               matchesPlayed: true,
@@ -235,12 +242,7 @@ export async function POST(
           partnerPreference: user.partnerPreference,
           mixedSideOverride: user.mixedSideOverride,
           needsMoreRest: false,
-          pool:
-            sessionData.poolsEnabled && isValidSessionPool(pool)
-              ? pool
-              : sessionData.poolsEnabled
-                ? SessionPool.B
-                : SessionPool.A,
+          pool: targetPool,
           sessionPoints: 0,
           matchmakingMatchesCredit,
           joinedAt,
@@ -267,12 +269,7 @@ export async function POST(
       mixedSideOverride: createdGuest.mixedSideOverride,
       representingClubId: normalizedRepresentingClubId,
       needsMoreRest: false,
-      pool:
-        sessionData.poolsEnabled && isValidSessionPool(pool)
-          ? pool
-          : sessionData.poolsEnabled
-            ? SessionPool.B
-            : SessionPool.A,
+      pool: targetPool,
       ladderEntryAt: joinedAt.toISOString(),
       queuedMatch,
     });

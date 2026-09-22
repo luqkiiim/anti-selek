@@ -129,6 +129,52 @@ describe("pause player route", () => {
     expect(tryRebuildAutomaticQueuedMatchForCode).toHaveBeenCalledWith("ABC");
   });
 
+  it("uses the resumed player's group baseline in grouped sessions", async () => {
+    vi.mocked(prisma.session.findUnique).mockResolvedValue({
+      id: "session-1",
+      clubId: null,
+      type: "POINTS",
+      status: "ACTIVE",
+      poolsEnabled: true,
+    } as never);
+    vi.mocked(prisma.sessionPlayer.findUnique).mockResolvedValue({
+      pausedAt: new Date("2026-05-08T04:00:00.000Z"),
+      inactiveSeconds: 0,
+      matchesPlayed: 0,
+      matchmakingMatchesCredit: 0,
+      pool: "A",
+    } as never);
+    vi.mocked(prisma.match.findFirst).mockResolvedValue({ id: "completed-match-1" } as never);
+    vi.mocked(prisma.sessionPlayer.findMany).mockResolvedValue([
+      { matchesPlayed: 5, matchmakingMatchesCredit: 0 },
+    ] as never);
+    const updateSpy = vi.fn(async ({ data }) => ({ id: "session-player-1", ...data }));
+    mockTransaction(updateSpy);
+
+    const response = await POST(createRequest("late-player", false), {
+      params: Promise.resolve({ code: "ABC" }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(prisma.sessionPlayer.findMany).toHaveBeenCalledWith({
+      where: {
+        sessionId: "session-1",
+        userId: { not: "late-player" },
+        isPaused: false,
+        pool: "A",
+      },
+      select: {
+        matchesPlayed: true,
+        matchmakingMatchesCredit: true,
+      },
+    });
+    expect(updateSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ matchmakingMatchesCredit: 5 }),
+      })
+    );
+  });
+
   it("credits a short resumed player when another match completed while paused", async () => {
     const now = new Date("2026-05-08T04:10:00.000Z");
     vi.useFakeTimers();

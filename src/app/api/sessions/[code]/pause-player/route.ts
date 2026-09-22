@@ -49,7 +49,7 @@ export async function POST(
 
     const sessionData = await prisma.session.findUnique({
       where: { code },
-      select: { id: true, clubId: true, type: true, status: true },
+      select: { id: true, clubId: true, type: true, status: true, poolsEnabled: true },
     });
 
     if (!sessionData) {
@@ -86,6 +86,7 @@ export async function POST(
         inactiveSeconds: true,
         matchesPlayed: true,
         matchmakingMatchesCredit: true,
+        pool: true,
       },
     });
 
@@ -137,6 +138,7 @@ export async function POST(
             sessionId: sessionData.id,
             userId: { not: userId },
             isPaused: false,
+            ...(sessionData.poolsEnabled ? { pool: existingPlayer.pool } : {}),
           },
           select: {
             matchesPlayed: true,
