@@ -1026,11 +1026,9 @@ function buildQuotaCombinations<T extends QuotaFairnessPlayer>(
             : combination
                 .map(
                   (player) =>
-                    crossoverTargetRatio *
-                      Math.max(
-                        player.matchesPlayed,
-                        player.matchmakingBaseline
-                      ) -
+                    // Absence credits keep entry neutral in the match-count
+                    // queue; they must not create missed crossover debt.
+                    crossoverTargetRatio * player.matchesPlayed -
                     Math.max(0, player.crossoverAppearances ?? 0)
                 )
                 .sort((left, right) => right - left),

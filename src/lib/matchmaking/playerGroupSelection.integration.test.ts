@@ -2,11 +2,13 @@ import { describe, expect, it } from "vitest";
 import {
   getRankedCandidates,
   selectBatchMatches,
+  selectSingleCourtMatch,
 } from "@/app/api/sessions/[code]/generate-match/selection";
 import type { GenerateMatchSession } from "@/app/api/sessions/[code]/generate-match/shared";
 import { buildRotationHistory } from "@/lib/matchmaking/partitioning";
 import {
   CourtGroupType,
+  MatchStatus,
   PartnerPreference,
   PlayerGender,
   SessionMode,
@@ -237,5 +239,81 @@ describe("player-group batch selection", () => {
           "courtGroupType" in selection && selection.courtGroupType !== null
       )
     ).toBe(true);
+  });
+});
+
+describe("grouped no-catch-up crossover selection", () => {
+  it.each(
+    [SessionType.ELO, SessionType.LADDER, SessionType.RACE].flatMap((type) =>
+      ["single", "batch"].flatMap((path) =>
+        [1, 3].map((actualMatches) => ({ type, path, actualMatches }))
+      )
+    )
+  )("uses actual crossover participation for $type/$path after $actualMatches games", ({ type, path, actualMatches }) => {
+    const regulars = [
+      createPlayer("A1", SessionPool.A),
+      createPlayer("A2", SessionPool.A),
+      createPlayer("B1", SessionPool.B),
+      createPlayer("B2", SessionPool.B),
+    ].map((player) => ({ ...player, matchesPlayed: 9 }));
+    const returningPlayer = {
+      ...createPlayer("Returning", SessionPool.A),
+      // In a batch, verify that playing once more moves them behind the
+      // nine-game band despite still having fewer visible games.
+      matchesPlayed: actualMatches + (path === "batch" ? 1 : 0),
+      matchmakingMatchesCredit: 9 - actualMatches,
+      availableSince: new Date("2026-08-24T00:00:00Z"),
+      // Their first priority match has already been played.
+      arrivalPriorityAt: null,
+    };
+    const players = [...regulars, returningPlayer];
+    // Four crossovers in fourteen assignments: the next crossover is due.
+    // Regulars have three appearances; the returning player has one.
+    const matches = Array.from({ length: 14 }, (_, index) => ({
+      id: `history-${index}`,
+      courtId: "court-1",
+      createdAt: new Date("2026-08-22T00:00:00Z"),
+      completedAt: new Date("2026-08-22T00:10:00Z"),
+      status: MatchStatus.COMPLETED,
+      courtGroupType: index < 4 ? CourtGroupType.CROSSOVER : CourtGroupType.SOCIAL,
+      poolASeatCount: index < 4 ? 2 : 0,
+      poolBSeatCount: index < 4 ? 2 : 4,
+      team1User1Id: index < 3 ? "A1" : index === 3 ? "Returning" : "past-1",
+      team1User2Id: index < 3 ? "B1" : "past-2",
+      team2User1Id: index < 3 ? "A2" : "past-3",
+      team2User2Id: index < 3 ? "B2" : "past-4",
+      team1Score: 11,
+      team2Score: 11,
+    }));
+    const sessionData = {
+      id: "no-catch-up",
+      type,
+      mode: SessionMode.MEXICANO,
+      poolsEnabled: true,
+      respectPlayerRest: true,
+      courts: [{ id: "court-1" }],
+      players,
+      matches,
+      queuedMatch: null,
+      sessionClubs: [],
+    } as unknown as GenerateMatchSession;
+    const { rankedCandidates } = getRankedCandidates(sessionData, new Set());
+    const input = {
+      rankedCandidates,
+      sessionData,
+      playersById: new Map(players.map((player) => [
+        player.userId,
+        { ...player, elo: 1000, pointDiff: 0 },
+      ])),
+      rotationHistory: buildRotationHistory([]),
+    };
+    const selection = path === "single"
+      ? selectSingleCourtMatch({ ...input, reshuffleSource: null })
+      : selectBatchMatches({ ...input, requestedMatchCount: 1 }).selections[0];
+
+    expect(selection.courtGroupType).toBe(CourtGroupType.CROSSOVER);
+    // Single-court ties use actual crossover debt and waiting time. Batches
+    // can optimize variety at a tie, but must respect effective game counts.
+    expect(new Set(selection.ids)).toEqual(new Set(["A1", "A2", "B1", "B2"]));
   });
 });
