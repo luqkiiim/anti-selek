@@ -12,6 +12,7 @@ import {
   Play,
   Check,
   Clock,
+  ClockCounterClockwise,
   GearSix,
   SignOut,
 } from "@phosphor-icons/react";
@@ -28,6 +29,8 @@ import {
   ErrorText,
 } from "./Primitives";
 import { Pager } from "./Pager";
+import SessionMatchHistory from "./SessionMatchHistory";
+import LivePlayerManagement from "./LivePlayerManagement";
 type ScoreTarget = { match: Match; court: Court; correct: boolean };
 type ManualTarget =
   | { kind: "court"; courtId: string }
@@ -67,6 +70,8 @@ export default function LiveSession({
   const scoreRefs = useRef<Record<string, HTMLInputElement | null>>({});
   const [name, setName] = useState(""),
     [rating, setRating] = useState("1000");
+  const [showHistory, setShowHistory] = useState(false);
+  const [managePlayersOpen, setManagePlayersOpen] = useState(false);
   const sessionTabs = ["Courts", "Players", "Standings"] as const;
   function navigateTab(nextTab: string) { setTab(nextTab); }
   async function refresh() {
@@ -199,6 +204,17 @@ export default function LiveSession({
       },
     }));
   }
+  if (showHistory) {
+    return (
+      <div className="pc-app">
+        <SessionMatchHistory
+          code={code}
+          onBack={() => setShowHistory(false)}
+          onMutated={refresh}
+        />
+      </div>
+    );
+  }
   function closeSheet() {
     setSheet("");
     setCourtControlId(null);
@@ -330,7 +346,7 @@ export default function LiveSession({
           <strong>{s?.name || "Session"}</strong>
           <small>{s?.clubs?.find((c) => c.role === "HOST")?.name}</small>
         </div>
-        {canManage && !ended ? (
+        {s && s.status !== "WAITING" ? (
           <button
             className="icon-button"
             aria-label="More options"
@@ -372,6 +388,9 @@ export default function LiveSession({
               </div>
               <button className="primary" onClick={onBack}>
                 Back to club
+              </button>
+              <button className="secondary full" onClick={() => setShowHistory(true)}>
+                Match history
               </button>
             </>
           ) : s?.status === "WAITING" ? (
@@ -549,7 +568,7 @@ export default function LiveSession({
                   <DotsThree size={23} />
                 </button>
               )}
-              {canManage && !queued && s.courts.length > 0 && s.courts.every((court) => !!court.currentMatch) && (
+              {canManage && !queued && s.courts.length > 0 && s.courts.every((court) => !!court.currentMatch) && s.players.filter((player) => !player.isPaused && !playingCourtFor(player.userId)).length >= 4 && (
                 <button
                   className="secondary full"
                   onClick={() => startManual({ kind: "queue", replaceQueuedMatch: false })}
@@ -567,17 +586,22 @@ export default function LiveSession({
                 </small>
               </div>
               {canManage && (
-                <button
-                  className="primary"
-                  onClick={() => {
-                    setName("");
-                    setRating("1000");
-                    setSheet("guest");
-                  }}
-                >
-                  <Plus />
-                  Add guest
-                </button>
+                <div className="button-pair">
+                  <button
+                    className="primary"
+                    onClick={() => {
+                      setName("");
+                      setRating("1000");
+                      setSheet("guest");
+                    }}
+                  >
+                    <Plus size={18} />
+                    Add guest
+                  </button>
+                  <button className="secondary" onClick={() => setManagePlayersOpen(true)}>
+                    Manage players
+                  </button>
+                </div>
               )}
               <div className="roster">
                 {activePlayers.map((p) => (
@@ -808,16 +832,11 @@ export default function LiveSession({
             </>
           ) : sheet === "menu" ? (
             <>
-              <Row
-                title="Session settings"
-                icon={GearSix}
-                onClick={() => setSheet("settings")}
-              />
-              <Row
-                title="End session"
-                icon={SignOut}
-                onClick={() => setSheet("end")}
-              />
+              <Row title="Match history" icon={ClockCounterClockwise} onClick={() => { setSheet(""); setShowHistory(true); }} />
+              {canManage && !ended && <>
+                <Row title="Session settings" icon={GearSix} onClick={() => setSheet("settings")} />
+                <Row title="End session" icon={SignOut} onClick={() => setSheet("end")} />
+              </>}
             </>
           ) : sheet === "settings" ? (
             <>
@@ -1109,7 +1128,14 @@ export default function LiveSession({
           ) : (
             <p>No match queued yet.</p>
           )}
-        </Sheet>
+      </Sheet>
+      {s && <LivePlayerManagement
+        code={code}
+        session={s}
+        open={managePlayersOpen && canManage && !ended}
+        onClose={() => setManagePlayersOpen(false)}
+        onChanged={refresh}
+      />}
     </div>
   );
 }

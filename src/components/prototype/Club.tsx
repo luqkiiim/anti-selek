@@ -41,6 +41,7 @@ import { PartnerChemistry } from "./PartnerChemistry";
 import { TopRivalries } from "./TopRivalries";
 import type { ClubPulseSnapshot } from "@/lib/clubPulse";
 import LiveSession from "./LiveSession";
+import SessionMatchHistory from "./SessionMatchHistory";
 export type Snapshot = {
   viewer: ClubPageUser;
   club: ClubPageClub;
@@ -180,6 +181,16 @@ export default function Club({
           go("sessions");
         }}
       />
+    );
+  if (page === "recap-history" && recap)
+    return (
+      <div className="pc-app">
+        <SessionMatchHistory
+          code={recap.code}
+          onBack={() => go("recap")}
+          onMutated={refresh}
+        />
+      </div>
     );
   if (page === "admin" && data && canAdmin)
     return (
@@ -375,6 +386,9 @@ export default function Club({
                   <small>wins</small>
                 </div>
               </div>
+              <button className="secondary full" onClick={() => go("recap-history")}>
+                Match history
+              </button>
               {renderAchievement()}
               <button className="primary" onClick={() => go("profile")}>
                 View progress
