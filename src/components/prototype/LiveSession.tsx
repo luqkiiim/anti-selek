@@ -32,6 +32,11 @@ import { Pager } from "./Pager";
 import SessionMatchHistory from "./SessionMatchHistory";
 import LivePlayerManagement from "./LivePlayerManagement";
 type ScoreTarget = { match: Match; court: Court; correct: boolean };
+type LiveSettingsDraft = {
+  autoQueueEnabled: boolean;
+  respectPlayerRest: boolean;
+  courtLabels: Record<string, string>;
+};
 type ManualTarget =
   | { kind: "court"; courtId: string }
   | { kind: "queue"; replaceQueuedMatch: boolean };
@@ -72,6 +77,9 @@ export default function LiveSession({
     [rating, setRating] = useState("1000");
   const [showHistory, setShowHistory] = useState(false);
   const [managePlayersOpen, setManagePlayersOpen] = useState(false);
+  const [liveSettingsDraft, setLiveSettingsDraft] = useState<LiveSettingsDraft | null>(null);
+  const [confirmAutoQueueOff, setConfirmAutoQueueOff] = useState(false);
+  const [confirmedQueueId, setConfirmedQueueId] = useState<string | null>(null);
   const sessionTabs = ["Courts", "Players", "Standings"] as const;
   function navigateTab(nextTab: string) { setTab(nextTab); }
   async function refresh() {
@@ -90,6 +98,17 @@ export default function LiveSession({
   }, [refreshSession, refreshStandings, action.busy]);
   const canManage = !!s?.viewerCanManage && !s?.viewerIsQuickAccess;
   const ended = s?.status === "COMPLETED";
+  const hasLiveSettingsChanges = !!(
+    s && liveSettingsDraft && (
+      liveSettingsDraft.autoQueueEnabled !== s.autoQueueEnabled ||
+      liveSettingsDraft.respectPlayerRest !== s.respectPlayerRest ||
+      s.courts.some(
+        (court) =>
+          (liveSettingsDraft.courtLabels[court.id] ?? "").trim() !==
+          (court.label ?? "").trim(),
+      )
+    )
+  );
 
   function score(m: Match): [string, string] {
     const freshMatch =
@@ -221,6 +240,7 @@ export default function LiveSession({
     setConfirmation(null);
     setManualTarget(null);
     setManualSelection([]);
+    setConfirmAutoQueueOff(false);
   }
   function finishControlAction() {
     setSheet("");
@@ -240,6 +260,66 @@ export default function LiveSession({
     setConfirmation(null);
     action.setError("");
     setSheet("next");
+  }
+  function openLiveSettings() {
+    if (!s) return;
+    setLiveSettingsDraft({
+      autoQueueEnabled: s.autoQueueEnabled,
+      respectPlayerRest: s.respectPlayerRest,
+      courtLabels: Object.fromEntries(
+        s.courts.map((court) => [court.id, court.label ?? ""]),
+      ),
+    });
+    setConfirmAutoQueueOff(false);
+    setConfirmedQueueId(null);
+    action.setError("");
+    setSheet("settings");
+  }
+  function changeAutoQueue(value: boolean) {
+    if (!liveSettingsDraft) return;
+    if (value) {
+      setLiveSettingsDraft((current) => current ? { ...current, autoQueueEnabled: true } : current);
+      setConfirmAutoQueueOff(false);
+      setConfirmedQueueId(null);
+      return;
+    }
+    if (s?.queuedMatch) {
+      setConfirmAutoQueueOff(true);
+      return;
+    }
+    setLiveSettingsDraft((current) => current ? { ...current, autoQueueEnabled: false } : current);
+    setConfirmAutoQueueOff(false);
+    setConfirmedQueueId(null);
+  }
+  function confirmDisableAutoQueue() {
+    setLiveSettingsDraft((current) => current ? { ...current, autoQueueEnabled: false } : current);
+    setConfirmedQueueId(s?.queuedMatch?.id ?? null);
+    setConfirmAutoQueueOff(false);
+  }
+  function saveLiveSettings() {
+    if (!s || !liveSettingsDraft) return;
+    const queuedMatchWillBeCleared =
+      !liveSettingsDraft.autoQueueEnabled && !!s.queuedMatch;
+    if (queuedMatchWillBeCleared && confirmedQueueId !== s.queuedMatch?.id) {
+      setConfirmAutoQueueOff(true);
+      return;
+    }
+    const payload = {
+      autoQueueEnabled: liveSettingsDraft.autoQueueEnabled,
+      respectPlayerRest: liveSettingsDraft.respectPlayerRest,
+      courtLabels: s.courts.map((court) => ({
+        courtNumber: court.courtNumber,
+        label: liveSettingsDraft.courtLabels[court.id]?.trim() || null,
+      })),
+    };
+    void action.run(
+      () => api(endpoint, "PATCH", payload),
+      () => {
+        setSheet("");
+        setConfirmAutoQueueOff(false);
+        setConfirmedQueueId(null);
+      },
+    );
   }
   function startManual(target: ManualTarget) {
     setManualTarget(target);
@@ -834,25 +914,139 @@ export default function LiveSession({
             <>
               <Row title="Match history" icon={ClockCounterClockwise} onClick={() => { setSheet(""); setShowHistory(true); }} />
               {canManage && !ended && <>
-                <Row title="Session settings" icon={GearSix} onClick={() => setSheet("settings")} />
+                <Row title="Session settings" icon={GearSix} onClick={openLiveSettings} />
                 <Row title="End session" icon={SignOut} onClick={() => setSheet("end")} />
               </>}
             </>
           ) : sheet === "settings" ? (
             <>
-              <div className="setting-line">
-                <span>Courts</span>
-                <strong>{s?.courts.length}</strong>
-              </div>
-              <div className="setting-line">
-                <span>Matchmaking</span>
-                <strong>
-                  {s?.matchmakingStyle?.toLowerCase().replaceAll("_", " ")}
-                </strong>
-              </div>
-              <button className="primary" onClick={() => setSheet("")}>
-                Done
-              </button>
+              {s && liveSettingsDraft ? (
+                <div className="live-settings">
+                  <section className="live-settings-section" aria-labelledby="live-matchmaking-heading">
+                    <h3 id="live-matchmaking-heading">Matchmaking</h3>
+                    <div className="live-settings-options">
+                      <div className="live-settings-row">
+                        <span>
+                          <strong>Prepare the next game</strong>
+                          <small>Reserve four players when all courts are busy.</small>
+                        </span>
+                        <button
+                          type="button"
+                          role="switch"
+                          aria-label="Prepare the next game"
+                          aria-checked={liveSettingsDraft.autoQueueEnabled}
+                          className={`live-settings-switch${liveSettingsDraft.autoQueueEnabled ? " is-on" : ""}`}
+                          onClick={() => changeAutoQueue(!liveSettingsDraft.autoQueueEnabled)}
+                        >
+                          {liveSettingsDraft.autoQueueEnabled ? "On" : "Off"}
+                        </button>
+                      </div>
+                      <div className="live-settings-row">
+                        <span>
+                          <strong>Respect extra rest</strong>
+                          <small>Use players’ saved rest preferences.</small>
+                        </span>
+                        <button
+                          type="button"
+                          role="switch"
+                          aria-label="Respect extra rest"
+                          aria-checked={liveSettingsDraft.respectPlayerRest}
+                          className={`live-settings-switch${liveSettingsDraft.respectPlayerRest ? " is-on" : ""}`}
+                          onClick={() => setLiveSettingsDraft((current) => current ? {
+                            ...current,
+                            respectPlayerRest: !current.respectPlayerRest,
+                          } : current)}
+                        >
+                          {liveSettingsDraft.respectPlayerRest ? "On" : "Off"}
+                        </button>
+                      </div>
+                    </div>
+                    {confirmAutoQueueOff ? (
+                      <div className="live-settings-warning" role="group" aria-label="Confirm turning off Prepare the next game">
+                        <p>This session has a next match queued. Saving with “Prepare the next game” off will remove it.</p>
+                        <div className="live-settings-confirm-actions">
+                          <button
+                            type="button"
+                            className="secondary"
+                            onClick={() => liveSettingsDraft.autoQueueEnabled
+                              ? setConfirmAutoQueueOff(false)
+                              : changeAutoQueue(true)}
+                          >
+                            {liveSettingsDraft.autoQueueEnabled ? "Keep auto queue" : "Keep the next match"}
+                          </button>
+                          <button
+                            type="button"
+                            className="live-settings-confirm-button"
+                            onClick={confirmDisableAutoQueue}
+                          >
+                            Turn off and clear on save
+                          </button>
+                        </div>
+                      </div>
+                    ) : !liveSettingsDraft.autoQueueEnabled && s.queuedMatch ? (
+                      <p className="live-settings-warning" role="status">
+                        Saving will remove the current next match.
+                      </p>
+                    ) : null}
+                  </section>
+
+                  <section className="live-settings-section" aria-labelledby="live-courts-heading">
+                    <div className="live-settings-section-heading">
+                      <h3 id="live-courts-heading">Court labels</h3>
+                      <p>Leave blank to use the default court name.</p>
+                    </div>
+                    <div className="live-settings-courts">
+                      {s.courts.map((court) => (
+                        <label className="live-settings-court" key={court.id}>
+                          <span>Court {court.courtNumber}</span>
+                          <input
+                            aria-label={`Court ${court.courtNumber} label`}
+                            type="text"
+                            value={liveSettingsDraft.courtLabels[court.id] ?? ""}
+                            maxLength={24}
+                            placeholder={`Court ${court.courtNumber}`}
+                            onChange={(event) => setLiveSettingsDraft((current) => current ? {
+                              ...current,
+                              courtLabels: {
+                                ...current.courtLabels,
+                                [court.id]: event.target.value,
+                              },
+                            } : current)}
+                          />
+                        </label>
+                      ))}
+                    </div>
+                  </section>
+
+                  <button
+                    type="button"
+                    className="primary"
+                    disabled={!hasLiveSettingsChanges || action.busy}
+                    onClick={saveLiveSettings}
+                  >
+                    {action.busy ? "Saving settings…" : "Save settings"}
+                  </button>
+
+                  <details className="live-settings-format">
+                    <summary>
+                      <strong>Session format</strong>
+                      <span>Fixed while live</span>
+                    </summary>
+                    <div className="live-settings-readonly" aria-label="Current game format">
+                      <div className="setting-line">
+                        <span>Court count</span>
+                        <strong>{s.courts.length}</strong>
+                      </div>
+                      <div className="setting-line">
+                        <span>Matchmaking style</span>
+                        <strong>
+                          {s.matchmakingStyle?.toLowerCase().replaceAll("_", " ") || "—"}
+                        </strong>
+                      </div>
+                    </div>
+                  </details>
+                </div>
+              ) : <p role="status">Loading session settings…</p>}
             </>
           ) : sheet === "end" ? (
             <>

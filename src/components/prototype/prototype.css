@@ -908,6 +908,199 @@
   padding: 15px 0;
   border-bottom: 1px solid var(--line);
 }
+.live-settings {
+  display: grid;
+  gap: 15px;
+  width: 100%;
+}
+.live-settings-readonly {
+  padding: 0 12px;
+  border: 1px solid #eee7e5;
+  border-radius: 14px;
+  background: #fffdfb;
+}
+.live-settings-readonly .setting-line {
+  min-height: 44px;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 0;
+  font-size: 13px;
+}
+.live-settings-readonly .setting-line:last-child {
+  border-bottom: 0;
+}
+.live-settings-readonly strong {
+  text-align: right;
+  text-transform: capitalize;
+}
+.live-settings-section-heading p {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+.live-settings-format {
+  border-top: 1px solid #eee7e5;
+  border-bottom: 1px solid #eee7e5;
+}
+.live-settings-format summary {
+  display: flex;
+  min-height: 44px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  cursor: pointer;
+  list-style: none;
+}
+.live-settings-format summary:focus-visible {
+  outline: 3px solid #aa83ed;
+  outline-offset: 2px;
+}
+.live-settings-format summary::-webkit-details-marker {
+  display: none;
+}
+.live-settings-format summary::after {
+  content: "+";
+  color: #7040cf;
+  font-size: 20px;
+  font-weight: 700;
+}
+.live-settings-format[open] summary::after {
+  content: "−";
+}
+.live-settings-format summary strong {
+  font-size: 13px;
+}
+.live-settings-format summary span {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 12px;
+}
+.live-settings-format .live-settings-readonly {
+  margin-bottom: 10px;
+}
+.live-settings-section {
+  display: grid;
+  gap: 9px;
+}
+.live-settings-section > h3,
+.live-settings-section-heading h3 {
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 900;
+}
+.live-settings-section-heading {
+  display: grid;
+  gap: 2px;
+}
+.live-settings-options,
+.live-settings-courts {
+  overflow: hidden;
+  border: 1px solid #eee7e5;
+  border-radius: 14px;
+  background: #fffdfb;
+}
+.live-settings-row {
+  display: flex;
+  min-height: 72px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 11px 10px 13px;
+}
+.live-settings-row + .live-settings-row {
+  border-top: 1px solid #eee7e5;
+}
+.live-settings-row > span {
+  display: block;
+  min-width: 0;
+}
+.live-settings-row strong,
+.live-settings-row small {
+  display: block;
+}
+.live-settings-row strong {
+  font-size: 14px;
+  font-weight: 800;
+}
+.live-settings-row small {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.35;
+}
+.live-settings-switch {
+  flex: 0 0 auto;
+  min-width: 60px;
+  min-height: 44px;
+  border: 1px solid #ddd2e6;
+  border-radius: 12px;
+  background: #f5eff8;
+  color: #614d6c;
+  font-size: 13px !important;
+  font-weight: 900 !important;
+}
+.live-settings-switch.is-on {
+  border-color: #7443cf;
+  background: #7443cf;
+  color: #fff;
+}
+.live-settings-warning {
+  margin: 0 !important;
+  padding: 11px 12px;
+  border: 1px solid #f0d7a8;
+  border-radius: 12px;
+  background: #fff8e9;
+  color: #684c22;
+  font-size: 12px;
+  line-height: 1.4;
+}
+.live-settings-confirm-actions {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+}
+.live-settings-confirm-actions button {
+  min-height: 44px;
+  border-radius: 11px;
+  padding: 8px 10px;
+  font-size: 12px !important;
+  font-weight: 800 !important;
+}
+.live-settings-confirm-actions .secondary {
+  border: 1px solid #e9deed;
+}
+.live-settings-confirm-button {
+  border: 1px solid #b87558;
+  background: #b87558;
+  color: #fff;
+}
+.live-settings-courts {
+  display: grid;
+}
+.live-settings-court {
+  display: grid;
+  grid-template-columns: minmax(62px, 0.7fr) minmax(0, 1.3fr);
+  align-items: center;
+  gap: 10px;
+  min-height: 64px;
+  padding: 8px 10px 8px 13px;
+  font-size: 13px;
+  font-weight: 800;
+}
+.live-settings-court + .live-settings-court {
+  border-top: 1px solid #eee7e5;
+}
+.live-settings-court input {
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  border: 1px solid #e1d7e8;
+  border-radius: 10px;
+  background: #fffaf3;
+  padding: 8px 10px;
+  color: var(--ink);
+  font: 400 14px "Nunito Sans", sans-serif;
+}
 .toggle-row {
   display: flex;
   align-items: center;

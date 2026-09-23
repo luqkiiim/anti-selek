@@ -17,6 +17,24 @@ test("prototype host can reach court controls, player management, and match hist
   await expect(page.getByRole("button", { name: "Reshuffle whole match" })).toBeVisible();
   await page.getByRole("button", { name: "Close" }).click();
 
+  await page.getByRole("button", { name: "More options" }).click();
+  await page.getByRole("button", { name: "Session settings" }).click();
+  await expect(page.getByRole("dialog", { name: "Session settings" })).toBeVisible();
+  await page.setViewportSize({ width: 320, height: 700 });
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await page.screenshot({ path: "test-results/prototype-settings-320.png" });
+  await page.getByRole("textbox", { name: "Court 1 label" }).fill("North Court");
+  await page.getByRole("switch", { name: "Prepare the next game" }).click();
+  await page.getByRole("switch", { name: "Respect extra rest" }).click();
+  await page.getByRole("button", { name: "Save settings" }).click();
+  await expect(page.getByRole("heading", { name: "North Court" })).toBeVisible();
+  await page.getByRole("button", { name: "More options" }).click();
+  await page.getByRole("button", { name: "Session settings" }).click();
+  await expect(page.getByRole("switch", { name: "Prepare the next game" })).toHaveAttribute("aria-checked", "false");
+  await expect(page.getByRole("switch", { name: "Respect extra rest" })).toHaveAttribute("aria-checked", "false");
+  await expect(page.getByRole("textbox", { name: "Court 1 label" })).toHaveValue("North Court");
+  await page.getByRole("button", { name: "Close" }).click();
+
   await page.getByRole("navigation", { name: "Session navigation" }).getByRole("button", { name: "Players" }).click();
   await page.getByRole("button", { name: "Manage players" }).click();
   await expect(page.getByRole("dialog", { name: "Players" })).toBeVisible();

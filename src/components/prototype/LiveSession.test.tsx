@@ -341,4 +341,73 @@ describe("LiveSession score and player controls", () => {
       },
     });
   });
+
+  it("saves live settings through the active-session settings contract", async () => {
+    const session = sessionWithCourts([
+      { id: "court-1", courtNumber: 1, label: null, currentMatch: null },
+      { id: "court-2", courtNumber: 2, label: "Show court", currentMatch: null },
+    ]);
+    setup(session);
+    await act(async () => root.render(<LiveSession code="TEST01" onBack={vi.fn()} onEnded={vi.fn(async () => undefined)} />));
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="More options"]')?.click());
+    await act(async () => Array.from(container.querySelectorAll<HTMLButtonElement>("[role=dialog] button")).find((button) => button.textContent === "Session settings")?.click());
+
+    const courtLabel = container.querySelector<HTMLInputElement>('[aria-label="Court 1 label"]');
+    expect(courtLabel).toBeTruthy();
+    await act(async () => setInputValue(courtLabel!, "North"));
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Prepare the next game"]')?.click());
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Respect extra rest"]')?.click());
+    await act(async () => Array.from(container.querySelectorAll<HTMLButtonElement>("[role=dialog] button")).find((button) => button.textContent === "Save settings")?.click());
+
+    expect(mocks.api).toHaveBeenCalledWith("/api/sessions/TEST01", "PATCH", {
+      autoQueueEnabled: true,
+      respectPlayerRest: false,
+      courtLabels: [
+        { courtNumber: 1, label: "North" },
+        { courtNumber: 2, label: "Show court" },
+      ],
+    });
+  });
+
+  it("confirms the queued-match removal before saving auto queue off", async () => {
+    const session = sessionWithCourts([
+      { id: "court-1", courtNumber: 1, currentMatch: null },
+    ]);
+    session.autoQueueEnabled = true;
+    session.queuedMatch = match("queued-1", 2);
+    setup(session);
+    await act(async () => root.render(<LiveSession code="TEST01" onBack={vi.fn()} onEnded={vi.fn(async () => undefined)} />));
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="More options"]')?.click());
+    await act(async () => Array.from(container.querySelectorAll<HTMLButtonElement>("[role=dialog] button")).find((button) => button.textContent === "Session settings")?.click());
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Prepare the next game"]')?.click());
+
+    expect(container.textContent).toContain("Saving with “Prepare the next game” off will remove it.");
+    expect(mocks.api).not.toHaveBeenCalled();
+    await act(async () => Array.from(container.querySelectorAll<HTMLButtonElement>("[role=dialog] button")).find((button) => button.textContent === "Turn off and clear on save")?.click());
+    expect(container.querySelector<HTMLButtonElement>('[aria-label="Prepare the next game"]')?.getAttribute("aria-checked")).toBe("false");
+    await act(async () => Array.from(container.querySelectorAll<HTMLButtonElement>("[role=dialog] button")).find((button) => button.textContent === "Save settings")?.click());
+
+    expect(mocks.api).toHaveBeenCalledWith("/api/sessions/TEST01", "PATCH", {
+      autoQueueEnabled: false,
+      respectPlayerRest: true,
+      courtLabels: [{ courtNumber: 1, label: null }],
+    });
+  });
+
+  it("keeps unsaved court-label edits when the session poll refreshes", async () => {
+    const session = sessionWithCourts([
+      { id: "court-1", courtNumber: 1, label: null, currentMatch: null },
+    ]);
+    setup(session);
+    await act(async () => root.render(<LiveSession code="TEST01" onBack={vi.fn()} onEnded={vi.fn(async () => undefined)} />));
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="More options"]')?.click());
+    await act(async () => Array.from(container.querySelectorAll<HTMLButtonElement>("[role=dialog] button")).find((button) => button.textContent === "Session settings")?.click());
+    await act(async () => setInputValue(container.querySelector<HTMLInputElement>('[aria-label="Court 1 label"]')!, "North"));
+
+    const polledSession = { ...session, courts: [{ ...session.courts[0], label: "Server label" }] };
+    mocks.sessionResource = { data: polledSession, error: "", refresh: vi.fn(async () => undefined) };
+    await act(async () => root.render(<LiveSession code="TEST01" onBack={vi.fn()} onEnded={vi.fn(async () => undefined)} />));
+
+    expect(container.querySelector<HTMLInputElement>('[aria-label="Court 1 label"]')?.value).toBe("North");
+  });
 });
