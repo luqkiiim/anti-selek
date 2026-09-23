@@ -2,6 +2,7 @@ import { expect, test } from "@playwright/test";
 import { signInAsAdmin } from "./helpers";
 
 test("prototype host can reach court controls, player management, and match history", async ({ page }) => {
+  test.setTimeout(90_000);
   await page.setViewportSize({ width: 390, height: 844 });
   await signInAsAdmin(page);
 
@@ -59,6 +60,23 @@ test("prototype host can reach court controls, player management, and match hist
   await page.getByRole("button", { name: "Save score" }).click();
   await page.getByRole("dialog", { name: "Confirm result" }).getByRole("button", { name: "Confirm result" }).click();
 
+  await page.getByRole("navigation", { name: "Session navigation" }).getByRole("button", { name: "Standings" }).click();
+  await expect(page.getByRole("heading", { name: "Standings" })).toBeVisible();
+  await expect(page.getByText("Point diff").first()).toBeVisible();
+  for (const width of [320, 390, 430, 1100]) {
+    await page.setViewportSize({ width, height: 844 });
+    await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  }
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.waitForTimeout(400);
+  await page.screenshot({ path: "test-results/prototype-standings-390.png", fullPage: true });
+  await page.getByRole("navigation", { name: "Session navigation" }).getByRole("button", { name: "Courts" }).click();
+  await expect(page.getByRole("navigation", { name: "Session navigation" }).getByRole("button", { name: "Courts" })).toHaveAttribute("aria-current", "page");
+  await page.getByRole("button", { name: "Create on North Court" }).click();
+  await expect(page.getByRole("group", { name: "Create a match on North Court" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Best Match" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Manual" })).toBeVisible();
+
   await page.getByRole("button", { name: "More options" }).click();
   await page.getByRole("button", { name: "Match history" }).click();
   await page.setViewportSize({ width: 430, height: 932 });
@@ -98,4 +116,17 @@ test("prototype host can reach court controls, player management, and match hist
   await page.getByRole("button", { name: "Close" }).click();
   await page.getByRole("button", { name: "Start session" }).click();
   await expect(page.getByRole("heading", { name: "South Court" })).toBeVisible();
+  await page.getByRole("button", { name: "More options" }).click();
+  await page.getByRole("button", { name: "End session" }).click();
+  await page.getByRole("dialog", { name: "End this session?" }).getByRole("button", { name: "End session" }).click();
+  await expect(page.getByRole("heading", { name: "Session complete" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Share standings" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Replay winner celebration" })).toBeVisible();
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await page.waitForTimeout(700);
+  await page.screenshot({ path: "test-results/prototype-finish-320.png", fullPage: true });
+  const downloadPromise = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Share standings" }).click();
+  const download = await downloadPromise;
+  expect(download.suggestedFilename()).toMatch(/e2e-score-session-standings\.png$/);
 });

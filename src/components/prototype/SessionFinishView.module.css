@@ -1,0 +1,376 @@
+.finish {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  color: #30203f;
+}
+
+.header {
+  display: flex;
+  min-height: 104px;
+  align-items: center;
+  justify-content: space-between;
+  overflow: hidden;
+  border: 1px solid #e9def3;
+  border-radius: 20px;
+  padding: 17px 18px;
+  background: linear-gradient(135deg, #f7f0ff 0%, #fffdf8 83%);
+}
+
+.header > div {
+  min-width: 0;
+}
+
+.eyebrow {
+  display: block;
+  margin-bottom: 5px;
+  color: #7543ba;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 1.2px;
+}
+
+.header h1 {
+  margin: 0;
+  color: #30203f;
+  font-size: 25px;
+  font-weight: 900;
+  letter-spacing: -0.8px;
+  line-height: 1.12;
+}
+
+.header p {
+  margin: 5px 0 0;
+  color: #766783;
+  font-size: 13px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.headerSparkle {
+  flex: 0 0 auto;
+  margin-left: 12px;
+  color: #8954cf;
+}
+
+.slot {
+  min-width: 0;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.shareButton,
+.replayButton {
+  display: inline-flex;
+  min-height: 45px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border-radius: 14px;
+  padding: 0 13px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 140ms ease, background-color 140ms ease;
+}
+
+.shareButton {
+  flex: 1;
+  border: 1px solid #6f3ab4;
+  background: #7443c4;
+  color: #fff;
+  box-shadow: 0 2px 0 #5e32a6;
+}
+
+.shareButton:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
+.replayButton {
+  border: 1px solid #e3d7ec;
+  background: #fffdf9;
+  color: #633894;
+}
+
+.shareButton:active,
+.replayButton:active {
+  transform: translateY(1px);
+}
+
+.shareButton:focus-visible,
+.replayButton:focus-visible {
+  outline: 3px solid #b899e5;
+  outline-offset: 2px;
+}
+
+.podium {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: end;
+  gap: 7px;
+  overflow: hidden;
+  border: 1px solid #eee5f2;
+  border-radius: 20px;
+  padding: 15px 11px 0;
+  background: #fffdfa;
+}
+
+.podiumPlace {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  flex-direction: column;
+  text-align: center;
+  animation: placeReveal 430ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  animation-delay: var(--reveal-delay, 0ms);
+}
+
+.podiumAvatar {
+  margin-bottom: 6px;
+  border: 2px solid #fff !important;
+  box-shadow: 0 0 0 2px #fff, 0 0 0 3px #d9c4f1, 0 5px 14px #3c24531a !important;
+}
+
+.podiumName {
+  display: -webkit-box;
+  max-width: 100%;
+  min-height: 29px;
+  overflow: hidden;
+  color: #392647;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.guestTag {
+  margin: 1px 0 4px;
+  color: #8a7496;
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.podiumBlock {
+  position: relative;
+  display: flex;
+  width: 100%;
+  min-height: 94px;
+  align-items: center;
+  flex-direction: column;
+  border: 1px solid #e5d6f1;
+  border-bottom: 0;
+  border-radius: 14px 14px 0 0;
+  padding: 9px 4px 8px;
+  background: linear-gradient(180deg, #f5effb, #ece1f6);
+}
+
+.place1 .podiumBlock {
+  min-height: 117px;
+  border-color: #7040af;
+  background: linear-gradient(180deg, #8c61c6, #7042ac);
+  color: #fffdf9;
+  box-shadow: 0 -4px 15px #7544bb20;
+}
+
+.place3 .podiumBlock {
+  min-height: 82px;
+  border-color: #eee0d1;
+  background: linear-gradient(180deg, #fff7e9, #f7ebd8);
+}
+
+.rankMark {
+  display: grid;
+  width: 23px;
+  height: 23px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid #d6c1eb;
+  border-radius: 50%;
+  background: #fffdf9;
+  color: #7145a0;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.place1 .rankMark {
+  border-color: #ead8a7;
+  background: #fff4d9;
+  color: #855a1e;
+}
+
+.podiumScore {
+  max-width: 100%;
+  overflow: hidden;
+  margin-top: 7px;
+  font-size: 17px;
+  font-weight: 900;
+  line-height: 1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.scoreLabel {
+  margin-top: 3px;
+  font-size: 9px;
+  font-weight: 700;
+  opacity: 0.8;
+}
+
+.podiumDiff {
+  margin-top: 7px;
+  font-size: 9px;
+  font-weight: 800;
+  opacity: 0.88;
+}
+
+.standings {
+  overflow: hidden;
+  border: 1px solid #eee5f2;
+  border-radius: 19px;
+  background: #fffdfa;
+}
+
+.standingsHeading {
+  display: flex;
+  min-height: 47px;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid #f0e9f2;
+  padding: 0 14px;
+}
+
+.standingsHeading h2 {
+  margin: 0;
+  color: #30203f;
+  font-size: 16px;
+  font-weight: 900;
+}
+
+.standingsHeading > span {
+  color: #897d91;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.rows {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.row {
+  display: flex;
+  min-height: 64px;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 12px;
+}
+
+.row + .row {
+  border-top: 1px solid #f3edf4;
+}
+
+.rowRank {
+  display: grid;
+  width: 22px;
+  height: 22px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid #e8e0eb;
+  border-radius: 8px;
+  color: #776b80;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.rowRankFirst {
+  border-color: #e4c984;
+  background: #fff4d8;
+  color: #92672b;
+}
+
+.rowAvatar {
+  height: 36px !important;
+  width: 36px !important;
+  border-color: #e7daf0 !important;
+  box-shadow: none !important;
+  font-size: 11px !important;
+}
+
+.identity {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.identity strong {
+  overflow: hidden;
+  color: #392647;
+  font-size: 13px;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.identity small,
+.rowScore small {
+  color: #887a90;
+  font-size: 10px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.matchesPlayed {
+  color: #887a90;
+}
+
+.rowScore {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: flex-end;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.rowScore strong {
+  color: #7543b4;
+  font-size: 15px;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.empty {
+  margin: 0;
+  border: 1px solid #eee5f2;
+  border-radius: 18px;
+  padding: 24px 16px;
+  background: #fffdfa;
+  color: #82728e;
+  font-size: 14px;
+  text-align: center;
+}
+
+@keyframes placeReveal {
+  from { opacity: 0; transform: translateY(9px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .podiumPlace,
+  .shareButton,
+  .replayButton {
+    animation: none;
+    transition: none;
+  }
+}

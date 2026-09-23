@@ -13,6 +13,7 @@ import {
 } from "@/lib/sessionCollab";
 import {
   MatchStatus,
+  ClubRole,
   SessionCollabFormat,
   SessionPool,
   SessionScoringType,
@@ -257,6 +258,12 @@ async function getSessionRoute(
     userId: session.user.id,
     acceptedOnly: true,
   });
+  const hostOperatorMembership = sessionData.clubId
+    ? await prisma.clubMember.findUnique({
+        where: { clubId_userId: { clubId: sessionData.clubId, userId: session.user.id } },
+        select: { role: true },
+      })
+    : null;
   const clubRole = membership?.role ?? null;
 
   const isSessionPlayer = sessionData.players.some((p) => p.userId === session.user.id);
@@ -364,6 +371,10 @@ async function getSessionRoute(
       !isQuickAccess && (session.user.isAdmin || !!operatorMembership),
     viewerCanUseAdminSessionControls:
       !isQuickAccess && (session.user.isAdmin || !!adminMembership),
+    viewerCanDelete:
+      !isQuickAccess &&
+      (sessionData.status !== SessionStatus.COMPLETED || sessionData.isTest) &&
+      (session.user.isAdmin || hostOperatorMembership?.role === ClubRole.ADMIN || hostOperatorMembership?.role === ClubRole.STAFF),
     isTutorialClub: sessionData.club?.isTutorial === true,
     tutorialOwnerId: sessionData.club?.tutorialOwnerId ?? null,
     clubs: sessionData.sessionClubs.map((link) => ({

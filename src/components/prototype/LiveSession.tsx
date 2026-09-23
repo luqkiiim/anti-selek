@@ -1,5 +1,4 @@
 "use client";
-import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
 import {
   ArrowLeft,
@@ -15,6 +14,7 @@ import {
   ClockCounterClockwise,
   GearSix,
   SignOut,
+  Trash,
 } from "@phosphor-icons/react";
 import type {
   SessionData,
@@ -26,6 +26,8 @@ import {
   SessionMatchmakingStyle,
   SessionPairingMode,
   SessionCrossoverFrequency,
+  SessionType,
+  SessionPool,
 } from "@/types/enums";
 import { api, useResource, useAction } from "./api";
 import {
@@ -37,6 +39,13 @@ import {
 import { Pager } from "./Pager";
 import SessionMatchHistory from "./SessionMatchHistory";
 import LivePlayerManagement from "./LivePlayerManagement";
+import InterclubScoreboard from "./InterclubScoreboard";
+import { LiveSessionStandings } from "./LiveSessionStandings";
+import { deriveLiveSessionPlayerStats } from "./deriveLiveSessionStandings";
+import { SessionFinishView } from "./SessionFinishView";
+import { shareSessionStandingsImage } from "@/lib/sessionShareImageClient";
+import { getInterclubScore } from "@/lib/interclubScoreboard";
+import { CourtMatchCreateMenu, SessionMatchCreationToolbar } from "./SessionMatchCreationControls";
 type ScoreTarget = { match: Match; court: Court; correct: boolean };
 type LiveSettingsDraft = {
   autoQueueEnabled: boolean;
@@ -60,10 +69,16 @@ export default function LiveSession({
   code,
   onBack,
   onEnded,
+  onDeleted,
+  onOpenMember,
+  profileMemberIds,
 }: {
   code: string;
   onBack: () => void;
   onEnded: () => Promise<void>;
+  onDeleted?: () => Promise<void>;
+  onOpenMember?: (userId: string) => void;
+  profileMemberIds?: readonly string[];
 }) {
   const endpoint = "/api/sessions/" + code;
   const resource = useResource<SessionData>(endpoint);
@@ -73,6 +88,7 @@ export default function LiveSession({
       userId: string;
       name: string;
       sessionPoints: number;
+      score?: number;
     }[];
   }>(endpoint + "/leaderboard");
   const [tab, setTab] = useState("Courts"),
@@ -89,6 +105,9 @@ export default function LiveSession({
     [rating, setRating] = useState("1000");
   const [showHistory, setShowHistory] = useState(false);
   const [managePlayersOpen, setManagePlayersOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [sharing, setSharing] = useState(false);
+  const [shareError, setShareError] = useState("");
   const [liveSettingsDraft, setLiveSettingsDraft] = useState<LiveSettingsDraft | null>(null);
   const [confirmAutoQueueOff, setConfirmAutoQueueOff] = useState(false);
   const [confirmedQueueId, setConfirmedQueueId] = useState<string | null>(null);
@@ -110,6 +129,69 @@ export default function LiveSession({
   }, [refreshSession, refreshStandings, action.busy]);
   const canManage = !!s?.viewerCanManage && !s?.viewerIsQuickAccess;
   const ended = s?.status === "COMPLETED";
+  const sessionPlayerById = new Map(s?.players.map((player) => [player.userId, player]) ?? []);
+  const profileMemberIdSet = new Set(profileMemberIds ?? []);
+  const sessionStats = deriveLiveSessionPlayerStats(
+    s?.players.map((player) => player.userId) ?? [],
+    s?.matches ?? [],
+  );
+  const standingRows = standings.data?.currentLeaderboard.map((entry) => {
+    const player = sessionPlayerById.get(entry.userId);
+    const stats = sessionStats.get(entry.userId);
+    const ladderScore = entry.score ?? ((stats?.wins ?? 0) - (stats?.losses ?? 0));
+    return {
+      userId: entry.userId,
+      name: entry.name,
+      avatarUrl: player?.user.avatarUrl,
+      group: player?.pool === SessionPool.B ? ("B" as const) : ("A" as const),
+      score: s?.type === SessionType.LADDER && ladderScore > 0 ? `+${ladderScore}` : s?.type === SessionType.LADDER ? ladderScore : entry.sessionPoints,
+      matchesPlayed: stats?.matchesPlayed ?? 0,
+      wins: stats?.wins ?? 0,
+      losses: stats?.losses ?? 0,
+      pointDiff: stats?.pointDiff ?? 0,
+      canOpenMember: !player?.isGuest && profileMemberIdSet.has(entry.userId),
+    };
+  }) ?? [];
+  const finalPlayers = standings.data?.currentLeaderboard
+    .map((entry) => sessionPlayerById.get(entry.userId))
+    .filter((player): player is NonNullable<typeof player> => !!player) ?? [];
+  const finalPlayerStats = new Map(
+    Array.from(sessionStats, ([userId, stats]) => [userId, {
+      played: stats.matchesPlayed,
+      wins: stats.wins,
+      losses: stats.losses,
+    }] as const),
+  );
+  const finalPointDiff = new Map(Array.from(sessionStats, ([userId, stats]) => [userId, stats.pointDiff] as const));
+  const busyPlayerIds = new Set<string>();
+  s?.courts.forEach((court) => {
+    if (!court.currentMatch) return;
+    playersInMatch(court.currentMatch).forEach((player) => busyPlayerIds.add(player.id));
+  });
+  if (s?.queuedMatch) playerInQueue(s.queuedMatch).forEach((player) => busyPlayerIds.add(player.id));
+  const availablePlayerCount = s?.players.filter((player) => !player.isPaused && !busyPlayerIds.has(player.userId)).length ?? 0;
+  const openCourts = s?.courts.filter((court) => !court.currentMatch).sort((left, right) => left.courtNumber - right.courtNumber) ?? [];
+  const creatableOpenCourtIds = s?.queuedMatch ? [] : openCourts.slice(0, Math.floor(availablePlayerCount / 4)).map((court) => court.id);
+  const canQueueNextMatch = !!s && s.status === "ACTIVE" && openCourts.length === 0 && !s.queuedMatch && availablePlayerCount >= 4;
+
+  async function shareResults() {
+    if (!s || sharing) return;
+    setSharing(true);
+    setShareError("");
+    try {
+      await shareSessionStandingsImage({
+        code,
+        fileName: `${s.name}-standings`,
+        shareTitle: `${s.name} standings`,
+      });
+    } catch (error) {
+      if (!(error instanceof DOMException && error.name === "AbortError")) {
+        setShareError(error instanceof Error ? error.message : "Unable to share standings");
+      }
+    } finally {
+      setSharing(false);
+    }
+  }
   const hasLiveSettingsChanges = !!(
     s && liveSettingsDraft && (
       liveSettingsDraft.autoQueueEnabled !== s.autoQueueEnabled ||
@@ -368,6 +450,19 @@ export default function LiveSession({
       },
     );
   }
+  async function deleteSession() {
+    if (deleting) return;
+    setDeleting(true);
+    action.setError("");
+    try {
+      await api(endpoint + "/delete", "DELETE");
+      await onDeleted?.();
+    } catch (error) {
+      action.setError(error instanceof Error ? error.message : "Unable to delete session");
+    } finally {
+      setDeleting(false);
+    }
+  }
   function startManual(target: ManualTarget) {
     setManualTarget(target);
     setManualSelection([]);
@@ -473,7 +568,7 @@ export default function LiveSession({
           <strong>{s?.name || "Session"}</strong>
           <small>{s?.clubs?.find((c) => c.role === "HOST")?.name}</small>
         </div>
-        {s && s.status !== "WAITING" ? (
+        {s && (s.status !== "WAITING" || s.viewerCanDelete) ? (
           <button
             className="icon-button"
             aria-label="More options"
@@ -492,27 +587,20 @@ export default function LiveSession({
           {!s && <p role="status">Loading session…</p>}
           {s && ended ? (
             <>
-              <div className="celebration">
-                <Image width={240} height={240} src="/medallion.png" alt="Session complete" />
-                <h1>Session complete!</h1>
-                <p>Everyone has stopped playing.</p>
-              </div>
-              <h3>Standings</h3>
-              <div className="roster">
-                {standings.data?.currentLeaderboard.map((p, i) => (
-                  <div className="person" key={p.userId}>
-                    <span className="rank">{i + 1}</span>
-                    <Avatar
-                      name={s.players.find((player) => player.userId === p.userId)?.user.name ?? p.name}
-                      url={s.players.find((player) => player.userId === p.userId)?.user.avatarUrl}
-                    />
-                    <span className="person-info">
-                      <strong>{p.name}</strong>
-                    </span>
-                    <span>{p.sessionPoints} points</span>
-                  </div>
-                ))}
-              </div>
+              {standings.data ? (
+                <SessionFinishView
+                  sessionName={s.name}
+                  sessionType={s.type}
+                  players={finalPlayers}
+                  pointDiffByUserId={finalPointDiff}
+                  playerStatsByUserId={finalPlayerStats}
+                  onShareResults={finalPlayers.length > 0 ? () => void shareResults() : undefined}
+                  sharingResults={sharing}
+                >
+                  {getInterclubScore(s) ? <InterclubScoreboard session={s} /> : null}
+                </SessionFinishView>
+              ) : <p role="status">Loading final results…</p>}
+              <ErrorText error={shareError} />
               <button className="primary" onClick={onBack}>
                 Back to club
               </button>
@@ -567,6 +655,20 @@ export default function LiveSession({
                   {s.players.length} players · {s.courts.length} courts
                 </small>
               </div>
+              <InterclubScoreboard session={s} />
+              {canManage && (creatableOpenCourtIds.length > 0 || canQueueNextMatch) && (
+                <SessionMatchCreationToolbar
+                  isHost={canManage}
+                  isActive={s.status === "ACTIVE"}
+                  hasQueuedMatch={!!s.queuedMatch}
+                  creatableOpenCourtIds={creatableOpenCourtIds}
+                  canQueueNextMatch={canQueueNextMatch}
+                  creatingMatches={action.busy}
+                  creatingQueuedMatch={action.busy}
+                  onGenerateMatch={(body) => void action.run(() => api(endpoint + "/generate-match", "POST", body))}
+                  onQueueNextMatch={() => void action.run(() => api(endpoint + "/queue-match", "POST"))}
+                />
+              )}
               {s.courts.map((court) => {
                 const match = court.currentMatch;
                 const previous = saved[court.id];
@@ -665,21 +767,17 @@ export default function LiveSession({
                             )}
                           </>
                         )}
-                        {canManage && (
-                          <button
-                            className="primary"
-                            disabled={action.busy}
-                            onClick={() =>
-                              void action.run(() =>
-                                api(endpoint + "/generate-match", "POST", {
-                                  courtIds: [court.id],
-                                }),
-                              )
-                            }
-                          >
-                            Start next match
-                          </button>
-                        )}
+                        <CourtMatchCreateMenu
+                          isHost={canManage}
+                          isActive={s.status === "ACTIVE"}
+                          court={court}
+                          players={s.players}
+                          courts={s.courts}
+                          queuedMatch={s.queuedMatch ?? null}
+                          isCreating={action.busy}
+                          onGenerateMatch={(courtId, matchType) => void action.run(() => api(endpoint + "/generate-match", "POST", { courtId, ...(matchType ? { matchType } : {}) }))}
+                          onOpenManualMatch={(courtId) => startManual({ kind: "court", courtId })}
+                        />
                       </>
                     )}
                   </section>
@@ -818,31 +916,14 @@ export default function LiveSession({
           ) : (
             s && (
               <>
-                <div className="section-heading">
-                  <h2>Standings</h2>
-                  <span className="pill">Session</span>
-                </div>
-                <p className="muted">Leading this session</p>
-                <div className="roster">
-                  {standings.data?.currentLeaderboard.map((p, i) => (
-                    <div className="person" key={p.userId}>
-                      <span className={"rank " + (i === 0 ? "first" : "")}>
-                        {i + 1}
-                      </span>
-                      <Avatar
-                        name={s.players.find((player) => player.userId === p.userId)?.user.name ?? p.name}
-                        url={s.players.find((player) => player.userId === p.userId)?.user.avatarUrl}
-                      />
-                      <span className="person-info">
-                        <strong>{p.name}</strong>
-                      </span>
-                      <span>
-                        <b>{p.sessionPoints}</b>
-                        <small> points</small>
-                      </span>
-                    </div>
-                  ))}
-                </div>
+                <LiveSessionStandings
+                  rows={standingRows}
+                  groupsEnabled={s.poolsEnabled}
+                  groupAName={s.poolAName ?? "Competitive"}
+                  groupBName={s.poolBName ?? "Social"}
+                  scoreLabel={s.type === SessionType.LADDER ? "net wins" : "points"}
+                  onOpenMember={onOpenMember}
+                />
                 <details>
                   <summary>How rankings work</summary>
                   <p>
@@ -880,6 +961,8 @@ export default function LiveSession({
                 ? "Options"
                 : sheet === "end"
                   ? "End this session?"
+                  : sheet === "delete"
+                    ? s?.status === "WAITING" ? "Delete this session?" : "Cancel this session?"
                   : sheet === "guest"
                     ? "Add guest"
                     : sheet === "settings"
@@ -902,7 +985,7 @@ export default function LiveSession({
                                 : "Choose next match"
                             : "Next match"
           }
-          busy={action.busy}
+          busy={action.busy || deleting}
           onClose={closeSheet}
         >
           <ErrorText error={action.error} />
@@ -984,6 +1067,9 @@ export default function LiveSession({
                 <Row title="Session settings" icon={GearSix} onClick={openLiveSettings} />
                 <Row title="End session" icon={SignOut} onClick={() => setSheet("end")} />
               </>}
+              {s?.viewerCanDelete && (
+                <Row title={s.status === "WAITING" ? "Delete session" : "Cancel session"} icon={Trash} onClick={() => { action.setError(""); setSheet("delete"); }} />
+              )}
             </>
           ) : sheet === "settings" ? (
             <>
@@ -1287,6 +1373,16 @@ export default function LiveSession({
               <button className="text-button" onClick={() => setSheet("")}>
                 Keep playing
               </button>
+            </>
+          ) : sheet === "delete" ? (
+            <>
+              <p>This permanently removes {s?.name || "this session"}, including its matches, scores, and standings.</p>
+              {s?.status !== "WAITING" && <p className="muted">Any rating changes from this session will be reversed.</p>}
+              <p className="muted">This cannot be undone.</p>
+              <button type="button" className="secondary full danger-outline" disabled={deleting} onClick={() => void deleteSession()}>
+                {deleting ? "Deleting session…" : s?.status === "WAITING" ? "Delete session" : "Cancel and delete session"}
+              </button>
+              <button type="button" className="text-button" onClick={() => setSheet("")}>Keep session</button>
             </>
           ) : sheet === "court-controls" && courtControl ? (
             controlMatch ? (

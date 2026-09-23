@@ -170,7 +170,7 @@ export default function Club({
   }
   if (page === "session")
     return (
-      <LiveSession
+      <><LiveSession
         code={sessionCode}
         onBack={() => {
           go("sessions");
@@ -178,9 +178,14 @@ export default function Club({
         }}
         onEnded={async () => {
           await refresh();
-          go("sessions");
         }}
-      />
+        onDeleted={async () => {
+          go("sessions");
+          await refresh();
+        }}
+        onOpenMember={openMember}
+        profileMemberIds={data?.clubMembers.map((member) => member.id) ?? []}
+      />{memberOverlay}</>
     );
   if (page === "recap-history" && recap)
     return (

@@ -9,6 +9,7 @@ import {
   PlayerGender,
   SessionBalanceMetric,
   SessionCrossoverFrequency,
+  SessionCollabFormat,
   SessionMatchmakingStyle,
   SessionMode,
   SessionPairingMode,
@@ -492,5 +493,91 @@ describe("LiveSession score and player controls", () => {
     expect(Array.from(container.querySelectorAll<HTMLButtonElement>("button")).some((button) => button.textContent === "Review session settings")).toBe(true);
     expect(Array.from(container.querySelectorAll<HTMLButtonElement>("button")).some((button) => button.textContent === "Manage players")).toBe(true);
     expect(Array.from(container.querySelectorAll<HTMLButtonElement>("button")).some((button) => button.textContent === "Start session")).toBe(true);
+  });
+
+  it("requires confirmation before a host admin deletes a waiting session", async () => {
+    const session = sessionWithCourts([{ id: "court-1", courtNumber: 1, currentMatch: null }]);
+    session.status = "WAITING";
+    session.viewerCanDelete = true;
+    setup(session);
+    const onDeleted = vi.fn(async () => undefined);
+    await act(async () => root.render(<LiveSession code="TEST01" onBack={vi.fn()} onEnded={vi.fn(async () => undefined)} onDeleted={onDeleted} />));
+
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="More options"]')?.click());
+    await act(async () => Array.from(container.querySelectorAll<HTMLButtonElement>("[role=dialog] button")).find((button) => button.textContent === "Delete session")?.click());
+    expect(container.textContent).toContain("This cannot be undone");
+    expect(mocks.api).not.toHaveBeenCalled();
+    await act(async () => Array.from(container.querySelectorAll<HTMLButtonElement>("[role=dialog] button")).find((button) => button.textContent === "Delete session")?.click());
+    expect(mocks.api).toHaveBeenCalledWith("/api/sessions/TEST01/delete", "DELETE");
+    expect(onDeleted).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps the completed results visible after the host ends a session", async () => {
+    const session = sessionWithCourts([{ id: "court-1", courtNumber: 1, currentMatch: null }], [player("winner", "Winner")]);
+    setup(session);
+    const onEnded = vi.fn(async () => undefined);
+    mocks.api.mockImplementation(async (url: string) => {
+      if (url.endsWith("/end")) session.status = "COMPLETED";
+      return {};
+    });
+    await act(async () => root.render(<LiveSession code="TEST01" onBack={vi.fn()} onEnded={onEnded} />));
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="More options"]')?.click());
+    await act(async () => Array.from(container.querySelectorAll<HTMLButtonElement>("[role=dialog] button")).find((button) => button.textContent === "End session")?.click());
+    await act(async () => Array.from(container.querySelectorAll<HTMLButtonElement>("[role=dialog] button")).find((button) => button.textContent === "End session")?.click());
+    expect(mocks.api).toHaveBeenCalledWith("/api/sessions/TEST01/end", "POST");
+    expect(onEnded).toHaveBeenCalledTimes(1);
+    expect(container.textContent).toContain("Session complete");
+    expect(container.textContent).toContain("Share standings");
+    expect(container.textContent).toContain("Replay");
+  });
+
+  it("creates matches across eligible open courts and offers per-court formats", async () => {
+    const session = sessionWithCourts([
+      { id: "court-1", courtNumber: 1, currentMatch: null },
+      { id: "court-2", courtNumber: 2, currentMatch: null },
+    ], Array.from({ length: 8 }, (_, index) => player(`p${index}`, `Player ${index + 1}`)));
+    setup(session);
+    await act(async () => root.render(<LiveSession code="TEST01" onBack={vi.fn()} onEnded={vi.fn(async () => undefined)} />));
+
+    await act(async () => Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find((button) => button.textContent?.includes("Create Matches"))?.click());
+    expect(mocks.api).toHaveBeenCalledWith("/api/sessions/TEST01/generate-match", "POST", { courtIds: ["court-1", "court-2"] });
+    await act(async () => Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find((button) => button.textContent === "Create on Court 1")?.click());
+    expect(container.textContent).toContain("Men's Court");
+    expect(container.textContent).toContain("Women's Court");
+    await act(async () => Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find((button) => button.textContent === "Best Match")?.click());
+    expect(mocks.api).toHaveBeenLastCalledWith("/api/sessions/TEST01/generate-match", "POST", { courtId: "court-1" });
+  });
+
+  it("queues the next match on demand when every court is busy", async () => {
+    const currentMatch = match("match-1", 1);
+    const session = sessionWithCourts(
+      [{ id: "court-1", courtNumber: 1, currentMatch }],
+      [
+        ...[currentMatch.team1User1, currentMatch.team1User2, currentMatch.team2User1, currentMatch.team2User2].map((entry) => player(entry.id, entry.name)),
+        ...Array.from({ length: 4 }, (_, index) => player(`waiting-${index}`, `Waiting ${index + 1}`)),
+      ],
+    );
+    setup(session);
+    await act(async () => root.render(<LiveSession code="TEST01" onBack={vi.fn()} onEnded={vi.fn(async () => undefined)} />));
+    await act(async () => Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find((button) => button.textContent?.includes("Queue Next Match"))?.click());
+    expect(mocks.api).toHaveBeenCalledWith("/api/sessions/TEST01/queue-match", "POST");
+  });
+
+  it("shows the interclub lead using completed results only", async () => {
+    const session = sessionWithCourts([{ id: "court-1", courtNumber: 1, currentMatch: null }]);
+    session.collabFormat = SessionCollabFormat.INTERCLUB;
+    session.clubs = [
+      { id: "club-a", name: "Alpha", role: "HOST", status: "ACCEPTED" },
+      { id: "club-b", name: "Beta", role: "PARTNER", status: "ACCEPTED" },
+    ];
+    session.matches = [{
+      id: "done", status: "COMPLETED", team1ClubId: "club-a", team2ClubId: "club-b",
+      team1User1Id: "a", team1User2Id: "b", team2User1Id: "c", team2User2Id: "d",
+      team1Score: 21, team2Score: 18, winnerTeam: 1,
+    }];
+    setup(session);
+    await act(async () => root.render(<LiveSession code="TEST01" onBack={vi.fn()} onEnded={vi.fn(async () => undefined)} />));
+    expect(container.textContent).toContain("Club score");
+    expect(container.textContent).toContain("Alpha leads");
   });
 });

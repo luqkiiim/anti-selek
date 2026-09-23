@@ -141,6 +141,7 @@ export interface SessionData {
   crossoverFrequency: SessionCrossoverFrequency;
   viewerCanManage?: boolean;
   viewerCanUseAdminSessionControls?: boolean;
+  viewerCanDelete?: boolean;
   viewerIsQuickAccess?: boolean;
   viewerClubRole?: string | null;
   isTutorialClub?: boolean;
