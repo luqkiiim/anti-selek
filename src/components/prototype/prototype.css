@@ -560,7 +560,8 @@
   background: #30a46c;
 }
 .team-row {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 52px;
   align-items: center;
   gap: 8px;
   background: #faf6f2;
@@ -568,14 +569,43 @@
   margin: 10px 0;
   padding: 9px 10px;
 }
-.team-row strong {
+.team-players {
   flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.team-players .match-player strong {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  overflow-wrap: anywhere;
+}
+.match-player {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.match-player .avatar {
+  width: 32px;
+  height: 32px;
+  font-size: 14px;
+}
+.match-player strong {
+  min-width: 0;
   font-size: 17px;
   line-height: 1.25;
   font-weight: 800;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .team-row input {
+  justify-self: center;
   width: 52px;
+  flex: 0 0 52px;
   height: 45px;
   text-align: center;
   border: 1px solid #d9c5f4;
@@ -587,20 +617,6 @@
 }
 .team-row input::-webkit-inner-spin-button {
   appearance: none;
-}
-.steppers {
-  display: flex;
-  gap: 3px;
-}
-.steppers button {
-  border: 0;
-  background: #f0e9f2;
-  width: 32px;
-  height: 44px;
-  display: grid;
-  place-items: center;
-  border-radius: 8px;
-  color: var(--ink);
 }
 .score-placeholder {
   background: #f1ebf0;
@@ -625,13 +641,54 @@
 .next-up span {
   flex: 1;
 }
+.next-up > span {
+  min-width: 0;
+}
 .next-up strong,
 .next-up small {
   display: block;
 }
+.next-up-teams {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 7px;
+  margin-top: 7px;
+}
+.next-up-team {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+.next-up-teams > b {
+  color: #aa714f;
+  font-size: 11px;
+}
+.next-up .match-player {
+  min-width: 0;
+  gap: 5px;
+}
+.next-up .match-player .avatar {
+  flex: 0 0 28px;
+  width: 28px;
+  height: 28px;
+  font-size: 12px;
+}
+.next-up .match-player strong {
+  font-size: 12px;
+  font-weight: 700;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
 .next-up small {
   color: var(--ink);
   margin-top: 4px;
+}
+.paused-players {
+  opacity: 0.76;
+  border-top: 1px solid var(--line);
+  padding-top: 15px;
 }
 .session-summary {
   display: flex;
@@ -972,6 +1029,23 @@
   align-items: center;
   font-size: 20px;
   padding: 16px;
+}
+.next-team {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  width: 100%;
+}
+.next-teams .match-player {
+  color: var(--ink);
+  font-size: 14px;
+  text-align: left;
+}
+.next-teams .match-player strong {
+  min-width: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 .next-teams span {
   font-size: 13px;

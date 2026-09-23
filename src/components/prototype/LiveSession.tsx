@@ -1,6 +1,6 @@
 "use client";
 import Image from "next/image";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ArrowLeft,
   DotsThree,
@@ -8,7 +8,6 @@ import {
   UsersThree,
   ChartBar,
   Plus,
-  Minus,
   Pause,
   Play,
   Check,
@@ -55,6 +54,7 @@ export default function LiveSession({
     [target, setTarget] = useState<ScoreTarget | null>(null),
     [scores, setScores] = useState<Record<string, [string, string]>>({}),
     [saved, setSaved] = useState<Record<string, Match>>({});
+  const scoreRefs = useRef<Record<string, HTMLInputElement | null>>({});
   const [name, setName] = useState(""),
     [rating, setRating] = useState("1000");
   const sessionTabs = ["Courts", "Players", "Standings"] as const;
@@ -77,16 +77,30 @@ export default function LiveSession({
   const ended = s?.status === "COMPLETED";
 
   function score(m: Match): [string, string] {
+    const freshMatch =
+      m.status === "IN_PROGRESS" &&
+      m.team1Score === 0 &&
+      m.team2Score === 0 &&
+      !m.completedAt;
     return (
-      scores[m.id] ?? [String(m.team1Score ?? 0), String(m.team2Score ?? 0)]
+      scores[m.id] ?? [
+        freshMatch || m.team1Score == null ? "" : String(m.team1Score),
+        freshMatch || m.team2Score == null ? "" : String(m.team2Score),
+      ]
     );
   }
-  function update(m: Match, i: number, v: string) {
+  function update(m: Match, i: number, v: string, autoAdvance: false | "court" | "sheet" = false) {
+    const value = v.replace(/\D/g, "").slice(0, 2);
     setScores((prev) => {
       const next: [string, string] = [...score(m)];
-      next[i] = v;
+      next[i] = value;
       return { ...prev, [m.id]: next };
     });
+    if (autoAdvance && i === 0 && value.length === 2) {
+      requestAnimationFrame(() => {
+        scoreRefs.current[`${autoAdvance === "sheet" ? "sheet" : m.id}-1`]?.focus();
+      });
+    }
   }
   function openScore(match: Match, court: Court, correct = false) {
     setTarget({ match, court, correct });
@@ -94,6 +108,35 @@ export default function LiveSession({
     action.setError("");
   }
   const queued = s?.queuedMatch;
+  function playersInMatch(match: Match) {
+    return [
+      match.team1User1,
+      match.team1User2,
+      match.team2User1,
+      match.team2User2,
+    ];
+  }
+  function playingCourtFor(userId: string) {
+    return s?.courts.find((court) =>
+      court.currentMatch &&
+      playersInMatch(court.currentMatch).some((player) => player.id === userId),
+    );
+  }
+  function playerStatus(player: SessionData["players"][number]) {
+    const court = playingCourtFor(player.userId);
+    if (court) {
+      return player.isPaused
+        ? "Pausing after game"
+        : `Playing on ${court.label || "Court " + court.courtNumber}`;
+    }
+    return player.isPaused ? "Paused" : "Waiting";
+  }
+  const activePlayers = s?.players.filter((player) =>
+    !player.isPaused || !!playingCourtFor(player.userId),
+  ) ?? [];
+  const pausedPlayers = s?.players.filter((player) =>
+    player.isPaused && !playingCourtFor(player.userId),
+  ) ?? [];
   async function saveScore() {
     if (!target) return;
     const values = score(target.match).map(Number);
@@ -158,7 +201,13 @@ export default function LiveSession({
                 {standings.data?.currentLeaderboard.map((p, i) => (
                   <div className="person" key={p.userId}>
                     <span className="rank">{i + 1}</span>
-                    <strong className="person-info">{p.name}</strong>
+                    <Avatar
+                      name={s.players.find((player) => player.userId === p.userId)?.user.name ?? p.name}
+                      url={s.players.find((player) => player.userId === p.userId)?.user.avatarUrl}
+                    />
+                    <span className="person-info">
+                      <strong>{p.name}</strong>
+                    </span>
                     <span>{p.sessionPoints} points</span>
                   </div>
                 ))}
@@ -196,7 +245,7 @@ export default function LiveSession({
                   {s.players.length} players · {s.courts.length} courts
                 </small>
               </div>
-              {s.courts.map((court, index) => {
+              {s.courts.map((court) => {
                 const match = court.currentMatch;
                 const previous = saved[court.id];
                 return (
@@ -210,14 +259,6 @@ export default function LiveSession({
                             ? "Complete"
                             : "Available"}
                       </span>
-                      {match && index > 0 && canManage && (
-                        <button
-                          className="court-edit"
-                          onClick={() => openScore(match, court)}
-                        >
-                          Enter score
-                        </button>
-                      )}
                     </div>
                     {match ? (
                       <>
@@ -226,63 +267,30 @@ export default function LiveSession({
                           [match.team2User1, match.team2User2],
                         ].map((team, i) => (
                           <div className="team-row" key={i}>
-                            <strong>
-                              {team[0].name}
-                              <br />
-                              {team[1].name}
-                            </strong>
-                            {canManage && index === 0 ? (
+                            <div className="team-players">
+                              {team.map((player) => (
+                                <span className="match-player" key={player.id}>
+                                  <Avatar name={player.name} url={player.avatarUrl} />
+                                  <strong>{player.name}</strong>
+                                </span>
+                              ))}
+                            </div>
+                            {canManage ? (
                               <>
                                 <input
-                                  type="number"
-                                  min="0"
-                                  max="99"
+                                  ref={(node) => {
+                                    scoreRefs.current[`${match.id}-${i}`] = node;
+                                  }}
+                                  type="text"
+                                  inputMode="numeric"
+                                  pattern="[0-9]*"
+                                  maxLength={2}
                                   aria-label={"Team " + (i + 1) + " score"}
                                   value={score(match)[i]}
                                   onChange={(e) =>
-                                    update(match, i, e.target.value)
+                                    update(match, i, e.target.value, "court")
                                   }
                                 />
-                                <div className="steppers">
-                                  <button
-                                    aria-label={
-                                      "Increase team " + (i + 1) + " score"
-                                    }
-                                    onClick={() =>
-                                      update(
-                                        match,
-                                        i,
-                                        String(
-                                          Math.min(
-                                            99,
-                                            Number(score(match)[i]) + 1,
-                                          ),
-                                        ),
-                                      )
-                                    }
-                                  >
-                                    <Plus size={16} />
-                                  </button>
-                                  <button
-                                    aria-label={
-                                      "Decrease team " + (i + 1) + " score"
-                                    }
-                                    onClick={() =>
-                                      update(
-                                        match,
-                                        i,
-                                        String(
-                                          Math.max(
-                                            0,
-                                            Number(score(match)[i]) - 1,
-                                          ),
-                                        ),
-                                      )
-                                    }
-                                  >
-                                    <Minus size={16} />
-                                  </button>
-                                </div>
                               </>
                             ) : (
                               <span className="score-placeholder">
@@ -291,7 +299,7 @@ export default function LiveSession({
                             )}
                           </div>
                         ))}
-                        {canManage && index === 0 && (
+                        {canManage && (
                           <button
                             className="primary"
                             onClick={() => openScore(match, court)}
@@ -349,16 +357,25 @@ export default function LiveSession({
                   <Clock size={21} />
                   <span>
                     <strong>Next up</strong>
-                    <small>
-                      {[
-                        queued.team1User1,
-                        queued.team1User2,
-                        queued.team2User1,
-                        queued.team2User2,
-                      ]
-                        .map((p) => p.name)
-                        .join(" · ")}
-                    </small>
+                    <span className="next-up-teams">
+                      <span className="next-up-team">
+                        {[queued.team1User1, queued.team1User2].map((player) => (
+                          <span className="match-player" key={player.id}>
+                            <Avatar name={player.name} url={player.avatarUrl} />
+                            <strong>{player.name}</strong>
+                          </span>
+                        ))}
+                      </span>
+                      <b>vs</b>
+                      <span className="next-up-team">
+                        {[queued.team2User1, queued.team2User2].map((player) => (
+                          <span className="match-player" key={player.id}>
+                            <Avatar name={player.name} url={player.avatarUrl} />
+                            <strong>{player.name}</strong>
+                          </span>
+                        ))}
+                      </span>
+                    </span>
                   </span>
                   <CaretRight size={18} />
                 </button>
@@ -386,15 +403,12 @@ export default function LiveSession({
                 </button>
               )}
               <div className="roster">
-                {s.players.map((p) => (
+                {activePlayers.map((p) => (
                   <div className="person" key={p.userId}>
                     <Avatar name={p.user.name} url={p.user.avatarUrl} />
                     <span className="person-info">
                       <strong>{p.user.name}</strong>
-                      <small>
-                        {p.isPaused ? "Taking a break" : "Available"} ·{" "}
-                        {p.user.elo}
-                      </small>
+                      <small>{playerStatus(p)} · {p.user.elo}</small>
                     </span>
                     {canManage && (
                       <button
@@ -412,12 +426,48 @@ export default function LiveSession({
                           )
                         }
                       >
-                        {p.isPaused ? <Play size={20} /> : <Pause size={20} />}
+                        {p.isPaused ? <Play size={18} /> : <Pause size={18} />}
                       </button>
                     )}
                   </div>
                 ))}
               </div>
+              {pausedPlayers.length > 0 && (
+                <section className="paused-players">
+                  <div className="section-heading">
+                    <h3>Paused</h3>
+                    <small>{pausedPlayers.length} player{pausedPlayers.length === 1 ? "" : "s"}</small>
+                  </div>
+                  <div className="roster">
+                    {pausedPlayers.map((p) => (
+                      <div className="person" key={p.userId}>
+                        <Avatar name={p.user.name} url={p.user.avatarUrl} />
+                        <span className="person-info">
+                          <strong>{p.user.name}</strong>
+                          <small>{playerStatus(p)}</small>
+                        </span>
+                        {canManage && (
+                          <button
+                            className="icon-button"
+                            aria-label={`Resume ${p.user.name}`}
+                            disabled={action.busy}
+                            onClick={() =>
+                              void action.run(() =>
+                                api(endpoint + "/pause-player", "POST", {
+                                  userId: p.userId,
+                                  isPaused: false,
+                                }),
+                              )
+                            }
+                          >
+                            <Play size={18} />
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              )}
             </>
           ) : (
             s && (
@@ -433,7 +483,13 @@ export default function LiveSession({
                       <span className={"rank " + (i === 0 ? "first" : "")}>
                         {i + 1}
                       </span>
-                      <strong className="person-info">{p.name}</strong>
+                      <Avatar
+                        name={s.players.find((player) => player.userId === p.userId)?.user.name ?? p.name}
+                        url={s.players.find((player) => player.userId === p.userId)?.user.avatarUrl}
+                      />
+                      <span className="person-info">
+                        <strong>{p.name}</strong>
+                      </span>
                       <span>
                         <b>{p.sessionPoints}</b>
                         <small> points</small>
@@ -498,10 +554,14 @@ export default function LiveSession({
                 <label className="field-label" key={i}>
                   {team.map((p) => p.name).join(" & ")}
                   <input
+                    ref={(node) => { scoreRefs.current[`sheet-${i}`] = node; }}
                     aria-label={"Confirm team " + (i + 1) + " score"}
-                    type="number"
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    maxLength={2}
                     value={score(target.match)[i]}
-                    onChange={(e) => update(target.match, i, e.target.value)}
+                    onChange={(e) => update(target.match, i, e.target.value, "sheet")}
                   />
                 </label>
               ))}
@@ -617,13 +677,23 @@ export default function LiveSession({
           ) : queued ? (
             <>
               <div className="next-teams">
-                <strong>
-                  {queued.team1User1.name} & {queued.team1User2.name}
-                </strong>
+                <div className="next-team">
+                  {[queued.team1User1, queued.team1User2].map((player) => (
+                    <span className="match-player" key={player.id}>
+                      <Avatar name={player.name} url={player.avatarUrl} />
+                      <strong>{player.name}</strong>
+                    </span>
+                  ))}
+                </div>
                 <span>vs</span>
-                <strong>
-                  {queued.team2User1.name} & {queued.team2User2.name}
-                </strong>
+                <div className="next-team">
+                  {[queued.team2User1, queued.team2User2].map((player) => (
+                    <span className="match-player" key={player.id}>
+                      <Avatar name={player.name} url={player.avatarUrl} />
+                      <strong>{player.name}</strong>
+                    </span>
+                  ))}
+                </div>
               </div>
               <p className="muted">
                 {s?.courts.some((c) => !c.currentMatch)
