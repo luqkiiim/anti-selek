@@ -86,18 +86,90 @@ describe("LivePlayerManagement", () => {
     ));
   }
 
-  it("sets or clears skip-next through the player endpoint", async () => {
+  it("shows only exceptional player states and keeps skip status compact", async () => {
+    const session = sessionFixture();
+    session.players.push(
+      {
+        ...session.players[0],
+        userId: "player-2",
+        isPaused: true,
+        user: { id: "player-2", name: "Bea Paused", elo: 1100 },
+      },
+      {
+        ...session.players[0],
+        userId: "player-3",
+        skipNextMatchAt: "2026-09-23T00:00:00.000Z",
+        user: { id: "player-3", name: "Cal Skipping", elo: 1200 },
+      },
+    );
+
+    await render(session);
+
+    const rows = [...container.querySelectorAll(".pm-player-card")];
+    const activeRow = rows.find((row) => row.textContent?.includes("Ari Player"));
+    const pausedRow = rows.find((row) => row.textContent?.includes("Bea Paused"));
+    const skippingRow = rows.find((row) => row.textContent?.includes("Cal Skipping"));
+
+    expect(container.textContent).not.toContain("In rotation");
+    expect(container.textContent).toContain("1 taking a break");
+    expect(activeRow?.textContent).not.toContain("Paused");
+    expect(pausedRow?.textContent).toContain("Paused");
+    expect(skippingRow?.textContent).toContain("Skipping next");
+    expect(rows.every((row) => !row.textContent?.includes("Skip next match"))).toBe(true);
+    expect(container.querySelector('[aria-label="Options for Ari Player"]')).not.toBeNull();
+  });
+
+  it("keeps skip-next actions inside player options", async () => {
     mocks.api.mockResolvedValue({});
-    await render();
+    const session = sessionFixture();
+    await render(session);
+    expect(container.textContent).not.toContain("0 taking a break");
 
     await act(async () => {
-      [...container.querySelectorAll("button")].find((button) => button.textContent?.includes("Skip next match"))?.click();
+      container.querySelector<HTMLButtonElement>('[aria-label="Options for Ari Player"]')?.click();
     });
+
+    const skipButton = [...container.querySelectorAll("button")].find((button) => button.textContent?.includes("Skip next match"));
+    expect(skipButton?.className).toContain("pm-secondary");
+    expect(skipButton?.className).toContain("pm-full");
+
+    await act(async () => skipButton?.click());
 
     expect(mocks.api).toHaveBeenCalledWith(
       "/api/sessions/LIVE01/players/player-1/skip-next",
       "PATCH",
       { skipNextMatch: true },
+    );
+    expect(changed).toHaveBeenCalledOnce();
+    expect(container.querySelector('[aria-label="Options for Ari Player"]')).toBeNull();
+    expect(container.querySelector('[role="dialog"][aria-label="Ari Player"]')).not.toBeNull();
+
+    session.players[0].skipNextMatchAt = "2026-09-23T00:00:00.000Z";
+    await render(session);
+    expect([...container.querySelectorAll("button")].some((button) => button.textContent?.includes("Cancel skip"))).toBe(true);
+    expect(container.querySelector('[role="dialog"][aria-label="Ari Player"]')).not.toBeNull();
+    await act(async () => container.querySelector<HTMLButtonElement>(".pm-back")?.click());
+    expect(container.textContent).toContain("Skipping next");
+  });
+
+  it("offers Cancel skip inside options for a player with a scheduled skip", async () => {
+    mocks.api.mockResolvedValue({});
+    const session = sessionFixture();
+    session.players[0].isPaused = true;
+    session.players[0].skipNextMatchAt = "2026-09-23T00:00:00.000Z";
+    await render(session);
+
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('[aria-label="Options for Ari Player"]')?.click();
+    });
+    await act(async () => {
+      [...container.querySelectorAll("button")].find((button) => button.textContent?.includes("Cancel skip"))?.click();
+    });
+
+    expect(mocks.api).toHaveBeenCalledWith(
+      "/api/sessions/LIVE01/players/player-1/skip-next",
+      "PATCH",
+      { skipNextMatch: false },
     );
     expect(changed).toHaveBeenCalledOnce();
   });
@@ -117,7 +189,7 @@ describe("LivePlayerManagement", () => {
       />,
     ));
     await act(async () => {
-      container.querySelector<HTMLButtonElement>('[aria-label="Edit Ari Player"]')?.click();
+      container.querySelector<HTMLButtonElement>('[aria-label="Options for Ari Player"]')?.click();
     });
 
     const partnerPreference = container.querySelectorAll("select")[0];

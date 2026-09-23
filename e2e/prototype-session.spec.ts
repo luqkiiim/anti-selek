@@ -40,6 +40,12 @@ test("prototype host can reach court controls, player management, and match hist
   await expect(page.getByRole("dialog", { name: "Players" })).toBeVisible();
   await page.setViewportSize({ width: 320, height: 700 });
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await expect(page.getByText("In rotation")).toHaveCount(0);
+  await expect(page.getByRole("dialog", { name: "Players" }).getByText("0 taking a break")).toHaveCount(0);
+  await expect(page.getByRole("dialog", { name: "Players" }).getByRole("button", { name: "Skip next match" })).toHaveCount(0);
+  await page.getByRole("button", { name: "Options for Score Player 1" }).click();
+  await expect(page.getByRole("dialog", { name: "Score Player 1" }).getByRole("button", { name: "Skip next match" })).toBeVisible();
+  await page.getByRole("dialog", { name: "Score Player 1" }).getByRole("button", { name: "Players", exact: true }).click();
   await page.screenshot({ path: "test-results/prototype-players-320.png" });
   await expect(page.getByRole("button", { name: "Add club members" })).toBeVisible();
   await page.getByRole("button", { name: "Add club members" }).click();

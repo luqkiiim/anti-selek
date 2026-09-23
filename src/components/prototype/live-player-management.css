@@ -1,5 +1,5 @@
 .live-player-management { display: flex; flex-direction: column; gap: 12px; }
-.pm-back, .pm-primary, .pm-secondary, .pm-danger, .pm-quiet-action, .pm-icon-action {
+.pm-back, .pm-primary, .pm-secondary, .pm-danger, .pm-icon-action {
   display: inline-flex; align-items: center; justify-content: center; gap: 8px;
   min-height: 44px; border-radius: 12px; font: inherit; font-weight: 800;
 }
@@ -10,7 +10,6 @@
 .pm-primary { width: 100%; padding: 10px 14px; border: 0; color: white; background: #7040bc; box-shadow: 0 5px 14px #7040bc25; }
 .pm-secondary { flex: 0 0 auto; padding: 9px 12px; border: 1px solid #e8ddef; color: #7040bc; background: #fffdfb; }
 .pm-full { width: 100%; }
-.pm-quiet-action { width: 100%; padding: 8px 12px; border: 1px solid #eee5ef; color: #59416d; background: #f8f3fb; }
 .pm-danger { width: 100%; padding: 10px 12px; border: 1px solid #f0cbd2; color: #a32946; background: #fff4f5; }
 .pm-icon-action { width: 44px; min-width: 44px; height: 44px; padding: 0; border: 1px solid #e8ddef; color: #7040bc; background: #fffdfb; }
 .pm-search { display: flex; align-items: center; gap: 8px; min-height: 48px; padding: 0 12px; border: 1px solid #e8ddef; border-radius: 13px; color: #80718b; background: #fffdfb; }

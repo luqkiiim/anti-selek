@@ -3,8 +3,8 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import {
   ArrowLeft,
+  DotsThreeVertical,
   MagnifyingGlass,
-  PencilSimple,
   Trash,
   UserPlus,
 } from "@phosphor-icons/react";
@@ -88,6 +88,7 @@ export function LivePlayerManagement({
       .filter((player) => player.user.name.toLocaleLowerCase().includes(normalizedSearch)),
     [normalizedSearch, session.players],
   );
+  const pausedCount = session.players.filter((player) => player.isPaused).length;
   const visibleRoster = useMemo(
     () => roster.filter((member) =>
       !alreadyInSession.has(member.id) &&
@@ -184,7 +185,7 @@ export function LivePlayerManagement({
   }
 
   function toggleSkipNext(player: Player) {
-    if (player.isPaused || !canManage) return;
+    if ((!player.skipNextMatchAt && player.isPaused) || !canManage) return;
     return runAction(() => api(
       `/api/sessions/${code}/players/${player.userId}/skip-next`,
       "PATCH",
@@ -267,7 +268,7 @@ export function LivePlayerManagement({
           <>
             <div className="pm-summary">
               <strong>{session.players.length} player{session.players.length === 1 ? "" : "s"}</strong>
-              <span>{session.players.filter((player) => player.isPaused).length} taking a break</span>
+              {pausedCount > 0 ? <span>{pausedCount} taking a break</span> : null}
             </div>
             {canManage && session.clubId ? (
               <button type="button" className="pm-primary" onClick={() => void openRoster()} disabled={busy}>
@@ -297,34 +298,24 @@ export function LivePlayerManagement({
                       <div className="pm-player-copy">
                         <strong>{player.user.name}</strong>
                         <small>
-                          {player.isPaused ? "Paused" : "In rotation"} · Rating {player.user.elo}
+                          {player.isPaused ? "Paused · " : ""}Rating {player.user.elo}
                           {player.isGuest ? " · Guest" : ""}
                           {session.poolsEnabled ? ` · ${player.pool === SessionPool.A ? session.poolAName || "Competitive" : session.poolBName || "Social"}` : ""}
                         </small>
-                        {player.skipNextMatchAt ? <small className="pm-skip-state">Skipping next match</small> : null}
+                        {player.skipNextMatchAt ? <small className="pm-skip-state">Skipping next</small> : null}
                       </div>
                       {canManage ? (
                         <button
                           type="button"
                           className="pm-icon-action"
-                          aria-label={`Edit ${player.user.name}`}
+                          aria-label={`Options for ${player.user.name}`}
                           disabled={busy}
                           onClick={() => openPreferences(player)}
                         >
-                          <PencilSimple size={19} aria-hidden="true" />
+                          <DotsThreeVertical size={20} weight="bold" aria-hidden="true" />
                         </button>
                       ) : null}
                     </div>
-                    {canManage && !player.isPaused ? (
-                      <button
-                        type="button"
-                        className={player.skipNextMatchAt ? "pm-secondary" : "pm-quiet-action"}
-                        disabled={busy}
-                        onClick={() => void toggleSkipNext(player)}
-                      >
-                        {player.skipNextMatchAt ? "Cancel skip next" : "Skip next match"}
-                      </button>
-                    ) : null}
                   </article>
                 ))}
               </div>
@@ -464,6 +455,16 @@ export function LivePlayerManagement({
                   ))}
                 </select>
               </label>
+            ) : null}
+            {canManage && (!selectedPlayer.isPaused || selectedPlayer.skipNextMatchAt) ? (
+              <button
+                type="button"
+                className="pm-secondary pm-full"
+                disabled={busy}
+                onClick={() => void toggleSkipNext(selectedPlayer)}
+              >
+                {selectedPlayer.skipNextMatchAt ? "Cancel skip" : "Skip next match"}
+              </button>
             ) : null}
             {selectedPlayer.isGuest ? (
               <button type="button" className="pm-secondary pm-full" disabled={busy} onClick={() => startRename(selectedPlayer)}>
