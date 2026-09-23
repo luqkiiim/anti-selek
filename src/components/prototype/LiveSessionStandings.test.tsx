@@ -7,6 +7,11 @@ import { LiveSessionStandings, type LiveSessionStandingRow } from "./LiveSession
 import { deriveLiveSessionPlayerStats } from "./deriveLiveSessionStandings";
 import type { CompletedMatchInfo } from "@/components/session/sessionTypes";
 
+vi.mock("./Primitives", () => ({
+  Avatar: ({ name }: { name: string }) => <span aria-label={name} />,
+  Sheet: ({ open, title, children, onClose }: { open: boolean; title: string; children: React.ReactNode; onClose: () => void }) => open ? <div role="dialog" aria-label={title}><button onClick={onClose}>Close</button>{children}</div> : null,
+}));
+
 function row(
   userId: string,
   name: string,
@@ -96,7 +101,7 @@ describe("LiveSessionStandings", () => {
     document.body.innerHTML = "";
   });
 
-  it("keeps input rank order and shows session records, played counts, and point diff", async () => {
+  it("keeps input rank order and defers secondary stats until a row is opened", async () => {
     expect(typeof LiveSessionStandings).toBe("function");
     await act(async () => {
       root.render(
@@ -111,9 +116,12 @@ describe("LiveSessionStandings", () => {
     expect(entries).toHaveLength(2);
     expect(entries[0]?.textContent).toContain("Aiman Rahman");
     expect(entries[1]?.textContent).toContain("Haziq Azman");
-    expect(container.textContent).toContain("2–1");
-    expect(container.textContent).toContain("Played3");
-    expect(container.textContent).toContain("+6");
+    expect(container.textContent).toContain("2W · 1L");
+    expect(container.textContent).not.toContain("Matches played");
+    await act(async () => entries[0].querySelector<HTMLButtonElement>("button")?.click());
+    const detail = container.querySelector('[role="dialog"]');
+    expect(detail?.textContent).toContain("Matches played");
+    expect(detail?.textContent).toContain("+6");
   });
 
   it("filters and reranks rows by the selected group", async () => {
@@ -141,7 +149,7 @@ describe("LiveSessionStandings", () => {
     expect(container.textContent).not.toContain("Aiman Rahman");
   });
 
-  it("opens member details through the supplied callback and leaves guests as text", async () => {
+  it("opens a member profile from details while keeping guest details read-only", async () => {
     const onOpenMember = vi.fn();
     await act(async () => {
       root.render(
@@ -153,10 +161,14 @@ describe("LiveSessionStandings", () => {
       );
     });
 
-    const memberButton = container.querySelector<HTMLButtonElement>('button[aria-label="Open Aiman Rahman\'s profile"]');
+    const memberButton = container.querySelector<HTMLButtonElement>('button[aria-label="View Aiman Rahman\'s session stats"]');
     expect(memberButton).not.toBeNull();
-    expect(container.querySelector('button[aria-label="Open Guest Player\'s profile"]')).toBeNull();
     await act(async () => memberButton?.click());
+    expect(onOpenMember).not.toHaveBeenCalled();
+    await act(async () => Array.from(container.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')).find(button => button.textContent === "View profile")?.click());
     expect(onOpenMember).toHaveBeenCalledWith("member");
+    await act(async () => container.querySelector<HTMLButtonElement>('button[aria-label="View Guest Player\'s session stats"]')?.click());
+    expect(container.querySelector('[role="dialog"]')?.textContent).toContain("Matches played");
+    expect(container.querySelector('[role="dialog"]')?.textContent).not.toContain("View profile");
   });
 });

@@ -62,10 +62,15 @@ test("prototype host can reach court controls, player management, and match hist
 
   await page.getByRole("navigation", { name: "Session navigation" }).getByRole("button", { name: "Standings" }).click();
   await expect(page.getByRole("heading", { name: "Standings" })).toBeVisible();
-  await expect(page.getByText("Point diff").first()).toBeVisible();
+  await expect(page.getByText("Point difference")).toHaveCount(0);
+  await page.getByRole("button", { name: "View Score Player 1's session stats" }).click();
+  await expect(page.getByRole("dialog", { name: "Score Player 1" }).getByText("Point difference")).toBeVisible();
+  await page.getByRole("button", { name: "Close", exact: true }).click();
   for (const width of [320, 390, 430, 1100]) {
     await page.setViewportSize({ width, height: 844 });
     await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    const firstRow = page.getByRole("list", { name: "Player standings" }).getByRole("listitem").first();
+    await expect.poll(async () => (await firstRow.boundingBox())?.height ?? 1000).toBeLessThanOrEqual(72);
   }
   await page.setViewportSize({ width: 390, height: 844 });
   await page.waitForTimeout(400);
