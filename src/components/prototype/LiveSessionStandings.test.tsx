@@ -2,15 +2,10 @@
 
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { LiveSessionStandings, type LiveSessionStandingRow } from "./LiveSessionStandings";
 import { deriveLiveSessionPlayerStats } from "./deriveLiveSessionStandings";
 import type { CompletedMatchInfo } from "@/components/session/sessionTypes";
-
-vi.mock("./Primitives", () => ({
-  Avatar: ({ name }: { name: string }) => <span aria-label={name} />,
-  Sheet: ({ open, title, children, onClose }: { open: boolean; title: string; children: React.ReactNode; onClose: () => void }) => open ? <div role="dialog" aria-label={title}><button onClick={onClose}>Close</button>{children}</div> : null,
-}));
 
 function row(
   userId: string,
@@ -101,8 +96,7 @@ describe("LiveSessionStandings", () => {
     document.body.innerHTML = "";
   });
 
-  it("keeps input rank order and defers secondary stats until a row is opened", async () => {
-    expect(typeof LiveSessionStandings).toBe("function");
+  it("shows the compact standings columns in the supplied order", async () => {
     await act(async () => {
       root.render(
         <LiveSessionStandings
@@ -112,16 +106,29 @@ describe("LiveSessionStandings", () => {
       );
     });
 
-    const entries = Array.from(container.querySelectorAll("li"));
-    expect(entries).toHaveLength(2);
-    expect(entries[0]?.textContent).toContain("Aiman Rahman");
-    expect(entries[1]?.textContent).toContain("Haziq Azman");
-    expect(container.textContent).toContain("2W · 1L");
-    expect(container.textContent).not.toContain("Matches played");
-    await act(async () => entries[0].querySelector<HTMLButtonElement>("button")?.click());
-    const detail = container.querySelector('[role="dialog"]');
-    expect(detail?.textContent).toContain("Matches played");
-    expect(detail?.textContent).toContain("+6");
+    const headers = Array.from(container.querySelectorAll("thead th"));
+    expect(headers.map((header) => header.textContent)).toEqual(["", "Player", "Pts", "Diff", "MP", "W / L"]);
+    expect(headers[0]?.getAttribute("aria-label")).toBe("Rank");
+    const rows = Array.from(container.querySelectorAll("tbody tr"));
+    expect(rows).toHaveLength(2);
+    expect(rows[0]?.textContent).toContain("Aiman Rahman");
+    expect(rows[1]?.textContent).toContain("Haziq Azman");
+    expect(Array.from(rows[0]?.children ?? []).map((cell, index) =>
+      index === 1 ? cell.querySelector("[title]")?.textContent : cell.textContent,
+    )).toEqual(["1", "Aiman Rahman", "8", "+6", "3", "2 / 1"]);
+    expect(container.querySelector('[role="dialog"]')).toBeNull();
+  });
+
+  it("uses Ladder for net-win sessions", async () => {
+    await act(async () => {
+      root.render(
+        <LiveSessionStandings rows={[row("a", "Aiman Rahman", "A")]} groupsEnabled={false} scoreLabel="net wins" />,
+      );
+    });
+
+    expect(Array.from(container.querySelectorAll("thead th")).map((header) => header.textContent)).toEqual([
+      "", "Player", "Ladder", "Diff", "MP", "W / L",
+    ]);
   });
 
   it("filters and reranks rows by the selected group", async () => {
@@ -141,34 +148,38 @@ describe("LiveSessionStandings", () => {
     );
     await act(async () => filter?.click());
 
-    const entries = Array.from(container.querySelectorAll("li"));
-    expect(entries).toHaveLength(2);
-    expect(entries[0]?.textContent).toContain("Haziq Azman");
-    expect(entries[0]?.querySelector('[aria-label="Rank 1"]')?.textContent).toBe("1");
-    expect(entries[1]?.textContent).toContain("Mira Lee");
+    const rows = Array.from(container.querySelectorAll("tbody tr"));
+    expect(rows).toHaveLength(2);
+    expect(rows[0]?.textContent).toContain("Haziq Azman");
+    expect(rows[0]?.querySelector('[aria-label="Rank 1"]')?.textContent).toBe("1");
+    expect(rows[1]?.textContent).toContain("Mira Lee");
     expect(container.textContent).not.toContain("Aiman Rahman");
   });
 
-  it("opens a member profile from details while keeping guest details read-only", async () => {
-    const onOpenMember = vi.fn();
+  it("opens eligible member profiles directly and keeps guest rows static", async () => {
+    const openedMemberIds: string[] = [];
     await act(async () => {
       root.render(
         <LiveSessionStandings
-          rows={[row("member", "Aiman Rahman", "A"), row("guest", "Guest Player", "A", false)]}
+          rows={[
+            { ...row("member", "Aiman Rahman", "A"), avatarUrl: "https://example.test/aiman.jpg" },
+            row("guest", "Guest Player", "A", false),
+          ]}
           groupsEnabled={false}
-          onOpenMember={onOpenMember}
+          onOpenMember={(userId) => openedMemberIds.push(userId)}
         />,
       );
     });
 
-    const memberButton = container.querySelector<HTMLButtonElement>('button[aria-label="View Aiman Rahman\'s session stats"]');
+    const memberButton = container.querySelector<HTMLButtonElement>('button[aria-label="View Aiman Rahman\'s profile"]');
     expect(memberButton).not.toBeNull();
+    const avatar = memberButton?.querySelector<HTMLImageElement>("img");
+    expect(avatar?.getAttribute("src")).toBe("https://example.test/aiman.jpg");
+    await act(async () => avatar?.click());
     await act(async () => memberButton?.click());
-    expect(onOpenMember).not.toHaveBeenCalled();
-    await act(async () => Array.from(container.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')).find(button => button.textContent === "View profile")?.click());
-    expect(onOpenMember).toHaveBeenCalledWith("member");
-    await act(async () => container.querySelector<HTMLButtonElement>('button[aria-label="View Guest Player\'s session stats"]')?.click());
-    expect(container.querySelector('[role="dialog"]')?.textContent).toContain("Matches played");
-    expect(container.querySelector('[role="dialog"]')?.textContent).not.toContain("View profile");
+    expect(openedMemberIds).toEqual(["member", "member"]);
+    expect(container.querySelector('button[aria-label="View Guest Player\'s profile"]')).toBeNull();
+    expect(container.querySelector('[role="dialog"]')).toBeNull();
+    expect(container.textContent).toContain("Guest Player");
   });
 });

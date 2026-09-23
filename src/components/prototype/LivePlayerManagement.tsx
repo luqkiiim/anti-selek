@@ -31,7 +31,8 @@ interface SessionRosterMember {
   elo: number;
 }
 
-type Screen = "players" | "roster" | "preferences" | "rename" | "remove";
+type ListScreen = "players" | "roster";
+type PlayerOptionsScreen = "preferences" | "rename" | "remove";
 
 export interface LivePlayerManagementProps {
   code: string;
@@ -56,7 +57,8 @@ export function LivePlayerManagement({
   onClose,
   onChanged,
 }: LivePlayerManagementProps) {
-  const [screen, setScreen] = useState<Screen>("players");
+  const [listScreen, setListScreen] = useState<ListScreen>("players");
+  const [optionsScreen, setOptionsScreen] = useState<PlayerOptionsScreen | null>(null);
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
   const [rename, setRename] = useState("");
   const [search, setSearch] = useState("");
@@ -99,7 +101,8 @@ export function LivePlayerManagement({
 
   useEffect(() => {
     if (open) {
-      setScreen("players");
+      setListScreen("players");
+      setOptionsScreen(null);
       setSelectedPlayerId(null);
       setSearch("");
       setError("");
@@ -126,7 +129,7 @@ export function LivePlayerManagement({
   }
 
   async function openRoster() {
-    setScreen("roster");
+    setListScreen("roster");
     setSearch("");
     setRosterError("");
     setError("");
@@ -163,7 +166,7 @@ export function LivePlayerManagement({
   function openPreferences(player: Player) {
     setSelectedPlayerId(player.userId);
     setError("");
-    setScreen("preferences");
+    setOptionsScreen("preferences");
   }
 
   function rosterEntryKey(member: SessionRosterMember) {
@@ -180,7 +183,7 @@ export function LivePlayerManagement({
           ? { representingClubId: member.representingClubId }
           : {}),
       }),
-      () => setScreen("players"),
+      () => setListScreen("players"),
     );
   }
 
@@ -205,7 +208,7 @@ export function LivePlayerManagement({
     setSelectedPlayerId(player.userId);
     setRename(player.user.name);
     setError("");
-    setScreen("rename");
+    setOptionsScreen("rename");
   }
 
   function saveRename(event: FormEvent<HTMLFormElement>) {
@@ -217,7 +220,7 @@ export function LivePlayerManagement({
     }
     return runAction(
       () => api(`/api/sessions/${code}/players/${selectedPlayer.userId}`, "PATCH", { name }),
-      () => setScreen("preferences"),
+      () => setOptionsScreen("preferences"),
     );
   }
 
@@ -227,44 +230,42 @@ export function LivePlayerManagement({
       () => api(`/api/sessions/${code}/players/${selectedPlayer.userId}`, "DELETE"),
       () => {
         setSelectedPlayerId(null);
-        setScreen("players");
+        setOptionsScreen(null);
+        setListScreen("players");
       },
     );
   }
 
-  const title = screen === "players"
-    ? "Players"
-    : screen === "roster"
-      ? "Add club members"
-      : screen === "preferences"
-        ? selectedPlayer?.user.name ?? "Player settings"
-        : screen === "rename"
-          ? "Rename guest"
-          : "Remove player";
+  const title = listScreen === "players" ? "Players" : "Add club members";
+  const optionsTitle = optionsScreen === "preferences"
+    ? selectedPlayer?.user.name ?? "Player settings"
+    : optionsScreen === "rename"
+      ? "Rename guest"
+      : "Remove player";
 
   if (!open) return null;
 
   return (
     <Sheet title={title} onClose={onClose} open={open} busy={busy}>
       <div className="live-player-management">
-        {screen !== "players" ? (
+        {listScreen === "roster" ? (
           <button
             type="button"
             className="pm-back"
             disabled={busy}
             onClick={() => {
               setError("");
-              setScreen(screen === "remove" ? "preferences" : "players");
+              setListScreen("players");
             }}
           >
             <ArrowLeft size={18} aria-hidden="true" />
-            {screen === "remove" ? "Player settings" : "Players"}
+            Players
           </button>
         ) : null}
 
-        <ErrorText error={error} />
+        <ErrorText error={optionsScreen ? "" : error} />
 
-        {screen === "players" ? (
+        {listScreen === "players" ? (
           <>
             <div className="pm-summary">
               <strong>{session.players.length} player{session.players.length === 1 ? "" : "s"}</strong>
@@ -325,7 +326,7 @@ export function LivePlayerManagement({
           </>
         ) : null}
 
-        {screen === "roster" ? (
+        {listScreen === "roster" ? (
           <>
             <label className="pm-search">
               <MagnifyingGlass size={18} aria-hidden="true" />
@@ -383,7 +384,39 @@ export function LivePlayerManagement({
           </>
         ) : null}
 
-        {screen === "preferences" && selectedPlayer ? (
+      </div>
+      <Sheet
+        open={open && optionsScreen !== null}
+        title={optionsTitle}
+        onClose={() => {
+          setOptionsScreen(null);
+          setSelectedPlayerId(null);
+          setError("");
+        }}
+        busy={busy}
+      >
+        <div className="pm-player-options">
+          <button
+            type="button"
+            className="pm-back"
+            disabled={busy}
+            onClick={() => {
+              setError("");
+              if (optionsScreen === "remove") {
+                setOptionsScreen("preferences");
+              } else {
+                setOptionsScreen(null);
+                setSelectedPlayerId(null);
+              }
+            }}
+          >
+            <ArrowLeft size={18} aria-hidden="true" />
+            {optionsScreen === "remove" ? "Player settings" : "Players"}
+          </button>
+
+          <ErrorText error={error} />
+
+        {optionsScreen === "preferences" && selectedPlayer ? (
           <>
             {isMixicano && selectedPlayer.isGuest ? (
               <label className="pm-label">
@@ -471,14 +504,14 @@ export function LivePlayerManagement({
                 Rename guest
               </button>
             ) : null}
-            <button type="button" className="pm-danger" disabled={busy} onClick={() => setScreen("remove")}>
+            <button type="button" className="pm-danger" disabled={busy} onClick={() => setOptionsScreen("remove")}>
               <Trash size={18} aria-hidden="true" />
               Remove from session
             </button>
           </>
         ) : null}
 
-        {screen === "rename" && selectedPlayer ? (
+        {optionsScreen === "rename" && selectedPlayer ? (
           <form className="pm-form" onSubmit={saveRename}>
             <label className="pm-label">
               <span>Guest name</span>
@@ -490,19 +523,20 @@ export function LivePlayerManagement({
           </form>
         ) : null}
 
-        {screen === "remove" && selectedPlayer ? (
+        {optionsScreen === "remove" && selectedPlayer ? (
           <div className="pm-remove-confirm">
             <p>Remove <strong>{selectedPlayer.user.name}</strong> from this session?</p>
             <p className="pm-hint">Players with match history or a current match cannot be removed.</p>
             <button type="button" className="pm-danger" disabled={busy} onClick={() => void removePlayer()}>
               {busy ? "Removing…" : "Remove player"}
             </button>
-            <button type="button" className="pm-secondary pm-full" disabled={busy} onClick={() => setScreen("preferences")}>
+            <button type="button" className="pm-secondary pm-full" disabled={busy} onClick={() => setOptionsScreen("preferences")}>
               Keep player
             </button>
           </div>
         ) : null}
-      </div>
+        </div>
+      </Sheet>
     </Sheet>
   );
 }

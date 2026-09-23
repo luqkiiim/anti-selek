@@ -205,35 +205,30 @@ describe("LiveSession score and player controls", () => {
     expect(mocks.api).not.toHaveBeenCalled();
   });
 
-  it("confirms a score, focuses the second confirmation field, and prefills corrections", async () => {
+  it("confirms inline, resets confirmation after editing, and clears the finished court", async () => {
     const currentMatch = match("match-1", 1, 0, 0);
     const session = sessionWithCourts([{ id: "court-1", courtNumber: 1, currentMatch }]);
     setup(session);
     await act(async () => root.render(<LiveSession code="TEST01" onBack={vi.fn()} onEnded={vi.fn(async () => undefined)} />));
     const inputs = container.querySelectorAll<HTMLInputElement>('.court-card input[aria-label$="score"]');
+    const save = () => container.querySelector(".court-card .primary") as HTMLButtonElement;
     await act(async () => setInputValue(inputs[0], "21"));
     await act(async () => setInputValue(inputs[1], "19"));
-    await act(async () => (container.querySelector(".court-card .primary") as HTMLButtonElement).click());
-    const initialConfirmation = container.querySelector('[role="dialog"]') as HTMLElement;
-    const initialConfirmationInputs = initialConfirmation.querySelectorAll<HTMLInputElement>("input");
-    expect(initialConfirmationInputs[0].value).toBe("21");
-    expect(initialConfirmationInputs[1].value).toBe("19");
-    await act(async () => setInputValue(initialConfirmationInputs[0], "20"));
-    expect(document.activeElement).toBe(initialConfirmationInputs[1]);
-    await act(async () => Array.from(initialConfirmation.querySelectorAll("button")).find((button) => button.textContent?.includes("Confirm result"))?.click());
+    await act(async () => save().click());
+    expect(save().textContent).toBe("Confirm");
+    expect(container.querySelector('[role="dialog"]')).toBeNull();
+    expect(mocks.api).not.toHaveBeenCalled();
+    await act(async () => setInputValue(inputs[0], "20"));
+    expect(save().textContent).toBe("Save score");
+    await act(async () => save().click());
+    await act(async () => save().click());
     expect(mocks.api).toHaveBeenCalledWith("/api/matches/match-1/score", "POST", { team1Score: 20, team2Score: 19 });
-
     session.courts[0].currentMatch = null;
     await act(async () => root.render(<LiveSession code="TEST01" onBack={vi.fn()} onEnded={vi.fn(async () => undefined)} />));
-    await act(async () => (container.querySelector(".court-card .secondary") as HTMLButtonElement).click());
-    const confirmation = container.querySelector('[role="dialog"]') as HTMLElement;
-    const confirmationInputs = confirmation.querySelectorAll<HTMLInputElement>("input");
-    expect(confirmationInputs[0].value).toBe("20");
-    expect(confirmationInputs[1].value).toBe("19");
-    await act(async () => setInputValue(confirmationInputs[0], "22"));
-    expect(document.activeElement).toBe(confirmationInputs[1]);
-    await act(async () => Array.from(confirmation.querySelectorAll("button")).find((button) => button.textContent?.includes("Confirm result"))?.click());
-    expect(mocks.api).toHaveBeenLastCalledWith("/api/matches/match-1/correction", "POST", { team1Score: 22, team2Score: 19 });
+    expect(container.querySelector('.court-card input')).toBeNull();
+    expect(container.textContent).not.toContain("Result saved");
+    expect(container.textContent).not.toContain("Correct score");
+    expect(Array.from(container.querySelectorAll("nav[aria-label='Session tabs'] button")).map(button => button.textContent)).toEqual(["Players", "Courts", "Standings"]);
   });
 
   it("keeps an active paused player on court and sends pause/resume payloads", async () => {

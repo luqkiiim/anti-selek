@@ -58,18 +58,21 @@ test("prototype host can reach court controls, player management, and match hist
   await page.getByRole("textbox", { name: "Team 1 score" }).fill("21");
   await page.getByRole("textbox", { name: "Team 2 score" }).fill("19");
   await page.getByRole("button", { name: "Save score" }).click();
-  await page.getByRole("dialog", { name: "Confirm result" }).getByRole("button", { name: "Confirm result" }).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await page.getByRole("button", { name: "Confirm", exact: true }).click();
+  await expect(page.getByRole("textbox", { name: "Team 1 score" })).toHaveCount(0);
+  await expect(page.getByText("Result saved", { exact: true })).toHaveCount(0);
 
   await page.getByRole("navigation", { name: "Session navigation" }).getByRole("button", { name: "Standings" }).click();
   await expect(page.getByRole("heading", { name: "Standings" })).toBeVisible();
-  await expect(page.getByText("Point difference")).toHaveCount(0);
-  await page.getByRole("button", { name: "View Score Player 1's session stats" }).click();
-  await expect(page.getByRole("dialog", { name: "Score Player 1" }).getByText("Point difference")).toBeVisible();
-  await page.getByRole("button", { name: "Close", exact: true }).click();
+  await expect(page.getByRole("columnheader", { name: "Points", exact: true })).toBeVisible();
+  await expect(page.getByRole("columnheader", { name: "Point difference", exact: true })).toBeVisible();
+  await expect(page.getByRole("columnheader", { name: "Matches played", exact: true })).toBeVisible();
+  await expect(page.getByRole("columnheader", { name: "Wins and losses", exact: true })).toBeVisible();
   for (const width of [320, 390, 430, 1100]) {
     await page.setViewportSize({ width, height: 844 });
     await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
-    const firstRow = page.getByRole("list", { name: "Player standings" }).getByRole("listitem").first();
+    const firstRow = page.getByRole("table", { name: "Player standings" }).locator("tbody tr").first();
     await expect.poll(async () => (await firstRow.boundingBox())?.height ?? 1000).toBeLessThanOrEqual(72);
   }
   await page.setViewportSize({ width: 390, height: 844 });

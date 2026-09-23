@@ -9,7 +9,6 @@ import {
   Plus,
   Pause,
   Play,
-  Check,
   Clock,
   ClockCounterClockwise,
   GearSix,
@@ -46,7 +45,6 @@ import { SessionFinishView } from "./SessionFinishView";
 import { shareSessionStandingsImage } from "@/lib/sessionShareImageClient";
 import { getInterclubScore } from "@/lib/interclubScoreboard";
 import { CourtMatchCreateMenu, SessionMatchCreationToolbar } from "./SessionMatchCreationControls";
-type ScoreTarget = { match: Match; court: Court; correct: boolean };
 type LiveSettingsDraft = {
   autoQueueEnabled: boolean;
   respectPlayerRest: boolean;
@@ -93,9 +91,8 @@ export default function LiveSession({
   }>(endpoint + "/leaderboard");
   const [tab, setTab] = useState("Courts"),
     [sheet, setSheet] = useState(""),
-    [target, setTarget] = useState<ScoreTarget | null>(null),
+    [confirmingMatchId, setConfirmingMatchId] = useState<string | null>(null),
     [scores, setScores] = useState<Record<string, [string, string]>>({}),
-    [saved, setSaved] = useState<Record<string, Match>>({}),
     [courtControlId, setCourtControlId] = useState<string | null>(null),
     [confirmation, setConfirmation] = useState<ControlConfirmation | null>(null),
     [manualTarget, setManualTarget] = useState<ManualTarget | null>(null),
@@ -111,7 +108,7 @@ export default function LiveSession({
   const [liveSettingsDraft, setLiveSettingsDraft] = useState<LiveSettingsDraft | null>(null);
   const [confirmAutoQueueOff, setConfirmAutoQueueOff] = useState(false);
   const [confirmedQueueId, setConfirmedQueueId] = useState<string | null>(null);
-  const sessionTabs = ["Courts", "Players", "Standings"] as const;
+  const sessionTabs = ["Players", "Courts", "Standings"] as const;
   function navigateTab(nextTab: string) { setTab(nextTab); }
   async function refresh() {
     await Promise.all([resource.refresh(), standings.refresh()]);
@@ -226,6 +223,7 @@ export default function LiveSession({
     );
   }
   function update(m: Match, i: number, v: string, autoAdvance: false | "court" | "sheet" = false) {
+    setConfirmingMatchId(null);
     const value = v.replace(/\D/g, "").slice(0, 2);
     setScores((prev) => {
       const next: [string, string] = [...score(m)];
@@ -237,11 +235,6 @@ export default function LiveSession({
         scoreRefs.current[`${autoAdvance === "sheet" ? "sheet" : m.id}-1`]?.focus();
       });
     }
-  }
-  function openScore(match: Match, court: Court, correct = false) {
-    setTarget({ match, court, correct });
-    setSheet("score");
-    action.setError("");
   }
   const queued = s?.queuedMatch;
   function playersInMatch(match: Pick<Match, "team1User1" | "team1User2" | "team2User1" | "team2User2">) {
@@ -300,30 +293,36 @@ export default function LiveSession({
       .sort((a, b) => a.user.name.localeCompare(b.user.name));
   }
   const manualPlayers = getManualPlayers(manualTarget);
-  async function saveScore() {
-    if (!target) return;
-    const values = score(target.match).map(Number);
+  function validateScore(match: Match) {
+    const values = score(match).map(Number);
     if (
-      score(target.match).some((v) => v.trim() === "") ||
+      score(match).some((v) => v.trim() === "") ||
       values.some((v) => !Number.isInteger(v) || v < 0 || v > 99) ||
       values[0] === values[1]
     )
       throw new Error("Enter unequal whole scores from 0 to 99.");
+    return values;
+  }
+  function confirmScore(match: Match) {
+    action.setError("");
+    try {
+      validateScore(match);
+      if (confirmingMatchId !== match.id) {
+        setConfirmingMatchId(match.id);
+        return;
+      }
+      void action.run(() => saveScore(match), () => setConfirmingMatchId(null));
+    } catch (error) {
+      action.setError(error instanceof Error ? error.message : "Check both scores.");
+    }
+  }
+  async function saveScore(match: Match) {
+    const values = validateScore(match);
     await api(
-      "/api/matches/" +
-        target.match.id +
-        (target.correct ? "/correction" : "/score"),
+      "/api/matches/" + match.id + "/score",
       "POST",
       { team1Score: values[0], team2Score: values[1] },
     );
-    setSaved((prev) => ({
-      ...prev,
-      [target.court.id]: {
-        ...target.match,
-        team1Score: values[0],
-        team2Score: values[1],
-      },
-    }));
   }
   if (showHistory) {
     return (
@@ -444,7 +443,7 @@ export default function LiveSession({
       () => api(endpoint + "/reset", "POST"),
       () => {
         setScores({});
-        setSaved({});
+        setConfirmingMatchId(null);
         setSheet("");
         setTab("Courts");
       },
@@ -671,19 +670,11 @@ export default function LiveSession({
               )}
               {s.courts.map((court) => {
                 const match = court.currentMatch;
-                const previous = saved[court.id];
                 return (
                   <section className="court-card" key={court.id}>
                     <div className="section-heading">
                       <h3>{court.label || "Court " + court.courtNumber}</h3>
                       <div className="court-heading-actions">
-                        <span className="court-status">
-                          {match
-                            ? "Playing now"
-                            : previous
-                              ? "Complete"
-                              : "Available"}
-                        </span>
                         {canManage && (
                           <button
                             className="icon-button court-more"
@@ -737,36 +728,15 @@ export default function LiveSession({
                         {canManage && (
                           <button
                             className="primary"
-                            onClick={() => openScore(match, court)}
+                            disabled={action.busy}
+                            onClick={() => confirmScore(match)}
                           >
-                            Save score
+                            {confirmingMatchId === match.id ? "Confirm" : "Save score"}
                           </button>
                         )}
                       </>
                     ) : (
                       <>
-                        {previous && (
-                          <>
-                            <div className="saved-result">
-                              <strong>
-                                {previous.team1Score} <span>–</span>{" "}
-                                {previous.team2Score}
-                              </strong>
-                              <span className="gain">
-                                <Check size={17} />
-                                Result saved
-                              </span>
-                            </div>
-                            {canManage && (
-                              <button
-                                className="secondary full"
-                                onClick={() => openScore(previous, court, true)}
-                              >
-                                Correct score
-                              </button>
-                            )}
-                          </>
-                        )}
                         <CourtMatchCreateMenu
                           isHost={canManage}
                           isActive={s.status === "ACTIVE"}
@@ -938,7 +908,7 @@ export default function LiveSession({
       {!ended && (
         <nav className="bottom-nav" aria-label="Session navigation">
           {sessionTabs.map((t, i) => {
-            const Icon = [House, UsersThree, ChartBar][i];
+            const Icon = [UsersThree, House, ChartBar][i];
             return (
               <button
                 key={t}
@@ -955,9 +925,7 @@ export default function LiveSession({
       )}
       <Sheet open={!!sheet}
           title={
-            sheet === "score"
-              ? "Confirm result"
-              : sheet === "menu"
+            sheet === "menu"
                 ? "Options"
                 : sheet === "end"
                   ? "End this session?"
@@ -989,39 +957,7 @@ export default function LiveSession({
           onClose={closeSheet}
         >
           <ErrorText error={action.error} />
-          {sheet === "score" && target ? (
-            <>
-              <p>{target.court.label || "Court " + target.court.courtNumber}</p>
-              {[
-                [target.match.team1User1, target.match.team1User2],
-                [target.match.team2User1, target.match.team2User2],
-              ].map((team, i) => (
-                <label className="field-label" key={i}>
-                  {team.map((p) => p.name).join(" & ")}
-                  <input
-                    ref={(node) => { scoreRefs.current[`sheet-${i}`] = node; }}
-                    aria-label={"Confirm team " + (i + 1) + " score"}
-                    type="text"
-                    inputMode="numeric"
-                    pattern="[0-9]*"
-                    maxLength={2}
-                    value={score(target.match)[i]}
-                    onChange={(e) => update(target.match, i, e.target.value, "sheet")}
-                  />
-                </label>
-              ))}
-              <p className="muted">Check both scores before saving.</p>
-              <button
-                className="primary"
-                onClick={() => void action.run(saveScore, () => setSheet(""))}
-              >
-                Confirm result
-              </button>
-              <button className="text-button" onClick={() => setSheet("")}>
-                Keep editing
-              </button>
-            </>
-          ) : sheet === "guest" ? (
+          {sheet === "guest" ? (
             <>
               <label className="field-label">
                 Name

@@ -1,4 +1,7 @@
 .live-player-management { display: flex; flex-direction: column; gap: 12px; }
+/* Keep one backdrop through the nested options sheet's exit animation. */
+.prototype-sheet:has(.live-player-management):has(.pm-player-options) > .sheet-shade { display: none; }
+.pm-player-options { display: flex; flex-direction: column; gap: 12px; }
 .pm-back, .pm-primary, .pm-secondary, .pm-danger, .pm-icon-action {
   display: inline-flex; align-items: center; justify-content: center; gap: 8px;
   min-height: 44px; border-radius: 12px; font: inherit; font-weight: 800;

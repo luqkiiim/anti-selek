@@ -40,7 +40,6 @@ export function SessionMatchCreationToolbar({
   if (canQueueNextMatch) {
     return (
       <div className={styles.toolbar}>
-        <p>All courts are playing. Set up the next match when you’re ready.</p>
         <button
           className={`${styles.primary} ${styles.queue}`}
           type="button"
@@ -58,7 +57,6 @@ export function SessionMatchCreationToolbar({
 
   return (
     <div className={styles.toolbar}>
-      <p>Fill each ready court with an available match.</p>
       <button
         className={styles.primary}
         type="button"

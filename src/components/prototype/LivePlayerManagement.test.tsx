@@ -128,6 +128,8 @@ describe("LivePlayerManagement", () => {
     await act(async () => {
       container.querySelector<HTMLButtonElement>('[aria-label="Options for Ari Player"]')?.click();
     });
+    expect(container.querySelector('[role="dialog"][aria-label="Players"]')).not.toBeNull();
+    expect(container.querySelector('[role="dialog"][aria-label="Ari Player"]')).not.toBeNull();
 
     const skipButton = [...container.querySelectorAll("button")].find((button) => button.textContent?.includes("Skip next match"));
     expect(skipButton?.className).toContain("pm-secondary");
@@ -141,7 +143,7 @@ describe("LivePlayerManagement", () => {
       { skipNextMatch: true },
     );
     expect(changed).toHaveBeenCalledOnce();
-    expect(container.querySelector('[aria-label="Options for Ari Player"]')).toBeNull();
+    expect(container.querySelector('[aria-label="Options for Ari Player"]')).not.toBeNull();
     expect(container.querySelector('[role="dialog"][aria-label="Ari Player"]')).not.toBeNull();
 
     session.players[0].skipNextMatchAt = "2026-09-23T00:00:00.000Z";
@@ -150,6 +152,7 @@ describe("LivePlayerManagement", () => {
     expect(container.querySelector('[role="dialog"][aria-label="Ari Player"]')).not.toBeNull();
     await act(async () => container.querySelector<HTMLButtonElement>(".pm-back")?.click());
     expect(container.textContent).toContain("Skipping next");
+    expect(container.querySelector('[role="dialog"][aria-label="Ari Player"]')).toBeNull();
   });
 
   it("offers Cancel skip inside options for a player with a scheduled skip", async () => {
@@ -231,6 +234,15 @@ describe("LivePlayerManagement", () => {
     });
     expect(container.textContent).toContain("Bea Member");
     expect(mocks.api).toHaveBeenCalledWith("/api/clubs/club-1/members");
+
+    await act(async () => container.querySelector<HTMLButtonElement>(".pm-back")?.click());
+    expect(container.textContent).not.toContain("Bea Member");
+    expect(container.textContent).toContain("Ari Player");
+
+    await act(async () => {
+      [...container.querySelectorAll("button")].find((button) => button.textContent?.includes("Add club members"))?.click();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
 
     await act(async () => {
       [...container.querySelectorAll("button")].find((button) => button.textContent?.includes("Add to session"))?.click();
