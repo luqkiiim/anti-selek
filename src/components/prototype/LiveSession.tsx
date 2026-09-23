@@ -21,6 +21,12 @@ import type {
   Match,
   Court,
 } from "@/components/session/sessionTypes";
+import {
+  SessionBalanceMetric,
+  SessionMatchmakingStyle,
+  SessionPairingMode,
+  SessionCrossoverFrequency,
+} from "@/types/enums";
 import { api, useResource, useAction } from "./api";
 import {
   Avatar,
@@ -35,7 +41,13 @@ type ScoreTarget = { match: Match; court: Court; correct: boolean };
 type LiveSettingsDraft = {
   autoQueueEnabled: boolean;
   respectPlayerRest: boolean;
-  courtLabels: Record<string, string>;
+  courtLabels: Record<number, string>;
+  matchmakingStyle: SessionMatchmakingStyle;
+  balanceMetric: SessionBalanceMetric;
+  pairingMode: SessionPairingMode;
+  poolsEnabled: boolean;
+  crossoverFrequency: SessionCrossoverFrequency;
+  courtCount: number;
 };
 type ManualTarget =
   | { kind: "court"; courtId: string }
@@ -104,9 +116,17 @@ export default function LiveSession({
       liveSettingsDraft.respectPlayerRest !== s.respectPlayerRest ||
       s.courts.some(
         (court) =>
-          (liveSettingsDraft.courtLabels[court.id] ?? "").trim() !==
+          (liveSettingsDraft.courtLabels[court.courtNumber] ?? "").trim() !==
           (court.label ?? "").trim(),
-      )
+      ) ||
+      (s.status === "WAITING" && (
+        liveSettingsDraft.matchmakingStyle !== (s.matchmakingStyle ?? SessionMatchmakingStyle.BALANCED) ||
+        liveSettingsDraft.balanceMetric !== (s.balanceMetric ?? SessionBalanceMetric.RATING) ||
+        liveSettingsDraft.pairingMode !== (s.pairingMode ?? SessionPairingMode.OPEN) ||
+        liveSettingsDraft.poolsEnabled !== s.poolsEnabled ||
+        liveSettingsDraft.crossoverFrequency !== s.crossoverFrequency ||
+        liveSettingsDraft.courtCount !== s.courts.length
+      ))
     )
   );
 
@@ -267,8 +287,14 @@ export default function LiveSession({
       autoQueueEnabled: s.autoQueueEnabled,
       respectPlayerRest: s.respectPlayerRest,
       courtLabels: Object.fromEntries(
-        s.courts.map((court) => [court.id, court.label ?? ""]),
+        s.courts.map((court) => [court.courtNumber, court.label ?? ""]),
       ),
+      matchmakingStyle: s.matchmakingStyle ?? SessionMatchmakingStyle.BALANCED,
+      balanceMetric: s.balanceMetric ?? SessionBalanceMetric.RATING,
+      pairingMode: s.pairingMode ?? SessionPairingMode.OPEN,
+      poolsEnabled: s.poolsEnabled,
+      crossoverFrequency: s.crossoverFrequency,
+      courtCount: s.courts.length,
     });
     setConfirmAutoQueueOff(false);
     setConfirmedQueueId(null);
@@ -307,10 +333,20 @@ export default function LiveSession({
     const payload = {
       autoQueueEnabled: liveSettingsDraft.autoQueueEnabled,
       respectPlayerRest: liveSettingsDraft.respectPlayerRest,
-      courtLabels: s.courts.map((court) => ({
-        courtNumber: court.courtNumber,
-        label: liveSettingsDraft.courtLabels[court.id]?.trim() || null,
+      courtLabels: Array.from({ length: liveSettingsDraft.courtCount }, (_, index) => ({
+        courtNumber: index + 1,
+        label: liveSettingsDraft.courtLabels[index + 1]?.trim() || null,
       })),
+      ...(s.status === "WAITING" ? {
+        gameplaySettings: {
+          matchmakingStyle: liveSettingsDraft.matchmakingStyle,
+          balanceMetric: liveSettingsDraft.balanceMetric,
+          pairingMode: liveSettingsDraft.pairingMode,
+          poolsEnabled: liveSettingsDraft.poolsEnabled,
+          crossoverFrequency: liveSettingsDraft.crossoverFrequency,
+          courtCount: liveSettingsDraft.courtCount,
+        },
+      } : {}),
     };
     void action.run(
       () => api(endpoint, "PATCH", payload),
@@ -318,6 +354,17 @@ export default function LiveSession({
         setSheet("");
         setConfirmAutoQueueOff(false);
         setConfirmedQueueId(null);
+      },
+    );
+  }
+  function resetSession() {
+    void action.run(
+      () => api(endpoint + "/reset", "POST"),
+      () => {
+        setScores({});
+        setSaved({});
+        setSheet("");
+        setTab("Courts");
       },
     );
   }
@@ -479,6 +526,24 @@ export default function LiveSession({
               <p>
                 {s.players.length} players · {s.courts.length} courts
               </p>
+              {canManage && (
+                <button
+                  className="secondary full"
+                  disabled={action.busy}
+                  onClick={openLiveSettings}
+                >
+                  Review session settings
+                </button>
+              )}
+              {canManage && (
+                <button
+                  className="secondary full"
+                  disabled={action.busy}
+                  onClick={() => setManagePlayersOpen(true)}
+                >
+                  Manage players
+                </button>
+              )}
               {canManage && (
                 <button
                   className="primary"
@@ -819,6 +884,8 @@ export default function LiveSession({
                     ? "Add guest"
                     : sheet === "settings"
                       ? "Session settings"
+                      : sheet === "reset"
+                        ? "Reset this session?"
                       : sheet === "court-controls"
                         ? courtControl?.label || `Court ${courtControl?.courtNumber ?? ""} options`
                         : sheet === "confirm-control"
@@ -923,7 +990,7 @@ export default function LiveSession({
               {s && liveSettingsDraft ? (
                 <div className="live-settings">
                   <section className="live-settings-section" aria-labelledby="live-matchmaking-heading">
-                    <h3 id="live-matchmaking-heading">Matchmaking</h3>
+                    <h3 id="live-matchmaking-heading">Session controls</h3>
                     <div className="live-settings-options">
                       <div className="live-settings-row">
                         <span>
@@ -996,27 +1063,145 @@ export default function LiveSession({
                       <p>Leave blank to use the default court name.</p>
                     </div>
                     <div className="live-settings-courts">
-                      {s.courts.map((court) => (
-                        <label className="live-settings-court" key={court.id}>
-                          <span>Court {court.courtNumber}</span>
-                          <input
-                            aria-label={`Court ${court.courtNumber} label`}
-                            type="text"
-                            value={liveSettingsDraft.courtLabels[court.id] ?? ""}
-                            maxLength={24}
-                            placeholder={`Court ${court.courtNumber}`}
-                            onChange={(event) => setLiveSettingsDraft((current) => current ? {
-                              ...current,
-                              courtLabels: {
-                                ...current.courtLabels,
-                                [court.id]: event.target.value,
-                              },
-                            } : current)}
-                          />
-                        </label>
-                      ))}
+                      {Array.from({ length: liveSettingsDraft.courtCount }, (_, index) => {
+                        const courtNumber = index + 1;
+                        return (
+                          <label className="live-settings-court" key={courtNumber}>
+                            <span>Court {courtNumber}</span>
+                            <input
+                              aria-label={`Court ${courtNumber} label`}
+                              type="text"
+                              value={liveSettingsDraft.courtLabels[courtNumber] ?? ""}
+                              maxLength={24}
+                              placeholder={`Court ${courtNumber}`}
+                              onChange={(event) => setLiveSettingsDraft((current) => current ? {
+                                ...current,
+                                courtLabels: {
+                                  ...current.courtLabels,
+                                  [courtNumber]: event.target.value,
+                                },
+                              } : current)}
+                            />
+                          </label>
+                        );
+                      })}
                     </div>
                   </section>
+
+                  {s.status === "WAITING" ? (
+                    <>
+                      <section className="live-settings-section" aria-labelledby="live-format-heading">
+                        <div className="live-settings-section-heading">
+                          <h3 id="live-format-heading">Session format</h3>
+                          <p>Choose how the next round of play will work.</p>
+                        </div>
+                        <label className="live-settings-field">
+                          Matchmaking style
+                          <select
+                            aria-label="Matchmaking style"
+                            className="live-settings-select"
+                            value={liveSettingsDraft.matchmakingStyle}
+                            onChange={(event) => setLiveSettingsDraft((current) => current ? {
+                              ...current,
+                              matchmakingStyle: event.target.value as SessionMatchmakingStyle,
+                            } : current)}
+                          >
+                            <option value={SessionMatchmakingStyle.BALANCED}>Balanced</option>
+                            <option value={SessionMatchmakingStyle.SOCIAL}>Social</option>
+                            <option value={SessionMatchmakingStyle.LEVEL_MATCH}>Level match</option>
+                          </select>
+                        </label>
+                        {liveSettingsDraft.matchmakingStyle !== SessionMatchmakingStyle.SOCIAL && (
+                          <label className="live-settings-field">
+                            Balance teams using
+                            <select
+                              aria-label="Balance teams using"
+                              className="live-settings-select"
+                              value={liveSettingsDraft.balanceMetric}
+                              onChange={(event) => setLiveSettingsDraft((current) => current ? {
+                                ...current,
+                                balanceMetric: event.target.value as SessionBalanceMetric,
+                              } : current)}
+                            >
+                              <option value={SessionBalanceMetric.RATING}>Club rating</option>
+                              <option value={SessionBalanceMetric.SESSION_POINTS}>Session points</option>
+                            </select>
+                          </label>
+                        )}
+                        <label className="live-settings-field">
+                          Pairing
+                          <select
+                            aria-label="Pairing"
+                            className="live-settings-select"
+                            value={liveSettingsDraft.pairingMode}
+                            onChange={(event) => setLiveSettingsDraft((current) => current ? {
+                              ...current,
+                              pairingMode: event.target.value as SessionPairingMode,
+                            } : current)}
+                          >
+                            <option value={SessionPairingMode.OPEN}>Open pairs</option>
+                            <option value={SessionPairingMode.MIXED}>Mixed pairs</option>
+                          </select>
+                        </label>
+                        <label className="live-settings-field">
+                          Courts
+                          <select
+                            aria-label="Court count"
+                            className="live-settings-select"
+                            value={liveSettingsDraft.courtCount}
+                            onChange={(event) => setLiveSettingsDraft((current) => current ? {
+                              ...current,
+                              courtCount: Number(event.target.value),
+                            } : current)}
+                          >
+                            {Array.from({ length: 10 }, (_, index) => index + 1).map((count) => (
+                              <option value={count} key={count}>{count}</option>
+                            ))}
+                          </select>
+                        </label>
+                        <div className="live-settings-row live-settings-group-toggle">
+                          <span>
+                            <strong>Player groups</strong>
+                            <small>Separate Competitive and Social players.</small>
+                          </span>
+                          <button
+                            type="button"
+                            role="switch"
+                            aria-label="Player groups"
+                            aria-checked={liveSettingsDraft.poolsEnabled}
+                            className={`live-settings-switch${liveSettingsDraft.poolsEnabled ? " is-on" : ""}`}
+                            onClick={() => setLiveSettingsDraft((current) => current ? {
+                              ...current,
+                              poolsEnabled: !current.poolsEnabled,
+                            } : current)}
+                          >
+                            {liveSettingsDraft.poolsEnabled ? "On" : "Off"}
+                          </button>
+                        </div>
+                        {liveSettingsDraft.poolsEnabled && (
+                          <>
+                            <label className="live-settings-field">
+                              Mix groups
+                              <select
+                                aria-label="Mix groups"
+                                className="live-settings-select"
+                                value={liveSettingsDraft.crossoverFrequency}
+                                onChange={(event) => setLiveSettingsDraft((current) => current ? {
+                                  ...current,
+                                  crossoverFrequency: event.target.value as SessionCrossoverFrequency,
+                                } : current)}
+                              >
+                                <option value={SessionCrossoverFrequency.OCCASIONAL}>Occasionally</option>
+                                <option value={SessionCrossoverFrequency.BALANCED}>Sometimes</option>
+                                <option value={SessionCrossoverFrequency.FREQUENT}>Often</option>
+                              </select>
+                            </label>
+                            <p className="live-settings-hint">Save this setting first, then use Manage players to assign groups. Each group needs at least two active players before the session can start.</p>
+                          </>
+                        )}
+                      </section>
+                    </>
+                  ) : null}
 
                   <button
                     type="button"
@@ -1026,27 +1211,52 @@ export default function LiveSession({
                   >
                     {action.busy ? "Saving settings…" : "Save settings"}
                   </button>
-
-                  <details className="live-settings-format">
-                    <summary>
-                      <strong>Session format</strong>
-                      <span>Fixed while live</span>
-                    </summary>
-                    <div className="live-settings-readonly" aria-label="Current game format">
-                      <div className="setting-line">
-                        <span>Court count</span>
-                        <strong>{s.courts.length}</strong>
+                  {s.status === "ACTIVE" ? (
+                    <details className="live-settings-format">
+                      <summary>
+                        <strong>Session format</strong>
+                        <span>Fixed while live</span>
+                      </summary>
+                      <div className="live-settings-readonly" aria-label="Current game format">
+                        <div className="setting-line">
+                          <span>Court count</span>
+                          <strong>{s.courts.length}</strong>
+                        </div>
+                        <div className="setting-line">
+                          <span>Matchmaking style</span>
+                          <strong>{s.matchmakingStyle?.toLowerCase().replaceAll("_", " ") || "—"}</strong>
+                        </div>
                       </div>
-                      <div className="setting-line">
-                        <span>Matchmaking style</span>
-                        <strong>
-                          {s.matchmakingStyle?.toLowerCase().replaceAll("_", " ") || "—"}
-                        </strong>
-                      </div>
-                    </div>
-                  </details>
+                    </details>
+                  ) : null}
+                  {s.status === "ACTIVE" && canManage ? (
+                    <button
+                      type="button"
+                      className="secondary full danger-outline"
+                      disabled={action.busy}
+                      onClick={() => setSheet("reset")}
+                    >
+                      Reset session to change setup
+                    </button>
+                  ) : null}
                 </div>
               ) : <p role="status">Loading session settings…</p>}
+            </>
+          ) : sheet === "reset" ? (
+            <>
+              <p>This permanently removes every match, score, and standing from this session, and reverses its rating changes.</p>
+              <p className="muted">The roster and current settings stay. The session returns to Ready to play, where you can change its setup before starting again.</p>
+              <button
+                type="button"
+                className="secondary full danger-outline"
+                disabled={action.busy}
+                onClick={resetSession}
+              >
+                {action.busy ? "Resetting session…" : "Reset session"}
+              </button>
+              <button type="button" className="text-button" disabled={action.busy} onClick={() => setSheet("settings")}>
+                Keep playing
+              </button>
             </>
           ) : sheet === "end" ? (
             <>

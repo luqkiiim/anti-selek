@@ -66,4 +66,30 @@ test("prototype host can reach court controls, player management, and match hist
   await page.screenshot({ path: "test-results/prototype-history-320.png" });
   await page.getByRole("button", { name: "Back to session" }).click();
   await expect(page.getByRole("button", { name: "More options" })).toBeVisible();
+
+  await page.getByRole("button", { name: "More options" }).click();
+  await page.getByRole("button", { name: "Session settings" }).click();
+  await page.getByRole("button", { name: "Reset session to change setup" }).click();
+  await expect(page.getByRole("dialog", { name: "Reset this session?" })).toContainText("reverses its rating changes");
+  await page.getByRole("button", { name: "Reset session", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Ready to play?" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Manage players" })).toBeVisible();
+
+  await page.getByRole("button", { name: "Review session settings" }).click();
+  await expect.poll(() => page.evaluate(() => {
+    const dialog = document.querySelector('dialog.prototype-sheet[open]');
+    const panel = dialog?.querySelector('.sheet-panel');
+    return !!dialog && !!panel && dialog.scrollWidth <= dialog.clientWidth && panel.scrollWidth <= panel.clientWidth;
+  })).toBe(true);
+  await page.screenshot({ path: "test-results/prototype-waiting-settings-320.png" });
+  await page.getByRole("combobox", { name: "Matchmaking style" }).selectOption("LEVEL_MATCH");
+  await page.getByRole("combobox", { name: "Court count" }).selectOption("2");
+  await page.getByRole("textbox", { name: "Court 2 label" }).fill("South Court");
+  await page.getByRole("button", { name: "Save settings" }).click();
+  await page.getByRole("button", { name: "Review session settings" }).click();
+  await expect(page.getByRole("combobox", { name: "Matchmaking style" })).toHaveValue("LEVEL_MATCH");
+  await expect(page.getByRole("textbox", { name: "Court 2 label" })).toHaveValue("South Court");
+  await page.getByRole("button", { name: "Close" }).click();
+  await page.getByRole("button", { name: "Start session" }).click();
+  await expect(page.getByRole("heading", { name: "South Court" })).toBeVisible();
 });

@@ -8,6 +8,7 @@ import { MatchStatus, SessionStatus } from "@/types/enums";
 import { logError, safeErrorResponse } from "@/lib/errors";
 import { rateLimit, checkInvalidTargetRateLimit, invalidTargetResponse } from "@/lib/rateLimit";
 import { reverseSessionEloChanges } from "@/lib/sessionLifecycle";
+import { getSessionOperatorMembership } from "@/lib/sessionCollab";
 
 export const dynamic = "force-dynamic";
 
@@ -47,22 +48,13 @@ export async function POST(
       return invalidTargetResponse(_request, "api:sessions:code:reset");
     }
 
-    let isClubAdmin = false;
-    if (targetSession.clubId) {
-      const membership = await prisma.clubMember.findUnique({
-        where: {
-          clubId_userId: {
-            clubId: targetSession.clubId,
-            userId: session.user.id,
-          },
-        },
-        select: { role: true },
-      });
-      isClubAdmin = membership?.role === "ADMIN";
-    }
-
-    if (!session.user.isAdmin && !isClubAdmin) {
-      return NextResponse.json({ error: "Admin only" }, { status: 403 });
+    const operatorMembership = await getSessionOperatorMembership(prisma, {
+      session: targetSession,
+      userId: session.user.id,
+      acceptedOnly: true,
+    });
+    if (!session.user.isAdmin && !operatorMembership) {
+      return NextResponse.json({ error: "Admin or staff only" }, { status: 403 });
     }
 
     if (

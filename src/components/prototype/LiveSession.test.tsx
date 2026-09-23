@@ -7,8 +7,11 @@ import type { Match, SessionData } from "@/components/session/sessionTypes";
 import {
   PartnerPreference,
   PlayerGender,
+  SessionBalanceMetric,
   SessionCrossoverFrequency,
+  SessionMatchmakingStyle,
   SessionMode,
+  SessionPairingMode,
   SessionPool,
 } from "@/types/enums";
 
@@ -138,6 +141,12 @@ function setInputValue(input: HTMLInputElement, value: string) {
   const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
   setter?.call(input, value);
   input.dispatchEvent(new Event("input", { bubbles: true }));
+}
+
+function setSelectValue(select: HTMLSelectElement, value: string) {
+  const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")?.set;
+  setter?.call(select, value);
+  select.dispatchEvent(new Event("change", { bubbles: true }));
 }
 
 describe("LiveSession score and player controls", () => {
@@ -409,5 +418,79 @@ describe("LiveSession score and player controls", () => {
     await act(async () => root.render(<LiveSession code="TEST01" onBack={vi.fn()} onEnded={vi.fn(async () => undefined)} />));
 
     expect(container.querySelector<HTMLInputElement>('[aria-label="Court 1 label"]')?.value).toBe("North");
+  });
+
+  it("edits the full session setup while waiting, then keeps the session ready to start", async () => {
+    const session = sessionWithCourts(
+      [{ id: "court-1", courtNumber: 1, currentMatch: null }],
+      [player("a", "Ari"), player("b", "Bea"), player("c", "Chen"), player("d", "Dee")],
+    );
+    session.status = "WAITING";
+    session.matchmakingStyle = SessionMatchmakingStyle.BALANCED;
+    session.balanceMetric = SessionBalanceMetric.RATING;
+    session.pairingMode = SessionPairingMode.OPEN;
+    setup(session);
+    await act(async () => root.render(<LiveSession code="TEST01" onBack={vi.fn()} onEnded={vi.fn(async () => undefined)} />));
+
+    await act(async () => Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find((button) => button.textContent === "Review session settings")?.click());
+    await act(async () => setSelectValue(container.querySelector<HTMLSelectElement>('[aria-label="Matchmaking style"]')!, SessionMatchmakingStyle.LEVEL_MATCH));
+    await act(async () => setSelectValue(container.querySelector<HTMLSelectElement>('[aria-label="Balance teams using"]')!, SessionBalanceMetric.SESSION_POINTS));
+    await act(async () => setSelectValue(container.querySelector<HTMLSelectElement>('[aria-label="Pairing"]')!, SessionPairingMode.MIXED));
+    await act(async () => setSelectValue(container.querySelector<HTMLSelectElement>('[aria-label="Court count"]')!, "3"));
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Player groups"]')?.click());
+    await act(async () => setSelectValue(container.querySelector<HTMLSelectElement>('[aria-label="Mix groups"]')!, SessionCrossoverFrequency.FREQUENT));
+    await act(async () => Array.from(container.querySelectorAll<HTMLButtonElement>("[role=dialog] button")).find((button) => button.textContent === "Save settings")?.click());
+
+    expect(mocks.api).toHaveBeenCalledWith("/api/sessions/TEST01", "PATCH", {
+      autoQueueEnabled: false,
+      respectPlayerRest: true,
+      courtLabels: [
+        { courtNumber: 1, label: null },
+        { courtNumber: 2, label: null },
+        { courtNumber: 3, label: null },
+      ],
+      gameplaySettings: {
+        matchmakingStyle: SessionMatchmakingStyle.LEVEL_MATCH,
+        balanceMetric: SessionBalanceMetric.SESSION_POINTS,
+        pairingMode: SessionPairingMode.MIXED,
+        poolsEnabled: true,
+        crossoverFrequency: SessionCrossoverFrequency.FREQUENT,
+        courtCount: 3,
+      },
+    });
+    expect(container.textContent).toContain("Ready to play?");
+    expect(Array.from(container.querySelectorAll<HTMLButtonElement>("button")).some((button) => button.textContent === "Start session")).toBe(true);
+    expect(Array.from(container.querySelectorAll<HTMLButtonElement>("button")).some((button) => button.textContent === "Manage players")).toBe(true);
+  });
+
+  it("confirms reset data loss and returns to a ready state for setup changes", async () => {
+    const session = sessionWithCourts([
+      { id: "court-1", courtNumber: 1, currentMatch: match("match-1", 1) },
+    ]);
+    setup(session);
+    mocks.api.mockImplementation(async (url: string) => {
+      if (url.endsWith("/reset")) {
+        session.status = "WAITING";
+        session.courts[0].currentMatch = null;
+        session.matches = [];
+      }
+      return {};
+    });
+    await act(async () => root.render(<LiveSession code="TEST01" onBack={vi.fn()} onEnded={vi.fn(async () => undefined)} />));
+
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="More options"]')?.click());
+    await act(async () => Array.from(container.querySelectorAll<HTMLButtonElement>("[role=dialog] button")).find((button) => button.textContent === "Session settings")?.click());
+    await act(async () => Array.from(container.querySelectorAll<HTMLButtonElement>("[role=dialog] button")).find((button) => button.textContent === "Reset session to change setup")?.click());
+
+    expect(container.textContent).toContain("permanently removes every match, score, and standing");
+    expect(container.textContent).toContain("reverses its rating changes");
+    expect(mocks.api).not.toHaveBeenCalled();
+    await act(async () => Array.from(container.querySelectorAll<HTMLButtonElement>("[role=dialog] button")).find((button) => button.textContent === "Reset session")?.click());
+
+    expect(mocks.api).toHaveBeenCalledWith("/api/sessions/TEST01/reset", "POST");
+    expect(container.textContent).toContain("Ready to play?");
+    expect(Array.from(container.querySelectorAll<HTMLButtonElement>("button")).some((button) => button.textContent === "Review session settings")).toBe(true);
+    expect(Array.from(container.querySelectorAll<HTMLButtonElement>("button")).some((button) => button.textContent === "Manage players")).toBe(true);
+    expect(Array.from(container.querySelectorAll<HTMLButtonElement>("button")).some((button) => button.textContent === "Start session")).toBe(true);
   });
 });

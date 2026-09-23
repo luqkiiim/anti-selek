@@ -992,6 +992,42 @@
   display: grid;
   gap: 2px;
 }
+.live-settings-field {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(130px, 1.1fr);
+  align-items: center;
+  gap: 12px;
+  min-height: 62px;
+  padding: 8px 10px 8px 13px;
+  border: 1px solid #eee7e5;
+  border-radius: 13px;
+  background: #fffdfb;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 800;
+}
+.live-settings-select {
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  border: 1px solid #e1d7e8;
+  border-radius: 10px;
+  background: #fffaf3;
+  padding: 8px 10px;
+  color: var(--ink);
+  font: 400 14px "Nunito Sans", sans-serif;
+}
+.live-settings-group-toggle {
+  border: 1px solid #eee7e5;
+  border-radius: 13px;
+  background: #fffdfb;
+}
+.live-settings-hint {
+  margin: 0 !important;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
 .live-settings-options,
 .live-settings-courts {
   overflow: hidden;

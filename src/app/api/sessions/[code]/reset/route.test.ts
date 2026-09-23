@@ -23,6 +23,9 @@ vi.mock("@/lib/playerGroupPreferences", () => ({
 vi.mock("@/lib/sessionLifecycle", () => ({
   reverseSessionEloChanges: vi.fn(),
 }));
+vi.mock("@/lib/sessionCollab", () => ({
+  getSessionOperatorMembership: vi.fn(),
+}));
 vi.mock("@/lib/clubElo", () => ({
   getClubEloByUserId: vi.fn(),
   withClubElo: vi.fn((players) => players),
@@ -30,16 +33,18 @@ vi.mock("@/lib/clubElo", () => ({
 
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { getSessionOperatorMembership } from "@/lib/sessionCollab";
 import { POST } from "./route";
 
 describe("reset session route", () => {
   it("clears gameplay state while preserving settings and player groups", async () => {
     vi.mocked(auth).mockResolvedValue({
-      user: { id: "admin-1", isAdmin: true },
+      user: { id: "staff-1", isAdmin: false },
     } as never);
+    vi.mocked(getSessionOperatorMembership).mockResolvedValue({ role: "STAFF" } as never);
     vi.mocked(prisma.session.findUnique).mockResolvedValue({
       id: "session-1",
-      clubId: null,
+      clubId: "club-1",
       isTest: true,
       status: SessionStatus.ACTIVE,
     } as never);
@@ -107,5 +112,10 @@ describe("reset session route", () => {
     expect(sessionPlayerUpdateMany.mock.calls[0][0].data).not.toHaveProperty(
       "pool"
     );
+    expect(getSessionOperatorMembership).toHaveBeenCalledWith(prisma, {
+      session: expect.objectContaining({ id: "session-1", clubId: "club-1" }),
+      userId: "staff-1",
+      acceptedOnly: true,
+    });
   });
 });
