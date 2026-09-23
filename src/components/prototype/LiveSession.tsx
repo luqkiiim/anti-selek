@@ -91,13 +91,17 @@ export default function LiveSession({
   }>(endpoint + "/leaderboard");
   const [tab, setTab] = useState("Courts"),
     [sheet, setSheet] = useState(""),
-    [confirmingMatchId, setConfirmingMatchId] = useState<string | null>(null),
+    [confirmingMatchIds, setConfirmingMatchIds] = useState<Set<string>>(() => new Set()),
+    [savingScoreMatchIds, setSavingScoreMatchIds] = useState<Set<string>>(() => new Set()),
+    [scoreErrors, setScoreErrors] = useState<Record<string, string>>({}),
     [scores, setScores] = useState<Record<string, [string, string]>>({}),
     [courtControlId, setCourtControlId] = useState<string | null>(null),
     [confirmation, setConfirmation] = useState<ControlConfirmation | null>(null),
     [manualTarget, setManualTarget] = useState<ManualTarget | null>(null),
     [manualSelection, setManualSelection] = useState<string[]>([]);
   const scoreRefs = useRef<Record<string, HTMLInputElement | null>>({});
+  const confirmingMatchIdsRef = useRef(new Set<string>());
+  const savingScoreMatchIdsRef = useRef(new Set<string>());
   const [name, setName] = useState(""),
     [rating, setRating] = useState("1000");
   const [showHistory, setShowHistory] = useState(false);
@@ -117,13 +121,13 @@ export default function LiveSession({
   const refreshSession=resource.refresh,refreshStandings=standings.refresh;
   useEffect(() => {
     const timer = setInterval(() => {
-      if (!document.hidden && !action.busy) {
+      if (!document.hidden && !action.busy && savingScoreMatchIds.size === 0) {
         void refreshSession().catch(() => {});
         void refreshStandings().catch(() => {});
       }
     }, 15000);
     return () => clearInterval(timer);
-  }, [refreshSession, refreshStandings, action.busy]);
+  }, [refreshSession, refreshStandings, action.busy, savingScoreMatchIds]);
   const canManage = !!s?.viewerCanManage && !s?.viewerIsQuickAccess;
   const ended = s?.status === "COMPLETED";
   const sessionPlayerById = new Map(s?.players.map((player) => [player.userId, player]) ?? []);
@@ -222,8 +226,28 @@ export default function LiveSession({
       ]
     );
   }
+  function setMatchConfirmation(matchId: string, confirming: boolean) {
+    const next = new Set(confirmingMatchIdsRef.current);
+    if (confirming) next.add(matchId);
+    else next.delete(matchId);
+    confirmingMatchIdsRef.current = next;
+    setConfirmingMatchIds(next);
+  }
+  function setMatchSaving(matchId: string, saving: boolean) {
+    const next = new Set(savingScoreMatchIdsRef.current);
+    if (saving) next.add(matchId);
+    else next.delete(matchId);
+    savingScoreMatchIdsRef.current = next;
+    setSavingScoreMatchIds(next);
+  }
   function update(m: Match, i: number, v: string, autoAdvance: false | "court" | "sheet" = false) {
-    setConfirmingMatchId(null);
+    setMatchConfirmation(m.id, false);
+    setScoreErrors((previous) => {
+      if (!(m.id in previous)) return previous;
+      const next = { ...previous };
+      delete next[m.id];
+      return next;
+    });
     const value = v.replace(/\D/g, "").slice(0, 2);
     setScores((prev) => {
       const next: [string, string] = [...score(m)];
@@ -304,25 +328,46 @@ export default function LiveSession({
     return values;
   }
   function confirmScore(match: Match) {
-    action.setError("");
+    if (action.busy || savingScoreMatchIdsRef.current.has(match.id)) return;
     try {
-      validateScore(match);
-      if (confirmingMatchId !== match.id) {
-        setConfirmingMatchId(match.id);
+      const values = validateScore(match);
+      if (!confirmingMatchIdsRef.current.has(match.id)) {
+        setMatchConfirmation(match.id, true);
         return;
       }
-      void action.run(() => saveScore(match), () => setConfirmingMatchId(null));
+      setScoreErrors((previous) => {
+        if (!(match.id in previous)) return previous;
+        const next = { ...previous };
+        delete next[match.id];
+        return next;
+      });
+      // Lock synchronously so rapid clicks cannot submit the same match twice.
+      setMatchSaving(match.id, true);
+      void saveScore(match, values);
     } catch (error) {
-      action.setError(error instanceof Error ? error.message : "Check both scores.");
+      setScoreErrors((previous) => ({
+        ...previous,
+        [match.id]: error instanceof Error ? error.message : "Check both scores.",
+      }));
     }
   }
-  async function saveScore(match: Match) {
-    const values = validateScore(match);
-    await api(
-      "/api/matches/" + match.id + "/score",
-      "POST",
-      { team1Score: values[0], team2Score: values[1] },
-    );
+  async function saveScore(match: Match, values: number[]) {
+    try {
+      await api(
+        "/api/matches/" + match.id + "/score",
+        "POST",
+        { team1Score: values[0], team2Score: values[1] },
+      );
+      await refresh();
+      setMatchConfirmation(match.id, false);
+    } catch (error) {
+      setScoreErrors((previous) => ({
+        ...previous,
+        [match.id]: error instanceof Error ? error.message : "Unable to save score.",
+      }));
+    } finally {
+      setMatchSaving(match.id, false);
+    }
   }
   if (showHistory) {
     return (
@@ -443,7 +488,9 @@ export default function LiveSession({
       () => api(endpoint + "/reset", "POST"),
       () => {
         setScores({});
-        setConfirmingMatchId(null);
+        confirmingMatchIdsRef.current = new Set();
+        setConfirmingMatchIds(new Set());
+        setScoreErrors({});
         setSheet("");
         setTab("Courts");
       },
@@ -712,6 +759,7 @@ export default function LiveSession({
                                   pattern="[0-9]*"
                                   maxLength={2}
                                   aria-label={"Team " + (i + 1) + " score"}
+                                  disabled={savingScoreMatchIds.has(match.id)}
                                   value={score(match)[i]}
                                   onChange={(e) =>
                                     update(match, i, e.target.value, "court")
@@ -725,13 +773,15 @@ export default function LiveSession({
                             )}
                           </div>
                         ))}
+                        <ErrorText error={scoreErrors[match.id] ?? ""} />
                         {canManage && (
                           <button
                             className="primary"
-                            disabled={action.busy}
+                            disabled={action.busy || savingScoreMatchIds.has(match.id)}
+                            aria-busy={savingScoreMatchIds.has(match.id)}
                             onClick={() => confirmScore(match)}
                           >
-                            {confirmingMatchId === match.id ? "Confirm" : "Save score"}
+                            {confirmingMatchIds.has(match.id) ? "Confirm" : "Save score"}
                           </button>
                         )}
                       </>

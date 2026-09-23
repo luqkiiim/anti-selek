@@ -150,6 +150,16 @@ function setSelectValue(select: HTMLSelectElement, value: string) {
   select.dispatchEvent(new Event("change", { bubbles: true }));
 }
 
+function deferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return { promise, resolve, reject };
+}
+
 describe("LiveSession score and player controls", () => {
   let container: HTMLDivElement;
   let root: Root;
@@ -229,6 +239,95 @@ describe("LiveSession score and player controls", () => {
     expect(container.textContent).not.toContain("Result saved");
     expect(container.textContent).not.toContain("Correct score");
     expect(Array.from(container.querySelectorAll("nav[aria-label='Session tabs'] button")).map(button => button.textContent)).toEqual(["Players", "Courts", "Standings"]);
+  });
+
+  it("keeps score saving scoped to one court and prevents duplicate submissions", async () => {
+    const first = match("match-1", 1, 0, 0);
+    const second = match("match-2", 2, 0, 0);
+    const pendingSave = deferred<unknown>();
+    setup(sessionWithCourts([
+      { id: "court-1", courtNumber: 1, currentMatch: first },
+      { id: "court-2", courtNumber: 2, currentMatch: second },
+    ]));
+    mocks.api.mockImplementation((url: string) => url === "/api/matches/match-1/score" ? pendingSave.promise : Promise.resolve({}));
+    await act(async () => root.render(<LiveSession code="TEST01" onBack={vi.fn()} onEnded={vi.fn(async () => undefined)} />));
+
+    const courts = container.querySelectorAll<HTMLElement>(".court-card");
+    const courtOne = courts[0];
+    const courtTwo = courts[1];
+    const inputsOne = courtOne.querySelectorAll<HTMLInputElement>('input[aria-label$="score"]');
+    const inputsTwo = courtTwo.querySelectorAll<HTMLInputElement>('input[aria-label$="score"]');
+    const saveOne = courtOne.querySelector<HTMLButtonElement>(".primary")!;
+    const saveTwo = courtTwo.querySelector<HTMLButtonElement>(".primary")!;
+    await act(async () => setInputValue(inputsOne[0], "21"));
+    await act(async () => setInputValue(inputsOne[1], "18"));
+    await act(async () => setInputValue(inputsTwo[0], "21"));
+    await act(async () => setInputValue(inputsTwo[1], "17"));
+    await act(async () => saveOne.click());
+    expect(saveOne.textContent).toBe("Confirm");
+    await act(async () => saveOne.click());
+    await act(async () => saveOne.click());
+
+    expect(mocks.api).toHaveBeenCalledTimes(1);
+    expect(mocks.api).toHaveBeenCalledWith("/api/matches/match-1/score", "POST", { team1Score: 21, team2Score: 18 });
+    expect(Array.from(inputsOne).every((input) => input.disabled)).toBe(true);
+    expect(saveOne.disabled).toBe(true);
+    expect(Array.from(inputsTwo).every((input) => !input.disabled)).toBe(true);
+    expect(saveTwo.disabled).toBe(false);
+
+    await act(async () => pendingSave.resolve({}));
+  });
+
+  it("recovers and retries a failed score save on only the affected court", async () => {
+    const first = match("match-1", 1, 0, 0);
+    const second = match("match-2", 2, 0, 0);
+    const failedSave = deferred<unknown>();
+    setup(sessionWithCourts([
+      { id: "court-1", courtNumber: 1, currentMatch: first },
+      { id: "court-2", courtNumber: 2, currentMatch: second },
+    ]));
+    let attempts = 0;
+    mocks.api.mockImplementation((url: string) => {
+      if (url === "/api/matches/match-1/score" && attempts++ === 0) return failedSave.promise;
+      return Promise.resolve({});
+    });
+    await act(async () => root.render(<LiveSession code="TEST01" onBack={vi.fn()} onEnded={vi.fn(async () => undefined)} />));
+
+    const courts = container.querySelectorAll<HTMLElement>(".court-card");
+    const courtOne = courts[0];
+    const courtTwo = courts[1];
+    const inputsOne = courtOne.querySelectorAll<HTMLInputElement>('input[aria-label$="score"]');
+    const inputsTwo = courtTwo.querySelectorAll<HTMLInputElement>('input[aria-label$="score"]');
+    const saveOne = courtOne.querySelector<HTMLButtonElement>(".primary")!;
+    const saveTwo = courtTwo.querySelector<HTMLButtonElement>(".primary")!;
+    await act(async () => setInputValue(inputsOne[0], "21"));
+    await act(async () => setInputValue(inputsOne[1], "18"));
+    await act(async () => setInputValue(inputsTwo[0], "21"));
+    await act(async () => setInputValue(inputsTwo[1], "17"));
+    await act(async () => saveOne.click());
+    await act(async () => saveOne.click());
+
+    expect(Array.from(inputsOne).every((input) => input.disabled)).toBe(true);
+    expect(Array.from(inputsTwo).every((input) => !input.disabled)).toBe(true);
+    await act(async () => {
+      failedSave.reject(new Error("Network unavailable"));
+      await failedSave.promise.catch(() => undefined);
+    });
+
+    expect(courtOne.querySelector('[role="alert"]')?.textContent).toContain("Network unavailable");
+    expect(Array.from(inputsOne).every((input) => !input.disabled)).toBe(true);
+    expect(saveOne.disabled).toBe(false);
+    expect(Array.from(inputsTwo).every((input) => !input.disabled)).toBe(true);
+    expect(saveTwo.disabled).toBe(false);
+    expect(courtTwo.querySelector('[role="alert"]')).toBeNull();
+    expect(inputsOne[0].value).toBe("21");
+    expect(inputsTwo[0].value).toBe("21");
+
+    await act(async () => saveOne.click());
+    expect(mocks.api).toHaveBeenCalledTimes(2);
+    expect(mocks.api).toHaveBeenLastCalledWith("/api/matches/match-1/score", "POST", { team1Score: 21, team2Score: 18 });
+    expect(courtTwo.querySelector('[role="alert"]')).toBeNull();
+    expect(Array.from(inputsTwo).every((input) => !input.disabled)).toBe(true);
   });
 
   it("keeps an active paused player on court and sends pause/resume payloads", async () => {
