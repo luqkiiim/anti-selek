@@ -252,4 +252,93 @@ describe("LiveSession score and player controls", () => {
     await act(async () => root.render(<LiveSession code="TEST01" onBack={vi.fn()} onEnded={vi.fn(async () => undefined)} />));
     expect(container.textContent).toContain("Waiting");
   });
+
+  it("confirms a court reshuffle before sending the existing generate-match request", async () => {
+    const currentMatch = match("match-1", 1);
+    setup(sessionWithCourts([{ id: "court-1", courtNumber: 1, currentMatch }]));
+    await act(async () => root.render(<LiveSession code="TEST01" onBack={vi.fn()} onEnded={vi.fn(async () => undefined)} />));
+
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Court 1 options"]')?.click());
+    await act(async () => Array.from(container.querySelectorAll<HTMLButtonElement>("[role=dialog] button")).find((button) => button.textContent === "Reshuffle whole match")?.click());
+    expect(container.querySelector('[role="dialog"]')?.getAttribute("aria-label")).toBe("Reshuffle this match?");
+    await act(async () => Array.from(container.querySelectorAll<HTMLButtonElement>("[role=dialog] button")).find((button) => button.textContent === "Reshuffle match")?.click());
+
+    expect(mocks.api).toHaveBeenCalledWith("/api/sessions/TEST01/generate-match", "POST", {
+      courtId: "court-1",
+      forceReshuffle: true,
+    });
+  });
+
+  it("creates a court manual match from four selected active players", async () => {
+    const session = sessionWithCourts(
+      [{ id: "court-1", courtNumber: 1, currentMatch: null }],
+      [player("a", "Ari"), player("b", "Bea"), player("c", "Chen"), player("d", "Dee")],
+    );
+    setup(session);
+    await act(async () => root.render(<LiveSession code="TEST01" onBack={vi.fn()} onEnded={vi.fn(async () => undefined)} />));
+
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Court 1 options"]')?.click());
+    await act(async () => Array.from(container.querySelectorAll<HTMLButtonElement>("[role=dialog] button")).find((button) => button.textContent === "Manual 2v2 match")?.click());
+    for (let i = 0; i < 4; i += 1) {
+      const option = container.querySelectorAll<HTMLButtonElement>(".manual-player-option")[i];
+      await act(async () => option.click());
+    }
+    await act(async () => Array.from(container.querySelectorAll<HTMLButtonElement>("[role=dialog] button")).find((button) => button.textContent === "Create match")?.click());
+
+    expect(mocks.api).toHaveBeenCalledWith("/api/sessions/TEST01/generate-match", "POST", {
+      courtId: "court-1",
+      manualTeams: { team1: ["a", "b"], team2: ["c", "d"] },
+    });
+  });
+
+  it("replaces a queued player's spot using the queue-match route", async () => {
+    const queued = match("queued-1", 2);
+    const session = sessionWithCourts([{ id: "court-1", courtNumber: 1, currentMatch: match("court-match", 1) }]);
+    session.queuedMatch = queued;
+    session.players.push(
+      player(queued.team1User1.id, queued.team1User1.name),
+      player(queued.team1User2.id, queued.team1User2.name),
+      player(queued.team2User1.id, queued.team2User1.name),
+      player(queued.team2User2.id, queued.team2User2.name),
+    );
+    setup(session);
+    await act(async () => root.render(<LiveSession code="TEST01" onBack={vi.fn()} onEnded={vi.fn(async () => undefined)} />));
+
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Next up options"]')?.click());
+    await act(async () => Array.from(container.querySelectorAll<HTMLButtonElement>("[role=dialog] button")).find((button) => button.textContent?.includes(`Replace ${queued.team1User1.name}`))?.click());
+
+    expect(mocks.api).toHaveBeenCalledWith("/api/sessions/TEST01/queue-match", "POST", {
+      replaceUserId: queued.team1User1.id,
+    });
+  });
+
+  it("edits a queued lineup manually by clearing it and posting the selected teams", async () => {
+    const queued = match("queued-1", 2);
+    const session = sessionWithCourts([{ id: "court-1", courtNumber: 1, currentMatch: match("court-match", 1) }]);
+    session.queuedMatch = queued;
+    session.players.push(
+      player(queued.team1User1.id, queued.team1User1.name),
+      player(queued.team1User2.id, queued.team1User2.name),
+      player(queued.team2User1.id, queued.team2User1.name),
+      player(queued.team2User2.id, queued.team2User2.name),
+    );
+    setup(session);
+    await act(async () => root.render(<LiveSession code="TEST01" onBack={vi.fn()} onEnded={vi.fn(async () => undefined)} />));
+
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Next up options"]')?.click());
+    await act(async () => Array.from(container.querySelectorAll<HTMLButtonElement>("[role=dialog] button")).find((button) => button.textContent === "Edit manually")?.click());
+    for (let i = 0; i < 4; i += 1) {
+      const option = container.querySelectorAll<HTMLButtonElement>(".manual-player-option")[i];
+      await act(async () => option.click());
+    }
+    await act(async () => Array.from(container.querySelectorAll<HTMLButtonElement>("[role=dialog] button")).find((button) => button.textContent === "Save next match")?.click());
+
+    expect(mocks.api).toHaveBeenNthCalledWith(1, "/api/sessions/TEST01/queue-match", "DELETE");
+    expect(mocks.api).toHaveBeenNthCalledWith(2, "/api/sessions/TEST01/queue-match", "POST", {
+      manualTeams: {
+        team1: [queued.team1User1.id, queued.team1User2.id],
+        team2: [queued.team2User1.id, queued.team2User2.id],
+      },
+    });
+  });
 });
