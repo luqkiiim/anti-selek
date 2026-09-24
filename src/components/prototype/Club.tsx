@@ -6,6 +6,7 @@ import {
   CaretRight,
   ArrowLeft,
   ArrowUp,
+  ArrowDown,
   GearSix,
   Plus,
 } from "@phosphor-icons/react";
@@ -43,6 +44,7 @@ import { TopRivalries } from "./TopRivalries";
 import type { ClubPulseSnapshot } from "@/lib/clubPulse";
 import LiveSession from "./LiveSession";
 import SessionMatchHistory from "./SessionMatchHistory";
+import { formatProfileDate } from "./profileDate";
 export type Snapshot = {
   viewer: ClubPageUser;
   club: ClubPageClub;
@@ -152,7 +154,8 @@ export default function Club({
             <span
               className={"gain " + (recent.ratingChange < 0 ? "negative" : "")}
             >
-              <ArrowUp size={14} />
+              {recent.ratingChange > 0 && <ArrowUp size={14} aria-hidden="true" />}
+              {recent.ratingChange < 0 && <ArrowDown size={14} aria-hidden="true" />}
               {recent.ratingChange > 0 ? "+" : ""}
               {recent.ratingChange}
               <em>last session</em>
@@ -371,9 +374,7 @@ export default function Club({
                       <span>
                         <strong>{s.name}</strong>
                         <small>
-                          {new Date(
-                            s.endedAt || s.createdAt,
-                          ).toLocaleDateString()}
+                          {formatProfileDate(s.endedAt || s.createdAt)}
                         </small>
                       </span>
                       <CaretRight size={18} />

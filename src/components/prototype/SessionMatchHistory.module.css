@@ -293,8 +293,8 @@
 
 .matchOptions > summary {
   display: grid;
-  width: 40px;
-  height: 40px;
+  width: 44px;
+  height: 44px;
   place-items: center;
   border: 1px solid #e9e0eb;
   border-radius: 12px;
@@ -331,7 +331,7 @@
 
 .matchOptionsMenu button {
   display: flex;
-  min-height: 42px;
+  min-height: 44px;
   align-items: center;
   gap: 8px;
   border: 0;

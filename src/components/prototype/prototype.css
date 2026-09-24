@@ -1706,9 +1706,10 @@
 .club-welcome .eyebrow {
   font-size: 9px;
 }
-.pc-content > .section-heading .text-button {
+.pc-content .section-heading .text-button {
   font-size: 12px;
   padding: 8px;
+  min-height: 44px;
 }
 .chooser {
   padding-bottom: 45px;
