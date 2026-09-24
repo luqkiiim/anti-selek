@@ -60,13 +60,10 @@ function matchTime(match: HistoryMatch) {
   return match.completedAt ?? match.createdAt;
 }
 
-function formatMatchDate(timestamp: string) {
+function formatMatchTime(timestamp: string) {
   const date = new Date(timestamp);
-  if (Number.isNaN(date.getTime())) return "Date unavailable";
+  if (Number.isNaN(date.getTime())) return "Time unavailable";
   return new Intl.DateTimeFormat(undefined, {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
     hour: "numeric",
     minute: "2-digit",
   }).format(date);
@@ -359,7 +356,7 @@ export default function SessionMatchHistory({
                       <div className={styles.matchPlace}>
                         <span className={styles.court}>{courtLabel(match.court)}</span>
                         <time dateTime={timestamp} className={styles.date}>
-                          {formatMatchDate(timestamp)}
+                          {formatMatchTime(timestamp)}
                         </time>
                       </div>
                       {isPending ? (
@@ -369,7 +366,6 @@ export default function SessionMatchHistory({
 
                     <div className={styles.scoreboard}>
                       <div className={`${styles.team} ${team1Won ? styles.winner : ""}`}>
-                        <span className={styles.teamLabel}>TEAM A</span>
                         <span className={styles.playerNames}>
                           {match.team1User1.name}
                           <span aria-hidden="true"> &amp; </span>
@@ -393,7 +389,6 @@ export default function SessionMatchHistory({
                         )}
                       </div>
                       <div className={`${styles.team} ${styles.teamRight} ${team2Won ? styles.winner : ""}`}>
-                        <span className={styles.teamLabel}>TEAM B</span>
                         <span className={styles.playerNames}>
                           {match.team2User1.name}
                           <span aria-hidden="true"> &amp; </span>
@@ -460,7 +455,7 @@ export default function SessionMatchHistory({
             </p>
             <div className={styles.sheetMatch}>
               <span>{courtLabel(draft.match.court)}</span>
-              <span>{formatMatchDate(matchTime(draft.match))}</span>
+              <span>{formatMatchTime(matchTime(draft.match))}</span>
               <strong>
                 {draft.match.team1User1.name} &amp; {draft.match.team1User2.name}
               </strong>
