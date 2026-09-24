@@ -42,6 +42,7 @@ import InterclubScoreboard from "./InterclubScoreboard";
 import { LiveSessionStandings } from "./LiveSessionStandings";
 import { deriveLiveSessionPlayerStats } from "./deriveLiveSessionStandings";
 import { SessionFinishView } from "./SessionFinishView";
+import { sessionFinishHighlights } from "./sessionFinishHighlights";
 import { shareSessionStandingsImage } from "@/lib/sessionShareImageClient";
 import { getInterclubScore } from "@/lib/interclubScoreboard";
 import { CourtMatchCreateMenu, SessionMatchCreationToolbar } from "./SessionMatchCreationControls";
@@ -114,6 +115,7 @@ export default function LiveSession({
   const [managePlayersOpen, setManagePlayersOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [sharing, setSharing] = useState(false);
+  const [celebrateFinish, setCelebrateFinish] = useState(false);
   const [shareError, setShareError] = useState("");
   const [liveSettingsDraft, setLiveSettingsDraft] = useState<LiveSettingsDraft | null>(null);
   const [confirmAutoQueueOff, setConfirmAutoQueueOff] = useState(false);
@@ -703,6 +705,10 @@ export default function LiveSession({
                   playerStatsByUserId={finalPlayerStats}
                   onShareResults={finalPlayers.length > 0 ? () => void shareResults() : undefined}
                   sharingResults={sharing}
+                  celebrate={celebrateFinish}
+                  highlights={sessionFinishHighlights(finalPlayers, sessionStats)}
+                  onOpenMember={onOpenMember}
+                  profileMemberIds={profileMemberIds}
                 >
                   {getInterclubScore(s) ? <InterclubScoreboard session={s} /> : null}
                 </SessionFinishView>
@@ -711,7 +717,7 @@ export default function LiveSession({
               <button className="primary" onClick={onBack}>
                 Back to club
               </button>
-              <button className="secondary full" onClick={() => setShowHistory(true)}>
+              <button className="text-button full" onClick={() => { setCelebrateFinish(false); setShowHistory(true); }}>
                 Match history
               </button>
             </>
@@ -1421,7 +1427,10 @@ export default function LiveSession({
                 className="primary"
                 onClick={() =>
                   void action.run(
-                    () => api(endpoint + "/end", "POST"),
+                    async () => {
+                      await api(endpoint + "/end", "POST");
+                      setCelebrateFinish(true);
+                    },
                     async () => {
                       setSheet("");
                       await onEnded();
