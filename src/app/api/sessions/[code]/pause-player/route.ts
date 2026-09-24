@@ -23,7 +23,7 @@ export async function POST(
   { params }: { params: Promise<{ code: string }> }
 ) {
   try {
-    const rateLimitResponse = await rateLimit(request, "api:sessions:code:pause-player:post", { limit: 15, windowMs: 60_000 });
+    const rateLimitResponse = await rateLimit(request, "api:sessions:code:pause-player:post", { limit: 120, windowMs: 60_000 });
     if (rateLimitResponse) return rateLimitResponse;
 
     const session = await auth();
