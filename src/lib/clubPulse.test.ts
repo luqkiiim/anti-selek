@@ -178,6 +178,7 @@ describe("clubPulse", () => {
 
   it("returns quiet empty-state data when a club has no matches", () => {
     const result = buildClubPulse({
+      now: new Date("2026-09-20T12:00:00Z"),
       members: [createMember(players.alice), createMember(players.ben)],
       sessions: [],
       completedMatches: [],
@@ -196,6 +197,8 @@ describe("clubPulse", () => {
       },
       hotPlayers: [],
       ratingMovers: [],
+      monthlyClimbers: [],
+      monthlyClimbersMonth: "September 2026",
       rivalries: [],
       partnerships: [],
       recentMatches: [],

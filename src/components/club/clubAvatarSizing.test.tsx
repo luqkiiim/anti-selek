@@ -43,6 +43,8 @@ const member: ClubPageMember = {
 };
 
 const pulse: ClubPagePulse = {
+  monthlyClimbers: [],
+  monthlyClimbersMonth: "September 2026",
   metrics: {
     members: 12,
     activeTournaments: 0,

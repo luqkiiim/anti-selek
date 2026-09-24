@@ -29,6 +29,7 @@ import {
 import { Pager } from "./Pager";
 import { SessionUpdate } from "./SessionUpdate";
 import { ClubHighlights } from "./ClubHighlights";
+import { MonthlyClimbers } from "./MonthlyClimbers";
 import { UpcomingSessions } from "./UpcomingSessions";
 import { NextMilestone, AchievementCabinet } from "./Achievements";
 import type { AchievementCollection, AchievementId } from "@/lib/clubAchievements";
@@ -306,6 +307,7 @@ export default function Club({
               <UpcomingSessions sessions={upcoming} canManage={!!canManage} onOpen={openSession} onViewAll={() => go("sessions")} />
               {recent && <SessionUpdate session={recent} onOpen={() => { setRecap(recent); go("recap"); }} />}
               <ClubHighlights items={data.clubPulse?.sessionNews ?? []} onOpen={openSession} />
+              {data.clubPulse?.monthlyClimbers && <MonthlyClimbers climbers={data.clubPulse.monthlyClimbers} month={data.clubPulse.monthlyClimbersMonth} onOpenProfile={openMember} />}
               <div className="section-heading">
                 <h3>Your progress here</h3>
                 <button className="text-button" onClick={() => go("profile")}>
