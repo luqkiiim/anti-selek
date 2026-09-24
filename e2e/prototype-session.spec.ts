@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 import { signInAsAdmin } from "./helpers";
 
 test("prototype host can reach court controls, player management, and match history", async ({ page }) => {
-  test.setTimeout(90_000);
+  test.setTimeout(150_000);
   await page.setViewportSize({ width: 390, height: 844 });
   await signInAsAdmin(page);
 
@@ -15,8 +15,27 @@ test("prototype host can reach court controls, player management, and match hist
   await page.screenshot({ path: "test-results/prototype-courts-390.png", fullPage: true });
   await page.getByRole("button", { name: "Court 1 options" }).click();
   await expect(page.getByRole("dialog", { name: "Court 1 options" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Reshuffle whole match" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Reshuffle match", exact: true })).toBeVisible();
+  await expect(page.getByRole("dialog", { name: "Court 1 options" }).getByRole("button", { name: "Clear court", exact: true })).toBeVisible();
+  await expect(page.getByRole("dialog", { name: "Court 1 options" }).getByText("Replace one player")).toHaveCount(0);
+  await page.waitForTimeout(350);
+  await page.screenshot({ path: "test-results/prototype-court-menu-390.png" });
   await page.getByRole("button", { name: "Close" }).click();
+  await page.getByRole("button", { name: "Player actions for Score Player 1", exact: true }).click();
+  await expect(page.getByRole("dialog", { name: "Player actions", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Pause player", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Reshuffle without Score Player 1", exact: true })).toBeVisible();
+  await page.waitForTimeout(350);
+  await page.screenshot({ path: "test-results/prototype-court-player-390.png" });
+  await page.getByRole("button", { name: "Pause player", exact: true }).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(page.getByRole("textbox", { name: "Team 1 score" })).toHaveCount(0);
+  await page.getByRole("navigation", { name: "Session navigation" }).getByRole("button", { name: "Players" }).click();
+  await page.getByRole("button", { name: "Resume Score Player 1", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Pause Score Player 1", exact: true })).toBeVisible();
+  await page.getByRole("navigation", { name: "Session navigation" }).getByRole("button", { name: "Courts" }).click();
+  await page.getByRole("button", { name: "Create Matches", exact: true }).click();
+  await expect(page.getByRole("textbox", { name: "Team 1 score" })).toBeVisible();
 
   await page.getByRole("button", { name: "More options" }).click();
   await page.getByRole("button", { name: "Session settings" }).click();

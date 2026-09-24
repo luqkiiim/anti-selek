@@ -133,8 +133,10 @@ export function LiveSessionStandings({
                         {getInitial(row.name)}
                       </span>
                     )}
-                    <span className={styles.playerName} title={row.name}>{row.name}</span>
-                    {row.isCurrentUser ? <span className={styles.you}>You</span> : null}
+                    <span className={styles.playerIdentity}>
+                      <span className={styles.playerName} title={row.name}>{row.name}</span>
+                      {row.isCurrentUser ? <span className={styles.you}>You</span> : null}
+                    </span>
                   </>
                 );
 

@@ -48,12 +48,12 @@
   flex: 1 0 auto;
   align-items: center;
   justify-content: center;
-  min-height: 36px;
+  min-height: 44px;
   padding: 0 10px;
   border: 0;
   border-radius: 9px;
   font: inherit;
-  font-size: 11px;
+  font-size: 14px;
   font-weight: 800;
   white-space: nowrap;
   cursor: pointer;
@@ -92,17 +92,17 @@
 }
 
 .rankColumn { width: 6%; }
-.playerColumn { width: 46%; }
+.playerColumn { width: 42%; }
 .scoreColumn { width: 13%; }
-.diffColumn { width: 10%; }
+.diffColumn { width: 11%; }
 .matchesColumn { width: 9%; }
-.recordColumn { width: 16%; }
+.recordColumn { width: 19%; }
 
 .table th {
   height: 27px;
   padding: 2px 1px 6px;
-  color: #8b7c92;
-  font-size: 9px;
+  color: #766580;
+  font-size: 12px;
   font-weight: 850;
   line-height: 1;
   text-align: center;
@@ -115,7 +115,7 @@
 }
 
 .row td {
-  height: 48px;
+  height: 60px;
   padding: 5px 1px;
   border-top: 1px solid #f0e9ef;
   vertical-align: middle;
@@ -123,7 +123,7 @@
 
 .rank {
   color: #766981;
-  font-size: 11px;
+  font-size: 14px;
   font-weight: 800;
   text-align: center;
 }
@@ -147,6 +147,7 @@
 }
 
 .profileButton {
+  min-height: 44px;
   padding: 0;
   border: 0;
   color: inherit;
@@ -162,9 +163,9 @@
 .avatar,
 .avatarFallback {
   display: inline-flex;
-  width: 26px;
-  height: 26px;
-  flex: 0 0 26px;
+  width: 36px;
+  height: 36px;
+  flex: 0 0 36px;
   align-items: center;
   justify-content: center;
   overflow: hidden;
@@ -172,7 +173,7 @@
   border-radius: 50%;
   color: #7040bc;
   background: #f5edf9;
-  font-size: 10px;
+  font-size: 13px;
   font-weight: 900;
   object-fit: cover;
 }
@@ -181,12 +182,13 @@
   min-width: 0;
   overflow: hidden;
   color: #31213d;
-  font-size: 11px;
+  font-size: 14px;
   font-weight: 850;
   line-height: 1.2;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
+
+.playerIdentity { display: flex; min-width: 0; flex-direction: column; align-items: flex-start; gap: 3px; }
 
 .you {
   flex: 0 0 auto;
@@ -194,7 +196,7 @@
   border-radius: 6px;
   color: #7040bc;
   background: #f4edfb;
-  font-size: 8px;
+  font-size: 10px;
   font-weight: 900;
   line-height: 1;
   text-transform: uppercase;
@@ -203,7 +205,7 @@
 .number {
   overflow: hidden;
   color: #43334f;
-  font-size: 10px;
+  font-size: 13px;
   font-weight: 750;
   text-align: center;
   text-overflow: clip;
@@ -232,12 +234,12 @@
   .panel { padding: 16px; }
   .header { flex-direction: row; align-items: center; justify-content: space-between; gap: 12px; }
   .filters { width: auto; max-width: 100%; }
-  .table th { font-size: 11px; }
-  .row td { height: 54px; }
+  .table th { font-size: 13px; }
+  .row td { height: 64px; }
   .avatar,
-  .avatarFallback { width: 30px; height: 30px; flex-basis: 30px; }
-  .playerName { font-size: 13px; }
-  .number { font-size: 12px; }
+  .avatarFallback { width: 40px; height: 40px; flex-basis: 40px; }
+  .playerName { font-size: 15px; }
+  .number { font-size: 14px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -63,6 +63,11 @@ type ControlConfirmation =
   | { kind: "court-reshuffle"; courtId: string }
   | { kind: "court-undo"; courtId: string }
   | { kind: "queue-clear" };
+type CourtPlayerAction = {
+  courtId: string;
+  matchId: string;
+  player: Match["team1User1"];
+};
 export default function LiveSession({
   code,
   onBack,
@@ -96,6 +101,7 @@ export default function LiveSession({
     [scoreErrors, setScoreErrors] = useState<Record<string, string>>({}),
     [scores, setScores] = useState<Record<string, [string, string]>>({}),
     [courtControlId, setCourtControlId] = useState<string | null>(null),
+    [courtPlayerAction, setCourtPlayerAction] = useState<CourtPlayerAction | null>(null),
     [confirmation, setConfirmation] = useState<ControlConfirmation | null>(null),
     [manualTarget, setManualTarget] = useState<ManualTarget | null>(null),
     [manualSelection, setManualSelection] = useState<string[]>([]);
@@ -383,6 +389,7 @@ export default function LiveSession({
   function closeSheet() {
     setSheet("");
     setCourtControlId(null);
+    setCourtPlayerAction(null);
     setConfirmation(null);
     setManualTarget(null);
     setManualSelection([]);
@@ -391,6 +398,7 @@ export default function LiveSession({
   function finishControlAction() {
     setSheet("");
     setCourtControlId(null);
+    setCourtPlayerAction(null);
     setConfirmation(null);
     setManualTarget(null);
     setManualSelection([]);
@@ -400,6 +408,14 @@ export default function LiveSession({
     setConfirmation(null);
     action.setError("");
     setSheet("court-controls");
+  }
+  function openCourtPlayerActions(court: Court, player: Match["team1User1"]) {
+    if (!court.currentMatch || !canManage) return;
+    setCourtControlId(court.id);
+    setCourtPlayerAction({ courtId: court.id, matchId: court.currentMatch.id, player });
+    setConfirmation(null);
+    action.setError("");
+    setSheet("court-player");
   }
   function openNextControls() {
     setCourtControlId(null);
@@ -581,17 +597,62 @@ export default function LiveSession({
     }
     await api(endpoint + "/queue-match", "DELETE");
   }
-  function runCourtPlayerAction(kind: "exclude" | "replace", userId: string) {
-    if (!courtControl) return;
-    void action.run(
-      () => api(endpoint + "/generate-match", "POST", {
-        courtId: courtControl.id,
-        ...(kind === "exclude"
-          ? { forceReshuffle: true, excludedUserId: userId }
-          : { replaceUserId: userId }),
-      }),
-      finishControlAction,
+  function runCourtPlayerAction(kind: "exclude" | "pause") {
+    if (!courtPlayerAction) return;
+    const target = courtPlayerAction;
+    if (kind === "exclude") {
+      void action.run(
+        () => api(endpoint + "/generate-match", "POST", {
+          courtId: target.courtId,
+          forceReshuffle: true,
+          excludedUserId: target.player.id,
+        }),
+        finishControlAction,
+      );
+      return;
+    }
+
+    const targetCourt = s?.courts.find((court) => court.id === target.courtId);
+    const currentMatchPlayerIds = new Set(
+      targetCourt?.currentMatch?.id === target.matchId
+        ? playersInMatch(targetCourt.currentMatch).map((player) => player.id)
+        : [],
     );
+    const queuedPlayerIds = new Set(
+      s?.queuedMatch ? playerInQueue(s.queuedMatch).map((player) => player.id) : [],
+    );
+    const playersAvailableForCourt = s?.players.filter((player) =>
+      !player.isPaused &&
+      player.userId !== target.player.id &&
+      !queuedPlayerIds.has(player.userId) &&
+      (!busyPlayerIds.has(player.userId) || currentMatchPlayerIds.has(player.userId)),
+    ).length ?? 0;
+    let noReplacementMessage = "";
+    void action.run(async () => {
+      await api(endpoint + "/pause-player", "POST", {
+        userId: target.player.id,
+        isPaused: true,
+        courtId: target.courtId,
+        currentMatchId: target.matchId,
+      });
+
+      if (playersAvailableForCourt < 4) {
+        noReplacementMessage = "Player paused. The court is clear until four eligible players are available.";
+        return;
+      }
+
+      try {
+        await api(endpoint + "/generate-match", "POST", { courtId: target.courtId });
+      } catch (error) {
+        await refresh().catch(() => {});
+        finishControlAction();
+        const detail = error instanceof Error ? error.message : "No replacement match could be created.";
+        throw new Error(`Player paused and the court was cleared. ${detail}`);
+      }
+    }, () => {
+      finishControlAction();
+      if (noReplacementMessage) action.setError(noReplacementMessage);
+    });
   }
   function runQueuePlayerAction(kind: "exclude" | "replace", userId: string) {
     if (!controlQueue) return;
@@ -741,7 +802,19 @@ export default function LiveSession({
                         ].map((team, i) => (
                           <div className="team-row" key={i}>
                             <div className="team-players">
-                              {team.map((player) => (
+                              {team.map((player) => canManage ? (
+                                <button
+                                  type="button"
+                                  className="match-player court-player-action"
+                                  key={player.id}
+                                  aria-label={`Player actions for ${player.name}`}
+                                  disabled={action.busy || savingScoreMatchIds.has(match.id)}
+                                  onClick={() => openCourtPlayerActions(court, player)}
+                                >
+                                  <Avatar name={player.name} url={player.avatarUrl} />
+                                  <strong>{player.name}</strong>
+                                </button>
+                              ) : (
                                 <span className="match-player" key={player.id}>
                                   <Avatar name={player.name} url={player.avatarUrl} />
                                   <strong>{player.name}</strong>
@@ -987,11 +1060,13 @@ export default function LiveSession({
                       ? "Session settings"
                       : sheet === "reset"
                         ? "Reset this session?"
+                      : sheet === "court-player"
+                        ? "Player actions"
                       : sheet === "court-controls"
                         ? courtControl?.label || `Court ${courtControl?.courtNumber ?? ""} options`
                         : sheet === "confirm-control"
                           ? confirmation?.kind === "court-undo"
-                            ? "Undo court selection?"
+                            ? "Clear court?"
                             : confirmation?.kind === "queue-clear"
                               ? "Clear next match?"
                               : "Reshuffle this match?"
@@ -1370,60 +1445,53 @@ export default function LiveSession({
               </button>
               <button type="button" className="text-button" onClick={() => setSheet("")}>Keep session</button>
             </>
+          ) : sheet === "court-player" && courtPlayerAction ? (
+            <>
+              <div className="court-player-action-identity">
+                <Avatar name={courtPlayerAction.player.name} url={courtPlayerAction.player.avatarUrl} large />
+                <strong>{courtPlayerAction.player.name}</strong>
+              </div>
+              <div className="court-action-list">
+                <button
+                  type="button"
+                  className="court-action-row"
+                  aria-label={`Reshuffle without ${courtPlayerAction.player.name}`}
+                  disabled={action.busy}
+                  onClick={() => runCourtPlayerAction("exclude")}
+                >
+                  Reshuffle without
+                </button>
+                <button
+                  type="button"
+                  className="court-action-row"
+                  disabled={action.busy}
+                  onClick={() => runCourtPlayerAction("pause")}
+                >
+                  Pause player
+                </button>
+              </div>
+            </>
           ) : sheet === "court-controls" && courtControl ? (
             controlMatch ? (
               <>
-                <p className="control-intro">
-                  {courtControl.label || `Court ${courtControl.courtNumber}`} · choose how to update these players.
-                </p>
-                <button
-                  className="secondary full control-action"
-                  disabled={action.busy}
-                  onClick={() => startConfirmedControl({ kind: "court-reshuffle", courtId: courtControl.id })}
-                >
-                  Reshuffle whole match
-                </button>
-                <div className="control-section">
-                  <h3>Reshuffle without one player</h3>
-                  <div className="control-player-list">
-                    {playersInMatch(controlMatch).map((player) => (
-                      <button
-                        key={player.id}
-                        className="control-player-button"
-                        disabled={action.busy}
-                        onClick={() => runCourtPlayerAction("exclude", player.id)}
-                      >
-                        <Avatar name={player.name} url={player.avatarUrl} />
-                        <span>Leave out {player.name}</span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <div className="control-section">
-                  <h3>Replace one player</h3>
-                  <div className="control-player-list">
-                    {playersInMatch(controlMatch).map((player) => (
-                      <button
-                        key={player.id}
-                        className="control-player-button"
-                        disabled={action.busy}
-                        onClick={() => runCourtPlayerAction("replace", player.id)}
-                      >
-                        <Avatar name={player.name} url={player.avatarUrl} />
-                        <span>Replace {player.name}</span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                {controlMatch.status === "IN_PROGRESS" && (
+                <div className="court-action-list">
                   <button
-                    className="secondary full control-action danger-outline"
+                    type="button"
+                    className="court-action-row"
+                    disabled={action.busy}
+                    onClick={() => startConfirmedControl({ kind: "court-reshuffle", courtId: courtControl.id })}
+                  >
+                    Reshuffle match
+                  </button>
+                  <button
+                    type="button"
+                    className="court-action-row"
                     disabled={action.busy}
                     onClick={() => startConfirmedControl({ kind: "court-undo", courtId: courtControl.id })}
                   >
-                    Undo court selection
+                    Clear court
                   </button>
-                )}
+                </div>
               </>
             ) : (
               <>
@@ -1443,7 +1511,7 @@ export default function LiveSession({
               {confirmation.kind === "court-reshuffle" ? (
                 <p>Choose a different lineup for {courtControl?.label || `Court ${courtControl?.courtNumber ?? ""}`}? The current four players return to the pool.</p>
               ) : confirmation.kind === "court-undo" ? (
-                <p>Return the four players on {courtControl?.label || `Court ${courtControl?.courtNumber ?? ""}`} to the available pool? The court match will be removed.</p>
+                <p>Return the four players on {courtControl?.label || `Court ${courtControl?.courtNumber ?? ""}`} to the available pool and clear this court?</p>
               ) : (
                 <p>Remove the queued next match and return its players to the available pool?</p>
               )}
@@ -1454,7 +1522,7 @@ export default function LiveSession({
                   finishControlAction();
                 })}
               >
-                {confirmation.kind === "court-reshuffle" ? "Reshuffle match" : confirmation.kind === "court-undo" ? "Undo selection" : "Clear next match"}
+                {confirmation.kind === "court-reshuffle" ? "Reshuffle match" : confirmation.kind === "court-undo" ? "Clear court" : "Clear next match"}
               </button>
               <button className="text-button" disabled={action.busy} onClick={() => {
                 const returnSheet = confirmation.kind === "queue-clear" ? "next" : "court-controls";

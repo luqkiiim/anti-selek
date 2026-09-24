@@ -599,6 +599,19 @@
   gap: 8px;
   min-width: 0;
 }
+.court-player-action {
+  width: 100%;
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+}
+.court-player-action:focus-visible {
+  outline-offset: 2px;
+}
 .match-player .avatar {
   width: 32px;
   height: 32px;
@@ -1292,6 +1305,40 @@
   display: flex;
   flex-direction: column;
   gap: 12px;
+}
+.court-player-action-identity {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  min-width: 0;
+  padding: 2px 4px 5px;
+}
+.court-player-action-identity strong {
+  min-width: 0;
+  font-size: 18px;
+  font-weight: 850;
+  overflow-wrap: anywhere;
+}
+.court-action-list {
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: #fffdfb;
+}
+.sheet-content .court-action-row {
+  display: block;
+  width: 100%;
+  min-height: 52px;
+  padding: 13px 14px;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  text-align: left;
+  font-size: 15px;
+  font-weight: 800;
+}
+.sheet-content .court-action-row + .court-action-row {
+  border-top: 1px solid var(--line);
 }
 .sheet-content p {
   margin: 0 0 10px;

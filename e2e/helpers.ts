@@ -87,7 +87,7 @@ export async function signIn(page: Page, credentials: { email: string; password:
   await page.getByLabel("Email", { exact: true }).fill(credentials.email);
   await page.getByLabel("Password", { exact: true }).fill(credentials.password);
   await page.getByRole("button", { name: "Sign in" }).click();
-  await expect(page).toHaveURL(/\/$/);
+  await expect(page).toHaveURL(/\/$/, { timeout: 60_000 });
 }
 
 export async function signInAsAdmin(page: Page) {

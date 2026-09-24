@@ -363,7 +363,7 @@ describe("LiveSession score and player controls", () => {
     await act(async () => root.render(<LiveSession code="TEST01" onBack={vi.fn()} onEnded={vi.fn(async () => undefined)} />));
 
     await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Court 1 options"]')?.click());
-    await act(async () => Array.from(container.querySelectorAll<HTMLButtonElement>("[role=dialog] button")).find((button) => button.textContent === "Reshuffle whole match")?.click());
+    await act(async () => Array.from(container.querySelectorAll<HTMLButtonElement>("[role=dialog] button")).find((button) => button.textContent === "Reshuffle match")?.click());
     expect(container.querySelector('[role="dialog"]')?.getAttribute("aria-label")).toBe("Reshuffle this match?");
     await act(async () => Array.from(container.querySelectorAll<HTMLButtonElement>("[role=dialog] button")).find((button) => button.textContent === "Reshuffle match")?.click());
 
@@ -371,6 +371,90 @@ describe("LiveSession score and player controls", () => {
       courtId: "court-1",
       forceReshuffle: true,
     });
+  });
+
+  it("keeps the active court menu to reshuffle and clear actions", async () => {
+    const currentMatch = match("match-1", 1);
+    setup(sessionWithCourts([{ id: "court-1", courtNumber: 1, currentMatch }]));
+    await act(async () => root.render(<LiveSession code="TEST01" onBack={vi.fn()} onEnded={vi.fn(async () => undefined)} />));
+
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Court 1 options"]')?.click());
+    const actions = Array.from(container.querySelectorAll<HTMLButtonElement>('[role="dialog"] .court-action-row'));
+    expect(actions.map((button) => button.textContent?.trim())).toEqual(["Reshuffle match", "Clear court"]);
+    expect(container.textContent).not.toContain("Replace one player");
+    expect(container.textContent).not.toContain("Reshuffle without one player");
+
+    await act(async () => actions[1].click());
+    expect(container.querySelector('[role="dialog"]')?.getAttribute("aria-label")).toBe("Clear court?");
+    await act(async () => Array.from(container.querySelectorAll<HTMLButtonElement>("[role=dialog] button")).find((button) => button.textContent === "Clear court")?.click());
+    expect(mocks.api).toHaveBeenCalledWith("/api/sessions/TEST01/generate-match", "POST", {
+      courtId: "court-1",
+      undoCurrentMatch: true,
+    });
+  });
+
+  it("opens player actions from a court player and reshuffles without that player", async () => {
+    const currentMatch = match("match-1", 1);
+    setup(sessionWithCourts([{ id: "court-1", courtNumber: 1, currentMatch }]));
+    await act(async () => root.render(<LiveSession code="TEST01" onBack={vi.fn()} onEnded={vi.fn(async () => undefined)} />));
+
+    const playerAction = container.querySelector<HTMLButtonElement>('[aria-label="Player actions for Score Player 1A"]');
+    expect(playerAction).toBeTruthy();
+    await act(async () => playerAction?.click());
+    expect(container.querySelector('[role="dialog"]')?.getAttribute("aria-label")).toBe("Player actions");
+    expect(container.querySelector('[role="dialog"]')?.textContent).toContain("Score Player 1A");
+    expect(container.querySelectorAll('[role="dialog"] .court-action-row')).toHaveLength(2);
+
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Reshuffle without Score Player 1A"]')?.click());
+    expect(mocks.api).toHaveBeenCalledWith("/api/sessions/TEST01/generate-match", "POST", {
+      courtId: "court-1",
+      forceReshuffle: true,
+      excludedUserId: "match-1-a",
+    });
+  });
+
+  it("pauses and clears a court player when fewer than four eligible players remain", async () => {
+    const currentMatch = match("match-1", 1);
+    const session = sessionWithCourts([{ id: "court-1", courtNumber: 1, currentMatch }]);
+    setup(session);
+    await act(async () => root.render(<LiveSession code="TEST01" onBack={vi.fn()} onEnded={vi.fn(async () => undefined)} />));
+
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Player actions for Score Player 1A"]')?.click());
+    await act(async () => Array.from(container.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')).find((button) => button.textContent === "Pause player")?.click());
+
+    expect(mocks.api).toHaveBeenCalledWith("/api/sessions/TEST01/pause-player", "POST", {
+      userId: "match-1-a",
+      isPaused: true,
+      courtId: "court-1",
+      currentMatchId: "match-1",
+    });
+    expect(mocks.api).not.toHaveBeenCalledWith("/api/sessions/TEST01/generate-match", "POST", expect.anything());
+  });
+
+  it("rebuilds the court after pausing when four eligible players remain", async () => {
+    const currentMatch = match("match-1", 1);
+    const waitingPlayer = player("waiting-1", "Waiting Player");
+    setup(sessionWithCourts([{ id: "court-1", courtNumber: 1, currentMatch }], [
+      player(currentMatch.team1User1.id, currentMatch.team1User1.name),
+      player(currentMatch.team1User2.id, currentMatch.team1User2.name),
+      player(currentMatch.team2User1.id, currentMatch.team2User1.name),
+      player(currentMatch.team2User2.id, currentMatch.team2User2.name),
+      waitingPlayer,
+    ]));
+    await act(async () => root.render(<LiveSession code="TEST01" onBack={vi.fn()} onEnded={vi.fn(async () => undefined)} />));
+
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Player actions for Score Player 1A"]')?.click());
+    await act(async () => Array.from(container.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')).find((button) => button.textContent === "Pause player")?.click());
+
+    expect(mocks.api.mock.calls.slice(-2)).toEqual([
+      ["/api/sessions/TEST01/pause-player", "POST", {
+        userId: "match-1-a",
+        isPaused: true,
+        courtId: "court-1",
+        currentMatchId: "match-1",
+      }],
+      ["/api/sessions/TEST01/generate-match", "POST", { courtId: "court-1" }],
+    ]);
   });
 
   it("creates a court manual match from four selected active players", async () => {
