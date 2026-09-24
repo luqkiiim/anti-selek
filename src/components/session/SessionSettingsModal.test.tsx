@@ -39,8 +39,6 @@ describe("SessionSettingsModal", () => {
         isTestSession
         autoQueueEnabled={false}
         autoQueueDraft
-        respectPlayerRest={false}
-        respectPlayerRestDraft={false}
         canEditGameplay
         collabFormat={SessionCollabFormat.FREE_PLAY}
         matchmakingStyleDraft={SessionMatchmakingStyle.BALANCED}
@@ -57,7 +55,6 @@ describe("SessionSettingsModal", () => {
         courtLabelDrafts={{ 1: "" }}
         hasGameplayChanges
         hasAutoQueueChange
-        hasRespectPlayerRestChange={false}
         hasCourtLabelChanges={false}
         hasSettingsChanges
         savingSettings={false}
@@ -68,7 +65,6 @@ describe("SessionSettingsModal", () => {
         onCreateRealSession={vi.fn()}
         onDeleteSession={vi.fn()}
         onAutoQueueChange={vi.fn()}
-        onRespectPlayerRestChange={vi.fn()}
         onMatchmakingStyleChange={vi.fn()}
         onBalanceMetricChange={vi.fn()}
         onPairingModeChange={vi.fn()}
@@ -85,7 +81,6 @@ describe("SessionSettingsModal", () => {
     expect(markup).toContain('role="switch"');
     expect(markup).toContain('aria-label="Auto queue"');
     expect(markup).toContain('aria-checked="true"');
-    expect(markup).toContain('aria-label="Respect player rest"');
     expect(markup).toContain('role="status"');
     expect(markup).toContain("Gameplay setup");
     expect(markup).toContain("Gameplay changes will apply when you save.");
@@ -100,8 +95,6 @@ describe("SessionSettingsModal", () => {
         isTestSession={false}
         autoQueueEnabled
         autoQueueDraft
-        respectPlayerRest
-        respectPlayerRestDraft
         canEditGameplay={false}
         collabFormat={SessionCollabFormat.FREE_PLAY}
         matchmakingStyleDraft={SessionMatchmakingStyle.BALANCED}
@@ -118,7 +111,6 @@ describe("SessionSettingsModal", () => {
         courtLabelDrafts={{}}
         hasGameplayChanges={false}
         hasAutoQueueChange={false}
-        hasRespectPlayerRestChange={false}
         hasCourtLabelChanges={false}
         hasSettingsChanges={false}
         savingSettings={false}
@@ -129,7 +121,6 @@ describe("SessionSettingsModal", () => {
         onCreateRealSession={vi.fn()}
         onDeleteSession={vi.fn()}
         onAutoQueueChange={vi.fn()}
-        onRespectPlayerRestChange={vi.fn()}
         onMatchmakingStyleChange={vi.fn()}
         onBalanceMetricChange={vi.fn()}
         onPairingModeChange={vi.fn()}

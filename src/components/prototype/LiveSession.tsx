@@ -49,7 +49,6 @@ import { getInterclubScore } from "@/lib/interclubScoreboard";
 import { CourtMatchCreateMenu, SessionMatchCreationToolbar } from "./SessionMatchCreationControls";
 type LiveSettingsDraft = {
   autoQueueEnabled: boolean;
-  respectPlayerRest: boolean;
   courtLabels: Record<number, string>;
   matchmakingStyle: SessionMatchmakingStyle;
   balanceMetric: SessionBalanceMetric;
@@ -255,7 +254,6 @@ export default function LiveSession({
   const hasLiveSettingsChanges = !!(
     s && liveSettingsDraft && (
       liveSettingsDraft.autoQueueEnabled !== s.autoQueueEnabled ||
-      liveSettingsDraft.respectPlayerRest !== s.respectPlayerRest ||
       s.courts.some(
         (court) =>
           (liveSettingsDraft.courtLabels[court.courtNumber] ?? "").trim() !==
@@ -523,7 +521,6 @@ export default function LiveSession({
     if (!s) return;
     setLiveSettingsDraft({
       autoQueueEnabled: s.autoQueueEnabled,
-      respectPlayerRest: s.respectPlayerRest,
       courtLabels: Object.fromEntries(
         s.courts.map((court) => [court.courtNumber, court.label ?? ""]),
       ),
@@ -570,7 +567,7 @@ export default function LiveSession({
     }
     const payload = {
       autoQueueEnabled: liveSettingsDraft.autoQueueEnabled,
-      respectPlayerRest: liveSettingsDraft.respectPlayerRest,
+      respectPlayerRest: s.respectPlayerRest,
       courtLabels: Array.from({ length: liveSettingsDraft.courtCount }, (_, index) => ({
         courtNumber: index + 1,
         label: liveSettingsDraft.courtLabels[index + 1]?.trim() || null,
@@ -1220,25 +1217,6 @@ export default function LiveSession({
                           onClick={() => changeAutoQueue(!liveSettingsDraft.autoQueueEnabled)}
                         >
                           {liveSettingsDraft.autoQueueEnabled ? "On" : "Off"}
-                        </button>
-                      </div>
-                      <div className="live-settings-row">
-                        <span>
-                          <strong>Respect extra rest</strong>
-                          <small>Use players’ saved rest preferences.</small>
-                        </span>
-                        <button
-                          type="button"
-                          role="switch"
-                          aria-label="Respect extra rest"
-                          aria-checked={liveSettingsDraft.respectPlayerRest}
-                          className={`live-settings-switch${liveSettingsDraft.respectPlayerRest ? " is-on" : ""}`}
-                          onClick={() => setLiveSettingsDraft((current) => current ? {
-                            ...current,
-                            respectPlayerRest: !current.respectPlayerRest,
-                          } : current)}
-                        >
-                          {liveSettingsDraft.respectPlayerRest ? "On" : "Off"}
                         </button>
                       </div>
                     </div>

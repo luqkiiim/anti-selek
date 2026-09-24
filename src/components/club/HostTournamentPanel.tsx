@@ -36,8 +36,6 @@ interface HostTournamentPanelProps {
   onIsTestSessionChange: (value: boolean) => void;
   autoQueueEnabled: boolean;
   onAutoQueueEnabledChange: (value: boolean) => void;
-  respectPlayerRest: boolean;
-  onRespectPlayerRestChange: (value: boolean) => void;
   collabFormat: SessionCollabFormat;
   onCollabFormatChange: (format: SessionCollabFormat) => void;
   partnerClubId: string;
@@ -179,8 +177,6 @@ export function HostTournamentPanel({
   onIsTestSessionChange,
   autoQueueEnabled,
   onAutoQueueEnabledChange,
-  respectPlayerRest,
-  onRespectPlayerRestChange,
   collabFormat,
   onCollabFormatChange,
   partnerClubId,
@@ -323,12 +319,6 @@ export function HostTournamentPanel({
                   description={AUTO_QUEUE_DESCRIPTION}
                   checked={autoQueueEnabled}
                   onChange={onAutoQueueEnabledChange}
-                />
-                <SwitchRow
-                  label="Respect player rest"
-                  description="Avoid back-to-back games."
-                  checked={respectPlayerRest}
-                  onChange={onRespectPlayerRestChange}
                 />
                 <PlayerGroupsControl
                   enabled={poolsEnabled}

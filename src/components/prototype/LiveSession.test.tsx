@@ -585,12 +585,12 @@ describe("LiveSession score and player controls", () => {
     expect(courtLabel).toBeTruthy();
     await act(async () => setInputValue(courtLabel!, "North"));
     await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Prepare the next game"]')?.click());
-    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Respect extra rest"]')?.click());
+    expect(container.textContent).not.toContain("Respect extra rest");
     await act(async () => Array.from(container.querySelectorAll<HTMLButtonElement>("[role=dialog] button")).find((button) => button.textContent === "Save settings")?.click());
 
     expect(mocks.api).toHaveBeenCalledWith("/api/sessions/TEST01", "PATCH", {
       autoQueueEnabled: true,
-      respectPlayerRest: false,
+      respectPlayerRest: true,
       courtLabels: [
         { courtNumber: 1, label: "North" },
         { courtNumber: 2, label: "Show court" },

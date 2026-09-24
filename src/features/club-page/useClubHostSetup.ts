@@ -79,7 +79,6 @@ export function useClubHostSetup({
       : SessionMode.MEXICANO;
   const [isTestSession, setIsTestSession] = useState(false);
   const [autoQueueEnabled, setAutoQueueEnabled] = useState(false);
-  const [respectPlayerRest, setRespectPlayerRest] = useState(true);
   const [courtCount, setCourtCount] = useState(DEFAULT_COURT_COUNT);
   const [poolsEnabled, setPoolsEnabled] = useState(false);
   const [crossoverFrequency, setCrossoverFrequency] =
@@ -138,7 +137,6 @@ export function useClubHostSetup({
     setPairingMode(SessionPairingMode.OPEN);
     setIsTestSession(false);
     setAutoQueueEnabled(false);
-    setRespectPlayerRest(true);
     setCourtCount(DEFAULT_COURT_COUNT);
     setPoolsEnabled(false);
     setCollabFormatState(SessionCollabFormat.FREE_PLAY);
@@ -492,7 +490,7 @@ export function useClubHostSetup({
           pairingMode,
           isTest: isTestSession,
           autoQueueEnabled,
-          respectPlayerRest,
+          respectPlayerRest: true,
           courtCount,
           clubId,
           collabFormat,
@@ -529,7 +527,6 @@ export function useClubHostSetup({
       setGuestInitialEloInput(DEFAULT_GUEST_INITIAL_ELO);
       setGuestFormError("");
       setAutoQueueEnabled(false);
-      setRespectPlayerRest(true);
       setCourtCount(DEFAULT_COURT_COUNT);
       setMatchmakingStyle(SessionMatchmakingStyle.BALANCED);
       setBalanceMetric(SessionBalanceMetric.SESSION_POINTS);
@@ -813,8 +810,6 @@ export function useClubHostSetup({
     setIsTestSession,
     autoQueueEnabled,
     setAutoQueueEnabled,
-    respectPlayerRest,
-    setRespectPlayerRest,
     courtCount,
     setCourtCount,
     poolsEnabled,

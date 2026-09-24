@@ -43,8 +43,6 @@ function createPanel({
       onIsTestSessionChange={vi.fn()}
       autoQueueEnabled={true}
       onAutoQueueEnabledChange={vi.fn()}
-      respectPlayerRest={true}
-      onRespectPlayerRestChange={vi.fn()}
       collabFormat={SessionCollabFormat.FREE_PLAY}
       onCollabFormatChange={vi.fn()}
       partnerClubId=""
