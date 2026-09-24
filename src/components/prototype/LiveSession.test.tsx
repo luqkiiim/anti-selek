@@ -357,6 +357,47 @@ describe("LiveSession score and player controls", () => {
     expect(container.textContent).toContain("Waiting");
   });
 
+  it("updates a paused player immediately without waiting for POST or standings", async () => {
+    const session = sessionWithCourts([], [player("a", "Alice"), player("b", "Bob")]);
+    setup(session);
+    const save = deferred<unknown>();
+    const refresh = deferred<void>();
+    mocks.api.mockReturnValue(save.promise);
+    mocks.sessionResource!.refresh.mockReturnValue(refresh.promise);
+    await act(async () => root.render(<LiveSession code="TEST01" onBack={vi.fn()} onEnded={vi.fn(async () => undefined)} />));
+    await act(async () => Array.from(container.querySelectorAll<HTMLButtonElement>("nav[aria-label='Session tabs'] button")).find(button => button.textContent === "Players")?.click());
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Pause Alice"]')!.click());
+    const resume = container.querySelector<HTMLButtonElement>('[aria-label="Resume Alice"]');
+    expect(resume).not.toBeNull();
+    expect(resume!.disabled).toBe(true);
+    expect(container.querySelector<HTMLButtonElement>('[aria-label="Pause Bob"]')!.disabled).toBe(false);
+    await act(async () => resume!.click());
+    expect(mocks.api).toHaveBeenCalledTimes(1);
+    expect(mocks.standingsResource!.refresh).not.toHaveBeenCalled();
+    // A poll started before the click must not undo the pending state.
+    mocks.sessionResource!.data = { ...session, players: session.players.map(p => ({ ...p })) };
+    await act(async () => root.render(<LiveSession code="TEST01" onBack={vi.fn()} onEnded={vi.fn(async () => undefined)} />));
+    expect(container.querySelector('[aria-label="Resume Alice"]')).not.toBeNull();
+    await act(async () => save.resolve({}));
+    expect(container.querySelector('[aria-label="Resume Alice"]')).not.toBeNull();
+    expect(mocks.standingsResource!.refresh).not.toHaveBeenCalled();
+    session.players[0].isPaused = true;
+    await act(async () => refresh.resolve());
+  });
+
+  it("restores the player and shows the server error when pausing fails", async () => {
+    setup(sessionWithCourts([], [player("a", "Alice")]));
+    const save = deferred<unknown>();
+    mocks.api.mockReturnValue(save.promise);
+    await act(async () => root.render(<LiveSession code="TEST01" onBack={vi.fn()} onEnded={vi.fn(async () => undefined)} />));
+    await act(async () => Array.from(container.querySelectorAll<HTMLButtonElement>("nav[aria-label='Session tabs'] button")).find(button => button.textContent === "Players")?.click());
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Pause Alice"]')!.click());
+    expect(container.querySelector('[aria-label="Resume Alice"]')).not.toBeNull();
+    await act(async () => save.reject(new Error("Unable to pause Alice")));
+    expect(container.querySelector<HTMLButtonElement>('[aria-label="Pause Alice"]')!.disabled).toBe(false);
+    expect(container.textContent).toContain("Unable to pause Alice");
+  });
+
   it("confirms a court reshuffle before sending the existing generate-match request", async () => {
     const currentMatch = match("match-1", 1);
     setup(sessionWithCourts([{ id: "court-1", courtNumber: 1, currentMatch }]));

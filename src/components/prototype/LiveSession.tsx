@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
   DotsThree,
@@ -70,6 +70,20 @@ type CourtPlayerAction = {
   matchId: string;
   player: Match["team1User1"];
 };
+type PlayerPauseOverlay = {
+  isPaused: boolean;
+  pending: boolean;
+  conflictingRefreshes: number;
+};
+type PausePlayerResponse = {
+  queuedMatchAffected?: boolean;
+  queuedMatch?: SessionData["queuedMatch"];
+};
+type QueuedMatchOverlay = {
+  queuedMatch: SessionData["queuedMatch"] | null;
+  expectedId: string | null;
+  conflictingRefreshes: number;
+};
 export default function LiveSession({
   code,
   onBack,
@@ -87,7 +101,17 @@ export default function LiveSession({
 }) {
   const endpoint = "/api/sessions/" + code;
   const resource = useResource<SessionData>(endpoint);
-  const s = resource.data;
+  const [pauseOverlays, setPauseOverlays] = useState<Record<string, PlayerPauseOverlay>>({});
+  const [pauseError, setPauseError] = useState("");
+  const [queuedMatchOverlay, setQueuedMatchOverlay] = useState<QueuedMatchOverlay | null>(null);
+  const pauseRequestsRef = useRef(new Set<string>());
+  const rawSession = resource.data;
+  const s = useMemo(
+    () => rawSession && queuedMatchOverlay
+      ? { ...rawSession, queuedMatch: queuedMatchOverlay.queuedMatch }
+      : rawSession,
+    [rawSession, queuedMatchOverlay],
+  );
   const standings = useResource<{
     currentLeaderboard: {
       userId: string;
@@ -128,6 +152,32 @@ export default function LiveSession({
   }
   const action = useAction(refresh);
   const refreshSession=resource.refresh,refreshStandings=standings.refresh;
+  useEffect(() => {
+    if (!rawSession) return;
+    setPauseOverlays((current) => {
+      const next = { ...current };
+      let changed = false;
+      for (const [userId, overlay] of Object.entries(current)) {
+        const player = rawSession.players.find((candidate) => candidate.userId === userId);
+        if (!player || (!overlay.pending && (
+          player.isPaused === overlay.isPaused || overlay.conflictingRefreshes > 0
+        ))) {
+          delete next[userId];
+          changed = true;
+        } else if (!overlay.pending) {
+          next[userId] = { ...overlay, conflictingRefreshes: 1 };
+          changed = true;
+        }
+      }
+      return changed ? next : current;
+    });
+    setQueuedMatchOverlay((current) => {
+      if (!current) return null;
+      const queueId = rawSession.queuedMatch?.id ?? null;
+      if (queueId === current.expectedId || current.conflictingRefreshes > 0) return null;
+      return { ...current, conflictingRefreshes: 1 };
+    });
+  }, [rawSession]);
   useEffect(() => {
     const timer = setInterval(() => {
       if (!document.hidden && !action.busy && savingScoreMatchIds.size === 0) {
@@ -287,21 +337,64 @@ export default function LiveSession({
       playersInMatch(court.currentMatch).some((player) => player.id === userId),
     );
   }
+  function isRosterPlayerPaused(player: SessionData["players"][number]) {
+    return pauseOverlays[player.userId]?.isPaused ?? player.isPaused;
+  }
   function playerStatus(player: SessionData["players"][number]) {
     const court = playingCourtFor(player.userId);
     if (court) {
-      return player.isPaused
+      return isRosterPlayerPaused(player)
         ? "Pausing after game"
         : `Playing on ${court.label || "Court " + court.courtNumber}`;
     }
-    return player.isPaused ? "Paused" : "Waiting";
+    return isRosterPlayerPaused(player) ? "Paused" : "Waiting";
   }
   const activePlayers = s?.players.filter((player) =>
-    !player.isPaused || !!playingCourtFor(player.userId),
+    !isRosterPlayerPaused(player) || !!playingCourtFor(player.userId),
   ) ?? [];
   const pausedPlayers = s?.players.filter((player) =>
-    player.isPaused && !playingCourtFor(player.userId),
+    isRosterPlayerPaused(player) && !playingCourtFor(player.userId),
   ) ?? [];
+  async function toggleRosterPlayerPause(userId: string, currentPaused: boolean) {
+    if (pauseRequestsRef.current.has(userId)) return;
+    pauseRequestsRef.current.add(userId);
+    const previousOverlay = pauseOverlays[userId];
+    const isPaused = !currentPaused;
+    setPauseError("");
+    setPauseOverlays((current) => ({
+      ...current,
+      [userId]: { isPaused, pending: true, conflictingRefreshes: 0 },
+    }));
+    try {
+      const data = await api<PausePlayerResponse>(endpoint + "/pause-player", "POST", {
+        userId,
+        isPaused,
+      });
+      setPauseOverlays((current) => ({
+        ...current,
+        [userId]: { isPaused, pending: false, conflictingRefreshes: 0 },
+      }));
+      if (data.queuedMatchAffected === true) {
+        const queuedMatch = data.queuedMatch ?? null;
+        setQueuedMatchOverlay({
+          queuedMatch,
+          expectedId: queuedMatch?.id ?? null,
+          conflictingRefreshes: 0,
+        });
+      }
+      void refreshSession().catch(() => {});
+    } catch (error) {
+      setPauseOverlays((current) => {
+        const next = { ...current };
+        if (previousOverlay) next[userId] = previousOverlay;
+        else delete next[userId];
+        return next;
+      });
+      setPauseError(error instanceof Error ? error.message : "Failed to update player status");
+    } finally {
+      pauseRequestsRef.current.delete(userId);
+    }
+  }
   const courtControl = s?.courts.find((court) => court.id === courtControlId) ?? null;
   const controlMatch = courtControl?.currentMatch ?? null;
   const controlQueue = s?.queuedMatch ?? null;
@@ -692,7 +785,7 @@ export default function LiveSession({
       </header>
       <Pager pages={s?.status !== "ACTIVE" ? [tab] : sessionTabs} active={tab} onChange={navigateTab}>{tab => <>
           <ErrorText
-            error={resource.error || standings.error || (!sheet ? action.error : "")}
+            error={pauseError || resource.error || standings.error || (!sheet ? action.error : "")}
           />
           {!s && <p role="status">Loading session…</p>}
           {s && ended ? (
@@ -903,7 +996,7 @@ export default function LiveSession({
               <div className="section-heading">
                 <h2>Players</h2>
                 <small>
-                  {s.players.filter((p) => p.isPaused).length} taking a break
+                  {s.players.filter((p) => isRosterPlayerPaused(p)).length} taking a break
                 </small>
               </div>
               {canManage && (
@@ -925,34 +1018,30 @@ export default function LiveSession({
                 </div>
               )}
               <div className="roster">
-                {activePlayers.map((p) => (
-                  <div className="person" key={p.userId}>
-                    <Avatar name={p.user.name} url={p.user.avatarUrl} />
-                    <span className="person-info">
-                      <strong>{p.user.name}</strong>
-                      <small>{playerStatus(p)} · {p.user.elo}</small>
-                    </span>
-                    {canManage && (
-                      <button
-                        className="icon-button"
-                        aria-label={
-                          (p.isPaused ? "Resume " : "Pause ") + p.user.name
-                        }
-                        disabled={action.busy}
-                        onClick={() =>
-                          void action.run(() =>
-                            api(endpoint + "/pause-player", "POST", {
-                              userId: p.userId,
-                              isPaused: !p.isPaused,
-                            }),
-                          )
-                        }
-                      >
-                        {p.isPaused ? <Play size={18} /> : <Pause size={18} />}
-                      </button>
-                    )}
-                  </div>
-                ))}
+                {activePlayers.map((p) => {
+                  const isPaused = isRosterPlayerPaused(p);
+                  return (
+                    <div className="person" key={p.userId}>
+                      <Avatar name={p.user.name} url={p.user.avatarUrl} />
+                      <span className="person-info">
+                        <strong>{p.user.name}</strong>
+                        <small>{playerStatus(p)} · {p.user.elo}</small>
+                      </span>
+                      {canManage && (
+                        <button
+                          className="icon-button"
+                          aria-label={
+                            (isPaused ? "Resume " : "Pause ") + p.user.name
+                          }
+                          disabled={pauseOverlays[p.userId]?.pending === true}
+                          onClick={() => void toggleRosterPlayerPause(p.userId, isPaused)}
+                        >
+                          {isPaused ? <Play size={18} /> : <Pause size={18} />}
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
               {pausedPlayers.length > 0 && (
                 <section className="paused-players">
@@ -972,15 +1061,8 @@ export default function LiveSession({
                           <button
                             className="icon-button"
                             aria-label={`Resume ${p.user.name}`}
-                            disabled={action.busy}
-                            onClick={() =>
-                              void action.run(() =>
-                                api(endpoint + "/pause-player", "POST", {
-                                  userId: p.userId,
-                                  isPaused: false,
-                                }),
-                              )
-                            }
+                            disabled={pauseOverlays[p.userId]?.pending === true}
+                            onClick={() => void toggleRosterPlayerPause(p.userId, true)}
                           >
                             <Play size={18} />
                           </button>
