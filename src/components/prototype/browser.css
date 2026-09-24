@@ -319,6 +319,19 @@
 .rankings-page details { margin-top: 22px; }
 .rankings-note { font-size: 13px; color: #80718b; }
 
+.prototype-root .club-activity-totals {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin: 4px 0 20px;
+  padding: 16px 0;
+  border-block: 1px solid #e9dfed;
+}
+.prototype-root .club-activity-totals > div { display: grid; gap: 3px; min-width: 0; }
+.prototype-root .club-activity-totals > div + div { border-left: 1px solid #e9dfed; padding-left: 16px; }
+.prototype-root .club-activity-totals strong { color: #553184; font-size: 28px; font-weight: 900; line-height: 1.1; overflow-wrap: anywhere; }
+.prototype-root .club-activity-totals span { color: #786582; font-size: 12px; font-weight: 700; }
+
 .prototype-root .past-sessions { margin-top: 24px; }
 .prototype-root .past-sessions-heading {
   display: flex;

@@ -285,6 +285,10 @@ export default function Club({
                 </div>
                 <Image src="/spark.png" alt="Friendly spark" width={92} height={92} />
               </div>
+              <section className="club-activity-totals" aria-label="Club activity">
+                <div><strong>{(data.clubPulse?.metrics.completedTournaments ?? completedSessions.length).toLocaleString()}</strong><span>Sessions completed</span></div>
+                <div><strong>{data.clubPulse?.metrics.totalMatches.toLocaleString() ?? "—"}</strong><span>Matches completed</span></div>
+              </section>
               {live.length ? (
                 <div className="session-tile">
                   <span className="eyebrow">LIVE NOW</span>
@@ -309,7 +313,6 @@ export default function Club({
                 </button>
               </div>
               {renderStats()}
-              {achievements.data && <NextMilestone collection={achievements.data} onOpen={id => { go("profile"); setAchievementRequest({id,nonce:Date.now()}); }} />}
               <PartnerChemistry onOpenProfile={openMember} pairs={data.clubPulse?.partnerships ?? []} />
               <TopRivalries onOpenProfile={openMember} rivalries={data.clubPulse?.rivalries ?? []} />
               {data.club.rules && <details className="club-rules"><summary>Club rules</summary><p style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{data.club.rules}</p></details>}

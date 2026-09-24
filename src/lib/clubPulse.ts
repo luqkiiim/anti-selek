@@ -1176,7 +1176,8 @@ function getHistoricalPeakBeforeLatestSession(
 function buildSessionNews(
   completedSessions: ClubPulseSessionSource[],
   matches: ClubPulseMatchSource[],
-  guestIdsBySessionId: GuestIdsBySessionId
+  guestIdsBySessionId: GuestIdsBySessionId,
+  coreMemberIds: ReadonlySet<string>
 ) {
   const latestSession = completedSessions[0];
   if (!latestSession) return [];
@@ -1188,7 +1189,7 @@ function buildSessionNews(
 
   const latestAggregates = Array.from(
     buildSessionAggregates(latestMatches, guestIdsBySessionId).values()
-  );
+  ).filter((aggregate) => coreMemberIds.has(aggregate.user.id));
   const latestPlayerIds = new Set(
     latestAggregates.map((aggregate) => aggregate.user.id)
   );
@@ -1240,7 +1241,8 @@ function buildSessionNews(
       const { team1, team2 } = getMatchTeams(match);
       if (
         !isTeamGuestFree(guestIdsBySessionId, match, team1) ||
-        !isTeamGuestFree(guestIdsBySessionId, match, team2)
+        !isTeamGuestFree(guestIdsBySessionId, match, team2) ||
+        [...team1, ...team2].some((player) => !coreMemberIds.has(player.id))
       ) {
         return null;
       }
@@ -1462,7 +1464,8 @@ export function buildClubPulse({
     sessionNews: buildSessionNews(
       completedSessions,
       sortedCompletedMatches,
-      guestIdsBySessionId
+      guestIdsBySessionId,
+      coreMemberIds
     ),
     latestStory: buildLatestStory(
       completedSessions,

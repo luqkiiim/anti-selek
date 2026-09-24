@@ -1120,6 +1120,58 @@ describe("clubPulse", () => {
     });
   });
 
+  it("chooses the top core member for session news after excluding occasional members", () => {
+    const occasional = createPlayer("occasional", "Occasional");
+    const session = createSession("core-session-news");
+    const completedMatches = [
+      createMatch("occasional-rating-jump", {
+        session,
+        completedAt: "2026-05-01T11:00:00.000Z",
+        team1: [occasional, players.alice],
+        team2: [players.ben, players.cara],
+        team1Score: 21,
+        team2Score: 18,
+        winnerTeam: 1,
+        eloAdjustments: [
+          { userId: occasional.id, delta: 40, beforeElo: 1000, afterElo: 1040 },
+          { userId: players.alice.id, delta: 5, beforeElo: 1000, afterElo: 1005 },
+          { userId: players.ben.id, delta: -20, beforeElo: 1000, afterElo: 980 },
+          { userId: players.cara.id, delta: -25, beforeElo: 1000, afterElo: 975 },
+        ],
+      }),
+      createMatch("core-rating-jump", {
+        session,
+        completedAt: "2026-05-01T11:30:00.000Z",
+        team1: [players.dan, players.eli],
+        team2: [players.farah, players.gina],
+        team1Score: 21,
+        team2Score: 18,
+        winnerTeam: 1,
+        team1EloChange: 20,
+        team2EloChange: -20,
+      }),
+    ];
+
+    const result = buildClubPulse({
+      members: [
+        ...Object.values(players).map((player) => createMember(player)),
+        { ...createMember(occasional), status: "OCCASIONAL" },
+      ],
+      sessions: [session],
+      completedMatches,
+    });
+
+    expect(result.sessionNews[0]).toMatchObject({
+      type: "RATING_JUMP",
+      title: "Dan",
+      value: "+20 rating",
+      featuredPlayers: [players.dan],
+    });
+    expect(result.sessionNews.flatMap((item) => item.players)).not.toContainEqual(
+      occasional
+    );
+  });
+
   it("omits session news when a completed session has no qualifying highlight", () => {
     const session = createSession("quiet-news");
     const result = buildClubPulse({
