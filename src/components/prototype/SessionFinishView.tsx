@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { Crown, Medal, RotateCw, Share2 } from "lucide-react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { ChevronDown, Crown, RotateCw, Share2 } from "lucide-react";
 
 import type { Player } from "@/components/session/sessionTypes";
 import { Avatar } from "@/components/ui/Avatar";
@@ -65,24 +65,6 @@ function getStandingsScore(sessionType: string, player: Player, stats: PlayerSta
   return netWins > 0 ? `+${netWins}` : netWins;
 }
 
-function getOrdinal(rank: number) {
-  if (rank === 1) return "1st";
-  if (rank === 2) return "2nd";
-  return "3rd";
-}
-
-function getRevealDelayMs(rank: number) {
-  if (rank === 3) return 0;
-  if (rank === 2) return 430;
-  return 860;
-}
-
-function getEnamelStyle(rank: number): CSSProperties {
-  if (rank === 1) return { "--medal-color": "#c89536", "--medal-light": "#fff0b7" } as CSSProperties;
-  if (rank === 2) return { "--medal-color": "#8790a0", "--medal-light": "#f1f4fa" } as CSSProperties;
-  return { "--medal-color": "#b97848", "--medal-light": "#ffe0c2" } as CSSProperties;
-}
-
 function buildStandingsRows({
   players,
   sessionType,
@@ -117,7 +99,7 @@ function buildStandingsRows({
 function ConfettiBits() {
   return (
     <span className={styles.confetti} aria-hidden="true">
-      {Array.from({ length: 12 }, (_, index) => (
+      {Array.from({ length: 20 }, (_, index) => (
         <span key={index} />
       ))}
     </span>
@@ -146,6 +128,8 @@ export function SessionFinishView({
     (player) => (playerStatsByUserId.get(player.userId)?.played ?? 0) > 0,
   );
   const topThree = hasRecordedGames ? players.slice(0, 3) : [];
+  const champion = topThree[0];
+  const runnerUps = topThree.slice(1);
   const isLadderSession = sessionType === SessionType.LADDER;
   const visibleHighlights = hasRecordedGames ? highlights?.slice(0, 2) ?? [] : [];
   const standingsRows = buildStandingsRows({
@@ -190,85 +174,123 @@ export function SessionFinishView({
       data-celebrating={isCelebrating}
     >
       <header className={styles.header}>
-        <h1 id="session-finish-title">That&apos;s a wrap!</h1>
         <p className={styles.sessionMeta}>
           <strong>{sessionName}</strong>
           {sessionDate ? (
             <time dateTime={sessionDate}>{formatProfileDate(sessionDate)}</time>
           ) : null}
         </p>
+        <h1 id="session-finish-title">Session complete</h1>
       </header>
 
-      {topThree.length > 0 ? (
+      {champion ? (
         <div
           key={celebrationRunId}
-          className={`${styles.podium} ${styles[`podiumCount${topThree.length}`]} ${isCelebrating ? styles.celebrating : ""}`}
+          className={`${styles.celebration} ${isCelebrating ? styles.celebrating : ""}`}
           role="group"
           aria-label="Top finishers"
         >
-          {topThree.map((player, index) => {
-            const rank = index + 1;
-            const stats = playerStatsByUserId.get(player.userId) ?? EMPTY_PLAYER_STATS;
-            const pointDiff = pointDiffByUserId.get(player.userId) ?? 0;
+          {(() => {
+            const stats = playerStatsByUserId.get(champion.userId) ?? EMPTY_PLAYER_STATS;
+            const pointDiff = pointDiffByUserId.get(champion.userId) ?? 0;
             const canOpenProfile =
               !!onOpenMember &&
-              !player.isGuest &&
-              (!profileMemberIds || profileMemberIds.includes(player.userId));
+              !champion.isGuest &&
+              (!profileMemberIds || profileMemberIds.includes(champion.userId));
             const MemberTag = canOpenProfile ? "button" : "div";
-            const medalStyle = getEnamelStyle(rank);
 
             return (
-              <article
-                key={`${player.userId}-${celebrationRunId}`}
-                className={`${styles.podiumPlace} ${styles[`place${rank}`] ?? ""}`}
-                style={{
-                  "--reveal-delay": `${getRevealDelayMs(rank)}ms`,
-                  ...medalStyle,
-                } as CSSProperties}
-                aria-label={`${getOrdinal(rank)} place: ${player.user.name}`}
-              >
+              <article className={styles.championCard} aria-label={`Session champion: ${champion.user.name}`}>
+                {isCelebrating ? <ConfettiBits /> : null}
                 <MemberTag
-                  className={`${styles.podiumContent} ${canOpenProfile ? styles.podiumContentLink : ""}`}
+                  className={`${styles.championContent} ${canOpenProfile ? styles.memberLink : ""}`}
                   {...(canOpenProfile
                     ? {
                         type: "button" as const,
-                        "aria-label": `View ${player.user.name}'s profile`,
-                        onClick: () => onOpenMember?.(player.userId),
+                        "aria-label": `View ${champion.user.name}'s profile`,
+                        onClick: () => onOpenMember?.(champion.userId),
                       }
                     : {})}
                 >
-                  <span className={styles.avatarWrap}>
+                  <span className={styles.championPortrait}>
                     <Avatar
-                      name={player.user.name}
-                      avatarUrl={player.user.avatarUrl}
+                      name={champion.user.name}
+                      avatarUrl={champion.user.avatarUrl}
                       size="xl"
-                      className={styles.podiumAvatar}
+                      className={styles.championAvatar}
                       imageLoading="eager"
                       imageFetchPriority="high"
                     />
-                    <span className={styles.enamelMedal} style={medalStyle} aria-hidden="true">
-                      {rank === 1 ? (
-                        <Crown size={19} strokeWidth={2.2} />
-                      ) : (
-                        <Medal size={19} strokeWidth={2.1} />
-                      )}
+                    <span className={styles.crownBadge} aria-hidden="true">
+                      <Crown size={23} strokeWidth={2.2} />
                     </span>
                   </span>
-                  <span className={styles.rankLabel}>{getOrdinal(rank)} place</span>
-                  <strong className={styles.podiumName} title={player.user.name}>
-                    {player.user.name}
+                  <span className={styles.championLabel}>Session champion</span>
+                  <strong className={styles.championName} title={champion.user.name}>
+                    {champion.user.name}
                   </strong>
-                  {player.isGuest ? <span className={styles.guestTag}>Guest</span> : null}
-                  <span className={styles.podiumScore}>
-                    {getScore(sessionType, player, stats)}
+                  {champion.isGuest ? <span className={styles.guestTag}>Guest</span> : null}
+                  <span className={styles.championResult}>
+                    {getScore(sessionType, champion, stats)}
                     <span>{isLadderSession ? "W–L" : "pts"}</span>
                   </span>
-                  <span className={styles.podiumDiff}>{formatPointDiff(pointDiff)} diff</span>
+                  <span className={styles.championDiff}>{formatPointDiff(pointDiff)} point diff</span>
                 </MemberTag>
               </article>
             );
-          })}
-          {isCelebrating ? <ConfettiBits /> : null}
+          })()}
+
+          {runnerUps.length > 0 ? (
+            <div className={styles.runnerUpGrid}>
+              {runnerUps.map((player, index) => {
+                const stats = playerStatsByUserId.get(player.userId) ?? EMPTY_PLAYER_STATS;
+                const pointDiff = pointDiffByUserId.get(player.userId) ?? 0;
+                const canOpenProfile =
+                  !!onOpenMember &&
+                  !player.isGuest &&
+                  (!profileMemberIds || profileMemberIds.includes(player.userId));
+                const MemberTag = canOpenProfile ? "button" : "div";
+
+                return (
+                  <article
+                    key={`${player.userId}-${celebrationRunId}`}
+                    className={styles.runnerUpCard}
+                    aria-label={`Runner-up: ${player.user.name}`}
+                  >
+                    <MemberTag
+                      className={`${styles.runnerUpContent} ${canOpenProfile ? styles.memberLink : ""}`}
+                      {...(canOpenProfile
+                        ? {
+                            type: "button" as const,
+                            "aria-label": `View ${player.user.name}'s profile`,
+                            onClick: () => onOpenMember?.(player.userId),
+                          }
+                        : {})}
+                    >
+                      <Avatar
+                        name={player.user.name}
+                        avatarUrl={player.user.avatarUrl}
+                        size="lg"
+                        className={styles.runnerUpAvatar}
+                      />
+                      <span className={styles.runnerUpCopy}>
+                        <span className={styles.runnerUpLabel}>{index === 0 ? "2nd place" : "3rd place"}</span>
+                        <strong className={styles.runnerUpName} title={player.user.name}>
+                          {player.user.name}
+                        </strong>
+                        {player.isGuest ? <span className={styles.guestTag}>Guest</span> : null}
+                        <span className={styles.runnerUpScore}>
+                          {getScore(sessionType, player, stats)}
+                          <span>{isLadderSession ? "W–L" : "pts"}</span>
+                        </span>
+                        <span className={styles.runnerUpDiff}>{formatPointDiff(pointDiff)} diff</span>
+                      </span>
+                    </MemberTag>
+                  </article>
+                );
+              })}
+            </div>
+          ) : null}
         </div>
       ) : players.length > 0 ? (
         <p className={styles.noGames}>No completed games yet.</p>
@@ -324,12 +346,20 @@ export function SessionFinishView({
       ) : null}
 
       {players.length > 0 ? (
+        <details className={styles.standings}>
+          <summary>
+            <span>Full standings</span>
+            <ChevronDown size={19} strokeWidth={2.2} aria-hidden="true" />
+          </summary>
+          <div className={styles.standingsContent}>
         <LiveSessionStandings
           rows={standingsRows}
           groupsEnabled={false}
           scoreLabel={isLadderSession ? "net wins" : "points"}
           onOpenMember={onOpenMember}
         />
+          </div>
+        </details>
       ) : (
         <p className={styles.empty}>No final results have been recorded.</p>
       )}

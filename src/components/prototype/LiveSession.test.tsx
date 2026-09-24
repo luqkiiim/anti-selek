@@ -745,7 +745,7 @@ describe("LiveSession score and player controls", () => {
     await act(async () => Array.from(container.querySelectorAll<HTMLButtonElement>("[role=dialog] button")).find((button) => button.textContent === "End session")?.click());
     expect(mocks.api).toHaveBeenCalledWith("/api/sessions/TEST01/end", "POST");
     expect(onEnded).toHaveBeenCalledTimes(1);
-    expect(container.textContent).toContain("That's a wrap!");
+    expect(container.textContent).toContain("Session complete");
     expect(container.textContent).toContain("Share recap");
     expect(container.textContent).toContain("No completed games yet.");
   });

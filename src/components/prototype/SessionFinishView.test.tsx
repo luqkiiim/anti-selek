@@ -93,12 +93,12 @@ describe("SessionFinishView", () => {
   it("shows a settled recap by default with ranked winners and readable standings", async () => {
     await act(async () => root.render(<SessionFinishView {...baseProps} sessionDate="2026-09-20" />));
 
-    expect(container.querySelector("h1")?.textContent).toBe("That's a wrap!");
+    expect(container.querySelector("h1")?.textContent).toBe("Session complete");
     expect(container.textContent).toContain("Thursday Social");
     expect(container.textContent).toContain("20 Sep 2026");
     expect(container.querySelector("[data-celebrating]")?.getAttribute("data-celebrating")).toBe("false");
     expect(container.querySelector('[aria-label="Top finishers"]')?.textContent).toContain("Aiman Rahman");
-    expect(container.querySelector('[aria-label="Top finishers"]')?.textContent).toContain("+31 diff");
+    expect(container.querySelector('[aria-label="Top finishers"]')?.textContent).toContain("+31 point diff");
     expect(container.querySelector("thead")?.textContent).toContain("Pts");
     const rows = Array.from(container.querySelectorAll("tbody tr"));
     expect(rows).toHaveLength(4);

@@ -161,7 +161,7 @@ test("prototype host can reach court controls, player management, and match hist
   await page.getByRole("button", { name: "More options" }).click();
   await page.getByRole("button", { name: "End session" }).click();
   await page.getByRole("dialog", { name: "End this session?" }).getByRole("button", { name: "End session" }).click();
-  await expect(page.getByRole("heading", { name: "That's a wrap!" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Session complete" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Share recap" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Replay winner celebration" })).toBeVisible();
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
@@ -174,6 +174,9 @@ test("prototype host can reach court controls, player management, and match hist
   await page.getByRole("button", { name: "Replay winner celebration" }).click();
   await expect(page.locator('[data-celebrating="true"]')).toBeVisible();
   await expect(page.locator('[data-celebrating="false"]')).toBeVisible();
+  await expect(page.getByRole("table", { name: "Player standings" })).toBeHidden();
+  await page.getByText("Full standings", { exact: true }).click();
+  await expect(page.getByRole("table", { name: "Player standings" })).toBeVisible();
   await page.getByRole("button", { name: "Match history", exact: true }).click();
   await page.getByRole("button", { name: "Back to session" }).click();
   await expect(page.locator('[data-celebrating="false"]')).toBeVisible();
