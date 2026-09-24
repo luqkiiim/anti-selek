@@ -5,7 +5,6 @@ import type { LiveSessionPlayerStats } from "./deriveLiveSessionStandings";
 export function sessionFinishHighlights(players: readonly Player[], stats: Map<string, LiveSessionPlayerStats>) {
   const categories = [
     { id: "wins", label: "Most wins", field: "wins" as const, format: (n: number) => `${n} ${n === 1 ? "win" : "wins"}` },
-    { id: "difference", label: "Best point difference", field: "pointDiff" as const, format: (n: number) => `+${n} points` },
   ];
   return categories.flatMap(category => {
     const played = players.filter(player => (stats.get(player.userId)?.matchesPlayed ?? 0) > 0);

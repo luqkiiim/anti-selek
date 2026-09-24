@@ -174,6 +174,8 @@ test("prototype host can reach court controls, player management, and match hist
   await page.getByRole("button", { name: "Replay winner celebration" }).click();
   await expect(page.locator('[data-celebrating="true"]')).toBeVisible();
   await expect(page.locator('[data-celebrating="false"]')).toBeVisible();
+  await expect(page.getByRole("table", { name: "Player standings" })).toBeVisible();
+  await page.getByText("Full standings", { exact: true }).click();
   await expect(page.getByRole("table", { name: "Player standings" })).toBeHidden();
   await page.getByText("Full standings", { exact: true }).click();
   await expect(page.getByRole("table", { name: "Player standings" })).toBeVisible();

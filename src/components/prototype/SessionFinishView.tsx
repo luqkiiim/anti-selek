@@ -254,8 +254,8 @@ export function SessionFinishView({
                 return (
                   <article
                     key={`${player.userId}-${celebrationRunId}`}
-                    className={styles.runnerUpCard}
-                    aria-label={`Runner-up: ${player.user.name}`}
+                    className={`${styles.runnerUpCard} ${index === 0 ? styles.silverCard : styles.bronzeCard}`}
+                    aria-label={`${index === 0 ? "2nd" : "3rd"} place: ${player.user.name}`}
                   >
                     <MemberTag
                       className={`${styles.runnerUpContent} ${canOpenProfile ? styles.memberLink : ""}`}
@@ -346,7 +346,7 @@ export function SessionFinishView({
       ) : null}
 
       {players.length > 0 ? (
-        <details className={styles.standings}>
+        <details className={styles.standings} open>
           <summary>
             <span>Full standings</span>
             <ChevronDown size={19} strokeWidth={2.2} aria-hidden="true" />

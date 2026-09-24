@@ -100,6 +100,7 @@ describe("SessionFinishView", () => {
     expect(container.querySelector('[aria-label="Top finishers"]')?.textContent).toContain("Aiman Rahman");
     expect(container.querySelector('[aria-label="Top finishers"]')?.textContent).toContain("+31 point diff");
     expect(container.querySelector("thead")?.textContent).toContain("Pts");
+    expect(container.querySelector("details")?.open).toBe(true);
     const rows = Array.from(container.querySelectorAll("tbody tr"));
     expect(rows).toHaveLength(4);
     expect(rows[0]?.textContent).toContain("Aiman Rahman");

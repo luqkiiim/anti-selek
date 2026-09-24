@@ -14,6 +14,6 @@ describe("session finish highlights", () => {
       ["a", { matchesPlayed: 3, wins: 2, losses: 1, pointDiff: 3 }],
       ["b", { matchesPlayed: 3, wins: 1, losses: 2, pointDiff: 5 }],
     ]));
-    expect(result.map(({ name, value }) => [name, value])).toEqual([["a", "2 wins"], ["b", "+5 points"]]);
+    expect(result.map(({ name, value }) => [name, value])).toEqual([["a", "2 wins"]]);
   });
 });

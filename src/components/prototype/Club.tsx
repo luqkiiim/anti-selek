@@ -90,6 +90,13 @@ export default function Club({
   const [page, setPage] = useState("club"),
     [sessionCode, setSessionCode] = useState(""),
     [recap, setRecap] = useState<PlayerProfileSessionSummary | null>(null);
+  const [pastSessionPagination, setPastSessionPagination] = useState({
+    clubId: club.id,
+    visibleCount: 5,
+  });
+  if (pastSessionPagination.clubId !== club.id) {
+    setPastSessionPagination({ clubId: club.id, visibleCount: 5 });
+  }
   async function refresh() {
     await Promise.all([resource.refresh(), profile.refresh(), achievements.refresh()]);
   }
@@ -102,6 +109,14 @@ export default function Club({
   const sessions = data?.sessions.filter((s) => !s.isTest) || [];
   const live = sessions.filter((s) => s.status === "ACTIVE");
   const upcoming = sessions.filter((s) => s.status === "WAITING");
+  const completedSessions = sessions
+    .filter((s) => s.status === "COMPLETED")
+    .sort(
+      (left, right) =>
+        new Date(right.endedAt || right.createdAt).getTime() -
+        new Date(left.endedAt || left.createdAt).getTime(),
+    );
+  const visiblePastSessionCount = pastSessionPagination.visibleCount;
   const recent = profile.data?.recentSessions?.find(r=>sessions.some(s=>s.id===r.id&&s.status==="COMPLETED"));
   const member = data?.clubMembers.find((p) => p.id === data.viewer.id);
   const rating = profile.data?.user.elo ?? member?.elo;
@@ -327,43 +342,59 @@ export default function Club({
                 </div>
               ))}
               <UpcomingSessions sessions={upcoming} canManage={!!canManage} onOpen={openSession} />
-              <details className="past-sessions">
-                <summary>
-                  <span>Past sessions <span className="past-sessions-count">{sessions.filter((s) => s.status === "COMPLETED").length}</span></span>
-                  <CaretRight size={20} aria-hidden="true" />
-                </summary>
-              {sessions
-                .filter((s) => s.status === "COMPLETED")
-                .map((s) => (
+              <section className="past-sessions" aria-labelledby="past-sessions-heading">
+                <div className="past-sessions-heading">
+                  <h2 id="past-sessions-heading">Past sessions</h2>
+                  <span className="past-sessions-count">{completedSessions.length}</span>
+                </div>
+                <div className="past-sessions-list">
+                  {completedSessions.slice(0, visiblePastSessionCount).map((s) => (
+                    <button
+                      className="recent-card"
+                      key={s.id}
+                      onClick={() => {
+                        const item = profile.data?.recentSessions.find(
+                          (r) => r.id === s.id,
+                        );
+                        if (item) {
+                          setRecap(item);
+                          go("recap");
+                        } else openSession(s.code);
+                      }}
+                    >
+                      <CalendarBlank size={22} />
+                      <span>
+                        <strong>{s.name}</strong>
+                        <small>
+                          {new Date(
+                            s.endedAt || s.createdAt,
+                          ).toLocaleDateString()}
+                        </small>
+                      </span>
+                      <CaretRight size={18} />
+                    </button>
+                  ))}
+                </div>
+                {completedSessions.length === 0 && (
+                  <p className="muted">No completed sessions yet.</p>
+                )}
+                {visiblePastSessionCount < completedSessions.length && (
                   <button
-                    className="recent-card"
-                    key={s.id}
-                    onClick={() => {
-                      const item = profile.data?.recentSessions.find(
-                        (r) => r.id === s.id,
-                      );
-                      if (item) {
-                        setRecap(item);
-                        go("recap");
-                      } else openSession(s.code);
-                    }}
+                    className="text-button past-sessions-load-more"
+                    type="button"
+                    onClick={() =>
+                      setPastSessionPagination((current) => ({
+                        clubId: club.id,
+                        visibleCount:
+                          (current.clubId === club.id ? current.visibleCount : 5) +
+                          5,
+                      }))
+                    }
                   >
-                    <CalendarBlank size={22} />
-                    <span>
-                      <strong>{s.name}</strong>
-                      <small>
-                        {new Date(
-                          s.endedAt || s.createdAt,
-                        ).toLocaleDateString()}
-                      </small>
-                    </span>
-                    <CaretRight size={18} />
+                    Load more sessions
                   </button>
-                ))}
-              {!sessions.some((s) => s.status === "COMPLETED") && (
-                <p className="muted">No completed sessions yet.</p>
-              )}
-              </details>
+                )}
+              </section>
             </>
           )}
           {data && page === "rankings" && <Rankings onOpenProfile={openMember} members={data.clubMembers} viewerId={data.viewer.id} clubName={data.club.name} hasCompletedSession={data.sessions.some(session => session.status === "COMPLETED" && !session.isTest)} />}
