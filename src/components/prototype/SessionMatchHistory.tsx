@@ -5,6 +5,7 @@ import {
   ArrowCounterClockwise,
   ArrowLeft,
   Clock,
+  DotsThreeVertical,
   PencilSimple,
   Trophy,
 } from "@phosphor-icons/react";
@@ -359,9 +360,35 @@ export default function SessionMatchHistory({
                           {formatMatchTime(timestamp)}
                         </time>
                       </div>
-                      {isPending ? (
-                        <span className={styles.pending}>Awaiting approval</span>
-                      ) : null}
+                      <div className={styles.matchMetaActions}>
+                        {isPending ? (
+                          <span className={styles.pending}>Awaiting approval</span>
+                        ) : null}
+                        {canApprove || canCorrect || canUndo ? (
+                          <details className={styles.matchOptions}>
+                            <summary aria-label="Match options">
+                              <DotsThreeVertical aria-hidden="true" size={20} weight="bold" />
+                            </summary>
+                            <div className={styles.matchOptionsMenu} aria-label="Host match actions">
+                              {canApprove ? (
+                                <button type="button" onClick={(event) => { event.currentTarget.closest("details")?.removeAttribute("open"); openAction("approve", match); }}>
+                                  Approve result
+                                </button>
+                              ) : null}
+                              {canCorrect ? (
+                                <button type="button" onClick={(event) => { event.currentTarget.closest("details")?.removeAttribute("open"); openAction("correct", match); }}>
+                                  <PencilSimple aria-hidden="true" size={16} /> Correct score
+                                </button>
+                              ) : null}
+                              {canUndo ? (
+                                <button className={styles.undoMenuAction} type="button" onClick={(event) => { event.currentTarget.closest("details")?.removeAttribute("open"); openAction("undo", match); }}>
+                                  <ArrowCounterClockwise aria-hidden="true" size={16} /> Undo result
+                                </button>
+                              ) : null}
+                            </div>
+                          </details>
+                        ) : null}
+                      </div>
                     </div>
 
                     <div className={styles.scoreboard}>
@@ -402,35 +429,6 @@ export default function SessionMatchHistory({
                       </div>
                     </div>
 
-                    {canApprove || canCorrect || canUndo ? (
-                      <div className={styles.matchActions} aria-label="Host match actions">
-                        {canApprove ? (
-                          <button className={styles.actionButton} type="button" onClick={() => openAction("approve", match)}>
-                            Approve result
-                          </button>
-                        ) : null}
-                        {canCorrect ? (
-                          <button
-                            className={styles.actionButton}
-                            type="button"
-                            onClick={() => openAction("correct", match)}
-                          >
-                            <PencilSimple aria-hidden="true" size={16} />
-                            Correct score
-                          </button>
-                        ) : null}
-                        {canUndo ? (
-                          <button
-                            className={`${styles.actionButton} ${styles.undoButton}`}
-                            type="button"
-                            onClick={() => openAction("undo", match)}
-                          >
-                            <ArrowCounterClockwise aria-hidden="true" size={16} />
-                            Undo result
-                          </button>
-                        ) : null}
-                      </div>
-                    ) : null}
                   </article>
                 </li>
               );
