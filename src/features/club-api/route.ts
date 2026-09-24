@@ -65,9 +65,35 @@ export async function GET(request: Request) {
       orderBy: { createdAt: "asc" },
     });
 
+    const clubIds = memberships.map((membership) => membership.club.id);
+    const activeSessionsByClub = new Set<string>();
+    const standbySessionsByClub = new Set<string>();
+    if (clubIds.length > 0) {
+      const ongoingSessions = await prisma.session.findMany({
+        where: {
+          clubId: { in: clubIds },
+          isTest: false,
+          status: { in: ["ACTIVE", "WAITING"] },
+        },
+        select: { clubId: true, status: true },
+      });
+      for (const ongoingSession of ongoingSessions) {
+        if (ongoingSession.status === "ACTIVE") {
+          activeSessionsByClub.add(ongoingSession.clubId ?? "");
+        } else if (ongoingSession.status === "WAITING") {
+          standbySessionsByClub.add(ongoingSession.clubId ?? "");
+        }
+      }
+    }
+
     return NextResponse.json(
       memberships.map((m) => {
         const viewerIsOwner = m.club.createdById === session.user.id;
+        const sessionStatus = activeSessionsByClub.has(m.club.id)
+          ? "ACTIVE"
+          : standbySessionsByClub.has(m.club.id)
+            ? "WAITING"
+            : null;
 
         return withLegacyClubAliases({
           id: m.club.id,
@@ -86,6 +112,7 @@ export async function GET(request: Request) {
           createdAt: m.club.createdAt,
           membersCount: m.club._count.members,
           sessionsCount: m.club._count.sessions,
+          sessionStatus,
         });
       })
     );

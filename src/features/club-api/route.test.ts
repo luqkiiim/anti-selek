@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   clubCreate: vi.fn(),
   clubFindMany: vi.fn(),
   clubMemberFindMany: vi.fn(),
+  sessionFindMany: vi.fn(),
   rateLimit: vi.fn(async () => null),
 }));
 
@@ -22,6 +23,9 @@ vi.mock("@/lib/prisma", () => ({
     },
     clubMember: {
       findMany: mocks.clubMemberFindMany,
+    },
+    session: {
+      findMany: mocks.sessionFindMany,
     },
   },
 }));
@@ -61,6 +65,7 @@ describe("club collection API", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.rateLimit.mockResolvedValue(null);
+    mocks.sessionFindMany.mockResolvedValue([]);
     mockSignedInUser();
   });
 

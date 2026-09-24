@@ -10,6 +10,7 @@ export interface DashboardClub {
   isTutorial?: boolean;
   membersCount: number;
   sessionsCount: number;
+  sessionStatus?: "ACTIVE" | "WAITING" | null;
 }
 
 export type ClubFormField = "clubName" | "password";

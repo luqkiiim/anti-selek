@@ -1641,6 +1641,34 @@
   color: var(--muted);
   margin-top: 4px;
 }
+.club-session-status {
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  border-radius: 999px;
+  padding: 4px 8px;
+  font-size: 10px;
+  font-weight: 900;
+  line-height: 1.2;
+}
+.club-session-status::before {
+  width: 7px;
+  height: 7px;
+  flex: 0 0 7px;
+  border-radius: 50%;
+  background: currentColor;
+  content: "";
+}
+.club-session-status.is-live {
+  background: #e8f5ed;
+  color: #26734f;
+}
+.club-session-status.is-standby {
+  background: #fff4d9;
+  color: #8a6411;
+}
 .club-choice em {
   font-style: normal;
   color: #29825f;

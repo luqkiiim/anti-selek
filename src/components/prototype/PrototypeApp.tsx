@@ -136,6 +136,11 @@ export default function PrototypeApp() {
                             : "Member"}{" "}
                       · {c.membersCount} players
                     </small>
+                    {c.sessionStatus === "ACTIVE" ? (
+                      <span className="club-session-status is-live">Live session</span>
+                    ) : c.sessionStatus === "WAITING" ? (
+                      <span className="club-session-status is-standby">Standby session</span>
+                    ) : null}
                   </span>
                   <CaretRight size={20} />
                 </button>
