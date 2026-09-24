@@ -18,6 +18,8 @@ export function parseGenerateMatchRequest(
     undoCurrentMatch = false,
     manualTeams,
     excludedUserId,
+    restUserId,
+    expectedMatchId,
     replaceUserId,
     matchType,
   } = (typeof body === "object" && body !== null ? body : {}) as {
@@ -27,6 +29,8 @@ export function parseGenerateMatchRequest(
     undoCurrentMatch?: boolean;
     manualTeams?: unknown;
     excludedUserId?: unknown;
+    restUserId?: unknown;
+    expectedMatchId?: unknown;
     replaceUserId?: unknown;
     matchType?: unknown;
   };
@@ -48,6 +52,18 @@ export function parseGenerateMatchRequest(
   }
   if (excludedUserId !== undefined && typeof excludedUserId !== "string") {
     throw new GenerateMatchError(400, "Invalid excluded player.");
+  }
+  if (restUserId !== undefined && typeof restUserId !== "string") {
+    throw new GenerateMatchError(400, "Invalid player to rest.");
+  }
+  if (expectedMatchId !== undefined && typeof expectedMatchId !== "string") {
+    throw new GenerateMatchError(400, "Invalid match to rest.");
+  }
+  if (restUserId && (!forceReshuffle || restUserId !== excludedUserId || !expectedMatchId)) {
+    throw new GenerateMatchError(400, "Resting a player requires a current match and excluded player.");
+  }
+  if (!restUserId && expectedMatchId !== undefined) {
+    throw new GenerateMatchError(400, "Expected match ID is only supported when resting a player.");
   }
   if (replaceUserId !== undefined && typeof replaceUserId !== "string") {
     throw new GenerateMatchError(400, "Invalid replacement player.");
@@ -105,6 +121,8 @@ export function parseGenerateMatchRequest(
     undoCurrentMatch,
     manualTeams,
     excludedUserId,
+    restUserId,
+    expectedMatchId,
     replaceUserId,
     matchType: matchType as SideSpecificCourtCreateType | undefined,
   };

@@ -379,6 +379,8 @@ describe("generate match service", () => {
         undoCurrentMatch: false,
         manualTeams: undefined,
         excludedUserId: undefined,
+        restUserId: undefined,
+        expectedMatchId: undefined,
         replaceUserId: undefined,
         matchType: undefined,
       });
@@ -396,6 +398,8 @@ describe("generate match service", () => {
         undoCurrentMatch: false,
         manualTeams: undefined,
         excludedUserId: undefined,
+        restUserId: undefined,
+        expectedMatchId: undefined,
         replaceUserId: undefined,
         matchType: undefined,
       });
@@ -414,8 +418,23 @@ describe("generate match service", () => {
         undoCurrentMatch: false,
         manualTeams: undefined,
         excludedUserId: "player-1",
+        restUserId: undefined,
+        expectedMatchId: undefined,
         replaceUserId: undefined,
         matchType: undefined,
+      });
+    });
+
+    it("accepts a rest request tied to the current match", () => {
+      expect(parseGenerateMatchRequest({
+        courtId: "court-1",
+        forceReshuffle: true,
+        excludedUserId: "player-1",
+        restUserId: "player-1",
+        expectedMatchId: "match-1",
+      })).toMatchObject({
+        restUserId: "player-1",
+        expectedMatchId: "match-1",
       });
     });
 
@@ -431,6 +450,8 @@ describe("generate match service", () => {
         undoCurrentMatch: false,
         manualTeams: undefined,
         excludedUserId: undefined,
+        restUserId: undefined,
+        expectedMatchId: undefined,
         replaceUserId: "player-2",
         matchType: undefined,
       });
@@ -448,6 +469,8 @@ describe("generate match service", () => {
         undoCurrentMatch: false,
         manualTeams: undefined,
         excludedUserId: undefined,
+        restUserId: undefined,
+        expectedMatchId: undefined,
         replaceUserId: undefined,
         matchType: "WOMENS",
       });

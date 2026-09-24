@@ -434,7 +434,7 @@ describe("LiveSession score and player controls", () => {
     });
   });
 
-  it("opens player actions from a court player and reshuffles without that player", async () => {
+  it("offers reshuffle, rest, and pause from court player actions", async () => {
     const currentMatch = match("match-1", 1);
     setup(sessionWithCourts([{ id: "court-1", courtNumber: 1, currentMatch }]));
     await act(async () => root.render(<LiveSession code="TEST01" onBack={vi.fn()} onEnded={vi.fn(async () => undefined)} />));
@@ -444,13 +444,36 @@ describe("LiveSession score and player controls", () => {
     await act(async () => playerAction?.click());
     expect(container.querySelector('[role="dialog"]')?.getAttribute("aria-label")).toBe("Player actions");
     expect(container.querySelector('[role="dialog"]')?.textContent).toContain("Score Player 1A");
-    expect(container.querySelectorAll('[role="dialog"] .court-action-row')).toHaveLength(2);
+    expect(container.querySelectorAll('[role="dialog"] .court-action-row')).toHaveLength(3);
 
     await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Reshuffle without Score Player 1A"]')?.click());
     expect(mocks.api).toHaveBeenCalledWith("/api/sessions/TEST01/generate-match", "POST", {
       courtId: "court-1",
       forceReshuffle: true,
       excludedUserId: "match-1-a",
+    });
+  });
+
+  it("asks before resting a court player and sends the confirmed match identity", async () => {
+    const currentMatch = match("match-rest", 1);
+    setup(sessionWithCourts([{ id: "court-rest", courtNumber: 1, currentMatch }]));
+    await act(async () => root.render(<LiveSession code="TEST01" onBack={vi.fn()} onEnded={vi.fn(async () => undefined)} />));
+
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Player actions for Score Player 1A"]')?.click());
+    await act(async () => Array.from(container.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')).find((button) => button.textContent === "Rest")?.click());
+    expect(container.querySelector('[role="dialog"]')?.getAttribute("aria-label")).toBe("Rest this match?");
+    expect(container.querySelector('[role="dialog"]')?.textContent).toContain("This counts as your turn.");
+    await act(async () => Array.from(container.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')).find((button) => button.textContent === "Cancel")?.click());
+    expect(mocks.api).not.toHaveBeenCalled();
+
+    await act(async () => Array.from(container.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')).find((button) => button.textContent === "Rest")?.click());
+    await act(async () => Array.from(container.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')).find((button) => button.textContent === "Confirm rest")?.click());
+    expect(mocks.api).toHaveBeenCalledWith("/api/sessions/TEST01/generate-match", "POST", {
+      courtId: "court-rest",
+      forceReshuffle: true,
+      excludedUserId: "match-rest-a",
+      restUserId: "match-rest-a",
+      expectedMatchId: "match-rest",
     });
   });
 

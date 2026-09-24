@@ -270,6 +270,7 @@ export async function replaceCurrentCourtMatchAssignment({
   poolBSeatCount,
   clearArrivalPriority,
   consumeSkipNextUserIds,
+  creditRestUserIds,
   releasePendingUserIds,
 }: {
   sessionId: string;
@@ -285,6 +286,7 @@ export async function replaceCurrentCourtMatchAssignment({
   poolBSeatCount?: number | null;
   clearArrivalPriority?: boolean;
   consumeSkipNextUserIds?: string[];
+  creditRestUserIds?: string[];
   releasePendingUserIds?: string[];
 }) {
   return prisma.$transaction(async (tx) => {
@@ -346,6 +348,21 @@ export async function replaceCurrentCourtMatchAssignment({
       sessionId,
       userIds: consumeSkipNextUserIds ?? [],
     });
+
+    const restUserIds = Array.from(new Set(creditRestUserIds ?? []));
+    if (restUserIds.length > 0) {
+      const creditedPlayers = await tx.sessionPlayer.updateMany({
+        where: { sessionId, userId: { in: restUserIds } },
+        data: {
+          matchmakingMatchesCredit: { increment: 1 },
+          availableSince: new Date(),
+          arrivalPriorityAt: null,
+        },
+      });
+      if (creditedPlayers.count !== restUserIds.length) {
+        throw new GenerateMatchError(409, "Player is no longer in this session.");
+      }
+    }
 
     await applyPendingPlayerGroupChangesInTransaction(tx, {
       sessionId,

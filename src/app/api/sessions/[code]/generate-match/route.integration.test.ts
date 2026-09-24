@@ -1044,6 +1044,130 @@ describe("generate match route integration", () => {
     expect(storedMatches).toHaveLength(1);
   });
 
+  it("records one sacrificed turn atomically when resting a court player", async () => {
+    const prefix = `rest-${randomUUID().slice(0, 8)}`;
+    const { clubId } = await createClubAdmin(prefix);
+    const playerKeys = ["p1", "p2", "p3", "p4", "p5", "p6"];
+    const playerIds = playerKeys.map((key) => `${prefix}-${key}`);
+    const courtId = `${prefix}-court-1`;
+    await createUsers(prefix, playerKeys.map((key) => ({ key })));
+    const { sessionId, code } = await createSessionWithCourtsAndPlayers({
+      prefix,
+      clubId,
+      type: SessionType.POINTS,
+      mode: SessionMode.MEXICANO,
+      players: playerIds.map((userId, index) => ({ userId, matchesPlayed: index === 0 ? 2 : 1 })),
+      courtIds: [courtId],
+    });
+    const currentMatch = await prisma.match.create({
+      data: {
+        id: `${prefix}-current-match`,
+        sessionId,
+        courtId,
+        status: MatchStatus.IN_PROGRESS,
+        team1User1Id: playerIds[0],
+        team1User2Id: playerIds[1],
+        team2User1Id: playerIds[2],
+        team2User2Id: playerIds[3],
+      },
+    });
+    await prisma.court.update({ where: { id: courtId }, data: { currentMatchId: currentMatch.id } });
+
+    const response = await postGenerateMatch(code, {
+      courtId,
+      forceReshuffle: true,
+      excludedUserId: playerIds[0],
+      restUserId: playerIds[0],
+      expectedMatchId: currentMatch.id,
+    });
+    const payload = await response.json();
+    const restedPlayer = await prisma.sessionPlayer.findUnique({
+      where: { sessionId_userId: { sessionId, userId: playerIds[0] } },
+    });
+
+    expect(response.status).toBe(200);
+    expect(getSelectedIds(payload)).not.toContain(playerIds[0]);
+    expect(restedPlayer).toMatchObject({
+      matchesPlayed: 2,
+      matchmakingMatchesCredit: 1,
+      sessionPoints: 0,
+      isPaused: false,
+      skipNextMatchAt: null,
+    });
+    expect(await prisma.match.count({ where: { sessionId } })).toBe(1);
+
+    const duplicateResponse = await postGenerateMatch(code, {
+      courtId,
+      forceReshuffle: true,
+      excludedUserId: playerIds[0],
+      restUserId: playerIds[0],
+      expectedMatchId: currentMatch.id,
+    });
+    expect(duplicateResponse.status).toBe(409);
+    expect((await prisma.sessionPlayer.findUnique({
+      where: { sessionId_userId: { sessionId, userId: playerIds[0] } },
+    }))?.matchmakingMatchesCredit).toBe(1);
+  });
+
+  it("does not consume a rest turn for stale or unavailable replacement requests", async () => {
+    const stalePrefix = `rest-stale-${randomUUID().slice(0, 8)}`;
+    const { clubId: staleClubId } = await createClubAdmin(stalePrefix);
+    const stalePlayers = ["p1", "p2", "p3", "p4", "p5"].map((key) => `${stalePrefix}-${key}`);
+    const staleCourtId = `${stalePrefix}-court-1`;
+    await createUsers(stalePrefix, stalePlayers.map((_, index) => ({ key: `p${index + 1}` })));
+    const { sessionId: staleSessionId, code: staleCode } = await createSessionWithCourtsAndPlayers({
+      prefix: stalePrefix,
+      clubId: staleClubId,
+      type: SessionType.POINTS,
+      mode: SessionMode.MEXICANO,
+      players: stalePlayers.map((userId) => ({ userId })),
+      courtIds: [staleCourtId],
+    });
+    const staleMatch = await prisma.match.create({
+      data: {
+        id: `${stalePrefix}-current-match`, sessionId: staleSessionId, courtId: staleCourtId,
+        status: MatchStatus.IN_PROGRESS, team1User1Id: stalePlayers[0], team1User2Id: stalePlayers[1],
+        team2User1Id: stalePlayers[2], team2User2Id: stalePlayers[3],
+      },
+    });
+    await prisma.court.update({ where: { id: staleCourtId }, data: { currentMatchId: staleMatch.id } });
+    const staleResponse = await postGenerateMatch(staleCode, {
+      courtId: staleCourtId, forceReshuffle: true, excludedUserId: stalePlayers[0],
+      restUserId: stalePlayers[0], expectedMatchId: "old-match-id",
+    });
+    expect(staleResponse.status).toBe(409);
+    expect((await prisma.sessionPlayer.findUnique({ where: { sessionId_userId: { sessionId: staleSessionId, userId: stalePlayers[0] } } }))?.matchmakingMatchesCredit).toBe(0);
+
+    const shortPrefix = `rest-short-${randomUUID().slice(0, 8)}`;
+    const { clubId: shortClubId } = await createClubAdmin(shortPrefix);
+    const shortPlayers = ["p1", "p2", "p3", "p4"].map((key) => `${shortPrefix}-${key}`);
+    const shortCourtId = `${shortPrefix}-court-1`;
+    await createUsers(shortPrefix, ["p1", "p2", "p3", "p4"].map((key) => ({ key })));
+    const { sessionId: shortSessionId, code: shortCode } = await createSessionWithCourtsAndPlayers({
+      prefix: shortPrefix,
+      clubId: shortClubId,
+      type: SessionType.POINTS,
+      mode: SessionMode.MEXICANO,
+      players: shortPlayers.map((userId) => ({ userId })),
+      courtIds: [shortCourtId],
+    });
+    const shortMatch = await prisma.match.create({
+      data: {
+        id: `${shortPrefix}-current-match`, sessionId: shortSessionId, courtId: shortCourtId,
+        status: MatchStatus.IN_PROGRESS, team1User1Id: shortPlayers[0], team1User2Id: shortPlayers[1],
+        team2User1Id: shortPlayers[2], team2User2Id: shortPlayers[3],
+      },
+    });
+    await prisma.court.update({ where: { id: shortCourtId }, data: { currentMatchId: shortMatch.id } });
+    const noReplacementResponse = await postGenerateMatch(shortCode, {
+      courtId: shortCourtId, forceReshuffle: true, excludedUserId: shortPlayers[0],
+      restUserId: shortPlayers[0], expectedMatchId: shortMatch.id,
+    });
+    expect(noReplacementResponse.status).toBe(400);
+    expect((await prisma.sessionPlayer.findUnique({ where: { sessionId_userId: { sessionId: shortSessionId, userId: shortPlayers[0] } } }))?.matchmakingMatchesCredit).toBe(0);
+    expect(await prisma.match.findUnique({ where: { id: shortMatch.id } })).not.toBeNull();
+  });
+
   it("replaces one live-match player with the next eligible waiting player", async () => {
     const prefix = `replace-live-${randomUUID().slice(0, 8)}`;
     const { clubId } = await createClubAdmin(prefix);

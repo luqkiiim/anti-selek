@@ -63,7 +63,8 @@ type ManualTarget =
 type ControlConfirmation =
   | { kind: "court-reshuffle"; courtId: string }
   | { kind: "court-undo"; courtId: string }
-  | { kind: "queue-clear" };
+  | { kind: "queue-clear" }
+  | { kind: "court-player-rest"; courtId: string; matchId: string; playerId: string };
 type CourtPlayerAction = {
   courtId: string;
   matchId: string;
@@ -674,6 +675,16 @@ export default function LiveSession({
   }
   async function confirmControlAction() {
     if (!confirmation) return;
+    if (confirmation.kind === "court-player-rest") {
+      await api(endpoint + "/generate-match", "POST", {
+        courtId: confirmation.courtId,
+        forceReshuffle: true,
+        excludedUserId: confirmation.playerId,
+        restUserId: confirmation.playerId,
+        expectedMatchId: confirmation.matchId,
+      });
+      return;
+    }
     if (confirmation.kind === "court-reshuffle") {
       await api(endpoint + "/generate-match", "POST", {
         courtId: confirmation.courtId,
@@ -1128,8 +1139,10 @@ export default function LiveSession({
                         ? "Player actions"
                       : sheet === "court-controls"
                         ? courtControl?.label || `Court ${courtControl?.courtNumber ?? ""} options`
-                        : sheet === "confirm-control"
-                          ? confirmation?.kind === "court-undo"
+                      : sheet === "confirm-control"
+                          ? confirmation?.kind === "court-player-rest"
+                            ? "Rest this match?"
+                            : confirmation?.kind === "court-undo"
                             ? "Clear court?"
                             : confirmation?.kind === "queue-clear"
                               ? "Clear next match?"
@@ -1513,6 +1526,22 @@ export default function LiveSession({
                   type="button"
                   className="court-action-row"
                   disabled={action.busy}
+                  onClick={() => {
+                    setConfirmation({
+                      kind: "court-player-rest",
+                      courtId: courtPlayerAction.courtId,
+                      matchId: courtPlayerAction.matchId,
+                      playerId: courtPlayerAction.player.id,
+                    });
+                    setSheet("confirm-control");
+                  }}
+                >
+                  Rest
+                </button>
+                <button
+                  type="button"
+                  className="court-action-row"
+                  disabled={action.busy}
                   onClick={() => runCourtPlayerAction("pause")}
                 >
                   Pause player
@@ -1556,7 +1585,9 @@ export default function LiveSession({
             )
           ) : sheet === "confirm-control" && confirmation ? (
             <>
-              {confirmation.kind === "court-reshuffle" ? (
+              {confirmation.kind === "court-player-rest" ? (
+                <p>This counts as your turn.</p>
+              ) : confirmation.kind === "court-reshuffle" ? (
                 <p>Choose a different lineup for {courtControl?.label || `Court ${courtControl?.courtNumber ?? ""}`}? The current four players return to the pool.</p>
               ) : confirmation.kind === "court-undo" ? (
                 <p>Return the four players on {courtControl?.label || `Court ${courtControl?.courtNumber ?? ""}`} to the available pool and clear this court?</p>
@@ -1570,14 +1601,14 @@ export default function LiveSession({
                   finishControlAction();
                 })}
               >
-                {confirmation.kind === "court-reshuffle" ? "Reshuffle match" : confirmation.kind === "court-undo" ? "Clear court" : "Clear next match"}
+                {confirmation.kind === "court-player-rest" ? "Confirm rest" : confirmation.kind === "court-reshuffle" ? "Reshuffle match" : confirmation.kind === "court-undo" ? "Clear court" : "Clear next match"}
               </button>
               <button className="text-button" disabled={action.busy} onClick={() => {
-                const returnSheet = confirmation.kind === "queue-clear" ? "next" : "court-controls";
+                const returnSheet = confirmation.kind === "queue-clear" ? "next" : confirmation.kind === "court-player-rest" ? "court-player" : "court-controls";
                 setConfirmation(null);
                 setSheet(returnSheet);
               }}>
-                Keep current lineup
+                {confirmation.kind === "court-player-rest" ? "Cancel" : "Keep current lineup"}
               </button>
             </>
           ) : sheet === "manual-match" && manualTarget ? (
