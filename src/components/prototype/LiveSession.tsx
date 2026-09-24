@@ -42,6 +42,7 @@ import InterclubScoreboard from "./InterclubScoreboard";
 import { LiveSessionStandings } from "./LiveSessionStandings";
 import { deriveLiveSessionPlayerStats } from "./deriveLiveSessionStandings";
 import { SessionFinishView } from "./SessionFinishView";
+import { SessionStandbyView } from "./SessionStandbyView";
 import { sessionFinishHighlights } from "./sessionFinishHighlights";
 import { shareSessionStandingsImage } from "@/lib/sessionShareImageClient";
 import { getInterclubScore } from "@/lib/interclubScoreboard";
@@ -668,7 +669,7 @@ export default function LiveSession({
     );
   }
   return (
-    <div className="pc-app">
+    <div className={`pc-app${s?.status === "WAITING" ? " session-standby" : ""}`}>
       <header className="pc-header">
         <button className="icon-button" aria-label="Back" onClick={onBack}>
           <ArrowLeft size={23} />
@@ -689,7 +690,7 @@ export default function LiveSession({
           <span />
         )}
       </header>
-      <Pager pages={ended ? [tab] : sessionTabs} active={tab} onChange={navigateTab}>{tab => <>
+      <Pager pages={s?.status !== "ACTIVE" ? [tab] : sessionTabs} active={tab} onChange={navigateTab}>{tab => <>
           <ErrorText
             error={resource.error || standings.error || (!sheet ? action.error : "")}
           />
@@ -722,41 +723,19 @@ export default function LiveSession({
               </button>
             </>
           ) : s?.status === "WAITING" ? (
-            <>
-              <h2>Ready to play?</h2>
-              <p>
-                {s.players.length} players · {s.courts.length} courts
-              </p>
-              {canManage && (
-                <button
-                  className="secondary full"
-                  disabled={action.busy}
-                  onClick={openLiveSettings}
-                >
-                  Review session settings
-                </button>
+            <SessionStandbyView
+              session={s}
+              canManage={canManage}
+              busy={action.busy}
+              onSettings={openLiveSettings}
+              onManagePlayers={() => setManagePlayersOpen(true)}
+              onStart={() => void action.run(
+                () => api(endpoint + "/start", "POST"),
+                () => setTab("Courts"),
               )}
-              {canManage && (
-                <button
-                  className="secondary full"
-                  disabled={action.busy}
-                  onClick={() => setManagePlayersOpen(true)}
-                >
-                  Manage players
-                </button>
-              )}
-              {canManage && (
-                <button
-                  className="primary"
-                  disabled={action.busy}
-                  onClick={() =>
-                    void action.run(() => api(endpoint + "/start", "POST"))
-                  }
-                >
-                  Start session
-                </button>
-              )}
-            </>
+              onOpenMember={onOpenMember}
+              profileMemberIds={profileMemberIds}
+            />
           ) : s && tab === "Courts" ? (
             <>
               <div className="session-summary">
@@ -1034,7 +1013,7 @@ export default function LiveSession({
             )
           )}
       </>}</Pager>
-      {!ended && (
+      {s?.status === "ACTIVE" && (
         <nav className="bottom-nav" aria-label="Session navigation">
           {sessionTabs.map((t, i) => {
             const Icon = [UsersThree, House, ChartBar][i];

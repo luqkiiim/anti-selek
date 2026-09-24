@@ -225,6 +225,9 @@
   scrollbar-width: none;
 }
 .prototype-root .pager-page .pc-content { padding-bottom: 28px; }
+.prototype-root .session-standby .page-pager {
+  bottom: env(safe-area-inset-bottom, 0px);
+}
 .prototype-sheet::backdrop { background: transparent; backdrop-filter: none; }
 .prototype-sheet .sheet-shade { position: absolute; inset: 0; background: rgba(0,0,0,.34); }
 .prototype-sheet .sheet-panel {

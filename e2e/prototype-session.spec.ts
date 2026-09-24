@@ -123,8 +123,16 @@ test("prototype host can reach court controls, player management, and match hist
   await page.getByRole("button", { name: "Reset session to change setup" }).click();
   await expect(page.getByRole("dialog", { name: "Reset this session?" })).toContainText("reverses its rating changes");
   await page.getByRole("button", { name: "Reset session", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "Ready to play?" })).toBeVisible();
+  await expect(page.getByText("Not started", { exact: true })).toBeVisible();
+  await expect(page.getByRole("navigation", { name: "Session navigation" })).toHaveCount(0);
+  await expect(page.getByText("Score Player 1", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Manage players" })).toBeVisible();
+  for (const width of [320, 390, 430, 1100]) {
+    await page.setViewportSize({ width, height: 844 });
+    await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    await page.screenshot({ path: `test-results/prototype-standby-${width}.png`, fullPage: true });
+  }
+  await page.setViewportSize({ width: 320, height: 844 });
 
   await page.getByRole("button", { name: "Review session settings" }).click();
   await expect.poll(() => page.evaluate(() => {
@@ -142,6 +150,7 @@ test("prototype host can reach court controls, player management, and match hist
   await expect(page.getByRole("textbox", { name: "Court 2 label" })).toHaveValue("South Court");
   await page.getByRole("button", { name: "Close" }).click();
   await page.getByRole("button", { name: "Start session" }).click();
+  await expect(page.getByRole("navigation", { name: "Session navigation" }).getByRole("button", { name: "Courts" })).toHaveAttribute("aria-current", "page");
   await expect(page.getByRole("heading", { name: "South Court" })).toBeVisible();
   await page.getByRole("button", { name: "Create Matches", exact: true }).click();
   await page.getByRole("textbox", { name: "Team 1 score" }).fill("21");

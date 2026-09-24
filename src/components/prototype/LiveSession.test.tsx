@@ -611,7 +611,7 @@ describe("LiveSession score and player controls", () => {
     setup(session);
     await act(async () => root.render(<LiveSession code="TEST01" onBack={vi.fn()} onEnded={vi.fn(async () => undefined)} />));
 
-    await act(async () => Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find((button) => button.textContent === "Review session settings")?.click());
+    await act(async () => Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find((button) => button.getAttribute("aria-label") === "Review session settings")?.click());
     await act(async () => setSelectValue(container.querySelector<HTMLSelectElement>('[aria-label="Matchmaking style"]')!, SessionMatchmakingStyle.LEVEL_MATCH));
     await act(async () => setSelectValue(container.querySelector<HTMLSelectElement>('[aria-label="Balance teams using"]')!, SessionBalanceMetric.SESSION_POINTS));
     await act(async () => setSelectValue(container.querySelector<HTMLSelectElement>('[aria-label="Pairing"]')!, SessionPairingMode.MIXED));
@@ -637,7 +637,7 @@ describe("LiveSession score and player controls", () => {
         courtCount: 3,
       },
     });
-    expect(container.textContent).toContain("Ready to play?");
+    expect(container.textContent).toContain("Not started");
     expect(Array.from(container.querySelectorAll<HTMLButtonElement>("button")).some((button) => button.textContent === "Start session")).toBe(true);
     expect(Array.from(container.querySelectorAll<HTMLButtonElement>("button")).some((button) => button.textContent === "Manage players")).toBe(true);
   });
@@ -667,8 +667,8 @@ describe("LiveSession score and player controls", () => {
     await act(async () => Array.from(container.querySelectorAll<HTMLButtonElement>("[role=dialog] button")).find((button) => button.textContent === "Reset session")?.click());
 
     expect(mocks.api).toHaveBeenCalledWith("/api/sessions/TEST01/reset", "POST");
-    expect(container.textContent).toContain("Ready to play?");
-    expect(Array.from(container.querySelectorAll<HTMLButtonElement>("button")).some((button) => button.textContent === "Review session settings")).toBe(true);
+    expect(container.textContent).toContain("Not started");
+    expect(Array.from(container.querySelectorAll<HTMLButtonElement>("button")).some((button) => button.getAttribute("aria-label") === "Review session settings")).toBe(true);
     expect(Array.from(container.querySelectorAll<HTMLButtonElement>("button")).some((button) => button.textContent === "Manage players")).toBe(true);
     expect(Array.from(container.querySelectorAll<HTMLButtonElement>("button")).some((button) => button.textContent === "Start session")).toBe(true);
   });
@@ -704,9 +704,9 @@ describe("LiveSession score and player controls", () => {
     await act(async () => Array.from(container.querySelectorAll<HTMLButtonElement>("[role=dialog] button")).find((button) => button.textContent === "End session")?.click());
     expect(mocks.api).toHaveBeenCalledWith("/api/sessions/TEST01/end", "POST");
     expect(onEnded).toHaveBeenCalledTimes(1);
-    expect(container.textContent).toContain("Session complete");
-    expect(container.textContent).toContain("Share standings");
-    expect(container.textContent).toContain("Replay");
+    expect(container.textContent).toContain("That's a wrap!");
+    expect(container.textContent).toContain("Share recap");
+    expect(container.textContent).toContain("No completed games yet.");
   });
 
   it("creates matches across eligible open courts and offers per-court formats", async () => {
