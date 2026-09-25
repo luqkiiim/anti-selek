@@ -16,6 +16,7 @@ import {
 import {
   fetchShareImageAvatarDataUrls,
   buildSessionShareImageViewModel,
+  getSessionShareImageFonts,
   renderSessionShareImage,
   SESSION_SHARE_IMAGE_HEIGHT,
   SESSION_SHARE_IMAGE_WIDTH,
@@ -84,6 +85,8 @@ async function getSessionShareImageRoute(
       name: true,
       type: true,
       status: true,
+      createdAt: true,
+      endedAt: true,
       club: {
         select: {
           id: true,
@@ -188,6 +191,11 @@ async function getSessionShareImageRoute(
     sessionName: sessionData.name,
     clubName: getShareImageClubName(sessionData),
     sessionType: sessionData.type,
+    sessionDate: sessionData.endedAt ?? sessionData.createdAt,
+    participantCount: sessionData.players.length,
+    completedMatchCount: sessionData.matches.filter(
+      (match) => match.status === MatchStatus.COMPLETED
+    ).length,
     players: sessionData.players.map((player) => ({
       userId: player.userId,
       sessionPoints: player.sessionPoints,
@@ -204,11 +212,13 @@ async function getSessionShareImageRoute(
   const avatarDataUrlsByUserId = await fetchShareImageAvatarDataUrls(
     viewModel.standings
   );
+  const fonts = await getSessionShareImageFonts();
   const imageResponse = new ImageResponse(
     renderSessionShareImage(viewModel, avatarDataUrlsByUserId),
     {
       width: SESSION_SHARE_IMAGE_WIDTH,
       height: SESSION_SHARE_IMAGE_HEIGHT,
+      fonts,
     }
   );
 

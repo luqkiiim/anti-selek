@@ -3,6 +3,7 @@ import { ImageResponse } from "next/og";
 import { SessionType } from "@/types/enums";
 import {
   buildSessionShareImageViewModel,
+  getSessionShareImageFonts,
   renderSessionShareImage,
   SESSION_SHARE_IMAGE_HEIGHT,
   SESSION_SHARE_IMAGE_WIDTH,
@@ -25,19 +26,20 @@ describe("session share image response", () => {
     const response = new ImageResponse(renderSessionShareImage(viewModel), {
       width: SESSION_SHARE_IMAGE_WIDTH,
       height: SESSION_SHARE_IMAGE_HEIGHT,
+      fonts: await getSessionShareImageFonts(),
     });
     const bytes = await response.arrayBuffer();
 
     expect(response.headers.get("content-type")).toContain("image/png");
     expect(bytes.byteLength).toBeGreaterThan(1_000);
-  });
+  }, 15_000);
 
-  it("renders the two-column standings layout into PNG bytes", async () => {
+  it("renders the fourteen-player standings layout into PNG bytes", async () => {
     const viewModel = buildSessionShareImageViewModel({
       sessionName: "Championship Finals",
       clubName: "Badminton Usuals",
       sessionType: SessionType.POINTS,
-      players: Array.from({ length: 12 }, (_, index) => ({
+      players: Array.from({ length: 14 }, (_, index) => ({
         userId: `u${index + 1}`,
         sessionPoints: 24 - index,
         user: { name: `Player ${index + 1}` },
@@ -47,10 +49,11 @@ describe("session share image response", () => {
     const response = new ImageResponse(renderSessionShareImage(viewModel), {
       width: SESSION_SHARE_IMAGE_WIDTH,
       height: SESSION_SHARE_IMAGE_HEIGHT,
+      fonts: await getSessionShareImageFonts(),
     });
     const bytes = await response.arrayBuffer();
 
     expect(response.headers.get("content-type")).toContain("image/png");
     expect(bytes.byteLength).toBeGreaterThan(1_000);
-  });
+  }, 15_000);
 });

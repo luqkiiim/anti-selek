@@ -22,55 +22,43 @@ function createPlayers(count: number) {
 }
 
 describe("session share image", () => {
-  it("renders top 13 with podium ranks 1-3 and rows 4-13 only", () => {
+  it("renders top 14 with podium ranks 1-3 and rows 4-14 only", () => {
     const viewModel = buildSessionShareImageViewModel({
       sessionName: "Weekend Cup",
       clubName: "Badminton Usuals",
       sessionType: SessionType.POINTS,
-      players: createPlayers(14),
+      players: createPlayers(15),
       matches: [],
     });
     const markup = renderToStaticMarkup(renderSessionShareImage(viewModel));
 
-    expect(viewModel.standings).toHaveLength(13);
-    expect(markup).toContain("Final standings");
-    expect(markup).not.toContain("Positions 4-11");
-    expect(markup).not.toContain("Top 11 snapshot");
-    expect(markup).toContain(">1<");
-    expect(markup).toContain(">13<");
-    expect(markup).not.toContain("P14");
+    expect(viewModel.standings).toHaveLength(14);
+    expect(viewModel.omittedPlayerCount).toBe(1);
+    expect(markup).toContain("Weekend Cup");
+    expect(markup).toContain("1 more player not shown");
+    expect(markup).toContain("Player");
+    expect(markup).toContain("Pts");
+    expect(markup).toContain("Diff");
+    expect(markup).toContain("MP");
+    expect(markup).toContain("W/L");
+    expect(markup).toContain(">14<");
+    expect(markup).not.toContain(">15<");
     expect(markup.match(/P01/g) ?? []).toHaveLength(1);
     expect(markup.match(/P02/g) ?? []).toHaveLength(1);
     expect(markup.match(/P03/g) ?? []).toHaveLength(1);
   });
 
-  it("uses one wide lower column until more than eight players are shown", () => {
-    const eightPlayerMarkup = renderToStaticMarkup(
-      renderSessionShareImage(
-        buildSessionShareImageViewModel({
-          sessionName: "Weekend Cup",
-          clubName: "Badminton Usuals",
-          sessionType: SessionType.POINTS,
-          players: createPlayers(8),
-          matches: [],
-        })
-      )
-    );
-    const ninePlayerMarkup = renderToStaticMarkup(
-      renderSessionShareImage(
-        buildSessionShareImageViewModel({
-          sessionName: "Weekend Cup",
-          clubName: "Badminton Usuals",
-          sessionType: SessionType.POINTS,
-          players: createPlayers(9),
-          matches: [],
-        })
-      )
-    );
-
-    expect(eightPlayerMarkup).toContain("width:896px");
-    expect(eightPlayerMarkup).not.toContain("width:438px");
-    expect(ninePlayerMarkup).toContain("width:438px");
+  it("keeps a truthful empty state and centers a single podium winner", () => {
+    const emptyMarkup = renderToStaticMarkup(renderSessionShareImage(buildSessionShareImageViewModel({
+      sessionName: "Quiet day", clubName: "Club", sessionType: SessionType.POINTS, players: [], matches: [],
+    })));
+    const onePlayerMarkup = renderToStaticMarkup(renderSessionShareImage(buildSessionShareImageViewModel({
+      sessionName: "Quiet day", clubName: "Club", sessionType: SessionType.POINTS, players: createPlayers(1), matches: [],
+    })));
+    expect(emptyMarkup).toContain("No standings available");
+    expect(emptyMarkup).toContain("0 players");
+    expect(onePlayerMarkup).toContain("P01");
+    expect(onePlayerMarkup).toContain("flex:0 0 52%");
   });
 
   it("uses session points, wins, losses, and point diff for points standings", () => {
@@ -93,7 +81,7 @@ describe("session share image", () => {
           team1Score: 21,
           team2Score: 17,
           winnerTeam: 1,
-          status: MatchStatus.COMPLETED,
+      status: MatchStatus.COMPLETED,
         },
       ],
     });
@@ -104,6 +92,7 @@ describe("session share image", () => {
       wins: 1,
       losses: 0,
       score: 10,
+      matchesPlayed: 1,
     });
     expect(viewModel.standings[1]).toMatchObject({
       userId: "u2",
@@ -111,6 +100,7 @@ describe("session share image", () => {
       wins: 0,
       losses: 1,
       score: 10,
+      matchesPlayed: 1,
     });
   });
 
@@ -147,13 +137,13 @@ describe("session share image", () => {
     );
 
     expect(markup).toMatch(
-      /alt="P01 avatar"[^>]*width="136"[^>]*height="136"/
+      /alt="P01 avatar"[^>]*width="230"[^>]*height="230"/
     );
     expect(markup).toMatch(
-      /alt="P04 avatar"[^>]*width="92"[^>]*height="92"/
+      /alt="P04 avatar"[^>]*width="78"[^>]*height="78"/
     );
-    expect(markup).toContain("width:136px;height:136px");
-    expect(markup).toContain("width:92px;height:92px");
+    expect(markup).toContain("width:230px;height:230px");
+    expect(markup).toContain("width:78px;height:78px");
   });
 
   it("fetches avatar data URLs best-effort and skips failures", async () => {
@@ -183,6 +173,7 @@ describe("session share image", () => {
           wins: 3,
           losses: 1,
           pointDiff: 7,
+          matchesPlayed: 4,
         },
         {
           rank: 2,
@@ -196,6 +187,7 @@ describe("session share image", () => {
           wins: 2,
           losses: 2,
           pointDiff: 1,
+          matchesPlayed: 4,
         },
       ],
       { fetchImpl: fetchImpl as unknown as typeof fetch }
@@ -240,6 +232,7 @@ describe("session share image", () => {
           wins: 3,
           losses: 1,
           pointDiff: 7,
+          matchesPlayed: 4,
         },
       ],
       { fetchImpl: fetchImpl as unknown as typeof fetch }
