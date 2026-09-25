@@ -21,7 +21,7 @@ const mocks = vi.hoisted(() => ({
   useResource: vi.fn(),
   useAction: vi.fn(),
   session: null as SessionData | null,
-  sessionResource: null as { data: SessionData | null; error: string; refresh: ReturnType<typeof vi.fn> } | null,
+  sessionResource: null as { data: SessionData | null; error: string; refresh: ReturnType<typeof vi.fn>; update: ReturnType<typeof vi.fn> } | null,
   standingsResource: null as { data: { currentLeaderboard: Array<{ userId: string; name: string; sessionPoints: number }> }; error: string; refresh: ReturnType<typeof vi.fn> } | null,
 }));
 
@@ -119,7 +119,10 @@ function sessionWithCourts(courts: SessionData["courts"], players = courts.flatM
 
 function setup(session: SessionData) {
   mocks.session = session;
-  mocks.sessionResource = { data: session, error: "", refresh: vi.fn(async () => undefined) };
+  const sessionResource = { data: session, error: "", refresh: vi.fn(async () => undefined), update: vi.fn((updater: (current: SessionData) => SessionData) => {
+    if (sessionResource.data) sessionResource.data = updater(sessionResource.data);
+  }) };
+  mocks.sessionResource = sessionResource;
   mocks.standingsResource = {
     data: { currentLeaderboard: session.players.map((p) => ({ userId: p.userId, name: p.user.name, sessionPoints: p.sessionPoints })) },
     error: "",
@@ -239,6 +242,45 @@ describe("LiveSession score and player controls", () => {
     expect(container.textContent).not.toContain("Result saved");
     expect(container.textContent).not.toContain("Correct score");
     expect(Array.from(container.querySelectorAll("nav[aria-label='Session tabs'] button")).map(button => button.textContent)).toEqual(["Players", "Courts", "Standings"]);
+  });
+
+  it("clears an approved court as soon as the score POST resolves, while refreshes remain pending", async () => {
+    const currentMatch = match("match-1", 1, 0, 0);
+    const session = sessionWithCourts([{ id: "court-1", courtNumber: 1, currentMatch }]);
+    const pendingSave = deferred<unknown>();
+    const pendingSessionRefresh = deferred<void>();
+    const pendingStandingsRefresh = deferred<void>();
+    setup(session);
+    mocks.sessionResource!.refresh.mockImplementation(() => pendingSessionRefresh.promise);
+    mocks.standingsResource!.refresh.mockImplementation(() => pendingStandingsRefresh.promise);
+    mocks.api.mockImplementation((url: string) => url === "/api/matches/match-1/score" ? pendingSave.promise : Promise.resolve({}));
+    await act(async () => root.render(<LiveSession code="TEST01" onBack={vi.fn()} onEnded={vi.fn(async () => undefined)} />));
+
+    const inputs = container.querySelectorAll<HTMLInputElement>('.court-card input[aria-label$="score"]');
+    await act(async () => setInputValue(inputs[0], "21"));
+    await act(async () => setInputValue(inputs[1], "18"));
+    const save = container.querySelector<HTMLButtonElement>(".court-card .primary")!;
+    await act(async () => save.click());
+    await act(async () => save.click());
+    expect(save.disabled).toBe(true);
+
+    await act(async () => pendingSave.resolve({
+      id: "match-1",
+      status: "COMPLETED",
+      team1Score: 21,
+      team2Score: 18,
+      winnerTeam: 1,
+    }));
+
+    expect(mocks.sessionResource!.data?.courts[0].currentMatch).toBeNull();
+    expect(container.querySelector(".court-card input")).toBeNull();
+    expect(mocks.sessionResource!.refresh).toHaveBeenCalledOnce();
+    expect(mocks.standingsResource!.refresh).toHaveBeenCalledOnce();
+
+    await act(async () => {
+      pendingSessionRefresh.resolve();
+      pendingStandingsRefresh.resolve();
+    });
   });
 
   it("keeps score saving scoped to one court and prevents duplicate submissions", async () => {
@@ -657,7 +699,7 @@ describe("LiveSession score and player controls", () => {
     await act(async () => setInputValue(container.querySelector<HTMLInputElement>('[aria-label="Court 1 label"]')!, "North"));
 
     const polledSession = { ...session, courts: [{ ...session.courts[0], label: "Server label" }] };
-    mocks.sessionResource = { data: polledSession, error: "", refresh: vi.fn(async () => undefined) };
+    mocks.sessionResource = { data: polledSession, error: "", refresh: vi.fn(async () => undefined), update: vi.fn() };
     await act(async () => root.render(<LiveSession code="TEST01" onBack={vi.fn()} onEnded={vi.fn(async () => undefined)} />));
 
     expect(container.querySelector<HTMLInputElement>('[aria-label="Court 1 label"]')?.value).toBe("North");

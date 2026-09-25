@@ -20,25 +20,36 @@ export function useResource<T>(url: string | null) {
   const [state, setState] = useState<{ url: string; data: T } | null>(null);
   const [error, setError] = useState("");
   const latest = useRef(url);
+  const requestVersion = useRef(0);
   useEffect(() => { latest.current = url; }, [url]);
   const refresh = useCallback(async () => {
     if (!url) return;
+    const version = ++requestVersion.current;
     try {
       const data = await api<T>(url);
-      if (latest.current === url) {
+      if (latest.current === url && requestVersion.current === version) {
         setState({ url, data });
         setError("");
       }
     } catch (e) {
-      if (latest.current === url)
+      if (latest.current === url && requestVersion.current === version)
         setError(e instanceof Error ? e.message : "Unable to load");
       throw e;
     }
   }, [url]);
+  const update = useCallback((updater: (current: T) => T) => {
+    if (!url || latest.current !== url) return;
+    // Ignore reads that started before this authoritative local update.
+    requestVersion.current += 1;
+    setState((current) => current?.url === url
+      ? { url, data: updater(current.data) }
+      : current);
+    setError("");
+  }, [url]);
   useEffect(() => {
     void Promise.resolve().then(refresh).catch(() => {});
   }, [refresh]);
-  return { data: state?.url === url ? state.data : null, error, refresh };
+  return { data: state?.url === url ? state.data : null, error, refresh, update };
 }
 export function useAction(refresh?: () => Promise<unknown>) {
   const [busy, setBusy] = useState(false),

@@ -47,6 +47,15 @@ import { sessionFinishHighlights } from "./sessionFinishHighlights";
 import { shareSessionStandingsImage } from "@/lib/sessionShareImageClient";
 import { getInterclubScore } from "@/lib/interclubScoreboard";
 import { CourtMatchCreateMenu, SessionMatchCreationToolbar } from "./SessionMatchCreationControls";
+import {
+  applyGeneratedMatches,
+  applyQueuedMatch,
+  applyScoreApproval,
+  applyScoreSubmission,
+  type MatchPayload,
+} from "@/app/session/[code]/sessionDataMutations";
+import { MatchStatus } from "@/types/enums";
+import { saveScoreWithBackgroundRefresh } from "./scoreSave";
 type LiveSettingsDraft = {
   autoQueueEnabled: boolean;
   courtLabels: Record<number, string>;
@@ -78,6 +87,10 @@ type PlayerPauseOverlay = {
 type PausePlayerResponse = {
   queuedMatchAffected?: boolean;
   queuedMatch?: SessionData["queuedMatch"];
+};
+type ScoreSaveResponse = MatchPayload & {
+  queuedMatch?: SessionData["queuedMatch"];
+  autoAssignedMatch?: MatchPayload;
 };
 type QueuedMatchOverlay = {
   queuedMatch: SessionData["queuedMatch"] | null;
@@ -454,13 +467,37 @@ export default function LiveSession({
   }
   async function saveScore(match: Match, values: number[]) {
     try {
-      await api(
-        "/api/matches/" + match.id + "/score",
-        "POST",
-        { team1Score: values[0], team2Score: values[1] },
+      await saveScoreWithBackgroundRefresh(
+        () => api<ScoreSaveResponse>(
+          "/api/matches/" + match.id + "/score",
+          "POST",
+          { team1Score: values[0], team2Score: values[1] },
+        ),
+        (response) => {
+          if (response.status === MatchStatus.COMPLETED) {
+            setQueuedMatchOverlay(null);
+          }
+          resource.update((current) => {
+            const next = response.status === MatchStatus.COMPLETED
+              ? applyScoreApproval(current, response)
+              : applyScoreSubmission(current, response);
+            if (response.status !== MatchStatus.COMPLETED) return next;
+            return applyQueuedMatch(
+              response.autoAssignedMatch
+                ? applyGeneratedMatches(next, [response.autoAssignedMatch])
+                : next,
+              response.queuedMatch ?? null,
+            );
+          });
+          setScores((current) => {
+            const next = { ...current };
+            delete next[match.id];
+            return next;
+          });
+          setMatchConfirmation(match.id, false);
+        },
+        () => Promise.all([refreshSession(), refreshStandings()]),
       );
-      await refresh();
-      setMatchConfirmation(match.id, false);
     } catch (error) {
       setScoreErrors((previous) => ({
         ...previous,
