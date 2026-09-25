@@ -29,6 +29,9 @@ export function ClubHighlights({ items, onOpen }: {
           <CaretRight size={17} aria-hidden="true" />
         </button>
       </li>)}</ul>
-    </> : <div className="highlights-empty"><Sparkle size={24} weight="duotone" aria-hidden="true" /><p>Club moments will appear here after a completed session.</p></div>}
+    </> : <>
+      <p className="highlights-context highlights-context--empty" aria-hidden="true" />
+      <div className="highlights-empty"><Sparkle size={24} weight="duotone" aria-hidden="true" /><p>Club moments will appear here after a completed session.</p></div>
+    </>}
   </section>;
 }

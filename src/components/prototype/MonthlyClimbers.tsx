@@ -1,6 +1,7 @@
 "use client";
 
 import type { ClubPulseMonthlyClimber } from "@/lib/clubPulse";
+import { TrendUp } from "@phosphor-icons/react";
 import { Avatar } from "./Primitives";
 
 export function MonthlyClimbers({
@@ -16,8 +17,9 @@ export function MonthlyClimbers({
     <section className="monthly-climbers-section" aria-label="Monthly climbers">
       <div className="section-heading">
         <h3>Monthly climbers</h3>
-        <span className="monthly-climbers-month">{month}</span>
+        <TrendUp size={21} weight="duotone" aria-hidden="true" />
       </div>
+      <p className="monthly-climbers-context">{month}</p>
       {climbers.length > 0 ? (
         <ol className="monthly-climbers-list chemistry-card">
           {climbers.map(({ user, ratingGain }, index) => (

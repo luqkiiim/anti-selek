@@ -63,7 +63,7 @@
   .prototype-root .club-dashboard-grid {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    align-items: start;
+    align-items: stretch;
     column-gap: 20px;
     row-gap: 20px;
   }
@@ -119,6 +119,48 @@
   .prototype-root .club-dashboard-grid > .club-highlights .section-heading,
   .prototype-root .club-dashboard-grid > .monthly-climbers-section .section-heading {
     margin-top: 0;
+  }
+
+  .prototype-root .club-dashboard-grid > .club-highlights,
+  .prototype-root .club-dashboard-grid > .monthly-climbers-section,
+  .prototype-root .club-dashboard-grid > .chemistry-section,
+  .prototype-root .club-dashboard-grid > .rivalries-section {
+    display: flex;
+    flex-direction: column;
+    align-self: stretch;
+    min-height: 0;
+  }
+
+  .prototype-root .club-dashboard-grid > .club-highlights,
+  .prototype-root .club-dashboard-grid > .chemistry-section,
+  .prototype-root .club-dashboard-grid > .rivalries-section {
+    margin-block: 0;
+  }
+
+  .prototype-root .club-dashboard-grid > .club-highlights .highlights-list,
+  .prototype-root .club-dashboard-grid > .club-highlights .highlights-empty,
+  .prototype-root .club-dashboard-grid > .monthly-climbers-section .monthly-climbers-list,
+  .prototype-root .club-dashboard-grid > .monthly-climbers-section .monthly-climbers-empty,
+  .prototype-root .club-dashboard-grid > .chemistry-section .chemistry-card,
+  .prototype-root .club-dashboard-grid > .chemistry-section .chemistry-empty,
+  .prototype-root .club-dashboard-grid > .rivalries-section .rivalry-empty,
+  .prototype-root .club-dashboard-grid > .rivalries-section .rivalry-list-joined.chemistry-card {
+    flex: 1;
+  }
+
+  .prototype-root .club-dashboard-grid > .club-highlights .highlights-list,
+  .prototype-root .club-dashboard-grid > .monthly-climbers-section .monthly-climbers-list,
+  .prototype-root .club-dashboard-grid > .chemistry-section .chemistry-card,
+  .prototype-root .club-dashboard-grid > .rivalries-section .rivalry-list-joined.chemistry-card {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .prototype-root .club-dashboard-grid > .club-highlights .highlights-list > li,
+  .prototype-root .club-dashboard-grid > .monthly-climbers-section .monthly-climbers-list > li,
+  .prototype-root .club-dashboard-grid > .chemistry-section .chemistry-card > li,
+  .prototype-root .club-dashboard-grid > .rivalries-section .rivalry-list-joined.chemistry-card > li {
+    flex: 1;
   }
 
   .prototype-root .pc-content--sessions > .past-sessions {

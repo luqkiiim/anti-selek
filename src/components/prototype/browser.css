@@ -276,8 +276,9 @@
 .chemistry-explanation summary { cursor: pointer; color: #5e4772; }
 .chemistry-explanation p { margin-top: 10px; line-height: 1.6; }
 
-.monthly-climbers-section .section-heading { margin-bottom: 10px; flex-wrap: wrap; gap: 4px 12px; }
-.monthly-climbers-month { color: #80718b; font-size: 12px; }
+.monthly-climbers-section .section-heading { margin-bottom: 4px; flex-wrap: wrap; gap: 4px 12px; }
+.monthly-climbers-section .section-heading > svg { color: #8657bc; }
+.monthly-climbers-context { margin: 0 0 12px; color: #887a94; font-size: 12px; line-height: 1.4; overflow-wrap: anywhere; }
 .monthly-climbers-list { list-style: none; margin: 0; padding: 0 14px; }
 .monthly-climber-row { display: flex; align-items: center; gap: 10px; min-height: 64px; padding: 10px 0; }
 .monthly-climber-row + .monthly-climber-row { border-top: 1px solid #eee5ef; }
@@ -380,10 +381,13 @@
 .club-highlights { margin: 24px 0; }
 .club-highlights .section-heading { margin-bottom: 4px; }
 .club-highlights .section-heading > svg { color: #bd784b; }
-.highlights-context { margin: 0 0 12px; color: #887a94; font-size: 12px; overflow-wrap: anywhere; }
+.highlights-context { margin: 0 0 12px; color: #887a94; font-size: 12px; line-height: 1.4; overflow-wrap: anywhere; }
+.highlights-context--empty { min-height: 1.4em; }
 .highlights-list { list-style: none; margin: 0; padding: 0 16px; background: #fff; border: 1px solid #eee5dd; border-radius: 22px; }
 .highlights-list li + li { border-top: 1px solid #f1eae4; }
 .prototype-root .highlight-row { display: flex; align-items: center; gap: 12px; width: 100%; padding: 17px 0; border: 0; background: transparent; text-align: left; color: #291440; }
+.highlights-list > li { display: flex; }
+.prototype-root .highlights-list > li > .highlight-row { height: 100%; }
 .highlight-avatars { display: flex; flex-shrink: 0; gap: 5px; }
 .highlight-avatars .avatar { width: 40px; height: 40px; font-size: 15px; }
 .highlight-copy { display: grid; gap: 4px; flex: 1; min-width: 0; }
