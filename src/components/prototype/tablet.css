@@ -129,7 +129,7 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  /* Live courts use the real direct-child summary, scoreboard, toolbar and cards. */
+  /* Only court cards take a grid cell; session controls and alerts span the row. */
   .prototype-root .pc-content:has(> .court-card) {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -138,10 +138,7 @@
     gap: 16px;
   }
 
-  .prototype-root .pc-content:has(> .court-card) > .session-summary,
-  .prototype-root .pc-content:has(> .court-card) > .interclub-scoreboard,
-  .prototype-root .pc-content:has(> .court-card) > .session-match-creation-toolbar,
-  .prototype-root .pc-content:has(> .court-card) > .prototype-error {
+  .prototype-root .pc-content:has(> .court-card) > :not(.court-card) {
     grid-column: 1 / -1;
   }
 
