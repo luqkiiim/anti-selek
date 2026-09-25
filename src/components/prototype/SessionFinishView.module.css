@@ -221,13 +221,13 @@
 .shareButton:active, .replayButton:active { transform: translateY(1px); }
 .shareButton:focus-visible, .replayButton:focus-visible { outline: 3px solid #b998e5; outline-offset: 2px; }
 
+.settings { display: grid; gap: 10px; border: 1px solid #eee5ef; border-radius: 16px; padding: 13px 15px; background: #fffdfa; }
+.settings h2 { margin: 0; color: #806b91; font-size: 16px !important; font-weight: 800; letter-spacing: normal !important; text-transform: none !important; }
+.settings dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 14px; margin: 0; }
+.settings dl > div { min-width: 0; }
+.settings dt { color: #8b7b96; font-size: 12px; font-weight: 700; }
+.settings dd { margin: 2px 0 0; color: #392647; font-size: 13px; font-weight: 750; overflow-wrap: anywhere; }
 .standings { overflow: hidden; border: 1px solid #eee5ef; border-radius: 18px; background: #fffdfa; box-shadow: 0 6px 22px rgb(63 31 84 / 5%); }
-.standings > summary { display: flex; min-height: 52px; align-items: center; justify-content: space-between; gap: 10px; padding: 0 15px; color: #392647; font-size: 15px; font-weight: 850; cursor: pointer; list-style: none; }
-.standings > summary::-webkit-details-marker { display: none; }
-.standings > summary svg { color: #806b91; transition: transform 160ms ease; }
-.standings[open] > summary { border-bottom: 1px solid #eee5ef; }
-.standings[open] > summary svg { transform: rotate(180deg); }
-.standings > summary:focus-visible { outline: 3px solid #b998e5; outline-offset: -3px; }
 .standingsContent { padding: 10px; }
 .standingsContent > section { box-shadow: none; }
 
@@ -247,11 +247,12 @@
   .runnerUpAvatar { width: 42px !important; height: 42px !important; flex-basis: 42px; }
   .runnerUpName { font-size: 12px; }
   .runnerUpScore { font-size: 14px; }
+  .settings dl { grid-template-columns: 1fr; gap: 8px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .celebrating .championContent, .celebrating .runnerUpCard { opacity: 1; }
   .celebrating .championContent, .celebrating .crownBadge, .celebrating .runnerUpCard,
-  .confetti > span, .shareButton, .replayButton, .standings > summary svg { animation: none; transition: none; }
+  .confetti > span, .shareButton, .replayButton { animation: none; transition: none; }
   .confetti { display: none; }
 }

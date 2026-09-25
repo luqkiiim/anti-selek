@@ -845,6 +845,7 @@ export default function LiveSession({
                 <SessionFinishView
                   sessionName={s.name}
                   sessionType={s.type}
+                  sessionSettings={s}
                   players={finalPlayers}
                   pointDiffByUserId={finalPointDiff}
                   playerStatsByUserId={finalPlayerStats}

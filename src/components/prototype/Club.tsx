@@ -4,6 +4,7 @@ import { useState } from "react";
 import {
   CalendarBlank,
   CaretRight,
+  CaretLeft,
   ArrowLeft,
   ArrowUp,
   ArrowDown,
@@ -244,8 +245,8 @@ export default function Club({
             >
               <small>YOUR CLUB</small>
               <strong>
+                <CaretLeft size={16} aria-hidden="true" />
                 {data?.club.name || club.name}
-                <CaretRight size={16} />
               </strong>
             </button>
             <div className="club-header-actions">
@@ -455,6 +456,9 @@ export default function Club({
                   <small>wins</small>
                 </div>
               </div>
+              <button className="secondary full" onClick={() => openSession(recap.code)}>
+                Full session results
+              </button>
               <button className="secondary full" onClick={() => go("recap-history")}>
                 Match history
               </button>

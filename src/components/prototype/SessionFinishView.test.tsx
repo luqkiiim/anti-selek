@@ -6,6 +6,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   PartnerPreference,
   PlayerGender,
+  SessionBalanceMetric,
+  SessionCrossoverFrequency,
+  SessionMatchmakingStyle,
+  SessionMode,
+  SessionPairingMode,
+  SessionScoringType,
   SessionPool,
   SessionType,
 } from "@/types/enums";
@@ -67,6 +73,23 @@ const playerStatsByUserId = new Map([
 const baseProps = {
   sessionName: "Thursday Social",
   sessionType: SessionType.POINTS,
+  sessionSettings: {
+    type: SessionType.POINTS,
+    mode: SessionMode.MEXICANO,
+    matchmakingStyle: SessionMatchmakingStyle.BALANCED,
+    balanceMetric: SessionBalanceMetric.SESSION_POINTS,
+    pairingMode: SessionPairingMode.OPEN,
+    scoringType: SessionScoringType.POINTS,
+    poolsEnabled: true,
+    poolAName: "Competitive",
+    poolBName: "Social",
+    crossoverFrequency: SessionCrossoverFrequency.FREQUENT,
+    courts: [
+      { id: "court-1", courtNumber: 1, label: "Center court", currentMatch: null },
+      { id: "court-2", courtNumber: 2, label: null, currentMatch: null },
+    ],
+    autoQueueEnabled: true,
+  },
   players,
   pointDiffByUserId,
   playerStatsByUserId,
@@ -100,7 +123,11 @@ describe("SessionFinishView", () => {
     expect(container.querySelector('[aria-label="Top finishers"]')?.textContent).toContain("Aiman Rahman");
     expect(container.querySelector('[aria-label="Top finishers"]')?.textContent).toContain("+31 point diff");
     expect(container.querySelector("thead")?.textContent).toContain("Pts");
-    expect(container.querySelector("details")?.open).toBe(true);
+    expect(container.querySelector("details")).toBeNull();
+    expect(container.textContent).toContain("Settings used");
+    expect(container.textContent).toContain("Center court, Court 2");
+    expect(container.textContent).toContain("Competitive / Social · Often mix");
+    expect(container.textContent).toContain("Prepare next gameOn");
     const rows = Array.from(container.querySelectorAll("tbody tr"));
     expect(rows).toHaveLength(4);
     expect(rows[0]?.textContent).toContain("Aiman Rahman");

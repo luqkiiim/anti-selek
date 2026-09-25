@@ -1,11 +1,18 @@
 "use client";
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { ChevronDown, Crown, RotateCw, Share2 } from "lucide-react";
+import { Crown, RotateCw, Share2 } from "lucide-react";
 
-import type { Player } from "@/components/session/sessionTypes";
+import type { Player, SessionData } from "@/components/session/sessionTypes";
 import { Avatar } from "@/components/ui/Avatar";
-import { SessionType } from "@/types/enums";
+import { SessionCrossoverFrequency, SessionType } from "@/types/enums";
+import {
+  getBalanceMetricLabel,
+  getMatchmakingStyleLabel,
+  getPairingModeLabel,
+  getSessionSettings,
+} from "@/lib/sessionSettings";
+import { getCourtDisplayLabel } from "@/lib/courtLabels";
 import { LiveSessionStandings } from "./LiveSessionStandings";
 import type { LiveSessionStandingRow } from "./LiveSessionStandings";
 import { formatProfileDate } from "./profileDate";
@@ -28,6 +35,21 @@ export interface SessionFinishHighlight {
 export interface SessionFinishViewProps {
   sessionName: string;
   sessionType: string;
+  sessionSettings: Pick<
+    SessionData,
+    | "type"
+    | "mode"
+    | "matchmakingStyle"
+    | "balanceMetric"
+    | "pairingMode"
+    | "scoringType"
+    | "poolsEnabled"
+    | "poolAName"
+    | "poolBName"
+    | "crossoverFrequency"
+    | "courts"
+    | "autoQueueEnabled"
+  >;
   /** Pass the already-ranked roster from the session view model. */
   players: Player[];
   pointDiffByUserId: Map<string, number>;
@@ -109,6 +131,7 @@ function ConfettiBits() {
 export function SessionFinishView({
   sessionName,
   sessionType,
+  sessionSettings,
   players,
   pointDiffByUserId,
   playerStatsByUserId,
@@ -139,6 +162,15 @@ export function SessionFinishView({
     playerStatsByUserId,
     profileMemberIds,
   });
+  const resolvedSettings = getSessionSettings(sessionSettings);
+  const sortedCourts = [...sessionSettings.courts].sort(
+    (left, right) => left.courtNumber - right.courtNumber,
+  );
+  const crossoverFrequency = {
+    [SessionCrossoverFrequency.OCCASIONAL]: "Occasionally",
+    [SessionCrossoverFrequency.BALANCED]: "Sometimes",
+    [SessionCrossoverFrequency.FREQUENT]: "Often",
+  }[sessionSettings.crossoverFrequency];
 
   useEffect(() => {
     if (celebrate && !previousCelebrate.current) {
@@ -346,11 +378,7 @@ export function SessionFinishView({
       ) : null}
 
       {players.length > 0 ? (
-        <details className={styles.standings} open>
-          <summary>
-            <span>Full standings</span>
-            <ChevronDown size={19} strokeWidth={2.2} aria-hidden="true" />
-          </summary>
+        <div className={styles.standings}>
           <div className={styles.standingsContent}>
         <LiveSessionStandings
           rows={standingsRows}
@@ -359,10 +387,38 @@ export function SessionFinishView({
           onOpenMember={onOpenMember}
         />
           </div>
-        </details>
+        </div>
       ) : (
         <p className={styles.empty}>No final results have been recorded.</p>
       )}
+
+      <section className={styles.settings} aria-label="Session settings used">
+        <h2>Settings used</h2>
+        <dl>
+          <div>
+            <dt>Matchmaking</dt>
+            <dd>{getMatchmakingStyleLabel(resolvedSettings.matchmakingStyle)} · {getBalanceMetricLabel(resolvedSettings.balanceMetric)}</dd>
+          </div>
+          <div>
+            <dt>Pairing</dt>
+            <dd>{getPairingModeLabel(resolvedSettings.pairingMode)}</dd>
+          </div>
+          <div>
+            <dt>Courts</dt>
+            <dd>{sortedCourts.length > 0 ? sortedCourts.map(getCourtDisplayLabel).join(", ") : "None"}</dd>
+          </div>
+          <div>
+            <dt>Player groups</dt>
+            <dd>{sessionSettings.poolsEnabled
+              ? `${sessionSettings.poolAName || "Group A"} / ${sessionSettings.poolBName || "Group B"} · ${crossoverFrequency} mix`
+              : "Off"}</dd>
+          </div>
+          <div>
+            <dt>Prepare next game</dt>
+            <dd>{sessionSettings.autoQueueEnabled ? "On" : "Off"}</dd>
+          </div>
+        </dl>
+      </section>
     </section>
   );
 }
