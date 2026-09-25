@@ -337,15 +337,31 @@
 .prototype-root .club-activity-totals {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16px;
+  gap: 8px;
   margin: 4px 0 20px;
-  padding: 16px 0;
-  border-block: 1px solid #e9dfed;
+  padding: 10px 0;
 }
-.prototype-root .club-activity-totals > div { display: grid; gap: 3px; min-width: 0; }
-.prototype-root .club-activity-totals > div + div { border-left: 1px solid #e9dfed; padding-left: 16px; }
-.prototype-root .club-activity-totals strong { color: #553184; font-size: 28px; font-weight: 900; line-height: 1.1; overflow-wrap: anywhere; }
-.prototype-root .club-activity-totals span { color: #786582; font-size: 12px; font-weight: 700; }
+.prototype-root .club-activity-totals > div,
+.prototype-root .club-activity-totals > button {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr);
+  align-items: center;
+  gap: 4px 7px;
+  min-width: 0;
+  min-height: 90px;
+  padding: 10px;
+  border: 1px solid #e9dfed;
+  border-radius: 14px;
+  background: #fffdf9;
+  text-align: left;
+}
+.prototype-root .club-activity-totals > button { cursor: pointer; color: inherit; font: inherit; }
+.prototype-root .club-activity-totals > button:hover { border-color: #cdb5e1; background: #fbf6ff; }
+.prototype-root .club-activity-totals > button:focus-visible { outline: 3px solid #8a5bc2; outline-offset: 2px; }
+.prototype-root .club-activity-totals svg { color: #7040bc; }
+.prototype-root .club-activity-totals strong { grid-column: 1 / -1; color: #553184; font-size: 25px; font-weight: 900; line-height: 1.1; overflow-wrap: anywhere; }
+.prototype-root .club-activity-totals strong.club-activity-date { font-size: 16px; }
+.prototype-root .club-activity-totals span { grid-column: 1 / -1; color: #786582; font-size: 12px; font-weight: 700; }
 
 .prototype-root .past-sessions { margin-top: 24px; }
 .prototype-root .past-sessions-heading {

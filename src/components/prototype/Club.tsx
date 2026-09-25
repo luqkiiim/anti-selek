@@ -7,8 +7,11 @@ import {
   ArrowLeft,
   ArrowUp,
   ArrowDown,
+  ClockCounterClockwise,
   GearSix,
   Plus,
+  Table,
+  UsersThree,
 } from "@phosphor-icons/react";
 import type { DashboardClub } from "@/components/dashboard/dashboardTypes";
 import type {
@@ -291,8 +294,26 @@ export default function Club({
                   <Image src="/spark.png" alt="Friendly spark" width={92} height={92} />
                 </div>
                 <section className="club-activity-totals" aria-label="Club activity">
-                  <div><strong>{(data.clubPulse?.metrics.completedTournaments ?? completedSessions.length).toLocaleString()}</strong><span>Sessions completed</span></div>
-                  <div><strong>{data.clubPulse?.metrics.totalMatches.toLocaleString() ?? "—"}</strong><span>Matches completed</span></div>
+                  <button type="button" onClick={() => go("sessions")} aria-label={`${(data.clubPulse?.metrics.completedTournaments ?? completedSessions.length).toLocaleString()} Sessions, view sessions`}>
+                    <CalendarBlank size={19} aria-hidden="true" />
+                    <strong>{(data.clubPulse?.metrics.completedTournaments ?? completedSessions.length).toLocaleString()}</strong>
+                    <span>Sessions</span>
+                  </button>
+                  <div>
+                    <Table size={19} aria-hidden="true" />
+                    <strong>{data.clubPulse?.metrics.totalMatches.toLocaleString() ?? "—"}</strong>
+                    <span>Matches</span>
+                  </div>
+                  <button type="button" onClick={() => go("rankings")} aria-label={`${data.clubMembers.length.toLocaleString()} Members, view rankings`}>
+                    <UsersThree size={19} aria-hidden="true" />
+                    <strong>{data.clubMembers.length.toLocaleString()}</strong>
+                    <span>Members</span>
+                  </button>
+                  <div>
+                    <ClockCounterClockwise size={19} aria-hidden="true" />
+                    <strong className="club-activity-date">{data.clubPulse?.metrics.lastPlayedAt ? formatProfileDate(data.clubPulse.metrics.lastPlayedAt) : "Not yet"}</strong>
+                    <span>Last played</span>
+                  </div>
                 </section>
               </div>
               <div className="club-dashboard-session-cards">
