@@ -46,7 +46,7 @@ export function Pager({ pages, active, onChange, children }: {
   }, [pagesKey]);
   return <div className="page-pager" ref={ref}>{pages.map(page => (
     <div className="pager-page" key={page} inert={page !== active} aria-hidden={page !== active}>
-      <main className="pc-content">{children(page)}</main>
+      <main className={`pc-content pc-content--${page}`}>{children(page)}</main>
     </div>
   ))}</div>;
 }

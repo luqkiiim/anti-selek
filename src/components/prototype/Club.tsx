@@ -275,7 +275,8 @@ export default function Club({
           <ErrorText error={resource.error || profile.error || achievements.error || action.error} />
           {!data && <p role="status">Loading club…</p>}
           {data && page === "club" && (
-            <>
+            <div className="club-dashboard-grid">
+              <div className="club-dashboard-primary">
               <div className="club-welcome">
                 <div>
                   <span className="eyebrow">
@@ -309,6 +310,8 @@ export default function Club({
               ) : null}
               <UpcomingSessions sessions={upcoming} canManage={!!canManage} onOpen={openSession} onViewAll={() => go("sessions")} />
               {recent && <SessionUpdate session={recent} onOpen={() => { setRecap(recent); go("recap"); }} />}
+              </div>
+              <div className="club-dashboard-secondary">
               <ClubHighlights items={data.clubPulse?.sessionNews ?? []} onOpen={openSession} />
               {data.clubPulse?.monthlyClimbers && <MonthlyClimbers climbers={data.clubPulse.monthlyClimbers} month={data.clubPulse.monthlyClimbersMonth} onOpenProfile={openMember} />}
               <div className="section-heading">
@@ -321,7 +324,8 @@ export default function Club({
               <PartnerChemistry onOpenProfile={openMember} pairs={data.clubPulse?.partnerships ?? []} />
               <TopRivalries onOpenProfile={openMember} rivalries={data.clubPulse?.rivalries ?? []} />
               {data.club.rules && <details className="club-rules"><summary>Club rules</summary><p style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{data.club.rules}</p></details>}
-            </>
+              </div>
+            </div>
           )}
           {data && page === "sessions" && (
             <>

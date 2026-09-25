@@ -1,0 +1,164 @@
+/* Landscape tablet layouts. Phone styles remain unchanged below this breakpoint. */
+.prototype-root .club-dashboard-grid,
+.prototype-root .club-dashboard-primary,
+.prototype-root .club-dashboard-secondary {
+  display: contents;
+}
+
+@media (min-width: 900px) {
+  .prototype-root .pc-app {
+    max-width: 1200px;
+  }
+
+  .prototype-root .pc-header {
+    padding-inline: 30px;
+  }
+
+  .prototype-root .pc-content {
+    width: min(100%, 1120px);
+    margin-inline: auto;
+    padding-inline: 32px;
+    gap: 20px;
+  }
+
+  .prototype-root .bottom-nav {
+    left: 50%;
+    right: auto;
+    width: min(100%, 760px);
+    transform: translateX(-50%);
+    border-inline: 1px solid var(--line);
+    border-radius: 16px 16px 0 0;
+    padding-inline: 18px;
+  }
+
+  .prototype-root .local-tabs {
+    left: 50%;
+    right: auto;
+    width: min(calc(100% - 64px), 1056px);
+    transform: translateX(-50%);
+  }
+
+  /* Club chooser: intro and actions span the grid; choices fill in order. */
+  .prototype-root .pc-content.chooser {
+    width: min(100%, 1050px);
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-content: start;
+    align-items: stretch;
+  }
+
+  .prototype-root .chooser-intro,
+  .prototype-root .pc-content.chooser > .prototype-error,
+  .prototype-root .pc-content.chooser > [role="status"],
+  .prototype-root .chooser-actions {
+    grid-column: 1 / -1;
+  }
+
+  .prototype-root .club-choice {
+    min-height: 132px;
+  }
+
+  /* Keep optional dashboard panels in two real columns without empty grid tracks. */
+  .prototype-root .club-dashboard-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1.05fr) minmax(0, .95fr);
+    align-items: start;
+    gap: 28px;
+  }
+
+  .prototype-root .club-dashboard-primary,
+  .prototype-root .club-dashboard-secondary {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: 20px;
+  }
+
+  .prototype-root .club-dashboard-primary > *,
+  .prototype-root .club-dashboard-secondary > * {
+    min-width: 0;
+    margin-block: 0;
+  }
+
+  .prototype-root .club-dashboard-primary .club-activity-totals {
+    width: 100%;
+  }
+
+  .prototype-root .club-dashboard-primary .club-welcome {
+    min-height: 120px;
+  }
+
+  .prototype-root .club-dashboard-secondary .section-heading {
+    margin-bottom: 8px;
+  }
+
+  .prototype-root .pc-content--sessions > .past-sessions {
+    grid-column: 1 / -1;
+  }
+
+  .prototype-root .pc-content--sessions .past-sessions-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  /* Live courts use the real direct-child summary, scoreboard, toolbar and cards. */
+  .prototype-root .pc-content:has(> .court-card) {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-content: start;
+    align-items: start;
+    gap: 16px;
+  }
+
+  .prototype-root .pc-content:has(> .court-card) > .session-summary,
+  .prototype-root .pc-content:has(> .court-card) > .interclub-scoreboard,
+  .prototype-root .pc-content:has(> .court-card) > .session-match-creation-toolbar,
+  .prototype-root .pc-content:has(> .court-card) > .prototype-error {
+    grid-column: 1 / -1;
+  }
+
+  .prototype-root .court-card {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .prototype-root .rankings-page {
+    width: min(100%, 880px);
+    margin-inline: auto;
+  }
+
+  .prototype-root .player-profile {
+    width: min(100%, 900px);
+    margin-inline: auto;
+  }
+
+  .prototype-root .manage-club .pc-content {
+    width: min(100%, 1080px);
+  }
+
+  .prototype-root .session-setup {
+    width: min(100%, 900px);
+    margin-inline: auto;
+  }
+
+  /* Dialogs and bottom sheets stay centered in the usable landscape height. */
+  .prototype-root .member-profile-dialog {
+    width: min(calc(100% - 64px), 1080px);
+    max-width: 1080px;
+    height: min(92dvh, 900px);
+    max-height: 92dvh;
+    border-radius: 22px;
+    overflow: hidden;
+  }
+
+  .prototype-root .member-profile-dialog .pc-app {
+    max-width: none;
+  }
+
+  .prototype-sheet .sheet-panel {
+    bottom: max(16px, env(safe-area-inset-bottom, 0px));
+    width: min(calc(100% - 64px), 720px);
+    max-height: min(84dvh, 760px);
+    border-radius: 24px;
+    padding-bottom: 20px;
+  }
+}

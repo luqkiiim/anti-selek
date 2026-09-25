@@ -21,6 +21,7 @@ import "@fontsource/nunito-sans/800.css";
 import "@fontsource/nunito-sans/900.css";
 import "./prototype.css";
 import "./browser.css";
+import "./tablet.css";
 
 function ClubMark({ url, tone }: { url?: string | null; tone: number }) {
   const [failedUrl, setFailedUrl] = useState<string | null>(null);
