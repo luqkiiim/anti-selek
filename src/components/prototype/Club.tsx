@@ -388,15 +388,7 @@ export default function Club({
                     <button
                       className="recent-card"
                       key={s.id}
-                      onClick={() => {
-                        const item = profile.data?.recentSessions.find(
-                          (r) => r.id === s.id,
-                        );
-                        if (item) {
-                          setRecap(item);
-                          go("recap");
-                        } else openSession(s.code);
-                      }}
+                      onClick={() => openSession(s.code)}
                     >
                       <CalendarBlank size={22} />
                       <span>

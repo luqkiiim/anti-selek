@@ -378,16 +378,12 @@ export function SessionFinishView({
       ) : null}
 
       {players.length > 0 ? (
-        <div className={styles.standings}>
-          <div className={styles.standingsContent}>
         <LiveSessionStandings
           rows={standingsRows}
           groupsEnabled={false}
           scoreLabel={isLadderSession ? "net wins" : "points"}
           onOpenMember={onOpenMember}
         />
-          </div>
-        </div>
       ) : (
         <p className={styles.empty}>No final results have been recorded.</p>
       )}

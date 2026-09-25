@@ -227,10 +227,6 @@
 .settings dl > div { min-width: 0; }
 .settings dt { color: #8b7b96; font-size: 12px; font-weight: 700; }
 .settings dd { margin: 2px 0 0; color: #392647; font-size: 13px; font-weight: 750; overflow-wrap: anywhere; }
-.standings { overflow: hidden; border: 1px solid #eee5ef; border-radius: 18px; background: #fffdfa; box-shadow: 0 6px 22px rgb(63 31 84 / 5%); }
-.standingsContent { padding: 10px; }
-.standingsContent > section { box-shadow: none; }
-
 .noGames, .empty { margin: 0; border: 1px solid #eee5f2; border-radius: 15px; padding: 15px; background: #fffdfa; color: #82728e; font-size: 13px; text-align: center; }
 .empty { padding: 22px 15px; }
 
