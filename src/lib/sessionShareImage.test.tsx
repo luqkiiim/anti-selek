@@ -6,6 +6,7 @@ import { MatchStatus, SessionType } from "@/types/enums";
 import {
   buildSessionShareImageViewModel,
   fetchShareImageAvatarDataUrls,
+  getSessionShareImageRowSizing,
   renderSessionShareImage,
 } from "./sessionShareImage";
 
@@ -22,6 +23,21 @@ function createPlayers(count: number) {
 }
 
 describe("session share image", () => {
+  it("sizes standings rows and avatars to the available table space", () => {
+    const fiveRows = getSessionShareImageRowSizing(5);
+    const sixRows = getSessionShareImageRowSizing(6);
+    const elevenRows = getSessionShareImageRowSizing(11);
+    const elevenRowsWithOverflow = getSessionShareImageRowSizing(11, true);
+
+    expect(fiveRows).toEqual(sixRows);
+    expect(sixRows.rowHeight).toBeGreaterThan(elevenRows.rowHeight);
+    expect(sixRows.avatarSize).toBeGreaterThan(elevenRows.avatarSize);
+    expect(sixRows.avatarSize).toBe(136);
+    expect(elevenRows.avatarSize).toBe(78);
+    expect(elevenRowsWithOverflow.rowHeight).toBeLessThan(elevenRows.rowHeight);
+    expect(elevenRowsWithOverflow.rowHeight * 11 + 30).toBeLessThanOrEqual(1044);
+  });
+
   it("renders top 14 with podium ranks 1-3 and rows 4-14 only", () => {
     const viewModel = buildSessionShareImageViewModel({
       sessionName: "Weekend Cup",
@@ -41,6 +57,7 @@ describe("session share image", () => {
     expect(markup).toContain("Diff");
     expect(markup).toContain("MP");
     expect(markup).toContain("W/L");
+    expect(markup).toContain("font-size:32px");
     expect(markup).toContain(">14<");
     expect(markup).not.toContain(">15<");
     expect(markup.match(/P01/g) ?? []).toHaveLength(1);
@@ -118,6 +135,23 @@ describe("session share image", () => {
     expect(markup).not.toContain("<img");
   });
 
+  it("does not append a Guest label to guest player names", () => {
+    const viewModel = buildSessionShareImageViewModel({
+      sessionName: "Weekend Cup",
+      clubName: "Badminton Usuals",
+      sessionType: SessionType.POINTS,
+      players: createPlayers(4).map((player, index) => ({
+        ...player,
+        isGuest: index === 3,
+      })),
+      matches: [],
+    });
+    const markup = renderToStaticMarkup(renderSessionShareImage(viewModel));
+
+    expect(markup).toContain("P04");
+    expect(markup).not.toContain("Guest");
+  });
+
   it("renders enlarged podium and row avatar images when data URLs are available", () => {
     const viewModel = buildSessionShareImageViewModel({
       sessionName: "Weekend Cup",
@@ -140,10 +174,10 @@ describe("session share image", () => {
       /alt="P01 avatar"[^>]*width="230"[^>]*height="230"/
     );
     expect(markup).toMatch(
-      /alt="P04 avatar"[^>]*width="78"[^>]*height="78"/
+      /alt="P04 avatar"[^>]*width="136"[^>]*height="136"/
     );
     expect(markup).toContain("width:230px;height:230px");
-    expect(markup).toContain("width:78px;height:78px");
+    expect(markup).toContain("width:136px;height:136px");
   });
 
   it("fetches avatar data URLs best-effort and skips failures", async () => {

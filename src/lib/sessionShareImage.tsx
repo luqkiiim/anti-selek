@@ -22,7 +22,41 @@ export const SESSION_SHARE_IMAGE_PLAYER_LIMIT = 14;
 
 const SHARE_AVATAR_FETCH_TIMEOUT_MS = 4_000;
 const SHARE_PODIUM_AVATAR_SIZE = 230;
-const SHARE_ROW_AVATAR_SIZE = 78;
+const SHARE_ROW_AVATAR_MIN_SIZE = 78;
+const SHARE_ROW_AVATAR_MAX_SIZE = 136;
+const SHARE_ROW_AVATAR_VERTICAL_GUTTER = 16;
+const SHARE_TABLE_HEADER_HEIGHT = 64;
+const SHARE_TABLE_OVERFLOW_HEIGHT = 30;
+const SHARE_TABLE_FOOTER_HEIGHT = 90;
+const SHARE_TABLE_BODY_HEIGHT =
+  SESSION_SHARE_IMAGE_HEIGHT - 700 - 22 - SHARE_TABLE_HEADER_HEIGHT - SHARE_TABLE_FOOTER_HEIGHT;
+const SHARE_STANDINGS_MIN_ROWS_FOR_SIZING = 6;
+const SHARE_STANDINGS_MAX_ROWS = SESSION_SHARE_IMAGE_PLAYER_LIMIT - 3;
+
+export function getSessionShareImageRowSizing(
+  rowCount: number,
+  hasOverflow = false
+) {
+  const sizingRowCount = Math.min(
+    Math.max(rowCount, SHARE_STANDINGS_MIN_ROWS_FOR_SIZING),
+    SHARE_STANDINGS_MAX_ROWS
+  );
+  const rowHeight = Math.floor(
+    (SHARE_TABLE_BODY_HEIGHT - (hasOverflow ? SHARE_TABLE_OVERFLOW_HEIGHT : 0)) /
+      sizingRowCount
+  );
+
+  return {
+    rowHeight,
+    avatarSize: Math.min(
+      SHARE_ROW_AVATAR_MAX_SIZE,
+      Math.max(
+        SHARE_ROW_AVATAR_MIN_SIZE,
+        rowHeight - SHARE_ROW_AVATAR_VERTICAL_GUTTER
+      )
+    ),
+  };
+}
 
 export async function getSessionShareImageFonts() {
   const directory = join(process.cwd(), "node_modules", "@fontsource", "nunito-sans", "files");
@@ -502,7 +536,7 @@ const styles: Record<string, CSSProperties> = {
     width: "100%", padding: "22px 46px 0", background: "#fffdf9",
   },
   tableHeader: {
-    display: "flex", flexDirection: "row", alignItems: "center", height: 64,
+    display: "flex", flexDirection: "row", alignItems: "center", height: SHARE_TABLE_HEADER_HEIGHT,
     borderBottom: "2px solid #e6e1e8", color: "#70568f", fontSize: 22, fontWeight: 800,
   },
   tableRow: {
@@ -512,12 +546,12 @@ const styles: Record<string, CSSProperties> = {
   rankCell: { display: "flex", justifyContent: "center", width: 56, fontSize: 25, fontWeight: 700 },
   avatarCell: { display: "flex", justifyContent: "center", width: 92 },
   rowAvatar: {
-    width: SHARE_ROW_AVATAR_SIZE, height: SHARE_ROW_AVATAR_SIZE, borderRadius: 999,
+    borderRadius: 999,
     border: "2px solid #d8cce2", background: "#eee8f1", objectFit: "cover",
   },
   rowAvatarFallback: {
     display: "flex", alignItems: "center", justifyContent: "center",
-    width: SHARE_ROW_AVATAR_SIZE, height: SHARE_ROW_AVATAR_SIZE, borderRadius: 999,
+    borderRadius: 999,
     border: "2px solid #d8cce2", background: "#eee8f1", color: "#4a1b70",
     fontSize: 22, fontWeight: 800,
   },
@@ -528,8 +562,8 @@ const styles: Record<string, CSSProperties> = {
   numberCell: { display: "flex", justifyContent: "center", width: 98, fontSize: 30, fontWeight: 400 },
   pointsCell: { display: "flex", justifyContent: "center", width: 104, fontSize: 34, fontWeight: 800 },
   footer: {
-    display: "flex", justifyContent: "center", alignItems: "center", height: 70, marginTop: "auto",
-    color: "#9a82ad", fontSize: 23, fontWeight: 700, letterSpacing: 0.5,
+    display: "flex", justifyContent: "center", alignItems: "center", height: SHARE_TABLE_FOOTER_HEIGHT, marginTop: "auto",
+    color: "#9a82ad", fontSize: 32, fontWeight: 700, letterSpacing: 0.5,
   },
   empty: { display: "flex", flex: 1, justifyContent: "center", alignItems: "center", color: "#856c98", fontSize: 26 },
   overflow: { display: "flex", justifyContent: "center", paddingTop: 8, color: "#856c98", fontSize: 19, fontWeight: 700 },
@@ -571,11 +605,13 @@ function AvatarImage({
   avatarDataUrlsByUserId,
   variant,
   rank,
+  rowAvatarSize,
 }: {
   standing: SessionShareImageStanding;
   avatarDataUrlsByUserId: Map<string, string>;
   variant: "podium" | "row";
   rank?: number;
+  rowAvatarSize?: number;
 }) {
   const avatarDataUrl = avatarDataUrlsByUserId.get(standing.userId);
   const imageStyle =
@@ -585,6 +621,19 @@ function AvatarImage({
       ? styles.podiumAvatarFallback
       : styles.rowAvatarFallback;
   const medalBorder = rank === 1 ? "7px solid #e8cf67" : rank === 2 ? "7px solid #cbd0dc" : "7px solid #c78e59";
+  const sizedRowAvatarStyle =
+    variant === "row" && rowAvatarSize
+      ? { ...imageStyle, width: rowAvatarSize, height: rowAvatarSize }
+      : imageStyle;
+  const sizedRowFallbackStyle =
+    variant === "row" && rowAvatarSize
+      ? {
+          ...fallbackStyle,
+          width: rowAvatarSize,
+          height: rowAvatarSize,
+          fontSize: Math.round(rowAvatarSize * 0.28),
+        }
+      : fallbackStyle;
 
   if (avatarDataUrl) {
     return (
@@ -592,22 +641,14 @@ function AvatarImage({
       <img
         alt={`${standing.name} avatar`}
         src={avatarDataUrl}
-        width={
-          variant === "podium"
-            ? SHARE_PODIUM_AVATAR_SIZE
-            : SHARE_ROW_AVATAR_SIZE
-        }
-        height={
-          variant === "podium"
-            ? SHARE_PODIUM_AVATAR_SIZE
-            : SHARE_ROW_AVATAR_SIZE
-        }
-        style={variant === "podium" ? { ...imageStyle, border: medalBorder } : imageStyle}
+        width={variant === "podium" ? SHARE_PODIUM_AVATAR_SIZE : rowAvatarSize}
+        height={variant === "podium" ? SHARE_PODIUM_AVATAR_SIZE : rowAvatarSize}
+        style={variant === "podium" ? { ...imageStyle, border: medalBorder } : sizedRowAvatarStyle}
       />
     );
   }
 
-  return <div style={variant === "podium" ? { ...fallbackStyle, border: medalBorder } : fallbackStyle}>{standing.initials}</div>;
+  return <div style={variant === "podium" ? { ...fallbackStyle, border: medalBorder } : sizedRowFallbackStyle}>{standing.initials}</div>;
 }
 
 function PodiumCard({
@@ -660,15 +701,19 @@ function PodiumCard({
 function StandingRow({
   standing,
   avatarDataUrlsByUserId,
+  rowHeight,
+  avatarSize,
 }: {
   standing: SessionShareImageStanding;
   avatarDataUrlsByUserId: Map<string, string>;
+  rowHeight: number;
+  avatarSize: number;
 }) {
   return (
-    <div style={styles.tableRow}>
+    <div style={{ ...styles.tableRow, height: rowHeight }}>
       <div style={styles.rankCell}>{standing.rank}</div>
-      <div style={styles.avatarCell}><AvatarImage standing={standing} avatarDataUrlsByUserId={avatarDataUrlsByUserId} variant="row" /></div>
-      <div style={styles.nameCell}>{truncateLabel(standing.name, 19)}{standing.isGuest ? " · Guest" : ""}</div>
+      <div style={{ ...styles.avatarCell, width: avatarSize + 14 }}><AvatarImage standing={standing} avatarDataUrlsByUserId={avatarDataUrlsByUserId} variant="row" rowAvatarSize={avatarSize} /></div>
+      <div style={styles.nameCell}>{truncateLabel(standing.name, 19)}</div>
       <div style={styles.pointsCell}>{standing.score}</div>
       <div style={styles.numberCell}>{formatPointDiff(standing.pointDiff)}</div>
       <div style={styles.numberCell}>{standing.matchesPlayed}</div>
@@ -697,6 +742,10 @@ export function renderSessionShareImage(
         ? [topThree[1], topThree[0]]
         : topThree;
   const rowStandings = viewModel.standings.slice(3, SESSION_SHARE_IMAGE_PLAYER_LIMIT);
+  const rowSizing = getSessionShareImageRowSizing(
+    rowStandings.length,
+    viewModel.omittedPlayerCount > 0
+  );
 
   return (
     <div style={styles.frame}>
@@ -719,11 +768,11 @@ export function renderSessionShareImage(
       </div>
       <div style={styles.standingsPanel}>
         {rowStandings.length > 0 && <div style={styles.tableHeader}>
-          <div style={styles.rankCell} /><div style={styles.avatarCell} />
+          <div style={styles.rankCell} /><div style={{ ...styles.avatarCell, width: rowSizing.avatarSize + 14 }} />
           <div style={styles.nameCell}>Player</div><div style={styles.pointsCell}>{viewModel.sessionType === SessionType.LADDER ? "Record" : "Pts"}</div>
           <div style={styles.numberCell}>Diff</div><div style={styles.numberCell}>MP</div><div style={styles.numberCell}>W/L</div>
         </div>}
-        {rowStandings.map((standing) => <StandingRow key={standing.userId} standing={standing} avatarDataUrlsByUserId={avatarDataUrlsByUserId} />)}
+        {rowStandings.map((standing) => <StandingRow key={standing.userId} standing={standing} avatarDataUrlsByUserId={avatarDataUrlsByUserId} rowHeight={rowSizing.rowHeight} avatarSize={rowSizing.avatarSize} />)}
         {viewModel.omittedPlayerCount > 0 && <div style={styles.overflow}>{`${viewModel.omittedPlayerCount} more ${viewModel.omittedPlayerCount === 1 ? "player" : "players"} not shown`}</div>}
         {viewModel.standings.length === 0 && <div style={styles.empty}>No standings available</div>}
         <div style={styles.footer}>antiselek.com</div>
