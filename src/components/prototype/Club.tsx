@@ -276,55 +276,57 @@ export default function Club({
           {!data && <p role="status">Loading club…</p>}
           {data && page === "club" && (
             <div className="club-dashboard-grid">
-              <div className="club-dashboard-primary">
-              <div className="club-welcome">
-                <div>
-                  <span className="eyebrow">
-                    {canManage ? "YOUR CLUB, TOGETHER" : "GOOD TO SEE YOU"}
-                  </span>
-                  <h1>
-                    {canManage
-                      ? "Ready for a rally?"
-                      : `Welcome back, ${data.viewer.name}.`}
-                  </h1>
+              <div className="club-dashboard-intro">
+                <div className="club-welcome">
+                  <div>
+                    <span className="eyebrow">
+                      {canManage ? "YOUR CLUB, TOGETHER" : "GOOD TO SEE YOU"}
+                    </span>
+                    <h1>
+                      {canManage
+                        ? "Ready for a rally?"
+                        : `Welcome back, ${data.viewer.name}.`}
+                    </h1>
+                  </div>
+                  <Image src="/spark.png" alt="Friendly spark" width={92} height={92} />
                 </div>
-                <Image src="/spark.png" alt="Friendly spark" width={92} height={92} />
+                <section className="club-activity-totals" aria-label="Club activity">
+                  <div><strong>{(data.clubPulse?.metrics.completedTournaments ?? completedSessions.length).toLocaleString()}</strong><span>Sessions completed</span></div>
+                  <div><strong>{data.clubPulse?.metrics.totalMatches.toLocaleString() ?? "—"}</strong><span>Matches completed</span></div>
+                </section>
               </div>
-              <section className="club-activity-totals" aria-label="Club activity">
-                <div><strong>{(data.clubPulse?.metrics.completedTournaments ?? completedSessions.length).toLocaleString()}</strong><span>Sessions completed</span></div>
-                <div><strong>{data.clubPulse?.metrics.totalMatches.toLocaleString() ?? "—"}</strong><span>Matches completed</span></div>
-              </section>
-              {live.length ? (
-                <div className="session-tile">
-                  <span className="eyebrow">LIVE NOW</span>
-                  <h2>{live[0].name}</h2>
-                  <p>{live[0].players.length} players</p>
-                  <button
-                    className="primary"
-                    onClick={() => openSession(live[0].code)}
-                  >
-                    {canManage ? "Continue hosting" : "View session"}
-                    <CaretRight size={19} />
-                  </button>
-                </div>
-              ) : null}
-              <UpcomingSessions sessions={upcoming} canManage={!!canManage} onOpen={openSession} onViewAll={() => go("sessions")} />
-              {recent && <SessionUpdate session={recent} onOpen={() => { setRecap(recent); go("recap"); }} />}
+              <div className="club-dashboard-session-cards">
+                {live.length ? (
+                  <div className="session-tile">
+                    <span className="eyebrow">LIVE NOW</span>
+                    <h2>{live[0].name}</h2>
+                    <p>{live[0].players.length} players</p>
+                    <button
+                      className="primary"
+                      onClick={() => openSession(live[0].code)}
+                    >
+                      {canManage ? "Continue hosting" : "View session"}
+                      <CaretRight size={19} />
+                    </button>
+                  </div>
+                ) : null}
+                <UpcomingSessions sessions={upcoming} canManage={!!canManage} onOpen={openSession} onViewAll={() => go("sessions")} />
+                {recent && <SessionUpdate session={recent} onOpen={() => { setRecap(recent); go("recap"); }} />}
               </div>
-              <div className="club-dashboard-secondary">
               <ClubHighlights items={data.clubPulse?.sessionNews ?? []} onOpen={openSession} />
               {data.clubPulse?.monthlyClimbers && <MonthlyClimbers climbers={data.clubPulse.monthlyClimbers} month={data.clubPulse.monthlyClimbersMonth} onOpenProfile={openMember} />}
-              <div className="section-heading">
-                <h3>Your progress here</h3>
-                <button className="text-button" onClick={() => go("profile")}>
-                  View profile
-                </button>
+              <div className="club-dashboard-progress">
+                <div className="section-heading">
+                  <h3>Your progress here</h3>
+                  <button className="text-button" onClick={() => go("profile")}>
+                    View profile
+                  </button>
+                </div>
+                {renderStats()}
               </div>
-              {renderStats()}
               <PartnerChemistry onOpenProfile={openMember} pairs={data.clubPulse?.partnerships ?? []} />
               <TopRivalries onOpenProfile={openMember} rivalries={data.clubPulse?.rivalries ?? []} />
               {data.club.rules && <details className="club-rules"><summary>Club rules</summary><p style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{data.club.rules}</p></details>}
-              </div>
             </div>
           )}
           {data && page === "sessions" && (
