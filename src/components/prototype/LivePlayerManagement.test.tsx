@@ -256,6 +256,47 @@ describe("LivePlayerManagement", () => {
     expect(changed).toHaveBeenCalledOnce();
   });
 
+  it("prefills a missing roster search as a guest and submits gender, side, and rating", async () => {
+    mocks.api.mockResolvedValueOnce([]).mockResolvedValueOnce({});
+    await render();
+    await act(async () => {
+      [...container.querySelectorAll("button")].find((button) => button.textContent?.includes("Add club members"))?.click();
+    });
+    const search = container.querySelector<HTMLInputElement>('[aria-label="Search club members"]');
+    await act(async () => {
+      if (search) {
+        const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+        setter?.call(search, "New Guest");
+        search.dispatchEvent(new Event("input", { bubbles: true }));
+      }
+    });
+    const addAsGuest = [...container.querySelectorAll("button")].find((button) => button.textContent?.includes("Add “New Guest” as a guest"));
+    expect(addAsGuest).toBeDefined();
+    await act(async () => addAsGuest?.click());
+    const guestName = container.querySelector<HTMLInputElement>('.pm-form input');
+    expect(guestName?.value).toBe("New Guest");
+    expect(container.querySelector('[aria-label="Starting rating"]')).toBeNull();
+    const rating = container.querySelector<HTMLInputElement>('.pm-form input[type="number"]');
+    expect(rating?.value).toBe("1000");
+    const selects = container.querySelectorAll<HTMLSelectElement>(".pm-form select");
+    expect(selects[0]?.value).toBe(PlayerGender.UNSPECIFIED);
+    await act(async () => {
+      selects[0].value = PlayerGender.FEMALE;
+      selects[0].dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    const form = container.querySelector<HTMLFormElement>(".pm-form");
+    await act(async () => form?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
+
+    expect(mocks.api).toHaveBeenCalledWith("/api/sessions/LIVE01/guests", "POST", {
+      name: "New Guest",
+      initialElo: 1000,
+      gender: PlayerGender.FEMALE,
+      mixedSideOverride: null,
+      pool: SessionPool.A,
+    });
+    expect(changed).toHaveBeenCalledOnce();
+  });
+
   it("uses the session roster and club side for accepted interclub sessions", async () => {
     mocks.api.mockImplementation(async (url: string) => {
       if (url.endsWith("/roster")) {

@@ -5,6 +5,7 @@ import {
   ArrowLeft,
   DotsThreeVertical,
   MagnifyingGlass,
+  Plus,
   Trash,
   UserPlus,
 } from "@phosphor-icons/react";
@@ -14,7 +15,9 @@ import {
   SessionCollabFormat,
   SessionMode,
   SessionPool,
+  MixedSide,
 } from "@/types/enums";
+import { getMixedSideOverrideOptionForGender } from "@/lib/mixedSide";
 import type { Player, SessionData } from "@/components/session/sessionTypes";
 import { api } from "./api";
 import { Avatar, ErrorText, Sheet } from "./Primitives";
@@ -68,6 +71,12 @@ export function LivePlayerManagement({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [rosterError, setRosterError] = useState("");
+  const [addingGuest, setAddingGuest] = useState(false);
+  const [guestName, setGuestName] = useState("");
+  const [guestRating, setGuestRating] = useState("1000");
+  const [guestGender, setGuestGender] = useState<PlayerGender>(PlayerGender.UNSPECIFIED);
+  const [guestMixedSideOverride, setGuestMixedSideOverride] = useState<MixedSide | null>(null);
+  const [guestRepresentingClubId, setGuestRepresentingClubId] = useState("");
 
   const canManage = Boolean(session.viewerCanManage && !session.viewerIsQuickAccess);
   const isMixicano = session.mode === SessionMode.MIXICANO;
@@ -107,6 +116,7 @@ export function LivePlayerManagement({
       setSearch("");
       setError("");
       setRosterError("");
+      setAddingGuest(false);
     }
   }, [code, open]);
 
@@ -128,9 +138,9 @@ export function LivePlayerManagement({
     }
   }
 
-  async function openRoster() {
+  async function openRoster(searchValue = ""): Promise<SessionRosterMember[] | null> {
     setListScreen("roster");
-    setSearch("");
+    setSearch(searchValue);
     setRosterError("");
     setError("");
     setLoadingRoster(true);
@@ -155,12 +165,51 @@ export function LivePlayerManagement({
         }
         return next;
       });
+      return members;
     } catch (caught) {
       setRosterError(messageFor(caught, "Unable to load club members."));
       setRoster([]);
+      return null;
     } finally {
       setLoadingRoster(false);
     }
+  }
+
+  function openGuestForm(prefill = "") {
+    setGuestName(prefill);
+    setGuestRating("1000");
+    setGuestGender(PlayerGender.UNSPECIFIED);
+    setGuestMixedSideOverride(null);
+    setGuestRepresentingClubId("");
+    setError("");
+    setAddingGuest(true);
+  }
+
+  function addGuest() {
+    const name = guestName.trim();
+    const rating = Number(guestRating);
+    if (name.length < 2) return setError("Guest name must be at least 2 characters.");
+    if (session.players.some((player) => player.user.name.trim().toLocaleLowerCase() === name.toLocaleLowerCase()) || roster.some((member) => member.name.trim().toLocaleLowerCase() === name.toLocaleLowerCase())) {
+      return setError("That name is already in the session or club roster.");
+    }
+    if (![PlayerGender.MALE, PlayerGender.FEMALE].includes(guestGender)) return setError("Choose Male or Female for this guest.");
+    if (!guestRating.trim() || !Number.isInteger(rating) || rating < 0 || rating > 5000) return setError("Enter a whole-number rating from 0 to 5000.");
+    const representingClubId = isInterclub ? guestRepresentingClubId : undefined;
+    if (isInterclub && !(session.clubs ?? []).some((club) => club.status === "ACCEPTED" && club.id === representingClubId)) return setError("Choose a club before adding an interclub guest.");
+    return runAction(
+      () => api(`/api/sessions/${code}/guests`, "POST", {
+        name,
+        initialElo: rating,
+        gender: guestGender,
+        mixedSideOverride: guestMixedSideOverride,
+        pool: SessionPool.A,
+        ...(representingClubId ? { representingClubId } : {}),
+      }),
+      () => {
+        setAddingGuest(false);
+        setListScreen("players");
+      },
+    );
   }
 
   function openPreferences(player: Player) {
@@ -321,7 +370,19 @@ export function LivePlayerManagement({
                 ))}
               </div>
             ) : (
-              <p className="pm-empty">No players match this search.</p>
+              <div className="pm-empty">
+                <p>No players match this search.</p>
+                {canManage && search.trim().length >= 2 ? (
+                  <button type="button" className="pm-secondary" disabled={busy} onClick={() => {
+                    const prefill = search.trim();
+                    void openRoster(prefill).then((members) => {
+                      if (members && !members.some((member) => member.name.trim().toLocaleLowerCase() === prefill.toLocaleLowerCase())) {
+                        openGuestForm(prefill);
+                      }
+                    });
+                  }}><Plus size={18} aria-hidden="true" />Add “{search.trim()}” as a guest</button>
+                ) : null}
+              </div>
             )}
           </>
         ) : null}
@@ -342,7 +403,16 @@ export function LivePlayerManagement({
             {rosterError ? <ErrorText error={rosterError} /> : null}
             {loadingRoster ? <p className="pm-empty" role="status">Loading club members…</p> : null}
             {!loadingRoster && !rosterError && visibleRoster.length === 0 ? (
-              <p className="pm-empty">Everyone in this roster is already here.</p>
+              <div className="pm-empty">
+                <p>{normalizedSearch ? "No club members match this search." : "Everyone in this roster is already here."}</p>
+                {!addingGuest && canManage && normalizedSearch.length >= 2 &&
+                  !session.players.some((player) => player.user.name.trim().toLocaleLowerCase() === normalizedSearch) &&
+                  !roster.some((member) => member.name.trim().toLocaleLowerCase() === normalizedSearch) ? (
+                    <button type="button" className="pm-secondary" disabled={busy} onClick={() => openGuestForm(search.trim())}>
+                      <Plus size={18} aria-hidden="true" /> Add “{search.trim()}” as a guest
+                    </button>
+                  ) : null}
+              </div>
             ) : null}
             <div className="pm-player-list">
               {visibleRoster.map((member) => {
@@ -381,6 +451,22 @@ export function LivePlayerManagement({
                 );
               })}
             </div>
+            {addingGuest ? (
+              <form className="pm-form" onSubmit={(event) => { event.preventDefault(); void addGuest(); }}>
+                <h3>Add a guest</h3>
+                <label className="pm-label"><span>Guest name</span><input className={fieldClass()} value={guestName} onChange={(event) => setGuestName(event.target.value)} /></label>
+                <label className="pm-label"><span>Starting rating</span><input className={fieldClass()} type="number" min={0} max={5000} step={1} value={guestRating} onChange={(event) => setGuestRating(event.target.value)} /></label>
+                <label className="pm-label"><span>Gender</span><select className={fieldClass()} value={guestGender} onChange={(event) => { setGuestGender(event.target.value as PlayerGender); setGuestMixedSideOverride(null); }}><option value={PlayerGender.UNSPECIFIED}>Choose gender</option><option value={PlayerGender.MALE}>Male</option><option value={PlayerGender.FEMALE}>Female</option></select></label>
+                {guestGender !== PlayerGender.UNSPECIFIED ? (
+                  <label className="pm-label"><span>Mixed doubles side</span><select className={fieldClass()} value={guestMixedSideOverride ?? ""} onChange={(event) => setGuestMixedSideOverride(event.target.value ? event.target.value as MixedSide : null)}><option value="">Default</option>{(() => { const option = getMixedSideOverrideOptionForGender(guestGender); return option ? <option value={option.value}>{option.label}</option> : null; })()}</select></label>
+                ) : null}
+                {isInterclub ? (
+                  <label className="pm-label"><span>Represents</span><select className={fieldClass()} value={guestRepresentingClubId} onChange={(event) => setGuestRepresentingClubId(event.target.value)}><option value="">Choose club</option>{(session.clubs ?? []).filter((club) => club.status === "ACCEPTED").map((club) => <option key={club.id} value={club.id}>{club.name}</option>)}</select></label>
+                ) : null}
+                <button type="button" className="pm-secondary" disabled={busy} onClick={() => { setAddingGuest(false); setError(""); }}>Cancel</button>
+                <button type="submit" className="pm-primary" disabled={busy || guestGender === PlayerGender.UNSPECIFIED}>{busy ? "Adding…" : "Add guest"}</button>
+              </form>
+            ) : null}
           </>
         ) : null}
 

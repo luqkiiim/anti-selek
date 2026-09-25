@@ -27,6 +27,8 @@ import {
   SessionCrossoverFrequency,
   SessionType,
   SessionPool,
+  MixedSide,
+  PlayerGender,
 } from "@/types/enums";
 import { api, useResource, useAction } from "./api";
 import {
@@ -46,6 +48,7 @@ import { SessionStandbyView } from "./SessionStandbyView";
 import { sessionFinishHighlights } from "./sessionFinishHighlights";
 import { shareSessionStandingsImage } from "@/lib/sessionShareImageClient";
 import { getInterclubScore } from "@/lib/interclubScoreboard";
+import { getMixedSideOverrideOptionForGender } from "@/lib/mixedSide";
 import { CourtMatchCreateMenu, SessionMatchCreationToolbar } from "./SessionMatchCreationControls";
 import {
   applyGeneratedMatches,
@@ -149,6 +152,9 @@ export default function LiveSession({
   const savingScoreMatchIdsRef = useRef(new Set<string>());
   const [name, setName] = useState(""),
     [rating, setRating] = useState("1000");
+  const [guestGender, setGuestGender] = useState<PlayerGender>(PlayerGender.UNSPECIFIED);
+  const [guestMixedSideOverride, setGuestMixedSideOverride] = useState<MixedSide | null>(null);
+  const [guestRepresentingClubId, setGuestRepresentingClubId] = useState("");
   const [showHistory, setShowHistory] = useState(false);
   const [managePlayersOpen, setManagePlayersOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -1051,6 +1057,9 @@ export default function LiveSession({
                     onClick={() => {
                       setName("");
                       setRating("1000");
+                      setGuestGender(PlayerGender.UNSPECIFIED);
+                      setGuestMixedSideOverride(null);
+                      setGuestRepresentingClubId("");
                       setSheet("guest");
                     }}
                   >
@@ -1212,10 +1221,38 @@ export default function LiveSession({
                   onChange={(e) => setRating(e.target.value)}
                 />
               </label>
+              <label className="field-label">
+                Gender
+                <select value={guestGender} onChange={(event) => { setGuestGender(event.target.value as PlayerGender); setGuestMixedSideOverride(null); }}>
+                  <option value={PlayerGender.UNSPECIFIED}>Choose gender</option>
+                  <option value={PlayerGender.MALE}>Male</option>
+                  <option value={PlayerGender.FEMALE}>Female</option>
+                </select>
+              </label>
+              {guestGender !== PlayerGender.UNSPECIFIED ? (
+                <label className="field-label">
+                  Mixed doubles side
+                  <select value={guestMixedSideOverride ?? ""} onChange={(event) => setGuestMixedSideOverride(event.target.value ? event.target.value as MixedSide : null)}>
+                    <option value="">Default</option>
+                    {(() => { const option = getMixedSideOverrideOptionForGender(guestGender); return option ? <option value={option.value}>{option.label}</option> : null; })()}
+                  </select>
+                </label>
+              ) : null}
+              {s?.collabFormat === "INTERCLUB" ? (
+                <label className="field-label">
+                  Represents
+                  <select value={guestRepresentingClubId} onChange={(event) => setGuestRepresentingClubId(event.target.value)}>
+                    <option value="">Choose club</option>
+                    {(s.clubs ?? []).filter((club) => club.status === "ACCEPTED").map((club) => <option key={club.id} value={club.id}>{club.name}</option>)}
+                  </select>
+                </label>
+              ) : null}
               <button
                 className="primary"
                 disabled={
                   name.trim().length < 2 ||
+                  ![PlayerGender.MALE, PlayerGender.FEMALE].includes(guestGender) ||
+                  (s?.collabFormat === "INTERCLUB" && !guestRepresentingClubId) ||
                   !rating.trim() ||
                   !Number.isInteger(Number(rating)) ||
                   Number(rating) < 0 ||
@@ -1227,6 +1264,9 @@ export default function LiveSession({
                       api(endpoint + "/guests", "POST", {
                         name: name.trim(),
                         initialElo: Number(rating),
+                        gender: guestGender,
+                        mixedSideOverride: guestMixedSideOverride,
+                        ...(s?.collabFormat === "INTERCLUB" ? { representingClubId: guestRepresentingClubId } : {}),
                       }),
                     () => setSheet(""),
                   )

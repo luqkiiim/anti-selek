@@ -3,13 +3,15 @@
 import { useRef, useState } from "react";
 import { CaretRight, Check, Minus, Plus, MagnifyingGlass, Shuffle, Scales, ChartBar, UsersThree, Trash, X } from "@phosphor-icons/react";
 import type { ClubPageMember } from "@/components/club/clubTypes";
+import { getMixedSideOverrideOptionForGender } from "@/lib/mixedSide";
+import { MixedSide, PlayerGender } from "@/types/enums";
 import { Avatar, Sheet, ErrorText } from "./Primitives";
 import { api, useAction } from "./api";
 import "./session-setup.css";
 
 type Gender = "MALE" | "FEMALE" | "UNSPECIFIED";
 type Pool = "A" | "B";
-type Guest = { id: string; name: string; initialElo: number; gender: Gender; pool: Pool };
+type Guest = { id: string; name: string; initialElo: number; gender: Gender; mixedSideOverride: MixedSide | null; pool: Pool };
 const formats = [
   { id: "BALANCED", name: "Balanced", description: "More variety, while keeping teams balanced.", icon: Scales },
   { id: "SOCIAL", name: "Social", description: "Prioritize playing with different people.", icon: Shuffle },
@@ -47,6 +49,7 @@ export function SessionSetup({ clubId, members: rosterMembers, onCreated }: { cl
   const [guestName, setGuestName] = useState("");
   const [guestRating, setGuestRating] = useState("1000");
   const [guestGender, setGuestGender] = useState<Gender>("UNSPECIFIED");
+  const [guestMixedSideOverride, setGuestMixedSideOverride] = useState<MixedSide | null>(null);
   const [guestError, setGuestError] = useState("");
   const action = useAction();
   const players = members.filter(p => selected.includes(p.id));
@@ -57,16 +60,35 @@ export function SessionSetup({ clubId, members: rosterMembers, onCreated }: { cl
   const visibleMembers = members
     .filter(p => p.name.toLowerCase().includes(search.trim().toLowerCase()))
     .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }));
+  const hasGuestNameConflict = (value: string) => {
+    const normalized = value.trim().toLocaleLowerCase();
+    return rosterMembers.some((p) => p.name.trim().toLocaleLowerCase() === normalized) ||
+      guests.some((g) => g.name.trim().toLocaleLowerCase() === normalized);
+  };
+  function openGuestForm(prefill = "") {
+    setGuestName(prefill);
+    setGuestRating("1000");
+    setGuestGender("UNSPECIFIED");
+    setGuestMixedSideOverride(null);
+    setGuestError("");
+    setAddingGuest(true);
+  }
+  const guestSideOption = guestGender === "MALE"
+    ? getMixedSideOverrideOptionForGender(PlayerGender.MALE)
+    : guestGender === "FEMALE"
+      ? getMixedSideOverrideOptionForGender(PlayerGender.FEMALE)
+      : null;
   function togglePlayer(id: string) { setSelected(ids => ids.includes(id) ? ids.filter(p => p !== id) : [...ids, id]); }
   function addGuest() {
     const clean = guestName.trim();
     if (clean.length < 2) return setGuestError("Use at least two characters for the guest’s name.");
     if (guests.some(g => g.name.toLowerCase() === clean.toLowerCase())) return setGuestError("That guest is already on the list.");
     if (rosterMembers.some(p => p.name.trim().toLowerCase() === clean.toLowerCase())) return setGuestError("That name belongs to a club member. Select them from the player list.");
+    if (guestGender !== "MALE" && guestGender !== "FEMALE") return setGuestError("Choose Male or Female for this guest.");
     const rating = Number(guestRating);
     if (!guestRating.trim() || !Number.isInteger(rating) || rating < 0 || rating > 5000) return setGuestError("Enter a whole-number rating from 0 to 5000.");
-    setGuests(list => [...list, { id: crypto.randomUUID(), name: clean, initialElo: rating, gender: guestGender, pool: "B" }]);
-    setGuestName(""); setGuestRating("1000"); setGuestGender("UNSPECIFIED"); setGuestError(""); setAddingGuest(false);
+    setGuests(list => [...list, { id: crypto.randomUUID(), name: clean, initialElo: rating, gender: guestGender, mixedSideOverride: guestMixedSideOverride, pool: "B" }]);
+    setGuestName(""); setGuestRating("1000"); setGuestGender("UNSPECIFIED"); setGuestMixedSideOverride(null); setGuestError(""); setAddingGuest(false);
   }
   function prepare() {
     void action.run(async () => {
@@ -79,7 +101,7 @@ export function SessionSetup({ clubId, members: rosterMembers, onCreated }: { cl
         name: name.trim(), clubId, courtCount: courts, scoringType: "POINTS", matchmakingStyle: style,
         balanceMetric: metric, pairingMode: mixed ? "MIXED" : "OPEN", collabFormat: "FREE_PLAY",
         playerIds: players.map(p => p.id), playerConfigs: players.map(p => ({ userId: p.id, pool: getPool(p) })),
-        guestConfigs: guests.map(({ name, initialElo, gender, pool }) => ({ name, initialElo, gender, pool })),
+        guestConfigs: guests.map(({ name, initialElo, gender, mixedSideOverride, pool }) => ({ name, initialElo, gender, mixedSideOverride, pool })),
         poolsEnabled: groups, crossoverFrequency: crossover, autoQueueEnabled: autoQueue, respectPlayerRest: true, isTest: false,
       });
       onCreated(created.code);
@@ -120,9 +142,9 @@ export function SessionSetup({ clubId, members: rosterMembers, onCreated }: { cl
     <Sheet open={rosterOpen} title="Who’s playing?" onClose={() => { setRosterOpen(false); setAddingGuest(false); }}>
       <div className="setup-roster-sheet"><div className="setup-roster-tools"><strong>{count} selected</strong></div>
         <div className="setup-search"><MagnifyingGlass size={18} aria-hidden="true" /><input ref={searchInput} aria-label="Find a player" value={search} onChange={e => setSearch(e.target.value)} placeholder="Find a player" />{search && <button type="button" className="setup-search-clear" aria-label="Clear player search" onClick={() => { setSearch(""); searchInput.current?.focus(); }}><X size={18} aria-hidden="true" /></button>}</div>
-        <div className="setup-roster-list">{visibleMembers.map(p => <div key={p.id} className="setup-person"><label className="setup-person-select"><input type="checkbox" checked={selected.includes(p.id)} onChange={() => togglePlayer(p.id)} /><Avatar name={p.name} url={p.avatarUrl} /><span><strong>{p.name}</strong><small>{p.status === "CORE" ? "Core" : "Occasional"} · {p.elo}</small></span></label>{selected.includes(p.id) && groups && <div className="setup-person-options">{groups && <label>Group<select value={getPool(p)} onChange={e => setPools(g => ({ ...g, [p.id]: e.target.value as Pool }))} aria-label={`Group for ${p.name}`}><option value="A">Competitive</option><option value="B">Social</option></select></label>}</div>}</div>)}{!visibleMembers.length && <p className="setup-hint">No players found.</p>}</div>
-        {guests.length > 0 && <div className="setup-guests"><h3>Guests</h3>{[...guests].sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" })).map(g => <div className="setup-person" key={g.id}><div className="setup-guest-heading"><Avatar name={g.name} /><span><strong>{g.name}</strong><small>Guest · {g.initialElo}</small></span><button type="button" className="icon-button" aria-label={`Remove guest ${g.name}`} onClick={() => setGuests(list => list.filter(item => item.id !== g.id))}><Trash size={18} /></button></div>{(mixed || groups) && <div className="setup-person-options">{mixed && <label>Gender<select aria-label={`Gender for ${g.name}`} value={g.gender} onChange={e => setGuests(list => list.map(item => item.id === g.id ? { ...item, gender: e.target.value as Gender } : item))}><option value="UNSPECIFIED">Choose</option><option value="MALE">Male</option><option value="FEMALE">Female</option></select></label>}{groups && <label>Group<select aria-label={`Group for ${g.name}`} value={g.pool} onChange={e => setGuests(list => list.map(item => item.id === g.id ? { ...item, pool: e.target.value as Pool } : item))}><option value="A">Competitive</option><option value="B">Social</option></select></label>}</div>}</div>)}</div>}
-        {addingGuest ? <div className="setup-add-guest"><h3>Add a guest</h3><label className="field-label">Guest name<input value={guestName} onChange={e => setGuestName(e.target.value)} placeholder="Name" /></label><label className="field-label">Starting rating<input type="number" inputMode="numeric" min={0} max={5000} step={1} value={guestRating} onChange={e => setGuestRating(e.target.value)} /></label>{mixed && <label className="field-label">Gender<select value={guestGender} onChange={e => setGuestGender(e.target.value as Gender)}><option value="UNSPECIFIED">Choose</option><option value="MALE">Male</option><option value="FEMALE">Female</option></select></label>}<ErrorText error={guestError} /><div className="setup-guest-actions"><button type="button" className="secondary" onClick={() => setAddingGuest(false)}>Cancel</button><button type="button" className="primary" onClick={addGuest}>Add guest</button></div></div> : <button type="button" className="secondary full" onClick={() => setAddingGuest(true)}><Plus size={18} />Add guest</button>}
+        <div className="setup-roster-list">{visibleMembers.map(p => <div key={p.id} className="setup-person"><label className="setup-person-select"><input type="checkbox" checked={selected.includes(p.id)} onChange={() => togglePlayer(p.id)} /><Avatar name={p.name} url={p.avatarUrl} /><span><strong>{p.name}</strong><small>{p.status === "CORE" ? "Core" : "Occasional"} · {p.elo}</small></span></label>{selected.includes(p.id) && groups && <div className="setup-person-options">{groups && <label>Group<select value={getPool(p)} onChange={e => setPools(g => ({ ...g, [p.id]: e.target.value as Pool }))} aria-label={`Group for ${p.name}`}><option value="A">Competitive</option><option value="B">Social</option></select></label>}</div>}</div>)}{!visibleMembers.length && <div className="setup-no-match"><p className="setup-hint">No players found.</p>{!addingGuest && search.trim().length >= 2 && !hasGuestNameConflict(search) && <button type="button" className="secondary full" onClick={() => openGuestForm(search.trim())}>Add “{search.trim()}” as a guest</button>}</div>}</div>
+        {guests.length > 0 && <div className="setup-guests"><h3>Guests</h3>{[...guests].sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" })).map(g => <div className="setup-person" key={g.id}><div className="setup-guest-heading"><Avatar name={g.name} /><span><strong>{g.name}</strong><small>Guest · {g.initialElo}</small></span><button type="button" className="icon-button" aria-label={`Remove guest ${g.name}`} onClick={() => setGuests(list => list.filter(item => item.id !== g.id))}><Trash size={18} /></button></div>{(mixed || groups) && <div className="setup-person-options">{mixed && <label>Gender<select aria-label={`Gender for ${g.name}`} value={g.gender} onChange={e => setGuests(list => list.map(item => item.id === g.id ? { ...item, gender: e.target.value as Gender, mixedSideOverride: null } : item))}><option value="MALE">Male</option><option value="FEMALE">Female</option></select></label>}{groups && <label>Group<select aria-label={`Group for ${g.name}`} value={g.pool} onChange={e => setGuests(list => list.map(item => item.id === g.id ? { ...item, pool: e.target.value as Pool } : item))}><option value="A">Competitive</option><option value="B">Social</option></select></label>}</div>}</div>)}</div>}
+        {addingGuest ? <div className="setup-add-guest"><h3>Add a guest</h3><label className="field-label">Guest name<input autoFocus value={guestName} onChange={e => setGuestName(e.target.value)} placeholder="Name" /></label><label className="field-label">Starting rating<input type="number" inputMode="numeric" min={0} max={5000} step={1} value={guestRating} onChange={e => setGuestRating(e.target.value)} /></label><label className="field-label">Gender<select value={guestGender} onChange={e => { setGuestGender(e.target.value as Gender); setGuestMixedSideOverride(null); }}><option value="UNSPECIFIED">Choose gender</option><option value="MALE">Male</option><option value="FEMALE">Female</option></select></label>{guestSideOption && <label className="field-label">Mixed doubles side<select value={guestMixedSideOverride ?? ""} onChange={e => setGuestMixedSideOverride(e.target.value ? e.target.value as MixedSide : null)}><option value="">Default</option><option value={guestSideOption.value}>{guestSideOption.label}</option></select></label>}<ErrorText error={guestError} /><div className="setup-guest-actions"><button type="button" className="secondary" onClick={() => setAddingGuest(false)}>Cancel</button><button type="button" className="primary" onClick={addGuest} disabled={guestGender === "UNSPECIFIED"}>Add guest</button></div></div> : <button type="button" className="secondary full" onClick={() => openGuestForm()}><Plus size={18} />Add guest</button>}
         <div className="setup-roster-done"><button type="button" className="primary full" onClick={() => setRosterOpen(false)}>Done · {count} players</button></div>
       </div>
     </Sheet>
