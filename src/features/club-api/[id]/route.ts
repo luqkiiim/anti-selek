@@ -127,6 +127,7 @@ export async function GET(
         select: {
           id: true,
           name: true,
+          rules: true,
           avatarKey: true,
           createdById: true,
           isTutorial: true,
@@ -425,6 +426,7 @@ export async function GET(
         name: member.name,
         avatarUrl: member.avatarUrl,
         elo: member.elo,
+        status: member.status,
       })),
       sessions,
       completedMatches: completedMatches.map((match) => ({
@@ -476,6 +478,7 @@ export async function GET(
       avatarUrl: serializeAvatarEntity(club).avatarUrl,
       clubId: club.id,
       clubName: getTutorialClubDisplayName(club),
+      rules: club.rules,
       isTutorial: club.isTutorial,
       tutorialOwnerId: club.tutorialOwnerId,
       viewerIsOwner,
@@ -581,6 +584,7 @@ export async function PATCH(
         select: {
           id: true,
           createdById: true,
+          rules: true,
           isPasswordProtected: true,
           isTutorial: true,
           tutorialOwnerId: true,
@@ -607,15 +611,18 @@ export async function PATCH(
 
     const {
       name,
+      rules,
       password,
       isPasswordProtected,
     } = body as {
       name?: unknown;
+      rules?: unknown;
       password?: unknown;
       isPasswordProtected?: unknown;
     };
     const updates: {
       name?: string;
+      rules?: string;
       isPasswordProtected?: boolean;
       passwordHash?: string | null;
     } = {};
@@ -674,6 +681,16 @@ export async function PATCH(
       updates.name = nextName;
     }
 
+    if (rules !== undefined) {
+      if (typeof rules !== "string" || rules.length > 3000) {
+        return NextResponse.json(
+          { error: "Club rules must be 3000 characters or fewer" },
+          { status: 400 }
+        );
+      }
+      updates.rules = rules;
+    }
+
     if (password !== undefined) {
       if (typeof password !== "string") {
         return NextResponse.json({ error: "Invalid password" }, { status: 400 });
@@ -716,6 +733,7 @@ export async function PATCH(
       select: {
         id: true,
         name: true,
+        rules: true,
         isPasswordProtected: true,
         updatedAt: true,
       },

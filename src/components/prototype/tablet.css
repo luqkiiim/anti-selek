@@ -1,0 +1,239 @@
+/* Keep dashboard groups in the original phone reading order. */
+.prototype-root .club-dashboard-grid,
+.prototype-root .club-dashboard-intro,
+.prototype-root .club-dashboard-session-cards,
+.prototype-root .club-dashboard-progress {
+  display: contents;
+}
+
+@media (min-width: 900px) {
+  .prototype-root .pc-app {
+    max-width: 1200px;
+  }
+
+  .prototype-root .pc-header {
+    padding-inline: 30px;
+  }
+
+  .prototype-root .pc-content {
+    width: min(100%, 1120px);
+    margin-inline: auto;
+    padding-inline: 32px;
+    gap: 20px;
+  }
+
+  .prototype-root .bottom-nav {
+    left: 50%;
+    right: auto;
+    width: min(100%, 760px);
+    transform: translateX(-50%);
+    border-inline: 1px solid var(--line);
+    border-radius: 16px 16px 0 0;
+    padding-inline: 18px;
+  }
+
+  .prototype-root .local-tabs {
+    left: 50%;
+    right: auto;
+    width: min(calc(100% - 64px), 1056px);
+    transform: translateX(-50%);
+  }
+
+  /* Club chooser: intro and actions span the grid; choices fill in order. */
+  .prototype-root .pc-content.chooser {
+    width: min(100%, 1050px);
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-content: start;
+    align-items: stretch;
+  }
+
+  .prototype-root .chooser-intro,
+  .prototype-root .pc-content.chooser > .prototype-error,
+  .prototype-root .pc-content.chooser > [role="status"],
+  .prototype-root .chooser-actions {
+    grid-column: 1 / -1;
+  }
+
+  .prototype-root .club-choice {
+    min-height: 132px;
+  }
+
+  /* Order the dashboard by related panels rather than fixed left/right stacks. */
+  .prototype-root .club-dashboard-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: stretch;
+    column-gap: 20px;
+    row-gap: 20px;
+  }
+
+  .prototype-root .club-dashboard-intro,
+  .prototype-root .club-dashboard-session-cards,
+  .prototype-root .club-dashboard-progress,
+  .prototype-root .club-dashboard-grid > .club-rules {
+    grid-column: 1 / -1;
+  }
+
+  .prototype-root .club-dashboard-intro {
+    display: grid;
+    grid-template-columns: minmax(0, 1.1fr) minmax(0, .9fr);
+    align-items: center;
+    gap: 24px;
+  }
+
+  .prototype-root .club-dashboard-session-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    align-items: stretch;
+    gap: 16px;
+  }
+
+  .prototype-root .club-dashboard-session-cards:empty {
+    display: none;
+  }
+
+  .prototype-root .club-dashboard-progress {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .prototype-root .club-dashboard-grid > * {
+    min-width: 0;
+  }
+
+  .prototype-root .club-dashboard-session-cards > *,
+  .prototype-root .club-dashboard-grid > .club-highlights,
+  .prototype-root .club-dashboard-grid > .monthly-climbers-section,
+  .prototype-root .club-dashboard-grid > .club-dashboard-progress,
+  .prototype-root .club-dashboard-grid > .club-rules {
+    min-width: 0;
+    margin-block: 0;
+  }
+
+  .prototype-root .club-dashboard-progress .section-heading {
+    margin: 0;
+  }
+
+  .prototype-root .club-dashboard-grid > .club-highlights .section-heading,
+  .prototype-root .club-dashboard-grid > .monthly-climbers-section .section-heading {
+    margin-top: 0;
+  }
+
+  .prototype-root .club-dashboard-grid > .club-highlights,
+  .prototype-root .club-dashboard-grid > .monthly-climbers-section,
+  .prototype-root .club-dashboard-grid > .chemistry-section,
+  .prototype-root .club-dashboard-grid > .rivalries-section {
+    display: flex;
+    flex-direction: column;
+    align-self: stretch;
+    min-height: 0;
+  }
+
+  .prototype-root .club-dashboard-grid > .club-highlights,
+  .prototype-root .club-dashboard-grid > .chemistry-section,
+  .prototype-root .club-dashboard-grid > .rivalries-section {
+    margin-block: 0;
+  }
+
+  .prototype-root .club-dashboard-grid > .club-highlights .highlights-list,
+  .prototype-root .club-dashboard-grid > .club-highlights .highlights-empty,
+  .prototype-root .club-dashboard-grid > .monthly-climbers-section .monthly-climbers-list,
+  .prototype-root .club-dashboard-grid > .monthly-climbers-section .monthly-climbers-empty,
+  .prototype-root .club-dashboard-grid > .chemistry-section .chemistry-card,
+  .prototype-root .club-dashboard-grid > .chemistry-section .chemistry-empty,
+  .prototype-root .club-dashboard-grid > .rivalries-section .rivalry-empty,
+  .prototype-root .club-dashboard-grid > .rivalries-section .rivalry-list-joined.chemistry-card {
+    flex: 1;
+  }
+
+  .prototype-root .club-dashboard-grid > .club-highlights .highlights-list,
+  .prototype-root .club-dashboard-grid > .monthly-climbers-section .monthly-climbers-list,
+  .prototype-root .club-dashboard-grid > .chemistry-section .chemistry-card,
+  .prototype-root .club-dashboard-grid > .rivalries-section .rivalry-list-joined.chemistry-card {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .prototype-root .club-dashboard-grid > .club-highlights .highlights-list > li,
+  .prototype-root .club-dashboard-grid > .monthly-climbers-section .monthly-climbers-list > li,
+  .prototype-root .club-dashboard-grid > .chemistry-section .chemistry-card > li,
+  .prototype-root .club-dashboard-grid > .rivalries-section .rivalry-list-joined.chemistry-card > li {
+    flex: 1;
+  }
+
+  .prototype-root .pc-content--sessions > .past-sessions {
+    grid-column: 1 / -1;
+  }
+
+  .prototype-root .pc-content--sessions .past-sessions-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  /* Only court cards take a grid cell; session controls and alerts span the row. */
+  .prototype-root .pc-content:has(> .court-card) {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-content: start;
+    align-items: start;
+    gap: 16px;
+  }
+
+  .prototype-root .pc-content:has(> .court-card) > :not(.court-card) {
+    grid-column: 1 / -1;
+  }
+
+  .prototype-root .court-card {
+    display: flex;
+    flex-direction: column;
+    align-self: stretch;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .prototype-root .court-card > .primary {
+    margin-block-start: auto;
+  }
+
+  .prototype-root .rankings-page {
+    width: min(100%, 880px);
+    margin-inline: auto;
+  }
+
+  .prototype-root .player-profile {
+    width: min(100%, 900px);
+    margin-inline: auto;
+  }
+
+  .prototype-root .manage-club .pc-content {
+    width: min(100%, 1080px);
+  }
+
+  .prototype-root .session-setup {
+    width: min(100%, 900px);
+    margin-inline: auto;
+  }
+
+  /* Dialogs and bottom sheets stay centered in the usable landscape height. */
+  .prototype-root .member-profile-dialog {
+    width: min(calc(100% - 64px), 1080px);
+    max-width: 1080px;
+    height: min(92dvh, 900px);
+    max-height: 92dvh;
+    border-radius: 22px;
+    overflow: hidden;
+  }
+
+  .prototype-root .member-profile-dialog .pc-app {
+    max-width: none;
+  }
+
+  .prototype-sheet .sheet-panel {
+    bottom: max(16px, env(safe-area-inset-bottom, 0px));
+    width: min(calc(100% - 64px), 720px);
+    max-height: min(84dvh, 760px);
+    border-radius: 24px;
+    padding-bottom: 20px;
+  }
+}

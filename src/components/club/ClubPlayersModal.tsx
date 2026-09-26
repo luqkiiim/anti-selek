@@ -126,11 +126,15 @@ export function ClubPlayersModal({
   );
   const canAddGuest =
     trimmedSearch.length >= 2 && !hasExactMemberMatch && !hasExactGuestMatch;
-  const visibleGuests = guestConfigs.filter((guest) =>
-    normalizedSearch.length > 0
-      ? guest.name.toLowerCase().includes(normalizedSearch)
-      : true
-  );
+  const visibleGuests = guestConfigs
+    .filter((guest) =>
+      normalizedSearch.length > 0
+        ? guest.name.toLowerCase().includes(normalizedSearch)
+        : true
+    )
+    .sort((left, right) =>
+      left.name.localeCompare(right.name, undefined, { sensitivity: "base" })
+    );
 
   function focusSearch() {
     requestAnimationFrame(() => searchInputRef.current?.focus());

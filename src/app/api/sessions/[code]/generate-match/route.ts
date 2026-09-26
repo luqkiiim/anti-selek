@@ -58,6 +58,8 @@ export async function POST(
       undoCurrentMatch,
       manualTeams,
       excludedUserId,
+      restUserId,
+      expectedMatchId,
       replaceUserId,
       matchType,
     } = parseGenerateMatchRequest(body);
@@ -75,6 +77,13 @@ export async function POST(
       requestedCourtIds,
       forceReshuffle,
     });
+
+    if (restUserId && targetCourt.currentMatch?.id !== expectedMatchId) {
+      throw new GenerateMatchError(
+        409,
+        "This match has changed. Refresh and try again."
+      );
+    }
 
     if (undoCurrentMatch) {
       return NextResponse.json(await undoCurrentCourtMatch(targetCourt));
@@ -289,15 +298,22 @@ export async function POST(
           "poolBSeatCount" in bestSelection ? bestSelection.poolBSeatCount : null,
         clearArrivalPriority: true,
         consumeSkipNextUserIds: consumedSkipUserIds,
+        creditRestUserIds: restUserId ? [restUserId] : [],
         releasePendingUserIds: reshuffleUserIds.filter(
           (userId) => !bestSelection.ids.includes(userId)
         ),
       });
 
-      return NextResponse.json({
-        ...newMatch,
-        queuedMatch: await tryRebuildQueuedMatchForSessionId(sessionData.id),
-      });
+      let queuedMatch: Awaited<ReturnType<typeof tryRebuildQueuedMatchForSessionId>>;
+      try {
+        queuedMatch = await tryRebuildQueuedMatchForSessionId(sessionData.id);
+      } catch (error) {
+        if (!restUserId) throw error;
+        logError("Failed to rebuild queued match after player rest", error);
+        queuedMatch = null;
+      }
+
+      return NextResponse.json({ ...newMatch, queuedMatch });
     }
 
     const { busyPlayerIds, playersById, rotationHistory } =

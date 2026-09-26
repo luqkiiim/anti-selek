@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { resolveAvatarUrl } from "@/lib/avatar";
 import bcrypt from "bcryptjs";
 import { isGlobalAdminEmail } from "@/lib/globalAdmin";
 import { logError, safeErrorResponse } from "@/lib/errors";
@@ -47,6 +48,7 @@ export async function GET(request: Request) {
           select: {
             id: true,
             name: true,
+            avatarKey: true,
             createdById: true,
             isTutorial: true,
             isPasswordProtected: true,
@@ -63,13 +65,40 @@ export async function GET(request: Request) {
       orderBy: { createdAt: "asc" },
     });
 
+    const clubIds = memberships.map((membership) => membership.club.id);
+    const activeSessionsByClub = new Set<string>();
+    const standbySessionsByClub = new Set<string>();
+    if (clubIds.length > 0) {
+      const ongoingSessions = await prisma.session.findMany({
+        where: {
+          clubId: { in: clubIds },
+          isTest: false,
+          status: { in: ["ACTIVE", "WAITING"] },
+        },
+        select: { clubId: true, status: true },
+      });
+      for (const ongoingSession of ongoingSessions) {
+        if (ongoingSession.status === "ACTIVE") {
+          activeSessionsByClub.add(ongoingSession.clubId ?? "");
+        } else if (ongoingSession.status === "WAITING") {
+          standbySessionsByClub.add(ongoingSession.clubId ?? "");
+        }
+      }
+    }
+
     return NextResponse.json(
       memberships.map((m) => {
         const viewerIsOwner = m.club.createdById === session.user.id;
+        const sessionStatus = activeSessionsByClub.has(m.club.id)
+          ? "ACTIVE"
+          : standbySessionsByClub.has(m.club.id)
+            ? "WAITING"
+            : null;
 
         return withLegacyClubAliases({
           id: m.club.id,
           name: m.club.name,
+          avatarUrl: resolveAvatarUrl(m.club.avatarKey),
           clubId: m.club.id,
           clubName: m.club.name,
           role:
@@ -83,6 +112,7 @@ export async function GET(request: Request) {
           createdAt: m.club.createdAt,
           membersCount: m.club._count.members,
           sessionsCount: m.club._count.sessions,
+          sessionStatus,
         });
       })
     );
@@ -136,7 +166,10 @@ export async function POST(request: Request) {
       }
       throw error;
     }
-    const { password } = bodyRecord as { password?: unknown };
+    const { password, allowJoinRequests } = bodyRecord as {
+      password?: unknown;
+      allowJoinRequests?: unknown;
+    };
     const name = aliasedName ?? bodyRecord.name;
     if (typeof name !== "string" || name.trim().length < 3) {
       return NextResponse.json(
@@ -150,6 +183,12 @@ export async function POST(request: Request) {
     if (password !== undefined && typeof password !== "string") {
       return NextResponse.json(
         { error: "Invalid password", field: "password" },
+        { status: 400 }
+      );
+    }
+    if (allowJoinRequests !== undefined && typeof allowJoinRequests !== "boolean") {
+      return NextResponse.json(
+        { error: "Invalid join request setting", field: "allowJoinRequests" },
         { status: 400 }
       );
     }
@@ -197,6 +236,7 @@ export async function POST(request: Request) {
         name: normalizedName,
         isPasswordProtected: !!passwordHash,
         passwordHash,
+        allowJoinRequests: allowJoinRequests === true,
         createdById: session.user.id,
         members: {
           create: {

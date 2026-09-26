@@ -15,6 +15,7 @@ export interface ClubPulseParticipant {
 
 export interface ClubPulseMemberSource extends ClubPulseParticipant {
   elo: number;
+  status?: string;
 }
 
 export interface ClubPulseSessionSource {
@@ -104,6 +105,11 @@ export interface ClubPulsePartnership {
   } | null;
 }
 
+export interface ClubPulseMonthlyClimber {
+  user: ClubPulseParticipant;
+  ratingGain: number;
+}
+
 export interface ClubPulseLatestStory {
   session: {
     id: string;
@@ -178,6 +184,8 @@ export interface ClubPulseSnapshot {
   };
   hotPlayers: ClubPulseHotPlayer[];
   ratingMovers: ClubPulseHotPlayer[];
+  monthlyClimbers: ClubPulseMonthlyClimber[];
+  monthlyClimbersMonth: string;
   rivalries: ClubPulseRivalry[];
   partnerships: ClubPulsePartnership[];
   recentMatches: ClubPulseRecentMatch[];
@@ -288,6 +296,105 @@ function getMatchRatingChange(
     (team === 1 ? match.team1EloChange : match.team2EloChange) ??
     0
   );
+}
+
+const CLUB_PULSE_TIME_ZONE = "Asia/Kuala_Lumpur";
+const CLUB_PULSE_MONTH_PARTS_FORMATTER = new Intl.DateTimeFormat("en-CA", {
+  timeZone: CLUB_PULSE_TIME_ZONE,
+  year: "numeric",
+  month: "2-digit",
+});
+const CLUB_PULSE_MONTH_LABEL_FORMATTER = new Intl.DateTimeFormat("en", {
+  timeZone: CLUB_PULSE_TIME_ZONE,
+  month: "long",
+  year: "numeric",
+});
+
+function getMonthContext(value: Date) {
+  const parts = CLUB_PULSE_MONTH_PARTS_FORMATTER.formatToParts(value);
+  const year = parts.find((part) => part.type === "year")?.value;
+  const month = parts.find((part) => part.type === "month")?.value;
+  if (!year || !month) return { label: "", startAt: 0, endAt: 0 };
+  const yearNumber = Number(year);
+  const monthNumber = Number(month);
+  const malaysiaOffsetMs = 8 * 60 * 60 * 1000;
+  return {
+    label: CLUB_PULSE_MONTH_LABEL_FORMATTER.format(value),
+    startAt: Date.UTC(yearNumber, monthNumber - 1, 1) - malaysiaOffsetMs,
+    endAt: Date.UTC(yearNumber, monthNumber, 1) - malaysiaOffsetMs,
+  };
+}
+
+function buildMonthlyClimbers(
+  members: ClubPulseMemberSource[],
+  matches: ClubPulseMatchSource[],
+  guestIdsBySessionId: GuestIdsBySessionId,
+  now: Date,
+  monthStart: number,
+  monthEnd: number
+) {
+  const coreMembers = new Map(
+    members
+      .filter((member) => (member.status ?? "CORE") === "CORE")
+      .map((member) => [member.id, {
+        id: member.id,
+        name: member.name,
+        avatarUrl: member.avatarUrl,
+      }])
+  );
+  const gains = new Map<string, number>();
+  const incompleteMembers = new Set<string>();
+
+  for (const match of matches) {
+    const completedAt = match.completedAt
+      ? match.completedAt instanceof Date
+        ? match.completedAt
+        : new Date(match.completedAt)
+      : null;
+    if (
+      !completedAt ||
+      !Number.isFinite(completedAt.getTime()) ||
+      completedAt.getTime() > now.getTime() ||
+      completedAt.getTime() < monthStart ||
+      completedAt.getTime() >= monthEnd
+    ) {
+      continue;
+    }
+
+    const { team1, team2 } = getMatchTeams(match);
+    const eligiblePlayers = [...team1, ...team2].filter(
+      (player) =>
+        coreMembers.has(player.id) &&
+        !isMatchGuest(guestIdsBySessionId, match, player.id)
+    );
+    const hasZeroTeamDeltas =
+      match.team1EloChange === 0 && match.team2EloChange === 0;
+
+    for (const player of eligiblePlayers) {
+      const adjustment = getMatchAdjustment(match, player.id);
+      if (!adjustment) {
+        if (!hasZeroTeamDeltas) incompleteMembers.add(player.id);
+        continue;
+      }
+      gains.set(player.id, (gains.get(player.id) ?? 0) + adjustment.delta);
+    }
+  }
+
+  return Array.from(gains.entries())
+    .filter(([id, ratingGain]) => ratingGain > 0 && !incompleteMembers.has(id))
+    .map(([id, ratingGain]): ClubPulseMonthlyClimber => ({
+      user: coreMembers.get(id)!,
+      ratingGain,
+    }))
+    .sort(
+      (left, right) =>
+        right.ratingGain - left.ratingGain ||
+        left.user.name.localeCompare(right.user.name, undefined, {
+          sensitivity: "base",
+        }) ||
+        left.user.id.localeCompare(right.user.id)
+    )
+    .slice(0, 3);
 }
 
 function getTeamBeforeElo(
@@ -602,17 +709,18 @@ function getRivalryStrength(rivalry: RivalryAggregate) {
 
 function buildRivalries(
   matches: ClubPulseMatchSource[],
-  guestIdsBySessionId: GuestIdsBySessionId
+  guestIdsBySessionId: GuestIdsBySessionId,
+  coreMemberIds: Set<string>
 ) {
   const aggregates = new Map<string, RivalryAggregate>();
 
   for (const match of matches) {
     const { team1, team2 } = getMatchTeams(match);
     const eligibleTeam1 = team1.filter(
-      (player) => !isMatchGuest(guestIdsBySessionId, match, player.id)
+      (player) => coreMemberIds.has(player.id) && !isMatchGuest(guestIdsBySessionId, match, player.id)
     );
     const eligibleTeam2 = team2.filter(
-      (player) => !isMatchGuest(guestIdsBySessionId, match, player.id)
+      (player) => coreMemberIds.has(player.id) && !isMatchGuest(guestIdsBySessionId, match, player.id)
     );
     const winnerIds = new Set(
       match.winnerTeam === 1
@@ -701,7 +809,8 @@ function updatePartnership(
 
 function buildPartnerships(
   matches: ClubPulseMatchSource[],
-  guestIdsBySessionId: GuestIdsBySessionId
+  guestIdsBySessionId: GuestIdsBySessionId,
+  coreMemberIds: Set<string>
 ) {
   const aggregates = new Map<string, PartnershipAggregate>();
 
@@ -712,7 +821,7 @@ function buildPartnerships(
     const team1Result = match.winnerTeam === 1 ? "WIN" : "LOSS";
     const team2Result = match.winnerTeam === 2 ? "WIN" : "LOSS";
 
-    if (isTeamGuestFree(guestIdsBySessionId, match, team1)) {
+    if (team1.every(player => coreMemberIds.has(player.id)) && isTeamGuestFree(guestIdsBySessionId, match, team1)) {
       updatePartnership(
         aggregates,
         team1[0],
@@ -725,7 +834,7 @@ function buildPartnerships(
       );
     }
 
-    if (isTeamGuestFree(guestIdsBySessionId, match, team2)) {
+    if (team2.every(player => coreMemberIds.has(player.id)) && isTeamGuestFree(guestIdsBySessionId, match, team2)) {
       updatePartnership(
         aggregates,
         team2[0],
@@ -1173,7 +1282,8 @@ function getHistoricalPeakBeforeLatestSession(
 function buildSessionNews(
   completedSessions: ClubPulseSessionSource[],
   matches: ClubPulseMatchSource[],
-  guestIdsBySessionId: GuestIdsBySessionId
+  guestIdsBySessionId: GuestIdsBySessionId,
+  coreMemberIds: ReadonlySet<string>
 ) {
   const latestSession = completedSessions[0];
   if (!latestSession) return [];
@@ -1185,7 +1295,7 @@ function buildSessionNews(
 
   const latestAggregates = Array.from(
     buildSessionAggregates(latestMatches, guestIdsBySessionId).values()
-  );
+  ).filter((aggregate) => coreMemberIds.has(aggregate.user.id));
   const latestPlayerIds = new Set(
     latestAggregates.map((aggregate) => aggregate.user.id)
   );
@@ -1237,7 +1347,8 @@ function buildSessionNews(
       const { team1, team2 } = getMatchTeams(match);
       if (
         !isTeamGuestFree(guestIdsBySessionId, match, team1) ||
-        !isTeamGuestFree(guestIdsBySessionId, match, team2)
+        !isTeamGuestFree(guestIdsBySessionId, match, team2) ||
+        [...team1, ...team2].some((player) => !coreMemberIds.has(player.id))
       ) {
         return null;
       }
@@ -1403,11 +1514,15 @@ export function buildClubPulse({
   members,
   sessions,
   completedMatches,
+  now = new Date(),
 }: {
   members: ClubPulseMemberSource[];
   sessions: ClubPulseSessionSource[];
   completedMatches: ClubPulseMatchSource[];
+  now?: Date;
 }): ClubPulseSnapshot {
+  const coreMemberIds = new Set(members.filter(member => (member.status ?? "CORE") === "CORE").map(member => member.id));
+  const monthContext = getMonthContext(now);
   const activeSessions = getActiveSessions(sessions);
   const completedSessions = getCompletedSessions(sessions);
   const guestIdsBySessionId = getGuestIdsBySessionId(sessions);
@@ -1448,16 +1563,27 @@ export function buildClubPulse({
       sortedCompletedMatches,
       guestIdsBySessionId
     ),
-    rivalries: buildRivalries(sortedCompletedMatches, guestIdsBySessionId),
+    monthlyClimbers: buildMonthlyClimbers(
+      members,
+      sortedCompletedMatches,
+      guestIdsBySessionId,
+      now,
+      monthContext.startAt,
+      monthContext.endAt
+    ),
+    monthlyClimbersMonth: monthContext.label,
+    rivalries: buildRivalries(sortedCompletedMatches, guestIdsBySessionId, coreMemberIds),
     partnerships: buildPartnerships(
       sortedCompletedMatches,
-      guestIdsBySessionId
+      guestIdsBySessionId,
+      coreMemberIds
     ),
     recentMatches: buildRecentMatches(sortedCompletedMatches),
     sessionNews: buildSessionNews(
       completedSessions,
       sortedCompletedMatches,
-      guestIdsBySessionId
+      guestIdsBySessionId,
+      coreMemberIds
     ),
     latestStory: buildLatestStory(
       completedSessions,

@@ -84,6 +84,8 @@ function createSessionData({
     name: "Badminton 29/5/26",
     type: SessionType.POINTS,
     status,
+    createdAt: new Date("2026-05-01T00:00:00.000Z"),
+    endedAt: new Date("2026-05-01T12:00:00.000Z"),
     club: {
       id: "community-1",
       name: communityIsTutorial
@@ -151,15 +153,22 @@ describe("session share image route", () => {
     expect(response.status).toBe(200);
     expect(response.headers.get("content-type")).toContain("image/png");
     expect(response.headers.get("cache-control")).toBe("private, no-store");
-    expect(mocks.imageResponses[0].options).toEqual({
+    expect(mocks.imageResponses[0].options).toEqual(expect.objectContaining({
       width: SESSION_SHARE_IMAGE_WIDTH,
       height: SESSION_SHARE_IMAGE_HEIGHT,
-    });
+      fonts: expect.arrayContaining([
+        expect.objectContaining({ name: "Nunito Sans", weight: 400 }),
+        expect.objectContaining({ name: "Nunito Sans", weight: 800 }),
+      ]),
+    }));
     const markup = renderToStaticMarkup(
       mocks.imageResponses[0].element as ReactElement
     );
     expect(markup).toContain("Badminton 29/5/26");
     expect(markup).toContain(">13<");
+    expect(markup).toContain("1 May 2026");
+    expect(markup).toContain("13 players");
+    expect(markup).toContain("1 match");
   });
 
   it("rejects unauthenticated users", async () => {

@@ -1,0 +1,1 @@
+ALTER TABLE "Community" ADD COLUMN "rules" TEXT NOT NULL DEFAULT '';

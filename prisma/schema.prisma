@@ -9,12 +9,14 @@ datasource db {
 }
 
 model User {
+  clubJoinRequests ClubJoinRequest[]
   id                String    @id @default(cuid())
   email             String?   @unique
   passwordHash      String?
   name              String
   avatarKey         String?
   selfNameChangedAt DateTime?
+  selfGenderChangedAt DateTime?
   isClaimed         Boolean   @default(false)
   gender            String    @default("UNSPECIFIED") // MALE, FEMALE, UNSPECIFIED
   partnerPreference String    @default("OPEN") // legacy MIXICANO preference fallback: OPEN, FEMALE_FLEX
@@ -54,8 +56,11 @@ model User {
 }
 
 model Club {
+  allowJoinRequests Boolean @default(false)
+  joinRequests ClubJoinRequest[]
   id                  String   @id @default(cuid())
   name                String   @unique
+  rules               String   @default("")
   avatarKey           String?
   isPasswordProtected Boolean  @default(false)
   passwordHash        String?
@@ -96,6 +101,7 @@ model ClubRatingAdjustment {
 }
 
 model ClubMember {
+  achievementPreferencesJson String @default("{}")
   ratingAdjustments ClubRatingAdjustment[]
   id            String   @id @default(cuid())
   clubId        String   @map("communityId")
@@ -115,6 +121,7 @@ model ClubMember {
 }
 
 model Session {
+  achievementEligibilityJson String @default("{}")
   id                     String    @id @default(cuid())
   code                   String    @unique
   clubId                 String?   @map("communityId")
@@ -471,4 +478,18 @@ model ClubNotification {
   @@unique([type, newsItemId, actorUserId, recipientUserId])
   @@index([clubId, recipientUserId, readAt, createdAt])
   @@index([recipientUserId, createdAt])
+}
+
+model ClubJoinRequest {
+  id String @id @default(cuid())
+  clubId String
+  userId String
+  status String @default("PENDING")
+  createdAt DateTime @default(now())
+  reviewedAt DateTime?
+  reviewedById String?
+  club Club @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@unique([clubId, userId])
+  @@index([clubId, status])
 }

@@ -87,8 +87,6 @@ export default function ClubPage() {
     setIsTestSession,
     autoQueueEnabled,
     setAutoQueueEnabled,
-    respectPlayerRest,
-    setRespectPlayerRest,
     collabFormat,
     setCollabFormat,
     partnerClubId,
@@ -750,8 +748,6 @@ export default function ClubPage() {
       onIsTestSessionChange={setIsTestSession}
       autoQueueEnabled={autoQueueEnabled}
       onAutoQueueEnabledChange={setAutoQueueEnabled}
-      respectPlayerRest={respectPlayerRest}
-      onRespectPlayerRestChange={setRespectPlayerRest}
       collabFormat={collabFormat}
       onCollabFormatChange={setCollabFormat}
       partnerClubId={partnerClubId}

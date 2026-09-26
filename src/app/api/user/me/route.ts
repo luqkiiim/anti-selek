@@ -30,6 +30,7 @@ function toCurrentUserPayload(
     elo: number;
     createdAt: Date;
     selfNameChangedAt: Date | null;
+    selfGenderChangedAt: Date | null;
   },
   session: Session
 ) {
@@ -45,6 +46,10 @@ function toCurrentUserPayload(
       user.isClaimed &&
       !session.user.isQuickAccess &&
       user.selfNameChangedAt === null,
+    canChangeGender:
+      user.isClaimed &&
+      !session.user.isQuickAccess &&
+      user.selfGenderChangedAt === null,
   });
 }
 
@@ -71,6 +76,7 @@ async function getCurrentUserRoute(_request: Request) {
       elo: true,
       createdAt: true,
       selfNameChangedAt: true,
+      selfGenderChangedAt: true,
     },
   });
 
@@ -149,6 +155,7 @@ async function updateCurrentUserRoute(request: Request) {
       elo: true,
       createdAt: true,
       selfNameChangedAt: true,
+      selfGenderChangedAt: true,
     },
   });
 
@@ -178,27 +185,61 @@ async function updateCurrentUserRoute(request: Request) {
     );
   }
 
-  const updatedUser = await prisma.user.update({
-    where: { id: currentUser.id },
-    data: {
-      name: nameChanged ? nextName : undefined,
-      selfNameChangedAt: nameChanged ? new Date() : undefined,
-      gender: genderChanged ? (gender as PlayerGender) : undefined,
-    },
-    select: {
-      id: true,
-      email: true,
-      name: true,
-      avatarKey: true,
-      isClaimed: true,
-      gender: true,
-      partnerPreference: true,
-      mixedSideOverride: true,
-      elo: true,
-      createdAt: true,
-      selfNameChangedAt: true,
-    },
-  });
+  if (genderChanged && currentUser.selfGenderChangedAt !== null) {
+    return NextResponse.json(
+      { error: "Player gender can only be changed once" },
+      { status: 409 }
+    );
+  }
+
+  let updatedUser;
+  try {
+    updatedUser = await prisma.user.update({
+      where: {
+        id: currentUser.id,
+        ...(nameChanged ? { selfNameChangedAt: null } : {}),
+        ...(genderChanged ? { selfGenderChangedAt: null } : {}),
+      },
+      data: {
+        name: nameChanged ? nextName : undefined,
+        selfNameChangedAt: nameChanged ? new Date() : undefined,
+        gender: genderChanged ? (gender as PlayerGender) : undefined,
+        selfGenderChangedAt: genderChanged ? new Date() : undefined,
+      },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        avatarKey: true,
+        isClaimed: true,
+        gender: true,
+        partnerPreference: true,
+        mixedSideOverride: true,
+        elo: true,
+        createdAt: true,
+        selfNameChangedAt: true,
+        selfGenderChangedAt: true,
+      },
+    });
+  } catch (error) {
+    // The nullable timestamp predicates above make this update a compare-and-set.
+    // If another request won the race, surface the same one-time-change response.
+    if ((error as { code?: unknown })?.code === "P2025") {
+      if (nameChanged) {
+        return NextResponse.json(
+          { error: "Player name can only be changed once" },
+          { status: 409 }
+        );
+      }
+      if (genderChanged) {
+        return NextResponse.json(
+          { error: "Player gender can only be changed once" },
+          { status: 409 }
+        );
+      }
+    }
+    throw error;
+  }
 
   logAuditEvent({
     action: nameChanged ? "user.rename_self" : "user.update_gender_self",

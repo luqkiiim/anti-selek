@@ -16,12 +16,14 @@ import { MatchStatus, SessionStatus } from "@/types/enums";
 
 export const dynamic = "force-dynamic";
 
+class CourtPauseConflictError extends Error {}
+
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ code: string }> }
 ) {
   try {
-    const rateLimitResponse = await rateLimit(request, "api:sessions:code:pause-player:post", { limit: 15, windowMs: 60_000 });
+    const rateLimitResponse = await rateLimit(request, "api:sessions:code:pause-player:post", { limit: 120, windowMs: 60_000 });
     if (rateLimitResponse) return rateLimitResponse;
 
     const session = await auth();
@@ -42,9 +44,21 @@ export async function POST(
     if (!body || typeof body !== "object") {
       return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
     }
-    const { userId, isPaused } = body as { userId?: unknown; isPaused?: unknown };
+    const { userId, isPaused, courtId, currentMatchId } = body as {
+      userId?: unknown;
+      isPaused?: unknown;
+      courtId?: unknown;
+      currentMatchId?: unknown;
+    };
     if (typeof userId !== "string" || typeof isPaused !== "boolean") {
       return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
+    }
+    const isCourtPause = courtId !== undefined || currentMatchId !== undefined;
+    if (
+      isCourtPause &&
+      (!isPaused || typeof courtId !== "string" || typeof currentMatchId !== "string")
+    ) {
+      return NextResponse.json({ error: "Invalid court pause request" }, { status: 400 });
     }
 
     const sessionData = await prisma.session.findUnique({
@@ -69,9 +83,15 @@ export async function POST(
     if (!session.user.isAdmin && !operatorMembership && session.user.id !== userId) {
       return invalidTargetResponse(request, "api:sessions:code:pause-player");
     }
+    if (isCourtPause && !session.user.isAdmin && !operatorMembership) {
+      return invalidTargetResponse(request, "api:sessions:code:pause-player");
+    }
 
     if (sessionData.status === SessionStatus.COMPLETED) {
       return NextResponse.json({ error: "Tournament already ended" }, { status: 400 });
+    }
+    if (isCourtPause && sessionData.status !== SessionStatus.ACTIVE) {
+      return NextResponse.json({ error: "Tournament not active" }, { status: 400 });
     }
 
     const existingPlayer = await prisma.sessionPlayer.findUnique({
@@ -92,6 +112,46 @@ export async function POST(
 
     if (!existingPlayer) {
       return invalidTargetResponse(request, "api:sessions:code:pause-player");
+    }
+
+    const courtPauseTarget = isCourtPause
+      ? { courtId: courtId as string, currentMatchId: currentMatchId as string }
+      : null;
+    let courtMatchUserIds: string[] = [];
+    if (courtPauseTarget) {
+      const liveMatch = await prisma.match.findFirst({
+        where: {
+          id: courtPauseTarget.currentMatchId,
+          sessionId: sessionData.id,
+          courtId: courtPauseTarget.courtId,
+          status: { in: [MatchStatus.PENDING, MatchStatus.IN_PROGRESS] },
+          OR: [
+            { team1User1Id: userId },
+            { team1User2Id: userId },
+            { team2User1Id: userId },
+            { team2User2Id: userId },
+          ],
+        },
+        select: {
+          id: true,
+          team1User1Id: true,
+          team1User2Id: true,
+          team2User1Id: true,
+          team2User2Id: true,
+        },
+      });
+      if (!liveMatch) {
+        return NextResponse.json(
+          { error: "This court match has changed. Refresh and try again." },
+          { status: 409 }
+        );
+      }
+      courtMatchUserIds = [
+        liveMatch.team1User1Id,
+        liveMatch.team1User2Id,
+        liveMatch.team2User1Id,
+        liveMatch.team2User2Id,
+      ];
     }
 
     let inactiveSecondsToIncrement = 0;
@@ -156,6 +216,42 @@ export async function POST(
       shouldResetResumeQueue && sessionData.status === SessionStatus.ACTIVE;
 
     const { nextPlayer, queuedMatchAffected } = await prisma.$transaction(async (tx) => {
+      if (courtPauseTarget) {
+        const clearedCourt = await tx.court.updateMany({
+          where: {
+            id: courtPauseTarget.courtId,
+            sessionId: sessionData.id,
+            currentMatchId: courtPauseTarget.currentMatchId,
+          },
+          data: { currentMatchId: null },
+        });
+        if (clearedCourt.count === 0) {
+          throw new CourtPauseConflictError(
+            "This court match has changed. Refresh and try again."
+          );
+        }
+
+        const deletedMatch = await tx.match.deleteMany({
+          where: {
+            id: courtPauseTarget.currentMatchId,
+            sessionId: sessionData.id,
+            courtId: courtPauseTarget.courtId,
+            status: { in: [MatchStatus.PENDING, MatchStatus.IN_PROGRESS] },
+            OR: [
+              { team1User1Id: userId },
+              { team1User2Id: userId },
+              { team2User1Id: userId },
+              { team2User2Id: userId },
+            ],
+          },
+        });
+        if (deletedMatch.count === 0) {
+          throw new CourtPauseConflictError(
+            "This court match has changed. Refresh and try again."
+          );
+        }
+      }
+
       const nextPlayer = await tx.sessionPlayer.update({
         where: {
           sessionId_userId: {
@@ -177,7 +273,7 @@ export async function POST(
       });
 
       let queuedMatchAffected = false;
-      if (isPaused) {
+      if (isPaused && !courtPauseTarget) {
         const queuedMatch = await tx.queuedMatch.findUnique({
           where: { sessionId: sessionData.id },
         });
@@ -196,6 +292,13 @@ export async function POST(
         }
       }
 
+      if (courtPauseTarget) {
+        await applyPendingPlayerGroupChangesInTransaction(tx, {
+          sessionId: sessionData.id,
+          userIds: courtMatchUserIds,
+        });
+      }
+
       return { nextPlayer, queuedMatchAffected };
     });
 
@@ -211,6 +314,9 @@ export async function POST(
       queuedMatch,
     });
   } catch (error) {
+    if (error instanceof CourtPauseConflictError) {
+      return NextResponse.json({ error: error.message }, { status: 409 });
+    }
     logError("Pause player error", error);
     return safeErrorResponse();
   }

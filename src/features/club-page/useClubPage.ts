@@ -137,9 +137,13 @@ export function useClubPage() {
 
   const filteredSelectablePlayers = useMemo(
     () =>
-      hostSetup.selectablePlayers.filter((member) =>
-        member.name.toLowerCase().includes(hostSetup.playerSearch.toLowerCase())
-      ),
+      hostSetup.selectablePlayers
+        .filter((member) =>
+          member.name.toLowerCase().includes(hostSetup.playerSearch.toLowerCase())
+        )
+        .sort((left, right) =>
+          left.name.localeCompare(right.name, undefined, { sensitivity: "base" })
+        ),
     [hostSetup.playerSearch, hostSetup.selectablePlayers]
   );
 

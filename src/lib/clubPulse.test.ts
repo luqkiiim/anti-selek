@@ -148,8 +148,37 @@ function createRivalrySeries({
 }
 
 describe("clubPulse", () => {
+  it("ranks only current core-member pairs while retaining their games with other players", () => {
+    const session = createSession("core-only", {
+      players: Object.values(players).map(user => ({ user, isGuest: user.id === players.cara.id })),
+    });
+    const completedMatches = Array.from({ length: 4 }, (_, index) => createMatch(`core-${index}`, {
+      session,
+      completedAt: `2026-05-0${index + 1}T10:00:00.000Z`,
+      team1: [players.alice, players.ben],
+      team2: [players.cara, players.dan],
+      team1Score: index % 2 ? 19 : 21,
+      team2Score: index % 2 ? 21 : 19,
+      winnerTeam: index % 2 ? 2 : 1,
+    }));
+    const members = [players.alice, players.ben, players.cara, players.dan].map(user => ({
+      ...createMember(user), status: user.id === players.ben.id ? "OCCASIONAL" : "CORE",
+    }));
+    const result = buildClubPulse({ members, sessions: [session], completedMatches });
+    expect(result.partnerships).toEqual([]);
+    expect(result.rivalries).toHaveLength(1);
+    expect(result.rivalries[0].players).toEqual([players.alice, players.dan]);
+    expect(result.rivalries[0].matches).toBe(4);
+
+    const promoted = buildClubPulse({ members: members.map(m => ({ ...m, status: "CORE" })), sessions: [session], completedMatches });
+    expect(promoted.partnerships.map(p => p.players)).toEqual([[players.alice, players.ben]]);
+    const departed = buildClubPulse({ members: members.filter(m => m.id !== players.dan.id), sessions: [session], completedMatches });
+    expect(departed.rivalries).toEqual([]);
+  });
+
   it("returns quiet empty-state data when a club has no matches", () => {
     const result = buildClubPulse({
+      now: new Date("2026-09-20T12:00:00Z"),
       members: [createMember(players.alice), createMember(players.ben)],
       sessions: [],
       completedMatches: [],
@@ -168,6 +197,8 @@ describe("clubPulse", () => {
       },
       hotPlayers: [],
       ratingMovers: [],
+      monthlyClimbers: [],
+      monthlyClimbersMonth: "September 2026",
       rivalries: [],
       partnerships: [],
       recentMatches: [],
@@ -1090,6 +1121,58 @@ describe("clubPulse", () => {
       players: [players.alice, players.ben, players.cara, players.dan],
       featuredPlayers: [players.alice, players.ben],
     });
+  });
+
+  it("chooses the top core member for session news after excluding occasional members", () => {
+    const occasional = createPlayer("occasional", "Occasional");
+    const session = createSession("core-session-news");
+    const completedMatches = [
+      createMatch("occasional-rating-jump", {
+        session,
+        completedAt: "2026-05-01T11:00:00.000Z",
+        team1: [occasional, players.alice],
+        team2: [players.ben, players.cara],
+        team1Score: 21,
+        team2Score: 18,
+        winnerTeam: 1,
+        eloAdjustments: [
+          { userId: occasional.id, delta: 40, beforeElo: 1000, afterElo: 1040 },
+          { userId: players.alice.id, delta: 5, beforeElo: 1000, afterElo: 1005 },
+          { userId: players.ben.id, delta: -20, beforeElo: 1000, afterElo: 980 },
+          { userId: players.cara.id, delta: -25, beforeElo: 1000, afterElo: 975 },
+        ],
+      }),
+      createMatch("core-rating-jump", {
+        session,
+        completedAt: "2026-05-01T11:30:00.000Z",
+        team1: [players.dan, players.eli],
+        team2: [players.farah, players.gina],
+        team1Score: 21,
+        team2Score: 18,
+        winnerTeam: 1,
+        team1EloChange: 20,
+        team2EloChange: -20,
+      }),
+    ];
+
+    const result = buildClubPulse({
+      members: [
+        ...Object.values(players).map((player) => createMember(player)),
+        { ...createMember(occasional), status: "OCCASIONAL" },
+      ],
+      sessions: [session],
+      completedMatches,
+    });
+
+    expect(result.sessionNews[0]).toMatchObject({
+      type: "RATING_JUMP",
+      title: "Dan",
+      value: "+20 rating",
+      featuredPlayers: [players.dan],
+    });
+    expect(result.sessionNews.flatMap((item) => item.players)).not.toContainEqual(
+      occasional
+    );
   });
 
   it("omits session news when a completed session has no qualifying highlight", () => {

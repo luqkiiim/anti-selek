@@ -1,4 +1,6 @@
 import type { CSSProperties, ReactElement } from "react";
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
 import {
   getCompetitiveEntryAt,
   deriveLadderRecordsByEntryTime,
@@ -16,11 +18,57 @@ import { MatchStatus, SessionType } from "@/types/enums";
 
 export const SESSION_SHARE_IMAGE_WIDTH = 1080;
 export const SESSION_SHARE_IMAGE_HEIGHT = 1920;
-export const SESSION_SHARE_IMAGE_PLAYER_LIMIT = 13;
+export const SESSION_SHARE_IMAGE_PLAYER_LIMIT = 14;
 
 const SHARE_AVATAR_FETCH_TIMEOUT_MS = 4_000;
-const SHARE_PODIUM_AVATAR_SIZE = 136;
-const SHARE_ROW_AVATAR_SIZE = 92;
+const SHARE_PODIUM_AVATAR_SIZE = 230;
+const SHARE_ROW_AVATAR_MIN_SIZE = 78;
+const SHARE_ROW_AVATAR_MAX_SIZE = 136;
+const SHARE_ROW_AVATAR_VERTICAL_GUTTER = 16;
+const SHARE_TABLE_HEADER_HEIGHT = 64;
+const SHARE_TABLE_OVERFLOW_HEIGHT = 30;
+const SHARE_TABLE_FOOTER_HEIGHT = 90;
+const SHARE_TABLE_BODY_HEIGHT =
+  SESSION_SHARE_IMAGE_HEIGHT - 700 - 22 - SHARE_TABLE_HEADER_HEIGHT - SHARE_TABLE_FOOTER_HEIGHT;
+const SHARE_STANDINGS_MIN_ROWS_FOR_SIZING = 6;
+const SHARE_STANDINGS_MAX_ROWS = SESSION_SHARE_IMAGE_PLAYER_LIMIT - 3;
+
+export function getSessionShareImageRowSizing(
+  rowCount: number,
+  hasOverflow = false
+) {
+  const sizingRowCount = Math.min(
+    Math.max(rowCount, SHARE_STANDINGS_MIN_ROWS_FOR_SIZING),
+    SHARE_STANDINGS_MAX_ROWS
+  );
+  const rowHeight = Math.floor(
+    (SHARE_TABLE_BODY_HEIGHT - (hasOverflow ? SHARE_TABLE_OVERFLOW_HEIGHT : 0)) /
+      sizingRowCount
+  );
+
+  return {
+    rowHeight,
+    avatarSize: Math.min(
+      SHARE_ROW_AVATAR_MAX_SIZE,
+      Math.max(
+        SHARE_ROW_AVATAR_MIN_SIZE,
+        rowHeight - SHARE_ROW_AVATAR_VERTICAL_GUTTER
+      )
+    ),
+  };
+}
+
+export async function getSessionShareImageFonts() {
+  const directory = join(process.cwd(), "node_modules", "@fontsource", "nunito-sans", "files");
+  const [regular, extraBold] = await Promise.all([
+    readFile(join(directory, "nunito-sans-latin-400-normal.woff")),
+    readFile(join(directory, "nunito-sans-latin-800-normal.woff")),
+  ]);
+  return [
+    { name: "Nunito Sans", data: regular, weight: 400 as const, style: "normal" as const },
+    { name: "Nunito Sans", data: extraBold, weight: 800 as const, style: "normal" as const },
+  ];
+}
 
 export interface SessionShareImagePlayer {
   userId: string;
@@ -50,6 +98,9 @@ export interface SessionShareImageInput {
   sessionName: string;
   clubName: string;
   sessionType: string;
+  sessionDate?: Date | string | null;
+  participantCount?: number;
+  completedMatchCount?: number;
   players: SessionShareImagePlayer[];
   matches: SessionShareImageMatch[];
 }
@@ -66,6 +117,7 @@ export interface SessionShareImageStanding {
   wins: number;
   losses: number;
   pointDiff: number;
+  matchesPlayed: number;
 }
 
 export interface SessionShareImageViewModel {
@@ -73,6 +125,10 @@ export interface SessionShareImageViewModel {
   clubName: string;
   sessionType: string;
   sessionTypeLabel: string;
+  sessionDate: string | null;
+  participantCount: number;
+  completedMatchCount: number;
+  omittedPlayerCount: number;
   standings: SessionShareImageStanding[];
 }
 
@@ -104,6 +160,11 @@ export function getShareImageInitials(name: string) {
 
 function formatPointDiff(pointDiff: number) {
   return pointDiff > 0 ? `+${pointDiff}` : `${pointDiff}`;
+}
+
+function truncateLabel(value: string, maxLength: number) {
+  const normalized = value.trim();
+  return normalized.length <= maxLength ? normalized : `${normalized.slice(0, maxLength - 1).trimEnd()}…`;
 }
 
 function formatScoreLabel(sessionType: string) {
@@ -240,6 +301,9 @@ export function buildSessionShareImageViewModel({
   sessionName,
   clubName,
   sessionType,
+  sessionDate,
+  participantCount,
+  completedMatchCount,
   players,
   matches,
 }: SessionShareImageInput): SessionShareImageViewModel {
@@ -309,8 +373,15 @@ export function buildSessionShareImageViewModel({
           wins: performance.wins,
           losses: performance.losses,
           pointDiff: performance.pointDiff,
+          matchesPlayed: performance.wins + performance.losses,
         };
       }),
+    sessionDate: toHistoryDate(sessionDate)?.toISOString() ?? null,
+    participantCount: participantCount ?? players.length,
+    completedMatchCount:
+      completedMatchCount ??
+      matches.filter((match) => match.status === MatchStatus.COMPLETED).length,
+    omittedPlayerCount: Math.max(0, sortedPlayers.length - SESSION_SHARE_IMAGE_PLAYER_LIMIT),
   };
 }
 
@@ -401,329 +472,130 @@ export async function fetchShareImageAvatarDataUrls(
 
 const styles: Record<string, CSSProperties> = {
   frame: {
-    display: "flex",
-    flexDirection: "column",
-    width: "100%",
-    height: "100%",
-    padding: 58,
-    background:
-      "linear-gradient(180deg, #f8fbff 0%, #edf4ff 44%, #ffffff 100%)",
-    color: "#020617",
+    display: "flex", flexDirection: "column", width: "100%", height: "100%",
+    background: "#fffdf9", color: "#351859", overflow: "hidden", fontFamily: "Nunito Sans",
   },
-  header: {
-    display: "flex",
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-    width: "100%",
-    padding: "42px 50px",
-    border: "2px solid #e2e8f0",
-    borderRadius: 54,
-    background: "#ffffff",
+  hero: {
+    display: "flex", flexDirection: "column", alignItems: "center",
+    position: "relative", width: "100%", height: 700, padding: "34px 44px 0",
+    background: "linear-gradient(180deg, #3b175b 0%, #4a1b70 100%)",
+    color: "#fffaff", borderBottomLeftRadius: 52, borderBottomRightRadius: 52,
   },
-  headerText: {
-    display: "flex",
-    flexDirection: "column",
-    maxWidth: 700,
-  },
-  eyebrow: {
-    display: "flex",
-    fontSize: 24,
-    fontWeight: 900,
-    letterSpacing: 6,
-    textTransform: "uppercase",
-    color: "#0369a1",
-  },
+  header: { display: "flex", flexDirection: "column", alignItems: "center", width: "100%" },
   title: {
-    display: "flex",
-    marginTop: 26,
-    fontSize: 66,
-    fontWeight: 900,
-    lineHeight: 0.95,
-    color: "#111827",
+    display: "flex", maxWidth: "100%", justifyContent: "center", textAlign: "center",
+    fontSize: 40, fontWeight: 800, lineHeight: 1.04, whiteSpace: "nowrap",
+    overflow: "hidden", textOverflow: "ellipsis",
   },
+  sessionTitle: { display: "flex", marginTop: 3, maxWidth: "100%", justifyContent: "center", fontSize: 40, fontWeight: 700, lineHeight: 1.05, color: "#e4d5f5", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" },
   club: {
-    display: "flex",
-    marginTop: 24,
-    fontSize: 38,
-    fontWeight: 700,
-    color: "#64748b",
+    display: "flex", marginTop: 6, maxWidth: "100%", justifyContent: "center",
+    fontSize: 65, fontWeight: 800, lineHeight: 1.02, color: "#fffaff",
+    whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
   },
-  typeBadge: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: "18px 34px",
-    border: "2px solid #bae6fd",
-    borderRadius: 999,
-    background: "#f0f9ff",
-    fontSize: 26,
-    fontWeight: 900,
-    color: "#0369a1",
+  meta: {
+    display: "flex", flexDirection: "row", justifyContent: "center", gap: 15,
+    marginTop: 8, fontSize: 25, fontWeight: 400, color: "#e9ddf2",
   },
+  metaDot: { color: "#c8a5e6" },
   podiumRow: {
-    display: "flex",
-    flexDirection: "row",
-    alignItems: "flex-end",
-    gap: 30,
-    width: "100%",
-    marginTop: 42,
+    display: "flex", flexDirection: "row", alignItems: "flex-end", gap: 12,
+    width: "100%", flex: 1, marginTop: 20,
   },
   podiumColumn: {
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-    flex: 1,
-    minWidth: 0,
-  },
-  podiumName: {
-    display: "flex",
-    justifyContent: "center",
-    width: "100%",
-    marginBottom: 20,
-    fontSize: 44,
-    fontWeight: 900,
-    lineHeight: 1,
-    textAlign: "center",
-    whiteSpace: "nowrap",
-    overflow: "hidden",
-    textOverflow: "ellipsis",
+    display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-end",
+    flex: 1, minWidth: 0, height: "100%",
   },
   podiumAvatar: {
-    width: SHARE_PODIUM_AVATAR_SIZE,
-    height: SHARE_PODIUM_AVATAR_SIZE,
-    borderRadius: 999,
-    border: "5px solid #ffffff",
-    background: "#ecfdf5",
-    objectFit: "cover",
+    width: SHARE_PODIUM_AVATAR_SIZE, height: SHARE_PODIUM_AVATAR_SIZE,
+    borderRadius: 999, border: "7px solid #e8cf67", background: "#e7dfec", objectFit: "cover",
   },
   podiumAvatarFallback: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    width: SHARE_PODIUM_AVATAR_SIZE,
-    height: SHARE_PODIUM_AVATAR_SIZE,
-    borderRadius: 999,
-    border: "5px solid #ffffff",
-    background: "#ecfdf5",
-    color: "#0f766e",
-    fontSize: 44,
-    fontWeight: 900,
+    display: "flex", alignItems: "center", justifyContent: "center",
+    width: SHARE_PODIUM_AVATAR_SIZE, height: SHARE_PODIUM_AVATAR_SIZE,
+    borderRadius: 999, border: "7px solid #e8cf67", background: "#eee8f1",
+    color: "#4a1b70", fontSize: 56, fontWeight: 900,
   },
   podiumBlock: {
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-    width: "100%",
-    marginTop: 18,
-    padding: "22px 22px 26px",
-    borderWidth: 2,
-    borderStyle: "solid",
-    borderBottomWidth: 0,
-    borderTopLeftRadius: 56,
-    borderTopRightRadius: 56,
+    display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-start",
+    width: "100%", marginTop: 14, padding: "10px 8px 6px",
+    borderTopLeftRadius: 24, borderTopRightRadius: 24,
   },
-  rankBubble: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    width: 78,
-    height: 78,
-    borderRadius: 999,
-    borderWidth: 3,
-    borderStyle: "solid",
-    fontSize: 35,
-    fontWeight: 900,
+  podiumRank: { display: "flex", fontSize: 44, fontWeight: 900, lineHeight: 1 },
+  podiumName: {
+    display: "flex", justifyContent: "center", width: "100%", marginTop: 4,
+    fontSize: 36, fontWeight: 800, lineHeight: 1.05, textAlign: "center",
+    whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
   },
-  podiumScore: {
-    display: "flex",
-    marginTop: 28,
-    fontSize: 70,
-    fontWeight: 900,
-    lineHeight: 1,
-  },
-  podiumLabel: {
-    display: "flex",
-    marginTop: 12,
-    fontSize: 18,
-    fontWeight: 900,
-    letterSpacing: 5,
-    textTransform: "uppercase",
-    color: "#64748b",
-  },
-  podiumRecord: {
-    display: "flex",
-    marginTop: 22,
-    fontSize: 25,
-    fontWeight: 800,
-    letterSpacing: 4,
-    color: "#475569",
-  },
-  podiumDiff: {
-    display: "flex",
-    marginTop: 20,
-    fontSize: 35,
-    fontWeight: 900,
-  },
-  podiumBase: {
-    width: "100%",
-    height: 24,
-    borderBottomLeftRadius: 42,
-    borderBottomRightRadius: 42,
-    background: "#e2e8f0",
-  },
+  podiumScore: { display: "flex", marginTop: 5, fontSize: 36, fontWeight: 800, lineHeight: 1 },
+  podiumScoreLabel: { display: "flex", marginLeft: 6, fontSize: 25, fontWeight: 800 },
+  podiumScoreLine: { display: "flex", flexDirection: "row", alignItems: "baseline", marginTop: 5 },
+  podiumDetails: { display: "flex", marginTop: 6, fontSize: 24, fontWeight: 800, lineHeight: 1.1 },
   standingsPanel: {
-    display: "flex",
-    flexDirection: "column",
-    flex: 1,
-    minHeight: 0,
-    width: "100%",
-    marginTop: 44,
-    padding: 34,
-    border: "2px solid #dbe4ef",
-    borderRadius: 54,
-    background: "#ffffff",
+    display: "flex", flexDirection: "column", flex: 1, minHeight: 0,
+    width: "100%", padding: "22px 46px 0", background: "#fffdf9",
   },
-  standingsColumns: {
-    display: "flex",
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: 20,
-    width: "100%",
+  tableHeader: {
+    display: "flex", flexDirection: "row", alignItems: "center", height: SHARE_TABLE_HEADER_HEIGHT,
+    borderBottom: "2px solid #e6e1e8", color: "#70568f", fontSize: 22, fontWeight: 800,
   },
-  standingsColumn: {
-    display: "flex",
-    flexDirection: "column",
-    gap: 18,
-    width: 438,
+  tableRow: {
+    display: "flex", flexDirection: "row", alignItems: "center", height: 94,
+    borderBottom: "2px solid #e9e4eb", color: "#3c1a62",
   },
-  standingsColumnWide: {
-    width: 896,
-  },
-  rowCard: {
-    display: "flex",
-    flexDirection: "row",
-    alignItems: "center",
-    width: 438,
-    minHeight: 108,
-    padding: "14px 20px",
-    border: "2px solid #e2e8f0",
-    borderRadius: 36,
-    background: "#f8fafc",
-  },
-  rowCardWide: {
-    width: 896,
-  },
-  rowRank: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    width: 64,
-    height: 64,
-    borderRadius: 999,
-    border: "3px solid #dbe4ef",
-    background: "#ffffff",
-    color: "#64748b",
-    fontSize: 28,
-    fontWeight: 900,
-  },
+  rankCell: { display: "flex", justifyContent: "center", width: 56, fontSize: 25, fontWeight: 700 },
+  avatarCell: { display: "flex", justifyContent: "center", width: 92 },
   rowAvatar: {
-    width: SHARE_ROW_AVATAR_SIZE,
-    height: SHARE_ROW_AVATAR_SIZE,
-    marginLeft: 18,
     borderRadius: 999,
-    border: "3px solid #c7f0e7",
-    background: "#ecfdf5",
-    objectFit: "cover",
+    border: "2px solid #d8cce2", background: "#eee8f1", objectFit: "cover",
   },
   rowAvatarFallback: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    width: SHARE_ROW_AVATAR_SIZE,
-    height: SHARE_ROW_AVATAR_SIZE,
-    marginLeft: 18,
+    display: "flex", alignItems: "center", justifyContent: "center",
     borderRadius: 999,
-    border: "3px solid #c7f0e7",
-    background: "#ecfdf5",
-    color: "#0f766e",
-    fontSize: 31,
-    fontWeight: 900,
+    border: "2px solid #d8cce2", background: "#eee8f1", color: "#4a1b70",
+    fontSize: 22, fontWeight: 800,
   },
-  rowIdentity: {
-    display: "flex",
-    flexDirection: "column",
-    minWidth: 0,
-    flex: 1,
-    marginLeft: 14,
+  nameCell: {
+    display: "flex", flex: 1, minWidth: 0, paddingLeft: 14, fontSize: 34,
+    fontWeight: 800, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
   },
-  rowName: {
-    display: "flex",
-    fontSize: 29,
-    fontWeight: 900,
-    lineHeight: 1.1,
-    whiteSpace: "nowrap",
-    overflow: "hidden",
-    textOverflow: "ellipsis",
+  numberCell: { display: "flex", justifyContent: "center", width: 98, fontSize: 30, fontWeight: 400 },
+  pointsCell: { display: "flex", justifyContent: "center", width: 104, fontSize: 34, fontWeight: 800 },
+  footer: {
+    display: "flex", justifyContent: "center", alignItems: "center", height: SHARE_TABLE_FOOTER_HEIGHT, marginTop: "auto",
+    color: "#9a82ad", fontSize: 32, fontWeight: 700, letterSpacing: 0.5,
   },
-  rowRecord: {
-    display: "flex",
-    marginTop: 6,
-    fontSize: 20,
-    fontWeight: 800,
-    color: "#64748b",
-  },
-  rowScore: {
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "flex-end",
-    marginLeft: 12,
-  },
-  rowScoreValue: {
-    display: "flex",
-    fontSize: 39,
-    fontWeight: 900,
-    lineHeight: 1,
-  },
-  rowDiff: {
-    display: "flex",
-    marginTop: 8,
-    fontSize: 25,
-    fontWeight: 900,
-  },
+  empty: { display: "flex", flex: 1, justifyContent: "center", alignItems: "center", color: "#856c98", fontSize: 26 },
+  overflow: { display: "flex", justifyContent: "center", paddingTop: 8, color: "#856c98", fontSize: 19, fontWeight: 700 },
 };
+
+const confettiBits: CSSProperties[] = [
+  { left: 54, top: 208, background: "#b658e8", transform: "rotate(24deg)" },
+  { left: 111, top: 424, background: "#a44fd4", transform: "rotate(-26deg)" },
+  { right: 62, top: 246, background: "#c26deb", transform: "rotate(-18deg)" },
+  { right: 102, top: 465, background: "#a84dd7", transform: "rotate(25deg)" },
+  { left: 258, top: 266, background: "#c26deb", transform: "rotate(42deg)" },
+].map((position) => ({
+  position: "absolute",
+  width: 14,
+  height: 20,
+  borderRadius: 2,
+  ...position,
+}));
 
 function getPodiumStyle(rank: number) {
   switch (rank) {
     case 1:
       return {
-        height: 362,
-        borderColor: "#fde68a",
-        background:
-          "linear-gradient(180deg, rgba(254, 243, 199, 0.98), rgba(252, 211, 77, 0.55))",
-        rankBorderColor: "#fcd34d",
-        rankBackground: "#fef3c7",
-        rankColor: "#b45309",
+        height: 270, border: "#e5c94f", background: "#4e2074", color: "#f4da65",
       };
     case 2:
       return {
-        height: 336,
-        borderColor: "#cbd5e1",
-        background:
-          "linear-gradient(180deg, rgba(248, 250, 252, 0.98), rgba(203, 213, 225, 0.72))",
-        rankBorderColor: "#cbd5e1",
-        rankBackground: "#f1f5f9",
-        rankColor: "#475569",
+        height: 250, border: "#c4c8d1", background: "#48206a", color: "#d9dbe4",
       };
     default:
       return {
-        height: 318,
-        borderColor: "#fdba74",
-        background:
-          "linear-gradient(180deg, rgba(255, 237, 213, 0.98), rgba(251, 146, 60, 0.42))",
-        rankBorderColor: "#fb923c",
-        rankBackground: "#ffedd5",
-        rankColor: "#c2410c",
+        height: 230, border: "#c78e59", background: "#432063", color: "#e0ad78",
       };
   }
 }
@@ -732,10 +604,14 @@ function AvatarImage({
   standing,
   avatarDataUrlsByUserId,
   variant,
+  rank,
+  rowAvatarSize,
 }: {
   standing: SessionShareImageStanding;
   avatarDataUrlsByUserId: Map<string, string>;
   variant: "podium" | "row";
+  rank?: number;
+  rowAvatarSize?: number;
 }) {
   const avatarDataUrl = avatarDataUrlsByUserId.get(standing.userId);
   const imageStyle =
@@ -744,6 +620,20 @@ function AvatarImage({
     variant === "podium"
       ? styles.podiumAvatarFallback
       : styles.rowAvatarFallback;
+  const medalBorder = rank === 1 ? "7px solid #e8cf67" : rank === 2 ? "7px solid #cbd0dc" : "7px solid #c78e59";
+  const sizedRowAvatarStyle =
+    variant === "row" && rowAvatarSize
+      ? { ...imageStyle, width: rowAvatarSize, height: rowAvatarSize }
+      : imageStyle;
+  const sizedRowFallbackStyle =
+    variant === "row" && rowAvatarSize
+      ? {
+          ...fallbackStyle,
+          width: rowAvatarSize,
+          height: rowAvatarSize,
+          fontSize: Math.round(rowAvatarSize * 0.28),
+        }
+      : fallbackStyle;
 
   if (avatarDataUrl) {
     return (
@@ -751,74 +641,59 @@ function AvatarImage({
       <img
         alt={`${standing.name} avatar`}
         src={avatarDataUrl}
-        width={
-          variant === "podium"
-            ? SHARE_PODIUM_AVATAR_SIZE
-            : SHARE_ROW_AVATAR_SIZE
-        }
-        height={
-          variant === "podium"
-            ? SHARE_PODIUM_AVATAR_SIZE
-            : SHARE_ROW_AVATAR_SIZE
-        }
-        style={imageStyle}
+        width={variant === "podium" ? SHARE_PODIUM_AVATAR_SIZE : rowAvatarSize}
+        height={variant === "podium" ? SHARE_PODIUM_AVATAR_SIZE : rowAvatarSize}
+        style={variant === "podium" ? { ...imageStyle, border: medalBorder } : sizedRowAvatarStyle}
       />
     );
   }
 
-  return <div style={fallbackStyle}>{standing.initials}</div>;
+  return <div style={variant === "podium" ? { ...fallbackStyle, border: medalBorder } : sizedRowFallbackStyle}>{standing.initials}</div>;
 }
 
 function PodiumCard({
   standing,
   avatarDataUrlsByUserId,
+  centered = false,
 }: {
   standing: SessionShareImageStanding;
   avatarDataUrlsByUserId: Map<string, string>;
+  centered?: boolean;
 }) {
   const rankStyle = getPodiumStyle(standing.rank);
 
   return (
-    <div style={styles.podiumColumn}>
-      <div style={styles.podiumName}>{standing.name}</div>
+    <div style={centered ? { ...styles.podiumColumn, flex: "0 0 52%" } : styles.podiumColumn}>
       <AvatarImage
         standing={standing}
         avatarDataUrlsByUserId={avatarDataUrlsByUserId}
         variant="podium"
+        rank={standing.rank}
       />
       <div
         style={{
           ...styles.podiumBlock,
           height: rankStyle.height,
-          borderColor: rankStyle.borderColor,
+          borderTop: `4px solid ${rankStyle.border}`,
           background: rankStyle.background,
+          color: rankStyle.color,
         }}
       >
+        <div style={{ ...styles.podiumRank, color: rankStyle.color }}>{standing.rank}</div>
+        <div style={{ ...styles.podiumName, color: "#fffaff" }}>{truncateLabel(standing.name, 15)}</div>
+        <div style={styles.podiumScoreLine}><div style={{ ...styles.podiumScore, color: "#fffaff" }}>{standing.score}</div><div style={styles.podiumScoreLabel}>{standing.scoreLabel === "Points" ? "pts" : "W–L"}</div></div>
         <div
           style={{
-            ...styles.rankBubble,
-            borderColor: rankStyle.rankBorderColor,
-            background: rankStyle.rankBackground,
-            color: rankStyle.rankColor,
+            ...styles.podiumDetails,
+            color: "#efe5f5",
           }}
         >
-          {standing.rank}
+          {`${standing.wins}W  •  ${standing.losses}L`}
         </div>
-        <div style={styles.podiumScore}>{standing.score}</div>
-        <div style={styles.podiumLabel}>{standing.scoreLabel}</div>
-        <div style={styles.podiumRecord}>
-          {`${standing.wins}W / ${standing.losses}L`}
-        </div>
-        <div
-          style={{
-            ...styles.podiumDiff,
-            color: standing.pointDiff >= 0 ? "#047857" : "#e11d48",
-          }}
-        >
-          {`${formatPointDiff(standing.pointDiff)} diff`}
+        <div style={{ ...styles.podiumDetails, color: "#ddc8ee" }}>
+          {`${formatPointDiff(standing.pointDiff)} Diff`}
         </div>
       </div>
-      <div style={styles.podiumBase} />
     </div>
   );
 }
@@ -826,41 +701,33 @@ function PodiumCard({
 function StandingRow({
   standing,
   avatarDataUrlsByUserId,
-  wide = false,
+  rowHeight,
+  avatarSize,
 }: {
   standing: SessionShareImageStanding;
   avatarDataUrlsByUserId: Map<string, string>;
-  wide?: boolean;
+  rowHeight: number;
+  avatarSize: number;
 }) {
   return (
-    <div style={wide ? { ...styles.rowCard, ...styles.rowCardWide } : styles.rowCard}>
-      <div style={styles.rowRank}>{standing.rank}</div>
-      <AvatarImage
-        standing={standing}
-        avatarDataUrlsByUserId={avatarDataUrlsByUserId}
-        variant="row"
-      />
-      <div style={styles.rowIdentity}>
-        <div style={styles.rowName}>{standing.name}</div>
-        <div style={styles.rowRecord}>
-          {`${standing.wins}W / ${standing.losses}L${
-            standing.isGuest ? " - Guest" : ""
-          }`}
-        </div>
-      </div>
-      <div style={styles.rowScore}>
-        <div style={styles.rowScoreValue}>{standing.score}</div>
-        <div
-          style={{
-            ...styles.rowDiff,
-            color: standing.pointDiff >= 0 ? "#047857" : "#e11d48",
-          }}
-        >
-          {formatPointDiff(standing.pointDiff)}
-        </div>
-      </div>
+    <div style={{ ...styles.tableRow, height: rowHeight }}>
+      <div style={styles.rankCell}>{standing.rank}</div>
+      <div style={{ ...styles.avatarCell, width: avatarSize + 14 }}><AvatarImage standing={standing} avatarDataUrlsByUserId={avatarDataUrlsByUserId} variant="row" rowAvatarSize={avatarSize} /></div>
+      <div style={styles.nameCell}>{truncateLabel(standing.name, 19)}</div>
+      <div style={styles.pointsCell}>{standing.score}</div>
+      <div style={styles.numberCell}>{formatPointDiff(standing.pointDiff)}</div>
+      <div style={styles.numberCell}>{standing.matchesPlayed}</div>
+      <div style={styles.numberCell}>{`${standing.wins}/${standing.losses}`}</div>
     </div>
   );
+}
+
+function getFormattedSessionDate(value: string | null) {
+  if (!value) return "Date unavailable";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime())
+    ? "Date unavailable"
+    : new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }).format(date);
 }
 
 export function renderSessionShareImage(
@@ -874,58 +741,41 @@ export function renderSessionShareImage(
       : topThree.length === 2
         ? [topThree[1], topThree[0]]
         : topThree;
-  const rowStandings = viewModel.standings.slice(3, 13);
-  const useWideLowerRows = rowStandings.length <= 5;
-  const standingsColumns = useWideLowerRows
-    ? [rowStandings]
-    : [
-        rowStandings.slice(0, 5),
-        rowStandings.slice(5, 10),
-      ].filter((column) => column.length > 0);
+  const rowStandings = viewModel.standings.slice(3, SESSION_SHARE_IMAGE_PLAYER_LIMIT);
+  const rowSizing = getSessionShareImageRowSizing(
+    rowStandings.length,
+    viewModel.omittedPlayerCount > 0
+  );
 
   return (
     <div style={styles.frame}>
-      <div style={styles.header}>
-        <div style={styles.headerText}>
-          <div style={styles.eyebrow}>Final standings</div>
-          <div style={styles.title}>{viewModel.sessionName}</div>
-          <div style={styles.club}>{viewModel.clubName}</div>
+      <div style={styles.hero}>
+        {confettiBits.map((style, index) => <div key={index} style={style} />)}
+        <div style={styles.header}>
+          <div style={styles.club}>{truncateLabel(viewModel.clubName, 21)}</div>
+          <div style={styles.sessionTitle}>{truncateLabel(viewModel.sessionName, 32)}</div>
+          <div style={styles.meta}>
+            <span>{getFormattedSessionDate(viewModel.sessionDate)}</span><span style={styles.metaDot}>•</span>
+            <span>{viewModel.participantCount} players</span><span style={styles.metaDot}>•</span>
+            <span>{`${viewModel.completedMatchCount} ${viewModel.completedMatchCount === 1 ? "match" : "matches"}`}</span>
+          </div>
         </div>
-        <div style={styles.typeBadge}>{viewModel.sessionTypeLabel}</div>
-      </div>
-
-      <div style={styles.podiumRow}>
-        {orderedPodium.map((standing) => (
-          <PodiumCard
-            key={standing.userId}
-            standing={standing}
-            avatarDataUrlsByUserId={avatarDataUrlsByUserId}
-          />
-        ))}
-      </div>
-
-      <div style={styles.standingsPanel}>
-        <div style={styles.standingsColumns}>
-          {standingsColumns.map((column, columnIndex) => (
-            <div
-              key={columnIndex}
-              style={
-                useWideLowerRows
-                  ? { ...styles.standingsColumn, ...styles.standingsColumnWide }
-                  : styles.standingsColumn
-              }
-            >
-              {column.map((standing) => (
-                <StandingRow
-                  key={standing.userId}
-                  standing={standing}
-                  avatarDataUrlsByUserId={avatarDataUrlsByUserId}
-                  wide={useWideLowerRows}
-                />
-              ))}
-            </div>
+        <div style={styles.podiumRow}>
+          {orderedPodium.map((standing) => (
+            <PodiumCard key={standing.userId} standing={standing} avatarDataUrlsByUserId={avatarDataUrlsByUserId} centered={topThree.length === 1} />
           ))}
         </div>
+      </div>
+      <div style={styles.standingsPanel}>
+        {rowStandings.length > 0 && <div style={styles.tableHeader}>
+          <div style={styles.rankCell} /><div style={{ ...styles.avatarCell, width: rowSizing.avatarSize + 14 }} />
+          <div style={styles.nameCell}>Player</div><div style={styles.pointsCell}>{viewModel.sessionType === SessionType.LADDER ? "Record" : "Pts"}</div>
+          <div style={styles.numberCell}>Diff</div><div style={styles.numberCell}>MP</div><div style={styles.numberCell}>W/L</div>
+        </div>}
+        {rowStandings.map((standing) => <StandingRow key={standing.userId} standing={standing} avatarDataUrlsByUserId={avatarDataUrlsByUserId} rowHeight={rowSizing.rowHeight} avatarSize={rowSizing.avatarSize} />)}
+        {viewModel.omittedPlayerCount > 0 && <div style={styles.overflow}>{`${viewModel.omittedPlayerCount} more ${viewModel.omittedPlayerCount === 1 ? "player" : "players"} not shown`}</div>}
+        {viewModel.standings.length === 0 && <div style={styles.empty}>No standings available</div>}
+        <div style={styles.footer}>antiselek.com</div>
       </div>
     </div>
   );

@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
+  captureAchievementEligibility: vi.fn(),
   auth: vi.fn(),
   rateLimit: vi.fn(),
   checkInvalidTargetRateLimit: vi.fn(),
@@ -19,6 +20,8 @@ const mocks = vi.hoisted(() => ({
   getClubEloByUserId: vi.fn(),
   withClubElo: vi.fn(),
 }));
+
+vi.mock("@/lib/clubAchievementService", () => ({ captureAchievementEligibility: mocks.captureAchievementEligibility }));
 
 vi.mock("@/lib/auth", () => ({
   auth: mocks.auth,
@@ -57,6 +60,7 @@ describe("session end route", () => {
   beforeEach(() => {
     vi.clearAllMocks();
 
+    mocks.captureAchievementEligibility.mockResolvedValue(undefined);
     mocks.auth.mockResolvedValue({
       user: { id: "staff-1", isAdmin: false },
     });
@@ -138,6 +142,7 @@ describe("session end route", () => {
       params: Promise.resolve({ code: "ABC123" }),
     });
     const body = await response.json();
+    expect(mocks.captureAchievementEligibility).toHaveBeenCalledWith(expect.objectContaining({ session: expect.any(Object) }), "session-1", ["community-1"]);
 
     expect(response.status).toBe(200);
     expect(body.players[0].user.avatarUrl).toBe(

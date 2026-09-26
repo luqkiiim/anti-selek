@@ -138,7 +138,6 @@ export default function SessionPage() {
   const [showPlayersModal, setShowPlayersModal] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [autoQueueDraft, setAutoQueueDraft] = useState(true);
-  const [respectPlayerRestDraft, setRespectPlayerRestDraft] = useState(true);
   const [matchmakingStyleDraft, setMatchmakingStyleDraft] =
     useState<SessionMatchmakingStyle>(SessionMatchmakingStyle.BALANCED);
   const [balanceMetricDraft, setBalanceMetricDraft] =
@@ -742,18 +741,10 @@ export default function SessionPage() {
 
     return autoQueueDraft !== sessionData.autoQueueEnabled;
   }, [autoQueueDraft, sessionData]);
-  const hasRespectPlayerRestChange = useMemo(() => {
-    if (!sessionData) {
-      return false;
-    }
-
-    return respectPlayerRestDraft !== sessionData.respectPlayerRest;
-  }, [respectPlayerRestDraft, sessionData]);
   const hasSettingsChanges =
     hasCourtLabelChanges ||
     hasGameplayChanges ||
-    hasAutoQueueChange ||
-    hasRespectPlayerRestChange;
+    hasAutoQueueChange;
   const completedScoredTestMatchesCount = useMemo(
     () =>
       (sessionData?.matches ?? []).filter(
@@ -772,7 +763,6 @@ export default function SessionPage() {
 
     setError("");
     setAutoQueueDraft(sessionData.autoQueueEnabled);
-    setRespectPlayerRestDraft(sessionData.respectPlayerRest);
     setMatchmakingStyleDraft(currentGameplaySettings.matchmakingStyle);
     setBalanceMetricDraft(currentGameplaySettings.balanceMetric);
     setPairingModeDraft(currentGameplaySettings.pairingMode);
@@ -850,7 +840,7 @@ export default function SessionPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           autoQueueEnabled: autoQueueDraft,
-          respectPlayerRest: respectPlayerRestDraft,
+          respectPlayerRest: sessionData.respectPlayerRest,
           courtLabels: Array.from(
             { length: labelCourtCount },
             (_, index) => ({
@@ -908,7 +898,6 @@ export default function SessionPage() {
     pairingModeDraft,
     patchSessionData,
     poolsEnabledDraft,
-    respectPlayerRestDraft,
     scheduleSessionRefresh,
     sessionData,
   ]);
@@ -1595,8 +1584,6 @@ export default function SessionPage() {
         isTestSession={sessionData.isTest}
         autoQueueEnabled={sessionData.autoQueueEnabled}
         autoQueueDraft={autoQueueDraft}
-        respectPlayerRest={sessionData.respectPlayerRest}
-        respectPlayerRestDraft={respectPlayerRestDraft}
         canEditGameplay={sessionData.status === SessionStatus.WAITING}
         collabFormat={
           sessionData.collabFormat ?? SessionCollabFormat.FREE_PLAY
@@ -1621,7 +1608,6 @@ export default function SessionPage() {
         courtLabelDrafts={courtLabelDrafts}
         hasGameplayChanges={hasGameplayChanges}
         hasAutoQueueChange={hasAutoQueueChange}
-        hasRespectPlayerRestChange={hasRespectPlayerRestChange}
         hasCourtLabelChanges={hasCourtLabelChanges}
         hasSettingsChanges={hasSettingsChanges}
         savingSettings={savingSettings}
@@ -1632,7 +1618,6 @@ export default function SessionPage() {
         onCreateRealSession={openCreateRealSessionConfirm}
         onDeleteSession={openDeleteTestConfirm}
         onAutoQueueChange={setAutoQueueDraft}
-        onRespectPlayerRestChange={setRespectPlayerRestDraft}
         onMatchmakingStyleChange={setMatchmakingStyleDraft}
         onBalanceMetricChange={setBalanceMetricDraft}
         onPairingModeChange={setPairingModeDraft}

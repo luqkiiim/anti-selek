@@ -1,0 +1,338 @@
+.container {
+  display: grid;
+  width: min(100%, 48rem);
+  gap: 1rem;
+  margin: 0 auto;
+  padding: 0.25rem 0 1.5rem;
+}
+
+.setupCard,
+.rosterCard {
+  min-width: 0;
+  border: 1px solid #e8dfd2;
+  border-radius: 1.125rem;
+  background: #fffdf8;
+  box-shadow: 0 8px 24px rgba(57, 43, 30, 0.045);
+}
+
+.setupCard {
+  padding: 1rem;
+}
+
+.setupHeader,
+.rosterHeader,
+.rosterHeading {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.setupTitleGroup {
+  display: grid;
+  min-width: 0;
+  justify-items: start;
+  gap: 0.35rem;
+}
+
+.status {
+  color: #766d81;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.025em;
+  line-height: 1.25rem;
+}
+
+.setupTitle,
+.rosterTitle {
+  margin: 0;
+  color: #292433;
+  font-size: 1.0625rem;
+  font-weight: 650;
+  line-height: 1.4;
+}
+
+.iconButton,
+.manageButton {
+  display: inline-flex;
+  min-width: 2.75rem;
+  min-height: 2.75rem;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #ded5e7;
+  border-radius: 0.8rem;
+  background: #fffdf8;
+  color: #5a466e;
+  cursor: pointer;
+  transition: background-color 140ms ease, border-color 140ms ease;
+}
+
+.iconButton:hover,
+.manageButton:hover {
+  border-color: #cbb9dc;
+  background: #f8f3fb;
+}
+
+.iconButton:focus-visible,
+.manageButton:focus-visible,
+.playerProfileButton:focus-visible,
+.startButton:focus-visible {
+  outline: 3px solid #9a7bb7;
+  outline-offset: 2px;
+}
+
+.iconButton:disabled,
+.manageButton:disabled,
+.startButton:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
+.settingsSummary {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3rem 0.45rem;
+  margin-top: 0.75rem;
+  color: #625d68;
+  font-size: 0.8125rem;
+  line-height: 1.4;
+}
+
+.summaryDivider {
+  color: #b5abbc;
+}
+
+.courtsSummary {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem 0.6rem;
+  margin-top: 0.8rem;
+}
+
+.summaryLabel {
+  color: #736d78;
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.25rem;
+}
+
+.courtList {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  gap: 0.375rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.courtChip {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  border: 1px solid #eee6d9;
+  border-radius: 999px;
+  background: #faf5eb;
+  padding: 0.25rem 0.6rem;
+  color: #514a55;
+  font-size: 0.75rem;
+  line-height: 1.2rem;
+}
+
+.rosterCard {
+  overflow: hidden;
+  padding: 1rem;
+}
+
+.rosterHeader {
+  padding-bottom: 0.75rem;
+}
+
+.rosterHeading {
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.65rem;
+}
+
+.playerCount {
+  color: #807987;
+  font-size: 0.75rem;
+  line-height: 1.3rem;
+}
+
+.manageButton {
+  padding: 0 0.75rem;
+  color: #5e4b70;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.playerList {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr));
+  gap: 0.25rem 0.75rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.playerItem {
+  min-width: 0;
+  border-top: 1px solid #f0eae0;
+}
+
+.playerRow,
+.playerProfileButton {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  min-height: 4rem;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem 0.25rem;
+  text-align: left;
+}
+
+.playerRow {
+  color: inherit;
+}
+
+.playerProfileButton {
+  border: 0;
+  border-radius: 0.65rem;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.playerProfileButton:hover {
+  background: #f8f3fb;
+}
+
+.avatar {
+  border-color: #e1d3eb !important;
+  background: linear-gradient(145deg, #eee5f5, #f8f3fb) !important;
+  color: #614a76 !important;
+  box-shadow: none !important;
+}
+
+.avatarFallback {
+  font-size: 0.875rem;
+}
+
+.playerText {
+  display: grid;
+  min-width: 0;
+  gap: 0.2rem;
+}
+
+.playerName {
+  color: #302c36;
+  font-size: 0.9375rem;
+  font-weight: 800;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.playerDetails {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+
+.guestTag,
+.pausedTag {
+  width: fit-content;
+  border-radius: 999px;
+  padding: 0.1rem 0.45rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.2rem;
+}
+
+.guestTag {
+  background: #f5f0e7;
+  color: #76654c;
+}
+
+.pausedTag {
+  background: #f2ecf7;
+  color: #675176;
+}
+
+.emptyRoster {
+  margin: 0;
+  border-top: 1px solid #f0eae0;
+  padding: 1rem 0.25rem 0.25rem;
+  color: #77717a;
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+.startArea {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  background: #fffaf3;
+  display: grid;
+  justify-items: center;
+  padding: 0.25rem 0 0.75rem;
+}
+
+.startButton {
+  width: min(100%, 22rem);
+  min-height: 3.25rem;
+  border: 1px solid #5a426d;
+  border-radius: 0.95rem;
+  background: #7547b7;
+  padding: 0.75rem 1rem;
+  color: #fffdf8;
+  cursor: pointer;
+  font-size: 1rem;
+  font-weight: 800;
+  line-height: 1.4;
+  box-shadow: 0 6px 14px rgba(80, 56, 99, 0.16);
+  transition: background-color 140ms ease, transform 140ms ease;
+}
+
+.startButton:hover:not(:disabled) {
+  background: #663aa6;
+}
+
+.startButton:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.waitingMessage {
+  margin: 0;
+  color: #736d78;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  text-align: center;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .container button { transition: none; }
+}
+
+@media (min-width: 40rem) {
+  .setupCard,
+  .rosterCard {
+    border-radius: 1.25rem;
+  }
+
+  .setupCard,
+  .rosterCard {
+    padding: 1.25rem 1.5rem;
+  }
+
+  .settingsSummary {
+    font-size: 0.875rem;
+  }
+}

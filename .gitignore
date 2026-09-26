@@ -55,3 +55,8 @@ next-env.d.ts
 
 .vercel
 .env*.local
+
+/prototype/node_modules/
+/prototype/dist/
+/prototype/test-results/
+/prototype/playwright-report/

@@ -9,7 +9,7 @@ import {
   deleteEphemeralGuestUsers,
   reverseSessionEloChanges,
 } from "@/lib/sessionLifecycle";
-import { SessionStatus } from "@/types/enums";
+import { ClubRole, SessionStatus } from "@/types/enums";
 
 export const dynamic = "force-dynamic";
 
@@ -50,7 +50,7 @@ export async function DELETE(
       return invalidTargetResponse(request, "api:sessions:code:delete");
     }
 
-    let isClubAdmin = false;
+    let isHostOperator = false;
     if (targetSession.clubId) {
       const membership = await prisma.clubMember.findUnique({
         where: {
@@ -61,11 +61,11 @@ export async function DELETE(
         },
         select: { role: true },
       });
-      isClubAdmin = membership?.role === "ADMIN";
+      isHostOperator = membership?.role === ClubRole.ADMIN || membership?.role === ClubRole.STAFF;
     }
 
-    if (!session.user.isAdmin && !isClubAdmin) {
-      return NextResponse.json({ error: "Admin only" }, { status: 403 });
+    if (!session.user.isAdmin && !isHostOperator) {
+      return NextResponse.json({ error: "Host only" }, { status: 403 });
     }
 
     if (

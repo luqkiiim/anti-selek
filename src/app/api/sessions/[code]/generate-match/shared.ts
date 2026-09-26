@@ -21,6 +21,8 @@ export interface ParsedGenerateMatchRequest {
   undoCurrentMatch: boolean;
   manualTeams?: unknown;
   excludedUserId?: string;
+  restUserId?: string;
+  expectedMatchId?: string;
   replaceUserId?: string;
   matchType?: SideSpecificCourtCreateType;
 }

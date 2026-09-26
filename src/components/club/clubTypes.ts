@@ -23,6 +23,8 @@ export interface ClubPageUser {
 }
 
 export interface ClubPageClub {
+  avatarUrl?: string | null;
+  rules?: string;
   id: string;
   name: string;
   role: "ADMIN" | "STAFF" | "MEMBER";

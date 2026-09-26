@@ -1,0 +1,46 @@
+.manage-club-identity { display: flex; align-items: center; gap: 14px; width: 100%; border: 0; background: transparent; padding: 0 0 24px; text-align: left; color: var(--ink); }
+.manage-club-identity > span:nth-child(2) { flex: 1; min-width: 0; }
+.manage-club-identity strong { display: block; font-size: 22px; font-weight: 900; overflow-wrap: anywhere; line-height: 1.2; }
+.manage-club-identity small { display: block; margin-top: 5px; font-size: 12px; color: var(--muted); }
+.manage-club-identity > svg { color: var(--purple); flex-shrink: 0; }
+.manage-club .manage-club-identity .avatar { width: 58px; height: 58px; flex-shrink: 0; font-size: 24px; }
+.manage-player-action { margin: 14px 0 24px; }
+.manage-player-action .primary { min-height: 46px; width: 100%; }
+.manage-player-group { margin-bottom: 26px; }
+.manage-club .manage-player-group h3 { font-size: 14px; margin: 0 0 10px; display: flex; align-items: center; gap: 8px; }
+.manage-player-group h3 > span { font-size: 11px; color: var(--muted); background: #eee6f5; padding: 2px 7px; border-radius: 8px; }
+.manage-player-group .roster { overflow: hidden; border: 1px solid #eee5ef; border-radius: 18px; background: #fffdfb; }
+.manage-player-group .person { margin: 0; padding: 13px 12px; border: 0; border-radius: 0; }
+.manage-player-group .person + .person { border-top: 1px solid #eee5ef; }
+.manage-player-group .avatar { width: 46px; height: 46px; flex-shrink: 0; }
+.manage-player-group .person-info { min-width: 0; }
+.manage-player-group .person-info strong { overflow-wrap: anywhere; }
+.club-settings-fields { margin: 0; padding: 0; border: 0; min-width: 0; }
+.club-settings-photo { display: flex; flex-direction: column; align-items: center; gap: 8px; margin: 0 0 22px; }
+.club-photo-button { border: 0; padding: 0; background: transparent; border-radius: 50%; position: relative; }
+.club-settings-photo .avatar.large { width: 80px; height: 80px; font-size: 32px; }
+.club-photo-button > span:last-child { position: absolute; right: -2px; bottom: 0; background: var(--purple); color: white; border-radius: 50%; display: grid; place-items: center; width: 30px; height: 30px; border: 3px solid #fffaf3; }
+.club-settings-photo > div { display: flex; gap: 16px; }
+.club-settings-photo .text-button { min-height: 44px; font-size: 12px; }
+.club-settings .field-label { font-size: 14px; }
+.club-settings input, .club-settings textarea { font-size: 16px; min-height: 48px; }
+.club-settings textarea { width: 100%; resize: vertical; border: 1px solid #e8ddef; border-radius: 13px; background: #fffdfb; padding: 12px; color: var(--ink); font: inherit; font-size: 16px; font-weight: 400; line-height: 1.5; }
+.club-settings .club-settings-hint { margin: -7px 0 16px; font-size: 12px; color: var(--muted); }
+.club-settings-section { margin-top: 30px; }
+.club-settings .club-settings-section h3 { font-size: 15px; margin-bottom: 12px; }
+.club-settings-rows { border: 1px solid #eee5ef; border-radius: 16px; background: #fffdfb; overflow: hidden; }
+.club-setting-row { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 76px; padding: 15px; border: 0; background: transparent; text-align: left; color: var(--ink); }
+.club-setting-row > span { flex: 1; }
+.club-setting-row strong, .club-setting-row small { display: block; }
+.club-setting-row strong { font-size: 14px; }
+.club-setting-row small { margin-top: 4px; color: var(--muted); font-size: 12px; }
+.club-setting-row > svg { color: var(--purple); }
+.club-settings-rows .toggle-row { margin: 0; padding: 15px; border: 0; border-top: 1px solid #eee5ef; border-radius: 0; min-height: 76px; background: transparent; }
+.club-settings-danger { margin-top: 30px; padding-top: 18px; border-top: 1px solid #eee5ef; }
+.club-settings-danger button { display: flex; gap: 8px; align-items: center; min-height: 44px; font-size: 13px; }
+.club-settings .club-settings-notice { margin-top: 14px; color: #426c4c; font-size: 13px; }
+.club-crop-area { height: 280px; max-height: 40dvh; position: relative; background: #291440; border-radius: 16px; overflow: hidden; margin-bottom: 18px; }
+
+.manage-player-preferences { margin: 16px 0; padding-top: 4px; border-top: 1px solid #eee5ef; }
+.manage-player-preferences select { width: 100%; min-height: 48px; font-size: 16px; line-height: 1.4; }
+.manage-preference-hint { margin: -6px 0 14px; font-size: 12px; color: #80718b; }

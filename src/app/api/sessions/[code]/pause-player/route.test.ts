@@ -33,10 +33,10 @@ import {
 } from "../queue-match/shared";
 import { POST } from "./route";
 
-function createRequest(userId: string, isPaused: boolean) {
+function createRequest(userId: string, isPaused: boolean, extra: Record<string, unknown> = {}) {
   return new Request("http://localhost/api/sessions/ABC/pause-player", {
     method: "POST",
-    body: JSON.stringify({ userId, isPaused }),
+    body: JSON.stringify({ userId, isPaused, ...extra }),
   });
 }
 
@@ -51,6 +51,12 @@ function mockTransaction(
     queuedMatch: {
       findUnique: vi.fn().mockResolvedValue(queuedMatch),
       delete: vi.fn().mockResolvedValue({}),
+    },
+    court: {
+      updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+    },
+    match: {
+      deleteMany: vi.fn().mockResolvedValue({ count: 1 }),
     },
   };
   vi.mocked(prisma.$transaction).mockImplementation(async (callback) =>
@@ -291,6 +297,130 @@ describe("pause player route", () => {
       }
     );
     expect(tryRebuildQueuedMatchForCode).toHaveBeenCalledWith("ABC");
+  });
+
+  it("transactionally pauses a court player and clears their current match", async () => {
+    vi.mocked(prisma.sessionPlayer.findUnique).mockResolvedValue({
+      pausedAt: null,
+      inactiveSeconds: 0,
+      matchesPlayed: 1,
+      matchmakingMatchesCredit: 0,
+    } as never);
+    vi.mocked(prisma.match.findFirst).mockResolvedValue({
+      id: "court-match-1",
+      team1User1Id: "active-player",
+      team1User2Id: "p2",
+      team2User1Id: "p3",
+      team2User2Id: "p4",
+    } as never);
+    const updateSpy = vi.fn(async ({ data }) => ({ id: "player-1", ...data }));
+    const tx = mockTransaction(updateSpy);
+
+    const response = await POST(createRequest("active-player", true, {
+      courtId: "court-1",
+      currentMatchId: "court-match-1",
+    }), {
+      params: Promise.resolve({ code: "ABC" }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(tx.court.updateMany).toHaveBeenCalledWith({
+      where: {
+        id: "court-1",
+        sessionId: "session-1",
+        currentMatchId: "court-match-1",
+      },
+      data: { currentMatchId: null },
+    });
+    expect(tx.match.deleteMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({
+        id: "court-match-1",
+        sessionId: "session-1",
+        courtId: "court-1",
+        status: { in: ["PENDING", "IN_PROGRESS"] },
+      }),
+    }));
+    expect(updateSpy).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ isPaused: true }),
+    }));
+    expect(applyPendingPlayerGroupChangesInTransaction).toHaveBeenCalledWith(tx, {
+      sessionId: "session-1",
+      userIds: ["active-player", "p2", "p3", "p4"],
+    });
+    expect(tryRebuildAutomaticQueuedMatchForCode).not.toHaveBeenCalled();
+    expect(tryRebuildQueuedMatchForCode).not.toHaveBeenCalled();
+  });
+
+  it("rejects a stale court match before pausing the player", async () => {
+    vi.mocked(prisma.sessionPlayer.findUnique).mockResolvedValue({
+      pausedAt: null,
+      inactiveSeconds: 0,
+      matchesPlayed: 1,
+      matchmakingMatchesCredit: 0,
+    } as never);
+    vi.mocked(prisma.match.findFirst).mockResolvedValue(null);
+    const updateSpy = vi.fn();
+    mockTransaction(updateSpy);
+
+    const response = await POST(createRequest("active-player", true, {
+      courtId: "court-1",
+      currentMatchId: "stale-match",
+    }), {
+      params: Promise.resolve({ code: "ABC" }),
+    });
+
+    expect(response.status).toBe(409);
+    expect(updateSpy).not.toHaveBeenCalled();
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it("does not allow a player to clear their court by pausing themselves", async () => {
+    vi.mocked(auth).mockResolvedValue({
+      user: { id: "active-player", isAdmin: false },
+    } as never);
+    const updateSpy = vi.fn();
+    mockTransaction(updateSpy);
+
+    const response = await POST(createRequest("active-player", true, {
+      courtId: "court-1",
+      currentMatchId: "court-match-1",
+    }), {
+      params: Promise.resolve({ code: "ABC" }),
+    });
+
+    expect(response.status).not.toBe(200);
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+    expect(updateSpy).not.toHaveBeenCalled();
+  });
+
+  it("does not pause the player when the court no longer references the match", async () => {
+    vi.mocked(prisma.sessionPlayer.findUnique).mockResolvedValue({
+      pausedAt: null,
+      inactiveSeconds: 0,
+      matchesPlayed: 1,
+      matchmakingMatchesCredit: 0,
+    } as never);
+    vi.mocked(prisma.match.findFirst).mockResolvedValue({
+      id: "court-match-1",
+      team1User1Id: "active-player",
+      team1User2Id: "p2",
+      team2User1Id: "p3",
+      team2User2Id: "p4",
+    } as never);
+    const updateSpy = vi.fn();
+    const tx = mockTransaction(updateSpy);
+    tx.court.updateMany.mockResolvedValue({ count: 0 });
+
+    const response = await POST(createRequest("active-player", true, {
+      courtId: "court-1",
+      currentMatchId: "court-match-1",
+    }), {
+      params: Promise.resolve({ code: "ABC" }),
+    });
+
+    expect(response.status).toBe(409);
+    expect(tx.match.deleteMany).not.toHaveBeenCalled();
+    expect(updateSpy).not.toHaveBeenCalled();
   });
 
   it("does not release pending groups when pausing cancels an automatic queue", async () => {
