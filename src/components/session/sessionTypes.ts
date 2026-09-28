@@ -42,6 +42,7 @@ export interface Player {
 
 export interface Match {
   id: string;
+  createdAt?: string;
   status: string;
   scoreSubmittedByUserId?: string | null;
   team1ClubId?: string | null;
@@ -78,6 +79,7 @@ export interface QueuedMatch {
 
 export interface CompletedMatchInfo {
   id: string;
+  createdAt?: string;
   team1User1Id: string;
   team1User2Id: string;
   team2User1Id: string;

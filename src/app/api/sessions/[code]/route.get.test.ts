@@ -201,6 +201,9 @@ describe("session route GET", () => {
     const body = await response.json();
 
     expect(response.status).toBe(200);
+    const query = mocks.sessionFindUnique.mock.calls[0][0];
+    expect(query.include.courts.include.currentMatch.select.createdAt).toBe(true);
+    expect(query.include.matches.select.createdAt).toBe(true);
     expect(response.headers.get("Cache-Control")).toBe(
       "private, no-store, max-age=0"
     );

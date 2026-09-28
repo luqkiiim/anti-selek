@@ -7,7 +7,6 @@ import {
   isQuickAccessSession,
 } from "@/lib/quickAccess";
 import {
-  getPlayerClubBadges,
   getSessionAdminMembership,
   getSessionMembership,
   getSessionOperatorMembership,
@@ -193,10 +192,6 @@ async function getSessionHistory(
       players: {
         select: {
           userId: true,
-          representingClubId: true,
-          user: {
-            select: { elo: true },
-          },
         },
       },
       matches: {
@@ -276,39 +271,6 @@ async function getSessionHistory(
     return invalidTargetResponse(_request, "api:sessions:code:history");
   }
 
-  const playerIds = sessionData.players.map((player) => player.userId);
-  const playerById = new Map(
-    sessionData.players.map((player) => [player.userId, player])
-  );
-  const ratingClubIds = Array.from(
-    new Set(
-      [
-        sessionData.clubId,
-        ...sessionData.sessionClubs
-          .filter((link) => link.status === SessionClubStatus.ACCEPTED)
-          .map((link) => link.clubId),
-      ].filter((clubId): clubId is string => Boolean(clubId))
-    )
-  );
-  const clubBadgesByUserId = await getPlayerClubBadges(
-    prisma,
-    ratingClubIds,
-    playerIds
-  );
-  const getPlayerRating = (userId: string, teamClubId?: string | null) => {
-    const player = playerById.get(userId);
-    if (!player) return null;
-    const clubId = teamClubId ?? player.representingClubId ?? sessionData.clubId;
-    if (clubId) {
-      return (
-        clubBadgesByUserId
-          .get(userId)
-          ?.find((badge) => badge.id === clubId)?.elo ?? null
-      );
-    }
-    return typeof player.user.elo === "number" ? player.user.elo : null;
-  };
-
   const undoableMatchId =
     viewerCanManage && sessionData.status === SessionStatus.ACTIVE
       ? (sessionData.matches.find(
@@ -358,25 +320,7 @@ async function getSessionHistory(
     canCorrectCompletedScores,
     correctionBlockedReason,
     undoableMatchId,
-    matches: sessionData.matches.map((match) => ({
-      ...match,
-      team1User1: {
-        ...match.team1User1,
-        elo: getPlayerRating(match.team1User1Id, match.team1ClubId),
-      },
-      team1User2: {
-        ...match.team1User2,
-        elo: getPlayerRating(match.team1User2Id, match.team1ClubId),
-      },
-      team2User1: {
-        ...match.team2User1,
-        elo: getPlayerRating(match.team2User1Id, match.team2ClubId),
-      },
-      team2User2: {
-        ...match.team2User2,
-        elo: getPlayerRating(match.team2User2Id, match.team2ClubId),
-      },
-    })),
+    matches: sessionData.matches,
   });
 }
 

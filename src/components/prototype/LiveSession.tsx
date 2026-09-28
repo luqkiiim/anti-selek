@@ -59,6 +59,7 @@ import {
 } from "@/app/session/[code]/sessionDataMutations";
 import { MatchStatus } from "@/types/enums";
 import { saveScoreWithBackgroundRefresh } from "./scoreSave";
+import { CourtPairingDetails } from "./CourtPairingDetails";
 type LiveSettingsDraft = {
   autoQueueEnabled: boolean;
   courtLabels: Record<number, string>;
@@ -913,7 +914,7 @@ export default function LiveSession({
                     <div className="section-heading">
                       <h3>{court.label || "Court " + court.courtNumber}</h3>
                       <div className="court-heading-actions">
-                        {canManage && (
+                        {(canManage || !!match) && (
                           <button
                             className="icon-button court-more"
                             aria-label={`${court.label || "Court " + court.courtNumber} options`}
@@ -1186,6 +1187,8 @@ export default function LiveSession({
                         ? "Player actions"
                       : sheet === "court-controls"
                         ? courtControl?.label || `Court ${courtControl?.courtNumber ?? ""} options`
+                      : sheet === "court-details"
+                        ? "Details"
                       : sheet === "confirm-control"
                           ? confirmation?.kind === "court-player-rest"
                             ? "Rest this match?"
@@ -1626,10 +1629,20 @@ export default function LiveSession({
                 </button>
               </div>
             </>
+          ) : sheet === "court-details" && s && controlMatch ? (
+            <CourtPairingDetails match={controlMatch} session={s} />
           ) : sheet === "court-controls" && courtControl ? (
             controlMatch ? (
               <>
                 <div className="court-action-list">
+                  <button
+                    type="button"
+                    className="court-action-row"
+                    onClick={() => setSheet("court-details")}
+                  >
+                    Details
+                  </button>
+                  {canManage && <>
                   <button
                     type="button"
                     className="court-action-row"
@@ -1646,9 +1659,10 @@ export default function LiveSession({
                   >
                     Clear court
                   </button>
+                  </>}
                 </div>
               </>
-            ) : (
+            ) : canManage ? (
               <>
                 <p className="control-intro">Set a specific 2v2 lineup for this open court.</p>
                 <button
@@ -1660,7 +1674,7 @@ export default function LiveSession({
                 </button>
                 {getManualPlayers({ kind: "court", courtId: courtControl.id }).length < 4 && <p className="muted">Four active players are required.</p>}
               </>
-            )
+            ) : null
           ) : sheet === "confirm-control" && confirmation ? (
             <>
               {confirmation.kind === "court-player-rest" ? (

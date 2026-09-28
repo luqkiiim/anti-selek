@@ -171,6 +171,7 @@ async function getSessionRoute(
           currentMatch: {
             select: {
               id: true,
+              createdAt: true,
               status: true,
               team1ClubId: true,
               team2ClubId: true,
@@ -222,6 +223,7 @@ async function getSessionRoute(
         where: { status: { in: [MatchStatus.COMPLETED, MatchStatus.PENDING_APPROVAL] } },
         select: {
           id: true,
+          createdAt: true,
           team1User1Id: true,
           team1User2Id: true,
           team2User1Id: true,

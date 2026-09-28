@@ -197,7 +197,7 @@ describe("SessionHistoryPage match admin actions", () => {
     expect(hasExactButtonText(container, "Undo result")).toBe(false);
   });
 
-  it("lets players open numeric details without exposing admin actions", async () => {
+  it("does not render the action menu when no admin action is available", async () => {
     await renderPage(
       createHistoryData({
         viewerCanManage: false,
@@ -206,27 +206,9 @@ describe("SessionHistoryPage match admin actions", () => {
       })
     );
 
-    expect(hasExactButtonText(container, "Details")).toBe(false);
-    await act(async () => {
-      getButtonByLabel(container, "Open actions for Court 1").click();
-    });
-    expect(hasExactButtonText(container, "Details")).toBe(true);
+    expect(container.querySelector('[aria-haspopup="menu"]')).toBeNull();
     expect(hasExactButtonText(container, "Correct score")).toBe(false);
     expect(hasExactButtonText(container, "Undo result")).toBe(false);
-    await act(async () => {
-      getButtons(container).find((button) => button.textContent?.trim() === "Details")!.click();
-    });
-    const dialog = document.body.querySelector('[role="dialog"]');
-    expect(dialog?.textContent).toContain("Shared court repeats");
-    expect(dialog?.textContent).toContain("Partner repeats");
-    expect(dialog?.textContent).toContain("Opponent repeats");
-    expect(dialog?.textContent).toContain("Rating gap");
-    expect(dialog?.textContent).not.toContain("Close match");
-    expect(container.querySelector('[role="menu"]')).toBeNull();
-    await act(async () => {
-      document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
-    });
-    expect(document.body.querySelector('[role="dialog"]')).toBeNull();
   });
 
   it("opens the existing correction and undo modals from menu actions", async () => {

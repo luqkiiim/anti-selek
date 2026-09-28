@@ -64,4 +64,11 @@ describe("session pairing details", () => {
     expect(details.opponentPairs.map((pair) => pair.count)).toEqual([0, 0, 0, 0]);
     expect(details.gamesPlayedByPlayer).toEqual({ a: null, b: null, c: 0, d: 0 });
   });
+
+  it("counts an earlier completed game when only its completion timestamp is available", () => {
+    const details = buildSessionPairingDetails(match("current", 60, 70), [
+      { ...match("earlier", 10, 20), createdAt: "" },
+    ]);
+    expect(details.partnerPairs.map((pair) => pair.count)).toEqual([1, 1]);
+  });
 });

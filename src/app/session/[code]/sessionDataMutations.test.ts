@@ -177,6 +177,7 @@ describe("sessionDataMutations", () => {
         id: "match-1",
         courtId: "court-1",
         status: "IN_PROGRESS",
+        createdAt: new Date("2026-09-28T10:30:00Z"),
         team1User1: { id: "p1", name: "Player 1" },
         team1User2: { id: "p2", name: "Player 2" },
         team2User1: { id: "p3", name: "Player 3" },
@@ -185,6 +186,7 @@ describe("sessionDataMutations", () => {
     ]);
 
     expect(updated.courts[0].currentMatch?.id).toBe("match-1");
+    expect(updated.courts[0].currentMatch?.createdAt).toBe("2026-09-28T10:30:00.000Z");
     expect(updated.courts[0].currentMatch?.team1User1.name).toBe("Player 1");
   });
 

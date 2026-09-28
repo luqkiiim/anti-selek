@@ -11,7 +11,6 @@ const mocks = vi.hoisted(() => ({
   canQuickAccessClub: vi.fn(),
   canQuickAccessSessionRead: vi.fn(),
   getSessionAdminMembership: vi.fn(),
-  getPlayerClubBadges: vi.fn(),
   getSessionMembership: vi.fn(),
   getSessionOperatorMembership: vi.fn(),
   invalidTargetResponse: vi.fn(),
@@ -48,7 +47,6 @@ vi.mock("@/lib/rateLimit", () => ({
 }));
 
 vi.mock("@/lib/sessionCollab", () => ({
-  getPlayerClubBadges: mocks.getPlayerClubBadges,
   getSessionAdminMembership: mocks.getSessionAdminMembership,
   getSessionMembership: mocks.getSessionMembership,
   getSessionOperatorMembership: mocks.getSessionOperatorMembership,
@@ -119,7 +117,6 @@ describe("session history route correction availability", () => {
   beforeEach(() => {
     Object.values(mocks).forEach((mock) => mock.mockReset());
     mocks.rateLimit.mockResolvedValue(null);
-    mocks.getPlayerClubBadges.mockResolvedValue(new Map());
     mocks.auth.mockResolvedValue({
       user: { id: "admin-1", isAdmin: false },
     });
@@ -157,21 +154,6 @@ describe("session history route correction availability", () => {
     mocks.getSessionOperatorMembership.mockResolvedValue({ role: "ADMIN" });
     mocks.getSessionAdminMembership.mockResolvedValue({ role: "ADMIN" });
     mocks.matchFindFirst.mockResolvedValue(null);
-  });
-
-  it("returns club ratings to ordinary viewers without granting management access", async () => {
-    mocks.getSessionMembership.mockResolvedValue({ role: "MEMBER" });
-    mocks.getSessionOperatorMembership.mockResolvedValue(null);
-    mocks.getSessionAdminMembership.mockResolvedValue(null);
-    mocks.getPlayerClubBadges.mockResolvedValue(new Map([
-      ["a1", [{ id: "community-1", name: "Club", elo: 1240 }]],
-    ]));
-    const response = await getHistory();
-    const body = await response.json();
-    expect(response.status).toBe(200);
-    expect(body.viewerCanManage).toBe(false);
-    expect(body.matches[0].team1User1.elo).toBe(1240);
-    expect(body.matches[0].team1User2.elo).toBeNull();
   });
 
   it("marks completed sessions correctable for admins when replay is exact", async () => {

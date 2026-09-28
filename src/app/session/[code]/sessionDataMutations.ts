@@ -23,6 +23,7 @@ interface MatchParticipant {
 
 export interface MatchPayload {
   id: string;
+  createdAt?: string | Date | null;
   courtId?: string | null;
   status: string;
   winnerTeam?: number | null;
@@ -210,6 +211,7 @@ function buildLiveMatch(
   return {
     id: payload.id,
     status: payload.status,
+    createdAt: normalizeOptionalDate(payload.createdAt) ?? fallbackMatch?.createdAt,
     scoreSubmittedByUserId: payload.scoreSubmittedByUserId ?? null,
     team1User1,
     team1User2,
@@ -247,6 +249,7 @@ function buildCompletedMatchInfo(
   return {
     id: payload.id,
     team1User1Id,
+    createdAt: normalizeOptionalDate(payload.createdAt) ?? fallbackMatch?.createdAt,
     team1User2Id,
     team2User1Id,
     team2User2Id,

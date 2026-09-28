@@ -64,7 +64,12 @@ export function buildSessionPairingDetails(
       return false;
     }
     const candidateStart = toTimestamp(candidate.createdAt);
-    return matchStart !== null && candidateStart !== null && candidateStart <= matchStart;
+    const completedAt = toTimestamp(candidate.completedAt);
+    return matchStart !== null && (
+      completedAt !== null
+        ? completedAt <= matchStart
+        : candidateStart === null || candidateStart <= matchStart
+    );
   });
   const uncertainEarlierMatches = earlierStartedMatches.filter(
     (candidate) => toTimestamp(candidate.completedAt) === null
