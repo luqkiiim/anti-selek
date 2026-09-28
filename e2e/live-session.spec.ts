@@ -5,6 +5,7 @@ import {
   adminUserId,
   createManualMatchWithPlayers,
   createStartedHostSession,
+  getHostPlayerCredentials,
   hostClubId,
   openSessionPlayersModal,
   openSessionRoster,
@@ -15,9 +16,11 @@ import {
   readCurrentMatchSignature,
   readSessionSnapshot,
   scoreSessionCode,
+  signIn,
   signInAsAdmin,
   submitAndApproveVisibleMatch,
 } from "./helpers";
+import { e2eBaseURL } from "./env";
 
 test("admin can host a tournament and reshuffle the first live court", async ({
   page,
@@ -503,4 +506,125 @@ test("admin can submit and approve a pending score", async ({ page }) => {
   await expect(
     page.getByText("Waiting for opponent or admin approval")
   ).toHaveCount(0);
+});
+
+test("another signed-in viewer sees a submitted score and updated standings without reloading", async ({
+  page,
+}) => {
+  await signInAsAdmin(page);
+  const sessionCode = await createStartedHostSession(page, {
+    sessionName: `E2E Live Updates ${Date.now()}`,
+    selectedPlayerNames: ["Host Player 1", "Host Player 2", "Host Player 3"],
+  });
+  await page.getByRole("button", { name: "Create Match" }).click();
+  await expect
+    .poll(() => readCurrentMatchSignature(page, sessionCode), {
+      message: "expected a live match before submitting a result",
+    })
+    .not.toBe("");
+  const startingSnapshot = await readSessionSnapshot(page, sessionCode);
+  const team1 = startingSnapshot.courts.find((court) => court.currentMatch)
+    ?.currentMatch;
+  if (!team1) {
+    throw new Error("The new tournament did not create a live match");
+  }
+  const winningViewerName =
+    team1.team1User1.name === "Admin E2E"
+      ? team1.team1User2.name
+      : team1.team1User1.name;
+  const winningViewerIndex = Number(winningViewerName.match(/\d+/)?.[0]);
+  if (!Number.isInteger(winningViewerIndex) || winningViewerIndex < 1) {
+    throw new Error("Could not identify a signed-in viewer on team one");
+  }
+
+  const browser = page.context().browser();
+  if (!browser) {
+    throw new Error("Playwright browser context is unavailable");
+  }
+  const viewerContext = await browser.newContext({
+    baseURL: e2eBaseURL,
+    viewport: { width: 390, height: 844 },
+  });
+
+  try {
+    const viewerPage = await viewerContext.newPage();
+    await signIn(viewerPage, getHostPlayerCredentials(winningViewerIndex));
+    await viewerPage.goto(`/session/${sessionCode}`);
+
+    const viewerPoints = viewerPage
+      .locator("table tbody tr")
+      .filter({ hasText: winningViewerName })
+      .locator("td")
+      .nth(2);
+    await expect(viewerPoints).toHaveText("0");
+
+    await submitAndApproveVisibleMatch(page, {
+      team1Score: 21,
+      team2Score: 18,
+    });
+
+    await expect(viewerPoints).toHaveText("3", { timeout: 10_000 });
+  } finally {
+    await viewerContext.close();
+  }
+});
+
+test("history refresh keeps an open action menu and score correction draft", async ({
+  page,
+}) => {
+  await signInAsAdmin(page);
+  const sessionCode = await createStartedHostSession(page, {
+    sessionName: `E2E History Refresh ${Date.now()}`,
+    selectedPlayerNames: ["Host Player 1", "Host Player 2", "Host Player 3"],
+  });
+  await page.getByRole("button", { name: "Create Match" }).click();
+  await expect
+    .poll(() => readCurrentMatchSignature(page, sessionCode), {
+      message: "expected a live match before submitting a result",
+    })
+    .not.toBe("");
+  await submitAndApproveVisibleMatch(page, {
+    team1Score: 21,
+    team2Score: 18,
+  });
+
+  const firstHistoryRead = page.waitForResponse(
+    (response) =>
+      response.url().includes(`/api/sessions/${sessionCode}/history`) &&
+      response.request().method() === "GET"
+  );
+  await page.goto(`/session/${sessionCode}/history`);
+  await firstHistoryRead;
+
+  const firstMatch = page.locator("article.app-subcard").first();
+  const actionButton = firstMatch.getByRole("button", {
+    name: /^Open actions for/,
+  });
+  await expect(actionButton).toBeVisible();
+  await actionButton.click();
+  const menu = firstMatch.getByRole("menu");
+  await expect(menu).toBeVisible();
+  const menuRefresh = page.waitForResponse(
+    (response) =>
+      response.url().includes(`/api/sessions/${sessionCode}/history`) &&
+      response.request().method() === "GET"
+  );
+  await menuRefresh;
+  await expect(menu).toBeVisible();
+
+  const correctScoreButton = menu.getByRole("menuitem", {
+    name: "Correct score",
+  });
+  await expect(correctScoreButton).toBeVisible();
+  await correctScoreButton.click();
+  const team1Correction = page.getByLabel("Team 1 corrected score");
+  await expect(team1Correction).toBeVisible();
+  await team1Correction.fill("22");
+  const draftRefresh = page.waitForResponse(
+    (response) =>
+      response.url().includes(`/api/sessions/${sessionCode}/history`) &&
+      response.request().method() === "GET"
+  );
+  await draftRefresh;
+  await expect(team1Correction).toHaveValue("22");
 });

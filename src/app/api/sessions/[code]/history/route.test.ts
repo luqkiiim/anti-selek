@@ -17,6 +17,7 @@ const mocks = vi.hoisted(() => ({
   isQuickAccessSession: vi.fn(),
   matchFindFirst: vi.fn(),
   sessionFindUnique: vi.fn(),
+  rateLimit: vi.fn(),
 }));
 
 vi.mock("@/lib/auth", () => ({
@@ -42,7 +43,7 @@ vi.mock("@/lib/quickAccess", () => ({
 vi.mock("@/lib/rateLimit", () => ({
   checkInvalidTargetRateLimit: vi.fn(async () => null),
   invalidTargetResponse: mocks.invalidTargetResponse,
-  rateLimit: vi.fn(async () => null),
+  rateLimit: mocks.rateLimit,
 }));
 
 vi.mock("@/lib/sessionCollab", () => ({
@@ -115,6 +116,7 @@ function getHistory() {
 describe("session history route correction availability", () => {
   beforeEach(() => {
     Object.values(mocks).forEach((mock) => mock.mockReset());
+    mocks.rateLimit.mockResolvedValue(null);
     mocks.auth.mockResolvedValue({
       user: { id: "admin-1", isAdmin: false },
     });
@@ -159,8 +161,52 @@ describe("session history route correction availability", () => {
     const body = await response.json();
 
     expect(response.status).toBe(200);
+    expect(response.headers.get("Cache-Control")).toBe(
+      "private, no-store, max-age=0"
+    );
     expect(body.canCorrectCompletedScores).toBe(true);
     expect(body.correctionBlockedReason).toBeNull();
+  });
+
+  it("uses a separate authenticated read bucket for viewers behind the same IP", async () => {
+    const url = "http://localhost/api/sessions/ABC123/history";
+    const headers = {
+      "x-forwarded-for": "203.0.113.10",
+      accept: "application/json",
+      "accept-language": "en-US",
+      "user-agent": "Mozilla/5.0",
+    };
+    const params = { params: Promise.resolve({ code: "ABC123" }) };
+
+    const firstResponse = await GET(new Request(url, { headers }), params);
+    expect(firstResponse.status).toBe(200);
+
+    mocks.auth.mockResolvedValueOnce({ user: { id: "a1", isAdmin: false } });
+    const secondResponse = await GET(new Request(url, { headers }), params);
+    expect(secondResponse.status).toBe(200);
+
+    expect(mocks.rateLimit).toHaveBeenNthCalledWith(
+      1,
+      expect.any(Request),
+      "api:sessions:code:history:get",
+      {
+        applyHighRiskBucket: false,
+        identity: "admin-1",
+        limit: 120,
+        windowMs: 60_000,
+      }
+    );
+    expect(mocks.rateLimit).toHaveBeenNthCalledWith(
+      2,
+      expect.any(Request),
+      "api:sessions:code:history:get",
+      {
+        applyHighRiskBucket: false,
+        identity: "a1",
+        limit: 120,
+        windowMs: 60_000,
+      }
+    );
   });
 
   it("marks active sessions correctable for admins when replay is exact", async () => {

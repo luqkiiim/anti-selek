@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { MoreHorizontal, Pencil, Undo2 } from "lucide-react";
@@ -57,6 +57,21 @@ interface SessionHistoryData {
   matches: HistoryMatch[];
 }
 
+const HISTORY_POLL_INTERVAL_MS = 2_000;
+const HISTORY_REQUEST_TIMEOUT_MS = 10_000;
+
+function getRetryAfterDelay(value: string | null) {
+  if (!value?.trim()) return 0;
+
+  const seconds = Number(value);
+  if (Number.isFinite(seconds)) {
+    return Math.max(0, seconds * 1_000);
+  }
+
+  const timestamp = Date.parse(value);
+  return Number.isNaN(timestamp) ? 0 : Math.max(0, timestamp - Date.now());
+}
+
 export default function SessionHistoryPage() {
   const { status } = useSession();
   const router = useRouter();
@@ -84,20 +99,74 @@ export default function SessionHistoryPage() {
   const [openActionMatchId, setOpenActionMatchId] = useState<string | null>(
     null
   );
+  const requestRef = useRef<{
+    controller: AbortController;
+    id: number;
+    code: string;
+    timeoutId: number;
+  } | null>(null);
+  const requestIdRef = useRef(0);
+  const activeGenerationRef = useRef(0);
+  const activeCodeRef = useRef("");
+  const isActiveRef = useRef(false);
+  const nextRequestAllowedAtRef = useRef(0);
+  const lastDataSignatureRef = useRef<string | null>(null);
 
   const fetchHistory = useCallback(
-    async ({ showLoading = false }: { showLoading?: boolean } = {}) => {
+    async ({
+      showLoading = false,
+      silent = false,
+      force = false,
+    }: { showLoading?: boolean; silent?: boolean; force?: boolean } = {}) => {
       if (!code) return;
+      if (requestRef.current?.code === code) {
+        if (!force) return;
+
+        requestRef.current.controller.abort();
+        window.clearTimeout(requestRef.current.timeoutId);
+        requestRef.current = null;
+      }
+      if (Date.now() < nextRequestAllowedAtRef.current) return;
 
       if (showLoading) {
         setLoading(true);
       }
-      setError("");
-      setSuccess("");
+      if (!silent) {
+        setError("");
+        setSuccess("");
+      }
+
+      const generation = activeGenerationRef.current;
+      const controller = new AbortController();
+      const requestId = ++requestIdRef.current;
+      const timeoutId = window.setTimeout(
+        () => controller.abort(),
+        HISTORY_REQUEST_TIMEOUT_MS
+      );
+      requestRef.current = { controller, id: requestId, code, timeoutId };
 
       try {
-        const res = await fetch(`/api/sessions/${code}/history`);
+        const res = await fetch(`/api/sessions/${code}/history`, {
+          cache: "no-store",
+          signal: controller.signal,
+        });
+        if (
+          !isActiveRef.current ||
+          activeCodeRef.current !== code ||
+          activeGenerationRef.current !== generation ||
+          requestRef.current?.id !== requestId
+        ) {
+          return;
+        }
         if (!res.ok) {
+          if (res.status === 429) {
+            const retryAfterMs = getRetryAfterDelay(
+              res.headers.get("Retry-After")
+            );
+            if (retryAfterMs > 0) {
+              nextRequestAllowedAtRef.current = Date.now() + retryAfterMs;
+            }
+          }
           const payload = (await res.json().catch(() => null)) as
             | { error?: string }
             | null;
@@ -105,14 +174,51 @@ export default function SessionHistoryPage() {
         }
 
         const json = (await res.json()) as SessionHistoryData;
-        setData(json);
+        if (
+          !isActiveRef.current ||
+          activeCodeRef.current !== code ||
+          activeGenerationRef.current !== generation ||
+          requestRef.current?.id !== requestId
+        ) {
+          return;
+        }
+
+        nextRequestAllowedAtRef.current = 0;
+        const signature = JSON.stringify(json);
+        if (signature !== lastDataSignatureRef.current) {
+          lastDataSignatureRef.current = signature;
+          setData(json);
+        }
       } catch (err) {
-        console.error(err);
-        setError(
-          err instanceof Error ? err.message : "Failed to load match history"
-        );
+        if (!controller.signal.aborted) {
+          console.error(err);
+        }
+        if (
+          !silent &&
+          isActiveRef.current &&
+          activeCodeRef.current === code &&
+          activeGenerationRef.current === generation &&
+          requestRef.current?.id === requestId
+        ) {
+          setError(
+            err instanceof Error ? err.message : "Failed to load match history"
+          );
+        }
       } finally {
-        setLoading(false);
+        window.clearTimeout(timeoutId);
+        const isCurrentRequest = requestRef.current?.id === requestId;
+        if (isCurrentRequest) {
+          requestRef.current = null;
+        }
+        if (
+          showLoading &&
+          isCurrentRequest &&
+          isActiveRef.current &&
+          activeCodeRef.current === code &&
+          activeGenerationRef.current === generation
+        ) {
+          setLoading(false);
+        }
       }
     },
     [code]
@@ -136,14 +242,67 @@ export default function SessionHistoryPage() {
   };
 
   useEffect(() => {
-    if (status === "authenticated") {
-      void fetchHistory({ showLoading: true });
+    if (status !== "authenticated" || !code) {
+      activeGenerationRef.current += 1;
+      isActiveRef.current = false;
+      activeCodeRef.current = "";
+      requestRef.current?.controller.abort();
+      if (requestRef.current) {
+        window.clearTimeout(requestRef.current.timeoutId);
+        requestRef.current = null;
+      }
+      return;
     }
-  }, [fetchHistory, status]);
+
+    const generation = activeGenerationRef.current + 1;
+    activeGenerationRef.current = generation;
+    activeCodeRef.current = code;
+    isActiveRef.current = true;
+    nextRequestAllowedAtRef.current = 0;
+    lastDataSignatureRef.current = null;
+    setData(null);
+    setLoading(true);
+    void fetchHistory({ showLoading: true });
+
+    const refreshWhenVisible = () => {
+      if (document.visibilityState !== "hidden") {
+        void fetchHistory({ silent: true });
+      }
+    };
+    const interval = window.setInterval(
+      refreshWhenVisible,
+      HISTORY_POLL_INTERVAL_MS
+    );
+    window.addEventListener("focus", refreshWhenVisible);
+    window.addEventListener("online", refreshWhenVisible);
+    document.addEventListener("visibilitychange", refreshWhenVisible);
+
+    return () => {
+      if (activeGenerationRef.current === generation) {
+        activeGenerationRef.current += 1;
+        isActiveRef.current = false;
+        activeCodeRef.current = "";
+      }
+      window.clearInterval(interval);
+      window.removeEventListener("focus", refreshWhenVisible);
+      window.removeEventListener("online", refreshWhenVisible);
+      document.removeEventListener("visibilitychange", refreshWhenVisible);
+      if (requestRef.current?.code === code) {
+        requestRef.current.controller.abort();
+        window.clearTimeout(requestRef.current.timeoutId);
+        requestRef.current = null;
+      }
+    };
+  }, [code, fetchHistory, status]);
 
   useEffect(() => {
-    setOpenActionMatchId(null);
-  }, [data]);
+    if (
+      openActionMatchId &&
+      !data?.matches.some((match) => match.id === openActionMatchId)
+    ) {
+      setOpenActionMatchId(null);
+    }
+  }, [data?.matches, openActionMatchId]);
 
   useEffect(() => {
     if (!openActionMatchId) return;
@@ -230,7 +389,7 @@ export default function SessionHistoryPage() {
       }
 
       setUndoDraft(null);
-      await fetchHistory();
+      await fetchHistory({ force: true });
       setSuccess("Result undone.");
     } catch (err) {
       console.error(err);
@@ -271,7 +430,7 @@ export default function SessionHistoryPage() {
       }
 
       setCorrectionDraft(null);
-      await fetchHistory();
+      await fetchHistory({ force: true });
       setSuccess("Score corrected.");
     } catch (err) {
       console.error(err);

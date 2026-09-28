@@ -149,6 +149,18 @@ async function getSessionHistory(
     return NextResponse.json({ error: "Invalid request parameters" }, { status: 400 });
   }
 
+  const rateLimitResponse = await rateLimit(
+    _request,
+    "api:sessions:code:history:get",
+    {
+      applyHighRiskBucket: false,
+      identity: session.user.id,
+      limit: 120,
+      windowMs: 60_000,
+    }
+  );
+  if (rateLimitResponse) return rateLimitResponse;
+
   const invalidTargetLimitResponse = await checkInvalidTargetRateLimit(_request, "api:sessions:code:history");
 
   if (invalidTargetLimitResponse) return invalidTargetLimitResponse;
@@ -312,14 +324,16 @@ async function getSessionHistory(
   });
 }
 
+function privateNoStore(response: NextResponse) {
+  response.headers.set("Cache-Control", "private, no-store, max-age=0");
+  return response;
+}
+
 export async function GET(...args: Parameters<typeof getSessionHistory>) {
   try {
-    const rateLimitResponse = await rateLimit(args[0], "api:sessions:code:history:get", { limit: 30, windowMs: 60_000 });
-    if (rateLimitResponse) return rateLimitResponse;
-
-    return await getSessionHistory(...args);
+    return privateNoStore(await getSessionHistory(...args));
   } catch (error) {
     logError("Load session history error", error);
-    return safeErrorResponse();
+    return privateNoStore(safeErrorResponse());
   }
 }

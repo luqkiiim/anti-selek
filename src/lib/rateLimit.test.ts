@@ -66,6 +66,48 @@ describe("rate limiting", () => {
     expect(third.retryAfterSeconds).toBeGreaterThan(0);
   });
 
+  it("keeps authenticated session read buckets separate for viewers behind one IP", () => {
+    const sharedIp = "203.0.113.10";
+    const viewerAKey = buildRateLimitStorageKey([
+      "api:sessions:code:get",
+      "viewer-a",
+      sharedIp,
+    ]);
+    const viewerBKey = buildRateLimitStorageKey([
+      "api:sessions:code:get",
+      "viewer-b",
+      sharedIp,
+    ]);
+
+    applyRateLimit({
+      key: viewerAKey,
+      max: 2,
+      now: 1_000,
+      windowMs: 60_000,
+    });
+    applyRateLimit({
+      key: viewerAKey,
+      max: 2,
+      now: 1_001,
+      windowMs: 60_000,
+    });
+    const viewerABlocked = applyRateLimit({
+      key: viewerAKey,
+      max: 2,
+      now: 1_002,
+      windowMs: 60_000,
+    });
+    const viewerBStillAllowed = applyRateLimit({
+      key: viewerBKey,
+      max: 2,
+      now: 1_003,
+      windowMs: 60_000,
+    });
+
+    expect(viewerABlocked.allowed).toBe(false);
+    expect(viewerBStillAllowed.allowed).toBe(true);
+  });
+
   it("resets the bucket after the window expires", () => {
     const key = buildRateLimitKey(["auth", "signup", "user@example.com", "ip"]);
 

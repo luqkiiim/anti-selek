@@ -5,7 +5,9 @@ import { expectAliasPair } from "@/lib/clubContractAliasTestUtils";
 const mocks = vi.hoisted(() => ({
   auth: vi.fn(),
   canQuickAccessSessionRead: vi.fn(),
+  checkInvalidTargetRateLimit: vi.fn(async () => null),
   sessionFindUnique: vi.fn(),
+  clubMemberFindUnique: vi.fn(),
   getSessionMembership: vi.fn(),
   getSessionAdminMembership: vi.fn(),
   getSessionOperatorMembership: vi.fn(),
@@ -15,6 +17,7 @@ const mocks = vi.hoisted(() => ({
   withPlayerClubBadges: vi.fn(),
   getQueuedMatchUserIds: vi.fn(),
   parseMatchmakingReasonJson: vi.fn(),
+  rateLimit: vi.fn(async () => null),
 }));
 
 vi.mock("@/lib/auth", () => ({
@@ -25,6 +28,9 @@ vi.mock("@/lib/prisma", () => ({
   prisma: {
     session: {
       findUnique: mocks.sessionFindUnique,
+    },
+    clubMember: {
+      findUnique: mocks.clubMemberFindUnique,
     },
   },
 }));
@@ -60,11 +66,11 @@ vi.mock("@/lib/matchmaking/matchReason", () => ({
 }));
 
 vi.mock("@/lib/rateLimit", () => ({
-  checkInvalidTargetRateLimit: vi.fn(async () => null),
+  checkInvalidTargetRateLimit: mocks.checkInvalidTargetRateLimit,
   invalidTargetResponse: vi.fn(async () =>
     Response.json({ error: "Unauthorized" }, { status: 403 })
   ),
-  rateLimit: vi.fn(async () => null),
+  rateLimit: mocks.rateLimit,
 }));
 
 import { GET } from "./route";
@@ -72,6 +78,8 @@ import { GET } from "./route";
 describe("session route GET", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.checkInvalidTargetRateLimit.mockResolvedValue(null);
+    mocks.rateLimit.mockResolvedValue(null);
 
     mocks.auth.mockResolvedValue({
       user: { id: "u1", isAdmin: false },
@@ -103,6 +111,7 @@ describe("session route GET", () => {
     mocks.getSessionMembership.mockResolvedValue({ role: "MEMBER" });
     mocks.getSessionAdminMembership.mockResolvedValue(null);
     mocks.getSessionOperatorMembership.mockResolvedValue(null);
+    mocks.clubMemberFindUnique.mockResolvedValue(null);
     mocks.getClubEloByUserId.mockResolvedValue(new Map());
     mocks.withClubElo.mockImplementation((players) => players);
     mocks.getPlayerClubBadges.mockResolvedValue(new Map());
@@ -192,6 +201,9 @@ describe("session route GET", () => {
     const body = await response.json();
 
     expect(response.status).toBe(200);
+    expect(response.headers.get("Cache-Control")).toBe(
+      "private, no-store, max-age=0"
+    );
     expect(body.players[0].user.avatarUrl).toBe(
       "https://blob.vercel-storage.com/avatars/u1/photo.jpg"
     );
@@ -205,6 +217,56 @@ describe("session route GET", () => {
     expectAliasPair(body, "clubs", "communities");
     expectAliasPair(body, "viewerClubRole", "viewerCommunityRole");
     expect(body.respectPlayerRest).toBe(true);
+  });
+
+  it("uses a separate authenticated read bucket for viewers behind the same IP", async () => {
+    const sharedHeaders = {
+      "x-forwarded-for": "203.0.113.10",
+      accept: "application/json",
+      "accept-language": "en-US",
+      "user-agent": "Mozilla/5.0",
+    };
+
+    const firstResponse = await GET(
+      new Request("http://localhost/api/sessions/ABC123", {
+        headers: sharedHeaders,
+      }),
+      { params: Promise.resolve({ code: "ABC123" }) }
+    );
+    expect(firstResponse.status).toBe(200);
+
+    mocks.auth.mockResolvedValueOnce({ user: { id: "u2", isAdmin: false } });
+    const secondResponse = await GET(
+      new Request("http://localhost/api/sessions/ABC123", {
+        headers: sharedHeaders,
+      }),
+      { params: Promise.resolve({ code: "ABC123" }) }
+    );
+    expect(secondResponse.status).toBe(200);
+
+    expect(mocks.rateLimit).toHaveBeenNthCalledWith(
+      1,
+      expect.any(Request),
+      "api:sessions:code:get",
+      {
+        applyHighRiskBucket: false,
+        identity: "u1",
+        limit: 120,
+        windowMs: 60_000,
+      }
+    );
+    expect(mocks.rateLimit).toHaveBeenNthCalledWith(
+      2,
+      expect.any(Request),
+      "api:sessions:code:get",
+      {
+        applyHighRiskBucket: false,
+        identity: "u2",
+        limit: 120,
+        windowMs: 60_000,
+      }
+    );
+    expect(mocks.checkInvalidTargetRateLimit).toHaveBeenCalledTimes(2);
   });
 
   it("allows quick-access host club spectators without management permissions", async () => {

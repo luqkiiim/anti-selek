@@ -140,6 +140,18 @@ async function getSessionRoute(
     return NextResponse.json({ error: "Invalid request parameters" }, { status: 400 });
   }
 
+  const rateLimitResponse = await rateLimit(
+    request,
+    "api:sessions:code:get",
+    {
+      applyHighRiskBucket: false,
+      identity: session.user.id,
+      limit: 120,
+      windowMs: 60_000,
+    }
+  );
+  if (rateLimitResponse) return rateLimitResponse;
+
   const invalidTargetLimitResponse = await checkInvalidTargetRateLimit(request, "api:sessions:code");
 
   if (invalidTargetLimitResponse) return invalidTargetLimitResponse;
@@ -387,15 +399,17 @@ async function getSessionRoute(
   }));
 }
 
+function privateNoStore(response: NextResponse) {
+  response.headers.set("Cache-Control", "private, no-store, max-age=0");
+  return response;
+}
+
 export async function GET(...args: Parameters<typeof getSessionRoute>) {
   try {
-    const rateLimitResponse = await rateLimit(args[0], "api:sessions:code:get", { limit: 30, windowMs: 60_000 });
-    if (rateLimitResponse) return rateLimitResponse;
-
-    return await getSessionRoute(...args);
+    return privateNoStore(await getSessionRoute(...args));
   } catch (error) {
     logError("Load session error", error);
-    return safeErrorResponse();
+    return privateNoStore(safeErrorResponse());
   }
 }
 
