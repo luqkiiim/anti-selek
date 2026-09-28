@@ -456,24 +456,56 @@ describe("LiveSession score and player controls", () => {
     });
   });
 
-  it("keeps the active court menu to reshuffle and clear actions", async () => {
+  it("adds details to the active court menu alongside reshuffle and clear", async () => {
     const currentMatch = match("match-1", 1);
     setup(sessionWithCourts([{ id: "court-1", courtNumber: 1, currentMatch }]));
     await act(async () => root.render(<LiveSession code="TEST01" onBack={vi.fn()} onEnded={vi.fn(async () => undefined)} />));
 
     await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Court 1 options"]')?.click());
     const actions = Array.from(container.querySelectorAll<HTMLButtonElement>('[role="dialog"] .court-action-row'));
-    expect(actions.map((button) => button.textContent?.trim())).toEqual(["Reshuffle match", "Clear court"]);
+    expect(actions.map((button) => button.textContent?.trim())).toEqual(["Details", "Reshuffle match", "Clear court"]);
     expect(container.textContent).not.toContain("Replace one player");
     expect(container.textContent).not.toContain("Reshuffle without one player");
 
-    await act(async () => actions[1].click());
+    await act(async () => actions[2].click());
     expect(container.querySelector('[role="dialog"]')?.getAttribute("aria-label")).toBe("Clear court?");
     await act(async () => Array.from(container.querySelectorAll<HTMLButtonElement>("[role=dialog] button")).find((button) => button.textContent === "Clear court")?.click());
     expect(mocks.api).toHaveBeenCalledWith("/api/sessions/TEST01/generate-match", "POST", {
       courtId: "court-1",
       undoCurrentMatch: true,
     });
+  });
+
+  it("lets a player open numeric pairing details directly from the court menu", async () => {
+    const currentMatch = { ...match("match-details", 1), createdAt: "2026-09-28T10:30:00Z" };
+    const session = sessionWithCourts([{ id: "court-1", courtNumber: 1, currentMatch }]);
+    session.viewerCanManage = false;
+    session.players[0].user.elo = 1200;
+    session.players[2].user.elo = 1100;
+    const prior = {
+      id: "prior", status: "COMPLETED", winnerTeam: 1,
+      createdAt: "2026-09-28T10:00:00Z", completedAt: "2026-09-28T10:20:00Z",
+      team1User1Id: currentMatch.team1User1.id, team1User2Id: currentMatch.team1User2.id,
+      team2User1Id: currentMatch.team2User1.id, team2User2Id: currentMatch.team2User2.id,
+    };
+    session.matches = [prior, { ...prior, id: "later", createdAt: "2026-09-28T10:40:00Z", completedAt: "2026-09-28T10:50:00Z" }];
+    setup(session);
+    await act(async () => root.render(<LiveSession code="TEST01" onBack={vi.fn()} onEnded={vi.fn(async () => undefined)} />));
+    const court = container.querySelector(".court-card")!;
+    expect(court.textContent).not.toContain("Details");
+    await act(async () => court.querySelector<HTMLButtonElement>('[aria-label="Court 1 options"]')!.click());
+    const actions = Array.from(container.querySelectorAll<HTMLButtonElement>('[role="dialog"] .court-action-row'));
+    expect(actions.map((button) => button.textContent?.trim())).toEqual(["Details"]);
+    await act(async () => actions[0].click());
+    const dialog = container.querySelector('[role="dialog"][aria-label="Details"]')!;
+    expect(dialog).not.toBeNull();
+    expect(dialog.textContent).toContain("Rating gap50");
+    expect(dialog.textContent).toContain("Average1100");
+    expect(dialog.textContent).toContain("Average1050");
+    expect(Array.from(dialog.querySelectorAll('[aria-label="Shared court repeats"] dd')).map((node) => node.textContent)).toEqual(["1", "1", "1", "1", "1", "1"]);
+    expect(Array.from(dialog.querySelectorAll('[aria-label="Partner repeats"] dd')).map((node) => node.textContent)).toEqual(["1", "1"]);
+    expect(Array.from(dialog.querySelectorAll('[aria-label="Opponent repeats"] dd')).map((node) => node.textContent)).toEqual(["1", "1", "1", "1"]);
+    expect(mocks.api).not.toHaveBeenCalled();
   });
 
   it("offers reshuffle, rest, and pause from court player actions", async () => {
