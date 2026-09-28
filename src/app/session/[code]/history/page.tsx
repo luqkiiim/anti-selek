@@ -14,6 +14,7 @@ import { getErrorMessage } from "@/lib/http";
 import { getSessionModeLabel, getSessionTypeLabel } from "@/lib/sessionModeLabels";
 import { getSessionStatusLabel } from "@/lib/sessionStatusLabels";
 import { MatchStatus } from "@/types/enums";
+import { SessionPairingDetailsModal } from "@/components/session/SessionPairingDetailsModal";
 
 interface HistoryMatch {
   id: string;
@@ -31,10 +32,10 @@ interface HistoryMatch {
     courtNumber: number;
     label?: string | null;
   };
-  team1User1: { id: string; name: string };
-  team1User2: { id: string; name: string };
-  team2User1: { id: string; name: string };
-  team2User2: { id: string; name: string };
+  team1User1: { id: string; name: string; elo?: number | null };
+  team1User2: { id: string; name: string; elo?: number | null };
+  team2User1: { id: string; name: string; elo?: number | null };
+  team2User2: { id: string; name: string; elo?: number | null };
 }
 
 interface SessionHistoryData {
@@ -99,6 +100,7 @@ export default function SessionHistoryPage() {
   const [openActionMatchId, setOpenActionMatchId] = useState<string | null>(
     null
   );
+  const [detailsMatchId, setDetailsMatchId] = useState<string | null>(null);
   const requestRef = useRef<{
     controller: AbortController;
     id: number;
@@ -473,6 +475,7 @@ export default function SessionHistoryPage() {
       ? `/profile/${userId}?clubId=${encodeURIComponent(profileClubId)}`
       : `/profile/${userId}`;
   };
+  const detailsMatch = data.matches.find((match) => match.id === detailsMatchId);
 
   return (
     <main className="app-page">
@@ -520,7 +523,6 @@ export default function SessionHistoryPage() {
                 const canCorrectScore =
                   data.canCorrectCompletedScores === true &&
                   match.status === MatchStatus.COMPLETED;
-                const hasMatchActions = canCorrectScore || canUndoResult;
                 const matchActionMenuOpen = openActionMatchId === match.id;
                 const courtLabel = getCourtDisplayLabel(match.court);
                 const matchTime = new Date(matchTimestamp).toLocaleTimeString([], {
@@ -539,11 +541,10 @@ export default function SessionHistoryPage() {
                       <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
                         <div className="inline-flex items-center gap-1.5">
                           <p className="text-sm text-gray-600">{matchTime}</p>
-                          {hasMatchActions ? (
-                            <div
-                              className="relative"
-                              data-match-action-root={match.id}
-                            >
+                          <div
+                            className="relative"
+                            data-match-action-root={match.id}
+                          >
                               <button
                                 type="button"
                                 onClick={() =>
@@ -566,6 +567,17 @@ export default function SessionHistoryPage() {
                                     aria-label={`${courtLabel} actions`}
                                     className="overflow-hidden rounded-xl border border-gray-200 bg-white py-1 text-sm font-semibold text-gray-800 shadow-[0_18px_44px_rgba(23,32,31,0.16)]"
                                   >
+                                    <button
+                                      type="button"
+                                      role="menuitem"
+                                      onClick={() => {
+                                        setOpenActionMatchId(null);
+                                        setDetailsMatchId(match.id);
+                                      }}
+                                      className="inline-flex min-h-11 w-full items-center gap-2 px-3 py-2.5 text-left transition hover:bg-[var(--accent-faint)] hover:text-[var(--accent-strong)]"
+                                    >
+                                      Details
+                                    </button>
                                     {canCorrectScore ? (
                                       <button
                                         type="button"
@@ -594,8 +606,7 @@ export default function SessionHistoryPage() {
                                   </div>
                                 </div>
                               ) : null}
-                            </div>
-                          ) : null}
+                          </div>
                         </div>
                         {isPendingApproval ? (
                           <span className="app-chip app-chip-warning">Awaiting approval</span>
@@ -649,6 +660,14 @@ export default function SessionHistoryPage() {
           )}
         </SectionCard>
       </div>
+
+      {detailsMatch ? (
+        <SessionPairingDetailsModal
+          match={detailsMatch}
+          sessionMatches={data.matches}
+          onClose={() => setDetailsMatchId(null)}
+        />
+      ) : null}
 
       {undoDraft ? (
         <SessionActionConfirmModal
