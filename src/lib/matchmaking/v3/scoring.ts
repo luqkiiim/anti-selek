@@ -10,7 +10,7 @@ import type {
 } from "./types";
 
 export const ELO_EXACT_REMATCH_BALANCE_TOLERANCE = 30;
-export const ELO_BALANCE_VARIETY_TOLERANCE = 75;
+export const ELO_BALANCE_GAP_CEILING = 50;
 export const POINTS_BALANCE_VARIETY_TOLERANCE = 1.5;
 export const FULL_SHARED_COURT_REPEAT_PENALTY = 6;
 export const FULL_REPEAT_REST_TOLERANCE = 1;
@@ -203,11 +203,11 @@ export function getBalanceVarietyTolerance(sessionType: SessionType) {
     return POINTS_BALANCE_VARIETY_TOLERANCE;
   }
 
-  if (sessionType === SessionType.ELO) {
-    return ELO_BALANCE_VARIETY_TOLERANCE;
-  }
-
   return null;
+}
+
+export function usesBalanceFirstVariety(sessionType: SessionType) {
+  return sessionType === SessionType.POINTS || sessionType === SessionType.ELO;
 }
 
 function compareBalanceFirstVariety<T extends ActiveMatchmakerV3Player>(
@@ -398,8 +398,22 @@ export function compareSingleCourtSelections<
   const balanceDiff = left.balanceGap - right.balanceGap;
   const balanceVarietyTolerance = getBalanceVarietyTolerance(sessionType);
 
-  if (balanceVarietyTolerance !== null) {
-    if (Math.abs(balanceDiff) > balanceVarietyTolerance) {
+  if (sessionType === SessionType.ELO) {
+    const leftWithinCeiling = left.balanceGap <= ELO_BALANCE_GAP_CEILING;
+    const rightWithinCeiling = right.balanceGap <= ELO_BALANCE_GAP_CEILING;
+    if (leftWithinCeiling !== rightWithinCeiling) {
+      return leftWithinCeiling ? -1 : 1;
+    }
+    if (!leftWithinCeiling && balanceDiff !== 0) {
+      return balanceDiff;
+    }
+  }
+
+  if (usesBalanceFirstVariety(sessionType)) {
+    if (
+      balanceVarietyTolerance !== null &&
+      Math.abs(balanceDiff) > balanceVarietyTolerance
+    ) {
       return balanceDiff;
     }
 
@@ -572,8 +586,27 @@ export function compareBatchSelections<T extends ActiveMatchmakerV3Player>(
   const totalBalanceDiff = left.totalBalanceGap - right.totalBalanceGap;
   const balanceVarietyTolerance = getBalanceVarietyTolerance(sessionType);
 
-  if (balanceVarietyTolerance !== null) {
-    if (Math.abs(maxBalanceDiff) > balanceVarietyTolerance) {
+  if (sessionType === SessionType.ELO) {
+    const leftWithinCeiling = left.maxBalanceGap <= ELO_BALANCE_GAP_CEILING;
+    const rightWithinCeiling = right.maxBalanceGap <= ELO_BALANCE_GAP_CEILING;
+    if (leftWithinCeiling !== rightWithinCeiling) {
+      return leftWithinCeiling ? -1 : 1;
+    }
+    if (!leftWithinCeiling) {
+      if (maxBalanceDiff !== 0) {
+        return maxBalanceDiff;
+      }
+      if (totalBalanceDiff !== 0) {
+        return totalBalanceDiff;
+      }
+    }
+  }
+
+  if (usesBalanceFirstVariety(sessionType)) {
+    if (
+      balanceVarietyTolerance !== null &&
+      Math.abs(maxBalanceDiff) > balanceVarietyTolerance
+    ) {
       return maxBalanceDiff;
     }
 

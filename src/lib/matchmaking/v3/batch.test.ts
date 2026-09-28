@@ -52,6 +52,11 @@ function getBatchSelectedIds(selection: V3BatchSelection | null | undefined) {
   );
 }
 
+function isOneOfTwoForcedQuartets(players: Array<{ userId: string }>) {
+  const key = players.map((player) => player.userId).sort().join("|");
+  return key === "A|B|C|D" || key === "E|F|G|H";
+}
+
 function createPlayers(count: number, prefix = "P") {
   return Array.from({ length: count }, (_, index) =>
     createPlayer(`${prefix}${index + 1}`)
@@ -223,6 +228,45 @@ describe("matchmaking v3 batch selection", () => {
     expect(result.selection).not.toBeNull();
     expect(result.debug.searchLimitReached).toBe(true);
     expect(result.debug.failureReason).toBeNull();
+  });
+
+  it("finds a full batch under the rating ceiling when the normal search limit is reached", () => {
+    const allowedQuartets = new Set([
+      "A|B|C|D",
+      "E|F|G|H",
+      "A|B|E|F",
+      "C|D|G|H",
+    ]);
+    const result = findBestBatchSelectionV3(
+      [
+        ...["A", "B", "C", "D"].map((id) => createPlayer(id)),
+        createPlayer("E", { strength: 1450 }),
+        createPlayer("F", { strength: 450 }),
+        createPlayer("G", { strength: 1350 }),
+        createPlayer("H", { strength: 750 }),
+      ],
+      {
+        courtCount: 2,
+        sessionMode: SessionMode.MEXICANO,
+        sessionType: SessionType.ELO,
+        selectionConstraints: {
+          isQuartetAllowed: (players) =>
+            allowedQuartets.has(
+              players.map((player) => player.userId).sort().join("|")
+            ),
+        },
+        searchLimits: { maxBranches: 1 },
+        randomFn: () => 0,
+      }
+    );
+
+    expect(result.selection?.selections).toHaveLength(2);
+    expect(result.selection?.maxBalanceGap).toBe(50);
+    expect(
+      result.selection?.selections
+        .map((court) => [...court.ids].sort().join("|"))
+        .sort()
+    ).toEqual(["A|B|E|F", "C|D|G|H"]);
   });
 
   it("keeps the dynamic cap policy when respectPlayerRest is false", () => {
@@ -497,7 +541,7 @@ describe("matchmaking v3 batch selection", () => {
         ...Array.from({ length: 8 }, (_, index) =>
           createPlayer(String.fromCharCode(65 + index), { strength: 1000 })
         ),
-        createPlayer("I", { strength: 1150 }),
+        createPlayer("I", { strength: 1100 }),
       ],
       {
         courtCount: 2,
@@ -520,7 +564,7 @@ describe("matchmaking v3 batch selection", () => {
     );
 
     expect(getBatchSelectedIds(result.selection)).toContain("I");
-    expect(result.selection?.maxBalanceGap).toBeLessThanOrEqual(75);
+    expect(result.selection?.maxBalanceGap).toBeLessThanOrEqual(50);
     expect(result.selection?.totalSharedCourtRepeatPenalty).toBeLessThan(12);
   });
 
@@ -530,7 +574,7 @@ describe("matchmaking v3 batch selection", () => {
         ...Array.from({ length: 8 }, (_, index) =>
           createPlayer(String.fromCharCode(65 + index), { strength: 1000 })
         ),
-        createPlayer("I", { strength: 1152 }),
+        createPlayer("I", { strength: 1102 }),
       ],
       {
         courtCount: 2,
@@ -554,6 +598,90 @@ describe("matchmaking v3 batch selection", () => {
 
     expect(getBatchSelectedIds(result.selection)).not.toContain("I");
     expect(result.selection?.maxBalanceGap).toBe(0);
+  });
+
+  it("keeps a middle split inside the absolute rating cap during batch compression", () => {
+    const result = findBestBatchSelectionV3(
+      [
+        createPlayer("A", { strength: 1113 }),
+        createPlayer("B", { strength: 1052 }),
+        createPlayer("C", { strength: 1029 }),
+        createPlayer("D", { strength: 1000 }),
+        ...["E", "F", "G", "H"].map((id) => createPlayer(id)),
+      ],
+      {
+        courtCount: 2,
+        sessionMode: SessionMode.MEXICANO,
+        sessionType: SessionType.ELO,
+        selectionConstraints: { isQuartetAllowed: isOneOfTwoForcedQuartets },
+        completedMatches: [
+          {
+            team1: ["A", "D"],
+            team2: ["X1", "X2"],
+            completedAt: new Date("2026-03-18T00:00:00Z"),
+          },
+          {
+            team1: ["A", "D"],
+            team2: ["X3", "X4"],
+            completedAt: new Date("2026-03-18T00:10:00Z"),
+          },
+          {
+            team1: ["A", "C"],
+            team2: ["X5", "X6"],
+            completedAt: new Date("2026-03-18T00:20:00Z"),
+          },
+        ],
+        randomFn: () => 0,
+      }
+    );
+
+    const ratedCourt = result.selection?.selections.find((court) =>
+      court.ids.includes("A")
+    );
+    expect(result.selection?.selections).toHaveLength(2);
+    expect(ratedCourt?.partition).toEqual({
+      team1: ["A", "C"],
+      team2: ["B", "D"],
+    });
+    expect(ratedCourt?.balanceGap).toBe(45);
+    expect(result.selection?.maxBalanceGap).toBe(45);
+  });
+
+  it("falls back to the smallest achievable maximum rating gap for a full batch", () => {
+    const result = findBestBatchSelectionV3(
+      [
+        createPlayer("A", { strength: 1340 }),
+        createPlayer("B", { strength: 1100 }),
+        createPlayer("C", { strength: 1040 }),
+        createPlayer("D", { strength: 1000 }),
+        ...["E", "F", "G", "H"].map((id) => createPlayer(id)),
+      ],
+      {
+        courtCount: 2,
+        sessionMode: SessionMode.MEXICANO,
+        sessionType: SessionType.ELO,
+        selectionConstraints: { isQuartetAllowed: isOneOfTwoForcedQuartets },
+        completedMatches: [
+          {
+            team1: ["A", "D"],
+            team2: ["B", "C"],
+            completedAt: new Date("2026-03-18T00:00:00Z"),
+          },
+        ],
+        randomFn: () => 0,
+      }
+    );
+
+    const ratedCourt = result.selection?.selections.find((court) =>
+      court.ids.includes("A")
+    );
+    expect(result.selection?.selections).toHaveLength(2);
+    expect(ratedCourt?.partition).toEqual({
+      team1: ["A", "D"],
+      team2: ["B", "C"],
+    });
+    expect(ratedCourt?.balanceGap).toBe(100);
+    expect(result.selection?.maxBalanceGap).toBe(100);
   });
 
   it("avoids a full-repeat court in points batches when alternatives are near-rested", () => {

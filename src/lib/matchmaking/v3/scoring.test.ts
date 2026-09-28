@@ -237,7 +237,7 @@ describe("matchmaking v3 scoring", () => {
   it("keeps Elo balance ahead of rest outside the safe window", () => {
     const higherRest = createSelection({
       restTurns: [4, 4, 4, 4],
-      balanceGap: 76,
+      balanceGap: 51,
       exactRematchPenalty: 2,
     });
     const lowerRest = createSelection({
@@ -408,7 +408,7 @@ describe("matchmaking v3 scoring", () => {
       exactRematchPenalty: 0,
     });
     const freshPartner = createSelection({
-      balanceGap: 75,
+      balanceGap: 50,
       partnerRepeatPenalty: 0,
       exactRematchPenalty: 0,
     });
@@ -429,7 +429,7 @@ describe("matchmaking v3 scoring", () => {
       exactRematchPenalty: 0,
     });
     const farWorseFreshPartner = createSelection({
-      balanceGap: 76,
+      balanceGap: 51,
       partnerRepeatPenalty: 0,
       exactRematchPenalty: 0,
     });
@@ -451,7 +451,7 @@ describe("matchmaking v3 scoring", () => {
       randomScore: 0,
     });
     const freshMatchup = createSelection({
-      balanceGap: 75,
+      balanceGap: 50,
       partnerRepeatPenalty: 0,
       exactRematchPenalty: 0,
       randomScore: 1,
@@ -473,7 +473,7 @@ describe("matchmaking v3 scoring", () => {
       exactRematchPenalty: 0,
     });
     const freshOpponents = createSelection({
-      balanceGap: 75,
+      balanceGap: 50,
       opponentRepeatPenalty: 0,
       exactRematchPenalty: 0,
     });
@@ -1202,8 +1202,8 @@ describe("matchmaking v3 scoring", () => {
       totalPartnerRepeatPenalty: 1,
     });
     const freshPartnerBatch = createBatchSelection({
-      maxBalanceGap: 75,
-      totalBalanceGap: 75,
+      maxBalanceGap: 50,
+      totalBalanceGap: 50,
       totalPartnerRepeatPenalty: 0,
     });
 
@@ -1223,8 +1223,8 @@ describe("matchmaking v3 scoring", () => {
       totalPartnerRepeatPenalty: 1,
     });
     const freshPartnerBatch = createBatchSelection({
-      maxBalanceGap: 76,
-      totalBalanceGap: 76,
+      maxBalanceGap: 51,
+      totalBalanceGap: 51,
       totalPartnerRepeatPenalty: 0,
     });
 
@@ -1245,8 +1245,8 @@ describe("matchmaking v3 scoring", () => {
       totalExactRematchPenalty: 1,
     });
     const freshBatch = createBatchSelection({
-      maxBalanceGap: 75,
-      totalBalanceGap: 75,
+      maxBalanceGap: 50,
+      totalBalanceGap: 50,
       totalOpponentRepeatPenalty: 0,
       totalExactRematchPenalty: 0,
     });

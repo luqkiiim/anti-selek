@@ -6,7 +6,7 @@ import { findBestBatchSelectionV3 } from "@/lib/matchmaking/v3/batch";
 import { getExactPartitionKey } from "@/lib/matchmaking/v3/rematch";
 import {
   FULL_REPEAT_REST_TOLERANCE,
-  getBalanceVarietyTolerance,
+  usesBalanceFirstVariety,
 } from "@/lib/matchmaking/v3/scoring";
 import { findBestSingleCourtSelectionV3 } from "@/lib/matchmaking/v3/singleCourt";
 import type {
@@ -194,7 +194,7 @@ export function getInterclubTeamClubIdsForPartition(
 }
 
 function getInterclubRestTurnTieZoneTolerance(sessionType: SessionType) {
-  if (getBalanceVarietyTolerance(sessionType) !== null) {
+  if (usesBalanceFirstVariety(sessionType)) {
     return Number.POSITIVE_INFINITY;
   }
 

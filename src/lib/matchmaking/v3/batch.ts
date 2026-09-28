@@ -22,6 +22,7 @@ import {
   buildRestSummary,
   compareBatchSelections,
   compareSingleCourtSelections,
+  ELO_BALANCE_GAP_CEILING,
   FULL_REPEAT_REST_TOLERANCE,
   getBatchPairingRandomScore,
   getBatchSidePairingKeys,
@@ -29,6 +30,7 @@ import {
   getBalanceVarietyTolerance,
   getPartitionPairingRandomScore,
   getQuartetRandomScore,
+  usesBalanceFirstVariety,
 } from "./scoring";
 
 import type {
@@ -51,6 +53,8 @@ const MAX_MULTI_COURT_CANDIDATES = 24;
 const MULTI_COURT_EXTRA_CANDIDATES = 8;
 const MAX_BATCH_SEARCH_BRANCHES = 50000;
 const MAX_BATCH_SEARCH_MS = 2000;
+const MAX_ELO_CEILING_RESCUE_BRANCHES = 10000;
+const MAX_ELO_CEILING_RESCUE_MS = 100;
 
 function buildCombinations<T>(items: T[], size: number): T[][] {
   if (size === 0) {
@@ -513,7 +517,7 @@ function getBatchCandidateCap(courtCount: number, requiredPlayerCount: number) {
 }
 
 function getRestTurnTieZoneTolerance(sessionType: SessionType) {
-  if (getBalanceVarietyTolerance(sessionType) !== null) {
+  if (usesBalanceFirstVariety(sessionType)) {
     return Number.POSITIVE_INFINITY;
   }
 
@@ -620,7 +624,27 @@ function compressQuartetSelections<T extends ActiveMatchmakerV3Player>(
   const compressedSelections: V3SingleCourtSelection<T>[] = [];
 
   for (const group of groupedSelections.values()) {
-    const sortedGroup = [...group].sort((left, right) =>
+    const eligibleGroup = (() => {
+      if (sessionType !== SessionType.ELO) {
+        return group;
+      }
+
+      const withinCeiling = group.filter(
+        (selection) => selection.balanceGap <= ELO_BALANCE_GAP_CEILING
+      );
+      if (withinCeiling.length > 0) {
+        return withinCeiling;
+      }
+
+      const bestBalanceGap = Math.min(
+        ...group.map((selection) => selection.balanceGap)
+      );
+      return group.filter(
+        (selection) => selection.balanceGap === bestBalanceGap
+      );
+    })();
+
+    const sortedGroup = [...eligibleGroup].sort((left, right) =>
       compareSingleCourtSelections(left, right, sessionType, {
         respectPlayerRest,
       })
@@ -636,14 +660,14 @@ function compressQuartetSelections<T extends ActiveMatchmakerV3Player>(
     const bestBalanceSelection =
       sessionType === SessionType.POINTS ||
       sessionType === SessionType.SOCIAL_MIX
-        ? [...group].sort(
+        ? [...eligibleGroup].sort(
             (left, right) =>
               left.balanceGap - right.balanceGap ||
               left.pointDiffGap - right.pointDiffGap ||
               left.randomScore - right.randomScore ||
               left.pairingRandomScore - right.pairingRandomScore
           )[0]
-        : [...group].sort(
+        : [...eligibleGroup].sort(
             (left, right) =>
               left.balanceGap - right.balanceGap ||
               left.randomScore - right.randomScore ||
@@ -659,7 +683,7 @@ function compressQuartetSelections<T extends ActiveMatchmakerV3Player>(
 
     const bestVarietySelection =
       sessionType === SessionType.SOCIAL_MIX
-        ? [...group].sort(
+        ? [...eligibleGroup].sort(
             (left, right) =>
               left.sharedCourtRepeatPenalty - right.sharedCourtRepeatPenalty ||
               left.partnerCoveragePenalty - right.partnerCoveragePenalty ||
@@ -673,7 +697,7 @@ function compressQuartetSelections<T extends ActiveMatchmakerV3Player>(
               left.pairingRandomScore - right.pairingRandomScore
           )[0]
         : sessionType === SessionType.POINTS
-        ? [...group].sort(
+        ? [...eligibleGroup].sort(
             (left, right) =>
               left.sharedCourtRepeatPenalty - right.sharedCourtRepeatPenalty ||
               left.partnerCoveragePenalty - right.partnerCoveragePenalty ||
@@ -687,7 +711,7 @@ function compressQuartetSelections<T extends ActiveMatchmakerV3Player>(
               left.pairingRandomScore - right.pairingRandomScore
           )[0]
         : sessionType === SessionType.ELO
-          ? [...group].sort(
+          ? [...eligibleGroup].sort(
               (left, right) =>
                 left.sharedCourtRepeatPenalty - right.sharedCourtRepeatPenalty ||
                 left.partnerCoveragePenalty - right.partnerCoveragePenalty ||
@@ -699,7 +723,7 @@ function compressQuartetSelections<T extends ActiveMatchmakerV3Player>(
                 left.randomScore - right.randomScore ||
                 left.pairingRandomScore - right.pairingRandomScore
             )[0]
-          : [...group].sort(
+          : [...eligibleGroup].sort(
               (left, right) =>
                 left.exactRematchPenalty - right.exactRematchPenalty ||
                 left.balanceGap - right.balanceGap ||
@@ -772,6 +796,75 @@ function findGreedyBatchSelection<T extends ActiveMatchmakerV3Player>(
   return summarizeBatch(chosen, pairingRandomSalts);
 }
 
+function findEloCeilingBatchAfterSearchLimit<T extends ActiveMatchmakerV3Player>(
+  quartetSelections: V3SingleCourtSelection<T>[],
+  orderedCandidateIds: string[],
+  lockedIds: Set<string>,
+  courtCount: number,
+  pairingRandomSalts: V3BatchPairingRandomSalts
+): V3BatchSelection<T> | null {
+  const safeQuartets = quartetSelections.filter(
+    (selection) => selection.balanceGap <= ELO_BALANCE_GAP_CEILING
+  );
+  if (safeQuartets.length < courtCount) {
+    return null;
+  }
+
+  const quartetsByUserId = new Map(
+    orderedCandidateIds.map((userId) => [userId, [] as typeof safeQuartets])
+  );
+  for (const quartet of safeQuartets) {
+    for (const userId of quartet.ids) {
+      quartetsByUserId.get(userId)?.push(quartet);
+    }
+  }
+
+  const deadline = Date.now() + MAX_ELO_CEILING_RESCUE_MS;
+  let exploredBranches = 0;
+  const search = (
+    chosen: V3SingleCourtSelection<T>[],
+    usedIds: Set<string>
+  ): V3BatchSelection<T> | null => {
+    exploredBranches += 1;
+    if (
+      exploredBranches > MAX_ELO_CEILING_RESCUE_BRANCHES ||
+      Date.now() >= deadline
+    ) {
+      return null;
+    }
+
+    if (chosen.length === courtCount) {
+      if ([...lockedIds].some((id) => !usedIds.has(id))) {
+        return null;
+      }
+      return summarizeBatch(chosen, pairingRandomSalts);
+    }
+
+    const anchorId =
+      orderedCandidateIds.find((id) => lockedIds.has(id) && !usedIds.has(id)) ??
+      orderedCandidateIds.find((id) => !usedIds.has(id));
+    if (!anchorId) {
+      return null;
+    }
+
+    for (const quartet of quartetsByUserId.get(anchorId) ?? []) {
+      if (quartet.ids.some((id) => usedIds.has(id))) {
+        continue;
+      }
+      const nextUsedIds = new Set(usedIds);
+      quartet.ids.forEach((id) => nextUsedIds.add(id));
+      const result = search([...chosen, quartet], nextUsedIds);
+      if (result) {
+        return result;
+      }
+    }
+
+    return null;
+  };
+
+  return search([], new Set<string>());
+}
+
 function chooseBestBatchSelection<T extends ActiveMatchmakerV3Player>(
   selections: V3BatchSelection<T>[],
   sessionType: SessionType,
@@ -794,7 +887,7 @@ function chooseBestBatchSelection<T extends ActiveMatchmakerV3Player>(
   );
 
   const balanceSafeSelections =
-    getBalanceVarietyTolerance(sessionType) !== null
+    usesBalanceFirstVariety(sessionType)
       ? filterBalanceSafeBatches(fairnessSafeSelections, sessionType)
       : fairnessSafeSelections;
 
@@ -818,6 +911,28 @@ function filterBalanceSafeBatches<T extends ActiveMatchmakerV3Player>(
   selections: V3BatchSelection<T>[],
   sessionType: SessionType
 ) {
+  if (sessionType === SessionType.ELO) {
+    const withinCeiling = selections.filter(
+      (selection) => selection.maxBalanceGap <= ELO_BALANCE_GAP_CEILING
+    );
+    if (withinCeiling.length > 0) {
+      return withinCeiling;
+    }
+
+    const bestMaxBalanceGap = Math.min(
+      ...selections.map((selection) => selection.maxBalanceGap)
+    );
+    const bestMaxGapSelections = selections.filter(
+      (selection) => selection.maxBalanceGap === bestMaxBalanceGap
+    );
+    const bestTotalBalanceGap = Math.min(
+      ...bestMaxGapSelections.map((selection) => selection.totalBalanceGap)
+    );
+    return bestMaxGapSelections.filter(
+      (selection) => selection.totalBalanceGap === bestTotalBalanceGap
+    );
+  }
+
   const tolerance = getBalanceVarietyTolerance(sessionType);
 
   if (tolerance === null) {
@@ -1008,8 +1123,25 @@ function searchBatchCandidatePlayers<T extends MatchmakerV3Player>({
 
   backtrack([], new Set<string>());
 
+  const ceilingRescueSelection =
+    sessionType === SessionType.ELO &&
+    searchLimitReached &&
+    !completedSelections.some(
+      (selection) => selection.maxBalanceGap <= ELO_BALANCE_GAP_CEILING
+    )
+      ? findEloCeilingBatchAfterSearchLimit(
+          quartetSelections,
+          orderedCandidateIds,
+          lockedIds,
+          courtCount,
+          pairingRandomSalts
+        )
+      : null;
+
   const bestSelection = chooseBestBatchSelection(
-    completedSelections,
+    ceilingRescueSelection
+      ? [...completedSelections, ceilingRescueSelection]
+      : completedSelections,
     sessionType,
     respectPlayerRest,
     pairingRandomMode

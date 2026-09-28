@@ -22,10 +22,12 @@ import {
 import {
   buildRestSummary,
   compareSingleCourtSelections,
+  ELO_BALANCE_GAP_CEILING,
   FULL_REPEAT_REST_TOLERANCE,
   getBalanceVarietyTolerance,
   getPartitionPairingRandomScore,
   getQuartetRandomScore,
+  usesBalanceFirstVariety,
 } from "./scoring";
 
 import type {
@@ -198,7 +200,7 @@ function relaxLockedPlayersForMixedFeasibility<T extends MatchmakerV3Player>(
 }
 
 function getRestTurnTieZoneTolerance(sessionType: SessionType) {
-  if (getBalanceVarietyTolerance(sessionType) !== null) {
+  if (usesBalanceFirstVariety(sessionType)) {
     return Number.POSITIVE_INFINITY;
   }
 
@@ -409,7 +411,7 @@ function chooseBestSingleCourtSelection<T extends ActiveMatchmakerV3Player>(
   );
 
   const balanceSafeSelections =
-    getBalanceVarietyTolerance(sessionType) !== null
+    usesBalanceFirstVariety(sessionType)
       ? filterBalanceSafeSelections(fairnessSafeSelections, sessionType)
       : fairnessSafeSelections;
 
@@ -424,6 +426,22 @@ function filterBalanceSafeSelections<T extends ActiveMatchmakerV3Player>(
   selections: V3SingleCourtSelection<T>[],
   sessionType: SessionType
 ) {
+  if (sessionType === SessionType.ELO) {
+    const withinCeiling = selections.filter(
+      (selection) => selection.balanceGap <= ELO_BALANCE_GAP_CEILING
+    );
+    if (withinCeiling.length > 0) {
+      return withinCeiling;
+    }
+
+    const bestBalanceGap = Math.min(
+      ...selections.map((selection) => selection.balanceGap)
+    );
+    return selections.filter(
+      (selection) => selection.balanceGap === bestBalanceGap
+    );
+  }
+
   const tolerance = getBalanceVarietyTolerance(sessionType);
 
   if (tolerance === null) {

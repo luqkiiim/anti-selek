@@ -270,13 +270,15 @@ Shared constraints:
 - Late joiners and resumed players re-enter at the current fair baseline without catch-up
 - Mixed sessions respect gender and partner-preference rules
 
-`Points` and `Ratings` matchmaking priority:
+`Ratings` matchmaking priority:
 
-1. Lower rotation load
-2. Longer waiting time
-3. Team-vs-team balance
-4. Exact rematch avoidance
-5. Controlled randomness among near-equal options
+1. Eligible players and one-time priority for mid-session arrivals or resumes
+2. Lower effective match counts for fair court rotation
+3. Team-balance eligibility: keep team-average rating gaps at or below 50 when possible, otherwise use the smallest available gap
+4. Fewer repeated shared-court contacts, partners, opponents, and exact rematches among eligible options
+5. Smaller team gap, rest turns, then controlled randomness
+
+`Points` uses the same fair rotation and variety signals, with a 1.5-point balance window above the best gap and an additional back-to-back play preference.
 
 - `Ladder` and `Race` matchmaking:
   - group players by current competitive standing before selecting pairings
@@ -284,8 +286,7 @@ Shared constraints:
   - use point difference as a tie-breaker in standings
   - do not rely on session standing points
 
-- Additional `Points` and `Ratings` constraints:
-  - exact repeated partitions are heavily penalized using recent completed-match history
+- Rest turns count completed matches missed while a player was available; elapsed waiting minutes are not directly compared in ordinary Ratings matchmaking.
 
 ## Live Session Notes
 

@@ -27,12 +27,12 @@ heuristics onto the previous engine.
      do not widen to the next band just for prettier balance.
    - This is intended to avoid easy 2-match gaps in the active rotation.
 
-3. Waiting time is the secondary fairness signal.
-   - Waiting time starts when the player becomes available.
-   - Late joiners start waiting time from the moment they join.
-   - Resumed players start waiting time from the moment they unpause.
-   - Near-equal waiting times are treated as tied within roughly one match
-     duration.
+3. Rest and arrival priority supplement match-count fairness.
+   - Mid-session joiners and resumed players receive a one-time arrival
+     priority, oldest first.
+   - Rest turns count completed matches missed since becoming available.
+   - Ordinary elapsed waiting minutes are not directly ranked in Ratings
+     matchmaking.
 
 4. Late joiners and resumed players re-enter neutrally.
    - No catch-up.
@@ -44,15 +44,15 @@ heuristics onto the previous engine.
 
 5. Balance is team-vs-team balance only.
    - `Ratings` sessions use rating / Elo for strength balance.
+   - Rating options with a team-average gap of 50 or less qualify for variety
+     comparison. If none qualify in the fair pool, use the smallest available
+     gap instead.
    - `Points` sessions use current session performance for strength balance.
    - Very mixed quartets are acceptable if the two teams are balanced.
 
-6. Variety is intentionally narrow.
-   - Softly penalize repeated partners using recent history.
-   - Recent history matters, with decay.
-   - Same pods and same opponents are acceptable by themselves.
-   - Exact rematches are discouraged only because they repeat both partner
-     pairings.
+6. Variety compares prior shared-court contacts, partner coverage, opponent
+   coverage, recent partner and opponent repeats, then exact rematches, in that
+   order. Recent-repeat penalties decay with history.
 
 7. Batch selection must be global.
    - When multiple courts are open, choose the best batch across all open
@@ -66,17 +66,18 @@ heuristics onto the previous engine.
 
 ## Decision order
 
-Inside the allowed fairness pool:
+Inside the allowed fairness pool for Ratings:
 
-1. Waiting time
-2. Prefer fresh partners when balance stays reasonably close
-3. Team-vs-team balance
-4. Small randomness among near-equal options
+1. Keep options under the absolute 50-point team-average gap ceiling, or the
+   smallest available gap when none meet the ceiling
+2. Prefer fresh shared-court contacts, partners, and opponents
+3. Prefer the smaller team gap
+4. Rest turns, then random tie-breaks
 
 Global rule ordering:
 
 1. Fairness beats partner freshness
-2. Partner freshness beats balance only inside the tolerance window
+2. Variety beats balance only among options under the Ratings ceiling
 3. Balance beats randomness
 
 ## Design intent

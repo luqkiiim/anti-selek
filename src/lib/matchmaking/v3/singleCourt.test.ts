@@ -93,7 +93,7 @@ describe("matchmaking v3 single-court selection", () => {
         createPlayer("B", { strength: 1000 }),
         createPlayer("C", { strength: 1000 }),
         createPlayer("D", { strength: 1000 }),
-        createPlayer("E", { strength: 1150 }),
+        createPlayer("E", { strength: 1100 }),
       ],
       {
         sessionMode: SessionMode.MEXICANO,
@@ -110,7 +110,7 @@ describe("matchmaking v3 single-court selection", () => {
     );
 
     expect(result.selection?.ids).toContain("E");
-    expect(result.selection?.balanceGap).toBe(75);
+    expect(result.selection?.balanceGap).toBe(50);
     expect(result.selection?.sharedCourtRepeatPenalty).toBeLessThan(6);
   });
 
@@ -121,7 +121,7 @@ describe("matchmaking v3 single-court selection", () => {
         createPlayer("B", { strength: 1000 }),
         createPlayer("C", { strength: 1000 }),
         createPlayer("D", { strength: 1000 }),
-        createPlayer("E", { strength: 1152 }),
+        createPlayer("E", { strength: 1102 }),
       ],
       {
         sessionMode: SessionMode.MEXICANO,
@@ -148,7 +148,7 @@ describe("matchmaking v3 single-court selection", () => {
         createPlayer("B", { strength: 1000 }),
         createPlayer("C", { strength: 1000 }),
         createPlayer("D", { strength: 1000 }),
-        createPlayer("E", { strength: 1150 }),
+        createPlayer("E", { strength: 1100 }),
         createPlayer("F", { strength: 1452 }),
       ],
       {
@@ -167,7 +167,67 @@ describe("matchmaking v3 single-court selection", () => {
 
     expect(result.selection?.ids).toContain("E");
     expect(result.selection?.ids).not.toContain("F");
-    expect(result.selection?.balanceGap).toBe(75);
+    expect(result.selection?.balanceGap).toBe(50);
+  });
+
+  it("keeps the best rating split when a fresher split exceeds the absolute 50-point gap", () => {
+    const result = findBestSingleCourtSelectionV3(
+      [
+        createPlayer("Haziq", { strength: 1250 }),
+        createPlayer("Nizam", { strength: 1198 }),
+        createPlayer("Yong Bing", { strength: 1126 }),
+        createPlayer("Hairul", { strength: 1042 }),
+      ],
+      {
+        sessionMode: SessionMode.MEXICANO,
+        sessionType: SessionType.ELO,
+        completedMatches: [
+          {
+            team1: ["Haziq", "Hairul"],
+            team2: ["Nizam", "Yong Bing"],
+            completedAt: new Date("2026-03-18T00:00:00Z"),
+          },
+        ],
+        randomFn: () => 0,
+      }
+    );
+
+    expect(result.selection?.partition).toEqual({
+      team1: ["Haziq", "Hairul"],
+      team2: ["Nizam", "Yong Bing"],
+    });
+    expect(result.selection?.balanceGap).toBe(16);
+    expect(result.selection?.partnerRepeatPenalty).toBeGreaterThan(0);
+  });
+
+  it("falls back to the smallest rating gap when every split exceeds 50", () => {
+    const result = findBestSingleCourtSelectionV3(
+      [
+        createPlayer("A", { strength: 1340 }),
+        createPlayer("B", { strength: 1100 }),
+        createPlayer("C", { strength: 1040 }),
+        createPlayer("D", { strength: 1000 }),
+      ],
+      {
+        sessionMode: SessionMode.MEXICANO,
+        sessionType: SessionType.ELO,
+        completedMatches: [
+          {
+            team1: ["A", "D"],
+            team2: ["B", "C"],
+            completedAt: new Date("2026-03-18T00:00:00Z"),
+          },
+        ],
+        randomFn: () => 0,
+      }
+    );
+
+    expect(result.selection?.partition).toEqual({
+      team1: ["A", "D"],
+      team2: ["B", "C"],
+    });
+    expect(result.selection?.balanceGap).toBe(100);
+    expect(result.selection?.partnerRepeatPenalty).toBeGreaterThan(0);
   });
 
   it("keeps lower-rest players eligible when they create the best Elo balance", () => {
