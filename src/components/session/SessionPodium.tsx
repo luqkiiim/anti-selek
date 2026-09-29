@@ -23,6 +23,7 @@ interface SessionPodiumProps {
   onReplayCelebration?: () => void;
   onShareResults?: () => void;
   sharingResults?: boolean;
+  sharePreparationFailed?: boolean;
 }
 
 const RANK_STYLES: Record<
@@ -69,6 +70,7 @@ export function SessionPodium({
   onReplayCelebration,
   onShareResults,
   sharingResults = false,
+  sharePreparationFailed = false,
 }: SessionPodiumProps) {
   const topThree = players.slice(0, 3);
   const isLadderSession = sessionType === SessionType.LADDER;
@@ -122,7 +124,7 @@ export function SessionPodium({
             className="inline-flex h-10 items-center gap-2 rounded-full border border-sky-200/80 bg-white/85 px-4 text-sm font-bold text-sky-700 shadow-sm backdrop-blur transition hover:-translate-y-0.5 hover:border-sky-300 hover:bg-sky-50 hover:text-sky-800 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-sky-300 focus:ring-offset-2 disabled:cursor-wait disabled:opacity-70 disabled:hover:translate-y-0"
           >
             <Share2 aria-hidden="true" size={16} strokeWidth={2.4} />
-            {sharingResults ? "Preparing..." : "Share"}
+            {sharingResults ? "Preparing..." : sharePreparationFailed ? "Try again" : "Share"}
           </button>
         ) : null}
 

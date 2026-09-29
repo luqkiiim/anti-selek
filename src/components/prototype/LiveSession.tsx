@@ -46,7 +46,8 @@ import { deriveLiveSessionPlayerStats } from "./deriveLiveSessionStandings";
 import { SessionFinishView } from "./SessionFinishView";
 import { SessionStandbyView } from "./SessionStandbyView";
 import { sessionFinishHighlights } from "./sessionFinishHighlights";
-import { shareSessionStandingsImage } from "@/lib/sessionShareImageClient";
+import { shareSessionStandingsImageBlob } from "@/lib/sessionShareImageClient";
+import { useSessionStandingsImage } from "@/lib/useSessionStandingsImage";
 import { getInterclubScore } from "@/lib/interclubScoreboard";
 import { getMixedSideOverrideOptionForGender } from "@/lib/mixedSide";
 import { CourtMatchCreateMenu, SessionMatchCreationToolbar } from "./SessionMatchCreationControls";
@@ -235,6 +236,16 @@ export default function LiveSession({
   const finalPlayers = standings.data?.currentLeaderboard
     .map((entry) => sessionPlayerById.get(entry.userId))
     .filter((player): player is NonNullable<typeof player> => !!player) ?? [];
+  const shareImageRevision = JSON.stringify({
+    name: s?.name,
+    players: s?.players.map((player) => [player.userId, player.user.name, player.sessionPoints]),
+    matches: s?.matches?.map((match) => [match.id, match.team1Score, match.team2Score, match.winnerTeam]),
+  });
+  const shareImage = useSessionStandingsImage({
+    code,
+    enabled: ended && finalPlayers.length > 0,
+    revision: shareImageRevision,
+  });
   const finalPlayerStats = new Map(
     Array.from(sessionStats, ([userId, stats]) => [userId, {
       played: stats.matchesPlayed,
@@ -256,11 +267,15 @@ export default function LiveSession({
 
   async function shareResults() {
     if (!s || sharing) return;
+    if (!shareImage.blob) {
+      if (shareImage.error) shareImage.retry();
+      return;
+    }
     setSharing(true);
     setShareError("");
     try {
-      await shareSessionStandingsImage({
-        code,
+      await shareSessionStandingsImageBlob({
+        blob: shareImage.blob,
         fileName: `${s.name}-standings`,
         shareTitle: `${s.name} standings`,
       });
@@ -851,7 +866,8 @@ export default function LiveSession({
                   pointDiffByUserId={finalPointDiff}
                   playerStatsByUserId={finalPlayerStats}
                   onShareResults={finalPlayers.length > 0 ? () => void shareResults() : undefined}
-                  sharingResults={sharing}
+                  sharingResults={sharing || shareImage.preparing}
+                  sharePreparationFailed={!!shareImage.error}
                   celebrate={celebrateFinish}
                   highlights={sessionFinishHighlights(finalPlayers, sessionStats)}
                   onOpenMember={onOpenMember}
@@ -860,7 +876,7 @@ export default function LiveSession({
                   {getInterclubScore(s) ? <InterclubScoreboard session={s} /> : null}
                 </SessionFinishView>
               ) : <p role="status">Loading final results…</p>}
-              <ErrorText error={shareError} />
+              <ErrorText error={shareError || (shareImage.error ? `${shareImage.error} Tap Try again to prepare the recap.` : "")} />
               <button className="primary" onClick={onBack}>
                 Back to club
               </button>

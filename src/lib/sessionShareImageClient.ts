@@ -1,7 +1,5 @@
-export interface ShareSessionStandingsImageOptions {
+export interface FetchSessionStandingsImageOptions {
   code: string;
-  fileName: string;
-  shareTitle: string;
   fetchImpl?: typeof fetch;
 }
 
@@ -35,10 +33,7 @@ async function getShareImageErrorMessage(response: Response) {
 export async function fetchSessionStandingsImageBlob({
   code,
   fetchImpl = fetch,
-}: {
-  code: string;
-  fetchImpl?: typeof fetch;
-}) {
+}: FetchSessionStandingsImageOptions) {
   const response = await fetchImpl(
     `/api/sessions/${encodeURIComponent(code)}/share-image`,
     {
@@ -93,32 +88,15 @@ export async function shareSessionStandingsImageBlob({
   if (
     typeof navigatorWithShare.share === "function" &&
     (!navigatorWithShare.canShare ||
-      navigatorWithShare.canShare({ files: [file], title: shareTitle }))
+      navigatorWithShare.canShare({ files: [file] }))
   ) {
-    try {
-      await navigatorWithShare.share({
-        files: [file],
-        title: shareTitle,
-      });
-      return { method: "native-share" };
-    } catch (error) {
-      if (error instanceof DOMException && error.name === "AbortError") {
-        throw error;
-      }
-    }
+    await navigatorWithShare.share({
+      files: [file],
+      title: shareTitle,
+    });
+    return { method: "native-share" };
   }
 
   downloadSessionStandingsImageBlob(blob, fileName);
   return { method: "download" };
-}
-
-export async function shareSessionStandingsImage({
-  code,
-  fileName,
-  shareTitle,
-  fetchImpl,
-}: ShareSessionStandingsImageOptions): Promise<ShareSessionStandingsImageResult> {
-  const blob = await fetchSessionStandingsImageBlob({ code, fetchImpl });
-
-  return shareSessionStandingsImageBlob({ blob, fileName, shareTitle });
 }

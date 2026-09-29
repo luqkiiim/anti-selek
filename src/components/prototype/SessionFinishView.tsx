@@ -57,6 +57,7 @@ export interface SessionFinishViewProps {
   /** Pass the authorized session share handler; the image API checks access again. */
   onShareResults?: () => void;
   sharingResults?: boolean;
+  sharePreparationFailed?: boolean;
   /** Optional content such as the interclub scoreboard. */
   children?: ReactNode;
   /** Animate once when the just-completed session first opens. */
@@ -137,6 +138,7 @@ export function SessionFinishView({
   playerStatsByUserId,
   onShareResults,
   sharingResults = false,
+  sharePreparationFailed = false,
   children,
   celebrate = false,
   sessionDate,
@@ -360,7 +362,7 @@ export function SessionFinishView({
               disabled={sharingResults}
             >
               <Share2 size={17} strokeWidth={2.3} aria-hidden="true" />
-              {sharingResults ? "Preparing recap…" : "Share recap"}
+              {sharingResults ? "Preparing recap…" : sharePreparationFailed ? "Try again" : "Share recap"}
             </button>
           ) : null}
           {topThree.length > 0 ? (

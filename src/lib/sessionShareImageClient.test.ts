@@ -4,7 +4,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   downloadSessionStandingsImageBlob,
   fetchSessionStandingsImageBlob,
-  shareSessionStandingsImage,
   shareSessionStandingsImageBlob,
 } from "./sessionShareImageClient";
 
@@ -62,15 +61,18 @@ describe("session share image client helpers", () => {
     );
   });
 
-  it("prefers native file share when supported", async () => {
-    const share = vi.fn().mockResolvedValue(undefined);
+  it("invokes native file share synchronously when supported", async () => {
+    let finishShare!: () => void;
+    const share = vi.fn(() => new Promise<void>((resolve) => {
+      finishShare = resolve;
+    }));
     const canShare = vi.fn().mockReturnValue(true);
     Object.defineProperty(globalThis, "navigator", {
       configurable: true,
       value: { share, canShare },
     });
 
-    const result = await shareSessionStandingsImageBlob({
+    const resultPromise = shareSessionStandingsImageBlob({
       blob: new Blob(["png"], { type: "image/png" }),
       fileName: "Weekend Cup",
       shareTitle: "Weekend Cup final standings",
@@ -78,13 +80,13 @@ describe("session share image client helpers", () => {
 
     expect(canShare).toHaveBeenCalledWith({
       files: [expect.any(File)],
-      title: "Weekend Cup final standings",
     });
     expect(share).toHaveBeenCalledWith({
       files: [expect.any(File)],
       title: "Weekend Cup final standings",
     });
-    expect(result).toEqual({ method: "native-share" });
+    finishShare();
+    await expect(resultPromise).resolves.toEqual({ method: "native-share" });
   });
 
   it("falls back to download when native file sharing is unavailable", async () => {
@@ -111,28 +113,28 @@ describe("session share image client helpers", () => {
     expect(result).toEqual({ method: "download" });
   });
 
-  it("fetches once and shares the returned server PNG", async () => {
-    const fetchImpl = vi.fn().mockResolvedValue(
-      new Response(new Blob(["png"], { type: "image/png" }), {
-        headers: { "content-type": "image/png" },
-      })
+  it("does not download when native file sharing rejects", async () => {
+    const shareError = new DOMException("Sharing is not allowed", "NotAllowedError");
+    const share = vi.fn().mockRejectedValue(shareError);
+    const anchor = document.createElement("a");
+    const click = vi.spyOn(anchor, "click").mockImplementation(() => undefined);
+    const originalCreateElement = document.createElement.bind(document);
+    vi.spyOn(document, "createElement").mockImplementation((tagName: string) =>
+      tagName.toLowerCase() === "a" ? anchor : originalCreateElement(tagName)
     );
-    const share = vi.fn().mockResolvedValue(undefined);
     Object.defineProperty(globalThis, "navigator", {
       configurable: true,
       value: { share },
     });
 
-    const result = await shareSessionStandingsImage({
-      code: "ABC123",
+    await expect(shareSessionStandingsImageBlob({
+      blob: new Blob(["png"], { type: "image/png" }),
       fileName: "Weekend Cup",
       shareTitle: "Weekend Cup final standings",
-      fetchImpl: fetchImpl as unknown as typeof fetch,
-    });
+    })).rejects.toBe(shareError);
 
-    expect(fetchImpl).toHaveBeenCalledTimes(1);
     expect(share).toHaveBeenCalledTimes(1);
-    expect(result).toEqual({ method: "native-share" });
+    expect(click).not.toHaveBeenCalled();
   });
 
   it("downloads a PNG blob with a stable slugged name", () => {

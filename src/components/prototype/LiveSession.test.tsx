@@ -831,6 +831,10 @@ describe("LiveSession score and player controls", () => {
   it("keeps the completed results visible after the host ends a session", async () => {
     const session = sessionWithCourts([{ id: "court-1", courtNumber: 1, currentMatch: null }], [player("winner", "Winner")]);
     setup(session);
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(
+      new Blob(["png"], { type: "image/png" }),
+      { headers: { "content-type": "image/png" } },
+    )));
     const onEnded = vi.fn(async () => undefined);
     mocks.api.mockImplementation(async (url: string) => {
       if (url.endsWith("/end")) session.status = "COMPLETED";
@@ -845,6 +849,38 @@ describe("LiveSession score and player controls", () => {
     expect(container.textContent).toContain("Session complete");
     expect(container.textContent).toContain("Share recap");
     expect(container.textContent).toContain("No completed games yet.");
+  });
+
+  it("opens the native recap share synchronously once the image is prepared", async () => {
+    const session = sessionWithCourts([{ id: "court-1", courtNumber: 1, currentMatch: null }], [player("winner", "Winner")]);
+    session.status = "COMPLETED";
+    setup(session);
+    const imageResponse = deferred<Response>();
+    const fetchImage = vi.fn(() => imageResponse.promise);
+    const share = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal("fetch", fetchImage);
+    vi.stubGlobal("navigator", { ...navigator, share, canShare: () => true });
+
+    await act(async () => root.render(<LiveSession code="TEST01" onBack={vi.fn()} onEnded={vi.fn(async () => undefined)} />));
+    const shareButton = Array.from(container.querySelectorAll<HTMLButtonElement>("button"))
+      .find((button) => button.textContent?.includes("Preparing recap"));
+    expect(shareButton?.disabled).toBe(true);
+    expect(fetchImage).toHaveBeenCalledTimes(1);
+
+    await act(async () => imageResponse.resolve(new Response(
+      new Blob(["png"], { type: "image/png" }),
+      { headers: { "content-type": "image/png" } },
+    )));
+
+    const readyButton = Array.from(container.querySelectorAll<HTMLButtonElement>("button"))
+      .find((button) => button.textContent?.includes("Share recap"));
+    expect(readyButton?.disabled).toBe(false);
+    act(() => {
+      readyButton?.click();
+      expect(share).toHaveBeenCalledTimes(1);
+    });
+    expect(share.mock.calls[0]?.[0].files[0]).toBeInstanceOf(File);
+    expect(fetchImage).toHaveBeenCalledTimes(1);
   });
 
   it("creates matches across eligible open courts and offers per-court formats", async () => {

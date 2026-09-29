@@ -48,7 +48,8 @@ import {
   SessionPool,
   SessionStatus,
 } from "@/types/enums";
-import { shareSessionStandingsImage } from "@/lib/sessionShareImageClient";
+import { shareSessionStandingsImageBlob } from "@/lib/sessionShareImageClient";
+import { useSessionStandingsImage } from "@/lib/useSessionStandingsImage";
 import {
   applyCourtLabelUpdates,
   mergeSessionSnapshot,
@@ -593,6 +594,16 @@ export default function SessionPage() {
     rosterSearch,
     sessionData,
   ]);
+  const shareImageRevision = JSON.stringify({
+    name: sessionData?.name,
+    players: sessionData?.players.map((player) => [player.userId, player.user.name, player.sessionPoints]),
+    matches: sessionData?.matches?.map((match) => [match.id, match.team1Score, match.team2Score, match.winnerTeam]),
+  });
+  const shareImage = useSessionStandingsImage({
+    code,
+    enabled: !!sessionView?.isCompletedSession && sessionView.sortedPlayers.length > 0,
+    revision: shareImageRevision,
+  });
   const interclubClubToneById = useMemo(() => {
     if (!sessionView?.interclubScoreboard) {
       return undefined;
@@ -610,13 +621,17 @@ export default function SessionPage() {
       setError("Results are not ready to share yet");
       return;
     }
+    if (!shareImage.blob) {
+      if (shareImage.error) shareImage.retry();
+      return;
+    }
 
     setSharingResults(true);
     setError("");
 
     try {
-      await shareSessionStandingsImage({
-        code,
+      await shareSessionStandingsImageBlob({
+        blob: shareImage.blob,
         fileName: `${sessionData.name}-standings`,
         shareTitle: `${sessionData.name} final standings`,
       });
@@ -632,7 +647,7 @@ export default function SessionPage() {
     } finally {
       setSharingResults(false);
     }
-  }, [code, sessionData, sessionView]);
+  }, [sessionData, sessionView, shareImage]);
   const mobileSections = useMemo(
     () =>
       sessionView?.isCompletedSession
@@ -1545,8 +1560,12 @@ export default function SessionPage() {
                         ? () => void handleShareResults()
                         : undefined
                     }
-                    sharingResults={sharingResults}
+                    sharingResults={sharingResults || shareImage.preparing}
+                    sharePreparationFailed={!!shareImage.error}
                   />
+                ) : null}
+                {shareImage.error ? (
+                  <FlashMessage tone="error">{shareImage.error} Tap Try again to prepare the recap.</FlashMessage>
                 ) : null}
 
                 <LiveStandingsTable
