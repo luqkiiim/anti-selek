@@ -69,7 +69,10 @@ function TeamNames({
   const rowDirectionClass = align === "right" ? "flex-row-reverse" : "flex-row";
 
   return (
-    <div className={`min-w-0 space-y-2 ${textAlignClass}`}>
+    <div
+      className={`min-w-0 space-y-2 ${textAlignClass}`}
+      data-ipad-court-team={align}
+    >
       {players.map((player) => {
         const actionKey = `${matchId}:${player.id}`;
         const actionOpen = activeActionPlayerId === actionKey;
@@ -90,28 +93,32 @@ function TeamNames({
                 aria-expanded={actionOpen}
                 aria-label={`Open actions for ${player.name}`}
                 title={player.name}
-                className={`flex min-w-0 w-full items-center gap-1.5 text-[0.95rem] font-semibold leading-tight text-gray-900 transition hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-50 sm:gap-2 sm:text-base lg:text-lg xl:text-base ${textAlignClass} ${rowDirectionClass}`}
+                className={`ipad-court-player-content flex min-w-0 w-full items-center gap-1.5 text-[0.95rem] font-semibold leading-tight text-gray-900 transition hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-50 sm:gap-2 sm:text-base lg:text-lg xl:text-base ${textAlignClass} ${rowDirectionClass}`}
               >
                 <Avatar
                   name={player.name}
                   avatarUrl={player.avatarUrl}
                   size="court"
                   appearance="court"
+                  className="ipad-court-avatar"
                 />
-                <span className="min-w-0 flex-1 line-clamp-2 break-words leading-snug">
+                <span className="ipad-court-player-name min-w-0 flex-1 line-clamp-2 break-words leading-snug">
                   {player.name}
                 </span>
               </button>
             ) : (
-              <div className={`flex min-w-0 items-center gap-1.5 sm:gap-2 ${rowDirectionClass}`}>
+              <div
+                className={`ipad-court-player-content flex min-w-0 items-center gap-1.5 sm:gap-2 ${rowDirectionClass}`}
+              >
                 <Avatar
                   name={player.name}
                   avatarUrl={player.avatarUrl}
                   size="court"
                   appearance="court"
+                  className="ipad-court-avatar"
                 />
                 <p
-                  className="min-w-0 flex-1 line-clamp-2 break-words text-[0.95rem] font-semibold leading-snug text-gray-900 sm:text-base lg:text-lg xl:text-base"
+                  className="ipad-court-player-name min-w-0 flex-1 line-clamp-2 break-words text-[0.95rem] font-semibold leading-snug text-gray-900 sm:text-base lg:text-lg xl:text-base"
                   title={player.name}
                 >
                   {player.name}
@@ -194,6 +201,7 @@ function ScoreSlot({
         step={1}
         data-live-score-input="true"
         data-score-input-match-id={matchId}
+        data-ipad-court-score={teamKey}
         data-tutorial-target="admin-onboarding-score-input"
         value={scoreValue}
         onChange={(event) => onScoreChange(event.target.value)}
@@ -212,6 +220,7 @@ function ScoreSlot({
   return (
     <output
       aria-label={`${accessibleLabel}: ${displayScore ?? "not entered"}`}
+      data-ipad-court-score={teamKey}
       className={`flex h-11 w-11 items-center justify-center rounded-xl border bg-white text-[1.55rem] font-semibold tabular-nums sm:h-12 sm:w-12 sm:text-2xl md:h-[3.25rem] md:w-[3.25rem] xl:h-14 xl:w-14 ${
         displayScore !== null
           ? "border-gray-200 text-gray-900"
@@ -539,7 +548,7 @@ export function LiveMatchCard({
   }, [clearSavedScoreInputScrollPosition]);
 
   const matchLineup = (
-    <div className="grid grid-cols-[minmax(0,1fr)_2.75rem_2.75rem_minmax(0,1fr)] items-center gap-1.5 sm:grid-cols-[minmax(0,1fr)_3rem_3rem_minmax(0,1fr)] sm:gap-2 md:grid-cols-[minmax(0,1fr)_3.25rem_3.25rem_minmax(0,1fr)] lg:gap-3 xl:grid-cols-[minmax(0,1fr)_3.5rem_3.5rem_minmax(0,1fr)]">
+    <div data-ipad-court-lineup="true" className="grid grid-cols-[minmax(0,1fr)_2.75rem_2.75rem_minmax(0,1fr)] items-center gap-1.5 sm:grid-cols-[minmax(0,1fr)_3rem_3rem_minmax(0,1fr)] sm:gap-2 md:grid-cols-[minmax(0,1fr)_3.25rem_3.25rem_minmax(0,1fr)] lg:gap-3 xl:grid-cols-[minmax(0,1fr)_3.5rem_3.5rem_minmax(0,1fr)]">
       <TeamNames
         matchId={match.id}
         players={[match.team1User1, match.team1User2]}
