@@ -4,7 +4,6 @@ import Link from "next/link";
 import { Suspense, useState } from "react";
 import { getSession, signIn } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { LogIn } from "lucide-react";
 
 import { FlashMessage } from "@/components/ui/chrome";
 import {
@@ -12,6 +11,12 @@ import {
   resolveQuickAccessCallbackUrl,
   withCallbackUrl,
 } from "@/lib/authCallback";
+import "@fontsource/nunito-sans/400.css";
+import "@fontsource/nunito-sans/600.css";
+import "@fontsource/nunito-sans/700.css";
+import "@fontsource/nunito-sans/800.css";
+import "@fontsource/nunito-sans/900.css";
+import styles from "./signin.module.css";
 
 type AccessMode = "account" | "quick";
 
@@ -103,51 +108,52 @@ function SigninForm() {
   };
 
   return (
-    <main className="app-page flex items-center justify-center px-4 py-10">
-      <div className="w-full max-w-5xl">
-        <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
-          <section className="app-panel order-1 px-6 py-8 sm:px-8 lg:order-2">
-            <p className="app-eyebrow">Account access</p>
-            <h1 className="mt-3 text-2xl font-semibold text-gray-900">
-              Welcome to Anti-Selek
+    <main className={styles.page}>
+      <div className={styles.shell}>
+        <div className={styles.brand} aria-label="Anti-Selek">
+          Anti-Selek<span aria-hidden="true">.</span>
+        </div>
+
+        <section className={styles.panel} aria-labelledby="signin-title">
+          <header className={styles.intro}>
+            <p className={styles.eyebrow}>ACCOUNT ACCESS</p>
+            <h1 className={styles.title} id="signin-title">
+              Welcome back
             </h1>
-            <p className="mt-2 text-sm text-gray-600">
-              Sign in to play and manage clubs, or view a club using the player
-              profile your host already added. New here? Create an account below.
+            <p className={styles.subtitle}>
+              Sign in to play, follow results, or manage your club.
             </p>
+          </header>
 
-            <div
-              className="mt-6 grid grid-cols-2 gap-2 rounded-2xl border border-gray-200 bg-gray-50 p-1"
-              role="group"
-              aria-label="Access method"
+          <div
+            className={styles.modeSwitch}
+            role="group"
+            aria-label="Access method"
+          >
+            <button
+              type="button"
+              aria-pressed={accessMode === "account"}
+              onClick={() => selectAccessMode("account")}
+              className={`${styles.modeButton} ${
+                accessMode === "account" ? styles.modeButtonSelected : ""
+              }`}
             >
-              <button
-                type="button"
-                aria-pressed={accessMode === "account"}
-                onClick={() => selectAccessMode("account")}
-                className={`min-h-11 rounded-xl px-3 py-2 text-sm font-semibold transition ${
-                  accessMode === "account"
-                    ? "bg-white text-gray-950 shadow-sm"
-                    : "text-gray-600 hover:bg-white/70"
-                }`}
-              >
-                Log in
-              </button>
-              <button
-                type="button"
-                aria-pressed={accessMode === "quick"}
-                onClick={() => selectAccessMode("quick")}
-                className={`min-h-11 rounded-xl px-3 py-2 text-sm font-semibold transition ${
-                  accessMode === "quick"
-                    ? "bg-white text-gray-950 shadow-sm"
-                    : "text-gray-600 hover:bg-white/70"
-                }`}
-              >
-                View-only access
-              </button>
-            </div>
+              Log in
+            </button>
+            <button
+              type="button"
+              aria-pressed={accessMode === "quick"}
+              onClick={() => selectAccessMode("quick")}
+              className={`${styles.modeButton} ${
+                accessMode === "quick" ? styles.modeButtonSelected : ""
+              }`}
+            >
+              View-only access
+            </button>
+          </div>
 
-            <div className="mt-6 space-y-4">
+          {registered || passwordReset || error ? (
+            <div className={styles.messages}>
               {registered ? (
                 <FlashMessage tone="success">
                   Account created. Please sign in.
@@ -164,167 +170,129 @@ function SigninForm() {
                 </FlashMessage>
               ) : null}
             </div>
+          ) : null}
 
-            {accessMode === "account" ? (
-              <form
-                onSubmit={handleSubmit}
-                aria-busy={loading}
-                className="mt-6 space-y-4"
+          {accessMode === "account" ? (
+            <form
+              onSubmit={handleSubmit}
+              aria-busy={loading}
+              className={styles.form}
+            >
+              <label className={styles.fieldLabel}>
+                <span>Email</span>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(event) => {
+                    setEmail(event.target.value);
+                    setError("");
+                  }}
+                  className={styles.field}
+                  autoComplete="email"
+                  disabled={loading}
+                  required
+                />
+              </label>
+
+              <label className={styles.fieldLabel}>
+                <span>Password</span>
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(event) => {
+                    setPassword(event.target.value);
+                    setError("");
+                  }}
+                  className={styles.field}
+                  autoComplete="current-password"
+                  disabled={loading}
+                  required
+                />
+              </label>
+
+              <div className={styles.forgotRow}>
+                <Link href="/forgot-password" className={styles.link}>
+                  Forgot password?
+                </Link>
+              </div>
+
+              <button
+                type="submit"
+                disabled={loading}
+                className={styles.primaryButton}
               >
-                <label className="block space-y-2 text-sm font-medium text-gray-900">
-                  <span>Email</span>
+                {loading ? "Signing in..." : "Sign in"}
+              </button>
+            </form>
+          ) : (
+            <div className={styles.quickAccess}>
+              <p className={styles.quickNote}>
+                View-only access needs no password and is tied to one club
+                profile. You can follow tournaments and standings, but you
+                cannot join clubs, submit scores, or manage a club.
+              </p>
+              <p className={styles.quickInstructions}>
+                Use the club and player names your host registered. Ask your
+                host for the spelling if you are unsure. To submit scores or
+                join another club, create an account.
+              </p>
+              <form
+                onSubmit={handleQuickAccessSubmit}
+                aria-busy={quickLoading}
+                className={styles.form}
+              >
+                <label className={styles.fieldLabel}>
+                  <span>Club name</span>
                   <input
-                    type="email"
-                    value={email}
+                    type="text"
+                    value={clubName}
                     onChange={(event) => {
-                      setEmail(event.target.value);
+                      setClubName(event.target.value);
                       setError("");
                     }}
-                    className="field"
-                    autoComplete="email"
-                    disabled={loading}
+                    className={styles.field}
+                    autoComplete="organization"
+                    disabled={quickLoading}
                     required
                   />
                 </label>
 
-                <label className="block space-y-2 text-sm font-medium text-gray-900">
-                  <span>Password</span>
+                <label className={styles.fieldLabel}>
+                  <span>Your player name</span>
                   <input
-                    type="password"
-                    value={password}
+                    type="text"
+                    value={playerName}
                     onChange={(event) => {
-                      setPassword(event.target.value);
+                      setPlayerName(event.target.value);
                       setError("");
                     }}
-                    className="field"
-                    autoComplete="current-password"
-                    disabled={loading}
+                    className={styles.field}
+                    autoComplete="name"
+                    disabled={quickLoading}
                     required
                   />
                 </label>
-
-                <div className="flex justify-end">
-                  <Link
-                    href="/forgot-password"
-                    className="text-sm font-semibold text-blue-600 hover:underline"
-                  >
-                    Forgot password?
-                  </Link>
-                </div>
 
                 <button
                   type="submit"
-                  disabled={loading}
-                  className="app-button-primary w-full"
+                  disabled={
+                    quickLoading || !clubName.trim() || !playerName.trim()
+                  }
+                  className={styles.primaryButton}
                 >
-                  <LogIn aria-hidden="true" size={17} />
-                  {loading ? "Signing in..." : "Sign in"}
+                  {quickLoading ? "Entering..." : "Enter club"}
                 </button>
               </form>
-            ) : (
-              <div className="mt-6 space-y-4">
-                <FlashMessage tone="warning">
-                  View-only access needs no password and is tied to one club profile. You
-                  can follow tournaments and standings, but you cannot join
-                  clubs, submit scores, or manage a club.
-                </FlashMessage>
-                <form
-                  onSubmit={handleQuickAccessSubmit}
-                  aria-busy={quickLoading}
-                  className="space-y-4"
-                >
-                  <p className="text-sm leading-6 text-gray-600">Use the club and player names your host registered. Ask your host for the spelling if you are unsure. To submit scores or join another club, create an account.</p>
-                <label className="block space-y-2 text-sm font-medium text-gray-900">
-                    <span>Club name</span>
-                    <input
-                      type="text"
-                      value={clubName}
-                      onChange={(event) => {
-                        setClubName(event.target.value);
-                        setError("");
-                      }}
-                      className="field"
-                      autoComplete="organization"
-                      disabled={quickLoading}
-                      required
-                    />
-                  </label>
-
-                  <label className="block space-y-2 text-sm font-medium text-gray-900">
-                    <span>Your player name</span>
-                    <input
-                      type="text"
-                      value={playerName}
-                      onChange={(event) => {
-                        setPlayerName(event.target.value);
-                        setError("");
-                      }}
-                      className="field"
-                      autoComplete="name"
-                      disabled={quickLoading}
-                      required
-                    />
-                  </label>
-
-                  <button
-                    type="submit"
-                    disabled={
-                      quickLoading || !clubName.trim() || !playerName.trim()
-                    }
-                    className="app-button-primary w-full"
-                  >
-                    <LogIn aria-hidden="true" size={17} />
-                    {quickLoading ? "Entering..." : "Enter club"}
-                  </button>
-                </form>
-              </div>
-            )}
-
-            <p className="mt-6 text-sm text-gray-600">
-              Don&apos;t have an account?{" "}
-              <Link
-                href={signupHref}
-                className="font-semibold text-blue-600 hover:underline"
-              >
-                Sign up
-              </Link>
-            </p>
-          </section>
-
-          <section className="app-panel order-2 relative overflow-hidden px-6 py-8 sm:px-8 lg:order-1">
-            <div className="relative">
-              <p className="app-eyebrow">Court control</p>
-              <h2 className="mt-3 app-title text-gray-900">
-                Your club, courts, and standings in one place.
-              </h2>
-              <p className="mt-4 max-w-xl text-sm text-gray-600 sm:text-base">
-                Return to a live tournament, check results, or prepare the next
-                club night from any device.
-              </p>
-
-              <div className="mt-8 grid gap-3 sm:grid-cols-3">
-                <div className="app-panel-muted p-4">
-                  <p className="text-xs font-semibold text-gray-600">Resume quickly</p>
-                  <p className="mt-2 text-sm font-semibold text-gray-900">
-                    Pick up an active tournament where you left off.
-                  </p>
-                </div>
-                <div className="app-panel-muted p-4">
-                  <p className="text-xs font-semibold text-gray-600">Clear standings</p>
-                  <p className="mt-2 text-sm font-semibold text-gray-900">
-                    Follow points, ratings, and history.
-                  </p>
-                </div>
-                <div className="app-panel-muted p-4">
-                  <p className="text-xs font-semibold text-gray-600">Court-side ready</p>
-                  <p className="mt-2 text-sm font-semibold text-gray-900">
-                    Comfortable controls on phones and tablets.
-                  </p>
-                </div>
-              </div>
             </div>
-          </section>
-        </div>
+          )}
+
+          <p className={styles.footer}>
+            <span>Don&apos;t have an account?</span>
+            <Link href={signupHref} className={styles.link}>
+              Sign up
+            </Link>
+          </p>
+        </section>
       </div>
     </main>
   );
@@ -334,11 +302,16 @@ export default function SigninPage() {
   return (
     <Suspense
       fallback={
-        <div className="app-page flex items-center justify-center px-6">
-          <div className="app-panel px-8 py-8">
-            <p className="app-eyebrow">Loading sign in</p>
+        <main className={styles.page}>
+          <div className={styles.shell}>
+            <div className={styles.brand} aria-label="Anti-Selek">
+              Anti-Selek<span aria-hidden="true">.</span>
+            </div>
+            <div className={styles.loadingPanel} role="status">
+              Loading sign in…
+            </div>
           </div>
-        </div>
+        </main>
       }
     >
       <SigninForm />

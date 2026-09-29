@@ -85,15 +85,17 @@ describe("authentication pages", () => {
     document.body.innerHTML = "";
   });
 
-  it("places the sign-in controls first in mobile reading order", async () => {
+  it("keeps sign-in focused in one mobile reading flow", async () => {
     await act(async () => root.render(<SigninPage />));
 
-    const sections = container.querySelectorAll("main section");
-    expect(sections[0]?.textContent).toContain("Welcome to Anti-Selek");
-    expect(sections[0]?.className).toContain("order-1");
-    expect(sections[1]?.textContent).toContain(
-      "Your club, courts, and standings"
-    );
+    const main = container.querySelector("main");
+    expect(main?.textContent).toContain("Welcome back");
+    expect(container.querySelectorAll("main section")).toHaveLength(1);
+    expect(main?.textContent).toContain("Email");
+    expect(main?.textContent).toContain("Password");
+    expect(main?.textContent).toContain("Forgot password?");
+    expect(main?.textContent).toContain("Sign in");
+    expect(main?.textContent).toContain("Sign up");
   });
 
   it("returns an account sign-in to its sanitized callback URL", async () => {
