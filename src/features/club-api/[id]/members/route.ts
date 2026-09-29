@@ -466,20 +466,25 @@ export async function POST(
         ? (user.gender as PlayerGender)
         : PlayerGender.MALE);
 
+    const hasMixedSideOverrideInput =
+      isValidMixedSide(mixedSideOverride) || mixedSideOverride === null;
+    const hasPartnerPreferenceInput = isValidPartnerPreference(partnerPreference);
     const resolvedMixedState = resolveMixedSideState({
       gender: resolvedGender,
       mixedSideOverride:
-        isValidMixedSide(mixedSideOverride) || mixedSideOverride === null
+        hasMixedSideOverrideInput
           ? mixedSideOverride
-          : requestedGender !== undefined
+          : hasPartnerPreferenceInput || requestedGender !== undefined
             ? null
             : user.mixedSideOverride,
       partnerPreference:
-        isValidPartnerPreference(partnerPreference)
-          ? partnerPreference
-          : requestedGender !== undefined || userWasCreated
-            ? undefined
-            : user.partnerPreference,
+        hasMixedSideOverrideInput
+          ? undefined
+          : hasPartnerPreferenceInput
+            ? partnerPreference
+            : requestedGender !== undefined || userWasCreated
+              ? undefined
+              : user.partnerPreference,
     });
 
     if (

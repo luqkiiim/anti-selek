@@ -12,6 +12,7 @@ import {
   vi,
 } from "vitest";
 import {
+  MixedSide,
   PartnerPreference,
   PlayerGender,
   SessionPool,
@@ -182,6 +183,38 @@ describe("SessionPreferenceEditorPortal", () => {
       true,
       null
     );
+  });
+
+  it("shows the actual default and alternate mixed sides", async () => {
+    await renderPortal({ isMixicano: true });
+
+    let mixedSideSelect = Array.from(document.querySelectorAll("select")).find(
+      (select) => select.parentElement?.textContent?.includes("Mixed side")
+    ) ?? null;
+    expect(mixedSideSelect?.parentElement?.textContent).toContain("Mixed side");
+    expect(Array.from(mixedSideSelect?.options ?? []).map((option) => option.textContent?.trim())).toEqual([
+      "Upper Side (default)",
+      "Lower Side",
+    ]);
+
+    await renderPortal({
+      isMixicano: true,
+      player: createPlayer({
+        gender: PlayerGender.FEMALE,
+        partnerPreference: PartnerPreference.OPEN,
+        mixedSideOverride: MixedSide.UPPER,
+      }),
+    });
+
+    mixedSideSelect = Array.from(document.querySelectorAll("select")).find(
+      (select) => select.parentElement?.textContent?.includes("Mixed side")
+    ) ?? null;
+    expect(Array.from(mixedSideSelect?.options ?? []).map((option) => option.textContent?.trim())).toEqual([
+      "Lower Side (default)",
+      "Upper Side",
+    ]);
+    expect(mixedSideSelect?.value).toBe(MixedSide.UPPER);
+    expect(document.body.textContent).not.toContain("Female Flex");
   });
 
   it("renders mobile player actions as a bottom sheet without inline coordinates", async () => {

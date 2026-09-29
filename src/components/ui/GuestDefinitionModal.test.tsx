@@ -80,6 +80,7 @@ describe("GuestDefinitionModal", () => {
           isMixed
           poolsEnabled
           isInterclub
+          gender={PlayerGender.FEMALE}
           mixedSideOverride={MixedSide.UPPER}
           submitting
           error="Unable to add this guest."
@@ -93,6 +94,13 @@ describe("GuestDefinitionModal", () => {
     expect(
       document.body.querySelector('select[aria-label="Guest mixed doubles side"]')
     ).not.toBeNull();
+    expect(
+      Array.from(
+        document.body.querySelectorAll(
+          'select[aria-label="Guest mixed doubles side"] option'
+        )
+      ).map((option) => option.textContent?.trim())
+    ).toEqual(["Lower Side (default)", "Upper Side"]);
     expect(
       document.body.querySelector('select[aria-label="Guest game group"]')
     ).not.toBeNull();

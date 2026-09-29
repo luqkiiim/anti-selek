@@ -268,7 +268,7 @@ Shared constraints:
 - Busy players are excluded
 - Paused players are excluded
 - Late joiners and resumed players re-enter at the current fair baseline without catch-up
-- Mixed sessions respect gender and partner-preference rules
+- Mixed session matchmaking uses Upper and Lower Side assignments, with per-player overrides
 
 `Ratings` matchmaking priority:
 

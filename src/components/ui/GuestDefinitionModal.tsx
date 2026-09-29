@@ -2,7 +2,10 @@
 
 import { useRef } from "react";
 import { ModalFrame } from "./ModalFrame";
-import { getMixedSideOverrideOptionForGender } from "@/lib/mixedSide";
+import {
+  getDefaultMixedSideForGender,
+  getMixedSideOverrideOptionForGender,
+} from "@/lib/mixedSide";
 import {
   MixedSide,
   PlayerGender,
@@ -61,6 +64,7 @@ export function GuestDefinitionModal({
   if (!open) return null;
 
   const mixedSideOption = getMixedSideOverrideOptionForGender(gender);
+  const defaultMixedSide = getDefaultMixedSideForGender(gender);
 
   return (
     <ModalFrame
@@ -190,7 +194,11 @@ export function GuestDefinitionModal({
                 }
                 className="field"
               >
-                <option value="">Default</option>
+                <option value="">
+                  {defaultMixedSide === MixedSide.UPPER
+                    ? "Upper Side (default)"
+                    : "Lower Side (default)"}
+                </option>
                 {mixedSideOption ? (
                   <option value={mixedSideOption.value}>
                     {mixedSideOption.label}

@@ -51,7 +51,7 @@ vi.mock("@/lib/mixedSide", () => ({
   isValidMixedSide: (value: unknown) =>
     value === "UPPER" || value === "LOWER",
   isValidPartnerPreference: (value: unknown) =>
-    value === PartnerPreference.OPEN,
+    value === PartnerPreference.OPEN || value === PartnerPreference.FEMALE_FLEX,
   isValidPlayerGender: (value: unknown) =>
     value === PlayerGender.MALE ||
     value === PlayerGender.FEMALE ||
@@ -107,6 +107,65 @@ describe("club admin create member route", () => {
       mixedSideOverride: null,
     });
     mocks.serializeAvatarEntity.mockReturnValue({ avatarUrl: null });
+  });
+
+  it.each([
+    {
+      label: "explicit mixed-side Default",
+      input: { mixedSideOverride: null },
+      expectedPreferenceInput: undefined,
+    },
+    {
+      label: "legacy preference-only Default",
+      input: { partnerPreference: PartnerPreference.FEMALE_FLEX },
+      expectedPreferenceInput: PartnerPreference.FEMALE_FLEX,
+    },
+  ])("clears an existing female Upper Side with $label", async ({ input, expectedPreferenceInput }) => {
+    const createdAt = new Date("2026-06-24T00:00:00.000Z");
+    mocks.userFindUnique.mockResolvedValue({
+      id: "player-1",
+      name: "Upper Player",
+      email: "upper@example.com",
+      avatarKey: null,
+      gender: PlayerGender.FEMALE,
+      partnerPreference: PartnerPreference.OPEN,
+      mixedSideOverride: "UPPER",
+      isActive: true,
+      isClaimed: true,
+      createdAt,
+    });
+    mocks.resolveMixedSideState.mockReturnValue({
+      partnerPreference: PartnerPreference.FEMALE_FLEX,
+      mixedSideOverride: null,
+    });
+    mocks.clubMemberUpsert.mockResolvedValue({
+      role: "MEMBER",
+      elo: 1000,
+      status: ClubPlayerStatus.CORE,
+      needsMoreRest: false,
+      preferredPool: "B",
+    });
+
+    const response = await postMember({
+      name: "Upper Player",
+      email: "upper@example.com",
+      ...input,
+    });
+
+    expect(response.status).toBe(200);
+    expect(mocks.resolveMixedSideState).toHaveBeenCalledWith({
+      gender: PlayerGender.FEMALE,
+      mixedSideOverride: null,
+      partnerPreference: expectedPreferenceInput,
+    });
+    expect(mocks.userUpdate).toHaveBeenCalledWith({
+      where: { id: "player-1" },
+      data: {
+        gender: PlayerGender.FEMALE,
+        partnerPreference: PartnerPreference.FEMALE_FLEX,
+        mixedSideOverride: null,
+      },
+    });
   });
 
   it("saves and returns the more-rest default for new placeholders", async () => {

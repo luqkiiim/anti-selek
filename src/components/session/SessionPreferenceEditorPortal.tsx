@@ -10,7 +10,10 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
-import { getMixedSideOverrideOptionForGender } from "@/lib/mixedSide";
+import {
+  getDefaultMixedSideForGender,
+  getMixedSideOverrideOptionForGender,
+} from "@/lib/mixedSide";
 import { getSessionPoolOptions } from "@/lib/sessionPools";
 import { useDialogFocusManagement } from "@/components/ui/useDialogFocusManagement";
 import { MixedSide, PlayerGender, SessionPool } from "@/types/enums";
@@ -234,6 +237,9 @@ export function SessionPreferenceEditorPortal({
   const mixedSideOption = getMixedSideOverrideOptionForGender(
     activePreferencePlayer.gender
   );
+  const defaultMixedSide = getDefaultMixedSideForGender(
+    activePreferencePlayer.gender
+  );
   const poolOptions = getSessionPoolOptions({ poolsEnabled });
   const hasSkipNext = Boolean(activePreferencePlayer.skipNextMatchAt);
   const actionButtonClassName = cx(
@@ -285,7 +291,11 @@ export function SessionPreferenceEditorPortal({
                 }}
                 className={selectClassName()}
               >
-                <option value="">Default</option>
+                <option value="">
+                  {defaultMixedSide === MixedSide.UPPER
+                    ? "Upper Side (default)"
+                    : "Lower Side (default)"}
+                </option>
                 <option value={mixedSideOption.value}>
                   {mixedSideOption.label}
                 </option>

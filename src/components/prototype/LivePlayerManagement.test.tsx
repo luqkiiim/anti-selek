@@ -3,7 +3,7 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { PartnerPreference, PlayerGender, SessionCollabFormat, SessionCrossoverFrequency, SessionMode, SessionPool } from "@/types/enums";
+import { MixedSide, PartnerPreference, PlayerGender, SessionCollabFormat, SessionCrossoverFrequency, SessionMode, SessionPool } from "@/types/enums";
 import type { SessionData } from "@/components/session/sessionTypes";
 
 const mocks = vi.hoisted(() => ({ api: vi.fn() }));
@@ -177,34 +177,94 @@ describe("LivePlayerManagement", () => {
     expect(changed).toHaveBeenCalledOnce();
   });
 
-  it("saves partner preferences through the preference endpoint", async () => {
+  it.each([
+    {
+      label: "male",
+      gender: PlayerGender.MALE,
+      partnerPreference: PartnerPreference.OPEN,
+      defaultLabel: "Upper Side (default)",
+      alternateLabel: "Lower Side",
+      alternateSide: MixedSide.LOWER,
+    },
+    {
+      label: "female",
+      gender: PlayerGender.FEMALE,
+      partnerPreference: PartnerPreference.FEMALE_FLEX,
+      defaultLabel: "Lower Side (default)",
+      alternateLabel: "Upper Side",
+      alternateSide: MixedSide.UPPER,
+    },
+  ])("offers mixed sides for a $label player and saves the override", async ({
+    gender, partnerPreference, defaultLabel, alternateLabel, alternateSide,
+  }) => {
     mocks.api.mockResolvedValue({});
     const session = sessionFixture();
     session.mode = SessionMode.MIXICANO;
+    session.status = "WAITING";
+    session.players[0].gender = gender;
+    session.players[0].partnerPreference = partnerPreference;
 
-    await act(async () => root.render(
-      <LivePlayerManagement
-        code="LIVE01"
-        session={session}
-        open
-        onClose={vi.fn()}
-        onChanged={() => changed()}
-      />,
-    ));
+    await render(session);
     await act(async () => {
       container.querySelector<HTMLButtonElement>('[aria-label="Options for Ari Player"]')?.click();
     });
 
-    const partnerPreference = container.querySelectorAll("select")[0];
+    const mixedSide = [...container.querySelectorAll("label.pm-label")]
+      .find((label) => label.textContent?.includes("Mixed side"))
+      ?.querySelector("select");
+    expect(Array.from(mixedSide?.options ?? []).map((option) => option.textContent?.trim()))
+      .toEqual([defaultLabel, alternateLabel]);
+    expect(mixedSide?.value).toBe("");
+    expect(container.textContent).not.toContain("Female flex");
+
     await act(async () => {
-      partnerPreference.value = PartnerPreference.FEMALE_FLEX;
-      partnerPreference.dispatchEvent(new Event("change", { bubbles: true }));
+      if (mixedSide) {
+        mixedSide.value = alternateSide;
+        mixedSide.dispatchEvent(new Event("change", { bubbles: true }));
+      }
     });
 
     expect(mocks.api).toHaveBeenLastCalledWith(
       "/api/sessions/LIVE01/players/player-1/preferences",
       "PATCH",
-      { mixedSideOverride: null, partnerPreference: PartnerPreference.FEMALE_FLEX },
+      { mixedSideOverride: alternateSide },
+    );
+    expect(changed).toHaveBeenCalledOnce();
+  });
+
+  it.each([
+    { label: "explicit", mixedSideOverride: MixedSide.UPPER },
+    { label: "legacy", mixedSideOverride: null },
+  ])("clears a $label female Upper Side to the default", async ({ mixedSideOverride }) => {
+    mocks.api.mockResolvedValue({});
+    const session = sessionFixture();
+    session.mode = SessionMode.MIXICANO;
+    session.status = "WAITING";
+    session.players[0].gender = PlayerGender.FEMALE;
+    session.players[0].partnerPreference = PartnerPreference.OPEN;
+    session.players[0].mixedSideOverride = mixedSideOverride;
+
+    await render(session);
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('[aria-label="Options for Ari Player"]')?.click();
+    });
+
+    const mixedSide = [...container.querySelectorAll("label.pm-label")]
+      .find((label) => label.textContent?.includes("Mixed side"))
+      ?.querySelector("select");
+    expect(mixedSide?.value).toBe(MixedSide.UPPER);
+
+    await act(async () => {
+      if (mixedSide) {
+        mixedSide.value = "";
+        mixedSide.dispatchEvent(new Event("change", { bubbles: true }));
+      }
+    });
+
+    expect(mocks.api).toHaveBeenLastCalledWith(
+      "/api/sessions/LIVE01/players/player-1/preferences",
+      "PATCH",
+      { mixedSideOverride: null },
     );
     expect(changed).toHaveBeenCalledOnce();
   });
@@ -284,6 +344,10 @@ describe("LivePlayerManagement", () => {
       selects[0].value = PlayerGender.FEMALE;
       selects[0].dispatchEvent(new Event("change", { bubbles: true }));
     });
+    const guestMixedSide = [...container.querySelectorAll<HTMLSelectElement>(".pm-form select")]
+      .find((select) => select.parentElement?.textContent?.includes("Mixed side"));
+    expect(Array.from(guestMixedSide?.options ?? []).map((option) => option.textContent?.trim()))
+      .toEqual(["Lower Side (default)", "Upper Side"]);
     const form = container.querySelector<HTMLFormElement>(".pm-form");
     await act(async () => form?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
 

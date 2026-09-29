@@ -59,7 +59,8 @@ vi.mock("@/lib/prisma", () => ({
 vi.mock("@/lib/mixedSide", () => ({
   isValidMixedSide: (value: unknown) =>
     value === "UPPER" || value === "LOWER",
-  isValidPartnerPreference: (value: unknown) => value === PartnerPreference.OPEN,
+  isValidPartnerPreference: (value: unknown) =>
+    value === PartnerPreference.OPEN || value === PartnerPreference.FEMALE_FLEX,
   isValidPlayerGender: (value: unknown) =>
     value === PlayerGender.MALE ||
     value === PlayerGender.FEMALE ||
@@ -156,6 +157,75 @@ describe("club admin update member route", () => {
       automaticQueueSessionIds: [],
     });
     mocks.tryRebuildAutomaticQueuedMatchForSessionId.mockResolvedValue(null);
+  });
+
+  it.each([
+    {
+      label: "explicit mixed-side Default",
+      input: { mixedSideOverride: null },
+      expectedPreferenceInput: undefined,
+    },
+    {
+      label: "legacy preference-only Default",
+      input: { partnerPreference: PartnerPreference.FEMALE_FLEX },
+      expectedPreferenceInput: PartnerPreference.FEMALE_FLEX,
+    },
+  ])("clears a female Upper Side with $label", async ({ input, expectedPreferenceInput }) => {
+    const createdAt = new Date("2026-06-24T00:00:00.000Z");
+    mocks.clubFindUnique.mockResolvedValue({ createdById: "owner-1" });
+    mocks.clubMemberFindUnique
+      .mockResolvedValueOnce({ role: "ADMIN" })
+      .mockResolvedValue({
+        id: "membership-1",
+        role: "MEMBER",
+        elo: 1000,
+        status: ClubPlayerStatus.CORE,
+        needsMoreRest: false,
+        preferredPool: "B",
+      });
+    mocks.userFindUnique.mockResolvedValue({
+      name: "Upper Player",
+      email: "upper@example.com",
+      avatarKey: null,
+      isClaimed: true,
+      isActive: true,
+      gender: PlayerGender.FEMALE,
+      partnerPreference: PartnerPreference.OPEN,
+      mixedSideOverride: "UPPER",
+    });
+    mocks.resolveMixedSideState.mockReturnValue({
+      partnerPreference: PartnerPreference.FEMALE_FLEX,
+      mixedSideOverride: null,
+    });
+    mocks.userUpdate.mockResolvedValue({
+      id: "user-1",
+      name: "Upper Player",
+      email: "upper@example.com",
+      avatarKey: null,
+      gender: PlayerGender.FEMALE,
+      partnerPreference: PartnerPreference.FEMALE_FLEX,
+      mixedSideOverride: null,
+      isActive: true,
+      isClaimed: true,
+      createdAt,
+    });
+
+    const response = await patchMember(input);
+
+    expect(response.status).toBe(200);
+    expect(mocks.resolveMixedSideState).toHaveBeenCalledWith({
+      gender: PlayerGender.FEMALE,
+      mixedSideOverride: null,
+      partnerPreference: expectedPreferenceInput,
+    });
+    expect(mocks.userUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          partnerPreference: PartnerPreference.FEMALE_FLEX,
+          mixedSideOverride: null,
+        }),
+      })
+    );
   });
 
   it("reconciles sessions when staff retries the already-saved game group", async () => {

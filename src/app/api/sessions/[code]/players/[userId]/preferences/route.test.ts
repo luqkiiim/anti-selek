@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  MixedSide,
   PartnerPreference,
   PlayerGender,
   SessionMode,
@@ -305,6 +306,104 @@ describe("session player preference route", () => {
       })
     );
     expect(body.needsMoreRest).toBe(true);
+  });
+
+  it("clears a female upper-side override when Default is selected", async () => {
+    mocks.sessionPlayerFindUnique.mockResolvedValue({
+      gender: PlayerGender.FEMALE,
+      partnerPreference: PartnerPreference.OPEN,
+      mixedSideOverride: MixedSide.UPPER,
+      pool: SessionPool.A,
+      pendingPool: null,
+      representingClubId: null,
+      isGuest: false,
+    });
+
+    const response = await patchPreferences({ mixedSideOverride: null });
+
+    expect(response.status).toBe(200);
+    expect(mocks.sessionPlayerUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          mixedSideOverride: null,
+          partnerPreference: PartnerPreference.FEMALE_FLEX,
+        }),
+      })
+    );
+  });
+
+  it("clears a legacy male lower-side override when Default is selected", async () => {
+    mocks.sessionPlayerFindUnique.mockResolvedValue({
+      gender: PlayerGender.MALE,
+      partnerPreference: PartnerPreference.FEMALE_FLEX,
+      mixedSideOverride: MixedSide.LOWER,
+      pool: SessionPool.A,
+      pendingPool: null,
+      representingClubId: null,
+      isGuest: false,
+    });
+
+    const response = await patchPreferences({ mixedSideOverride: null });
+
+    expect(response.status).toBe(200);
+    expect(mocks.sessionPlayerUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          mixedSideOverride: null,
+          partnerPreference: PartnerPreference.OPEN,
+        }),
+      })
+    );
+  });
+
+  it("preserves legacy side inference when the side is omitted", async () => {
+    mocks.sessionPlayerFindUnique.mockResolvedValue({
+      gender: PlayerGender.FEMALE,
+      partnerPreference: PartnerPreference.OPEN,
+      mixedSideOverride: null,
+      pool: SessionPool.A,
+      pendingPool: null,
+      representingClubId: null,
+      isGuest: false,
+    });
+
+    const response = await patchPreferences({ needsMoreRest: true });
+
+    expect(response.status).toBe(200);
+    expect(mocks.sessionPlayerUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          mixedSideOverride: MixedSide.UPPER,
+          partnerPreference: PartnerPreference.OPEN,
+        }),
+      })
+    );
+  });
+
+  it("lets a legacy partner-preference request replace a stored side override", async () => {
+    mocks.sessionPlayerFindUnique.mockResolvedValue({
+      gender: PlayerGender.FEMALE,
+      partnerPreference: PartnerPreference.OPEN,
+      mixedSideOverride: MixedSide.UPPER,
+      pool: SessionPool.A,
+      pendingPool: null,
+      representingClubId: null,
+      isGuest: false,
+    });
+
+    const response = await patchPreferences({
+      partnerPreference: PartnerPreference.FEMALE_FLEX,
+    });
+
+    expect(response.status).toBe(200);
+    expect(mocks.sessionPlayerUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          mixedSideOverride: null,
+          partnerPreference: PartnerPreference.FEMALE_FLEX,
+        }),
+      })
+    );
   });
 
   it("rejects more-rest changes after the session is completed", async () => {

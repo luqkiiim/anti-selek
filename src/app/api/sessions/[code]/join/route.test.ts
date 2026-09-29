@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  MixedSide,
   PartnerPreference,
   PlayerGender,
   SessionClubRole,
@@ -94,6 +95,69 @@ describe("join session route", () => {
     mocks.clubMemberFindMany.mockResolvedValue([]);
     mocks.offlineIdentityMemberFindMany.mockResolvedValue([]);
     mocks.sessionClubFindMany.mockResolvedValue([]);
+  });
+
+  it.each([
+    {
+      label: "an explicit Default mixed side",
+      input: { mixedSideOverride: null },
+      expectedSide: null,
+      expectedPreference: PartnerPreference.FEMALE_FLEX,
+    },
+    {
+      label: "a legacy preference-only Default request",
+      input: { partnerPreference: PartnerPreference.FEMALE_FLEX },
+      expectedSide: null,
+      expectedPreference: PartnerPreference.FEMALE_FLEX,
+    },
+    {
+      label: "an explicit Upper Side over a conflicting legacy preference",
+      input: {
+        mixedSideOverride: MixedSide.UPPER,
+        partnerPreference: PartnerPreference.FEMALE_FLEX,
+      },
+      expectedSide: MixedSide.UPPER,
+      expectedPreference: PartnerPreference.OPEN,
+    },
+  ])("uses $label when joining", async ({ input, expectedSide, expectedPreference }) => {
+    mocks.auth.mockResolvedValue({ user: { id: "player-1", isAdmin: false } });
+    mocks.sessionFindUnique.mockResolvedValue({
+      id: "session-1",
+      clubId: null,
+      status: SessionStatus.WAITING,
+      mode: SessionMode.MIXICANO,
+      poolsEnabled: false,
+      players: [],
+    });
+    mocks.sessionPlayerFindUnique.mockResolvedValue(null);
+    mocks.userFindUnique.mockResolvedValue({
+      gender: PlayerGender.FEMALE,
+      partnerPreference: PartnerPreference.OPEN,
+      mixedSideOverride: MixedSide.UPPER,
+    });
+    mocks.sessionUpdate.mockResolvedValue({
+      id: "session-1",
+      clubId: null,
+      courts: [],
+      players: [],
+    });
+
+    const response = await postJoin(input);
+
+    expect(response.status).toBe(200);
+    expect(mocks.sessionUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: {
+          players: {
+            create: expect.objectContaining({
+              gender: PlayerGender.FEMALE,
+              mixedSideOverride: expectedSide,
+              partnerPreference: expectedPreference,
+            }),
+          },
+        },
+      })
+    );
   });
 
   it("blocks quick-access users from joining sessions", async () => {

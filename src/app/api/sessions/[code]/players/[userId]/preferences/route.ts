@@ -277,14 +277,18 @@ export async function PATCH(
       mixedSideOverride:
         isValidMixedSide(mixedSideOverride) || mixedSideOverride === null
           ? mixedSideOverride
-          : typeof gender === "string"
+          : isValidPartnerPreference(partnerPreference) ||
+              typeof gender === "string"
             ? null
             : existing.mixedSideOverride,
-      partnerPreference: isValidPartnerPreference(partnerPreference)
-        ? partnerPreference
-        : typeof gender === "string"
+      partnerPreference:
+        mixedSideOverride !== undefined
           ? undefined
-          : existing.partnerPreference,
+          : isValidPartnerPreference(partnerPreference)
+            ? partnerPreference
+            : typeof gender === "string"
+              ? undefined
+              : existing.partnerPreference,
     });
 
     const mutation = await prisma.$transaction(async (tx) => {

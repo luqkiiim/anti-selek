@@ -10,14 +10,17 @@ import {
   UserPlus,
 } from "@phosphor-icons/react";
 import {
-  PartnerPreference,
   PlayerGender,
   SessionCollabFormat,
   SessionMode,
   SessionPool,
   MixedSide,
 } from "@/types/enums";
-import { getMixedSideOverrideOptionForGender } from "@/lib/mixedSide";
+import {
+  getDefaultMixedSideForGender,
+  getMixedSideOverrideOptionForGender,
+  normalizeMixedSideOverrideForGender,
+} from "@/lib/mixedSide";
 import type { Player, SessionData } from "@/components/session/sessionTypes";
 import { api } from "./api";
 import { Avatar, ErrorText, Sheet } from "./Primitives";
@@ -51,6 +54,15 @@ function messageFor(error: unknown, fallback: string) {
 
 function fieldClass() {
   return "pm-field";
+}
+
+function defaultMixedSideLabel(gender: PlayerGender) {
+  const defaultSide = getDefaultMixedSideForGender(gender);
+  return defaultSide === MixedSide.UPPER
+    ? "Upper Side (default)"
+    : defaultSide === MixedSide.LOWER
+      ? "Lower Side (default)"
+      : "Default";
 }
 
 export function LivePlayerManagement({
@@ -87,6 +99,16 @@ export function LivePlayerManagement({
       .map((club) => club.id),
   ).size > 1;
   const selectedPlayer = session.players.find((player) => player.userId === selectedPlayerId) ?? null;
+  const selectedPlayerMixedSideOption = selectedPlayer
+    ? getMixedSideOverrideOptionForGender(selectedPlayer.gender)
+    : null;
+  const selectedPlayerMixedSideOverride = selectedPlayer
+    ? normalizeMixedSideOverrideForGender(
+        selectedPlayer.gender,
+        selectedPlayer.mixedSideOverride,
+        selectedPlayer.partnerPreference,
+      )
+    : null;
   const alreadyInSession = useMemo(
     () => new Set(session.players.map((player) => player.userId)),
     [session.players],
@@ -458,7 +480,7 @@ export function LivePlayerManagement({
                 <label className="pm-label"><span>Starting rating</span><input className={fieldClass()} type="number" min={0} max={5000} step={1} value={guestRating} onChange={(event) => setGuestRating(event.target.value)} /></label>
                 <label className="pm-label"><span>Gender</span><select className={fieldClass()} value={guestGender} onChange={(event) => { setGuestGender(event.target.value as PlayerGender); setGuestMixedSideOverride(null); }}><option value={PlayerGender.UNSPECIFIED}>Choose gender</option><option value={PlayerGender.MALE}>Male</option><option value={PlayerGender.FEMALE}>Female</option></select></label>
                 {guestGender !== PlayerGender.UNSPECIFIED ? (
-                  <label className="pm-label"><span>Mixed doubles side</span><select className={fieldClass()} value={guestMixedSideOverride ?? ""} onChange={(event) => setGuestMixedSideOverride(event.target.value ? event.target.value as MixedSide : null)}><option value="">Default</option>{(() => { const option = getMixedSideOverrideOptionForGender(guestGender); return option ? <option value={option.value}>{option.label}</option> : null; })()}</select></label>
+                  <label className="pm-label"><span>Mixed side</span><select className={fieldClass()} value={guestMixedSideOverride ?? ""} onChange={(event) => setGuestMixedSideOverride(event.target.value ? event.target.value as MixedSide : null)}><option value="">{defaultMixedSideLabel(guestGender)}</option>{(() => { const option = getMixedSideOverrideOptionForGender(guestGender); return option ? <option value={option.value}>{option.label}</option> : null; })()}</select></label>
                 ) : null}
                 {isInterclub ? (
                   <label className="pm-label"><span>Represents</span><select className={fieldClass()} value={guestRepresentingClubId} onChange={(event) => setGuestRepresentingClubId(event.target.value)}><option value="">Choose club</option>{(session.clubs ?? []).filter((club) => club.status === "ACCEPTED").map((club) => <option key={club.id} value={club.id}>{club.name}</option>)}</select></label>
@@ -521,20 +543,23 @@ export function LivePlayerManagement({
                 </select>
               </label>
             ) : null}
-            {isMixicano ? (
+            {isMixicano && selectedPlayerMixedSideOption ? (
               <label className="pm-label">
-                <span>Partner preference</span>
+                <span>Mixed side</span>
                 <select
                   className={fieldClass()}
-                  value={selectedPlayer.partnerPreference}
+                  value={selectedPlayerMixedSideOverride ?? ""}
                   disabled={busy}
                   onChange={(event) => void updatePreference(selectedPlayer, {
-                    mixedSideOverride: null,
-                    partnerPreference: event.target.value as PartnerPreference,
+                    mixedSideOverride: event.target.value
+                      ? event.target.value as MixedSide
+                      : null,
                   })}
                 >
-                  <option value={PartnerPreference.OPEN}>Open</option>
-                  <option value={PartnerPreference.FEMALE_FLEX}>Female flex</option>
+                  <option value="">{defaultMixedSideLabel(selectedPlayer.gender)}</option>
+                  <option value={selectedPlayerMixedSideOption.value}>
+                    {selectedPlayerMixedSideOption.label}
+                  </option>
                 </select>
               </label>
             ) : null}

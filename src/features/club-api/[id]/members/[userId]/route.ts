@@ -364,19 +364,24 @@ export async function PATCH(
       typeof gender === "string"
         ? (gender as PlayerGender)
         : (currentUser.gender as PlayerGender | undefined) ?? PlayerGender.UNSPECIFIED;
+    const hasMixedSideOverrideInput =
+      isValidMixedSide(mixedSideOverride) || mixedSideOverride === null;
+    const hasPartnerPreferenceInput = isValidPartnerPreference(partnerPreference);
     const resolvedMixedState = resolveMixedSideState({
       gender: nextGender,
       mixedSideOverride:
-        isValidMixedSide(mixedSideOverride) || mixedSideOverride === null
+        hasMixedSideOverrideInput
           ? mixedSideOverride
-          : typeof gender === "string"
+          : hasPartnerPreferenceInput || typeof gender === "string"
             ? null
             : currentUser.mixedSideOverride,
-      partnerPreference: isValidPartnerPreference(partnerPreference)
-        ? partnerPreference
-        : typeof gender === "string"
-          ? undefined
-          : currentUser.partnerPreference,
+      partnerPreference: hasMixedSideOverrideInput
+        ? undefined
+        : hasPartnerPreferenceInput
+          ? partnerPreference
+          : typeof gender === "string"
+            ? undefined
+            : currentUser.partnerPreference,
     });
 
     const updatedUser = await prisma.user.update({

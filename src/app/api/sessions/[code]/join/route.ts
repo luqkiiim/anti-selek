@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { calculateNoCatchUpMatchmakingCredit } from "@/lib/matchmaking/matchmakingCredit";
 import {
   isValidMixedSide,
+  isValidPartnerPreference,
   isValidPlayerGender,
   resolveMixedSideState,
 } from "@/lib/mixedSide";
@@ -191,21 +192,27 @@ export async function POST(
         : rawGender;
     const hasOverrideGender =
       isValidPlayerGender(overrideGender);
+    const hasMixedSideOverrideInput =
+      isValidMixedSide(overrideMixedSideOverride) ||
+      overrideMixedSideOverride === null;
+    const hasPartnerPreferenceInput =
+      isValidPartnerPreference(overridePreference);
     const resolvedMixedState = resolveMixedSideState({
       gender: sessionGender,
       mixedSideOverride:
-        isValidMixedSide(overrideMixedSideOverride) ||
-        overrideMixedSideOverride === null
+        hasMixedSideOverrideInput
           ? overrideMixedSideOverride
-          : hasOverrideGender
+          : hasPartnerPreferenceInput || hasOverrideGender
             ? null
             : userProfile.mixedSideOverride,
       partnerPreference:
-        typeof overridePreference === "string"
-          ? overridePreference
-          : hasOverrideGender
-            ? undefined
-            : userProfile.partnerPreference,
+        hasMixedSideOverrideInput
+          ? undefined
+          : hasPartnerPreferenceInput
+            ? overridePreference
+            : hasOverrideGender
+              ? undefined
+              : userProfile.partnerPreference,
     });
     const joinedAt = new Date();
     const arrivalPriorityAt =
