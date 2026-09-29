@@ -106,7 +106,7 @@ export function SessionOverviewPanel({
               aria-describedby={
                 startBlockedReason ? "session-start-blocked-reason" : undefined
               }
-              className="app-button-primary disabled:cursor-not-allowed disabled:opacity-50"
+              className="app-button-primary font-bold disabled:cursor-not-allowed disabled:opacity-50"
               data-tutorial-target="admin-onboarding-start-session"
             >
               <Play aria-hidden="true" size={17} />
