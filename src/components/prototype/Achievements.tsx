@@ -52,14 +52,6 @@ const enamelAchievements = new Set<AchievementId>([
   "good-together",
   "making-it-happen",
 ]);
-const enamelSvgAchievements = new Set<AchievementId>([
-  "on-the-board",
-  "down-to-wire",
-  "clean-sweep",
-  "raising-bar",
-  "good-together",
-  "making-it-happen",
-]);
 
 function AchievementPictogram({ id, size }: { id: AchievementId; size: number }) {
   const props = { className: "achievement-badge-pictogram", size, weight: "duotone" as const };
@@ -108,10 +100,9 @@ export function BadgeIcon({ achievement, tier = 0, size = "regular" }: {
     const variant = achievement.id === "first-serve"
       ? achievement.id
       : `${achievement.id}-${tierColors[Math.max(0, Math.min(tier - 1, 2))]}`;
-    const extension = enamelSvgAchievements.has(achievement.id) ? "svg" : "png";
     return (
       <span className={`achievement-badge-icon achievement-badge-icon--${size} achievement-enamel${tier === 0 ? " achievement-enamel--locked" : ""}`} aria-hidden="true">
-        <Image src={`/achievements/enamel/${variant}.${extension}`} alt="" width={256} height={256} sizes={size === "large" ? "96px" : "72px"} unoptimized={extension === "svg"} className="achievement-enamel-image" />
+        <Image src={`/achievements/enamel/${variant}.png`} alt="" width={256} height={256} sizes={size === "large" ? "96px" : "72px"} quality={90} className="achievement-enamel-image" />
       </span>
     );
   }
