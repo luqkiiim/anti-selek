@@ -828,6 +828,44 @@ describe("LiveSession score and player controls", () => {
     expect(onDeleted).toHaveBeenCalledTimes(1);
   });
 
+  it("rolls back an eligible completed session only after confirmation", async () => {
+    const session = sessionWithCourts([{ id: "court-1", courtNumber: 1, currentMatch: null }]);
+    session.status = "COMPLETED";
+    session.isTest = false;
+    session.viewerCanRollback = true;
+    setup(session);
+    const onDeleted = vi.fn(async () => undefined);
+    await act(async () => root.render(<LiveSession code="TEST01" onBack={vi.fn()} onEnded={vi.fn(async () => undefined)} onDeleted={onDeleted} />));
+
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="More options"]')?.click());
+    const menu = container.querySelector('[role="dialog"][aria-label="Options"]');
+    expect(menu?.textContent).toContain("Rollback session");
+    expect(menu?.textContent).not.toContain("Cancel session");
+    await act(async () => Array.from(menu?.querySelectorAll<HTMLButtonElement>("button") ?? []).find((button) => button.textContent === "Rollback session")?.click());
+
+    const confirmation = container.querySelector('[role="dialog"][aria-label="Rollback this session?"]');
+    expect(confirmation).not.toBeNull();
+    expect(mocks.api).not.toHaveBeenCalled();
+    await act(async () => Array.from(confirmation?.querySelectorAll<HTMLButtonElement>("button") ?? []).find((button) => button.textContent === "Rollback and delete session")?.click());
+
+    expect(mocks.api).toHaveBeenCalledWith("/api/sessions/TEST01/rollback", "POST");
+    expect(onDeleted).toHaveBeenCalledTimes(1);
+  });
+
+  it("hides rollback for a completed session that is not eligible", async () => {
+    const session = sessionWithCourts([{ id: "court-1", courtNumber: 1, currentMatch: null }]);
+    session.status = "COMPLETED";
+    session.isTest = false;
+    session.viewerCanRollback = false;
+    setup(session);
+    await act(async () => root.render(<LiveSession code="TEST01" onBack={vi.fn()} onEnded={vi.fn(async () => undefined)} />));
+
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="More options"]')?.click());
+    const menu = container.querySelector('[role="dialog"][aria-label="Options"]');
+    expect(menu?.textContent).toContain("Match history");
+    expect(menu?.textContent).not.toContain("Rollback session");
+  });
+
   it("keeps the completed results visible after the host ends a session", async () => {
     const session = sessionWithCourts([{ id: "court-1", courtNumber: 1, currentMatch: null }], [player("winner", "Winner")]);
     setup(session);

@@ -160,6 +160,7 @@ export default function LiveSession({
   const [showHistory, setShowHistory] = useState(false);
   const [managePlayersOpen, setManagePlayersOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [rollingBack, setRollingBack] = useState(false);
   const [sharing, setSharing] = useState(false);
   const [celebrateFinish, setCelebrateFinish] = useState(false);
   const [shareError, setShareError] = useState("");
@@ -678,6 +679,19 @@ export default function LiveSession({
       setDeleting(false);
     }
   }
+  async function rollbackSession() {
+    if (rollingBack) return;
+    setRollingBack(true);
+    action.setError("");
+    try {
+      await api(endpoint + "/rollback", "POST");
+      await onDeleted?.();
+    } catch (error) {
+      action.setError(error instanceof Error ? error.message : "Unable to roll back session");
+    } finally {
+      setRollingBack(false);
+    }
+  }
   function startManual(target: ManualTarget) {
     setManualTarget(target);
     setManualSelection([]);
@@ -1191,8 +1205,10 @@ export default function LiveSession({
                 ? "Options"
                 : sheet === "end"
                   ? "End this session?"
+                  : sheet === "rollback"
+                    ? "Rollback this session?"
                   : sheet === "delete"
-                    ? s?.status === "WAITING" ? "Delete this session?" : "Cancel this session?"
+                    ? s?.status === "ACTIVE" ? "Cancel this session?" : "Delete this session?"
                   : sheet === "guest"
                     ? "Add guest"
                     : sheet === "settings"
@@ -1221,7 +1237,7 @@ export default function LiveSession({
                                 : "Choose next match"
                             : "Next match"
           }
-          busy={action.busy || deleting}
+          busy={action.busy || deleting || rollingBack}
           onClose={closeSheet}
         >
           <ErrorText error={action.error} />
@@ -1303,7 +1319,10 @@ export default function LiveSession({
                 <Row title="End session" icon={SignOut} onClick={() => setSheet("end")} />
               </>}
               {s?.viewerCanDelete && (
-                <Row title={s.status === "WAITING" ? "Delete session" : "Cancel session"} icon={Trash} onClick={() => { action.setError(""); setSheet("delete"); }} />
+                <Row title={s.status === "ACTIVE" ? "Cancel session" : "Delete session"} icon={Trash} onClick={() => { action.setError(""); setSheet("delete"); }} />
+              )}
+              {s?.viewerCanRollback && (
+                <Row title="Rollback session" icon={Trash} onClick={() => { action.setError(""); setSheet("rollback"); }} />
               )}
             </>
           ) : sheet === "settings" ? (
@@ -1593,13 +1612,22 @@ export default function LiveSession({
                 Keep playing
               </button>
             </>
+          ) : sheet === "rollback" ? (
+            <>
+              <p>This permanently removes {s?.name || "this session"}, including its matches, scores, and standings.</p>
+              <p className="muted">Rating changes from this session will be reversed. This cannot be undone.</p>
+              <button type="button" className="secondary full danger-outline" disabled={rollingBack} onClick={() => void rollbackSession()}>
+                {rollingBack ? "Rolling back session…" : "Rollback and delete session"}
+              </button>
+              <button type="button" className="text-button" disabled={rollingBack} onClick={() => setSheet("")}>Keep session</button>
+            </>
           ) : sheet === "delete" ? (
             <>
               <p>This permanently removes {s?.name || "this session"}, including its matches, scores, and standings.</p>
               {s?.status !== "WAITING" && <p className="muted">Any rating changes from this session will be reversed.</p>}
               <p className="muted">This cannot be undone.</p>
               <button type="button" className="secondary full danger-outline" disabled={deleting} onClick={() => void deleteSession()}>
-                {deleting ? "Deleting session…" : s?.status === "WAITING" ? "Delete session" : "Cancel and delete session"}
+                {deleting ? "Deleting session…" : s?.status === "ACTIVE" ? "Cancel and delete session" : "Delete session"}
               </button>
               <button type="button" className="text-button" onClick={() => setSheet("")}>Keep session</button>
             </>

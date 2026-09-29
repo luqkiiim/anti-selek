@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   canQuickAccessSessionRead: vi.fn(),
   checkInvalidTargetRateLimit: vi.fn(async () => null),
   sessionFindUnique: vi.fn(),
+  sessionFindFirst: vi.fn(),
   clubMemberFindUnique: vi.fn(),
   getSessionMembership: vi.fn(),
   getSessionAdminMembership: vi.fn(),
@@ -28,6 +29,7 @@ vi.mock("@/lib/prisma", () => ({
   prisma: {
     session: {
       findUnique: mocks.sessionFindUnique,
+      findFirst: mocks.sessionFindFirst,
     },
     clubMember: {
       findUnique: mocks.clubMemberFindUnique,
@@ -112,6 +114,7 @@ describe("session route GET", () => {
     mocks.getSessionAdminMembership.mockResolvedValue(null);
     mocks.getSessionOperatorMembership.mockResolvedValue(null);
     mocks.clubMemberFindUnique.mockResolvedValue(null);
+    mocks.sessionFindFirst.mockResolvedValue({ id: "session-1" });
     mocks.getClubEloByUserId.mockResolvedValue(new Map());
     mocks.withClubElo.mockImplementation((players) => players);
     mocks.getPlayerClubBadges.mockResolvedValue(new Map());
@@ -472,6 +475,99 @@ describe("session route GET", () => {
       expect.anything(),
       expect.objectContaining({ acceptedOnly: true })
     );
+  });
+
+  it("offers rollback to the host club admin for the latest completed real session", async () => {
+    const sessionData = await mocks.sessionFindUnique();
+    mocks.sessionFindUnique.mockResolvedValue({ ...sessionData, status: "COMPLETED" });
+    mocks.clubMemberFindUnique.mockResolvedValue({ role: "ADMIN" });
+
+    const response = await GET(
+      new Request("http://localhost/api/sessions/ABC123"),
+      { params: Promise.resolve({ code: "ABC123" }) }
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.viewerCanRollback).toBe(true);
+    expect(mocks.sessionFindFirst).toHaveBeenCalledWith({
+      where: {
+        clubId: "community-1",
+        status: "COMPLETED",
+        isTest: false,
+      },
+      orderBy: [{ endedAt: "desc" }, { createdAt: "desc" }],
+      select: { id: true },
+    });
+  });
+
+  it("offers rollback to a global admin without host club membership", async () => {
+    const sessionData = await mocks.sessionFindUnique();
+    mocks.sessionFindUnique.mockResolvedValue({ ...sessionData, status: "COMPLETED" });
+    mocks.auth.mockResolvedValue({ user: { id: "u1", isAdmin: true } });
+
+    const response = await GET(
+      new Request("http://localhost/api/sessions/ABC123"),
+      { params: Promise.resolve({ code: "ABC123" }) }
+    );
+
+    expect(response.status).toBe(200);
+    expect((await response.json()).viewerCanRollback).toBe(true);
+  });
+
+  it("does not offer rollback for an older completed session", async () => {
+    const sessionData = await mocks.sessionFindUnique();
+    mocks.sessionFindUnique.mockResolvedValue({ ...sessionData, status: "COMPLETED" });
+    mocks.clubMemberFindUnique.mockResolvedValue({ role: "ADMIN" });
+    mocks.sessionFindFirst.mockResolvedValue({ id: "newer-session" });
+
+    const response = await GET(
+      new Request("http://localhost/api/sessions/ABC123"),
+      { params: Promise.resolve({ code: "ABC123" }) }
+    );
+
+    expect(response.status).toBe(200);
+    expect((await response.json()).viewerCanRollback).toBe(false);
+  });
+
+  it.each([
+    { reason: "staff access", hostRole: "STAFF" },
+    { reason: "member access", hostRole: "MEMBER" },
+    { reason: "a partner club admin", hostRole: null, partnerAdmin: true },
+    { reason: "a test session", hostRole: "ADMIN", isTest: true },
+    { reason: "a tutorial session", hostRole: "ADMIN", tutorial: true },
+    { reason: "an active session", hostRole: "ADMIN", status: "ACTIVE" },
+    { reason: "quick access", hostRole: "ADMIN", quickAccess: true },
+  ])("does not offer rollback for $reason", async (caseData) => {
+    const sessionData = await mocks.sessionFindUnique();
+    mocks.sessionFindUnique.mockResolvedValue({
+      ...sessionData,
+      status: caseData.status ?? "COMPLETED",
+      isTest: caseData.isTest ?? false,
+      club: caseData.tutorial
+        ? { id: "community-1", isTutorial: true, tutorialOwnerId: "u1" }
+        : null,
+    });
+    mocks.clubMemberFindUnique.mockResolvedValue(
+      caseData.hostRole ? { role: caseData.hostRole } : null
+    );
+    if (caseData.partnerAdmin) {
+      mocks.getSessionAdminMembership.mockResolvedValue({ role: "ADMIN" });
+    }
+    if (caseData.quickAccess) {
+      mocks.auth.mockResolvedValue({
+        user: { id: "u1", isAdmin: false, isQuickAccess: true, quickAccessClubId: "community-1" },
+      });
+    }
+
+    const response = await GET(
+      new Request("http://localhost/api/sessions/ABC123"),
+      { params: Promise.resolve({ code: "ABC123" }) }
+    );
+
+    expect(response.status).toBe(200);
+    expect((await response.json()).viewerCanRollback).toBe(false);
+    expect(mocks.sessionFindFirst).not.toHaveBeenCalled();
   });
 
   it("masks tutorial club names in linked session clubs", async () => {

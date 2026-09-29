@@ -288,6 +288,25 @@ async function getSessionRoute(
     return invalidTargetResponse(request, "api:sessions:code");
   }
 
+  const canRequestRollback =
+    !isQuickAccess &&
+    sessionData.status === SessionStatus.COMPLETED &&
+    !sessionData.isTest &&
+    sessionData.club?.isTutorial !== true &&
+    (session.user.isAdmin || hostOperatorMembership?.role === ClubRole.ADMIN);
+  const latestCompleted = canRequestRollback
+    ? await prisma.session.findFirst({
+        where: {
+          clubId: sessionData.clubId,
+          status: SessionStatus.COMPLETED,
+          isTest: false,
+        },
+        orderBy: [{ endedAt: "desc" }, { createdAt: "desc" }],
+        select: { id: true },
+      })
+    : null;
+  const viewerCanRollback = canRequestRollback && latestCompleted?.id === sessionData.id;
+
   const linkedClubIds = Array.from(
     new Set(
       [
@@ -389,6 +408,7 @@ async function getSessionRoute(
       !isQuickAccess &&
       (sessionData.status !== SessionStatus.COMPLETED || sessionData.isTest) &&
       (session.user.isAdmin || hostOperatorMembership?.role === ClubRole.ADMIN || hostOperatorMembership?.role === ClubRole.STAFF),
+    viewerCanRollback,
     isTutorialClub: sessionData.club?.isTutorial === true,
     tutorialOwnerId: sessionData.club?.tutorialOwnerId ?? null,
     clubs: sessionData.sessionClubs.map((link) => ({

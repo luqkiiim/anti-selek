@@ -144,6 +144,7 @@ export interface SessionData {
   viewerCanManage?: boolean;
   viewerCanUseAdminSessionControls?: boolean;
   viewerCanDelete?: boolean;
+  viewerCanRollback?: boolean;
   viewerIsQuickAccess?: boolean;
   viewerClubRole?: string | null;
   isTutorialClub?: boolean;
