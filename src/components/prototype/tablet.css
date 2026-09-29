@@ -237,3 +237,16 @@
     padding-bottom: 20px;
   }
 }
+
+/* iPad court cards use twice the phone-sized player labels and avatars. */
+@media (min-width: 700px) and (max-width: 1376px) and (min-height: 600px) and (any-pointer: coarse) {
+  .prototype-root .court-card .match-player .avatar {
+    width: 64px;
+    height: 64px;
+    font-size: 28px;
+  }
+
+  .prototype-root .court-card .match-player strong {
+    font-size: 34px;
+  }
+}
