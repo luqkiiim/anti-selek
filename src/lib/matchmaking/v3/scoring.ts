@@ -450,7 +450,7 @@ export function compareSingleCourtSelections<
     }
 
     if (
-      sessionType === SessionType.POINTS &&
+      usesBalanceFirstVariety(sessionType) &&
       shouldRespectPlayerRest(options)
     ) {
       const consecutivePlayCompare = compareConsecutivePlayFairness(left, right);

@@ -12,6 +12,8 @@ import type {
   V3SingleCourtSelection,
 } from "./types";
 
+const BALANCED_SESSION_TYPES = [SessionType.POINTS, SessionType.ELO] as const;
+
 function createActivePlayer(
   userId: string,
   restTurns: number,
@@ -49,6 +51,8 @@ function createSelection(
     consecutivePlayCount = 0,
     consecutivePlayMaxBurden = 0,
     consecutivePlayTotalBurden = 0,
+    mixedVarietyPenalty,
+    mixedGlobalVarietyPenalty,
     randomScore = 0,
     pairingRandomScore = 0,
   }: {
@@ -65,6 +69,8 @@ function createSelection(
     consecutivePlayCount?: number;
     consecutivePlayMaxBurden?: number;
     consecutivePlayTotalBurden?: number;
+    mixedVarietyPenalty?: number;
+    mixedGlobalVarietyPenalty?: number;
     randomScore?: number;
     pairingRandomScore?: number;
   }
@@ -99,6 +105,10 @@ function createSelection(
     partnerRepeatPenalty,
     opponentRepeatPenalty,
     exactRematchPenalty,
+    ...(mixedVarietyPenalty !== undefined ? { mixedVarietyPenalty } : {}),
+    ...(mixedGlobalVarietyPenalty !== undefined
+      ? { mixedGlobalVarietyPenalty }
+      : {}),
     consecutivePlayCount,
     consecutivePlayMaxBurden,
     consecutivePlayTotalBurden,
@@ -109,6 +119,7 @@ function createSelection(
 
 function createBatchSelection({
   restTurns = [1, 1, 1, 1],
+  moreRestDeficits = [0, 0, 0, 0],
   maxBalanceGap,
   totalBalanceGap,
   maxPointDiffGap = 0,
@@ -119,12 +130,15 @@ function createBatchSelection({
   totalPartnerRepeatPenalty = 0,
   totalOpponentRepeatPenalty = 0,
   totalExactRematchPenalty = 0,
+  totalMixedVarietyPenalty,
+  totalMixedGlobalVarietyPenalty,
   totalRandomScore = 0,
   totalPairingRandomScore = 0,
   sidePairingLayoutKeys = ["team1", "team2"],
   sidePairingRandomScores = [totalPairingRandomScore, totalPairingRandomScore],
 }: {
   restTurns?: number[];
+  moreRestDeficits?: number[];
   maxBalanceGap: number;
   totalBalanceGap: number;
   maxPointDiffGap?: number;
@@ -135,6 +149,8 @@ function createBatchSelection({
   totalPartnerRepeatPenalty?: number;
   totalOpponentRepeatPenalty?: number;
   totalExactRematchPenalty?: number;
+  totalMixedVarietyPenalty?: number;
+  totalMixedGlobalVarietyPenalty?: number;
   totalRandomScore?: number;
   totalPairingRandomScore?: number;
   sidePairingLayoutKeys?: [string, string];
@@ -142,6 +158,7 @@ function createBatchSelection({
 }): V3BatchSelection {
   const selection = createSelection({
     restTurns,
+    moreRestDeficits,
     balanceGap: maxBalanceGap,
     pointDiffGap: maxPointDiffGap,
     sharedCourtRepeatPenalty: totalSharedCourtRepeatPenalty,
@@ -150,6 +167,12 @@ function createBatchSelection({
     partnerRepeatPenalty: totalPartnerRepeatPenalty,
     opponentRepeatPenalty: totalOpponentRepeatPenalty,
     exactRematchPenalty: totalExactRematchPenalty,
+    ...(totalMixedVarietyPenalty !== undefined
+      ? { mixedVarietyPenalty: totalMixedVarietyPenalty }
+      : {}),
+    ...(totalMixedGlobalVarietyPenalty !== undefined
+      ? { mixedGlobalVarietyPenalty: totalMixedGlobalVarietyPenalty }
+      : {}),
     randomScore: totalRandomScore,
     pairingRandomScore: totalPairingRandomScore,
   });
@@ -167,6 +190,12 @@ function createBatchSelection({
     totalPartnerRepeatPenalty,
     totalOpponentRepeatPenalty,
     totalExactRematchPenalty,
+    ...(totalMixedVarietyPenalty !== undefined
+      ? { totalMixedVarietyPenalty }
+      : {}),
+    ...(totalMixedGlobalVarietyPenalty !== undefined
+      ? { totalMixedGlobalVarietyPenalty }
+      : {}),
     totalRandomScore,
     totalPairingRandomScore,
     sidePairingLayoutKeys,
@@ -872,7 +901,7 @@ describe("matchmaking v3 scoring", () => {
     ).toBeLessThan(0);
   });
 
-  it("ignores back-to-back burden in Elo sessions", () => {
+  it("prioritizes back-to-back fairness in Balanced Elo within its safe window", () => {
     const lowerBurden = createSelection({
       balanceGap: 10,
       exactRematchPenalty: 0,
@@ -890,11 +919,116 @@ describe("matchmaking v3 scoring", () => {
 
     expect(
       compareSingleCourtSelections(
-        betterBalancedRepeatedStayer,
         lowerBurden,
+        betterBalancedRepeatedStayer,
         SessionType.ELO
       )
     ).toBeLessThan(0);
+  });
+
+  it("prioritizes consecutive-play protection before partner novelty for both Balanced metrics", () => {
+    const fewerBackToBacks = createSelection({
+      balanceGap: 0,
+      partnerRepeatPenalty: 3,
+      exactRematchPenalty: 0,
+      consecutivePlayCount: 0,
+    });
+    const fresherPartners = createSelection({
+      balanceGap: 0,
+      partnerRepeatPenalty: 0,
+      exactRematchPenalty: 0,
+      consecutivePlayCount: 1,
+      consecutivePlayMaxBurden: 1,
+      consecutivePlayTotalBurden: 1,
+    });
+
+    for (const sessionType of BALANCED_SESSION_TYPES) {
+      expect(
+        compareSingleCourtSelections(
+          fewerBackToBacks,
+          fresherPartners,
+          sessionType
+        )
+      ).toBeLessThan(0);
+    }
+  });
+
+  it("keeps More rest ahead of ordinary rest and composition for both Balanced metrics", () => {
+    const lowerMoreRestDeficit = createSelection({
+      restTurns: [1, 1, 1, 1],
+      moreRestDeficits: [0, 0, 0, 0],
+      balanceGap: 0,
+      exactRematchPenalty: 0,
+      mixedVarietyPenalty: 3,
+    });
+    const higherMoreRestDeficit = createSelection({
+      restTurns: [5, 5, 5, 5],
+      moreRestDeficits: [1, 0, 0, 0],
+      balanceGap: 0,
+      exactRematchPenalty: 0,
+      mixedVarietyPenalty: -3,
+    });
+    const moreOrdinaryRest = createSelection({
+      restTurns: [5, 5, 5, 5],
+      balanceGap: 0,
+      exactRematchPenalty: 0,
+      mixedVarietyPenalty: 3,
+    });
+    const lessOrdinaryRest = createSelection({
+      restTurns: [1, 1, 1, 1],
+      balanceGap: 0,
+      exactRematchPenalty: 0,
+      mixedVarietyPenalty: -3,
+    });
+
+    for (const sessionType of BALANCED_SESSION_TYPES) {
+      expect(
+        compareSingleCourtSelections(
+          lowerMoreRestDeficit,
+          higherMoreRestDeficit,
+          sessionType
+        )
+      ).toBeLessThan(0);
+      expect(
+        compareSingleCourtSelections(
+          moreOrdinaryRest,
+          lessOrdinaryRest,
+          sessionType
+        )
+      ).toBeLessThan(0);
+    }
+  });
+
+  it("preserves flag-off behavior for consecutive play and rest across Balanced metrics", () => {
+    const restPreferredButLessNovel = createSelection({
+      restTurns: [5, 5, 5, 5],
+      balanceGap: 0,
+      exactRematchPenalty: 0,
+      partnerRepeatPenalty: 2,
+      consecutivePlayCount: 0,
+      mixedVarietyPenalty: 3,
+    });
+    const lessRestButMoreNovel = createSelection({
+      restTurns: [1, 1, 1, 1],
+      balanceGap: 0,
+      exactRematchPenalty: 0,
+      partnerRepeatPenalty: 0,
+      consecutivePlayCount: 1,
+      consecutivePlayMaxBurden: 1,
+      consecutivePlayTotalBurden: 1,
+      mixedVarietyPenalty: -3,
+    });
+
+    for (const sessionType of BALANCED_SESSION_TYPES) {
+      expect(
+        compareSingleCourtSelections(
+          lessRestButMoreNovel,
+          restPreferredButLessNovel,
+          sessionType,
+          { respectPlayerRest: false }
+        )
+      ).toBeLessThan(0);
+    }
   });
 
   it("keeps points batch balance ahead of variety outside the safe window", () => {
@@ -1069,6 +1203,48 @@ describe("matchmaking v3 scoring", () => {
         SessionType.POINTS
       )
     ).toBeLessThan(0);
+  });
+
+  it("keeps batch More rest and ordinary rest priorities aligned for POINTS and ELO", () => {
+    const lowerMoreRestDeficit = createBatchSelection({
+      restTurns: [1, 1, 1, 1],
+      moreRestDeficits: [0, 0, 0, 0],
+      maxBalanceGap: 0,
+      totalBalanceGap: 0,
+      totalMixedVarietyPenalty: 3,
+    });
+    const higherMoreRestDeficit = createBatchSelection({
+      restTurns: [5, 5, 5, 5],
+      moreRestDeficits: [1, 0, 0, 0],
+      maxBalanceGap: 0,
+      totalBalanceGap: 0,
+      totalMixedVarietyPenalty: -3,
+    });
+    const moreRest = createBatchSelection({
+      restTurns: [5, 5, 5, 5],
+      maxBalanceGap: 0,
+      totalBalanceGap: 0,
+      totalMixedVarietyPenalty: 3,
+    });
+    const moreCompositionVariety = createBatchSelection({
+      restTurns: [1, 1, 1, 1],
+      maxBalanceGap: 0,
+      totalBalanceGap: 0,
+      totalMixedVarietyPenalty: -3,
+    });
+
+    for (const sessionType of BALANCED_SESSION_TYPES) {
+      expect(
+        compareBatchSelections(
+          lowerMoreRestDeficit,
+          higherMoreRestDeficit,
+          sessionType
+        )
+      ).toBeLessThan(0);
+      expect(
+        compareBatchSelections(moreRest, moreCompositionVariety, sessionType)
+      ).toBeLessThan(0);
+    }
   });
 
   it("uses point-difference balance after points batch balance ties", () => {
