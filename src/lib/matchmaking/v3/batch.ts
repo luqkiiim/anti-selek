@@ -7,6 +7,13 @@ import { evaluateBalancedPartitions } from "./balance";
 import { buildCandidatePool } from "./candidatePool";
 import { getEmptyConsecutivePlayMetrics } from "./consecutive";
 import {
+  buildMixedVarietyContext,
+  getGlobalMixedVarietyPenalty,
+  getMixedVarietyPenalty,
+  isMixedPartitionForSides,
+} from "./mixedVariety";
+import type { V3MixedHistoryMatch } from "./mixedVariety";
+import {
   buildExactRematchHistory,
   buildOpponentRepeatHistory,
   buildPartnerRepeatHistory,
@@ -175,9 +182,13 @@ function buildFeasibilityCandidatePools<T extends MatchmakerV3Player>(
 
 function summarizeBatch<T extends ActiveMatchmakerV3Player>(
   selections: V3SingleCourtSelection<T>[],
-  pairingRandomSalts: V3BatchPairingRandomSalts
+  pairingRandomSalts: V3BatchPairingRandomSalts,
+  mixedVarietyContext: ReturnType<typeof buildMixedVarietyContext> | null
 ): V3BatchSelection<T> {
   const flattenedPlayers = selections.flatMap((selection) => selection.players);
+  const mixedSelectionCount = selections.filter(
+    (selection) => selection.mixedGame
+  ).length;
 
   return {
     selections,
@@ -220,6 +231,27 @@ function summarizeBatch<T extends ActiveMatchmakerV3Player>(
       (sum, selection) => sum + selection.exactRematchPenalty,
       0
     ),
+    ...(selections.some(
+      (selection) => selection.mixedVarietyPenalty !== undefined
+    )
+      ? {
+          totalMixedVarietyPenalty: selections.reduce(
+            (sum, selection) =>
+              sum + (selection.mixedVarietyPenalty ?? 0),
+            0
+          ),
+          ...(mixedVarietyContext
+            ? {
+                totalMixedGlobalVarietyPenalty:
+                  getGlobalMixedVarietyPenalty(
+                    mixedVarietyContext,
+                    mixedSelectionCount,
+                    selections.length
+                  ),
+              }
+            : {}),
+        }
+      : {}),
     totalRandomScore: selections.reduce(
       (sum, selection) => sum + selection.randomScore,
       0
@@ -395,6 +427,7 @@ function buildQuartetSelections<T extends MatchmakerV3Player>(
   {
     sessionMode,
     completedMatches,
+    mixedVarietyContext,
     selectionConstraints,
     pairingRandomSalt,
   }: {
@@ -404,6 +437,7 @@ function buildQuartetSelections<T extends MatchmakerV3Player>(
       team2: [string, string];
       completedAt?: Date | null;
     }>;
+    mixedVarietyContext: ReturnType<typeof buildMixedVarietyContext> | null;
     selectionConstraints?: V3SelectionConstraints<ActiveMatchmakerV3Player<T>>;
     pairingRandomSalt: number;
   }
@@ -457,6 +491,13 @@ function buildQuartetSelections<T extends MatchmakerV3Player>(
         continue;
       }
 
+      const mixedGame = mixedVarietyContext
+        ? isMixedPartitionForSides(
+            partition,
+            mixedVarietyContext.sideByUserId
+          )
+        : undefined;
+
       selections.push({
         ids,
         players: quartetPlayers,
@@ -488,6 +529,16 @@ function buildQuartetSelections<T extends MatchmakerV3Player>(
           partition,
           rematchHistory
         ),
+        ...(mixedVarietyContext
+          ? {
+              mixedGame,
+              mixedVarietyPenalty: getMixedVarietyPenalty(
+                ids,
+                mixedGame ?? false,
+                mixedVarietyContext
+              ),
+            }
+          : {}),
         ...getEmptyConsecutivePlayMetrics(),
         randomScore,
         pairingRandomScore: getPartitionPairingRandomScore(
@@ -754,7 +805,8 @@ function findGreedyBatchSelection<T extends ActiveMatchmakerV3Player>(
   orderedCandidateIds: string[],
   lockedIds: Set<string>,
   courtCount: number,
-  pairingRandomSalts: V3BatchPairingRandomSalts
+  pairingRandomSalts: V3BatchPairingRandomSalts,
+  mixedVarietyContext: ReturnType<typeof buildMixedVarietyContext> | null
 ) {
   const chosen: V3SingleCourtSelection<T>[] = [];
   const usedIds = new Set<string>();
@@ -793,7 +845,7 @@ function findGreedyBatchSelection<T extends ActiveMatchmakerV3Player>(
     return null;
   }
 
-  return summarizeBatch(chosen, pairingRandomSalts);
+  return summarizeBatch(chosen, pairingRandomSalts, mixedVarietyContext);
 }
 
 function findEloCeilingBatchAfterSearchLimit<T extends ActiveMatchmakerV3Player>(
@@ -801,7 +853,8 @@ function findEloCeilingBatchAfterSearchLimit<T extends ActiveMatchmakerV3Player>
   orderedCandidateIds: string[],
   lockedIds: Set<string>,
   courtCount: number,
-  pairingRandomSalts: V3BatchPairingRandomSalts
+  pairingRandomSalts: V3BatchPairingRandomSalts,
+  mixedVarietyContext: ReturnType<typeof buildMixedVarietyContext> | null
 ): V3BatchSelection<T> | null {
   const safeQuartets = quartetSelections.filter(
     (selection) => selection.balanceGap <= ELO_BALANCE_GAP_CEILING
@@ -837,7 +890,7 @@ function findEloCeilingBatchAfterSearchLimit<T extends ActiveMatchmakerV3Player>
       if ([...lockedIds].some((id) => !usedIds.has(id))) {
         return null;
       }
-      return summarizeBatch(chosen, pairingRandomSalts);
+      return summarizeBatch(chosen, pairingRandomSalts, mixedVarietyContext);
     }
 
     const anchorId =
@@ -969,6 +1022,7 @@ function searchBatchCandidatePlayers<T extends MatchmakerV3Player>({
   sessionType,
   respectPlayerRest,
   completedMatches,
+  mixedVarietyContext,
   searchLimits,
   selectionConstraints,
   pairingRandomSalts,
@@ -985,6 +1039,7 @@ function searchBatchCandidatePlayers<T extends MatchmakerV3Player>({
     team2: [string, string];
     completedAt?: Date | null;
   }>;
+  mixedVarietyContext: ReturnType<typeof buildMixedVarietyContext> | null;
   searchLimits?: {
     maxBranches?: number;
     maxMs?: number;
@@ -1017,6 +1072,7 @@ function searchBatchCandidatePlayers<T extends MatchmakerV3Player>({
     buildQuartetSelections(candidatePlayers, {
       sessionMode,
       completedMatches,
+      mixedVarietyContext,
       selectionConstraints,
       pairingRandomSalt: pairingRandomSalts.combined,
     }),
@@ -1080,7 +1136,11 @@ function searchBatchCandidatePlayers<T extends MatchmakerV3Player>({
         return;
       }
 
-      const batchSelection = summarizeBatch(chosen, pairingRandomSalts);
+      const batchSelection = summarizeBatch(
+        chosen,
+        pairingRandomSalts,
+        mixedVarietyContext
+      );
       completedSelections.push(batchSelection);
 
       return;
@@ -1134,7 +1194,8 @@ function searchBatchCandidatePlayers<T extends MatchmakerV3Player>({
           orderedCandidateIds,
           lockedIds,
           courtCount,
-          pairingRandomSalts
+          pairingRandomSalts,
+          mixedVarietyContext
         )
       : null;
 
@@ -1155,7 +1216,8 @@ function searchBatchCandidatePlayers<T extends MatchmakerV3Player>({
           orderedCandidateIds,
           lockedIds,
           courtCount,
-          pairingRandomSalts
+          pairingRandomSalts,
+          mixedVarietyContext
         )
       : null);
 
@@ -1185,6 +1247,7 @@ export function findBestBatchSelectionV3<T extends MatchmakerV3Player>(
     sessionType,
     respectPlayerRest = true,
     completedMatches = [],
+    mixedHistoryMatches,
     randomFn = Math.random,
     searchLimits,
     candidatePool,
@@ -1201,6 +1264,7 @@ export function findBestBatchSelectionV3<T extends MatchmakerV3Player>(
       team2: [string, string];
       completedAt?: Date | null;
     }>;
+    mixedHistoryMatches?: V3MixedHistoryMatch[];
     randomFn?: () => number;
     searchLimits?: {
       maxBranches?: number;
@@ -1229,6 +1293,14 @@ export function findBestBatchSelectionV3<T extends MatchmakerV3Player>(
     randomFn,
     pairingRandomMode
   );
+  const mixedVarietyContext =
+    sessionMode === SessionMode.MIXICANO &&
+    (sessionType === SessionType.POINTS || sessionType === SessionType.ELO)
+      ? buildMixedVarietyContext(
+          players,
+          mixedHistoryMatches ?? completedMatches
+        )
+      : null;
   const debug: V3BatchDebug = {
     eligiblePlayerIds: resolvedCandidatePool.activePlayers.map(
       (player) => player.userId
@@ -1314,6 +1386,7 @@ export function findBestBatchSelectionV3<T extends MatchmakerV3Player>(
       sessionType,
       respectPlayerRest,
       completedMatches,
+      mixedVarietyContext,
       searchLimits,
       selectionConstraints,
       pairingRandomSalts,

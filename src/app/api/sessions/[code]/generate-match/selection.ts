@@ -34,6 +34,7 @@ import {
 import { getBusyPlayerIds } from "@/lib/matchmaking/busyFilter";
 import { buildV3MatchmakingReasonJson } from "@/lib/matchmaking/matchReason";
 import { buildRestTurnsByUserId } from "@/lib/matchmaking/restTurns";
+import type { V3MixedHistoryMatch } from "@/lib/matchmaking/v3/mixedVariety";
 import {
   getPendingSkipNextUserIds,
   getSkippedSelectionUserIds,
@@ -256,6 +257,66 @@ function buildCompletedMatches(sessionData: GenerateMatchSession) {
       status: match.status,
       completedAt: match.completedAt ?? null,
     }));
+}
+
+function getMatchQuartetKey(match: V3MixedHistoryMatch) {
+  return [...match.team1, ...match.team2].sort().join("|");
+}
+
+export function buildMixedHistoryMatches(
+  sessionData: GenerateMatchSession
+): V3MixedHistoryMatch[] {
+  const includedStatuses = [
+    MatchStatus.COMPLETED,
+    MatchStatus.PENDING,
+    MatchStatus.IN_PROGRESS,
+    MatchStatus.PENDING_APPROVAL,
+  ];
+  const matches = sessionData.matches
+    .filter((match) => includedStatuses.includes(match.status as MatchStatus))
+    .map((match) => ({
+      team1: [match.team1User1Id, match.team1User2Id] as [string, string],
+      team2: [match.team2User1Id, match.team2User2Id] as [string, string],
+    }));
+
+  if (!sessionData.queuedMatch) {
+    return matches;
+  }
+
+  const queuedMatch = {
+    team1: [
+      sessionData.queuedMatch.team1User1Id,
+      sessionData.queuedMatch.team1User2Id,
+    ] as [string, string],
+    team2: [
+      sessionData.queuedMatch.team2User1Id,
+      sessionData.queuedMatch.team2User2Id,
+    ] as [string, string],
+  };
+  const activeQuartetKeys = new Set(
+    sessionData.matches
+      .filter((match) =>
+        [
+          MatchStatus.PENDING,
+          MatchStatus.IN_PROGRESS,
+          MatchStatus.PENDING_APPROVAL,
+        ].includes(match.status as MatchStatus)
+      )
+      .map((match) =>
+        getMatchQuartetKey({
+          team1: [match.team1User1Id, match.team1User2Id],
+          team2: [match.team2User1Id, match.team2User2Id],
+        })
+      )
+  );
+
+  // Queue assignment replaces the queued row with an active match. If both
+  // records appear in a snapshot, use the active match as the single entry.
+  if (activeQuartetKeys.has(getMatchQuartetKey(queuedMatch))) {
+    return matches;
+  }
+
+  return [...matches, queuedMatch];
 }
 
 function countPoolPlayers<T extends { pool?: string | null }>(
@@ -1219,6 +1280,7 @@ function buildPlayerGroupSelectionRunner({
   sessionData: GenerateMatchSession;
 }) {
   const completedMatches = buildCompletedMatches(sessionData);
+  const mixedHistoryMatches = buildMixedHistoryMatches(sessionData);
   const usesCompetitiveGrouping =
     getMatchmakerSessionType(sessionData) === SessionType.LADDER ||
     getMatchmakerSessionType(sessionData) === SessionType.RACE;
@@ -1376,6 +1438,7 @@ function buildPlayerGroupSelectionRunner({
         sessionType: getMatchmakerSessionType(sessionData),
         respectPlayerRest: sessionData.respectPlayerRest,
         completedMatches,
+        mixedHistoryMatches,
         excludedQuartetKey,
         excludedQuartetKeys,
         excludedPartitionKey,
@@ -1584,6 +1647,7 @@ export function selectSingleCourtMatch({
   }
 
   const completedMatches = buildCompletedMatches(sessionData);
+  const mixedHistoryMatches = buildMixedHistoryMatches(sessionData);
   const usesCompetitiveGrouping =
     getMatchmakerSessionType(sessionData) === SessionType.LADDER ||
     getMatchmakerSessionType(sessionData) === SessionType.RACE;
@@ -1602,6 +1666,7 @@ export function selectSingleCourtMatch({
           sessionType: getMatchmakerSessionType(sessionData),
           respectPlayerRest: sessionData.respectPlayerRest,
           completedMatches,
+          mixedHistoryMatches,
         }
       );
 
@@ -1688,6 +1753,7 @@ export function selectSingleCourtMatch({
     sessionType: getMatchmakerSessionType(sessionData),
     respectPlayerRest: sessionData.respectPlayerRest,
     completedMatches,
+    mixedHistoryMatches,
     excludedQuartetKey: previousQuartetKey,
   });
 
@@ -1704,6 +1770,7 @@ export function selectSingleCourtMatch({
     sessionType: getMatchmakerSessionType(sessionData),
     respectPlayerRest: sessionData.respectPlayerRest,
     completedMatches,
+    mixedHistoryMatches,
     excludedPartitionKey: previousPartitionKey,
   });
 
@@ -1837,6 +1904,7 @@ function selectExactQuartetMatch({
       sessionType: getMatchmakerSessionType(sessionData),
       respectPlayerRest: sessionData.respectPlayerRest,
       completedMatches: buildCompletedMatches(sessionData),
+      mixedHistoryMatches: buildMixedHistoryMatches(sessionData),
       selectionConstraints,
     }
   );
@@ -2507,6 +2575,7 @@ export function selectBatchMatches({
       sessionType: getMatchmakerSessionType(sessionData),
       respectPlayerRest: sessionData.respectPlayerRest,
       completedMatches: buildCompletedMatches(sessionData),
+      mixedHistoryMatches: buildMixedHistoryMatches(sessionData),
       randomFn,
     }
   );

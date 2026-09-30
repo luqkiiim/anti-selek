@@ -3,6 +3,7 @@ export * from "./batch";
 export * from "./candidatePool";
 export * from "./entry";
 export * from "./fairness";
+export * from "./mixedVariety";
 export * from "./rematch";
 export * from "./scoring";
 export * from "./simulation";

@@ -11,6 +11,7 @@ import {
 } from "@/types/enums";
 import { getExactPartitionKey } from "@/lib/matchmaking/v3/rematch";
 import {
+  buildMixedHistoryMatches,
   buildMatchmakingState,
   getRankedCandidates,
   selectBatchMatches,
@@ -202,6 +203,74 @@ function getClubBPairLayout(selection: ReturnType<typeof selectBatchMatches>) {
 }
 
 describe("generate-match race regressions", () => {
+  it("includes active and queued commitments once in composition history", () => {
+    const timestamp = new Date("2026-04-04T00:00:00Z");
+    const sessionData = createSessionData({
+      matches: [
+        createMatch("completed", {
+          status: MatchStatus.COMPLETED,
+          team1: ["A", "B"],
+          team2: ["C", "D"],
+          createdAt: timestamp,
+        }),
+        createMatch("pending", {
+          status: MatchStatus.PENDING,
+          team1: ["E", "F"],
+          team2: ["G", "H"],
+          createdAt: timestamp,
+        }),
+        createMatch("in-progress", {
+          status: MatchStatus.IN_PROGRESS,
+          team1: ["I", "J"],
+          team2: ["K", "L"],
+          createdAt: timestamp,
+        }),
+        createMatch("pending-approval", {
+          status: MatchStatus.PENDING_APPROVAL,
+          team1: ["M", "N"],
+          team2: ["O", "P"],
+          createdAt: timestamp,
+        }),
+      ],
+      queuedMatch: {
+        team1User1Id: "A",
+        team1User2Id: "Q",
+        team2User1Id: "R",
+        team2User2Id: "S",
+      } as NonNullable<GenerateMatchSession["queuedMatch"]>,
+    });
+
+    const history = buildMixedHistoryMatches(sessionData);
+
+    expect(history).toHaveLength(5);
+    expect(history.at(-1)).toEqual({
+      team1: ["A", "Q"],
+      team2: ["R", "S"],
+    });
+  });
+
+  it("deduplicates a queued quartet already represented by an active match", () => {
+    const timestamp = new Date("2026-04-04T00:00:00Z");
+    const sessionData = createSessionData({
+      matches: [
+        createMatch("active", {
+          status: MatchStatus.IN_PROGRESS,
+          team1: ["A", "B"],
+          team2: ["C", "D"],
+          createdAt: timestamp,
+        }),
+      ],
+      queuedMatch: {
+        team1User1Id: "D",
+        team1User2Id: "A",
+        team2User1Id: "C",
+        team2User2Id: "B",
+      } as NonNullable<GenerateMatchSession["queuedMatch"]>,
+    });
+
+    expect(buildMixedHistoryMatches(sessionData)).toHaveLength(1);
+  });
+
   it("creates a new Mixicano race match after the mixed court finishes while a men's court is still active", async () => {
     const waitingSince = new Date("2026-04-04T00:00:00Z");
     const mixedFinishedAt = new Date("2026-04-04T00:20:00Z");

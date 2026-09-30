@@ -14,6 +14,7 @@ export const ELO_BALANCE_GAP_CEILING = 50;
 export const POINTS_BALANCE_VARIETY_TOLERANCE = 1.5;
 export const FULL_SHARED_COURT_REPEAT_PENALTY = 6;
 export const FULL_REPEAT_REST_TOLERANCE = 1;
+const MIXED_VARIETY_COMPARE_EPSILON = 1e-9;
 
 export function buildRestSummary<
   T extends Pick<ActiveMatchmakerV3Player, "restTurns">,
@@ -366,6 +367,37 @@ export function compareRestSummaries(
   return 0;
 }
 
+function compareRestSummariesWithTolerance(
+  left: V3RestSummary,
+  right: V3RestSummary,
+  tolerance = 1
+) {
+  const totalDiff = right.totalRestTurns - left.totalRestTurns;
+  if (Math.abs(totalDiff) > tolerance) {
+    return totalDiff;
+  }
+
+  const minimumDiff = right.minimumRestTurns - left.minimumRestTurns;
+  if (Math.abs(minimumDiff) > tolerance) {
+    return minimumDiff;
+  }
+
+  for (
+    let index = 0;
+    index < Math.max(left.restTurnVector.length, right.restTurnVector.length);
+    index++
+  ) {
+    const leftRestTurns = left.restTurnVector[index] ?? 0;
+    const rightRestTurns = right.restTurnVector[index] ?? 0;
+    const restDiff = rightRestTurns - leftRestTurns;
+    if (Math.abs(restDiff) > tolerance) {
+      return restDiff;
+    }
+  }
+
+  return 0;
+}
+
 function compareConsecutivePlayFairness<T extends ActiveMatchmakerV3Player>(
   left: V3SingleCourtSelection<T>,
   right: V3SingleCourtSelection<T>
@@ -424,6 +456,43 @@ export function compareSingleCourtSelections<
       const consecutivePlayCompare = compareConsecutivePlayFairness(left, right);
       if (consecutivePlayCompare !== 0) {
         return consecutivePlayCompare;
+      }
+    }
+
+    if (
+      left.mixedVarietyPenalty !== undefined ||
+      right.mixedVarietyPenalty !== undefined
+    ) {
+      if (shouldRespectPlayerRest(options)) {
+        const moreRestCompare = compareMoreRestDeficitTotals(
+          left.players,
+          right.players
+        );
+        if (moreRestCompare !== 0) {
+          return moreRestCompare;
+        }
+
+        const restCompare = compareRestSummariesWithTolerance(
+          left.restSummary,
+          right.restSummary
+        );
+        if (restCompare !== 0) {
+          return restCompare;
+        }
+      }
+
+      const mixedVarietyDiff =
+        (left.mixedVarietyPenalty ?? 0) -
+        (right.mixedVarietyPenalty ?? 0);
+      if (Math.abs(mixedVarietyDiff) > MIXED_VARIETY_COMPARE_EPSILON) {
+        return mixedVarietyDiff;
+      }
+
+      const mixedGlobalVarietyDiff =
+        (left.mixedGlobalVarietyPenalty ?? 0) -
+        (right.mixedGlobalVarietyPenalty ?? 0);
+      if (Math.abs(mixedGlobalVarietyDiff) > MIXED_VARIETY_COMPARE_EPSILON) {
+        return mixedGlobalVarietyDiff;
       }
     }
 
@@ -608,6 +677,43 @@ export function compareBatchSelections<T extends ActiveMatchmakerV3Player>(
       Math.abs(maxBalanceDiff) > balanceVarietyTolerance
     ) {
       return maxBalanceDiff;
+    }
+
+    if (
+      left.totalMixedVarietyPenalty !== undefined ||
+      right.totalMixedVarietyPenalty !== undefined
+    ) {
+      if (shouldRespectPlayerRest(options)) {
+        const moreRestCompare = compareMoreRestDeficitTotals(
+          left.selections.flatMap((selection) => selection.players),
+          right.selections.flatMap((selection) => selection.players)
+        );
+        if (moreRestCompare !== 0) {
+          return moreRestCompare;
+        }
+
+        const restCompare = compareRestSummariesWithTolerance(
+          left.restSummary,
+          right.restSummary
+        );
+        if (restCompare !== 0) {
+          return restCompare;
+        }
+      }
+
+      const mixedVarietyDiff =
+        (left.totalMixedVarietyPenalty ?? 0) -
+        (right.totalMixedVarietyPenalty ?? 0);
+      if (Math.abs(mixedVarietyDiff) > MIXED_VARIETY_COMPARE_EPSILON) {
+        return mixedVarietyDiff;
+      }
+
+      const mixedGlobalVarietyDiff =
+        (left.totalMixedGlobalVarietyPenalty ?? 0) -
+        (right.totalMixedGlobalVarietyPenalty ?? 0);
+      if (Math.abs(mixedGlobalVarietyDiff) > MIXED_VARIETY_COMPARE_EPSILON) {
+        return mixedGlobalVarietyDiff;
+      }
     }
 
     const varietyDiff = compareBalanceFirstBatchVariety(left, right);

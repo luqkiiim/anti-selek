@@ -125,6 +125,9 @@ export interface V3SingleCourtSelection<
   partnerRepeatPenalty: number;
   opponentRepeatPenalty: number;
   exactRematchPenalty: number;
+  mixedVarietyPenalty?: number;
+  mixedGlobalVarietyPenalty?: number;
+  mixedGame?: boolean;
   consecutivePlayCount: number;
   consecutivePlayMaxBurden: number;
   consecutivePlayTotalBurden: number;
@@ -175,6 +178,8 @@ export interface V3BatchSelection<
   totalPartnerRepeatPenalty: number;
   totalOpponentRepeatPenalty: number;
   totalExactRematchPenalty: number;
+  totalMixedVarietyPenalty?: number;
+  totalMixedGlobalVarietyPenalty?: number;
   totalRandomScore: number;
   totalPairingRandomScore: number;
   sidePairingLayoutKeys: [string, string];

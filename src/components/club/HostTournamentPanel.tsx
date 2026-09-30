@@ -257,6 +257,7 @@ export function HostTournamentPanel({
             onChange={onPairingModeChange}
             openLabel={openModeLabel}
             mixedLabel={mixedModeLabel}
+            matchmakingStyle={matchmakingStyle}
           />
         </div>
 

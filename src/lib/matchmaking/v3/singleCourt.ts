@@ -7,6 +7,13 @@ import {
 } from "./consecutive";
 import { evaluateBalancedPartitions } from "./balance";
 import {
+  buildMixedVarietyContext,
+  getSingleMixedGlobalVarietyPenalty,
+  getMixedVarietyPenalty,
+  isMixedPartitionForSides,
+} from "./mixedVariety";
+import type { V3MixedHistoryMatch } from "./mixedVariety";
+import {
   buildExactRematchHistory,
   buildOpponentRepeatHistory,
   buildPartnerRepeatHistory,
@@ -221,6 +228,7 @@ function searchCandidatePool<T extends MatchmakerV3Player>({
   opponentHistory,
   socialMixHistory,
   consecutivePlayHistory,
+  mixedVarietyContext,
   respectPlayerRest,
   selectionConstraints,
   pairingRandomSalt,
@@ -238,6 +246,7 @@ function searchCandidatePool<T extends MatchmakerV3Player>({
   opponentHistory: ReturnType<typeof buildOpponentRepeatHistory>;
   socialMixHistory: ReturnType<typeof buildSocialMixHistory>;
   consecutivePlayHistory: ReturnType<typeof buildConsecutivePlayHistory>;
+  mixedVarietyContext: ReturnType<typeof buildMixedVarietyContext> | null;
   respectPlayerRest: boolean;
   selectionConstraints?: V3SelectionConstraints<ActiveMatchmakerV3Player<T>>;
   pairingRandomSalt: number;
@@ -330,6 +339,12 @@ function searchCandidatePool<T extends MatchmakerV3Player>({
       }
 
       validPartitionCount += 1;
+      const isMixedGame = mixedVarietyContext
+        ? isMixedPartitionForSides(
+            partition,
+            mixedVarietyContext.sideByUserId
+          )
+        : false;
 
       const selection: V3SingleCourtSelection<ActiveMatchmakerV3Player<T>> = {
         ids,
@@ -362,6 +377,21 @@ function searchCandidatePool<T extends MatchmakerV3Player>({
           partition,
           rematchHistory
         ),
+        ...(mixedVarietyContext
+          ? {
+              mixedVarietyPenalty: getMixedVarietyPenalty(
+                ids,
+                isMixedGame,
+                mixedVarietyContext
+              ),
+              mixedGlobalVarietyPenalty:
+                getSingleMixedGlobalVarietyPenalty(
+                  isMixedGame,
+                  mixedVarietyContext
+                ),
+              mixedGame: isMixedGame,
+            }
+          : {}),
         ...consecutivePlayMetrics,
         randomScore,
         pairingRandomScore: getPartitionPairingRandomScore(
@@ -464,6 +494,7 @@ export function findBestSingleCourtSelectionV3<T extends MatchmakerV3Player>(
     sessionMode,
     sessionType,
     completedMatches = [],
+    mixedHistoryMatches,
     excludedQuartetKey,
     excludedQuartetKeys,
     excludedPartitionKey,
@@ -482,6 +513,7 @@ export function findBestSingleCourtSelectionV3<T extends MatchmakerV3Player>(
       team2: [string, string];
       completedAt?: Date | null;
     }>;
+    mixedHistoryMatches?: V3MixedHistoryMatch[];
     excludedQuartetKey?: string;
     excludedQuartetKeys?: ReadonlySet<string>;
     excludedPartitionKey?: string;
@@ -565,6 +597,14 @@ export function findBestSingleCourtSelectionV3<T extends MatchmakerV3Player>(
   const opponentHistory = buildOpponentRepeatHistory(completedMatches);
   const socialMixHistory = buildSocialMixHistory(completedMatches);
   const consecutivePlayHistory = buildConsecutivePlayHistory(completedMatches);
+  const mixedVarietyContext =
+    sessionMode === SessionMode.MIXICANO &&
+    (sessionType === SessionType.POINTS || sessionType === SessionType.ELO)
+      ? buildMixedVarietyContext(
+          players,
+          mixedHistoryMatches ?? completedMatches
+        )
+      : null;
   let searchedCandidatePool = initialCandidatePool;
   let totalQuartetCount = 0;
   let totalValidPartitionCount = 0;
@@ -589,6 +629,7 @@ export function findBestSingleCourtSelectionV3<T extends MatchmakerV3Player>(
       opponentHistory,
       socialMixHistory,
       consecutivePlayHistory,
+      mixedVarietyContext,
       respectPlayerRest,
       selectionConstraints,
       pairingRandomSalt,
@@ -618,6 +659,7 @@ export function findBestSingleCourtSelectionV3<T extends MatchmakerV3Player>(
           opponentHistory,
           socialMixHistory,
           consecutivePlayHistory,
+          mixedVarietyContext,
           respectPlayerRest,
           selectionConstraints,
           pairingRandomSalt,

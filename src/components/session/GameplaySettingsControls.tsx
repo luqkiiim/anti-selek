@@ -121,11 +121,13 @@ export function PairingModeControl({
   onChange,
   openLabel,
   mixedLabel,
+  matchmakingStyle,
 }: {
   value: SessionPairingMode;
   onChange: (value: SessionPairingMode) => void;
   openLabel: string;
   mixedLabel: string;
+  matchmakingStyle?: SessionMatchmakingStyle;
 }) {
   return (
     <div className="space-y-1.5">
@@ -145,7 +147,9 @@ export function PairingModeControl({
       <p className="text-sm leading-5 text-gray-600">
         {value === SessionPairingMode.OPEN
           ? "Any combination of players can form a team, regardless of gender."
-          : "Each doubles team uses one player from each mixed-pairing side (normally a man and a woman). Check player pairing settings if needed."}
+          : matchmakingStyle === SessionMatchmakingStyle.BALANCED
+            ? "Aims for a fair mix of mixed and same-gender games, adjusting to the available players and pairing settings."
+            : "Each doubles team uses one player from each mixed-pairing side (normally a man and a woman). Check player pairing settings if needed."}
       </p>
     </div>
   );

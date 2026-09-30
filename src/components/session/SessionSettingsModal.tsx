@@ -238,6 +238,7 @@ export function SessionSettingsModal({
                 onChange={onPairingModeChange}
                 openLabel="Open"
                 mixedLabel="Mixed"
+                matchmakingStyle={matchmakingStyleDraft}
               />
               <BalanceMetricControl
                 value={balanceMetricDraft}
