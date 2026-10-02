@@ -4,6 +4,8 @@ import { SessionType } from "../../../types/enums";
 import {
   buildRestSummary,
   compareBatchSelections,
+  compareBalancedMixedBatchSelections,
+  compareBalancedMixedSingleCourtSelections,
   compareSingleCourtSelections,
 } from "./scoring";
 import type {
@@ -43,6 +45,7 @@ function createSelection(
     balanceGap,
     pointDiffGap = 0,
     sharedCourtRepeatPenalty = 0,
+    sharedCourtEncounterFrequencyPenalty = 0,
     partnerCoveragePenalty = 0,
     opponentCoveragePenalty = 0,
     partnerRepeatPenalty = 0,
@@ -61,6 +64,7 @@ function createSelection(
     balanceGap: number;
     pointDiffGap?: number;
     sharedCourtRepeatPenalty?: number;
+    sharedCourtEncounterFrequencyPenalty?: number;
     partnerCoveragePenalty?: number;
     opponentCoveragePenalty?: number;
     partnerRepeatPenalty?: number;
@@ -100,6 +104,7 @@ function createSelection(
     balanceGap,
     pointDiffGap,
     sharedCourtRepeatPenalty,
+    sharedCourtEncounterFrequencyPenalty,
     partnerCoveragePenalty,
     opponentCoveragePenalty,
     partnerRepeatPenalty,
@@ -125,6 +130,7 @@ function createBatchSelection({
   maxPointDiffGap = 0,
   totalPointDiffGap = 0,
   totalSharedCourtRepeatPenalty = 0,
+  totalSharedCourtEncounterFrequencyPenalty = 0,
   totalPartnerCoveragePenalty = 0,
   totalOpponentCoveragePenalty = 0,
   totalPartnerRepeatPenalty = 0,
@@ -144,6 +150,7 @@ function createBatchSelection({
   maxPointDiffGap?: number;
   totalPointDiffGap?: number;
   totalSharedCourtRepeatPenalty?: number;
+  totalSharedCourtEncounterFrequencyPenalty?: number;
   totalPartnerCoveragePenalty?: number;
   totalOpponentCoveragePenalty?: number;
   totalPartnerRepeatPenalty?: number;
@@ -162,6 +169,8 @@ function createBatchSelection({
     balanceGap: maxBalanceGap,
     pointDiffGap: maxPointDiffGap,
     sharedCourtRepeatPenalty: totalSharedCourtRepeatPenalty,
+    sharedCourtEncounterFrequencyPenalty:
+      totalSharedCourtEncounterFrequencyPenalty,
     partnerCoveragePenalty: totalPartnerCoveragePenalty,
     opponentCoveragePenalty: totalOpponentCoveragePenalty,
     partnerRepeatPenalty: totalPartnerRepeatPenalty,
@@ -185,6 +194,7 @@ function createBatchSelection({
     maxPointDiffGap,
     totalPointDiffGap,
     totalSharedCourtRepeatPenalty,
+    totalSharedCourtEncounterFrequencyPenalty,
     totalPartnerCoveragePenalty,
     totalOpponentCoveragePenalty,
     totalPartnerRepeatPenalty,
@@ -229,6 +239,11 @@ function createBatchFromSelections(
       (sum, selection) => sum + selection.sharedCourtRepeatPenalty,
       0
     ),
+    totalSharedCourtEncounterFrequencyPenalty: selections.reduce(
+      (sum, selection) =>
+        sum + (selection.sharedCourtEncounterFrequencyPenalty ?? 0),
+      0
+    ),
     totalPartnerCoveragePenalty: selections.reduce(
       (sum, selection) => sum + selection.partnerCoveragePenalty,
       0
@@ -263,6 +278,327 @@ function createBatchFromSelections(
 }
 
 describe("matchmaking v3 scoring", () => {
+  it("orders Balanced Mixed court novelty by pair count, encounter frequency, relationships, then composition", () => {
+    const noRepeatedPairs = createSelection({
+      balanceGap: 0,
+      sharedCourtRepeatPenalty: 0,
+      sharedCourtEncounterFrequencyPenalty: 0,
+      exactRematchPenalty: 0,
+      mixedVarietyPenalty: 10,
+    });
+    const oneRepeatedPair = createSelection({
+      balanceGap: 0,
+      sharedCourtRepeatPenalty: 1,
+      sharedCourtEncounterFrequencyPenalty: 1,
+      exactRematchPenalty: 0,
+      mixedVarietyPenalty: 0,
+    });
+    expect(
+      compareBalancedMixedSingleCourtSelections(
+        noRepeatedPairs,
+        oneRepeatedPair,
+        SessionType.ELO
+      )
+    ).toBeLessThan(0);
+
+    const onePairSixEncounters = createSelection({
+      balanceGap: 0,
+      sharedCourtRepeatPenalty: 1,
+      sharedCourtEncounterFrequencyPenalty: 6,
+      partnerCoveragePenalty: 1,
+      mixedVarietyPenalty: 9,
+      exactRematchPenalty: 0,
+    });
+    const twoRepeatedPairs = createSelection({
+      balanceGap: 0,
+      sharedCourtRepeatPenalty: 2,
+      sharedCourtEncounterFrequencyPenalty: 2,
+      partnerCoveragePenalty: 0,
+      mixedVarietyPenalty: 0,
+      exactRematchPenalty: 0,
+    });
+    expect(
+      compareBalancedMixedSingleCourtSelections(
+        onePairSixEncounters,
+        twoRepeatedPairs,
+        SessionType.ELO
+      )
+    ).toBeLessThan(0);
+
+    const lowerFrequency = createSelection({
+      balanceGap: 0,
+      sharedCourtRepeatPenalty: 1,
+      sharedCourtEncounterFrequencyPenalty: 2,
+      partnerCoveragePenalty: 0,
+      mixedVarietyPenalty: 9,
+      exactRematchPenalty: 0,
+    });
+    const higherFrequency = createSelection({
+      balanceGap: 0,
+      sharedCourtRepeatPenalty: 1,
+      sharedCourtEncounterFrequencyPenalty: 5,
+      partnerCoveragePenalty: 0,
+      mixedVarietyPenalty: 0,
+      exactRematchPenalty: 0,
+    });
+    expect(
+      compareBalancedMixedSingleCourtSelections(
+        lowerFrequency,
+        higherFrequency,
+        SessionType.ELO
+      )
+    ).toBeLessThan(0);
+
+    const betterRelationships = createSelection({
+      balanceGap: 0,
+      sharedCourtRepeatPenalty: 1,
+      sharedCourtEncounterFrequencyPenalty: 2,
+      partnerCoveragePenalty: 0,
+      mixedVarietyPenalty: 9,
+      exactRematchPenalty: 0,
+    });
+    const betterComposition = createSelection({
+      balanceGap: 0,
+      sharedCourtRepeatPenalty: 1,
+      sharedCourtEncounterFrequencyPenalty: 2,
+      partnerCoveragePenalty: 1,
+      mixedVarietyPenalty: 0,
+      exactRematchPenalty: 0,
+    });
+    expect(
+      compareBalancedMixedSingleCourtSelections(
+        betterRelationships,
+        betterComposition,
+        SessionType.ELO
+      )
+    ).toBeLessThan(0);
+
+    const sameExposureAndRelationships = createSelection({
+      balanceGap: 0,
+      sharedCourtRepeatPenalty: 1,
+      sharedCourtEncounterFrequencyPenalty: 2,
+      partnerCoveragePenalty: 0,
+      mixedVarietyPenalty: 0,
+      mixedGlobalVarietyPenalty: 0,
+      exactRematchPenalty: 0,
+    });
+    expect(
+      compareBalancedMixedSingleCourtSelections(
+        sameExposureAndRelationships,
+        betterRelationships,
+        SessionType.ELO
+      )
+    ).toBeLessThan(0);
+
+    const categoryPreferred = createSelection({
+      balanceGap: 42,
+      sharedCourtRepeatPenalty: 1,
+      sharedCourtEncounterFrequencyPenalty: 2,
+      partnerCoveragePenalty: 0,
+      mixedVarietyPenalty: 0,
+      exactRematchPenalty: 0,
+    });
+    const categoryDeferred = createSelection({
+      balanceGap: 0,
+      sharedCourtRepeatPenalty: 1,
+      sharedCourtEncounterFrequencyPenalty: 2,
+      partnerCoveragePenalty: 0,
+      mixedVarietyPenalty: 0,
+      exactRematchPenalty: 0,
+    });
+    expect(
+      compareBalancedMixedSingleCourtSelections(
+        categoryPreferred,
+        categoryDeferred,
+        SessionType.ELO,
+        { leftCategoryPenalty: 0, rightCategoryPenalty: 1 }
+      )
+    ).toBeLessThan(0);
+  });
+
+  it("keeps Balanced Mixed variety inside the ELO ceiling and falls back to best balance", () => {
+    const balancedButRepeated = createSelection({
+      balanceGap: 8,
+      sharedCourtRepeatPenalty: 4,
+      exactRematchPenalty: 0,
+      mixedVarietyPenalty: 0,
+    });
+    const acceptableFresh = createSelection({
+      balanceGap: 42,
+      sharedCourtRepeatPenalty: 0,
+      exactRematchPenalty: 0,
+      mixedVarietyPenalty: 8,
+    });
+    const outsideCeilingAndFresh = createSelection({
+      balanceGap: 70,
+      sharedCourtRepeatPenalty: 0,
+      exactRematchPenalty: 0,
+      mixedVarietyPenalty: 0,
+    });
+    expect(
+      compareBalancedMixedSingleCourtSelections(
+        acceptableFresh,
+        balancedButRepeated,
+        SessionType.ELO
+      )
+    ).toBeLessThan(0);
+    expect(
+      compareBalancedMixedSingleCourtSelections(
+        outsideCeilingAndFresh,
+        acceptableFresh,
+        SessionType.ELO
+      )
+    ).toBeGreaterThan(0);
+
+    const noAcceptableFresh = createSelection({
+      balanceGap: 80,
+      sharedCourtRepeatPenalty: 0,
+      exactRematchPenalty: 0,
+      mixedVarietyPenalty: 0,
+    });
+    expect(
+      compareBalancedMixedSingleCourtSelections(
+        acceptableFresh,
+        noAcceptableFresh,
+        SessionType.ELO
+      )
+    ).toBeLessThan(0);
+    const unavailableAtCeiling = createSelection({
+      balanceGap: 70,
+      sharedCourtRepeatPenalty: 0,
+      exactRematchPenalty: 0,
+      mixedVarietyPenalty: 0,
+    });
+    expect(
+      compareBalancedMixedSingleCourtSelections(
+        noAcceptableFresh,
+        unavailableAtCeiling,
+        SessionType.ELO
+      )
+    ).toBeGreaterThan(0);
+  });
+
+  it("orders Balanced Mixed batches by total repeated pairs before per-court burden and frequency", () => {
+    const oneRepeatedPair = createBatchSelection({
+      maxBalanceGap: 42,
+      totalBalanceGap: 42,
+      totalSharedCourtRepeatPenalty: 1,
+      totalSharedCourtEncounterFrequencyPenalty: 6,
+      totalMixedVarietyPenalty: 10,
+    });
+    const twoRepeatedPairs = createBatchSelection({
+      maxBalanceGap: 8,
+      totalBalanceGap: 8,
+      totalSharedCourtRepeatPenalty: 2,
+      totalSharedCourtEncounterFrequencyPenalty: 2,
+      totalMixedVarietyPenalty: 0,
+    });
+    expect(
+      compareBalancedMixedBatchSelections(
+        oneRepeatedPair,
+        twoRepeatedPairs,
+        SessionType.ELO
+      )
+    ).toBeLessThan(0);
+
+    const fewerEncounters = createBatchSelection({
+      maxBalanceGap: 42,
+      totalBalanceGap: 42,
+      totalSharedCourtRepeatPenalty: 1,
+      totalSharedCourtEncounterFrequencyPenalty: 2,
+      totalMixedVarietyPenalty: 10,
+    });
+    const moreEncounters = createBatchSelection({
+      maxBalanceGap: 8,
+      totalBalanceGap: 8,
+      totalSharedCourtRepeatPenalty: 1,
+      totalSharedCourtEncounterFrequencyPenalty: 5,
+      totalMixedVarietyPenalty: 0,
+    });
+    expect(
+      compareBalancedMixedBatchSelections(
+        fewerEncounters,
+        moreEncounters,
+        SessionType.ELO
+      )
+    ).toBeLessThan(0);
+
+    const makeDistinctCourt = (
+      selection: V3SingleCourtSelection,
+      prefix: string
+    ) => {
+      const players = selection.players.map((player, index) => ({
+        ...player,
+        userId: `${prefix}${index + 1}`,
+      })) as V3SingleCourtSelection["players"];
+      const ids = players.map((player) => player.userId) as V3SingleCourtSelection["ids"];
+      return {
+        ...selection,
+        players,
+        ids,
+        partition: {
+          team1: [ids[0], ids[1]] as [string, string],
+          team2: [ids[2], ids[3]] as [string, string],
+        },
+      };
+    };
+    const worseCourtDistribution = createBatchFromSelections([
+      makeDistinctCourt(
+        createSelection({
+          balanceGap: 0,
+          sharedCourtRepeatPenalty: 2,
+          exactRematchPenalty: 0,
+          mixedVarietyPenalty: 0,
+        }),
+        "A"
+      ),
+      makeDistinctCourt(
+        createSelection({
+          balanceGap: 0,
+          sharedCourtRepeatPenalty: 0,
+          exactRematchPenalty: 0,
+          mixedVarietyPenalty: 0,
+        }),
+        "B"
+      ),
+    ]);
+    const balancedCourtDistribution = createBatchFromSelections([
+      makeDistinctCourt(
+        createSelection({
+          balanceGap: 0,
+          sharedCourtRepeatPenalty: 1,
+          exactRematchPenalty: 0,
+          mixedVarietyPenalty: 0,
+        }),
+        "C"
+      ),
+      makeDistinctCourt(
+        createSelection({
+          balanceGap: 0,
+          sharedCourtRepeatPenalty: 1,
+          exactRematchPenalty: 0,
+          mixedVarietyPenalty: 0,
+        }),
+        "D"
+      ),
+    ]);
+    const left = {
+      ...worseCourtDistribution,
+      totalMixedVarietyPenalty: 0,
+      totalSharedCourtRepeatPenalty: 2,
+      totalSharedCourtEncounterFrequencyPenalty: 2,
+    };
+    const right = {
+      ...balancedCourtDistribution,
+      totalMixedVarietyPenalty: 0,
+      totalSharedCourtRepeatPenalty: 2,
+      totalSharedCourtEncounterFrequencyPenalty: 2,
+    };
+    expect(
+      compareBalancedMixedBatchSelections(left, right, SessionType.ELO)
+    ).toBeGreaterThan(0);
+  });
+
   it("keeps Elo balance ahead of rest outside the safe window", () => {
     const higherRest = createSelection({
       restTurns: [4, 4, 4, 4],

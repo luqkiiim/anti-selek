@@ -4,6 +4,7 @@ import {
   sortArrivalPriorityPlayers,
 } from "../arrivalPriority";
 import { evaluateBalancedPartitions } from "./balance";
+import { getBalancedMixedBatchCategoryPenalty } from "./balancedMixedRotation";
 import { buildCandidatePool } from "./candidatePool";
 import { getEmptyConsecutivePlayMetrics } from "./consecutive";
 import {
@@ -23,10 +24,12 @@ import {
   getOpponentRepeatPenalty,
   getPartnerCoveragePenalty,
   getPartnerRepeatPenalty,
+  getSharedCourtEncounterFrequencyPenalty,
   getSharedCourtRepeatPenalty,
 } from "./rematch";
 import {
   buildRestSummary,
+  compareBalancedMixedSingleCourtSelections,
   compareBatchSelections,
   compareSingleCourtSelections,
   ELO_BALANCE_GAP_CEILING,
@@ -64,6 +67,8 @@ const MAX_BATCH_SEARCH_BRANCHES = 50000;
 const MAX_BATCH_SEARCH_MS = 2000;
 const MAX_ELO_CEILING_RESCUE_BRANCHES = 10000;
 const MAX_ELO_CEILING_RESCUE_MS = 100;
+const MAX_BALANCED_MIXED_PAIR_RESCUE_BRANCHES = 50000;
+const MAX_BALANCED_MIXED_PAIR_RESCUE_MS = 150;
 
 function buildCombinations<T>(items: T[], size: number): T[][] {
   if (size === 0) {
@@ -211,6 +216,11 @@ function summarizeBatch<T extends ActiveMatchmakerV3Player>(
     ),
     totalSharedCourtRepeatPenalty: selections.reduce(
       (sum, selection) => sum + selection.sharedCourtRepeatPenalty,
+      0
+    ),
+    totalSharedCourtEncounterFrequencyPenalty: selections.reduce(
+      (sum, selection) =>
+        sum + (selection.sharedCourtEncounterFrequencyPenalty ?? 0),
       0
     ),
     totalPartnerCoveragePenalty: selections.reduce(
@@ -511,6 +521,8 @@ function buildQuartetSelections<T extends MatchmakerV3Player>(
           partition,
           socialMixHistory
         ),
+        sharedCourtEncounterFrequencyPenalty:
+          getSharedCourtEncounterFrequencyPenalty(partition, socialMixHistory),
         partnerCoveragePenalty: getPartnerCoveragePenalty(
           partition,
           socialMixHistory
@@ -658,7 +670,8 @@ function buildArrivalPriorityBatchCandidatePool<T extends MatchmakerV3Player>(
 function compressQuartetSelections<T extends ActiveMatchmakerV3Player>(
   selections: V3SingleCourtSelection<T>[],
   sessionType: SessionType,
-  respectPlayerRest: boolean
+  respectPlayerRest: boolean,
+  mixedVarietyContext: ReturnType<typeof buildMixedVarietyContext> | null
 ) {
   const groupedSelections = new Map<string, V3SingleCourtSelection<T>[]>();
 
@@ -697,14 +710,51 @@ function compressQuartetSelections<T extends ActiveMatchmakerV3Player>(
       );
     })();
 
-    const sortedGroup = [...eligibleGroup].sort((left, right) =>
-      compareSingleCourtSelections(left, right, sessionType, {
+    const compareQuartetSelections = (
+      left: V3SingleCourtSelection<T>,
+      right: V3SingleCourtSelection<T>
+    ) => {
+      if (
+        mixedVarietyContext &&
+        (left.mixedVarietyPenalty !== undefined ||
+          right.mixedVarietyPenalty !== undefined)
+      ) {
+        return compareBalancedMixedSingleCourtSelections(
+          left,
+          right,
+          sessionType,
+          {
+            respectPlayerRest,
+            leftCategoryPenalty: getBalancedMixedBatchCategoryPenalty(
+              mixedVarietyContext,
+              [left]
+            ),
+            rightCategoryPenalty: getBalancedMixedBatchCategoryPenalty(
+              mixedVarietyContext,
+              [right]
+            ),
+          }
+        );
+      }
+      return compareSingleCourtSelections(left, right, sessionType, {
         respectPlayerRest,
-      })
+      });
+    };
+    const isBalancedMixedGroup = Boolean(
+      mixedVarietyContext &&
+        eligibleGroup.some(
+          (selection) => selection.mixedVarietyPenalty !== undefined
+        )
     );
+    const sortedGroup = [...eligibleGroup].sort(compareQuartetSelections);
     const firstSelection = sortedGroup[0];
 
     if (!firstSelection) {
+      continue;
+    }
+
+    if (isBalancedMixedGroup) {
+      compressedSelections.push(...eligibleGroup);
       continue;
     }
 
@@ -848,6 +898,67 @@ function findGreedyBatchSelection<T extends ActiveMatchmakerV3Player>(
   }
 
   return summarizeBatch(chosen, pairingRandomSalts, mixedVarietyContext);
+}
+
+function findBestBalancedMixedPairAfterSearchLimit<
+  T extends ActiveMatchmakerV3Player,
+>(
+  quartetSelections: V3SingleCourtSelection<T>[],
+  lockedIds: Set<string>,
+  courtCount: number,
+  sessionType: SessionType,
+  respectPlayerRest: boolean,
+  pairingRandomSalts: V3BatchPairingRandomSalts,
+  mixedVarietyContext: ReturnType<typeof buildMixedVarietyContext> | null,
+  pairingRandomMode: V3BatchPairingRandomMode
+) {
+  if (courtCount !== 2 || !mixedVarietyContext) return null;
+
+  const candidates: V3BatchSelection<T>[] = [];
+  const deadline = Date.now() + MAX_BALANCED_MIXED_PAIR_RESCUE_MS;
+  let exploredBranches = 0;
+  let stopSearch = false;
+
+  for (let leftIndex = 0; leftIndex < quartetSelections.length; leftIndex += 1) {
+    const left = quartetSelections[leftIndex];
+    if (!left) continue;
+
+    for (
+      let rightIndex = leftIndex + 1;
+      rightIndex < quartetSelections.length;
+      rightIndex += 1
+    ) {
+      exploredBranches += 1;
+      if (
+        exploredBranches > MAX_BALANCED_MIXED_PAIR_RESCUE_BRANCHES ||
+        Date.now() >= deadline
+      ) {
+        stopSearch = true;
+        break;
+      }
+
+      const right = quartetSelections[rightIndex];
+      if (!right || left.ids.some((id) => right.ids.includes(id))) continue;
+      const selectedIds = new Set([...left.ids, ...right.ids]);
+      if ([...lockedIds].some((id) => !selectedIds.has(id))) continue;
+      candidates.push(
+        summarizeBatch(
+          [left, right],
+          pairingRandomSalts,
+          mixedVarietyContext
+        )
+      );
+    }
+
+    if (stopSearch) break;
+  }
+
+  return chooseBestBatchSelection(
+    candidates,
+    sessionType,
+    respectPlayerRest,
+    pairingRandomMode
+  );
 }
 
 function findEloCeilingBatchAfterSearchLimit<T extends ActiveMatchmakerV3Player>(
@@ -1083,7 +1194,8 @@ function searchBatchCandidatePlayers<T extends MatchmakerV3Player>({
       pairingRandomSalt: pairingRandomSalts.combined,
     }),
     sessionType,
-    respectPlayerRest
+    respectPlayerRest,
+    mixedVarietyContext
   );
 
   if (quartetSelections.length < courtCount) {
@@ -1117,6 +1229,9 @@ function searchBatchCandidatePlayers<T extends MatchmakerV3Player>({
 
   const completedSelections: V3BatchSelection<ActiveMatchmakerV3Player<T>>[] = [];
   const completedSelectionKeys = new Set<string>();
+  const maxSkippedAnchorCount = mixedVarietyContext
+    ? Math.max(0, candidatePlayerIds.length - requiredPlayerCount)
+    : 2;
   const maxBranches = searchLimits?.maxBranches ?? MAX_BATCH_SEARCH_BRANCHES;
   const searchDeadline = Date.now() + (searchLimits?.maxMs ?? MAX_BATCH_SEARCH_MS);
   let searchLimitReached = false;
@@ -1198,7 +1313,7 @@ function searchBatchCandidatePlayers<T extends MatchmakerV3Player>({
 
     if (
       allowAnchorSkipping &&
-      skippedAnchorCount < 2 &&
+      skippedAnchorCount < maxSkippedAnchorCount &&
       !lockedIds.has(anchorId)
     ) {
       const skippedIds = new Set(usedIds);
@@ -1225,10 +1340,39 @@ function searchBatchCandidatePlayers<T extends MatchmakerV3Player>({
         )
       : null;
 
+  const balancedMixedPairRescueSelection =
+    sessionMode === SessionMode.MIXICANO &&
+    mixedVarietyContext &&
+    searchLimitReached
+      ? findBestBalancedMixedPairAfterSearchLimit(
+          quartetSelections,
+          lockedIds,
+          courtCount,
+          sessionType,
+          respectPlayerRest,
+          pairingRandomSalts,
+          mixedVarietyContext,
+          pairingRandomMode
+        )
+      : null;
+
+  for (const rescueSelection of [
+    ceilingRescueSelection,
+    balancedMixedPairRescueSelection,
+  ]) {
+    if (!rescueSelection) continue;
+    const key = rescueSelection.selections
+      .map(getSelectionKey)
+      .sort()
+      .join(";");
+    if (!completedSelectionKeys.has(key)) {
+      completedSelectionKeys.add(key);
+      completedSelections.push(rescueSelection);
+    }
+  }
+
   const bestSelection = chooseBestBatchSelection(
-    ceilingRescueSelection
-      ? [...completedSelections, ceilingRescueSelection]
-      : completedSelections,
+    completedSelections,
     sessionType,
     respectPlayerRest,
     pairingRandomMode
@@ -1365,6 +1509,7 @@ export function findBestBatchSelectionV3<T extends MatchmakerV3Player>(
     chosenTotalPartnerRepeatPenalty: null,
     chosenTotalOpponentRepeatPenalty: null,
     chosenTotalExactRematchPenalty: null,
+    chosenTotalSharedCourtEncounterFrequencyPenalty: null,
   };
 
   if (
@@ -1426,7 +1571,7 @@ export function findBestBatchSelectionV3<T extends MatchmakerV3Player>(
       selectionConstraints,
       pairingRandomSalts,
       pairingRandomMode,
-      allowAnchorSkipping: Boolean(selectionOverride),
+      allowAnchorSkipping: Boolean(selectionOverride) || Boolean(mixedVarietyContext),
     });
 
     attemptRecords.push({ pool, result: attempt });
@@ -1608,6 +1753,8 @@ export function findBestBatchSelectionV3<T extends MatchmakerV3Player>(
         finalSelection.totalOpponentRepeatPenalty;
       debug.chosenTotalExactRematchPenalty =
         finalSelection.totalExactRematchPenalty;
+      debug.chosenTotalSharedCourtEncounterFrequencyPenalty =
+        finalSelection.totalSharedCourtEncounterFrequencyPenalty ?? 0;
     } else {
       debug.failureReason = "NOT_ENOUGH_NON_OVERLAPPING_COURTS";
     }

@@ -239,6 +239,237 @@ function compareBalanceFirstBatchVariety<T extends ActiveMatchmakerV3Player>(
   );
 }
 
+function compareBalancedMixedSingleCourtVariety<T extends ActiveMatchmakerV3Player>(
+  left: V3SingleCourtSelection<T>,
+  right: V3SingleCourtSelection<T>
+) {
+  return (
+    left.sharedCourtRepeatPenalty - right.sharedCourtRepeatPenalty ||
+    (left.sharedCourtEncounterFrequencyPenalty ?? 0) -
+      (right.sharedCourtEncounterFrequencyPenalty ?? 0) ||
+    left.partnerCoveragePenalty - right.partnerCoveragePenalty ||
+    left.opponentCoveragePenalty - right.opponentCoveragePenalty ||
+    left.partnerRepeatPenalty - right.partnerRepeatPenalty ||
+    left.opponentRepeatPenalty - right.opponentRepeatPenalty ||
+    left.exactRematchPenalty - right.exactRematchPenalty
+  );
+}
+
+export function compareBalancedMixedSingleCourtSelections<
+  T extends ActiveMatchmakerV3Player,
+>(
+  left: V3SingleCourtSelection<T>,
+  right: V3SingleCourtSelection<T>,
+  sessionType: SessionType,
+  options?: {
+    respectPlayerRest?: boolean;
+    leftCategoryPenalty?: number;
+    rightCategoryPenalty?: number;
+    includeRandom?: boolean;
+  }
+) {
+  const balanceDiff = left.balanceGap - right.balanceGap;
+  if (sessionType === SessionType.ELO) {
+    const leftWithinCeiling = left.balanceGap <= ELO_BALANCE_GAP_CEILING;
+    const rightWithinCeiling = right.balanceGap <= ELO_BALANCE_GAP_CEILING;
+    if (leftWithinCeiling !== rightWithinCeiling) {
+      return leftWithinCeiling ? -1 : 1;
+    }
+    if (!leftWithinCeiling && balanceDiff !== 0) return balanceDiff;
+  } else if (
+    sessionType === SessionType.POINTS &&
+    Math.abs(balanceDiff) > POINTS_BALANCE_VARIETY_TOLERANCE
+  ) {
+    return balanceDiff;
+  }
+
+  if (shouldRespectPlayerRest(options)) {
+    const consecutivePlayCompare = compareConsecutivePlayFairness(left, right);
+    if (consecutivePlayCompare !== 0) return consecutivePlayCompare;
+    const moreRestCompare = compareMoreRestDeficitTotals(
+      left.players,
+      right.players
+    );
+    if (moreRestCompare !== 0) return moreRestCompare;
+    const restCompare = compareRestSummariesWithTolerance(
+      left.restSummary,
+      right.restSummary
+    );
+    if (restCompare !== 0) return restCompare;
+  }
+
+  const varietyDiff = compareBalancedMixedSingleCourtVariety(left, right);
+  if (varietyDiff !== 0) return varietyDiff;
+
+  const personalMixedDiff =
+    (left.mixedVarietyPenalty ?? 0) - (right.mixedVarietyPenalty ?? 0);
+  if (Math.abs(personalMixedDiff) > MIXED_VARIETY_COMPARE_EPSILON) {
+    return personalMixedDiff;
+  }
+  const globalMixedDiff =
+    (left.mixedGlobalVarietyPenalty ?? 0) -
+    (right.mixedGlobalVarietyPenalty ?? 0);
+  if (Math.abs(globalMixedDiff) > MIXED_VARIETY_COMPARE_EPSILON) {
+    return globalMixedDiff;
+  }
+  const categoryDiff =
+    (options?.leftCategoryPenalty ?? 0) -
+    (options?.rightCategoryPenalty ?? 0);
+  if (Math.abs(categoryDiff) > MIXED_VARIETY_COMPARE_EPSILON) {
+    return categoryDiff;
+  }
+
+  if (balanceDiff !== 0) return balanceDiff;
+  if (sessionType === SessionType.POINTS) {
+    const pointDiffGapDiff = left.pointDiffGap - right.pointDiffGap;
+    if (pointDiffGapDiff !== 0) return pointDiffGapDiff;
+  }
+  return options?.includeRandom === false
+    ? 0
+    : compareSingleCourtRandomTieBreak(left, right);
+}
+
+function getBatchSharedCourtRepeatBurden<T extends ActiveMatchmakerV3Player>(
+  selection: V3BatchSelection<T>
+) {
+  return Math.max(
+    0,
+    ...selection.selections.map((court) => court.sharedCourtRepeatPenalty)
+  );
+}
+
+function getBatchSharedCourtEncounterFrequency<T extends ActiveMatchmakerV3Player>(
+  selection: V3BatchSelection<T>
+) {
+  return (
+    selection.totalSharedCourtEncounterFrequencyPenalty ??
+    selection.selections.reduce(
+      (total, court) =>
+        total + (court.sharedCourtEncounterFrequencyPenalty ?? 0),
+      0
+    )
+  );
+}
+
+export function compareBalancedMixedBatchSelections<
+  T extends ActiveMatchmakerV3Player,
+>(
+  left: V3BatchSelection<T>,
+  right: V3BatchSelection<T>,
+  sessionType: SessionType,
+  options?: {
+    respectPlayerRest?: boolean;
+    leftCategoryPenalty?: number;
+    rightCategoryPenalty?: number;
+    includeRandom?: boolean;
+  }
+) {
+  const maxBalanceDiff = left.maxBalanceGap - right.maxBalanceGap;
+  const totalBalanceDiff = left.totalBalanceGap - right.totalBalanceGap;
+  if (sessionType === SessionType.ELO) {
+    const leftWithinCeiling = left.maxBalanceGap <= ELO_BALANCE_GAP_CEILING;
+    const rightWithinCeiling = right.maxBalanceGap <= ELO_BALANCE_GAP_CEILING;
+    if (leftWithinCeiling !== rightWithinCeiling) {
+      return leftWithinCeiling ? -1 : 1;
+    }
+    if (!leftWithinCeiling) {
+      if (maxBalanceDiff !== 0) return maxBalanceDiff;
+      if (totalBalanceDiff !== 0) return totalBalanceDiff;
+    }
+  } else if (
+    sessionType === SessionType.POINTS &&
+    Math.abs(maxBalanceDiff) > POINTS_BALANCE_VARIETY_TOLERANCE
+  ) {
+    return maxBalanceDiff;
+  }
+
+  if (shouldRespectPlayerRest(options)) {
+    const leftPlayers = left.selections.flatMap((selection) => selection.players);
+    const rightPlayers = right.selections.flatMap((selection) => selection.players);
+    const getConsecutiveVector = (selection: V3BatchSelection<T>) => [
+      selection.selections.reduce(
+        (sum, court) => sum + court.consecutivePlayCount,
+        0
+      ),
+      Math.max(
+        0,
+        ...selection.selections.map((court) => court.consecutivePlayMaxBurden)
+      ),
+      selection.selections.reduce(
+        (sum, court) => sum + court.consecutivePlayTotalBurden,
+        0
+      ),
+    ];
+    const leftConsecutive = getConsecutiveVector(left);
+    const rightConsecutive = getConsecutiveVector(right);
+    for (let index = 0; index < leftConsecutive.length; index += 1) {
+      const difference =
+        (leftConsecutive[index] ?? 0) - (rightConsecutive[index] ?? 0);
+      if (difference !== 0) return difference;
+    }
+    const moreRestCompare = compareMoreRestDeficitTotals(
+      leftPlayers,
+      rightPlayers
+    );
+    if (moreRestCompare !== 0) return moreRestCompare;
+    const restCompare = compareRestSummariesWithTolerance(
+      left.restSummary,
+      right.restSummary
+    );
+    if (restCompare !== 0) return restCompare;
+  }
+
+  const repeatDiff =
+    left.totalSharedCourtRepeatPenalty - right.totalSharedCourtRepeatPenalty;
+  if (repeatDiff !== 0) return repeatDiff;
+  const worstCourtRepeatDiff =
+    getBatchSharedCourtRepeatBurden(left) -
+    getBatchSharedCourtRepeatBurden(right);
+  if (worstCourtRepeatDiff !== 0) return worstCourtRepeatDiff;
+  const encounterFrequencyDiff =
+    getBatchSharedCourtEncounterFrequency(left) -
+    getBatchSharedCourtEncounterFrequency(right);
+  if (encounterFrequencyDiff !== 0) return encounterFrequencyDiff;
+  const relationshipDiff =
+    left.totalPartnerCoveragePenalty - right.totalPartnerCoveragePenalty ||
+    left.totalOpponentCoveragePenalty - right.totalOpponentCoveragePenalty ||
+    left.totalPartnerRepeatPenalty - right.totalPartnerRepeatPenalty ||
+    left.totalOpponentRepeatPenalty - right.totalOpponentRepeatPenalty ||
+    left.totalExactRematchPenalty - right.totalExactRematchPenalty;
+  if (relationshipDiff !== 0) return relationshipDiff;
+
+  const personalMixedDiff =
+    (left.totalMixedVarietyPenalty ?? 0) -
+    (right.totalMixedVarietyPenalty ?? 0);
+  if (Math.abs(personalMixedDiff) > MIXED_VARIETY_COMPARE_EPSILON) {
+    return personalMixedDiff;
+  }
+  const globalMixedDiff =
+    (left.totalMixedGlobalVarietyPenalty ?? 0) -
+    (right.totalMixedGlobalVarietyPenalty ?? 0);
+  if (Math.abs(globalMixedDiff) > MIXED_VARIETY_COMPARE_EPSILON) {
+    return globalMixedDiff;
+  }
+  const categoryDiff =
+    (options?.leftCategoryPenalty ?? 0) -
+    (options?.rightCategoryPenalty ?? 0);
+  if (Math.abs(categoryDiff) > MIXED_VARIETY_COMPARE_EPSILON) {
+    return categoryDiff;
+  }
+
+  if (maxBalanceDiff !== 0) return maxBalanceDiff;
+  if (totalBalanceDiff !== 0) return totalBalanceDiff;
+  if (sessionType === SessionType.POINTS) {
+    const maxPointDiffGapDiff = left.maxPointDiffGap - right.maxPointDiffGap;
+    if (maxPointDiffGapDiff !== 0) return maxPointDiffGapDiff;
+    const totalPointDiffGapDiff = left.totalPointDiffGap - right.totalPointDiffGap;
+    if (totalPointDiffGapDiff !== 0) return totalPointDiffGapDiff;
+  }
+  return options?.includeRandom === false
+    ? 0
+    : compareBatchRandomTieBreak(left, right);
+}
+
 function isWithinFullRepeatRestTolerance(
   alternative: V3RestSummary,
   fullRepeat: V3RestSummary
@@ -450,49 +681,24 @@ export function compareSingleCourtSelections<
     }
 
     if (
+      left.mixedVarietyPenalty !== undefined ||
+      right.mixedVarietyPenalty !== undefined
+    ) {
+      return compareBalancedMixedSingleCourtSelections(
+        left,
+        right,
+        sessionType,
+        options
+      );
+    }
+
+    if (
       usesBalanceFirstVariety(sessionType) &&
       shouldRespectPlayerRest(options)
     ) {
       const consecutivePlayCompare = compareConsecutivePlayFairness(left, right);
       if (consecutivePlayCompare !== 0) {
         return consecutivePlayCompare;
-      }
-    }
-
-    if (
-      left.mixedVarietyPenalty !== undefined ||
-      right.mixedVarietyPenalty !== undefined
-    ) {
-      if (shouldRespectPlayerRest(options)) {
-        const moreRestCompare = compareMoreRestDeficitTotals(
-          left.players,
-          right.players
-        );
-        if (moreRestCompare !== 0) {
-          return moreRestCompare;
-        }
-
-        const restCompare = compareRestSummariesWithTolerance(
-          left.restSummary,
-          right.restSummary
-        );
-        if (restCompare !== 0) {
-          return restCompare;
-        }
-      }
-
-      const mixedVarietyDiff =
-        (left.mixedVarietyPenalty ?? 0) -
-        (right.mixedVarietyPenalty ?? 0);
-      if (Math.abs(mixedVarietyDiff) > MIXED_VARIETY_COMPARE_EPSILON) {
-        return mixedVarietyDiff;
-      }
-
-      const mixedGlobalVarietyDiff =
-        (left.mixedGlobalVarietyPenalty ?? 0) -
-        (right.mixedGlobalVarietyPenalty ?? 0);
-      if (Math.abs(mixedGlobalVarietyDiff) > MIXED_VARIETY_COMPARE_EPSILON) {
-        return mixedGlobalVarietyDiff;
       }
     }
 
@@ -683,37 +889,12 @@ export function compareBatchSelections<T extends ActiveMatchmakerV3Player>(
       left.totalMixedVarietyPenalty !== undefined ||
       right.totalMixedVarietyPenalty !== undefined
     ) {
-      if (shouldRespectPlayerRest(options)) {
-        const moreRestCompare = compareMoreRestDeficitTotals(
-          left.selections.flatMap((selection) => selection.players),
-          right.selections.flatMap((selection) => selection.players)
-        );
-        if (moreRestCompare !== 0) {
-          return moreRestCompare;
-        }
-
-        const restCompare = compareRestSummariesWithTolerance(
-          left.restSummary,
-          right.restSummary
-        );
-        if (restCompare !== 0) {
-          return restCompare;
-        }
-      }
-
-      const mixedVarietyDiff =
-        (left.totalMixedVarietyPenalty ?? 0) -
-        (right.totalMixedVarietyPenalty ?? 0);
-      if (Math.abs(mixedVarietyDiff) > MIXED_VARIETY_COMPARE_EPSILON) {
-        return mixedVarietyDiff;
-      }
-
-      const mixedGlobalVarietyDiff =
-        (left.totalMixedGlobalVarietyPenalty ?? 0) -
-        (right.totalMixedGlobalVarietyPenalty ?? 0);
-      if (Math.abs(mixedGlobalVarietyDiff) > MIXED_VARIETY_COMPARE_EPSILON) {
-        return mixedGlobalVarietyDiff;
-      }
+      return compareBalancedMixedBatchSelections(
+        left,
+        right,
+        sessionType,
+        options
+      );
     }
 
     const varietyDiff = compareBalanceFirstBatchVariety(left, right);

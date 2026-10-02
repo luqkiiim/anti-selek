@@ -120,6 +120,7 @@ export interface V3SingleCourtSelection<
   balanceGap: number;
   pointDiffGap: number;
   sharedCourtRepeatPenalty: number;
+  sharedCourtEncounterFrequencyPenalty?: number;
   partnerCoveragePenalty: number;
   opponentCoveragePenalty: number;
   partnerRepeatPenalty: number;
@@ -203,6 +204,7 @@ export interface V3SingleCourtDebug {
   chosenPartnerRepeatPenalty: number | null;
   chosenOpponentRepeatPenalty: number | null;
   chosenExactRematchPenalty: number | null;
+  chosenSharedCourtEncounterFrequencyPenalty: number | null;
   chosenConsecutivePlayCount: number | null;
   chosenConsecutivePlayMaxBurden: number | null;
   chosenConsecutivePlayTotalBurden: number | null;
@@ -225,6 +227,7 @@ export interface V3BatchSelection<
   maxPointDiffGap: number;
   totalPointDiffGap: number;
   totalSharedCourtRepeatPenalty: number;
+  totalSharedCourtEncounterFrequencyPenalty?: number;
   totalPartnerCoveragePenalty: number;
   totalOpponentCoveragePenalty: number;
   totalPartnerRepeatPenalty: number;
@@ -271,6 +274,7 @@ export interface V3BatchDebug {
   chosenTotalPartnerRepeatPenalty: number | null;
   chosenTotalOpponentRepeatPenalty: number | null;
   chosenTotalExactRematchPenalty: number | null;
+  chosenTotalSharedCourtEncounterFrequencyPenalty: number | null;
 }
 
 export interface V3BatchResult<

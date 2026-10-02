@@ -71,7 +71,8 @@ function createSelection(
   players: ActiveMatchmakerV3Player[],
   ids: [string, string, string, string],
   mixedVarietyPenalty = 0,
-  balanceGap = 0
+  balanceGap = 0,
+  metrics: Partial<V3SingleCourtSelection<ActiveMatchmakerV3Player>> = {}
 ): V3SingleCourtSelection<ActiveMatchmakerV3Player> {
   const playersById = new Map(players.map((player) => [player.userId, player]));
   const selectedPlayers = ids.map((id) => playersById.get(id)!);
@@ -111,6 +112,7 @@ function createSelection(
     consecutivePlayTotalBurden: 0,
     randomScore: 0,
     pairingRandomScore: 0,
+    ...metrics,
   };
 }
 
@@ -143,14 +145,66 @@ function createBatch(
     totalBalanceGap: selection.balanceGap,
     maxPointDiffGap: selection.pointDiffGap,
     totalPointDiffGap: selection.pointDiffGap,
-    totalSharedCourtRepeatPenalty: 0,
-    totalPartnerCoveragePenalty: 0,
-    totalOpponentCoveragePenalty: 0,
-    totalPartnerRepeatPenalty: 0,
-    totalOpponentRepeatPenalty: 0,
-    totalExactRematchPenalty: 0,
+    totalSharedCourtRepeatPenalty: selection.sharedCourtRepeatPenalty,
+    totalSharedCourtEncounterFrequencyPenalty:
+      selection.sharedCourtEncounterFrequencyPenalty ?? 0,
+    totalPartnerCoveragePenalty: selection.partnerCoveragePenalty,
+    totalOpponentCoveragePenalty: selection.opponentCoveragePenalty,
+    totalPartnerRepeatPenalty: selection.partnerRepeatPenalty,
+    totalOpponentRepeatPenalty: selection.opponentRepeatPenalty,
+    totalExactRematchPenalty: selection.exactRematchPenalty,
     totalMixedVarietyPenalty,
     totalMixedGlobalVarietyPenalty: 0,
+    totalRandomScore: 0,
+    totalPairingRandomScore: 0,
+    sidePairingLayoutKeys: ["", ""],
+    sidePairingRandomScores: [0, 0],
+  };
+}
+
+function createMultiCourtBatch(
+  selections: V3SingleCourtSelection<ActiveMatchmakerV3Player>[]
+): V3BatchSelection<ActiveMatchmakerV3Player> {
+  const sum = (getValue: (selection: V3SingleCourtSelection) => number) =>
+    selections.reduce((total, selection) => total + getValue(selection), 0);
+  return {
+    selections,
+    restSummary: {
+      totalRestTurns: 0,
+      minimumRestTurns: 0,
+      restTurnVector: Array(selections.length * 4).fill(0),
+    },
+    maxBalanceGap: Math.max(0, ...selections.map((selection) => selection.balanceGap)),
+    totalBalanceGap: sum((selection) => selection.balanceGap),
+    maxPointDiffGap: Math.max(0, ...selections.map((selection) => selection.pointDiffGap)),
+    totalPointDiffGap: sum((selection) => selection.pointDiffGap),
+    totalSharedCourtRepeatPenalty: sum(
+      (selection) => selection.sharedCourtRepeatPenalty
+    ),
+    totalSharedCourtEncounterFrequencyPenalty: sum(
+      (selection) => selection.sharedCourtEncounterFrequencyPenalty ?? 0
+    ),
+    totalPartnerCoveragePenalty: sum(
+      (selection) => selection.partnerCoveragePenalty
+    ),
+    totalOpponentCoveragePenalty: sum(
+      (selection) => selection.opponentCoveragePenalty
+    ),
+    totalPartnerRepeatPenalty: sum(
+      (selection) => selection.partnerRepeatPenalty
+    ),
+    totalOpponentRepeatPenalty: sum(
+      (selection) => selection.opponentRepeatPenalty
+    ),
+    totalExactRematchPenalty: sum(
+      (selection) => selection.exactRematchPenalty
+    ),
+    totalMixedVarietyPenalty: sum(
+      (selection) => selection.mixedVarietyPenalty ?? 0
+    ),
+    totalMixedGlobalVarietyPenalty: sum(
+      (selection) => selection.mixedGlobalVarietyPenalty ?? 0
+    ),
     totalRandomScore: 0,
     totalPairingRandomScore: 0,
     sidePairingLayoutKeys: ["", ""],
@@ -173,7 +227,151 @@ function event(
 }
 
 describe("Balanced Mixed rotation safety", () => {
-  it("caps whole-batch deferrals at two and never replaces with a higher projected count", () => {
+  it("accepts pure courtmate and relationship exposure wins from override candidates", () => {
+    const players = createPlayers(8);
+    const choose = buildBalancedMixedSingleSelectionOverride({
+      players,
+      mixedHistoryMatches: [],
+      completedMatches: [],
+      sessionMode: SessionMode.MIXICANO,
+      sessionType: SessionType.POINTS,
+      respectPlayerRest: true,
+      decisionId: "pure-exposure-improvement",
+      timestamp: BASE_TIME,
+    })!;
+    const baseline = createSelection(players, ["P1", "P2", "P5", "P6"], 0, 0, {
+      sharedCourtRepeatPenalty: 2,
+      sharedCourtEncounterFrequencyPenalty: 5,
+      partnerRepeatPenalty: 1,
+    });
+    const fresherCourt = createSelection(
+      players,
+      ["P1", "P2", "P7", "P8"],
+      0,
+      0,
+      {
+        sharedCourtRepeatPenalty: 1,
+        sharedCourtEncounterFrequencyPenalty: 1,
+        partnerRepeatPenalty: 1,
+      }
+    );
+    const courtSelection = choose({
+      baselineSelection: baseline,
+      candidates: [fresherCourt],
+    });
+    if (
+      courtSelection === null ||
+      isV3SelectionOverrideRejection(courtSelection)
+    ) {
+      throw new Error("Expected the fresh court candidate to be selected");
+    }
+    expect(courtSelection.ids).toEqual(fresherCourt.ids);
+
+    const equalCourtNoveltyBaseline = createSelection(
+      players,
+      ["P1", "P2", "P5", "P6"],
+      0,
+      0,
+      {
+        sharedCourtRepeatPenalty: 1,
+        sharedCourtEncounterFrequencyPenalty: 2,
+        partnerRepeatPenalty: 1,
+      }
+    );
+    const betterRelationship = createSelection(
+      players,
+      ["P1", "P2", "P7", "P8"],
+      0,
+      0,
+      {
+        sharedCourtRepeatPenalty: 1,
+        sharedCourtEncounterFrequencyPenalty: 2,
+        partnerRepeatPenalty: 0,
+      }
+    );
+    const relationshipSelection = choose({
+      baselineSelection: equalCourtNoveltyBaseline,
+      candidates: [betterRelationship],
+    });
+    if (
+      relationshipSelection === null ||
+      isV3SelectionOverrideRejection(relationshipSelection)
+    ) {
+      throw new Error("Expected the relationship-variety candidate to be selected");
+    }
+    expect(relationshipSelection.ids).toEqual(betterRelationship.ids);
+  });
+
+  it("allows a fair batch exposure improvement that rotates three players", () => {
+    const players = [
+      ...["U1", "U2", "U3", "U4", "U5"].map((id) =>
+        createPlayer(id, "UPPER")
+      ),
+      ...["L1", "L2", "L3", "L4", "L5", "L6"].map((id) =>
+        createPlayer(id, "LOWER")
+      ),
+    ];
+    const baseline = createMultiCourtBatch([
+      createSelection(players, ["U1", "U2", "L1", "L2"], 0, 0, {
+        sharedCourtRepeatPenalty: 3,
+        sharedCourtEncounterFrequencyPenalty: 6,
+      }),
+      createSelection(players, ["U3", "U4", "L3", "L4"], 0, 0, {
+        sharedCourtRepeatPenalty: 3,
+        sharedCourtEncounterFrequencyPenalty: 6,
+      }),
+    ]);
+    const fresherCandidate = createMultiCourtBatch([
+      createSelection(players, ["U1", "U2", "L1", "L5"]),
+      createSelection(players, ["U3", "U5", "L3", "L6"]),
+    ]);
+    const baselineSelections = baseline.selections;
+    const candidateSelections = fresherCandidate.selections;
+    const choose = buildBalancedMixedBatchSelectionOverride({
+      players,
+      mixedHistoryMatches: [],
+      completedMatches: [],
+      sessionMode: SessionMode.MIXICANO,
+      sessionType: SessionType.POINTS,
+      respectPlayerRest: true,
+      decisionId: "three-player-exposure-rotation",
+      timestamp: BASE_TIME,
+    })!;
+
+    expect(
+      compareBalancedMixedProjectedCounts(
+        candidateSelections.flatMap((selection) => selection.ids),
+        baselineSelections.flatMap((selection) => selection.ids),
+        players,
+        new Map()
+      )
+    ).toBe(0);
+    expect(
+      isBalancedMixedRotationBatchWithinBounds({
+        baselineSelections,
+        candidateSelections,
+        players,
+        sessionType: SessionType.POINTS,
+        respectPlayerRest: true,
+      })
+    ).toBe(true);
+
+    const selected = choose({
+      baselineSelection: baseline,
+      candidates: [baseline, fresherCandidate],
+    });
+    if (selected === null || isV3SelectionOverrideRejection(selected)) {
+      throw new Error("Expected the safe shared-court improvement to be selected");
+    }
+    expect(selected.selections.flatMap((selection) => selection.ids)).toEqual(
+      candidateSelections.flatMap((selection) => selection.ids)
+    );
+    expect(
+      selected.selections[0]?.balancedMixedRotation?.deferredPlayerIds
+    ).toHaveLength(3);
+  });
+
+  it("allows three-player exposure swaps while blocking a higher projected count", () => {
     const players = [
       createPlayer("P1", "UPPER"),
       createPlayer("P2", "UPPER"),
@@ -221,7 +419,7 @@ describe("Balanced Mixed rotation safety", () => {
         sessionType: SessionType.POINTS,
         respectPlayerRest: true,
       })
-    ).toBe(false);
+    ).toBe(true);
 
     Object.assign(players.find((player) => player.userId === "P9")!, {
       matchesPlayed: 2,

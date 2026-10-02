@@ -54,9 +54,12 @@ import {
 } from "@/lib/matchmaking/partitioning";
 import {
   buildActivePlayers,
+  buildRestSummary,
+  compareBalancedMixedBatchSelections,
   findBestBatchSelectionV3,
   findBestSingleCourtSelectionV3,
   type MatchmakerV3Player,
+  type V3BatchSelection,
   type V3BatchDebug,
   type V3SingleCourtSelection,
 } from "@/lib/matchmaking/v3";
@@ -72,6 +75,7 @@ import {
 } from "@/lib/matchmaking/v3/balancedMixedRotation";
 import {
   buildMixedVarietyContext,
+  getGlobalMixedVarietyPenalty,
   getMixedMatchClassification,
 } from "@/lib/matchmaking/v3/mixedVariety";
 import { getExactPartitionKey } from "@/lib/matchmaking/v3/rematch";
@@ -190,6 +194,81 @@ function getV3Selections(
     typed.push(selection);
   }
   return typed;
+}
+
+function buildV3BatchSelection(
+  selections: V3SingleCourtSelection[],
+  context: ReturnType<typeof buildMixedVarietyContext>
+): V3BatchSelection | null {
+  if (selections.length === 0) return null;
+
+  const players = selections.flatMap((selection) => selection.players);
+  const mixedMatchCount = selections.filter(
+    (selection) => selection.mixedGame
+  ).length;
+
+  return {
+    selections,
+    restSummary: buildRestSummary(players),
+    maxBalanceGap: Math.max(...selections.map((selection) => selection.balanceGap)),
+    totalBalanceGap: selections.reduce(
+      (total, selection) => total + selection.balanceGap,
+      0
+    ),
+    maxPointDiffGap: Math.max(...selections.map((selection) => selection.pointDiffGap)),
+    totalPointDiffGap: selections.reduce(
+      (total, selection) => total + selection.pointDiffGap,
+      0
+    ),
+    totalSharedCourtRepeatPenalty: selections.reduce(
+      (total, selection) => total + selection.sharedCourtRepeatPenalty,
+      0
+    ),
+    totalSharedCourtEncounterFrequencyPenalty: selections.reduce(
+      (total, selection) =>
+        total + (selection.sharedCourtEncounterFrequencyPenalty ?? 0),
+      0
+    ),
+    totalPartnerCoveragePenalty: selections.reduce(
+      (total, selection) => total + selection.partnerCoveragePenalty,
+      0
+    ),
+    totalOpponentCoveragePenalty: selections.reduce(
+      (total, selection) => total + selection.opponentCoveragePenalty,
+      0
+    ),
+    totalPartnerRepeatPenalty: selections.reduce(
+      (total, selection) => total + selection.partnerRepeatPenalty,
+      0
+    ),
+    totalOpponentRepeatPenalty: selections.reduce(
+      (total, selection) => total + selection.opponentRepeatPenalty,
+      0
+    ),
+    totalExactRematchPenalty: selections.reduce(
+      (total, selection) => total + selection.exactRematchPenalty,
+      0
+    ),
+    totalMixedVarietyPenalty: selections.reduce(
+      (total, selection) => total + (selection.mixedVarietyPenalty ?? 0),
+      0
+    ),
+    totalMixedGlobalVarietyPenalty: getGlobalMixedVarietyPenalty(
+      context,
+      mixedMatchCount,
+      selections.length
+    ),
+    totalRandomScore: selections.reduce(
+      (total, selection) => total + selection.randomScore,
+      0
+    ),
+    totalPairingRandomScore: selections.reduce(
+      (total, selection) => total + selection.pairingRandomScore,
+      0
+    ),
+    sidePairingLayoutKeys: ["", ""],
+    sidePairingRandomScores: [0, 0],
+  };
 }
 
 function withMatchmakingReason<
@@ -2322,7 +2401,7 @@ export function selectReplacementMatchRespectingSkips({
   throw getSkipNextAlternativeError();
 }
 
-function compareGroupedBatchSelections(
+export function compareGroupedBatchSelections(
   left: readonly PoolAwareSelection[],
   right: readonly PoolAwareSelection[],
   sessionData: GenerateMatchSession,
@@ -2354,6 +2433,7 @@ function compareGroupedBatchSelections(
     );
   const leftPlayers = getPlayers(left);
   const rightPlayers = getPlayers(right);
+  let compareRotationVariety = false;
   if (fairnessPolicy) {
     const projectedCompare = compareBalancedMixedProjectedCounts(
       left.flatMap((selection) => selection.ids),
@@ -2393,29 +2473,12 @@ function compareGroupedBatchSelections(
         );
         return index < 0 ? Number.POSITIVE_INFINITY : index;
       };
-      const catchupDiff = getCatchupRank(left) - getCatchupRank(right);
-      if (catchupDiff !== 0) return catchupDiff;
-
-      const getPersonalPenalty = (selections: V3SingleCourtSelection[] | null) =>
-        (selections ?? []).reduce(
-          (total, selection) =>
-            total + Number(selection?.mixedVarietyPenalty ?? 0),
-          0
-        );
-      const personalDiff =
-        getPersonalPenalty(leftV3) - getPersonalPenalty(rightV3);
-      if (Math.abs(personalDiff) > 1e-9) return personalDiff;
-
-      const categoryDiff =
-        getBalancedMixedBatchCategoryPenalty(
-          rotationPolicy.context,
-          leftV3 ?? []
-        ) -
-        getBalancedMixedBatchCategoryPenalty(
-          rotationPolicy.context,
-          rightV3 ?? []
-        );
-      if (Math.abs(categoryDiff) > 1e-9) return categoryDiff;
+      const leftCatchupRank = getCatchupRank(left);
+      const rightCatchupRank = getCatchupRank(right);
+      if (leftCatchupRank !== rightCatchupRank) {
+        return leftCatchupRank < rightCatchupRank ? -1 : 1;
+      }
+      compareRotationVariety = true;
     }
   }
   const fairnessCompare = fairnessPolicy
@@ -2464,6 +2527,33 @@ function compareGroupedBatchSelections(
       -1
     );
     if (restCompare !== 0) return restCompare;
+  }
+
+  if (rotationPolicy && compareRotationVariety) {
+    const leftV3 = getV3Selections(left);
+    const rightV3 = getV3Selections(right);
+    if (!leftV3 || !rightV3) return 0;
+    const leftBatch = buildV3BatchSelection(leftV3, rotationPolicy.context);
+    const rightBatch = buildV3BatchSelection(rightV3, rotationPolicy.context);
+    if (!leftBatch || !rightBatch) return 0;
+
+    const sessionType = getMatchmakerSessionType(sessionData);
+    return compareBalancedMixedBatchSelections(
+      leftBatch,
+      rightBatch,
+      sessionType,
+      {
+        respectPlayerRest: sessionData.respectPlayerRest,
+        leftCategoryPenalty: getBalancedMixedBatchCategoryPenalty(
+          rotationPolicy.context,
+          leftV3
+        ),
+        rightCategoryPenalty: getBalancedMixedBatchCategoryPenalty(
+          rotationPolicy.context,
+          rightV3
+        ),
+      }
+    );
   }
 
   const usesLevelMatch =
@@ -2989,29 +3079,26 @@ export function selectBatchMatches({
         const baselineV3 = getV3Selections(baselineSelections);
         const candidateV3 = getV3Selections(rotationCandidates);
         if (!baselineV3 || !candidateV3) return baselineSelections;
-        const baselinePersonalPenalty = baselineSelections.reduce(
-          (sum, selection) =>
-            sum + (getV3Selections([selection])?.[0].mixedVarietyPenalty ?? 0),
-          0
+        const baselineBatch = buildV3BatchSelection(baselineV3, rotationContext!);
+        const candidateBatch = buildV3BatchSelection(candidateV3, rotationContext!);
+        if (!baselineBatch || !candidateBatch) return baselineSelections;
+        const rotationPriorityCompare = compareBalancedMixedBatchSelections(
+          candidateBatch,
+          baselineBatch,
+          getMatchmakerSessionType(sessionData),
+          {
+            respectPlayerRest: sessionData.respectPlayerRest,
+            leftCategoryPenalty: getBalancedMixedBatchCategoryPenalty(
+              rotationContext!,
+              candidateV3
+            ),
+            rightCategoryPenalty: getBalancedMixedBatchCategoryPenalty(
+              rotationContext!,
+              baselineV3
+            ),
+            includeRandom: false,
+          }
         );
-        const candidatePersonalPenalty = rotationCandidates.reduce(
-          (sum, selection) =>
-            sum + (getV3Selections([selection])?.[0].mixedVarietyPenalty ?? 0),
-          0
-        );
-        const baselineCategoryPenalty = getBalancedMixedBatchCategoryPenalty(
-          rotationContext!,
-          baselineV3
-        );
-        const candidateCategoryPenalty = getBalancedMixedBatchCategoryPenalty(
-          rotationContext!,
-          candidateV3
-        );
-        const improvesComposition =
-          candidatePersonalPenalty < baselinePersonalPenalty - 1e-9 ||
-          (Math.abs(candidatePersonalPenalty - baselinePersonalPenalty) <= 1e-9 &&
-            candidateCategoryPenalty < baselineCategoryPenalty - 1e-9) ||
-          newlyServedObligation;
         const rotationDecision = evaluateBalancedMixedRotationBatchCandidate({
           baselineSelections: baselineV3,
           candidateSelections: candidateV3,
@@ -3021,7 +3108,8 @@ export function selectBatchMatches({
           pendingObligations: rotationPendingObligations,
           sessionType: getMatchmakerSessionType(sessionData),
           respectPlayerRest: sessionData.respectPlayerRest,
-          improvesOtherRotationGoal: improvesComposition,
+          improvesOtherRotationGoal:
+            rotationPriorityCompare < 0 || newlyServedObligation,
         });
         selectedForProjectedCountRepair =
           rotationDecision.accepted && rotationDecision.improvesProjectedCounts;

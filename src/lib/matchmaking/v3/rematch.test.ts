@@ -8,6 +8,9 @@ import {
   getExactRematchPenalty,
   getOpponentRepeatPenalty,
   getPartnerRepeatPenalty,
+  buildSocialMixHistory,
+  getSharedCourtEncounterFrequencyPenalty,
+  getSharedCourtRepeatPenalty,
 } from "./rematch";
 
 describe("matchmaking v3 rematch", () => {
@@ -134,6 +137,37 @@ describe("matchmaking v3 rematch", () => {
         history
       )
     ).toBeCloseTo(1.85 ** 2 * 2 + 0.85 ** 2 * 2, 10);
+  });
+
+  it("counts every historical shared-court encounter across all six player pairs", () => {
+    const match = {
+      team1: ["A", "B"] as [string, string],
+      team2: ["C", "D"] as [string, string],
+      completedAt: new Date("2026-03-18T00:00:00Z"),
+    };
+    const unrelatedRecentMatches = Array.from({ length: 10 }, (_, index) => ({
+      team1: [`X${index}A`, `X${index}B`] as [string, string],
+      team2: [`X${index}C`, `X${index}D`] as [string, string],
+      completedAt: new Date(`2026-03-18T00:${String(index + 2).padStart(2, "0")}:00Z`),
+    }));
+    const history = buildSocialMixHistory([
+      match,
+      { ...match, completedAt: new Date("2026-03-18T00:01:00Z") },
+      ...unrelatedRecentMatches,
+    ]);
+
+    expect(
+      getSharedCourtRepeatPenalty(
+        { team1: ["A", "B"], team2: ["C", "D"] },
+        history
+      )
+    ).toBe(6);
+    expect(
+      getSharedCourtEncounterFrequencyPenalty(
+        { team1: ["A", "B"], team2: ["C", "D"] },
+        history
+      )
+    ).toBe(12);
   });
 
   it("decays older opponent repeats across the recent history window", () => {

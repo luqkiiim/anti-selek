@@ -24,6 +24,7 @@ import {
   getOpponentRepeatPenalty,
   getPartnerCoveragePenalty,
   getPartnerRepeatPenalty,
+  getSharedCourtEncounterFrequencyPenalty,
   getSharedCourtRepeatPenalty,
 } from "./rematch";
 import {
@@ -359,6 +360,8 @@ function searchCandidatePool<T extends MatchmakerV3Player>({
           partition,
           socialMixHistory
         ),
+        sharedCourtEncounterFrequencyPenalty:
+          getSharedCourtEncounterFrequencyPenalty(partition, socialMixHistory),
         partnerCoveragePenalty: getPartnerCoveragePenalty(
           partition,
           socialMixHistory
@@ -575,6 +578,7 @@ export function findBestSingleCourtSelectionV3<T extends MatchmakerV3Player>(
         chosenPartnerRepeatPenalty: null,
         chosenOpponentRepeatPenalty: null,
         chosenExactRematchPenalty: null,
+        chosenSharedCourtEncounterFrequencyPenalty: null,
         chosenConsecutivePlayCount: null,
         chosenConsecutivePlayMaxBurden: null,
         chosenConsecutivePlayTotalBurden: null,
@@ -750,6 +754,7 @@ export function findBestSingleCourtSelectionV3<T extends MatchmakerV3Player>(
     chosenPartnerRepeatPenalty: null,
     chosenOpponentRepeatPenalty: null,
     chosenExactRematchPenalty: null,
+    chosenSharedCourtEncounterFrequencyPenalty: null,
     chosenConsecutivePlayCount: null,
     chosenConsecutivePlayMaxBurden: null,
     chosenConsecutivePlayTotalBurden: null,
@@ -762,6 +767,8 @@ export function findBestSingleCourtSelectionV3<T extends MatchmakerV3Player>(
     debug.chosenPartnerRepeatPenalty = bestSelection.partnerRepeatPenalty;
     debug.chosenOpponentRepeatPenalty = bestSelection.opponentRepeatPenalty;
     debug.chosenExactRematchPenalty = bestSelection.exactRematchPenalty;
+    debug.chosenSharedCourtEncounterFrequencyPenalty =
+      bestSelection.sharedCourtEncounterFrequencyPenalty ?? 0;
     debug.chosenConsecutivePlayCount = bestSelection.consecutivePlayCount;
     debug.chosenConsecutivePlayMaxBurden =
       bestSelection.consecutivePlayMaxBurden;

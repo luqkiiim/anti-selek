@@ -9,6 +9,7 @@ import {
 } from "../../../types/enums";
 import { getEffectiveMixedSide } from "@/lib/mixedSide";
 import { findBestBatchSelectionV3 } from "./batch";
+import { findBestSingleCourtSelectionV3 } from "./singleCourt";
 import type { MatchmakerV3Player, V3BatchSelection } from "./types";
 
 function createPlayer(
@@ -38,6 +39,22 @@ function createLowerPlayer(
     partnerPreference: PartnerPreference.FEMALE_FLEX,
     ...overrides,
   });
+}
+
+function createMixedSidePlayers(
+  upperIds: string[],
+  lowerIds: string[]
+) {
+  return [
+    ...upperIds.map((id) => createPlayer(id, { gender: PlayerGender.MALE })),
+    ...lowerIds.map((id) =>
+      createLowerPlayer(id, { partnerPreference: PartnerPreference.FEMALE_FLEX })
+    ),
+  ];
+}
+
+function quartetKey(players: Array<{ userId: string }>) {
+  return players.map((player) => player.userId).sort().join("|");
 }
 
 function createSequenceRandom(values: number[]) {
@@ -98,6 +115,233 @@ function expectLegalMixedBatch(
 }
 
 describe("matchmaking v3 batch selection", () => {
+  it("chooses the globally better POINTS partition after the other court sets the balance window", () => {
+    const strengths: Record<string, number> = {
+      U1: 6,
+      U2: 3,
+      L1: 0,
+      L2: 3,
+      U3: 9,
+      U4: 3,
+      L3: 0,
+      L4: 0,
+    };
+    const players = createMixedSidePlayers(
+      ["U1", "U2", "U3", "U4"],
+      ["L1", "L2", "L3", "L4"]
+    ).map((player) => ({ ...player, strength: strengths[player.userId]! }));
+    const firstQuartet = new Set(["U1", "U2", "L1", "L2"]);
+    const allowedQuartets = new Set([
+      [...firstQuartet].sort().join("|"),
+      ["U3", "U4", "L3", "L4"].sort().join("|"),
+    ]);
+    const completedMatches = [
+      {
+        team1: ["U1", "L1"] as [string, string],
+        team2: ["U2", "L2"] as [string, string],
+        completedAt: new Date("2026-09-01T00:00:00Z"),
+      },
+    ];
+    const selectionConstraints = {
+      isQuartetAllowed: (quartet: Array<{ userId: string }>) =>
+        allowedQuartets.has(quartetKey(quartet)),
+      normalizePartition: ({
+        partition,
+        playersById,
+      }: {
+        partition: { team1: [string, string]; team2: [string, string] };
+        playersById: Map<string, { gender?: string }>;
+      }) => {
+        const isMixedTeam = (team: [string, string]) =>
+          playersById.get(team[0])?.gender !==
+          playersById.get(team[1])?.gender;
+        return isMixedTeam(partition.team1) && isMixedTeam(partition.team2)
+          ? partition
+          : null;
+      },
+    };
+
+    const locallyBest = findBestSingleCourtSelectionV3(
+      players.filter((player) => firstQuartet.has(player.userId)),
+      {
+        sessionMode: SessionMode.MIXICANO,
+        sessionType: SessionType.POINTS,
+        completedMatches,
+        selectionConstraints,
+        respectPlayerRest: false,
+        randomFn: () => 0,
+      }
+    );
+    expect(locallyBest.selection?.balanceGap).toBe(0);
+    expect(locallyBest.selection?.partnerRepeatPenalty).toBeGreaterThan(0);
+
+    const result = findBestBatchSelectionV3(players, {
+      courtCount: 2,
+      sessionMode: SessionMode.MIXICANO,
+      sessionType: SessionType.POINTS,
+      completedMatches,
+      selectionConstraints,
+      respectPlayerRest: false,
+      randomFn: () => 0,
+    });
+
+    const firstCourt = result.selection?.selections.find(
+      (court) => quartetKey(court.players) === [...firstQuartet].sort().join("|")
+    );
+    expect(result.selection?.selections).toHaveLength(2);
+    expect(result.selection?.maxBalanceGap).toBe(3);
+    expect(firstCourt?.balanceGap).toBe(3);
+    expect(firstCourt?.partnerRepeatPenalty).toBe(0);
+  });
+
+  it("minimizes total repeated courtmates across both courts instead of extending the best first court greedily", () => {
+    const upperIds = ["U1", "U2", "U3", "U4"];
+    const lowerIds = ["L1", "L2", "L3", "L4"];
+    const players = createMixedSidePlayers(upperIds, lowerIds);
+    const quartets = [
+      ["U1", "U2", "L1", "L2"],
+      ["U3", "U4", "L3", "L4"],
+      ["U1", "U3", "L1", "L3"],
+      ["U2", "U4", "L2", "L4"],
+    ];
+    const allowedQuartets = new Set(
+      quartets.map((quartet) => quartet.sort().join("|"))
+    );
+    const completedMatches = [
+      {
+        team1: ["U3", "L3"] as [string, string],
+        team2: ["U4", "L4"] as [string, string],
+        completedAt: new Date("2026-09-01T00:00:00Z"),
+      },
+    ];
+    const selectionConstraints = {
+      isQuartetAllowed: (quartet: Array<{ userId: string }>) =>
+        allowedQuartets.has(quartetKey(quartet)),
+    };
+
+    const locallyBest = findBestSingleCourtSelectionV3(players, {
+      sessionMode: SessionMode.MIXICANO,
+      sessionType: SessionType.POINTS,
+      completedMatches,
+      selectionConstraints,
+      randomFn: () => 0,
+    });
+    expect(quartetKey(locallyBest.selection?.players ?? [])).toBe("L1|L2|U1|U2");
+    expect(locallyBest.selection?.sharedCourtRepeatPenalty).toBe(0);
+
+    const result = findBestBatchSelectionV3(players, {
+      courtCount: 2,
+      sessionMode: SessionMode.MIXICANO,
+      sessionType: SessionType.POINTS,
+      completedMatches,
+      selectionConstraints,
+      randomFn: () => 0,
+    });
+
+    expect(result.selection?.selections).toHaveLength(2);
+    expect(result.selection?.totalSharedCourtRepeatPenalty).toBe(2);
+    expect(
+      result.selection?.selections.map((court) => quartetKey(court.players)).sort()
+    ).toEqual(["L1|L3|U1|U3", "L2|L4|U2|U4"]);
+  });
+
+  it("skips all three leading upper players to choose a fresh two-lower batch", () => {
+    const upperIds = ["U1", "U2", "U3"];
+    const lowerIds = Array.from({ length: 8 }, (_, index) => `L${index + 1}`);
+    const players = createMixedSidePlayers(upperIds, lowerIds);
+    const allowedQuartets = new Set([
+      ["U1", "U2", "L1", "L2"].sort().join("|"),
+      ["L1", "L2", "L3", "L4"].sort().join("|"),
+      ["L5", "L6", "L7", "L8"].sort().join("|"),
+    ]);
+    const completedMatches = upperIds.flatMap((upperId, upperIndex) =>
+      lowerIds.map((lowerId, lowerIndex) => ({
+        team1: [upperId, lowerId] as [string, string],
+        team2: [
+          `F${upperIndex * lowerIds.length + lowerIndex}A`,
+          `F${upperIndex * lowerIds.length + lowerIndex}B`,
+        ] as [string, string],
+        completedAt: new Date(
+          Date.UTC(2026, 8, 1, 0, upperIndex * lowerIds.length + lowerIndex)
+        ),
+      }))
+    );
+
+    const result = findBestBatchSelectionV3(players, {
+      courtCount: 2,
+      sessionMode: SessionMode.MIXICANO,
+      sessionType: SessionType.POINTS,
+      completedMatches,
+      selectionConstraints: {
+        isQuartetAllowed: (quartet) =>
+          allowedQuartets.has(quartetKey(quartet)),
+      },
+      randomFn: () => 0.25,
+    });
+
+    expect(result.selection?.selections).toHaveLength(2);
+    expect(
+      result.selection?.selections.map((court) => quartetKey(court.players)).sort()
+    ).toEqual(
+      [
+        ["L1", "L2", "L3", "L4"].sort().join("|"),
+        ["L5", "L6", "L7", "L8"].sort().join("|"),
+      ].sort()
+    );
+    expect(result.selection?.totalSharedCourtRepeatPenalty).toBe(0);
+    expect(result.selection?.selections.every((court) => !court.mixedGame)).toBe(
+      true
+    );
+  });
+
+  it("finds the globally fresher two-court batch after the initial search is interrupted", () => {
+    const upperIds = ["U1", "U2", "U3"];
+    const lowerIds = Array.from({ length: 8 }, (_, index) => `L${index + 1}`);
+    const players = createMixedSidePlayers(upperIds, lowerIds);
+    const allowedQuartets = new Set([
+      ["U1", "U2", "L1", "L2"].sort().join("|"),
+      ["L1", "L2", "L3", "L4"].sort().join("|"),
+      ["L5", "L6", "L7", "L8"].sort().join("|"),
+    ]);
+    const completedMatches = upperIds.flatMap((upperId, upperIndex) =>
+      lowerIds.map((lowerId, lowerIndex) => ({
+        team1: [upperId, lowerId] as [string, string],
+        team2: [
+          `F${upperIndex * lowerIds.length + lowerIndex}A`,
+          `F${upperIndex * lowerIds.length + lowerIndex}B`,
+        ] as [string, string],
+        completedAt: new Date(
+          Date.UTC(2026, 8, 1, 0, upperIndex * lowerIds.length + lowerIndex)
+        ),
+      }))
+    );
+
+    const result = findBestBatchSelectionV3(players, {
+      courtCount: 2,
+      sessionMode: SessionMode.MIXICANO,
+      sessionType: SessionType.POINTS,
+      completedMatches,
+      selectionConstraints: {
+        isQuartetAllowed: (quartet) =>
+          allowedQuartets.has(quartetKey(quartet)),
+      },
+      searchLimits: { maxBranches: 1 },
+      randomFn: () => 0.25,
+    });
+
+    expect(result.debug.searchLimitReached).toBe(true);
+    expect(result.selection?.selections).toHaveLength(2);
+    expect(
+      result.selection?.selections.map((court) => quartetKey(court.players)).sort()
+    ).toEqual(
+      [
+        ["L1", "L2", "L3", "L4"].sort().join("|"),
+        ["L5", "L6", "L7", "L8"].sort().join("|"),
+      ].sort()
+    );
+    expect(result.selection?.totalSharedCourtRepeatPenalty).toBe(0);
+  });
+
   it("considers all 9 available points players for a single court", () => {
     const result = findBestBatchSelectionV3(createPlayers(9), {
       courtCount: 1,

@@ -114,6 +114,75 @@ describe("matchmaking v3 single-court selection", () => {
     expect(result.selection?.sharedCourtRepeatPenalty).toBeLessThan(6);
   });
 
+  it("chooses a fresh 42-point ELO gap over a repeated 8-point gap and excludes gap 70", () => {
+    const players = [
+      createPlayer("A-U1", { strength: 1100 }),
+      createPlayer("A-U2", { strength: 1000 }),
+      createPlayer("A-L1", {
+        strength: 1084,
+        gender: PlayerGender.FEMALE,
+        partnerPreference: PartnerPreference.FEMALE_FLEX,
+      }),
+      createPlayer("A-L2", {
+        strength: 1000,
+        gender: PlayerGender.FEMALE,
+        partnerPreference: PartnerPreference.FEMALE_FLEX,
+      }),
+      createPlayer("B-U1", { strength: 1100 }),
+      createPlayer("B-U2", { strength: 1000 }),
+      createPlayer("B-L1", {
+        strength: 1016,
+        gender: PlayerGender.FEMALE,
+        partnerPreference: PartnerPreference.FEMALE_FLEX,
+      }),
+      createPlayer("B-L2", {
+        strength: 1000,
+        gender: PlayerGender.FEMALE,
+        partnerPreference: PartnerPreference.FEMALE_FLEX,
+      }),
+      createPlayer("C-U1", { strength: 1200 }),
+      createPlayer("C-U2", { strength: 1000 }),
+      createPlayer("C-L1", {
+        strength: 1060,
+        gender: PlayerGender.FEMALE,
+        partnerPreference: PartnerPreference.FEMALE_FLEX,
+      }),
+      createPlayer("C-L2", {
+        strength: 1000,
+        gender: PlayerGender.FEMALE,
+        partnerPreference: PartnerPreference.FEMALE_FLEX,
+      }),
+    ];
+    const allowedQuartets = new Set([
+      ["A-U1", "A-U2", "A-L1", "A-L2"].sort().join("|"),
+      ["B-U1", "B-U2", "B-L1", "B-L2"].sort().join("|"),
+      ["C-U1", "C-U2", "C-L1", "C-L2"].sort().join("|"),
+    ]);
+    const result = findBestSingleCourtSelectionV3(players, {
+      sessionMode: SessionMode.MIXICANO,
+      sessionType: SessionType.ELO,
+      completedMatches: [
+        {
+          team1: ["A-U1", "A-L1"],
+          team2: ["A-U2", "A-L2"],
+          completedAt: new Date("2026-03-18T00:00:00Z"),
+        },
+      ],
+      selectionConstraints: {
+        isQuartetAllowed: (quartet) =>
+          allowedQuartets.has(
+            quartet.map((player) => player.userId).sort().join("|")
+          ),
+      },
+      randomFn: () => 0.25,
+    });
+
+    expect(result.selection?.ids).toContain("B-U1");
+    expect(result.selection?.balanceGap).toBe(42);
+    expect(result.selection?.sharedCourtRepeatPenalty).toBe(0);
+    expect(result.debug.chosenSharedCourtEncounterFrequencyPenalty).toBe(0);
+  });
+
   it("keeps Elo balance ahead of fresh shared-court variety outside the safe window", () => {
     const result = findBestSingleCourtSelectionV3(
       [

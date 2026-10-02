@@ -5,6 +5,8 @@ import {
 } from "./mixedVariety";
 import {
   compareBatchSelections,
+  compareBalancedMixedBatchSelections,
+  compareBalancedMixedSingleCourtSelections,
   compareSingleCourtSelections,
   compareRestSummaries,
   ELO_BALANCE_GAP_CEILING,
@@ -29,7 +31,6 @@ import {
   parseMatchmakingReasonJson,
 } from "../matchReason";
 
-const SCORE_EPSILON = 1e-9;
 const MAX_PROJECTED_MATCH_SPREAD = 1;
 
 type RotationCategory = "MIXED" | "UPPER" | "LOWER";
@@ -636,7 +637,6 @@ export function isBalancedMixedRotationBatchWithinBounds<T extends MatchmakerV3P
     pendingObligations.map((obligation) => obligation.playerId)
   );
   if (
-    deferred.length > 2 ||
     !hasSafeReplacementCounts(
       deferred,
       added,
@@ -688,10 +688,23 @@ export function isBalancedMixedRotationBatchWithinBounds<T extends MatchmakerV3P
       baselineMaxBalanceGap + POINTS_BALANCE_VARIETY_TOLERANCE
     );
   }
-  return (
-    sessionType === SessionType.ELO &&
-    candidateMaxBalanceGap <= ELO_BALANCE_GAP_CEILING
-  );
+  if (sessionType === SessionType.ELO) {
+    if (candidateMaxBalanceGap <= ELO_BALANCE_GAP_CEILING) return true;
+    if (baselineMaxBalanceGap <= ELO_BALANCE_GAP_CEILING) return false;
+    if (candidateMaxBalanceGap !== baselineMaxBalanceGap) {
+      return candidateMaxBalanceGap < baselineMaxBalanceGap;
+    }
+    const baselineTotalBalanceGap = baselineSelections.reduce(
+      (sum, selection) => sum + selection.balanceGap,
+      0
+    );
+    const candidateTotalBalanceGap = candidateSelections.reduce(
+      (sum, selection) => sum + selection.balanceGap,
+      0
+    );
+    return candidateTotalBalanceGap <= baselineTotalBalanceGap;
+  }
+  return false;
 }
 
 function selectionIsSafe<T extends MatchmakerV3Player>(
@@ -717,7 +730,6 @@ function selectionIsSafe<T extends MatchmakerV3Player>(
   }
 
   if (
-    deferred.length > 2 ||
     !hasSafeReplacementCounts(
       deferred,
       added,
@@ -778,7 +790,15 @@ function selectionIsBalanceSafe<T extends MatchmakerV3Player>(
     return candidate.balanceGap <= bestGap + POINTS_BALANCE_VARIETY_TOLERANCE;
   }
   if (sessionType === SessionType.ELO) {
-    return candidate.balanceGap <= ELO_BALANCE_GAP_CEILING;
+    const withinCeiling = candidates.filter(
+      (selection) => selection.balanceGap <= ELO_BALANCE_GAP_CEILING
+    );
+    if (withinCeiling.length > 0) {
+      return candidate.balanceGap <= ELO_BALANCE_GAP_CEILING;
+    }
+    return candidate.balanceGap === Math.min(
+      ...candidates.map((selection) => selection.balanceGap)
+    );
   }
   return false;
 }
@@ -794,7 +814,6 @@ export function buildBalancedMixedSingleSelectionOverride<T extends MatchmakerV3
   pendingObligations = [],
   decisionId: suppliedDecisionId,
   timestamp: suppliedTimestamp,
-  alreadyDeferredPlayerIds = [],
   enforceProjectedFairness = true,
 }: {
   players: T[];
@@ -905,13 +924,23 @@ export function buildBalancedMixedSingleSelectionOverride<T extends MatchmakerV3
       priorityFairCandidates,
       sessionType
     );
-    const fairnessBaseline = baselineIsSafeReference
-      ? baselineSelection
-      : [...baselineBalanceCandidates].sort((left, right) => {
-          return compareSingleCourtSelections(left, right, sessionType, {
-            respectPlayerRest,
-          });
-      })[0];
+    const fairnessBaseline =
+      baselineBalanceCandidates.find(
+        (candidate) => getKey(candidate) === baselineKey
+      ) ??
+      [...baselineBalanceCandidates].sort((left, right) =>
+        compareBalancedMixedSingleCourtSelections(left, right, sessionType, {
+          respectPlayerRest,
+          leftCategoryPenalty: getCategoryPenalty(
+            context,
+            getSelectionCategories([left], context.sideByUserId)
+          ),
+          rightCategoryPenalty: getCategoryPenalty(
+            context,
+            getSelectionCategories([right], context.sideByUserId)
+          ),
+        })
+      )[0];
     if (!fairnessBaseline) return V3_SELECTION_OVERRIDE_REJECTED;
     const safetyFilteredFairCandidates = projectedFairCandidates.filter(
       (candidate) => {
@@ -928,24 +957,14 @@ export function buildBalancedMixedSingleSelectionOverride<T extends MatchmakerV3
             enforceProjectedFairness
           )
         ) return false;
-        const deferredCount = fairnessBaseline.ids.filter(
-          (userId) => !candidate.ids.includes(userId)
-        ).length;
-        return deferredCount + alreadyDeferredPlayerIds.length <= 2;
+        return true;
       }
     );
     const balanceSafeCandidates = filterFairSingleBalance(
       safetyFilteredFairCandidates,
       sessionType
     );
-    const fairCandidates = balanceSafeCandidates.includes(fairnessBaseline)
-      ? balanceSafeCandidates
-      : [...balanceSafeCandidates, fairnessBaseline];
-    const baselinePersonalPenalty = fairnessBaseline.mixedVarietyPenalty ?? 0;
-    const baselineCategoryPenalty = getCategoryPenalty(
-      context,
-      getSelectionCategories([fairnessBaseline], context.sideByUserId)
-    );
+    const fairCandidates = balanceSafeCandidates;
 
     const eligible = fairCandidates.filter((candidate) => {
       if (candidate === fairnessBaseline) return true;
@@ -960,8 +979,6 @@ export function buildBalancedMixedSingleSelectionOverride<T extends MatchmakerV3
           pendingPlayerIds,
           enforceProjectedFairness
         ) &&
-          fairnessBaseline.ids.filter((userId) => !candidate.ids.includes(userId)).length +
-            alreadyDeferredPlayerIds.length <= 2 &&
           selectionIsBalanceSafe(candidate, fairCandidates, sessionType)
       );
     });
@@ -978,6 +995,27 @@ export function buildBalancedMixedSingleSelectionOverride<T extends MatchmakerV3
         )
       : fairnessTiedCandidates;
 
+    const getSingleCategoryPenalty = (selection: V3SingleCourtSelection) =>
+      getCategoryPenalty(
+        context,
+        getSelectionCategories([selection], context.sideByUserId)
+      );
+    const compareRotationCandidates = (
+      left: V3SingleCourtSelection,
+      right: V3SingleCourtSelection,
+      includeRandom = true
+    ) =>
+      compareBalancedMixedSingleCourtSelections(
+        left,
+        right,
+        sessionType,
+        {
+          respectPlayerRest,
+          leftCategoryPenalty: getSingleCategoryPenalty(left),
+          rightCategoryPenalty: getSingleCategoryPenalty(right),
+          includeRandom,
+        }
+      );
     catchupCandidates.sort((left, right) => {
       if (enforceProjectedFairness) {
         const fairnessDiff = compareBalancedMixedProjectedCounts(
@@ -990,38 +1028,15 @@ export function buildBalancedMixedSingleSelectionOverride<T extends MatchmakerV3
       }
       const arrivalDiff = compareArrivalPriority(left, right);
       if (arrivalDiff !== 0) return arrivalDiff;
-      const personalDiff =
-        (left.mixedVarietyPenalty ?? 0) - (right.mixedVarietyPenalty ?? 0);
-      if (Math.abs(personalDiff) > SCORE_EPSILON) return personalDiff;
-      const categoryDiff =
-        getCategoryPenalty(
-          context,
-          getSelectionCategories([left], context.sideByUserId)
-        ) -
-        getCategoryPenalty(
-          context,
-          getSelectionCategories([right], context.sideByUserId)
-        );
-      if (Math.abs(categoryDiff) > SCORE_EPSILON) return categoryDiff;
-      return compareSingleCourtSelections(left, right, sessionType, {
-        respectPlayerRest,
-      });
+      return compareRotationCandidates(left, right);
     });
 
     const selected = catchupCandidates[0];
     if (!selected) {
       return annotate(fairnessBaseline, [], "NO_SAFE_IMPROVEMENT");
     }
-    const selectedPersonalPenalty = selected.mixedVarietyPenalty ?? 0;
-    const selectedCategoryPenalty = getCategoryPenalty(
-      context,
-      getSelectionCategories([selected], context.sideByUserId)
-    );
-    const improvesComposition =
-      selectedPersonalPenalty < baselinePersonalPenalty - SCORE_EPSILON ||
-      (Math.abs(selectedPersonalPenalty - baselinePersonalPenalty) <=
-        SCORE_EPSILON &&
-        selectedCategoryPenalty < baselineCategoryPenalty - SCORE_EPSILON);
+    const improvesRotationPriority =
+      compareRotationCandidates(selected, fairnessBaseline, false) < 0;
     const improvesFairness = enforceProjectedFairness &&
       compareBalancedMixedProjectedCounts(
         getSelectionIds(selected),
@@ -1029,15 +1044,12 @@ export function buildBalancedMixedSingleSelectionOverride<T extends MatchmakerV3
         players,
         outstandingMatchCountByUserId
       ) < 0;
-    const improvesBalance =
-      selected.balanceGap < fairnessBaseline.balanceGap - SCORE_EPSILON;
     const servedPlayerIds = pendingObligations
       .filter((obligation) => selected.ids.includes(obligation.playerId))
       .map((obligation) => obligation.playerId);
     if (
-      !improvesComposition &&
+      !improvesRotationPriority &&
       !improvesFairness &&
-      !improvesBalance &&
       !servedPlayerIds.length
     ) {
       return annotate(fairnessBaseline, [], "NO_SAFE_IMPROVEMENT");
@@ -1064,7 +1076,6 @@ export function buildBalancedMixedBatchSelectionOverride<T extends MatchmakerV3P
   pendingObligations = [],
   decisionId: suppliedDecisionId,
   timestamp: suppliedTimestamp,
-  alreadyDeferredPlayerIds = [],
   enforceProjectedFairness = true,
 }: {
   players: T[];
@@ -1125,8 +1136,6 @@ export function buildBalancedMixedBatchSelectionOverride<T extends MatchmakerV3P
     candidates: V3BatchSelection<ActiveMatchmakerV3Player<T>>[];
     searchInterrupted?: boolean;
   }) => {
-    const getPersonalPenalty = (selection: V3BatchSelection<ActiveMatchmakerV3Player<T>>) =>
-      selection.totalMixedVarietyPenalty ?? 0;
     const getCategoryScore = (selection: V3BatchSelection) =>
       getCategoryPenalty(
         context,
@@ -1186,7 +1195,6 @@ export function buildBalancedMixedBatchSelectionOverride<T extends MatchmakerV3P
         .flatMap((match) => match.players)
         .filter((player) => !baselineIdSet.has(player.userId));
       if (
-        deferred.length + alreadyDeferredPlayerIds.length > 2 ||
         !hasSafeReplacementCounts(
           deferred,
           added,
@@ -1230,13 +1238,17 @@ export function buildBalancedMixedBatchSelectionOverride<T extends MatchmakerV3P
       priorityFairCandidates,
       sessionType
     );
-    const fairnessBaseline = baselineIsSafeReference
-      ? baselineSelection
-      : [...baselineBalanceCandidates].sort((left, right) =>
-          compareBatchSelections(left, right, sessionType, {
-            respectPlayerRest,
-          })
-        )[0];
+    const fairnessBaseline =
+      baselineBalanceCandidates.find(
+        (candidate) => getKey(candidate) === baselineKey
+      ) ??
+      [...baselineBalanceCandidates].sort((left, right) =>
+        compareBalancedMixedBatchSelections(left, right, sessionType, {
+          respectPlayerRest,
+          leftCategoryPenalty: getCategoryScore(left),
+          rightCategoryPenalty: getCategoryScore(right),
+        })
+      )[0];
     if (!fairnessBaseline) return V3_SELECTION_OVERRIDE_REJECTED;
     const safetyFilteredFairCandidates = projectedFairCandidates.filter(
       (candidate) =>
@@ -1247,13 +1259,8 @@ export function buildBalancedMixedBatchSelectionOverride<T extends MatchmakerV3P
       safetyFilteredFairCandidates,
       sessionType
     );
-    const eligibleFairCandidates = balanceSafeAlternatives.includes(fairnessBaseline)
-      ? balanceSafeAlternatives
-      : [...balanceSafeAlternatives, fairnessBaseline];
+    const eligibleFairCandidates = balanceSafeAlternatives;
     const fairnessBaselineIds = getBatchIds(fairnessBaseline);
-    const bestBalance = Math.min(
-      ...eligibleFairCandidates.map((selection) => selection.maxBalanceGap)
-    );
     const eligible = eligibleFairCandidates.filter((candidate) => {
       const candidateIds = new Set(getBatchIds(candidate));
       const baselineIdSet = new Set(fairnessBaselineIds);
@@ -1263,7 +1270,6 @@ export function buildBalancedMixedBatchSelectionOverride<T extends MatchmakerV3P
       const added = candidate.selections.flatMap((match) => match.players)
         .filter((player) => !baselineIdSet.has(player.userId));
       if (
-        deferred.length + alreadyDeferredPlayerIds.length > 2 ||
         !hasSafeReplacementCounts(
           deferred,
           added,
@@ -1291,10 +1297,7 @@ export function buildBalancedMixedBatchSelectionOverride<T extends MatchmakerV3P
             )
         ) return false;
       }
-      if (sessionType === SessionType.POINTS) {
-        return candidate.maxBalanceGap <= bestBalance + POINTS_BALANCE_VARIETY_TOLERANCE;
-      }
-      return candidate.maxBalanceGap <= ELO_BALANCE_GAP_CEILING;
+      return true;
     });
     const sortedByFairness = [...eligible].sort((left, right) =>
       enforceProjectedFairness
@@ -1330,12 +1333,10 @@ export function buildBalancedMixedBatchSelectionOverride<T extends MatchmakerV3P
         )
       : fairnessTiedCandidates;
     catchupCandidates.sort((left, right) => {
-      const personalDiff = getPersonalPenalty(left) - getPersonalPenalty(right);
-      if (Math.abs(personalDiff) > SCORE_EPSILON) return personalDiff;
-      const categoryDiff = getCategoryScore(left) - getCategoryScore(right);
-      if (Math.abs(categoryDiff) > SCORE_EPSILON) return categoryDiff;
-      return compareBatchSelections(left, right, sessionType, {
+      return compareBalancedMixedBatchSelections(left, right, sessionType, {
         respectPlayerRest,
+        leftCategoryPenalty: getCategoryScore(left),
+        rightCategoryPenalty: getCategoryScore(right),
       });
     });
     const selected = catchupCandidates[0];
@@ -1346,10 +1347,18 @@ export function buildBalancedMixedBatchSelectionOverride<T extends MatchmakerV3P
         searchInterrupted ? "SEARCH_BUDGET" : "NO_SAFE_IMPROVEMENT"
       );
     }
-    const selectedPersonalPenalty = getPersonalPenalty(selected);
-    const baselinePersonalPenalty = getPersonalPenalty(fairnessBaseline);
-    const selectedCategoryPenalty = getCategoryScore(selected);
-    const baselineCategoryPenalty = getCategoryScore(fairnessBaseline);
+    const improvesRotationPriority =
+      compareBalancedMixedBatchSelections(
+        selected,
+        fairnessBaseline,
+        sessionType,
+        {
+          respectPlayerRest,
+          leftCategoryPenalty: getCategoryScore(selected),
+          rightCategoryPenalty: getCategoryScore(fairnessBaseline),
+          includeRandom: false,
+        }
+      ) < 0;
     const improvesFairness = enforceProjectedFairness &&
       compareBalancedMixedProjectedCounts(
         getBatchIds(selected),
@@ -1361,9 +1370,7 @@ export function buildBalancedMixedBatchSelectionOverride<T extends MatchmakerV3P
     const servedPlayerIds = pendingObligations
       .filter((obligation) => selectedIds.has(obligation.playerId))
       .map((obligation) => obligation.playerId);
-    if (selectedPersonalPenalty < baselinePersonalPenalty - SCORE_EPSILON ||
-      (Math.abs(selectedPersonalPenalty - baselinePersonalPenalty) <= SCORE_EPSILON &&
-        selectedCategoryPenalty < baselineCategoryPenalty - SCORE_EPSILON) ||
+    if (improvesRotationPriority ||
       servedPlayerIds.length > 0 ||
       improvesFairness) {
       const deferredPlayerIds = fairnessBaselineIds.filter(
