@@ -44,7 +44,6 @@ interface ClubPlayerEditorModalProps {
       gender?: PlayerGender;
       mixedSideOverride?: MixedSide | null;
       status?: ClubPlayerStatus;
-      needsMoreRest?: boolean;
       preferredPool?: SessionPool;
     }
   ) => Promise<void>;
@@ -318,28 +317,6 @@ export function ClubPlayerEditorModal({
             </div>
 
             <div className="border-t border-gray-200 pt-4">
-              <label className="mb-4 flex items-start gap-3 rounded-xl border border-gray-200 bg-white/75 p-3 text-sm text-gray-700">
-                <input
-                  type="checkbox"
-                  checked={player.needsMoreRest}
-                  onChange={async (event) => {
-                    await onUpdatePreferences(player, {
-                      needsMoreRest: event.target.checked,
-                    });
-                  }}
-                  disabled={savingPreferences}
-                  className="mt-1 h-4 w-4 rounded border-gray-300 text-[var(--accent)]"
-                />
-                <span>
-                  <span className="block font-semibold text-gray-900">
-                    More rest
-                  </span>
-                  <span className="mt-1 block text-xs text-gray-600">
-                    Default this player to a lighter tournament rotation.
-                  </span>
-                </span>
-              </label>
-
               <div>
                 <p className="text-sm font-semibold text-gray-900">
                   Club role

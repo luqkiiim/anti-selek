@@ -107,86 +107,29 @@ describe("matchmaking v3 fairness", () => {
     ]);
   });
 
-  it("prefers ready or unmarked players before under-target more-rest players in the same band", () => {
+  it("ignores legacy more-rest markers when ranking players", () => {
+    const randomValues = [0, 0.9];
+    let randomIndex = 0;
     const ranked = buildActivePlayers(
       [
-        createPlayer("NeedsMoreRestTooSoon", {
+        createPlayer("LegacyMarked", {
           matchesPlayed: 1,
-          restTurns: 1,
+          restTurns: 0,
           needsMoreRest: true,
-          moreRestTarget: 2,
+          moreRestTarget: 3,
         }),
         createPlayer("Unmarked", {
           matchesPlayed: 1,
           restTurns: 0,
         }),
-        createPlayer("NeedsMoreRestReady", {
-          matchesPlayed: 1,
-          restTurns: 2,
-          needsMoreRest: true,
-          moreRestTarget: 2,
-        }),
       ],
-      { randomFn: () => 0 }
+      { randomFn: () => randomValues[randomIndex++] ?? 0 }
     );
 
     expect(ranked.map((player) => player.userId)).toEqual([
-      "NeedsMoreRestReady",
+      "LegacyMarked",
       "Unmarked",
-      "NeedsMoreRestTooSoon",
     ]);
-    expect(ranked.map((player) => player.moreRestDeficit)).toEqual([0, 0, 1]);
-  });
-
-  it("treats one court wave as the more-rest readiness target", () => {
-    const ranked = buildActivePlayers(
-      [
-        createPlayer("OneCourtReady", {
-          restTurns: 1,
-          needsMoreRest: true,
-          moreRestTarget: 1,
-        }),
-        createPlayer("TwoCourtsUnder", {
-          restTurns: 1,
-          needsMoreRest: true,
-          moreRestTarget: 2,
-        }),
-        createPlayer("ThreeCourtsUnder", {
-          restTurns: 2,
-          needsMoreRest: true,
-          moreRestTarget: 3,
-        }),
-      ],
-      { randomFn: () => 0 }
-    );
-
-    expect(
-      Object.fromEntries(
-        ranked.map((player) => [player.userId, player.moreRestDeficit])
-      )
-    ).toEqual({
-      OneCourtReady: 0,
-      TwoCourtsUnder: 1,
-      ThreeCourtsUnder: 1,
-    });
-  });
-
-  it("ignores more-rest deficits when player rest is disabled", () => {
-    const ranked = buildActivePlayers(
-      [
-        createPlayer("UnderTarget", {
-          restTurns: 0,
-          needsMoreRest: true,
-          moreRestTarget: 3,
-        }),
-      ],
-      {
-        randomFn: () => 0,
-        respectPlayerRest: false,
-      }
-    );
-
-    expect(ranked[0]?.moreRestDeficit).toBe(0);
   });
 
   it("does not let neutral resume credit outrank lower effective-match players", () => {

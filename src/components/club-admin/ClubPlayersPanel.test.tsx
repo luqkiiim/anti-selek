@@ -18,7 +18,6 @@ function buildPlayer(
     email: "jane@example.com",
     avatarUrl: null,
     status: ClubPlayerStatus.CORE,
-    needsMoreRest: false,
     preferredPool: SessionPool.B,
     gender: PlayerGender.FEMALE,
     partnerPreference: PartnerPreference.OPEN,

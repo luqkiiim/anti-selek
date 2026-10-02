@@ -69,7 +69,6 @@ function player(id: string, name: string, isPaused = false): TestPlayer {
     gender: PlayerGender.UNSPECIFIED,
     partnerPreference: PartnerPreference.OPEN,
     pool: SessionPool.A,
-    needsMoreRest: false,
     user: { id, name, avatarUrl: null, elo: 1000 },
   };
 }

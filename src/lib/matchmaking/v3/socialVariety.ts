@@ -284,9 +284,6 @@ function buildConstrainedOpportunities<T extends MatchmakerV3Player>(
     isBusy: false,
     effectiveMatchCount: Math.max(player.matchesPlayed, player.matchmakingBaseline),
     restTurns: player.restTurns ?? 0,
-    needsMoreRest: false,
-    moreRestTarget: player.moreRestTarget ?? 1,
-    moreRestDeficit: 0,
     randomScore: 0,
     rank,
   }));

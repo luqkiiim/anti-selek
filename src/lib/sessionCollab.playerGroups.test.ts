@@ -14,7 +14,6 @@ describe("session membership player-group precedence", () => {
         clubId,
         role: "MEMBER",
         elo: 1000,
-        needsMoreRest: false,
         preferredPool:
           clubId === "host-club" ? SessionPool.A : SessionPool.B,
       };

@@ -12,14 +12,6 @@ import type {
   MatchmakerLadderPlayer,
 } from "./types";
 
-function getLoadPreferredPlayers<T extends ActiveMatchmakerLadderPlayer>(
-  players: T[],
-  requiredSlots: number
-) {
-  const readyPlayers = players.filter((player) => player.moreRestDeficit === 0);
-  return readyPlayers.length >= requiredSlots ? readyPlayers : players;
-}
-
 export function buildCandidatePool<T extends MatchmakerLadderPlayer>(
   players: T[],
   {
@@ -78,13 +70,10 @@ export function buildCandidatePool<T extends MatchmakerLadderPlayer>(
 
     selectionBand = band;
     requiredSelectableCount = requiredPlayerCount - lockedPlayers.length;
-    const loadPreferredPlayers = respectPlayerRest
-      ? getLoadPreferredPlayers(band.players, requiredSelectableCount)
-      : band.players;
     tieZone = respectPlayerRest
-      ? buildRestTurnTieZone(loadPreferredPlayers, requiredSelectableCount)
+      ? buildRestTurnTieZone(band.players, requiredSelectableCount)
       : null;
-    selectablePlayers = tieZone?.players ?? loadPreferredPlayers;
+    selectablePlayers = tieZone?.players ?? band.players;
     break;
   }
 

@@ -11,7 +11,9 @@ export interface MatchmakerLadderPlayer extends LadderRecord {
   matchmakingBaseline: number;
   availableSince: Date;
   restTurns?: number;
+  /** Legacy persisted flag retained for compatibility; matchmaking ignores it. */
   needsMoreRest?: boolean;
+  /** Legacy court-count input target retained for compatibility; matchmaking ignores it. */
   moreRestTarget?: number;
   arrivalPriorityAt?: Date | string | null;
   strength: number;
@@ -38,9 +40,6 @@ export type ActiveMatchmakerLadderPlayer<
 > = T & {
   effectiveMatchCount: number;
   restTurns: number;
-  needsMoreRest: boolean;
-  moreRestTarget: number;
-  moreRestDeficit: number;
   randomScore: number;
   rank: number;
 };

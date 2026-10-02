@@ -8,13 +8,13 @@ Social uses the same scorer for single courts, whole batches, player groups,
 interclub games, queues, and reshuffles. The sections below describe the
 balanced matcher unless a Social rule is stated explicitly.
 
-Social's priority order is:
+Social gives each priority a turn in this order:
 
-1. Court-time fairness
-2. Existing arrival priority within court-time ties
-3. Rest fairness, when the session enables it
-4. Existing player-group seat and crossover rules
-5. Ongoing variety
+1. Fair turns
+2. Arrival priority when turn counts tie
+3. Existing player-group seat and crossover rules
+4. Ongoing variety
+5. Ordinary rest turns, when the session enables them
 6. Team balance
 7. Recent repeats and random tie-breaks
 
@@ -47,9 +47,10 @@ information. Unclassifiable games contribute interpersonal history only.
 Social considers all legal player selections and partitions. Two-court searches
 with up to fourteen eligible players compare every compatible pair. Larger
 searches use bounded global search and safe pruning. On timeout, only a complete
-batch with certified court-time, arrival and rest fairness may be returned;
-diagnostics flag that variety may be suboptimal. Otherwise the search reports
-its limit. Courts are never filled greedily as a fallback.
+batch with certified turn counts and arrival priority may be returned; group
+schedule ranks are searched in order. Diagnostics flag that variety may be
+suboptimal. Otherwise the search reports its limit. Courts are never filled
+greedily as a fallback.
 
 ## Status
 

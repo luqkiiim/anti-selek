@@ -72,12 +72,11 @@ describe("Social lifetime normalized diversity", () => {
       ...player,
       pool: ["U1", "U2", "L1", "L2"].includes(player.userId) ? "A" : "B",
       isBusy: true,
-      needsMoreRest: true,
     }));
     const context = buildSocialVarietyContext(players, [], {
       sessionMode: SessionMode.MIXICANO,
       opportunityConstraints: ["A", "B"].map((pool) => ({
-        isQuartetAllowed: (quartet) => quartet.every((player) => player.pool === pool && !player.isBusy && !player.needsMoreRest),
+        isQuartetAllowed: (quartet) => quartet.every((player) => player.pool === pool && !player.isBusy),
       })),
     });
     expect(context.playersByUserId.get("U1")!.partners.opportunities).toEqual(new Set(["L1", "L2"]));

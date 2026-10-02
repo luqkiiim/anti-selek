@@ -84,7 +84,6 @@ function parseClubPlayers(data: unknown): ClubUser[] {
         partnerPreference?: unknown;
         mixedSideOverride?: unknown;
         status?: unknown;
-        needsMoreRest?: unknown;
         representingClubId?: unknown;
         representingClubName?: unknown;
         preferredPool?: unknown;
@@ -127,7 +126,6 @@ function parseClubPlayers(data: unknown): ClubUser[] {
         gender,
         partnerPreference,
         mixedSideOverride,
-        needsMoreRest: candidate.needsMoreRest === true,
         preferredPool: isValidSessionPool(candidate.preferredPool)
           ? candidate.preferredPool
           : SessionPool.B,
@@ -646,7 +644,6 @@ export function useSessionPlayerManagement({
     nextGender: PlayerGender,
     nextMixedSideOverride: MixedSide | null,
     nextPool: SessionPool,
-    nextNeedsMoreRest: boolean,
     nextRepresentingClubId?: string | null
   ) => {
     setSavingPreferencesFor(userId);
@@ -661,7 +658,6 @@ export function useSessionPlayerManagement({
             gender: nextGender,
             mixedSideOverride: nextMixedSideOverride,
             pool: sessionData?.poolsEnabled ? nextPool : SessionPool.A,
-            needsMoreRest: nextNeedsMoreRest,
             ...(sessionData?.collabFormat === SessionCollabFormat.INTERCLUB
               ? { representingClubId: nextRepresentingClubId ?? null }
               : {}),

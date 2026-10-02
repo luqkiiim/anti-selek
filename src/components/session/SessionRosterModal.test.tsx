@@ -23,7 +23,6 @@ const availablePlayer: ClubUser = {
   gender: PlayerGender.MALE,
   partnerPreference: PartnerPreference.OPEN,
   mixedSideOverride: null,
-  needsMoreRest: false,
   preferredPool: SessionPool.B,
 };
 const interclubPlayer: ClubUser = {

@@ -167,7 +167,6 @@ export async function GET(
           preferredPool: isValidSessionPool(membership.preferredPool)
             ? membership.preferredPool
             : SessionPool.B,
-          needsMoreRest: membership.needsMoreRest,
           status:
             membership.status === ClubPlayerStatus.OCCASIONAL
               ? ClubPlayerStatus.OCCASIONAL

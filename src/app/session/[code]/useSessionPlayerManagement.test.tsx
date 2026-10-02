@@ -65,7 +65,6 @@ const interclubPlayer: ClubUser = {
   avatarUrl: null,
   elo: 1110,
   status: ClubPlayerStatus.CORE,
-  needsMoreRest: false,
   preferredPool: SessionPool.B,
   representingClubId: "club-b",
   representingClubName: "Anti-SeleK",

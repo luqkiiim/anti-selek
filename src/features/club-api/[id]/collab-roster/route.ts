@@ -184,7 +184,6 @@ export async function GET(
           elo: number;
           status: string;
           role: string;
-          needsMoreRest: boolean;
           preferredPool: string;
         }>;
       }
@@ -209,7 +208,6 @@ export async function GET(
         elo: membership.elo,
         status: membership.status,
         role: membership.role,
-        needsMoreRest: membership.needsMoreRest,
         preferredPool: membership.preferredPool,
       });
       if (membership.club.id === hostClubId) {
@@ -247,7 +245,6 @@ export async function GET(
                 ? user.mixedSideOverride
                 : null,
             elo: preferred.elo,
-            needsMoreRest: preferred.needsMoreRest,
             preferredPool: isValidSessionPool(preferred.preferredPool)
               ? preferred.preferredPool
               : SessionPool.B,

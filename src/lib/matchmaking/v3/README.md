@@ -17,10 +17,11 @@ heuristics onto the previous engine.
 ## Social matchmaking
 
 Social uses one whole-batch optimizer for ordinary, player-group, and interclub
-matches. Its order is court-time fairness, arrival priority within count ties,
-rest fairness when enabled, existing player-group scheduling policy, ongoing
-variety, team balance, recent repeats, then seeded pairing tie-breaks. Variety
-cannot override even a small rest difference. Balanced modes keep their own rules.
+matches. It gives fair turns first, then arrival priority when turn counts tie,
+then applicable player-group rules. It considers ongoing variety before
+ordinary rest turns, then team balance, recent repeats, and seeded pairing
+tie-breaks. Longer breaks can win only when the stronger priorities and variety
+are tied. Balanced modes keep their own rules.
 
 Variety combines four equally scaled per-player experience distributions:
 shared-court contacts, partners, opponents, and (in Mixed pairing) mixed-side

@@ -39,7 +39,6 @@ function createPlayer({
     gender: PlayerGender.UNSPECIFIED,
     partnerPreference: PartnerPreference.OPEN,
     pool: SessionPool.A,
-    needsMoreRest: false,
     user: { id: userId, name, avatarUrl, elo: 1000 },
   };
 }

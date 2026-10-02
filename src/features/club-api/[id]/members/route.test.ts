@@ -142,7 +142,6 @@ describe("club admin create member route", () => {
       role: "MEMBER",
       elo: 1000,
       status: ClubPlayerStatus.CORE,
-      needsMoreRest: false,
       preferredPool: "B",
     });
 
@@ -168,7 +167,7 @@ describe("club admin create member route", () => {
     });
   });
 
-  it("saves and returns the more-rest default for new placeholders", async () => {
+  it("ignores legacy more-rest input when creating placeholders", async () => {
     const createdAt = new Date("2026-06-24T00:00:00.000Z");
     mocks.clubMemberFindMany.mockResolvedValue([]);
     mocks.userCreate.mockResolvedValue({
@@ -204,18 +203,19 @@ describe("club admin create member route", () => {
         create: expect.objectContaining({
           clubId: "community-1",
           userId: "player-1",
-          needsMoreRest: true,
         }),
         select: {
           role: true,
           elo: true,
           status: true,
-          needsMoreRest: true,
           preferredPool: true,
         },
       })
     );
-    expect(body.needsMoreRest).toBe(true);
+    expect(mocks.clubMemberUpsert.mock.calls[0]?.[0].create).not.toHaveProperty(
+      "needsMoreRest"
+    );
+    expect(body).not.toHaveProperty("needsMoreRest");
     expect(body.preferredPool).toBe("B");
   });
 });

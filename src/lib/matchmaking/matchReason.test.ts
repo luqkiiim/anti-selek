@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { PlayerGender, SessionMode, SessionPool, SessionType } from "@/types/enums";
+import { CourtGroupType, PlayerGender, SessionMode, SessionPool, SessionType } from "@/types/enums";
 import { withSocialVarietySnapshot } from "./v3/socialVariety";
 import {
   buildV3MatchmakingReason,
@@ -26,9 +26,6 @@ function createActivePlayer(
     strength: 1000,
     effectiveMatchCount,
     restTurns,
-    needsMoreRest: false,
-    moreRestTarget: 1,
-    moreRestDeficit: 0,
     randomScore: 0,
     rank: 0,
   };
@@ -156,6 +153,9 @@ describe("matchmaking reason", () => {
       {
         sessionType: SessionType.SOCIAL_MIX,
         sessionMode: SessionMode.MEXICANO,
+        courtGroupType: CourtGroupType.CROSSOVER,
+        poolASeatCount: 2,
+        poolBSeatCount: 2,
       }
     );
 
@@ -171,6 +171,23 @@ describe("matchmaking reason", () => {
     expect(reason.summary.join(" ")).toContain("Both partner pairings are new");
     expect(reason.summary.join(" ")).toContain("Opponent coverage");
     expect(reason.summary.join(" ")).toContain("previous match");
+  });
+
+  it("explains the new Social order with rest after equally varied choices", () => {
+    const reason = buildV3MatchmakingReason(
+      createSelection({ socialVarietyGain: 0.25 }),
+      {
+        sessionType: SessionType.SOCIAL_MIX,
+        sessionMode: SessionMode.MEXICANO,
+        courtGroupType: CourtGroupType.CROSSOVER,
+        poolASeatCount: 2,
+        poolBSeatCount: 2,
+      }
+    );
+
+    expect(reason.summary.join(" ")).toContain("fair turns, arrival priority and player-group rules");
+    expect(reason.summary.join(" ")).toContain("longer breaks only decide between equally varied choices");
+    expect(reason.summary.join(" ")).toContain("completed-match rest turns");
   });
 
   it("parses valid reason JSON and ignores invalid JSON", () => {

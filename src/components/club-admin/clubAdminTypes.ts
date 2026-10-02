@@ -28,7 +28,6 @@ export interface ClubAdminPlayer {
   email: string | null;
   avatarUrl?: string | null;
   status: ClubPlayerStatus;
-  needsMoreRest: boolean;
   preferredPool: SessionPool;
   gender: PlayerGender;
   partnerPreference: PartnerPreference;

@@ -218,7 +218,6 @@ export async function POST(
     const arrivalPriorityAt =
       sessionData.status === SessionStatus.ACTIVE ? joinedAt : null;
     let normalizedRepresentingClubId: string | null = null;
-    let targetNeedsMoreRest = false;
     let targetPreferredPool = SessionPool.B;
 
     if (isInterclubSession(sessionData)) {
@@ -274,7 +273,6 @@ export async function POST(
           },
         },
         select: {
-          needsMoreRest: true,
           preferredPool: true,
         },
       });
@@ -285,7 +283,6 @@ export async function POST(
         );
       }
 
-      targetNeedsMoreRest = targetMembership.needsMoreRest ?? false;
       targetPreferredPool =
         targetMembership.preferredPool === SessionPool.A
           ? SessionPool.A
@@ -299,7 +296,6 @@ export async function POST(
       if (!targetMembership) {
         return NextResponse.json({ error: "Target player is not a member of this club" }, { status: 400 });
       }
-      targetNeedsMoreRest = targetMembership.needsMoreRest ?? false;
       targetPreferredPool =
         targetMembership.preferredPool === SessionPool.A
           ? SessionPool.A
@@ -341,7 +337,6 @@ export async function POST(
             gender: sessionGender,
             partnerPreference: resolvedMixedState.partnerPreference,
             mixedSideOverride: resolvedMixedState.mixedSideOverride,
-            needsMoreRest: targetNeedsMoreRest,
             pool: targetPool,
             sessionPoints: 0,
             matchmakingMatchesCredit,

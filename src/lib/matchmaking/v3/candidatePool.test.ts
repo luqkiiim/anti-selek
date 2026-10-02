@@ -257,7 +257,7 @@ describe("matchmaking v3 candidate pool", () => {
     ]);
   });
 
-  it("skips under-target more-rest players when enough same-band alternatives are ready", () => {
+  it("keeps legacy more-rest players in the same rest-turn tie zone", () => {
     const pool = buildCandidatePool(
       [
         createPlayer("ReadyA", { matchesPlayed: 4, restTurns: 0 }),
@@ -266,9 +266,9 @@ describe("matchmaking v3 candidate pool", () => {
         createPlayer("ReadyD", { matchesPlayed: 4, restTurns: 0 }),
         createPlayer("NeedsMoreRest", {
           matchesPlayed: 4,
-          restTurns: 1,
+          restTurns: 0,
           needsMoreRest: true,
-          moreRestTarget: 2,
+          moreRestTarget: 3,
         }),
       ],
       {
@@ -282,32 +282,6 @@ describe("matchmaking v3 candidate pool", () => {
       "ReadyB",
       "ReadyC",
       "ReadyD",
-    ]);
-  });
-
-  it("keeps an under-target more-rest player when they are needed for a fair legal pool", () => {
-    const pool = buildCandidatePool(
-      [
-        createPlayer("ReadyA", { matchesPlayed: 4, restTurns: 0 }),
-        createPlayer("ReadyB", { matchesPlayed: 4, restTurns: 0 }),
-        createPlayer("ReadyC", { matchesPlayed: 4, restTurns: 0 }),
-        createPlayer("NeedsMoreRest", {
-          matchesPlayed: 4,
-          restTurns: 1,
-          needsMoreRest: true,
-          moreRestTarget: 2,
-        }),
-      ],
-      {
-        requiredPlayerCount: 4,
-        randomFn: () => 0,
-      }
-    );
-
-    expect(pool.candidatePlayers.map((player) => player.userId)).toEqual([
-      "ReadyA",
-      "ReadyB",
-      "ReadyC",
       "NeedsMoreRest",
     ]);
   });

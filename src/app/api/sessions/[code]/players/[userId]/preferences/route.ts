@@ -59,14 +59,12 @@ export async function PATCH(
       partnerPreference,
       mixedSideOverride,
       pool,
-      needsMoreRest,
       representingClubId,
     } = body as {
       gender?: unknown;
       partnerPreference?: unknown;
       mixedSideOverride?: unknown;
       pool?: unknown;
-      needsMoreRest?: unknown;
       representingClubId?: unknown;
     };
     const hasRepresentingClubInput = Object.prototype.hasOwnProperty.call(
@@ -92,9 +90,6 @@ export async function PATCH(
     }
     if (pool !== undefined && !isValidSessionPool(pool)) {
       return NextResponse.json({ error: "Invalid pool" }, { status: 400 });
-    }
-    if (needsMoreRest !== undefined && typeof needsMoreRest !== "boolean") {
-      return NextResponse.json({ error: "Invalid more rest value" }, { status: 400 });
     }
     if (
       hasRepresentingClubInput &&
@@ -393,8 +388,6 @@ export async function PATCH(
             : SessionPool.A,
           pendingPool:
             freshSession.poolsEnabled && hasPoolInput ? null : undefined,
-          needsMoreRest:
-            typeof needsMoreRest === "boolean" ? needsMoreRest : undefined,
           representingClubId: hasRepresentingClubInput
             ? nextRepresentingClubId ?? null
             : undefined,
@@ -448,7 +441,11 @@ export async function PATCH(
       );
     }
 
-    const updated = mutation.updated;
+    const {
+      needsMoreRest: legacyMoreRestValue,
+      ...updated
+    } = mutation.updated;
+    void legacyMoreRestValue;
     let queuedMatch: unknown = undefined;
     if (mutation.automaticQueueInvalidated) {
       queuedMatch = await tryRebuildAutomaticQueuedMatchForSessionId(

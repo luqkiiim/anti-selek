@@ -49,7 +49,6 @@ function sessionFixture(): SessionData {
       gender: PlayerGender.MALE,
       partnerPreference: PartnerPreference.OPEN,
       pool: SessionPool.A,
-      needsMoreRest: false,
       user: { id: "player-1", name: "Ari Player", elo: 1000 },
     }],
   };

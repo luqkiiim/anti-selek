@@ -180,7 +180,6 @@ describe("club admin update member route", () => {
         role: "MEMBER",
         elo: 1000,
         status: ClubPlayerStatus.CORE,
-        needsMoreRest: false,
         preferredPool: "B",
       });
     mocks.userFindUnique.mockResolvedValue({
@@ -238,7 +237,6 @@ describe("club admin update member route", () => {
         role: "MEMBER",
         elo: 1000,
         status: ClubPlayerStatus.CORE,
-        needsMoreRest: false,
         preferredPool: "A",
       });
     mocks.userFindUnique.mockResolvedValue({
@@ -268,7 +266,6 @@ describe("club admin update member route", () => {
       role: "MEMBER",
       elo: 1000,
       status: ClubPlayerStatus.CORE,
-      needsMoreRest: false,
       preferredPool: "A",
     });
     mocks.propagatePreferredPoolToClubSessions.mockResolvedValue({
@@ -446,7 +443,7 @@ describe("club admin update member route", () => {
     expect(body.name).toBe("Renamed Placeholder");
   });
 
-  it("saves and returns the more-rest player default", async () => {
+  it("ignores legacy more-rest updates", async () => {
     const createdAt = new Date("2026-05-19T00:00:00.000Z");
     mocks.clubMemberFindUnique
       .mockResolvedValueOnce({ role: "ADMIN" })
@@ -455,7 +452,7 @@ describe("club admin update member route", () => {
         role: "MEMBER",
         elo: 1000,
         status: ClubPlayerStatus.CORE,
-        needsMoreRest: false,
+        needsMoreRest: true,
       });
     mocks.userFindUnique.mockResolvedValue({
       name: "Rest Player",
@@ -490,25 +487,8 @@ describe("club admin update member route", () => {
     const body = await response.json();
 
     expect(response.status).toBe(200);
-    expect(mocks.clubMemberUpdate).toHaveBeenCalledWith({
-      where: {
-        clubId_userId: {
-          clubId: "community-1",
-          userId: "user-1",
-        },
-      },
-      data: {
-        needsMoreRest: true,
-      },
-      select: {
-        role: true,
-        elo: true,
-        status: true,
-        needsMoreRest: true,
-        preferredPool: true,
-      },
-    });
-    expect(body.needsMoreRest).toBe(true);
+    expect(mocks.clubMemberUpdate).not.toHaveBeenCalled();
+    expect(body).not.toHaveProperty("needsMoreRest");
   });
 
   it("allows admins to grant staff to claimed members", async () => {

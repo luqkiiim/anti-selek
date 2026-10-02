@@ -40,7 +40,6 @@ function buildMemberSessionConfigs({
     gender: string;
     partnerPreference: string;
     mixedSideOverride: string | null;
-    needsMoreRest: boolean;
     preferredPool: string;
   }>;
   playerConfigMap: ParsedCreateSessionRequest["playerConfigMap"];
@@ -115,7 +114,6 @@ function buildMemberSessionConfigs({
         (selectedUser?.preferredPool === SessionPool.A
           ? SessionPool.A
           : SessionPool.B),
-      needsMoreRest: selectedUser?.needsMoreRest ?? false,
       sessionPoints: 0,
     };
   });
@@ -218,19 +216,12 @@ export async function createSessionForUser({
     select: {
       clubId: true,
       userId: true,
-      needsMoreRest: true,
       preferredPool: true,
     },
   });
   const memberSet = new Set(memberRows.map((member) => member.userId));
-  const needsMoreRestByUserId = new Map<string, boolean>();
   const preferredPoolByUserId = new Map<string, SessionPool>();
   for (const member of memberRows) {
-    needsMoreRestByUserId.set(
-      member.userId,
-      (needsMoreRestByUserId.get(member.userId) ?? false) ||
-        member.needsMoreRest
-    );
     if (
       member.clubId === input.clubId ||
       !preferredPoolByUserId.has(member.userId)
@@ -277,9 +268,8 @@ export async function createSessionForUser({
       mixedSideOverride: true,
     },
   });
-  const selectedUsersWithRest = selectedUsers.map((user) => ({
+  const selectedUsersWithPools = selectedUsers.map((user) => ({
     ...user,
-    needsMoreRest: needsMoreRestByUserId.get(user.id) ?? false,
     preferredPool:
       preferredPoolByUserId.get(user.id) ?? SessionPool.B,
   }));
@@ -291,7 +281,7 @@ export async function createSessionForUser({
       : new Map<string, Array<{ id: string; name: string; elo: number }>>();
   const memberSessionConfigs = buildMemberSessionConfigs({
     uniquePlayerIds,
-    selectedUsers: selectedUsersWithRest,
+    selectedUsers: selectedUsersWithPools,
     playerConfigMap: input.playerConfigMap,
     mode: input.mode,
     collabFormat: input.collabFormat,
@@ -448,7 +438,6 @@ export async function createSessionForUser({
           pool: input.poolsEnabled
             ? input.normalizedGuests[index].pool
             : SessionPool.A,
-          needsMoreRest: false,
           sessionPoints: 0,
           joinedAt: new Date(),
           availableSince: new Date(),

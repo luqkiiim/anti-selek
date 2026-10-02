@@ -41,7 +41,6 @@ function buildPlayer(
     email: null,
     avatarUrl: null,
     status: ClubPlayerStatus.CORE,
-    needsMoreRest: false,
     preferredPool: SessionPool.B,
     gender: PlayerGender.MALE,
     partnerPreference: PartnerPreference.OPEN,
@@ -131,16 +130,6 @@ describe("ClubPlayerEditorModal", () => {
     expect(markup).not.toContain(
       "Claimed members recover passwords from the sign-in screen by email."
     );
-  });
-
-  it("shows the more rest preference for marked players", () => {
-    const markup = renderModal(buildPlayer({ needsMoreRest: true }));
-
-    expect(markup).toContain("More rest");
-    expect(markup).toContain(
-      "Default this player to a lighter tournament rotation."
-    );
-    expect(markup).toContain('checked=""');
   });
 
   it("shows the saved preferred game group as a tournament default", () => {

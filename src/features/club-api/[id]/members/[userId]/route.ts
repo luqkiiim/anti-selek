@@ -136,7 +136,6 @@ export async function PATCH(
       partnerPreference,
       mixedSideOverride,
       status,
-      needsMoreRest,
       preferredPool,
       role,
     } = body as {
@@ -148,7 +147,6 @@ export async function PATCH(
       partnerPreference?: unknown;
       mixedSideOverride?: unknown;
       status?: unknown;
-      needsMoreRest?: unknown;
       preferredPool?: unknown;
       role?: unknown;
     };
@@ -199,9 +197,6 @@ export async function PATCH(
     }
     if (status !== undefined && !isValidClubPlayerStatus(status)) {
       return NextResponse.json({ error: "Invalid roster status" }, { status: 400 });
-    }
-    if (needsMoreRest !== undefined && typeof needsMoreRest !== "boolean") {
-      return NextResponse.json({ error: "Invalid more rest value" }, { status: 400 });
     }
     if (preferredPool !== undefined && !isValidSessionPool(preferredPool)) {
       return NextResponse.json(
@@ -419,7 +414,6 @@ export async function PATCH(
       shouldGrantStaff ||
       shouldRevokeStaff ||
       isValidClubPlayerStatus(status) ||
-      typeof needsMoreRest === "boolean" ||
       isValidSessionPool(preferredPool)
         ? await prisma.clubMember.update({
             where: {
@@ -431,7 +425,6 @@ export async function PATCH(
             data: {
               ...(typeof elo === "number" ? { elo } : {}),
               ...(isValidClubPlayerStatus(status) ? { status } : {}),
-              ...(typeof needsMoreRest === "boolean" ? { needsMoreRest } : {}),
               ...(isValidSessionPool(preferredPool) ? { preferredPool } : {}),
               ...(nextRole ? { role: nextRole } : {}),
             },
@@ -439,7 +432,6 @@ export async function PATCH(
               role: true,
               elo: true,
               status: true,
-              needsMoreRest: true,
               preferredPool: true,
             },
           })
@@ -454,7 +446,6 @@ export async function PATCH(
               role: true,
               elo: true,
               status: true,
-              needsMoreRest: true,
               preferredPool: true,
             },
           });
@@ -500,7 +491,6 @@ export async function PATCH(
           ? membership.preferredPool
           : SessionPool.B,
       preferencePropagation,
-      needsMoreRest: updatedMembership?.needsMoreRest ?? membership.needsMoreRest,
       status:
         updatedMembership?.status === ClubPlayerStatus.OCCASIONAL
           ? ClubPlayerStatus.OCCASIONAL

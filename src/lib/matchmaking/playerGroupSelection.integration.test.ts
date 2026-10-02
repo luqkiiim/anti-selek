@@ -34,7 +34,6 @@ function createPlayer(
     sessionPoints: 0,
     isPaused: false,
     isGuest: false,
-    needsMoreRest: false,
     gender,
     partnerPreference: PartnerPreference.OPEN,
     mixedSideOverride: null,

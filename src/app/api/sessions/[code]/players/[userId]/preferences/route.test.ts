@@ -293,19 +293,16 @@ describe("session player preference route", () => {
     expect(body.queuedMatch).toEqual({ id: "queue-2" });
   });
 
-  it("overrides more rest for the current session only", async () => {
+  it("ignores legacy more-rest updates", async () => {
     const response = await patchPreferences({ needsMoreRest: true });
     const body = await response.json();
 
     expect(response.status).toBe(200);
-    expect(mocks.sessionPlayerUpdate).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({
-          needsMoreRest: true,
-        }),
-      })
+    expect(mocks.sessionPlayerUpdate).toHaveBeenCalled();
+    expect(mocks.sessionPlayerUpdate.mock.calls[0]?.[0].data).not.toHaveProperty(
+      "needsMoreRest"
     );
-    expect(body.needsMoreRest).toBe(true);
+    expect(body).not.toHaveProperty("needsMoreRest");
   });
 
   it("clears a female upper-side override when Default is selected", async () => {
@@ -367,7 +364,7 @@ describe("session player preference route", () => {
       isGuest: false,
     });
 
-    const response = await patchPreferences({ needsMoreRest: true });
+    const response = await patchPreferences({});
 
     expect(response.status).toBe(200);
     expect(mocks.sessionPlayerUpdate).toHaveBeenCalledWith(
@@ -406,20 +403,4 @@ describe("session player preference route", () => {
     );
   });
 
-  it("rejects more-rest changes after the session is completed", async () => {
-    mocks.sessionFindUnique.mockResolvedValue({
-      id: "session-1",
-      clubId: "community-1",
-      mode: SessionMode.MEXICANO,
-      status: SessionStatus.COMPLETED,
-      poolsEnabled: false,
-    });
-
-    const response = await patchPreferences({ needsMoreRest: true });
-    const body = await response.json();
-
-    expect(response.status).toBe(400);
-    expect(body.error).toBe("Tournament already completed");
-    expect(mocks.sessionPlayerUpdate).not.toHaveBeenCalled();
-  });
 });

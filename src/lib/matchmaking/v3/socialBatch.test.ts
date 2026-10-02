@@ -3,6 +3,7 @@ import { SessionMode, SessionType } from "../../../types/enums";
 import { findBestBatchSelectionV3 } from "./batch";
 import { findBestSingleCourtSelectionV3 } from "./singleCourt";
 import { findBestSocialBatchSelection } from "./socialBatch";
+import { buildCandidatePool } from "./candidatePool";
 import { getDoublesPartitions, isValidPartitionForMode, getPartitionBalanceGap, getPartitionPointDiffGap } from "./balance";
 import { buildSocialVarietyContext, getSocialVarietyGain } from "./socialVariety";
 import { getExactPartitionKey } from "./rematch";
@@ -45,8 +46,8 @@ describe("Social global batch solver", () => {
       const selected = [...left.ids, ...right.ids].map((id) => byId.get(id)!);
       const rests = selected.map((player) => player.restTurns).sort((a, b) => b - a);
       return [...selected.map((player) => player.matchesPlayed).sort((a, b) => a - b),
-        -rests.reduce((sum, rest) => sum + rest, 0), -rests[rests.length - 1], ...rests.map((rest) => -rest),
-        -(left.gain + right.gain), Math.max(left.balance, right.balance), left.balance + right.balance,
+        -(left.gain + right.gain), -rests.reduce((sum, rest) => sum + rest, 0),
+        -rests[rests.length - 1], ...rests.map((rest) => -rest), Math.max(left.balance, right.balance), left.balance + right.balance,
         Math.max(left.point, right.point), left.point + right.point];
     };
     for (let a = 0; a < legal.length; a++) for (let b = a + 1; b < legal.length; b++) {
@@ -59,11 +60,11 @@ describe("Social global batch solver", () => {
     expect(key(chosen[0], chosen[1])).toEqual(optimum);
   });
 
-  it("never trades a rest turn for fresh people or match type", () => {
+  it("lets variety beat ordinary rest when court-time and arrival are tied", () => {
     const players = makePlayers(8).map((player, index) => ({ ...player, restTurns: index < 4 ? 3 : 2 }));
     const completedMatches: V3CompletedMatch[] = Array.from({ length: 10 }, () => ({ team1: ["P0", "P1"], team2: ["P2", "P3"] }));
     const result = findBestSingleCourtSelectionV3(players, { sessionMode: SessionMode.MEXICANO, sessionType: SessionType.SOCIAL_MIX, completedMatches, randomFn: () => 0 });
-    expect(new Set(result.selection?.ids)).toEqual(new Set(["P0", "P1", "P2", "P3"]));
+    expect(result.selection?.ids.some((id) => Number(id.slice(1)) >= 4)).toBe(true);
     const ignoreRest = findBestSingleCourtSelectionV3(players, { sessionMode: SessionMode.MEXICANO, sessionType: SessionType.SOCIAL_MIX, completedMatches, randomFn: () => 0, respectPlayerRest: false });
     expect(ignoreRest.selection?.ids.some((id) => Number(id.slice(1)) >= 4)).toBe(true);
   });
@@ -128,12 +129,57 @@ describe("Social global batch solver", () => {
     expect(result.fairnessCertified).toBe(false);
   });
 
-  it("compares labelled schedules by fairness before scheduling rank", () => {
+  it("compares labelled schedules by scheduling rank before rest and variety", () => {
     const players = makePlayers(8).map((player, index) => ({ ...player, restTurns: index < 4 ? 2 : 0 }));
     const group = (first: number) => ({ isQuartetAllowed: (quartet: Array<{ userId: string }>) => quartet.every((player) => Number(player.userId.slice(1)) >= first && Number(player.userId.slice(1)) < first + 4) });
     const result = findBestSocialBatchSelection(players, { courtCount: 1, sessionMode: SessionMode.MEXICANO, randomFn: () => 0, schedules: [{ rank: 0, courts: [group(4)] }, { rank: 1, courts: [group(0)] }] });
+    expect(result.scheduleIndex).toBe(0);
+    expect(result.selection?.selections[0].ids).toEqual(["P4", "P5", "P6", "P7"]);
+  });
+
+  it("searches lower-rank Social group schedules before returning a timed-out incumbent", () => {
+    const players = makePlayers(8);
+    const group = (first: number) => ({ isQuartetAllowed: (quartet: Array<{ userId: string }>) => quartet.every((player) => Number(player.userId.slice(1)) >= first && Number(player.userId.slice(1)) < first + 4) });
+    const result = findBestSocialBatchSelection(players, {
+      courtCount: 1,
+      sessionMode: SessionMode.MEXICANO,
+      randomFn: () => 0,
+      searchLimits: { maxBranches: 1 },
+      schedules: [
+        { rank: 1, courts: [group(4)] },
+        { rank: 0, courts: [group(0)] },
+      ],
+    });
+
     expect(result.scheduleIndex).toBe(1);
     expect(result.selection?.selections[0].ids).toEqual(["P0", "P1", "P2", "P3"]);
+    expect(result.varietyOptimal).toBe(false);
+  });
+
+  it("widens a supplied rest tie zone so short-rest candidates can earn better Social variety", () => {
+    const players = makePlayers(5).map((player, index) => ({
+      ...player,
+      restTurns: index < 4 ? 3 : 0,
+    }));
+    const candidatePool = buildCandidatePool(players, {
+      requiredPlayerCount: 4,
+      randomFn: () => 0,
+      respectPlayerRest: true,
+    });
+    const history: V3CompletedMatch[] = Array.from({ length: 10 }, () => ({
+      team1: ["P0", "P1"], team2: ["P2", "P3"],
+    }));
+
+    expect(candidatePool.tieZone?.players.map((player) => player.userId)).not.toContain("P4");
+    const result = findBestSocialBatchSelection(players, {
+      courtCount: 1,
+      sessionMode: SessionMode.MEXICANO,
+      completedMatches: history,
+      candidatePool,
+      randomFn: () => 0,
+    });
+
+    expect(result.selection?.selections[0].ids).toContain("P4");
   });
 
   it("matches a three-court exhaustive oracle while applying global bounds", () => {

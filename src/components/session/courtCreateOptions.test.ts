@@ -16,7 +16,6 @@ function createPlayer(
     partnerPreference: PartnerPreference.OPEN,
     mixedSideOverride: null,
     pool: SessionPool.A,
-    needsMoreRest: false,
     user: {
       id: userId,
       name: userId,

@@ -90,7 +90,6 @@ export interface GuestPayload {
   pool?: Player["pool"];
   pendingPool?: Player["pendingPool"];
   representingClubId?: string | null;
-  needsMoreRest?: boolean;
 }
 
 export interface SessionPlayerPayload {
@@ -101,7 +100,6 @@ export interface SessionPlayerPayload {
   pool?: Player["pool"];
   pendingPool?: Player["pendingPool"];
   representingClubId?: string | null;
-  needsMoreRest?: boolean;
 }
 
 function normalizeOptionalNumber(value: number | null | undefined) {
@@ -614,7 +612,6 @@ export function applyGuestAdded(current: SessionData, guest: GuestPayload) {
         mixedSideOverride: guest.mixedSideOverride ?? null,
         pool: getNormalizedSessionPool(guest.pool),
         pendingPool: null,
-        needsMoreRest: guest.needsMoreRest ?? false,
         user: {
           id: guest.id,
           name: guest.name,
@@ -766,7 +763,6 @@ export function applyPlayerPreferenceUpdate(
               Object.prototype.hasOwnProperty.call(payload, "representingClubId")
                 ? payload.representingClubId ?? null
                 : player.representingClubId ?? null,
-            needsMoreRest: payload.needsMoreRest ?? player.needsMoreRest,
           }
         : player
     ),

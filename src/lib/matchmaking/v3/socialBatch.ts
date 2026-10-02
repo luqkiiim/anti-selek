@@ -9,7 +9,7 @@ import {
   getPartnerRepeatPenalty, getSharedCourtEncounterFrequencyPenalty, getSharedCourtRepeatPenalty,
 } from "./rematch";
 import {
-  buildRestSummary, compareSocialNumberVectors, getSocialFairnessVector,
+  buildRestSummary, compareSocialNumberVectors, getSocialFairnessVector, getSocialRestVector,
   getBatchPairingRandomScore, getBatchSidePairingKeys, getBatchSidePairingRandomScores,
   getPartitionPairingRandomScore, getQuartetRandomScore,
 } from "./scoring";
@@ -103,13 +103,25 @@ export function findBestSocialBatchSelection<T extends MatchmakerV3Player>(
 ): SocialBatchResult<ActiveMatchmakerV3Player<T>> {
   const respectRest = options.respectPlayerRest !== false;
   const randomFn = options.randomFn ?? Math.random;
-  const active = options.candidatePool?.candidatePlayers ?? buildActivePlayers(players, { randomFn, respectPlayerRest: respectRest });
+  const sourcePool = options.candidatePool;
+  const socialCandidatePool = sourcePool?.tieZone && sourcePool.selectionBand
+    ? {
+        ...sourcePool,
+        selectablePlayers: [...sourcePool.selectionBand.players],
+        candidatePlayers: [...sourcePool.lockedPlayers, ...sourcePool.selectionBand.players],
+        tieZone: null,
+      }
+    : sourcePool;
+  const active = socialCandidatePool?.candidatePlayers ?? buildActivePlayers(players, { randomFn, respectPlayerRest: false });
   const required = options.courtCount * 4;
   const locked = new Set([
-    ...(options.candidatePool?.lockedPlayers.map((player) => player.userId) ?? []),
+    ...(socialCandidatePool?.lockedPlayers.map((player) => player.userId) ?? []),
     ...(options.lockedPlayerIds ?? []),
   ]);
   const profiles = options.schedules ?? [{ rank: 0, courts: Array.from({ length: options.courtCount }, () => options.selectionConstraints) }];
+  const scheduleIndexes = profiles
+    .map((_, index) => index)
+    .sort((left, right) => profiles[left].rank - profiles[right].rank || left - right);
   const salts = { combined: randomFn(), sides: (options.pairingRandomMode === "side-balanced" ? [randomFn(), randomFn()] : [0, 0]) as [number, number] };
   const history = options.completedMatches ?? [];
   const context = options.socialVarietyContext ?? buildSocialVarietyContext(players, options.socialHistoryMatches ?? history, {
@@ -140,22 +152,31 @@ export function findBestSocialBatchSelection<T extends MatchmakerV3Player>(
   let scheduleIndex: number | null = null;
   let bestRank = Infinity;
   const fairnessCache = new Map<bigint, number[]>();
+  const restCache = new Map<bigint, number[]>();
   const getFairness = (mask: bigint) => {
     let vector = fairnessCache.get(mask);
     if (!vector) {
-      vector = getSocialFairnessVector(active.filter((player) => (mask & bits.get(player.userId)!) !== BigInt(0)), respectRest);
+      vector = getSocialFairnessVector(active.filter((player) => (mask & bits.get(player.userId)!) !== BigInt(0)));
       fairnessCache.set(mask, vector);
+    }
+    return vector;
+  };
+  const getRest = (mask: bigint) => {
+    let vector = restCache.get(mask);
+    if (!vector) {
+      vector = getSocialRestVector(active.filter((player) => (mask & bits.get(player.userId)!) !== BigInt(0)));
+      restCache.set(mask, vector);
     }
     return vector;
   };
   // Relax court compatibility. This exact player-only optimum is a fairness lower bound.
   const optimisticPlayers = [...active].sort((a, b) => compareSocialNumberVectors(
-    getSocialFairnessVector([a], respectRest), getSocialFairnessVector([b], respectRest)
+    getSocialFairnessVector([a]), getSocialFairnessVector([b])
   ));
   const globalFairnessBound = getSocialFairnessVector([
     ...optimisticPlayers.filter((player) => locked.has(player.userId)),
     ...optimisticPlayers.filter((player) => !locked.has(player.userId)).slice(0, Math.max(0, required - locked.size)),
-  ], respectRest);
+  ]);
   const candidateCache = new Map<V3SelectionConstraints<ActiveMatchmakerV3Player<T>> | undefined, Candidate<ActiveMatchmakerV3Player<T>>[]>();
 
   const outOfBudget = () => {
@@ -225,17 +246,24 @@ export function findBestSocialBatchSelection<T extends MatchmakerV3Player>(
     candidateCache.set(constraints, candidates);
     return candidates;
   };
-  const metricsFor = (selections: V3SingleCourtSelection<ActiveMatchmakerV3Player<T>>[]) => [
-    -canonicalSum(selections.map((selection) => selection.socialVarietyGain ?? 0)),
-    Math.max(...selections.map((selection) => selection.balanceGap)),
-    selections.reduce((sum, selection) => sum + selection.balanceGap, 0),
-    Math.max(...selections.map((selection) => selection.pointDiffGap)),
-    selections.reduce((sum, selection) => sum + selection.pointDiffGap, 0),
-    selections.reduce((sum, selection) => sum + selection.partnerRepeatPenalty, 0),
-    selections.reduce((sum, selection) => sum + selection.opponentRepeatPenalty, 0),
-    selections.reduce((sum, selection) => sum + selection.exactRematchPenalty, 0),
-    selections.reduce((sum, selection) => sum + selection.randomScore, 0),
-  ];
+  const metricsFor = (selections: V3SingleCourtSelection<ActiveMatchmakerV3Player<T>>[]) => {
+    const selectedMask = selections.flatMap((selection) => selection.players).reduce(
+      (mask, player) => mask | bits.get(player.userId)!,
+      BigInt(0)
+    );
+    return [
+      -canonicalSum(selections.map((selection) => selection.socialVarietyGain ?? 0)),
+      ...(respectRest ? getRest(selectedMask) : []),
+      Math.max(...selections.map((selection) => selection.balanceGap)),
+      selections.reduce((sum, selection) => sum + selection.balanceGap, 0),
+      Math.max(...selections.map((selection) => selection.pointDiffGap)),
+      selections.reduce((sum, selection) => sum + selection.pointDiffGap, 0),
+      selections.reduce((sum, selection) => sum + selection.partnerRepeatPenalty, 0),
+      selections.reduce((sum, selection) => sum + selection.opponentRepeatPenalty, 0),
+      selections.reduce((sum, selection) => sum + selection.exactRematchPenalty, 0),
+      selections.reduce((sum, selection) => sum + selection.randomScore, 0),
+    ];
+  };
   let layoutTies: V3BatchSelection<ActiveMatchmakerV3Player<T>>[] = [];
   const layoutScheduleIndexes = new WeakMap<V3BatchSelection<ActiveMatchmakerV3Player<T>>, number>();
   const consider = (chosen: Candidate<ActiveMatchmakerV3Player<T>>[], mask: bigint, index: number) => {
@@ -252,6 +280,7 @@ export function findBestSocialBatchSelection<T extends MatchmakerV3Player>(
     const selections = chosen.map((candidate) => candidate.selection);
     const metrics = selections.length === 2 ? [
       -gain,
+      ...(respectRest ? getRest(mask) : []),
       Math.max(selections[0].balanceGap, selections[1].balanceGap), selections[0].balanceGap + selections[1].balanceGap,
       Math.max(selections[0].pointDiffGap, selections[1].pointDiffGap), selections[0].pointDiffGap + selections[1].pointDiffGap,
       selections[0].partnerRepeatPenalty + selections[1].partnerRepeatPenalty,
@@ -277,7 +306,7 @@ export function findBestSocialBatchSelection<T extends MatchmakerV3Player>(
     }
   };
   if (required > 0 && active.length >= required && locksFeasible) {
-    for (let index = 0; index < profiles.length; index++) {
+    for (const index of scheduleIndexes) {
       if (profiles[index].courts.length !== options.courtCount) continue;
       const lists = profiles[index].courts.map(candidatesFor);
       if (interrupted) break;
@@ -292,9 +321,9 @@ export function findBestSocialBatchSelection<T extends MatchmakerV3Player>(
         if (mandatory.length > slots) { pruned++; return; }
         const optimistic = [...chosen.flatMap((candidate) => candidate.selection.players), ...mandatory,
           ...available.filter((player) => !locked.has(player.userId)).sort((a, b) => compareSocialNumberVectors(
-            getSocialFairnessVector([a], respectRest), getSocialFairnessVector([b], respectRest)
+            getSocialFairnessVector([a]), getSocialFairnessVector([b])
           )).slice(0, slots - mandatory.length)];
-        const fairnessBound = getSocialFairnessVector(optimistic, respectRest);
+        const fairnessBound = getSocialFairnessVector(optimistic);
         if (bestFairness && compareSocialNumberVectors(fairnessBound, bestFairness) > 0) { pruned++; return; }
         let court = remaining[0];
         let compatible = lists[court].filter((candidate) => (candidate.mask & used) === BigInt(0));

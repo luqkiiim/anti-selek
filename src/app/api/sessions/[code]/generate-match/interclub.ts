@@ -43,8 +43,6 @@ type RankedInterclubCandidate = {
   matchesPlayed: number;
   matchmakingBaseline: number;
   restTurns: number;
-  needsMoreRest?: boolean;
-  moreRestTarget?: number;
   arrivalPriorityAt?: Date | string | null;
   strength?: number;
 };
@@ -327,8 +325,6 @@ function buildInterclubMatchmakerPlayers({
         matchmakingBaseline: candidate.matchmakingBaseline,
         availableSince: player.availableSince,
         restTurns: candidate.restTurns,
-        needsMoreRest: candidate.needsMoreRest ?? player.needsMoreRest,
-        moreRestTarget: candidate.moreRestTarget,
         arrivalPriorityAt:
           candidate.arrivalPriorityAt ?? player.arrivalPriorityAt ?? null,
         strength: playersById.get(player.userId)?.elo ?? 0,
@@ -376,10 +372,6 @@ function sortActivePlayers(
   return [...players].sort((left, right) => {
     if (left.effectiveMatchCount !== right.effectiveMatchCount) {
       return left.effectiveMatchCount - right.effectiveMatchCount;
-    }
-
-    if (respectPlayerRest && left.moreRestDeficit !== right.moreRestDeficit) {
-      return left.moreRestDeficit - right.moreRestDeficit;
     }
 
     if (respectPlayerRest && left.restTurns !== right.restTurns) {
@@ -433,13 +425,15 @@ function buildInterclubCandidatePool({
   respectPlayerRest: boolean;
   randomFn?: () => number;
 }): V3CandidatePool<ActiveInterclubPlayer> {
+  const poolRespectsRest =
+    sessionType !== SessionType.SOCIAL_MIX && respectPlayerRest;
   const clubPools = clubIds.map((clubId) =>
     buildCandidatePool(
       players.filter((player) => player.representingClubId === clubId),
       {
         requiredPlayerCount: requiredPerClub,
         randomFn,
-        respectPlayerRest,
+        respectPlayerRest: poolRespectsRest,
         restTurnTieZoneTolerance:
           getInterclubRestTurnTieZoneTolerance(sessionType),
       }
@@ -447,7 +441,7 @@ function buildInterclubCandidatePool({
   );
   const activePlayers = sortActivePlayers(
     clubPools.flatMap((pool) => pool.activePlayers),
-    respectPlayerRest
+    poolRespectsRest
   );
   const fairnessBands = buildFairnessBands(activePlayers);
   const lockedPlayers = clubPools.flatMap((pool) => pool.lockedPlayers);
@@ -584,8 +578,6 @@ function getInterclubSocialOptions(
       matchmakingBaseline:
         player.matchesPlayed + Math.max(0, player.matchmakingMatchesCredit ?? 0),
       restTurns: 0,
-      needsMoreRest: player.needsMoreRest,
-      moreRestTarget: Math.max(1, sessionData.courts?.length ?? 1),
       arrivalPriorityAt: player.arrivalPriorityAt,
     }
   );

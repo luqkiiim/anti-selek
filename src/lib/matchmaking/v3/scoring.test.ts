@@ -18,28 +18,28 @@ function createActivePlayer(
   userId: string,
   restTurns: number,
   randomScore: number,
-  moreRestDeficit = 0
+  matchesPlayed = 0,
+  arrivalPriorityAt: Date | null = null
 ): ActiveMatchmakerV3Player {
   return {
     userId,
-    matchesPlayed: 0,
-    matchmakingBaseline: 0,
+    matchesPlayed,
+    matchmakingBaseline: matchesPlayed,
     availableSince: new Date("2026-03-18T00:00:00Z"),
     strength: 1000,
-    effectiveMatchCount: 0,
+    effectiveMatchCount: matchesPlayed,
     restTurns,
-    needsMoreRest: false,
-    moreRestTarget: 1,
-    moreRestDeficit,
     randomScore,
     rank: 0,
+    arrivalPriorityAt,
   };
 }
 
 function createSelection(
   {
     restTurns = [1, 1, 1, 1],
-    moreRestDeficits = [0, 0, 0, 0],
+    matchesPlayed = [0, 0, 0, 0],
+    arrivalPriorityAt = [null, null, null, null],
     balanceGap,
     pointDiffGap = 0,
     sharedCourtRepeatPenalty = 0,
@@ -58,7 +58,8 @@ function createSelection(
     pairingRandomScore = 0,
   }: {
     restTurns?: number[];
-    moreRestDeficits?: number[];
+    matchesPlayed?: number[];
+    arrivalPriorityAt?: Array<Date | null>;
     balanceGap: number;
     pointDiffGap?: number;
     sharedCourtRepeatPenalty?: number;
@@ -82,7 +83,8 @@ function createSelection(
       `P${index + 1}`,
       value,
       randomScore,
-      moreRestDeficits[index] ?? 0
+      matchesPlayed[index] ?? 0,
+      arrivalPriorityAt[index] ?? null
     )
   ) as [
     ActiveMatchmakerV3Player,
@@ -122,7 +124,6 @@ function createSelection(
 
 function createBatchSelection({
   restTurns = [1, 1, 1, 1],
-  moreRestDeficits = [0, 0, 0, 0],
   maxBalanceGap,
   totalBalanceGap,
   maxPointDiffGap = 0,
@@ -141,7 +142,6 @@ function createBatchSelection({
   sidePairingRandomScores = [totalPairingRandomScore, totalPairingRandomScore],
 }: {
   restTurns?: number[];
-  moreRestDeficits?: number[];
   maxBalanceGap: number;
   totalBalanceGap: number;
   maxPointDiffGap?: number;
@@ -161,7 +161,6 @@ function createBatchSelection({
 }): V3BatchSelection {
   const selection = createSelection({
     restTurns,
-    moreRestDeficits,
     balanceGap: maxBalanceGap,
     pointDiffGap: maxPointDiffGap,
     sharedCourtRepeatPenalty: totalSharedCourtRepeatPenalty,
@@ -308,18 +307,20 @@ describe("matchmaking v3 scoring", () => {
     ).toBeLessThan(0);
   });
 
-  it("retains the Points repeat exception while Social always respects rest", () => {
+  it("keeps the Points repeat exception but lets Social variety beat rest", () => {
     const fullRepeat = createSelection({
       restTurns: [3, 3, 3, 3],
       balanceGap: 0,
       sharedCourtRepeatPenalty: 6,
       exactRematchPenalty: 0,
+      socialVarietyGain: 0,
     });
     const nearRestAlternative = createSelection({
       restTurns: [3, 3, 2, 2],
       balanceGap: 1.5,
       sharedCourtRepeatPenalty: 2,
       exactRematchPenalty: 0,
+      socialVarietyGain: 1,
     });
 
     expect(
@@ -335,30 +336,43 @@ describe("matchmaking v3 scoring", () => {
         fullRepeat,
         SessionType.SOCIAL_MIX
       )
-    ).toBeGreaterThan(0);
+    ).toBeLessThan(0);
   });
 
-  it("keeps a full repeat in social mix when the alternative is more than one rest turn worse", () => {
-    const fullRepeat = createSelection({
-      restTurns: [3, 3, 3, 3],
-      balanceGap: 10,
-      sharedCourtRepeatPenalty: 6,
-      exactRematchPenalty: 0,
+  it("uses ordinary rest only after Social variety ties, and skips it when disabled", () => {
+    const moreRest = createSelection({
+      restTurns: [4, 4, 4, 4], balanceGap: 0, exactRematchPenalty: 0,
+      socialVarietyGain: 2,
     });
-    const tooLowRestAlternative = createSelection({
-      restTurns: [3, 2, 1, 1],
-      balanceGap: 0,
-      sharedCourtRepeatPenalty: 0,
-      exactRematchPenalty: 0,
+    const lessRest = createSelection({
+      restTurns: [1, 1, 1, 1], balanceGap: 0, exactRematchPenalty: 0,
+      socialVarietyGain: 2,
     });
 
-    expect(
-      compareSingleCourtSelections(
-        fullRepeat,
-        tooLowRestAlternative,
-        SessionType.SOCIAL_MIX
-      )
-    ).toBeLessThan(0);
+    expect(compareSingleCourtSelections(moreRest, lessRest, SessionType.SOCIAL_MIX)).toBeLessThan(0);
+    expect(compareSingleCourtSelections(moreRest, lessRest, SessionType.SOCIAL_MIX, { respectPlayerRest: false })).toBe(0);
+  });
+
+  it("keeps court-time and arrival priority ahead of Social variety", () => {
+    const higherCount = createSelection({
+      matchesPlayed: [0, 0, 0, 2], balanceGap: 0, exactRematchPenalty: 0,
+      socialVarietyGain: 100,
+    });
+    const lowerCount = createSelection({
+      matchesPlayed: [0, 0, 0, 0], balanceGap: 0, exactRematchPenalty: 0,
+      socialVarietyGain: 0,
+    });
+    const laterArrival = createSelection({
+      arrivalPriorityAt: [null, null, null, null], balanceGap: 0, exactRematchPenalty: 0,
+      socialVarietyGain: 100,
+    });
+    const earlierArrival = createSelection({
+      arrivalPriorityAt: [new Date("2026-03-17T00:00:00Z"), null, null, null],
+      balanceGap: 0, exactRematchPenalty: 0, socialVarietyGain: 0,
+    });
+
+    expect(compareSingleCourtSelections(lowerCount, higherCount, SessionType.SOCIAL_MIX)).toBeLessThan(0);
+    expect(compareSingleCourtSelections(earlierArrival, laterArrival, SessionType.SOCIAL_MIX)).toBeLessThan(0);
   });
 
   it("keeps points balance ahead of heavy non-full repeats", () => {
@@ -382,55 +396,6 @@ describe("matchmaking v3 scoring", () => {
         SessionType.POINTS
       )
     ).toBeLessThan(0);
-  });
-
-  it("prefers the lower total more-rest deficit before raw rest turns", () => {
-    const lowerDeficit = createSelection({
-      restTurns: [1, 1, 1, 1],
-      moreRestDeficits: [0, 0, 0, 0],
-      balanceGap: 0,
-      exactRematchPenalty: 0,
-    });
-    const higherDeficitWithMoreRestTurns = createSelection({
-      restTurns: [5, 5, 5, 5],
-      moreRestDeficits: [1, 0, 0, 0],
-      balanceGap: 0,
-      exactRematchPenalty: 0,
-    });
-
-    expect(
-      compareSingleCourtSelections(
-        lowerDeficit,
-        higherDeficitWithMoreRestTurns,
-        SessionType.ELO
-      )
-    ).toBeLessThan(0);
-  });
-
-  it("ignores more-rest deficit scoring when player rest is disabled", () => {
-    const lowerDeficit = createSelection({
-      restTurns: [1, 1, 1, 1],
-      moreRestDeficits: [0, 0, 0, 0],
-      balanceGap: 0,
-      exactRematchPenalty: 0,
-      randomScore: 2,
-    });
-    const higherDeficit = createSelection({
-      restTurns: [5, 5, 5, 5],
-      moreRestDeficits: [1, 0, 0, 0],
-      balanceGap: 0,
-      exactRematchPenalty: 0,
-      randomScore: 1,
-    });
-
-    expect(
-      compareSingleCourtSelections(
-        lowerDeficit,
-        higherDeficit,
-        SessionType.ELO,
-        { respectPlayerRest: false }
-      )
-    ).toBeGreaterThan(0);
   });
 
   it("prefers a new partner inside the Elo balance window", () => {
@@ -959,21 +924,7 @@ describe("matchmaking v3 scoring", () => {
     }
   });
 
-  it("keeps More rest ahead of ordinary rest and composition for both Balanced metrics", () => {
-    const lowerMoreRestDeficit = createSelection({
-      restTurns: [1, 1, 1, 1],
-      moreRestDeficits: [0, 0, 0, 0],
-      balanceGap: 0,
-      exactRematchPenalty: 0,
-      mixedVarietyPenalty: 3,
-    });
-    const higherMoreRestDeficit = createSelection({
-      restTurns: [5, 5, 5, 5],
-      moreRestDeficits: [1, 0, 0, 0],
-      balanceGap: 0,
-      exactRematchPenalty: 0,
-      mixedVarietyPenalty: -3,
-    });
+  it("keeps ordinary rest ahead of composition for both Balanced metrics", () => {
     const moreOrdinaryRest = createSelection({
       restTurns: [5, 5, 5, 5],
       balanceGap: 0,
@@ -988,13 +939,6 @@ describe("matchmaking v3 scoring", () => {
     });
 
     for (const sessionType of BALANCED_SESSION_TYPES) {
-      expect(
-        compareSingleCourtSelections(
-          lowerMoreRestDeficit,
-          higherMoreRestDeficit,
-          sessionType
-        )
-      ).toBeLessThan(0);
       expect(
         compareSingleCourtSelections(
           moreOrdinaryRest,
@@ -1212,22 +1156,8 @@ describe("matchmaking v3 scoring", () => {
     ).toBeLessThan(0);
   });
 
-  it("keeps batch More rest and ordinary rest priorities aligned for POINTS and ELO", () => {
-    const lowerMoreRestDeficit = createBatchSelection({
-      restTurns: [1, 1, 1, 1],
-      moreRestDeficits: [0, 0, 0, 0],
-      maxBalanceGap: 0,
-      totalBalanceGap: 0,
-      totalMixedVarietyPenalty: 3,
-    });
-    const higherMoreRestDeficit = createBatchSelection({
-      restTurns: [5, 5, 5, 5],
-      moreRestDeficits: [1, 0, 0, 0],
-      maxBalanceGap: 0,
-      totalBalanceGap: 0,
-      totalMixedVarietyPenalty: -3,
-    });
-    const moreRest = createBatchSelection({
+  it("keeps batch ordinary rest before composition for POINTS and ELO", () => {
+    const moreOrdinaryRest = createBatchSelection({
       restTurns: [5, 5, 5, 5],
       maxBalanceGap: 0,
       totalBalanceGap: 0,
@@ -1242,14 +1172,7 @@ describe("matchmaking v3 scoring", () => {
 
     for (const sessionType of BALANCED_SESSION_TYPES) {
       expect(
-        compareBatchSelections(
-          lowerMoreRestDeficit,
-          higherMoreRestDeficit,
-          sessionType
-        )
-      ).toBeLessThan(0);
-      expect(
-        compareBatchSelections(moreRest, moreCompositionVariety, sessionType)
+        compareBatchSelections(moreOrdinaryRest, moreCompositionVariety, sessionType)
       ).toBeLessThan(0);
     }
   });

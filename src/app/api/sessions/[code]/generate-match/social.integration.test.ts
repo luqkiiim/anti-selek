@@ -59,7 +59,6 @@ function player(
     sessionPoints: 0,
     isPaused: false,
     isGuest: false,
-    needsMoreRest: false,
     lastPartnerId: null,
     representingClubId: null,
     availableSince,
@@ -287,7 +286,7 @@ describe("Social generation route adapters", () => {
     for (const selection of result.selections) expectHistoryScore(selection, context);
   });
 
-  it("keeps strict rest priority in a Social player-group batch", async () => {
+  it("keeps Social player-group batch selections valid while variety precedes rest", async () => {
     const players = [SessionPool.A, SessionPool.B].flatMap((pool) =>
       Array.from({ length: 6 }, (_, index) => player(`${pool}${index + 1}`, PlayerGender.MALE, { pool }))
     );
@@ -300,7 +299,104 @@ describe("Social generation route adapters", () => {
     const data = session({ poolsEnabled: true, mode: SessionMode.MEXICANO, players, matches: [recent] });
     const state = await inputs(data);
     const result = selectBatchMatches({ ...state, requestedMatchCount: 2, randomFn: () => 0.25 });
-    expect(result.selections.flatMap((entry) => entry.ids).sort()).toEqual(["A1", "A2", "A3", "A4", "B1", "B2", "B3", "B4"]);
+    expect(result.selections).toHaveLength(2);
+    expect(new Set(result.selections.flatMap((entry) => entry.ids)).size).toBe(8);
+    for (const selection of result.selections) {
+      expect((selection.poolASeatCount ?? 0) + (selection.poolBSeatCount ?? 0)).toBe(4);
+      expect(selection.courtGroupType).toBeTruthy();
+    }
+  });
+
+  it.each([
+    ["MIXED", "MIXED", 1],
+    ["MIXED", "MIXED", 4729],
+    ["MENS", "WOMENS", 104729],
+  ] as const)("keeps Social variety active through alternating queue-disabled refills after %s + %s openings (seed %i)", async (firstOpeningType, secondOpeningType, seed) => {
+    let randomState = seed;
+    vi.mocked(Math.random).mockImplementation(() => {
+      randomState = (randomState * 48271) % 2147483647;
+      return randomState / 2147483647;
+    });
+    const players = [
+      ...Array.from({ length: 7 }, (_, index) => player(`M${index + 1}`, PlayerGender.MALE, { matchesPlayed: 0, availableSince: joinedAt })),
+      ...Array.from({ length: 7 }, (_, index) => player(`F${index + 1}`, PlayerGender.FEMALE, { matchesPlayed: 0, availableSince: joinedAt })),
+    ];
+    const openingPairs: Record<string, [V3DoublesPartition, V3DoublesPartition]> = {
+      "MIXED+MIXED": [
+        { team1: ["M1", "F1"], team2: ["M2", "F2"] },
+        { team1: ["M3", "F3"], team2: ["M4", "F4"] },
+      ],
+      "MENS+WOMENS": [
+        { team1: ["M1", "M2"], team2: ["M3", "M4"] },
+        { team1: ["F1", "F2"], team2: ["F3", "F4"] },
+      ],
+    };
+    const [firstPartition, secondPartition] = openingPairs[`${firstOpeningType}+${secondOpeningType}`];
+    const data = session({
+      players,
+      queuedMatch: null,
+      matches: [
+        match("opening-court-1", firstPartition, players, MatchStatus.IN_PROGRESS, { courtId: "court-1" }),
+        match("opening-court-2", secondPartition, players, MatchStatus.IN_PROGRESS, { courtId: "court-2" }),
+      ],
+    });
+    const currentMatchByCourt = new Map([
+      ["court-1", "opening-court-1"],
+      ["court-2", "opening-court-2"],
+    ]);
+    const selectedTypes: string[] = [];
+    const gendersById = new Map(players.map((entry) => [entry.userId, entry.gender]));
+
+    for (let refill = 0; refill < 45; refill += 1) {
+      const freedCourtId = refill % 2 === 0 ? "court-1" : "court-2";
+      const busyCourtId = freedCourtId === "court-1" ? "court-2" : "court-1";
+      const currentMatchId = currentMatchByCourt.get(freedCourtId)!;
+      const completedAt = new Date(joinedAt.getTime() + (refill + 1) * 10 * 60 * 1000);
+      const completed = data.matches.find((entry) => entry.id === currentMatchId)!;
+      completed.status = MatchStatus.COMPLETED;
+      completed.completedAt = completedAt;
+      for (const userId of [completed.team1User1Id, completed.team1User2Id, completed.team2User1Id, completed.team2User2Id]) {
+        const entry = data.players.find((candidate) => candidate.userId === userId)!;
+        entry.matchesPlayed += 1;
+        entry.availableSince = completedAt;
+      }
+      const completedCounts = data.players.map((entry) => entry.matchesPlayed);
+      expect(Math.max(...completedCounts) - Math.min(...completedCounts)).toBeLessThanOrEqual(1);
+
+      const state = await inputs(data);
+      const busyMatch = data.matches.find((entry) => entry.id === currentMatchByCourt.get(busyCourtId))!;
+      expect(state.busyPlayerIds).toEqual(new Set([
+        busyMatch.team1User1Id, busyMatch.team1User2Id, busyMatch.team2User1Id, busyMatch.team2User2Id,
+      ]));
+      expect(data.queuedMatch).toBeNull();
+      const selection = selectSingleCourtMatch({ ...state, reshuffleSource: null });
+      expect(selection.ids.every((id) => !state.busyPlayerIds.has(id))).toBe(true);
+      const countsById = new Map(data.players.map((entry) => [
+        entry.userId,
+        Math.max(entry.matchesPlayed, entry.matchesPlayed + Math.max(0, entry.matchmakingMatchesCredit ?? 0)),
+      ]));
+      const expectedCounts = state.rankedCandidates
+        .map((entry) => countsById.get(entry.userId)!)
+        .sort((left, right) => left - right)
+        .slice(0, 4);
+      const selectedCounts = selection.ids
+        .map((id) => countsById.get(id)!)
+        .sort((left, right) => left - right);
+      expect(selectedCounts).toEqual(expectedCounts);
+      const men = selection.ids.filter((id) => gendersById.get(id) === PlayerGender.MALE).length;
+      expect([0, 2, 4]).toContain(men);
+      selectedTypes.push(men === 4 ? "MENS" : men === 0 ? "WOMENS" : "MIXED");
+
+      const nextMatchId = `refill-${refill}`;
+      data.matches.push(match(nextMatchId, selection.partition, data.players, MatchStatus.IN_PROGRESS, {
+        courtId: freedCourtId,
+        createdAt: completedAt,
+        matchmakingReasonJson: selection.matchmakingReasonJson,
+      }));
+      currentMatchByCourt.set(freedCourtId, nextMatchId);
+    }
+
+    expect(new Set(selectedTypes.slice(-24))).toEqual(new Set(["MENS", "WOMENS", "MIXED"]));
   });
 
   it("uses constrained full-roster Social history for Interclub batches", async () => {

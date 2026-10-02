@@ -219,7 +219,6 @@ export async function GET(
           preferredPool: isValidSessionPool(m.preferredPool)
             ? m.preferredPool
             : SessionPool.B,
-          needsMoreRest: m.needsMoreRest,
           status:
             m.status === ClubPlayerStatus.OCCASIONAL
               ? ClubPlayerStatus.OCCASIONAL
@@ -305,7 +304,6 @@ export async function POST(
       partnerPreference,
       mixedSideOverride,
       status,
-      needsMoreRest,
       preferredPool,
     } =
       body as {
@@ -316,7 +314,6 @@ export async function POST(
       partnerPreference?: unknown;
       mixedSideOverride?: unknown;
       status?: unknown;
-      needsMoreRest?: unknown;
       preferredPool?: unknown;
     };
     if (typeof name !== "string" || name.trim().length < 2) {
@@ -346,9 +343,6 @@ export async function POST(
     }
     if (status !== undefined && !isValidClubPlayerStatus(status)) {
       return NextResponse.json({ error: "Invalid roster status" }, { status: 400 });
-    }
-    if (needsMoreRest !== undefined && typeof needsMoreRest !== "boolean") {
-      return NextResponse.json({ error: "Invalid more rest value" }, { status: 400 });
     }
     if (preferredPool !== undefined && !isValidSessionPool(preferredPool)) {
       return NextResponse.json({ error: "Invalid preferred game group" }, { status: 400 });
@@ -517,8 +511,6 @@ export async function POST(
         status: isValidClubPlayerStatus(status)
           ? status
           : ClubPlayerStatus.CORE,
-        needsMoreRest:
-          typeof needsMoreRest === "boolean" ? needsMoreRest : false,
         preferredPool: isValidSessionPool(preferredPool)
           ? preferredPool
           : SessionPool.B,
@@ -527,7 +519,6 @@ export async function POST(
         role: true,
         elo: true,
         status: true,
-        needsMoreRest: true,
         preferredPool: true,
       },
     });
@@ -540,7 +531,6 @@ export async function POST(
       preferredPool: isValidSessionPool(membership.preferredPool)
         ? membership.preferredPool
         : SessionPool.B,
-      needsMoreRest: membership.needsMoreRest,
       status:
         membership.status === ClubPlayerStatus.OCCASIONAL
           ? ClubPlayerStatus.OCCASIONAL

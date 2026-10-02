@@ -100,8 +100,6 @@ type AvailableCandidate = {
   arrivalPriorityAt: Date | null;
   strength: number;
   pool?: string | null;
-  needsMoreRest: boolean;
-  moreRestTarget: number;
   isBusy: false;
   isPaused: false;
 };
@@ -404,14 +402,6 @@ function getPoolWaitingCounts(
   };
 }
 
-function getSessionCourtCount(sessionData: GenerateMatchSession) {
-  return Math.max(1, sessionData.courts?.length ?? 0);
-}
-
-function getPlayerMoreRestTarget(sessionData: GenerateMatchSession) {
-  return getSessionCourtCount(sessionData);
-}
-
 function buildV3Players(
   sessionData: GenerateMatchSession,
   playersById: Map<string, PartitionCandidate>,
@@ -456,8 +446,6 @@ function buildV3Players(
     pointDiff: playersById.get(player.userId)?.pointDiff ?? 0,
     isBusy: !player.isPaused && !availableUserIds.has(player.userId),
     isPaused: player.isPaused,
-    needsMoreRest: player.needsMoreRest,
-    moreRestTarget: getPlayerMoreRestTarget(sessionData),
     gender: player.gender,
     partnerPreference: player.partnerPreference,
     mixedSideOverride: player.mixedSideOverride,
@@ -519,8 +507,6 @@ function buildLadderPlayers(
       ladderScore: record.ladderScore,
       isBusy: !player.isPaused && !availableUserIds.has(player.userId),
       isPaused: player.isPaused,
-      needsMoreRest: player.needsMoreRest,
-      moreRestTarget: getPlayerMoreRestTarget(sessionData),
       gender: player.gender,
       partnerPreference: player.partnerPreference,
       mixedSideOverride: player.mixedSideOverride,
@@ -686,8 +672,6 @@ export function getRankedCandidates(
       arrivalPriorityAt: player.arrivalPriorityAt ?? null,
       strength: 0,
       pool: player.pool,
-      needsMoreRest: player.needsMoreRest,
-      moreRestTarget: getPlayerMoreRestTarget(sessionData),
       isBusy: false,
       isPaused: false,
     }));
@@ -696,7 +680,9 @@ export function getRankedCandidates(
     availableCandidates,
     rankedCandidates: buildActivePlayers(availableCandidates, {
       randomFn: () => 0,
-      respectPlayerRest: sessionData.respectPlayerRest,
+      respectPlayerRest:
+        getMatchmakerSessionType(sessionData) !== SessionType.SOCIAL_MIX &&
+        sessionData.respectPlayerRest,
     }),
   };
 }
@@ -970,8 +956,6 @@ type QuotaFairnessPlayer = {
   matchesPlayed: number;
   matchmakingBaseline: number;
   restTurns?: number;
-  needsMoreRest?: boolean;
-  moreRestTarget?: number;
   arrivalPriorityAt?: Date | string | null;
   availableSince: Date;
   isBusy?: boolean;
@@ -983,7 +967,6 @@ type QuotaCombination<T extends QuotaFairnessPlayer> = {
   players: T[];
   missingArrivalPriorityCount: number;
   effectiveMatchCountVector: number[];
-  moreRestDeficitTotal: number;
   restTurnVector: number[];
   crossoverDebtVector: number[];
   waitTimeVector: number[];
@@ -1034,9 +1017,6 @@ function compareQuotaCombinations<T extends QuotaFairnessPlayer>(
     right.effectiveMatchCountVector
   );
   if (matchCountCompare !== 0) return matchCountCompare;
-  if (left.moreRestDeficitTotal !== right.moreRestDeficitTotal) {
-    return left.moreRestDeficitTotal - right.moreRestDeficitTotal;
-  }
   const restCompare = compareNumberVectors(
     left.restTurnVector,
     right.restTurnVector,
@@ -1077,7 +1057,6 @@ function buildQuotaCombinations<T extends QuotaFairnessPlayer>(
       players: [],
       missingArrivalPriorityCount: 0,
       effectiveMatchCountVector: [],
-      moreRestDeficitTotal: 0,
       restTurnVector: [],
       crossoverDebtVector: [],
       waitTimeVector: [],
@@ -1119,20 +1098,6 @@ function buildQuotaCombinations<T extends QuotaFairnessPlayer>(
             Math.max(player.matchesPlayed, player.matchmakingBaseline)
           )
           .sort((left, right) => left - right),
-        moreRestDeficitTotal: respectPlayerRest
-          ? combination.reduce(
-              (total, player) =>
-                total +
-                (player.needsMoreRest
-                  ? Math.max(
-                      0,
-                      Math.max(1, player.moreRestTarget ?? 1) -
-                        Math.max(0, player.restTurns ?? 0)
-                    )
-                  : 0),
-              0
-            )
-          : 0,
         restTurnVector: respectPlayerRest ? restTurnVector : [],
         crossoverDebtVector:
           crossoverTargetRatio === null
@@ -1169,9 +1134,6 @@ function combineQuotaFairness<T extends QuotaFairnessPlayer>(
       ...poolACombination.effectiveMatchCountVector,
       ...poolBCombination.effectiveMatchCountVector,
     ].sort((a, b) => a - b),
-    moreRestDeficitTotal:
-      poolACombination.moreRestDeficitTotal +
-      poolBCombination.moreRestDeficitTotal,
     restTurnVector: [
       ...poolACombination.restTurnVector,
       ...poolBCombination.restTurnVector,
@@ -2481,7 +2443,6 @@ function compareGroupedBatchSelections(
       "players" in selection && Array.isArray(selection.players)
         ? (selection.players as Array<{
             effectiveMatchCount?: number;
-            moreRestDeficit?: number;
             restTurns?: number;
             arrivalPriorityAt?: Date | string | null;
           }>)
@@ -2517,16 +2478,6 @@ function compareGroupedBatchSelections(
   if (priorityCompare !== 0) return priorityCompare;
 
   if (sessionData.respectPlayerRest) {
-    const leftDeficit = leftPlayers.reduce(
-      (sum, player) => sum + (player.moreRestDeficit ?? 0),
-      0
-    );
-    const rightDeficit = rightPlayers.reduce(
-      (sum, player) => sum + (player.moreRestDeficit ?? 0),
-      0
-    );
-    if (leftDeficit !== rightDeficit) return leftDeficit - rightDeficit;
-
     const restCompare = compareNumberVectors(
       leftPlayers.map((player) => player.restTurns ?? 0).sort((a, b) => b - a),
       rightPlayers.map((player) => player.restTurns ?? 0).sort((a, b) => b - a),

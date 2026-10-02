@@ -95,7 +95,6 @@ function makeMembership({
     elo: 1100,
     status: ClubPlayerStatus.CORE,
     role: ClubRole.MEMBER,
-    needsMoreRest: false,
     createdAt: new Date("2026-06-02T00:00:00.000Z"),
     user: {
       id: userId,

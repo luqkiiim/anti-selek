@@ -365,7 +365,7 @@ describe("join session route", () => {
     vi.useRealTimers();
   });
 
-  it("copies club rest and game-group defaults when a member joins", async () => {
+  it("copies the saved game group and ignores a legacy more-rest value", async () => {
     mocks.auth.mockResolvedValue({
       user: {
         id: "rest-player",
@@ -407,7 +407,6 @@ describe("join session route", () => {
           players: {
             create: expect.objectContaining({
               userId: "rest-player",
-              needsMoreRest: true,
               pool: SessionPool.A,
             }),
           },
@@ -431,7 +430,6 @@ describe("join session route", () => {
     mocks.clubMemberFindUnique.mockResolvedValue({
       clubId: "community-1",
       role: "MEMBER",
-      needsMoreRest: false,
       preferredPool: SessionPool.A,
     });
 
@@ -535,7 +533,6 @@ describe("join session route", () => {
             create: expect.objectContaining({
               userId: "club-b-player",
               representingClubId: "community-2",
-              needsMoreRest: true,
             }),
           },
         },
@@ -584,7 +581,6 @@ describe("join session route", () => {
     mocks.clubMemberFindUnique.mockResolvedValue({
       clubId: "community-1",
       role: "ADMIN",
-      needsMoreRest: false,
     });
     mocks.clubMemberFindMany.mockResolvedValue([
       {

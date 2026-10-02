@@ -38,13 +38,11 @@ describe("CreateClubPlayerModal", () => {
         newPlayerGender={PlayerGender.MALE}
         newPlayerMixedSideOverride={null}
         newPlayerStatus={ClubPlayerStatus.CORE}
-        newPlayerNeedsMoreRest={false}
         newPlayerPreferredPool={SessionPool.B}
         onNameChange={vi.fn()}
         onNewPlayerGenderChange={vi.fn()}
         onNewPlayerMixedSideOverrideChange={vi.fn()}
         onNewPlayerStatusChange={vi.fn()}
-        onNewPlayerNeedsMoreRestChange={vi.fn()}
         onNewPlayerPreferredPoolChange={vi.fn()}
         onClose={vi.fn()}
         onSubmit={vi.fn()}
@@ -52,7 +50,7 @@ describe("CreateClubPlayerModal", () => {
     );
 
     expect(markup).toContain("Local placeholder only");
-    expect(markup).toContain("More rest");
+    expect(markup).not.toContain("More rest");
     expect(markup).toContain("Preferred game group");
     expect(markup).toContain('<option value="B" selected="">Social</option>');
     expect(markup).toContain(

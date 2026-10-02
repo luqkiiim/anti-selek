@@ -21,10 +21,9 @@ function isSocialSession(sessionType: SessionType): boolean {
   return sessionType === SessionType.SOCIAL_MIX;
 }
 
-/** Every component is minimized; variety can never buy better court time or rest. */
+/** Count fairness and arrival are the primary Social fairness priorities. */
 export function getSocialFairnessVector(
-  players: readonly ActiveMatchmakerV3Player[],
-  respectPlayerRest = true
+  players: readonly ActiveMatchmakerV3Player[]
 ) {
   const counts = players.map((player) => player.effectiveMatchCount).sort((a, b) => a - b);
   const arrivalTimes = players
@@ -33,16 +32,19 @@ export function getSocialFairnessVector(
     .sort((a, b) => a - b);
   const vector = [...counts, -arrivalTimes.length, ...arrivalTimes];
   while (vector.length < players.length * 2 + 1) vector.push(Number.POSITIVE_INFINITY);
-  if (respectPlayerRest) {
-    const rest = buildRestSummary([...players]);
-    vector.push(
-      players.reduce((sum, player) => sum + player.moreRestDeficit, 0),
-      -rest.totalRestTurns,
-      -rest.minimumRestTurns,
-      ...rest.restTurnVector.map((turns) => -turns)
-    );
-  }
   return vector;
+}
+
+/** Ordinary rest is a Social tie-break after group rules and ongoing variety. */
+export function getSocialRestVector(
+  players: readonly ActiveMatchmakerV3Player[]
+) {
+  const rest = buildRestSummary([...players]);
+  return [
+    -rest.totalRestTurns,
+    -rest.minimumRestTurns,
+    ...rest.restTurnVector.map((turns) => -turns),
+  ];
 }
 
 export function compareSocialNumberVectors(left: readonly number[], right: readonly number[]) {
@@ -56,12 +58,21 @@ export function compareSocialNumberVectors(left: readonly number[], right: reado
 
 export function compareSocialFairnessPlayers(
   left: readonly ActiveMatchmakerV3Player[],
-  right: readonly ActiveMatchmakerV3Player[],
-  respectPlayerRest = true
+  right: readonly ActiveMatchmakerV3Player[]
 ) {
   return compareSocialNumberVectors(
-    getSocialFairnessVector(left, respectPlayerRest),
-    getSocialFairnessVector(right, respectPlayerRest)
+    getSocialFairnessVector(left),
+    getSocialFairnessVector(right)
+  );
+}
+
+export function compareSocialRestPlayers(
+  left: readonly ActiveMatchmakerV3Player[],
+  right: readonly ActiveMatchmakerV3Player[]
+) {
+  return compareSocialNumberVectors(
+    getSocialRestVector(left),
+    getSocialRestVector(right)
   );
 }
 
@@ -70,13 +81,15 @@ export function compareSocialBatchSelections<T extends ActiveMatchmakerV3Player>
   right: V3BatchSelection<T>,
   options?: { respectPlayerRest?: boolean; leftSchedulingRank?: number; rightSchedulingRank?: number }
 ) {
+  const leftPlayers = left.selections.flatMap((selection) => selection.players);
+  const rightPlayers = right.selections.flatMap((selection) => selection.players);
   return compareSocialFairnessPlayers(
-    left.selections.flatMap((selection) => selection.players),
-    right.selections.flatMap((selection) => selection.players),
-    options?.respectPlayerRest !== false
+    leftPlayers,
+    rightPlayers
   ) ||
     (options?.leftSchedulingRank ?? 0) - (options?.rightSchedulingRank ?? 0) ||
     (right.totalSocialVarietyGain ?? 0) - (left.totalSocialVarietyGain ?? 0) ||
+    (options?.respectPlayerRest === false ? 0 : compareSocialRestPlayers(leftPlayers, rightPlayers)) ||
     left.maxBalanceGap - right.maxBalanceGap ||
     left.totalBalanceGap - right.totalBalanceGap ||
     left.maxPointDiffGap - right.maxPointDiffGap ||
@@ -233,22 +246,6 @@ function compareBatchRandomTieBreak<T extends ActiveMatchmakerV3Player>(
 
   return (
     left.totalPairingRandomScore - right.totalPairingRandomScore
-  );
-}
-
-function getMoreRestDeficitTotal<
-  T extends Pick<ActiveMatchmakerV3Player, "moreRestDeficit">,
->(players: T[]) {
-  return players.reduce((sum, player) => sum + player.moreRestDeficit, 0);
-}
-
-function compareMoreRestDeficitTotals<T extends ActiveMatchmakerV3Player>(
-  leftPlayers: T[],
-  rightPlayers: T[]
-) {
-  return (
-    getMoreRestDeficitTotal(leftPlayers) -
-    getMoreRestDeficitTotal(rightPlayers)
   );
 }
 
@@ -496,8 +493,9 @@ export function compareSingleCourtSelections<
   options?: { respectPlayerRest?: boolean }
 ) {
   if (isSocialSession(sessionType)) {
-    return compareSocialFairnessPlayers(left.players, right.players, options?.respectPlayerRest !== false) ||
+    return compareSocialFairnessPlayers(left.players, right.players) ||
       (right.socialVarietyGain ?? 0) - (left.socialVarietyGain ?? 0) ||
+      (options?.respectPlayerRest === false ? 0 : compareSocialRestPlayers(left.players, right.players)) ||
       left.balanceGap - right.balanceGap || left.pointDiffGap - right.pointDiffGap ||
       left.partnerRepeatPenalty - right.partnerRepeatPenalty ||
       left.opponentRepeatPenalty - right.opponentRepeatPenalty ||
@@ -540,14 +538,6 @@ export function compareSingleCourtSelections<
       right.mixedVarietyPenalty !== undefined
     ) {
       if (shouldRespectPlayerRest(options)) {
-        const moreRestCompare = compareMoreRestDeficitTotals(
-          left.players,
-          right.players
-        );
-        if (moreRestCompare !== 0) {
-          return moreRestCompare;
-        }
-
         const restCompare = compareRestSummariesWithTolerance(
           left.restSummary,
           right.restSummary
@@ -589,14 +579,6 @@ export function compareSingleCourtSelections<
     }
 
     if (shouldRespectPlayerRest(options)) {
-      const moreRestCompare = compareMoreRestDeficitTotals(
-        left.players,
-        right.players
-      );
-      if (moreRestCompare !== 0) {
-        return moreRestCompare;
-      }
-
       const restCompare = compareRestSummaries(
         left.restSummary,
         right.restSummary
@@ -624,14 +606,6 @@ export function compareSingleCourtSelections<
     });
     if (fullRepeatGuardrailCompare !== 0) {
       return fullRepeatGuardrailCompare;
-    }
-
-    const moreRestCompare = compareMoreRestDeficitTotals(
-      left.players,
-      right.players
-    );
-    if (moreRestCompare !== 0) {
-      return moreRestCompare;
     }
 
     const restCompare = compareRestSummaries(
@@ -715,14 +689,6 @@ export function compareBatchSelections<T extends ActiveMatchmakerV3Player>(
       right.totalMixedVarietyPenalty !== undefined
     ) {
       if (shouldRespectPlayerRest(options)) {
-        const moreRestCompare = compareMoreRestDeficitTotals(
-          left.selections.flatMap((selection) => selection.players),
-          right.selections.flatMap((selection) => selection.players)
-        );
-        if (moreRestCompare !== 0) {
-          return moreRestCompare;
-        }
-
         const restCompare = compareRestSummariesWithTolerance(
           left.restSummary,
           right.restSummary
@@ -774,14 +740,6 @@ export function compareBatchSelections<T extends ActiveMatchmakerV3Player>(
     }
 
     if (shouldRespectPlayerRest(options)) {
-      const moreRestCompare = compareMoreRestDeficitTotals(
-        left.selections.flatMap((selection) => selection.players),
-        right.selections.flatMap((selection) => selection.players)
-      );
-      if (moreRestCompare !== 0) {
-        return moreRestCompare;
-      }
-
       const restCompare = compareRestSummaries(
         left.restSummary,
         right.restSummary
@@ -802,14 +760,6 @@ export function compareBatchSelections<T extends ActiveMatchmakerV3Player>(
     );
     if (fullRepeatGuardrailCompare !== 0) {
       return fullRepeatGuardrailCompare;
-    }
-
-    const moreRestCompare = compareMoreRestDeficitTotals(
-      left.selections.flatMap((selection) => selection.players),
-      right.selections.flatMap((selection) => selection.players)
-    );
-    if (moreRestCompare !== 0) {
-      return moreRestCompare;
     }
 
     const restCompare = compareRestSummaries(

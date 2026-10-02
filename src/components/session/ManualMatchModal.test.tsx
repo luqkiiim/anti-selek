@@ -51,7 +51,6 @@ function createPlayer(userId: string, name: string, pool = SessionPool.A): Playe
     gender: PlayerGender.MALE,
     partnerPreference: PartnerPreference.OPEN,
     pool,
-    needsMoreRest: false,
     user: {
       id: userId,
       name,

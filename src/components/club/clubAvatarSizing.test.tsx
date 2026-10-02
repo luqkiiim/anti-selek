@@ -31,7 +31,6 @@ const member: ClubPageMember = {
   name: "Alex Lee",
   avatarUrl: "https://cdn.test/alex.jpg",
   status: ClubPlayerStatus.CORE,
-  needsMoreRest: false,
   preferredPool: SessionPool.B,
   gender: PlayerGender.UNSPECIFIED,
   partnerPreference: PartnerPreference.OPEN,

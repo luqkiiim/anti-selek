@@ -139,7 +139,7 @@ describe("matchmaking v3 simulation", () => {
     );
   });
 
-  it("keeps Social court time and actual rest ahead of variety throughout a seven-player run", () => {
+  it("keeps Social court time fair while variety precedes ordinary rest", () => {
     const state = createSimulationState(
       createSimulationPlayers(7, { strengthStep: 0 }),
       {
@@ -149,8 +149,7 @@ describe("matchmaking v3 simulation", () => {
 
     for (let round = 0; round < 8; round++) {
       const preferred = [...state.players].sort((a, b) =>
-        Math.max(a.matchesPlayed, a.matchmakingBaseline) - Math.max(b.matchesPlayed, b.matchmakingBaseline) ||
-        (b.restTurns ?? 0) - (a.restTurns ?? 0)
+        Math.max(a.matchesPlayed, a.matchmakingBaseline) - Math.max(b.matchesPlayed, b.matchmakingBaseline)
       ).slice(0, 4);
       const played = playRound(state, {
         courtCount: 1,
@@ -161,9 +160,6 @@ describe("matchmaking v3 simulation", () => {
       const chosen = played.selections[0].players;
       expect(chosen.map((player) => player.effectiveMatchCount).sort((a, b) => a - b)).toEqual(
         preferred.map((player) => Math.max(player.matchesPlayed, player.matchmakingBaseline)).sort((a, b) => a - b)
-      );
-      expect(chosen.reduce((sum, player) => sum + player.restTurns, 0)).toBe(
-        preferred.reduce((sum, player) => sum + (player.restTurns ?? 0), 0)
       );
     }
     const counts = state.players.map((player) => player.matchesPlayed);

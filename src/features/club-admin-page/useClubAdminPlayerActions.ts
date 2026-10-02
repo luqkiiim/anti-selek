@@ -57,7 +57,6 @@ export function useClubAdminPlayerActions({
   const [newPlayerStatus, setNewPlayerStatus] = useState<ClubPlayerStatus>(
     ClubPlayerStatus.CORE
   );
-  const [newPlayerNeedsMoreRest, setNewPlayerNeedsMoreRest] = useState(false);
   const [newPlayerPreferredPool, setNewPlayerPreferredPool] =
     useState<SessionPool>(SessionPool.B);
 
@@ -93,7 +92,6 @@ export function useClubAdminPlayerActions({
     setNewPlayerGender(PlayerGender.MALE);
     setNewPlayerMixedSideOverride(null);
     setNewPlayerStatus(ClubPlayerStatus.CORE);
-    setNewPlayerNeedsMoreRest(false);
     setNewPlayerPreferredPool(SessionPool.B);
     setIsCreatePlayerOpen(true);
   };
@@ -151,7 +149,6 @@ export function useClubAdminPlayerActions({
           gender: newPlayerGender,
           mixedSideOverride: newPlayerMixedSideOverride,
           status: newPlayerStatus,
-          needsMoreRest: newPlayerNeedsMoreRest,
           preferredPool: newPlayerPreferredPool,
         }),
       });
@@ -166,7 +163,6 @@ export function useClubAdminPlayerActions({
       setNewPlayerGender(PlayerGender.MALE);
       setNewPlayerMixedSideOverride(null);
       setNewPlayerStatus(ClubPlayerStatus.CORE);
-      setNewPlayerNeedsMoreRest(false);
       setNewPlayerPreferredPool(SessionPool.B);
       setIsCreatePlayerOpen(false);
       await refreshClubData();
@@ -474,7 +470,6 @@ export function useClubAdminPlayerActions({
       gender?: PlayerGender;
       mixedSideOverride?: MixedSide | null;
       status?: ClubPlayerStatus;
-      needsMoreRest?: boolean;
       preferredPool?: SessionPool;
     }
   ) => {
@@ -482,7 +477,6 @@ export function useClubAdminPlayerActions({
       updates.gender === undefined &&
       updates.mixedSideOverride === undefined &&
       updates.status === undefined &&
-      updates.needsMoreRest === undefined &&
       updates.preferredPool === undefined
     ) {
       return;
@@ -528,10 +522,6 @@ export function useClubAdminPlayerActions({
                     : data.status === ClubPlayerStatus.CORE
                       ? ClubPlayerStatus.CORE
                       : item.status,
-                needsMoreRest:
-                  typeof data.needsMoreRest === "boolean"
-                    ? data.needsMoreRest
-                    : item.needsMoreRest,
                 preferredPool:
                   data.preferredPool === SessionPool.A
                     ? SessionPool.A
@@ -615,8 +605,6 @@ export function useClubAdminPlayerActions({
     setNewPlayerMixedSideOverride,
     newPlayerStatus,
     setNewPlayerStatus,
-    newPlayerNeedsMoreRest,
-    setNewPlayerNeedsMoreRest,
     newPlayerPreferredPool,
     setNewPlayerPreferredPool,
     editingPlayer,

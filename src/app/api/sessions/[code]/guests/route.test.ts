@@ -123,7 +123,6 @@ describe("guest route", () => {
     expect(response.status).toBe(200);
     expect(mocks.sessionPlayerCreate).toHaveBeenCalledWith({
       data: expect.objectContaining({
-        needsMoreRest: false,
         matchmakingMatchesCredit: 4,
         joinedAt: now,
         ladderEntryAt: now,
@@ -188,7 +187,6 @@ describe("guest route", () => {
     expect(response.status).toBe(200);
     expect(mocks.sessionPlayerCreate).toHaveBeenCalledWith({
       data: expect.objectContaining({
-        needsMoreRest: false,
         matchmakingMatchesCredit: 0,
         arrivalPriorityAt: null,
       }),

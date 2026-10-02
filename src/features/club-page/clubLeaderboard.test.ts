@@ -13,7 +13,6 @@ function createMember(overrides: Partial<ClubPageMember> = {}): ClubPageMember {
     id: "player-1",
     name: "Player One",
     status: ClubPlayerStatus.CORE,
-    needsMoreRest: false,
     preferredPool: SessionPool.B,
     gender: PlayerGender.MALE,
     partnerPreference: PartnerPreference.OPEN,

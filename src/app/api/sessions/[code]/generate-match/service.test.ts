@@ -113,6 +113,7 @@ function createSessionPlayer(
     skipNextMatchRequestedById?: string | null;
     arrivalPriorityAt?: Date | null;
     pool?: SessionPool;
+    // Simulates a legacy value already present in the database.
     needsMoreRest?: boolean;
     representingClubId?: string | null;
   } = {}
@@ -136,7 +137,7 @@ function createSessionPlayer(
     skipNextMatchRequestedById: options.skipNextMatchRequestedById ?? null,
     arrivalPriorityAt: options.arrivalPriorityAt ?? null,
     pool: options.pool ?? SessionPool.A,
-    needsMoreRest: options.needsMoreRest ?? false,
+    ...(options.needsMoreRest ? { needsMoreRest: true } : {}),
     user: {
       id: userId,
       name: options.name ?? userId,
@@ -245,9 +246,6 @@ function createActiveV3Player(
     pointDiff: 0,
     effectiveMatchCount: 0,
     restTurns: 0,
-    needsMoreRest: false,
-    moreRestTarget: 1,
-    moreRestDeficit: 0,
     randomScore: 0,
     rank: 0,
   };
@@ -268,9 +266,6 @@ function createActiveLadderPlayer(
     ladderScore: 0,
     effectiveMatchCount: 0,
     restTurns: 0,
-    needsMoreRest: false,
-    moreRestTarget: 1,
-    moreRestDeficit: 0,
     randomScore: 0,
     rank: 0,
   };
@@ -757,68 +752,26 @@ describe("generate match service", () => {
       );
     });
 
-    it("uses the total court count as the more-rest target for normal sessions", () => {
+    it("ignores legacy more-rest values on existing session players", () => {
       const players = [
         createSessionPlayer("rest-player", { needsMoreRest: true }),
         createSessionPlayer("regular-player"),
       ];
 
       const { availableCandidates, rankedCandidates } = getRankedCandidates(
-        createSessionData({
-          players,
-          courts: [createCourt("court-1"), createCourt("court-2")],
-        }),
+        createSessionData({ players }),
         new Set()
       );
 
-      expect(
-        availableCandidates.find(
-          (candidate) => candidate.userId === "rest-player"
-        )?.moreRestTarget
-      ).toBe(2);
-      expect(
-        rankedCandidates.find((candidate) => candidate.userId === "rest-player")
-          ?.moreRestDeficit
-      ).toBe(2);
-    });
-
-    it("uses normal session court capacity as the more-rest target in grouped sessions", () => {
-      const players = [
-        createSessionPlayer("pool-a-rest", {
-          pool: SessionPool.A,
-          needsMoreRest: true,
-        }),
-        createSessionPlayer("pool-b-rest", {
-          pool: SessionPool.B,
-          needsMoreRest: true,
-        }),
-      ];
-
-      const { availableCandidates } = getRankedCandidates(
-        createSessionData({
-          players,
-          courts: [
-            createCourt("court-1"),
-            createCourt("court-2"),
-            createCourt("court-3"),
-          ],
-          poolsEnabled: true,
-          poolACourtAssignments: 1,
-          poolBCourtAssignments: 3,
-        }),
-        new Set()
-      );
-
-      expect(
-        availableCandidates.find(
-          (candidate) => candidate.userId === "pool-a-rest"
-        )?.moreRestTarget
-      ).toBe(3);
-      expect(
-        availableCandidates.find(
-          (candidate) => candidate.userId === "pool-b-rest"
-        )?.moreRestTarget
-      ).toBe(3);
+      expect(availableCandidates.map((candidate) => candidate.userId)).toEqual([
+        "rest-player",
+        "regular-player",
+      ]);
+      expect(rankedCandidates.map((candidate) => candidate.userId)).toEqual([
+        "rest-player",
+        "regular-player",
+      ]);
+      expect(availableCandidates[0]).not.toHaveProperty("needsMoreRest");
     });
   });
 
@@ -1453,7 +1406,7 @@ describe("generate match service", () => {
       { label: "standard", type: SessionType.ELO },
       { label: "Level Match", type: SessionType.RACE },
     ])(
-      "applies arrival and more-rest fairness inside each Crossover quota ($label)",
+      "applies arrival priority inside each Crossover quota ($label)",
       ({ type }) => {
         const players = [
           createSessionPlayer("A-late", {
@@ -1462,9 +1415,8 @@ describe("generate match service", () => {
             arrivalPriorityAt: new Date("2026-08-23T00:00:00Z"),
           }),
           createSessionPlayer("A-ready", { pool: SessionPool.A }),
-          createSessionPlayer("A-needs-rest", {
+          createSessionPlayer("A-third", {
             pool: SessionPool.A,
-            needsMoreRest: true,
           }),
           createSessionPlayer("B1", { pool: SessionPool.B }),
           createSessionPlayer("B2", { pool: SessionPool.B }),
@@ -1480,16 +1432,17 @@ describe("generate match service", () => {
           const poolBIds = matchmakerPlayers
             .filter((player) => player.pool === SessionPool.B)
             .map((player) => player.userId);
+          const selectedPoolAIds = poolAIds.slice(0, 2);
           const selectedPoolBIds = poolBIds.slice(0, 2);
-          const ids = [...poolAIds, ...selectedPoolBIds] as [
+          const ids = [...selectedPoolAIds, ...selectedPoolBIds] as [
             string,
             string,
             string,
             string,
           ];
           const partition = {
-            team1: [poolAIds[0], selectedPoolBIds[0]],
-            team2: [poolAIds[1], selectedPoolBIds[1]],
+            team1: [selectedPoolAIds[0], selectedPoolBIds[0]],
+            team2: [selectedPoolAIds[1], selectedPoolBIds[1]],
           } as { team1: [string, string]; team2: [string, string] };
 
           return type === SessionType.RACE
@@ -1538,8 +1491,9 @@ describe("generate match service", () => {
         });
 
         expect(result.ids).toContain("A-late");
-        expect(result.ids).toContain("A-ready");
-        expect(result.ids).not.toContain("A-needs-rest");
+        expect(result.ids).toHaveLength(4);
+        expect(result.poolASeatCount).toBe(2);
+        expect(result.poolBSeatCount).toBe(2);
         expect(
           "courtGroupType" in result ? result.courtGroupType : null
         ).toBe(CourtGroupType.CROSSOVER);

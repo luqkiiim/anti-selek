@@ -30,7 +30,6 @@ export interface Player {
   mixedSideOverride?: MixedSide | null;
   pool: SessionPool;
   pendingPool?: SessionPool | null;
-  needsMoreRest: boolean;
   user: {
     id: string;
     name: string;
@@ -106,7 +105,6 @@ export interface ClubUser {
   avatarUrl?: string | null;
   elo: number;
   status: ClubPlayerStatus;
-  needsMoreRest: boolean;
   preferredPool: SessionPool;
   representingClubId?: string | null;
   representingClubName?: string | null;

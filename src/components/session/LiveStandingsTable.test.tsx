@@ -27,7 +27,6 @@ function createPlayer(
     gender: PlayerGender.MALE,
     partnerPreference: PartnerPreference.OPEN,
     pool: SessionPool.A,
-    needsMoreRest: false,
     user: {
       id: userId,
       name,

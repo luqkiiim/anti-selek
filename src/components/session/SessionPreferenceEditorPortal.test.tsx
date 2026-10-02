@@ -35,7 +35,6 @@ function createPlayer(overrides: Partial<Player> = {}): Player {
     partnerPreference: PartnerPreference.OPEN,
     mixedSideOverride: null,
     pool: SessionPool.A,
-    needsMoreRest: false,
     user: {
       id: "player-1",
       name: "Player One",
@@ -159,31 +158,6 @@ describe("SessionPreferenceEditorPortal", () => {
       onRemovePlayer,
     };
   }
-
-  it("toggles more rest for the current session", async () => {
-    const player = createPlayer();
-    const { onClose, onUpdatePreference } = await renderPortal({ player });
-
-    const checkbox = document.querySelector(
-      'input[type="checkbox"]'
-    ) as HTMLInputElement | null;
-    expect(checkbox).not.toBeNull();
-
-    await act(async () => {
-      checkbox?.click();
-    });
-
-    expect(onClose).toHaveBeenCalledTimes(1);
-    expect(onUpdatePreference).toHaveBeenCalledTimes(1);
-    expect(onUpdatePreference).toHaveBeenCalledWith(
-      "player-1",
-      PlayerGender.MALE,
-      null,
-      SessionPool.A,
-      true,
-      null
-    );
-  });
 
   it("shows the actual default and alternate mixed sides", async () => {
     await renderPortal({ isMixicano: true });

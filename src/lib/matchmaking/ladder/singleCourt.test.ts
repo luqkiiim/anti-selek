@@ -251,9 +251,6 @@ describe("ladder single-court selection", () => {
           isPaused: false,
           effectiveMatchCount: 5,
           restTurns: restTurns[index],
-          needsMoreRest: false,
-          moreRestTarget: 1,
-          moreRestDeficit: 0,
           randomScore,
           rank: index,
         }) satisfies ActiveMatchmakerLadderPlayer

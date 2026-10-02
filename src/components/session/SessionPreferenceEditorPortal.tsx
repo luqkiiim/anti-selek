@@ -39,7 +39,6 @@ interface SessionPreferenceEditorPortalProps {
     nextGender: PlayerGender,
     nextMixedSideOverride: MixedSide | null,
     nextPool: SessionPool,
-    nextNeedsMoreRest: boolean,
     nextRepresentingClubId?: string | null
   ) => Promise<void>;
   onRequestRenameGuest: (userId: string, currentName: string) => void;
@@ -262,7 +261,6 @@ export function SessionPreferenceEditorPortal({
                   nextGender,
                   null,
                   activePreferencePlayer.pool,
-                  activePreferencePlayer.needsMoreRest,
                   activePreferencePlayer.representingClubId ?? null
                 );
               }}
@@ -285,7 +283,6 @@ export function SessionPreferenceEditorPortal({
                     activePreferencePlayer.gender,
                     event.target.value ? (event.target.value as MixedSide) : null,
                     activePreferencePlayer.pool,
-                    activePreferencePlayer.needsMoreRest,
                     activePreferencePlayer.representingClubId ?? null
                   );
                 }}
@@ -321,7 +318,6 @@ export function SessionPreferenceEditorPortal({
                 activePreferencePlayer.gender,
                 activePreferencePlayer.mixedSideOverride ?? null,
                 event.target.value as SessionPool,
-                activePreferencePlayer.needsMoreRest,
                 activePreferencePlayer.representingClubId ?? null
               );
             }}
@@ -356,7 +352,6 @@ export function SessionPreferenceEditorPortal({
                 activePreferencePlayer.gender,
                 activePreferencePlayer.mixedSideOverride ?? null,
                 activePreferencePlayer.pool,
-                activePreferencePlayer.needsMoreRest,
                 event.target.value || null
               );
             }}
@@ -371,38 +366,6 @@ export function SessionPreferenceEditorPortal({
           </select>
         </label>
       ) : null}
-
-      <label
-        className={cx(
-          "flex items-start gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 text-xs text-gray-600",
-          isSheet ? "min-h-11 py-3" : "py-2"
-        )}
-      >
-        <input
-          type="checkbox"
-          checked={activePreferencePlayer.needsMoreRest}
-          onChange={async (event) => {
-            onClose();
-            await onUpdatePreference(
-              activePreferencePlayer.userId,
-              activePreferencePlayer.gender,
-              activePreferencePlayer.mixedSideOverride ?? null,
-              activePreferencePlayer.pool,
-              event.target.checked,
-              activePreferencePlayer.representingClubId ?? null
-            );
-          }}
-          className="mt-0.5 h-4 w-4 rounded border-gray-300 text-[var(--accent)]"
-        />
-        <span>
-          <span className="block font-semibold text-gray-900">
-            More rest this tournament
-          </span>
-          <span className="mt-0.5 block">
-            Prefer a lighter rotation for this player.
-          </span>
-        </span>
-      </label>
 
       {activePreferencePlayer.isGuest ? (
         <button

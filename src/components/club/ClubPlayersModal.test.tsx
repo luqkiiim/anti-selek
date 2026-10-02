@@ -23,7 +23,6 @@ const player: ClubPageMember = {
   id: "player-1",
   name: "Alex Lee",
   status: ClubPlayerStatus.CORE,
-  needsMoreRest: false,
   preferredPool: SessionPool.B,
   gender: PlayerGender.MALE,
   partnerPreference: PartnerPreference.OPEN,

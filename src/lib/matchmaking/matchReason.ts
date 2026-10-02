@@ -146,7 +146,11 @@ function buildReasonSummary({
     );
   }
 
-  if (respectPlayerRest !== false && metrics.totalRestTurns > 0) {
+  if (
+    (sessionType !== SessionType.SOCIAL_MIX || metrics.socialVarietyGain === undefined) &&
+    respectPlayerRest !== false &&
+    metrics.totalRestTurns > 0
+  ) {
     summary.push(
       `Rest priority used completed-match turns: selected players had ${formatMetric(
         metrics.totalRestTurns
@@ -173,14 +177,19 @@ function buildReasonSummary({
 
   if (sessionType === SessionType.SOCIAL_MIX) {
     if (metrics.socialVarietyGain !== undefined) {
-      const fairness = respectPlayerRest === false
-        ? "court-time fairness"
-        : "court-time and rest fairness";
+      const priorities = metrics.courtGroupType
+        ? "fair turns, arrival priority and player-group rules"
+        : "fair turns and arrival priority";
       summary.push(
         sessionMode === SessionMode.MIXICANO
-          ? `Selected for ongoing courtmate, partner, opponent and match-type variety after ${fairness}.`
-          : `Selected for ongoing courtmate, partner and opponent variety after ${fairness}.`
+          ? `Selected for ongoing courtmate, partner, opponent and match-type variety after ${priorities}${respectPlayerRest === false ? "." : "; longer breaks only decide between equally varied choices."}`
+          : `Selected for ongoing courtmate, partner and opponent variety after ${priorities}${respectPlayerRest === false ? "." : "; longer breaks only decide between equally varied choices."}`
       );
+      if (respectPlayerRest !== false && metrics.totalRestTurns > 0) {
+        summary.push(
+          `Selected players had ${formatMetric(metrics.totalRestTurns)} total completed-match rest turns, with minimum ${formatMetric(metrics.minimumRestTurns)}.`
+        );
+      }
     } else {
       summary.push(
         metrics.sharedCourtRepeatPenalty === 0
