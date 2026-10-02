@@ -1,8 +1,14 @@
 import { CourtGroupType, SessionMode, SessionType } from "@/types/enums";
 import { getCourtGroupTypeLabel } from "@/lib/playerGroups";
+import {
+  buildSocialVarietySnapshot,
+  parseSocialVarietySnapshot,
+} from "./v3/socialVariety";
 import type {
   ActiveMatchmakerV3Player,
   V3SingleCourtSelection,
+  SocialVarietyGains,
+  SocialVarietySnapshot,
 } from "./v3/types";
 
 export interface MatchmakingReason {
@@ -14,6 +20,7 @@ export interface MatchmakingReason {
   team1UserIds: [string, string];
   team2UserIds: [string, string];
   summary: string[];
+  socialVariety?: SocialVarietySnapshot;
   metrics: {
     fairnessBand: number | null;
     selectedMatchCounts: number[];
@@ -22,6 +29,8 @@ export interface MatchmakingReason {
     sharedCourtRepeatPenalty?: number;
     partnerCoveragePenalty?: number;
     opponentCoveragePenalty?: number;
+    socialVarietyGain?: number;
+    socialVarietyGains?: SocialVarietyGains;
     partnerRepeatPenalty: number;
     opponentRepeatPenalty: number;
     exactRematchPenalty: number;
@@ -163,27 +172,38 @@ function buildReasonSummary({
   }
 
   if (sessionType === SessionType.SOCIAL_MIX) {
-    summary.push(
-      metrics.sharedCourtRepeatPenalty === 0
-        ? "All six shared-court pairings are first-time contacts this session."
-        : `Shared-court repeat penalty is ${formatMetric(
-            metrics.sharedCourtRepeatPenalty ?? 0
-          )} of 6 possible pairings.`
-    );
-    summary.push(
-      metrics.partnerCoveragePenalty === 0
-        ? "Both partner pairings are new for this session."
-        : `Partner coverage penalty is ${formatMetric(
-            metrics.partnerCoveragePenalty ?? 0
-          )} of 2 pairings.`
-    );
-    summary.push(
-      metrics.opponentCoveragePenalty === 0
-        ? "All four opponent pairings are new for this session."
-        : `Opponent coverage penalty is ${formatMetric(
-            metrics.opponentCoveragePenalty ?? 0
-          )} of 4 pairings.`
-    );
+    if (metrics.socialVarietyGain !== undefined) {
+      const fairness = respectPlayerRest === false
+        ? "court-time fairness"
+        : "court-time and rest fairness";
+      summary.push(
+        sessionMode === SessionMode.MIXICANO
+          ? `Selected for ongoing courtmate, partner, opponent and match-type variety after ${fairness}.`
+          : `Selected for ongoing courtmate, partner and opponent variety after ${fairness}.`
+      );
+    } else {
+      summary.push(
+        metrics.sharedCourtRepeatPenalty === 0
+          ? "All six shared-court pairings are first-time contacts this session."
+          : `Shared-court repeat penalty is ${formatMetric(
+              metrics.sharedCourtRepeatPenalty ?? 0
+            )} of 6 possible pairings.`
+      );
+      summary.push(
+        metrics.partnerCoveragePenalty === 0
+          ? "Both partner pairings are new for this session."
+          : `Partner coverage penalty is ${formatMetric(
+              metrics.partnerCoveragePenalty ?? 0
+            )} of 2 pairings.`
+      );
+      summary.push(
+        metrics.opponentCoveragePenalty === 0
+          ? "All four opponent pairings are new for this session."
+          : `Opponent coverage penalty is ${formatMetric(
+              metrics.opponentCoveragePenalty ?? 0
+            )} of 4 pairings.`
+      );
+    }
   } else if (sessionType !== SessionType.POINTS) {
     summary.push(
       metrics.partnerRepeatPenalty === 0
@@ -261,6 +281,12 @@ export function buildV3MatchmakingReason<
     sharedCourtRepeatPenalty: selection.sharedCourtRepeatPenalty,
     partnerCoveragePenalty: selection.partnerCoveragePenalty,
     opponentCoveragePenalty: selection.opponentCoveragePenalty,
+    ...(selection.socialVarietyGain !== undefined
+      ? { socialVarietyGain: selection.socialVarietyGain }
+      : {}),
+    ...(selection.socialVarietyGains
+      ? { socialVarietyGains: selection.socialVarietyGains }
+      : {}),
     partnerRepeatPenalty: selection.partnerRepeatPenalty,
     opponentRepeatPenalty: selection.opponentRepeatPenalty,
     exactRematchPenalty: selection.exactRematchPenalty,
@@ -301,6 +327,13 @@ export function buildV3MatchmakingReason<
       metrics,
       respectPlayerRest: context.respectPlayerRest,
     }),
+    ...(context.sessionType === SessionType.SOCIAL_MIX
+      ? {
+          socialVariety:
+            selection.socialVariety ??
+            buildSocialVarietySnapshot(selection.partition, selection.players),
+        }
+      : {}),
     metrics,
   };
 }
@@ -466,6 +499,11 @@ export function parseMatchmakingReasonJson(
   const totalWaitSeconds = hasLegacyWaitMetrics
     ? (metrics.totalWaitSeconds as number)
     : undefined;
+  const socialVariety = parseSocialVarietySnapshot(parsed, {
+    team1: parsed.team1UserIds as [string, string],
+    team2: parsed.team2UserIds as [string, string],
+  });
+  const socialVarietyGains = parseSocialVarietyGains(metrics.socialVarietyGains);
 
   return {
     version: 1,
@@ -476,6 +514,7 @@ export function parseMatchmakingReasonJson(
     team1UserIds: parsed.team1UserIds as [string, string],
     team2UserIds: parsed.team2UserIds as [string, string],
     summary: parsed.summary,
+    ...(socialVariety ? { socialVariety } : {}),
     metrics: {
       fairnessBand: metrics.fairnessBand,
       selectedMatchCounts: metrics.selectedMatchCounts,
@@ -484,6 +523,11 @@ export function parseMatchmakingReasonJson(
       sharedCourtRepeatPenalty: metrics.sharedCourtRepeatPenalty,
       partnerCoveragePenalty: metrics.partnerCoveragePenalty,
       opponentCoveragePenalty: metrics.opponentCoveragePenalty,
+      ...(typeof metrics.socialVarietyGain === "number" &&
+        Number.isFinite(metrics.socialVarietyGain)
+        ? { socialVarietyGain: metrics.socialVarietyGain }
+        : {}),
+      ...(socialVarietyGains ? { socialVarietyGains } : {}),
       partnerRepeatPenalty: metrics.partnerRepeatPenalty,
       opponentRepeatPenalty: metrics.opponentRepeatPenalty,
       exactRematchPenalty: metrics.exactRematchPenalty,
@@ -519,5 +563,23 @@ export function parseMatchmakingReasonJson(
           : undefined,
       mixedMode: metrics.mixedMode,
     },
+  };
+}
+
+function parseSocialVarietyGains(value: unknown): SocialVarietyGains | undefined {
+  if (!isRecord(value)) return undefined;
+  const keys = ["courtmates", "partners", "opponents", "matchType"] as const;
+  if (
+    keys.some(
+      (key) => typeof value[key] !== "number" || !Number.isFinite(value[key])
+    )
+  ) {
+    return undefined;
+  }
+  return {
+    courtmates: value.courtmates as number,
+    partners: value.partners as number,
+    opponents: value.opponents as number,
+    matchType: value.matchType as number,
   };
 }

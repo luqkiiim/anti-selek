@@ -2,6 +2,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import type { ManualMatchTeams } from "@/lib/matchmaking/manualMatch";
 import { parseMatchmakingReasonJson } from "@/lib/matchmaking/matchReason";
+import { resolveSocialHistoryReasonJson } from "@/lib/matchmaking/socialHistoryPersistence";
 import { applyPendingPlayerGroupChangesInTransaction } from "@/lib/playerGroupPreferences";
 import { classifyCourtGroupSnapshot } from "@/lib/playerGroups";
 import { buildSessionPoolMap } from "@/lib/sessionPools";
@@ -222,6 +223,12 @@ async function createQueuedMatchRecord({
         poolASeatCount,
         poolBSeatCount,
       });
+      const reasonJson = await resolveSocialHistoryReasonJson(
+        tx,
+        sessionId,
+        partition,
+        matchmakingReasonJson
+      );
       const queuedMatch = await tx.queuedMatch.create({
         data: {
           sessionId,
@@ -236,7 +243,7 @@ async function createQueuedMatchRecord({
           poolASeatCount: groupSnapshot?.poolASeatCount ?? null,
           poolBSeatCount: groupSnapshot?.poolBSeatCount ?? null,
           isAutomatic,
-          matchmakingReasonJson: matchmakingReasonJson ?? null,
+          matchmakingReasonJson: reasonJson,
         },
       });
 
@@ -339,6 +346,12 @@ async function updateQueuedMatchRecord({
       poolASeatCount,
       poolBSeatCount,
     });
+    const reasonJson = await resolveSocialHistoryReasonJson(
+      tx,
+      sessionId,
+      partition,
+      matchmakingReasonJson
+    );
     const queuedMatch = await tx.queuedMatch.update({
       where: { id: queuedMatchId },
       data: {
@@ -353,7 +366,7 @@ async function updateQueuedMatchRecord({
         poolASeatCount: groupSnapshot?.poolASeatCount ?? null,
         poolBSeatCount: groupSnapshot?.poolBSeatCount ?? null,
         isAutomatic,
-        matchmakingReasonJson: matchmakingReasonJson ?? null,
+        matchmakingReasonJson: reasonJson,
       },
     });
 

@@ -7,12 +7,47 @@
 Build a cleaner matcher from explicit product rules instead of layering more
 heuristics onto the previous engine.
 
-## Agreed priorities
+## Balanced matchmaking priorities
 
 1. Fairness of court time
 2. Fresh partners when balance is still close
 3. Balanced match strength
 4. Small controlled randomness among near-equal options
+
+## Social matchmaking
+
+Social uses one whole-batch optimizer for ordinary, player-group, and interclub
+matches. Its order is court-time fairness, arrival priority within count ties,
+rest fairness when enabled, existing player-group scheduling policy, ongoing
+variety, team balance, recent repeats, then seeded pairing tie-breaks. Variety
+cannot override even a small rest difference. Balanced modes keep their own rules.
+
+Variety combines four equally scaled per-player experience distributions:
+shared-court contacts, partners, opponents, and (in Mixed pairing) mixed-side
+versus own-side games. Each distribution uses lifetime encounter counts and
+Shannon entropy divided by the logarithm of its legal opportunity count. A
+candidate batch is scored by its change in the combined entropy. Parts with
+fewer than two opportunities contribute zero; the other parts are not rescaled.
+Negative gains remain valid. There are no match-type quotas, target percentages,
+or every-N-games rules, and an early own-side game does not discharge variety.
+
+Opportunities use the full unpaused roster, including busy and queued players,
+and obey structural pairing, club, and player-group rules. They are frozen for
+one decision. Paused peers are excluded from the current vocabulary; their
+historical counts return when they resume. Existing Mixed side assignments and
+legacy partner preferences determine the experience types.
+
+Completed and committed active/queued games, including manual games, count once.
+Queue-to-active transitions retain their assignment-time side snapshot in the
+existing reason JSON. Undo, cancellation, and replacement remove old reservations
+from subsequent decisions. Legacy games without snapshots use current resolvable
+sides; unclassifiable games still contribute interpersonal history.
+
+Small one/two-court batches with up to fourteen eligible players are exhaustive:
+every legal partition and non-overlapping pair is considered. Larger batches use
+bounded global search. A timeout returns an incumbent only when its player
+fairness is certified, and exposes whether variety was fully optimized. An
+uncertified timeout returns a search-limit failure rather than a greedy batch.
 
 ## Core rules
 
@@ -50,7 +85,7 @@ heuristics onto the previous engine.
    - `Points` sessions use current session performance for strength balance.
    - Very mixed quartets are acceptable if the two teams are balanced.
 
-6. Variety compares prior shared-court contacts, partner coverage, opponent
+6. Balanced variety compares prior shared-court contacts, partner coverage, opponent
    coverage, recent partner and opponent repeats, then exact rematches, in that
    order. Recent-repeat penalties decay with history.
 

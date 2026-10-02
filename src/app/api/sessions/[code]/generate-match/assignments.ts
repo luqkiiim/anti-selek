@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { CourtGroupType, MatchStatus } from "@/types/enums";
 import type { ManualMatchTeams } from "@/lib/matchmaking/manualMatch";
 import { parseMatchmakingReasonJson } from "@/lib/matchmaking/matchReason";
+import { resolveSocialHistoryReasonJson } from "@/lib/matchmaking/socialHistoryPersistence";
 import { applyPendingPlayerGroupChangesInTransaction } from "@/lib/playerGroupPreferences";
 import { classifyCourtGroupSnapshot } from "@/lib/playerGroups";
 import { buildSessionPoolMap } from "@/lib/sessionPools";
@@ -156,6 +157,12 @@ async function createMatchAssignment(
 
   const createdAt =
     assignment.createdAt ?? (await getNextMatchCreatedAt(tx, sessionId));
+  const reasonJson = await resolveSocialHistoryReasonJson(
+    tx,
+    sessionId,
+    assignment.partition,
+    assignment.matchmakingReasonJson
+  );
 
   const match = await tx.match.create({
     data: {
@@ -168,7 +175,7 @@ async function createMatchAssignment(
       team2User1Id: assignment.partition.team2[0],
       team2User2Id: assignment.partition.team2[1],
       team2ClubId: assignment.team2ClubId ?? null,
-      matchmakingReasonJson: assignment.matchmakingReasonJson ?? null,
+      matchmakingReasonJson: reasonJson,
       courtGroupType: groupSnapshot?.courtGroupType ?? null,
       poolASeatCount: groupSnapshot?.poolASeatCount ?? null,
       poolBSeatCount: groupSnapshot?.poolBSeatCount ?? null,

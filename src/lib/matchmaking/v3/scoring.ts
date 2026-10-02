@@ -1,4 +1,5 @@
 import { SessionType } from "../../../types/enums";
+import { getArrivalPriorityTime } from "../arrivalPriority";
 
 import type {
   ActiveMatchmakerV3Player,
@@ -15,6 +16,76 @@ export const POINTS_BALANCE_VARIETY_TOLERANCE = 1.5;
 export const FULL_SHARED_COURT_REPEAT_PENALTY = 6;
 export const FULL_REPEAT_REST_TOLERANCE = 1;
 const MIXED_VARIETY_COMPARE_EPSILON = 1e-9;
+
+function isSocialSession(sessionType: SessionType): boolean {
+  return sessionType === SessionType.SOCIAL_MIX;
+}
+
+/** Every component is minimized; variety can never buy better court time or rest. */
+export function getSocialFairnessVector(
+  players: readonly ActiveMatchmakerV3Player[],
+  respectPlayerRest = true
+) {
+  const counts = players.map((player) => player.effectiveMatchCount).sort((a, b) => a - b);
+  const arrivalTimes = players
+    .map((player) => getArrivalPriorityTime(player.arrivalPriorityAt))
+    .filter((time): time is number => time !== null)
+    .sort((a, b) => a - b);
+  const vector = [...counts, -arrivalTimes.length, ...arrivalTimes];
+  while (vector.length < players.length * 2 + 1) vector.push(Number.POSITIVE_INFINITY);
+  if (respectPlayerRest) {
+    const rest = buildRestSummary([...players]);
+    vector.push(
+      players.reduce((sum, player) => sum + player.moreRestDeficit, 0),
+      -rest.totalRestTurns,
+      -rest.minimumRestTurns,
+      ...rest.restTurnVector.map((turns) => -turns)
+    );
+  }
+  return vector;
+}
+
+export function compareSocialNumberVectors(left: readonly number[], right: readonly number[]) {
+  for (let index = 0; index < Math.max(left.length, right.length); index++) {
+    const a = left[index] ?? 0;
+    const b = right[index] ?? 0;
+    if (a !== b) return a < b ? -1 : 1;
+  }
+  return 0;
+}
+
+export function compareSocialFairnessPlayers(
+  left: readonly ActiveMatchmakerV3Player[],
+  right: readonly ActiveMatchmakerV3Player[],
+  respectPlayerRest = true
+) {
+  return compareSocialNumberVectors(
+    getSocialFairnessVector(left, respectPlayerRest),
+    getSocialFairnessVector(right, respectPlayerRest)
+  );
+}
+
+export function compareSocialBatchSelections<T extends ActiveMatchmakerV3Player>(
+  left: V3BatchSelection<T>,
+  right: V3BatchSelection<T>,
+  options?: { respectPlayerRest?: boolean; leftSchedulingRank?: number; rightSchedulingRank?: number }
+) {
+  return compareSocialFairnessPlayers(
+    left.selections.flatMap((selection) => selection.players),
+    right.selections.flatMap((selection) => selection.players),
+    options?.respectPlayerRest !== false
+  ) ||
+    (options?.leftSchedulingRank ?? 0) - (options?.rightSchedulingRank ?? 0) ||
+    (right.totalSocialVarietyGain ?? 0) - (left.totalSocialVarietyGain ?? 0) ||
+    left.maxBalanceGap - right.maxBalanceGap ||
+    left.totalBalanceGap - right.totalBalanceGap ||
+    left.maxPointDiffGap - right.maxPointDiffGap ||
+    left.totalPointDiffGap - right.totalPointDiffGap ||
+    left.totalPartnerRepeatPenalty - right.totalPartnerRepeatPenalty ||
+    left.totalOpponentRepeatPenalty - right.totalOpponentRepeatPenalty ||
+    left.totalExactRematchPenalty - right.totalExactRematchPenalty ||
+    compareBatchRandomTieBreak(left, right);
+}
 
 export function buildRestSummary<
   T extends Pick<ActiveMatchmakerV3Player, "restTurns">,
@@ -189,10 +260,7 @@ function usesConsecutivePlayPreference(sessionType: SessionType) {
 }
 
 function usesSharedCourtRepeatGuardrail(sessionType: SessionType) {
-  return (
-    sessionType === SessionType.POINTS ||
-    sessionType === SessionType.SOCIAL_MIX
-  );
+  return sessionType === SessionType.POINTS;
 }
 
 function shouldRespectPlayerRest(options?: { respectPlayerRest?: boolean }) {
@@ -427,6 +495,14 @@ export function compareSingleCourtSelections<
   sessionType: SessionType,
   options?: { respectPlayerRest?: boolean }
 ) {
+  if (isSocialSession(sessionType)) {
+    return compareSocialFairnessPlayers(left.players, right.players, options?.respectPlayerRest !== false) ||
+      (right.socialVarietyGain ?? 0) - (left.socialVarietyGain ?? 0) ||
+      left.balanceGap - right.balanceGap || left.pointDiffGap - right.pointDiffGap ||
+      left.partnerRepeatPenalty - right.partnerRepeatPenalty ||
+      left.opponentRepeatPenalty - right.opponentRepeatPenalty ||
+      left.exactRematchPenalty - right.exactRematchPenalty || compareSingleCourtRandomTieBreak(left, right);
+  }
   const balanceDiff = left.balanceGap - right.balanceGap;
   const balanceVarietyTolerance = getBalanceVarietyTolerance(sessionType);
 
@@ -574,53 +650,7 @@ export function compareSingleCourtSelections<
     }
   }
 
-  if (sessionType === SessionType.SOCIAL_MIX) {
-    const sharedCourtDiff =
-      left.sharedCourtRepeatPenalty - right.sharedCourtRepeatPenalty;
-    if (sharedCourtDiff !== 0) {
-      return sharedCourtDiff;
-    }
 
-    const partnerCoverageDiff =
-      left.partnerCoveragePenalty - right.partnerCoveragePenalty;
-    if (partnerCoverageDiff !== 0) {
-      return partnerCoverageDiff;
-    }
-
-    const opponentCoverageDiff =
-      left.opponentCoveragePenalty - right.opponentCoveragePenalty;
-    if (opponentCoverageDiff !== 0) {
-      return opponentCoverageDiff;
-    }
-
-    const balanceDiff = left.balanceGap - right.balanceGap;
-    if (balanceDiff !== 0) {
-      return balanceDiff;
-    }
-
-    const pointDiffGapDiff = left.pointDiffGap - right.pointDiffGap;
-    if (pointDiffGapDiff !== 0) {
-      return pointDiffGapDiff;
-    }
-
-    const partnerDiff = left.partnerRepeatPenalty - right.partnerRepeatPenalty;
-    if (partnerDiff !== 0) {
-      return partnerDiff;
-    }
-
-    const opponentDiff =
-      left.opponentRepeatPenalty - right.opponentRepeatPenalty;
-    if (opponentDiff !== 0) {
-      return opponentDiff;
-    }
-
-    const rematchDiff = left.exactRematchPenalty - right.exactRematchPenalty;
-    if (rematchDiff !== 0) {
-      return rematchDiff;
-    }
-
-    return compareSingleCourtRandomTieBreak(left, right);
-  }
 
   const rematchDiff = left.exactRematchPenalty - right.exactRematchPenalty;
 
@@ -651,6 +681,7 @@ export function compareBatchSelections<T extends ActiveMatchmakerV3Player>(
     pairingRandomMode?: V3BatchPairingRandomMode;
   }
 ) {
+  if (isSocialSession(sessionType)) return compareSocialBatchSelections(left, right, options);
   const maxBalanceDiff = left.maxBalanceGap - right.maxBalanceGap;
   const totalBalanceDiff = left.totalBalanceGap - right.totalBalanceGap;
   const balanceVarietyTolerance = getBalanceVarietyTolerance(sessionType);
@@ -790,66 +821,7 @@ export function compareBatchSelections<T extends ActiveMatchmakerV3Player>(
     }
   }
 
-  if (sessionType === SessionType.SOCIAL_MIX) {
-    const sharedCourtDiff =
-      left.totalSharedCourtRepeatPenalty - right.totalSharedCourtRepeatPenalty;
-    if (sharedCourtDiff !== 0) {
-      return sharedCourtDiff;
-    }
 
-    const partnerCoverageDiff =
-      left.totalPartnerCoveragePenalty - right.totalPartnerCoveragePenalty;
-    if (partnerCoverageDiff !== 0) {
-      return partnerCoverageDiff;
-    }
-
-    const opponentCoverageDiff =
-      left.totalOpponentCoveragePenalty - right.totalOpponentCoveragePenalty;
-    if (opponentCoverageDiff !== 0) {
-      return opponentCoverageDiff;
-    }
-
-    const maxBalanceDiff = left.maxBalanceGap - right.maxBalanceGap;
-    if (maxBalanceDiff !== 0) {
-      return maxBalanceDiff;
-    }
-
-    const totalBalanceDiff = left.totalBalanceGap - right.totalBalanceGap;
-    if (totalBalanceDiff !== 0) {
-      return totalBalanceDiff;
-    }
-
-    const maxPointDiffGapDiff = left.maxPointDiffGap - right.maxPointDiffGap;
-    if (maxPointDiffGapDiff !== 0) {
-      return maxPointDiffGapDiff;
-    }
-
-    const totalPointDiffGapDiff =
-      left.totalPointDiffGap - right.totalPointDiffGap;
-    if (totalPointDiffGapDiff !== 0) {
-      return totalPointDiffGapDiff;
-    }
-
-    const partnerDiff =
-      left.totalPartnerRepeatPenalty - right.totalPartnerRepeatPenalty;
-    if (partnerDiff !== 0) {
-      return partnerDiff;
-    }
-
-    const opponentDiff =
-      left.totalOpponentRepeatPenalty - right.totalOpponentRepeatPenalty;
-    if (opponentDiff !== 0) {
-      return opponentDiff;
-    }
-
-    const rematchDiff =
-      left.totalExactRematchPenalty - right.totalExactRematchPenalty;
-    if (rematchDiff !== 0) {
-      return rematchDiff;
-    }
-
-    return compareBatchRandomTieBreak(left, right);
-  }
 
   const rematchDiff =
     left.totalExactRematchPenalty - right.totalExactRematchPenalty;

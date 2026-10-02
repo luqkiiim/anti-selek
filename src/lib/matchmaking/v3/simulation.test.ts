@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 
 import { SessionMode, SessionType } from "../../../types/enums";
-import { buildConsecutivePlayHistory } from "./consecutive";
 import {
   addLateJoiner,
   createSimulationPlayers,
@@ -140,7 +139,7 @@ describe("matchmaking v3 simulation", () => {
     );
   });
 
-  it("spreads one-court seven-player social mix back-to-back burden before repeating a stayer", () => {
+  it("keeps Social court time and actual rest ahead of variety throughout a seven-player run", () => {
     const state = createSimulationState(
       createSimulationPlayers(7, { strengthStep: 0 }),
       {
@@ -149,21 +148,26 @@ describe("matchmaking v3 simulation", () => {
     );
 
     for (let round = 0; round < 8; round++) {
-      playRound(state, {
+      const preferred = [...state.players].sort((a, b) =>
+        Math.max(a.matchesPlayed, a.matchmakingBaseline) - Math.max(b.matchesPlayed, b.matchmakingBaseline) ||
+        (b.restTurns ?? 0) - (a.restTurns ?? 0)
+      ).slice(0, 4);
+      const played = playRound(state, {
         courtCount: 1,
         sessionMode: SessionMode.MEXICANO,
         sessionType: SessionType.SOCIAL_MIX,
         randomFn: () => 0,
       });
+      const chosen = played.selections[0].players;
+      expect(chosen.map((player) => player.effectiveMatchCount).sort((a, b) => a - b)).toEqual(
+        preferred.map((player) => Math.max(player.matchesPlayed, player.matchmakingBaseline)).sort((a, b) => a - b)
+      );
+      expect(chosen.reduce((sum, player) => sum + player.restTurns, 0)).toBe(
+        preferred.reduce((sum, player) => sum + (player.restTurns ?? 0), 0)
+      );
     }
-
-    const history = buildConsecutivePlayHistory(state.completedMatches);
-    const burdens = state.players.map(
-      (player) => history.burdenByUserId.get(player.userId) ?? 0
-    );
-
-    expect(Math.min(...burdens)).toBe(1);
-    expect(Math.max(...burdens)).toBe(1);
+    const counts = state.players.map((player) => player.matchesPlayed);
+    expect(Math.max(...counts) - Math.min(...counts)).toBeLessThanOrEqual(1);
   });
 
   it("assigns a neutral baseline to late joiners in the live simulation state", () => {
@@ -410,7 +414,7 @@ describe("matchmaking v3 simulation", () => {
   );
 
   it(
-    "can reach full shared-court coverage in an ideal 13-player social mix run",
+    "continues improving shared-court coverage while preserving fair turns in Social",
     () => {
       const state = createSimulationState(
         createSimulationPlayers(13, { strengthStep: 0 }),
@@ -428,7 +432,18 @@ describe("matchmaking v3 simulation", () => {
         });
       }
 
-      expect(getUnseenSharedCourtPairs(state.players, state.completedMatches)).toBe(0);
+      const openingUnseen = getUnseenSharedCourtPairs(state.players, state.completedMatches);
+      for (let round = 0; round < 10; round += 1) {
+        playRound(state, {
+          courtCount: 2, sessionMode: SessionMode.MEXICANO,
+          sessionType: SessionType.SOCIAL_MIX, randomFn: () => 0,
+        });
+      }
+      const laterUnseen = getUnseenSharedCourtPairs(state.players, state.completedMatches);
+      if (openingUnseen > 0) expect(laterUnseen).toBeLessThan(openingUnseen);
+      else expect(laterUnseen).toBe(0);
+      const counts = state.players.map((player) => player.matchesPlayed);
+      expect(Math.max(...counts) - Math.min(...counts)).toBeLessThanOrEqual(1);
     },
     LONG_SIMULATION_TIMEOUT_MS
   );

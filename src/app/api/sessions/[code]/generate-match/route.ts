@@ -122,6 +122,7 @@ export async function POST(
           team1ClubId: teamClubIds.team1ClubId,
           team2ClubId: teamClubIds.team2ClubId,
           matchmakingReasonJson: null,
+          clearArrivalPriority: false,
         },
       ]);
 

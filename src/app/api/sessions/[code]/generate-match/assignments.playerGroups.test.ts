@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { CourtGroupType } from "@/types/enums";
+import { CourtGroupType, PlayerGender, SessionMode, SessionType } from "@/types/enums";
+import { withSocialVarietySnapshot } from "@/lib/matchmaking/v3/socialVariety";
 
 const mocks = vi.hoisted(() => ({
   transaction: vi.fn(),
@@ -143,6 +144,56 @@ describe("player-group assignment lifecycle", () => {
     expect(tx.queuedMatch.deleteMany).toHaveBeenCalledWith({
       where: { id: "queue-1", sessionId: "session-1" },
     });
+  });
+
+  it("stores a Social manual assignment snapshot without displaying an automatic reason", async () => {
+    const tx = createTransactionMock();
+    tx.session.findUnique.mockResolvedValue({
+      poolsEnabled: false,
+      type: SessionType.SOCIAL_MIX,
+      mode: SessionMode.MIXICANO,
+    });
+    tx.sessionPlayer.findMany.mockImplementation(async ({ where }) =>
+      where.userId.in.map((userId: string) => ({
+        userId,
+        gender: userId.startsWith("competitive") ? PlayerGender.MALE : PlayerGender.FEMALE,
+        partnerPreference: userId.startsWith("competitive") ? "OPEN" : "FEMALE_FLEX",
+      }))
+    );
+    mocks.transaction.mockImplementation(async (callback) => callback(tx));
+    const [match] = await createMatchesForAssignments("session-1", [{
+      courtId: "court-1",
+      selectedIds: [...partition.team1, ...partition.team2],
+      partition,
+      clearArrivalPriority: false,
+      matchmakingReasonJson: null,
+    }]);
+    const data = tx.match.create.mock.calls[0][0].data;
+    expect(JSON.parse(data.matchmakingReasonJson).socialVariety.courtType).toBe("MIXED");
+    expect(match.matchmakingReason).toBeNull();
+    expect(tx.sessionPlayer.updateMany).not.toHaveBeenCalled();
+  });
+
+  it("keeps a manual Social queue snapshot and manual arrival semantics on assignment", async () => {
+    const tx = createTransactionMock();
+    tx.session.findUnique.mockResolvedValue({ poolsEnabled: false });
+    const players = [...partition.team1, ...partition.team2].map((userId) => ({
+      userId,
+      gender: PlayerGender.MALE,
+    }));
+    const json = withSocialVarietySnapshot(null, partition, players);
+    mocks.transaction.mockImplementation(async (callback) => callback(tx));
+    const match = await createQueuedMatchAssignment({
+      sessionId: "session-1",
+      queuedMatchId: "queue-1",
+      courtId: "court-1",
+      partition,
+      matchmakingReasonJson: json,
+      isAutomatic: false,
+    });
+    expect(tx.match.create.mock.calls[0][0].data.matchmakingReasonJson).toBe(json);
+    expect(match.matchmakingReason).toBeNull();
+    expect(tx.sessionPlayer.updateMany).not.toHaveBeenCalled();
   });
 
   it("clears arrival priority for an automatic queue even without a reason", async () => {

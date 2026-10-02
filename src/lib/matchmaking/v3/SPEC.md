@@ -2,6 +2,55 @@
 
 This document defines the intended behavior of the live `v3` matcher.
 
+## Social mode
+
+Social uses the same scorer for single courts, whole batches, player groups,
+interclub games, queues, and reshuffles. The sections below describe the
+balanced matcher unless a Social rule is stated explicitly.
+
+Social's priority order is:
+
+1. Court-time fairness
+2. Existing arrival priority within court-time ties
+3. Rest fairness, when the session enables it
+4. Existing player-group seat and crossover rules
+5. Ongoing variety
+6. Team balance
+7. Recent repeats and random tie-breaks
+
+Variety measures how evenly each player has experienced their feasible
+courtmates, partners, opponents, and, in Mixed pairing, mixed-side and own-side
+doubles. All four parts have the same scale: lifetime Shannon entropy divided
+by `log(number of feasible outcomes)`. A batch's score is the change in their
+combined score. A part with fewer than two feasible outcomes contributes zero
+without increasing the weight of other parts. Negative changes are allowed.
+
+This continues valuing less frequent encounters and game types after everyone
+has met and after an own-side game has already happened. There are no quotas,
+fixed percentages, or periodic game-type rules. Existing effective Mixed side
+assignments determine the game types.
+
+Opportunities come from the full unpaused roster, including busy and queued
+players. Pairing, player-group and club restrictions apply; temporary rest and
+court occupancy do not. The opportunity set stays fixed during each decision.
+
+Completed, pending, in-progress, pending-approval and queued assignments count,
+including manual games. Current records rebuild history on every decision, so
+undo, cancellation and replacement remove old assignments. Queue-to-active
+duplicates count once; genuine repeated games still count. Pausing does not
+erase history. New players add new opportunities.
+
+Assignment-time side snapshots live in optional versioned reason JSON metadata
+and survive queue activation. Older games fall back to current resolvable side
+information. Unclassifiable games contribute interpersonal history only.
+
+Social considers all legal player selections and partitions. Two-court searches
+with up to fourteen eligible players compare every compatible pair. Larger
+searches use bounded global search and safe pruning. On timeout, only a complete
+batch with certified court-time, arrival and rest fairness may be returned;
+diagnostics flag that variety may be suboptimal. Otherwise the search reports
+its limit. Courts are never filled greedily as a fallback.
+
 ## Status
 
 - Live matcher reference

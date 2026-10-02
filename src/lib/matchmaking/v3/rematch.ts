@@ -44,6 +44,7 @@ export interface V3OpponentRepeatHistory {
 
 export interface V3SocialMixHistory {
   sharedCourtPairs: Set<string>;
+  sharedCourtPairCounts?: Map<string, number>;
   partnerPairs: Set<string>;
   opponentPairs: Set<string>;
 }
@@ -218,6 +219,7 @@ export function buildSocialMixHistory(
   matches: V3CompletedMatch[]
 ): V3SocialMixHistory {
   const sharedCourtPairs = new Set<string>();
+  const sharedCourtPairCounts = new Map<string, number>();
   const partnerPairs = new Set<string>();
   const opponentPairs = new Set<string>();
 
@@ -229,6 +231,10 @@ export function buildSocialMixHistory(
 
     for (const pairKey of getSharedCourtPairKeys(partition)) {
       sharedCourtPairs.add(pairKey);
+      sharedCourtPairCounts.set(
+        pairKey,
+        (sharedCourtPairCounts.get(pairKey) ?? 0) + 1
+      );
     }
 
     for (const pairKey of getPartnerPairKeys(partition)) {
@@ -242,6 +248,7 @@ export function buildSocialMixHistory(
 
   return {
     sharedCourtPairs,
+    sharedCourtPairCounts,
     partnerPairs,
     opponentPairs,
   };
@@ -253,6 +260,19 @@ export function getSharedCourtRepeatPenalty(
 ) {
   return getSharedCourtPairKeys(partition).reduce(
     (count, pairKey) => count + Number(history.sharedCourtPairs.has(pairKey)),
+    0
+  );
+}
+
+export function getSharedCourtEncounterFrequencyPenalty(
+  partition: V3DoublesPartition,
+  history: V3SocialMixHistory
+) {
+  return getSharedCourtPairKeys(partition).reduce(
+    (count, pairKey) =>
+      count +
+      (history.sharedCourtPairCounts?.get(pairKey) ??
+        Number(history.sharedCourtPairs.has(pairKey))),
     0
   );
 }

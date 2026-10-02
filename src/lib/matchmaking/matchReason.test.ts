@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { SessionMode, SessionPool, SessionType } from "@/types/enums";
+import { PlayerGender, SessionMode, SessionPool, SessionType } from "@/types/enums";
+import { withSocialVarietySnapshot } from "./v3/socialVariety";
 import {
   buildV3MatchmakingReason,
   buildV3MatchmakingReasonJson,
@@ -186,6 +187,65 @@ describe("matchmaking reason", () => {
     ]);
     expect(parseMatchmakingReasonJson("{not-json")).toBeNull();
     expect(parseMatchmakingReasonJson(JSON.stringify({ version: 1 }))).toBeNull();
+  });
+
+  it("preserves ongoing Social gains and assignment-time mixed sides", () => {
+    const selection = createSelection({
+      socialVarietyGain: 0.123456789,
+      socialVarietyGains: {
+        courtmates: 0.01,
+        partners: 0.02,
+        opponents: 0.03,
+        matchType: 0.063456789,
+      },
+    });
+    selection.players.forEach((player) => {
+      player.gender = ["A", "B"].includes(player.userId)
+        ? PlayerGender.MALE
+        : PlayerGender.FEMALE;
+    });
+    const json = buildV3MatchmakingReasonJson(selection, {
+      sessionType: SessionType.SOCIAL_MIX,
+      sessionMode: SessionMode.MIXICANO,
+    });
+    const parsed = parseMatchmakingReasonJson(json);
+
+    expect(parsed?.socialVariety?.courtType).toBe("MIXED");
+    expect(parsed?.socialVariety?.effectiveSideByUserId).toEqual({
+      A: "UPPER", B: "UPPER", C: "LOWER", D: "LOWER",
+    });
+    expect(parsed?.metrics.socialVarietyGain).toBe(0.123456789);
+    expect(parsed?.metrics.socialVarietyGains).toEqual(selection.socialVarietyGains);
+    expect(parsed?.summary.join(" ")).toContain("ongoing courtmate");
+    expect(parsed?.summary.join(" ")).toContain("match-type variety");
+    expect(parsed?.summary.join(" ")).not.toContain("coverage penalty");
+  });
+
+  it("keeps metadata-only manual assignments out of displayed reasons", () => {
+    const selection = createSelection();
+    const json = withSocialVarietySnapshot(null, selection.partition, selection.players);
+    expect(JSON.parse(json).socialVariety.courtType).toBeNull();
+    expect(parseMatchmakingReasonJson(json)).toBeNull();
+  });
+
+  it("ignores invalid optional Social metadata while parsing the legacy reason", () => {
+    const reason = buildV3MatchmakingReason(createSelection(), {
+      sessionType: SessionType.POINTS,
+      sessionMode: SessionMode.MEXICANO,
+    });
+    const parsed = parseMatchmakingReasonJson({
+      ...reason,
+      socialVariety: { version: 99 },
+      metrics: {
+        ...reason.metrics,
+        socialVarietyGain: "invalid",
+        socialVarietyGains: { courtmates: 1 },
+      },
+    });
+    expect(parsed?.selectedUserIds).toEqual(reason.selectedUserIds);
+    expect(parsed?.socialVariety).toBeUndefined();
+    expect(parsed?.metrics.socialVarietyGain).toBeUndefined();
+    expect(parsed?.metrics.socialVarietyGains).toBeUndefined();
   });
 
   it("parses older reason JSON without point-difference metrics", () => {

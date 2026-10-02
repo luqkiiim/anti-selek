@@ -24,6 +24,25 @@ export interface V3CompletedMatch {
   completedAt?: Date | null;
 }
 
+export interface SocialVarietySnapshot {
+  version: 1;
+  basis: "EFFECTIVE_MIXED_SIDE";
+  courtType: "MIXED" | "UPPER" | "LOWER" | null;
+  effectiveSideByUserId: Record<string, "UPPER" | "LOWER" | null>;
+}
+
+export interface SocialHistoryMatch extends V3CompletedMatch {
+  id?: string;
+  socialVariety?: SocialVarietySnapshot;
+}
+
+export interface SocialVarietyGains {
+  courtmates: number;
+  partners: number;
+  opponents: number;
+  matchType: number;
+}
+
 export type ActiveMatchmakerV3Player<
   T extends MatchmakerV3Player = MatchmakerV3Player,
 > = T & {
@@ -120,6 +139,7 @@ export interface V3SingleCourtSelection<
   balanceGap: number;
   pointDiffGap: number;
   sharedCourtRepeatPenalty: number;
+  sharedCourtEncounterFrequencyPenalty?: number;
   partnerCoveragePenalty: number;
   opponentCoveragePenalty: number;
   partnerRepeatPenalty: number;
@@ -128,6 +148,9 @@ export interface V3SingleCourtSelection<
   mixedVarietyPenalty?: number;
   mixedGlobalVarietyPenalty?: number;
   mixedGame?: boolean;
+  socialVarietyGain?: number;
+  socialVarietyGains?: SocialVarietyGains;
+  socialVariety?: SocialVarietySnapshot;
   consecutivePlayCount: number;
   consecutivePlayMaxBurden: number;
   consecutivePlayTotalBurden: number;
@@ -151,9 +174,17 @@ export interface V3SingleCourtDebug {
   chosenPartnerRepeatPenalty: number | null;
   chosenOpponentRepeatPenalty: number | null;
   chosenExactRematchPenalty: number | null;
+  chosenSharedCourtEncounterFrequencyPenalty?: number | null;
   chosenConsecutivePlayCount: number | null;
   chosenConsecutivePlayMaxBurden: number | null;
   chosenConsecutivePlayTotalBurden: number | null;
+  chosenSocialVarietyGain?: number | null;
+  chosenSocialVarietyGains?: SocialVarietyGains | null;
+  fairnessOptimal?: boolean;
+  fairnessCertified?: boolean;
+  varietyOptimal?: boolean;
+  searchLimitReached?: boolean;
+  failureReason?: V3BatchFailureReason | null;
 }
 
 export interface V3SingleCourtResult<
@@ -173,6 +204,7 @@ export interface V3BatchSelection<
   maxPointDiffGap: number;
   totalPointDiffGap: number;
   totalSharedCourtRepeatPenalty: number;
+  totalSharedCourtEncounterFrequencyPenalty?: number;
   totalPartnerCoveragePenalty: number;
   totalOpponentCoveragePenalty: number;
   totalPartnerRepeatPenalty: number;
@@ -180,6 +212,8 @@ export interface V3BatchSelection<
   totalExactRematchPenalty: number;
   totalMixedVarietyPenalty?: number;
   totalMixedGlobalVarietyPenalty?: number;
+  totalSocialVarietyGain?: number;
+  totalSocialVarietyGains?: SocialVarietyGains;
   totalRandomScore: number;
   totalPairingRandomScore: number;
   sidePairingLayoutKeys: [string, string];
@@ -219,6 +253,12 @@ export interface V3BatchDebug {
   chosenTotalPartnerRepeatPenalty: number | null;
   chosenTotalOpponentRepeatPenalty: number | null;
   chosenTotalExactRematchPenalty: number | null;
+  chosenTotalSharedCourtEncounterFrequencyPenalty?: number | null;
+  chosenTotalSocialVarietyGain?: number | null;
+  chosenTotalSocialVarietyGains?: SocialVarietyGains | null;
+  fairnessOptimal?: boolean;
+  fairnessCertified?: boolean;
+  varietyOptimal?: boolean;
 }
 
 export interface V3BatchResult<

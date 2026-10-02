@@ -13,6 +13,9 @@ import {
   isMixedPartitionForSides,
 } from "./mixedVariety";
 import type { V3MixedHistoryMatch } from "./mixedVariety";
+import { findBestSocialBatchSelection } from "./socialBatch";
+import type { SocialVarietyContext } from "./socialVariety";
+import type { SocialHistoryMatch } from "./types";
 import {
   buildExactRematchHistory,
   buildOpponentRepeatHistory,
@@ -30,7 +33,6 @@ import {
   compareBatchSelections,
   compareSingleCourtSelections,
   ELO_BALANCE_GAP_CEILING,
-  FULL_REPEAT_REST_TOLERANCE,
   getBatchPairingRandomScore,
   getBatchSidePairingKeys,
   getBatchSidePairingRandomScores,
@@ -572,7 +574,7 @@ function getRestTurnTieZoneTolerance(sessionType: SessionType) {
     return Number.POSITIVE_INFINITY;
   }
 
-  return sessionType === SessionType.SOCIAL_MIX ? FULL_REPEAT_REST_TOLERANCE : 0;
+  return 0;
 }
 
 function createBatchPairingRandomSalts(
@@ -1248,6 +1250,8 @@ export function findBestBatchSelectionV3<T extends MatchmakerV3Player>(
     respectPlayerRest = true,
     completedMatches = [],
     mixedHistoryMatches,
+    socialHistoryMatches,
+    socialVarietyContext,
     randomFn = Math.random,
     searchLimits,
     candidatePool,
@@ -1265,6 +1269,8 @@ export function findBestBatchSelectionV3<T extends MatchmakerV3Player>(
       completedAt?: Date | null;
     }>;
     mixedHistoryMatches?: V3MixedHistoryMatch[];
+    socialHistoryMatches?: SocialHistoryMatch[];
+    socialVarietyContext?: SocialVarietyContext;
     randomFn?: () => number;
     searchLimits?: {
       maxBranches?: number;
@@ -1278,6 +1284,14 @@ export function findBestBatchSelectionV3<T extends MatchmakerV3Player>(
     pairingRandomMode?: V3BatchPairingRandomMode;
   }
 ): V3BatchResult<ActiveMatchmakerV3Player<T>> {
+  if (sessionType === SessionType.SOCIAL_MIX) {
+    return findBestSocialBatchSelection(players, {
+      courtCount, sessionMode, respectPlayerRest, completedMatches,
+      socialHistoryMatches: socialHistoryMatches ?? mixedHistoryMatches,
+      socialVarietyContext, randomFn, searchLimits, candidatePool,
+      selectionConstraints, pairingRandomMode,
+    });
+  }
   const requiredPlayerCount = courtCount * 4;
   const candidateCap =
     courtCount > 0 ? getBatchCandidateCap(courtCount, requiredPlayerCount) : null;

@@ -1,13 +1,16 @@
 import type { ManualMatchTeams } from "@/lib/matchmaking/manualMatch";
 import type { PartitionCandidate } from "@/lib/matchmaking/partitioning";
 import { buildCandidatePool } from "@/lib/matchmaking/v3/candidatePool";
+import { buildSocialSessionHistory } from "@/lib/matchmaking/socialSessionHistory";
+import {
+  buildSocialVarietyContext,
+  type SocialVarietyGains,
+  type SocialVarietySnapshot,
+} from "@/lib/matchmaking/v3/socialVariety";
 import { buildFairnessBands } from "@/lib/matchmaking/v3/fairness";
 import { findBestBatchSelectionV3 } from "@/lib/matchmaking/v3/batch";
 import { getExactPartitionKey } from "@/lib/matchmaking/v3/rematch";
-import {
-  FULL_REPEAT_REST_TOLERANCE,
-  usesBalanceFirstVariety,
-} from "@/lib/matchmaking/v3/scoring";
+import { usesBalanceFirstVariety } from "@/lib/matchmaking/v3/scoring";
 import { findBestSingleCourtSelectionV3 } from "@/lib/matchmaking/v3/singleCourt";
 import type {
   ActiveMatchmakerV3Player,
@@ -194,11 +197,12 @@ export function getInterclubTeamClubIdsForPartition(
 }
 
 function getInterclubRestTurnTieZoneTolerance(sessionType: SessionType) {
+  if (sessionType === SessionType.SOCIAL_MIX) return 0;
   if (usesBalanceFirstVariety(sessionType)) {
     return Number.POSITIVE_INFINITY;
   }
 
-  return sessionType === SessionType.SOCIAL_MIX ? FULL_REPEAT_REST_TOLERANCE : 0;
+  return 0;
 }
 
 function buildCompletedInterclubMatches(
@@ -270,11 +274,17 @@ function buildInterclubReasonJson({
   team2ClubId,
   balanceGap,
   pointDiffGap,
+  socialVariety,
+  socialVarietyGain,
+  socialVarietyGains,
 }: {
   team1ClubId: string;
   team2ClubId: string;
   balanceGap: number;
   pointDiffGap: number;
+  socialVariety?: SocialVarietySnapshot;
+  socialVarietyGain?: number;
+  socialVarietyGains?: SocialVarietyGains;
 }) {
   return JSON.stringify({
     type: "INTERCLUB",
@@ -282,6 +292,7 @@ function buildInterclubReasonJson({
     team2ClubId,
     balanceGap,
     pointDiffGap,
+    ...(socialVariety ? { socialVariety, socialVarietyGain, socialVarietyGains } : {}),
   });
 }
 
@@ -557,6 +568,48 @@ function getInterclubSelectionConstraints(
   };
 }
 
+function getInterclubSocialOptions(
+  sessionData: GenerateMatchSession,
+  rankedCandidates: readonly RankedInterclubCandidate[],
+  playersById: Map<string, PartitionCandidate>,
+  clubIds: [string, string]
+) {
+  if (getEffectiveSessionType(sessionData) !== SessionType.SOCIAL_MIX) return {};
+  const availableIds = new Set(rankedCandidates.map((candidate) => candidate.userId));
+  const candidatesById = new Map(rankedCandidates.map((candidate) => [candidate.userId, candidate]));
+  const fullRosterCandidates = sessionData.players.map((player) =>
+    candidatesById.get(player.userId) ?? {
+      userId: player.userId,
+      matchesPlayed: player.matchesPlayed,
+      matchmakingBaseline:
+        player.matchesPlayed + Math.max(0, player.matchmakingMatchesCredit ?? 0),
+      restTurns: 0,
+      needsMoreRest: player.needsMoreRest,
+      moreRestTarget: Math.max(1, sessionData.courts?.length ?? 1),
+      arrivalPriorityAt: player.arrivalPriorityAt,
+    }
+  );
+  // Busy and queued players remain part of the opportunity space. They are
+  // excluded from selection by the separate available-candidate roster.
+  const players = buildInterclubMatchmakerPlayers({
+    sessionData,
+    rankedCandidates: fullRosterCandidates,
+    playersById,
+    clubIds,
+  }).map((player) => ({
+    ...player,
+    isBusy: !player.isPaused && !availableIds.has(player.userId),
+  }));
+  const socialHistoryMatches = buildSocialSessionHistory(sessionData);
+  return {
+    socialHistoryMatches,
+    socialVarietyContext: buildSocialVarietyContext(players, socialHistoryMatches, {
+      sessionMode: getEffectiveSessionMode(sessionData) as SessionMode,
+      opportunityConstraints: [getInterclubSelectionConstraints(clubIds)],
+    }),
+  };
+}
+
 function toManualMatchTeams(partition: V3DoublesPartition): ManualMatchTeams {
   return {
     team1: partition.team1,
@@ -593,6 +646,9 @@ function toInterclubSelection(
       team2ClubId: clubIds[1],
       balanceGap: selection.balanceGap,
       pointDiffGap: selection.pointDiffGap,
+      socialVariety: selection.socialVariety,
+      socialVarietyGain: selection.socialVarietyGain,
+      socialVarietyGains: selection.socialVarietyGains,
     }),
   };
 }
@@ -668,16 +724,21 @@ function findInterclubSingleCourtSelection({
     return null;
   }
 
-  return findBestSingleCourtSelectionV3(context.players, {
+  const result = findBestSingleCourtSelectionV3(context.players, {
     sessionMode: context.sessionMode,
     sessionType: context.sessionType,
     completedMatches: context.completedMatches,
+    ...getInterclubSocialOptions(sessionData, rankedCandidates, playersById, context.clubIds),
     respectPlayerRest: sessionData.respectPlayerRest,
-    candidatePool: context.candidatePool,
+    candidatePool: context.sessionType === SessionType.SOCIAL_MIX ? undefined : context.candidatePool,
     selectionConstraints: context.selectionConstraints,
     excludedQuartetKey,
     excludedPartitionKey,
-  }).selection;
+  });
+  if (context.sessionType === SessionType.SOCIAL_MIX && !result.selection && result.debug.searchLimitReached) {
+    throw new GenerateMatchError(400, "Match search reached its time limit before establishing a fair batch. Try again.");
+  }
+  return result.selection;
 }
 
 export function selectInterclubSingleCourtMatch({
@@ -812,6 +873,7 @@ export function selectInterclubReplacementMatch({
     sessionMode: getEffectiveSessionMode(sessionData) as SessionMode,
     sessionType,
     completedMatches: buildCompletedInterclubMatches(sessionData),
+    ...getInterclubSocialOptions(sessionData, eligibleCandidates, playersById, clubIds),
     respectPlayerRest: sessionData.respectPlayerRest,
     candidatePool,
     candidatePoolVariants: (pool) => [pool],
@@ -819,6 +881,9 @@ export function selectInterclubReplacementMatch({
   });
 
   if (!result.selection) {
+    if (sessionType === SessionType.SOCIAL_MIX && result.debug.searchLimitReached) {
+      throw new GenerateMatchError(400, "Match search reached its time limit before establishing a fair batch. Try again.");
+    }
     throw new GenerateMatchError(
       409,
       "No eligible replacement player was available for this club vs club match."
@@ -864,14 +929,18 @@ export function selectInterclubBatchMatches({
     sessionType: context.sessionType,
     respectPlayerRest: sessionData.respectPlayerRest,
     completedMatches: context.completedMatches,
+    ...getInterclubSocialOptions(sessionData, rankedCandidates, playersById, context.clubIds),
     randomFn,
-    candidatePool: context.candidatePool,
+    candidatePool: context.sessionType === SessionType.SOCIAL_MIX ? undefined : context.candidatePool,
     candidatePoolVariants: (pool) => [pool],
     selectionConstraints: context.selectionConstraints,
     pairingRandomMode: "side-balanced",
   });
 
   if (!result.selection) {
+    if (context.sessionType === SessionType.SOCIAL_MIX && result.debug.searchLimitReached) {
+      throw new GenerateMatchError(400, "Match search reached its time limit before establishing a fair batch. Try again.");
+    }
     throw new GenerateMatchError(
       400,
       getInterclubShortageMessage({

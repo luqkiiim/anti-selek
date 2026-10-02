@@ -200,7 +200,7 @@ describe("matchmaking v3 batch selection", () => {
     15_000
   );
 
-  it("uses the same candidate cap policy for social batches", () => {
+  it("keeps all fairness-admissible Social candidates without a roster cap", () => {
     const result = findBestBatchSelectionV3(createPlayers(20), {
       courtCount: 2,
       sessionMode: SessionMode.MEXICANO,
@@ -211,7 +211,7 @@ describe("matchmaking v3 batch selection", () => {
     expect(result.debug.availableCandidateCount).toBe(20);
     expect(result.debug.consideredCandidateCount).toBe(20);
     expect(result.debug.candidatePlayerIds).toHaveLength(20);
-    expect(result.debug.candidateCap).toBe(20);
+    expect(result.debug.candidateCap).toBeNull();
   });
 
   it("returns the best found batch when the search limit is reached", () => {

@@ -6,6 +6,7 @@ export * from "./fairness";
 export * from "./mixedVariety";
 export * from "./rematch";
 export * from "./scoring";
+export * from "./socialVariety";
 export * from "./simulation";
 export * from "./singleCourt";
 export * from "./types";

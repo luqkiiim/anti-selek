@@ -53,6 +53,7 @@ function createSelection(
     consecutivePlayTotalBurden = 0,
     mixedVarietyPenalty,
     mixedGlobalVarietyPenalty,
+    socialVarietyGain,
     randomScore = 0,
     pairingRandomScore = 0,
   }: {
@@ -71,6 +72,7 @@ function createSelection(
     consecutivePlayTotalBurden?: number;
     mixedVarietyPenalty?: number;
     mixedGlobalVarietyPenalty?: number;
+    socialVarietyGain?: number;
     randomScore?: number;
     pairingRandomScore?: number;
   }
@@ -105,6 +107,7 @@ function createSelection(
     partnerRepeatPenalty,
     opponentRepeatPenalty,
     exactRematchPenalty,
+    socialVarietyGain,
     ...(mixedVarietyPenalty !== undefined ? { mixedVarietyPenalty } : {}),
     ...(mixedGlobalVarietyPenalty !== undefined
       ? { mixedGlobalVarietyPenalty }
@@ -305,7 +308,7 @@ describe("matchmaking v3 scoring", () => {
     ).toBeLessThan(0);
   });
 
-  it("avoids a full shared-court repeat when rest is within one turn", () => {
+  it("retains the Points repeat exception while Social always respects rest", () => {
     const fullRepeat = createSelection({
       restTurns: [3, 3, 3, 3],
       balanceGap: 0,
@@ -332,7 +335,7 @@ describe("matchmaking v3 scoring", () => {
         fullRepeat,
         SessionType.SOCIAL_MIX
       )
-    ).toBeLessThan(0);
+    ).toBeGreaterThan(0);
   });
 
   it("keeps a full repeat in social mix when the alternative is more than one rest turn worse", () => {
@@ -780,7 +783,7 @@ describe("matchmaking v3 scoring", () => {
     ).toBeLessThan(0);
   });
 
-  it("prefers first-time shared-court contacts over balance in social mix sessions", () => {
+  it("prefers greater persistent Social variety gain over balance", () => {
     const repeatedCourt = createSelection({
       balanceGap: 0,
       sharedCourtRepeatPenalty: 2,
@@ -788,6 +791,7 @@ describe("matchmaking v3 scoring", () => {
     });
     const freshCourt = createSelection({
       balanceGap: 2,
+      socialVarietyGain: 1,
       sharedCourtRepeatPenalty: 0,
       exactRematchPenalty: 0,
     });
@@ -801,7 +805,7 @@ describe("matchmaking v3 scoring", () => {
     ).toBeLessThan(0);
   });
 
-  it("prefers fresh partners before fresher opponents in social mix sessions", () => {
+  it("compares partner and opponent variety through their common gain", () => {
     const repeatedPartners = createSelection({
       balanceGap: 0,
       sharedCourtRepeatPenalty: 0,
@@ -811,6 +815,7 @@ describe("matchmaking v3 scoring", () => {
     });
     const freshPartners = createSelection({
       balanceGap: 0,
+      socialVarietyGain: 1,
       sharedCourtRepeatPenalty: 0,
       partnerCoveragePenalty: 0,
       opponentCoveragePenalty: 1,
@@ -849,9 +854,10 @@ describe("matchmaking v3 scoring", () => {
     ).toBeLessThan(0);
   });
 
-  it("prefers lower back-to-back burden before social mix coverage", () => {
+  it("uses actual rest turns instead of serial match-completion burden in Social", () => {
     const lowerBurden = createSelection({
       balanceGap: 10,
+      restTurns: [2, 2, 2, 2],
       sharedCourtRepeatPenalty: 3,
       exactRematchPenalty: 0,
       consecutivePlayCount: 1,
@@ -1138,7 +1144,7 @@ describe("matchmaking v3 scoring", () => {
     ).toBeLessThan(0);
   });
 
-  it("prefers lower total shared-court repeats before balance in social mix batches", () => {
+  it("prefers greater total Social variety gain before balance in batches", () => {
     const repeatedCourtBatch = createBatchSelection({
       maxBalanceGap: 0,
       totalBalanceGap: 0,
@@ -1149,6 +1155,7 @@ describe("matchmaking v3 scoring", () => {
       totalBalanceGap: 2,
       totalSharedCourtRepeatPenalty: 0,
     });
+    freshCourtBatch.totalSocialVarietyGain = 1;
 
     expect(
       compareBatchSelections(

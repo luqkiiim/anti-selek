@@ -13,6 +13,9 @@ import {
   isMixedPartitionForSides,
 } from "./mixedVariety";
 import type { V3MixedHistoryMatch } from "./mixedVariety";
+import { findBestSocialBatchSelection } from "./socialBatch";
+import type { SocialVarietyContext } from "./socialVariety";
+import type { SocialHistoryMatch } from "./types";
 import {
   buildExactRematchHistory,
   buildOpponentRepeatHistory,
@@ -30,7 +33,6 @@ import {
   buildRestSummary,
   compareSingleCourtSelections,
   ELO_BALANCE_GAP_CEILING,
-  FULL_REPEAT_REST_TOLERANCE,
   getBalanceVarietyTolerance,
   getPartitionPairingRandomScore,
   getQuartetRandomScore,
@@ -211,7 +213,7 @@ function getRestTurnTieZoneTolerance(sessionType: SessionType) {
     return Number.POSITIVE_INFINITY;
   }
 
-  return sessionType === SessionType.SOCIAL_MIX ? FULL_REPEAT_REST_TOLERANCE : 0;
+  return 0;
 }
 
 function searchCandidatePool<T extends MatchmakerV3Player>({
@@ -495,6 +497,8 @@ export function findBestSingleCourtSelectionV3<T extends MatchmakerV3Player>(
     sessionType,
     completedMatches = [],
     mixedHistoryMatches,
+    socialHistoryMatches,
+    socialVarietyContext,
     excludedQuartetKey,
     excludedQuartetKeys,
     excludedPartitionKey,
@@ -514,6 +518,8 @@ export function findBestSingleCourtSelectionV3<T extends MatchmakerV3Player>(
       completedAt?: Date | null;
     }>;
     mixedHistoryMatches?: V3MixedHistoryMatch[];
+    socialHistoryMatches?: SocialHistoryMatch[];
+    socialVarietyContext?: SocialVarietyContext;
     excludedQuartetKey?: string;
     excludedQuartetKeys?: ReadonlySet<string>;
     excludedPartitionKey?: string;
@@ -528,6 +534,46 @@ export function findBestSingleCourtSelectionV3<T extends MatchmakerV3Player>(
     selectionConstraints?: V3SelectionConstraints<ActiveMatchmakerV3Player<T>>;
   }
 ): V3SingleCourtResult<ActiveMatchmakerV3Player<T>> {
+  if (sessionType === SessionType.SOCIAL_MIX) {
+    const excluded = new Set(excludedQuartetKeys);
+    if (excludedQuartetKey) excluded.add(excludedQuartetKey);
+    const socialConstraints: V3SelectionConstraints<ActiveMatchmakerV3Player<T>> | undefined = targetPool || selectionConstraints ? {
+      ...selectionConstraints,
+      isQuartetAllowed: (quartet) =>
+        (!targetPool || quartet.filter((player) => player.pool === targetPool).length >= (minimumTargetPoolPlayers ?? 1)) &&
+        (selectionConstraints?.isQuartetAllowed?.(quartet) ?? true),
+    } : undefined;
+    const result = findBestSocialBatchSelection(players, {
+      courtCount: 1, sessionMode, respectPlayerRest, completedMatches,
+      socialHistoryMatches: socialHistoryMatches ?? mixedHistoryMatches,
+      socialVarietyContext, randomFn, candidatePool,
+      excludedQuartetKeys: excluded, excludedPartitionKey,
+      selectionConstraints: socialConstraints,
+    });
+    const selection = result.selection?.selections[0] ?? null;
+    return {
+      selection,
+      debug: {
+        eligiblePlayerIds: result.debug.eligiblePlayerIds, lowestBand: result.debug.lowestBand,
+        includedBandValues: result.debug.includedBandValues, widened: result.debug.widened,
+        lockedPlayerIds: result.debug.lockedPlayerIds, tieZonePlayerIds: result.debug.tieZonePlayerIds,
+        candidatePlayerIds: result.debug.candidatePlayerIds, quartetCount: result.debug.quartetCount,
+        validPartitionCount: result.debug.validQuartetCount, chosenIds: selection?.ids ?? null,
+        chosenBalanceGap: selection?.balanceGap ?? null, chosenPointDiffGap: selection?.pointDiffGap ?? null,
+        chosenPartnerRepeatPenalty: selection?.partnerRepeatPenalty ?? null,
+        chosenOpponentRepeatPenalty: selection?.opponentRepeatPenalty ?? null,
+        chosenExactRematchPenalty: selection?.exactRematchPenalty ?? null,
+        chosenSharedCourtEncounterFrequencyPenalty: selection?.sharedCourtEncounterFrequencyPenalty ?? null,
+        chosenConsecutivePlayCount: selection?.consecutivePlayCount ?? null,
+        chosenConsecutivePlayMaxBurden: selection?.consecutivePlayMaxBurden ?? null,
+        chosenConsecutivePlayTotalBurden: selection?.consecutivePlayTotalBurden ?? null,
+        chosenSocialVarietyGain: selection?.socialVarietyGain ?? null,
+        chosenSocialVarietyGains: selection?.socialVarietyGains ?? null,
+        fairnessCertified: result.fairnessCertified, varietyOptimal: result.varietyOptimal,
+        searchLimitReached: result.debug.searchLimitReached, failureReason: result.debug.failureReason,
+      },
+    };
+  }
   const initialCandidatePool =
     candidatePool ??
     buildCandidatePool(players, {

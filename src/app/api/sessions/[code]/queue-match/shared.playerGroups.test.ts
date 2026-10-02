@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { CourtGroupType, SessionPool, SessionStatus } from "@/types/enums";
+import { CourtGroupType, PlayerGender, SessionMode, SessionPool, SessionStatus, SessionType } from "@/types/enums";
 
 const mocks = vi.hoisted(() => ({
   transaction: vi.fn(),
@@ -230,6 +230,28 @@ describe("queued player-group lifecycle", () => {
       poolBSeatCount: 2,
       isAutomatic: false,
     });
+  });
+
+  it("persists unknown Social manual type history without changing the manual source", async () => {
+    const tx = createTransactionMock();
+    tx.session.findUnique.mockResolvedValue({
+      poolsEnabled: false,
+      type: SessionType.SOCIAL_MIX,
+      mode: SessionMode.MIXICANO,
+    });
+    tx.sessionPlayer.findMany.mockImplementation(async ({ where }) =>
+      where.userId.in.map((userId: string) => ({ userId, gender: PlayerGender.UNSPECIFIED }))
+    );
+    mocks.transaction.mockImplementation(async (callback) => callback(tx));
+    const result = await createManualQueuedMatchForSession(
+      sessionRecord({ poolsEnabled: false, type: SessionType.SOCIAL_MIX, mode: SessionMode.MIXICANO }),
+      { team1: ["a1", "b1"], team2: ["a2", "b2"] }
+    );
+    const data = tx.queuedMatch.create.mock.calls[0][0].data;
+    expect(JSON.parse(data.matchmakingReasonJson).socialVariety.courtType).toBeNull();
+    expect(data.isAutomatic).toBe(false);
+    expect(result.isAutomatic).toBe(false);
+    expect(result.matchmakingReason).toBeNull();
   });
 
   it("stores planner metadata and an automatic source for automatic queues", async () => {
