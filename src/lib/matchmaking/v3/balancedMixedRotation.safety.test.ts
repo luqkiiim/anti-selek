@@ -10,18 +10,22 @@ import {
   buildBalancedMixedRotationObligations,
   buildBalancedMixedBatchSelectionOverride,
   buildBalancedMixedSingleSelectionOverride,
+  compareBalancedMixedProjectedCounts,
+  isBalancedMixedProjectedFairnessWithinBounds,
   isBalancedMixedRotationBatchWithinBounds,
 } from "./balancedMixedRotation";
-import type {
-  ActiveMatchmakerV3Player,
-  V3BalancedMixedRotationMetadata,
-  V3BatchSelection,
-  V3CompletedMatch,
-  V3SingleCourtSelection,
+import {
+  isV3SelectionOverrideRejection,
+  type ActiveMatchmakerV3Player,
+  type V3BalancedMixedRotationMetadata,
+  type V3BatchSelection,
+  type V3CompletedMatch,
+  type V3SingleCourtSelection,
 } from "./types";
 import { findBestBatchSelectionV3 } from "./batch";
 import { findBestSingleCourtSelectionV3 } from "./singleCourt";
 import type { V3MixedHistoryMatch } from "./mixedVariety";
+import { evaluateBalancedMixedRotationBatchCandidate } from "@/app/api/sessions/[code]/generate-match/selection";
 
 const BASE_TIME = "2026-09-30T10:00:00.000Z";
 
@@ -169,7 +173,7 @@ function event(
 }
 
 describe("Balanced Mixed rotation safety", () => {
-  it("caps whole-batch deferrals at two and permits a one-match replacement gap", () => {
+  it("caps whole-batch deferrals at two and never replaces with a higher projected count", () => {
     const players = [
       createPlayer("P1", "UPPER"),
       createPlayer("P2", "UPPER"),
@@ -179,17 +183,13 @@ describe("Balanced Mixed rotation safety", () => {
       createPlayer("P6", "UPPER"),
       createPlayer("P7", "LOWER"),
       createPlayer("P8", "LOWER"),
-      createPlayer("P9", "LOWER", { effectiveMatchCount: 1 }),
-      createPlayer("P10", "LOWER", { effectiveMatchCount: 1 }),
+      createPlayer("P9", "LOWER"),
+      createPlayer("P10", "LOWER"),
       createPlayer("P11", "LOWER"),
     ];
     for (const id of ["P4", "P8"]) {
       players.find((player) => player.userId === id)!.effectiveMatchCount = 0;
     }
-    for (const id of ["P9", "P10"]) {
-      players.find((player) => player.userId === id)!.effectiveMatchCount = 1;
-    }
-
     const baselineSelections = [
       createSelection(players, ["P1", "P2", "P3", "P4"]),
       createSelection(players, ["P5", "P6", "P7", "P8"]),
@@ -223,7 +223,11 @@ describe("Balanced Mixed rotation safety", () => {
       })
     ).toBe(false);
 
-    players.find((player) => player.userId === "P9")!.effectiveMatchCount = 2;
+    Object.assign(players.find((player) => player.userId === "P9")!, {
+      matchesPlayed: 2,
+      matchmakingBaseline: 2,
+      effectiveMatchCount: 2,
+    });
     expect(
       isBalancedMixedRotationBatchWithinBounds({
         baselineSelections,
@@ -263,6 +267,272 @@ describe("Balanced Mixed rotation safety", () => {
         respectPlayerRest: true,
       })
     ).toBe(false);
+  });
+
+  it("repairs an existing count gap before catching up an older obligation", () => {
+    const players = [
+      createPlayer("U1", "UPPER", { matchesPlayed: 4, matchmakingBaseline: 4 }),
+      createPlayer("U2", "UPPER", { matchesPlayed: 3, matchmakingBaseline: 3 }),
+      createPlayer("U3", "UPPER", { matchesPlayed: 2, matchmakingBaseline: 2 }),
+      createPlayer("U4", "UPPER", { matchesPlayed: 2, matchmakingBaseline: 2 }),
+      createPlayer("L1", "LOWER", { matchesPlayed: 3, matchmakingBaseline: 3 }),
+      createPlayer("L2", "LOWER", { matchesPlayed: 2, matchmakingBaseline: 2 }),
+      createPlayer("L3", "LOWER", { matchesPlayed: 2, matchmakingBaseline: 2 }),
+      createPlayer("L4", "LOWER", { matchesPlayed: 2, matchmakingBaseline: 2 }),
+    ];
+    const obligatedThreeCountSelection = createSelection(
+      players,
+      ["U2", "U3", "L2", "L3"]
+    );
+    const underplayedSelection = createSelection(
+      players,
+      ["U3", "U4", "L2", "L3"]
+    );
+    const pendingObligations = [
+      { playerId: "U2", decisionId: "older", timestamp: new Date(BASE_TIME) },
+    ];
+    const chooseSingle = buildBalancedMixedSingleSelectionOverride({
+      players,
+      mixedHistoryMatches: [],
+      completedMatches: [],
+      sessionMode: SessionMode.MIXICANO,
+      sessionType: SessionType.POINTS,
+      respectPlayerRest: true,
+      pendingObligations,
+      decisionId: "fairness-recovery-single",
+      timestamp: BASE_TIME,
+    })!;
+
+    const single = chooseSingle({
+      baselineSelection: obligatedThreeCountSelection,
+      candidates: [obligatedThreeCountSelection, underplayedSelection],
+    });
+    if (single === null || isV3SelectionOverrideRejection(single)) {
+      throw new Error("Expected a fair single-court recovery selection");
+    }
+    expect(single?.ids).toEqual(underplayedSelection.ids);
+    expect(single?.balancedMixedRotation?.deferredPlayerIds).toEqual([]);
+    expect(single?.balancedMixedRotation?.servedPlayerIds).toEqual([]);
+
+    const chooseBatch = buildBalancedMixedBatchSelectionOverride({
+      players,
+      mixedHistoryMatches: [],
+      completedMatches: [],
+      sessionMode: SessionMode.MIXICANO,
+      sessionType: SessionType.POINTS,
+      respectPlayerRest: true,
+      pendingObligations,
+      decisionId: "fairness-recovery-batch",
+      timestamp: BASE_TIME,
+    })!;
+    const batch = chooseBatch({
+      baselineSelection: createBatch(obligatedThreeCountSelection, 0),
+      candidates: [
+        createBatch(obligatedThreeCountSelection, 0),
+        createBatch(underplayedSelection, 0),
+      ],
+    });
+    if (batch === null || isV3SelectionOverrideRejection(batch)) {
+      throw new Error("Expected a fair batch recovery selection");
+    }
+    expect(batch?.selections[0]?.ids).toEqual(underplayedSelection.ids);
+    expect(
+      batch?.selections[0]?.balancedMixedRotation?.deferredPlayerIds
+    ).toEqual([]);
+    expect(
+      batch?.selections[0]?.balancedMixedRotation?.servedPlayerIds
+    ).toEqual([]);
+  });
+
+  it("keeps More Rest priority across the additional fair candidate pools", () => {
+    const players = createPlayers(8);
+    for (const id of ["P3", "P7"]) {
+      players.find((player) => player.userId === id)!.moreRestDeficit = 1;
+    }
+    const readyPoolBaseline = createSelection(
+      players,
+      ["P1", "P2", "P5", "P6"],
+      0,
+      80
+    );
+    const widerBetterBalance = createSelection(
+      players,
+      ["P1", "P3", "P5", "P7"],
+      0,
+      0
+    );
+    const choose = buildBalancedMixedSingleSelectionOverride({
+      players,
+      mixedHistoryMatches: [],
+      completedMatches: [],
+      sessionMode: SessionMode.MIXICANO,
+      sessionType: SessionType.POINTS,
+      respectPlayerRest: true,
+    })!;
+
+    const selected = choose({
+      baselineSelection: readyPoolBaseline,
+      candidates: [widerBetterBalance],
+    });
+    if (selected === null || isV3SelectionOverrideRejection(selected)) {
+      throw new Error("Expected the ready-player selection to remain available");
+    }
+    expect(selected.ids).toEqual(readyPoolBaseline.ids);
+
+    const chooseElo = buildBalancedMixedSingleSelectionOverride({
+      players,
+      mixedHistoryMatches: [],
+      completedMatches: [],
+      sessionMode: SessionMode.MIXICANO,
+      sessionType: SessionType.ELO,
+      respectPlayerRest: true,
+    })!;
+    const selectedElo = chooseElo({
+      baselineSelection: createSelection(
+        players,
+        ["P1", "P2", "P5", "P6"],
+        0,
+        80
+      ),
+      candidates: [
+        createSelection(players, ["P1", "P3", "P5", "P7"], 0, 0),
+      ],
+    });
+    if (selectedElo === null || isV3SelectionOverrideRejection(selectedElo)) {
+      throw new Error("Expected the ELO ready-player selection to remain available");
+    }
+    expect(selectedElo.ids).toEqual(readyPoolBaseline.ids);
+
+    const recoveryPlayers = createPlayers(8);
+    for (const id of ["P1", "P5"]) {
+      const player = recoveryPlayers.find((candidate) => candidate.userId === id)!;
+      player.matchesPlayed = 3;
+      player.matchmakingBaseline = 3;
+    }
+    for (const id of ["P3", "P7"]) {
+      recoveryPlayers.find((player) => player.userId === id)!.moreRestDeficit = 1;
+    }
+    const unfairRawBaseline = createSelection(
+      recoveryPlayers,
+      ["P1", "P2", "P5", "P6"],
+      0,
+      0
+    );
+    const readyFairCorrection = createSelection(
+      recoveryPlayers,
+      ["P2", "P4", "P6", "P8"],
+      0,
+      80
+    );
+    const restDueFairCorrection = createSelection(
+      recoveryPlayers,
+      ["P2", "P3", "P6", "P7"],
+      0,
+      0
+    );
+    const recoveryChoose = buildBalancedMixedSingleSelectionOverride({
+      players: recoveryPlayers,
+      mixedHistoryMatches: [],
+      completedMatches: [],
+      sessionMode: SessionMode.MIXICANO,
+      sessionType: SessionType.POINTS,
+      respectPlayerRest: true,
+    })!;
+    const recovered = recoveryChoose({
+      baselineSelection: unfairRawBaseline,
+      candidates: [readyFairCorrection, restDueFairCorrection],
+    });
+    if (recovered === null || isV3SelectionOverrideRejection(recovered)) {
+      throw new Error("Expected a fair recovery selection");
+    }
+    expect(recovered.ids).toEqual(readyFairCorrection.ids);
+  });
+
+  it("accepts a grouped count repair even when court composition does not improve", () => {
+    const players = [
+      createPlayer("U1", "UPPER", { matchesPlayed: 4, matchmakingBaseline: 4 }),
+      createPlayer("U2", "UPPER", { matchesPlayed: 3, matchmakingBaseline: 3 }),
+      createPlayer("U3", "UPPER", { matchesPlayed: 3, matchmakingBaseline: 3 }),
+      createPlayer("U4", "UPPER", { matchesPlayed: 3, matchmakingBaseline: 3 }),
+      createPlayer("U5", "UPPER", { matchesPlayed: 2, matchmakingBaseline: 2 }),
+      createPlayer("U6", "UPPER", { matchesPlayed: 2, matchmakingBaseline: 2 }),
+      createPlayer("U7", "UPPER", { matchesPlayed: 2, matchmakingBaseline: 2 }),
+      createPlayer("U8", "UPPER", { matchesPlayed: 2, matchmakingBaseline: 2 }),
+      createPlayer("L1", "LOWER", { matchesPlayed: 4, matchmakingBaseline: 4 }),
+      createPlayer("L2", "LOWER", { matchesPlayed: 3, matchmakingBaseline: 3 }),
+      createPlayer("L3", "LOWER", { matchesPlayed: 3, matchmakingBaseline: 3 }),
+      createPlayer("L4", "LOWER", { matchesPlayed: 3, matchmakingBaseline: 3 }),
+      createPlayer("L5", "LOWER", { matchesPlayed: 2, matchmakingBaseline: 2 }),
+      createPlayer("L6", "LOWER", { matchesPlayed: 2, matchmakingBaseline: 2 }),
+      createPlayer("L7", "LOWER", { matchesPlayed: 2, matchmakingBaseline: 2 }),
+      createPlayer("L8", "LOWER", { matchesPlayed: 2, matchmakingBaseline: 2 }),
+    ];
+    const baselineSelections = [
+      createSelection(players, ["U2", "U5", "L5", "L6"]),
+      createSelection(players, ["U6", "U7", "L7", "L8"]),
+    ];
+    const candidateSelections = [
+      createSelection(players, ["U5", "U6", "L5", "L6"]),
+      createSelection(players, ["U7", "U8", "L7", "L8"]),
+    ];
+    const selectedIds = candidateSelections.flatMap((selection) => selection.ids);
+
+    expect(
+      isBalancedMixedProjectedFairnessWithinBounds(players, selectedIds)
+    ).toBe(true);
+    expect(
+      compareBalancedMixedProjectedCounts(
+        selectedIds,
+        baselineSelections.flatMap((selection) => selection.ids),
+        players,
+        new Map()
+      )
+    ).toBeLessThan(0);
+    const decision = evaluateBalancedMixedRotationBatchCandidate({
+      baselineSelections,
+      candidateSelections,
+      players,
+      outstandingMatchCountByUserId: new Map(),
+      completedMatches: [],
+      pendingObligations: [
+        { playerId: "U2", decisionId: "older", timestamp: new Date(BASE_TIME) },
+      ],
+      sessionType: SessionType.POINTS,
+      respectPlayerRest: true,
+      improvesOtherRotationGoal: false,
+    });
+    expect(decision).toEqual({ accepted: true, improvesProjectedCounts: true });
+    const newDeferredPlayerIds = decision.improvesProjectedCounts
+      ? []
+      : baselineSelections
+          .flatMap((selection) => selection.ids)
+          .filter((userId) => !selectedIds.includes(userId));
+    expect(newDeferredPlayerIds).toEqual([]);
+
+    const compositionImprovedDecision = evaluateBalancedMixedRotationBatchCandidate({
+      baselineSelections,
+      candidateSelections,
+      players,
+      outstandingMatchCountByUserId: new Map(),
+      completedMatches: [],
+      pendingObligations: [
+        { playerId: "U2", decisionId: "older", timestamp: new Date(BASE_TIME) },
+      ],
+      sessionType: SessionType.POINTS,
+      respectPlayerRest: true,
+      improvesOtherRotationGoal: true,
+    });
+    expect(compositionImprovedDecision).toEqual({
+      accepted: true,
+      improvesProjectedCounts: true,
+    });
+    const deferralsAfterCombinedImprovement = compositionImprovedDecision
+      .improvesProjectedCounts
+      ? []
+      : baselineSelections
+          .flatMap((selection) => selection.ids)
+          .filter((userId) => !selectedIds.includes(userId));
+    expect(deferralsAfterCombinedImprovement).toEqual([]);
   });
 
   it("does not add a player who is owed more rest, and bypasses rest-only guards when disabled", () => {
@@ -407,9 +677,12 @@ describe("Balanced Mixed rotation safety", () => {
       baselineSelection: baseline,
       candidates: [catchupU3, catchupU4],
     });
-    expect(selected?.ids).toEqual(catchupU3.ids);
-    expect(selected?.balancedMixedRotation?.servedPlayerIds).toEqual(["U3"]);
-    expect(selected?.balancedMixedRotation?.deferredPlayerIds).toEqual(["U2"]);
+    if (selected === null || isV3SelectionOverrideRejection(selected)) {
+      throw new Error("Expected a single-court catch-up selection");
+    }
+    expect(selected.ids).toEqual(catchupU3.ids);
+    expect(selected.balancedMixedRotation?.servedPlayerIds).toEqual(["U3"]);
+    expect(selected.balancedMixedRotation?.deferredPlayerIds).toEqual(["U2"]);
 
     const owedU2 = buildBalancedMixedSingleSelectionOverride({
       players,
@@ -428,12 +701,18 @@ describe("Balanced Mixed rotation safety", () => {
       baselineSelection: baseline,
       candidates: [catchupU3],
     });
-    expect(attemptedRedeferral?.ids).toEqual(baseline.ids);
-    expect(attemptedRedeferral?.balancedMixedRotation?.servedPlayerIds).toEqual([
+    if (
+      attemptedRedeferral === null ||
+      isV3SelectionOverrideRejection(attemptedRedeferral)
+    ) {
+      throw new Error("Expected the owed-player selection to remain available");
+    }
+    expect(attemptedRedeferral.ids).toEqual(baseline.ids);
+    expect(attemptedRedeferral.balancedMixedRotation?.servedPlayerIds).toEqual([
       "U2",
     ]);
     expect(
-      attemptedRedeferral?.balancedMixedRotation?.deferredPlayerIds
+      attemptedRedeferral.balancedMixedRotation?.deferredPlayerIds
     ).toEqual([]);
   });
 
@@ -468,12 +747,15 @@ describe("Balanced Mixed rotation safety", () => {
       baselineSelection: createBatch(baseline, 0),
       candidates: [createBatch(catchup, 100)],
     });
-    expect(selected?.selections[0]?.ids).toEqual(catchup.ids);
-    expect(selected?.selections[0]?.balancedMixedRotation?.servedPlayerIds).toEqual([
+    if (selected === null || isV3SelectionOverrideRejection(selected)) {
+      throw new Error("Expected a batch catch-up selection");
+    }
+    expect(selected.selections[0]?.ids).toEqual(catchup.ids);
+    expect(selected.selections[0]?.balancedMixedRotation?.servedPlayerIds).toEqual([
       "U3",
     ]);
     expect(
-      selected?.selections[0]?.balancedMixedRotation?.deferredPlayerIds
+      selected.selections[0]?.balancedMixedRotation?.deferredPlayerIds
     ).toEqual(["U2"]);
   });
 

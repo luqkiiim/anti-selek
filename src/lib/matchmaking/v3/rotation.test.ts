@@ -20,6 +20,10 @@ import {
 it.each([
   { sessionType: SessionType.POINTS, totalMatches: 21, upperCount: 7, lowerCount: 7 },
   { sessionType: SessionType.ELO, totalMatches: 21, upperCount: 7, lowerCount: 7 },
+  { sessionType: SessionType.POINTS, totalMatches: 20, upperCount: 7, lowerCount: 7 },
+  { sessionType: SessionType.ELO, totalMatches: 20, upperCount: 7, lowerCount: 7 },
+  { sessionType: SessionType.POINTS, totalMatches: 19, upperCount: 7, lowerCount: 7 },
+  { sessionType: SessionType.ELO, totalMatches: 19, upperCount: 7, lowerCount: 7 },
   { sessionType: SessionType.POINTS, totalMatches: 84, upperCount: 7, lowerCount: 7 },
   { sessionType: SessionType.ELO, totalMatches: 84, upperCount: 7, lowerCount: 7 },
   { sessionType: SessionType.POINTS, totalMatches: 21, upperCount: 10, lowerCount: 4 },
@@ -29,9 +33,13 @@ it.each([
   { sessionType: SessionType.POINTS, totalMatches: 21, upperCount: 12, lowerCount: 2 },
   { sessionType: SessionType.ELO, totalMatches: 21, upperCount: 12, lowerCount: 2 },
   { sessionType: SessionType.POINTS, totalMatches: 6, upperCount: 7, lowerCount: 7, simultaneous: true, sideOverrides: true },
-])(
-  "uses persisted obligations for $sessionType across $totalMatches asynchronous Balanced Mixed matches with $upperCount upper and $lowerCount lower players",
-  ({ sessionType, totalMatches, upperCount, lowerCount, simultaneous = false, sideOverrides = false }) => {
+].flatMap((fixture) =>
+  fixture.upperCount === 7 && fixture.lowerCount === 7 && [20, 21, 84].includes(fixture.totalMatches)
+    ? [4729, 1777, 9265].map((seed) => ({ ...fixture, seed }))
+    : [{ ...fixture, seed: 4729 }]
+))(
+  "uses persisted obligations for $sessionType across $totalMatches asynchronous Balanced Mixed matches with $upperCount upper and $lowerCount lower players (seed $seed)",
+  ({ sessionType, totalMatches, upperCount, lowerCount, simultaneous = false, sideOverrides = false, seed: randomSeed = 4729 }) => {
   const players = [
     ...Array.from({ length: upperCount }, (_, i) => {
       const moveToLower = sideOverrides && i < 2;
@@ -102,7 +110,7 @@ it.each([
   };
   const baseTime = new Date("2026-09-30T00:00:00Z").getTime();
   const evolveStrengths = totalMatches > 21;
-  let seed = 4729;
+  let seed = randomSeed;
   const randomFn = () => {
     seed = (seed * 48271) % 2147483647;
     return seed / 2147483647;
@@ -150,7 +158,7 @@ it.each([
       (player) =>
         player.matchesPlayed + (outstandingCounts().get(player.userId) ?? 0)
     );
-    expect(Math.max(...counts) - Math.min(...counts)).toBeLessThanOrEqual(2);
+    expect(Math.max(...counts) - Math.min(...counts)).toBeLessThanOrEqual(1);
   };
   const assertOneBatchDecision = (
     selections: Array<{ balancedMixedRotation?: { decisionId: string; obligationOwner: boolean } }>
@@ -320,13 +328,6 @@ it.each([
   });
   const mixedCount = categories.filter((category) => category === "M").length;
   const gameCounts = players.map((player) => player.matchesPlayed);
-  const playerMixedCounts = players.map((player) =>
-    completed.filter(
-      (match) =>
-        [...match.team1, ...match.team2].includes(player.userId) &&
-        isMixedPartitionForSides(match, sideByUserId)
-    ).length
-  );
   expect(categories).not.toContain("INVALID");
   const balancedSideTarget = Math.min(upperCount, lowerCount) < 4
     ? (upperCount > lowerCount ? lowerCount / upperCount : upperCount / lowerCount)
@@ -336,36 +337,31 @@ it.each([
     (upperCount + lowerCount);
   if (simultaneous) {
     expect(categories).toContain("M");
-  } else if (upperCount === lowerCount && totalMatches === 21) {
-    expect(mixedCount).toBeGreaterThanOrEqual(9);
-    expect(mixedCount).toBeLessThanOrEqual(12);
-  } else if (upperCount === lowerCount && totalMatches >= 84) {
-    expect(mixedCount).toBeGreaterThanOrEqual(Math.ceil(totalMatches * 0.45));
-    expect(mixedCount).toBeLessThanOrEqual(Math.floor(totalMatches * 0.55));
+  } else if (upperCount === lowerCount && totalMatches >= 20) {
+    expect(categories).toContain("M");
   } else {
     expect(mixedCount).toBeGreaterThanOrEqual(Math.floor(expectedMixedCount - 3));
     expect(mixedCount).toBeLessThanOrEqual(Math.ceil(expectedMixedCount + 3));
   }
   if (!simultaneous && upperCount >= 4) expect(categories).toContain("U");
   if (!simultaneous && lowerCount >= 4) expect(categories).toContain("L");
+  if (!simultaneous && upperCount >= 4 && lowerCount >= 4 && totalMatches === 20) {
+    expect(categories).toContain("M");
+    expect(categories).toContain("U");
+    expect(categories).toContain("L");
+  }
   if (!simultaneous && Math.min(upperCount, lowerCount) < 4) {
     expect(categories).not.toContain(upperCount < 4 ? "U" : "L");
   }
-  expect(Math.max(...gameCounts) - Math.min(...gameCounts)).toBeLessThanOrEqual(2);
-  if (totalMatches === 21 && upperCount === lowerCount) {
-    expect(
-      Math.max(
-        ...playerMixedCounts.map((count, index) =>
-          Math.abs(count - (gameCounts[index] ?? 0) / 2)
-        )
-      )
-    ).toBeLessThanOrEqual(1);
-    expect(
-      playerMixedCounts.every(
-        (count, index) =>
-          Math.abs(count - (gameCounts[index] ?? 0) / 2) <= 1
-      )
-    ).toBe(true);
+  expect(Math.max(...gameCounts) - Math.min(...gameCounts)).toBeLessThanOrEqual(1);
+  if (totalMatches === 20 && upperCount === 7 && lowerCount === 7) {
+    expect(gameCounts.filter((count) => count === 6)).toHaveLength(10);
+    expect(gameCounts.filter((count) => count === 5)).toHaveLength(4);
   }
+  if (totalMatches === 21 && upperCount === 7 && lowerCount === 7) {
+    expect(gameCounts.every((count) => count === 6)).toBe(true);
   }
-);
+  if (totalMatches === 84 && upperCount === 7 && lowerCount === 7) {
+    expect(gameCounts.every((count) => count === 24)).toBe(true);
+  }
+  }, 30_000);

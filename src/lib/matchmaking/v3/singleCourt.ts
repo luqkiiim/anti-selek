@@ -47,6 +47,7 @@ import type {
   V3SingleCourtSelection,
   V3SingleCourtSelectionOverride,
 } from "./types";
+import { isV3SelectionOverrideRejection } from "./types";
 
 function buildCombinations<T>(items: T[], size: number): T[][] {
   if (size === 0) {
@@ -685,7 +686,10 @@ export function findBestSingleCourtSelectionV3<T extends MatchmakerV3Player>(
       selectedCandidatePool = effectiveCandidatePool;
       rotationCandidates.push(...candidatePoolSearch.candidates);
       rotationPoolsCollected = 1;
-      if (!selectionOverride || requiresArrivalPriority) {
+      if (
+        !selectionOverride ||
+        (requiresArrivalPriority && !selectionOverride.collectAllCandidatePools)
+      ) {
         break;
       }
       continue;
@@ -694,18 +698,25 @@ export function findBestSingleCourtSelectionV3<T extends MatchmakerV3Player>(
     if (selectionOverride && rotationPoolsCollected > 0) {
       rotationCandidates.push(...candidatePoolSearch.candidates);
       rotationPoolsCollected += 1;
-      if (rotationPoolsCollected >= 2) {
+      if (
+        !selectionOverride.collectAllCandidatePools &&
+        rotationPoolsCollected >= 2
+      ) {
         break;
       }
     }
   }
 
   if (bestSelection && selectionOverride) {
-    bestSelection =
-      selectionOverride({
-        baselineSelection: bestSelection,
-        candidates: rotationCandidates,
-      }) ?? bestSelection;
+    const overrideSelection = selectionOverride({
+      baselineSelection: bestSelection,
+      candidates: rotationCandidates,
+    });
+    if (isV3SelectionOverrideRejection(overrideSelection)) {
+      bestSelection = null;
+    } else if (overrideSelection !== null) {
+      bestSelection = overrideSelection;
+    }
   }
 
   const selectedIds = new Set(bestSelection?.ids ?? []);

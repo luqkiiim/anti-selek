@@ -153,10 +153,31 @@ export interface V3BalancedMixedRotationMetadata {
 
 export type V3SingleCourtSelectionOverride<
   T extends ActiveMatchmakerV3Player = ActiveMatchmakerV3Player,
-> = (args: {
+> = ((args: {
   baselineSelection: V3SingleCourtSelection<T>;
   candidates: V3SingleCourtSelection<T>[];
-}) => V3SingleCourtSelection<T> | null;
+}) => V3SingleCourtSelection<T> | null | V3SelectionOverrideRejection) & {
+  collectAllCandidatePools?: boolean;
+};
+
+export interface V3SelectionOverrideRejection {
+  type: "V3_SELECTION_OVERRIDE_REJECTED";
+}
+
+export const V3_SELECTION_OVERRIDE_REJECTED: V3SelectionOverrideRejection = {
+  type: "V3_SELECTION_OVERRIDE_REJECTED",
+};
+
+export function isV3SelectionOverrideRejection(
+  value: unknown
+): value is V3SelectionOverrideRejection {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "type" in value &&
+    value.type === V3_SELECTION_OVERRIDE_REJECTED.type
+  );
+}
 
 export type V3BatchSelectionOverride<
   T extends ActiveMatchmakerV3Player = ActiveMatchmakerV3Player,
@@ -164,7 +185,7 @@ export type V3BatchSelectionOverride<
   baselineSelection: V3BatchSelection<T>;
   candidates: V3BatchSelection<T>[];
   searchInterrupted?: boolean;
-}) => V3BatchSelection<T> | null;
+}) => V3BatchSelection<T> | null | V3SelectionOverrideRejection;
 
 export interface V3SingleCourtDebug {
   eligiblePlayerIds: string[];

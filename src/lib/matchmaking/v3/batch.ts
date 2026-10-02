@@ -54,6 +54,7 @@ import type {
   V3SelectionConstraints,
   V3SingleCourtSelection,
 } from "./types";
+import { isV3SelectionOverrideRejection } from "./types";
 
 const MAX_SINGLE_COURT_CANDIDATES = 24;
 const MAX_TWO_COURT_CANDIDATES = 20;
@@ -1581,35 +1582,35 @@ export function findBestBatchSelectionV3<T extends MatchmakerV3Player>(
 
   if (finalSelection !== null) {
     if (selectionOverride) {
-      if (!rotationSearchInterrupted && rotationCandidates.length > 0) {
-        finalSelection =
-          selectionOverride({
-            baselineSelection: finalSelection,
-            candidates: rotationCandidates,
-          }) ?? finalSelection;
-      } else if (rotationSearchInterrupted) {
-        finalSelection =
-          selectionOverride({
-            baselineSelection: finalSelection,
-            candidates: [],
-            searchInterrupted: true,
-          }) ?? finalSelection;
+      const overrideSelection = selectionOverride({
+        baselineSelection: finalSelection,
+        candidates: rotationCandidates,
+        searchInterrupted: rotationSearchInterrupted,
+      });
+      if (isV3SelectionOverrideRejection(overrideSelection)) {
+        finalSelection = null;
+      } else if (overrideSelection !== null) {
+        finalSelection = overrideSelection;
       }
     }
-    debug.failureReason = null;
-    debug.chosenQuartets = finalSelection.selections.map(
-      (selection) => selection.ids
-    );
-    debug.chosenMaxBalanceGap = finalSelection.maxBalanceGap;
-    debug.chosenTotalBalanceGap = finalSelection.totalBalanceGap;
-    debug.chosenMaxPointDiffGap = finalSelection.maxPointDiffGap;
-    debug.chosenTotalPointDiffGap = finalSelection.totalPointDiffGap;
-    debug.chosenTotalPartnerRepeatPenalty =
-      finalSelection.totalPartnerRepeatPenalty;
-    debug.chosenTotalOpponentRepeatPenalty =
-      finalSelection.totalOpponentRepeatPenalty;
-    debug.chosenTotalExactRematchPenalty =
-      finalSelection.totalExactRematchPenalty;
+    if (finalSelection) {
+      debug.failureReason = null;
+      debug.chosenQuartets = finalSelection.selections.map(
+        (selection) => selection.ids
+      );
+      debug.chosenMaxBalanceGap = finalSelection.maxBalanceGap;
+      debug.chosenTotalBalanceGap = finalSelection.totalBalanceGap;
+      debug.chosenMaxPointDiffGap = finalSelection.maxPointDiffGap;
+      debug.chosenTotalPointDiffGap = finalSelection.totalPointDiffGap;
+      debug.chosenTotalPartnerRepeatPenalty =
+        finalSelection.totalPartnerRepeatPenalty;
+      debug.chosenTotalOpponentRepeatPenalty =
+        finalSelection.totalOpponentRepeatPenalty;
+      debug.chosenTotalExactRematchPenalty =
+        finalSelection.totalExactRematchPenalty;
+    } else {
+      debug.failureReason = "NOT_ENOUGH_NON_OVERLAPPING_COURTS";
+    }
   }
 
   return {

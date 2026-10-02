@@ -64,7 +64,10 @@ import {
   buildBalancedMixedRotationObligations,
   buildBalancedMixedBatchSelectionOverride,
   buildBalancedMixedSingleSelectionOverride,
+  compareBalancedMixedProjectedCounts,
+  getBalancedMixedTrueConsecutiveStreaks,
   getBalancedMixedBatchCategoryPenalty,
+  isBalancedMixedProjectedFairnessWithinBounds,
   isBalancedMixedRotationBatchWithinBounds,
 } from "@/lib/matchmaking/v3/balancedMixedRotation";
 import {
@@ -1574,6 +1577,7 @@ function buildPlayerGroupSelectionRunner({
               respectPlayerRest: sessionData.respectPlayerRest,
               outstandingMatchCountByUserId,
               pendingObligations: pendingRotationObligations,
+              enforceProjectedFairness: false,
               decisionId: rotationDecisionId,
               timestamp: rotationTimestamp,
               alreadyDeferredPlayerIds: rotationDeferredPlayerIds,
@@ -1900,6 +1904,19 @@ export function selectSingleCourtMatch({
   }
 
   const v3Players = buildV3Players(sessionData, playersById, rankedCandidates);
+  const outstandingMatchCountByUserId =
+    buildOutstandingMatchCountByUserId(sessionData);
+  const buildRotationOverride = () =>
+    buildBalancedMixedSingleSelectionOverride<MatchmakerV3Player>({
+      players: v3Players,
+      mixedHistoryMatches,
+      completedMatches,
+      sessionMode: getMatchmakerSessionMode(sessionData),
+      sessionType: getMatchmakerSessionType(sessionData),
+      respectPlayerRest: sessionData.respectPlayerRest,
+      outstandingMatchCountByUserId,
+      pendingObligations: pendingRotationObligations,
+    });
   const previousQuartetKey = getV3QuartetKey(reshuffleSource.ids);
   const previousPartitionKey = getExactPartitionKey(reshuffleSource.partition);
   const selectedQuartetKey = getV3QuartetKey(initialResult.selection.ids);
@@ -1917,6 +1934,7 @@ export function selectSingleCourtMatch({
     respectPlayerRest: sessionData.respectPlayerRest,
     completedMatches,
     mixedHistoryMatches,
+    selectionOverride: buildRotationOverride(),
     excludedQuartetKey: previousQuartetKey,
   });
 
@@ -1934,6 +1952,7 @@ export function selectSingleCourtMatch({
     respectPlayerRest: sessionData.respectPlayerRest,
     completedMatches,
     mixedHistoryMatches,
+    selectionOverride: buildRotationOverride(),
     excludedPartitionKey: previousPartitionKey,
   });
 
@@ -2316,6 +2335,10 @@ function compareGroupedBatchSelections(
     pendingObligations: ReturnType<
       typeof buildBalancedMixedRotationObligationsForSession
     >;
+  },
+  fairnessPolicy?: {
+    players: MatchmakerV3Player[];
+    outstandingMatchCountByUserId: ReadonlyMap<string, number>;
   }
 ) {
   const getPlayers = (selections: readonly PoolAwareSelection[]) =>
@@ -2331,6 +2354,15 @@ function compareGroupedBatchSelections(
     );
   const leftPlayers = getPlayers(left);
   const rightPlayers = getPlayers(right);
+  if (fairnessPolicy) {
+    const projectedCompare = compareBalancedMixedProjectedCounts(
+      left.flatMap((selection) => selection.ids),
+      right.flatMap((selection) => selection.ids),
+      fairnessPolicy.players,
+      fairnessPolicy.outstandingMatchCountByUserId
+    );
+    if (projectedCompare !== 0) return projectedCompare;
+  }
   if (rotationPolicy) {
     const v3Baseline = getV3Selections(rotationPolicy.baselineSelections);
     const leftV3 = getV3Selections(left);
@@ -2386,14 +2418,16 @@ function compareGroupedBatchSelections(
       if (Math.abs(categoryDiff) > 1e-9) return categoryDiff;
     }
   }
-  const fairnessCompare = compareNumberVectors(
-    leftPlayers
-      .map((player) => player.effectiveMatchCount ?? 0)
-      .sort((a, b) => a - b),
-    rightPlayers
-      .map((player) => player.effectiveMatchCount ?? 0)
-      .sort((a, b) => a - b)
-  );
+  const fairnessCompare = fairnessPolicy
+    ? 0
+    : compareNumberVectors(
+        leftPlayers
+          .map((player) => player.effectiveMatchCount ?? 0)
+          .sort((a, b) => a - b),
+        rightPlayers
+          .map((player) => player.effectiveMatchCount ?? 0)
+          .sort((a, b) => a - b)
+      );
   if (fairnessCompare !== 0) return fairnessCompare;
 
   const leftPriorityTimes = leftPlayers
@@ -2528,6 +2562,87 @@ function compareGroupedBatchSelections(
   };
 
   return compareNumberVectors(getV3Metrics(left), getV3Metrics(right));
+}
+
+export function evaluateBalancedMixedRotationBatchCandidate({
+  baselineSelections,
+  candidateSelections,
+  players,
+  outstandingMatchCountByUserId,
+  completedMatches,
+  pendingObligations,
+  sessionType,
+  respectPlayerRest,
+  improvesOtherRotationGoal,
+}: {
+  baselineSelections: readonly V3SingleCourtSelection[];
+  candidateSelections: readonly V3SingleCourtSelection[];
+  players: MatchmakerV3Player[];
+  outstandingMatchCountByUserId: ReadonlyMap<string, number>;
+  completedMatches: ReturnType<typeof buildCompletedMatches>;
+  pendingObligations: ReturnType<
+    typeof buildBalancedMixedRotationObligationsForSession
+  >;
+  sessionType: SessionType;
+  respectPlayerRest: boolean;
+  improvesOtherRotationGoal: boolean;
+}) {
+  const improvesProjectedCounts =
+    compareBalancedMixedProjectedCounts(
+      candidateSelections.flatMap((selection) => selection.ids),
+      baselineSelections.flatMap((selection) => selection.ids),
+      players,
+      outstandingMatchCountByUserId
+    ) < 0;
+  const consecutiveStreaks = getBalancedMixedTrueConsecutiveStreaks(
+    completedMatches
+  );
+  let isSafe = isBalancedMixedRotationBatchWithinBounds({
+    baselineSelections,
+    candidateSelections,
+    players,
+    outstandingMatchCountByUserId,
+    completedMatches,
+    pendingObligations,
+    sessionType,
+    respectPlayerRest,
+  });
+  if (improvesProjectedCounts) {
+    const baselineIds = new Set(
+      baselineSelections.flatMap((selection) => selection.ids)
+    );
+    const candidateIds = new Set(
+      candidateSelections.flatMap((selection) => selection.ids)
+    );
+    const baselinePlayers = baselineSelections.flatMap(
+      (selection) => selection.players
+    );
+    const addedPlayers = candidateSelections
+      .flatMap((selection) => selection.players)
+      .filter((player) => !baselineIds.has(player.userId));
+    const retainsArrivalPriority = baselinePlayers
+      .filter((player) => player.arrivalPriorityAt)
+      .every((player) => candidateIds.has(player.userId));
+    const preservesRestGuards =
+      !respectPlayerRest ||
+      (addedPlayers.every((player) => player.moreRestDeficit <= 0) &&
+        addedPlayers.every(
+          (player) =>
+            (consecutiveStreaks.get(player.userId) ?? 0) < 2
+        ));
+    isSafe =
+      isBalancedMixedProjectedFairnessWithinBounds(
+        players,
+        [...candidateIds],
+        outstandingMatchCountByUserId
+      ) &&
+      retainsArrivalPriority &&
+      preservesRestGuards;
+  }
+  return {
+    accepted: isSafe && (improvesOtherRotationGoal || improvesProjectedCounts),
+    improvesProjectedCounts,
+  };
 }
 
 export function selectBatchMatches({
@@ -2695,7 +2810,8 @@ export function selectBatchMatches({
       rotationDecisionId: string,
       enableRotation: boolean,
       deadline: number,
-      rotationPolicy?: Parameters<typeof compareGroupedBatchSelections>[3]
+      rotationPolicy?: Parameters<typeof compareGroupedBatchSelections>[3],
+      fairnessPolicy?: Parameters<typeof compareGroupedBatchSelections>[4]
     ): { selections: PoolAwareSelection[] | null; interrupted: boolean } => {
       let bestSelections: PoolAwareSelection[] | null = null;
       let exploredBranches = 0;
@@ -2706,13 +2822,28 @@ export function selectBatchMatches({
       ) => {
         exploredBranches += 1;
         if (selections.length === compositions.length) {
+          const selectionsV3 = fairnessPolicy
+            ? getV3Selections(selections)
+            : null;
+          if (
+            fairnessPolicy &&
+            (!selectionsV3 ||
+              !isBalancedMixedProjectedFairnessWithinBounds(
+                fairnessPolicy.players,
+                selections.flatMap((selection) => selection.ids),
+                fairnessPolicy.outstandingMatchCountByUserId
+              ))
+          ) {
+            return;
+          }
           if (
             !bestSelections ||
             compareGroupedBatchSelections(
               selections,
               bestSelections,
               sessionData,
-              rotationPolicy
+              rotationPolicy,
+              fairnessPolicy
             ) < 0
           ) {
             bestSelections = selections;
@@ -2787,6 +2918,14 @@ export function selectBatchMatches({
       };
     };
 
+    const projectedFairnessPolicy =
+      rotationScopeEnabled && rotationPlayers
+        ? {
+            players: rotationPlayers,
+            outstandingMatchCountByUserId: rotationOutstandingCounts,
+          }
+        : undefined;
+
     for (const plan of plans) {
       const compositions = orderForPhysicalCourts(plan.compositions);
       const rotationDecisionId = randomUUID();
@@ -2800,7 +2939,9 @@ export function selectBatchMatches({
               planDeadline,
               Date.now() + Math.floor(MAX_GROUP_BATCH_SEARCH_MS / 2)
             )
-          : planDeadline
+          : planDeadline,
+        undefined,
+        projectedFairnessPolicy
       );
       const baselineSelections = baselineSearch.selections;
       const rotationPolicy =
@@ -2821,13 +2962,15 @@ export function selectBatchMatches({
               rotationDecisionId,
               true,
               planDeadline,
-              rotationPolicy
+              rotationPolicy,
+              projectedFairnessPolicy
             )
           : null;
       const rotationCandidates =
         rotationSearch && !rotationSearch.interrupted
           ? rotationSearch.selections
           : null;
+      let selectedForProjectedCountRepair = false;
       const selections = (() => {
         if (!baselineSelections || !rotationPolicy || !rotationCandidates) {
           return baselineSelections;
@@ -2869,7 +3012,7 @@ export function selectBatchMatches({
           (Math.abs(candidatePersonalPenalty - baselinePersonalPenalty) <= 1e-9 &&
             candidateCategoryPenalty < baselineCategoryPenalty - 1e-9) ||
           newlyServedObligation;
-        const isSafe = isBalancedMixedRotationBatchWithinBounds({
+        const rotationDecision = evaluateBalancedMixedRotationBatchCandidate({
           baselineSelections: baselineV3,
           candidateSelections: candidateV3,
           players: rotationPlayers!,
@@ -2878,8 +3021,11 @@ export function selectBatchMatches({
           pendingObligations: rotationPendingObligations,
           sessionType: getMatchmakerSessionType(sessionData),
           respectPlayerRest: sessionData.respectPlayerRest,
+          improvesOtherRotationGoal: improvesComposition,
         });
-        return isSafe && improvesComposition
+        selectedForProjectedCountRepair =
+          rotationDecision.accepted && rotationDecision.improvesProjectedCounts;
+        return rotationDecision.accepted
           ? rotationCandidates
           : baselineSelections;
       })();
@@ -2894,6 +3040,7 @@ export function selectBatchMatches({
           (baselineSelections ?? []).flatMap((selection) => selection.ids)
         );
         const deferredPlayerIds = isRotationSelection
+            && !selectedForProjectedCountRepair
           ? [...baselineIds].filter((userId) => !selectedIds.has(userId))
           : [];
         const servedPlayerIds = rotationPendingObligations
