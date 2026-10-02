@@ -15,6 +15,10 @@ export interface V3MixedVarietyContext {
   targetMixedGameRate: number;
   classifiableMatchCount: number;
   mixedGameCount: number;
+  upperSameSideGameCount: number;
+  lowerSameSideGameCount: number;
+  targetUpperSameSideRate: number;
+  targetLowerSameSideRate: number;
 }
 
 function isOneFromEachSide(
@@ -97,11 +101,33 @@ function getTargetMixedRates(upperCount: number, lowerCount: number) {
   };
 }
 
+function getTargetSameSideRates(
+  upperCount: number,
+  lowerCount: number,
+  mixedRate: number
+) {
+  const sameSideRate = Math.max(0, 1 - mixedRate);
+  if (upperCount >= 4 && lowerCount >= 4) {
+    const upperWeight = upperCount * upperCount;
+    const lowerWeight = lowerCount * lowerCount;
+    const totalWeight = upperWeight + lowerWeight;
+    return {
+      targetUpperSameSideRate: (sameSideRate * upperWeight) / totalWeight,
+      targetLowerSameSideRate: (sameSideRate * lowerWeight) / totalWeight,
+    };
+  }
+
+  return {
+    targetUpperSameSideRate: upperCount >= 4 ? sameSideRate : 0,
+    targetLowerSameSideRate: lowerCount >= 4 ? sameSideRate : 0,
+  };
+}
+
 function getMatchUserIds(match: V3MixedHistoryMatch) {
   return [...new Set([...match.team1, ...match.team2])];
 }
 
-function getMatchClassification(
+export function getMixedMatchClassification(
   match: V3MixedHistoryMatch,
   sideByUserId: Map<string, string | null>
 ) {
@@ -120,11 +146,11 @@ function getMatchClassification(
   }
 
   if (sides.every((side) => side === "UPPER")) {
-    return "SAME_SIDE" as const;
+    return "UPPER" as const;
   }
 
   if (sides.every((side) => side === "LOWER")) {
-    return "SAME_SIDE" as const;
+    return "LOWER" as const;
   }
 
   return null;
@@ -143,6 +169,11 @@ export function buildMixedVarietyContext(
           lowerCount * targetRates.lowerRate) /
         activeSideCount
       : 0;
+  const sameSideTargets = getTargetSameSideRates(
+    upperCount,
+    lowerCount,
+    targetMixedGameRate
+  );
   const targetMixedRateByUserId = new Map<string, number>();
 
   for (const [userId, side] of sideByUserId) {
@@ -157,10 +188,12 @@ export function buildMixedVarietyContext(
   const mixedMatchCountByUserId = new Map<string, number>();
   let classifiableMatchCount = 0;
   let mixedGameCount = 0;
+  let upperSameSideGameCount = 0;
+  let lowerSameSideGameCount = 0;
 
   for (const match of matches) {
     const userIds = getMatchUserIds(match);
-    const classification = getMatchClassification(match, sideByUserId);
+    const classification = getMixedMatchClassification(match, sideByUserId);
     if (!classification) {
       continue;
     }
@@ -168,6 +201,10 @@ export function buildMixedVarietyContext(
     classifiableMatchCount += 1;
     if (classification === "MIXED") {
       mixedGameCount += 1;
+    } else if (classification === "UPPER") {
+      upperSameSideGameCount += 1;
+    } else if (classification === "LOWER") {
+      lowerSameSideGameCount += 1;
     }
 
     for (const userId of userIds) {
@@ -192,6 +229,9 @@ export function buildMixedVarietyContext(
     targetMixedGameRate,
     classifiableMatchCount,
     mixedGameCount,
+    upperSameSideGameCount,
+    lowerSameSideGameCount,
+    ...sameSideTargets,
   };
 }
 

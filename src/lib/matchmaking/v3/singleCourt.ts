@@ -45,6 +45,7 @@ import type {
   V3SingleCourtDebug,
   V3SingleCourtResult,
   V3SingleCourtSelection,
+  V3SingleCourtSelectionOverride,
 } from "./types";
 
 function buildCombinations<T>(items: T[], size: number): T[][] {
@@ -410,6 +411,7 @@ function searchCandidatePool<T extends MatchmakerV3Player>({
       sessionType,
       respectPlayerRest
     ),
+    candidates: selections,
     quartetCount,
     validPartitionCount,
   };
@@ -505,6 +507,7 @@ export function findBestSingleCourtSelectionV3<T extends MatchmakerV3Player>(
     candidatePool,
     candidatePoolVariants,
     selectionConstraints,
+    selectionOverride,
   }: {
     sessionMode: SessionMode;
     sessionType: SessionType;
@@ -526,6 +529,9 @@ export function findBestSingleCourtSelectionV3<T extends MatchmakerV3Player>(
       candidatePool: V3CandidatePool<ActiveMatchmakerV3Player<T>>
     ) => Array<V3CandidatePool<ActiveMatchmakerV3Player<T>>>;
     selectionConstraints?: V3SelectionConstraints<ActiveMatchmakerV3Player<T>>;
+    selectionOverride?: V3SingleCourtSelectionOverride<
+      ActiveMatchmakerV3Player<T>
+    >;
   }
 ): V3SingleCourtResult<ActiveMatchmakerV3Player<T>> {
   const initialCandidatePool =
@@ -605,15 +611,19 @@ export function findBestSingleCourtSelectionV3<T extends MatchmakerV3Player>(
           mixedHistoryMatches ?? completedMatches
         )
       : null;
-  let searchedCandidatePool = initialCandidatePool;
+  let selectedCandidatePool = initialCandidatePool;
   let totalQuartetCount = 0;
   let totalValidPartitionCount = 0;
 
   let bestSelection: V3SingleCourtSelection<ActiveMatchmakerV3Player<T>> | null =
     null;
+  const rotationCandidates: V3SingleCourtSelection<
+    ActiveMatchmakerV3Player<T>
+  >[] = [];
+  let rotationPoolsCollected = 0;
 
   for (const { candidatePool, requiresArrivalPriority } of candidatePoolEntries) {
-    searchedCandidatePool = candidatePool;
+    let effectiveCandidatePool = candidatePool;
 
     let candidatePoolSearch = searchCandidatePool({
       candidatePool,
@@ -645,6 +655,7 @@ export function findBestSingleCourtSelectionV3<T extends MatchmakerV3Player>(
       const relaxedCandidatePool = relaxLockedPlayersForMixedFeasibility(candidatePool);
 
       if (relaxedCandidatePool) {
+        effectiveCandidatePool = relaxedCandidatePool;
         candidatePoolSearch = searchCandidatePool({
           candidatePool: relaxedCandidatePool,
           sessionMode,
@@ -669,25 +680,55 @@ export function findBestSingleCourtSelectionV3<T extends MatchmakerV3Player>(
       }
     }
 
-    if (candidatePoolSearch.bestSelection) {
+    if (!bestSelection && candidatePoolSearch.bestSelection) {
       bestSelection = candidatePoolSearch.bestSelection;
-      break;
+      selectedCandidatePool = effectiveCandidatePool;
+      rotationCandidates.push(...candidatePoolSearch.candidates);
+      rotationPoolsCollected = 1;
+      if (!selectionOverride || requiresArrivalPriority) {
+        break;
+      }
+      continue;
+    }
+
+    if (selectionOverride && rotationPoolsCollected > 0) {
+      rotationCandidates.push(...candidatePoolSearch.candidates);
+      rotationPoolsCollected += 1;
+      if (rotationPoolsCollected >= 2) {
+        break;
+      }
     }
   }
+
+  if (bestSelection && selectionOverride) {
+    bestSelection =
+      selectionOverride({
+        baselineSelection: bestSelection,
+        candidates: rotationCandidates,
+      }) ?? bestSelection;
+  }
+
+  const selectedIds = new Set(bestSelection?.ids ?? []);
+  const debugCandidatePool =
+    candidatePoolEntries.find(({ candidatePool }) =>
+      [...selectedIds].every((userId) =>
+        candidatePool.candidatePlayers.some((player) => player.userId === userId)
+      )
+    )?.candidatePool ?? selectedCandidatePool;
 
   const debug: V3SingleCourtDebug = {
     eligiblePlayerIds: initialCandidatePool.activePlayers.map(
       (player) => player.userId
     ),
     lowestBand: initialCandidatePool.lowestBand,
-    includedBandValues: searchedCandidatePool.includedBandValues,
-    widened: searchedCandidatePool.widened,
-    lockedPlayerIds: searchedCandidatePool.lockedPlayers.map(
+    includedBandValues: debugCandidatePool.includedBandValues,
+    widened: debugCandidatePool.widened,
+    lockedPlayerIds: debugCandidatePool.lockedPlayers.map(
       (player) => player.userId
     ),
     tieZonePlayerIds:
-      searchedCandidatePool.tieZone?.players.map((player) => player.userId) ?? [],
-    candidatePlayerIds: searchedCandidatePool.candidatePlayers.map(
+      debugCandidatePool.tieZone?.players.map((player) => player.userId) ?? [],
+    candidatePlayerIds: debugCandidatePool.candidatePlayers.map(
       (player) => player.userId
     ),
     quartetCount: totalQuartetCount,

@@ -44,6 +44,7 @@ import type {
   ActiveMatchmakerV3Player,
   V3BatchPairingRandomMode,
   V3BatchPairingRandomSalts,
+  V3BatchSelectionOverride,
   V3BatchFailureReason,
   MatchmakerV3Player,
   V3BatchDebug,
@@ -1005,6 +1006,7 @@ function filterBalanceSafeBatches<T extends ActiveMatchmakerV3Player>(
 
 interface BatchSearchAttemptResult<T extends ActiveMatchmakerV3Player> {
   selection: V3BatchSelection<T> | null;
+  candidates: V3BatchSelection<T>[];
   candidatePlayerIds: string[];
   quartetCount: number;
   validQuartetCount: number;
@@ -1027,6 +1029,7 @@ function searchBatchCandidatePlayers<T extends MatchmakerV3Player>({
   selectionConstraints,
   pairingRandomSalts,
   pairingRandomMode,
+  allowAnchorSkipping,
 }: {
   candidatePlayers: ActiveMatchmakerV3Player<T>[];
   lockedIds: Set<string>;
@@ -1047,6 +1050,7 @@ function searchBatchCandidatePlayers<T extends MatchmakerV3Player>({
   selectionConstraints?: V3SelectionConstraints<ActiveMatchmakerV3Player<T>>;
   pairingRandomSalts: V3BatchPairingRandomSalts;
   pairingRandomMode: V3BatchPairingRandomMode;
+  allowAnchorSkipping: boolean;
 }): BatchSearchAttemptResult<ActiveMatchmakerV3Player<T>> {
   const requiredPlayerCount = courtCount * 4;
   const candidatePlayerIds = candidatePlayers.map((player) => player.userId);
@@ -1058,6 +1062,7 @@ function searchBatchCandidatePlayers<T extends MatchmakerV3Player>({
   if (courtCount <= 0 || candidatePlayers.length < requiredPlayerCount) {
     return {
       selection: null,
+      candidates: [],
       candidatePlayerIds,
       quartetCount,
       validQuartetCount: 0,
@@ -1083,6 +1088,7 @@ function searchBatchCandidatePlayers<T extends MatchmakerV3Player>({
   if (quartetSelections.length < courtCount) {
     return {
       selection: null,
+      candidates: [],
       candidatePlayerIds,
       quartetCount,
       validQuartetCount: quartetSelections.length,
@@ -1109,6 +1115,7 @@ function searchBatchCandidatePlayers<T extends MatchmakerV3Player>({
   }
 
   const completedSelections: V3BatchSelection<ActiveMatchmakerV3Player<T>>[] = [];
+  const completedSelectionKeys = new Set<string>();
   const maxBranches = searchLimits?.maxBranches ?? MAX_BATCH_SEARCH_BRANCHES;
   const searchDeadline = Date.now() + (searchLimits?.maxMs ?? MAX_BATCH_SEARCH_MS);
   let searchLimitReached = false;
@@ -1117,7 +1124,8 @@ function searchBatchCandidatePlayers<T extends MatchmakerV3Player>({
 
   const backtrack = (
     chosen: V3SingleCourtSelection<ActiveMatchmakerV3Player<T>>[],
-    usedIds: Set<string>
+    usedIds: Set<string>,
+    skippedAnchorCount = 0
   ) => {
     exploredBranches += 1;
 
@@ -1141,7 +1149,14 @@ function searchBatchCandidatePlayers<T extends MatchmakerV3Player>({
         pairingRandomSalts,
         mixedVarietyContext
       );
-      completedSelections.push(batchSelection);
+      const key = batchSelection.selections
+        .map(getSelectionKey)
+        .sort()
+        .join(";");
+      if (!completedSelectionKeys.has(key)) {
+        completedSelectionKeys.add(key);
+        completedSelections.push(batchSelection);
+      }
 
       return;
     }
@@ -1177,7 +1192,17 @@ function searchBatchCandidatePlayers<T extends MatchmakerV3Player>({
 
       const nextUsedIds = new Set(usedIds);
       quartet.ids.forEach((id) => nextUsedIds.add(id));
-      backtrack([...chosen, quartet], nextUsedIds);
+      backtrack([...chosen, quartet], nextUsedIds, skippedAnchorCount);
+    }
+
+    if (
+      allowAnchorSkipping &&
+      skippedAnchorCount < 2 &&
+      !lockedIds.has(anchorId)
+    ) {
+      const skippedIds = new Set(usedIds);
+      skippedIds.add(anchorId);
+      backtrack(chosen, skippedIds, skippedAnchorCount + 1);
     }
   };
 
@@ -1223,6 +1248,7 @@ function searchBatchCandidatePlayers<T extends MatchmakerV3Player>({
 
   return {
     selection,
+    candidates: completedSelections,
     candidatePlayerIds,
     quartetCount,
     validQuartetCount: quartetSelections.length,
@@ -1254,6 +1280,7 @@ export function findBestBatchSelectionV3<T extends MatchmakerV3Player>(
     candidatePoolVariants,
     selectionConstraints,
     pairingRandomMode = "combined",
+    selectionOverride,
   }: {
     courtCount: number;
     sessionMode: SessionMode;
@@ -1276,6 +1303,9 @@ export function findBestBatchSelectionV3<T extends MatchmakerV3Player>(
     ) => Array<V3CandidatePool<ActiveMatchmakerV3Player<T>>>;
     selectionConstraints?: V3SelectionConstraints<ActiveMatchmakerV3Player<T>>;
     pairingRandomMode?: V3BatchPairingRandomMode;
+    selectionOverride?: V3BatchSelectionOverride<
+      ActiveMatchmakerV3Player<T>
+    >;
   }
 ): V3BatchResult<ActiveMatchmakerV3Player<T>> {
   const requiredPlayerCount = courtCount * 4;
@@ -1356,6 +1386,10 @@ export function findBestBatchSelectionV3<T extends MatchmakerV3Player>(
       : [resolvedCandidatePool]);
   let finalSelection: V3BatchSelection<ActiveMatchmakerV3Player<T>> | null =
     null;
+  let rotationCandidates: V3BatchSelection<
+    ActiveMatchmakerV3Player<T>
+  >[] = [];
+  let rotationSearchInterrupted = false;
   const attemptRecords: Array<{
     pool: V3CandidatePool<ActiveMatchmakerV3Player<T>>;
     result: BatchSearchAttemptResult<ActiveMatchmakerV3Player<T>>;
@@ -1391,6 +1425,7 @@ export function findBestBatchSelectionV3<T extends MatchmakerV3Player>(
       selectionConstraints,
       pairingRandomSalts,
       pairingRandomMode,
+      allowAnchorSkipping: Boolean(selectionOverride),
     });
 
     attemptRecords.push({ pool, result: attempt });
@@ -1425,6 +1460,8 @@ export function findBestBatchSelectionV3<T extends MatchmakerV3Player>(
 
       if (priorityAttempt?.selection) {
         finalSelection = priorityAttempt.selection;
+        rotationCandidates = priorityAttempt.candidates;
+        rotationSearchInterrupted = priorityAttempt.searchLimitReached;
       }
     }
   }
@@ -1444,6 +1481,39 @@ export function findBestBatchSelectionV3<T extends MatchmakerV3Player>(
 
     if (strictAttempt?.selection) {
       finalSelection = strictAttempt.selection;
+      rotationCandidates = strictAttempt.candidates;
+      rotationSearchInterrupted = strictAttempt.searchLimitReached;
+    }
+  }
+
+  if (
+    finalSelection &&
+    selectionOverride &&
+    !rotationSearchInterrupted &&
+    (attemptRecords[attemptRecords.length - 1]?.pool.lockedPlayers.length ?? 0) === 0
+  ) {
+    const baselinePool = attemptRecords[attemptRecords.length - 1]?.pool;
+    const nextPool = candidatePools.find(
+      (pool) =>
+        pool !== baselinePool &&
+        pool.includedBandValues.length >
+          (baselinePool?.includedBandValues.length ?? 0)
+    );
+    if (nextPool) {
+      const widenedAttempt = runAttempt({
+        pool: nextPool,
+        candidatePlayers: limitBatchCandidatePlayers(
+          nextPool,
+          candidateCap ?? requiredPlayerCount
+        ),
+        lockedIds: new Set(
+          nextPool.lockedPlayers.map((player) => player.userId)
+        ),
+      });
+      if (widenedAttempt) {
+        rotationCandidates.push(...widenedAttempt.candidates);
+        rotationSearchInterrupted = widenedAttempt.searchLimitReached;
+      }
     }
   }
 
@@ -1510,6 +1580,22 @@ export function findBestBatchSelectionV3<T extends MatchmakerV3Player>(
   }
 
   if (finalSelection !== null) {
+    if (selectionOverride) {
+      if (!rotationSearchInterrupted && rotationCandidates.length > 0) {
+        finalSelection =
+          selectionOverride({
+            baselineSelection: finalSelection,
+            candidates: rotationCandidates,
+          }) ?? finalSelection;
+      } else if (rotationSearchInterrupted) {
+        finalSelection =
+          selectionOverride({
+            baselineSelection: finalSelection,
+            candidates: [],
+            searchInterrupted: true,
+          }) ?? finalSelection;
+      }
+    }
     debug.failureReason = null;
     debug.chosenQuartets = finalSelection.selections.map(
       (selection) => selection.ids

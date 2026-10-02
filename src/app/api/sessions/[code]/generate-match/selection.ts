@@ -6,6 +6,7 @@ import {
 } from "@/lib/courtCreate";
 import { getClubEloByUserId } from "@/lib/clubElo";
 import { prisma } from "@/lib/prisma";
+import { randomUUID } from "node:crypto";
 import {
   getAcceptedSessionClubIds,
   getPlayerClubBadges,
@@ -59,6 +60,17 @@ import {
   type V3BatchDebug,
   type V3SingleCourtSelection,
 } from "@/lib/matchmaking/v3";
+import {
+  buildBalancedMixedRotationObligations,
+  buildBalancedMixedBatchSelectionOverride,
+  buildBalancedMixedSingleSelectionOverride,
+  getBalancedMixedBatchCategoryPenalty,
+  isBalancedMixedRotationBatchWithinBounds,
+} from "@/lib/matchmaking/v3/balancedMixedRotation";
+import {
+  buildMixedVarietyContext,
+  getMixedMatchClassification,
+} from "@/lib/matchmaking/v3/mixedVariety";
 import { getExactPartitionKey } from "@/lib/matchmaking/v3/rematch";
 import {
   CourtGroupType,
@@ -115,6 +127,7 @@ interface PoolAwareSelection extends CourtGroupSnapshot {
   missedPool?: SessionPool | null;
   competitiveTargetRatio: number;
   matchmakingReasonJson?: string | null;
+  balancedMixedRotation?: V3SingleCourtSelection["balancedMixedRotation"];
 }
 
 type MatchSelectionBase = {
@@ -130,6 +143,7 @@ type MatchSelectionBase = {
   poolBSeatCount?: number | null;
   competitiveTargetRatio?: number;
   matchmakingReasonJson?: string | null;
+  balancedMixedRotation?: V3SingleCourtSelection["balancedMixedRotation"];
 };
 
 const MAX_POOL_SELECTION_OPTIONS_PER_PLAN = 64;
@@ -162,6 +176,17 @@ function isV3Selection(
     typeof selection.opponentRepeatPenalty === "number" &&
     typeof selection.exactRematchPenalty === "number"
   );
+}
+
+function getV3Selections(
+  selections: readonly PoolAwareSelection[]
+): V3SingleCourtSelection[] | null {
+  const typed: V3SingleCourtSelection[] = [];
+  for (const selection of selections) {
+    if (!isV3Selection(selection)) return null;
+    typed.push(selection);
+  }
+  return typed;
 }
 
 function withMatchmakingReason<
@@ -317,6 +342,93 @@ export function buildMixedHistoryMatches(
   }
 
   return [...matches, queuedMatch];
+}
+
+export function buildOutstandingMatchCountByUserId(
+  sessionData: GenerateMatchSession
+) {
+  const counts = new Map<string, number>();
+  const includedQuartets = new Set<string>();
+  const addCommitment = (userIds: string[]) => {
+    const uniqueUserIds = [...new Set(userIds)];
+    if (uniqueUserIds.length !== 4) return;
+    const quartetKey = [...uniqueUserIds].sort().join("|");
+    if (includedQuartets.has(quartetKey)) return;
+    includedQuartets.add(quartetKey);
+    for (const userId of uniqueUserIds) {
+      counts.set(userId, (counts.get(userId) ?? 0) + 1);
+    }
+  };
+  const liveStatuses = new Set([
+    MatchStatus.PENDING,
+    MatchStatus.IN_PROGRESS,
+    MatchStatus.PENDING_APPROVAL,
+  ]);
+
+  for (const match of sessionData.matches) {
+    if (!liveStatuses.has(match.status as MatchStatus)) continue;
+    addCommitment([
+      match.team1User1Id,
+      match.team1User2Id,
+      match.team2User1Id,
+      match.team2User2Id,
+    ]);
+  }
+
+  if (sessionData.queuedMatch) {
+    addCommitment([
+      sessionData.queuedMatch.team1User1Id,
+      sessionData.queuedMatch.team1User2Id,
+      sessionData.queuedMatch.team2User1Id,
+      sessionData.queuedMatch.team2User2Id,
+    ]);
+  }
+
+  return counts;
+}
+
+export function buildBalancedMixedRotationObligationsForSession(
+  sessionData: GenerateMatchSession
+) {
+  const includedStatuses = new Set([
+    MatchStatus.COMPLETED,
+    MatchStatus.PENDING,
+    MatchStatus.IN_PROGRESS,
+    MatchStatus.PENDING_APPROVAL,
+  ]);
+  const events = sessionData.matches
+    .filter((match) => includedStatuses.has(match.status as MatchStatus))
+    .map((match) => ({
+      createdAt: match.createdAt,
+      userIds: [
+        match.team1User1Id,
+        match.team1User2Id,
+        match.team2User1Id,
+        match.team2User2Id,
+      ],
+      matchmakingReasonJson: match.matchmakingReasonJson,
+    }));
+  if (sessionData.queuedMatch) {
+    events.push({
+      createdAt: sessionData.queuedMatch.createdAt,
+      userIds: [
+        sessionData.queuedMatch.team1User1Id,
+        sessionData.queuedMatch.team1User2Id,
+        sessionData.queuedMatch.team2User1Id,
+        sessionData.queuedMatch.team2User2Id,
+      ],
+      matchmakingReasonJson: sessionData.queuedMatch.matchmakingReasonJson,
+    });
+  }
+
+  return buildBalancedMixedRotationObligations({
+    players: sessionData.players.map((player) => ({
+      userId: player.userId,
+      availableSince: player.availableSince,
+      isPaused: player.isPaused,
+    })),
+    events,
+  });
 }
 
 function countPoolPlayers<T extends { pool?: string | null }>(
@@ -1274,13 +1386,23 @@ function buildPlayerGroupSelectionRunner({
   rankedCandidates,
   playersById,
   sessionData,
+  rotationDecisionId = randomUUID(),
+  rotationTimestamp = new Date().toISOString(),
+  enableBalancedMixedRotation = true,
 }: {
   rankedCandidates: RankedCandidates;
   playersById: Map<string, PartitionCandidate>;
   sessionData: GenerateMatchSession;
+  rotationDecisionId?: string;
+  rotationTimestamp?: string;
+  enableBalancedMixedRotation?: boolean;
 }) {
   const completedMatches = buildCompletedMatches(sessionData);
   const mixedHistoryMatches = buildMixedHistoryMatches(sessionData);
+  const pendingRotationObligations =
+    buildBalancedMixedRotationObligationsForSession(sessionData);
+  const outstandingMatchCountByUserId =
+    buildOutstandingMatchCountByUserId(sessionData);
   const usesCompetitiveGrouping =
     getMatchmakerSessionType(sessionData) === SessionType.LADDER ||
     getMatchmakerSessionType(sessionData) === SessionType.RACE;
@@ -1336,11 +1458,13 @@ function buildPlayerGroupSelectionRunner({
     excludedQuartetKey,
     excludedQuartetKeys,
     excludedPartitionKey,
+    rotationDeferredPlayerIds = [],
   }: {
     composition: PlayerGroupCourtComposition;
     excludedQuartetKey?: string;
     excludedQuartetKeys?: ReadonlySet<string>;
     excludedPartitionKey?: string;
+    rotationDeferredPlayerIds?: string[];
   }): PoolAwareSelection | null => {
     const targetPool = getCompositionTargetPool(composition);
     const selectionConstraints = getPlayerGroupSelectionConstraints(composition);
@@ -1431,14 +1555,30 @@ function buildPlayerGroupSelectionRunner({
     const runV3 = (
       sourcePlayers: MatchmakerV3Player[],
       constraints = selectionConstraints,
-      useAllActivePlayers = false
-    ) =>
+      useAllActivePlayers = false,
+      rotationDeferredPlayerIds: string[] = []
+      ) =>
       findBestSingleCourtSelectionV3(sourcePlayers, {
         sessionMode: getMatchmakerSessionMode(sessionData),
         sessionType: getMatchmakerSessionType(sessionData),
         respectPlayerRest: sessionData.respectPlayerRest,
         completedMatches,
         mixedHistoryMatches,
+        selectionOverride: enableBalancedMixedRotation
+          ? buildBalancedMixedSingleSelectionOverride<MatchmakerV3Player>({
+              players: v3Players,
+              mixedHistoryMatches,
+              completedMatches,
+              sessionMode: getMatchmakerSessionMode(sessionData),
+              sessionType: getMatchmakerSessionType(sessionData),
+              respectPlayerRest: sessionData.respectPlayerRest,
+              outstandingMatchCountByUserId,
+              pendingObligations: pendingRotationObligations,
+              decisionId: rotationDecisionId,
+              timestamp: rotationTimestamp,
+              alreadyDeferredPlayerIds: rotationDeferredPlayerIds,
+            })
+          : undefined,
         excludedQuartetKey,
         excludedQuartetKeys,
         excludedPartitionKey,
@@ -1467,11 +1607,14 @@ function buildPlayerGroupSelectionRunner({
 
     if (targetPool) {
       return finishSelection(
-        runV3(
-          v3Players.filter(
-            (player) => getNormalizedSessionPool(player.pool) === targetPool
+          runV3(
+            v3Players.filter(
+              (player) => getNormalizedSessionPool(player.pool) === targetPool
+            ),
+            selectionConstraints,
+            false,
+            rotationDeferredPlayerIds
           )
-        )
       );
     }
 
@@ -1486,7 +1629,8 @@ function buildPlayerGroupSelectionRunner({
       const selection = runV3(
         getQuotaTierPlayers(tier),
         buildQuotaTierConstraints(composition, tier),
-        true
+        true,
+        rotationDeferredPlayerIds
       );
       if (selection) return finishSelection(selection);
     }
@@ -1514,10 +1658,12 @@ function selectPoolEnabledSingleCourtMatch({
   reshuffleSource: ReshuffleSource | null;
   requiredCourtGroupType?: CourtGroupType | string | null;
 }): PoolAwareSelection {
-  const runner = buildPlayerGroupSelectionRunner({
-    rankedCandidates,
-    playersById,
-    sessionData,
+    const rotationDecisionId = randomUUID();
+    const runner = buildPlayerGroupSelectionRunner({
+      rankedCandidates,
+      playersById,
+      sessionData,
+      rotationDecisionId,
   });
 
   const normalizedRequiredCourtGroupType = getNormalizedCourtGroupType(
@@ -1648,6 +1794,8 @@ export function selectSingleCourtMatch({
 
   const completedMatches = buildCompletedMatches(sessionData);
   const mixedHistoryMatches = buildMixedHistoryMatches(sessionData);
+  const pendingRotationObligations =
+    buildBalancedMixedRotationObligationsForSession(sessionData);
   const usesCompetitiveGrouping =
     getMatchmakerSessionType(sessionData) === SessionType.LADDER ||
     getMatchmakerSessionType(sessionData) === SessionType.RACE;
@@ -1659,16 +1807,31 @@ export function selectSingleCourtMatch({
             respectPlayerRest: sessionData.respectPlayerRest,
           }
         )
-    : findBestSingleCourtSelectionV3(
-        buildV3Players(sessionData, playersById, rankedCandidates),
-        {
+    : (() => {
+        const v3Players = buildV3Players(
+          sessionData,
+          playersById,
+          rankedCandidates
+        );
+        return findBestSingleCourtSelectionV3(v3Players, {
           sessionMode: getMatchmakerSessionMode(sessionData),
           sessionType: getMatchmakerSessionType(sessionData),
           respectPlayerRest: sessionData.respectPlayerRest,
           completedMatches,
           mixedHistoryMatches,
-        }
-      );
+          selectionOverride: buildBalancedMixedSingleSelectionOverride<MatchmakerV3Player>({
+            players: v3Players,
+            mixedHistoryMatches,
+            completedMatches,
+            sessionMode: getMatchmakerSessionMode(sessionData),
+            sessionType: getMatchmakerSessionType(sessionData),
+            respectPlayerRest: sessionData.respectPlayerRest,
+            outstandingMatchCountByUserId:
+              buildOutstandingMatchCountByUserId(sessionData),
+            pendingObligations: pendingRotationObligations,
+          }),
+        });
+      })();
 
   if (!initialResult.selection) {
     throw new GenerateMatchError(
@@ -2143,7 +2306,17 @@ export function selectReplacementMatchRespectingSkips({
 function compareGroupedBatchSelections(
   left: readonly PoolAwareSelection[],
   right: readonly PoolAwareSelection[],
-  sessionData: GenerateMatchSession
+  sessionData: GenerateMatchSession,
+  rotationPolicy?: {
+    baselineSelections: readonly PoolAwareSelection[];
+    context: ReturnType<typeof buildMixedVarietyContext>;
+    players: MatchmakerV3Player[];
+    completedMatches: ReturnType<typeof buildCompletedMatches>;
+    outstandingMatchCountByUserId: ReadonlyMap<string, number>;
+    pendingObligations: ReturnType<
+      typeof buildBalancedMixedRotationObligationsForSession
+    >;
+  }
 ) {
   const getPlayers = (selections: readonly PoolAwareSelection[]) =>
     selections.flatMap((selection) =>
@@ -2158,6 +2331,61 @@ function compareGroupedBatchSelections(
     );
   const leftPlayers = getPlayers(left);
   const rightPlayers = getPlayers(right);
+  if (rotationPolicy) {
+    const v3Baseline = getV3Selections(rotationPolicy.baselineSelections);
+    const leftV3 = getV3Selections(left);
+    const rightV3 = getV3Selections(right);
+    const rotationSafe = (selections: V3SingleCourtSelection[] | null) =>
+      Boolean(v3Baseline && selections) && isBalancedMixedRotationBatchWithinBounds({
+        baselineSelections: v3Baseline ?? [],
+        candidateSelections: selections ?? [],
+        players: rotationPolicy.players,
+        outstandingMatchCountByUserId:
+          rotationPolicy.outstandingMatchCountByUserId,
+        completedMatches: rotationPolicy.completedMatches,
+        pendingObligations: rotationPolicy.pendingObligations,
+        sessionType: getMatchmakerSessionType(sessionData),
+        respectPlayerRest: sessionData.respectPlayerRest,
+      });
+    const leftSafe = rotationSafe(leftV3);
+    const rightSafe = rotationSafe(rightV3);
+    if (leftSafe !== rightSafe) return leftSafe ? -1 : 1;
+
+    if (leftSafe && rightSafe) {
+      const getCatchupRank = (selections: readonly PoolAwareSelection[]) => {
+        const selectedIds = new Set(
+          selections.flatMap((selection) => selection.ids)
+        );
+        const index = rotationPolicy.pendingObligations.findIndex(
+          (obligation) => selectedIds.has(obligation.playerId)
+        );
+        return index < 0 ? Number.POSITIVE_INFINITY : index;
+      };
+      const catchupDiff = getCatchupRank(left) - getCatchupRank(right);
+      if (catchupDiff !== 0) return catchupDiff;
+
+      const getPersonalPenalty = (selections: V3SingleCourtSelection[] | null) =>
+        (selections ?? []).reduce(
+          (total, selection) =>
+            total + Number(selection?.mixedVarietyPenalty ?? 0),
+          0
+        );
+      const personalDiff =
+        getPersonalPenalty(leftV3) - getPersonalPenalty(rightV3);
+      if (Math.abs(personalDiff) > 1e-9) return personalDiff;
+
+      const categoryDiff =
+        getBalancedMixedBatchCategoryPenalty(
+          rotationPolicy.context,
+          leftV3 ?? []
+        ) -
+        getBalancedMixedBatchCategoryPenalty(
+          rotationPolicy.context,
+          rightV3 ?? []
+        );
+      if (Math.abs(categoryDiff) > 1e-9) return categoryDiff;
+    }
+  }
   const fairnessCompare = compareNumberVectors(
     leftPlayers
       .map((player) => player.effectiveMatchCount ?? 0)
@@ -2334,6 +2562,30 @@ export function selectBatchMatches({
   }
 
   if (sessionData.poolsEnabled) {
+    const rotationScopeEnabled =
+      getMatchmakerSessionMode(sessionData) === SessionMode.MIXICANO &&
+      (getMatchmakerSessionType(sessionData) === SessionType.POINTS ||
+        getMatchmakerSessionType(sessionData) === SessionType.ELO);
+    const rotationPlayers = rotationScopeEnabled
+      ? buildV3Players(sessionData, playersById, rankedCandidates)
+      : null;
+    const rotationHistory = rotationScopeEnabled
+      ? buildMixedHistoryMatches(sessionData)
+      : null;
+    const rotationContext =
+      rotationPlayers && rotationHistory
+        ? buildMixedVarietyContext(rotationPlayers, rotationHistory)
+        : null;
+    const rotationCompletedMatches = rotationScopeEnabled
+      ? buildCompletedMatches(sessionData)
+      : [];
+    const rotationOutstandingCounts = rotationScopeEnabled
+      ? buildOutstandingMatchCountByUserId(sessionData)
+      : new Map<string, number>();
+    const rotationPendingObligations = rotationScopeEnabled
+      ? buildBalancedMixedRotationObligationsForSession(sessionData)
+      : [];
+    const rotationTimestamp = new Date().toISOString();
     const activeCounts = getPoolActiveCounts(sessionData);
     const waitingCounts = getPoolWaitingCounts(sessionData, rankedCandidates);
     const plans = buildPlayerGroupCourtPlans({
@@ -2439,11 +2691,14 @@ export function selectBatchMatches({
     };
 
     const searchPlan = (
-      compositions: readonly PlayerGroupCourtComposition[]
-    ): PoolAwareSelection[] | null => {
+      compositions: readonly PlayerGroupCourtComposition[],
+      rotationDecisionId: string,
+      enableRotation: boolean,
+      deadline: number,
+      rotationPolicy?: Parameters<typeof compareGroupedBatchSelections>[3]
+    ): { selections: PoolAwareSelection[] | null; interrupted: boolean } => {
       let bestSelections: PoolAwareSelection[] | null = null;
       let exploredBranches = 0;
-      const deadline = Date.now() + MAX_GROUP_BATCH_SEARCH_MS;
 
       const backtrack = (
         workingRankedCandidates: RankedCandidates,
@@ -2456,7 +2711,8 @@ export function selectBatchMatches({
             compareGroupedBatchSelections(
               selections,
               bestSelections,
-              sessionData
+              sessionData,
+              rotationPolicy
             ) < 0
           ) {
             bestSelections = selections;
@@ -2466,7 +2722,7 @@ export function selectBatchMatches({
 
         if (
           exploredBranches > MAX_GROUP_BATCH_SEARCH_BRANCHES ||
-          (bestSelections && Date.now() >= deadline)
+          (Date.now() >= deadline && (enableRotation || bestSelections))
         ) {
           return;
         }
@@ -2479,7 +2735,18 @@ export function selectBatchMatches({
           rankedCandidates: workingRankedCandidates,
           playersById,
           sessionData,
+          rotationDecisionId,
+          rotationTimestamp,
+          enableBalancedMixedRotation: enableRotation,
         });
+        const rotationDeferredPlayerIds = [
+          ...new Set(
+            selections.flatMap(
+              (selection) =>
+                selection.balancedMixedRotation?.deferredPlayerIds ?? []
+            )
+          ),
+        ];
         const excludedQuartetKeys = new Set<string>();
         while (
           excludedQuartetKeys.size < MAX_POOL_SELECTION_OPTIONS_PER_PLAN
@@ -2487,6 +2754,7 @@ export function selectBatchMatches({
           const selection = runner.runSelection({
             composition,
             excludedQuartetKeys,
+            rotationDeferredPlayerIds,
           });
           if (!selection) break;
 
@@ -2503,7 +2771,7 @@ export function selectBatchMatches({
           );
           if (
             exploredBranches > MAX_GROUP_BATCH_SEARCH_BRANCHES ||
-            Date.now() >= deadline
+            (Date.now() >= deadline && (enableRotation || bestSelections))
           ) {
             break;
           }
@@ -2511,17 +2779,160 @@ export function selectBatchMatches({
       };
 
       backtrack(rankedCandidates, []);
-      return bestSelections;
+      return {
+        selections: bestSelections,
+        interrupted:
+          exploredBranches > MAX_GROUP_BATCH_SEARCH_BRANCHES ||
+          Date.now() >= deadline,
+      };
     };
 
     for (const plan of plans) {
       const compositions = orderForPhysicalCourts(plan.compositions);
-      const selections = searchPlan(compositions);
+      const rotationDecisionId = randomUUID();
+      const planDeadline = Date.now() + MAX_GROUP_BATCH_SEARCH_MS;
+      const baselineSearch = searchPlan(
+        compositions,
+        rotationDecisionId,
+        false,
+        rotationScopeEnabled
+          ? Math.min(
+              planDeadline,
+              Date.now() + Math.floor(MAX_GROUP_BATCH_SEARCH_MS / 2)
+            )
+          : planDeadline
+      );
+      const baselineSelections = baselineSearch.selections;
+      const rotationPolicy =
+        baselineSelections && rotationContext && rotationPlayers
+          ? {
+              baselineSelections,
+              context: rotationContext,
+              players: rotationPlayers,
+              completedMatches: rotationCompletedMatches,
+              outstandingMatchCountByUserId: rotationOutstandingCounts,
+              pendingObligations: rotationPendingObligations,
+            }
+          : undefined;
+      const rotationSearch =
+        rotationPolicy && Date.now() < planDeadline
+          ? searchPlan(
+              compositions,
+              rotationDecisionId,
+              true,
+              planDeadline,
+              rotationPolicy
+            )
+          : null;
+      const rotationCandidates =
+        rotationSearch && !rotationSearch.interrupted
+          ? rotationSearch.selections
+          : null;
+      const selections = (() => {
+        if (!baselineSelections || !rotationPolicy || !rotationCandidates) {
+          return baselineSelections;
+        }
+        const baselineIds = new Set(
+          baselineSelections.flatMap((selection) => selection.ids)
+        );
+        const candidateIds = new Set(
+          rotationCandidates.flatMap((selection) => selection.ids)
+        );
+        const newlyServedObligation = rotationPendingObligations.some(
+          (obligation) =>
+            !baselineIds.has(obligation.playerId) &&
+            candidateIds.has(obligation.playerId)
+        );
+        const baselineV3 = getV3Selections(baselineSelections);
+        const candidateV3 = getV3Selections(rotationCandidates);
+        if (!baselineV3 || !candidateV3) return baselineSelections;
+        const baselinePersonalPenalty = baselineSelections.reduce(
+          (sum, selection) =>
+            sum + (getV3Selections([selection])?.[0].mixedVarietyPenalty ?? 0),
+          0
+        );
+        const candidatePersonalPenalty = rotationCandidates.reduce(
+          (sum, selection) =>
+            sum + (getV3Selections([selection])?.[0].mixedVarietyPenalty ?? 0),
+          0
+        );
+        const baselineCategoryPenalty = getBalancedMixedBatchCategoryPenalty(
+          rotationContext!,
+          baselineV3
+        );
+        const candidateCategoryPenalty = getBalancedMixedBatchCategoryPenalty(
+          rotationContext!,
+          candidateV3
+        );
+        const improvesComposition =
+          candidatePersonalPenalty < baselinePersonalPenalty - 1e-9 ||
+          (Math.abs(candidatePersonalPenalty - baselinePersonalPenalty) <= 1e-9 &&
+            candidateCategoryPenalty < baselineCategoryPenalty - 1e-9) ||
+          newlyServedObligation;
+        const isSafe = isBalancedMixedRotationBatchWithinBounds({
+          baselineSelections: baselineV3,
+          candidateSelections: candidateV3,
+          players: rotationPlayers!,
+          outstandingMatchCountByUserId: rotationOutstandingCounts,
+          completedMatches: rotationCompletedMatches,
+          pendingObligations: rotationPendingObligations,
+          sessionType: getMatchmakerSessionType(sessionData),
+          respectPlayerRest: sessionData.respectPlayerRest,
+        });
+        return isSafe && improvesComposition
+          ? rotationCandidates
+          : baselineSelections;
+      })();
 
       if (selections) {
+        const isRotationSelection =
+          rotationScopeEnabled &&
+          Boolean(rotationCandidates) &&
+          selections === rotationCandidates;
+        const selectedIds = new Set(selections.flatMap((selection) => selection.ids));
+        const baselineIds = new Set(
+          (baselineSelections ?? []).flatMap((selection) => selection.ids)
+        );
+        const deferredPlayerIds = isRotationSelection
+          ? [...baselineIds].filter((userId) => !selectedIds.has(userId))
+          : [];
+        const servedPlayerIds = rotationPendingObligations
+          .filter((obligation) => selectedIds.has(obligation.playerId))
+          .map((obligation) => obligation.playerId);
+        const fallbackReason = isRotationSelection
+          ? null
+          : rotationPolicy &&
+              (!rotationSearch || rotationSearch.interrupted)
+            ? "SEARCH_BUDGET"
+            : "NO_SAFE_IMPROVEMENT";
         return {
-          selections: selections.map((selection) =>
-            withMatchmakingReason(selection, sessionData)
+          selections: selections.map((selection, index) =>
+            withMatchmakingReason(
+              rotationScopeEnabled && rotationContext
+                ? {
+                    ...selection,
+                    balancedMixedRotation: {
+                      ...(selection.balancedMixedRotation ?? {}),
+                      decisionId: rotationDecisionId,
+                      timestamp: rotationTimestamp,
+                      courtType: getMixedMatchClassification(
+                        selection.partition,
+                        rotationContext.sideByUserId
+                      ),
+                      deferredPlayerIds: index === 0 ? deferredPlayerIds : [],
+                      servedPlayerIds: index === 0 ? servedPlayerIds : [],
+                      obligationOwner: index === 0,
+                      target: {
+                        mixed: rotationContext.targetMixedGameRate,
+                        upperSameSide: rotationContext.targetUpperSameSideRate,
+                        lowerSameSide: rotationContext.targetLowerSameSideRate,
+                      },
+                      fallbackReason,
+                    },
+                  }
+                : selection,
+              sessionData
+            )
           ),
           poolSchedulingState: sessionData,
           competitiveTargetRatio: plan.competitiveTargetRatio,
@@ -2567,15 +2978,32 @@ export function selectBatchMatches({
     };
   }
 
+  const v3Players = buildV3Players(sessionData, playersById, rankedCandidates);
+  const completedMatches = buildCompletedMatches(sessionData);
+  const mixedHistoryMatches = buildMixedHistoryMatches(sessionData);
+  const pendingRotationObligations =
+    buildBalancedMixedRotationObligationsForSession(sessionData);
+  const outstandingMatchCountByUserId =
+    buildOutstandingMatchCountByUserId(sessionData);
   const result = findBestBatchSelectionV3(
-    buildV3Players(sessionData, playersById, rankedCandidates),
+    v3Players,
     {
       courtCount: requestedMatchCount,
       sessionMode: getMatchmakerSessionMode(sessionData),
       sessionType: getMatchmakerSessionType(sessionData),
       respectPlayerRest: sessionData.respectPlayerRest,
-      completedMatches: buildCompletedMatches(sessionData),
-      mixedHistoryMatches: buildMixedHistoryMatches(sessionData),
+      completedMatches,
+      mixedHistoryMatches,
+      selectionOverride: buildBalancedMixedBatchSelectionOverride<MatchmakerV3Player>({
+        players: v3Players,
+        mixedHistoryMatches,
+        completedMatches,
+        sessionMode: getMatchmakerSessionMode(sessionData),
+        sessionType: getMatchmakerSessionType(sessionData),
+        respectPlayerRest: sessionData.respectPlayerRest,
+        outstandingMatchCountByUserId,
+        pendingObligations: pendingRotationObligations,
+      }),
       randomFn,
     }
   );

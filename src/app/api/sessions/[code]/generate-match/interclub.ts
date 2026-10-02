@@ -9,11 +9,18 @@ import {
   usesBalanceFirstVariety,
 } from "@/lib/matchmaking/v3/scoring";
 import { findBestSingleCourtSelectionV3 } from "@/lib/matchmaking/v3/singleCourt";
+import {
+  buildBalancedMixedBatchSelectionOverride,
+  buildBalancedMixedRotationObligations,
+  buildBalancedMixedSingleSelectionOverride,
+} from "@/lib/matchmaking/v3/balancedMixedRotation";
+import type { V3MixedHistoryMatch } from "@/lib/matchmaking/v3/mixedVariety";
 import type {
   ActiveMatchmakerV3Player,
   MatchmakerV3Player,
   V3CandidatePool,
   V3CompletedMatch,
+  V3BalancedMixedRotationMetadata,
   V3DoublesPartition,
   V3SelectionConstraints,
   V3SingleCourtSelection,
@@ -213,6 +220,145 @@ function buildCompletedInterclubMatches(
     }));
 }
 
+function getInterclubQuartetKey(userIds: readonly string[]) {
+  return [...new Set(userIds)].sort().join("|");
+}
+
+function buildInterclubRotationInputs({
+  sessionData,
+  rankedCandidates,
+  playersById,
+  clubIds,
+  excludeQueuedMatch = false,
+}: {
+  sessionData: GenerateMatchSession;
+  rankedCandidates: readonly RankedInterclubCandidate[];
+  playersById: Map<string, PartitionCandidate>;
+  clubIds: [string, string];
+  excludeQueuedMatch?: boolean;
+}) {
+  const liveStatuses = new Set([
+    MatchStatus.COMPLETED,
+    MatchStatus.PENDING,
+    MatchStatus.IN_PROGRESS,
+    MatchStatus.PENDING_APPROVAL,
+  ]);
+  const matches = sessionData.matches.filter((match) =>
+    liveStatuses.has(match.status as MatchStatus)
+  );
+  const mixedHistoryMatches: V3MixedHistoryMatch[] = matches.map((match) => ({
+    team1: [match.team1User1Id, match.team1User2Id],
+    team2: [match.team2User1Id, match.team2User2Id],
+  }));
+  const outstandingMatchCountByUserId = new Map<string, number>();
+  const includedQuartets = new Set<string>();
+  const addOutstanding = (userIds: string[]) => {
+    const uniqueIds = [...new Set(userIds)];
+    if (uniqueIds.length !== 4) return;
+    const key = getInterclubQuartetKey(uniqueIds);
+    if (includedQuartets.has(key)) return;
+    includedQuartets.add(key);
+    for (const userId of uniqueIds) {
+      outstandingMatchCountByUserId.set(
+        userId,
+        (outstandingMatchCountByUserId.get(userId) ?? 0) + 1
+      );
+    }
+  };
+  const activeQuartets = new Set(
+    matches
+      .filter((match) => match.status !== MatchStatus.COMPLETED)
+      .map((match) =>
+        getInterclubQuartetKey([
+          match.team1User1Id,
+          match.team1User2Id,
+          match.team2User1Id,
+          match.team2User2Id,
+        ])
+      )
+  );
+  for (const match of matches) {
+    if (match.status === MatchStatus.COMPLETED) continue;
+    addOutstanding([
+      match.team1User1Id,
+      match.team1User2Id,
+      match.team2User1Id,
+      match.team2User2Id,
+    ]);
+  }
+
+  const rotationEvents = matches.map((match) => ({
+    createdAt: match.createdAt,
+    userIds: [
+      match.team1User1Id,
+      match.team1User2Id,
+      match.team2User1Id,
+      match.team2User2Id,
+    ],
+    matchmakingReasonJson: match.matchmakingReasonJson,
+  }));
+  if (sessionData.queuedMatch && !excludeQueuedMatch) {
+    const queue = sessionData.queuedMatch;
+    const userIds = [
+      queue.team1User1Id,
+      queue.team1User2Id,
+      queue.team2User1Id,
+      queue.team2User2Id,
+    ];
+    if (!activeQuartets.has(getInterclubQuartetKey(userIds))) {
+      mixedHistoryMatches.push({
+        team1: [queue.team1User1Id, queue.team1User2Id],
+        team2: [queue.team2User1Id, queue.team2User2Id],
+      });
+      addOutstanding(userIds);
+      rotationEvents.push({
+        createdAt: queue.createdAt,
+        userIds,
+        matchmakingReasonJson: queue.matchmakingReasonJson,
+      });
+    }
+  }
+
+  const pendingObligations = buildBalancedMixedRotationObligations({
+    players: sessionData.players.map((player) => ({
+      userId: player.userId,
+      availableSince: player.availableSince,
+      isPaused: player.isPaused,
+    })),
+    events: rotationEvents,
+  });
+  const availableIds = new Set(rankedCandidates.map((candidate) => candidate.userId));
+  const everyCandidate: RankedInterclubCandidate[] = sessionData.players.map(
+    (player) => ({
+      userId: player.userId,
+      matchesPlayed: player.matchesPlayed,
+      matchmakingBaseline:
+        player.matchesPlayed + Math.max(0, player.matchmakingMatchesCredit ?? 0),
+      restTurns: 0,
+      needsMoreRest: player.needsMoreRest,
+      moreRestTarget: Math.max(1, sessionData.courts?.length ?? 1),
+      arrivalPriorityAt: player.arrivalPriorityAt,
+      strength: playersById.get(player.userId)?.elo ?? player.user.elo,
+    })
+  );
+  const allRotationPlayers = buildInterclubMatchmakerPlayers({
+    sessionData,
+    rankedCandidates: everyCandidate,
+    playersById,
+    clubIds,
+  }).map((player) => ({
+    ...player,
+    isBusy: !player.isPaused && !availableIds.has(player.userId),
+  }));
+
+  return {
+    mixedHistoryMatches,
+    outstandingMatchCountByUserId,
+    pendingObligations,
+    allRotationPlayers,
+  };
+}
+
 function getCandidatesByClubId({
   sessionData,
   rankedCandidates,
@@ -270,11 +416,13 @@ function buildInterclubReasonJson({
   team2ClubId,
   balanceGap,
   pointDiffGap,
+  balancedMixedRotation,
 }: {
   team1ClubId: string;
   team2ClubId: string;
   balanceGap: number;
   pointDiffGap: number;
+  balancedMixedRotation?: V3BalancedMixedRotationMetadata;
 }) {
   return JSON.stringify({
     type: "INTERCLUB",
@@ -282,6 +430,7 @@ function buildInterclubReasonJson({
     team2ClubId,
     balanceGap,
     pointDiffGap,
+    ...(balancedMixedRotation ? { balancedMixedRotation } : {}),
   });
 }
 
@@ -593,6 +742,7 @@ function toInterclubSelection(
       team2ClubId: clubIds[1],
       balanceGap: selection.balanceGap,
       pointDiffGap: selection.pointDiffGap,
+      balancedMixedRotation: selection.balancedMixedRotation,
     }),
   };
 }
@@ -668,10 +818,28 @@ function findInterclubSingleCourtSelection({
     return null;
   }
 
+  const rotation = buildInterclubRotationInputs({
+    sessionData,
+    rankedCandidates,
+    playersById,
+    clubIds: getInterclubClubIds(sessionData)!,
+  });
+
   return findBestSingleCourtSelectionV3(context.players, {
     sessionMode: context.sessionMode,
     sessionType: context.sessionType,
     completedMatches: context.completedMatches,
+    mixedHistoryMatches: rotation.mixedHistoryMatches,
+    selectionOverride: buildBalancedMixedSingleSelectionOverride<InterclubMatchmakerPlayer>({
+      players: rotation.allRotationPlayers,
+      mixedHistoryMatches: rotation.mixedHistoryMatches,
+      completedMatches: context.completedMatches,
+      sessionMode: context.sessionMode,
+      sessionType: context.sessionType,
+      respectPlayerRest: sessionData.respectPlayerRest,
+      outstandingMatchCountByUserId: rotation.outstandingMatchCountByUserId,
+      pendingObligations: rotation.pendingObligations,
+    }),
     respectPlayerRest: sessionData.respectPlayerRest,
     candidatePool: context.candidatePool,
     selectionConstraints: context.selectionConstraints,
@@ -808,10 +976,28 @@ export function selectInterclubReplacementMatch({
     sessionType,
     respectPlayerRest: sessionData.respectPlayerRest,
   });
+  const rotation = buildInterclubRotationInputs({
+    sessionData,
+    rankedCandidates: eligibleCandidates,
+    playersById,
+    clubIds,
+    excludeQueuedMatch: true,
+  });
   const result = findBestSingleCourtSelectionV3(players, {
     sessionMode: getEffectiveSessionMode(sessionData) as SessionMode,
     sessionType,
     completedMatches: buildCompletedInterclubMatches(sessionData),
+    mixedHistoryMatches: rotation.mixedHistoryMatches,
+    selectionOverride: buildBalancedMixedSingleSelectionOverride<InterclubMatchmakerPlayer>({
+      players: rotation.allRotationPlayers,
+      mixedHistoryMatches: rotation.mixedHistoryMatches,
+      completedMatches: buildCompletedInterclubMatches(sessionData),
+      sessionMode: getEffectiveSessionMode(sessionData) as SessionMode,
+      sessionType,
+      respectPlayerRest: sessionData.respectPlayerRest,
+      outstandingMatchCountByUserId: rotation.outstandingMatchCountByUserId,
+      pendingObligations: rotation.pendingObligations,
+    }),
     respectPlayerRest: sessionData.respectPlayerRest,
     candidatePool,
     candidatePoolVariants: (pool) => [pool],
@@ -858,12 +1044,30 @@ export function selectInterclubBatchMatches({
     throw new GenerateMatchError(400, "Club vs club tournament is not ready.");
   }
 
+  const rotation = buildInterclubRotationInputs({
+    sessionData,
+    rankedCandidates,
+    playersById,
+    clubIds,
+  });
+
   const result = findBestBatchSelectionV3(context.players, {
     courtCount: requestedMatchCount,
     sessionMode: context.sessionMode,
     sessionType: context.sessionType,
     respectPlayerRest: sessionData.respectPlayerRest,
     completedMatches: context.completedMatches,
+    mixedHistoryMatches: rotation.mixedHistoryMatches,
+    selectionOverride: buildBalancedMixedBatchSelectionOverride<InterclubMatchmakerPlayer>({
+      players: rotation.allRotationPlayers,
+      mixedHistoryMatches: rotation.mixedHistoryMatches,
+      completedMatches: context.completedMatches,
+      sessionMode: context.sessionMode,
+      sessionType: context.sessionType,
+      respectPlayerRest: sessionData.respectPlayerRest,
+      outstandingMatchCountByUserId: rotation.outstandingMatchCountByUserId,
+      pendingObligations: rotation.pendingObligations,
+    }),
     randomFn,
     candidatePool: context.candidatePool,
     candidatePoolVariants: (pool) => [pool],

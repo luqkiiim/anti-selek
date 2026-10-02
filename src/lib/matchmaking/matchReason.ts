@@ -3,6 +3,7 @@ import { getCourtGroupTypeLabel } from "@/lib/playerGroups";
 import type {
   ActiveMatchmakerV3Player,
   V3SingleCourtSelection,
+  V3BalancedMixedRotationMetadata,
 } from "./v3/types";
 
 export interface MatchmakingReason {
@@ -14,6 +15,7 @@ export interface MatchmakingReason {
   team1UserIds: [string, string];
   team2UserIds: [string, string];
   summary: string[];
+  balancedMixedRotation?: V3BalancedMixedRotationMetadata;
   metrics: {
     fairnessBand: number | null;
     selectedMatchCounts: number[];
@@ -301,7 +303,57 @@ export function buildV3MatchmakingReason<
       metrics,
       respectPlayerRest: context.respectPlayerRest,
     }),
+    ...(selection.balancedMixedRotation
+      ? { balancedMixedRotation: selection.balancedMixedRotation }
+      : {}),
     metrics,
+  };
+}
+
+export function parseBalancedMixedRotationMetadata(
+  value: unknown
+): V3BalancedMixedRotationMetadata | undefined {
+  if (!isRecord(value)) return undefined;
+  const target = value.target;
+  if (
+    typeof value.decisionId !== "string" ||
+    typeof value.timestamp !== "string" ||
+    (value.courtType !== null &&
+      value.courtType !== "MIXED" &&
+      value.courtType !== "UPPER" &&
+      value.courtType !== "LOWER") ||
+    !isStringArray(value.deferredPlayerIds) ||
+    !isStringArray(value.servedPlayerIds) ||
+    typeof value.obligationOwner !== "boolean" ||
+    !isRecord(target) ||
+    typeof target.mixed !== "number" ||
+    typeof target.upperSameSide !== "number" ||
+    typeof target.lowerSameSide !== "number" ||
+    (value.fallbackReason !== undefined &&
+      value.fallbackReason !== null &&
+      typeof value.fallbackReason !== "string")
+  ) {
+    return undefined;
+  }
+
+  return {
+    decisionId: value.decisionId,
+    timestamp: value.timestamp,
+    courtType: value.courtType,
+    deferredPlayerIds: value.deferredPlayerIds,
+    servedPlayerIds: value.servedPlayerIds,
+    obligationOwner: value.obligationOwner,
+    target: {
+      mixed: target.mixed,
+      upperSameSide: target.upperSameSide,
+      lowerSameSide: target.lowerSameSide,
+    },
+    fallbackReason:
+      typeof value.fallbackReason === "string"
+        ? value.fallbackReason
+        : value.fallbackReason === null
+          ? null
+          : undefined,
   };
 }
 
@@ -476,6 +528,13 @@ export function parseMatchmakingReasonJson(
     team1UserIds: parsed.team1UserIds as [string, string],
     team2UserIds: parsed.team2UserIds as [string, string],
     summary: parsed.summary,
+    ...(parseBalancedMixedRotationMetadata(parsed.balancedMixedRotation)
+      ? {
+          balancedMixedRotation: parseBalancedMixedRotationMetadata(
+            parsed.balancedMixedRotation
+          ),
+        }
+      : {}),
     metrics: {
       fairnessBand: metrics.fairnessBand,
       selectedMatchCounts: metrics.selectedMatchCounts,

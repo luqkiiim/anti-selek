@@ -128,12 +128,43 @@ export interface V3SingleCourtSelection<
   mixedVarietyPenalty?: number;
   mixedGlobalVarietyPenalty?: number;
   mixedGame?: boolean;
+  balancedMixedRotation?: V3BalancedMixedRotationMetadata;
   consecutivePlayCount: number;
   consecutivePlayMaxBurden: number;
   consecutivePlayTotalBurden: number;
   randomScore: number;
   pairingRandomScore: number;
 }
+
+export interface V3BalancedMixedRotationMetadata {
+  decisionId: string;
+  timestamp: string;
+  courtType: "MIXED" | "UPPER" | "LOWER" | null;
+  deferredPlayerIds: string[];
+  servedPlayerIds: string[];
+  obligationOwner: boolean;
+  target: {
+    mixed: number;
+    upperSameSide: number;
+    lowerSameSide: number;
+  };
+  fallbackReason?: string | null;
+}
+
+export type V3SingleCourtSelectionOverride<
+  T extends ActiveMatchmakerV3Player = ActiveMatchmakerV3Player,
+> = (args: {
+  baselineSelection: V3SingleCourtSelection<T>;
+  candidates: V3SingleCourtSelection<T>[];
+}) => V3SingleCourtSelection<T> | null;
+
+export type V3BatchSelectionOverride<
+  T extends ActiveMatchmakerV3Player = ActiveMatchmakerV3Player,
+> = (args: {
+  baselineSelection: V3BatchSelection<T>;
+  candidates: V3BatchSelection<T>[];
+  searchInterrupted?: boolean;
+}) => V3BatchSelection<T> | null;
 
 export interface V3SingleCourtDebug {
   eligiblePlayerIds: string[];
