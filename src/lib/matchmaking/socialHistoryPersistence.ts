@@ -1,6 +1,6 @@
 import type { Prisma } from "@prisma/client";
 import { getEffectiveSessionType } from "@/lib/sessionSettings";
-import { SessionType } from "@/types/enums";
+import { usesRotationMatchmaking } from "./v3/socialBatch";
 import type { V3DoublesPartition } from "./v3/types";
 import {
   parseSocialVarietySnapshot,
@@ -29,7 +29,7 @@ export async function resolveSocialHistoryReasonJson(
       pairingMode: true,
     },
   });
-  if (!session || getEffectiveSessionType(session) !== SessionType.SOCIAL_MIX) {
+  if (!session || !usesRotationMatchmaking(getEffectiveSessionType(session))) {
     return reasonJson ?? null;
   }
 

@@ -1,3 +1,4 @@
+import { usesRotationMatchmaking } from "@/lib/matchmaking/v3/socialBatch";
 import type { ManualMatchTeams } from "@/lib/matchmaking/manualMatch";
 import type { PartitionCandidate } from "@/lib/matchmaking/partitioning";
 import { buildCandidatePool } from "@/lib/matchmaking/v3/candidatePool";
@@ -10,7 +11,6 @@ import {
 import { buildFairnessBands } from "@/lib/matchmaking/v3/fairness";
 import { findBestBatchSelectionV3 } from "@/lib/matchmaking/v3/batch";
 import { getExactPartitionKey } from "@/lib/matchmaking/v3/rematch";
-import { usesBalanceFirstVariety } from "@/lib/matchmaking/v3/scoring";
 import { findBestSingleCourtSelectionV3 } from "@/lib/matchmaking/v3/singleCourt";
 import type {
   ActiveMatchmakerV3Player,
@@ -21,6 +21,8 @@ import type {
   V3SelectionConstraints,
   V3SocialStarvationSummary,
   V3SingleCourtSelection,
+  V3BalanceGuardrail,
+  V3FinalTieBreak,
 } from "@/lib/matchmaking/v3/types";
 import {
   getAcceptedInterclubClubIds,
@@ -195,15 +197,6 @@ export function getInterclubTeamClubIdsForPartition(
   return { team1ClubId, team2ClubId };
 }
 
-function getInterclubRestTurnTieZoneTolerance(sessionType: SessionType) {
-  if (sessionType === SessionType.SOCIAL_MIX) return 0;
-  if (usesBalanceFirstVariety(sessionType)) {
-    return Number.POSITIVE_INFINITY;
-  }
-
-  return 0;
-}
-
 function buildCompletedInterclubMatches(
   sessionData: GenerateMatchSession
 ): V3CompletedMatch[] {
@@ -277,6 +270,10 @@ function buildInterclubReasonJson({
   socialVarietyGain,
   socialVarietyGains,
   socialStarvation,
+  balanceGuardrail,
+  finalTieBreak,
+  fairnessVector,
+  schedulingRank,
 }: {
   team1ClubId: string;
   team2ClubId: string;
@@ -286,6 +283,10 @@ function buildInterclubReasonJson({
   socialVarietyGain?: number;
   socialVarietyGains?: SocialVarietyGains;
   socialStarvation?: V3SocialStarvationSummary;
+  balanceGuardrail?: V3BalanceGuardrail;
+  finalTieBreak?: V3FinalTieBreak | null;
+  fairnessVector?: number[];
+  schedulingRank?: number;
 }) {
   return JSON.stringify({
     type: "INTERCLUB",
@@ -295,6 +296,10 @@ function buildInterclubReasonJson({
     pointDiffGap,
     ...(socialVariety ? { socialVariety, socialVarietyGain, socialVarietyGains } : {}),
     ...(socialStarvation ? { socialStarvation } : {}),
+    ...(balanceGuardrail ? { balanceGuardrail } : {}),
+    ...(finalTieBreak ? { finalTieBreak } : {}),
+    ...(fairnessVector ? { fairnessVector: fairnessVector.filter(Number.isFinite) } : {}),
+    ...(schedulingRank !== undefined ? { schedulingRank } : {}),
   });
 }
 
@@ -418,19 +423,14 @@ function buildInterclubCandidatePool({
   players,
   clubIds,
   requiredPerClub,
-  sessionType,
-  respectPlayerRest,
   randomFn,
 }: {
   players: InterclubMatchmakerPlayer[];
   clubIds: [string, string];
   requiredPerClub: number;
-  sessionType: SessionType;
-  respectPlayerRest: boolean;
   randomFn?: () => number;
 }): V3CandidatePool<ActiveInterclubPlayer> {
-  const poolRespectsRest =
-    sessionType !== SessionType.SOCIAL_MIX && respectPlayerRest;
+  const poolRespectsRest = false;
   const clubPools = clubIds.map((clubId) =>
     buildCandidatePool(
       players.filter((player) => player.representingClubId === clubId),
@@ -438,8 +438,6 @@ function buildInterclubCandidatePool({
         requiredPlayerCount: requiredPerClub,
         randomFn,
         respectPlayerRest: poolRespectsRest,
-        restTurnTieZoneTolerance:
-          getInterclubRestTurnTieZoneTolerance(sessionType),
       }
     )
   );
@@ -483,21 +481,15 @@ function buildInterclubReplacementCandidatePool({
   players,
   clubIds,
   retainedUserIds,
-  sessionType,
-  respectPlayerRest,
 }: {
   players: InterclubMatchmakerPlayer[];
   clubIds: [string, string];
   retainedUserIds: [string, string, string];
-  sessionType: SessionType;
-  respectPlayerRest: boolean;
 }) {
   const basePool = buildInterclubCandidatePool({
     players,
     clubIds,
     requiredPerClub: 2,
-    sessionType,
-    respectPlayerRest,
   });
   const playersById = new Map(
     basePool.activePlayers.map((player) => [player.userId, player])
@@ -566,13 +558,13 @@ function getInterclubSelectionConstraints(
   };
 }
 
-function getInterclubSocialOptions(
+function getInterclubRotationOptions(
   sessionData: GenerateMatchSession,
   rankedCandidates: readonly RankedInterclubCandidate[],
   playersById: Map<string, PartitionCandidate>,
   clubIds: [string, string]
 ) {
-  if (getEffectiveSessionType(sessionData) !== SessionType.SOCIAL_MIX) return {};
+  if (!usesRotationMatchmaking(getEffectiveSessionType(sessionData))) return {};
   const availableIds = new Set(rankedCandidates.map((candidate) => candidate.userId));
   const candidatesById = new Map(rankedCandidates.map((candidate) => [candidate.userId, candidate]));
   const fullRosterCandidates = sessionData.players.map((player) =>
@@ -647,6 +639,10 @@ function toInterclubSelection(
       socialVarietyGain: selection.socialVarietyGain,
       socialVarietyGains: selection.socialVarietyGains,
       socialStarvation: selection.socialStarvation,
+      balanceGuardrail: selection.balanceGuardrail,
+      finalTieBreak: selection.finalTieBreak,
+      fairnessVector: selection.fairnessVector,
+      schedulingRank: selection.schedulingRank,
     }),
   };
 }
@@ -683,8 +679,6 @@ function buildInterclubSelectionContext({
     players,
     clubIds,
     requiredPerClub,
-    sessionType,
-    respectPlayerRest: sessionData.respectPlayerRest,
     randomFn,
   });
 
@@ -726,14 +720,14 @@ function findInterclubSingleCourtSelection({
     sessionMode: context.sessionMode,
     sessionType: context.sessionType,
     completedMatches: context.completedMatches,
-    ...getInterclubSocialOptions(sessionData, rankedCandidates, playersById, context.clubIds),
+    ...getInterclubRotationOptions(sessionData, rankedCandidates, playersById, context.clubIds),
     respectPlayerRest: sessionData.respectPlayerRest,
     candidatePool: context.sessionType === SessionType.SOCIAL_MIX ? undefined : context.candidatePool,
     selectionConstraints: context.selectionConstraints,
     excludedQuartetKey,
     excludedPartitionKey,
   });
-  if (context.sessionType === SessionType.SOCIAL_MIX && !result.selection && result.debug.searchLimitReached) {
+  if (usesRotationMatchmaking(context.sessionType) && !result.selection && result.debug.searchLimitReached) {
     throw new GenerateMatchError(400, "Match search reached its time limit before establishing a fair batch. Try again.");
   }
   return result.selection;
@@ -864,22 +858,20 @@ export function selectInterclubReplacementMatch({
     players,
     clubIds,
     retainedUserIds,
-    sessionType,
-    respectPlayerRest: sessionData.respectPlayerRest,
   });
   const result = findBestSingleCourtSelectionV3(players, {
     sessionMode: getEffectiveSessionMode(sessionData) as SessionMode,
     sessionType,
     completedMatches: buildCompletedInterclubMatches(sessionData),
-    ...getInterclubSocialOptions(sessionData, eligibleCandidates, playersById, clubIds),
+    ...getInterclubRotationOptions(sessionData, eligibleCandidates, playersById, clubIds),
     respectPlayerRest: sessionData.respectPlayerRest,
     candidatePool,
-    candidatePoolVariants: (pool) => [pool],
+    lockedPlayerIds: retainedUserIdSet,
     selectionConstraints: getInterclubSelectionConstraints(clubIds),
   });
 
   if (!result.selection) {
-    if (sessionType === SessionType.SOCIAL_MIX && result.debug.searchLimitReached) {
+    if (usesRotationMatchmaking(sessionType) && result.debug.searchLimitReached) {
       throw new GenerateMatchError(400, "Match search reached its time limit before establishing a fair batch. Try again.");
     }
     throw new GenerateMatchError(
@@ -927,16 +919,15 @@ export function selectInterclubBatchMatches({
     sessionType: context.sessionType,
     respectPlayerRest: sessionData.respectPlayerRest,
     completedMatches: context.completedMatches,
-    ...getInterclubSocialOptions(sessionData, rankedCandidates, playersById, context.clubIds),
+    ...getInterclubRotationOptions(sessionData, rankedCandidates, playersById, context.clubIds),
     randomFn,
     candidatePool: context.sessionType === SessionType.SOCIAL_MIX ? undefined : context.candidatePool,
-    candidatePoolVariants: (pool) => [pool],
     selectionConstraints: context.selectionConstraints,
     pairingRandomMode: "side-balanced",
   });
 
   if (!result.selection) {
-    if (context.sessionType === SessionType.SOCIAL_MIX && result.debug.searchLimitReached) {
+    if (usesRotationMatchmaking(context.sessionType) && result.debug.searchLimitReached) {
       throw new GenerateMatchError(400, "Match search reached its time limit before establishing a fair batch. Try again.");
     }
     throw new GenerateMatchError(

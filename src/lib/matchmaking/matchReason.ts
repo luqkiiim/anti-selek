@@ -10,6 +10,8 @@ import type {
   SocialVarietyGains,
   SocialVarietySnapshot,
   V3SocialStarvationSummary,
+  V3BalanceGuardrail,
+  V3FinalTieBreak,
 } from "./v3/types";
 
 export interface MatchmakingReason {
@@ -33,6 +35,10 @@ export interface MatchmakingReason {
     socialVarietyGain?: number;
     socialVarietyGains?: SocialVarietyGains;
     socialStarvation?: V3SocialStarvationSummary;
+    balanceGuardrail?: V3BalanceGuardrail;
+    finalTieBreak?: V3FinalTieBreak | null;
+    fairnessVector?: number[];
+    schedulingRank?: number;
     partnerRepeatPenalty: number;
     opponentRepeatPenalty: number;
     exactRematchPenalty: number;
@@ -118,21 +124,12 @@ function buildReasonSummary({
     (left, right) => left - right
   );
   const balanceUnit = getBalanceUnit(sessionType);
+  const balanced = sessionType === SessionType.POINTS || sessionType === SessionType.ELO;
   const summary = [
     uniqueMatchCounts.length === 1
       ? `All selected players are in fairness band ${uniqueMatchCounts[0]}.`
       : `Selected across fairness bands ${uniqueMatchCounts.join(", ")} after legal-match filtering.`,
   ];
-
-  if (sessionType === SessionType.POINTS) {
-    summary.push(
-      metrics.sharedCourtRepeatPenalty === 0
-        ? "All six shared-court pairings are first-time contacts this session."
-        : `Shared-court repeat penalty is ${formatMetric(
-            metrics.sharedCourtRepeatPenalty ?? 0
-          )} of 6 possible pairings.`
-    );
-  }
 
   summary.push(
     `Team balance gap is ${formatMetric(metrics.balanceGap)} ${balanceUnit}${
@@ -149,7 +146,7 @@ function buildReasonSummary({
   }
 
   if (
-    (sessionType !== SessionType.SOCIAL_MIX || metrics.socialVarietyGain === undefined) &&
+    metrics.socialVarietyGain === undefined &&
     respectPlayerRest !== false &&
     metrics.totalRestTurns > 0
   ) {
@@ -177,11 +174,12 @@ function buildReasonSummary({
     );
   }
 
-  if (sessionType === SessionType.SOCIAL_MIX) {
+  if (sessionType === SessionType.SOCIAL_MIX || balanced) {
     if (metrics.socialVarietyGain !== undefined) {
-      const priorities = metrics.courtGroupType
+      const rotationPriorities = metrics.courtGroupType
         ? "fair turns, arrival priority, applicable player-group rules and overdue-turn protection"
         : "fair turns, arrival priority and overdue-turn protection";
+      const priorities = `${rotationPriorities}${balanced ? " and the balance guardrail" : ""}`;
       summary.push(
         sessionMode === SessionMode.MIXICANO
           ? `Selected for ongoing courtmate, partner, opponent and match-type variety after ${priorities}${respectPlayerRest === false ? "." : "; longer breaks only decide between equally varied choices."}`
@@ -198,7 +196,7 @@ function buildReasonSummary({
           `Across this refill, ${formatMetric(starvation.selectedOverdueCount)} of ${formatMetric(starvation.availableOverdueCount)} available players beyond the ${formatMetric(starvation.idealRestGap)}-match usual rest gap were selected; ${formatMetric(starvation.leftOutOverdueCount)} overdue player${starvation.leftOutOverdueCount === 1 ? " remains" : "s remain"} outside the batch.`
         );
       }
-    } else {
+    } else if (!balanced) {
       summary.push(
         metrics.sharedCourtRepeatPenalty === 0
           ? "All six shared-court pairings are first-time contacts this session."
@@ -221,7 +219,7 @@ function buildReasonSummary({
             )} of 4 pairings.`
       );
     }
-  } else if (sessionType !== SessionType.POINTS) {
+  } else if (!balanced) {
     summary.push(
       metrics.partnerRepeatPenalty === 0
         ? "No recent partner repeat penalty on this selection."
@@ -239,6 +237,29 @@ function buildReasonSummary({
             )}.`
       );
     }
+  }
+
+  if (balanced && metrics.balanceGuardrail) {
+    const guardrail = metrics.balanceGuardrail;
+    summary.push(
+      `Within the same fairness, arrival, structural and starvation state, the best achievable worst-court balance gap was ${formatMetric(guardrail.bestMaxBalanceGap)} ${balanceUnit}s; the allowed batch envelope is at most ${formatMetric(guardrail.allowedMaxBalanceGap)} ${balanceUnit}s per court (${formatMetric(guardrail.nearBestWindow)} near-best window).`
+    );
+    if (guardrail.absoluteCeiling !== null) {
+      summary.push(guardrail.ceilingFeasible
+        ? `The ${formatMetric(guardrail.absoluteCeiling)}-rating safety ceiling also applies.`
+        : `The ${formatMetric(guardrail.absoluteCeiling)}-rating ceiling is unattainable within this stronger rotation state; minimum worst-court and total imbalance were required.`);
+    }
+    if (guardrail.allowedTotalBalanceGap !== null) {
+      summary.push(`The allowed total batch balance gap is at most ${formatMetric(guardrail.allowedTotalBalanceGap)} ${balanceUnit}s.`);
+    }
+  }
+  if (balanced && metrics.socialVarietyGain !== undefined) {
+    const gain = metrics.socialVarietyGain.toPrecision(5);
+    const facets = metrics.socialVarietyGains;
+    summary.push(`Normalized entropy gain is ${gain}${facets ? ` (courtmates ${facets.courtmates.toPrecision(5)}, partners ${facets.partners.toPrecision(5)}, opponents ${facets.opponents.toPrecision(5)}, match type ${facets.matchType.toPrecision(5)})` : ""}.`);
+    if (metrics.finalTieBreak === "EXACT_REMATCH") summary.push("Exact rematch avoidance decided only after entropy, ordinary rest and actual balance tied.");
+    else if (metrics.finalTieBreak === "RANDOM") summary.push("Randomness decided only the final tied choices.");
+    else if (metrics.finalTieBreak === "DETERMINISTIC") summary.push("A deterministic final tie-break decided between equivalent choices.");
   }
 
   if (sessionMode === SessionMode.MIXICANO) {
@@ -293,8 +314,8 @@ export function buildV3MatchmakingReason<
     fairnessBand:
       selectedMatchCounts.length > 0 ? Math.min(...selectedMatchCounts) : null,
     selectedMatchCounts,
-    balanceGap: roundMetric(selection.balanceGap),
-    pointDiffGap: roundMetric(selection.pointDiffGap),
+    balanceGap: selection.balanceGuardrail ? selection.balanceGap : roundMetric(selection.balanceGap),
+    pointDiffGap: selection.balanceGuardrail ? selection.pointDiffGap : roundMetric(selection.pointDiffGap),
     sharedCourtRepeatPenalty: selection.sharedCourtRepeatPenalty,
     partnerCoveragePenalty: selection.partnerCoveragePenalty,
     opponentCoveragePenalty: selection.opponentCoveragePenalty,
@@ -307,6 +328,10 @@ export function buildV3MatchmakingReason<
     ...(selection.socialStarvation
       ? { socialStarvation: selection.socialStarvation }
       : {}),
+    ...(selection.balanceGuardrail ? { balanceGuardrail: selection.balanceGuardrail } : {}),
+    ...(selection.finalTieBreak ? { finalTieBreak: selection.finalTieBreak } : {}),
+    ...(selection.fairnessVector ? { fairnessVector: selection.fairnessVector.filter(Number.isFinite) } : {}),
+    ...(selection.schedulingRank !== undefined ? { schedulingRank: selection.schedulingRank } : {}),
     partnerRepeatPenalty: selection.partnerRepeatPenalty,
     opponentRepeatPenalty: selection.opponentRepeatPenalty,
     exactRematchPenalty: selection.exactRematchPenalty,
@@ -347,7 +372,7 @@ export function buildV3MatchmakingReason<
       metrics,
       respectPlayerRest: context.respectPlayerRest,
     }),
-    ...(context.sessionType === SessionType.SOCIAL_MIX
+    ...([SessionType.SOCIAL_MIX, SessionType.POINTS, SessionType.ELO].includes(context.sessionType as SessionType)
       ? {
           socialVariety:
             selection.socialVariety ??
@@ -525,6 +550,7 @@ export function parseMatchmakingReasonJson(
   });
   const socialVarietyGains = parseSocialVarietyGains(metrics.socialVarietyGains);
   const socialStarvation = parseSocialStarvationSummary(metrics.socialStarvation);
+  const balanceGuardrail = parseBalanceGuardrail(metrics.balanceGuardrail);
 
   return {
     version: 1,
@@ -550,6 +576,13 @@ export function parseMatchmakingReasonJson(
         : {}),
       ...(socialVarietyGains ? { socialVarietyGains } : {}),
       ...(socialStarvation ? { socialStarvation } : {}),
+      ...(balanceGuardrail ? { balanceGuardrail } : {}),
+      ...(["EXACT_REMATCH", "RANDOM", "DETERMINISTIC"].includes(metrics.finalTieBreak as string)
+        ? { finalTieBreak: metrics.finalTieBreak as V3FinalTieBreak } : {}),
+      ...(isNumberArray(metrics.fairnessVector) && metrics.fairnessVector.every(Number.isFinite)
+        ? { fairnessVector: metrics.fairnessVector } : {}),
+      ...(typeof metrics.schedulingRank === "number" && Number.isFinite(metrics.schedulingRank)
+        ? { schedulingRank: metrics.schedulingRank } : {}),
       partnerRepeatPenalty: metrics.partnerRepeatPenalty,
       opponentRepeatPenalty: metrics.opponentRepeatPenalty,
       exactRematchPenalty: metrics.exactRematchPenalty,
@@ -626,5 +659,27 @@ function parseSocialStarvationSummary(value: unknown): V3SocialStarvationSummary
     leftOutOverdueCount: value.leftOutOverdueCount as number,
     highestLeftOutRestTurns: value.highestLeftOutRestTurns as number,
     totalLeftOutRestTurns: value.totalLeftOutRestTurns as number,
+  };
+}
+
+function parseBalanceGuardrail(value: unknown): V3BalanceGuardrail | undefined {
+  if (!isRecord(value) || !["POINTS", "RATING"].includes(value.mode as string)) return undefined;
+  for (const key of ["bestMaxBalanceGap", "bestTotalBalanceGap", "nearBestWindow", "allowedMaxBalanceGap"] as const) {
+    if (typeof value[key] !== "number" || !Number.isFinite(value[key]) || value[key] < 0) return undefined;
+  }
+  for (const key of ["absoluteCeiling", "allowedTotalBalanceGap"] as const) {
+    if (value[key] !== null && (typeof value[key] !== "number" || !Number.isFinite(value[key]) || value[key] < 0)) return undefined;
+  }
+  if (typeof value.ceilingFeasible !== "boolean" || typeof value.baselineCertified !== "boolean") return undefined;
+  return {
+    mode: value.mode as V3BalanceGuardrail["mode"],
+    bestMaxBalanceGap: value.bestMaxBalanceGap as number,
+    bestTotalBalanceGap: value.bestTotalBalanceGap as number,
+    nearBestWindow: value.nearBestWindow as number,
+    absoluteCeiling: value.absoluteCeiling as number | null,
+    allowedMaxBalanceGap: value.allowedMaxBalanceGap as number,
+    allowedTotalBalanceGap: value.allowedTotalBalanceGap as number | null,
+    ceilingFeasible: value.ceilingFeasible,
+    baselineCertified: value.baselineCertified,
   };
 }

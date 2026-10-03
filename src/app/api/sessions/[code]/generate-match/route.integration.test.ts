@@ -391,7 +391,7 @@ describe("generate match route integration", () => {
     expect(storedMatches[0]?.matchmakingReasonJson).toEqual(expect.any(String));
   });
 
-  it("does not store reasoning for manual matches", async () => {
+  it("stores manual Balanced history metadata without an automatic reason", async () => {
     const prefix = `manual-reason-${randomUUID().slice(0, 8)}`;
     const { clubId } = await createClubAdmin(prefix);
     const playerKeys = ["p1", "p2", "p3", "p4"];
@@ -428,7 +428,10 @@ describe("generate match route integration", () => {
       where: { sessionId },
     });
 
-    expect(storedMatch?.matchmakingReasonJson).toBeNull();
+    const historyMetadata = JSON.parse(storedMatch!.matchmakingReasonJson!);
+    expect(historyMetadata.socialVariety).toMatchObject({ version: 1, basis: "EFFECTIVE_MIXED_SIDE" });
+    expect(historyMetadata.source).toBeUndefined();
+    expect(historyMetadata.summary).toBeUndefined();
   });
 
   it("clears arrival priority when an automatic live match is created", async () => {
@@ -1423,9 +1426,14 @@ describe("generate match route integration", () => {
     });
 
     expect(refreshedCourt?.currentMatchId).toBe(payload.autoAssignedMatch.id);
-    expect(storedAutoAssignedMatch?.matchmakingReasonJson).toBe(
-      queuedReasonJson
-    );
+    const { socialVariety, ...promotedReason } = JSON.parse(storedAutoAssignedMatch!.matchmakingReasonJson!);
+    expect(promotedReason).toEqual(JSON.parse(queuedReasonJson));
+    expect(socialVariety).toEqual({
+      version: 1,
+      basis: "EFFECTIVE_MIXED_SIDE",
+      courtType: "UPPER",
+      effectiveSideByUserId: Object.fromEntries(playerIds.slice(4, 8).map((id) => [id, "UPPER"])),
+    });
     expect(storedQueuedMatch).not.toBeNull();
     expect(getSelectedIds(storedQueuedMatch!).sort()).toEqual(rebuiltQueuedIds);
   });

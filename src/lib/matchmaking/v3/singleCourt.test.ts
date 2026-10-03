@@ -83,7 +83,8 @@ describe("matchmaking v3 single-court selection", () => {
       team1: ["A", "B"],
       team2: ["C", "D"],
     });
-    expect(result.selection?.partnerRepeatPenalty).toBeGreaterThan(0);
+    expect(result.selection?.partnerRepeatPenalty).toBe(0);
+    expect(result.selection?.socialVarietyGains).toBeDefined();
   });
 
   it("chooses fresh shared-court variety inside the Elo balance window", () => {
@@ -93,7 +94,7 @@ describe("matchmaking v3 single-court selection", () => {
         createPlayer("B", { strength: 1000 }),
         createPlayer("C", { strength: 1000 }),
         createPlayer("D", { strength: 1000 }),
-        createPlayer("E", { strength: 1100 }),
+        createPlayer("E", { strength: 1060 }),
       ],
       {
         sessionMode: SessionMode.MEXICANO,
@@ -110,7 +111,7 @@ describe("matchmaking v3 single-court selection", () => {
     );
 
     expect(result.selection?.ids).toContain("E");
-    expect(result.selection?.balanceGap).toBe(50);
+    expect(result.selection?.balanceGap).toBe(30);
     expect(result.selection?.sharedCourtRepeatPenalty).toBeLessThan(6);
   });
 
@@ -148,7 +149,7 @@ describe("matchmaking v3 single-court selection", () => {
         createPlayer("B", { strength: 1000 }),
         createPlayer("C", { strength: 1000 }),
         createPlayer("D", { strength: 1000 }),
-        createPlayer("E", { strength: 1100 }),
+        createPlayer("E", { strength: 1060 }),
         createPlayer("F", { strength: 1452 }),
       ],
       {
@@ -167,7 +168,7 @@ describe("matchmaking v3 single-court selection", () => {
 
     expect(result.selection?.ids).toContain("E");
     expect(result.selection?.ids).not.toContain("F");
-    expect(result.selection?.balanceGap).toBe(50);
+    expect(result.selection?.balanceGap).toBe(30);
   });
 
   it("keeps the best rating split when a fresher split exceeds the absolute 50-point gap", () => {
@@ -197,7 +198,8 @@ describe("matchmaking v3 single-court selection", () => {
       team2: ["Nizam", "Yong Bing"],
     });
     expect(result.selection?.balanceGap).toBe(16);
-    expect(result.selection?.partnerRepeatPenalty).toBeGreaterThan(0);
+    expect(result.selection?.partnerRepeatPenalty).toBe(0);
+    expect(result.selection?.socialVarietyGains).toBeDefined();
   });
 
   it("falls back to the smallest rating gap when every split exceeds 50", () => {
@@ -227,10 +229,11 @@ describe("matchmaking v3 single-court selection", () => {
       team2: ["B", "C"],
     });
     expect(result.selection?.balanceGap).toBe(100);
-    expect(result.selection?.partnerRepeatPenalty).toBeGreaterThan(0);
+    expect(result.selection?.partnerRepeatPenalty).toBe(0);
+    expect(result.selection?.socialVarietyGains).toBeDefined();
   });
 
-  it("keeps lower-rest players eligible when they create the best Elo balance", () => {
+  it("includes overdue players before the prettier Elo balance while retaining the full candidate vocabulary", () => {
     const result = findBestSingleCourtSelectionV3(
       [
         createPlayer("A", { strength: 1200, restTurns: 5 }),
@@ -248,8 +251,9 @@ describe("matchmaking v3 single-court selection", () => {
     );
 
     expect(result.debug.candidatePlayerIds).toContain("E");
-    expect(result.selection?.ids).toContain("E");
-    expect(result.selection?.balanceGap).toBe(0);
+    expect(result.selection?.ids).not.toContain("E");
+    expect(result.selection?.socialStarvation).toMatchObject({ selectedOverdueCount: 4, leftOutOverdueCount: 0 });
+    expect(result.debug.balanceGuardrail?.bestMaxBalanceGap).toBe(result.selection?.balanceGap);
   });
 
   it("keeps points balance ahead of fresh shared-court variety outside the safe window", () => {
@@ -336,7 +340,7 @@ describe("matchmaking v3 single-court selection", () => {
     expect(result.selection?.balanceGap).toBe(1.5);
   });
 
-  it("keeps lower-rest players eligible when they create the best points balance", () => {
+  it("includes overdue players before the prettier Points balance while retaining the full candidate vocabulary", () => {
     const result = findBestSingleCourtSelectionV3(
       [
         createPlayer("A", { strength: 20, restTurns: 5 }),
@@ -354,11 +358,12 @@ describe("matchmaking v3 single-court selection", () => {
     );
 
     expect(result.debug.candidatePlayerIds).toContain("E");
-    expect(result.selection?.ids).toContain("E");
-    expect(result.selection?.balanceGap).toBe(0);
+    expect(result.selection?.ids).not.toContain("E");
+    expect(result.selection?.socialStarvation).toMatchObject({ selectedOverdueCount: 4, leftOutOverdueCount: 0 });
+    expect(result.debug.balanceGuardrail?.bestMaxBalanceGap).toBe(result.selection?.balanceGap);
   });
 
-  it("ignores rest-shaped candidate narrowing when rest is off in mixed points", () => {
+  it("keeps the full Mixed vocabulary with rest off while overdue protection still applies", () => {
     const result = findBestSingleCourtSelectionV3(
       [
         createPlayer("M1", {
@@ -429,7 +434,7 @@ describe("matchmaking v3 single-court selection", () => {
     );
 
     expect(result.debug.candidatePlayerIds).toHaveLength(9);
-    expect(new Set(result.selection?.ids)).not.toEqual(
+    expect(new Set(result.selection?.ids)).toEqual(
       new Set(["F1", "F2", "F3", "F4"])
     );
     expect(result.selection?.sharedCourtRepeatPenalty).toBeLessThan(6);
@@ -736,7 +741,7 @@ describe("matchmaking v3 single-court selection", () => {
     ).toBe(2);
   });
 
-  it("relaxes locked lower-side players when all three have fewer matches", () => {
+  it("finds the fairest legal Mixed game when three lower-side players cannot all fit", () => {
     const result = findBestSingleCourtSelectionV3(
       [
         createPlayer("LowF1", {
@@ -779,7 +784,7 @@ describe("matchmaking v3 single-court selection", () => {
     );
 
     expect(result.selection).not.toBeNull();
-    expect(result.debug.lockedPlayerIds).toEqual(["LowF1", "LowF2", "LowF3"]);
+    expect(result.debug.lockedPlayerIds).toEqual([]);
     expect(
       result.selection?.players.filter(
         (player) => player.gender === PlayerGender.FEMALE
@@ -792,7 +797,7 @@ describe("matchmaking v3 single-court selection", () => {
     ).toBe(2);
   });
 
-  it("relaxes locked upper-side players when all three have fewer matches", () => {
+  it("finds the fairest legal Mixed game when three upper-side players cannot all fit", () => {
     const result = findBestSingleCourtSelectionV3(
       [
         createPlayer("LowM1", {
@@ -836,7 +841,7 @@ describe("matchmaking v3 single-court selection", () => {
     );
 
     expect(result.selection).not.toBeNull();
-    expect(result.debug.lockedPlayerIds).toEqual(["LowM1", "LowM2", "LowM3"]);
+    expect(result.debug.lockedPlayerIds).toEqual([]);
     expect(
       result.selection?.players.filter(
         (player) => player.gender === PlayerGender.FEMALE

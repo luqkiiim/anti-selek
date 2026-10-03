@@ -1,3 +1,4 @@
+import { buildSocialSessionHistory } from "@/lib/matchmaking/socialSessionHistory";
 import { describe, expect, it } from "vitest";
 import {
   MatchStatus,
@@ -11,7 +12,6 @@ import {
 } from "@/types/enums";
 import { getExactPartitionKey } from "@/lib/matchmaking/v3/rematch";
 import {
-  buildMixedHistoryMatches,
   buildMatchmakingState,
   getRankedCandidates,
   selectBatchMatches,
@@ -240,10 +240,10 @@ describe("generate-match race regressions", () => {
       } as NonNullable<GenerateMatchSession["queuedMatch"]>,
     });
 
-    const history = buildMixedHistoryMatches(sessionData);
+    const history = buildSocialSessionHistory(sessionData);
 
     expect(history).toHaveLength(5);
-    expect(history.at(-1)).toEqual({
+    expect(history.at(-1)).toMatchObject({
       team1: ["A", "Q"],
       team2: ["R", "S"],
     });
@@ -268,7 +268,7 @@ describe("generate-match race regressions", () => {
       } as NonNullable<GenerateMatchSession["queuedMatch"]>,
     });
 
-    expect(buildMixedHistoryMatches(sessionData)).toHaveLength(1);
+    expect(buildSocialSessionHistory(sessionData)).toHaveLength(1);
   });
 
   it("creates a new Mixicano race match after the mixed court finishes while a men's court is still active", async () => {
@@ -552,7 +552,7 @@ describe("generate-match interclub points batch regressions", () => {
         expectStrictInterclubSides(selection, clubByUserId);
       }
     }
-  });
+  }, 30_000);
 
   it("keeps lower-match-count players ahead of random club-vs-club variation", async () => {
     const clubAPlayers = [

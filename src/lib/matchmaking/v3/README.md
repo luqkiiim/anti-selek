@@ -1,144 +1,96 @@
 # Matchmaking v3
 
-`v3` is the live matcher used by session match generation.
+Social maximizes fair, organic rotation variety. Balanced maximizes the same
+variety inside an explicit balance envelope. Both use `socialBatch.ts` for
+single courts, global batches, player groups, interclub, reshuffles and player
+replacement. Level Match uses the separate ladder matcher.
 
-## Purpose
+## Priority policies
 
-Build a cleaner matcher from explicit product rules instead of layering more
-heuristics onto the previous engine.
+Legality, busy/paused availability, mandatory retained players and hard format
+constraints are enforced before ranking. Shared priorities are effective match
+counts, arrival priority, applicable structural schedule rank, then starvation.
 
-## Balanced matchmaking priorities
+Social then ranks entropy, enabled ordinary rest, actual team balance, its
+existing late recent-repeat ties, exact rematches and seeded randomness.
+Balanced then applies a fixed balance envelope and ranks entropy, enabled
+ordinary rest, actual worst/total balance, Points point-difference balance,
+exact rematches and seeded randomness. Consecutive-play burden is diagnostic.
 
-1. Fairness of court time
-2. Fresh partners when balance is still close
-3. Balanced match strength
-4. Small controlled randomness among near-equal options
+## Shared variety and starvation
 
-## Social matchmaking
-
-Social uses one whole-batch optimizer for ordinary, player-group, and interclub
-matches. It gives fair turns first, then arrival priority when turn counts tie,
-then applicable player-group rules. A derived rest-turn guardrail protects
-players who have missed more than their expected rotation gap before ongoing
-variety is scored. Ordinary rest turns then break equally varied choices,
-followed by team balance, recent repeats, and seeded pairing tie-breaks. The
-guardrail uses the full unpaused session roster, including busy players; only
-available overdue players can be protected in the current batch. Balanced modes
-keep their own rules.
-
-Variety combines four equally scaled per-player experience distributions:
-shared-court contacts, partners, opponents, and (in Mixed pairing) mixed-side
-versus own-side games. Each distribution uses lifetime encounter counts and
-Shannon entropy divided by the logarithm of its legal opportunity count. A
-candidate batch is scored by its change in the combined entropy. Parts with
-fewer than two opportunities contribute zero; the other parts are not rescaled.
-Negative gains remain valid. There are no match-type quotas, target percentages,
-or every-N-games rules, and an early own-side game does not discharge variety.
+`socialVariety.ts` is the single definition of variety. It measures changes in
+normalized lifetime Shannon entropy for courtmates, partners, opponents and,
+with Mixed pairing, MIXED versus OWN_SIDE experiences. Feasible facets have
+equal scale; a facet with fewer than two opportunities contributes zero.
+Negative gains are valid. There are no Mixed percentages, debt or obligations.
 
 Opportunities use the full unpaused roster, including busy and queued players,
-and obey structural pairing, club, and player-group rules. They are frozen for
-one decision. Paused peers are excluded from the current vocabulary; their
-historical counts return when they resume. Existing Mixed side assignments and
-legacy partner preferences determine the experience types.
+and obey pairing, player-group and club restrictions. Temporary rest and court
+occupancy do not shrink the vocabulary. Paused players keep their history;
+resuming or adding players expands feasible opportunities naturally.
+Completed and committed active/queued/manual games count once. Assignment-time
+Mixed-side snapshots survive queue activation. Undo, cancellation and
+replacement remove reservations; legacy unclassifiable games still contribute
+interpersonal history.
 
-Completed and committed active/queued games, including manual games, count once.
-Queue-to-active transitions retain their assignment-time side snapshot in the
-existing reason JSON. Undo, cancellation, and replacement remove old reservations
-from subsequent decisions. Legacy games without snapshots use current resolvable
-sides; unclassifiable games still contribute interpersonal history.
+The expected completed-match rest gap is `max(0, ceil((N - 4) / 4))`, using the
+full unpaused roster size. Available players above it are overdue. Before
+entropy or balance, minimize overdue players left out, their highest wait,
+then their total wait. This remains enabled when ordinary rest is disabled.
+Neutral entry/resume baselines preserve the existing no-catch-up behavior.
 
-Small one/two-court batches with up to fourteen eligible players are exhaustive:
-every legal partition and non-overlapping pair is considered. Larger batches use
-bounded global search. A timeout returns an incumbent only when its player
-fairness and Social rest-turn guardrail are certified, and exposes whether
-variety was fully optimized. An uncertified timeout returns a search-limit
-failure rather than a greedy batch.
+## Balance admissibility
 
-## Core rules
+`balanceGuardrail.ts` contains the format policy. Balanced search first finds
+the strongest feasible fairness/arrival/schedule/starvation class and its
+lexicographic minimum `(maxBalanceGap, totalBalanceGap)`. It then freezes the
+envelope and searches whole batches for the best entropy within it.
 
-1. Hard constraints come first.
-   - Busy players are excluded.
-   - Paused players are excluded while paused.
-   - Mixed-mode validity is enforced before scoring.
+Points admits `maxBalanceGap <= bestMaxBalanceGap + 1.5`. Rating admits
+`maxBalanceGap <= min(50, bestMaxBalanceGap + 30)`. The Rating window adapts the
+previous 30-rating rematch tolerance; it is deliberately separate from the
+absolute 50 ceiling. Both limits are explicit configurable policy inputs.
+The windows include the boundary. No pairwise tolerance comparator is used.
+Total gap is secondary actual balance quality after entropy/rest; several good
+courts cannot conceal a court outside the worst-gap envelope.
 
-2. Fairness is strict on match-count bands.
-   - Fewer matches played matters more than waiting time.
-   - If the current lowest eligible match-count band can fill the full batch,
-     do not widen to the next band just for prettier balance.
-   - This is intended to avoid easy 2-match gaps in the active rotation.
+If Rating's stronger class cannot meet 50, fairness and starvation still win:
+only its best achievable worst gap and total gap are admitted. Debug/reason
+output exposes this unavoidable-ceiling fallback. A prettier match from a
+weaker starvation or fairness class cannot set the baseline.
 
-3. Rest and arrival priority supplement match-count fairness.
-   - Mid-session joiners and resumed players receive a one-time arrival
-     priority, oldest first.
-   - Rest turns count completed matches missed since becoming available.
-   - Ordinary elapsed waiting minutes are not directly ranked in Ratings
-     matchmaking.
+## Search and diagnostics
 
-4. Late joiners and resumed players re-enter neutrally.
-   - No catch-up.
-   - No penalty.
-   - Their matchmaking baseline should be the current lowest eligible
-     match-count band.
-   - After re-entry, the gap is allowed to drift naturally, but the matcher
-     must not actively force catch-up.
+Balanced retires the old candidate caps, rest tie zones, quartet exemplars,
+anchor locks and repeat/coverage pruning. Every legal partition remains visible
+to entropy. Small one/two-court decisions with at most fourteen available
+players are exhaustive by default. Larger decisions use bounded global search
+and admissible pruning, with separate 50,000-branch / two-second budgets for
+baseline and entropy passes. Baseline scoring defers entropy, and collapses
+only worse-balanced partitions of an identical quartet; the entropy pass
+restores every admissible partition. A Balanced timeout may return an incumbent only when
+fairness, schedule, starvation and the balance baseline are certified; otherwise
+it reports a search limit. It never grants an unproven envelope or falls back
+to greedy courts. Diagnostics distinguish incomplete entropy optimization.
 
-5. Balance is team-vs-team balance only.
-   - `Ratings` sessions use rating / Elo for strength balance.
-   - Rating options with a team-average gap of 50 or less qualify for variety
-     comparison. If none qualify in the fair pool, use the smallest available
-     gap instead.
-   - `Points` sessions use current session performance for strength balance.
-   - Very mixed quartets are acceptable if the two teams are balanced.
+Balanced entropy uses fixed 1e-12 score buckets for transitive effective ties;
+Social retains its existing exact score ordering. Raw total/facet gains remain
+available. Debug and persisted reasons expose fairness, starvation, baseline,
+allowed gap, chosen gap, entropy facets and whether a final exact-rematch,
+seeded-random or deterministic tie decided the result.
 
-6. Balanced variety compares prior shared-court contacts, partner coverage, opponent
-   coverage, recent partner and opponent repeats, then exact rematches, in that
-   order. Recent-repeat penalties decay with history.
+The old `mixedVariety.ts` target/debt engine is removed. Shared-court repetition,
+partner/opponent coverage and recent repeats no longer influence Balanced.
+Exact rematches remain a late literal-layout tie-break. Social's existing late
+repeat ties and opportunity semantics remain unchanged.
 
-7. Batch selection must be global.
-   - When multiple courts are open, choose the best batch across all open
-     courts together.
-   - Do not fill courts greedily one by one.
+Player-group seat compositions and crossover schedule ranks remain stronger
+structural rules. Balanced no longer uses personal crossover debt or elapsed
+wait vectors to narrow equally fair selections; shared entropy decides those
+ties. Level Match retains its separate group-selection policy.
 
-8. Reshuffle should rerun normal selection.
-   - Do not preserve the same 4 players by default.
-   - Some of the previous 4 may still be selected again if the normal matcher
-     chooses them.
-
-## Decision order
-
-Inside the allowed fairness pool for Ratings:
-
-1. Keep options under the absolute 50-point team-average gap ceiling, or the
-   smallest available gap when none meet the ceiling
-2. Prefer fresh shared-court contacts, partners, and opponents
-3. Prefer the smaller team gap
-4. Rest turns, then random tie-breaks
-
-Global rule ordering:
-
-1. Fairness beats partner freshness
-2. Variety beats balance only among options under the Ratings ceiling
-3. Balance beats randomness
-
-## Design intent
-
-- The matcher should feel fair first.
-- It should not create catch-up pressure for late joiners or resumed players.
-- It should not become rigid from tiny waiting-time differences.
-- It should allow multiple good answers when several options are effectively
-  tied.
-
-## Not part of the default matcher
-
-The following ideas are intentionally reserved for a future separate mode:
-
-- Ladder / Swiss-style strength clustering
-- Strong preference for quartet coherence by skill band
-- Strong anti-pod spreading rules for re-entry groups
-
-## Current notes
-
-- The matcher is now wired into the live generate-match route.
-- Debug-oriented simulator and focused `v3` tests live alongside the engine.
-- Future work should tune behavior from real session snapshots rather than
-  reintroducing versioned route switching.
+Observed rest bounds remain subject to stronger count fairness and legality:
+asynchronous 7/7 Mixed simulations can defer a player for five completed-court
+events when Mixed parity prevents their inclusion in the fairest count class.
+An independent legal oracle verifies starvation is optimal inside that class.

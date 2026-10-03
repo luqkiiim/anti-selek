@@ -34,7 +34,6 @@ import {
 import { getBusyPlayerIds } from "@/lib/matchmaking/busyFilter";
 import { buildV3MatchmakingReasonJson } from "@/lib/matchmaking/matchReason";
 import { buildRestTurnsByUserId } from "@/lib/matchmaking/restTurns";
-import type { V3MixedHistoryMatch } from "@/lib/matchmaking/v3/mixedVariety";
 import {
   getPendingSkipNextUserIds,
   getSkippedSelectionUserIds,
@@ -66,7 +65,8 @@ import {
 } from "@/lib/matchmaking/v3/socialVariety";
 import {
   compareSocialBatchSelections,
-  findBestSocialBatchSelection,
+  findBestRotationBatchSelection,
+  usesRotationMatchmaking,
   summarizeSocialBatch,
 } from "@/lib/matchmaking/v3/socialBatch";
 import {
@@ -277,7 +277,7 @@ function buildCompletedMatches(sessionData: GenerateMatchSession) {
     }));
 }
 
-function getSocialPlayerGroupOpportunityConstraints(sessionData: GenerateMatchSession) {
+function getRotationPlayerGroupOpportunityConstraints(sessionData: GenerateMatchSession) {
   const counts = getPoolActiveCounts(sessionData);
   return buildPlayerGroupCourtPlans({
     requestedCourtCount: 1,
@@ -293,81 +293,21 @@ function getSocialPlayerGroupOpportunityConstraints(sessionData: GenerateMatchSe
   );
 }
 
-function getSocialSelectionOptions(
+function getRotationSelectionOptions(
   sessionData: GenerateMatchSession,
   players: MatchmakerV3Player[]
 ) {
-  if (getMatchmakerSessionType(sessionData) !== SessionType.SOCIAL_MIX) return {};
+  if (!usesRotationMatchmaking(getMatchmakerSessionType(sessionData))) return {};
   const socialHistoryMatches = buildSocialSessionHistory(sessionData);
   return {
     socialHistoryMatches,
     socialVarietyContext: buildSocialVarietyContext(players, socialHistoryMatches, {
       sessionMode: getMatchmakerSessionMode(sessionData),
       ...(sessionData.poolsEnabled
-        ? { opportunityConstraints: getSocialPlayerGroupOpportunityConstraints(sessionData) }
+        ? { opportunityConstraints: getRotationPlayerGroupOpportunityConstraints(sessionData) }
         : {}),
     }),
   };
-}
-
-function getMatchQuartetKey(match: V3MixedHistoryMatch) {
-  return [...match.team1, ...match.team2].sort().join("|");
-}
-
-export function buildMixedHistoryMatches(
-  sessionData: GenerateMatchSession
-): V3MixedHistoryMatch[] {
-  const includedStatuses = [
-    MatchStatus.COMPLETED,
-    MatchStatus.PENDING,
-    MatchStatus.IN_PROGRESS,
-    MatchStatus.PENDING_APPROVAL,
-  ];
-  const matches = sessionData.matches
-    .filter((match) => includedStatuses.includes(match.status as MatchStatus))
-    .map((match) => ({
-      team1: [match.team1User1Id, match.team1User2Id] as [string, string],
-      team2: [match.team2User1Id, match.team2User2Id] as [string, string],
-    }));
-
-  if (!sessionData.queuedMatch) {
-    return matches;
-  }
-
-  const queuedMatch = {
-    team1: [
-      sessionData.queuedMatch.team1User1Id,
-      sessionData.queuedMatch.team1User2Id,
-    ] as [string, string],
-    team2: [
-      sessionData.queuedMatch.team2User1Id,
-      sessionData.queuedMatch.team2User2Id,
-    ] as [string, string],
-  };
-  const activeQuartetKeys = new Set(
-    sessionData.matches
-      .filter((match) =>
-        [
-          MatchStatus.PENDING,
-          MatchStatus.IN_PROGRESS,
-          MatchStatus.PENDING_APPROVAL,
-        ].includes(match.status as MatchStatus)
-      )
-      .map((match) =>
-        getMatchQuartetKey({
-          team1: [match.team1User1Id, match.team1User2Id],
-          team2: [match.team2User1Id, match.team2User2Id],
-        })
-      )
-  );
-
-  // Queue assignment replaces the queued row with an active match. If both
-  // records appear in a snapshot, use the active match as the single entry.
-  if (activeQuartetKeys.has(getMatchQuartetKey(queuedMatch))) {
-    return matches;
-  }
-
-  return [...matches, queuedMatch];
 }
 
 function countPoolPlayers<T extends { pool?: string | null }>(
@@ -681,7 +621,7 @@ export function getRankedCandidates(
     rankedCandidates: buildActivePlayers(availableCandidates, {
       randomFn: () => 0,
       respectPlayerRest:
-        getMatchmakerSessionType(sessionData) !== SessionType.SOCIAL_MIX &&
+        !usesRotationMatchmaking(getMatchmakerSessionType(sessionData)) &&
         sessionData.respectPlayerRest,
     }),
   };
@@ -1295,7 +1235,6 @@ function buildPlayerGroupSelectionRunner({
   sessionData: GenerateMatchSession;
 }) {
   const completedMatches = buildCompletedMatches(sessionData);
-  const mixedHistoryMatches = buildMixedHistoryMatches(sessionData);
   const usesCompetitiveGrouping =
     getMatchmakerSessionType(sessionData) === SessionType.LADDER ||
     getMatchmakerSessionType(sessionData) === SessionType.RACE;
@@ -1445,39 +1384,17 @@ function buildPlayerGroupSelectionRunner({
 
     const runV3 = (
       sourcePlayers: MatchmakerV3Player[],
-      constraints = selectionConstraints,
-      useAllActivePlayers = false
+      constraints = selectionConstraints
     ) =>
       findBestSingleCourtSelectionV3(sourcePlayers, {
         sessionMode: getMatchmakerSessionMode(sessionData),
         sessionType: getMatchmakerSessionType(sessionData),
         respectPlayerRest: sessionData.respectPlayerRest,
         completedMatches,
-        mixedHistoryMatches,
-        ...getSocialSelectionOptions(sessionData, v3Players),
+        ...getRotationSelectionOptions(sessionData, v3Players),
         excludedQuartetKey,
         excludedQuartetKeys,
         excludedPartitionKey,
-        candidatePoolVariants: useAllActivePlayers
-          ? (candidatePool) => [
-              {
-                ...candidatePool,
-                includedBandValues: [
-                  ...new Set(
-                    candidatePool.activePlayers.map(
-                      (player) => player.effectiveMatchCount
-                    )
-                  ),
-                ].sort((left, right) => left - right),
-                widened: true,
-                lockedPlayers: [],
-                requiredSelectableCount: 4,
-                selectablePlayers: [...candidatePool.activePlayers],
-                candidatePlayers: [...candidatePool.activePlayers],
-                tieZone: null,
-              },
-            ]
-          : undefined,
         selectionConstraints: constraints,
       }).selection;
 
@@ -1501,8 +1418,7 @@ function buildPlayerGroupSelectionRunner({
     )) {
       const selection = runV3(
         getQuotaTierPlayers(tier),
-        buildQuotaTierConstraints(composition, tier),
-        true
+        buildQuotaTierConstraints(composition, tier)
       );
       if (selection) return finishSelection(selection);
     }
@@ -1612,7 +1528,7 @@ function orderPlayerGroupCompositionsForCourts(
       return ordered;
 }
 
-function selectSocialPlayerGroupBatch({
+function selectRotationPlayerGroupBatch({
   sessionData,
   rankedCandidates,
   playersById,
@@ -1651,7 +1567,7 @@ function selectSocialPlayerGroupBatch({
     plan.compositions.every((composition) => composition.courtGroupType === normalizedRequiredType)
   );
   const players = buildV3Players(sessionData, playersById, rankedCandidates);
-  const socialOptions = getSocialSelectionOptions(sessionData, players);
+  const socialOptions = getRotationSelectionOptions(sessionData, players);
   for (const courtCount of [...new Set(plans.map((plan) => plan.filledCourtCount))]) {
     const levelPlans = plans.filter((plan) => plan.filledCourtCount === courtCount);
     let rank = 0;
@@ -1672,7 +1588,8 @@ function selectSocialPlayerGroupBatch({
         courts: compositions.map((composition) => getPlayerGroupSelectionConstraints(composition)),
       };
     });
-    const result = findBestSocialBatchSelection(players, {
+    const result = findBestRotationBatchSelection(players, {
+      sessionType: getMatchmakerSessionType(sessionData),
       courtCount,
       sessionMode: getMatchmakerSessionMode(sessionData),
       respectPlayerRest: sessionData.respectPlayerRest,
@@ -1726,10 +1643,10 @@ function selectPoolEnabledSingleCourtMatch({
   reshuffleSource: ReshuffleSource | null;
   requiredCourtGroupType?: CourtGroupType | string | null;
 }): PoolAwareSelection {
-  if (getMatchmakerSessionType(sessionData) === SessionType.SOCIAL_MIX) {
+  if (usesRotationMatchmaking(getMatchmakerSessionType(sessionData))) {
     const select = (excludedQuartetKeys?: ReadonlySet<string>, excludedPartitionKey?: string) => {
       try {
-        return selectSocialPlayerGroupBatch({
+        return selectRotationPlayerGroupBatch({
           sessionData, rankedCandidates, playersById, requestedMatchCount: 1,
           requiredCourtGroupType, excludedQuartetKeys, excludedPartitionKey,
         }).selections[0] ?? null;
@@ -1880,7 +1797,6 @@ export function selectSingleCourtMatch({
   }
 
   const completedMatches = buildCompletedMatches(sessionData);
-  const mixedHistoryMatches = buildMixedHistoryMatches(sessionData);
   const usesCompetitiveGrouping =
     getMatchmakerSessionType(sessionData) === SessionType.LADDER ||
     getMatchmakerSessionType(sessionData) === SessionType.RACE;
@@ -1899,8 +1815,7 @@ export function selectSingleCourtMatch({
           sessionType: getMatchmakerSessionType(sessionData),
           respectPlayerRest: sessionData.respectPlayerRest,
           completedMatches,
-          mixedHistoryMatches,
-          ...getSocialSelectionOptions(
+          ...getRotationSelectionOptions(
             sessionData, buildV3Players(sessionData, playersById, rankedCandidates)
           ),
         }
@@ -1992,8 +1907,7 @@ export function selectSingleCourtMatch({
     sessionType: getMatchmakerSessionType(sessionData),
     respectPlayerRest: sessionData.respectPlayerRest,
     completedMatches,
-    mixedHistoryMatches,
-    ...getSocialSelectionOptions(sessionData, v3Players),
+    ...getRotationSelectionOptions(sessionData, v3Players),
     excludedQuartetKey: previousQuartetKey,
   });
 
@@ -2010,8 +1924,7 @@ export function selectSingleCourtMatch({
     sessionType: getMatchmakerSessionType(sessionData),
     respectPlayerRest: sessionData.respectPlayerRest,
     completedMatches,
-    mixedHistoryMatches,
-    ...getSocialSelectionOptions(sessionData, v3Players),
+    ...getRotationSelectionOptions(sessionData, v3Players),
     excludedPartitionKey: previousPartitionKey,
   });
 
@@ -2145,8 +2058,7 @@ function selectExactQuartetMatch({
       sessionType: getMatchmakerSessionType(sessionData),
       respectPlayerRest: sessionData.respectPlayerRest,
       completedMatches: buildCompletedMatches(sessionData),
-      mixedHistoryMatches: buildMixedHistoryMatches(sessionData),
-      ...getSocialSelectionOptions(
+      ...getRotationSelectionOptions(
         sessionData,
         buildV3Players(sessionData, playersById, rankedCandidates)
       ),
@@ -2194,7 +2106,7 @@ export function selectReplacementMatch({
 
   const excludedUserIdSet = new Set(excludedUserIds);
 
-  if (getMatchmakerSessionType(sessionData) === SessionType.SOCIAL_MIX) {
+  if (usesRotationMatchmaking(getMatchmakerSessionType(sessionData))) {
     const eligibleCandidates = rankedCandidates.filter((candidate) =>
       retainedUserIdSet.has(candidate.userId) || !excludedUserIdSet.has(candidate.userId)
     );
@@ -2203,7 +2115,7 @@ export function selectReplacementMatch({
     }
     if (sessionData.poolsEnabled) {
       try {
-        return selectSocialPlayerGroupBatch({
+        return selectRotationPlayerGroupBatch({
           sessionData, rankedCandidates: eligibleCandidates, playersById,
           requestedMatchCount: 1, requiredCourtGroupType,
           lockedPlayerIds: retainedUserIdSet,
@@ -2214,12 +2126,13 @@ export function selectReplacementMatch({
       }
     } else {
       const players = buildV3Players(sessionData, playersById, eligibleCandidates);
-      const result = findBestSocialBatchSelection(players, {
+      const result = findBestRotationBatchSelection(players, {
+        sessionType: getMatchmakerSessionType(sessionData),
         courtCount: 1,
         sessionMode: getMatchmakerSessionMode(sessionData),
         respectPlayerRest: sessionData.respectPlayerRest,
         completedMatches: buildCompletedMatches(sessionData),
-        ...getSocialSelectionOptions(sessionData, players),
+        ...getRotationSelectionOptions(sessionData, players),
         lockedPlayerIds: retainedUserIdSet,
       });
       if (result.selection) {
@@ -2616,8 +2529,8 @@ export function selectBatchMatches({
   }
 
   if (sessionData.poolsEnabled) {
-    if (getMatchmakerSessionType(sessionData) === SessionType.SOCIAL_MIX) {
-      return selectSocialPlayerGroupBatch({
+    if (usesRotationMatchmaking(getMatchmakerSessionType(sessionData))) {
+      return selectRotationPlayerGroupBatch({
         sessionData, rankedCandidates, playersById, requestedMatchCount,
         requestedCourtIds, randomFn,
       });
@@ -2774,8 +2687,7 @@ export function selectBatchMatches({
       sessionType: getMatchmakerSessionType(sessionData),
       respectPlayerRest: sessionData.respectPlayerRest,
       completedMatches: buildCompletedMatches(sessionData),
-      mixedHistoryMatches: buildMixedHistoryMatches(sessionData),
-      ...getSocialSelectionOptions(
+      ...getRotationSelectionOptions(
         sessionData, buildV3Players(sessionData, playersById, rankedCandidates)
       ),
       randomFn,

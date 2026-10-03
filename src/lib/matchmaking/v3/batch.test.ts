@@ -109,7 +109,7 @@ describe("matchmaking v3 batch selection", () => {
     expect(result.debug.availableCandidateCount).toBe(9);
     expect(result.debug.consideredCandidateCount).toBe(9);
     expect(result.debug.candidatePlayerIds).toHaveLength(9);
-    expect(result.debug.candidateCap).toBe(24);
+    expect(result.debug.candidateCap).toBeNull();
   });
 
   it("considers all 20 available points players for a single court", () => {
@@ -123,10 +123,10 @@ describe("matchmaking v3 batch selection", () => {
     expect(result.debug.availableCandidateCount).toBe(20);
     expect(result.debug.consideredCandidateCount).toBe(20);
     expect(result.debug.candidatePlayerIds).toHaveLength(20);
-    expect(result.debug.candidateCap).toBe(24);
+    expect(result.debug.candidateCap).toBeNull();
   });
 
-  it("caps a 25-player single-court points pool at 24 candidates", () => {
+  it("retains all 25 fairness-admissible single-court points candidates", () => {
     const result = findBestBatchSelectionV3(createPlayers(25), {
       courtCount: 1,
       sessionMode: SessionMode.MEXICANO,
@@ -135,9 +135,9 @@ describe("matchmaking v3 batch selection", () => {
     });
 
     expect(result.debug.availableCandidateCount).toBe(25);
-    expect(result.debug.consideredCandidateCount).toBe(24);
-    expect(result.debug.candidatePlayerIds).toHaveLength(24);
-    expect(result.debug.candidateCap).toBe(24);
+    expect(result.debug.consideredCandidateCount).toBe(25);
+    expect(result.debug.candidatePlayerIds).toHaveLength(25);
+    expect(result.debug.candidateCap).toBeNull();
   });
 
   it("considers all 20 available players for two courts", () => {
@@ -151,10 +151,10 @@ describe("matchmaking v3 batch selection", () => {
     expect(result.debug.availableCandidateCount).toBe(20);
     expect(result.debug.consideredCandidateCount).toBe(20);
     expect(result.debug.candidatePlayerIds).toHaveLength(20);
-    expect(result.debug.candidateCap).toBe(20);
+    expect(result.debug.candidateCap).toBeNull();
   });
 
-  it("caps a 21-player two-court pool at 20 candidates", () => {
+  it("retains all 21 fairness-admissible two-court points candidates", () => {
     const result = findBestBatchSelectionV3(createPlayers(21), {
       courtCount: 2,
       sessionMode: SessionMode.MEXICANO,
@@ -163,9 +163,9 @@ describe("matchmaking v3 batch selection", () => {
     });
 
     expect(result.debug.availableCandidateCount).toBe(21);
-    expect(result.debug.consideredCandidateCount).toBe(20);
-    expect(result.debug.candidatePlayerIds).toHaveLength(20);
-    expect(result.debug.candidateCap).toBe(20);
+    expect(result.debug.consideredCandidateCount).toBe(21);
+    expect(result.debug.candidatePlayerIds).toHaveLength(21);
+    expect(result.debug.candidateCap).toBeNull();
   });
 
   it("considers all 20 available players for three courts", () => {
@@ -179,11 +179,11 @@ describe("matchmaking v3 batch selection", () => {
     expect(result.debug.availableCandidateCount).toBe(20);
     expect(result.debug.consideredCandidateCount).toBe(20);
     expect(result.debug.candidatePlayerIds).toHaveLength(20);
-    expect(result.debug.candidateCap).toBe(20);
+    expect(result.debug.candidateCap).toBeNull();
   });
 
   it(
-    "caps a 30-player four-court pool at 24 candidates",
+    "retains all 30 four-court points candidates while bounding global search",
     () => {
       const result = findBestBatchSelectionV3(createPlayers(30), {
         courtCount: 4,
@@ -193,9 +193,9 @@ describe("matchmaking v3 batch selection", () => {
       });
 
       expect(result.debug.availableCandidateCount).toBe(30);
-      expect(result.debug.consideredCandidateCount).toBe(24);
-      expect(result.debug.candidatePlayerIds).toHaveLength(24);
-      expect(result.debug.candidateCap).toBe(24);
+      expect(result.debug.consideredCandidateCount).toBe(30);
+      expect(result.debug.candidatePlayerIds).toHaveLength(30);
+      expect(result.debug.candidateCap).toBeNull();
     },
     15_000
   );
@@ -214,8 +214,11 @@ describe("matchmaking v3 batch selection", () => {
     expect(result.debug.candidateCap).toBeNull();
   });
 
-  it("returns the best found batch when the search limit is reached", () => {
-    const result = findBestBatchSelectionV3(createPlayers(12), {
+  it("rejects an incumbent when the search limit leaves its balance baseline uncertified", () => {
+    // Distinct powers of two cannot form a zero-gap court, so an early
+    // incumbent cannot certify the universal zero lower bound.
+    const roster = createPlayers(12).map((player, index) => ({ ...player, strength: 2 ** index }));
+    const result = findBestBatchSelectionV3(roster, {
       courtCount: 2,
       sessionMode: SessionMode.MEXICANO,
       sessionType: SessionType.POINTS,
@@ -225,12 +228,13 @@ describe("matchmaking v3 batch selection", () => {
       },
     });
 
-    expect(result.selection).not.toBeNull();
+    expect(result.selection).toBeNull();
     expect(result.debug.searchLimitReached).toBe(true);
-    expect(result.debug.failureReason).toBeNull();
+    expect(result.debug.balanceCertified).toBe(false);
+    expect(result.debug.failureReason).toBe("SEARCH_LIMIT_REACHED");
   });
 
-  it("finds a full batch under the rating ceiling when the normal search limit is reached", () => {
+  it("does not treat an under-ceiling batch as safe before its near-best baseline is certified", () => {
     const allowedQuartets = new Set([
       "A|B|C|D",
       "E|F|G|H",
@@ -260,16 +264,12 @@ describe("matchmaking v3 batch selection", () => {
       }
     );
 
-    expect(result.selection?.selections).toHaveLength(2);
-    expect(result.selection?.maxBalanceGap).toBe(50);
-    expect(
-      result.selection?.selections
-        .map((court) => [...court.ids].sort().join("|"))
-        .sort()
-    ).toEqual(["A|B|E|F", "C|D|G|H"]);
+    expect(result.selection).toBeNull();
+    expect(result.debug.balanceCertified).toBe(false);
+    expect(result.debug.failureReason).toBe("SEARCH_LIMIT_REACHED");
   });
 
-  it("keeps the dynamic cap policy when respectPlayerRest is false", () => {
+  it("keeps the full candidate vocabulary when respectPlayerRest is false", () => {
     const result = findBestBatchSelectionV3(createPlayers(9), {
       courtCount: 1,
       sessionMode: SessionMode.MEXICANO,
@@ -280,7 +280,7 @@ describe("matchmaking v3 batch selection", () => {
 
     expect(result.selection).not.toBeNull();
     expect(result.debug.consideredCandidateCount).toBe(9);
-    expect(result.debug.candidateCap).toBe(24);
+    expect(result.debug.candidateCap).toBeNull();
   });
 
   it("includes an arrival-priority late player in a legal batch", () => {
@@ -384,7 +384,7 @@ describe("matchmaking v3 batch selection", () => {
     );
   });
 
-  it("builds a full global batch and uses all locked lower-band players", () => {
+  it("builds a full global batch containing all lower-band players without implicit anchors", () => {
     const result = findBestBatchSelectionV3(
       [
         createPlayer("A", { matchesPlayed: 4 }),
@@ -420,7 +420,7 @@ describe("matchmaking v3 batch selection", () => {
 
     expect(result.selection).not.toBeNull();
     expect(result.selection?.selections).toHaveLength(2);
-    expect(result.debug.lockedPlayerIds).toEqual(["A", "B", "C", "D", "E", "F"]);
+    expect(result.debug.lockedPlayerIds).toEqual([]);
     expect(
       new Set(result.selection?.selections.flatMap((selection) => selection.ids))
     ).toEqual(new Set(["A", "B", "C", "D", "E", "F", "G", "H"]));
@@ -504,7 +504,7 @@ describe("matchmaking v3 batch selection", () => {
     expect(quartetKeys).not.toContain("E|F|G|H");
   });
 
-  it("avoids repeating whole court groups in points batches before balance", () => {
+  it("varies whole court groups in Points batches inside their balance envelope", () => {
     const result = findBestBatchSelectionV3(
       Array.from({ length: 10 }, (_, index) =>
         createPlayer(String.fromCharCode(65 + index), { strength: 1000 })
@@ -541,7 +541,7 @@ describe("matchmaking v3 batch selection", () => {
         ...Array.from({ length: 8 }, (_, index) =>
           createPlayer(String.fromCharCode(65 + index), { strength: 1000 })
         ),
-        createPlayer("I", { strength: 1100 }),
+        createPlayer("I", { strength: 1060 }),
       ],
       {
         courtCount: 2,
@@ -600,7 +600,7 @@ describe("matchmaking v3 batch selection", () => {
     expect(result.selection?.maxBalanceGap).toBe(0);
   });
 
-  it("keeps a middle split inside the absolute rating cap during batch compression", () => {
+  it("retains a middle split for entropy within the rating ceiling and near-best window", () => {
     const result = findBestBatchSelectionV3(
       [
         createPlayer("A", { strength: 1113 }),
@@ -773,7 +773,7 @@ describe("matchmaking v3 batch selection", () => {
     });
   });
 
-  it("considers the full mixed candidate pool when it fits under the dynamic cap", () => {
+  it("considers all Mixed candidates through baseline and entropy passes", () => {
     const result = findBestBatchSelectionV3(
       [
         createPlayer("M1", { matchesPlayed: 0 }),
@@ -799,13 +799,13 @@ describe("matchmaking v3 batch selection", () => {
     );
 
     expect(result.selection).not.toBeNull();
-    expect(result.debug.searchAttemptCount).toBe(1);
+    expect(result.debug.searchAttemptCount).toBe(2);
     expect(result.debug.candidatePlayerIds).toHaveLength(13);
-    expect(result.debug.candidateCap).toBe(20);
+    expect(result.debug.candidateCap).toBeNull();
     expectLegalMixedBatch(result.selection, 2);
   });
 
-  it("relaxes locked mixed batch players when one fair player must wait for feasibility", () => {
+  it("finds the fairest legal Mixed batch when one lower-band player must wait", () => {
     const result = findBestBatchSelectionV3(
       [
         createLowerPlayer("F1", { matchesPlayed: 0 }),

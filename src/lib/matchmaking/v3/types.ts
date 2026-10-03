@@ -54,6 +54,21 @@ export interface V3SocialStarvationSummary {
   totalLeftOutRestTurns: number;
 }
 
+/** A fixed admissibility envelope established inside the best rotation class. */
+export interface V3BalanceGuardrail {
+  mode: "POINTS" | "RATING";
+  bestMaxBalanceGap: number;
+  bestTotalBalanceGap: number;
+  nearBestWindow: number;
+  absoluteCeiling: number | null;
+  allowedMaxBalanceGap: number;
+  allowedTotalBalanceGap: number | null;
+  ceilingFeasible: boolean;
+  baselineCertified: boolean;
+}
+
+export type V3FinalTieBreak = "EXACT_REMATCH" | "RANDOM" | "DETERMINISTIC";
+
 export type ActiveMatchmakerV3Player<
   T extends MatchmakerV3Player = MatchmakerV3Player,
 > = T & {
@@ -153,13 +168,14 @@ export interface V3SingleCourtSelection<
   partnerRepeatPenalty: number;
   opponentRepeatPenalty: number;
   exactRematchPenalty: number;
-  mixedVarietyPenalty?: number;
-  mixedGlobalVarietyPenalty?: number;
-  mixedGame?: boolean;
   socialVarietyGain?: number;
   socialVarietyGains?: SocialVarietyGains;
   socialVariety?: SocialVarietySnapshot;
   socialStarvation?: V3SocialStarvationSummary;
+  balanceGuardrail?: V3BalanceGuardrail;
+  finalTieBreak?: V3FinalTieBreak | null;
+  fairnessVector?: number[];
+  schedulingRank?: number;
   consecutivePlayCount: number;
   consecutivePlayMaxBurden: number;
   consecutivePlayTotalBurden: number;
@@ -192,6 +208,11 @@ export interface V3SingleCourtDebug {
   fairnessOptimal?: boolean;
   fairnessCertified?: boolean;
   starvationCertified?: boolean;
+  balanceCertified?: boolean;
+  balanceGuardrail?: V3BalanceGuardrail;
+  fairnessVector?: number[];
+  schedulingRank?: number;
+  finalTieBreak?: V3FinalTieBreak | null;
   socialIdealRestGap?: number;
   availableOverduePlayerCount?: number;
   selectedOverduePlayerCount?: number | null;
@@ -226,10 +247,12 @@ export interface V3BatchSelection<
   totalPartnerRepeatPenalty: number;
   totalOpponentRepeatPenalty: number;
   totalExactRematchPenalty: number;
-  totalMixedVarietyPenalty?: number;
-  totalMixedGlobalVarietyPenalty?: number;
   totalSocialVarietyGain?: number;
   totalSocialVarietyGains?: SocialVarietyGains;
+  balanceGuardrail?: V3BalanceGuardrail;
+  finalTieBreak?: V3FinalTieBreak | null;
+  fairnessVector?: number[];
+  schedulingRank?: number;
   totalRandomScore: number;
   totalPairingRandomScore: number;
   sidePairingLayoutKeys: [string, string];
@@ -275,6 +298,11 @@ export interface V3BatchDebug {
   fairnessOptimal?: boolean;
   fairnessCertified?: boolean;
   starvationCertified?: boolean;
+  balanceCertified?: boolean;
+  balanceGuardrail?: V3BalanceGuardrail;
+  fairnessVector?: number[];
+  schedulingRank?: number;
+  finalTieBreak?: V3FinalTieBreak | null;
   varietyOptimal?: boolean;
   socialIdealRestGap?: number;
   availableOverduePlayerCount?: number;

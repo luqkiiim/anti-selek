@@ -1,3 +1,7 @@
+import { buildSocialSessionHistory } from "@/lib/matchmaking/socialSessionHistory";
+import { buildSocialVarietyContext, getSocialVarietyGain } from "@/lib/matchmaking/v3/socialVariety";
+import { getDoublesPartitions } from "@/lib/matchmaking/v3/balance";
+import { buildPlayerGroupCourtPlans, getPlayerGroupSelectionConstraints } from "@/lib/matchmaking/playerGroupPlanner";
 import { prisma } from "@/lib/prisma";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
@@ -746,7 +750,7 @@ describe("generate match service", () => {
         rankedCandidates.find((candidate) => candidate.userId === "resumed")
           ?.effectiveMatchCount
       ).toBe(5);
-      expect(rankedCandidates[0]?.userId).toBe("B");
+      expect(rankedCandidates.map((candidate) => candidate.effectiveMatchCount)).toEqual([5, 5, 5]);
       expect(rankedCandidates.map((candidate) => candidate.userId)).toEqual(
         expect.arrayContaining(["resumed", "A"])
       );
@@ -1411,7 +1415,7 @@ describe("generate match service", () => {
         const players = [
           createSessionPlayer("A-late", {
             pool: SessionPool.A,
-            matchesPlayed: 5,
+            matchesPlayed: type === SessionType.RACE ? 5 : 0,
             arrivalPriorityAt: new Date("2026-08-23T00:00:00Z"),
           }),
           createSessionPlayer("A-ready", { pool: SessionPool.A }),
@@ -1500,7 +1504,7 @@ describe("generate match service", () => {
       }
     );
 
-    it("softly prefers players who are behind their crossover target", () => {
+    it("optimizes shared entropy within legal crossover seats instead of individual crossover debt", () => {
       const players = [
         ...["A1", "A2", "A3", "A4"].map((id) =>
           createSessionPlayer(id, {
@@ -1557,30 +1561,6 @@ describe("generate match service", () => {
         completedAt: null,
       })) as GenerateMatchSession["matches"];
 
-      vi.mocked(findBestSingleCourtSelectionV3).mockImplementation(
-        (matchmakerPlayers) => {
-          const poolAIds = matchmakerPlayers
-            .filter((player) => player.pool === SessionPool.A)
-            .map((player) => player.userId);
-          const poolBIds = matchmakerPlayers
-            .filter((player) => player.pool === SessionPool.B)
-            .map((player) => player.userId);
-          const ids = [...poolAIds, ...poolBIds] as [
-            string,
-            string,
-            string,
-            string,
-          ];
-          return {
-            selection: createV3Selection(ids, {
-              team1: [poolAIds[0], poolBIds[0]],
-              team2: [poolAIds[1], poolBIds[1]],
-            }),
-            debug: {} as never,
-          };
-        }
-      );
-
       const sessionData = createSessionData({
         poolsEnabled: true,
         crossoverFrequency: SessionCrossoverFrequency.BALANCED,
@@ -1597,12 +1577,28 @@ describe("generate match service", () => {
         reshuffleSource: null,
       });
 
-      expect(result.ids).toEqual(
-        expect.arrayContaining(["A3", "A4", "B3", "B4"])
-      );
-      expect(result.ids).not.toEqual(
-        expect.arrayContaining(["A1", "A2", "B1", "B2"])
-      );
+      expect(result.poolASeatCount).toBe(2);
+      expect(result.poolBSeatCount).toBe(2);
+      expect(result.courtGroupType).toBe(CourtGroupType.CROSSOVER);
+      const opportunityConstraints = buildPlayerGroupCourtPlans({
+        requestedCourtCount: 1, activePoolAPlayerCount: 4, activePoolBPlayerCount: 4,
+        waitingPoolAPlayerCount: 4, waitingPoolBPlayerCount: 4,
+        crossoverFrequency: sessionData.crossoverFrequency,
+      }).flatMap((plan) => plan.compositions.map((composition) => getPlayerGroupSelectionConstraints(composition)));
+      const context = buildSocialVarietyContext(players.map((entry) => ({
+        ...entry, strength: 1000, matchmakingBaseline: entry.matchesPlayed,
+      })), buildSocialSessionHistory(sessionData), { sessionMode: SessionMode.MEXICANO, opportunityConstraints });
+      let oracle = -Infinity;
+      for (let a = 0; a < 3; a++) for (let b = a + 1; b < 4; b++) {
+        for (let c = 4; c < 7; c++) for (let d = c + 1; d < 8; d++) {
+          for (const partition of getDoublesPartitions([players[a].userId, players[b].userId, players[c].userId, players[d].userId])) {
+            const partnersCrossPools = [partition.team1, partition.team2].every((team) => team[0][0] !== team[1][0]);
+            if (partnersCrossPools) oracle = Math.max(oracle, getSocialVarietyGain(partition, context));
+          }
+        }
+      }
+      expect(getSocialVarietyGain(result.partition, context)).toBeCloseTo(oracle, 12);
+      expect(JSON.parse(result.matchmakingReasonJson!).metrics.balanceGuardrail.baselineCertified).toBe(true);
     });
 
     it("reshuffles ladder sessions to an alternative quartet when possible", () => {

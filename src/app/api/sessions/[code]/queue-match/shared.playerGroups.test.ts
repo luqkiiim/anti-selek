@@ -105,6 +105,8 @@ function sessionRecord(overrides: Record<string, unknown> = {}) {
     id: "session-1",
     code: "ABC",
     status: SessionStatus.ACTIVE,
+    type: SessionType.POINTS,
+    mode: SessionMode.MEXICANO,
     poolsEnabled: true,
     autoQueueEnabled: true,
     players,
@@ -139,6 +141,7 @@ function createTransactionMock() {
         pendingPool?: SessionPool | null;
       }>
     > => {
+      if (select?.gender) return (where.userId.in as string[]).map((userId) => ({ userId }));
       if (!select?.pool) return [];
       return (where.userId.in as string[]).map((userId) => ({
         userId,
@@ -149,7 +152,7 @@ function createTransactionMock() {
 
   return {
     session: {
-      findUnique: vi.fn().mockResolvedValue({ poolsEnabled: true }),
+      findUnique: vi.fn().mockResolvedValue({ poolsEnabled: true, type: SessionType.POINTS, mode: SessionMode.MEXICANO }),
     },
     queuedMatch: {
       create: queuedMatchCreate,
@@ -221,7 +224,7 @@ describe("queued player-group lifecycle", () => {
         poolASeatCount: 2,
         poolBSeatCount: 2,
         isAutomatic: false,
-        matchmakingReasonJson: null,
+        matchmakingReasonJson: expect.any(String),
       }),
     });
     expect(result).toMatchObject({
@@ -230,6 +233,12 @@ describe("queued player-group lifecycle", () => {
       poolBSeatCount: 2,
       isAutomatic: false,
     });
+    const metadata = JSON.parse(tx.queuedMatch.create.mock.calls[0][0].data.matchmakingReasonJson);
+    expect(metadata.socialVariety).toMatchObject({ version: 1, basis: "EFFECTIVE_MIXED_SIDE", courtType: null });
+    expect(Object.keys(metadata.socialVariety.effectiveSideByUserId).sort()).toEqual(["a1", "a2", "b1", "b2"]);
+    expect(metadata.source).toBeUndefined();
+    expect(metadata.summary).toBeUndefined();
+    expect(result.matchmakingReason).toBeNull();
   });
 
   it("persists unknown Social manual type history without changing the manual source", async () => {
@@ -369,14 +378,16 @@ describe("queued player-group lifecycle", () => {
     });
     const session = sessionRecord({ queuedMatch: oldQueue });
     const tx = createTransactionMock();
-    tx.sessionPlayer.findMany
-      .mockResolvedValueOnce([
-        { userId: "a1", pool: SessionPool.A },
-        { userId: "b1", pool: SessionPool.B },
-        { userId: "a2", pool: SessionPool.A },
-        { userId: "spare", pool: SessionPool.B },
-      ])
-      .mockResolvedValueOnce([{ userId: "b2", pendingPool: SessionPool.A }]);
+    tx.sessionPlayer.findMany.mockImplementation(async ({ where, select }) => {
+      // Assignment history and pending-group state are separate reads. Answer
+      // the requested projection so another snapshot query cannot consume a
+      // pending-group result by changing the call order.
+      if (select?.pendingPool) return [{ userId: "b2", pendingPool: SessionPool.A }];
+      if (select?.gender) return where.userId.in.map((userId: string) => ({ userId }));
+      return where.userId.in.map((userId: string) => ({
+        userId, pool: userId.startsWith("a") ? SessionPool.A : SessionPool.B,
+      }));
+    });
     tx.queuedMatch.findUnique.mockResolvedValue(
       queueRecord({
         team1User1Id: "a1",
@@ -411,6 +422,14 @@ describe("queued player-group lifecycle", () => {
       },
       data: { pool: SessionPool.A, pendingPool: null },
     });
+    expect(tx.sessionPlayer.findMany).toHaveBeenCalledWith({
+      where: { sessionId: "session-1", userId: { in: ["b2"] }, pendingPool: { not: null } },
+      select: { userId: true, pendingPool: true },
+    });
+    expect(tx.sessionPlayer.updateMany).toHaveBeenCalledTimes(1);
+    const metadata = JSON.parse(tx.queuedMatch.update.mock.calls[0][0].data.matchmakingReasonJson);
+    expect(Object.keys(metadata.socialVariety.effectiveSideByUserId).sort()).toEqual(["a1", "a2", "b1", "spare"]);
+    expect(metadata.source).toBeUndefined();
   });
 
   it("applies pending groups for players removed by a manual queue reshuffle", async () => {
@@ -424,14 +443,16 @@ describe("queued player-group lifecycle", () => {
     });
     const session = sessionRecord({ queuedMatch: oldQueue });
     const tx = createTransactionMock();
-    tx.sessionPlayer.findMany
-      .mockResolvedValueOnce([
-        { userId: "a1", pool: SessionPool.A },
-        { userId: "b1", pool: SessionPool.B },
-        { userId: "a2", pool: SessionPool.A },
-        { userId: "spare", pool: SessionPool.B },
-      ])
-      .mockResolvedValueOnce([{ userId: "b2", pendingPool: SessionPool.A }]);
+    tx.sessionPlayer.findMany.mockImplementation(async ({ where, select }) => {
+      // Assignment history and pending-group state are separate reads. Answer
+      // the requested projection so another snapshot query cannot consume a
+      // pending-group result by changing the call order.
+      if (select?.pendingPool) return [{ userId: "b2", pendingPool: SessionPool.A }];
+      if (select?.gender) return where.userId.in.map((userId: string) => ({ userId }));
+      return where.userId.in.map((userId: string) => ({
+        userId, pool: userId.startsWith("a") ? SessionPool.A : SessionPool.B,
+      }));
+    });
     tx.queuedMatch.findUnique.mockResolvedValue(
       queueRecord({
         team1User1Id: "a1",
@@ -466,5 +487,13 @@ describe("queued player-group lifecycle", () => {
       },
       data: { pool: SessionPool.A, pendingPool: null },
     });
+    expect(tx.sessionPlayer.findMany).toHaveBeenCalledWith({
+      where: { sessionId: "session-1", userId: { in: ["b2"] }, pendingPool: { not: null } },
+      select: { userId: true, pendingPool: true },
+    });
+    expect(tx.sessionPlayer.updateMany).toHaveBeenCalledTimes(1);
+    const metadata = JSON.parse(tx.queuedMatch.update.mock.calls[0][0].data.matchmakingReasonJson);
+    expect(Object.keys(metadata.socialVariety.effectiveSideByUserId).sort()).toEqual(["a1", "a2", "b1", "spare"]);
+    expect(metadata.source).toBeUndefined();
   });
 });

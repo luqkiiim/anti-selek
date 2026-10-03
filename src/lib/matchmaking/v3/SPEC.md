@@ -1,418 +1,74 @@
-# Matchmaking v3 Spec
-
-This document defines the intended behavior of the live `v3` matcher.
-
-## Social mode
-
-Social uses the same scorer for single courts, whole batches, player groups,
-interclub games, queues, and reshuffles. The sections below describe the
-balanced matcher unless a Social rule is stated explicitly.
-
-Social gives each priority a turn in this order:
-
-1. Fair turns
-2. Arrival priority when turn counts tie
-3. Existing player-group seat and crossover rules
-4. Derived rest-turn protection for overdue players
-5. Ongoing variety
-6. Ordinary rest turns, when the session enables them
-7. Team balance
-8. Recent repeats and random tie-breaks
-
-The Social rest-turn gap is derived from the full unpaused session roster,
-including players currently busy on court: `max(0, ceil((N - 4) / 4))`.
-Available players whose rest turns exceed that gap are overdue. The batch
-minimizes the overdue players left out, then their highest rest-turn count and
-total rest turns. The threshold is fixed for each selection. This guardrail
-still applies when ordinary rest priority is disabled; after all available
-overdue players are included, variety remains ahead of ordinary rest.
-
-Variety measures how evenly each player has experienced their feasible
-courtmates, partners, opponents, and, in Mixed pairing, mixed-side and own-side
-doubles. All four parts have the same scale: lifetime Shannon entropy divided
-by `log(number of feasible outcomes)`. A batch's score is the change in their
-combined score. A part with fewer than two feasible outcomes contributes zero
-without increasing the weight of other parts. Negative changes are allowed.
-
-This continues valuing less frequent encounters and game types after everyone
-has met and after an own-side game has already happened. There are no quotas,
-fixed percentages, or periodic game-type rules. Existing effective Mixed side
-assignments determine the game types.
-
-Opportunities come from the full unpaused roster, including busy and queued
-players. Pairing, player-group and club restrictions apply; temporary rest and
-court occupancy do not. The opportunity set stays fixed during each decision.
-
-Completed, pending, in-progress, pending-approval and queued assignments count,
-including manual games. Current records rebuild history on every decision, so
-undo, cancellation and replacement remove old assignments. Queue-to-active
-duplicates count once; genuine repeated games still count. Pausing does not
-erase history. New players add new opportunities.
-
-Assignment-time side snapshots live in optional versioned reason JSON metadata
-and survive queue activation. Older games fall back to current resolvable side
-information. Unclassifiable games contribute interpersonal history only.
-
-Social considers all legal player selections and partitions. Two-court searches
-with up to fourteen eligible players compare every compatible pair. Larger
-searches use bounded global search and safe pruning. On timeout, only a complete
-batch with certified turn counts, arrival priority, group rank, and Social
-rest-turn protection may be returned; group schedule ranks are searched in
-order. Diagnostics flag that variety may be suboptimal. Otherwise the search
-reports its limit. Courts are never filled greedily as a fallback.
-
-## Status
-
-- Live matcher reference
-- Wired into session match generation
-- Used as the behavior target for ongoing tuning and regression tests
-
-## Goals
-
-- Fair court time is the top priority
-- No catch-up for late joiners or resumed players
-- Prefer fresh partners when balance is still close
-- Balanced matches within the fair pool
-- Allow small controlled randomness among near-equal good options
-
-## Non-goals
-
-- Ladder / Swiss behavior
-- Strong skill-band grouping inside a quartet
-- Hard anti-clustering rules for resumed or late-joined groups
-- Full-session history optimization
-
-## Rule Order
-
-Global priority order:
-
-1. Fairness of court time
-2. Fresh partners when balance is still close
-3. Match balance
-4. Controlled randomness
-
-Inside an already allowed fairness pool:
-
-1. Waiting time
-2. Fresh partners when balance is still close
-3. Match balance
-4. Controlled randomness
-
-## Definitions
-
-`Active player`
-- A player who is available for selection right now
-- Busy players are not active
-- Paused players are not active
-
-`Fairness band`
-- The lowest current `matchesPlayed` band among active players
-
-`Waiting time`
-- Time since the player most recently became available
-
-`Near-equal waiting time`
-- Waiting times within about one match duration of each other
-
-`Repeated partner`
-- A player is paired with the same teammate again
-- This is the only variety signal the default matcher actively penalizes
-
-## Hard Constraints
-
-The matcher must reject any candidate that violates these constraints:
-
-- Busy players cannot be selected
-- Paused players cannot be selected
-- A player cannot appear twice in the same match or batch
-- Mixed-mode validity must be satisfied before scoring
-
-## Fairness
-
-### Primary fairness signal
-
-Primary fairness is `matchesPlayed`.
-
-Rules:
-
-- Lower `matchesPlayed` always beats higher `matchesPlayed`
-- The matcher should fill from the lowest `matchesPlayed` band first
-- The matcher may only widen to the next higher band when the lowest band alone
-  cannot fill the open courts
-
-### Why fairness is strict
-
-This avoids creating easy 2-match gaps in the active rotation.
-
-Example:
-
-- Need `12` players for `3` courts
-- `12` players have played `4` matches
-- `8` players have played `5` matches
-
-Required behavior:
-
-- Use only the `4-match` group
-- Do not pull from the `5-match` group just to get prettier balance
-
-### Fairness cap intent
-
-For active players, the matcher should avoid creating a situation where one
-active player ends up 2 matches ahead of another active player when enough
-players exist to avoid that.
-
-This is a design intent, not a separate hard rule layered on top of selection.
-
-## Waiting Time
-
-Waiting time is the secondary fairness signal.
-
-Rules:
-
-- Waiting time starts when the player becomes available
-- For late joiners, waiting time starts when they join
-- For resumed players, waiting time starts when they unpause
-- Near-equal waiting times should be treated as tied enough for controlled
-  randomness
-
-## Late Join and Resume Behavior
-
-Late joiners and resumed players are treated the same.
-
-Rules:
-
-- No catch-up
-- No penalty
-- Enter at a neutral baseline
-- Neutral baseline = the current lowest eligible `matchesPlayed` band
-
-What this means:
-
-- They do not re-enter with a priority to erase the visible match gap
-- They do not re-enter artificially behind the rotation either
-- After entry, the gap may drift naturally, but the matcher must not actively
-  pull them back toward the rest of the pool
-
-Paused players are completely ignored while paused.
-
-## Balance
-
-Balance is only about the two teams being reasonably balanced against each
-other.
-
-Session-type inputs:
-
-- `Ratings` sessions use player rating / Elo
-- `Points` sessions use current session performance
-
-Important:
-
-- The default matcher may freely create mixed-strength quartets if the two teams
-  are balanced
-- Quartet coherence by skill band is not part of the default matcher
-- That idea is reserved for a future ladder / Swiss mode
-
-Acceptable default behavior:
-
-- `1 + 24 vs 12 + 13`
-
-if it is fair and the teams are balanced enough.
-
-## Variety
-
-Variety is intentionally narrow in the default matcher.
-
-Main rule:
-
-- Softly penalize repeated partners
-
-Not primary rules:
-
-- repeated same-court pod
-- repeated opponents
-
-These are not the main optimization target in the default matcher.
-
-### History window
-
-Partner-repeat avoidance should use recent history only, not full-session
-memory.
-
-Rules:
-
-- Look at the last `8` relevant completed matches
-- Apply exponential decay so the most recent rematches matter the most
-- Old partner pairings should fade out naturally
-
-### Rematch tradeoff
-
-Repeated partners should lose to a reasonably close alternative.
-
-But:
-
-- a clearly worse match should not win only because it gives a new partner
-
-So partner freshness is a soft preference, not a hard block.
-
-Starting tolerance:
-
-- `Ratings` sessions: only prefer the fresh partner option when the rating
-  balance difference stays very close
-- `Points` sessions: only prefer the fresh partner option when the points-based
-  balance difference stays very close
-
-## Randomness
-
-Randomness is controlled, not dominant.
-
-Rules:
-
-- If one option is clearly better, it should win consistently
-- If several options are near-equal, the matcher may pick different good
-  answers across runs
-- Randomness should mainly break ties among near-equal waiting-time and scoring
-  options
-
-## Batch Selection
-
-When multiple courts are open, the matcher must optimize globally across the
-whole batch.
-
-Rules:
-
-- Do not fill courts greedily one by one
-- Build candidate quartets from the allowed fairness pool
-- Solve the best disjoint set of quartets for the whole batch
-
-Planned implementation direction:
-
-- Branch-and-bound over candidate quartets
-
-Candidate generation should not search the whole session.
-
-Rules:
-
-- Build candidates from the strict fairness pool
-- Add only a small waiting-time tie zone if needed
-- Do not search the full available roster
-- If widening is required, include all players from the lower band first
-- Then fill only the remaining slots from the next band
-- Never skip bands while widening
-- Widen only as much as needed to satisfy player count or hard-constraint
-  feasibility
-
-## Reshuffle
-
-Reshuffle should rerun normal selection.
-
-Rules:
-
-- Do not try to preserve the same 4 players
-- Some of the original 4 may be selected again if the normal matcher chooses
-  them
-
-## Single-Court vs Batch
-
-Single-court and multi-court selection should share:
-
-- the same fairness rules
-- the same waiting-time behavior
-- the same balance model
-- the same partner-repeat logic
-
-Only the search strategy differs:
-
-- single-court: best quartet
-- multi-court: best disjoint batch
-
-## Examples
-
-### Example A: Fairness over prettier balance
-
-State:
-
-- Need `12` players
-- `12` active players at `4` matches
-- `8` active players at `5` matches
-
-Required behavior:
-
-- Use only the `4-match` players
-
-Not allowed:
-
-- Pulling in `5-match` players just because the resulting batch looks nicer
-
-### Example B: Neutral late join
-
-State:
-
-- Active rotation front is at `5` matches
-- A new player joins
-
-Required behavior:
-
-- New player enters with a neutral matchmaking baseline at the current lowest
-  eligible band
-- They do not get catch-up priority
-- Their waiting time starts from join time
-
-### Example C: Neutral resume
-
-State:
-
-- A paused player returns
-- Current active fairness band is `6`
-
-Required behavior:
-
-- The resumed player re-enters at the neutral baseline for the current lowest
-  eligible band
-- Waiting time starts from unpause
-- They rotate normally from there
-
-### Example D: Repeated partner penalty
-
-Recent match:
-
-- `A & B vs X & Y`
-
-Current options:
-
-- Option 1: `A & B vs C & D`
-- Option 2: `A & C vs B & D`
-
-Preferred behavior:
-
-- Option 2 should usually win if it is reasonably close on fairness and balance
-
-### Example E: Default mode allows mixed quartets
-
-If fairness is satisfied and team balance is acceptable, this is allowed:
-
-- `1 + 24 vs 12 + 13`
-
-The default matcher does not try to keep similar-strength players clustered.
-
-## Debug Requirements
-
-The implementation should produce structured debug output in development.
-
-Debug output should be able to explain:
-
-- the active fairness band
-- whether widening was needed
-- waiting-time tie zone used
-- which players were eligible
-- chosen quartet or batch
-- balance score
-- partner-repeat penalty
-
-Initial debug output should be structured data, not UI.
-
-## Remaining Open Questions
-
-- Exact branch-and-bound pruning strategy
-- Exact data shape for debug output objects
-- What additional real-session scenarios should be added to the validation
-  harness
+# Matchmaking v3 specification
+
+The current policy, balance limits, opportunity/history semantics and search
+certification requirements are defined in [README.md](./README.md). This
+specification records behavioral invariants used by regression tests.
+
+## Shared rotation invariants
+
+- Reject busy/paused players and illegal partitions before scoring.
+- Each selected player appears exactly once in a batch.
+- Honor explicit mandatory players and hard pairing, club and seat rules.
+- Minimize sorted effective match counts (`max(matchesPlayed, baseline)`), then
+  arrival priority and structural schedule rank before starvation or entropy.
+- Late joiners and resumed players enter at the lowest eligible neutral
+  baseline, with fresh rest and arrival state; do not force catch-up.
+- Protect available overdue players using the full unpaused roster, even when
+  ordinary rest preference is off.
+- Optimize whole disjoint batches globally, including asynchronous refills.
+
+## Shared variety invariants
+
+- One entropy implementation serves Social and Balanced, with courtmates,
+  partners, opponents and feasible MIXED/OWN_SIDE experience types.
+- Lifetime distributions continue valuing neglected experiences late in a
+  session. No Mixed rate, gender-composition target or one-time obligation.
+- Opportunity sets respect structural constraints and include busy players.
+- Pause does not erase history; new feasible peers expand the vocabulary.
+- Completed, active, pending approval, queued and manual assignments count
+  consistently, with deduplication and immutable assignment-side snapshots.
+
+## Social policy
+
+Keep existing ordering: fairness/arrival, group schedule, starvation, entropy,
+enabled rest, actual balance, late partner/opponent repeats, exact rematch and
+seeded pairing ties. Preserve exact entropy ordering and existing search limits.
+
+## Balanced policy
+
+1. Fairness and arrival priority.
+2. Applicable player-group schedule rules.
+3. Shared starvation protection.
+4. Balance admissibility within that stronger class.
+5. Shared entropy variety.
+6. Enabled ordinary rest.
+7. Actual worst-court gap, total gap, then Points point-difference gap.
+8. Exact-rematch avoidance and seeded/deterministic ties.
+
+The baseline pass minimizes worst-court balance and then total balance within
+one optimal stronger class. Entropy search uses a fixed inclusive envelope:
+Points `best worst gap + 1.5`; Rating `min(50, best worst gap + 30)`. If Rating's
+best achievable worst gap is above 50, admit only best worst and total gap.
+Starvation wins over a prettier baseline that excludes an overdue player.
+
+Balanced never compares candidates using a weighted balance/entropy sum or
+pairwise balance tolerance. Effective entropy ties use fixed 1e-12 buckets.
+Legacy debt, repeat, coverage and rest heuristics cannot prune legal entropy
+candidates. Exact rematches have no influence until all earlier metrics tie.
+
+## Search certification and explanation
+
+At most fourteen available players and at most two courts are exhaustive by
+default. Larger global search is bounded. Explicit limits can interrupt either
+pass. Returning a Balanced batch requires certified stronger priorities and a
+certified balance baseline; incomplete entropy optimization is reported.
+
+Debug/reason output must identify fairness state, schedule rank, starvation
+state, best achievable balance, allowed envelope, actual balance, raw entropy
+and facet gains, final tie-break and search certifications.
+
+Behavior tests cover independent exhaustive batch comparison, awkward skills,
+starvation against balance, full roster opportunities, Mixed imbalance, late
+join/resume, ordinary rest disabled, player groups/interclub, assignment history
+and long asynchronous sessions. Tests must check actual admissibility and
+rotation outcomes rather than asserting retired penalty fields.

@@ -72,31 +72,6 @@ function getUnseenSharedCourtPairs(
   return unseenPairs;
 }
 
-function getMaximumConsecutiveMatches(
-  matches: Array<{ team1: [string, string]; team2: [string, string] }>
-) {
-  const currentStreakByUserId = new Map<string, number>();
-  let maximumStreak = 0;
-
-  for (const match of matches) {
-    const playerIds = new Set([...match.team1, ...match.team2]);
-
-    for (const userId of currentStreakByUserId.keys()) {
-      if (!playerIds.has(userId)) {
-        currentStreakByUserId.set(userId, 0);
-      }
-    }
-
-    for (const userId of playerIds) {
-      const nextStreak = (currentStreakByUserId.get(userId) ?? 0) + 1;
-      currentStreakByUserId.set(userId, nextStreak);
-      maximumStreak = Math.max(maximumStreak, nextStreak);
-    }
-  }
-
-  return maximumStreak;
-}
-
 describe("matchmaking v3 simulation", () => {
   it("keeps one-court seven-player rotation within a one-match spread", () => {
     const state = createSimulationState(createSimulationPlayers(7), {
@@ -117,7 +92,7 @@ describe("matchmaking v3 simulation", () => {
     expect(Math.max(...matchCounts) - Math.min(...matchCounts)).toBeLessThanOrEqual(1);
   });
 
-  it("avoids three straight matches in one-court seven-player balanced points", () => {
+  it("bounds waiting while organic variety precedes ordinary rest in seven-player Balanced", () => {
     const state = createSimulationState(
       createSimulationPlayers(7, { strengthStep: 0 }),
       {
@@ -126,17 +101,16 @@ describe("matchmaking v3 simulation", () => {
     );
 
     for (let round = 0; round < 14; round++) {
-      playRound(state, {
+      const round = playRound(state, {
         courtCount: 1,
         sessionMode: SessionMode.MEXICANO,
         sessionType: SessionType.POINTS,
         randomFn: () => 0,
       });
+      expect(Math.max(...round.selections[0].players.map((player) => player.restTurns))).toBeLessThanOrEqual(2);
     }
-
-    expect(getMaximumConsecutiveMatches(state.completedMatches)).toBeLessThanOrEqual(
-      2
-    );
+    const counts = state.players.map((player) => player.matchesPlayed);
+    expect(Math.max(...counts) - Math.min(...counts)).toBeLessThanOrEqual(1);
   });
 
   it("keeps Social court time fair while variety precedes ordinary rest", () => {

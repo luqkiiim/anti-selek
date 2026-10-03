@@ -28,9 +28,9 @@ function transaction(type = SessionType.SOCIAL_MIX) {
   return { tx, client: tx as unknown as Prisma.TransactionClient };
 }
 
-describe("Social history persistence", () => {
-  it("stores manual sides without inventing an automatic matchmaking reason", async () => {
-    const { client } = transaction();
+describe("shared rotation history persistence", () => {
+  it.each([SessionType.SOCIAL_MIX, SessionType.POINTS, SessionType.ELO])("stores manual sides for %s without inventing an automatic matchmaking reason", async (type) => {
+    const { client } = transaction(type);
     const json = await resolveSocialHistoryReasonJson(client, "session", partition, null);
     expect(JSON.parse(json!).socialVariety).toMatchObject({
       basis: "EFFECTIVE_MIXED_SIDE",
@@ -81,8 +81,8 @@ describe("Social history persistence", () => {
     expect(stored).toBe(json);
   });
 
-  it("leaves non-Social records unchanged", async () => {
-    const { tx, client } = transaction(SessionType.POINTS);
+  it("leaves ladder records unchanged", async () => {
+    const { tx, client } = transaction(SessionType.LADDER);
     expect(await resolveSocialHistoryReasonJson(client, "session", partition, null)).toBeNull();
     expect(await resolveSocialHistoryReasonJson(client, "session", partition, "legacy-reason")).toBe("legacy-reason");
     expect(tx.sessionPlayer.findMany).not.toHaveBeenCalled();

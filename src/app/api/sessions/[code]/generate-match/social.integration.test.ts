@@ -495,3 +495,67 @@ describe("Social generation route adapters", () => {
     expectHistoryScore(selection, context);
   });
 });
+
+
+describe.each([SessionType.POINTS, SessionType.ELO])("%s shared rotation generation adapters", (type) => {
+  beforeEach(() => vi.spyOn(Math, "random").mockReturnValue(0.25));
+  afterEach(() => vi.restoreAllMocks());
+
+  it("reuses Social immutable manual, active and queued entropy history for both courts", async () => {
+    const data = standardFixture();
+    data.type = type;
+    const state = await inputs(data);
+    const context = buildSocialVarietyContext(contextPlayers(data), buildSocialSessionHistory(data), { sessionMode: SessionMode.MIXICANO });
+    const result = selectBatchMatches({ ...state, requestedMatchCount: 2, randomFn: () => 0.25 });
+    expect(result.selections).toHaveLength(2);
+    expect(new Set(result.selections.flatMap((entry) => entry.ids)).size).toBe(8);
+    for (const selection of result.selections) {
+      expect(selection.ids.every((id) => !state.busyPlayerIds.has(id))).toBe(true);
+      expectHistoryScore(selection, context);
+      const reason = JSON.parse(selection.matchmakingReasonJson!);
+      expect(reason.metrics.balanceGuardrail.baselineCertified).toBe(true);
+      expect(reason.metrics.balanceGap).toBeLessThanOrEqual(reason.metrics.balanceGuardrail.allowedMaxBalanceGap);
+      expect(reason.summary.join(" ")).not.toMatch(/coverage penalty|repeat penalty/);
+    }
+  });
+
+  it("compares entropy across legal replacement candidates while retaining all three players", async () => {
+    const players = ["a", "b", "r1", "r2", "r3"].map((id) => player(id, PlayerGender.MALE, { matchesPlayed: 6 }));
+    const data = session({ type, mode: SessionMode.MEXICANO, players, matches: Array.from({ length: 6 }, (_, index) => match(`repeat-${index}`, { team1: ["r1", "a"], team2: ["r2", "r3"] }, players)) });
+    const state = await inputs(data);
+    const rankedCandidates = [...state.rankedCandidates].sort((a, b) => a.userId.localeCompare(b.userId));
+    const selection = selectReplacementMatch({ ...state, rankedCandidates, retainedUserIds: ["r1", "r2", "r3"] });
+    expect(selection.ids.sort()).toEqual(["b", "r1", "r2", "r3"]);
+    expectHistoryScore(selection, buildSocialVarietyContext(contextPlayers(data), buildSocialSessionHistory(data), { sessionMode: SessionMode.MEXICANO }));
+    expect(JSON.parse(selection.matchmakingReasonJson!).metrics.balanceGuardrail).toBeDefined();
+  });
+
+  it("optimizes player-group schedules globally with shared constrained opportunity vocabulary", async () => {
+    const players = [SessionPool.A, SessionPool.B].flatMap((pool) => Array.from({ length: 6 }, (_, index) => player(`${pool}${index + 1}`, PlayerGender.MALE, { pool, matchesPlayed: index < 4 ? 1 : 3 })));
+    const data = session({ type, poolsEnabled: true, mode: SessionMode.MEXICANO, players });
+    const state = await inputs(data);
+    const opportunities = buildPlayerGroupCourtPlans({ requestedCourtCount: 1, activePoolAPlayerCount: 6, activePoolBPlayerCount: 6, waitingPoolAPlayerCount: 6, waitingPoolBPlayerCount: 6, crossoverFrequency: data.crossoverFrequency }).flatMap((plan) => plan.compositions.map((composition) => getPlayerGroupSelectionConstraints<ActiveMatchmakerV3Player<ContextPlayer>>(composition)));
+    const context = buildSocialVarietyContext(contextPlayers(data), [], { sessionMode: SessionMode.MEXICANO, opportunityConstraints: opportunities });
+    const result = selectBatchMatches({ ...state, requestedMatchCount: 2, requestedCourtIds: ["court-1", "court-2"], randomFn: () => 0.25 });
+    expect(result.selections.flatMap((entry) => entry.ids).sort()).toEqual(["A1", "A2", "A3", "A4", "B1", "B2", "B3", "B4"]);
+    for (const selection of result.selections) {
+      expectHistoryScore(selection, context);
+      expect(JSON.parse(selection.matchmakingReasonJson!).metrics.balanceGuardrail).toBeDefined();
+    }
+  });
+
+  it("preserves interclub structure, mandatory replacement players and unrelated queue history", async () => {
+    const players = ["host", "partner"].flatMap((club) => Array.from({ length: 6 }, (_, index) => player(`${club}-${index + 1}`, index % 2 === 0 ? PlayerGender.MALE : PlayerGender.FEMALE, { representingClubId: club })));
+    const queued = match("unrelated-queue", { team1: ["host-5", "host-6"], team2: ["partner-5", "partner-6"] }, players, MatchStatus.PENDING);
+    const data = interclubSession(players, { type, queuedMatch: { ...queued, isAutomatic: false } as unknown as GenerateMatchSession["queuedMatch"] });
+    const state = await inputs(data);
+    const selection = selectReplacementMatch({ ...state, retainedUserIds: ["host-1", "host-2", "partner-1"], excludedUserIds: ["partner-2"] });
+    for (const id of ["host-1", "host-2", "partner-1"]) expect(selection.ids).toContain(id);
+    expect(selection.ids).not.toContain("partner-2");
+    expect(selection.ids.every((id) => !state.busyPlayerIds.has(id))).toBe(true);
+    expect(selection.partition.team1.every((id) => id.startsWith("host"))).toBe(true);
+    expect(selection.partition.team2.every((id) => id.startsWith("partner"))).toBe(true);
+    expectHistoryScore(selection, buildSocialVarietyContext(contextPlayers(data), buildSocialSessionHistory(data), { sessionMode: SessionMode.MIXICANO, opportunityConstraints: [interclubConstraints()] }));
+    expect(JSON.parse(selection.matchmakingReasonJson!).balanceGuardrail).toBeDefined();
+  });
+});

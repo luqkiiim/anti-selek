@@ -72,7 +72,7 @@ function createSelection(
 }
 
 describe("matchmaking reason", () => {
-  it("builds compact points reasons with rest-turn and shared-court metrics", () => {
+  it("builds compact points reasons without retired variety scoring text", () => {
     const reason = buildV3MatchmakingReason(createSelection(), {
       sessionType: SessionType.POINTS,
       sessionMode: SessionMode.MIXICANO,
@@ -93,7 +93,7 @@ describe("matchmaking reason", () => {
     expect(reason.metrics.targetPool).toBe(SessionPool.A);
     expect(reason.metrics.missedPool).toBe(SessionPool.B);
     expect(reason.summary.join(" ")).toContain("completed-match turns");
-    expect(reason.summary.join(" ")).toContain("shared-court pairings");
+    expect(reason.summary.join(" ")).not.toContain("shared-court pairings");
     expect(reason.summary.join(" ")).toContain("Point-difference balance");
     expect(reason.summary.join(" ")).not.toContain("Partner repeat penalty");
     expect(reason.summary.join(" ")).not.toContain("Opponent repeat penalty");
@@ -188,6 +188,65 @@ describe("matchmaking reason", () => {
     expect(reason.summary.join(" ")).toContain("fair turns, arrival priority, applicable player-group rules and overdue-turn protection");
     expect(reason.summary.join(" ")).toContain("longer breaks only decide between equally varied choices");
     expect(reason.summary.join(" ")).toContain("completed-match rest turns");
+  });
+
+  it.each([SessionType.POINTS, SessionType.ELO])("explains %s entropy, starvation, fixed balance envelope and final tie-break", (sessionType) => {
+    const balanceGuardrail = {
+      mode: sessionType === SessionType.ELO ? "RATING" as const : "POINTS" as const,
+      bestMaxBalanceGap: 2,
+      bestTotalBalanceGap: 3,
+      nearBestWindow: sessionType === SessionType.ELO ? 30 : 1.5,
+      absoluteCeiling: sessionType === SessionType.ELO ? 50 : null,
+      allowedMaxBalanceGap: sessionType === SessionType.ELO ? 32 : 3.5,
+      allowedTotalBalanceGap: null,
+      ceilingFeasible: true,
+      baselineCertified: true,
+    };
+    const selection = createSelection({
+      socialVarietyGain: 0.00000002,
+      socialVarietyGains: { courtmates: 0.00000001, partners: 0.000000005, opponents: 0.000000005, matchType: 0 },
+      socialStarvation: { idealRestGap: 3, availableOverdueCount: 2, selectedOverdueCount: 2, leftOutOverdueCount: 0, highestLeftOutRestTurns: 0, totalLeftOutRestTurns: 0 },
+      balanceGuardrail,
+      fairnessVector: [2, 2, 2, 2, 0, Infinity],
+      schedulingRank: 0,
+      finalTieBreak: "EXACT_REMATCH",
+    });
+    const reason = buildV3MatchmakingReason(selection, { sessionType, sessionMode: SessionMode.MIXICANO, respectPlayerRest: false });
+    expect(reason.summary.join(" ")).toContain("overdue-turn protection and the balance guardrail");
+    expect(reason.summary.join(" ")).toContain("best achievable worst-court balance gap was 2");
+    expect(reason.summary.join(" ")).toContain("2 of 2 available players");
+    expect(reason.summary.join(" ")).toContain("Normalized entropy gain");
+    expect(reason.summary.join(" ")).toContain("match type");
+    expect(reason.summary.join(" ")).toContain("Exact rematch avoidance decided only after");
+    expect(reason.summary.join(" ")).not.toMatch(/coverage penalty|Partner repeat penalty|Opponent repeat penalty|Shared-court repeat penalty/);
+    const parsed = parseMatchmakingReasonJson(JSON.stringify(reason));
+    expect(parsed?.metrics.balanceGuardrail).toEqual(balanceGuardrail);
+    expect(parsed?.metrics.finalTieBreak).toBe("EXACT_REMATCH");
+    expect(parsed?.metrics.fairnessVector).toEqual([2, 2, 2, 2, 0]);
+    expect(parsed?.metrics.socialVarietyGain).toBe(0.00000002);
+    expect(parsed?.socialVariety).toBeDefined();
+  });
+
+  it("preserves exact Balanced metrics at decimal guardrail boundaries", () => {
+    const reason = buildV3MatchmakingReason(createSelection({
+      balanceGap: 3.549,
+      pointDiffGap: 0.12345,
+      balanceGuardrail: { mode: "POINTS", bestMaxBalanceGap: 2.049, bestTotalBalanceGap: 2.049, nearBestWindow: 1.5, absoluteCeiling: null, allowedMaxBalanceGap: 3.549, allowedTotalBalanceGap: null, ceilingFeasible: true, baselineCertified: true },
+    }), { sessionType: SessionType.POINTS, sessionMode: SessionMode.MEXICANO });
+    const parsed = parseMatchmakingReasonJson(JSON.stringify(reason));
+    expect(parsed?.metrics.balanceGap).toBe(3.549);
+    expect(parsed?.metrics.pointDiffGap).toBe(0.12345);
+    expect(parsed?.metrics.balanceGap).toBe(parsed?.metrics.balanceGuardrail?.allowedMaxBalanceGap);
+  });
+
+  it("explains an unavoidable Rating ceiling within the stronger starvation state", () => {
+    const reason = buildV3MatchmakingReason(createSelection({
+      balanceGap: 60,
+      socialVarietyGain: 0.1,
+      balanceGuardrail: { mode: "RATING", bestMaxBalanceGap: 60, bestTotalBalanceGap: 90, nearBestWindow: 30, absoluteCeiling: 50, allowedMaxBalanceGap: 60, allowedTotalBalanceGap: 90, ceilingFeasible: false, baselineCertified: true },
+    }), { sessionType: SessionType.ELO, sessionMode: SessionMode.MEXICANO });
+    expect(reason.summary.join(" ")).toContain("ceiling is unattainable within this stronger rotation state");
+    expect(reason.summary.join(" ")).toContain("allowed total batch balance gap is at most 90");
   });
 
   it("parses valid reason JSON and ignores invalid JSON", () => {

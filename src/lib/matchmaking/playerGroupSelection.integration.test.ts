@@ -1,3 +1,6 @@
+import { buildSocialSessionHistory } from "./socialSessionHistory";
+import { buildSocialVarietyContext, getSocialVarietyGain } from "./v3/socialVariety";
+import { getDoublesPartitions } from "./v3/balance";
 import { describe, expect, it } from "vitest";
 import {
   getRankedCandidates,
@@ -311,8 +314,29 @@ describe("grouped no-catch-up crossover selection", () => {
       : selectBatchMatches({ ...input, requestedMatchCount: 1 }).selections[0];
 
     expect(selection.courtGroupType).toBe(CourtGroupType.CROSSOVER);
-    // Single-court ties use actual crossover debt and waiting time. Batches
-    // can optimize variety at a tie, but must respect effective game counts.
-    expect(new Set(selection.ids)).toEqual(new Set(["A1", "A2", "B1", "B2"]));
+    if (type === SessionType.ELO && path === "single") {
+      // Balanced now shares Social's ongoing entropy rather than personal
+      // crossover debt. Returning has neutral effective count nine, so can
+      // earn variety within that band without catching up on visible games.
+      expect(selection.ids).toContain("Returning");
+      expect(selection.ids).toContain("B1");
+      expect(selection.ids).toContain("B2");
+      const context = buildSocialVarietyContext(players.map((entry) => ({
+        ...entry, strength: 1000,
+        matchmakingBaseline: entry.matchesPlayed + entry.matchmakingMatchesCredit,
+      })), buildSocialSessionHistory(sessionData), { sessionMode: SessionMode.MEXICANO });
+      const regularGain = Math.max(...getDoublesPartitions(["A1", "A2", "B1", "B2"])
+        .map((partition) => getSocialVarietyGain(partition, context)));
+      expect(getSocialVarietyGain(selection.partition, context)).toBeGreaterThan(regularGain);
+      returningPlayer.matchesPlayed += 1;
+      const nextCandidates = getRankedCandidates(sessionData, new Set()).rankedCandidates;
+      const next = selectSingleCourtMatch({ ...input, rankedCandidates: nextCandidates, reshuffleSource: null });
+      expect(new Set(next.ids)).toEqual(new Set(["A1", "A2", "B1", "B2"]));
+      expect(next.courtGroupType).toBe(CourtGroupType.CROSSOVER);
+    } else {
+      // Ladder/Race retain personal participation rules. Every format keeps
+      // the neutral credit baseline ahead of lower visible match counts.
+      expect(new Set(selection.ids)).toEqual(new Set(["A1", "A2", "B1", "B2"]));
+    }
   });
 });
