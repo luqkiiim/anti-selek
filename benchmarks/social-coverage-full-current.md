@@ -1,6 +1,9 @@
 # Matchmaking cadence and relationship coverage benchmark
 
-Generated 2026-10-03T08:47:14.814Z; source revision HEAD de0254f8 + working-tree changes. Primary seeds: 5; wide-profile Balanced seeds: 3.
+Generated 2026-10-03T13:25:18.800Z; source commit bcf07fb22cded580c7e2c0c72d6a5a58bc4eb49d; policy type-entropy-first; dirty worktree true. Primary seeds: 5; wide-profile Balanced seeds: 3.
+Worktree note: Current checkout includes the Mixed type-entropy-first engine and benchmark instrumentation; hashes identify the exact sources used.
+Tracked source changes from commit: core engine clean; shared variety clean; measurement harness clean. Generated untracked artifacts can make the overall worktree dirty without changing these tracked source statuses.
+Engine source SHA-256 21c2b52a97ec90d86ac60148a3c5443e7074bd44d81f2a9358b13644d92ea643; measurement harness SHA-256 27e22fd7eb48ca8e2d96638583de3c75aa7f064e5c3e3aea136667d44a0599b0.
 
 The roster uses the same P1–P14 identities, gender/preference assignments, latent skill ranks, and independent event-level court-completion schedule for every format at a given seed. The narrow profile maps the same rank vector to Points/Social strengths at 0.1 per rank and Rating strengths at 4 per rank; the wide profile maps it at 1 and 40 respectively. `pointDiff` stays 0 because this benchmark has no match scores. Each run has two active courts; one randomly scheduled court completes per event and is refilled. Coverage counts only completed matches. Rest turns count completed-match events while a player is available; active players do not accrue rest. The +1/+2 threshold counters include available idle events before a player's first match; assignment-rest gaps and back-to-back rates exclude first assignments.
 
@@ -8,25 +11,46 @@ Relationship coverage is the mean of each player’s feasible courtmate, partner
 
 ## Primary narrow-skill profile
 
-| Format | Completed | Relationship coverage (mean; median; min–max) | Partner / opponent / courtmate | MIXED / OWN_SIDE | Normalized entropy | Back-to-back rate | Max assignment rest gap (mean of per-seed maxima) | Mean / p95 assignment rest | +1 / +2 threshold reaches | Starvation changed set | Checkpoint / max fairness spread |
+| Format | Completed | Relationship coverage (mean; median; min–max) | Partner / opponent / courtmate | MIXED / OWN_SIDE | Normalized entropy | Back-to-back rate | Max assignment rest gap (mean of per-seed maxima) | Mean / p95 assignment rest | +1 / +2 threshold reaches | Starvation changes / overdue (certified, unknown; rates) | Checkpoint / max fairness spread |
 |---|---:|---:|---|---|---:|---:|---:|---:|---:|---:|---:|
-| Social (before → after) | 20 | 56.3%; 57.9%; 50.5%–59.0% | 37.1% / 58.9% / 73.0% | 100.0% / 11.4% | 55.8% | 30.3% → 11.8% | 4.40; 4.00; 4.00–5.00 → 3.00; 3.00; 2.00–4.00 | 1.48; 1.48; 1.48–1.48 / 3.00; 3.00; 2.00–4.00 | 0.8 / 0.0 | 0.0 (0.0%) | 1.00; 1.00; 1.00–1.00 / 2.40; 2.00; 2.00–3.00 |
-| Social (before → after) | 400 | 84.9%; 84.6%; 84.6%–86.1% | 54.7% / 100.0% / 100.0% | 100.0% / 11.4% | 68.7% | 29.5% → 12.6% | 5.80; 6.00; 5.00–7.00 → 5.40; 6.00; 4.00–6.00 | 1.50; 1.50; 1.50–1.50 / 3.00; 3.00; 3.00–3.00 | 28.4 / 5.2 | 0.0 (0.0%) | 1.00; 1.00; 1.00–1.00 / 4.60; 5.00; 3.00–6.00 |
-| Balanced Points (before → after) | 20 | 56.0%; 56.4%; 49.8%–59.0% | 37.6% / 58.0% / 72.3% | 100.0% / 11.4% | 55.8% | 30.3% → 11.8% | 4.40; 4.00; 4.00–5.00 → 3.00; 3.00; 2.00–4.00 | 1.48; 1.48; 1.48–1.48 / 3.00; 3.00; 2.00–4.00 | 0.8 / 0.0 | 0.0 (0.0%) | 1.00; 1.00; 1.00–1.00 / 2.40; 2.00; 2.00–3.00 |
-| Balanced Points (before → after) | 400 | 84.9%; 84.6%; 84.6%–86.1% | 54.7% / 100.0% / 100.0% | 100.0% / 11.4% | 68.7% | 29.7% → 12.6% | 5.80; 6.00; 5.00–7.00 → 5.40; 6.00; 4.00–6.00 | 1.50; 1.50; 1.50–1.50 / 3.00; 3.00; 3.00–3.00 | 28.4 / 5.2 | 0.0 (0.0%) | 1.00; 1.00; 1.00–1.00 / 4.60; 5.00; 3.00–6.00 |
-| Balanced Rating/Elo (before → after) | 20 | 56.6%; 58.6%; 50.5%–59.0% | 37.4% / 59.8% / 72.7% | 100.0% / 0.0% | 54.3% | 30.9% → 11.5% | 4.40; 4.00; 4.00–5.00 → 3.00; 3.00; 2.00–4.00 | 1.48; 1.48; 1.48–1.48 / 3.00; 3.00; 2.00–4.00 | 0.8 / 0.0 | 0.0 (0.0%) | 1.00; 1.00; 1.00–1.00 / 2.40; 2.00; 2.00–3.00 |
-| Balanced Rating/Elo (before → after) | 400 | 84.6%; 84.6%; 84.6%–84.6% | 53.8% / 100.0% / 100.0% | 100.0% / 0.0% | 68.5% | 29.8% → 12.6% | 5.80; 6.00; 5.00–7.00 → 5.40; 6.00; 4.00–6.00 | 1.50; 1.50; 1.50–1.50 / 3.00; 3.00; 3.00–3.00 | 28.4 / 5.2 | 0.0 (0.0%) | 1.00; 1.00; 1.00–1.00 / 4.60; 5.00; 3.00–6.00 |
+| Social (before → after) | 20 | 58.2%; 57.5%; 54.9%–61.5% | 42.0% / 59.6% / 73.0% | 100.0% / 100.0% | 79.8% | 30.3% → 26.1% | 4.40; 4.00; 4.00–5.00 → 4.20; 4.00; 4.00–5.00 | 1.45; 1.45; 1.41–1.47 / 4.00; 4.00; 4.00–4.00 | 6.0 / 0.2 | 1.6 changes (22 overdue; 22 certified, 0 unknown; overdue 39.0%, certified-only 39.0%) | 1.00; 1.00; 1.00–1.00 / 2.40; 2.00; 2.00–3.00 |
+| Social (before → after) | 400 | 100.0%; 100.0%; 100.0%–100.0% | 100.0% / 100.0% / 100.0% | 100.0% / 100.0% | 97.3% | 29.5% → 26.3% | 5.80; 6.00; 5.00–7.00 → 5.80; 6.00; 5.00–7.00 | 1.50; 1.50; 1.49–1.50 / 4.00; 4.00; 4.00–4.00 | 150.8 / 15.2 | 32.0 changes (578 overdue; 578 certified, 0 unknown; overdue 27.8%, certified-only 27.8%) | 1.00; 1.00; 1.00–1.00 / 4.60; 5.00; 3.00–6.00 |
+| Balanced Points (before → after) | 20 | 58.2%; 57.5%; 54.9%–61.5% | 42.0% / 59.6% / 73.0% | 100.0% / 100.0% | 79.8% | 30.3% → 26.1% | 4.40; 4.00; 4.00–5.00 → 4.20; 4.00; 4.00–5.00 | 1.45; 1.45; 1.41–1.47 / 4.00; 4.00; 4.00–4.00 | 6.0 / 0.2 | 1.6 changes (22 overdue; 22 certified, 0 unknown; overdue 39.0%, certified-only 39.0%) | 1.00; 1.00; 1.00–1.00 / 2.40; 2.00; 2.00–3.00 |
+| Balanced Points (before → after) | 400 | 100.0%; 100.0%; 100.0%–100.0% | 100.0% / 100.0% / 100.0% | 100.0% / 100.0% | 97.3% | 29.7% → 26.3% | 5.80; 6.00; 5.00–7.00 → 6.00; 6.00; 5.00–7.00 | 1.50; 1.50; 1.49–1.50 / 4.00; 4.00; 4.00–4.00 | 150.8 / 15.2 | 32.0 changes (575 overdue; 575 certified, 0 unknown; overdue 28.0%, certified-only 28.0%) | 1.00; 1.00; 1.00–1.00 / 4.60; 5.00; 3.00–6.00 |
+| Balanced Rating/Elo (before → after) | 20 | 58.4%; 57.5%; 55.7%–61.5% | 42.4% / 59.6% / 73.2% | 100.0% / 100.0% | 80.0% | 30.9% → 25.8% | 4.40; 4.00; 4.00–5.00 → 4.20; 4.00; 4.00–5.00 | 1.45; 1.45; 1.39–1.47 / 4.00; 4.00; 4.00–4.00 | 5.8 / 0.2 | 1.4 changes (21 overdue; 21 certified, 0 unknown; overdue 37.3%, certified-only 37.3%) | 1.00; 1.00; 1.00–1.00 / 2.40; 2.00; 2.00–3.00 |
+| Balanced Rating/Elo (before → after) | 400 | 100.0%; 100.0%; 100.0%–100.0% | 100.0% / 100.0% / 100.0% | 100.0% / 100.0% | 97.3% | 29.8% → 26.6% | 5.80; 6.00; 5.00–7.00 → 6.00; 6.00; 5.00–7.00 | 1.50; 1.50; 1.49–1.50 / 4.00; 4.00; 4.00–4.00 | 151.2 / 15.0 | 33.6 changes (572 overdue; 572 certified, 0 unknown; overdue 29.4%, certified-only 29.4%) | 1.00; 1.00; 1.00–1.00 / 4.60; 5.00; 3.00–6.00 |
 
 The table reports after-change coverage/entropy and before→after back-to-back rate and maximum assignment rest gap when a baseline report is supplied. Assignment rest is the completed-match rest-turn count sampled when players are selected; elapsed completion-event gaps are retained as a separate diagnostic and can include time spent in a match. `Starvation changed set` gives mean counterfactual set changes and the rate conditional on an overdue player being available. The fairness columns are checkpoint spread and maximum spread seen over the run. Exact per-seed values and missing relationship lists are in the adjacent JSON.
 
+Decision cohorts: coverage, rest, and match-type checkpoints use completed matches only. Starvation's completed-decision count increments when every assignment in that optimizer decision has completed. Refill/type-override counts at checkpoint N include decisions assigned after completion events 1 through N−1; the latest refill can still be active. The opening two-court decision is excluded from type-override counts.
+## Match-type priority overrides
+
+Each override is one certified one-court refill where the chosen set has more immediate replays but higher match-type entropy gain than a legal candidate in the same strongest fairness/starvation class and Balanced envelope. The denominator is certified one-court refills; the opening two-court decision is excluded. Relationship gain is courtmates + partners + opponents, scored independently from match-type gain.
+
+| Format | Overrides / certified refills | Rate | Mean selected match-type gain | Mean selected relationship gain |
+|---|---:|---:|---:|---:|
+| Social | 577 / 1995 | 28.9% | 0.035080 | 0.087427 |
+| Balanced Points | 578 / 1995 | 29.0% | 0.035080 | 0.087437 |
+| Balanced Rating/Elo | 589 / 1995 | 29.5% | 0.035080 | 0.087413 |
+
+## Completed match-type counts by session window
+
+These are actual completed matches, not player-level match-type coverage. Early and late refer to the first and last 100 completed matches of each 400-match run.
+
+| Format | At 20 completed: MIXED / OWN_SIDE | At 400 completed: MIXED / OWN_SIDE | First 100 OWN_SIDE | Last 100 OWN_SIDE |
+|---|---:|---:|---:|---:|
+| Social | 10.8 / 9.2 | 200.8 / 199.2 | 47.4 | 50.2 |
+| Balanced Points | 10.8 / 9.2 | 200.8 / 199.2 | 47.4 | 50.2 |
+| Balanced Rating/Elo | 10.8 / 9.2 | 200.8 / 199.2 | 47.4 | 51.0 |
+
 ## Wide-skill guardrail sensitivity
 
-| Format | Completed | Relationship coverage | Partner / opponent / courtmate | Normalized entropy | Back-to-back rate | Max assignment rest gap | Starvation set changes | Checkpoint / max fairness spread |
+| Format | Completed | Relationship coverage | Partner / opponent / courtmate | Normalized entropy | Back-to-back rate | Max assignment rest gap | Starvation changes / certified / unknown (rate) | Checkpoint / max fairness spread |
 |---|---:|---:|---|---:|---:|---:|---:|---:|
-| Balanced Points | 20 | 58.5% | 35.2% / 61.5% / 78.8% | 60.8% | 10.1% | 3.00 | 0.00 | 1.00 / 2.33 |
-| Balanced Points | 400 | 85.6% | 56.8% / 100.0% / 100.0% | 68.4% | 13.5% | 5.00 | 0.00 | 1.33 / 5.00 |
-| Balanced Rating/Elo | 20 | 54.1% | 31.1% / 58.6% / 72.5% | 58.5% | 10.6% | 3.00 | 0.00 | 1.00 / 2.33 |
-| Balanced Rating/Elo | 400 | 84.1% | 54.6% / 97.8% / 100.0% | 67.2% | 14.0% | 5.00 | 1.33 | 1.33 / 5.00 |
+| Balanced Points | 20 | 58.7% | 40.3% / 60.1% / 75.8% | 79.6% | 23.7% | 4.67 | 0.33 / 12 / 0 (6.7%) | 1.00 / 2.33 |
+| Balanced Points | 400 | 98.5% | 95.6% / 100.0% / 100.0% | 95.8% | 26.9% | 7.00 | 31.67 / 371 / 0 (25.6%) | 1.33 / 5.00 |
+| Balanced Rating/Elo | 20 | 55.3% | 37.0% / 54.6% / 74.4% | 77.3% | 23.2% | 4.33 | 0.33 / 9 / 0 (8.3%) | 1.00 / 2.33 |
+| Balanced Rating/Elo | 400 | 95.6% | 89.0% / 97.8% / 100.0% | 94.3% | 28.1% | 6.67 | 31.33 / 361 / 0 (26.0%) | 1.33 / 5.00 |
 
 The wide profile uses the same skill ranks at 10× the narrow strength spread. It is a sensitivity run for balance-envelope restrictions; the primary relationship denominator remains structural and does not shrink to the guardrail.
 Static equal-count two-court enumeration excluded 8 directed opportunity records (4 distinct facet-pairs) for wide Balanced Points; the JSON appendix lists the exact pairs.
@@ -36,25 +60,36 @@ Static equal-count two-court enumeration excluded 24 directed opportunity record
 
 | Format | Seeds reaching 100% | Remaining structurally feasible relationships | Guardrail interpretation |
 |---|---:|---|---|
-| Social | 0/5 | 206 total facet-pairs across seeds | No balance guardrail. |
-| Balanced Points | 0/5 | 206 total facet-pairs across seeds | 0 unseen facet-pairs were in a strongest rotation class but outside every observed balance envelope. |
-| Balanced Rating/Elo | 0/5 | 210 total facet-pairs across seeds | 0 unseen facet-pairs were in a strongest rotation class but outside every observed balance envelope. |
+| Social | 5/5 | 0 total facet-pairs across seeds | No balance guardrail. |
+| Balanced Points | 5/5 | 0 total facet-pairs across seeds | 0 unseen facet-pairs were in a strongest rotation class but outside every observed balance envelope. |
+| Balanced Rating/Elo | 5/5 | 0 total facet-pairs across seeds | 0 unseen facet-pairs were in a strongest rotation class but outside every observed balance envelope. |
 
-The unseen relationship classification is finite-session evidence: `ever admissible but unchosen`, `in the strongest fair/starvation class but excluded by every observed balance envelope`, or `never in the strongest rotation class during observed refills`. The static balance-feasibility audit is reported separately and can show whether a relationship is structurally possible while still outside a specific balance envelope. Finite simulation alone does not prove permanent exclusion.
+The unseen relationship classification is finite-session evidence across successive opportunity layers: balance envelope, match-type entropy frontier, zero-rest frontier, relationship entropy frontier, and soft cadence frontier. The static balance-feasibility audit is reported separately and can show whether a relationship is structurally feasible while still outside a specific balance envelope. Finite simulation alone does not prove permanent exclusion.
 
 ## Long waits
 
-There were 97 completed assignment gaps of at least five available completed-match rest turns in these runs. Deferred-refill classes: fairness_or_mixed_legality: 87; cadence_tie_later_tiebreak: 10. 0 had a linked immediately preceding rest-zero replay. The preserved cadence witnesses show 0 strictly better-cadence inclusion opportunities, 10 equal-cadence inclusion alternatives, and 0 cadence-worse inclusion opportunities; JSON stores the selected and candidate IDs/rest vectors for each witness. A fairness/legality class means no candidate including that player was observed in the stronger fairness class during their deferred decisions; a cadence tie means an equal cadence candidate existed earlier, the witness does not record entropy scores, so the exact later tie-break is not attributed.
+There were 336 completed assignment gaps of at least five available completed-match rest turns in these runs. Deferred-refill classes: fairness_or_mixed_legality: 290; match_type_entropy_priority_exclusion: 8; relationship_entropy_priority_exclusion: 37; balance_guardrail: 1. 89 had a linked immediately preceding rest-zero replay; 45 linked replay origins had a lower-zero alternative with lower match-type gain, so the chosen replay was an observed type-priority tradeoff. 0 long-wait episodes had no candidate in the minimum-zero frontier after the best type gain. Each wait record stores the type, zero-rest, relationship, and soft-rest frontier evidence and candidate gains.
 
 ## Runtime
 
-Total measured optimizer/oracle time across sessions: 225.6 seconds. Per-run timings are in JSON.
+Total measured optimizer/oracle time across sessions: 271.2 seconds. Per-run timings are in JSON.
 
 ## Machine-readable compact summary
 
 ```json
 {
-  "sourceRevision": "HEAD de0254f8 + working-tree changes",
+  "sourceRevision": "bcf07fb22cded580c7e2c0c72d6a5a58bc4eb49d",
+  "sourceProvenance": {
+    "commitSha": "bcf07fb22cded580c7e2c0c72d6a5a58bc4eb49d",
+    "workingTreeDirty": true,
+    "workingTreeNote": "Current checkout includes the Mixed type-entropy-first engine and benchmark instrumentation; hashes identify the exact sources used.",
+    "policyLabel": "type-entropy-first",
+    "coreEngineTrackedDiffPaths": [],
+    "sharedVarietyTrackedDiffPaths": [],
+    "measurementHarnessTrackedDiffPaths": [],
+    "engineSourceSha256": "21c2b52a97ec90d86ac60148a3c5443e7074bd44d81f2a9358b13644d92ea643",
+    "measurementHarnessSha256": "27e22fd7eb48ca8e2d96638583de3c75aa7f064e5c3e3aea136667d44a0599b0"
+  },
   "primarySeeds": 5,
   "wideSeeds": 3,
   "groups": [
@@ -62,969 +97,541 @@ Total measured optimizer/oracle time across sessions: 225.6 seconds. Per-run tim
       "profile": "narrow",
       "format": "Social",
       "completed": 20,
-      "varietyCoverageMean": 0.5633699633699634,
-      "varietyCoverageMedian": 0.5787545787545788,
-      "partnerCoverageMean": 0.3714285714285715,
-      "opponentCoverageMean": 0.5890109890109889,
-      "courtmateCoverageMean": 0.7296703296703296,
+      "varietyCoverageMean": 0.5816849816849816,
+      "varietyCoverageMedian": 0.575091575091575,
+      "varietyCoverageStdDev": 0.02887971185996633,
+      "varietyCoverageMin": 0.5494505494505494,
+      "varietyCoverageMax": 0.6153846153846153,
+      "partnerCoverageMean": 0.4197802197802199,
+      "partnerCoverageStdDev": 0.021308482889742124,
+      "opponentCoverageMean": 0.5956043956043955,
+      "opponentCoverageStdDev": 0.0234661060484204,
+      "courtmateCoverageMean": 0.7296703296703297,
+      "courtmateCoverageStdDev": 0.05088279957270427,
       "mixedCoverageMean": 1,
-      "ownSideCoverageMean": 0.11428571428571428,
-      "relationshipEntropyMean": 0.7179663114805165,
-      "matchTypeEntropyMean": 0.07634272456664072,
-      "normalizedEntropyMean": 0.5575604147520475,
-      "backToBackRateMean": 0.11818181818181817,
-      "maxAssignmentRestGapMean": 3,
-      "meanAssignmentRestGapMean": 1.4848484848484849,
-      "p95AssignmentRestGapMean": 3,
-      "starvationInterventions": 0,
-      "decisionsWithOverdue": 2,
-      "certifiedCounterfactualDecisions": 2,
+      "ownSideCoverageMean": 1,
+      "completedMixedMatchesMean": 10.8,
+      "completedOwnSideMatchesMean": 9.2,
+      "first100OwnSideMatchesMean": 47.4,
+      "last100OwnSideMatchesMean": 50.2,
+      "relationshipEntropyMean": 0.7471422135545608,
+      "matchTypeEntropyMean": 0.9511301201554817,
+      "normalizedEntropyMean": 0.7981391902047911,
+      "backToBackRateMean": 0.2606060606060606,
+      "maxAssignmentRestGapMean": 4.2,
+      "maxAssignmentRestGapWorst": 5,
+      "meanAssignmentRestGapMean": 1.4484848484848485,
+      "p95AssignmentRestGapMean": 4,
+      "starvationInterventions": 8,
+      "decisionsWithOverdue": 22,
+      "certifiedCounterfactualDecisions": 22,
       "uncertifiedCounterfactualDecisions": 0,
       "completedRotationDecisions": 95,
-      "backToBackAssignments": 39,
+      "backToBackAssignments": 86,
       "checkpointFairnessSpreadMean": 1,
       "maximumFairnessSpreadMean": 2.4,
       "pendingFiveTurnWaits": 0,
-      "starvationRateWhenOverdue": 0,
-      "starvationRateAcrossCompletedDecisions": 0,
-      "starvationRateAmongCertified": 0
+      "starvationRateWhenOverdue": 0.36363636363636365,
+      "starvationRateAcrossCompletedDecisions": 0.08421052631578947,
+      "starvationRateAmongCertified": 0.36363636363636365
     },
     {
       "profile": "narrow",
       "format": "Social",
       "completed": 400,
-      "varietyCoverageMean": 0.8490842490842491,
-      "varietyCoverageMedian": 0.8461538461538461,
-      "partnerCoverageMean": 0.5472527472527472,
+      "varietyCoverageMean": 1,
+      "varietyCoverageMedian": 1,
+      "varietyCoverageStdDev": 0,
+      "varietyCoverageMin": 1,
+      "varietyCoverageMax": 1,
+      "partnerCoverageMean": 1,
+      "partnerCoverageStdDev": 0,
       "opponentCoverageMean": 1,
+      "opponentCoverageStdDev": 0,
       "courtmateCoverageMean": 1,
+      "courtmateCoverageStdDev": 0,
       "mixedCoverageMean": 1,
-      "ownSideCoverageMean": 0.11428571428571428,
-      "relationshipEntropyMean": 0.913659070894749,
-      "matchTypeEntropyMean": 0.0082602088390994,
-      "normalizedEntropyMean": 0.6873093553808364,
-      "backToBackRateMean": 0.12648171500630517,
-      "maxAssignmentRestGapMean": 5.4,
-      "meanAssignmentRestGapMean": 1.4976040353089535,
-      "p95AssignmentRestGapMean": 3,
-      "starvationInterventions": 0,
-      "decisionsWithOverdue": 80,
-      "certifiedCounterfactualDecisions": 80,
+      "ownSideCoverageMean": 1,
+      "completedMixedMatchesMean": 200.8,
+      "completedOwnSideMatchesMean": 199.2,
+      "first100OwnSideMatchesMean": 47.4,
+      "last100OwnSideMatchesMean": 50.2,
+      "relationshipEntropyMean": 0.9636358515629683,
+      "matchTypeEntropyMean": 0.9997696277423709,
+      "normalizedEntropyMean": 0.9726692956078189,
+      "backToBackRateMean": 0.2626733921815889,
+      "maxAssignmentRestGapMean": 5.8,
+      "maxAssignmentRestGapWorst": 7,
+      "meanAssignmentRestGapMean": 1.496595208070618,
+      "p95AssignmentRestGapMean": 4,
+      "starvationInterventions": 160,
+      "decisionsWithOverdue": 578,
+      "certifiedCounterfactualDecisions": 578,
       "uncertifiedCounterfactualDecisions": 0,
       "completedRotationDecisions": 1995,
-      "backToBackAssignments": 1003,
+      "backToBackAssignments": 2083,
       "checkpointFairnessSpreadMean": 1,
       "maximumFairnessSpreadMean": 4.6,
       "pendingFiveTurnWaits": 0,
-      "starvationRateWhenOverdue": 0,
-      "starvationRateAcrossCompletedDecisions": 0,
-      "starvationRateAmongCertified": 0
+      "starvationRateWhenOverdue": 0.2768166089965398,
+      "starvationRateAcrossCompletedDecisions": 0.08020050125313283,
+      "starvationRateAmongCertified": 0.2768166089965398
     },
     {
       "profile": "narrow",
       "format": "Balanced Points",
       "completed": 20,
-      "varietyCoverageMean": 0.5597069597069597,
-      "varietyCoverageMedian": 0.5641025641025641,
-      "partnerCoverageMean": 0.3758241758241759,
-      "opponentCoverageMean": 0.5802197802197802,
-      "courtmateCoverageMean": 0.7230769230769231,
+      "varietyCoverageMean": 0.5816849816849816,
+      "varietyCoverageMedian": 0.575091575091575,
+      "varietyCoverageStdDev": 0.02887971185996633,
+      "varietyCoverageMin": 0.5494505494505494,
+      "varietyCoverageMax": 0.6153846153846153,
+      "partnerCoverageMean": 0.4197802197802199,
+      "partnerCoverageStdDev": 0.021308482889742124,
+      "opponentCoverageMean": 0.5956043956043955,
+      "opponentCoverageStdDev": 0.0234661060484204,
+      "courtmateCoverageMean": 0.7296703296703297,
+      "courtmateCoverageStdDev": 0.05088279957270427,
       "mixedCoverageMean": 1,
-      "ownSideCoverageMean": 0.11428571428571428,
-      "relationshipEntropyMean": 0.7183289109231905,
-      "matchTypeEntropyMean": 0.07634272456664072,
-      "normalizedEntropyMean": 0.557832364334053,
-      "backToBackRateMean": 0.11818181818181817,
-      "maxAssignmentRestGapMean": 3,
-      "meanAssignmentRestGapMean": 1.4848484848484849,
-      "p95AssignmentRestGapMean": 3,
-      "starvationInterventions": 0,
-      "decisionsWithOverdue": 2,
-      "certifiedCounterfactualDecisions": 2,
+      "ownSideCoverageMean": 1,
+      "completedMixedMatchesMean": 10.8,
+      "completedOwnSideMatchesMean": 9.2,
+      "first100OwnSideMatchesMean": 47.4,
+      "last100OwnSideMatchesMean": 50.2,
+      "relationshipEntropyMean": 0.7471422135545608,
+      "matchTypeEntropyMean": 0.9511301201554817,
+      "normalizedEntropyMean": 0.7981391902047911,
+      "backToBackRateMean": 0.2606060606060606,
+      "maxAssignmentRestGapMean": 4.2,
+      "maxAssignmentRestGapWorst": 5,
+      "meanAssignmentRestGapMean": 1.4484848484848485,
+      "p95AssignmentRestGapMean": 4,
+      "starvationInterventions": 8,
+      "decisionsWithOverdue": 22,
+      "certifiedCounterfactualDecisions": 22,
       "uncertifiedCounterfactualDecisions": 0,
       "completedRotationDecisions": 95,
-      "backToBackAssignments": 39,
+      "backToBackAssignments": 86,
       "checkpointFairnessSpreadMean": 1,
       "maximumFairnessSpreadMean": 2.4,
       "pendingFiveTurnWaits": 0,
-      "starvationRateWhenOverdue": 0,
-      "starvationRateAcrossCompletedDecisions": 0,
-      "starvationRateAmongCertified": 0
+      "starvationRateWhenOverdue": 0.36363636363636365,
+      "starvationRateAcrossCompletedDecisions": 0.08421052631578947,
+      "starvationRateAmongCertified": 0.36363636363636365
     },
     {
       "profile": "narrow",
       "format": "Balanced Points",
       "completed": 400,
-      "varietyCoverageMean": 0.8490842490842491,
-      "varietyCoverageMedian": 0.8461538461538461,
-      "partnerCoverageMean": 0.5472527472527472,
+      "varietyCoverageMean": 1,
+      "varietyCoverageMedian": 1,
+      "varietyCoverageStdDev": 0,
+      "varietyCoverageMin": 1,
+      "varietyCoverageMax": 1,
+      "partnerCoverageMean": 1,
+      "partnerCoverageStdDev": 0,
       "opponentCoverageMean": 1,
+      "opponentCoverageStdDev": 0,
       "courtmateCoverageMean": 1,
+      "courtmateCoverageStdDev": 0,
       "mixedCoverageMean": 1,
-      "ownSideCoverageMean": 0.11428571428571428,
-      "relationshipEntropyMean": 0.9137747553756561,
-      "matchTypeEntropyMean": 0.008267647572147886,
-      "normalizedEntropyMean": 0.6873979784247789,
-      "backToBackRateMean": 0.12648171500630517,
-      "maxAssignmentRestGapMean": 5.4,
-      "meanAssignmentRestGapMean": 1.4976040353089535,
-      "p95AssignmentRestGapMean": 3,
-      "starvationInterventions": 0,
-      "decisionsWithOverdue": 80,
-      "certifiedCounterfactualDecisions": 80,
+      "ownSideCoverageMean": 1,
+      "completedMixedMatchesMean": 200.8,
+      "completedOwnSideMatchesMean": 199.2,
+      "first100OwnSideMatchesMean": 47.4,
+      "last100OwnSideMatchesMean": 50.2,
+      "relationshipEntropyMean": 0.9637225685075401,
+      "matchTypeEntropyMean": 0.999769627742371,
+      "normalizedEntropyMean": 0.972734333316248,
+      "backToBackRateMean": 0.2630517023959647,
+      "maxAssignmentRestGapMean": 6,
+      "maxAssignmentRestGapWorst": 7,
+      "meanAssignmentRestGapMean": 1.496595208070618,
+      "p95AssignmentRestGapMean": 4,
+      "starvationInterventions": 160,
+      "decisionsWithOverdue": 575,
+      "certifiedCounterfactualDecisions": 575,
       "uncertifiedCounterfactualDecisions": 0,
       "completedRotationDecisions": 1995,
-      "backToBackAssignments": 1003,
+      "backToBackAssignments": 2086,
       "checkpointFairnessSpreadMean": 1,
       "maximumFairnessSpreadMean": 4.6,
       "pendingFiveTurnWaits": 0,
-      "starvationRateWhenOverdue": 0,
-      "starvationRateAcrossCompletedDecisions": 0,
-      "starvationRateAmongCertified": 0
+      "starvationRateWhenOverdue": 0.2782608695652174,
+      "starvationRateAcrossCompletedDecisions": 0.08020050125313283,
+      "starvationRateAmongCertified": 0.2782608695652174
     },
     {
       "profile": "narrow",
       "format": "Balanced Rating/Elo",
       "completed": 20,
-      "varietyCoverageMean": 0.5663003663003663,
+      "varietyCoverageMean": 0.5838827838827838,
+      "varietyCoverageMedian": 0.575091575091575,
+      "varietyCoverageStdDev": 0.026576347468449852,
+      "varietyCoverageMin": 0.5567765567765568,
+      "varietyCoverageMax": 0.6153846153846153,
+      "partnerCoverageMean": 0.4241758241758243,
+      "partnerCoverageStdDev": 0.01644684565614921,
+      "opponentCoverageMean": 0.5956043956043955,
+      "opponentCoverageStdDev": 0.02346610604842043,
+      "courtmateCoverageMean": 0.7318681318681319,
+      "courtmateCoverageStdDev": 0.04894737901389031,
+      "mixedCoverageMean": 1,
+      "ownSideCoverageMean": 1,
+      "completedMixedMatchesMean": 10.8,
+      "completedOwnSideMatchesMean": 9.2,
+      "first100OwnSideMatchesMean": 47.4,
+      "last100OwnSideMatchesMean": 51,
+      "relationshipEntropyMean": 0.7496363324265536,
+      "matchTypeEntropyMean": 0.9511301201554817,
+      "normalizedEntropyMean": 0.8000097793587857,
+      "backToBackRateMean": 0.25757575757575757,
+      "maxAssignmentRestGapMean": 4.2,
+      "maxAssignmentRestGapWorst": 5,
+      "meanAssignmentRestGapMean": 1.4454545454545458,
+      "p95AssignmentRestGapMean": 4,
+      "starvationInterventions": 7,
+      "decisionsWithOverdue": 21,
+      "certifiedCounterfactualDecisions": 21,
+      "uncertifiedCounterfactualDecisions": 0,
+      "completedRotationDecisions": 95,
+      "backToBackAssignments": 85,
+      "checkpointFairnessSpreadMean": 1,
+      "maximumFairnessSpreadMean": 2.4,
+      "pendingFiveTurnWaits": 0,
+      "starvationRateWhenOverdue": 0.3333333333333333,
+      "starvationRateAcrossCompletedDecisions": 0.07368421052631578,
+      "starvationRateAmongCertified": 0.3333333333333333
+    },
+    {
+      "profile": "narrow",
+      "format": "Balanced Rating/Elo",
+      "completed": 400,
+      "varietyCoverageMean": 1,
+      "varietyCoverageMedian": 1,
+      "varietyCoverageStdDev": 0,
+      "varietyCoverageMin": 1,
+      "varietyCoverageMax": 1,
+      "partnerCoverageMean": 1,
+      "partnerCoverageStdDev": 0,
+      "opponentCoverageMean": 1,
+      "opponentCoverageStdDev": 0,
+      "courtmateCoverageMean": 1,
+      "courtmateCoverageStdDev": 0,
+      "mixedCoverageMean": 1,
+      "ownSideCoverageMean": 1,
+      "completedMixedMatchesMean": 200.8,
+      "completedOwnSideMatchesMean": 199.2,
+      "first100OwnSideMatchesMean": 47.4,
+      "last100OwnSideMatchesMean": 51,
+      "relationshipEntropyMean": 0.9635033185882873,
+      "matchTypeEntropyMean": 0.9997696277423709,
+      "normalizedEntropyMean": 0.9725698958768083,
+      "backToBackRateMean": 0.26582597730138713,
+      "maxAssignmentRestGapMean": 6,
+      "maxAssignmentRestGapWorst": 7,
+      "meanAssignmentRestGapMean": 1.496595208070618,
+      "p95AssignmentRestGapMean": 4,
+      "starvationInterventions": 168,
+      "decisionsWithOverdue": 572,
+      "certifiedCounterfactualDecisions": 572,
+      "uncertifiedCounterfactualDecisions": 0,
+      "completedRotationDecisions": 1995,
+      "backToBackAssignments": 2108,
+      "checkpointFairnessSpreadMean": 1,
+      "maximumFairnessSpreadMean": 4.6,
+      "pendingFiveTurnWaits": 0,
+      "starvationRateWhenOverdue": 0.2937062937062937,
+      "starvationRateAcrossCompletedDecisions": 0.08421052631578947,
+      "starvationRateAmongCertified": 0.2937062937062937
+    },
+    {
+      "profile": "wide",
+      "format": "Balanced Points",
+      "completed": 20,
+      "varietyCoverageMean": 0.5873015873015873,
       "varietyCoverageMedian": 0.586080586080586,
-      "partnerCoverageMean": 0.3736263736263737,
-      "opponentCoverageMean": 0.5978021978021978,
-      "courtmateCoverageMean": 0.7274725274725274,
+      "varietyCoverageStdDev": 0.013486399288384975,
+      "varietyCoverageMin": 0.5714285714285713,
+      "varietyCoverageMax": 0.6043956043956044,
+      "partnerCoverageMean": 0.402930402930403,
+      "partnerCoverageStdDev": 0.013705704713457676,
+      "opponentCoverageMean": 0.6007326007326006,
+      "opponentCoverageStdDev": 0.018677727156017447,
+      "courtmateCoverageMean": 0.7582417582417582,
+      "courtmateCoverageStdDev": 0.023738976917244928,
       "mixedCoverageMean": 1,
-      "ownSideCoverageMean": 0,
-      "relationshipEntropyMean": 0.723965373448365,
-      "matchTypeEntropyMean": 0,
-      "normalizedEntropyMean": 0.5429740300862737,
-      "backToBackRateMean": 0.11515151515151514,
-      "maxAssignmentRestGapMean": 3,
-      "meanAssignmentRestGapMean": 1.4848484848484849,
-      "p95AssignmentRestGapMean": 3,
-      "starvationInterventions": 0,
-      "decisionsWithOverdue": 2,
-      "certifiedCounterfactualDecisions": 2,
-      "uncertifiedCounterfactualDecisions": 0,
-      "completedRotationDecisions": 95,
-      "backToBackAssignments": 38,
-      "checkpointFairnessSpreadMean": 1,
-      "maximumFairnessSpreadMean": 2.4,
-      "pendingFiveTurnWaits": 0,
-      "starvationRateWhenOverdue": 0,
-      "starvationRateAcrossCompletedDecisions": 0,
-      "starvationRateAmongCertified": 0
-    },
-    {
-      "profile": "narrow",
-      "format": "Balanced Rating/Elo",
-      "completed": 400,
-      "varietyCoverageMean": 0.8461538461538461,
-      "varietyCoverageMedian": 0.8461538461538461,
-      "partnerCoverageMean": 0.5384615384615384,
-      "opponentCoverageMean": 1,
-      "courtmateCoverageMean": 1,
-      "mixedCoverageMean": 1,
-      "ownSideCoverageMean": 0,
-      "relationshipEntropyMean": 0.9134291404630626,
-      "matchTypeEntropyMean": 9.15264715375691e-16,
-      "normalizedEntropyMean": 0.685071855347297,
-      "backToBackRateMean": 0.12635561160151326,
-      "maxAssignmentRestGapMean": 5.4,
-      "meanAssignmentRestGapMean": 1.4976040353089535,
-      "p95AssignmentRestGapMean": 3,
-      "starvationInterventions": 0,
-      "decisionsWithOverdue": 80,
-      "certifiedCounterfactualDecisions": 80,
-      "uncertifiedCounterfactualDecisions": 0,
-      "completedRotationDecisions": 1995,
-      "backToBackAssignments": 1002,
-      "checkpointFairnessSpreadMean": 1,
-      "maximumFairnessSpreadMean": 4.6,
-      "pendingFiveTurnWaits": 0,
-      "starvationRateWhenOverdue": 0,
-      "starvationRateAcrossCompletedDecisions": 0,
-      "starvationRateAmongCertified": 0
-    },
-    {
-      "profile": "wide",
-      "format": "Balanced Points",
-      "completed": 20,
-      "varietyCoverageMean": 0.5848595848595848,
-      "varietyCoverageMedian": 0.5897435897435896,
-      "partnerCoverageMean": 0.35164835164835173,
-      "opponentCoverageMean": 0.6153846153846153,
-      "courtmateCoverageMean": 0.7875457875457875,
-      "mixedCoverageMean": 1,
-      "ownSideCoverageMean": 0.38095238095238093,
-      "relationshipEntropyMean": 0.7258166441624773,
-      "matchTypeEntropyMean": 0.25447574855546906,
-      "normalizedEntropyMean": 0.6079814202607251,
-      "backToBackRateMean": 0.10101010101010101,
-      "maxAssignmentRestGapMean": 3,
-      "meanAssignmentRestGapMean": 1.4191919191919193,
-      "p95AssignmentRestGapMean": 2.6666666666666665,
-      "starvationInterventions": 0,
-      "decisionsWithOverdue": 0,
-      "certifiedCounterfactualDecisions": 0,
+      "ownSideCoverageMean": 1,
+      "completedMixedMatchesMean": 11.333333333333334,
+      "completedOwnSideMatchesMean": 8.666666666666666,
+      "first100OwnSideMatchesMean": 48,
+      "last100OwnSideMatchesMean": 49.666666666666664,
+      "relationshipEntropyMean": 0.7467382542813108,
+      "matchTypeEntropyMean": 0.9446585156357165,
+      "normalizedEntropyMean": 0.7962183196199124,
+      "backToBackRateMean": 0.23737373737373738,
+      "maxAssignmentRestGapMean": 4.666666666666667,
+      "maxAssignmentRestGapWorst": 5,
+      "meanAssignmentRestGapMean": 1.383838383838384,
+      "p95AssignmentRestGapMean": 3.6666666666666665,
+      "starvationInterventions": 1,
+      "decisionsWithOverdue": 12,
+      "certifiedCounterfactualDecisions": 12,
       "uncertifiedCounterfactualDecisions": 0,
       "completedRotationDecisions": 57,
-      "backToBackAssignments": 20,
+      "backToBackAssignments": 47,
       "checkpointFairnessSpreadMean": 1,
       "maximumFairnessSpreadMean": 2.3333333333333335,
       "pendingFiveTurnWaits": 0,
-      "starvationRateWhenOverdue": null,
-      "starvationRateAcrossCompletedDecisions": 0,
-      "starvationRateAmongCertified": null
+      "starvationRateWhenOverdue": 0.08333333333333333,
+      "starvationRateAcrossCompletedDecisions": 0.017543859649122806,
+      "starvationRateAmongCertified": 0.08333333333333333
     },
     {
       "profile": "wide",
       "format": "Balanced Points",
       "completed": 400,
-      "varietyCoverageMean": 0.8559218559218561,
-      "varietyCoverageMedian": 0.8608058608058611,
-      "partnerCoverageMean": 0.5677655677655676,
+      "varietyCoverageMean": 0.9853479853479854,
+      "varietyCoverageMedian": 0.9853479853479854,
+      "varietyCoverageStdDev": 0,
+      "varietyCoverageMin": 0.9853479853479854,
+      "varietyCoverageMax": 0.9853479853479854,
+      "partnerCoverageMean": 0.9560439560439562,
+      "partnerCoverageStdDev": 0,
       "opponentCoverageMean": 1,
+      "opponentCoverageStdDev": 0,
       "courtmateCoverageMean": 1,
+      "courtmateCoverageStdDev": 0,
       "mixedCoverageMean": 1,
-      "ownSideCoverageMean": 0.38095238095238093,
-      "relationshipEntropyMean": 0.9024222169254248,
-      "matchTypeEntropyMean": 0.027559021073863054,
-      "normalizedEntropyMean": 0.6837064179625343,
-      "backToBackRateMean": 0.1353509878100042,
-      "maxAssignmentRestGapMean": 5,
-      "meanAssignmentRestGapMean": 1.50021017234132,
-      "p95AssignmentRestGapMean": 3,
-      "starvationInterventions": 0,
-      "decisionsWithOverdue": 50,
-      "certifiedCounterfactualDecisions": 50,
+      "ownSideCoverageMean": 1,
+      "completedMixedMatchesMean": 202.33333333333334,
+      "completedOwnSideMatchesMean": 197.66666666666666,
+      "first100OwnSideMatchesMean": 48,
+      "last100OwnSideMatchesMean": 49.666666666666664,
+      "relationshipEntropyMean": 0.9447178990236273,
+      "matchTypeEntropyMean": 0.9996895844277157,
+      "normalizedEntropyMean": 0.9584608203746496,
+      "backToBackRateMean": 0.2688104245481295,
+      "maxAssignmentRestGapMean": 7,
+      "maxAssignmentRestGapWorst": 8,
+      "meanAssignmentRestGapMean": 1.4995796553173601,
+      "p95AssignmentRestGapMean": 4,
+      "starvationInterventions": 95,
+      "decisionsWithOverdue": 371,
+      "certifiedCounterfactualDecisions": 371,
       "uncertifiedCounterfactualDecisions": 0,
       "completedRotationDecisions": 1197,
-      "backToBackAssignments": 644,
+      "backToBackAssignments": 1279,
       "checkpointFairnessSpreadMean": 1.3333333333333333,
       "maximumFairnessSpreadMean": 5,
       "pendingFiveTurnWaits": 0,
-      "starvationRateWhenOverdue": 0,
-      "starvationRateAcrossCompletedDecisions": 0,
-      "starvationRateAmongCertified": 0
+      "starvationRateWhenOverdue": 0.2560646900269542,
+      "starvationRateAcrossCompletedDecisions": 0.07936507936507936,
+      "starvationRateAmongCertified": 0.2560646900269542
     },
     {
       "profile": "wide",
       "format": "Balanced Rating/Elo",
       "completed": 20,
-      "varietyCoverageMean": 0.5409035409035409,
-      "varietyCoverageMedian": 0.5347985347985348,
-      "partnerCoverageMean": 0.3113553113553114,
-      "opponentCoverageMean": 0.5860805860805861,
-      "courtmateCoverageMean": 0.7252747252747254,
+      "varietyCoverageMean": 0.5531135531135531,
+      "varietyCoverageMedian": 0.5494505494505495,
+      "varietyCoverageStdDev": 0.00791299230574831,
+      "varietyCoverageMin": 0.5457875457875457,
+      "varietyCoverageMax": 0.5641025641025641,
+      "partnerCoverageMean": 0.36996336996337,
+      "partnerCoverageStdDev": 0.02884251968502495,
+      "opponentCoverageMean": 0.5457875457875457,
+      "opponentCoverageStdDev": 0.018677727156017513,
+      "courtmateCoverageMean": 0.7435897435897436,
+      "courtmateCoverageStdDev": 0.01867772715601756,
       "mixedCoverageMean": 1,
-      "ownSideCoverageMean": 0.38095238095238093,
-      "relationshipEntropyMean": 0.6948537312358932,
-      "matchTypeEntropyMean": 0.25447574855546906,
-      "normalizedEntropyMean": 0.5847592355657872,
-      "backToBackRateMean": 0.10606060606060606,
-      "maxAssignmentRestGapMean": 3,
-      "meanAssignmentRestGapMean": 1.409090909090909,
-      "p95AssignmentRestGapMean": 2.6666666666666665,
-      "starvationInterventions": 0,
-      "decisionsWithOverdue": 0,
-      "certifiedCounterfactualDecisions": 0,
+      "ownSideCoverageMean": 1,
+      "completedMixedMatchesMean": 11.333333333333334,
+      "completedOwnSideMatchesMean": 8.666666666666666,
+      "first100OwnSideMatchesMean": 47.333333333333336,
+      "last100OwnSideMatchesMean": 51,
+      "relationshipEntropyMean": 0.7162500111393104,
+      "matchTypeEntropyMean": 0.9427131783512998,
+      "normalizedEntropyMean": 0.7728658029423078,
+      "backToBackRateMean": 0.23232323232323235,
+      "maxAssignmentRestGapMean": 4.333333333333333,
+      "maxAssignmentRestGapWorst": 5,
+      "meanAssignmentRestGapMean": 1.3939393939393938,
+      "p95AssignmentRestGapMean": 3.6666666666666665,
+      "starvationInterventions": 1,
+      "decisionsWithOverdue": 9,
+      "certifiedCounterfactualDecisions": 9,
       "uncertifiedCounterfactualDecisions": 0,
       "completedRotationDecisions": 57,
-      "backToBackAssignments": 21,
+      "backToBackAssignments": 46,
       "checkpointFairnessSpreadMean": 1,
       "maximumFairnessSpreadMean": 2.3333333333333335,
       "pendingFiveTurnWaits": 0,
-      "starvationRateWhenOverdue": null,
-      "starvationRateAcrossCompletedDecisions": 0,
-      "starvationRateAmongCertified": null
+      "starvationRateWhenOverdue": 0.1111111111111111,
+      "starvationRateAcrossCompletedDecisions": 0.017543859649122806,
+      "starvationRateAmongCertified": 0.1111111111111111
     },
     {
       "profile": "wide",
       "format": "Balanced Rating/Elo",
       "completed": 400,
-      "varietyCoverageMean": 0.8412698412698414,
-      "varietyCoverageMedian": 0.8461538461538464,
-      "partnerCoverageMean": 0.5457875457875456,
+      "varietyCoverageMean": 0.9560439560439562,
+      "varietyCoverageMedian": 0.9560439560439562,
+      "varietyCoverageStdDev": 0,
+      "varietyCoverageMin": 0.9560439560439562,
+      "varietyCoverageMax": 0.9560439560439562,
+      "partnerCoverageMean": 0.8901098901098902,
+      "partnerCoverageStdDev": 1.1102230246251565e-16,
       "opponentCoverageMean": 0.9780219780219781,
+      "opponentCoverageStdDev": 0,
       "courtmateCoverageMean": 1,
+      "courtmateCoverageStdDev": 0,
       "mixedCoverageMean": 1,
-      "ownSideCoverageMean": 0.38095238095238093,
-      "relationshipEntropyMean": 0.8869552648036994,
-      "matchTypeEntropyMean": 0.02754662318544891,
-      "normalizedEntropyMean": 0.6721031043991367,
-      "backToBackRateMean": 0.1403951240016814,
-      "maxAssignmentRestGapMean": 5,
-      "meanAssignmentRestGapMean": 1.50021017234132,
-      "p95AssignmentRestGapMean": 3,
-      "starvationInterventions": 4,
-      "decisionsWithOverdue": 71,
-      "certifiedCounterfactualDecisions": 71,
+      "ownSideCoverageMean": 1,
+      "completedMixedMatchesMean": 201.33333333333334,
+      "completedOwnSideMatchesMean": 198.66666666666666,
+      "first100OwnSideMatchesMean": 47.333333333333336,
+      "last100OwnSideMatchesMean": 51,
+      "relationshipEntropyMean": 0.9235126420986166,
+      "matchTypeEntropyMean": 0.9997422801122838,
+      "normalizedEntropyMean": 0.9425700516020337,
+      "backToBackRateMean": 0.28100042034468264,
+      "maxAssignmentRestGapMean": 6.666666666666667,
+      "maxAssignmentRestGapWorst": 8,
+      "meanAssignmentRestGapMean": 1.4989491382934006,
+      "p95AssignmentRestGapMean": 4,
+      "starvationInterventions": 94,
+      "decisionsWithOverdue": 361,
+      "certifiedCounterfactualDecisions": 361,
       "uncertifiedCounterfactualDecisions": 0,
       "completedRotationDecisions": 1197,
-      "backToBackAssignments": 668,
+      "backToBackAssignments": 1337,
       "checkpointFairnessSpreadMean": 1.3333333333333333,
       "maximumFairnessSpreadMean": 5,
-      "pendingFiveTurnWaits": 0,
-      "starvationRateWhenOverdue": 0.056338028169014086,
-      "starvationRateAcrossCompletedDecisions": 0.003341687552213868,
-      "starvationRateAmongCertified": 0.056338028169014086
+      "pendingFiveTurnWaits": 1,
+      "starvationRateWhenOverdue": 0.26038781163434904,
+      "starvationRateAcrossCompletedDecisions": 0.0785296574770259,
+      "starvationRateAmongCertified": 0.26038781163434904
     }
   ]
 }
 ```
 
+## Seed-to-seed coverage variation (population SD)
+
+| Profile | Format | Completed | Relationship VCS mean ± SD | Median | Min–max | Partner SD | Opponent SD | Courtmate SD |
+|---|---|---:|---:|---:|---:|---:|---:|---:|
+| narrow | Social | 20 | 58.2% ± 2.9% | 57.5% | 54.9%–61.5% | 2.1% | 2.3% | 5.1% |
+| narrow | Social | 400 | 100.0% ± 0.0% | 100.0% | 100.0%–100.0% | 0.0% | 0.0% | 0.0% |
+| narrow | Balanced Points | 20 | 58.2% ± 2.9% | 57.5% | 54.9%–61.5% | 2.1% | 2.3% | 5.1% |
+| narrow | Balanced Points | 400 | 100.0% ± 0.0% | 100.0% | 100.0%–100.0% | 0.0% | 0.0% | 0.0% |
+| narrow | Balanced Rating/Elo | 20 | 58.4% ± 2.7% | 57.5% | 55.7%–61.5% | 1.6% | 2.3% | 4.9% |
+| narrow | Balanced Rating/Elo | 400 | 100.0% ± 0.0% | 100.0% | 100.0%–100.0% | 0.0% | 0.0% | 0.0% |
+| wide | Balanced Points | 20 | 58.7% ± 1.3% | 58.6% | 57.1%–60.4% | 1.4% | 1.9% | 2.4% |
+| wide | Balanced Points | 400 | 98.5% ± 0.0% | 98.5% | 98.5%–98.5% | 0.0% | 0.0% | 0.0% |
+| wide | Balanced Rating/Elo | 20 | 55.3% ± 0.8% | 54.9% | 54.6%–56.4% | 2.9% | 1.9% | 1.9% |
+| wide | Balanced Rating/Elo | 400 | 95.6% ± 0.0% | 95.6% | 95.6%–95.6% | 0.0% | 0.0% | 0.0% |
+
+## Completed ≥5-rest gaps by cohort
+
+| Profile | Format | Count | No stronger fair/rotation candidate | Match-type priority | Zero-rest priority | Relationship priority | Soft-rest priority | Linked prior rest-zero replay |
+|---|---|---:|---:|---:|---:|---:|---:|---:|
 ## Exact unseen relationship list and traces
 
+| narrow | Social | 76 | 66 | 2 | 0 | 8 | 0 | 18 |
+| narrow | Balanced Points | 76 | 66 | 2 | 0 | 8 | 0 | 18 |
+| narrow | Balanced Rating/Elo | 75 | 64 | 2 | 0 | 9 | 0 | 17 |
+| wide | Balanced Points | 53 | 46 | 0 | 0 | 7 | 0 | 16 |
+| wide | Balanced Rating/Elo | 56 | 48 | 2 | 0 | 5 | 0 | 20 |
+
+The wait stage columns identify the first active selection layer that lacked a candidate including the deferred player: type entropy, zero-rest count, relationship entropy, or soft cadence. Candidate gains and chosen sets/rest vectors are recorded per refill; these are observed finite-session opportunities, not proof of permanent impossibility.
+
+## Static balance-guardrail dominance for wide skill profile
+
+### Wide Balanced Points: 4 excluded feasible facet-pairs; allowed max gap 1.5.
+Exhaustive standard Mixed-legal layout enumeration found minimum single-court gap above that window for every listed pair; these are guardrail-inadmissible for the fixed wide roster and rules.
+- P1–P2 partners: minimum gap 2 > 1.5.
+- P13–P14 partners: minimum gap 2 > 1.5.
+- P6–P7 partners: minimum gap 2 > 1.5.
+- P8–P9 partners: minimum gap 2 > 1.5.
+
+### Wide Balanced Rating/Elo: 12 excluded feasible facet-pairs; allowed max gap 30.
+Exhaustive standard Mixed-legal layout enumeration found minimum single-court gap above that window for every listed pair; these are guardrail-inadmissible for the fixed wide roster and rules.
+- P1–P14 opponents: minimum gap 40 > 30.
+- P7–P8 opponents: minimum gap 40 > 30.
+- P1–P2 partners: minimum gap 80 > 30.
+- P1–P3 partners: minimum gap 40 > 30.
+- P1–P8 partners: minimum gap 40 > 30.
+- P10–P8 partners: minimum gap 40 > 30.
+- P12–P14 partners: minimum gap 40 > 30.
+- P13–P14 partners: minimum gap 80 > 30.
+- P14–P7 partners: minimum gap 40 > 30.
+- P5–P7 partners: minimum gap 40 > 30.
+- P6–P7 partners: minimum gap 80 > 30.
+- P8–P9 partners: minimum gap 80 > 30.
+
+## Before/after optimizer timing (same narrow cohort)
+
+| Engine | Production decisions | Direct optimizer calls / time | Paired starvation diagnostics | Diagnostic-inclusive time per decision | Search-limit / certification failures |
+|---|---:|---:|---:|---:|---:|
+| Baseline de0254f84adef7414b512e3d3fd936033d65bef8 | 6000 | 6000 / 149.3 s | none available | 24.88 ms | 0 / 0 |
+| Current bcf07fb22cded580c7e2c0c72d6a5a58bc4eb49d | 6000 | 4269 / 90.7 s | 1731 wrappers / 61.0 s | 25.27 ms | 0 / 0 |
+
+Both rows cover the same five narrow seeds × three formats × 400 completed matches. On overdue decisions the current wrapper returns the production choice and runs one extra no-starvation search; its total time is included here, so the diagnostic-inclusive current number is a conservative instrumentation cost, not production-only latency. The baseline has no counterfactual API and its intervention count is unknown.
+Per-session harness totals including matcher, independent oracle, and report instrumentation were 242.3 s baseline and 213.2 s current; this broader scope is not production-only matcher latency.
+
+## Fixed-wide-profile same-quartet balance proof: Balanced Points
+
+All 4 structurally feasible excluded facet-pairs have a minimum legal Mixed single-court gap above the static envelope window (2 minimum > 1.5); the exhaustive same-quartet layout audit proves these relationships remain guardrail-inadmissible under this fixed profile. Exact pairs: P1–P2 partners (min gap 2), P13–P14 partners (min gap 2), P6–P7 partners (min gap 2), P8–P9 partners (min gap 2). The separate static equal-count two-court audit excludes these same pairs in the opening batch; the same-quartet dominance proof covers subsequent one-court refills. Together this is scoped to the fixed wide strength mapping, standard Mixed legality, a full-roster equal-count class, and no added partition-specific schedule restrictions. It does not extend to changing skills, other availability/history classes, or later multi-court refills.
+
+## Fixed-wide-profile same-quartet balance proof: Balanced Rating/Elo
+
+All 12 structurally feasible excluded facet-pairs have a minimum legal Mixed single-court gap above the static envelope window (40 minimum > 30); the exhaustive same-quartet layout audit proves these relationships remain guardrail-inadmissible under this fixed profile. Exact pairs: P1–P2 partners (min gap 80), P1–P3 partners (min gap 40), P1–P8 partners (min gap 40), P10–P8 partners (min gap 40), P12–P14 partners (min gap 40), P13–P14 partners (min gap 80), P14–P7 partners (min gap 40), P5–P7 partners (min gap 40), P6–P7 partners (min gap 80), P8–P9 partners (min gap 80), P1–P14 opponents (min gap 40), P7–P8 opponents (min gap 40). The separate static equal-count two-court audit excludes these same pairs in the opening batch; the same-quartet dominance proof covers subsequent one-court refills. Together this is scoped to the fixed wide strength mapping, standard Mixed legality, a full-roster equal-count class, and no added partition-specific schedule restrictions. It does not extend to changing skills, other availability/history classes, or later multi-court refills.
+
 ### Social narrow seed 1: unseen at 400
-- P1–P2 partners: cadence_priority_excluded_in_observed_opportunities; strongest 140, balance-envelope 140, cadence-frontier 0.
-- P1–P3 partners: cadence_priority_excluded_in_observed_opportunities; strongest 120, balance-envelope 120, cadence-frontier 0.
-- P1–P4 partners: cadence_priority_excluded_in_observed_opportunities; strongest 136, balance-envelope 136, cadence-frontier 0.
-- P1–P5 partners: cadence_priority_excluded_in_observed_opportunities; strongest 131, balance-envelope 131, cadence-frontier 0.
-- P1–P6 partners: cadence_priority_excluded_in_observed_opportunities; strongest 105, balance-envelope 105, cadence-frontier 0.
-- P1–P7 partners: cadence_priority_excluded_in_observed_opportunities; strongest 136, balance-envelope 136, cadence-frontier 0.
-- P10–P11 partners: cadence_priority_excluded_in_observed_opportunities; strongest 128, balance-envelope 128, cadence-frontier 0.
-- P10–P12 partners: cadence_priority_excluded_in_observed_opportunities; strongest 150, balance-envelope 150, cadence-frontier 0.
-- P10–P13 partners: cadence_priority_excluded_in_observed_opportunities; strongest 121, balance-envelope 121, cadence-frontier 0.
-- P10–P14 partners: cadence_priority_excluded_in_observed_opportunities; strongest 154, balance-envelope 154, cadence-frontier 0.
-- P10–P8 partners: cadence_priority_excluded_in_observed_opportunities; strongest 134, balance-envelope 134, cadence-frontier 0.
-- P10–P9 partners: cadence_priority_excluded_in_observed_opportunities; strongest 132, balance-envelope 132, cadence-frontier 0.
-- P11–P12 partners: cadence_priority_excluded_in_observed_opportunities; strongest 154, balance-envelope 154, cadence-frontier 0.
-- P11–P13 partners: cadence_priority_excluded_in_observed_opportunities; strongest 137, balance-envelope 137, cadence-frontier 0.
-- P11–P14 partners: cadence_priority_excluded_in_observed_opportunities; strongest 161, balance-envelope 161, cadence-frontier 0.
-- P11–P8 partners: cadence_priority_excluded_in_observed_opportunities; strongest 160, balance-envelope 160, cadence-frontier 0.
-- P11–P9 partners: cadence_priority_excluded_in_observed_opportunities; strongest 133, balance-envelope 133, cadence-frontier 0.
-- P12–P13 partners: cadence_priority_excluded_in_observed_opportunities; strongest 154, balance-envelope 154, cadence-frontier 0.
-- P12–P14 partners: cadence_priority_excluded_in_observed_opportunities; strongest 185, balance-envelope 185, cadence-frontier 0.
-- P12–P8 partners: cadence_priority_excluded_in_observed_opportunities; strongest 163, balance-envelope 163, cadence-frontier 0.
-- P12–P9 partners: cadence_priority_excluded_in_observed_opportunities; strongest 154, balance-envelope 154, cadence-frontier 0.
-- P13–P14 partners: cadence_priority_excluded_in_observed_opportunities; strongest 172, balance-envelope 172, cadence-frontier 0.
-- P13–P8 partners: cadence_priority_excluded_in_observed_opportunities; strongest 149, balance-envelope 149, cadence-frontier 0.
-- P13–P9 partners: cadence_priority_excluded_in_observed_opportunities; strongest 131, balance-envelope 131, cadence-frontier 0.
-- P14–P8 partners: cadence_priority_excluded_in_observed_opportunities; strongest 173, balance-envelope 173, cadence-frontier 0.
-- P14–P9 partners: cadence_priority_excluded_in_observed_opportunities; strongest 163, balance-envelope 163, cadence-frontier 0.
-- P2–P3 partners: cadence_priority_excluded_in_observed_opportunities; strongest 149, balance-envelope 149, cadence-frontier 0.
-- P2–P4 partners: cadence_priority_excluded_in_observed_opportunities; strongest 177, balance-envelope 177, cadence-frontier 0.
-- P2–P5 partners: cadence_priority_excluded_in_observed_opportunities; strongest 164, balance-envelope 164, cadence-frontier 0.
-- P2–P6 partners: cadence_priority_excluded_in_observed_opportunities; strongest 153, balance-envelope 153, cadence-frontier 0.
-- P2–P7 partners: cadence_priority_excluded_in_observed_opportunities; strongest 180, balance-envelope 180, cadence-frontier 0.
-- P3–P4 partners: cadence_priority_excluded_in_observed_opportunities; strongest 156, balance-envelope 156, cadence-frontier 0.
-- P3–P5 partners: cadence_priority_excluded_in_observed_opportunities; strongest 145, balance-envelope 145, cadence-frontier 0.
-- P3–P6 partners: cadence_priority_excluded_in_observed_opportunities; strongest 136, balance-envelope 136, cadence-frontier 0.
-- P3–P7 partners: cadence_priority_excluded_in_observed_opportunities; strongest 152, balance-envelope 152, cadence-frontier 0.
-- P4–P5 partners: cadence_priority_excluded_in_observed_opportunities; strongest 173, balance-envelope 173, cadence-frontier 0.
-- P4–P6 partners: cadence_priority_excluded_in_observed_opportunities; strongest 147, balance-envelope 147, cadence-frontier 0.
-- P4–P7 partners: cadence_priority_excluded_in_observed_opportunities; strongest 174, balance-envelope 174, cadence-frontier 0.
-- P5–P6 partners: cadence_priority_excluded_in_observed_opportunities; strongest 149, balance-envelope 149, cadence-frontier 0.
-- P5–P7 partners: cadence_priority_excluded_in_observed_opportunities; strongest 165, balance-envelope 165, cadence-frontier 0.
-- P6–P7 partners: cadence_priority_excluded_in_observed_opportunities; strongest 162, balance-envelope 162, cadence-frontier 0.
-- P8–P9 partners: cadence_priority_excluded_in_observed_opportunities; strongest 142, balance-envelope 142, cadence-frontier 0.
+All structurally feasible player/facet relationships were observed.
 
 ### Balanced Points narrow seed 1: unseen at 400
-- P1–P2 partners: cadence_priority_excluded_in_observed_opportunities; strongest 149, balance-envelope 149, cadence-frontier 0.
-- P1–P3 partners: cadence_priority_excluded_in_observed_opportunities; strongest 146, balance-envelope 146, cadence-frontier 0.
-- P1–P4 partners: cadence_priority_excluded_in_observed_opportunities; strongest 167, balance-envelope 167, cadence-frontier 0.
-- P1–P5 partners: cadence_priority_excluded_in_observed_opportunities; strongest 152, balance-envelope 152, cadence-frontier 0.
-- P1–P6 partners: cadence_priority_excluded_in_observed_opportunities; strongest 149, balance-envelope 149, cadence-frontier 0.
-- P1–P7 partners: cadence_priority_excluded_in_observed_opportunities; strongest 146, balance-envelope 146, cadence-frontier 0.
-- P10–P11 partners: cadence_priority_excluded_in_observed_opportunities; strongest 147, balance-envelope 147, cadence-frontier 0.
-- P10–P12 partners: cadence_priority_excluded_in_observed_opportunities; strongest 165, balance-envelope 165, cadence-frontier 0.
-- P10–P13 partners: cadence_priority_excluded_in_observed_opportunities; strongest 173, balance-envelope 173, cadence-frontier 0.
-- P10–P14 partners: cadence_priority_excluded_in_observed_opportunities; strongest 156, balance-envelope 156, cadence-frontier 0.
-- P10–P8 partners: cadence_priority_excluded_in_observed_opportunities; strongest 163, balance-envelope 163, cadence-frontier 0.
-- P10–P9 partners: cadence_priority_excluded_in_observed_opportunities; strongest 165, balance-envelope 165, cadence-frontier 0.
-- P11–P12 partners: cadence_priority_excluded_in_observed_opportunities; strongest 134, balance-envelope 134, cadence-frontier 0.
-- P11–P13 partners: cadence_priority_excluded_in_observed_opportunities; strongest 146, balance-envelope 146, cadence-frontier 0.
-- P11–P14 partners: cadence_priority_excluded_in_observed_opportunities; strongest 109, balance-envelope 109, cadence-frontier 0.
-- P11–P8 partners: cadence_priority_excluded_in_observed_opportunities; strongest 135, balance-envelope 135, cadence-frontier 0.
-- P11–P9 partners: cadence_priority_excluded_in_observed_opportunities; strongest 145, balance-envelope 145, cadence-frontier 0.
-- P12–P13 partners: cadence_priority_excluded_in_observed_opportunities; strongest 153, balance-envelope 153, cadence-frontier 0.
-- P12–P14 partners: cadence_priority_excluded_in_observed_opportunities; strongest 138, balance-envelope 138, cadence-frontier 0.
-- P12–P8 partners: cadence_priority_excluded_in_observed_opportunities; strongest 162, balance-envelope 162, cadence-frontier 0.
-- P12–P9 partners: cadence_priority_excluded_in_observed_opportunities; strongest 160, balance-envelope 160, cadence-frontier 0.
-- P13–P14 partners: cadence_priority_excluded_in_observed_opportunities; strongest 134, balance-envelope 134, cadence-frontier 0.
-- P13–P8 partners: cadence_priority_excluded_in_observed_opportunities; strongest 164, balance-envelope 164, cadence-frontier 0.
-- P13–P9 partners: cadence_priority_excluded_in_observed_opportunities; strongest 163, balance-envelope 163, cadence-frontier 0.
-- P14–P8 partners: cadence_priority_excluded_in_observed_opportunities; strongest 141, balance-envelope 141, cadence-frontier 0.
-- P14–P9 partners: cadence_priority_excluded_in_observed_opportunities; strongest 138, balance-envelope 138, cadence-frontier 0.
-- P2–P3 partners: cadence_priority_excluded_in_observed_opportunities; strongest 116, balance-envelope 116, cadence-frontier 0.
-- P2–P4 partners: cadence_priority_excluded_in_observed_opportunities; strongest 165, balance-envelope 165, cadence-frontier 0.
-- P2–P5 partners: cadence_priority_excluded_in_observed_opportunities; strongest 147, balance-envelope 147, cadence-frontier 0.
-- P2–P6 partners: cadence_priority_excluded_in_observed_opportunities; strongest 165, balance-envelope 165, cadence-frontier 0.
-- P2–P7 partners: cadence_priority_excluded_in_observed_opportunities; strongest 146, balance-envelope 146, cadence-frontier 0.
-- P3–P4 partners: cadence_priority_excluded_in_observed_opportunities; strongest 139, balance-envelope 139, cadence-frontier 0.
-- P3–P5 partners: cadence_priority_excluded_in_observed_opportunities; strongest 132, balance-envelope 132, cadence-frontier 0.
-- P3–P6 partners: cadence_priority_excluded_in_observed_opportunities; strongest 143, balance-envelope 143, cadence-frontier 0.
-- P3–P7 partners: cadence_priority_excluded_in_observed_opportunities; strongest 122, balance-envelope 122, cadence-frontier 0.
-- P4–P5 partners: cadence_priority_excluded_in_observed_opportunities; strongest 170, balance-envelope 170, cadence-frontier 0.
-- P4–P6 partners: cadence_priority_excluded_in_observed_opportunities; strongest 161, balance-envelope 161, cadence-frontier 0.
-- P4–P7 partners: cadence_priority_excluded_in_observed_opportunities; strongest 161, balance-envelope 161, cadence-frontier 0.
-- P5–P6 partners: cadence_priority_excluded_in_observed_opportunities; strongest 155, balance-envelope 155, cadence-frontier 0.
-- P5–P7 partners: cadence_priority_excluded_in_observed_opportunities; strongest 165, balance-envelope 165, cadence-frontier 0.
-- P6–P7 partners: cadence_priority_excluded_in_observed_opportunities; strongest 154, balance-envelope 154, cadence-frontier 0.
-- P8–P9 partners: cadence_priority_excluded_in_observed_opportunities; strongest 159, balance-envelope 159, cadence-frontier 0.
+All structurally feasible player/facet relationships were observed.
 
 ### Balanced Rating/Elo narrow seed 1: unseen at 400
-- P1–P2 partners: cadence_priority_excluded_in_observed_opportunities; strongest 125, balance-envelope 125, cadence-frontier 0.
-- P1–P3 partners: cadence_priority_excluded_in_observed_opportunities; strongest 136, balance-envelope 136, cadence-frontier 0.
-- P1–P4 partners: cadence_priority_excluded_in_observed_opportunities; strongest 131, balance-envelope 131, cadence-frontier 0.
-- P1–P5 partners: cadence_priority_excluded_in_observed_opportunities; strongest 139, balance-envelope 139, cadence-frontier 0.
-- P1–P6 partners: cadence_priority_excluded_in_observed_opportunities; strongest 146, balance-envelope 146, cadence-frontier 0.
-- P1–P7 partners: cadence_priority_excluded_in_observed_opportunities; strongest 115, balance-envelope 115, cadence-frontier 0.
-- P10–P11 partners: cadence_priority_excluded_in_observed_opportunities; strongest 129, balance-envelope 129, cadence-frontier 0.
-- P10–P12 partners: cadence_priority_excluded_in_observed_opportunities; strongest 144, balance-envelope 144, cadence-frontier 0.
-- P10–P13 partners: cadence_priority_excluded_in_observed_opportunities; strongest 161, balance-envelope 161, cadence-frontier 0.
-- P10–P14 partners: cadence_priority_excluded_in_observed_opportunities; strongest 179, balance-envelope 179, cadence-frontier 0.
-- P10–P8 partners: cadence_priority_excluded_in_observed_opportunities; strongest 120, balance-envelope 120, cadence-frontier 0.
-- P10–P9 partners: cadence_priority_excluded_in_observed_opportunities; strongest 158, balance-envelope 158, cadence-frontier 0.
-- P11–P12 partners: cadence_priority_excluded_in_observed_opportunities; strongest 127, balance-envelope 127, cadence-frontier 0.
-- P11–P13 partners: cadence_priority_excluded_in_observed_opportunities; strongest 154, balance-envelope 154, cadence-frontier 0.
-- P11–P14 partners: cadence_priority_excluded_in_observed_opportunities; strongest 159, balance-envelope 159, cadence-frontier 0.
-- P11–P8 partners: cadence_priority_excluded_in_observed_opportunities; strongest 126, balance-envelope 126, cadence-frontier 0.
-- P11–P9 partners: cadence_priority_excluded_in_observed_opportunities; strongest 139, balance-envelope 139, cadence-frontier 0.
-- P12–P13 partners: cadence_priority_excluded_in_observed_opportunities; strongest 158, balance-envelope 158, cadence-frontier 0.
-- P12–P14 partners: cadence_priority_excluded_in_observed_opportunities; strongest 161, balance-envelope 161, cadence-frontier 0.
-- P12–P8 partners: cadence_priority_excluded_in_observed_opportunities; strongest 121, balance-envelope 121, cadence-frontier 0.
-- P12–P9 partners: cadence_priority_excluded_in_observed_opportunities; strongest 162, balance-envelope 162, cadence-frontier 0.
-- P13–P14 partners: cadence_priority_excluded_in_observed_opportunities; strongest 190, balance-envelope 190, cadence-frontier 0.
-- P13–P8 partners: cadence_priority_excluded_in_observed_opportunities; strongest 146, balance-envelope 146, cadence-frontier 0.
-- P13–P9 partners: cadence_priority_excluded_in_observed_opportunities; strongest 166, balance-envelope 166, cadence-frontier 0.
-- P14–P8 partners: cadence_priority_excluded_in_observed_opportunities; strongest 148, balance-envelope 148, cadence-frontier 0.
-- P14–P9 partners: cadence_priority_excluded_in_observed_opportunities; strongest 174, balance-envelope 174, cadence-frontier 0.
-- P2–P3 partners: cadence_priority_excluded_in_observed_opportunities; strongest 139, balance-envelope 139, cadence-frontier 0.
-- P2–P4 partners: cadence_priority_excluded_in_observed_opportunities; strongest 137, balance-envelope 137, cadence-frontier 0.
-- P2–P5 partners: cadence_priority_excluded_in_observed_opportunities; strongest 152, balance-envelope 152, cadence-frontier 0.
-- P2–P6 partners: cadence_priority_excluded_in_observed_opportunities; strongest 162, balance-envelope 162, cadence-frontier 0.
-- P2–P7 partners: cadence_priority_excluded_in_observed_opportunities; strongest 140, balance-envelope 140, cadence-frontier 0.
-- P3–P4 partners: cadence_priority_excluded_in_observed_opportunities; strongest 155, balance-envelope 155, cadence-frontier 0.
-- P3–P5 partners: cadence_priority_excluded_in_observed_opportunities; strongest 168, balance-envelope 168, cadence-frontier 0.
-- P3–P6 partners: cadence_priority_excluded_in_observed_opportunities; strongest 180, balance-envelope 180, cadence-frontier 0.
-- P3–P7 partners: cadence_priority_excluded_in_observed_opportunities; strongest 149, balance-envelope 149, cadence-frontier 0.
-- P4–P5 partners: cadence_priority_excluded_in_observed_opportunities; strongest 163, balance-envelope 163, cadence-frontier 0.
-- P4–P6 partners: cadence_priority_excluded_in_observed_opportunities; strongest 168, balance-envelope 168, cadence-frontier 0.
-- P4–P7 partners: cadence_priority_excluded_in_observed_opportunities; strongest 146, balance-envelope 146, cadence-frontier 0.
-- P5–P6 partners: cadence_priority_excluded_in_observed_opportunities; strongest 179, balance-envelope 179, cadence-frontier 0.
-- P5–P7 partners: cadence_priority_excluded_in_observed_opportunities; strongest 147, balance-envelope 147, cadence-frontier 0.
-- P6–P7 partners: cadence_priority_excluded_in_observed_opportunities; strongest 173, balance-envelope 173, cadence-frontier 0.
-- P8–P9 partners: cadence_priority_excluded_in_observed_opportunities; strongest 128, balance-envelope 128, cadence-frontier 0.
+All structurally feasible player/facet relationships were observed.
 
 ### Social narrow seed 4729: unseen at 400
-- P1–P2 partners: cadence_priority_excluded_in_observed_opportunities; strongest 135, balance-envelope 135, cadence-frontier 0.
-- P1–P3 partners: cadence_priority_excluded_in_observed_opportunities; strongest 149, balance-envelope 149, cadence-frontier 0.
-- P1–P4 partners: cadence_priority_excluded_in_observed_opportunities; strongest 140, balance-envelope 140, cadence-frontier 0.
-- P1–P5 partners: cadence_priority_excluded_in_observed_opportunities; strongest 98, balance-envelope 98, cadence-frontier 0.
-- P1–P6 partners: cadence_priority_excluded_in_observed_opportunities; strongest 152, balance-envelope 152, cadence-frontier 0.
-- P10–P11 partners: cadence_priority_excluded_in_observed_opportunities; strongest 138, balance-envelope 138, cadence-frontier 0.
-- P10–P13 partners: cadence_priority_excluded_in_observed_opportunities; strongest 119, balance-envelope 119, cadence-frontier 0.
-- P10–P14 partners: cadence_priority_excluded_in_observed_opportunities; strongest 131, balance-envelope 131, cadence-frontier 0.
-- P10–P8 partners: cadence_priority_excluded_in_observed_opportunities; strongest 123, balance-envelope 123, cadence-frontier 0.
-- P10–P9 partners: cadence_priority_excluded_in_observed_opportunities; strongest 99, balance-envelope 99, cadence-frontier 0.
-- P11–P12 partners: cadence_priority_excluded_in_observed_opportunities; strongest 116, balance-envelope 116, cadence-frontier 0.
-- P11–P13 partners: cadence_priority_excluded_in_observed_opportunities; strongest 132, balance-envelope 132, cadence-frontier 0.
-- P11–P14 partners: cadence_priority_excluded_in_observed_opportunities; strongest 133, balance-envelope 133, cadence-frontier 0.
-- P11–P8 partners: cadence_priority_excluded_in_observed_opportunities; strongest 129, balance-envelope 129, cadence-frontier 0.
-- P11–P9 partners: cadence_priority_excluded_in_observed_opportunities; strongest 120, balance-envelope 120, cadence-frontier 0.
-- P12–P13 partners: cadence_priority_excluded_in_observed_opportunities; strongest 111, balance-envelope 111, cadence-frontier 0.
-- P12–P14 partners: cadence_priority_excluded_in_observed_opportunities; strongest 120, balance-envelope 120, cadence-frontier 0.
-- P12–P8 partners: cadence_priority_excluded_in_observed_opportunities; strongest 117, balance-envelope 117, cadence-frontier 0.
-- P12–P9 partners: cadence_priority_excluded_in_observed_opportunities; strongest 119, balance-envelope 119, cadence-frontier 0.
-- P13–P14 partners: cadence_priority_excluded_in_observed_opportunities; strongest 121, balance-envelope 121, cadence-frontier 0.
-- P13–P8 partners: cadence_priority_excluded_in_observed_opportunities; strongest 120, balance-envelope 120, cadence-frontier 0.
-- P13–P9 partners: cadence_priority_excluded_in_observed_opportunities; strongest 90, balance-envelope 90, cadence-frontier 0.
-- P14–P9 partners: cadence_priority_excluded_in_observed_opportunities; strongest 102, balance-envelope 102, cadence-frontier 0.
-- P2–P3 partners: cadence_priority_excluded_in_observed_opportunities; strongest 131, balance-envelope 131, cadence-frontier 0.
-- P2–P4 partners: cadence_priority_excluded_in_observed_opportunities; strongest 123, balance-envelope 123, cadence-frontier 0.
-- P2–P5 partners: cadence_priority_excluded_in_observed_opportunities; strongest 74, balance-envelope 74, cadence-frontier 0.
-- P2–P7 partners: cadence_priority_excluded_in_observed_opportunities; strongest 110, balance-envelope 110, cadence-frontier 0.
-- P3–P4 partners: cadence_priority_excluded_in_observed_opportunities; strongest 138, balance-envelope 138, cadence-frontier 0.
-- P3–P5 partners: cadence_priority_excluded_in_observed_opportunities; strongest 84, balance-envelope 84, cadence-frontier 0.
-- P3–P6 partners: cadence_priority_excluded_in_observed_opportunities; strongest 153, balance-envelope 153, cadence-frontier 0.
-- P3–P7 partners: cadence_priority_excluded_in_observed_opportunities; strongest 125, balance-envelope 125, cadence-frontier 0.
-- P4–P5 partners: cadence_priority_excluded_in_observed_opportunities; strongest 75, balance-envelope 75, cadence-frontier 0.
-- P4–P6 partners: cadence_priority_excluded_in_observed_opportunities; strongest 141, balance-envelope 141, cadence-frontier 0.
-- P4–P7 partners: cadence_priority_excluded_in_observed_opportunities; strongest 121, balance-envelope 121, cadence-frontier 0.
-- P5–P6 partners: cadence_priority_excluded_in_observed_opportunities; strongest 102, balance-envelope 102, cadence-frontier 0.
-- P5–P7 partners: cadence_priority_excluded_in_observed_opportunities; strongest 80, balance-envelope 80, cadence-frontier 0.
-- P6–P7 partners: cadence_priority_excluded_in_observed_opportunities; strongest 133, balance-envelope 133, cadence-frontier 0.
-- P8–P9 partners: cadence_priority_excluded_in_observed_opportunities; strongest 124, balance-envelope 124, cadence-frontier 0.
+All structurally feasible player/facet relationships were observed.
 
 ### Balanced Points narrow seed 4729: unseen at 400
-- P1–P2 partners: cadence_priority_excluded_in_observed_opportunities; strongest 137, balance-envelope 137, cadence-frontier 0.
-- P1–P3 partners: cadence_priority_excluded_in_observed_opportunities; strongest 133, balance-envelope 133, cadence-frontier 0.
-- P1–P4 partners: cadence_priority_excluded_in_observed_opportunities; strongest 147, balance-envelope 147, cadence-frontier 0.
-- P1–P5 partners: cadence_priority_excluded_in_observed_opportunities; strongest 113, balance-envelope 113, cadence-frontier 0.
-- P1–P6 partners: cadence_priority_excluded_in_observed_opportunities; strongest 150, balance-envelope 150, cadence-frontier 0.
-- P10–P11 partners: cadence_priority_excluded_in_observed_opportunities; strongest 130, balance-envelope 130, cadence-frontier 0.
-- P10–P13 partners: cadence_priority_excluded_in_observed_opportunities; strongest 120, balance-envelope 120, cadence-frontier 0.
-- P10–P14 partners: cadence_priority_excluded_in_observed_opportunities; strongest 109, balance-envelope 109, cadence-frontier 0.
-- P10–P8 partners: cadence_priority_excluded_in_observed_opportunities; strongest 145, balance-envelope 145, cadence-frontier 0.
-- P10–P9 partners: cadence_priority_excluded_in_observed_opportunities; strongest 128, balance-envelope 128, cadence-frontier 0.
-- P11–P12 partners: cadence_priority_excluded_in_observed_opportunities; strongest 100, balance-envelope 100, cadence-frontier 0.
-- P11–P13 partners: cadence_priority_excluded_in_observed_opportunities; strongest 121, balance-envelope 121, cadence-frontier 0.
-- P11–P14 partners: cadence_priority_excluded_in_observed_opportunities; strongest 119, balance-envelope 119, cadence-frontier 0.
-- P11–P8 partners: cadence_priority_excluded_in_observed_opportunities; strongest 144, balance-envelope 144, cadence-frontier 0.
-- P11–P9 partners: cadence_priority_excluded_in_observed_opportunities; strongest 127, balance-envelope 127, cadence-frontier 0.
-- P12–P13 partners: cadence_priority_excluded_in_observed_opportunities; strongest 120, balance-envelope 120, cadence-frontier 0.
-- P12–P14 partners: cadence_priority_excluded_in_observed_opportunities; strongest 89, balance-envelope 89, cadence-frontier 0.
-- P12–P8 partners: cadence_priority_excluded_in_observed_opportunities; strongest 120, balance-envelope 120, cadence-frontier 0.
-- P12–P9 partners: cadence_priority_excluded_in_observed_opportunities; strongest 107, balance-envelope 107, cadence-frontier 0.
-- P13–P14 partners: cadence_priority_excluded_in_observed_opportunities; strongest 107, balance-envelope 107, cadence-frontier 0.
-- P13–P8 partners: cadence_priority_excluded_in_observed_opportunities; strongest 140, balance-envelope 140, cadence-frontier 0.
-- P13–P9 partners: cadence_priority_excluded_in_observed_opportunities; strongest 124, balance-envelope 124, cadence-frontier 0.
-- P14–P9 partners: cadence_priority_excluded_in_observed_opportunities; strongest 103, balance-envelope 103, cadence-frontier 0.
-- P2–P3 partners: cadence_priority_excluded_in_observed_opportunities; strongest 112, balance-envelope 112, cadence-frontier 0.
-- P2–P4 partners: cadence_priority_excluded_in_observed_opportunities; strongest 134, balance-envelope 134, cadence-frontier 0.
-- P2–P5 partners: cadence_priority_excluded_in_observed_opportunities; strongest 103, balance-envelope 103, cadence-frontier 0.
-- P2–P7 partners: cadence_priority_excluded_in_observed_opportunities; strongest 110, balance-envelope 110, cadence-frontier 0.
-- P3–P4 partners: cadence_priority_excluded_in_observed_opportunities; strongest 118, balance-envelope 118, cadence-frontier 0.
-- P3–P5 partners: cadence_priority_excluded_in_observed_opportunities; strongest 89, balance-envelope 89, cadence-frontier 0.
-- P3–P6 partners: cadence_priority_excluded_in_observed_opportunities; strongest 127, balance-envelope 127, cadence-frontier 0.
-- P3–P7 partners: cadence_priority_excluded_in_observed_opportunities; strongest 117, balance-envelope 117, cadence-frontier 0.
-- P4–P5 partners: cadence_priority_excluded_in_observed_opportunities; strongest 103, balance-envelope 103, cadence-frontier 0.
-- P4–P6 partners: cadence_priority_excluded_in_observed_opportunities; strongest 138, balance-envelope 138, cadence-frontier 0.
-- P4–P7 partners: cadence_priority_excluded_in_observed_opportunities; strongest 125, balance-envelope 125, cadence-frontier 0.
-- P5–P6 partners: cadence_priority_excluded_in_observed_opportunities; strongest 102, balance-envelope 102, cadence-frontier 0.
-- P5–P7 partners: cadence_priority_excluded_in_observed_opportunities; strongest 87, balance-envelope 87, cadence-frontier 0.
-- P6–P7 partners: cadence_priority_excluded_in_observed_opportunities; strongest 124, balance-envelope 124, cadence-frontier 0.
-- P8–P9 partners: cadence_priority_excluded_in_observed_opportunities; strongest 146, balance-envelope 146, cadence-frontier 0.
+All structurally feasible player/facet relationships were observed.
 
 ### Balanced Rating/Elo narrow seed 4729: unseen at 400
-- P1–P2 partners: cadence_priority_excluded_in_observed_opportunities; strongest 141, balance-envelope 141, cadence-frontier 0.
-- P1–P3 partners: cadence_priority_excluded_in_observed_opportunities; strongest 131, balance-envelope 131, cadence-frontier 0.
-- P1–P4 partners: cadence_priority_excluded_in_observed_opportunities; strongest 140, balance-envelope 140, cadence-frontier 0.
-- P1–P5 partners: cadence_priority_excluded_in_observed_opportunities; strongest 127, balance-envelope 127, cadence-frontier 0.
-- P1–P6 partners: cadence_priority_excluded_in_observed_opportunities; strongest 123, balance-envelope 123, cadence-frontier 0.
-- P1–P7 partners: cadence_priority_excluded_in_observed_opportunities; strongest 109, balance-envelope 109, cadence-frontier 0.
-- P10–P11 partners: cadence_priority_excluded_in_observed_opportunities; strongest 111, balance-envelope 111, cadence-frontier 0.
-- P10–P12 partners: cadence_priority_excluded_in_observed_opportunities; strongest 148, balance-envelope 148, cadence-frontier 0.
-- P10–P13 partners: cadence_priority_excluded_in_observed_opportunities; strongest 107, balance-envelope 107, cadence-frontier 0.
-- P10–P14 partners: cadence_priority_excluded_in_observed_opportunities; strongest 137, balance-envelope 137, cadence-frontier 0.
-- P10–P8 partners: cadence_priority_excluded_in_observed_opportunities; strongest 99, balance-envelope 99, cadence-frontier 0.
-- P10–P9 partners: cadence_priority_excluded_in_observed_opportunities; strongest 118, balance-envelope 118, cadence-frontier 0.
-- P11–P12 partners: cadence_priority_excluded_in_observed_opportunities; strongest 153, balance-envelope 153, cadence-frontier 0.
-- P11–P13 partners: cadence_priority_excluded_in_observed_opportunities; strongest 116, balance-envelope 116, cadence-frontier 0.
-- P11–P14 partners: cadence_priority_excluded_in_observed_opportunities; strongest 126, balance-envelope 126, cadence-frontier 0.
-- P11–P8 partners: cadence_priority_excluded_in_observed_opportunities; strongest 104, balance-envelope 104, cadence-frontier 0.
-- P11–P9 partners: cadence_priority_excluded_in_observed_opportunities; strongest 92, balance-envelope 92, cadence-frontier 0.
-- P12–P13 partners: cadence_priority_excluded_in_observed_opportunities; strongest 141, balance-envelope 141, cadence-frontier 0.
-- P12–P14 partners: cadence_priority_excluded_in_observed_opportunities; strongest 153, balance-envelope 153, cadence-frontier 0.
-- P12–P8 partners: cadence_priority_excluded_in_observed_opportunities; strongest 130, balance-envelope 130, cadence-frontier 0.
-- P12–P9 partners: cadence_priority_excluded_in_observed_opportunities; strongest 142, balance-envelope 142, cadence-frontier 0.
-- P13–P14 partners: cadence_priority_excluded_in_observed_opportunities; strongest 120, balance-envelope 120, cadence-frontier 0.
-- P13–P8 partners: cadence_priority_excluded_in_observed_opportunities; strongest 109, balance-envelope 109, cadence-frontier 0.
-- P13–P9 partners: cadence_priority_excluded_in_observed_opportunities; strongest 103, balance-envelope 103, cadence-frontier 0.
-- P14–P8 partners: cadence_priority_excluded_in_observed_opportunities; strongest 115, balance-envelope 115, cadence-frontier 0.
-- P14–P9 partners: cadence_priority_excluded_in_observed_opportunities; strongest 102, balance-envelope 102, cadence-frontier 0.
-- P2–P3 partners: cadence_priority_excluded_in_observed_opportunities; strongest 135, balance-envelope 135, cadence-frontier 0.
-- P2–P4 partners: cadence_priority_excluded_in_observed_opportunities; strongest 128, balance-envelope 128, cadence-frontier 0.
-- P2–P5 partners: cadence_priority_excluded_in_observed_opportunities; strongest 125, balance-envelope 125, cadence-frontier 0.
-- P2–P6 partners: cadence_priority_excluded_in_observed_opportunities; strongest 115, balance-envelope 115, cadence-frontier 0.
-- P2–P7 partners: cadence_priority_excluded_in_observed_opportunities; strongest 109, balance-envelope 109, cadence-frontier 0.
-- P3–P4 partners: cadence_priority_excluded_in_observed_opportunities; strongest 130, balance-envelope 130, cadence-frontier 0.
-- P3–P5 partners: cadence_priority_excluded_in_observed_opportunities; strongest 130, balance-envelope 130, cadence-frontier 0.
-- P3–P6 partners: cadence_priority_excluded_in_observed_opportunities; strongest 114, balance-envelope 114, cadence-frontier 0.
-- P3–P7 partners: cadence_priority_excluded_in_observed_opportunities; strongest 107, balance-envelope 107, cadence-frontier 0.
-- P4–P5 partners: cadence_priority_excluded_in_observed_opportunities; strongest 135, balance-envelope 135, cadence-frontier 0.
-- P4–P6 partners: cadence_priority_excluded_in_observed_opportunities; strongest 116, balance-envelope 116, cadence-frontier 0.
-- P4–P7 partners: cadence_priority_excluded_in_observed_opportunities; strongest 107, balance-envelope 107, cadence-frontier 0.
-- P5–P6 partners: cadence_priority_excluded_in_observed_opportunities; strongest 115, balance-envelope 115, cadence-frontier 0.
-- P5–P7 partners: cadence_priority_excluded_in_observed_opportunities; strongest 97, balance-envelope 97, cadence-frontier 0.
-- P6–P7 partners: cadence_priority_excluded_in_observed_opportunities; strongest 92, balance-envelope 92, cadence-frontier 0.
-- P8–P9 partners: cadence_priority_excluded_in_observed_opportunities; strongest 100, balance-envelope 100, cadence-frontier 0.
+All structurally feasible player/facet relationships were observed.
 
 ### Social narrow seed 104729: unseen at 400
-- P1–P2 partners: cadence_priority_excluded_in_observed_opportunities; strongest 142, balance-envelope 142, cadence-frontier 0.
-- P1–P3 partners: cadence_priority_excluded_in_observed_opportunities; strongest 178, balance-envelope 178, cadence-frontier 0.
-- P1–P4 partners: cadence_priority_excluded_in_observed_opportunities; strongest 150, balance-envelope 150, cadence-frontier 0.
-- P1–P5 partners: cadence_priority_excluded_in_observed_opportunities; strongest 151, balance-envelope 151, cadence-frontier 0.
-- P1–P6 partners: cadence_priority_excluded_in_observed_opportunities; strongest 148, balance-envelope 148, cadence-frontier 0.
-- P1–P7 partners: cadence_priority_excluded_in_observed_opportunities; strongest 149, balance-envelope 149, cadence-frontier 0.
-- P10–P11 partners: cadence_priority_excluded_in_observed_opportunities; strongest 152, balance-envelope 152, cadence-frontier 0.
-- P10–P12 partners: cadence_priority_excluded_in_observed_opportunities; strongest 162, balance-envelope 162, cadence-frontier 0.
-- P10–P13 partners: cadence_priority_excluded_in_observed_opportunities; strongest 184, balance-envelope 184, cadence-frontier 0.
-- P10–P14 partners: cadence_priority_excluded_in_observed_opportunities; strongest 164, balance-envelope 164, cadence-frontier 0.
-- P10–P8 partners: cadence_priority_excluded_in_observed_opportunities; strongest 165, balance-envelope 165, cadence-frontier 0.
-- P10–P9 partners: cadence_priority_excluded_in_observed_opportunities; strongest 154, balance-envelope 154, cadence-frontier 0.
-- P11–P12 partners: cadence_priority_excluded_in_observed_opportunities; strongest 145, balance-envelope 145, cadence-frontier 0.
-- P11–P13 partners: cadence_priority_excluded_in_observed_opportunities; strongest 159, balance-envelope 159, cadence-frontier 0.
-- P11–P14 partners: cadence_priority_excluded_in_observed_opportunities; strongest 147, balance-envelope 147, cadence-frontier 0.
-- P11–P8 partners: cadence_priority_excluded_in_observed_opportunities; strongest 167, balance-envelope 167, cadence-frontier 0.
-- P11–P9 partners: cadence_priority_excluded_in_observed_opportunities; strongest 148, balance-envelope 148, cadence-frontier 0.
-- P12–P13 partners: cadence_priority_excluded_in_observed_opportunities; strongest 174, balance-envelope 174, cadence-frontier 0.
-- P12–P14 partners: cadence_priority_excluded_in_observed_opportunities; strongest 151, balance-envelope 151, cadence-frontier 0.
-- P12–P8 partners: cadence_priority_excluded_in_observed_opportunities; strongest 162, balance-envelope 162, cadence-frontier 0.
-- P12–P9 partners: cadence_priority_excluded_in_observed_opportunities; strongest 145, balance-envelope 145, cadence-frontier 0.
-- P13–P14 partners: cadence_priority_excluded_in_observed_opportunities; strongest 170, balance-envelope 170, cadence-frontier 0.
-- P13–P8 partners: cadence_priority_excluded_in_observed_opportunities; strongest 172, balance-envelope 172, cadence-frontier 0.
-- P13–P9 partners: cadence_priority_excluded_in_observed_opportunities; strongest 167, balance-envelope 167, cadence-frontier 0.
-- P14–P8 partners: cadence_priority_excluded_in_observed_opportunities; strongest 159, balance-envelope 159, cadence-frontier 0.
-- P14–P9 partners: cadence_priority_excluded_in_observed_opportunities; strongest 160, balance-envelope 160, cadence-frontier 0.
-- P2–P3 partners: cadence_priority_excluded_in_observed_opportunities; strongest 183, balance-envelope 183, cadence-frontier 0.
-- P2–P4 partners: cadence_priority_excluded_in_observed_opportunities; strongest 154, balance-envelope 154, cadence-frontier 0.
-- P2–P5 partners: cadence_priority_excluded_in_observed_opportunities; strongest 150, balance-envelope 150, cadence-frontier 0.
-- P2–P6 partners: cadence_priority_excluded_in_observed_opportunities; strongest 148, balance-envelope 148, cadence-frontier 0.
-- P2–P7 partners: cadence_priority_excluded_in_observed_opportunities; strongest 150, balance-envelope 150, cadence-frontier 0.
-- P3–P4 partners: cadence_priority_excluded_in_observed_opportunities; strongest 183, balance-envelope 183, cadence-frontier 0.
-- P3–P5 partners: cadence_priority_excluded_in_observed_opportunities; strongest 199, balance-envelope 199, cadence-frontier 0.
-- P3–P6 partners: cadence_priority_excluded_in_observed_opportunities; strongest 170, balance-envelope 170, cadence-frontier 0.
-- P3–P7 partners: cadence_priority_excluded_in_observed_opportunities; strongest 179, balance-envelope 179, cadence-frontier 0.
-- P4–P5 partners: cadence_priority_excluded_in_observed_opportunities; strongest 160, balance-envelope 160, cadence-frontier 0.
-- P4–P6 partners: cadence_priority_excluded_in_observed_opportunities; strongest 144, balance-envelope 144, cadence-frontier 0.
-- P4–P7 partners: cadence_priority_excluded_in_observed_opportunities; strongest 157, balance-envelope 157, cadence-frontier 0.
-- P5–P6 partners: cadence_priority_excluded_in_observed_opportunities; strongest 152, balance-envelope 152, cadence-frontier 0.
-- P5–P7 partners: cadence_priority_excluded_in_observed_opportunities; strongest 163, balance-envelope 163, cadence-frontier 0.
-- P6–P7 partners: cadence_priority_excluded_in_observed_opportunities; strongest 150, balance-envelope 150, cadence-frontier 0.
-- P8–P9 partners: cadence_priority_excluded_in_observed_opportunities; strongest 153, balance-envelope 153, cadence-frontier 0.
+All structurally feasible player/facet relationships were observed.
 
 ### Balanced Points narrow seed 104729: unseen at 400
-- P1–P2 partners: cadence_priority_excluded_in_observed_opportunities; strongest 201, balance-envelope 201, cadence-frontier 0.
-- P1–P3 partners: cadence_priority_excluded_in_observed_opportunities; strongest 163, balance-envelope 163, cadence-frontier 0.
-- P1–P4 partners: cadence_priority_excluded_in_observed_opportunities; strongest 163, balance-envelope 163, cadence-frontier 0.
-- P1–P5 partners: cadence_priority_excluded_in_observed_opportunities; strongest 171, balance-envelope 171, cadence-frontier 0.
-- P1–P6 partners: cadence_priority_excluded_in_observed_opportunities; strongest 181, balance-envelope 181, cadence-frontier 0.
-- P1–P7 partners: cadence_priority_excluded_in_observed_opportunities; strongest 177, balance-envelope 177, cadence-frontier 0.
-- P10–P11 partners: cadence_priority_excluded_in_observed_opportunities; strongest 159, balance-envelope 159, cadence-frontier 0.
-- P10–P12 partners: cadence_priority_excluded_in_observed_opportunities; strongest 147, balance-envelope 147, cadence-frontier 0.
-- P10–P13 partners: cadence_priority_excluded_in_observed_opportunities; strongest 169, balance-envelope 169, cadence-frontier 0.
-- P10–P14 partners: cadence_priority_excluded_in_observed_opportunities; strongest 149, balance-envelope 149, cadence-frontier 0.
-- P10–P8 partners: cadence_priority_excluded_in_observed_opportunities; strongest 120, balance-envelope 120, cadence-frontier 0.
-- P10–P9 partners: cadence_priority_excluded_in_observed_opportunities; strongest 162, balance-envelope 162, cadence-frontier 0.
-- P11–P12 partners: cadence_priority_excluded_in_observed_opportunities; strongest 185, balance-envelope 185, cadence-frontier 0.
-- P11–P13 partners: cadence_priority_excluded_in_observed_opportunities; strongest 196, balance-envelope 196, cadence-frontier 0.
-- P11–P14 partners: cadence_priority_excluded_in_observed_opportunities; strongest 169, balance-envelope 169, cadence-frontier 0.
-- P11–P8 partners: cadence_priority_excluded_in_observed_opportunities; strongest 133, balance-envelope 133, cadence-frontier 0.
-- P11–P9 partners: cadence_priority_excluded_in_observed_opportunities; strongest 199, balance-envelope 199, cadence-frontier 0.
-- P12–P13 partners: cadence_priority_excluded_in_observed_opportunities; strongest 177, balance-envelope 177, cadence-frontier 0.
-- P12–P14 partners: cadence_priority_excluded_in_observed_opportunities; strongest 161, balance-envelope 161, cadence-frontier 0.
-- P12–P8 partners: cadence_priority_excluded_in_observed_opportunities; strongest 119, balance-envelope 119, cadence-frontier 0.
-- P12–P9 partners: cadence_priority_excluded_in_observed_opportunities; strongest 171, balance-envelope 171, cadence-frontier 0.
-- P13–P14 partners: cadence_priority_excluded_in_observed_opportunities; strongest 189, balance-envelope 189, cadence-frontier 0.
-- P13–P8 partners: cadence_priority_excluded_in_observed_opportunities; strongest 134, balance-envelope 134, cadence-frontier 0.
-- P13–P9 partners: cadence_priority_excluded_in_observed_opportunities; strongest 200, balance-envelope 200, cadence-frontier 0.
-- P14–P8 partners: cadence_priority_excluded_in_observed_opportunities; strongest 124, balance-envelope 124, cadence-frontier 0.
-- P14–P9 partners: cadence_priority_excluded_in_observed_opportunities; strongest 171, balance-envelope 171, cadence-frontier 0.
-- P2–P3 partners: cadence_priority_excluded_in_observed_opportunities; strongest 159, balance-envelope 159, cadence-frontier 0.
-- P2–P4 partners: cadence_priority_excluded_in_observed_opportunities; strongest 160, balance-envelope 160, cadence-frontier 0.
-- P2–P5 partners: cadence_priority_excluded_in_observed_opportunities; strongest 176, balance-envelope 176, cadence-frontier 0.
-- P2–P6 partners: cadence_priority_excluded_in_observed_opportunities; strongest 168, balance-envelope 168, cadence-frontier 0.
-- P2–P7 partners: cadence_priority_excluded_in_observed_opportunities; strongest 153, balance-envelope 153, cadence-frontier 0.
-- P3–P4 partners: cadence_priority_excluded_in_observed_opportunities; strongest 146, balance-envelope 146, cadence-frontier 0.
-- P3–P5 partners: cadence_priority_excluded_in_observed_opportunities; strongest 157, balance-envelope 157, cadence-frontier 0.
-- P3–P6 partners: cadence_priority_excluded_in_observed_opportunities; strongest 153, balance-envelope 153, cadence-frontier 0.
-- P3–P7 partners: cadence_priority_excluded_in_observed_opportunities; strongest 155, balance-envelope 155, cadence-frontier 0.
-- P4–P5 partners: cadence_priority_excluded_in_observed_opportunities; strongest 146, balance-envelope 146, cadence-frontier 0.
-- P4–P6 partners: cadence_priority_excluded_in_observed_opportunities; strongest 142, balance-envelope 142, cadence-frontier 0.
-- P4–P7 partners: cadence_priority_excluded_in_observed_opportunities; strongest 137, balance-envelope 137, cadence-frontier 0.
-- P5–P6 partners: cadence_priority_excluded_in_observed_opportunities; strongest 156, balance-envelope 156, cadence-frontier 0.
-- P5–P7 partners: cadence_priority_excluded_in_observed_opportunities; strongest 145, balance-envelope 145, cadence-frontier 0.
-- P6–P7 partners: cadence_priority_excluded_in_observed_opportunities; strongest 151, balance-envelope 151, cadence-frontier 0.
-- P8–P9 partners: cadence_priority_excluded_in_observed_opportunities; strongest 126, balance-envelope 126, cadence-frontier 0.
+All structurally feasible player/facet relationships were observed.
 
 ### Balanced Rating/Elo narrow seed 104729: unseen at 400
-- P1–P2 partners: cadence_priority_excluded_in_observed_opportunities; strongest 184, balance-envelope 184, cadence-frontier 0.
-- P1–P3 partners: cadence_priority_excluded_in_observed_opportunities; strongest 149, balance-envelope 149, cadence-frontier 0.
-- P1–P4 partners: cadence_priority_excluded_in_observed_opportunities; strongest 163, balance-envelope 163, cadence-frontier 0.
-- P1–P5 partners: cadence_priority_excluded_in_observed_opportunities; strongest 179, balance-envelope 179, cadence-frontier 0.
-- P1–P6 partners: cadence_priority_excluded_in_observed_opportunities; strongest 192, balance-envelope 192, cadence-frontier 0.
-- P1–P7 partners: cadence_priority_excluded_in_observed_opportunities; strongest 150, balance-envelope 150, cadence-frontier 0.
-- P10–P11 partners: cadence_priority_excluded_in_observed_opportunities; strongest 133, balance-envelope 133, cadence-frontier 0.
-- P10–P12 partners: cadence_priority_excluded_in_observed_opportunities; strongest 151, balance-envelope 151, cadence-frontier 0.
-- P10–P13 partners: cadence_priority_excluded_in_observed_opportunities; strongest 132, balance-envelope 132, cadence-frontier 0.
-- P10–P14 partners: cadence_priority_excluded_in_observed_opportunities; strongest 143, balance-envelope 143, cadence-frontier 0.
-- P10–P8 partners: cadence_priority_excluded_in_observed_opportunities; strongest 135, balance-envelope 135, cadence-frontier 0.
-- P10–P9 partners: cadence_priority_excluded_in_observed_opportunities; strongest 125, balance-envelope 125, cadence-frontier 0.
-- P11–P12 partners: cadence_priority_excluded_in_observed_opportunities; strongest 185, balance-envelope 185, cadence-frontier 0.
-- P11–P13 partners: cadence_priority_excluded_in_observed_opportunities; strongest 164, balance-envelope 164, cadence-frontier 0.
-- P11–P14 partners: cadence_priority_excluded_in_observed_opportunities; strongest 178, balance-envelope 178, cadence-frontier 0.
-- P11–P8 partners: cadence_priority_excluded_in_observed_opportunities; strongest 186, balance-envelope 186, cadence-frontier 0.
-- P11–P9 partners: cadence_priority_excluded_in_observed_opportunities; strongest 147, balance-envelope 147, cadence-frontier 0.
-- P12–P13 partners: cadence_priority_excluded_in_observed_opportunities; strongest 171, balance-envelope 171, cadence-frontier 0.
-- P12–P14 partners: cadence_priority_excluded_in_observed_opportunities; strongest 195, balance-envelope 195, cadence-frontier 0.
-- P12–P8 partners: cadence_priority_excluded_in_observed_opportunities; strongest 194, balance-envelope 194, cadence-frontier 0.
-- P12–P9 partners: cadence_priority_excluded_in_observed_opportunities; strongest 157, balance-envelope 157, cadence-frontier 0.
-- P13–P14 partners: cadence_priority_excluded_in_observed_opportunities; strongest 167, balance-envelope 167, cadence-frontier 0.
-- P13–P8 partners: cadence_priority_excluded_in_observed_opportunities; strongest 169, balance-envelope 169, cadence-frontier 0.
-- P13–P9 partners: cadence_priority_excluded_in_observed_opportunities; strongest 139, balance-envelope 139, cadence-frontier 0.
-- P14–P8 partners: cadence_priority_excluded_in_observed_opportunities; strongest 187, balance-envelope 187, cadence-frontier 0.
-- P14–P9 partners: cadence_priority_excluded_in_observed_opportunities; strongest 150, balance-envelope 150, cadence-frontier 0.
-- P2–P3 partners: cadence_priority_excluded_in_observed_opportunities; strongest 138, balance-envelope 138, cadence-frontier 0.
-- P2–P4 partners: cadence_priority_excluded_in_observed_opportunities; strongest 162, balance-envelope 162, cadence-frontier 0.
-- P2–P5 partners: cadence_priority_excluded_in_observed_opportunities; strongest 167, balance-envelope 167, cadence-frontier 0.
-- P2–P6 partners: cadence_priority_excluded_in_observed_opportunities; strongest 192, balance-envelope 192, cadence-frontier 0.
-- P2–P7 partners: cadence_priority_excluded_in_observed_opportunities; strongest 147, balance-envelope 147, cadence-frontier 0.
-- P3–P4 partners: cadence_priority_excluded_in_observed_opportunities; strongest 126, balance-envelope 126, cadence-frontier 0.
-- P3–P5 partners: cadence_priority_excluded_in_observed_opportunities; strongest 145, balance-envelope 145, cadence-frontier 0.
-- P3–P6 partners: cadence_priority_excluded_in_observed_opportunities; strongest 154, balance-envelope 154, cadence-frontier 0.
-- P3–P7 partners: cadence_priority_excluded_in_observed_opportunities; strongest 131, balance-envelope 131, cadence-frontier 0.
-- P4–P5 partners: cadence_priority_excluded_in_observed_opportunities; strongest 159, balance-envelope 159, cadence-frontier 0.
-- P4–P6 partners: cadence_priority_excluded_in_observed_opportunities; strongest 171, balance-envelope 171, cadence-frontier 0.
-- P4–P7 partners: cadence_priority_excluded_in_observed_opportunities; strongest 143, balance-envelope 143, cadence-frontier 0.
-- P5–P6 partners: cadence_priority_excluded_in_observed_opportunities; strongest 191, balance-envelope 191, cadence-frontier 0.
-- P5–P7 partners: cadence_priority_excluded_in_observed_opportunities; strongest 155, balance-envelope 155, cadence-frontier 0.
-- P6–P7 partners: cadence_priority_excluded_in_observed_opportunities; strongest 162, balance-envelope 162, cadence-frontier 0.
-- P8–P9 partners: cadence_priority_excluded_in_observed_opportunities; strongest 152, balance-envelope 152, cadence-frontier 0.
+All structurally feasible player/facet relationships were observed.
 
 ### Social narrow seed 130363: unseen at 400
-- P1–P2 partners: cadence_priority_excluded_in_observed_opportunities; strongest 154, balance-envelope 154, cadence-frontier 0.
-- P1–P3 partners: cadence_priority_excluded_in_observed_opportunities; strongest 149, balance-envelope 149, cadence-frontier 0.
-- P1–P4 partners: cadence_priority_excluded_in_observed_opportunities; strongest 172, balance-envelope 172, cadence-frontier 0.
-- P1–P5 partners: cadence_priority_excluded_in_observed_opportunities; strongest 167, balance-envelope 167, cadence-frontier 0.
-- P1–P6 partners: cadence_priority_excluded_in_observed_opportunities; strongest 171, balance-envelope 171, cadence-frontier 0.
-- P1–P7 partners: cadence_priority_excluded_in_observed_opportunities; strongest 153, balance-envelope 153, cadence-frontier 0.
-- P10–P11 partners: cadence_priority_excluded_in_observed_opportunities; strongest 130, balance-envelope 130, cadence-frontier 0.
-- P10–P12 partners: cadence_priority_excluded_in_observed_opportunities; strongest 177, balance-envelope 177, cadence-frontier 0.
-- P10–P13 partners: cadence_priority_excluded_in_observed_opportunities; strongest 166, balance-envelope 166, cadence-frontier 0.
-- P10–P14 partners: cadence_priority_excluded_in_observed_opportunities; strongest 168, balance-envelope 168, cadence-frontier 0.
-- P10–P8 partners: cadence_priority_excluded_in_observed_opportunities; strongest 184, balance-envelope 184, cadence-frontier 0.
-- P10–P9 partners: cadence_priority_excluded_in_observed_opportunities; strongest 153, balance-envelope 153, cadence-frontier 0.
-- P11–P12 partners: cadence_priority_excluded_in_observed_opportunities; strongest 142, balance-envelope 142, cadence-frontier 0.
-- P11–P13 partners: cadence_priority_excluded_in_observed_opportunities; strongest 142, balance-envelope 142, cadence-frontier 0.
-- P11–P14 partners: cadence_priority_excluded_in_observed_opportunities; strongest 122, balance-envelope 122, cadence-frontier 0.
-- P11–P8 partners: cadence_priority_excluded_in_observed_opportunities; strongest 145, balance-envelope 145, cadence-frontier 0.
-- P11–P9 partners: cadence_priority_excluded_in_observed_opportunities; strongest 123, balance-envelope 123, cadence-frontier 0.
-- P12–P13 partners: cadence_priority_excluded_in_observed_opportunities; strongest 173, balance-envelope 173, cadence-frontier 0.
-- P12–P14 partners: cadence_priority_excluded_in_observed_opportunities; strongest 168, balance-envelope 168, cadence-frontier 0.
-- P12–P8 partners: cadence_priority_excluded_in_observed_opportunities; strongest 183, balance-envelope 183, cadence-frontier 0.
-- P12–P9 partners: cadence_priority_excluded_in_observed_opportunities; strongest 171, balance-envelope 171, cadence-frontier 0.
-- P13–P14 partners: cadence_priority_excluded_in_observed_opportunities; strongest 141, balance-envelope 141, cadence-frontier 0.
-- P13–P8 partners: cadence_priority_excluded_in_observed_opportunities; strongest 171, balance-envelope 171, cadence-frontier 0.
-- P13–P9 partners: cadence_priority_excluded_in_observed_opportunities; strongest 161, balance-envelope 161, cadence-frontier 0.
-- P14–P8 partners: cadence_priority_excluded_in_observed_opportunities; strongest 164, balance-envelope 164, cadence-frontier 0.
-- P14–P9 partners: cadence_priority_excluded_in_observed_opportunities; strongest 137, balance-envelope 137, cadence-frontier 0.
-- P2–P3 partners: cadence_priority_excluded_in_observed_opportunities; strongest 133, balance-envelope 133, cadence-frontier 0.
-- P2–P4 partners: cadence_priority_excluded_in_observed_opportunities; strongest 183, balance-envelope 183, cadence-frontier 0.
-- P2–P5 partners: cadence_priority_excluded_in_observed_opportunities; strongest 161, balance-envelope 161, cadence-frontier 0.
-- P2–P6 partners: cadence_priority_excluded_in_observed_opportunities; strongest 175, balance-envelope 175, cadence-frontier 0.
-- P2–P7 partners: cadence_priority_excluded_in_observed_opportunities; strongest 142, balance-envelope 142, cadence-frontier 0.
-- P3–P4 partners: cadence_priority_excluded_in_observed_opportunities; strongest 143, balance-envelope 143, cadence-frontier 0.
-- P3–P5 partners: cadence_priority_excluded_in_observed_opportunities; strongest 149, balance-envelope 149, cadence-frontier 0.
-- P3–P6 partners: cadence_priority_excluded_in_observed_opportunities; strongest 143, balance-envelope 143, cadence-frontier 0.
-- P3–P7 partners: cadence_priority_excluded_in_observed_opportunities; strongest 126, balance-envelope 126, cadence-frontier 0.
-- P4–P5 partners: cadence_priority_excluded_in_observed_opportunities; strongest 173, balance-envelope 173, cadence-frontier 0.
-- P4–P6 partners: cadence_priority_excluded_in_observed_opportunities; strongest 184, balance-envelope 184, cadence-frontier 0.
-- P4–P7 partners: cadence_priority_excluded_in_observed_opportunities; strongest 150, balance-envelope 150, cadence-frontier 0.
-- P5–P6 partners: cadence_priority_excluded_in_observed_opportunities; strongest 176, balance-envelope 176, cadence-frontier 0.
-- P5–P7 partners: cadence_priority_excluded_in_observed_opportunities; strongest 143, balance-envelope 143, cadence-frontier 0.
-- P6–P7 partners: cadence_priority_excluded_in_observed_opportunities; strongest 147, balance-envelope 147, cadence-frontier 0.
-- P8–P9 partners: cadence_priority_excluded_in_observed_opportunities; strongest 173, balance-envelope 173, cadence-frontier 0.
+All structurally feasible player/facet relationships were observed.
 
 ### Balanced Points narrow seed 130363: unseen at 400
-- P1–P2 partners: cadence_priority_excluded_in_observed_opportunities; strongest 154, balance-envelope 154, cadence-frontier 0.
-- P1–P3 partners: cadence_priority_excluded_in_observed_opportunities; strongest 149, balance-envelope 149, cadence-frontier 0.
-- P1–P4 partners: cadence_priority_excluded_in_observed_opportunities; strongest 172, balance-envelope 172, cadence-frontier 0.
-- P1–P5 partners: cadence_priority_excluded_in_observed_opportunities; strongest 167, balance-envelope 167, cadence-frontier 0.
-- P1–P6 partners: cadence_priority_excluded_in_observed_opportunities; strongest 171, balance-envelope 171, cadence-frontier 0.
-- P1–P7 partners: cadence_priority_excluded_in_observed_opportunities; strongest 153, balance-envelope 153, cadence-frontier 0.
-- P10–P11 partners: cadence_priority_excluded_in_observed_opportunities; strongest 130, balance-envelope 130, cadence-frontier 0.
-- P10–P12 partners: cadence_priority_excluded_in_observed_opportunities; strongest 177, balance-envelope 177, cadence-frontier 0.
-- P10–P13 partners: cadence_priority_excluded_in_observed_opportunities; strongest 166, balance-envelope 166, cadence-frontier 0.
-- P10–P14 partners: cadence_priority_excluded_in_observed_opportunities; strongest 168, balance-envelope 168, cadence-frontier 0.
-- P10–P8 partners: cadence_priority_excluded_in_observed_opportunities; strongest 184, balance-envelope 184, cadence-frontier 0.
-- P10–P9 partners: cadence_priority_excluded_in_observed_opportunities; strongest 153, balance-envelope 153, cadence-frontier 0.
-- P11–P12 partners: cadence_priority_excluded_in_observed_opportunities; strongest 142, balance-envelope 142, cadence-frontier 0.
-- P11–P13 partners: cadence_priority_excluded_in_observed_opportunities; strongest 142, balance-envelope 142, cadence-frontier 0.
-- P11–P14 partners: cadence_priority_excluded_in_observed_opportunities; strongest 122, balance-envelope 122, cadence-frontier 0.
-- P11–P8 partners: cadence_priority_excluded_in_observed_opportunities; strongest 145, balance-envelope 145, cadence-frontier 0.
-- P11–P9 partners: cadence_priority_excluded_in_observed_opportunities; strongest 123, balance-envelope 123, cadence-frontier 0.
-- P12–P13 partners: cadence_priority_excluded_in_observed_opportunities; strongest 173, balance-envelope 173, cadence-frontier 0.
-- P12–P14 partners: cadence_priority_excluded_in_observed_opportunities; strongest 168, balance-envelope 168, cadence-frontier 0.
-- P12–P8 partners: cadence_priority_excluded_in_observed_opportunities; strongest 183, balance-envelope 183, cadence-frontier 0.
-- P12–P9 partners: cadence_priority_excluded_in_observed_opportunities; strongest 171, balance-envelope 171, cadence-frontier 0.
-- P13–P14 partners: cadence_priority_excluded_in_observed_opportunities; strongest 141, balance-envelope 141, cadence-frontier 0.
-- P13–P8 partners: cadence_priority_excluded_in_observed_opportunities; strongest 171, balance-envelope 171, cadence-frontier 0.
-- P13–P9 partners: cadence_priority_excluded_in_observed_opportunities; strongest 161, balance-envelope 161, cadence-frontier 0.
-- P14–P8 partners: cadence_priority_excluded_in_observed_opportunities; strongest 164, balance-envelope 164, cadence-frontier 0.
-- P14–P9 partners: cadence_priority_excluded_in_observed_opportunities; strongest 137, balance-envelope 137, cadence-frontier 0.
-- P2–P3 partners: cadence_priority_excluded_in_observed_opportunities; strongest 133, balance-envelope 133, cadence-frontier 0.
-- P2–P4 partners: cadence_priority_excluded_in_observed_opportunities; strongest 183, balance-envelope 183, cadence-frontier 0.
-- P2–P5 partners: cadence_priority_excluded_in_observed_opportunities; strongest 161, balance-envelope 161, cadence-frontier 0.
-- P2–P6 partners: cadence_priority_excluded_in_observed_opportunities; strongest 175, balance-envelope 175, cadence-frontier 0.
-- P2–P7 partners: cadence_priority_excluded_in_observed_opportunities; strongest 142, balance-envelope 142, cadence-frontier 0.
-- P3–P4 partners: cadence_priority_excluded_in_observed_opportunities; strongest 143, balance-envelope 143, cadence-frontier 0.
-- P3–P5 partners: cadence_priority_excluded_in_observed_opportunities; strongest 149, balance-envelope 149, cadence-frontier 0.
-- P3–P6 partners: cadence_priority_excluded_in_observed_opportunities; strongest 143, balance-envelope 143, cadence-frontier 0.
-- P3–P7 partners: cadence_priority_excluded_in_observed_opportunities; strongest 126, balance-envelope 126, cadence-frontier 0.
-- P4–P5 partners: cadence_priority_excluded_in_observed_opportunities; strongest 173, balance-envelope 173, cadence-frontier 0.
-- P4–P6 partners: cadence_priority_excluded_in_observed_opportunities; strongest 184, balance-envelope 184, cadence-frontier 0.
-- P4–P7 partners: cadence_priority_excluded_in_observed_opportunities; strongest 150, balance-envelope 150, cadence-frontier 0.
-- P5–P6 partners: cadence_priority_excluded_in_observed_opportunities; strongest 176, balance-envelope 176, cadence-frontier 0.
-- P5–P7 partners: cadence_priority_excluded_in_observed_opportunities; strongest 143, balance-envelope 143, cadence-frontier 0.
-- P6–P7 partners: cadence_priority_excluded_in_observed_opportunities; strongest 147, balance-envelope 147, cadence-frontier 0.
-- P8–P9 partners: cadence_priority_excluded_in_observed_opportunities; strongest 173, balance-envelope 173, cadence-frontier 0.
+All structurally feasible player/facet relationships were observed.
 
 ### Balanced Rating/Elo narrow seed 130363: unseen at 400
-- P1–P2 partners: cadence_priority_excluded_in_observed_opportunities; strongest 154, balance-envelope 154, cadence-frontier 0.
-- P1–P3 partners: cadence_priority_excluded_in_observed_opportunities; strongest 149, balance-envelope 149, cadence-frontier 0.
-- P1–P4 partners: cadence_priority_excluded_in_observed_opportunities; strongest 172, balance-envelope 172, cadence-frontier 0.
-- P1–P5 partners: cadence_priority_excluded_in_observed_opportunities; strongest 167, balance-envelope 167, cadence-frontier 0.
-- P1–P6 partners: cadence_priority_excluded_in_observed_opportunities; strongest 171, balance-envelope 171, cadence-frontier 0.
-- P1–P7 partners: cadence_priority_excluded_in_observed_opportunities; strongest 153, balance-envelope 153, cadence-frontier 0.
-- P10–P11 partners: cadence_priority_excluded_in_observed_opportunities; strongest 130, balance-envelope 130, cadence-frontier 0.
-- P10–P12 partners: cadence_priority_excluded_in_observed_opportunities; strongest 177, balance-envelope 177, cadence-frontier 0.
-- P10–P13 partners: cadence_priority_excluded_in_observed_opportunities; strongest 166, balance-envelope 166, cadence-frontier 0.
-- P10–P14 partners: cadence_priority_excluded_in_observed_opportunities; strongest 168, balance-envelope 168, cadence-frontier 0.
-- P10–P8 partners: cadence_priority_excluded_in_observed_opportunities; strongest 184, balance-envelope 184, cadence-frontier 0.
-- P10–P9 partners: cadence_priority_excluded_in_observed_opportunities; strongest 153, balance-envelope 153, cadence-frontier 0.
-- P11–P12 partners: cadence_priority_excluded_in_observed_opportunities; strongest 142, balance-envelope 142, cadence-frontier 0.
-- P11–P13 partners: cadence_priority_excluded_in_observed_opportunities; strongest 142, balance-envelope 142, cadence-frontier 0.
-- P11–P14 partners: cadence_priority_excluded_in_observed_opportunities; strongest 122, balance-envelope 122, cadence-frontier 0.
-- P11–P8 partners: cadence_priority_excluded_in_observed_opportunities; strongest 145, balance-envelope 145, cadence-frontier 0.
-- P11–P9 partners: cadence_priority_excluded_in_observed_opportunities; strongest 123, balance-envelope 123, cadence-frontier 0.
-- P12–P13 partners: cadence_priority_excluded_in_observed_opportunities; strongest 173, balance-envelope 173, cadence-frontier 0.
-- P12–P14 partners: cadence_priority_excluded_in_observed_opportunities; strongest 168, balance-envelope 168, cadence-frontier 0.
-- P12–P8 partners: cadence_priority_excluded_in_observed_opportunities; strongest 183, balance-envelope 183, cadence-frontier 0.
-- P12–P9 partners: cadence_priority_excluded_in_observed_opportunities; strongest 171, balance-envelope 171, cadence-frontier 0.
-- P13–P14 partners: cadence_priority_excluded_in_observed_opportunities; strongest 141, balance-envelope 141, cadence-frontier 0.
-- P13–P8 partners: cadence_priority_excluded_in_observed_opportunities; strongest 171, balance-envelope 171, cadence-frontier 0.
-- P13–P9 partners: cadence_priority_excluded_in_observed_opportunities; strongest 161, balance-envelope 161, cadence-frontier 0.
-- P14–P8 partners: cadence_priority_excluded_in_observed_opportunities; strongest 164, balance-envelope 164, cadence-frontier 0.
-- P14–P9 partners: cadence_priority_excluded_in_observed_opportunities; strongest 137, balance-envelope 137, cadence-frontier 0.
-- P2–P3 partners: cadence_priority_excluded_in_observed_opportunities; strongest 133, balance-envelope 133, cadence-frontier 0.
-- P2–P4 partners: cadence_priority_excluded_in_observed_opportunities; strongest 183, balance-envelope 183, cadence-frontier 0.
-- P2–P5 partners: cadence_priority_excluded_in_observed_opportunities; strongest 161, balance-envelope 161, cadence-frontier 0.
-- P2–P6 partners: cadence_priority_excluded_in_observed_opportunities; strongest 175, balance-envelope 175, cadence-frontier 0.
-- P2–P7 partners: cadence_priority_excluded_in_observed_opportunities; strongest 142, balance-envelope 142, cadence-frontier 0.
-- P3–P4 partners: cadence_priority_excluded_in_observed_opportunities; strongest 143, balance-envelope 143, cadence-frontier 0.
-- P3–P5 partners: cadence_priority_excluded_in_observed_opportunities; strongest 149, balance-envelope 149, cadence-frontier 0.
-- P3–P6 partners: cadence_priority_excluded_in_observed_opportunities; strongest 143, balance-envelope 143, cadence-frontier 0.
-- P3–P7 partners: cadence_priority_excluded_in_observed_opportunities; strongest 126, balance-envelope 126, cadence-frontier 0.
-- P4–P5 partners: cadence_priority_excluded_in_observed_opportunities; strongest 173, balance-envelope 173, cadence-frontier 0.
-- P4–P6 partners: cadence_priority_excluded_in_observed_opportunities; strongest 184, balance-envelope 184, cadence-frontier 0.
-- P4–P7 partners: cadence_priority_excluded_in_observed_opportunities; strongest 150, balance-envelope 150, cadence-frontier 0.
-- P5–P6 partners: cadence_priority_excluded_in_observed_opportunities; strongest 176, balance-envelope 176, cadence-frontier 0.
-- P5–P7 partners: cadence_priority_excluded_in_observed_opportunities; strongest 143, balance-envelope 143, cadence-frontier 0.
-- P6–P7 partners: cadence_priority_excluded_in_observed_opportunities; strongest 147, balance-envelope 147, cadence-frontier 0.
-- P8–P9 partners: cadence_priority_excluded_in_observed_opportunities; strongest 173, balance-envelope 173, cadence-frontier 0.
+All structurally feasible player/facet relationships were observed.
 
 ### Social narrow seed 2097593: unseen at 400
-- P1–P2 partners: cadence_priority_excluded_in_observed_opportunities; strongest 166, balance-envelope 166, cadence-frontier 0.
-- P1–P3 partners: cadence_priority_excluded_in_observed_opportunities; strongest 168, balance-envelope 168, cadence-frontier 0.
-- P1–P4 partners: cadence_priority_excluded_in_observed_opportunities; strongest 155, balance-envelope 155, cadence-frontier 0.
-- P1–P5 partners: cadence_priority_excluded_in_observed_opportunities; strongest 135, balance-envelope 135, cadence-frontier 0.
-- P1–P6 partners: cadence_priority_excluded_in_observed_opportunities; strongest 151, balance-envelope 151, cadence-frontier 0.
-- P1–P7 partners: cadence_priority_excluded_in_observed_opportunities; strongest 173, balance-envelope 173, cadence-frontier 0.
-- P10–P11 partners: cadence_priority_excluded_in_observed_opportunities; strongest 163, balance-envelope 163, cadence-frontier 0.
-- P10–P12 partners: cadence_priority_excluded_in_observed_opportunities; strongest 126, balance-envelope 126, cadence-frontier 0.
-- P10–P13 partners: cadence_priority_excluded_in_observed_opportunities; strongest 138, balance-envelope 138, cadence-frontier 0.
-- P10–P14 partners: cadence_priority_excluded_in_observed_opportunities; strongest 131, balance-envelope 131, cadence-frontier 0.
-- P10–P8 partners: cadence_priority_excluded_in_observed_opportunities; strongest 160, balance-envelope 160, cadence-frontier 0.
-- P10–P9 partners: cadence_priority_excluded_in_observed_opportunities; strongest 155, balance-envelope 155, cadence-frontier 0.
-- P11–P12 partners: cadence_priority_excluded_in_observed_opportunities; strongest 129, balance-envelope 129, cadence-frontier 0.
-- P11–P13 partners: cadence_priority_excluded_in_observed_opportunities; strongest 166, balance-envelope 166, cadence-frontier 0.
-- P11–P14 partners: cadence_priority_excluded_in_observed_opportunities; strongest 165, balance-envelope 165, cadence-frontier 0.
-- P11–P8 partners: cadence_priority_excluded_in_observed_opportunities; strongest 184, balance-envelope 184, cadence-frontier 0.
-- P11–P9 partners: cadence_priority_excluded_in_observed_opportunities; strongest 174, balance-envelope 174, cadence-frontier 0.
-- P12–P13 partners: cadence_priority_excluded_in_observed_opportunities; strongest 122, balance-envelope 122, cadence-frontier 0.
-- P12–P14 partners: cadence_priority_excluded_in_observed_opportunities; strongest 123, balance-envelope 123, cadence-frontier 0.
-- P12–P8 partners: cadence_priority_excluded_in_observed_opportunities; strongest 122, balance-envelope 122, cadence-frontier 0.
-- P12–P9 partners: cadence_priority_excluded_in_observed_opportunities; strongest 137, balance-envelope 137, cadence-frontier 0.
-- P13–P14 partners: cadence_priority_excluded_in_observed_opportunities; strongest 167, balance-envelope 167, cadence-frontier 0.
-- P13–P8 partners: cadence_priority_excluded_in_observed_opportunities; strongest 165, balance-envelope 165, cadence-frontier 0.
-- P13–P9 partners: cadence_priority_excluded_in_observed_opportunities; strongest 157, balance-envelope 157, cadence-frontier 0.
-- P14–P8 partners: cadence_priority_excluded_in_observed_opportunities; strongest 153, balance-envelope 153, cadence-frontier 0.
-- P14–P9 partners: cadence_priority_excluded_in_observed_opportunities; strongest 152, balance-envelope 152, cadence-frontier 0.
-- P2–P3 partners: cadence_priority_excluded_in_observed_opportunities; strongest 160, balance-envelope 160, cadence-frontier 0.
-- P2–P4 partners: cadence_priority_excluded_in_observed_opportunities; strongest 151, balance-envelope 151, cadence-frontier 0.
-- P2–P5 partners: cadence_priority_excluded_in_observed_opportunities; strongest 138, balance-envelope 138, cadence-frontier 0.
-- P2–P6 partners: cadence_priority_excluded_in_observed_opportunities; strongest 147, balance-envelope 147, cadence-frontier 0.
-- P2–P7 partners: cadence_priority_excluded_in_observed_opportunities; strongest 162, balance-envelope 162, cadence-frontier 0.
-- P3–P4 partners: cadence_priority_excluded_in_observed_opportunities; strongest 162, balance-envelope 162, cadence-frontier 0.
-- P3–P5 partners: cadence_priority_excluded_in_observed_opportunities; strongest 134, balance-envelope 134, cadence-frontier 0.
-- P3–P6 partners: cadence_priority_excluded_in_observed_opportunities; strongest 142, balance-envelope 142, cadence-frontier 0.
-- P3–P7 partners: cadence_priority_excluded_in_observed_opportunities; strongest 167, balance-envelope 167, cadence-frontier 0.
-- P4–P5 partners: cadence_priority_excluded_in_observed_opportunities; strongest 124, balance-envelope 124, cadence-frontier 0.
-- P4–P6 partners: cadence_priority_excluded_in_observed_opportunities; strongest 129, balance-envelope 129, cadence-frontier 0.
-- P4–P7 partners: cadence_priority_excluded_in_observed_opportunities; strongest 152, balance-envelope 152, cadence-frontier 0.
-- P5–P6 partners: cadence_priority_excluded_in_observed_opportunities; strongest 131, balance-envelope 131, cadence-frontier 0.
-- P5–P7 partners: cadence_priority_excluded_in_observed_opportunities; strongest 154, balance-envelope 154, cadence-frontier 0.
-- P6–P7 partners: cadence_priority_excluded_in_observed_opportunities; strongest 149, balance-envelope 149, cadence-frontier 0.
-- P8–P9 partners: cadence_priority_excluded_in_observed_opportunities; strongest 161, balance-envelope 161, cadence-frontier 0.
+All structurally feasible player/facet relationships were observed.
 
 ### Balanced Points narrow seed 2097593: unseen at 400
-- P1–P2 partners: cadence_priority_excluded_in_observed_opportunities; strongest 144, balance-envelope 144, cadence-frontier 0.
-- P1–P3 partners: cadence_priority_excluded_in_observed_opportunities; strongest 168, balance-envelope 168, cadence-frontier 0.
-- P1–P4 partners: cadence_priority_excluded_in_observed_opportunities; strongest 167, balance-envelope 167, cadence-frontier 0.
-- P1–P5 partners: cadence_priority_excluded_in_observed_opportunities; strongest 175, balance-envelope 175, cadence-frontier 0.
-- P1–P6 partners: cadence_priority_excluded_in_observed_opportunities; strongest 160, balance-envelope 160, cadence-frontier 0.
-- P1–P7 partners: cadence_priority_excluded_in_observed_opportunities; strongest 146, balance-envelope 146, cadence-frontier 0.
-- P10–P11 partners: cadence_priority_excluded_in_observed_opportunities; strongest 170, balance-envelope 170, cadence-frontier 0.
-- P10–P12 partners: cadence_priority_excluded_in_observed_opportunities; strongest 151, balance-envelope 151, cadence-frontier 0.
-- P10–P13 partners: cadence_priority_excluded_in_observed_opportunities; strongest 175, balance-envelope 175, cadence-frontier 0.
-- P10–P14 partners: cadence_priority_excluded_in_observed_opportunities; strongest 166, balance-envelope 166, cadence-frontier 0.
-- P10–P8 partners: cadence_priority_excluded_in_observed_opportunities; strongest 161, balance-envelope 161, cadence-frontier 0.
-- P10–P9 partners: cadence_priority_excluded_in_observed_opportunities; strongest 158, balance-envelope 158, cadence-frontier 0.
-- P11–P12 partners: cadence_priority_excluded_in_observed_opportunities; strongest 148, balance-envelope 148, cadence-frontier 0.
-- P11–P13 partners: cadence_priority_excluded_in_observed_opportunities; strongest 136, balance-envelope 136, cadence-frontier 0.
-- P11–P14 partners: cadence_priority_excluded_in_observed_opportunities; strongest 137, balance-envelope 137, cadence-frontier 0.
-- P11–P8 partners: cadence_priority_excluded_in_observed_opportunities; strongest 155, balance-envelope 155, cadence-frontier 0.
-- P11–P9 partners: cadence_priority_excluded_in_observed_opportunities; strongest 124, balance-envelope 124, cadence-frontier 0.
-- P12–P13 partners: cadence_priority_excluded_in_observed_opportunities; strongest 129, balance-envelope 129, cadence-frontier 0.
-- P12–P14 partners: cadence_priority_excluded_in_observed_opportunities; strongest 135, balance-envelope 135, cadence-frontier 0.
-- P12–P8 partners: cadence_priority_excluded_in_observed_opportunities; strongest 158, balance-envelope 158, cadence-frontier 0.
-- P12–P9 partners: cadence_priority_excluded_in_observed_opportunities; strongest 131, balance-envelope 131, cadence-frontier 0.
-- P13–P14 partners: cadence_priority_excluded_in_observed_opportunities; strongest 157, balance-envelope 157, cadence-frontier 0.
-- P13–P8 partners: cadence_priority_excluded_in_observed_opportunities; strongest 157, balance-envelope 157, cadence-frontier 0.
-- P13–P9 partners: cadence_priority_excluded_in_observed_opportunities; strongest 152, balance-envelope 152, cadence-frontier 0.
-- P14–P8 partners: cadence_priority_excluded_in_observed_opportunities; strongest 151, balance-envelope 151, cadence-frontier 0.
-- P14–P9 partners: cadence_priority_excluded_in_observed_opportunities; strongest 148, balance-envelope 148, cadence-frontier 0.
-- P2–P3 partners: cadence_priority_excluded_in_observed_opportunities; strongest 152, balance-envelope 152, cadence-frontier 0.
-- P2–P4 partners: cadence_priority_excluded_in_observed_opportunities; strongest 136, balance-envelope 136, cadence-frontier 0.
-- P2–P5 partners: cadence_priority_excluded_in_observed_opportunities; strongest 145, balance-envelope 145, cadence-frontier 0.
-- P2–P6 partners: cadence_priority_excluded_in_observed_opportunities; strongest 129, balance-envelope 129, cadence-frontier 0.
-- P2–P7 partners: cadence_priority_excluded_in_observed_opportunities; strongest 131, balance-envelope 131, cadence-frontier 0.
-- P3–P4 partners: cadence_priority_excluded_in_observed_opportunities; strongest 153, balance-envelope 153, cadence-frontier 0.
-- P3–P5 partners: cadence_priority_excluded_in_observed_opportunities; strongest 176, balance-envelope 176, cadence-frontier 0.
-- P3–P6 partners: cadence_priority_excluded_in_observed_opportunities; strongest 157, balance-envelope 157, cadence-frontier 0.
-- P3–P7 partners: cadence_priority_excluded_in_observed_opportunities; strongest 148, balance-envelope 148, cadence-frontier 0.
-- P4–P5 partners: cadence_priority_excluded_in_observed_opportunities; strongest 147, balance-envelope 147, cadence-frontier 0.
-- P4–P6 partners: cadence_priority_excluded_in_observed_opportunities; strongest 144, balance-envelope 144, cadence-frontier 0.
-- P4–P7 partners: cadence_priority_excluded_in_observed_opportunities; strongest 120, balance-envelope 120, cadence-frontier 0.
-- P5–P6 partners: cadence_priority_excluded_in_observed_opportunities; strongest 148, balance-envelope 148, cadence-frontier 0.
-- P5–P7 partners: cadence_priority_excluded_in_observed_opportunities; strongest 151, balance-envelope 151, cadence-frontier 0.
-- P6–P7 partners: cadence_priority_excluded_in_observed_opportunities; strongest 153, balance-envelope 153, cadence-frontier 0.
-- P8–P9 partners: cadence_priority_excluded_in_observed_opportunities; strongest 151, balance-envelope 151, cadence-frontier 0.
+All structurally feasible player/facet relationships were observed.
 
 ### Balanced Rating/Elo narrow seed 2097593: unseen at 400
-- P1–P2 partners: cadence_priority_excluded_in_observed_opportunities; strongest 144, balance-envelope 144, cadence-frontier 0.
-- P1–P3 partners: cadence_priority_excluded_in_observed_opportunities; strongest 168, balance-envelope 168, cadence-frontier 0.
-- P1–P4 partners: cadence_priority_excluded_in_observed_opportunities; strongest 167, balance-envelope 167, cadence-frontier 0.
-- P1–P5 partners: cadence_priority_excluded_in_observed_opportunities; strongest 175, balance-envelope 175, cadence-frontier 0.
-- P1–P6 partners: cadence_priority_excluded_in_observed_opportunities; strongest 160, balance-envelope 160, cadence-frontier 0.
-- P1–P7 partners: cadence_priority_excluded_in_observed_opportunities; strongest 146, balance-envelope 146, cadence-frontier 0.
-- P10–P11 partners: cadence_priority_excluded_in_observed_opportunities; strongest 170, balance-envelope 170, cadence-frontier 0.
-- P10–P12 partners: cadence_priority_excluded_in_observed_opportunities; strongest 151, balance-envelope 151, cadence-frontier 0.
-- P10–P13 partners: cadence_priority_excluded_in_observed_opportunities; strongest 175, balance-envelope 175, cadence-frontier 0.
-- P10–P14 partners: cadence_priority_excluded_in_observed_opportunities; strongest 166, balance-envelope 166, cadence-frontier 0.
-- P10–P8 partners: cadence_priority_excluded_in_observed_opportunities; strongest 161, balance-envelope 161, cadence-frontier 0.
-- P10–P9 partners: cadence_priority_excluded_in_observed_opportunities; strongest 158, balance-envelope 158, cadence-frontier 0.
-- P11–P12 partners: cadence_priority_excluded_in_observed_opportunities; strongest 148, balance-envelope 148, cadence-frontier 0.
-- P11–P13 partners: cadence_priority_excluded_in_observed_opportunities; strongest 136, balance-envelope 136, cadence-frontier 0.
-- P11–P14 partners: cadence_priority_excluded_in_observed_opportunities; strongest 137, balance-envelope 137, cadence-frontier 0.
-- P11–P8 partners: cadence_priority_excluded_in_observed_opportunities; strongest 155, balance-envelope 155, cadence-frontier 0.
-- P11–P9 partners: cadence_priority_excluded_in_observed_opportunities; strongest 124, balance-envelope 124, cadence-frontier 0.
-- P12–P13 partners: cadence_priority_excluded_in_observed_opportunities; strongest 129, balance-envelope 129, cadence-frontier 0.
-- P12–P14 partners: cadence_priority_excluded_in_observed_opportunities; strongest 135, balance-envelope 135, cadence-frontier 0.
-- P12–P8 partners: cadence_priority_excluded_in_observed_opportunities; strongest 158, balance-envelope 158, cadence-frontier 0.
-- P12–P9 partners: cadence_priority_excluded_in_observed_opportunities; strongest 131, balance-envelope 131, cadence-frontier 0.
-- P13–P14 partners: cadence_priority_excluded_in_observed_opportunities; strongest 157, balance-envelope 157, cadence-frontier 0.
-- P13–P8 partners: cadence_priority_excluded_in_observed_opportunities; strongest 157, balance-envelope 157, cadence-frontier 0.
-- P13–P9 partners: cadence_priority_excluded_in_observed_opportunities; strongest 152, balance-envelope 152, cadence-frontier 0.
-- P14–P8 partners: cadence_priority_excluded_in_observed_opportunities; strongest 151, balance-envelope 151, cadence-frontier 0.
-- P14–P9 partners: cadence_priority_excluded_in_observed_opportunities; strongest 148, balance-envelope 148, cadence-frontier 0.
-- P2–P3 partners: cadence_priority_excluded_in_observed_opportunities; strongest 152, balance-envelope 152, cadence-frontier 0.
-- P2–P4 partners: cadence_priority_excluded_in_observed_opportunities; strongest 136, balance-envelope 136, cadence-frontier 0.
-- P2–P5 partners: cadence_priority_excluded_in_observed_opportunities; strongest 145, balance-envelope 145, cadence-frontier 0.
-- P2–P6 partners: cadence_priority_excluded_in_observed_opportunities; strongest 129, balance-envelope 129, cadence-frontier 0.
-- P2–P7 partners: cadence_priority_excluded_in_observed_opportunities; strongest 131, balance-envelope 131, cadence-frontier 0.
-- P3–P4 partners: cadence_priority_excluded_in_observed_opportunities; strongest 153, balance-envelope 153, cadence-frontier 0.
-- P3–P5 partners: cadence_priority_excluded_in_observed_opportunities; strongest 176, balance-envelope 176, cadence-frontier 0.
-- P3–P6 partners: cadence_priority_excluded_in_observed_opportunities; strongest 157, balance-envelope 157, cadence-frontier 0.
-- P3–P7 partners: cadence_priority_excluded_in_observed_opportunities; strongest 148, balance-envelope 148, cadence-frontier 0.
-- P4–P5 partners: cadence_priority_excluded_in_observed_opportunities; strongest 147, balance-envelope 147, cadence-frontier 0.
-- P4–P6 partners: cadence_priority_excluded_in_observed_opportunities; strongest 144, balance-envelope 144, cadence-frontier 0.
-- P4–P7 partners: cadence_priority_excluded_in_observed_opportunities; strongest 120, balance-envelope 120, cadence-frontier 0.
-- P5–P6 partners: cadence_priority_excluded_in_observed_opportunities; strongest 148, balance-envelope 148, cadence-frontier 0.
-- P5–P7 partners: cadence_priority_excluded_in_observed_opportunities; strongest 151, balance-envelope 151, cadence-frontier 0.
-- P6–P7 partners: cadence_priority_excluded_in_observed_opportunities; strongest 153, balance-envelope 153, cadence-frontier 0.
-- P8–P9 partners: cadence_priority_excluded_in_observed_opportunities; strongest 151, balance-envelope 151, cadence-frontier 0.
+All structurally feasible player/facet relationships were observed.
 
 ### Balanced Points narrow: static equal-count, two-court balance exclusions
 Static excluded 0 directed entries (0 distinct facet-pairs); Rating ceiling fallback: false.
@@ -1123,1067 +730,381 @@ Static excluded 24 directed entries (12 distinct facet-pairs); Rating ceiling fa
 - P7–P8 opponents
 
 ### Completed ≥5-rest assignments
-- wait-narrow-SOCIAL_MIX-1-P8-89: Social narrow seed 1, P8, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
-- wait-narrow-SOCIAL_MIX-1-P5-89: Social narrow seed 1, P5, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
-- wait-narrow-SOCIAL_MIX-1-P1-92: Social narrow seed 1, P1, rest 6, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
-- wait-narrow-SOCIAL_MIX-1-P13-92: Social narrow seed 1, P13, rest 6, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
-- wait-narrow-SOCIAL_MIX-1-P4-109: Social narrow seed 1, P4, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-narrow-SOCIAL_MIX-1-P5-16: Social narrow seed 1, P5, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-narrow-SOCIAL_MIX-1-P1-51: Social narrow seed 1, P1, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-narrow-SOCIAL_MIX-1-P10-53: Social narrow seed 1, P10, rest 5, classification type_entropy_priority_override, current wait fairness_or_mixed_legality; origin decision-45-court-1, fair alternatives 19, starvation-equivalent 19, balance-admissible 19, smoother 0.
+- wait-narrow-SOCIAL_MIX-1-P11-89: Social narrow seed 1, P11, rest 6, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-narrow-SOCIAL_MIX-1-P2-89: Social narrow seed 1, P2, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-narrow-SOCIAL_MIX-1-P10-89: Social narrow seed 1, P10, rest 6, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-narrow-SOCIAL_MIX-1-P14-92: Social narrow seed 1, P14, rest 6, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-narrow-SOCIAL_MIX-1-P5-92: Social narrow seed 1, P5, rest 6, classification no_equal_priority_smoother_replay_witness, current wait fairness_or_mixed_legality; origin decision-84-court-1, fair alternatives 6, starvation-equivalent 6, balance-admissible 6, smoother 0.
+- wait-narrow-SOCIAL_MIX-1-P3-109: Social narrow seed 1, P3, rest 5, classification type_entropy_priority_override, current wait fairness_or_mixed_legality; origin decision-103-court-1, fair alternatives 56, starvation-equivalent 56, balance-admissible 56, smoother 0.
+- wait-narrow-SOCIAL_MIX-1-P12-109: Social narrow seed 1, P12, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
 - wait-narrow-SOCIAL_MIX-1-P13-109: Social narrow seed 1, P13, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
-- wait-narrow-POINTS-1-P10-89: Balanced Points narrow seed 1, P10, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
-- wait-narrow-POINTS-1-P7-89: Balanced Points narrow seed 1, P7, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
-- wait-narrow-POINTS-1-P13-92: Balanced Points narrow seed 1, P13, rest 6, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
-- wait-narrow-POINTS-1-P4-92: Balanced Points narrow seed 1, P4, rest 6, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
-- wait-narrow-POINTS-1-P8-109: Balanced Points narrow seed 1, P8, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
-- wait-narrow-POINTS-1-P7-109: Balanced Points narrow seed 1, P7, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
-- wait-narrow-ELO-1-P9-89: Balanced Rating/Elo narrow seed 1, P9, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
-- wait-narrow-ELO-1-P4-89: Balanced Rating/Elo narrow seed 1, P4, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
-- wait-narrow-ELO-1-P1-92: Balanced Rating/Elo narrow seed 1, P1, rest 6, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
-- wait-narrow-ELO-1-P10-92: Balanced Rating/Elo narrow seed 1, P10, rest 6, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
-- wait-narrow-ELO-1-P10-109: Balanced Rating/Elo narrow seed 1, P10, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-narrow-SOCIAL_MIX-1-P10-111: Social narrow seed 1, P10, rest 5, classification type_entropy_priority_override, current wait fairness_or_mixed_legality; origin decision-100-court-1, fair alternatives 10, starvation-equivalent 10, balance-admissible 10, smoother 0.
+- wait-narrow-SOCIAL_MIX-1-P9-112: Social narrow seed 1, P9, rest 5, classification match_type_entropy_priority_exclusion, current wait match_type_entropy_priority_exclusion; no linked immediately preceding rest-zero replay.
+- wait-narrow-SOCIAL_MIX-1-P6-192: Social narrow seed 1, P6, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-narrow-SOCIAL_MIX-1-P14-216: Social narrow seed 1, P14, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-narrow-SOCIAL_MIX-1-P3-262: Social narrow seed 1, P3, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-narrow-SOCIAL_MIX-1-P12-301: Social narrow seed 1, P12, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-narrow-POINTS-1-P5-16: Balanced Points narrow seed 1, P5, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-narrow-POINTS-1-P1-51: Balanced Points narrow seed 1, P1, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-narrow-POINTS-1-P10-53: Balanced Points narrow seed 1, P10, rest 5, classification type_entropy_priority_override, current wait fairness_or_mixed_legality; origin decision-45-court-1, fair alternatives 19, starvation-equivalent 19, balance-admissible 19, smoother 0.
+- wait-narrow-POINTS-1-P11-89: Balanced Points narrow seed 1, P11, rest 6, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-narrow-POINTS-1-P2-89: Balanced Points narrow seed 1, P2, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-narrow-POINTS-1-P10-89: Balanced Points narrow seed 1, P10, rest 6, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-narrow-POINTS-1-P14-92: Balanced Points narrow seed 1, P14, rest 6, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-narrow-POINTS-1-P5-92: Balanced Points narrow seed 1, P5, rest 6, classification no_equal_priority_smoother_replay_witness, current wait fairness_or_mixed_legality; origin decision-84-court-1, fair alternatives 6, starvation-equivalent 6, balance-admissible 6, smoother 0.
+- wait-narrow-POINTS-1-P3-109: Balanced Points narrow seed 1, P3, rest 5, classification type_entropy_priority_override, current wait fairness_or_mixed_legality; origin decision-103-court-1, fair alternatives 56, starvation-equivalent 56, balance-admissible 56, smoother 0.
+- wait-narrow-POINTS-1-P12-109: Balanced Points narrow seed 1, P12, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-narrow-POINTS-1-P13-109: Balanced Points narrow seed 1, P13, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-narrow-POINTS-1-P10-111: Balanced Points narrow seed 1, P10, rest 5, classification type_entropy_priority_override, current wait fairness_or_mixed_legality; origin decision-100-court-1, fair alternatives 10, starvation-equivalent 10, balance-admissible 10, smoother 0.
+- wait-narrow-POINTS-1-P9-112: Balanced Points narrow seed 1, P9, rest 5, classification match_type_entropy_priority_exclusion, current wait match_type_entropy_priority_exclusion; no linked immediately preceding rest-zero replay.
+- wait-narrow-POINTS-1-P6-192: Balanced Points narrow seed 1, P6, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-narrow-POINTS-1-P14-216: Balanced Points narrow seed 1, P14, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-narrow-POINTS-1-P3-262: Balanced Points narrow seed 1, P3, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-narrow-POINTS-1-P12-301: Balanced Points narrow seed 1, P12, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-narrow-ELO-1-P7-16: Balanced Rating/Elo narrow seed 1, P7, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-narrow-ELO-1-P12-51: Balanced Rating/Elo narrow seed 1, P12, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-narrow-ELO-1-P6-53: Balanced Rating/Elo narrow seed 1, P6, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-narrow-ELO-1-P1-89: Balanced Rating/Elo narrow seed 1, P1, rest 6, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-narrow-ELO-1-P5-89: Balanced Rating/Elo narrow seed 1, P5, rest 6, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-narrow-ELO-1-P14-89: Balanced Rating/Elo narrow seed 1, P14, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-narrow-ELO-1-P4-92: Balanced Rating/Elo narrow seed 1, P4, rest 6, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-narrow-ELO-1-P12-92: Balanced Rating/Elo narrow seed 1, P12, rest 6, classification no_equal_priority_smoother_replay_witness, current wait fairness_or_mixed_legality; origin decision-84-court-1, fair alternatives 6, starvation-equivalent 6, balance-admissible 6, smoother 0.
+- wait-narrow-ELO-1-P3-109: Balanced Rating/Elo narrow seed 1, P3, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-narrow-ELO-1-P11-109: Balanced Rating/Elo narrow seed 1, P11, rest 5, classification type_entropy_priority_override, current wait fairness_or_mixed_legality; origin decision-103-court-1, fair alternatives 56, starvation-equivalent 56, balance-admissible 56, smoother 0.
 - wait-narrow-ELO-1-P5-109: Balanced Rating/Elo narrow seed 1, P5, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
-- wait-narrow-SOCIAL_MIX-4729-P11-110: Social narrow seed 4729, P11, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
-- wait-narrow-SOCIAL_MIX-4729-P7-110: Social narrow seed 4729, P7, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
-- wait-narrow-SOCIAL_MIX-4729-P3-166: Social narrow seed 4729, P3, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
-- wait-narrow-SOCIAL_MIX-4729-P8-166: Social narrow seed 4729, P8, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
-- wait-narrow-SOCIAL_MIX-4729-P11-231: Social narrow seed 4729, P11, rest 6, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
-- wait-narrow-SOCIAL_MIX-4729-P4-231: Social narrow seed 4729, P4, rest 6, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
-- wait-narrow-SOCIAL_MIX-4729-P3-233: Social narrow seed 4729, P3, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
-- wait-narrow-SOCIAL_MIX-4729-P9-233: Social narrow seed 4729, P9, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
-- wait-narrow-POINTS-4729-P11-110: Balanced Points narrow seed 4729, P11, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
-- wait-narrow-POINTS-4729-P7-110: Balanced Points narrow seed 4729, P7, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
-- wait-narrow-POINTS-4729-P2-166: Balanced Points narrow seed 4729, P2, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
-- wait-narrow-POINTS-4729-P9-166: Balanced Points narrow seed 4729, P9, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
-- wait-narrow-POINTS-4729-P4-231: Balanced Points narrow seed 4729, P4, rest 6, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
-- wait-narrow-POINTS-4729-P8-231: Balanced Points narrow seed 4729, P8, rest 6, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-narrow-ELO-1-P6-111: Balanced Rating/Elo narrow seed 1, P6, rest 5, classification type_entropy_priority_override, current wait fairness_or_mixed_legality; origin decision-100-court-1, fair alternatives 10, starvation-equivalent 10, balance-admissible 10, smoother 0.
+- wait-narrow-ELO-1-P2-112: Balanced Rating/Elo narrow seed 1, P2, rest 5, classification match_type_entropy_priority_exclusion, current wait match_type_entropy_priority_exclusion; no linked immediately preceding rest-zero replay.
+- wait-narrow-ELO-1-P9-234: Balanced Rating/Elo narrow seed 1, P9, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-narrow-ELO-1-P10-259: Balanced Rating/Elo narrow seed 1, P10, rest 5, classification relationship_entropy_priority_exclusion, current wait relationship_entropy_priority_exclusion; no linked immediately preceding rest-zero replay.
+- wait-narrow-ELO-1-P8-301: Balanced Rating/Elo narrow seed 1, P8, rest 5, classification no_equal_priority_smoother_replay_witness, current wait fairness_or_mixed_legality; origin decision-289-court-0, fair alternatives 12, starvation-equivalent 12, balance-admissible 12, smoother 0.
+- wait-narrow-SOCIAL_MIX-4729-P2-52: Social narrow seed 4729, P2, rest 6, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-narrow-SOCIAL_MIX-4729-P6-98: Social narrow seed 4729, P6, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-narrow-SOCIAL_MIX-4729-P14-98: Social narrow seed 4729, P14, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-narrow-SOCIAL_MIX-4729-P5-107: Social narrow seed 4729, P5, rest 6, classification relationship_entropy_priority_exclusion, current wait relationship_entropy_priority_exclusion; no linked immediately preceding rest-zero replay.
+- wait-narrow-SOCIAL_MIX-4729-P1-110: Social narrow seed 4729, P1, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-narrow-SOCIAL_MIX-4729-P6-110: Social narrow seed 4729, P6, rest 5, classification starvation_priority, current wait fairness_or_mixed_legality; origin decision-99-court-1, fair alternatives 19, starvation-equivalent 0, balance-admissible 0, smoother 0.
+- wait-narrow-SOCIAL_MIX-4729-P13-116: Social narrow seed 4729, P13, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-narrow-SOCIAL_MIX-4729-P3-127: Social narrow seed 4729, P3, rest 5, classification no_equal_priority_smoother_replay_witness, current wait fairness_or_mixed_legality; origin decision-121-court-1, fair alternatives 12, starvation-equivalent 12, balance-admissible 12, smoother 0.
+- wait-narrow-SOCIAL_MIX-4729-P2-166: Social narrow seed 4729, P2, rest 5, classification no_equal_priority_smoother_replay_witness, current wait fairness_or_mixed_legality; origin decision-155-court-0, fair alternatives 12, starvation-equivalent 12, balance-admissible 12, smoother 0.
+- wait-narrow-SOCIAL_MIX-4729-P12-166: Social narrow seed 4729, P12, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-narrow-SOCIAL_MIX-4729-P3-174: Social narrow seed 4729, P3, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-narrow-SOCIAL_MIX-4729-P2-191: Social narrow seed 4729, P2, rest 5, classification relationship_entropy_priority_exclusion, current wait relationship_entropy_priority_exclusion; no linked immediately preceding rest-zero replay.
+- wait-narrow-SOCIAL_MIX-4729-P11-212: Social narrow seed 4729, P11, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-narrow-SOCIAL_MIX-4729-P8-218: Social narrow seed 4729, P8, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-narrow-SOCIAL_MIX-4729-P8-231: Social narrow seed 4729, P8, rest 6, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-narrow-SOCIAL_MIX-4729-P2-231: Social narrow seed 4729, P2, rest 6, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-narrow-SOCIAL_MIX-4729-P5-233: Social narrow seed 4729, P5, rest 6, classification type_entropy_priority_override, current wait fairness_or_mixed_legality; origin decision-222-court-0, fair alternatives 66, starvation-equivalent 66, balance-admissible 66, smoother 0.
+- wait-narrow-SOCIAL_MIX-4729-P7-233: Social narrow seed 4729, P7, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-narrow-SOCIAL_MIX-4729-P4-233: Social narrow seed 4729, P4, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-narrow-SOCIAL_MIX-4729-P5-277: Social narrow seed 4729, P5, rest 5, classification type_entropy_priority_override, current wait fairness_or_mixed_legality; origin decision-271-court-0, fair alternatives 60, starvation-equivalent 60, balance-admissible 60, smoother 0.
+- wait-narrow-SOCIAL_MIX-4729-P9-281: Social narrow seed 4729, P9, rest 6, classification no_equal_priority_smoother_replay_witness, current wait fairness_or_mixed_legality; origin decision-274-court-0, fair alternatives 6, starvation-equivalent 6, balance-admissible 6, smoother 0.
+- wait-narrow-SOCIAL_MIX-4729-P13-360: Social narrow seed 4729, P13, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-narrow-POINTS-4729-P2-52: Balanced Points narrow seed 4729, P2, rest 6, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-narrow-POINTS-4729-P6-98: Balanced Points narrow seed 4729, P6, rest 7, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-narrow-POINTS-4729-P10-98: Balanced Points narrow seed 4729, P10, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-narrow-POINTS-4729-P2-107: Balanced Points narrow seed 4729, P2, rest 6, classification relationship_entropy_priority_exclusion, current wait relationship_entropy_priority_exclusion; no linked immediately preceding rest-zero replay.
+- wait-narrow-POINTS-4729-P5-110: Balanced Points narrow seed 4729, P5, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-narrow-POINTS-4729-P6-110: Balanced Points narrow seed 4729, P6, rest 5, classification starvation_priority, current wait fairness_or_mixed_legality; origin decision-99-court-1, fair alternatives 19, starvation-equivalent 0, balance-admissible 0, smoother 0.
+- wait-narrow-POINTS-4729-P13-116: Balanced Points narrow seed 4729, P13, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-narrow-POINTS-4729-P4-127: Balanced Points narrow seed 4729, P4, rest 5, classification no_equal_priority_smoother_replay_witness, current wait fairness_or_mixed_legality; origin decision-121-court-1, fair alternatives 12, starvation-equivalent 12, balance-admissible 12, smoother 0.
+- wait-narrow-POINTS-4729-P12-166: Balanced Points narrow seed 4729, P12, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-narrow-POINTS-4729-P4-166: Balanced Points narrow seed 4729, P4, rest 5, classification no_equal_priority_smoother_replay_witness, current wait fairness_or_mixed_legality; origin decision-155-court-0, fair alternatives 12, starvation-equivalent 12, balance-admissible 12, smoother 0.
+- wait-narrow-POINTS-4729-P6-174: Balanced Points narrow seed 4729, P6, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-narrow-POINTS-4729-P6-184: Balanced Points narrow seed 4729, P6, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-narrow-POINTS-4729-P1-191: Balanced Points narrow seed 4729, P1, rest 5, classification relationship_entropy_priority_exclusion, current wait relationship_entropy_priority_exclusion; no linked immediately preceding rest-zero replay.
+- wait-narrow-POINTS-4729-P14-212: Balanced Points narrow seed 4729, P14, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-narrow-POINTS-4729-P13-218: Balanced Points narrow seed 4729, P13, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-narrow-POINTS-4729-P12-231: Balanced Points narrow seed 4729, P12, rest 6, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-narrow-POINTS-4729-P2-231: Balanced Points narrow seed 4729, P2, rest 6, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
 - wait-narrow-POINTS-4729-P1-233: Balanced Points narrow seed 4729, P1, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
-- wait-narrow-POINTS-4729-P10-233: Balanced Points narrow seed 4729, P10, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
-- wait-narrow-ELO-4729-P4-110: Balanced Rating/Elo narrow seed 4729, P4, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
-- wait-narrow-ELO-4729-P12-110: Balanced Rating/Elo narrow seed 4729, P12, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-narrow-POINTS-4729-P7-233: Balanced Points narrow seed 4729, P7, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-narrow-POINTS-4729-P6-233: Balanced Points narrow seed 4729, P6, rest 6, classification type_entropy_priority_override, current wait fairness_or_mixed_legality; origin decision-222-court-0, fair alternatives 66, starvation-equivalent 66, balance-admissible 66, smoother 0.
+- wait-narrow-POINTS-4729-P6-277: Balanced Points narrow seed 4729, P6, rest 5, classification type_entropy_priority_override, current wait fairness_or_mixed_legality; origin decision-271-court-0, fair alternatives 60, starvation-equivalent 60, balance-admissible 60, smoother 0.
+- wait-narrow-POINTS-4729-P8-281: Balanced Points narrow seed 4729, P8, rest 6, classification no_equal_priority_smoother_replay_witness, current wait fairness_or_mixed_legality; origin decision-274-court-0, fair alternatives 6, starvation-equivalent 6, balance-admissible 6, smoother 0.
+- wait-narrow-ELO-4729-P14-52: Balanced Rating/Elo narrow seed 4729, P14, rest 6, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-narrow-ELO-4729-P4-98: Balanced Rating/Elo narrow seed 4729, P4, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-narrow-ELO-4729-P9-98: Balanced Rating/Elo narrow seed 4729, P9, rest 7, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-narrow-ELO-4729-P10-107: Balanced Rating/Elo narrow seed 4729, P10, rest 6, classification relationship_entropy_priority_exclusion, current wait relationship_entropy_priority_exclusion; no linked immediately preceding rest-zero replay.
+- wait-narrow-ELO-4729-P13-110: Balanced Rating/Elo narrow seed 4729, P13, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-narrow-ELO-4729-P9-110: Balanced Rating/Elo narrow seed 4729, P9, rest 5, classification starvation_priority, current wait fairness_or_mixed_legality; origin decision-99-court-1, fair alternatives 19, starvation-equivalent 0, balance-admissible 0, smoother 0.
+- wait-narrow-ELO-4729-P7-116: Balanced Rating/Elo narrow seed 4729, P7, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-narrow-ELO-4729-P8-127: Balanced Rating/Elo narrow seed 4729, P8, rest 5, classification no_equal_priority_smoother_replay_witness, current wait fairness_or_mixed_legality; origin decision-121-court-1, fair alternatives 12, starvation-equivalent 12, balance-admissible 12, smoother 0.
 - wait-narrow-ELO-4729-P5-166: Balanced Rating/Elo narrow seed 4729, P5, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
-- wait-narrow-ELO-4729-P9-166: Balanced Rating/Elo narrow seed 4729, P9, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
-- wait-narrow-ELO-4729-P11-231: Balanced Rating/Elo narrow seed 4729, P11, rest 6, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-narrow-ELO-4729-P10-166: Balanced Rating/Elo narrow seed 4729, P10, rest 5, classification no_equal_priority_smoother_replay_witness, current wait fairness_or_mixed_legality; origin decision-155-court-0, fair alternatives 12, starvation-equivalent 12, balance-admissible 12, smoother 0.
+- wait-narrow-ELO-4729-P8-174: Balanced Rating/Elo narrow seed 4729, P8, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-narrow-ELO-4729-P9-184: Balanced Rating/Elo narrow seed 4729, P9, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-narrow-ELO-4729-P12-191: Balanced Rating/Elo narrow seed 4729, P12, rest 5, classification relationship_entropy_priority_exclusion, current wait relationship_entropy_priority_exclusion; no linked immediately preceding rest-zero replay.
+- wait-narrow-ELO-4729-P4-212: Balanced Rating/Elo narrow seed 4729, P4, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-narrow-ELO-4729-P7-218: Balanced Rating/Elo narrow seed 4729, P7, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-narrow-ELO-4729-P13-231: Balanced Rating/Elo narrow seed 4729, P13, rest 6, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
 - wait-narrow-ELO-4729-P5-231: Balanced Rating/Elo narrow seed 4729, P5, rest 6, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
-- wait-narrow-ELO-4729-P13-233: Balanced Rating/Elo narrow seed 4729, P13, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
-- wait-narrow-ELO-4729-P6-233: Balanced Rating/Elo narrow seed 4729, P6, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-narrow-ELO-4729-P12-233: Balanced Rating/Elo narrow seed 4729, P12, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-narrow-ELO-4729-P14-233: Balanced Rating/Elo narrow seed 4729, P14, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-narrow-ELO-4729-P11-233: Balanced Rating/Elo narrow seed 4729, P11, rest 6, classification type_entropy_priority_override, current wait fairness_or_mixed_legality; origin decision-222-court-0, fair alternatives 66, starvation-equivalent 66, balance-admissible 66, smoother 0.
+- wait-narrow-ELO-4729-P13-277: Balanced Rating/Elo narrow seed 4729, P13, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-narrow-ELO-4729-P1-281: Balanced Rating/Elo narrow seed 4729, P1, rest 6, classification no_equal_priority_smoother_replay_witness, current wait fairness_or_mixed_legality; origin decision-274-court-0, fair alternatives 6, starvation-equivalent 6, balance-admissible 6, smoother 0.
+- wait-narrow-SOCIAL_MIX-104729-P9-165: Social narrow seed 104729, P9, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-narrow-SOCIAL_MIX-104729-P8-215: Social narrow seed 104729, P8, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-narrow-SOCIAL_MIX-104729-P2-222: Social narrow seed 104729, P2, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-narrow-SOCIAL_MIX-104729-P4-227: Social narrow seed 104729, P4, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-narrow-SOCIAL_MIX-104729-P1-241: Social narrow seed 104729, P1, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
 - wait-narrow-SOCIAL_MIX-104729-P14-294: Social narrow seed 104729, P14, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
-- wait-narrow-SOCIAL_MIX-104729-P1-294: Social narrow seed 104729, P1, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
-- wait-narrow-POINTS-104729-P7-294: Balanced Points narrow seed 104729, P7, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
-- wait-narrow-POINTS-104729-P11-294: Balanced Points narrow seed 104729, P11, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
-- wait-narrow-ELO-104729-P7-294: Balanced Rating/Elo narrow seed 104729, P7, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
-- wait-narrow-ELO-104729-P11-294: Balanced Rating/Elo narrow seed 104729, P11, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-narrow-SOCIAL_MIX-104729-P3-294: Social narrow seed 104729, P3, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-narrow-SOCIAL_MIX-104729-P8-295: Social narrow seed 104729, P8, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-narrow-SOCIAL_MIX-104729-P7-313: Social narrow seed 104729, P7, rest 5, classification type_entropy_priority_override, current wait fairness_or_mixed_legality; origin decision-305-court-1, fair alternatives 19, starvation-equivalent 19, balance-admissible 19, smoother 0.
+- wait-narrow-SOCIAL_MIX-104729-P9-333: Social narrow seed 104729, P9, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-narrow-POINTS-104729-P14-165: Balanced Points narrow seed 104729, P14, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-narrow-POINTS-104729-P9-215: Balanced Points narrow seed 104729, P9, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-narrow-POINTS-104729-P5-222: Balanced Points narrow seed 104729, P5, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-narrow-POINTS-104729-P2-227: Balanced Points narrow seed 104729, P2, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-narrow-POINTS-104729-P4-241: Balanced Points narrow seed 104729, P4, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-narrow-POINTS-104729-P13-294: Balanced Points narrow seed 104729, P13, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-narrow-POINTS-104729-P6-294: Balanced Points narrow seed 104729, P6, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-narrow-POINTS-104729-P8-295: Balanced Points narrow seed 104729, P8, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-narrow-POINTS-104729-P1-313: Balanced Points narrow seed 104729, P1, rest 5, classification type_entropy_priority_override, current wait fairness_or_mixed_legality; origin decision-305-court-1, fair alternatives 19, starvation-equivalent 19, balance-admissible 19, smoother 0.
+- wait-narrow-POINTS-104729-P14-333: Balanced Points narrow seed 104729, P14, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-narrow-ELO-104729-P14-165: Balanced Rating/Elo narrow seed 104729, P14, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-narrow-ELO-104729-P9-215: Balanced Rating/Elo narrow seed 104729, P9, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-narrow-ELO-104729-P5-222: Balanced Rating/Elo narrow seed 104729, P5, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-narrow-ELO-104729-P2-227: Balanced Rating/Elo narrow seed 104729, P2, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-narrow-ELO-104729-P4-241: Balanced Rating/Elo narrow seed 104729, P4, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-narrow-ELO-104729-P13-294: Balanced Rating/Elo narrow seed 104729, P13, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-narrow-ELO-104729-P6-294: Balanced Rating/Elo narrow seed 104729, P6, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-narrow-ELO-104729-P8-295: Balanced Rating/Elo narrow seed 104729, P8, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-narrow-ELO-104729-P1-313: Balanced Rating/Elo narrow seed 104729, P1, rest 5, classification type_entropy_priority_override, current wait fairness_or_mixed_legality; origin decision-305-court-1, fair alternatives 19, starvation-equivalent 19, balance-admissible 19, smoother 0.
+- wait-narrow-ELO-104729-P14-333: Balanced Rating/Elo narrow seed 104729, P14, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-narrow-SOCIAL_MIX-130363-P4-63: Social narrow seed 130363, P4, rest 5, classification type_entropy_priority_override, current wait match_type_entropy_priority_exclusion; origin decision-56-court-1, fair alternatives 66, starvation-equivalent 66, balance-admissible 66, smoother 0.
+- wait-narrow-SOCIAL_MIX-130363-P3-262: Social narrow seed 130363, P3, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-narrow-SOCIAL_MIX-130363-P8-291: Social narrow seed 130363, P8, rest 5, classification relationship_entropy_priority_exclusion, current wait relationship_entropy_priority_exclusion; no linked immediately preceding rest-zero replay.
+- wait-narrow-SOCIAL_MIX-130363-P14-350: Social narrow seed 130363, P14, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-narrow-SOCIAL_MIX-130363-P3-394: Social narrow seed 130363, P3, rest 5, classification no_equal_priority_smoother_replay_witness, current wait fairness_or_mixed_legality; origin decision-388-court-1, fair alternatives 6, starvation-equivalent 6, balance-admissible 6, smoother 0.
+- wait-narrow-POINTS-130363-P4-63: Balanced Points narrow seed 130363, P4, rest 5, classification type_entropy_priority_override, current wait match_type_entropy_priority_exclusion; origin decision-56-court-1, fair alternatives 66, starvation-equivalent 66, balance-admissible 66, smoother 0.
+- wait-narrow-POINTS-130363-P3-262: Balanced Points narrow seed 130363, P3, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-narrow-POINTS-130363-P8-291: Balanced Points narrow seed 130363, P8, rest 5, classification relationship_entropy_priority_exclusion, current wait relationship_entropy_priority_exclusion; no linked immediately preceding rest-zero replay.
+- wait-narrow-POINTS-130363-P14-350: Balanced Points narrow seed 130363, P14, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-narrow-POINTS-130363-P3-394: Balanced Points narrow seed 130363, P3, rest 5, classification no_equal_priority_smoother_replay_witness, current wait fairness_or_mixed_legality; origin decision-388-court-1, fair alternatives 6, starvation-equivalent 6, balance-admissible 6, smoother 0.
+- wait-narrow-ELO-130363-P4-63: Balanced Rating/Elo narrow seed 130363, P4, rest 5, classification type_entropy_priority_override, current wait match_type_entropy_priority_exclusion; origin decision-56-court-1, fair alternatives 66, starvation-equivalent 66, balance-admissible 66, smoother 0.
+- wait-narrow-ELO-130363-P3-262: Balanced Rating/Elo narrow seed 130363, P3, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-narrow-ELO-130363-P8-291: Balanced Rating/Elo narrow seed 130363, P8, rest 5, classification relationship_entropy_priority_exclusion, current wait relationship_entropy_priority_exclusion; no linked immediately preceding rest-zero replay.
+- wait-narrow-ELO-130363-P14-350: Balanced Rating/Elo narrow seed 130363, P14, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-narrow-ELO-130363-P3-394: Balanced Rating/Elo narrow seed 130363, P3, rest 5, classification no_equal_priority_smoother_replay_witness, current wait fairness_or_mixed_legality; origin decision-388-court-1, fair alternatives 6, starvation-equivalent 6, balance-admissible 6, smoother 0.
+- wait-narrow-SOCIAL_MIX-2097593-P4-45: Social narrow seed 2097593, P4, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-narrow-SOCIAL_MIX-2097593-P13-65: Social narrow seed 2097593, P13, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-narrow-SOCIAL_MIX-2097593-P1-65: Social narrow seed 2097593, P1, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-narrow-SOCIAL_MIX-2097593-P2-74: Social narrow seed 2097593, P2, rest 5, classification type_entropy_priority_override, current wait fairness_or_mixed_legality; origin decision-68-court-0, fair alternatives 66, starvation-equivalent 66, balance-admissible 66, smoother 0.
 - wait-narrow-SOCIAL_MIX-2097593-P9-74: Social narrow seed 2097593, P9, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
-- wait-narrow-SOCIAL_MIX-2097593-P5-74: Social narrow seed 2097593, P5, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
-- wait-narrow-SOCIAL_MIX-2097593-P12-203: Social narrow seed 2097593, P12, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
-- wait-narrow-SOCIAL_MIX-2097593-P1-203: Social narrow seed 2097593, P1, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
-- wait-narrow-SOCIAL_MIX-2097593-P9-204: Social narrow seed 2097593, P9, rest 6, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
-- wait-narrow-SOCIAL_MIX-2097593-P6-204: Social narrow seed 2097593, P6, rest 6, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
-- wait-narrow-SOCIAL_MIX-2097593-P4-312: Social narrow seed 2097593, P4, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
-- wait-narrow-SOCIAL_MIX-2097593-P11-312: Social narrow seed 2097593, P11, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
-- wait-narrow-SOCIAL_MIX-2097593-P2-317: Social narrow seed 2097593, P2, rest 6, classification cadence_tie_later_tiebreak, current wait cadence_tie_later_tiebreak; no linked immediately preceding rest-zero replay.
-- wait-narrow-SOCIAL_MIX-2097593-P13-317: Social narrow seed 2097593, P13, rest 6, classification cadence_tie_later_tiebreak, current wait cadence_tie_later_tiebreak; no linked immediately preceding rest-zero replay.
-- wait-narrow-POINTS-2097593-P11-74: Balanced Points narrow seed 2097593, P11, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
-- wait-narrow-POINTS-2097593-P3-74: Balanced Points narrow seed 2097593, P3, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
-- wait-narrow-POINTS-2097593-P9-203: Balanced Points narrow seed 2097593, P9, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
-- wait-narrow-POINTS-2097593-P5-203: Balanced Points narrow seed 2097593, P5, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
-- wait-narrow-POINTS-2097593-P1-204: Balanced Points narrow seed 2097593, P1, rest 6, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
-- wait-narrow-POINTS-2097593-P14-204: Balanced Points narrow seed 2097593, P14, rest 6, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
-- wait-narrow-POINTS-2097593-P3-312: Balanced Points narrow seed 2097593, P3, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
-- wait-narrow-POINTS-2097593-P14-312: Balanced Points narrow seed 2097593, P14, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
-- wait-narrow-POINTS-2097593-P9-317: Balanced Points narrow seed 2097593, P9, rest 6, classification cadence_tie_later_tiebreak, current wait cadence_tie_later_tiebreak; no linked immediately preceding rest-zero replay.
-- wait-narrow-POINTS-2097593-P7-317: Balanced Points narrow seed 2097593, P7, rest 6, classification cadence_tie_later_tiebreak, current wait cadence_tie_later_tiebreak; no linked immediately preceding rest-zero replay.
-- wait-narrow-ELO-2097593-P11-74: Balanced Rating/Elo narrow seed 2097593, P11, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
-- wait-narrow-ELO-2097593-P3-74: Balanced Rating/Elo narrow seed 2097593, P3, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
-- wait-narrow-ELO-2097593-P9-203: Balanced Rating/Elo narrow seed 2097593, P9, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
-- wait-narrow-ELO-2097593-P5-203: Balanced Rating/Elo narrow seed 2097593, P5, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
-- wait-narrow-ELO-2097593-P1-204: Balanced Rating/Elo narrow seed 2097593, P1, rest 6, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
-- wait-narrow-ELO-2097593-P14-204: Balanced Rating/Elo narrow seed 2097593, P14, rest 6, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
-- wait-narrow-ELO-2097593-P3-312: Balanced Rating/Elo narrow seed 2097593, P3, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
-- wait-narrow-ELO-2097593-P14-312: Balanced Rating/Elo narrow seed 2097593, P14, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
-- wait-narrow-ELO-2097593-P9-317: Balanced Rating/Elo narrow seed 2097593, P9, rest 6, classification cadence_tie_later_tiebreak, current wait cadence_tie_later_tiebreak; no linked immediately preceding rest-zero replay.
-- wait-narrow-ELO-2097593-P7-317: Balanced Rating/Elo narrow seed 2097593, P7, rest 6, classification cadence_tie_later_tiebreak, current wait cadence_tie_later_tiebreak; no linked immediately preceding rest-zero replay.
-- wait-wide-POINTS-65537-P14-42: Balanced Points wide seed 65537, P14, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
-- wait-wide-POINTS-65537-P4-42: Balanced Points wide seed 65537, P4, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
-- wait-wide-POINTS-65537-P6-280: Balanced Points wide seed 65537, P6, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
-- wait-wide-POINTS-65537-P12-280: Balanced Points wide seed 65537, P12, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
-- wait-wide-ELO-65537-P8-42: Balanced Rating/Elo wide seed 65537, P8, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
-- wait-wide-ELO-65537-P2-42: Balanced Rating/Elo wide seed 65537, P2, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
-- wait-wide-ELO-65537-P1-117: Balanced Rating/Elo wide seed 65537, P1, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-narrow-SOCIAL_MIX-2097593-P7-203: Social narrow seed 2097593, P7, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-narrow-SOCIAL_MIX-2097593-P13-203: Social narrow seed 2097593, P13, rest 7, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-narrow-SOCIAL_MIX-2097593-P8-203: Social narrow seed 2097593, P8, rest 7, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-narrow-SOCIAL_MIX-2097593-P11-204: Social narrow seed 2097593, P11, rest 6, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-narrow-SOCIAL_MIX-2097593-P4-204: Social narrow seed 2097593, P4, rest 6, classification no_equal_priority_smoother_replay_witness, current wait fairness_or_mixed_legality; origin decision-196-court-1, fair alternatives 6, starvation-equivalent 6, balance-admissible 6, smoother 0.
+- wait-narrow-SOCIAL_MIX-2097593-P8-295: Social narrow seed 2097593, P8, rest 5, classification no_equal_priority_smoother_replay_witness, current wait fairness_or_mixed_legality; origin decision-289-court-1, fair alternatives 12, starvation-equivalent 12, balance-admissible 12, smoother 0.
+- wait-narrow-SOCIAL_MIX-2097593-P4-301: Social narrow seed 2097593, P4, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-narrow-SOCIAL_MIX-2097593-P7-302: Social narrow seed 2097593, P7, rest 5, classification relationship_entropy_priority_exclusion, current wait relationship_entropy_priority_exclusion; no linked immediately preceding rest-zero replay.
+- wait-narrow-SOCIAL_MIX-2097593-P1-312: Social narrow seed 2097593, P1, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-narrow-SOCIAL_MIX-2097593-P8-312: Social narrow seed 2097593, P8, rest 6, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-narrow-SOCIAL_MIX-2097593-P9-317: Social narrow seed 2097593, P9, rest 6, classification relationship_entropy_priority_exclusion, current wait relationship_entropy_priority_exclusion; no linked immediately preceding rest-zero replay.
+- wait-narrow-SOCIAL_MIX-2097593-P14-317: Social narrow seed 2097593, P14, rest 6, classification relationship_entropy_priority_exclusion, current wait relationship_entropy_priority_exclusion; no linked immediately preceding rest-zero replay.
+- wait-narrow-SOCIAL_MIX-2097593-P13-317: Social narrow seed 2097593, P13, rest 6, classification relationship_entropy_priority_exclusion, current wait relationship_entropy_priority_exclusion; no linked immediately preceding rest-zero replay.
+- wait-narrow-SOCIAL_MIX-2097593-P1-322: Social narrow seed 2097593, P1, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-narrow-SOCIAL_MIX-2097593-P13-394: Social narrow seed 2097593, P13, rest 5, classification relationship_entropy_priority_exclusion, current wait relationship_entropy_priority_exclusion; no linked immediately preceding rest-zero replay.
+- wait-narrow-SOCIAL_MIX-2097593-P2-395: Social narrow seed 2097593, P2, rest 5, classification no_equal_priority_smoother_replay_witness, current wait fairness_or_mixed_legality; origin decision-386-court-0, fair alternatives 12, starvation-equivalent 12, balance-admissible 12, smoother 0.
+- wait-narrow-SOCIAL_MIX-2097593-P6-399: Social narrow seed 2097593, P6, rest 5, classification type_entropy_priority_override, current wait fairness_or_mixed_legality; origin decision-390-court-0, fair alternatives 66, starvation-equivalent 66, balance-admissible 66, smoother 0.
+- wait-narrow-POINTS-2097593-P4-45: Balanced Points narrow seed 2097593, P4, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-narrow-POINTS-2097593-P13-65: Balanced Points narrow seed 2097593, P13, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-narrow-POINTS-2097593-P1-65: Balanced Points narrow seed 2097593, P1, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-narrow-POINTS-2097593-P2-74: Balanced Points narrow seed 2097593, P2, rest 5, classification type_entropy_priority_override, current wait fairness_or_mixed_legality; origin decision-68-court-0, fair alternatives 66, starvation-equivalent 66, balance-admissible 66, smoother 0.
+- wait-narrow-POINTS-2097593-P9-74: Balanced Points narrow seed 2097593, P9, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-narrow-POINTS-2097593-P7-203: Balanced Points narrow seed 2097593, P7, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-narrow-POINTS-2097593-P13-203: Balanced Points narrow seed 2097593, P13, rest 7, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-narrow-POINTS-2097593-P8-203: Balanced Points narrow seed 2097593, P8, rest 7, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-narrow-POINTS-2097593-P11-204: Balanced Points narrow seed 2097593, P11, rest 6, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-narrow-POINTS-2097593-P4-204: Balanced Points narrow seed 2097593, P4, rest 6, classification no_equal_priority_smoother_replay_witness, current wait fairness_or_mixed_legality; origin decision-196-court-1, fair alternatives 6, starvation-equivalent 6, balance-admissible 6, smoother 0.
+- wait-narrow-POINTS-2097593-P8-295: Balanced Points narrow seed 2097593, P8, rest 5, classification no_equal_priority_smoother_replay_witness, current wait fairness_or_mixed_legality; origin decision-289-court-1, fair alternatives 12, starvation-equivalent 12, balance-admissible 12, smoother 0.
+- wait-narrow-POINTS-2097593-P4-301: Balanced Points narrow seed 2097593, P4, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-narrow-POINTS-2097593-P7-302: Balanced Points narrow seed 2097593, P7, rest 5, classification relationship_entropy_priority_exclusion, current wait relationship_entropy_priority_exclusion; no linked immediately preceding rest-zero replay.
+- wait-narrow-POINTS-2097593-P1-312: Balanced Points narrow seed 2097593, P1, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-narrow-POINTS-2097593-P8-312: Balanced Points narrow seed 2097593, P8, rest 6, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-narrow-POINTS-2097593-P9-317: Balanced Points narrow seed 2097593, P9, rest 6, classification relationship_entropy_priority_exclusion, current wait relationship_entropy_priority_exclusion; no linked immediately preceding rest-zero replay.
+- wait-narrow-POINTS-2097593-P14-317: Balanced Points narrow seed 2097593, P14, rest 6, classification relationship_entropy_priority_exclusion, current wait relationship_entropy_priority_exclusion; no linked immediately preceding rest-zero replay.
+- wait-narrow-POINTS-2097593-P13-317: Balanced Points narrow seed 2097593, P13, rest 6, classification relationship_entropy_priority_exclusion, current wait relationship_entropy_priority_exclusion; no linked immediately preceding rest-zero replay.
+- wait-narrow-POINTS-2097593-P1-322: Balanced Points narrow seed 2097593, P1, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-narrow-POINTS-2097593-P13-394: Balanced Points narrow seed 2097593, P13, rest 5, classification relationship_entropy_priority_exclusion, current wait relationship_entropy_priority_exclusion; no linked immediately preceding rest-zero replay.
+- wait-narrow-POINTS-2097593-P2-395: Balanced Points narrow seed 2097593, P2, rest 5, classification no_equal_priority_smoother_replay_witness, current wait fairness_or_mixed_legality; origin decision-386-court-0, fair alternatives 12, starvation-equivalent 12, balance-admissible 12, smoother 0.
+- wait-narrow-POINTS-2097593-P6-399: Balanced Points narrow seed 2097593, P6, rest 5, classification type_entropy_priority_override, current wait fairness_or_mixed_legality; origin decision-390-court-0, fair alternatives 66, starvation-equivalent 66, balance-admissible 66, smoother 0.
+- wait-narrow-ELO-2097593-P4-45: Balanced Rating/Elo narrow seed 2097593, P4, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-narrow-ELO-2097593-P13-65: Balanced Rating/Elo narrow seed 2097593, P13, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-narrow-ELO-2097593-P1-65: Balanced Rating/Elo narrow seed 2097593, P1, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-narrow-ELO-2097593-P2-74: Balanced Rating/Elo narrow seed 2097593, P2, rest 5, classification type_entropy_priority_override, current wait fairness_or_mixed_legality; origin decision-68-court-0, fair alternatives 66, starvation-equivalent 66, balance-admissible 66, smoother 0.
+- wait-narrow-ELO-2097593-P9-74: Balanced Rating/Elo narrow seed 2097593, P9, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-narrow-ELO-2097593-P7-203: Balanced Rating/Elo narrow seed 2097593, P7, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-narrow-ELO-2097593-P13-203: Balanced Rating/Elo narrow seed 2097593, P13, rest 7, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-narrow-ELO-2097593-P8-203: Balanced Rating/Elo narrow seed 2097593, P8, rest 7, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-narrow-ELO-2097593-P11-204: Balanced Rating/Elo narrow seed 2097593, P11, rest 6, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-narrow-ELO-2097593-P4-204: Balanced Rating/Elo narrow seed 2097593, P4, rest 6, classification no_equal_priority_smoother_replay_witness, current wait fairness_or_mixed_legality; origin decision-196-court-1, fair alternatives 6, starvation-equivalent 6, balance-admissible 6, smoother 0.
+- wait-narrow-ELO-2097593-P8-295: Balanced Rating/Elo narrow seed 2097593, P8, rest 5, classification no_equal_priority_smoother_replay_witness, current wait fairness_or_mixed_legality; origin decision-289-court-1, fair alternatives 12, starvation-equivalent 12, balance-admissible 12, smoother 0.
+- wait-narrow-ELO-2097593-P4-301: Balanced Rating/Elo narrow seed 2097593, P4, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-narrow-ELO-2097593-P7-302: Balanced Rating/Elo narrow seed 2097593, P7, rest 5, classification relationship_entropy_priority_exclusion, current wait relationship_entropy_priority_exclusion; no linked immediately preceding rest-zero replay.
+- wait-narrow-ELO-2097593-P1-312: Balanced Rating/Elo narrow seed 2097593, P1, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-narrow-ELO-2097593-P8-312: Balanced Rating/Elo narrow seed 2097593, P8, rest 6, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-narrow-ELO-2097593-P9-317: Balanced Rating/Elo narrow seed 2097593, P9, rest 6, classification relationship_entropy_priority_exclusion, current wait relationship_entropy_priority_exclusion; no linked immediately preceding rest-zero replay.
+- wait-narrow-ELO-2097593-P14-317: Balanced Rating/Elo narrow seed 2097593, P14, rest 6, classification relationship_entropy_priority_exclusion, current wait relationship_entropy_priority_exclusion; no linked immediately preceding rest-zero replay.
+- wait-narrow-ELO-2097593-P13-317: Balanced Rating/Elo narrow seed 2097593, P13, rest 6, classification relationship_entropy_priority_exclusion, current wait relationship_entropy_priority_exclusion; no linked immediately preceding rest-zero replay.
+- wait-narrow-ELO-2097593-P1-322: Balanced Rating/Elo narrow seed 2097593, P1, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-narrow-ELO-2097593-P13-394: Balanced Rating/Elo narrow seed 2097593, P13, rest 5, classification relationship_entropy_priority_exclusion, current wait relationship_entropy_priority_exclusion; no linked immediately preceding rest-zero replay.
+- wait-narrow-ELO-2097593-P2-395: Balanced Rating/Elo narrow seed 2097593, P2, rest 5, classification no_equal_priority_smoother_replay_witness, current wait fairness_or_mixed_legality; origin decision-386-court-0, fair alternatives 12, starvation-equivalent 12, balance-admissible 12, smoother 0.
+- wait-narrow-ELO-2097593-P6-399: Balanced Rating/Elo narrow seed 2097593, P6, rest 5, classification type_entropy_priority_override, current wait fairness_or_mixed_legality; origin decision-390-court-0, fair alternatives 66, starvation-equivalent 66, balance-admissible 66, smoother 0.
+- wait-wide-POINTS-30011-P3-17: Balanced Points wide seed 30011, P3, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-wide-POINTS-30011-P1-134: Balanced Points wide seed 30011, P1, rest 5, classification no_equal_priority_smoother_replay_witness, current wait fairness_or_mixed_legality; origin decision-128-court-0, fair alternatives 12, starvation-equivalent 12, balance-admissible 11, smoother 0.
+- wait-wide-POINTS-30011-P9-135: Balanced Points wide seed 30011, P9, rest 6, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-wide-POINTS-30011-P5-143: Balanced Points wide seed 30011, P5, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-wide-POINTS-30011-P12-198: Balanced Points wide seed 30011, P12, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-wide-POINTS-30011-P4-198: Balanced Points wide seed 30011, P4, rest 6, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-wide-POINTS-30011-P4-218: Balanced Points wide seed 30011, P4, rest 6, classification relationship_entropy_priority_exclusion, current wait relationship_entropy_priority_exclusion; no linked immediately preceding rest-zero replay.
+- wait-wide-POINTS-30011-P4-275: Balanced Points wide seed 30011, P4, rest 5, classification no_equal_priority_smoother_replay_witness, current wait fairness_or_mixed_legality; origin decision-268-court-1, fair alternatives 6, starvation-equivalent 6, balance-admissible 6, smoother 0.
+- wait-wide-POINTS-30011-P12-279: Balanced Points wide seed 30011, P12, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-wide-POINTS-30011-P8-339: Balanced Points wide seed 30011, P8, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-wide-POINTS-30011-P1-369: Balanced Points wide seed 30011, P1, rest 5, classification type_entropy_priority_override, current wait fairness_or_mixed_legality; origin decision-361-court-0, fair alternatives 66, starvation-equivalent 66, balance-admissible 66, smoother 0.
+- wait-wide-POINTS-30011-P12-384: Balanced Points wide seed 30011, P12, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-wide-ELO-30011-P1-44: Balanced Rating/Elo wide seed 30011, P1, rest 5, classification type_entropy_priority_override, current wait fairness_or_mixed_legality; origin decision-34-court-0, fair alternatives 66, starvation-equivalent 66, balance-admissible 47, smoother 0.
+- wait-wide-ELO-30011-P1-62: Balanced Rating/Elo wide seed 30011, P1, rest 5, classification balance_guardrail, current wait balance_guardrail; no linked immediately preceding rest-zero replay.
+- wait-wide-ELO-30011-P4-134: Balanced Rating/Elo wide seed 30011, P4, rest 5, classification no_equal_priority_smoother_replay_witness, current wait fairness_or_mixed_legality; origin decision-128-court-0, fair alternatives 12, starvation-equivalent 12, balance-admissible 5, smoother 0.
+- wait-wide-ELO-30011-P6-143: Balanced Rating/Elo wide seed 30011, P6, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-wide-ELO-30011-P7-165: Balanced Rating/Elo wide seed 30011, P7, rest 5, classification relationship_entropy_priority_exclusion, current wait relationship_entropy_priority_exclusion; no linked immediately preceding rest-zero replay.
+- wait-wide-ELO-30011-P2-198: Balanced Rating/Elo wide seed 30011, P2, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-wide-ELO-30011-P10-198: Balanced Rating/Elo wide seed 30011, P10, rest 6, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-wide-ELO-30011-P5-218: Balanced Rating/Elo wide seed 30011, P5, rest 6, classification relationship_entropy_priority_exclusion, current wait relationship_entropy_priority_exclusion; no linked immediately preceding rest-zero replay.
+- wait-wide-ELO-30011-P13-275: Balanced Rating/Elo wide seed 30011, P13, rest 5, classification no_equal_priority_smoother_replay_witness, current wait fairness_or_mixed_legality; origin decision-268-court-1, fair alternatives 6, starvation-equivalent 6, balance-admissible 4, smoother 0.
+- wait-wide-ELO-30011-P1-279: Balanced Rating/Elo wide seed 30011, P1, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-wide-ELO-30011-P14-304: Balanced Rating/Elo wide seed 30011, P14, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-wide-ELO-30011-P12-331: Balanced Rating/Elo wide seed 30011, P12, rest 5, classification no_equal_priority_smoother_replay_witness, current wait fairness_or_mixed_legality; origin decision-325-court-0, fair alternatives 12, starvation-equivalent 12, balance-admissible 6, smoother 0.
+- wait-wide-ELO-30011-P1-384: Balanced Rating/Elo wide seed 30011, P1, rest 5, classification type_entropy_priority_override, current wait fairness_or_mixed_legality; origin decision-378-court-0, fair alternatives 60, starvation-equivalent 60, balance-admissible 37, smoother 0.
+- wait-wide-POINTS-65537-P4-42: Balanced Points wide seed 65537, P4, rest 6, classification no_equal_priority_smoother_replay_witness, current wait fairness_or_mixed_legality; origin decision-35-court-0, fair alternatives 12, starvation-equivalent 12, balance-admissible 11, smoother 0.
+- wait-wide-POINTS-65537-P2-42: Balanced Points wide seed 65537, P2, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-wide-POINTS-65537-P3-42: Balanced Points wide seed 65537, P3, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-wide-POINTS-65537-P10-45: Balanced Points wide seed 65537, P10, rest 7, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-wide-POINTS-65537-P2-114: Balanced Points wide seed 65537, P2, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-wide-POINTS-65537-P1-185: Balanced Points wide seed 65537, P1, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-wide-POINTS-65537-P3-229: Balanced Points wide seed 65537, P3, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-wide-POINTS-65537-P7-229: Balanced Points wide seed 65537, P7, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-wide-POINTS-65537-P12-248: Balanced Points wide seed 65537, P12, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-wide-POINTS-65537-P10-258: Balanced Points wide seed 65537, P10, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-wide-POINTS-65537-P14-262: Balanced Points wide seed 65537, P14, rest 5, classification type_entropy_priority_override, current wait fairness_or_mixed_legality; origin decision-255-court-0, fair alternatives 15, starvation-equivalent 15, balance-admissible 15, smoother 0.
+- wait-wide-POINTS-65537-P7-279: Balanced Points wide seed 65537, P7, rest 5, classification type_entropy_priority_override, current wait fairness_or_mixed_legality; origin decision-272-court-0, fair alternatives 56, starvation-equivalent 56, balance-admissible 56, smoother 0.
+- wait-wide-POINTS-65537-P14-280: Balanced Points wide seed 65537, P14, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-wide-POINTS-65537-P2-280: Balanced Points wide seed 65537, P2, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-wide-POINTS-65537-P1-304: Balanced Points wide seed 65537, P1, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-wide-POINTS-65537-P1-366: Balanced Points wide seed 65537, P1, rest 5, classification type_entropy_priority_override, current wait fairness_or_mixed_legality; origin decision-360-court-0, fair alternatives 19, starvation-equivalent 19, balance-admissible 17, smoother 0.
+- wait-wide-POINTS-65537-P14-373: Balanced Points wide seed 65537, P14, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-wide-POINTS-65537-P7-373: Balanced Points wide seed 65537, P7, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-wide-POINTS-65537-P1-376: Balanced Points wide seed 65537, P1, rest 5, classification type_entropy_priority_override, current wait fairness_or_mixed_legality; origin decision-370-court-0, fair alternatives 66, starvation-equivalent 66, balance-admissible 60, smoother 0.
+- wait-wide-POINTS-65537-P8-388: Balanced Points wide seed 65537, P8, rest 5, classification relationship_entropy_priority_exclusion, current wait relationship_entropy_priority_exclusion; no linked immediately preceding rest-zero replay.
+- wait-wide-ELO-65537-P3-42: Balanced Rating/Elo wide seed 65537, P3, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-wide-ELO-65537-P4-42: Balanced Rating/Elo wide seed 65537, P4, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-wide-ELO-65537-P5-42: Balanced Rating/Elo wide seed 65537, P5, rest 6, classification no_equal_priority_smoother_replay_witness, current wait fairness_or_mixed_legality; origin decision-35-court-0, fair alternatives 12, starvation-equivalent 12, balance-admissible 7, smoother 0.
+- wait-wide-ELO-65537-P2-74: Balanced Rating/Elo wide seed 65537, P2, rest 5, classification match_type_entropy_priority_exclusion, current wait match_type_entropy_priority_exclusion; no linked immediately preceding rest-zero replay.
+- wait-wide-ELO-65537-P8-114: Balanced Rating/Elo wide seed 65537, P8, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-wide-ELO-65537-P9-117: Balanced Rating/Elo wide seed 65537, P9, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-wide-ELO-65537-P1-229: Balanced Rating/Elo wide seed 65537, P1, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-wide-ELO-65537-P4-229: Balanced Rating/Elo wide seed 65537, P4, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-wide-ELO-65537-P14-253: Balanced Rating/Elo wide seed 65537, P14, rest 5, classification no_equal_priority_smoother_replay_witness, current wait fairness_or_mixed_legality; origin decision-241-court-0, fair alternatives 12, starvation-equivalent 12, balance-admissible 5, smoother 0.
+- wait-wide-ELO-65537-P7-258: Balanced Rating/Elo wide seed 65537, P7, rest 5, classification type_entropy_priority_override, current wait fairness_or_mixed_legality; origin decision-251-court-0, fair alternatives 66, starvation-equivalent 66, balance-admissible 33, smoother 0.
+- wait-wide-ELO-65537-P5-258: Balanced Rating/Elo wide seed 65537, P5, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-wide-ELO-65537-P2-279: Balanced Rating/Elo wide seed 65537, P2, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-wide-ELO-65537-P3-279: Balanced Rating/Elo wide seed 65537, P3, rest 5, classification type_entropy_priority_override, current wait fairness_or_mixed_legality; origin decision-272-court-0, fair alternatives 66, starvation-equivalent 66, balance-admissible 31, smoother 0.
+- wait-wide-ELO-65537-P7-279: Balanced Rating/Elo wide seed 65537, P7, rest 5, classification type_entropy_priority_override, current wait fairness_or_mixed_legality; origin decision-272-court-0, fair alternatives 66, starvation-equivalent 66, balance-admissible 34, smoother 0.
 - wait-wide-ELO-65537-P5-280: Balanced Rating/Elo wide seed 65537, P5, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
-- wait-wide-ELO-65537-P12-280: Balanced Rating/Elo wide seed 65537, P12, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
-- wait-wide-ELO-65537-P9-373: Balanced Rating/Elo wide seed 65537, P9, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
-- wait-wide-ELO-65537-P6-376: Balanced Rating/Elo wide seed 65537, P6, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
-- wait-wide-POINTS-999983-P3-169: Balanced Points wide seed 999983, P3, rest 6, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
-- wait-wide-POINTS-999983-P11-169: Balanced Points wide seed 999983, P11, rest 6, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
-- wait-wide-POINTS-999983-P13-171: Balanced Points wide seed 999983, P13, rest 6, classification cadence_tie_later_tiebreak, current wait cadence_tie_later_tiebreak; no linked immediately preceding rest-zero replay.
-- wait-wide-POINTS-999983-P1-171: Balanced Points wide seed 999983, P1, rest 6, classification cadence_tie_later_tiebreak, current wait cadence_tie_later_tiebreak; no linked immediately preceding rest-zero replay.
+- wait-wide-ELO-65537-P8-280: Balanced Rating/Elo wide seed 65537, P8, rest 5, classification no_equal_priority_smoother_replay_witness, current wait fairness_or_mixed_legality; origin decision-274-court-0, fair alternatives 12, starvation-equivalent 12, balance-admissible 5, smoother 0.
+- wait-wide-ELO-65537-P13-359: Balanced Rating/Elo wide seed 65537, P13, rest 5, classification no_equal_priority_smoother_replay_witness, current wait fairness_or_mixed_legality; origin decision-353-court-0, fair alternatives 12, starvation-equivalent 12, balance-admissible 5, smoother 0.
+- wait-wide-ELO-65537-P12-366: Balanced Rating/Elo wide seed 65537, P12, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-wide-ELO-65537-P7-373: Balanced Rating/Elo wide seed 65537, P7, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-wide-ELO-65537-P12-376: Balanced Rating/Elo wide seed 65537, P12, rest 5, classification type_entropy_priority_override, current wait fairness_or_mixed_legality; origin decision-370-court-0, fair alternatives 66, starvation-equivalent 66, balance-admissible 37, smoother 0.
+- wait-wide-POINTS-999983-P3-19: Balanced Points wide seed 999983, P3, rest 5, classification relationship_entropy_priority_exclusion, current wait relationship_entropy_priority_exclusion; no linked immediately preceding rest-zero replay.
+- wait-wide-POINTS-999983-P14-32: Balanced Points wide seed 999983, P14, rest 5, classification type_entropy_priority_override, current wait fairness_or_mixed_legality; origin decision-24-court-1, fair alternatives 15, starvation-equivalent 15, balance-admissible 15, smoother 0.
+- wait-wide-POINTS-999983-P11-63: Balanced Points wide seed 999983, P11, rest 5, classification type_entropy_priority_override, current wait fairness_or_mixed_legality; origin decision-56-court-0, fair alternatives 66, starvation-equivalent 66, balance-admissible 53, smoother 0.
+- wait-wide-POINTS-999983-P9-119: Balanced Points wide seed 999983, P9, rest 5, classification type_entropy_priority_override, current wait fairness_or_mixed_legality; origin decision-112-court-1, fair alternatives 60, starvation-equivalent 60, balance-admissible 57, smoother 0.
+- wait-wide-POINTS-999983-P3-137: Balanced Points wide seed 999983, P3, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-wide-POINTS-999983-P10-166: Balanced Points wide seed 999983, P10, rest 5, classification no_equal_priority_smoother_replay_witness, current wait fairness_or_mixed_legality; origin decision-157-court-0, fair alternatives 12, starvation-equivalent 12, balance-admissible 7, smoother 0.
+- wait-wide-POINTS-999983-P1-169: Balanced Points wide seed 999983, P1, rest 6, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-wide-POINTS-999983-P5-169: Balanced Points wide seed 999983, P5, rest 6, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-wide-POINTS-999983-P9-171: Balanced Points wide seed 999983, P9, rest 6, classification relationship_entropy_priority_exclusion, current wait relationship_entropy_priority_exclusion; no linked immediately preceding rest-zero replay.
+- wait-wide-POINTS-999983-P4-171: Balanced Points wide seed 999983, P4, rest 8, classification type_entropy_priority_override, current wait relationship_entropy_priority_exclusion; origin decision-160-court-0, fair alternatives 66, starvation-equivalent 66, balance-admissible 58, smoother 0.
+- wait-wide-POINTS-999983-P5-185: Balanced Points wide seed 999983, P5, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-wide-POINTS-999983-P1-209: Balanced Points wide seed 999983, P1, rest 5, classification type_entropy_priority_override, current wait fairness_or_mixed_legality; origin decision-203-court-1, fair alternatives 60, starvation-equivalent 60, balance-admissible 54, smoother 0.
+- wait-wide-POINTS-999983-P8-248: Balanced Points wide seed 999983, P8, rest 5, classification no_equal_priority_smoother_replay_witness, current wait fairness_or_mixed_legality; origin decision-240-court-0, fair alternatives 6, starvation-equivalent 6, balance-admissible 6, smoother 0.
+- wait-wide-POINTS-999983-P2-249: Balanced Points wide seed 999983, P2, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-wide-POINTS-999983-P6-263: Balanced Points wide seed 999983, P6, rest 5, classification relationship_entropy_priority_exclusion, current wait relationship_entropy_priority_exclusion; no linked immediately preceding rest-zero replay.
+- wait-wide-POINTS-999983-P12-273: Balanced Points wide seed 999983, P12, rest 5, classification relationship_entropy_priority_exclusion, current wait relationship_entropy_priority_exclusion; no linked immediately preceding rest-zero replay.
+- wait-wide-POINTS-999983-P3-319: Balanced Points wide seed 999983, P3, rest 5, classification no_equal_priority_smoother_replay_witness, current wait fairness_or_mixed_legality; origin decision-310-court-1, fair alternatives 6, starvation-equivalent 6, balance-admissible 4, smoother 0.
+- wait-wide-POINTS-999983-P10-345: Balanced Points wide seed 999983, P10, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-wide-POINTS-999983-P11-352: Balanced Points wide seed 999983, P11, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-wide-POINTS-999983-P1-355: Balanced Points wide seed 999983, P1, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-wide-POINTS-999983-P10-373: Balanced Points wide seed 999983, P10, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-wide-ELO-999983-P13-19: Balanced Rating/Elo wide seed 999983, P13, rest 5, classification type_entropy_priority_override, current wait relationship_entropy_priority_exclusion; origin decision-11-court-1, fair alternatives 19, starvation-equivalent 19, balance-admissible 8, smoother 0.
+- wait-wide-ELO-999983-P14-32: Balanced Rating/Elo wide seed 999983, P14, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-wide-ELO-999983-P3-49: Balanced Rating/Elo wide seed 999983, P3, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-wide-ELO-999983-P7-119: Balanced Rating/Elo wide seed 999983, P7, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-wide-ELO-999983-P6-129: Balanced Rating/Elo wide seed 999983, P6, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-wide-ELO-999983-P8-169: Balanced Rating/Elo wide seed 999983, P8, rest 6, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
 - wait-wide-ELO-999983-P12-169: Balanced Rating/Elo wide seed 999983, P12, rest 6, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
-- wait-wide-ELO-999983-P7-169: Balanced Rating/Elo wide seed 999983, P7, rest 6, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
-- wait-wide-ELO-999983-P13-171: Balanced Rating/Elo wide seed 999983, P13, rest 6, classification cadence_tie_later_tiebreak, current wait cadence_tie_later_tiebreak; no linked immediately preceding rest-zero replay.
-- wait-wide-ELO-999983-P5-171: Balanced Rating/Elo wide seed 999983, P5, rest 6, classification cadence_tie_later_tiebreak, current wait cadence_tie_later_tiebreak; no linked immediately preceding rest-zero replay.
+- wait-wide-ELO-999983-P1-171: Balanced Rating/Elo wide seed 999983, P1, rest 6, classification relationship_entropy_priority_exclusion, current wait relationship_entropy_priority_exclusion; no linked immediately preceding rest-zero replay.
+- wait-wide-ELO-999983-P11-171: Balanced Rating/Elo wide seed 999983, P11, rest 8, classification type_entropy_priority_override, current wait match_type_entropy_priority_exclusion; origin decision-160-court-0, fair alternatives 66, starvation-equivalent 66, balance-admissible 31, smoother 0.
+- wait-wide-ELO-999983-P2-185: Balanced Rating/Elo wide seed 999983, P2, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-wide-ELO-999983-P8-209: Balanced Rating/Elo wide seed 999983, P8, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-wide-ELO-999983-P6-248: Balanced Rating/Elo wide seed 999983, P6, rest 5, classification no_equal_priority_smoother_replay_witness, current wait fairness_or_mixed_legality; origin decision-240-court-0, fair alternatives 6, starvation-equivalent 6, balance-admissible 2, smoother 0.
+- wait-wide-ELO-999983-P13-248: Balanced Rating/Elo wide seed 999983, P13, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-wide-ELO-999983-P12-249: Balanced Rating/Elo wide seed 999983, P12, rest 6, classification relationship_entropy_priority_exclusion, current wait relationship_entropy_priority_exclusion; no linked immediately preceding rest-zero replay.
+- wait-wide-ELO-999983-P14-273: Balanced Rating/Elo wide seed 999983, P14, rest 5, classification type_entropy_priority_override, current wait fairness_or_mixed_legality; origin decision-266-court-1, fair alternatives 66, starvation-equivalent 66, balance-admissible 40, smoother 0.
+- wait-wide-ELO-999983-P4-286: Balanced Rating/Elo wide seed 999983, P4, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-wide-ELO-999983-P4-297: Balanced Rating/Elo wide seed 999983, P4, rest 5, classification type_entropy_priority_override, current wait fairness_or_mixed_legality; origin decision-291-court-1, fair alternatives 15, starvation-equivalent 15, balance-admissible 9, smoother 0.
+- wait-wide-ELO-999983-P13-319: Balanced Rating/Elo wide seed 999983, P13, rest 5, classification no_equal_priority_smoother_replay_witness, current wait fairness_or_mixed_legality; origin decision-310-court-1, fair alternatives 6, starvation-equivalent 6, balance-admissible 4, smoother 0.
+- wait-wide-ELO-999983-P3-352: Balanced Rating/Elo wide seed 999983, P3, rest 5, classification no_equal_priority_smoother_replay_witness, current wait fairness_or_mixed_legality; origin decision-345-court-1, fair alternatives 6, starvation-equivalent 6, balance-admissible 2, smoother 0.
+- wait-wide-ELO-999983-P8-355: Balanced Rating/Elo wide seed 999983, P8, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-wide-ELO-999983-P6-373: Balanced Rating/Elo wide seed 999983, P6, rest 6, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-wide-ELO-999983-P1-381: Balanced Rating/Elo wide seed 999983, P1, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
+- wait-wide-ELO-999983-P13-395: Balanced Rating/Elo wide seed 999983, P13, rest 5, classification fairness_or_mixed_legality, current wait fairness_or_mixed_legality; no linked immediately preceding rest-zero replay.
 
 ### Censored at the 400-match checkpoint
-None.
+- Balanced Rating/Elo wide seed 999983: P3 still available at rest 5, origin decision-395-court-0.
 
 ### Search and timing scope
 
-- Social narrow seed 1: ordinary optimizer 10627.46 ms; counterfactual wrapper 609.15 ms (two searches); search-limit runs 0; fairness/starvation/balance certification failures 0/0/0; static-feasibility cache miss 0.00 ms; whole harness 14664 ms.
-- Balanced Points narrow seed 1: ordinary optimizer 7883.66 ms; counterfactual wrapper 435.57 ms (two searches); search-limit runs 0; fairness/starvation/balance certification failures 0/0/0; static-feasibility cache miss 1738.83 ms; whole harness 13153 ms.
-- Balanced Rating/Elo narrow seed 1: ordinary optimizer 7373.20 ms; counterfactual wrapper 438.56 ms (two searches); search-limit runs 0; fairness/starvation/balance certification failures 0/0/0; static-feasibility cache miss 1675.74 ms; whole harness 12514 ms.
-- Social narrow seed 4729: ordinary optimizer 8801.49 ms; counterfactual wrapper 1379.38 ms (two searches); search-limit runs 0; fairness/starvation/balance certification failures 0/0/0; static-feasibility cache miss 0.00 ms; whole harness 12794 ms.
-- Balanced Points narrow seed 4729: ordinary optimizer 6830.37 ms; counterfactual wrapper 940.42 ms (two searches); search-limit runs 0; fairness/starvation/balance certification failures 0/0/0; static-feasibility cache miss 0.00 ms; whole harness 10393 ms.
-- Balanced Rating/Elo narrow seed 4729: ordinary optimizer 6571.53 ms; counterfactual wrapper 980.65 ms (two searches); search-limit runs 0; fairness/starvation/balance certification failures 0/0/0; static-feasibility cache miss 0.00 ms; whole harness 10119 ms.
-- Social narrow seed 104729: ordinary optimizer 8817.60 ms; counterfactual wrapper 497.98 ms (two searches); search-limit runs 0; fairness/starvation/balance certification failures 0/0/0; static-feasibility cache miss 0.00 ms; whole harness 12149 ms.
-- Balanced Points narrow seed 104729: ordinary optimizer 7016.54 ms; counterfactual wrapper 375.72 ms (two searches); search-limit runs 0; fairness/starvation/balance certification failures 0/0/0; static-feasibility cache miss 0.00 ms; whole harness 10231 ms.
-- Balanced Rating/Elo narrow seed 104729: ordinary optimizer 7592.66 ms; counterfactual wrapper 343.61 ms (two searches); search-limit runs 0; fairness/starvation/balance certification failures 0/0/0; static-feasibility cache miss 0.00 ms; whole harness 10809 ms.
-- Social narrow seed 130363: ordinary optimizer 9492.07 ms; counterfactual wrapper 322.60 ms (two searches); search-limit runs 0; fairness/starvation/balance certification failures 0/0/0; static-feasibility cache miss 0.00 ms; whole harness 12790 ms.
-- Balanced Points narrow seed 130363: ordinary optimizer 7892.14 ms; counterfactual wrapper 257.67 ms (two searches); search-limit runs 0; fairness/starvation/balance certification failures 0/0/0; static-feasibility cache miss 0.00 ms; whole harness 11345 ms.
-- Balanced Rating/Elo narrow seed 130363: ordinary optimizer 7233.98 ms; counterfactual wrapper 245.88 ms (two searches); search-limit runs 0; fairness/starvation/balance certification failures 0/0/0; static-feasibility cache miss 0.00 ms; whole harness 10392 ms.
-- Social narrow seed 2097593: ordinary optimizer 8825.17 ms; counterfactual wrapper 900.80 ms (two searches); search-limit runs 0; fairness/starvation/balance certification failures 0/0/0; static-feasibility cache miss 0.00 ms; whole harness 12508 ms.
-- Balanced Points narrow seed 2097593: ordinary optimizer 7322.79 ms; counterfactual wrapper 681.53 ms (two searches); search-limit runs 0; fairness/starvation/balance certification failures 0/0/0; static-feasibility cache miss 0.00 ms; whole harness 10945 ms.
-- Balanced Rating/Elo narrow seed 2097593: ordinary optimizer 6643.27 ms; counterfactual wrapper 626.74 ms (two searches); search-limit runs 0; fairness/starvation/balance certification failures 0/0/0; static-feasibility cache miss 0.00 ms; whole harness 10030 ms.
-- Balanced Points wide seed 30011: ordinary optimizer 6043.92 ms; counterfactual wrapper 280.20 ms (two searches); search-limit runs 0; fairness/starvation/balance certification failures 0/0/0; static-feasibility cache miss 1318.90 ms; whole harness 10213 ms.
-- Balanced Rating/Elo wide seed 30011: ordinary optimizer 4836.69 ms; counterfactual wrapper 362.62 ms (two searches); search-limit runs 0; fairness/starvation/balance certification failures 0/0/0; static-feasibility cache miss 1112.03 ms; whole harness 8659 ms.
-- Balanced Points wide seed 65537: ordinary optimizer 5481.64 ms; counterfactual wrapper 531.53 ms (two searches); search-limit runs 0; fairness/starvation/balance certification failures 0/0/0; static-feasibility cache miss 0.00 ms; whole harness 8336 ms.
-- Balanced Rating/Elo wide seed 65537: ordinary optimizer 4518.23 ms; counterfactual wrapper 682.29 ms (two searches); search-limit runs 0; fairness/starvation/balance certification failures 0/0/0; static-feasibility cache miss 0.00 ms; whole harness 7327 ms.
-- Balanced Points wide seed 999983: ordinary optimizer 5698.04 ms; counterfactual wrapper 548.32 ms (two searches); search-limit runs 0; fairness/starvation/balance certification failures 0/0/0; static-feasibility cache miss 0.00 ms; whole harness 8782 ms.
-- Balanced Rating/Elo wide seed 999983: ordinary optimizer 4534.37 ms; counterfactual wrapper 663.45 ms (two searches); search-limit runs 0; fairness/starvation/balance certification failures 0/0/0; static-feasibility cache miss 0.00 ms; whole harness 7403 ms.
+- Social narrow seed 1: ordinary optimizer 7497.47 ms; counterfactual wrapper 5273.98 ms (two searches); search-limit runs 0; fairness/starvation/balance certification failures 0/0/0; static-feasibility cache miss 0.00 ms; whole harness 17165 ms.
+- Balanced Points narrow seed 1: ordinary optimizer 5655.90 ms; counterfactual wrapper 4049.04 ms (two searches); search-limit runs 0; fairness/starvation/balance certification failures 0/0/0; static-feasibility cache miss 1442.09 ms; whole harness 15121 ms.
+- Balanced Rating/Elo narrow seed 1: ordinary optimizer 6071.59 ms; counterfactual wrapper 4181.30 ms (two searches); search-limit runs 0; fairness/starvation/balance certification failures 0/0/0; static-feasibility cache miss 1524.78 ms; whole harness 16068 ms.
+- Social narrow seed 4729: ordinary optimizer 7798.38 ms; counterfactual wrapper 5765.26 ms (two searches); search-limit runs 0; fairness/starvation/balance certification failures 0/0/0; static-feasibility cache miss 0.00 ms; whole harness 18016 ms.
+- Balanced Points narrow seed 4729: ordinary optimizer 6022.77 ms; counterfactual wrapper 4018.93 ms (two searches); search-limit runs 0; fairness/starvation/balance certification failures 0/0/0; static-feasibility cache miss 0.00 ms; whole harness 13935 ms.
+- Balanced Rating/Elo narrow seed 4729: ordinary optimizer 5298.69 ms; counterfactual wrapper 3512.67 ms (two searches); search-limit runs 0; fairness/starvation/balance certification failures 0/0/0; static-feasibility cache miss 0.00 ms; whole harness 12197 ms.
+- Social narrow seed 104729: ordinary optimizer 6266.02 ms; counterfactual wrapper 4524.57 ms (two searches); search-limit runs 0; fairness/starvation/balance certification failures 0/0/0; static-feasibility cache miss 0.00 ms; whole harness 14615 ms.
+- Balanced Points narrow seed 104729: ordinary optimizer 5382.97 ms; counterfactual wrapper 3420.16 ms (two searches); search-limit runs 0; fairness/starvation/balance certification failures 0/0/0; static-feasibility cache miss 0.00 ms; whole harness 12531 ms.
+- Balanced Rating/Elo narrow seed 104729: ordinary optimizer 5485.86 ms; counterfactual wrapper 3744.68 ms (two searches); search-limit runs 0; fairness/starvation/balance certification failures 0/0/0; static-feasibility cache miss 0.00 ms; whole harness 13317 ms.
+- Social narrow seed 130363: ordinary optimizer 6353.33 ms; counterfactual wrapper 4021.60 ms (two searches); search-limit runs 0; fairness/starvation/balance certification failures 0/0/0; static-feasibility cache miss 0.00 ms; whole harness 14041 ms.
+- Balanced Points narrow seed 130363: ordinary optimizer 5575.53 ms; counterfactual wrapper 3288.76 ms (two searches); search-limit runs 0; fairness/starvation/balance certification failures 0/0/0; static-feasibility cache miss 0.00 ms; whole harness 12628 ms.
+- Balanced Rating/Elo narrow seed 130363: ordinary optimizer 5490.53 ms; counterfactual wrapper 3236.13 ms (two searches); search-limit runs 0; fairness/starvation/balance certification failures 0/0/0; static-feasibility cache miss 0.00 ms; whole harness 12456 ms.
+- Social narrow seed 2097593: ordinary optimizer 6850.80 ms; counterfactual wrapper 4895.98 ms (two searches); search-limit runs 0; fairness/starvation/balance certification failures 0/0/0; static-feasibility cache miss 0.00 ms; whole harness 15699 ms.
+- Balanced Points narrow seed 2097593: ordinary optimizer 5533.86 ms; counterfactual wrapper 3618.51 ms (two searches); search-limit runs 0; fairness/starvation/balance certification failures 0/0/0; static-feasibility cache miss 0.00 ms; whole harness 12947 ms.
+- Balanced Rating/Elo narrow seed 2097593: ordinary optimizer 5371.03 ms; counterfactual wrapper 3406.57 ms (two searches); search-limit runs 0; fairness/starvation/balance certification failures 0/0/0; static-feasibility cache miss 0.00 ms; whole harness 12436 ms.
+- Balanced Points wide seed 30011: ordinary optimizer 4070.31 ms; counterfactual wrapper 3379.46 ms (two searches); search-limit runs 0; fairness/starvation/balance certification failures 0/0/0; static-feasibility cache miss 1190.78 ms; whole harness 11768 ms.
+- Balanced Rating/Elo wide seed 30011: ordinary optimizer 3109.72 ms; counterfactual wrapper 2584.51 ms (two searches); search-limit runs 0; fairness/starvation/balance certification failures 0/0/0; static-feasibility cache miss 1007.11 ms; whole harness 9372 ms.
+- Balanced Points wide seed 65537: ordinary optimizer 3806.82 ms; counterfactual wrapper 3092.45 ms (two searches); search-limit runs 0; fairness/starvation/balance certification failures 0/0/0; static-feasibility cache miss 0.00 ms; whole harness 9904 ms.
+- Balanced Rating/Elo wide seed 65537: ordinary optimizer 3160.77 ms; counterfactual wrapper 2584.17 ms (two searches); search-limit runs 0; fairness/starvation/balance certification failures 0/0/0; static-feasibility cache miss 0.00 ms; whole harness 8410 ms.
+- Balanced Points wide seed 999983: ordinary optimizer 3927.03 ms; counterfactual wrapper 3025.54 ms (two searches); search-limit runs 0; fairness/starvation/balance certification failures 0/0/0; static-feasibility cache miss 0.00 ms; whole harness 10137 ms.
+- Balanced Rating/Elo wide seed 999983: ordinary optimizer 3220.48 ms; counterfactual wrapper 2529.46 ms (two searches); search-limit runs 0; fairness/starvation/balance certification failures 0/0/0; static-feasibility cache miss 0.00 ms; whole harness 8468 ms.
 
 ## Compact human-readable checkpoint summary
 
-| Profile | Format | Completed | VCS | Partner / opponent / courtmate | MIXED / OWN_SIDE | Entropy people / type / all | B2B | Max / mean / p95 assignment rest | Starvation changed / overdue / all completed |
-|---|---|---:|---:|---|---|---|---:|---|---|
-| narrow | Social | 20 | 56.3% | 37.1% / 58.9% / 73.0% | 100.0% / 11.4% | 71.8% / 7.6% / 55.8% | 11.8% | 3.00 / 1.48 / 3.00 | 0 / 2 / 95 (0.0% / 0.0%; certified 0.0%; unknown 0) |
-| narrow | Social | 400 | 84.9% | 54.7% / 100.0% / 100.0% | 100.0% / 11.4% | 91.4% / 0.8% / 68.7% | 12.6% | 5.40 / 1.50 / 3.00 | 0 / 80 / 1995 (0.0% / 0.0%; certified 0.0%; unknown 0) |
-| narrow | Balanced Points | 20 | 56.0% | 37.6% / 58.0% / 72.3% | 100.0% / 11.4% | 71.8% / 7.6% / 55.8% | 11.8% | 3.00 / 1.48 / 3.00 | 0 / 2 / 95 (0.0% / 0.0%; certified 0.0%; unknown 0) |
-| narrow | Balanced Points | 400 | 84.9% | 54.7% / 100.0% / 100.0% | 100.0% / 11.4% | 91.4% / 0.8% / 68.7% | 12.6% | 5.40 / 1.50 / 3.00 | 0 / 80 / 1995 (0.0% / 0.0%; certified 0.0%; unknown 0) |
-| narrow | Balanced Rating/Elo | 20 | 56.6% | 37.4% / 59.8% / 72.7% | 100.0% / 0.0% | 72.4% / 0.0% / 54.3% | 11.5% | 3.00 / 1.48 / 3.00 | 0 / 2 / 95 (0.0% / 0.0%; certified 0.0%; unknown 0) |
-| narrow | Balanced Rating/Elo | 400 | 84.6% | 53.8% / 100.0% / 100.0% | 100.0% / 0.0% | 91.3% / 0.0% / 68.5% | 12.6% | 5.40 / 1.50 / 3.00 | 0 / 80 / 1995 (0.0% / 0.0%; certified 0.0%; unknown 0) |
-| wide | Balanced Points | 20 | 58.5% | 35.2% / 61.5% / 78.8% | 100.0% / 38.1% | 72.6% / 25.4% / 60.8% | 10.1% | 3.00 / 1.42 / 2.67 | 0 / 0 / 57 (n/a / 0.0%; certified n/a; unknown 0) |
-| wide | Balanced Points | 400 | 85.6% | 56.8% / 100.0% / 100.0% | 100.0% / 38.1% | 90.2% / 2.8% / 68.4% | 13.5% | 5.00 / 1.50 / 3.00 | 0 / 50 / 1197 (0.0% / 0.0%; certified 0.0%; unknown 0) |
-| wide | Balanced Rating/Elo | 20 | 54.1% | 31.1% / 58.6% / 72.5% | 100.0% / 38.1% | 69.5% / 25.4% / 58.5% | 10.6% | 3.00 / 1.41 / 2.67 | 0 / 0 / 57 (n/a / 0.0%; certified n/a; unknown 0) |
-| wide | Balanced Rating/Elo | 400 | 84.1% | 54.6% / 97.8% / 100.0% | 100.0% / 38.1% | 88.7% / 2.8% / 67.2% | 14.0% | 5.00 / 1.50 / 3.00 | 4 / 71 / 1197 (5.6% / 0.3%; certified 5.6%; unknown 0) |
-
-## Supplemental seed statistics and causal evidence
-
-Population standard deviations below are computed across deterministic seeds.
-
-| Profile | Format | Matches | VCS mean ± SD | Median | Min–max | Partner / opponent / courtmate mean | Relationship / match-type / normalized entropy |
-|---|---|---:|---:|---:|---:|---|---|
-| narrow | Social | 20 | 56.3% ± 3.1% | 57.9% | 50.5%–59.0% | 37.1% / 58.9% / 73.0% | 71.8% / 7.6% / 55.8% |
-| narrow | Social | 400 | 84.9% ± 0.6% | 84.6% | 84.6%–86.1% | 54.7% / 100.0% / 100.0% | 91.4% / 0.8% / 68.7% |
-| narrow | Balanced Points | 20 | 56.0% ± 3.3% | 56.4% | 49.8%–59.0% | 37.6% / 58.0% / 72.3% | 71.8% / 7.6% / 55.8% |
-| narrow | Balanced Points | 400 | 84.9% ± 0.6% | 84.6% | 84.6%–86.1% | 54.7% / 100.0% / 100.0% | 91.4% / 0.8% / 68.7% |
-| narrow | Balanced Rating/Elo | 20 | 56.6% ± 3.2% | 58.6% | 50.5%–59.0% | 37.4% / 59.8% / 72.7% | 72.4% / 0.0% / 54.3% |
-| narrow | Balanced Rating/Elo | 400 | 84.6% ± 0.0% | 84.6% | 84.6%–84.6% | 53.8% / 100.0% / 100.0% | 91.3% / 0.0% / 68.5% |
-| wide | Balanced Points | 20 | 58.5% ± 1.2% | 59.0% | 56.8%–59.7% | 35.2% / 61.5% / 78.8% | 72.6% / 25.4% / 60.8% |
-| wide | Balanced Points | 400 | 85.6% ± 0.7% | 86.1% | 84.6%–86.1% | 56.8% / 100.0% / 100.0% | 90.2% / 2.8% / 68.4% |
-| wide | Balanced Rating/Elo | 20 | 54.1% ± 1.1% | 53.5% | 53.1%–55.7% | 31.1% / 58.6% / 72.5% | 69.5% / 25.4% / 58.5% |
-| wide | Balanced Rating/Elo | 400 | 84.1% ± 0.7% | 84.6% | 83.2%–84.6% | 54.6% / 97.8% / 100.0% | 88.7% / 2.8% / 67.2% |
-
-### Long waits by cohort
-
-| Profile | Format | Completed ≥5-rest episodes | No fair-class inclusion | Equal-cadence inclusion alternative | Strictly smoother | Cadence-worse | Prior immediate replay linked |
-|---|---|---:|---:|---:|---:|---:|---:|
-| narrow | Social | 26 | 24 | 2 | 0 | 0 | 0 |
-| narrow | Balanced Points | 26 | 24 | 2 | 0 | 0 | 0 |
-| narrow | Balanced Rating/Elo | 26 | 24 | 2 | 0 | 0 | 0 |
-| wide | Balanced Points | 8 | 6 | 2 | 0 | 0 | 0 |
-| wide | Balanced Rating/Elo | 11 | 9 | 2 | 0 | 0 | 0 |
-
-These are completed assignments sampled at selection. The 24/26 narrow cases per format had no candidate containing the waiting player in the fair rotation class during observed deferrals. The two remaining cases had an equal-cadence candidate with the same stronger fairness, starvation, and balance classes; the oracle records both sets and vectors but does not capture entropy values, so the later tie-break is not attributed. None of the current ≥5-rest episodes linked to an immediately preceding rest-zero replay.
-
-### Wide-profile balance-guardrail proof
-
-The exhaustive static Mixed-layout enumeration finds these structurally feasible relationships excluded by the guardrail under the fixed wide skill profile:
-
-**Balanced Points:** allowed max gap 1.5.
-- P1–P2 partners: best gap among legal Mixed layouts 2, above the 1.5 window.
-- P13–P14 partners: best gap among legal Mixed layouts 2, above the 1.5 window.
-- P6–P7 partners: best gap among legal Mixed layouts 2, above the 1.5 window.
-- P8–P9 partners: best gap among legal Mixed layouts 2, above the 1.5 window.
-
-**Balanced Rating/Elo:** allowed max gap 30.
-- P1–P2 partners: best gap among legal Mixed layouts 80, above the 30 window.
-- P1–P3 partners: best gap among legal Mixed layouts 40, above the 30 window.
-- P1–P8 partners: best gap among legal Mixed layouts 40, above the 30 window.
-- P10–P8 partners: best gap among legal Mixed layouts 40, above the 30 window.
-- P12–P14 partners: best gap among legal Mixed layouts 40, above the 30 window.
-- P13–P14 partners: best gap among legal Mixed layouts 80, above the 30 window.
-- P14–P7 partners: best gap among legal Mixed layouts 40, above the 30 window.
-- P5–P7 partners: best gap among legal Mixed layouts 40, above the 30 window.
-- P6–P7 partners: best gap among legal Mixed layouts 80, above the 30 window.
-- P8–P9 partners: best gap among legal Mixed layouts 80, above the 30 window.
-- P1–P14 opponents: best gap among legal Mixed layouts 40, above the 30 window.
-- P7–P8 opponents: best gap among legal Mixed layouts 40, above the 30 window.
-
-For these fixed strengths, every legal one-court Mixed partition exposing a listed relationship is worse than the best legal same-quartet layout by more than the guardrail window: at least 2 Points (>1.5) for Balanced Points and at least 40 rating units (>30) for Balanced Rating/Elo. The separate static equal-count two-court audit excludes these same pairs in the opening batch; the same-quartet dominance proof covers subsequent one-court refills. Together this supports guardrail inadmissibility under the fixed 14-player wide strength mapping, standard Mixed legality, full-roster equal-count class, and no added partition-specific constraints. It does not extend to changing skills, other availability/history classes, or later multi-court refills.
-
-### Before/after optimizer timing
-
-| Engine / cohort | Production decisions | Direct optimizer time | Paired diagnostics | Total measured time per production decision | Search limit / certification failures |
-|---|---:|---:|---:|---:|---:|
-| Baseline de0254f8, narrow 5×3 formats | 6000 | 6000 calls / 115.6 s | none available | 19.26 ms | 0 / 0 |
-| Current strict cadence, same cohort | 6000 | 5760 calls / 118.9 s | 240 wrappers / 9.0 s | 21.33 ms | 0 / 0 |
-
-Both rows use the same five narrow seeds × three formats × 400 completed matches. The current no-starvation counterfactual wrapper adds a second search on overdue decisions and includes both runs in its time; the current per-decision total is therefore diagnostic-inclusive and is not production-only latency. Baseline intervention counts remain unknown because that engine has no counterfactual API.
-
-```json
-{
-  "sourceRevision": "HEAD de0254f8 + working-tree changes",
-  "baselineRevision": "HEAD de0254f8 (original engine; benchmark coverage instrumentation added)",
-  "coverage": [
-    {
-      "profile": "narrow",
-      "format": "Social",
-      "completed": "20",
-      "n": 5,
-      "relationshipCoverage": {
-        "mean": 0.5633699633699634,
-        "median": 0.5787545787545788,
-        "min": 0.5054945054945056,
-        "max": 0.5897435897435896,
-        "populationStdDev": 0.03050646566103588
-      },
-      "partnerCoverage": {
-        "mean": 0.3714285714285715,
-        "median": 0.3736263736263737,
-        "min": 0.3406593406593406,
-        "max": 0.40659340659340665,
-        "populationStdDev": 0.023466106048420497
-      },
-      "opponentCoverage": {
-        "mean": 0.5890109890109889,
-        "median": 0.6043956043956042,
-        "min": 0.5384615384615385,
-        "max": 0.6483516483516484,
-        "populationStdDev": 0.0402863797358755
-      },
-      "courtmateCoverage": {
-        "mean": 0.7296703296703296,
-        "median": 0.7472527472527474,
-        "min": 0.6373626373626372,
-        "max": 0.7692307692307692,
-        "populationStdDev": 0.04744402888994051
-      },
-      "relationshipEntropy": {
-        "mean": 0.7179663114805165,
-        "median": 0.7250607562445316,
-        "min": 0.6760686167992735,
-        "max": 0.7469164309782367,
-        "populationStdDev": 0.02395824677250281
-      },
-      "matchTypeEntropy": {
-        "mean": 0.07634272456664072,
-        "median": 0,
-        "min": 0,
-        "max": 0.3817136228332036,
-        "populationStdDev": 0.15268544913328147
-      },
-      "normalizedEntropy": {
-        "mean": 0.5575604147520475,
-        "median": 0.548336568773344,
-        "min": 0.5070514625994551,
-        "max": 0.6284311519703624,
-        "populationStdDev": 0.03963651511628677
-      },
-      "backToBackRate": {
-        "mean": 0.11818181818181817,
-        "median": 0.12121212121212122,
-        "min": 0.06060606060606061,
-        "max": 0.18181818181818182,
-        "populationStdDev": 0.0411050302007592
-      },
-      "assignmentRestMax": {
-        "mean": 3,
-        "median": 3,
-        "min": 2,
-        "max": 4,
-        "populationStdDev": 0.6324555320336759
-      },
-      "assignmentRestMean": {
-        "mean": 1.4848484848484849,
-        "median": 1.4848484848484849,
-        "min": 1.4848484848484849,
-        "max": 1.4848484848484849,
-        "populationStdDev": 0
-      },
-      "assignmentRestP95": {
-        "mean": 3,
-        "median": 3,
-        "min": 2,
-        "max": 4,
-        "populationStdDev": 0.6324555320336759
-      }
-    },
-    {
-      "profile": "narrow",
-      "format": "Social",
-      "completed": "400",
-      "n": 5,
-      "relationshipCoverage": {
-        "mean": 0.8490842490842491,
-        "median": 0.8461538461538461,
-        "min": 0.8461538461538461,
-        "max": 0.860805860805861,
-        "populationStdDev": 0.005860805860805928
-      },
-      "partnerCoverage": {
-        "mean": 0.5472527472527472,
-        "median": 0.5384615384615384,
-        "min": 0.5384615384615384,
-        "max": 0.5824175824175822,
-        "populationStdDev": 0.017582417582417523
-      },
-      "opponentCoverage": {
-        "mean": 1,
-        "median": 1,
-        "min": 1,
-        "max": 1,
-        "populationStdDev": 0
-      },
-      "courtmateCoverage": {
-        "mean": 1,
-        "median": 1,
-        "min": 1,
-        "max": 1,
-        "populationStdDev": 0
-      },
-      "relationshipEntropy": {
-        "mean": 0.913659070894749,
-        "median": 0.9136448414122343,
-        "min": 0.9127222725970282,
-        "max": 0.9148114596195679,
-        "populationStdDev": 0.0006710732190773926
-      },
-      "matchTypeEntropy": {
-        "mean": 0.0082602088390994,
-        "median": 9.15264715375691e-16,
-        "min": 9.15264715375691e-16,
-        "max": 0.04130104419549334,
-        "populationStdDev": 0.01652041767819697
-      },
-      "normalizedEntropy": {
-        "mean": 0.6873093553808364,
-        "median": 0.6852336310591758,
-        "min": 0.6845417044477712,
-        "max": 0.696433855763549,
-        "populationStdDev": 0.0045695396570340175
-      },
-      "backToBackRate": {
-        "mean": 0.12648171500630517,
-        "median": 0.1235813366960908,
-        "min": 0.10592686002522068,
-        "max": 0.16204287515762925,
-        "populationStdDev": 0.019992858696198143
-      },
-      "assignmentRestMax": {
-        "mean": 5.4,
-        "median": 6,
-        "min": 4,
-        "max": 6,
-        "populationStdDev": 0.8
-      },
-      "assignmentRestMean": {
-        "mean": 1.4976040353089535,
-        "median": 1.4981084489281211,
-        "min": 1.4955863808322825,
-        "max": 1.4993694829760404,
-        "populationStdDev": 0.0012860074435291117
-      },
-      "assignmentRestP95": {
-        "mean": 3,
-        "median": 3,
-        "min": 3,
-        "max": 3,
-        "populationStdDev": 0
-      }
-    },
-    {
-      "profile": "narrow",
-      "format": "Balanced Points",
-      "completed": "20",
-      "n": 5,
-      "relationshipCoverage": {
-        "mean": 0.5597069597069597,
-        "median": 0.5641025641025641,
-        "min": 0.4981684981684982,
-        "max": 0.5897435897435896,
-        "populationStdDev": 0.0328773709484496
-      },
-      "partnerCoverage": {
-        "mean": 0.3758241758241759,
-        "median": 0.38461538461538464,
-        "min": 0.3296703296703297,
-        "max": 0.40659340659340665,
-        "populationStdDev": 0.025441399786352143
-      },
-      "opponentCoverage": {
-        "mean": 0.5802197802197802,
-        "median": 0.6043956043956042,
-        "min": 0.5274725274725276,
-        "max": 0.6153846153846153,
-        "populationStdDev": 0.0350272031879323
-      },
-      "courtmateCoverage": {
-        "mean": 0.7230769230769231,
-        "median": 0.7472527472527474,
-        "min": 0.6373626373626374,
-        "max": 0.7582417582417583,
-        "populationStdDev": 0.045786080562636625
-      },
-      "relationshipEntropy": {
-        "mean": 0.7183289109231905,
-        "median": 0.7236944841076157,
-        "min": 0.6695011755031072,
-        "max": 0.7469164309782367,
-        "populationStdDev": 0.027555701876815938
-      },
-      "matchTypeEntropy": {
-        "mean": 0.07634272456664072,
-        "median": 0,
-        "min": 0,
-        "max": 0.3817136228332036,
-        "populationStdDev": 0.15268544913328147
-      },
-      "normalizedEntropy": {
-        "mean": 0.557832364334053,
-        "median": 0.5556466017581829,
-        "min": 0.5021258816273304,
-        "max": 0.6284311519703624,
-        "populationStdDev": 0.040803365647290625
-      },
-      "backToBackRate": {
-        "mean": 0.11818181818181817,
-        "median": 0.12121212121212122,
-        "min": 0.06060606060606061,
-        "max": 0.18181818181818182,
-        "populationStdDev": 0.0411050302007592
-      },
-      "assignmentRestMax": {
-        "mean": 3,
-        "median": 3,
-        "min": 2,
-        "max": 4,
-        "populationStdDev": 0.6324555320336759
-      },
-      "assignmentRestMean": {
-        "mean": 1.4848484848484849,
-        "median": 1.4848484848484849,
-        "min": 1.4848484848484849,
-        "max": 1.4848484848484849,
-        "populationStdDev": 0
-      },
-      "assignmentRestP95": {
-        "mean": 3,
-        "median": 3,
-        "min": 2,
-        "max": 4,
-        "populationStdDev": 0.6324555320336759
-      }
-    },
-    {
-      "profile": "narrow",
-      "format": "Balanced Points",
-      "completed": "400",
-      "n": 5,
-      "relationshipCoverage": {
-        "mean": 0.8490842490842491,
-        "median": 0.8461538461538461,
-        "min": 0.8461538461538461,
-        "max": 0.860805860805861,
-        "populationStdDev": 0.005860805860805928
-      },
-      "partnerCoverage": {
-        "mean": 0.5472527472527472,
-        "median": 0.5384615384615384,
-        "min": 0.5384615384615384,
-        "max": 0.5824175824175822,
-        "populationStdDev": 0.017582417582417523
-      },
-      "opponentCoverage": {
-        "mean": 1,
-        "median": 1,
-        "min": 1,
-        "max": 1,
-        "populationStdDev": 0
-      },
-      "courtmateCoverage": {
-        "mean": 1,
-        "median": 1,
-        "min": 1,
-        "max": 1,
-        "populationStdDev": 0
-      },
-      "relationshipEntropy": {
-        "mean": 0.9137747553756561,
-        "median": 0.9135928620268453,
-        "min": 0.9132016254360563,
-        "max": 0.9148920221388421,
-        "populationStdDev": 0.0005809670921474231
-      },
-      "matchTypeEntropy": {
-        "mean": 0.008267647572147886,
-        "median": 9.15264715375691e-16,
-        "min": 9.15264715375691e-16,
-        "max": 0.04133823786073577,
-        "populationStdDev": 0.01653529514429394
-      },
-      "normalizedEntropy": {
-        "mean": 0.6873979784247789,
-        "median": 0.6851946465201341,
-        "min": 0.6849012190770422,
-        "max": 0.6965035760693153,
-        "populationStdDev": 0.004554370822496403
-      },
-      "backToBackRate": {
-        "mean": 0.12648171500630517,
-        "median": 0.1235813366960908,
-        "min": 0.10592686002522068,
-        "max": 0.16204287515762925,
-        "populationStdDev": 0.019992858696198143
-      },
-      "assignmentRestMax": {
-        "mean": 5.4,
-        "median": 6,
-        "min": 4,
-        "max": 6,
-        "populationStdDev": 0.8
-      },
-      "assignmentRestMean": {
-        "mean": 1.4976040353089535,
-        "median": 1.4981084489281211,
-        "min": 1.4955863808322825,
-        "max": 1.4993694829760404,
-        "populationStdDev": 0.0012860074435291117
-      },
-      "assignmentRestP95": {
-        "mean": 3,
-        "median": 3,
-        "min": 3,
-        "max": 3,
-        "populationStdDev": 0
-      }
-    },
-    {
-      "profile": "narrow",
-      "format": "Balanced Rating/Elo",
-      "completed": "20",
-      "n": 5,
-      "relationshipCoverage": {
-        "mean": 0.5663003663003663,
-        "median": 0.586080586080586,
-        "min": 0.5054945054945056,
-        "max": 0.5897435897435896,
-        "populationStdDev": 0.031731000480157756
-      },
-      "partnerCoverage": {
-        "mean": 0.3736263736263737,
-        "median": 0.38461538461538464,
-        "min": 0.3406593406593406,
-        "max": 0.40659340659340665,
-        "populationStdDev": 0.024075716813413917
-      },
-      "opponentCoverage": {
-        "mean": 0.5978021978021978,
-        "median": 0.6043956043956042,
-        "min": 0.5384615384615385,
-        "max": 0.6593406593406594,
-        "populationStdDev": 0.04088148403898523
-      },
-      "courtmateCoverage": {
-        "mean": 0.7274725274725274,
-        "median": 0.7472527472527473,
-        "min": 0.6373626373626374,
-        "max": 0.7582417582417583,
-        "populationStdDev": 0.04578608056263661
-      },
-      "relationshipEntropy": {
-        "mean": 0.723965373448365,
-        "median": 0.7318844097388005,
-        "min": 0.6760686167992735,
-        "max": 0.7469164309782367,
-        "populationStdDev": 0.02517569829421739
-      },
-      "matchTypeEntropy": {
-        "mean": 0,
-        "median": 0,
-        "min": 0,
-        "max": 0,
-        "populationStdDev": 0
-      },
-      "normalizedEntropy": {
-        "mean": 0.5429740300862737,
-        "median": 0.5489133073041004,
-        "min": 0.5070514625994551,
-        "max": 0.5601873232336775,
-        "populationStdDev": 0.018881773720663058
-      },
-      "backToBackRate": {
-        "mean": 0.11515151515151514,
-        "median": 0.12121212121212122,
-        "min": 0.06060606060606061,
-        "max": 0.18181818181818182,
-        "populationStdDev": 0.04020151261036848
-      },
-      "assignmentRestMax": {
-        "mean": 3,
-        "median": 3,
-        "min": 2,
-        "max": 4,
-        "populationStdDev": 0.6324555320336759
-      },
-      "assignmentRestMean": {
-        "mean": 1.4848484848484849,
-        "median": 1.4848484848484849,
-        "min": 1.4848484848484849,
-        "max": 1.4848484848484849,
-        "populationStdDev": 0
-      },
-      "assignmentRestP95": {
-        "mean": 3,
-        "median": 3,
-        "min": 2,
-        "max": 4,
-        "populationStdDev": 0.6324555320336759
-      }
-    },
-    {
-      "profile": "narrow",
-      "format": "Balanced Rating/Elo",
-      "completed": "400",
-      "n": 5,
-      "relationshipCoverage": {
-        "mean": 0.8461538461538461,
-        "median": 0.8461538461538461,
-        "min": 0.8461538461538461,
-        "max": 0.8461538461538461,
-        "populationStdDev": 0
-      },
-      "partnerCoverage": {
-        "mean": 0.5384615384615384,
-        "median": 0.5384615384615384,
-        "min": 0.5384615384615384,
-        "max": 0.5384615384615384,
-        "populationStdDev": 0
-      },
-      "opponentCoverage": {
-        "mean": 1,
-        "median": 1,
-        "min": 1,
-        "max": 1,
-        "populationStdDev": 0
-      },
-      "courtmateCoverage": {
-        "mean": 1,
-        "median": 1,
-        "min": 1,
-        "max": 1,
-        "populationStdDev": 0
-      },
-      "relationshipEntropy": {
-        "mean": 0.9134291404630626,
-        "median": 0.9133928054011908,
-        "min": 0.9129526194422478,
-        "max": 0.913927058455415,
-        "populationStdDev": 0.00034259639482326785
-      },
-      "matchTypeEntropy": {
-        "mean": 9.15264715375691e-16,
-        "median": 9.15264715375691e-16,
-        "min": 9.15264715375691e-16,
-        "max": 9.15264715375691e-16,
-        "populationStdDev": 0
-      },
-      "normalizedEntropy": {
-        "mean": 0.685071855347297,
-        "median": 0.6850446040508932,
-        "min": 0.6847144645816858,
-        "max": 0.6854452938415613,
-        "populationStdDev": 0.0002569472961174883
-      },
-      "backToBackRate": {
-        "mean": 0.12635561160151326,
-        "median": 0.1235813366960908,
-        "min": 0.10592686002522068,
-        "max": 0.1614123581336696,
-        "populationStdDev": 0.01976889578034343
-      },
-      "assignmentRestMax": {
-        "mean": 5.4,
-        "median": 6,
-        "min": 4,
-        "max": 6,
-        "populationStdDev": 0.8
-      },
-      "assignmentRestMean": {
-        "mean": 1.4976040353089535,
-        "median": 1.4981084489281211,
-        "min": 1.4955863808322825,
-        "max": 1.4993694829760404,
-        "populationStdDev": 0.0012860074435291117
-      },
-      "assignmentRestP95": {
-        "mean": 3,
-        "median": 3,
-        "min": 3,
-        "max": 3,
-        "populationStdDev": 0
-      }
-    },
-    {
-      "profile": "wide",
-      "format": "Balanced Points",
-      "completed": "20",
-      "n": 3,
-      "relationshipCoverage": {
-        "mean": 0.5848595848595848,
-        "median": 0.5897435897435896,
-        "min": 0.5677655677655677,
-        "max": 0.597069597069597,
-        "populationStdDev": 0.012451818104011641
-      },
-      "partnerCoverage": {
-        "mean": 0.35164835164835173,
-        "median": 0.3626373626373627,
-        "min": 0.30769230769230765,
-        "max": 0.3846153846153847,
-        "populationStdDev": 0.03235077240413135
-      },
-      "opponentCoverage": {
-        "mean": 0.6153846153846153,
-        "median": 0.6153846153846152,
-        "min": 0.6043956043956042,
-        "max": 0.6263736263736265,
-        "populationStdDev": 0.008972489900304786
-      },
-      "courtmateCoverage": {
-        "mean": 0.7875457875457875,
-        "median": 0.7802197802197802,
-        "min": 0.7692307692307692,
-        "max": 0.8131868131868133,
-        "populationStdDev": 0.0186777271560176
-      },
-      "relationshipEntropy": {
-        "mean": 0.7258166441624773,
-        "median": 0.7266862375132143,
-        "min": 0.7073898889122836,
-        "max": 0.7433738060619342,
-        "populationStdDev": 0.014703235875252383
-      },
-      "matchTypeEntropy": {
-        "mean": 0.25447574855546906,
-        "median": 0.3765775033161316,
-        "min": 0,
-        "max": 0.3868497423502756,
-        "populationStdDev": 0.17999038803196016
-      },
-      "normalizedEntropy": {
-        "mean": 0.6079814202607251,
-        "median": 0.6417271137224795,
-        "min": 0.5305424166842126,
-        "max": 0.6516747303754833,
-        "populationStdDev": 0.054908033568025455
-      },
-      "backToBackRate": {
-        "mean": 0.10101010101010101,
-        "median": 0.10606060606060606,
-        "min": 0.030303030303030304,
-        "max": 0.16666666666666666,
-        "populationStdDev": 0.055784651601955865
-      },
-      "assignmentRestMax": {
-        "mean": 3,
-        "median": 3,
-        "min": 3,
-        "max": 3,
-        "populationStdDev": 0
-      },
-      "assignmentRestMean": {
-        "mean": 1.4191919191919193,
-        "median": 1.4696969696969697,
-        "min": 1.303030303030303,
-        "max": 1.4848484848484849,
-        "populationStdDev": 0.08237124459747523
-      },
-      "assignmentRestP95": {
-        "mean": 2.6666666666666665,
-        "median": 3,
-        "min": 2,
-        "max": 3,
-        "populationStdDev": 0.4714045207910317
-      }
-    },
-    {
-      "profile": "wide",
-      "format": "Balanced Points",
-      "completed": "400",
-      "n": 3,
-      "relationshipCoverage": {
-        "mean": 0.8559218559218561,
-        "median": 0.8608058608058611,
-        "min": 0.8461538461538461,
-        "max": 0.8608058608058611,
-        "populationStdDev": 0.0069070259456562744
-      },
-      "partnerCoverage": {
-        "mean": 0.5677655677655676,
-        "median": 0.5824175824175822,
-        "min": 0.5384615384615384,
-        "max": 0.5824175824175822,
-        "populationStdDev": 0.02072107783696835
-      },
-      "opponentCoverage": {
-        "mean": 1,
-        "median": 1,
-        "min": 1,
-        "max": 1,
-        "populationStdDev": 0
-      },
-      "courtmateCoverage": {
-        "mean": 1,
-        "median": 1,
-        "min": 1,
-        "max": 1,
-        "populationStdDev": 0
-      },
-      "relationshipEntropy": {
-        "mean": 0.9024222169254248,
-        "median": 0.9021534929740134,
-        "min": 0.8999866444848653,
-        "max": 0.9051265133173958,
-        "populationStdDev": 0.0021069286217068363
-      },
-      "matchTypeEntropy": {
-        "mean": 0.027559021073863054,
-        "median": 0.04130163169561003,
-        "min": 9.15264715375691e-16,
-        "max": 0.0413754315259782,
-        "populationStdDev": 0.019487193974777786
-      },
-      "normalizedEntropy": {
-        "mean": 0.6837064179625343,
-        "median": 0.6869405276544126,
-        "min": 0.674989983363649,
-        "max": 0.689188742869541,
-        "populationStdDev": 0.006231414606698649
-      },
-      "backToBackRate": {
-        "mean": 0.1353509878100042,
-        "median": 0.13808322824716268,
-        "min": 0.12799495586380832,
-        "max": 0.13997477931904162,
-        "populationStdDev": 0.005258510299788487
-      },
-      "assignmentRestMax": {
-        "mean": 5,
-        "median": 5,
-        "min": 4,
-        "max": 6,
-        "populationStdDev": 0.816496580927726
-      },
-      "assignmentRestMean": {
-        "mean": 1.50021017234132,
-        "median": 1.4993694829760404,
-        "min": 1.4993694829760404,
-        "max": 1.5018915510718789,
-        "populationStdDev": 0.001188914302121068
-      },
-      "assignmentRestP95": {
-        "mean": 3,
-        "median": 3,
-        "min": 3,
-        "max": 3,
-        "populationStdDev": 0
-      }
-    },
-    {
-      "profile": "wide",
-      "format": "Balanced Rating/Elo",
-      "completed": "20",
-      "n": 3,
-      "relationshipCoverage": {
-        "mean": 0.5409035409035409,
-        "median": 0.5347985347985348,
-        "min": 0.5311355311355311,
-        "max": 0.5567765567765568,
-        "populationStdDev": 0.011323099506099773
-      },
-      "partnerCoverage": {
-        "mean": 0.3113553113553114,
-        "median": 0.30769230769230776,
-        "min": 0.2857142857142857,
-        "max": 0.3406593406593407,
-        "populationStdDev": 0.022580271073146464
-      },
-      "opponentCoverage": {
-        "mean": 0.5860805860805861,
-        "median": 0.5714285714285714,
-        "min": 0.5494505494505494,
-        "max": 0.6373626373626374,
-        "populationStdDev": 0.03735545431203511
-      },
-      "courtmateCoverage": {
-        "mean": 0.7252747252747254,
-        "median": 0.7252747252747254,
-        "min": 0.7032967032967035,
-        "max": 0.7472527472527474,
-        "populationStdDev": 0.017944979800609346
-      },
-      "relationshipEntropy": {
-        "mean": 0.6948537312358932,
-        "median": 0.6968218109017461,
-        "min": 0.687352872945862,
-        "max": 0.7003865098600716,
-        "populationStdDev": 0.005499934907567495
-      },
-      "matchTypeEntropy": {
-        "mean": 0.25447574855546906,
-        "median": 0.3817136228332036,
-        "min": 0,
-        "max": 0.3817136228332036,
-        "populationStdDev": 0.17994152745109493
-      },
-      "normalizedEntropy": {
-        "mean": 0.5847592355657872,
-        "median": 0.6109430604176973,
-        "min": 0.5226163581763096,
-        "max": 0.6207182881033545,
-        "populationStdDev": 0.04412249370981759
-      },
-      "backToBackRate": {
-        "mean": 0.10606060606060606,
-        "median": 0.10606060606060606,
-        "min": 0.045454545454545456,
-        "max": 0.16666666666666666,
-        "populationStdDev": 0.04948464126834703
-      },
-      "assignmentRestMax": {
-        "mean": 3,
-        "median": 3,
-        "min": 3,
-        "max": 3,
-        "populationStdDev": 0
-      },
-      "assignmentRestMean": {
-        "mean": 1.409090909090909,
-        "median": 1.4545454545454546,
-        "min": 1.303030303030303,
-        "max": 1.4696969696969697,
-        "populationStdDev": 0.07525083043308761
-      },
-      "assignmentRestP95": {
-        "mean": 2.6666666666666665,
-        "median": 3,
-        "min": 2,
-        "max": 3,
-        "populationStdDev": 0.4714045207910317
-      }
-    },
-    {
-      "profile": "wide",
-      "format": "Balanced Rating/Elo",
-      "completed": "400",
-      "n": 3,
-      "relationshipCoverage": {
-        "mean": 0.8412698412698414,
-        "median": 0.8461538461538464,
-        "min": 0.8315018315018315,
-        "max": 0.8461538461538464,
-        "populationStdDev": 0.0069070259456562215
-      },
-      "partnerCoverage": {
-        "mean": 0.5457875457875456,
-        "median": 0.5604395604395603,
-        "min": 0.5164835164835164,
-        "max": 0.5604395604395603,
-        "populationStdDev": 0.020721077836968405
-      },
-      "opponentCoverage": {
-        "mean": 0.9780219780219781,
-        "median": 0.9780219780219781,
-        "min": 0.9780219780219781,
-        "max": 0.9780219780219781,
-        "populationStdDev": 0
-      },
-      "courtmateCoverage": {
-        "mean": 1,
-        "median": 1,
-        "min": 1,
-        "max": 1,
-        "populationStdDev": 0
-      },
-      "relationshipEntropy": {
-        "mean": 0.8869552648036994,
-        "median": 0.8882849814778828,
-        "min": 0.8839608090839126,
-        "max": 0.8886200038493028,
-        "populationStdDev": 0.0021218127141135615
-      },
-      "matchTypeEntropy": {
-        "mean": 0.02754662318544891,
-        "median": 0.0412644380303676,
-        "min": 9.15264715375691e-16,
-        "max": 0.0413754315259782,
-        "populationStdDev": 0.019478456759196173
-      },
-      "normalizedEntropy": {
-        "mean": 0.6721031043991367,
-        "median": 0.6765575939899063,
-        "min": 0.6629706068129345,
-        "max": 0.6767811123945692,
-        "populationStdDev": 0.006458295659630177
-      },
-      "backToBackRate": {
-        "mean": 0.1403951240016814,
-        "median": 0.1424968474148802,
-        "min": 0.1317780580075662,
-        "max": 0.14691046658259774,
-        "populationStdDev": 0.006354021209680951
-      },
-      "assignmentRestMax": {
-        "mean": 5,
-        "median": 5,
-        "min": 4,
-        "max": 6,
-        "populationStdDev": 0.816496580927726
-      },
-      "assignmentRestMean": {
-        "mean": 1.50021017234132,
-        "median": 1.4993694829760404,
-        "min": 1.4993694829760404,
-        "max": 1.5018915510718789,
-        "populationStdDev": 0.001188914302121068
-      },
-      "assignmentRestP95": {
-        "mean": 3,
-        "median": 3,
-        "min": 3,
-        "max": 3,
-        "populationStdDev": 0
-      }
-    }
-  ],
-  "narrowTiming": {
-    "baseline": {
-      "decisions": 6000,
-      "direct": 115574.21000000002,
-      "directCalls": 6000,
-      "wrapper": 0,
-      "wrapperCalls": 0,
-      "limit": 0,
-      "fails": 0
-    },
-    "current": {
-      "decisions": 6000,
-      "direct": 118923.92999999998,
-      "directCalls": 5760,
-      "wrapper": 9036.26,
-      "wrapperCalls": 240,
-      "limit": 0,
-      "fails": 0
-    }
-  }
-}
-```
-
-Per-session harness totals for this same narrow cohort, including optimizer, independent oracle, and report instrumentation: 161.5 s baseline; 174.8 s current. This broad timing is not production-only matcher latency.
+| Profile | Format | Completed | VCS | Partner / opponent / courtmate | MIXED / OWN_SIDE player coverage | Completed MIXED / OWN_SIDE | First100 / last100 OWN_SIDE | Entropy people / type / all | B2B | Worst max / mean of per-seed maxima / mean / p95 assignment rest | Starvation changed / overdue / all completed |
+|---|---|---:|---:|---|---|---:|---:|---|---:|---|---|
+| narrow | Social | 20 | 58.2% | 42.0% / 59.6% / 73.0% | 100.0% / 100.0% | 10.8 / 9.2 | first100 OWN_SIDE 47.4 / last100 50.2 | 74.7% / 95.1% / 79.8% | 26.1% | 5.00 / 4.20 / 1.45 / 4.00 | 8 / 22 / 95 (36.4% / 8.4%; certified 36.4%; unknown 0) |
+| narrow | Social | 400 | 100.0% | 100.0% / 100.0% / 100.0% | 100.0% / 100.0% | 200.8 / 199.2 | first100 OWN_SIDE 47.4 / last100 50.2 | 96.4% / 100.0% / 97.3% | 26.3% | 7.00 / 5.80 / 1.50 / 4.00 | 160 / 578 / 1995 (27.7% / 8.0%; certified 27.7%; unknown 0) |
+| narrow | Balanced Points | 20 | 58.2% | 42.0% / 59.6% / 73.0% | 100.0% / 100.0% | 10.8 / 9.2 | first100 OWN_SIDE 47.4 / last100 50.2 | 74.7% / 95.1% / 79.8% | 26.1% | 5.00 / 4.20 / 1.45 / 4.00 | 8 / 22 / 95 (36.4% / 8.4%; certified 36.4%; unknown 0) |
+| narrow | Balanced Points | 400 | 100.0% | 100.0% / 100.0% / 100.0% | 100.0% / 100.0% | 200.8 / 199.2 | first100 OWN_SIDE 47.4 / last100 50.2 | 96.4% / 100.0% / 97.3% | 26.3% | 7.00 / 6.00 / 1.50 / 4.00 | 160 / 575 / 1995 (27.8% / 8.0%; certified 27.8%; unknown 0) |
+| narrow | Balanced Rating/Elo | 20 | 58.4% | 42.4% / 59.6% / 73.2% | 100.0% / 100.0% | 10.8 / 9.2 | first100 OWN_SIDE 47.4 / last100 51.0 | 75.0% / 95.1% / 80.0% | 25.8% | 5.00 / 4.20 / 1.45 / 4.00 | 7 / 21 / 95 (33.3% / 7.4%; certified 33.3%; unknown 0) |
+| narrow | Balanced Rating/Elo | 400 | 100.0% | 100.0% / 100.0% / 100.0% | 100.0% / 100.0% | 200.8 / 199.2 | first100 OWN_SIDE 47.4 / last100 51.0 | 96.4% / 100.0% / 97.3% | 26.6% | 7.00 / 6.00 / 1.50 / 4.00 | 168 / 572 / 1995 (29.4% / 8.4%; certified 29.4%; unknown 0) |
+| wide | Balanced Points | 20 | 58.7% | 40.3% / 60.1% / 75.8% | 100.0% / 100.0% | 11.3 / 8.7 | first100 OWN_SIDE 48.0 / last100 49.7 | 74.7% / 94.5% / 79.6% | 23.7% | 5.00 / 4.67 / 1.38 / 3.67 | 1 / 12 / 57 (8.3% / 1.8%; certified 8.3%; unknown 0) |
+| wide | Balanced Points | 400 | 98.5% | 95.6% / 100.0% / 100.0% | 100.0% / 100.0% | 202.3 / 197.7 | first100 OWN_SIDE 48.0 / last100 49.7 | 94.5% / 100.0% / 95.8% | 26.9% | 8.00 / 7.00 / 1.50 / 4.00 | 95 / 371 / 1197 (25.6% / 7.9%; certified 25.6%; unknown 0) |
+| wide | Balanced Rating/Elo | 20 | 55.3% | 37.0% / 54.6% / 74.4% | 100.0% / 100.0% | 11.3 / 8.7 | first100 OWN_SIDE 47.3 / last100 51.0 | 71.6% / 94.3% / 77.3% | 23.2% | 5.00 / 4.33 / 1.39 / 3.67 | 1 / 9 / 57 (11.1% / 1.8%; certified 11.1%; unknown 0) |
+| wide | Balanced Rating/Elo | 400 | 95.6% | 89.0% / 97.8% / 100.0% | 100.0% / 100.0% | 201.3 / 198.7 | first100 OWN_SIDE 47.3 / last100 51.0 | 92.4% / 100.0% / 94.3% | 28.1% | 8.00 / 6.67 / 1.50 / 4.00 | 94 / 361 / 1197 (26.0% / 7.9%; certified 26.0%; unknown 0) |
