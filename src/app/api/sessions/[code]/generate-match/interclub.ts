@@ -19,6 +19,7 @@ import type {
   V3CompletedMatch,
   V3DoublesPartition,
   V3SelectionConstraints,
+  V3SocialStarvationSummary,
   V3SingleCourtSelection,
 } from "@/lib/matchmaking/v3/types";
 import {
@@ -275,6 +276,7 @@ function buildInterclubReasonJson({
   socialVariety,
   socialVarietyGain,
   socialVarietyGains,
+  socialStarvation,
 }: {
   team1ClubId: string;
   team2ClubId: string;
@@ -283,6 +285,7 @@ function buildInterclubReasonJson({
   socialVariety?: SocialVarietySnapshot;
   socialVarietyGain?: number;
   socialVarietyGains?: SocialVarietyGains;
+  socialStarvation?: V3SocialStarvationSummary;
 }) {
   return JSON.stringify({
     type: "INTERCLUB",
@@ -291,6 +294,7 @@ function buildInterclubReasonJson({
     balanceGap,
     pointDiffGap,
     ...(socialVariety ? { socialVariety, socialVarietyGain, socialVarietyGains } : {}),
+    ...(socialStarvation ? { socialStarvation } : {}),
   });
 }
 
@@ -594,6 +598,7 @@ function getInterclubSocialOptions(
   }));
   const socialHistoryMatches = buildSocialSessionHistory(sessionData);
   return {
+    rotationPlayerCount: sessionData.players.filter((player) => !player.isPaused).length,
     socialHistoryMatches,
     socialVarietyContext: buildSocialVarietyContext(players, socialHistoryMatches, {
       sessionMode: getEffectiveSessionMode(sessionData) as SessionMode,
@@ -641,6 +646,7 @@ function toInterclubSelection(
       socialVariety: selection.socialVariety,
       socialVarietyGain: selection.socialVarietyGain,
       socialVarietyGains: selection.socialVarietyGains,
+      socialStarvation: selection.socialStarvation,
     }),
   };
 }

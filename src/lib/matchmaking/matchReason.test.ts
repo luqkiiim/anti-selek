@@ -185,7 +185,7 @@ describe("matchmaking reason", () => {
       }
     );
 
-    expect(reason.summary.join(" ")).toContain("fair turns, arrival priority and player-group rules");
+    expect(reason.summary.join(" ")).toContain("fair turns, arrival priority, applicable player-group rules and overdue-turn protection");
     expect(reason.summary.join(" ")).toContain("longer breaks only decide between equally varied choices");
     expect(reason.summary.join(" ")).toContain("completed-match rest turns");
   });
@@ -209,6 +209,14 @@ describe("matchmaking reason", () => {
   it("preserves ongoing Social gains and assignment-time mixed sides", () => {
     const selection = createSelection({
       socialVarietyGain: 0.123456789,
+      socialStarvation: {
+        idealRestGap: 2,
+        availableOverdueCount: 3,
+        selectedOverdueCount: 2,
+        leftOutOverdueCount: 1,
+        highestLeftOutRestTurns: 5,
+        totalLeftOutRestTurns: 5,
+      },
       socialVarietyGains: {
         courtmates: 0.01,
         partners: 0.02,
@@ -233,8 +241,10 @@ describe("matchmaking reason", () => {
     });
     expect(parsed?.metrics.socialVarietyGain).toBe(0.123456789);
     expect(parsed?.metrics.socialVarietyGains).toEqual(selection.socialVarietyGains);
+    expect(parsed?.metrics.socialStarvation).toEqual(selection.socialStarvation);
     expect(parsed?.summary.join(" ")).toContain("ongoing courtmate");
     expect(parsed?.summary.join(" ")).toContain("match-type variety");
+    expect(parsed?.summary.join(" ")).toContain("2 of 3 available players beyond the 2-match usual rest gap were selected");
     expect(parsed?.summary.join(" ")).not.toContain("coverage penalty");
   });
 

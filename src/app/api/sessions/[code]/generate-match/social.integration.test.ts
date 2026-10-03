@@ -12,6 +12,7 @@ import {
   SessionType,
 } from "@/types/enums";
 import { buildSocialSessionHistory } from "@/lib/matchmaking/socialSessionHistory";
+import { getSocialIdealRestGap } from "@/lib/matchmaking/v3/scoring";
 import * as socialHistory from "@/lib/matchmaking/socialSessionHistory";
 import {
   buildSocialVarietyContext,
@@ -346,6 +347,9 @@ describe("Social generation route adapters", () => {
     ]);
     const selectedTypes: string[] = [];
     const gendersById = new Map(players.map((entry) => [entry.userId, entry.gender]));
+    const waitStartedAtCompletion = new Map<string, number>();
+    const observedRestGaps: number[] = [];
+    let completionEventCount = 0;
 
     for (let refill = 0; refill < 45; refill += 1) {
       const freedCourtId = refill % 2 === 0 ? "court-1" : "court-2";
@@ -355,10 +359,12 @@ describe("Social generation route adapters", () => {
       const completed = data.matches.find((entry) => entry.id === currentMatchId)!;
       completed.status = MatchStatus.COMPLETED;
       completed.completedAt = completedAt;
+      completionEventCount += 1;
       for (const userId of [completed.team1User1Id, completed.team1User2Id, completed.team2User1Id, completed.team2User2Id]) {
         const entry = data.players.find((candidate) => candidate.userId === userId)!;
         entry.matchesPlayed += 1;
         entry.availableSince = completedAt;
+        waitStartedAtCompletion.set(userId, completionEventCount);
       }
       const completedCounts = data.players.map((entry) => entry.matchesPlayed);
       expect(Math.max(...completedCounts) - Math.min(...completedCounts)).toBeLessThanOrEqual(1);
@@ -383,6 +389,13 @@ describe("Social generation route adapters", () => {
         .map((id) => countsById.get(id)!)
         .sort((left, right) => left - right);
       expect(selectedCounts).toEqual(expectedCounts);
+      for (const userId of selection.ids) {
+        const startedAt = waitStartedAtCompletion.get(userId);
+        if (startedAt !== undefined) {
+          observedRestGaps.push(completionEventCount - startedAt);
+          waitStartedAtCompletion.delete(userId);
+        }
+      }
       const men = selection.ids.filter((id) => gendersById.get(id) === PlayerGender.MALE).length;
       expect([0, 2, 4]).toContain(men);
       selectedTypes.push(men === 4 ? "MENS" : men === 0 ? "WOMENS" : "MIXED");
@@ -397,6 +410,12 @@ describe("Social generation route adapters", () => {
     }
 
     expect(new Set(selectedTypes.slice(-24))).toEqual(new Set(["MENS", "WOMENS", "MIXED"]));
+    const maxRestGap = getSocialIdealRestGap(players.filter((entry) => !entry.isPaused).length) + 1;
+    expect(observedRestGaps.length).toBeGreaterThan(0);
+    expect(Math.max(...observedRestGaps)).toBeLessThanOrEqual(maxRestGap);
+    const censoredRestGaps = [...waitStartedAtCompletion.values()].map((startedAt) => completionEventCount - startedAt);
+    expect(censoredRestGaps.length).toBeGreaterThan(0);
+    expect(Math.max(...censoredRestGaps)).toBeLessThanOrEqual(maxRestGap);
   });
 
   it("uses constrained full-roster Social history for Interclub batches", async () => {
@@ -418,6 +437,9 @@ describe("Social generation route adapters", () => {
     const result = selectBatchMatches({ ...state, requestedMatchCount: 2, randomFn: () => 0.25 });
     expect(result.selections).toHaveLength(2);
     for (const selection of result.selections) {
+      expect(JSON.parse(selection.matchmakingReasonJson ?? "{}").socialStarvation).toMatchObject({
+        idealRestGap: 2,
+      });
       expect(selection.partition.team1.every((id) => id.startsWith("host"))).toBe(true);
       expect(selection.partition.team2.every((id) => id.startsWith("partner"))).toBe(true);
       expect(selection.ids.every((id) => !state.busyPlayerIds.has(id))).toBe(true);

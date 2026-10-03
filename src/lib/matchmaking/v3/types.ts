@@ -45,6 +45,15 @@ export interface SocialVarietyGains {
   matchType: number;
 }
 
+export interface V3SocialStarvationSummary {
+  idealRestGap: number;
+  availableOverdueCount: number;
+  selectedOverdueCount: number;
+  leftOutOverdueCount: number;
+  highestLeftOutRestTurns: number;
+  totalLeftOutRestTurns: number;
+}
+
 export type ActiveMatchmakerV3Player<
   T extends MatchmakerV3Player = MatchmakerV3Player,
 > = T & {
@@ -150,6 +159,7 @@ export interface V3SingleCourtSelection<
   socialVarietyGain?: number;
   socialVarietyGains?: SocialVarietyGains;
   socialVariety?: SocialVarietySnapshot;
+  socialStarvation?: V3SocialStarvationSummary;
   consecutivePlayCount: number;
   consecutivePlayMaxBurden: number;
   consecutivePlayTotalBurden: number;
@@ -181,6 +191,13 @@ export interface V3SingleCourtDebug {
   chosenSocialVarietyGains?: SocialVarietyGains | null;
   fairnessOptimal?: boolean;
   fairnessCertified?: boolean;
+  starvationCertified?: boolean;
+  socialIdealRestGap?: number;
+  availableOverduePlayerCount?: number;
+  selectedOverduePlayerCount?: number | null;
+  leftOutOverduePlayerCount?: number | null;
+  highestLeftOutRestTurns?: number | null;
+  totalLeftOutRestTurns?: number | null;
   varietyOptimal?: boolean;
   searchLimitReached?: boolean;
   failureReason?: V3BatchFailureReason | null;
@@ -257,7 +274,14 @@ export interface V3BatchDebug {
   chosenTotalSocialVarietyGains?: SocialVarietyGains | null;
   fairnessOptimal?: boolean;
   fairnessCertified?: boolean;
+  starvationCertified?: boolean;
   varietyOptimal?: boolean;
+  socialIdealRestGap?: number;
+  availableOverduePlayerCount?: number;
+  selectedOverduePlayerCount?: number | null;
+  leftOutOverduePlayerCount?: number | null;
+  highestLeftOutRestTurns?: number | null;
+  totalLeftOutRestTurns?: number | null;
 }
 
 export interface V3BatchResult<

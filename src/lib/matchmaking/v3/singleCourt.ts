@@ -505,6 +505,7 @@ export function findBestSingleCourtSelectionV3<T extends MatchmakerV3Player>(
     targetPool,
     minimumTargetPoolPlayers,
     respectPlayerRest = true,
+    rotationPlayerCount,
     randomFn = Math.random,
     candidatePool,
     candidatePoolVariants,
@@ -526,6 +527,7 @@ export function findBestSingleCourtSelectionV3<T extends MatchmakerV3Player>(
     targetPool?: string;
     minimumTargetPoolPlayers?: number;
     respectPlayerRest?: boolean;
+    rotationPlayerCount?: number;
     randomFn?: () => number;
     candidatePool?: V3CandidatePool<ActiveMatchmakerV3Player<T>>;
     candidatePoolVariants?: (
@@ -545,6 +547,7 @@ export function findBestSingleCourtSelectionV3<T extends MatchmakerV3Player>(
     } : undefined;
     const result = findBestSocialBatchSelection(players, {
       courtCount: 1, sessionMode, respectPlayerRest, completedMatches,
+      rotationPlayerCount,
       socialHistoryMatches: socialHistoryMatches ?? mixedHistoryMatches,
       socialVarietyContext, randomFn, candidatePool,
       excludedQuartetKeys: excluded, excludedPartitionKey,
@@ -569,7 +572,14 @@ export function findBestSingleCourtSelectionV3<T extends MatchmakerV3Player>(
         chosenConsecutivePlayTotalBurden: selection?.consecutivePlayTotalBurden ?? null,
         chosenSocialVarietyGain: selection?.socialVarietyGain ?? null,
         chosenSocialVarietyGains: selection?.socialVarietyGains ?? null,
-        fairnessCertified: result.fairnessCertified, varietyOptimal: result.varietyOptimal,
+        fairnessCertified: result.fairnessCertified, starvationCertified: result.starvationCertified,
+        socialIdealRestGap: result.debug.socialIdealRestGap,
+        availableOverduePlayerCount: result.debug.availableOverduePlayerCount,
+        selectedOverduePlayerCount: result.debug.selectedOverduePlayerCount,
+        leftOutOverduePlayerCount: result.debug.leftOutOverduePlayerCount,
+        highestLeftOutRestTurns: result.debug.highestLeftOutRestTurns,
+        totalLeftOutRestTurns: result.debug.totalLeftOutRestTurns,
+        varietyOptimal: result.varietyOptimal,
         searchLimitReached: result.debug.searchLimitReached, failureReason: result.debug.failureReason,
       },
     };

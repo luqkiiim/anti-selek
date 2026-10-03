@@ -9,6 +9,7 @@ import type {
   V3SingleCourtSelection,
   SocialVarietyGains,
   SocialVarietySnapshot,
+  V3SocialStarvationSummary,
 } from "./v3/types";
 
 export interface MatchmakingReason {
@@ -31,6 +32,7 @@ export interface MatchmakingReason {
     opponentCoveragePenalty?: number;
     socialVarietyGain?: number;
     socialVarietyGains?: SocialVarietyGains;
+    socialStarvation?: V3SocialStarvationSummary;
     partnerRepeatPenalty: number;
     opponentRepeatPenalty: number;
     exactRematchPenalty: number;
@@ -178,8 +180,8 @@ function buildReasonSummary({
   if (sessionType === SessionType.SOCIAL_MIX) {
     if (metrics.socialVarietyGain !== undefined) {
       const priorities = metrics.courtGroupType
-        ? "fair turns, arrival priority and player-group rules"
-        : "fair turns and arrival priority";
+        ? "fair turns, arrival priority, applicable player-group rules and overdue-turn protection"
+        : "fair turns, arrival priority and overdue-turn protection";
       summary.push(
         sessionMode === SessionMode.MIXICANO
           ? `Selected for ongoing courtmate, partner, opponent and match-type variety after ${priorities}${respectPlayerRest === false ? "." : "; longer breaks only decide between equally varied choices."}`
@@ -188,6 +190,12 @@ function buildReasonSummary({
       if (respectPlayerRest !== false && metrics.totalRestTurns > 0) {
         summary.push(
           `Selected players had ${formatMetric(metrics.totalRestTurns)} total completed-match rest turns, with minimum ${formatMetric(metrics.minimumRestTurns)}.`
+        );
+      }
+      if (metrics.socialStarvation?.availableOverdueCount) {
+        const starvation = metrics.socialStarvation;
+        summary.push(
+          `Across this refill, ${formatMetric(starvation.selectedOverdueCount)} of ${formatMetric(starvation.availableOverdueCount)} available players beyond the ${formatMetric(starvation.idealRestGap)}-match usual rest gap were selected; ${formatMetric(starvation.leftOutOverdueCount)} overdue player${starvation.leftOutOverdueCount === 1 ? " remains" : "s remain"} outside the batch.`
         );
       }
     } else {
@@ -295,6 +303,9 @@ export function buildV3MatchmakingReason<
       : {}),
     ...(selection.socialVarietyGains
       ? { socialVarietyGains: selection.socialVarietyGains }
+      : {}),
+    ...(selection.socialStarvation
+      ? { socialStarvation: selection.socialStarvation }
       : {}),
     partnerRepeatPenalty: selection.partnerRepeatPenalty,
     opponentRepeatPenalty: selection.opponentRepeatPenalty,
@@ -513,6 +524,7 @@ export function parseMatchmakingReasonJson(
     team2: parsed.team2UserIds as [string, string],
   });
   const socialVarietyGains = parseSocialVarietyGains(metrics.socialVarietyGains);
+  const socialStarvation = parseSocialStarvationSummary(metrics.socialStarvation);
 
   return {
     version: 1,
@@ -537,6 +549,7 @@ export function parseMatchmakingReasonJson(
         ? { socialVarietyGain: metrics.socialVarietyGain }
         : {}),
       ...(socialVarietyGains ? { socialVarietyGains } : {}),
+      ...(socialStarvation ? { socialStarvation } : {}),
       partnerRepeatPenalty: metrics.partnerRepeatPenalty,
       opponentRepeatPenalty: metrics.opponentRepeatPenalty,
       exactRematchPenalty: metrics.exactRematchPenalty,
@@ -590,5 +603,28 @@ function parseSocialVarietyGains(value: unknown): SocialVarietyGains | undefined
     partners: value.partners as number,
     opponents: value.opponents as number,
     matchType: value.matchType as number,
+  };
+}
+
+function parseSocialStarvationSummary(value: unknown): V3SocialStarvationSummary | undefined {
+  if (!isRecord(value)) return undefined;
+  const keys = [
+    "idealRestGap",
+    "availableOverdueCount",
+    "selectedOverdueCount",
+    "leftOutOverdueCount",
+    "highestLeftOutRestTurns",
+    "totalLeftOutRestTurns",
+  ] as const;
+  if (keys.some((key) => typeof value[key] !== "number" || !Number.isFinite(value[key]))) {
+    return undefined;
+  }
+  return {
+    idealRestGap: value.idealRestGap as number,
+    availableOverdueCount: value.availableOverdueCount as number,
+    selectedOverdueCount: value.selectedOverdueCount as number,
+    leftOutOverdueCount: value.leftOutOverdueCount as number,
+    highestLeftOutRestTurns: value.highestLeftOutRestTurns as number,
+    totalLeftOutRestTurns: value.totalLeftOutRestTurns as number,
   };
 }

@@ -13,10 +13,19 @@ Social gives each priority a turn in this order:
 1. Fair turns
 2. Arrival priority when turn counts tie
 3. Existing player-group seat and crossover rules
-4. Ongoing variety
-5. Ordinary rest turns, when the session enables them
-6. Team balance
-7. Recent repeats and random tie-breaks
+4. Derived rest-turn protection for overdue players
+5. Ongoing variety
+6. Ordinary rest turns, when the session enables them
+7. Team balance
+8. Recent repeats and random tie-breaks
+
+The Social rest-turn gap is derived from the full unpaused session roster,
+including players currently busy on court: `max(0, ceil((N - 4) / 4))`.
+Available players whose rest turns exceed that gap are overdue. The batch
+minimizes the overdue players left out, then their highest rest-turn count and
+total rest turns. The threshold is fixed for each selection. This guardrail
+still applies when ordinary rest priority is disabled; after all available
+overdue players are included, variety remains ahead of ordinary rest.
 
 Variety measures how evenly each player has experienced their feasible
 courtmates, partners, opponents, and, in Mixed pairing, mixed-side and own-side
@@ -47,10 +56,10 @@ information. Unclassifiable games contribute interpersonal history only.
 Social considers all legal player selections and partitions. Two-court searches
 with up to fourteen eligible players compare every compatible pair. Larger
 searches use bounded global search and safe pruning. On timeout, only a complete
-batch with certified turn counts and arrival priority may be returned; group
-schedule ranks are searched in order. Diagnostics flag that variety may be
-suboptimal. Otherwise the search reports its limit. Courts are never filled
-greedily as a fallback.
+batch with certified turn counts, arrival priority, group rank, and Social
+rest-turn protection may be returned; group schedule ranks are searched in
+order. Diagnostics flag that variety may be suboptimal. Otherwise the search
+reports its limit. Courts are never filled greedily as a fallback.
 
 ## Status
 

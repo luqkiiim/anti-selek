@@ -61,12 +61,147 @@ describe("Social global batch solver", () => {
   });
 
   it("lets variety beat ordinary rest when court-time and arrival are tied", () => {
-    const players = makePlayers(8).map((player, index) => ({ ...player, restTurns: index < 4 ? 3 : 2 }));
+    const players = makePlayers(8).map((player, index) => ({ ...player, restTurns: index < 4 ? 1 : 0 }));
     const completedMatches: V3CompletedMatch[] = Array.from({ length: 10 }, () => ({ team1: ["P0", "P1"], team2: ["P2", "P3"] }));
     const result = findBestSingleCourtSelectionV3(players, { sessionMode: SessionMode.MEXICANO, sessionType: SessionType.SOCIAL_MIX, completedMatches, randomFn: () => 0 });
     expect(result.selection?.ids.some((id) => Number(id.slice(1)) >= 4)).toBe(true);
+    expect(result.selection?.socialStarvation).toMatchObject({ idealRestGap: 1, availableOverdueCount: 0 });
     const ignoreRest = findBestSingleCourtSelectionV3(players, { sessionMode: SessionMode.MEXICANO, sessionType: SessionType.SOCIAL_MIX, completedMatches, randomFn: () => 0, respectPlayerRest: false });
     expect(ignoreRest.selection?.ids.some((id) => Number(id.slice(1)) >= 4)).toBe(true);
+  });
+
+  it("keeps arrival priority ahead of overdue-turn protection", () => {
+    const players = makePlayers(5).map((player, index) => ({
+      ...player,
+      restTurns: index === 0 ? 5 : 0,
+      arrivalPriorityAt: index === 1 ? new Date("2025-01-01") : null,
+    }));
+    const allowed = new Set(["P0|P2|P3|P4", "P1|P2|P3|P4"]);
+    const result = findBestSocialBatchSelection(players, {
+      courtCount: 1,
+      sessionMode: SessionMode.MEXICANO,
+      randomFn: () => 0,
+      selectionConstraints: { isQuartetAllowed: (quartet) => allowed.has(quartet.map((player) => player.userId).sort().join("|")) },
+    });
+
+    expect(result.selection?.selections[0].ids).toContain("P1");
+    expect(result.selection?.selections[0].ids).not.toContain("P0");
+  });
+
+  it("chooses the highest-variety legal batch that includes overdue players, even when excluding them offers more variety", () => {
+    const players = makePlayers(8).map((player, index) => ({
+      ...player,
+      restTurns: index === 0 ? 5 : 0,
+    }));
+    const overdueQuartet = ["P0", "P1", "P2", "P3"] as [string, string, string, string];
+    const otherOverdueQuartet = ["P0", "P4", "P5", "P6"] as [string, string, string, string];
+    const nonOverdueQuartet = ["P4", "P5", "P6", "P7"] as [string, string, string, string];
+    const allowed = new Set([overdueQuartet, otherOverdueQuartet, nonOverdueQuartet].map((ids) => ids.sort().join("|")));
+    const selectionConstraints = { isQuartetAllowed: (quartet: Array<{ userId: string }>) => allowed.has(quartet.map((player) => player.userId).sort().join("|")) };
+    const history: V3CompletedMatch[] = Array.from({ length: 100 }, () => ({
+      team1: ["P0", "P1"], team2: ["P2", "P3"],
+    }));
+    const context = buildSocialVarietyContext(players, history, {
+      sessionMode: SessionMode.MEXICANO,
+      opportunityConstraints: [selectionConstraints],
+    });
+    const candidates = [overdueQuartet, otherOverdueQuartet, nonOverdueQuartet]
+      .flatMap((ids) => getDoublesPartitions(ids))
+      .filter((partition) => isValidPartitionForMode(partition, new Map(players.map((player) => [player.userId, player])), SessionMode.MEXICANO));
+    const bestIncludedGain = Math.max(...candidates
+      .filter((partition) => [...partition.team1, ...partition.team2].includes("P0"))
+      .map((partition) => getSocialVarietyGain(partition, context)));
+    const bestExcludedGain = Math.max(...candidates
+      .filter((partition) => ![...partition.team1, ...partition.team2].includes("P0"))
+      .map((partition) => getSocialVarietyGain(partition, context)));
+
+    expect(bestExcludedGain).toBeGreaterThan(bestIncludedGain);
+    const result = findBestSingleCourtSelectionV3(players, {
+      sessionMode: SessionMode.MEXICANO,
+      sessionType: SessionType.SOCIAL_MIX,
+      randomFn: () => 0,
+      completedMatches: history,
+      socialVarietyContext: context,
+      selectionConstraints,
+    });
+
+    expect(result.selection?.ids).toContain("P0");
+    expect(result.selection?.socialVarietyGain).toBeCloseTo(bestIncludedGain, 12);
+    expect(result.selection?.socialStarvation).toMatchObject({
+      idealRestGap: 1,
+      availableOverdueCount: 1,
+      selectedOverdueCount: 1,
+      leftOutOverdueCount: 0,
+    });
+
+    const restDisabled = findBestSingleCourtSelectionV3(players, {
+      sessionMode: SessionMode.MEXICANO,
+      sessionType: SessionType.SOCIAL_MIX,
+      respectPlayerRest: false,
+      randomFn: () => 0,
+      completedMatches: history,
+      socialVarietyContext: context,
+      selectionConstraints,
+    });
+    expect(restDisabled.selection?.ids).toContain("P0");
+  });
+
+  it("uses full unpaused population including busy players, but ignores paused players when deriving the gap", () => {
+    const players = makePlayers(12).map((player, index) => ({
+      ...player,
+      isBusy: index < 2,
+      isPaused: index >= 10,
+      restTurns: index < 2 ? 20 : index === 2 ? 3 : index < 10 ? 2 : 100,
+    }));
+    const result = findBestSocialBatchSelection(players, {
+      courtCount: 1,
+      sessionMode: SessionMode.MEXICANO,
+      randomFn: () => 0,
+    });
+
+    expect(result.selection?.selections[0].ids).toContain("P2");
+    expect(result.selection?.selections[0].ids.some((id) => ["P0", "P1", "P10", "P11"].includes(id))).toBe(false);
+    expect(result.selection?.selections[0].socialStarvation).toMatchObject({
+      idealRestGap: 2,
+      availableOverdueCount: 1,
+      selectedOverdueCount: 1,
+      leftOutOverdueCount: 0,
+    });
+  });
+
+  it("protects all overdue players across the complete batch", () => {
+    const players = makePlayers(14).map((player, index) => ({ ...player, restTurns: index < 6 ? 4 : 3 }));
+    const result = findBestSocialBatchSelection(players, {
+      courtCount: 2,
+      sessionMode: SessionMode.MEXICANO,
+      randomFn: () => 0,
+    });
+    const summary = result.selection?.selections[0].socialStarvation;
+
+    expect(result.selection?.selections.flatMap((selection) => selection.ids).filter((id) => Number(id.slice(1)) < 6)).toHaveLength(6);
+    expect(summary).toMatchObject({
+      idealRestGap: 3,
+      availableOverdueCount: 6,
+      selectedOverdueCount: 6,
+      leftOutOverdueCount: 0,
+    });
+    expect(result.selection?.selections[1].socialStarvation).toEqual(summary);
+  });
+
+  it("keeps court-time fairness and an effective matchmaking baseline ahead of overdue-turn protection", () => {
+    const players = makePlayers(9).map((player, index) => ({
+      ...player,
+      matchesPlayed: 0,
+      matchmakingBaseline: index === 0 ? 3 : 0,
+      restTurns: index === 0 ? 10 : 0,
+    }));
+    const result = findBestSocialBatchSelection(players, {
+      courtCount: 1,
+      sessionMode: SessionMode.MEXICANO,
+      randomFn: () => 0,
+    });
+
+    expect(result.selection?.selections[0].ids).not.toContain("P0");
   });
 
   it("arrival priority cannot bypass court-time fairness", () => {
@@ -105,7 +240,7 @@ describe("Social global batch solver", () => {
   });
 
   it("returns a certified three-court incumbent when only variety search times out", () => {
-    const players = makePlayers(12);
+    const players = makePlayers(12).map((player, index) => ({ ...player, restTurns: index < 4 ? 4 : 0 }));
     const allowed = new Set(["P0|P1|P2|P3", "P4|P5|P6|P7", "P10|P11|P8|P9"]);
     const result = findBestSocialBatchSelection(players, {
       courtCount: 3, sessionMode: SessionMode.MEXICANO, randomFn: () => 0, searchLimits: { maxBranches: 4 },
@@ -113,7 +248,28 @@ describe("Social global batch solver", () => {
     });
     expect(result.selection?.selections).toHaveLength(3);
     expect(result.fairnessCertified).toBe(true);
+    expect(result.starvationCertified).toBe(true);
     expect(result.varietyOptimal).toBe(false);
+  });
+
+  it("does not certify an early timeout before an equally ranked profile can protect overdue players", () => {
+    const players = makePlayers(8).map((player, index) => ({ ...player, restTurns: index >= 4 ? 5 : 0 }));
+    const group = (first: number) => ({ isQuartetAllowed: (quartet: Array<{ userId: string }>) => quartet.every((player) => Number(player.userId.slice(1)) >= first && Number(player.userId.slice(1)) < first + 4) });
+    const result = findBestSocialBatchSelection(players, {
+      courtCount: 1,
+      sessionMode: SessionMode.MEXICANO,
+      randomFn: () => 0,
+      searchLimits: { maxBranches: 1 },
+      schedules: [
+        { rank: 0, courts: [group(0)] },
+        { rank: 0, courts: [group(4)] },
+      ],
+    });
+
+    expect(result.selection).toBeNull();
+    expect(result.fairnessCertified).toBe(true);
+    expect(result.starvationCertified).toBe(false);
+    expect(result.debug.failureReason).toBe("SEARCH_LIMIT_REACHED");
   });
 
   it("returns no batch when a timed-out incumbent cannot certify fairness", () => {
@@ -129,7 +285,7 @@ describe("Social global batch solver", () => {
     expect(result.fairnessCertified).toBe(false);
   });
 
-  it("compares labelled schedules by scheduling rank before rest and variety", () => {
+  it("compares labelled schedules by scheduling rank before overdue protection and variety", () => {
     const players = makePlayers(8).map((player, index) => ({ ...player, restTurns: index < 4 ? 2 : 0 }));
     const group = (first: number) => ({ isQuartetAllowed: (quartet: Array<{ userId: string }>) => quartet.every((player) => Number(player.userId.slice(1)) >= first && Number(player.userId.slice(1)) < first + 4) });
     const result = findBestSocialBatchSelection(players, { courtCount: 1, sessionMode: SessionMode.MEXICANO, randomFn: () => 0, schedules: [{ rank: 0, courts: [group(4)] }, { rank: 1, courts: [group(0)] }] });
@@ -156,10 +312,10 @@ describe("Social global batch solver", () => {
     expect(result.varietyOptimal).toBe(false);
   });
 
-  it("widens a supplied rest tie zone so short-rest candidates can earn better Social variety", () => {
+  it("widens a supplied strict candidate pool so a normal shorter-rest player can earn better Social variety", () => {
     const players = makePlayers(5).map((player, index) => ({
       ...player,
-      restTurns: index < 4 ? 3 : 0,
+      restTurns: index < 4 ? 1 : 0,
     }));
     const candidatePool = buildCandidatePool(players, {
       requiredPlayerCount: 4,
@@ -179,7 +335,46 @@ describe("Social global batch solver", () => {
       randomFn: () => 0,
     });
 
+    expect(result.debug.eligiblePlayerIds).toContain("P4");
     expect(result.selection?.selections[0].ids).toContain("P4");
+    expect(result.selection?.selections[0].socialStarvation).toMatchObject({
+      idealRestGap: 1,
+      availableOverdueCount: 0,
+      selectedOverdueCount: 0,
+      leftOutOverdueCount: 0,
+    });
+  });
+
+  it("keeps overdue protection effective after widening a supplied strict candidate pool", () => {
+    const players = makePlayers(5).map((player, index) => ({
+      ...player,
+      restTurns: index < 4 ? 3 : 0,
+    }));
+    const candidatePool = buildCandidatePool(players, {
+      requiredPlayerCount: 4,
+      randomFn: () => 0,
+      respectPlayerRest: true,
+    });
+    const history: V3CompletedMatch[] = Array.from({ length: 10 }, () => ({
+      team1: ["P0", "P1"], team2: ["P2", "P3"],
+    }));
+    const result = findBestSocialBatchSelection(players, {
+      courtCount: 1,
+      sessionMode: SessionMode.MEXICANO,
+      completedMatches: history,
+      candidatePool,
+      randomFn: () => 0,
+    });
+
+    expect(candidatePool.tieZone?.players.map((player) => player.userId)).not.toContain("P4");
+    expect(result.debug.eligiblePlayerIds).toContain("P4");
+    expect(result.selection?.selections[0].ids).not.toContain("P4");
+    expect(result.selection?.selections[0].socialStarvation).toMatchObject({
+      idealRestGap: 1,
+      availableOverdueCount: 4,
+      selectedOverdueCount: 4,
+      leftOutOverdueCount: 0,
+    });
   });
 
   it("matches a three-court exhaustive oracle while applying global bounds", () => {

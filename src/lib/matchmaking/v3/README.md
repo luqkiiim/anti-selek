@@ -18,10 +18,13 @@ heuristics onto the previous engine.
 
 Social uses one whole-batch optimizer for ordinary, player-group, and interclub
 matches. It gives fair turns first, then arrival priority when turn counts tie,
-then applicable player-group rules. It considers ongoing variety before
-ordinary rest turns, then team balance, recent repeats, and seeded pairing
-tie-breaks. Longer breaks can win only when the stronger priorities and variety
-are tied. Balanced modes keep their own rules.
+then applicable player-group rules. A derived rest-turn guardrail protects
+players who have missed more than their expected rotation gap before ongoing
+variety is scored. Ordinary rest turns then break equally varied choices,
+followed by team balance, recent repeats, and seeded pairing tie-breaks. The
+guardrail uses the full unpaused session roster, including busy players; only
+available overdue players can be protected in the current batch. Balanced modes
+keep their own rules.
 
 Variety combines four equally scaled per-player experience distributions:
 shared-court contacts, partners, opponents, and (in Mixed pairing) mixed-side
@@ -47,8 +50,9 @@ sides; unclassifiable games still contribute interpersonal history.
 Small one/two-court batches with up to fourteen eligible players are exhaustive:
 every legal partition and non-overlapping pair is considered. Larger batches use
 bounded global search. A timeout returns an incumbent only when its player
-fairness is certified, and exposes whether variety was fully optimized. An
-uncertified timeout returns a search-limit failure rather than a greedy batch.
+fairness and Social rest-turn guardrail are certified, and exposes whether
+variety was fully optimized. An uncertified timeout returns a search-limit
+failure rather than a greedy batch.
 
 ## Core rules
 

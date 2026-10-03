@@ -1248,6 +1248,7 @@ export function findBestBatchSelectionV3<T extends MatchmakerV3Player>(
     sessionMode,
     sessionType,
     respectPlayerRest = true,
+    rotationPlayerCount,
     completedMatches = [],
     mixedHistoryMatches,
     socialHistoryMatches,
@@ -1263,6 +1264,7 @@ export function findBestBatchSelectionV3<T extends MatchmakerV3Player>(
     sessionMode: SessionMode;
     sessionType: SessionType;
     respectPlayerRest?: boolean;
+    rotationPlayerCount?: number;
     completedMatches?: Array<{
       team1: [string, string];
       team2: [string, string];
@@ -1286,7 +1288,7 @@ export function findBestBatchSelectionV3<T extends MatchmakerV3Player>(
 ): V3BatchResult<ActiveMatchmakerV3Player<T>> {
   if (sessionType === SessionType.SOCIAL_MIX) {
     return findBestSocialBatchSelection(players, {
-      courtCount, sessionMode, respectPlayerRest, completedMatches,
+      courtCount, sessionMode, respectPlayerRest, rotationPlayerCount, completedMatches,
       socialHistoryMatches: socialHistoryMatches ?? mixedHistoryMatches,
       socialVarietyContext, randomFn, searchLimits, candidatePool,
       selectionConstraints, pairingRandomMode,

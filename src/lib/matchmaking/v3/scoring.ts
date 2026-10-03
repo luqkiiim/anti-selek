@@ -8,6 +8,7 @@ import type {
   V3DoublesPartition,
   V3SingleCourtSelection,
   V3RestSummary,
+  V3SocialStarvationSummary,
 } from "./types";
 
 export const ELO_EXACT_REMATCH_BALANCE_TOLERANCE = 30;
@@ -16,6 +17,22 @@ export const POINTS_BALANCE_VARIETY_TOLERANCE = 1.5;
 export const FULL_SHARED_COURT_REPEAT_PENALTY = 6;
 export const FULL_REPEAT_REST_TOLERANCE = 1;
 const MIXED_VARIETY_COMPARE_EPSILON = 1e-9;
+
+export const SOCIAL_STARVATION_METRIC_COUNT = 3;
+
+export interface SocialStarvationPlayer {
+  userId: string;
+  restTurns: number;
+}
+
+export interface SocialStarvationContext {
+  /** Full unpaused session roster size, including busy players. */
+  activePlayerCount: number;
+  /** Players currently available to be selected, before candidate compression. */
+  availablePlayers: readonly SocialStarvationPlayer[];
+}
+
+export type SocialStarvationSummary = V3SocialStarvationSummary;
 
 function isSocialSession(sessionType: SessionType): boolean {
   return sessionType === SessionType.SOCIAL_MIX;
@@ -45,6 +62,57 @@ export function getSocialRestVector(
     -rest.minimumRestTurns,
     ...rest.restTurnVector.map((turns) => -turns),
   ];
+}
+
+export function getSocialIdealRestGap(activePlayerCount: number) {
+  return Math.max(0, Math.ceil((Math.max(0, activePlayerCount) - 4) / 4));
+}
+
+/**
+ * Minimize overdue available players left out. With no overdue player left out,
+ * the all-zero vector leaves variety free to decide among the selected group.
+ */
+export function getSocialStarvationSummary(
+  selectedPlayers: readonly SocialStarvationPlayer[],
+  context: SocialStarvationContext
+): SocialStarvationSummary {
+  const idealRestGap = getSocialIdealRestGap(context.activePlayerCount);
+  const selectedIds = new Set(selectedPlayers.map((player) => player.userId));
+  const overduePlayers = context.availablePlayers.filter(
+    (player) => player.restTurns > idealRestGap
+  );
+  const leftOut = overduePlayers.filter((player) => !selectedIds.has(player.userId));
+  return {
+    idealRestGap,
+    availableOverdueCount: overduePlayers.length,
+    selectedOverdueCount: overduePlayers.length - leftOut.length,
+    leftOutOverdueCount: leftOut.length,
+    highestLeftOutRestTurns: leftOut.length ? Math.max(...leftOut.map((player) => player.restTurns)) : 0,
+    totalLeftOutRestTurns: leftOut.reduce((total, player) => total + player.restTurns, 0),
+  };
+}
+
+export function getSocialStarvationVector(
+  selectedPlayers: readonly SocialStarvationPlayer[],
+  context: SocialStarvationContext
+) {
+  const summary = getSocialStarvationSummary(selectedPlayers, context);
+  return [
+    summary.leftOutOverdueCount,
+    summary.highestLeftOutRestTurns,
+    summary.totalLeftOutRestTurns,
+  ];
+}
+
+export function compareSocialStarvationPlayers(
+  left: readonly SocialStarvationPlayer[],
+  right: readonly SocialStarvationPlayer[],
+  context: SocialStarvationContext
+) {
+  return compareSocialNumberVectors(
+    getSocialStarvationVector(left, context),
+    getSocialStarvationVector(right, context)
+  );
 }
 
 export function compareSocialNumberVectors(left: readonly number[], right: readonly number[]) {
@@ -79,7 +147,12 @@ export function compareSocialRestPlayers(
 export function compareSocialBatchSelections<T extends ActiveMatchmakerV3Player>(
   left: V3BatchSelection<T>,
   right: V3BatchSelection<T>,
-  options?: { respectPlayerRest?: boolean; leftSchedulingRank?: number; rightSchedulingRank?: number }
+  options?: {
+    respectPlayerRest?: boolean;
+    leftSchedulingRank?: number;
+    rightSchedulingRank?: number;
+    starvationContext?: SocialStarvationContext;
+  }
 ) {
   const leftPlayers = left.selections.flatMap((selection) => selection.players);
   const rightPlayers = right.selections.flatMap((selection) => selection.players);
@@ -88,6 +161,7 @@ export function compareSocialBatchSelections<T extends ActiveMatchmakerV3Player>
     rightPlayers
   ) ||
     (options?.leftSchedulingRank ?? 0) - (options?.rightSchedulingRank ?? 0) ||
+    (options?.starvationContext ? compareSocialStarvationPlayers(leftPlayers, rightPlayers, options.starvationContext) : 0) ||
     (right.totalSocialVarietyGain ?? 0) - (left.totalSocialVarietyGain ?? 0) ||
     (options?.respectPlayerRest === false ? 0 : compareSocialRestPlayers(leftPlayers, rightPlayers)) ||
     left.maxBalanceGap - right.maxBalanceGap ||
@@ -490,10 +564,11 @@ export function compareSingleCourtSelections<
   left: V3SingleCourtSelection<T>,
   right: V3SingleCourtSelection<T>,
   sessionType: SessionType,
-  options?: { respectPlayerRest?: boolean }
+  options?: { respectPlayerRest?: boolean; starvationContext?: SocialStarvationContext }
 ) {
   if (isSocialSession(sessionType)) {
     return compareSocialFairnessPlayers(left.players, right.players) ||
+      (options?.starvationContext ? compareSocialStarvationPlayers(left.players, right.players, options.starvationContext) : 0) ||
       (right.socialVarietyGain ?? 0) - (left.socialVarietyGain ?? 0) ||
       (options?.respectPlayerRest === false ? 0 : compareSocialRestPlayers(left.players, right.players)) ||
       left.balanceGap - right.balanceGap || left.pointDiffGap - right.pointDiffGap ||
@@ -653,6 +728,7 @@ export function compareBatchSelections<T extends ActiveMatchmakerV3Player>(
   options?: {
     respectPlayerRest?: boolean;
     pairingRandomMode?: V3BatchPairingRandomMode;
+    starvationContext?: SocialStarvationContext;
   }
 ) {
   if (isSocialSession(sessionType)) return compareSocialBatchSelections(left, right, options);
