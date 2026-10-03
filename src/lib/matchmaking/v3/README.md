@@ -11,31 +11,33 @@ Legality, busy/paused availability, mandatory retained players and hard format
 constraints are enforced before ranking. Shared priorities are effective match
 counts, arrival priority, applicable structural schedule rank, then starvation.
 
-After those priorities tie, Mixed sessions compare match-type entropy first.
-They then minimize the number of selected players with zero completed-match
-rest, compare relationship entropy (courtmates, partners and opponents), and
-use the ascending rest-turn vector as a soft tie-break when relationship
-entropy is tied. In MEXICANO, where there is no match-type facet, zero-rest
-count comes before relationship entropy. Social then compares actual team
-balance, its existing late recent-repeat ties, exact rematches and seeded
-randomness. Balanced first establishes its fixed balance envelope inside the
-strongest rotation class, then applies the same mode-aware entropy/cadence
-layers inside that envelope before actual worst/total balance, Points
-point-difference balance, exact rematches and seeded randomness.
-Consecutive-play burden is diagnostic.
+After those priorities tie, Social certifies the smallest immediate-replay
+count available in that rotation class and allows at most one additional
+zero-rest player. Balanced first establishes its fixed balance envelope inside
+the same stronger class, then certifies that minimum replay count only among
+candidates inside the envelope and applies the same one-player allowance.
+Neither allowance is calculated court by court or expands Balanced's envelope.
 
-The zero-rest count and soft rest vector compare the whole selected set for a
-refill batch. `restTurns === 0` counts as an immediate replay. The later soft
-vector maximizes the ascending sorted completed-match rest turns
-lexicographically: maximize the lowest rest, then the next-lowest, and so on.
-Total rest is not an objective. Social compares each entropy layer exactly;
-Balanced uses its fixed 1e-12 score bucket independently for match-type and
-relationship entropy. `respectPlayerRest: false` disables both cadence layers,
-while starvation protection remains enabled. In Mixed sessions a stronger
-match-type gain can outrank fewer immediate replays; among effectively tied
-type gains, the matcher minimizes zero-rest selections before optimizing
-relationships. Structural opportunity coverage continues to report feasible
+Within the certified replay allowance, both formats maximize the existing
+combined normalized entropy across courtmates, partners, opponents and, in
+Mixed sessions, match type. The completed-match rest vector is a soft tie-break
+after entropy. `restTurns === 0` counts as an immediate replay. The soft vector
+maximizes the ascending sorted rest turns lexicographically: maximize the
+lowest rest, then the next-lowest, and so on. Total rest is not an objective.
+Social compares combined entropy exactly; Balanced uses its fixed 1e-12 bucket
+on the combined score. `respectPlayerRest: false` disables both the replay
+allowance and soft cadence preference, while starvation protection remains
+enabled. Structural opportunity coverage continues to report feasible
 relationships regardless of the choices admitted by the balance envelope.
+
+The resulting Social order is legality and availability, match-count fairness,
+arrival, structural schedule rank, starvation, the whole-batch replay
+allowance, combined entropy, soft cadence, actual worst/total balance gaps and
+applicable point-difference gaps, Social's late partner/opponent-repeat ties,
+exact rematch and seeded randomness. Balanced uses the same stronger rotation
+order, then its fixed balance guardrail, replay allowance, combined entropy,
+soft cadence, actual worst/total balance, Points worst/total point-difference
+gaps where applicable, exact rematch and its seeded/deterministic final tie.
 
 ## Shared variety and starvation
 
@@ -104,6 +106,14 @@ npm run benchmark:matchmaking -- --seeds 1,4729,104729 --wide-seeds 30011,65537
 ```
 
 To compare against a previously saved report, pass `--baseline-json <path>`.
+For a four-policy comparison, also pass `--strict-json <path>` and
+`--type-first-json <path>` with the preserved strict-cadence and
+type-entropy-first reports. The retained full reports can be compared with:
+
+```sh
+npm run benchmark:matchmaking -- --baseline-json benchmarks/social-coverage-full-baseline.json --strict-json benchmarks/social-coverage-full-strict.json --type-first-json benchmarks/social-coverage-full-type-entropy-first.json
+```
+
 To generate a baseline report from an explicit worktree, pass
 `--baseline-worktree <path>`; the worktree must contain the benchmark test and
 measurement files. `--skip-baseline` runs only the current engine, and
@@ -115,9 +125,12 @@ skipped in the normal Vitest/CI run and is enabled by this script.
 `balanceGuardrail.ts` contains the format policy. Balanced search first finds
 the strongest feasible fairness/arrival/schedule/starvation class and its
 lexicographic minimum `(maxBalanceGap, totalBalanceGap)`. It then freezes the
-envelope before searching whole batches. In Mixed sessions, match-type entropy
-is followed by zero-rest count, relationship entropy and soft rest; in
-MEXICANO, zero-rest count precedes relationship entropy and soft rest.
+envelope before searching whole batches. Replay certification finds the
+minimum zero-rest count inside that fixed envelope and allows at most one
+additional zero-rest player across the whole batch. Combined normalized
+entropy ranks the admitted batches next, followed by soft completed-match
+cadence when entropy ties. The replay allowance never widens the balance
+envelope.
 
 Points admits `maxBalanceGap <= bestMaxBalanceGap + 1.5`. Rating admits
 `maxBalanceGap <= min(50, bestMaxBalanceGap + 30)`. The Rating window adapts the
@@ -136,30 +149,33 @@ weaker starvation or fairness class cannot set the baseline.
 
 Balanced retires the old candidate caps, rest tie zones, quartet exemplars,
 anchor locks and repeat/coverage pruning. Every admissible partition remains
-visible to the shared mode-aware entropy and cadence ordering. Small
-one/two-court decisions with at most fourteen available players are exhaustive
-by default. Larger decisions use bounded global search
-and admissible pruning, with separate 50,000-branch / two-second budgets for
-baseline and selection passes. Baseline scoring defers zero-rest ranking,
-entropy and soft cadence, and collapses only worse-balanced partitions of an
-identical quartet; the second pass restores every admissible partition. Its
-optimistic zero-rest bound is relaxed across all remaining players. For Mixed
-sessions, type-entropy pruning precedes the zero-rest bound; that bound applies
-only when the type score ties. Relationship-entropy pruning follows only when
-the zero-rest layer ties, and the soft-rest bound applies only when relationship
-entropy ties. MEXICANO skips the type layer. A Balanced timeout may return an incumbent only
-when fairness, schedule, starvation and the balance baseline are certified;
-otherwise it reports a search limit. It never grants an unproven envelope or
-falls back to greedy courts. Diagnostics distinguish incomplete entropy or
-soft-rest optimization.
+visible to the shared combined entropy and cadence ordering. Small one/two-court
+decisions with at most fourteen available players are exhaustive by default.
+Larger decisions use bounded global search and admissible pruning, with a
+50,000-branch / two-second budget for each baseline, replay-certification and
+final-selection phase.
+The balance pass defers replay, entropy and soft cadence, collapsing only
+worse-balanced partitions of an identical quartet. The replay pass then
+certifies the minimum zero-rest count inside the strongest rotation class and,
+for Balanced, inside the frozen guardrail. Its optimistic replay lower bound
+is relaxed across all remaining players. The final pass restores admissible
+layouts and searches only batches within the global best-plus-one allowance.
+Its optimistic combined-entropy bound is checked before the soft-rest bound;
+soft cadence prunes only when the entropy score ties. A rest-sensitive
+selection requires certified replay minimum and allowance; an incomplete
+replay-certification phase returns no selection. A Balanced timeout may return
+an incumbent only when fairness, schedule, starvation, balance baseline and
+replay allowance are certified; otherwise it reports a search limit. It
+never grants an unproven envelope or falls back to greedy courts. Diagnostics
+distinguish incomplete entropy or soft-rest optimization.
 
-Balanced entropy uses fixed 1e-12 score buckets for transitive effective ties;
-Social retains its existing exact score ordering. No pairwise epsilon is used.
-Raw total/facet gains remain available. Debug and persisted reasons expose
-fairness, starvation, baseline, allowed gap, chosen gap, the chosen batch's
-zero-rest selected-player count (which can include first assignments) and
-ascending completed-match rest vector, entropy facets and whether a final exact-rematch,
-seeded-random or deterministic tie decided the result.
+Balanced entropy uses one fixed 1e-12 bucket on the combined score for
+transitive effective ties; Social retains exact score ordering. No pairwise
+epsilon is used. Raw total/facet gains remain available. Shared debug reports
+the certified best replay count, its allowed best-plus-one count, chosen count
+and envelope status together with fairness, starvation, balance baseline,
+allowed gap, chosen gap, completed-match rest vector, entropy facets and final
+tie-break. Persisted reasons explain the rotation policy and selection metrics.
 The opt-in `measureRotationStarvationIntervention` benchmark helper runs the
 same search with starvation priority suppressed only in a private
 counterfactual, replaying identical random draws and reporting whether the
@@ -173,8 +189,8 @@ repeat ties and opportunity semantics remain unchanged.
 
 Player-group seat compositions and crossover schedule ranks remain stronger
 structural rules. Balanced no longer uses personal crossover debt or elapsed
-wait vectors to narrow equally fair selections; the mode-aware entropy layers,
-immediate zero-rest count and soft cadence decide those ties. Level Match
+wait vectors to narrow equally fair selections; the certified replay allowance,
+combined entropy and soft cadence decide those ties. Level Match
 retains its separate group-selection policy.
 
 Rest bounds remain subject to stronger count fairness and legality. Mixed

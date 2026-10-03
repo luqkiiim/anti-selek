@@ -193,14 +193,15 @@ describe("matchmaking v3 scoring", () => {
     expect(getSoftCadenceVector(players)).toEqual([0, -3, -3, -3]);
   });
 
-  // The solver applies the fixed balance envelope before these comparisons.
-  it.each(BALANCED_SESSION_TYPES)("minimizes zero-rest players before entropy and admissible balance (%s)", (sessionType) => {
-    const varied = createSelection({ balanceGap: 1, socialVarietyGain: 1, restTurns: [0, 0, 0, 0], exactRematchPenalty: 10 });
-    const rested = createSelection({ balanceGap: 0, socialVarietyGain: 0, restTurns: [3, 3, 3, 3], exactRematchPenalty: 0 });
-    expect(compareSingleCourtSelections(rested, varied, sessionType)).toBeLessThan(0);
-    const variedBatch = createBatchSelection({ maxBalanceGap: 1, totalBalanceGap: 2, totalSocialVarietyGain: 1, restTurns: [0, 0, 0, 0] });
-    const restedBatch = createBatchSelection({ maxBalanceGap: 0, totalBalanceGap: 0, totalSocialVarietyGain: 0, restTurns: [3, 3, 3, 3] });
-    expect(compareBatchSelections(restedBatch, variedBatch, sessionType)).toBeLessThan(0);
+  // Replay/balance admissibility is frozen by the shared search before these
+  // public ordering helpers compare entropy and later ties.
+  it.each(BALANCED_SESSION_TYPES)("compares entropy before actual balance inside an admitted envelope (%s)", (sessionType) => {
+    const varied = createSelection({ balanceGap: 1, socialVarietyGain: 1, restTurns: [1, 1, 1, 1], exactRematchPenalty: 10 });
+    const balanced = createSelection({ balanceGap: 0, socialVarietyGain: 0, restTurns: [1, 1, 1, 1], exactRematchPenalty: 0 });
+    expect(compareSingleCourtSelections(varied, balanced, sessionType)).toBeLessThan(0);
+    const variedBatch = createBatchSelection({ maxBalanceGap: 1, totalBalanceGap: 2, totalSocialVarietyGain: 1, restTurns: [1, 1, 1, 1] });
+    const balancedBatch = createBatchSelection({ maxBalanceGap: 0, totalBalanceGap: 0, totalSocialVarietyGain: 0, restTurns: [1, 1, 1, 1] });
+    expect(compareBatchSelections(variedBatch, balancedBatch, sessionType)).toBeLessThan(0);
   });
 
   it.each(BALANCED_SESSION_TYPES)("keeps fairness, arrival and overdue protection ahead of entropy (%s)", (sessionType) => {
@@ -276,14 +277,16 @@ describe("matchmaking v3 scoring", () => {
     expect(compareSingleCourtSelections(moreRest, lessRest, SessionType.SOCIAL_MIX, { respectPlayerRest: false })).toBe(0);
   });
 
-  it("keeps immediate-replay prevention ahead of variety while allowing entropy to beat soft rest", () => {
+  it("compares entropy before soft rest inside the frozen replay envelope", () => {
     const immediateReplay = createSelection({
       restTurns: [0, 1, 1, 1], balanceGap: 0, socialVarietyGain: 100, exactRematchPenalty: 0,
     });
     const noReplay = createSelection({
       restTurns: [1, 1, 1, 1], balanceGap: 0, socialVarietyGain: 0, exactRematchPenalty: 0,
     });
-    expect(compareSingleCourtSelections(noReplay, immediateReplay, SessionType.SOCIAL_MIX)).toBeLessThan(0);
+    // The shared search admits at most best+1 immediate replays, so this
+    // comparator orders these already-admitted candidates by entropy.
+    expect(compareSingleCourtSelections(immediateReplay, noReplay, SessionType.SOCIAL_MIX)).toBeLessThan(0);
 
     const betterEntropy = createSelection({
       restTurns: [1, 1, 1, 1], balanceGap: 0, socialVarietyGain: 1, exactRematchPenalty: 0,
@@ -294,47 +297,37 @@ describe("matchmaking v3 scoring", () => {
     expect(compareSingleCourtSelections(betterEntropy, moreRest, SessionType.SOCIAL_MIX)).toBeLessThan(0);
   });
 
-  it.each([SessionType.SOCIAL_MIX, ...BALANCED_SESSION_TYPES])("uses separate Mixed entropy and cadence priority layers for %s", (sessionType) => {
-    const higherTypeButReplay = createSelection({
+  it.each([SessionType.SOCIAL_MIX, ...BALANCED_SESSION_TYPES])("compares the combined four-facet entropy in MIXED mode (%s)", (sessionType) => {
+    const higherCombined = createSelection({
       restTurns: [0, 1, 1, 1], balanceGap: 0, socialVarietyGain: 0, exactRematchPenalty: 0,
     });
-    higherTypeButReplay.socialVarietyGains = { courtmates: 0, partners: 0, opponents: 0, matchType: 0.4 };
-    const lowerTypeNoReplay = createSelection({
+    higherCombined.socialVarietyGains = { courtmates: 0, partners: 0, opponents: 0, matchType: 0.5 };
+    const lowerCombined = createSelection({
       restTurns: [1, 1, 1, 1], balanceGap: 0, socialVarietyGain: 0.4, exactRematchPenalty: 0,
     });
-    lowerTypeNoReplay.socialVarietyGains = { courtmates: 0.1, partners: 0.1, opponents: 0.1, matchType: 0.1 };
+    lowerCombined.socialVarietyGains = { courtmates: 0.1, partners: 0.1, opponents: 0.1, matchType: 0.1 };
     const mixed = { sessionMode: SessionMode.MIXICANO };
-    expect(compareSingleCourtSelections(higherTypeButReplay, lowerTypeNoReplay, sessionType, mixed)).toBeLessThan(0);
+    expect(compareSingleCourtSelections(higherCombined, lowerCombined, sessionType, mixed)).toBeLessThan(0);
 
-    const fewerZeroRest = createSelection({
-      restTurns: [1, 1, 1, 1], balanceGap: 0, socialVarietyGain: 0, exactRematchPenalty: 0,
-    });
-    fewerZeroRest.socialVarietyGains = { courtmates: 0, partners: 0, opponents: 0, matchType: 0.1 };
-    const moreRelationshipEntropy = createSelection({
-      restTurns: [0, 1, 1, 1], balanceGap: 0, socialVarietyGain: 10, exactRematchPenalty: 0,
-    });
-    moreRelationshipEntropy.socialVarietyGains = { courtmates: 3, partners: 3, opponents: 3, matchType: 0.1 };
-    expect(compareSingleCourtSelections(fewerZeroRest, moreRelationshipEntropy, sessionType, mixed)).toBeLessThan(0);
-
-    const moreRelation = createSelection({
+    const higherRelationship = createSelection({
       restTurns: [1, 1, 1, 1], balanceGap: 0, socialVarietyGain: 1, exactRematchPenalty: 0,
     });
-    moreRelation.socialVarietyGains = { courtmates: 0.3, partners: 0.3, opponents: 0.3, matchType: 0.1 };
+    higherRelationship.socialVarietyGains = { courtmates: 0.3, partners: 0.3, opponents: 0.3, matchType: 0.1 };
     const smoother = createSelection({
       restTurns: [3, 3, 3, 3], balanceGap: 0, socialVarietyGain: 0, exactRematchPenalty: 0,
     });
     smoother.socialVarietyGains = { courtmates: 0, partners: 0, opponents: 0, matchType: 0.1 };
-    expect(compareSingleCourtSelections(moreRelation, smoother, sessionType, mixed)).toBeLessThan(0);
+    expect(compareSingleCourtSelections(higherRelationship, smoother, sessionType, mixed)).toBeLessThan(0);
 
-    const openNoReplay = createSelection({
+    const openNoType = createSelection({
       restTurns: [1, 1, 1, 1], balanceGap: 0, socialVarietyGain: 0, exactRematchPenalty: 0,
     });
-    openNoReplay.socialVarietyGains = { courtmates: 0, partners: 0, opponents: 0, matchType: 0 };
+    openNoType.socialVarietyGains = { courtmates: 0, partners: 0, opponents: 0, matchType: 0 };
     const openTypeOnly = createSelection({
       restTurns: [0, 1, 1, 1], balanceGap: 0, socialVarietyGain: 0, exactRematchPenalty: 0,
     });
     openTypeOnly.socialVarietyGains = { courtmates: 0, partners: 0, opponents: 0, matchType: 10 };
-    expect(compareSingleCourtSelections(openNoReplay, openTypeOnly, sessionType, { sessionMode: SessionMode.MEXICANO })).toBeLessThan(0);
+    expect(compareSingleCourtSelections(openNoType, openTypeOnly, sessionType, { sessionMode: SessionMode.MEXICANO })).toBeLessThan(0);
   });
 
   it("uses exact Social entropy before soft rest and soft rest only on an exact entropy tie", () => {

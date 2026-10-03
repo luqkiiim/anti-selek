@@ -20,6 +20,7 @@ const baselineWorktree = valueAfter("--baseline-worktree", process.env.BENCHMARK
 const strictWorktree = valueAfter("--strict-worktree", process.env.BENCHMARK_STRICT_WORKTREE);
 const suppliedBaselineJson = valueAfter("--baseline-json");
 const suppliedStrictJson = valueAfter("--strict-json");
+const suppliedTypeFirstJson = valueAfter("--type-first-json");
 const suppliedCurrentJson = valueAfter("--current-json");
 const skipBaseline = has("--skip-baseline");
 const outputDir = path.resolve(root, valueAfter("--out-dir", "benchmarks"));
@@ -70,7 +71,7 @@ function trackedChangedPaths(workdir, paths) {
   return result.stdout.split(/\r?\n/).map((item) => item.trim()).filter(Boolean);
 }
 
-function runIn(workdir, label, enginePolicy, baselineJson = "", policyLabel = enginePolicy === "baseline" ? "entropy-first" : enginePolicy === "strict" ? "strict-cadence" : "type-entropy-first") {
+function runIn(workdir, label, enginePolicy, baselineJson = "", policyLabel = enginePolicy === "baseline" ? "entropy-first" : enginePolicy === "strict" ? "strict-cadence" : "replay-envelope-best-plus-one") {
   const jsonPath = path.join(outputDir, `social-coverage-${runTag}-${label}.json`);
   const markdownPath = path.join(outputDir, `social-coverage-${runTag}-${label}.md`);
   const commitSha = gitHead(workdir);
@@ -82,7 +83,7 @@ function runIn(workdir, label, enginePolicy, baselineJson = "", policyLabel = en
       ? "Benchmark instrumentation is copied into the original entropy-first worktree. socialBatch.ts and scoring.ts are unchanged from the baseline commit; socialVariety.ts contains only the added coverage API."
       : enginePolicy === "strict"
         ? "Only benchmark measurement files are copied into the strict-policy worktree; production engine files remain at the recorded strict commit."
-        : "Current checkout includes the Mixed type-entropy-first engine and benchmark instrumentation; hashes identify the exact sources used.",
+        : "Current checkout includes the strongest-class, Balanced-envelope, frozen best-replay-plus-one policy and benchmark instrumentation; hashes identify the exact sources used.",
     policyLabel,
     coreEngineTrackedDiffPaths: trackedChangedPaths(workdir, coreEnginePaths),
     sharedVarietyTrackedDiffPaths: trackedChangedPaths(workdir, sharedVarietyPaths),
@@ -158,10 +159,12 @@ if (!strictJson && strictWorktree) {
 
 const current = suppliedCurrentJson
   ? { jsonPath: path.resolve(suppliedCurrentJson), markdownPath: null }
-  : runIn(root, "current", "current", baselineJson, "type-entropy-first");
+  : runIn(root, "current", "current", baselineJson, "replay-envelope-best-plus-one");
 const report = JSON.parse(readFileSync(current.jsonPath, "utf8"));
 const baselineReport = baselineJson && existsSync(baselineJson) ? JSON.parse(readFileSync(baselineJson, "utf8")) : null;
 const strictReport = strictJson && existsSync(strictJson) ? JSON.parse(readFileSync(strictJson, "utf8")) : null;
+const typeFirstJson = suppliedTypeFirstJson ? path.resolve(suppliedTypeFirstJson) : "";
+const typeFirstReport = typeFirstJson && existsSync(typeFirstJson) ? JSON.parse(readFileSync(typeFirstJson, "utf8")) : null;
 const filterRequestedSessions = (policyReport) => policyReport ? {
   ...policyReport,
   sessions: policyReport.sessions.filter((session) =>
@@ -169,10 +172,57 @@ const filterRequestedSessions = (policyReport) => policyReport ? {
 } : null;
 const matchedBaselineReport = filterRequestedSessions(baselineReport);
 const matchedStrictReport = filterRequestedSessions(strictReport);
-if (baselineReport && baselineReport.sourceProvenance?.policyLabel && baselineReport.sourceProvenance.policyLabel !== "entropy-first") throw new Error("--baseline-json must name an entropy-first benchmark artifact.");
-if (strictReport && strictReport.sourceProvenance?.policyLabel && strictReport.sourceProvenance.policyLabel !== "strict-cadence") throw new Error("--strict-json must name a strict-cadence benchmark artifact.");
+const matchedTypeFirstReport = filterRequestedSessions(typeFirstReport);
 const sessionTypes = ["SOCIAL_MIX", "POINTS", "ELO"];
 const labels = { SOCIAL_MIX: "Social", POINTS: "Balanced Points", ELO: "Balanced Rating/Elo" };
+if (baselineReport && baselineReport.sourceProvenance?.policyLabel && baselineReport.sourceProvenance.policyLabel !== "entropy-first") throw new Error("--baseline-json must name an entropy-first benchmark artifact.");
+if (strictReport && strictReport.sourceProvenance?.policyLabel && strictReport.sourceProvenance.policyLabel !== "strict-cadence") throw new Error("--strict-json must name a strict-cadence benchmark artifact.");
+if (typeFirstReport && typeFirstReport.sourceProvenance?.policyLabel && typeFirstReport.sourceProvenance.policyLabel !== "type-entropy-first") throw new Error("--type-first-json must name a type-entropy-first benchmark artifact.");
+if (report.sourceProvenance?.policyLabel && report.sourceProvenance.policyLabel !== "replay-envelope-best-plus-one") throw new Error("The newly measured report must be labeled replay-envelope-best-plus-one.");
+const expectedSessionKeys = [
+  ...seeds.flatMap((seed) => sessionTypes.map((sessionType) => `narrow:${sessionType}:${seed}`)),
+  ...wideSeeds.flatMap((seed) => ["POINTS", "ELO"].map((sessionType) => `wide:${sessionType}:${seed}`)),
+].sort();
+function assertComparableReport(policyName, policyReport) {
+  if (!policyReport) return;
+  const sessionKeys = policyReport.sessions.map((session) => `${session.profile}:${session.sessionType}:${session.seed}`).sort();
+  if (JSON.stringify(sessionKeys) !== JSON.stringify(expectedSessionKeys)) {
+    throw new Error(`${policyName} artifact does not contain the exact requested profile/format/seed sessions. Expected ${expectedSessionKeys.length}, found ${sessionKeys.length}.`);
+  }
+  const setupFields = ["sessionMode", "courts", "roster", "completionSchedule", "checkpoints", "coverageHistory", "restDefinition", "skillProfiles", "pointDiff"];
+  for (const field of setupFields) {
+    if (JSON.stringify(policyReport.setup?.[field]) !== JSON.stringify(report.setup?.[field])) {
+      throw new Error(`${policyName} artifact has a different ${field} definition than the current run.`);
+    }
+  }
+  for (const session of policyReport.sessions) {
+    if (session.checkpoints?.["20"]?.completedMatches !== 20 || session.checkpoints?.["400"]?.completedMatches !== 400 ||
+        session.completedMatchTypes?.length !== 400 || session.externalCompletionSchedule?.length !== 400) {
+      throw new Error(`${policyName} session ${session.profile}/${session.sessionType}/seed ${session.seed} does not have exact completed-only 20/400 checkpoints and 400 schedule events.`);
+    }
+  }
+}
+for (const [policyName, policyReport] of [
+  ["entropy-first", matchedBaselineReport],
+  ["strict-cadence", matchedStrictReport],
+  ["type-entropy-first", matchedTypeFirstReport],
+  ["replay-envelope-best-plus-one", filterRequestedSessions(report)],
+]) assertComparableReport(policyName, policyReport);
+const comparisonReports = [
+  ["entropy-first", matchedBaselineReport],
+  ["strict-cadence", matchedStrictReport],
+  ["type-entropy-first", matchedTypeFirstReport],
+].filter(([, policyReport]) => policyReport);
+for (const [policyName, historical] of comparisonReports) {
+  const historicalByKey = new Map(historical.sessions.map((session) => [`${session.profile}:${session.sessionType}:${session.seed}`, session]));
+  for (const session of report.sessions) {
+    const oldSession = historicalByKey.get(`${session.profile}:${session.sessionType}:${session.seed}`);
+    if (!oldSession) continue;
+    if (JSON.stringify(oldSession.externalCompletionSchedule) !== JSON.stringify(session.externalCompletionSchedule)) {
+      throw new Error(`${policyName} schedule differs for ${session.profile}/${session.sessionType}/seed ${session.seed}.`);
+    }
+  }
+}
 const percent = (value) => value === null || value === undefined ? "n/a" : `${(value * 100).toFixed(1)}%`;
 const mean = (items) => items.length ? items.reduce((sum, item) => sum + item, 0) / items.length : null;
 const populationStdDev = (items) => {
@@ -233,10 +283,13 @@ for (const profile of ["narrow", "wide"]) for (const sessionType of sessionTypes
 const policyReports = [
   ...(matchedBaselineReport ? [{ label: "entropy-first", report: matchedBaselineReport }] : []),
   ...(matchedStrictReport ? [{ label: "strict-cadence", report: matchedStrictReport }] : []),
-  { label: "type-entropy-first", report },
+  ...(matchedTypeFirstReport ? [{ label: "type-entropy-first", report: matchedTypeFirstReport }] : []),
+  { label: "replay-envelope-best-plus-one", report },
 ];
 const policyComparison = [];
 const averageValues = (items) => items.length ? items.reduce((sum, item) => sum + item, 0) / items.length : null;
+const sumValues = (items) => items.length ? items.reduce((sum, item) => sum + item, 0) : null;
+const meanAt = (checkpoints, getter) => averageValues(checkpoints.map(getter).filter((value) => typeof value === "number"));
 for (const { label: policy, report: policyReport } of policyReports) {
   for (const profile of ["narrow", "wide"]) for (const sessionType of sessionTypes) {
     const sessions = policyReport.sessions.filter((session) => session.profile === profile && session.sessionType === sessionType);
@@ -244,6 +297,10 @@ for (const { label: policy, report: policyReport } of policyReports) {
     const checkpoint20 = sessions.map((session) => session.checkpoints["20"]);
     const checkpoint400 = sessions.map((session) => session.checkpoints["400"]);
     const series = sessions.map((session) => session.completedMatchTypes ?? null).filter((value) => Array.isArray(value));
+    const replay20 = checkpoint20.map((item) => item.replayEnvelope).filter((item) => item?.policyApplied === true);
+    const replay400 = checkpoint400.map((item) => item.replayEnvelope).filter((item) => item?.policyApplied === true);
+    const replayApplicable = sessions.some((session) => session.replayEnvelope?.policyApplied === true);
+    const hasUncertifiedOverdue = checkpoint400.some((item) => item.starvation.uncertifiedCounterfactualDecisions > 0);
     policyComparison.push({
       policy,
       profile,
@@ -257,24 +314,94 @@ for (const { label: policy, report: policyReport } of policyReports) {
       last100OwnSideMean: averageValues(series.map((events) => events.slice(300, 400).filter((type) => type === "OWN_SIDE").length)),
       relationshipCoverage20Mean: averageValues(checkpoint20.map((item) => item.varietyCoverageScore).filter((value) => typeof value === "number")),
       relationshipCoverage400Mean: averageValues(checkpoint400.map((item) => item.varietyCoverageScore).filter((value) => typeof value === "number")),
+      partnerCoverage20Mean: meanAt(checkpoint20, (item) => item.partnerCoverage),
+      partnerCoverage400Mean: meanAt(checkpoint400, (item) => item.partnerCoverage),
+      opponentCoverage20Mean: meanAt(checkpoint20, (item) => item.opponentCoverage),
+      opponentCoverage400Mean: meanAt(checkpoint400, (item) => item.opponentCoverage),
+      courtmateCoverage20Mean: meanAt(checkpoint20, (item) => item.courtmateCoverage),
+      courtmateCoverage400Mean: meanAt(checkpoint400, (item) => item.courtmateCoverage),
       relationshipEntropy400Mean: averageValues(checkpoint400.map((item) => item.relationshipEntropyScore).filter((value) => typeof value === "number")),
       matchTypeEntropy400Mean: averageValues(checkpoint400.map((item) => item.matchTypeEntropyScore).filter((value) => typeof value === "number")),
       normalizedEntropy400Mean: averageValues(checkpoint400.map((item) => item.normalizedEntropyScore).filter((value) => typeof value === "number")),
+      relationshipEntropy20Mean: meanAt(checkpoint20, (item) => item.relationshipEntropyScore),
+      matchTypeEntropy20Mean: meanAt(checkpoint20, (item) => item.matchTypeEntropyScore),
+      normalizedEntropy20Mean: meanAt(checkpoint20, (item) => item.normalizedEntropyScore),
+      matchTypeCoverage20: {
+        mixedMean: meanAt(checkpoint20, (item) => item.matchTypeCoverage?.MIXED),
+        ownSideMean: meanAt(checkpoint20, (item) => item.matchTypeCoverage?.OWN_SIDE),
+      },
+      matchTypeCoverage400: {
+        mixedMean: meanAt(checkpoint400, (item) => item.matchTypeCoverage?.MIXED),
+        ownSideMean: meanAt(checkpoint400, (item) => item.matchTypeCoverage?.OWN_SIDE),
+      },
       backToBackRate400Mean: averageValues(checkpoint400.map((item) => item.backToBack.rate)),
+      backToBackRate20Mean: averageValues(checkpoint20.map((item) => item.backToBack.rate)),
+      assignmentRestMean20: meanAt(checkpoint20, (item) => item.assignmentRestGap.mean),
+      assignmentRestMean400: meanAt(checkpoint400, (item) => item.assignmentRestGap.mean),
+      assignmentRestP9520: meanAt(checkpoint20, (item) => item.assignmentRestGap.p95),
+      assignmentRestP95400: meanAt(checkpoint400, (item) => item.assignmentRestGap.p95),
+      assignmentRestMax20Worst: checkpoint20.length ? Math.max(...checkpoint20.map((item) => item.assignmentRestGap.max)) : null,
+      reachedIdealPlusOne20Mean: meanAt(checkpoint20, (item) => item.reachedIdealPlusOne),
+      reachedIdealPlusOne400Mean: meanAt(checkpoint400, (item) => item.reachedIdealPlusOne),
+      reachedIdealPlusTwo20Mean: meanAt(checkpoint20, (item) => item.reachedIdealPlusTwo),
+      reachedIdealPlusTwo400Mean: meanAt(checkpoint400, (item) => item.reachedIdealPlusTwo),
       maxAssignmentRest400Mean: averageValues(checkpoint400.map((item) => item.assignmentRestGap.max)),
       maxAssignmentRest400Worst: checkpoint400.length ? Math.max(...checkpoint400.map((item) => item.assignmentRestGap.max)) : null,
       matchCountSpread400Mean: averageValues(checkpoint400.map((item) => item.matchCountSpread)),
       maximumFairnessSpread400Mean: averageValues(checkpoint400.map((item) => item.maximumFairnessSpread)),
+      matchCountSpread20Mean: meanAt(checkpoint20, (item) => item.matchCountSpread),
+      maximumFairnessSpread20Mean: meanAt(checkpoint20, (item) => item.maximumFairnessSpread),
     fiveRestAssignments: sessions.reduce((sum, session) => sum + session.fiveGapEpisodes.length, 0),
       linkedRestZeroReplays: sessions.reduce((sum, session) => sum + session.fiveGapEpisodes.filter((episode) => episode.initiatingReplay !== null).length, 0),
       replayOriginsWithFewerZeroRestAlternative: sessions.reduce((sum, session) => sum + session.fiveGapEpisodes.filter((episode) => episode.initiatingReplay?.betterZeroRestSetsWithoutPlayer > 0).length, 0),
-      starvationInterventions: checkpoint400.reduce((sum, item) => sum + item.starvation.materiallyChangedPlayerSet, 0),
+      starvationInterventions: hasUncertifiedOverdue ? null : checkpoint400.reduce((sum, item) => sum + item.starvation.materiallyChangedPlayerSet, 0),
       overdueDecisions: checkpoint400.reduce((sum, item) => sum + item.starvation.decisionsWithOverdueAvailable, 0),
       uncertifiedOverdueDecisions: checkpoint400.reduce((sum, item) => sum + item.starvation.uncertifiedCounterfactualDecisions, 0),
-    sourceProvenance: policyReport.sourceProvenance ?? { commitSha: policyReport.sourceRevision, policyLabel: policy, workingTreeDirty: null },
-    typeEntropyOverrideDecisions: sessions.reduce((sum, session) => sum + (session.typePriorityOverrides?.decisionsWithLowerZeroTypeTradeoff ?? 0), 0),
-    certifiedRefillDecisions: sessions.reduce((sum, session) => sum + (session.typePriorityOverrides?.certifiedRefillDecisions ?? 0), 0),
+      starvationRateAmongCertified: checkpoint400.reduce((sum, item) => sum + item.starvation.certifiedCounterfactualDecisions, 0)
+        ? checkpoint400.reduce((sum, item) => sum + item.starvation.materiallyChangedPlayerSet, 0) /
+          checkpoint400.reduce((sum, item) => sum + item.starvation.certifiedCounterfactualDecisions, 0) : null,
+      starvationRateWhenOverdue: hasUncertifiedOverdue || checkpoint400.reduce((sum, item) => sum + item.starvation.decisionsWithOverdueAvailable, 0) === 0
+        ? null : checkpoint400.reduce((sum, item) => sum + item.starvation.materiallyChangedPlayerSet, 0) /
+          checkpoint400.reduce((sum, item) => sum + item.starvation.decisionsWithOverdueAvailable, 0),
+      starvationRateAcrossCompletedDecisions: hasUncertifiedOverdue ? null : checkpoint400.reduce((sum, item) => sum + item.starvation.completedRotationDecisions, 0)
+        ? checkpoint400.reduce((sum, item) => sum + item.starvation.materiallyChangedPlayerSet, 0) /
+          checkpoint400.reduce((sum, item) => sum + item.starvation.completedRotationDecisions, 0) : null,
+      replayEnvelopeApplicable: replayApplicable,
+      replayEnvelopeCertifiedRefills20: replayApplicable ? sumValues(replay20.map((item) => item.productionReplayEnvelopeCertifiedDecisions)) : null,
+      replayEnvelopeCertifiedRefills400: replayApplicable ? sumValues(replay400.map((item) => item.productionReplayEnvelopeCertifiedDecisions)) : null,
+      replayEnvelopeUncertifiedRefills400: replayApplicable ? sumValues(replay400.map((item) => item.productionUncertifiedDecisions)) : null,
+      replayEnvelopeFullCertifiedRefills400: replayApplicable ? sumValues(replay400.map((item) => item.productionCertifiedDecisions)) : null,
+      noStarvationReplayCertifiedRefills400: replayApplicable ? sumValues(replay400.map((item) => item.noStarvationReplayEnvelopeCertifiedDecisions)) : null,
+      noStarvationReplayUncertifiedRefills400: replayApplicable ? sumValues(replay400.map((item) => item.noStarvationUncertifiedDecisions)) : null,
+      acceptedPlusOneDecisions400: replayApplicable ? sumValues(replay400.map((item) => item.acceptedPlusOneDecisions)) : null,
+      acceptedPlusOneRate400: replayApplicable
+        ? (() => {
+            const certified = sumValues(replay400.map((item) => item.productionReplayEnvelopeCertifiedDecisions)) ?? 0;
+            return certified ? (sumValues(replay400.map((item) => item.acceptedPlusOneDecisions)) ?? 0) / certified : null;
+          })() : null,
+      higherEntropyBeyondAllowanceDecisions400: replayApplicable ? sumValues(replay400.map((item) => item.betterEntropyBeyondAllowanceDecisions)) : null,
+      higherEntropyBeyondAllowanceCandidates400: replayApplicable ? sumValues(replay400.map((item) => item.betterEntropyBeyondAllowanceCandidateCount)) : null,
+      fivePlusRestEpisodes400: replayApplicable ? sumValues(replay400.map((item) => item.fivePlusCompletedRestEpisodes)) : null,
+      fivePlusEpisodesLinkedAcceptedPlusOne400: replayApplicable ? sumValues(replay400.map((item) => item.fivePlusEpisodesLinkedAcceptedPlusOneReplay)) : null,
+      fivePlusEpisodesLinkedOtherReplay400: replayApplicable ? sumValues(replay400.map((item) => item.fivePlusEpisodesLinkedOtherRestZeroReplay)) : null,
+      fivePlusEpisodesNoReplayOrigin400: replayApplicable ? sumValues(replay400.map((item) => item.fivePlusEpisodesWithoutLinkedRestZeroReplay)) : null,
+      narrowSeedsAt100Percent400: profile === "narrow"
+        ? sessions.filter((session) => session.checkpoints["400"].varietyCoverageScore === 1).length
+        : null,
+      missingBalanceEnvelopeRelationships400: sessions.reduce((sum, session) => sum + (session.missingRelationships ?? []).filter((item) => item.classification === "excluded_by_balance_envelope_in_observed_opportunities").length, 0),
+      missingReplayAllowanceRelationships400: sessions.reduce((sum, session) => sum + (session.missingRelationships ?? []).filter((item) => item.classification === "replay_allowance_priority_excluded_in_observed_opportunities").length, 0),
+      missingAdmissibleButUnchosenRelationships400: sessions.reduce((sum, session) => sum + (session.missingRelationships ?? []).filter((item) => item.classification === "admissible_but_unselected").length, 0),
+      missingSoftOrEntropyPriorityRelationships400: sessions.reduce((sum, session) => sum + (session.missingRelationships ?? []).filter((item) =>
+        item.classification === "combined_entropy_priority_excluded_in_observed_opportunities" ||
+        item.classification === "soft_cadence_priority_excluded_in_observed_opportunities").length, 0),
+      sourceProvenance: policyReport.sourceProvenance ?? { commitSha: policyReport.sourceRevision, policyLabel: policy, workingTreeDirty: null },
+    typeEntropyOverrideDecisions: sessions.some((session) => session.typePriorityOverrides?.applicable !== false && typeof session.typePriorityOverrides?.decisionsWithLowerZeroTypeTradeoff === "number")
+      ? sessions.reduce((sum, session) => sum + (session.typePriorityOverrides?.decisionsWithLowerZeroTypeTradeoff ?? 0), 0) : null,
+    certifiedRefillDecisions: sessions.some((session) => session.typePriorityOverrides?.applicable !== false && typeof session.typePriorityOverrides?.certifiedRefillDecisions === "number")
+      ? sessions.reduce((sum, session) => sum + (session.typePriorityOverrides?.certifiedRefillDecisions ?? 0), 0) : null,
     typeEntropyOverrideRateAcrossRefills: (() => {
+      const applicable = sessions.some((session) => session.typePriorityOverrides?.applicable !== false && typeof session.typePriorityOverrides?.certifiedRefillDecisions === "number");
+      if (!applicable) return null;
       const denominators = sessions.reduce((sum, session) => sum + (session.typePriorityOverrides?.certifiedRefillDecisions ?? 0), 0);
       return denominators ? sessions.reduce((sum, session) => sum + (session.typePriorityOverrides?.decisionsWithLowerZeroTypeTradeoff ?? 0), 0) / denominators : null;
     })(),
@@ -285,19 +412,59 @@ for (const { label: policy, report: policyReport } of policyReports) {
 }
 const comparisonJsonPath = path.join(outputDir, `social-coverage-${runTag}-policy-comparison.json`);
 const comparisonMarkdownPath = path.join(outputDir, `social-coverage-${runTag}-policy-comparison.md`);
-writeFileSync(comparisonJsonPath, `${JSON.stringify({ seedCount: seeds.length, seeds, wideSeeds, policies: policyReports.map((item) => item.label), groups: policyComparison }, null, 2)}\n`, "utf8");
+const comparisonProvenance = {
+  aggregationRevision: gitHead(root),
+  aggregationWorkingTreeDirty: worktreeIsDirty(root),
+  aggregationHarnessSha256: hashFiles(root, measurementPaths),
+  currentMeasurementHarnessSha256: report.sourceProvenance?.measurementHarnessSha256 ?? null,
+};
+writeFileSync(comparisonJsonPath, `${JSON.stringify({ seedCount: seeds.length, seeds, wideSeeds, comparisonProvenance, policies: policyReports.map((item) => item.label), groups: policyComparison }, null, 2)}\n`, "utf8");
+const wideMissingRows = policyReports.flatMap(({ label: policy, report: policyReport }) => policyReport.sessions
+  .filter((session) => session.profile === "wide" && session.checkpoints?.["400"]?.completedMatches === 400)
+  .map((session) => {
+    const missing = session.missingRelationships ?? [];
+    const list = (classifications) => {
+      const selected = missing.filter((item) => classifications.includes(item.classification));
+      return selected.length ? selected.map((item) => `${item.players.join("–")} ${item.facet}`).join(", ") : "none";
+    };
+    return `| ${policy} | ${labels[session.sessionType]} | ${session.seed} | ${list(["excluded_by_balance_envelope_in_observed_opportunities"])} | ${list(["replay_allowance_priority_excluded_in_observed_opportunities", "immediate_replay_priority_excluded_in_observed_opportunities"])} | ${list(["admissible_but_unselected"])} | ${list(["combined_entropy_priority_excluded_in_observed_opportunities", "soft_cadence_priority_excluded_in_observed_opportunities", "relationship_entropy_priority_excluded_in_observed_opportunities"])} |`;
+  }));
 const comparisonMarkdown = [
-  "# Matchmaking policy pilot comparison",
+  "# Matchmaking policy comparison",
   "",
   `Seeds: ${seeds.join(", ")}. Wide-profile seeds: ${wideSeeds.join(", ") || "none"}. Each engine used the same P1–P14 roster and seeded external court-completion schedule per seed. The 20/400 counts include completed matches only; first/last windows are the first/last 100 completions of the 400-match run.`,
   "",
-  "Policy provenance is per JSON row (commit, dirty state, and source hashes where available). Entropy-first is the original engine; strict-cadence is the 93262f36 engine; type-entropy-first is the current policy: in MIXED, match-type entropy → zero-rest count → relationship entropy → soft rest; other modes start with zero-rest count.",
+  `Comparison aggregation revision ${comparisonProvenance.aggregationRevision}; dirty worktree ${comparisonProvenance.aggregationWorkingTreeDirty}; runner/harness SHA-256 ${comparisonProvenance.aggregationHarnessSha256}. Current measured report harness SHA-256 ${comparisonProvenance.currentMeasurementHarnessSha256 ?? "unavailable"}.`,
   "",
-  "| Policy | Profile | Format | OWN_SIDE at 20 / 400 | First 100 / last 100 OWN_SIDE | VCS at 20 / 400 | Relationship / type entropy at 400 | B2B rate | Worst / mean of per-seed max rest | Fairness spread at 400 / max | ≥5 rest episodes / linked replay origins with fewer-zero alternative | Starvation changes / overdue decisions | Type-priority overrides / certified refills | Mean type / relationship gain per refill |",
-  "|---|---|---|---:|---:|---:|---|---:|---:|---:|---|---|---:|---:|",
-  ...policyComparison.map((item) => `| ${item.policy} | ${item.profile} | ${item.format} | ${item.ownSideCompletedAt20Mean?.toFixed(1) ?? "n/a"} / ${item.ownSideCompletedAt400Mean?.toFixed(1) ?? "n/a"} | ${item.first100OwnSideMean?.toFixed(1) ?? "n/a"} / ${item.last100OwnSideMean?.toFixed(1) ?? "n/a"} | ${percent(item.relationshipCoverage20Mean)} / ${percent(item.relationshipCoverage400Mean)} | ${percent(item.relationshipEntropy400Mean)} / ${percent(item.matchTypeEntropy400Mean)} | ${percent(item.backToBackRate400Mean)} | ${item.maxAssignmentRest400Worst?.toFixed(2) ?? "n/a"} / ${item.maxAssignmentRest400Mean?.toFixed(2) ?? "n/a"} | ${item.matchCountSpread400Mean?.toFixed(2) ?? "n/a"} / ${item.maximumFairnessSpread400Mean?.toFixed(2) ?? "n/a"} | ${item.fiveRestAssignments} / ${item.replayOriginsWithFewerZeroRestAlternative} of ${item.linkedRestZeroReplays} | ${item.starvationInterventions} / ${item.overdueDecisions} (unknown ${item.uncertifiedOverdueDecisions}) | ${item.typeEntropyOverrideDecisions}/${item.certifiedRefillDecisions} (${percent(item.typeEntropyOverrideRateAcrossRefills)}) | ${item.selectedMatchTypeGainMean?.toFixed(6) ?? "n/a"} / ${item.selectedRelationshipGainMean?.toFixed(6) ?? "n/a"} |`),
+  "Policy provenance is per JSON row (commit, dirty state, and source hashes where available). Entropy-first is the original engine; strict-cadence is the 93262f36 engine; type-entropy-first is the preserved bcf07fb policy; replay-envelope-best-plus-one is the new policy: inside the strongest fairness/starvation class and fixed Balanced envelope, freeze best zero-rest count + 1, then maximize combined entropy, then soft-rest cadence.",
   "",
-  "`n/a` means the source artifact predates completed-match type-count and type-override instrumentation; no counts have been inferred from player-level coverage. The override denominator is certified one-court refills only; the opening two-court optimizer decision is excluded. The override witness proves that the selected candidate has higher effective match-type gain but more zero-rest assignments than a legal candidate in the same fairness/starvation/balance class.",
+  "| Policy | Profile | Format | VCS20/400 | Partner20/400 | Opponent20/400 | Courtmate20/400 | Rel entropy20/400 | Type entropy20/400 | All entropy20/400 | B2B20/400 | Mean rest20/400 | P95 rest20/400 | Worst max rest20/400 | +1/+2 threshold reaches20/400 | MIXED/OWN_SIDE400 | First100/last100 OWN_SIDE | Fairness spread20/400/max | +1 accepted/certified; +2 rejected decisions/candidates; 5+ linked/total | Starvation changes/overdue (rate; unknown) | 100% seeds | Missing balance/replay/admissible/entropy-soft |",
+  "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---:|---:|---|---|---|---:|---|",
+  ...policyComparison.map((item) => {
+    const replayStats = item.replayEnvelopeApplicable
+      ? `${item.acceptedPlusOneDecisions400}/${item.replayEnvelopeCertifiedRefills400} (${percent(item.acceptedPlusOneRate400)}); ${item.higherEntropyBeyondAllowanceDecisions400}/${item.higherEntropyBeyondAllowanceCandidates400}; ${item.fivePlusEpisodesLinkedAcceptedPlusOne400}/${item.fivePlusRestEpisodes400}`
+      : "n/a (unavailable)";
+    const starvationChanges = item.starvationInterventions === null ? "n/a" : String(item.starvationInterventions);
+    return `| ${item.policy} | ${item.profile} | ${item.format} | ${percent(item.relationshipCoverage20Mean)}/${percent(item.relationshipCoverage400Mean)} | ${percent(item.partnerCoverage20Mean)}/${percent(item.partnerCoverage400Mean)} | ${percent(item.opponentCoverage20Mean)}/${percent(item.opponentCoverage400Mean)} | ${percent(item.courtmateCoverage20Mean)}/${percent(item.courtmateCoverage400Mean)} | ${percent(item.relationshipEntropy20Mean)}/${percent(item.relationshipEntropy400Mean)} | ${percent(item.matchTypeEntropy20Mean)}/${percent(item.matchTypeEntropy400Mean)} | ${percent(item.normalizedEntropy20Mean)}/${percent(item.normalizedEntropy400Mean)} | ${percent(item.backToBackRate20Mean)}/${percent(item.backToBackRate400Mean)} | ${item.assignmentRestMean20?.toFixed(2) ?? "n/a"}/${item.assignmentRestMean400?.toFixed(2) ?? "n/a"} | ${item.assignmentRestP9520?.toFixed(2) ?? "n/a"}/${item.assignmentRestP95400?.toFixed(2) ?? "n/a"} | ${item.assignmentRestMax20Worst?.toFixed(2) ?? "n/a"}/${item.maxAssignmentRest400Worst?.toFixed(2) ?? "n/a"} | ${item.reachedIdealPlusOne20Mean?.toFixed(1) ?? "n/a"}/${item.reachedIdealPlusOne400Mean?.toFixed(1) ?? "n/a"}; ${item.reachedIdealPlusTwo20Mean?.toFixed(1) ?? "n/a"}/${item.reachedIdealPlusTwo400Mean?.toFixed(1) ?? "n/a"} | ${item.mixedCompletedAt400Mean?.toFixed(1) ?? "n/a"}/${item.ownSideCompletedAt400Mean?.toFixed(1) ?? "n/a"} | ${item.first100OwnSideMean?.toFixed(1) ?? "n/a"}/${item.last100OwnSideMean?.toFixed(1) ?? "n/a"} | ${item.matchCountSpread20Mean?.toFixed(2) ?? "n/a"}/${item.matchCountSpread400Mean?.toFixed(2) ?? "n/a"}/${item.maximumFairnessSpread400Mean?.toFixed(2) ?? "n/a"} | ${replayStats} | ${starvationChanges}/${item.overdueDecisions} (${percent(item.starvationRateWhenOverdue)}; ${item.uncertifiedOverdueDecisions} unknown) | ${item.narrowSeedsAt100Percent400 ?? "n/a"} | ${item.missingBalanceEnvelopeRelationships400}/${item.missingReplayAllowanceRelationships400}/${item.missingAdmissibleButUnchosenRelationships400}/${item.missingSoftOrEntropyPriorityRelationships400} |`;
+  }),
+  "",
+  "Replay-envelope +1 and +2 metrics apply only to the new policy and use certified one-court refills; the opening two-court decision is excluded. A +2 rejection counts a refill when a candidate in the same strongest class and fixed Balanced envelope exceeds the frozen replay allowance and strictly beats the selected combined entropy. Historical artifacts without the counter show n/a. Starvation rates are unknown if any overdue counterfactual was uncertified.",
+  "",
+  "## Replay-envelope measurements (new policy)",
+  "",
+  "A linked ≥5-rest episode means the rest period followed an assignment involving a rest-zero player from a certified decision that used the +1 allowance. This is decision-level attribution and does not identify a uniquely marginal player.",
+  "",
+  "| Profile | Format | Refill / replay certified / full certified | Replay uncertified | +1 selected / rate | +2 higher-entropy rejected decisions / candidates | ≥5-rest total / linked +1 / linked other rest-zero / no replay link | No-starvation replay certified / uncertified |",
+  "|---|---|---:|---:|---:|---:|---:|---:|",
+  ...policyComparison.filter((item) => item.policy === "replay-envelope-best-plus-one").map((item) => `| ${item.profile} | ${item.format} | ${item.replayEnvelopeCertifiedRefills400 ?? "n/a"} / ${item.replayEnvelopeCertifiedRefills400 ?? "n/a"} / ${item.replayEnvelopeFullCertifiedRefills400 ?? "n/a"} | ${item.replayEnvelopeUncertifiedRefills400 ?? "n/a"} | ${item.acceptedPlusOneDecisions400 ?? "n/a"} / ${percent(item.acceptedPlusOneRate400)} | ${item.higherEntropyBeyondAllowanceDecisions400 ?? "n/a"} / ${item.higherEntropyBeyondAllowanceCandidates400 ?? "n/a"} | ${item.fivePlusRestEpisodes400 ?? "n/a"} / ${item.fivePlusEpisodesLinkedAcceptedPlusOne400 ?? "n/a"} / ${item.fivePlusEpisodesLinkedOtherReplay400 ?? "n/a"} / ${item.fivePlusEpisodesNoReplayOrigin400 ?? "n/a"} | ${item.noStarvationReplayCertifiedRefills400 ?? "n/a"} / ${item.noStarvationReplayUncertifiedRefills400 ?? "n/a"} |`),
+  "",
+  "## Wide-profile unseen structurally feasible relationships",
+  "",
+  "Exact names below come from each report’s unchanged structural opportunity denominator. `Replay allowance` means the relationship appeared in the strongest-class, balance-envelope opportunity set but not inside the frozen best-plus-one replay allowance; `admissible but unchosen` was available inside the observed policy frontier but never selected. The JSON retains directed player/facet opportunity counts and every per-seed record.",
+  "",
+  "| Policy | Format | Seed | Balance-envelope excluded | Replay allowance excluded | Admissible but unchosen | Combined entropy / relationship entropy / soft cadence exclusions |",
+  "|---|---|---:|---|---|---|---|",
+  ...wideMissingRows,
 ].join("\n");
 writeFileSync(comparisonMarkdownPath, `${comparisonMarkdown}\n`, "utf8");
 for (const group of aggregate) {
@@ -466,8 +633,13 @@ appendix.push("", "## Compact human-readable checkpoint summary", "", "| Profile
 ));
 if (current.markdownPath) writeFileSync(current.markdownPath, `${readFileSync(current.markdownPath, "utf8").trimEnd()}\n${appendix.join("\n")}\n`, "utf8");
 process.stdout.write("\nCompact human-readable results (coverage and completed-match counts are means across seeds):\n");
-for (const item of aggregate) process.stdout.write(`- ${item.profile} ${item.format} after ${item.completed}: VCS ${percent(item.varietyCoverageMean)}; partner/opponent/court ${percent(item.partnerCoverageMean)}/${percent(item.opponentCoverageMean)}/${percent(item.courtmateCoverageMean)}; MIXED/OWN_SIDE player coverage ${percent(item.mixedCoverageMean)}/${percent(item.ownSideCoverageMean)}; completed MIXED/OWN_SIDE ${item.completedMixedMatchesMean?.toFixed(1)}/${item.completedOwnSideMatchesMean?.toFixed(1)}; first100/last100 OWN_SIDE ${item.first100OwnSideMatchesMean?.toFixed(1)}/${item.last100OwnSideMatchesMean?.toFixed(1)}; entropy people/type/all ${percent(item.relationshipEntropyMean)}/${percent(item.matchTypeEntropyMean)}/${percent(item.normalizedEntropyMean)}; B2B ${percent(item.backToBackRateMean)}; worst max/mean-of-per-seed-maxima/mean/p95 assignment rest ${item.maxAssignmentRestGapWorst?.toFixed(2)}/${item.maxAssignmentRestGapMean?.toFixed(2)}/${item.meanAssignmentRestGapMean?.toFixed(2)}/${item.p95AssignmentRestGapMean?.toFixed(2)}; starvation changed ${item.starvationInterventions} of ${item.decisionsWithOverdue} overdue decisions.`);
+for (const item of aggregate) process.stdout.write(`- ${item.profile} ${item.format} after ${item.completed}: VCS ${percent(item.varietyCoverageMean)}; partner/opponent/court ${percent(item.partnerCoverageMean)}/${percent(item.opponentCoverageMean)}/${percent(item.courtmateCoverageMean)}; MIXED/OWN_SIDE player coverage ${percent(item.mixedCoverageMean)}/${percent(item.ownSideCoverageMean)}; completed MIXED/OWN_SIDE ${item.completedMixedMatchesMean?.toFixed(1)}/${item.completedOwnSideMatchesMean?.toFixed(1)}; first100/last100 OWN_SIDE ${item.first100OwnSideMatchesMean?.toFixed(1)}/${item.last100OwnSideMatchesMean?.toFixed(1)}; entropy people/type/all ${percent(item.relationshipEntropyMean)}/${percent(item.matchTypeEntropyMean)}/${percent(item.normalizedEntropyMean)}; B2B ${percent(item.backToBackRateMean)}; worst max/mean-of-per-seed-maxima/mean/p95 assignment rest ${item.maxAssignmentRestGapWorst?.toFixed(2)}/${item.maxAssignmentRestGapMean?.toFixed(2)}/${item.meanAssignmentRestGapMean?.toFixed(2)}/${item.p95AssignmentRestGapMean?.toFixed(2)}; starvation changed ${item.starvationInterventions} of ${item.decisionsWithOverdue} overdue decisions.\n`);
 process.stdout.write(`\nPolicy comparison (${policyReports.map((item) => item.label).join(", ")}):\n`);
-for (const item of policyComparison) process.stdout.write(`- ${item.policy} ${item.profile} ${item.format}: OWN_SIDE at20/400 ${item.ownSideCompletedAt20Mean?.toFixed(1) ?? "n/a"}/${item.ownSideCompletedAt400Mean?.toFixed(1) ?? "n/a"}; first100/last100 ${item.first100OwnSideMean?.toFixed(1) ?? "n/a"}/${item.last100OwnSideMean?.toFixed(1) ?? "n/a"}; VCS20/400 ${percent(item.relationshipCoverage20Mean)}/${percent(item.relationshipCoverage400Mean)}; B2B ${percent(item.backToBackRate400Mean)}; worst/mean-of-per-seed-max rest ${item.maxAssignmentRest400Worst?.toFixed(2) ?? "n/a"}/${item.maxAssignmentRest400Mean?.toFixed(2) ?? "n/a"}; type-priority overrides ${item.typeEntropyOverrideDecisions}/${item.certifiedRefillDecisions} (${percent(item.typeEntropyOverrideRateAcrossRefills)}); starvation ${item.starvationInterventions}/${item.overdueDecisions} (unknown ${item.uncertifiedOverdueDecisions}).`);
+for (const item of policyComparison) {
+  const replaySummary = item.replayEnvelopeApplicable
+    ? `best+1 ${item.acceptedPlusOneDecisions400}/${item.replayEnvelopeCertifiedRefills400}, +2 entropy rejection ${item.higherEntropyBeyondAllowanceDecisions400} decisions/${item.higherEntropyBeyondAllowanceCandidates400} candidates, ≥5-rest linked+1 ${item.fivePlusEpisodesLinkedAcceptedPlusOne400}/${item.fivePlusRestEpisodes400}`
+    : "best+1/+2 diagnostics n/a";
+  process.stdout.write(`- ${item.policy} ${item.profile} ${item.format}: VCS20/400 ${percent(item.relationshipCoverage20Mean)}/${percent(item.relationshipCoverage400Mean)}, partner20/400 ${percent(item.partnerCoverage20Mean)}/${percent(item.partnerCoverage400Mean)}; OWN_SIDE20/400 ${item.ownSideCompletedAt20Mean?.toFixed(1) ?? "n/a"}/${item.ownSideCompletedAt400Mean?.toFixed(1) ?? "n/a"}, first100/last100 ${item.first100OwnSideMean?.toFixed(1) ?? "n/a"}/${item.last100OwnSideMean?.toFixed(1) ?? "n/a"}; entropy people/type/all 20=${percent(item.relationshipEntropy20Mean)}/${percent(item.matchTypeEntropy20Mean)}/${percent(item.normalizedEntropy20Mean)} and 400=${percent(item.relationshipEntropy400Mean)}/${percent(item.matchTypeEntropy400Mean)}/${percent(item.normalizedEntropy400Mean)}; B2B ${percent(item.backToBackRate20Mean)}/${percent(item.backToBackRate400Mean)}, worst max assignment rest ${item.maxAssignmentRest400Worst?.toFixed(2) ?? "n/a"}, ${replaySummary}; starvation ${item.starvationInterventions ?? "n/a"}/${item.overdueDecisions} overdue (${item.uncertifiedOverdueDecisions} unknown).\n`);
+}
 process.stdout.write(`\nCompact machine-readable results:\n${JSON.stringify({ sourceRevision: report.sourceRevision, sourceProvenance: report.sourceProvenance, primarySeeds: report.seedCount, wideSeeds: report.wideSeedCount, groups: aggregate, policyComparison })}\n`);
 process.stdout.write(`\nSaved benchmark JSON: ${current.jsonPath}${current.markdownPath ? `\nSaved human report: ${current.markdownPath}` : ""}\nSaved policy comparison JSON: ${comparisonJsonPath}\nSaved policy comparison report: ${comparisonMarkdownPath}\n`);

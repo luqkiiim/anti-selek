@@ -24,12 +24,15 @@ describe("Social global batch solver", () => {
     const result = findBestSocialBatchSelection(makePlayers(14), { courtCount: 2, sessionMode: SessionMode.MIXICANO, randomFn: () => 0 });
     expect(result.selection?.selections).toHaveLength(2);
     expect(result.debug.validQuartetCount).toBe(1092);
-    expect(result.debug.exploredBranches).toBe(595686);
+    expect(result.debug.exploredBranches).toBeGreaterThan(0);
+    expect(result.debug.searchAttemptCount).toBe(2);
+    expect(result.debug.replayCertified).toBe(true);
+    expect(result.debug.allowedImmediateReplayCount).toBe(result.debug.bestImmediateReplayCount! + 1);
     expect(result.varietyOptimal).toBe(true);
     expect(result.fairnessCertified).toBe(true);
   });
 
-  it.each([10, 14])("matches an independent exhaustive %i-player fairness/cadence/variety/balance oracle", (count) => {
+  it.each([10, 14])("matches an independent exhaustive %i-player fairness/replay/entropy/cadence oracle", (count) => {
     const players = makePlayers(count).map((player, index) => ({ ...player, matchesPlayed: index % 3 === 0 ? 1 : 0, restTurns: index % 2, strength: 850 + index * 47 }));
     const history: V3CompletedMatch[] = [{ team1: ["P0", "P5"], team2: ["P1", "P6"] }];
     const context = buildSocialVarietyContext(players, history, { sessionMode: SessionMode.MIXICANO });
@@ -41,35 +44,69 @@ describe("Social global batch solver", () => {
         legal.push({ ids, partition, gains: getSocialVarietyGains(partition, context), balance: getPartitionBalanceGap(partition, byId)!, point: getPartitionPointDiffGap(partition, byId)! });
       }
     }
-    let optimum: number[] | null = null;
-    const key = (left: typeof legal[number], right: typeof legal[number]) => {
-      const selected = [...left.ids, ...right.ids].map((id) => byId.get(id)!);
-      const rests = selected.map((player) => player.restTurns).sort((a, b) => a - b);
-      const facetTotal = (facet: keyof typeof left.gains) => [left.gains[facet], right.gains[facet]]
-        .sort((a, b) => a - b).reduce((sum, gain) => sum + gain, 0);
-      const matchTypeGain = facetTotal("matchType");
-      const relationshipGain = [facetTotal("courtmates"), facetTotal("partners"), facetTotal("opponents")]
-        .sort((a, b) => a - b).reduce((sum, gain) => sum + gain, 0);
-      return [...selected.map((player) => player.matchesPlayed).sort((a, b) => a - b),
-        0, 0, 0, -matchTypeGain, rests.filter((rest) => rest === 0).length, -relationshipGain, ...rests.map((rest) => -rest),
-        Math.max(left.balance, right.balance), left.balance + right.balance,
-        Math.max(left.point, right.point), left.point + right.point];
-    };
+    const canonicalSum = (values: number[]) => values.sort((a, b) => a - b).reduce((sum, value) => sum + value, 0);
+    const batches: Array<{ left: typeof legal[number]; right: typeof legal[number]; fairness: number[]; replay: number }> = [];
     for (let a = 0; a < legal.length; a++) for (let b = a + 1; b < legal.length; b++) {
       if (new Set([...legal[a].ids, ...legal[b].ids]).size !== 8) continue;
-      const value = key(legal[a], legal[b]);
-      if (!optimum || compare(value, optimum) < 0) optimum = value;
+      const selected = [...legal[a].ids, ...legal[b].ids].map((id) => byId.get(id)!);
+      batches.push({
+        left: legal[a],
+        right: legal[b],
+        fairness: selected.map((player) => player.matchesPlayed).sort((x, y) => x - y),
+        replay: selected.filter((player) => player.restTurns === 0).length,
+      });
     }
+    const strongestFairness = batches.map((batch) => batch.fairness).sort(compare)[0];
+    const strongest = batches.filter((batch) => compare(batch.fairness, strongestFairness) === 0);
+    const bestReplay = Math.min(...strongest.map((batch) => batch.replay));
+    const allowedReplay = bestReplay + 1;
+    const admissible = strongest.filter((batch) => batch.replay <= allowedReplay);
+    const key = (batch: typeof admissible[number]) => {
+      const { left, right } = batch;
+      const facetTotal = (facet: keyof typeof left.gains) =>
+        canonicalSum([left.gains[facet], right.gains[facet]]);
+      const matchTypeGain = facetTotal("matchType");
+      const relationshipGain = canonicalSum([
+        facetTotal("courtmates"), facetTotal("partners"), facetTotal("opponents"),
+      ]);
+      const totalEntropy = canonicalSum([matchTypeGain, relationshipGain]);
+      const selected = [...left.ids, ...right.ids].map((id) => byId.get(id)!);
+      const rests = selected.map((player) => player.restTurns).sort((x, y) => x - y);
+      return [
+        -totalEntropy, ...rests.map((rest) => -rest),
+        Math.max(left.balance, right.balance), left.balance + right.balance,
+        Math.max(left.point, right.point), left.point + right.point,
+      ];
+    };
+    const optimum = admissible.reduce((best, candidate) =>
+      compare(key(candidate), key(best)) < 0 ? candidate : best
+    );
     const result = findBestSocialBatchSelection(players, { courtCount: 2, sessionMode: SessionMode.MIXICANO, completedMatches: history, randomFn: () => 0 });
     const chosen = result.selection!.selections.map((selection) => legal.find((candidate) => getExactPartitionKey(candidate.partition) === getExactPartitionKey(selection.partition))!);
-    expect(key(chosen[0], chosen[1])).toEqual(optimum);
+    const chosenPlayers = chosen.flatMap((candidate) => candidate.ids.map((id) => byId.get(id)!));
+    const chosenReplay = chosenPlayers.filter((player) => player.restTurns === 0).length;
+    expect(result.debug.bestImmediateReplayCount).toBe(bestReplay);
+    expect(result.debug.allowedImmediateReplayCount).toBe(allowedReplay);
+    expect(chosenReplay).toBeLessThanOrEqual(allowedReplay);
+    const chosenBatch = batches.find((batch) =>
+      new Set([...batch.left.ids, ...batch.right.ids]).size === 8 &&
+      [batch.left, batch.right].every((candidate) => chosen.some((match) =>
+        getExactPartitionKey(match.partition) === getExactPartitionKey(candidate.partition)
+      ))
+    );
+    expect(chosenBatch).toBeDefined();
+    expect(key(chosenBatch!)).toEqual(key(optimum));
   });
 
-  it("prefers smoother rest over variety when stronger rotation priorities tie", () => {
+  it("freezes a global best-plus-one replay envelope before entropy and soft rest", () => {
     const players = makePlayers(8).map((player, index) => ({ ...player, restTurns: index < 4 ? 1 : 0 }));
     const completedMatches: V3CompletedMatch[] = Array.from({ length: 10 }, () => ({ team1: ["P0", "P1"], team2: ["P2", "P3"] }));
     const result = findBestSingleCourtSelectionV3(players, { sessionMode: SessionMode.MEXICANO, sessionType: SessionType.SOCIAL_MIX, completedMatches, randomFn: () => 0 });
-    expect(result.selection?.ids.every((id) => Number(id.slice(1)) < 4)).toBe(true);
+    expect(result.debug.bestImmediateReplayCount).toBe(0);
+    expect(result.debug.allowedImmediateReplayCount).toBe(1);
+    expect(result.debug.chosenImmediateReplayCount).toBe(1);
+    expect(result.selection?.ids.some((id) => Number(id.slice(1)) >= 4)).toBe(true);
+    expect(result.debug.replayCertified).toBe(true);
     expect(result.selection?.socialStarvation).toMatchObject({ idealRestGap: 1, availableOverdueCount: 0 });
     const ignoreRest = findBestSingleCourtSelectionV3(players, { sessionMode: SessionMode.MEXICANO, sessionType: SessionType.SOCIAL_MIX, completedMatches, randomFn: () => 0, respectPlayerRest: false });
     expect(ignoreRest.selection?.ids.some((id) => Number(id.slice(1)) >= 4)).toBe(true);
@@ -331,7 +368,7 @@ describe("Social global batch solver", () => {
     expect(result.varietyOptimal).toBe(false);
   });
 
-  it("widens a supplied strict candidate pool without letting variety beat zero-rest prevention", () => {
+  it("allows at most one extra immediate replay when entropy favors the wider candidate pool", () => {
     const players = makePlayers(5).map((player, index) => ({
       ...player,
       restTurns: index < 4 ? 1 : 0,
@@ -355,7 +392,10 @@ describe("Social global batch solver", () => {
     });
 
     expect(result.debug.eligiblePlayerIds).toContain("P4");
-    expect(result.selection?.selections[0].ids).not.toContain("P4");
+    expect(result.debug.bestImmediateReplayCount).toBe(0);
+    expect(result.debug.allowedImmediateReplayCount).toBe(1);
+    expect(result.debug.chosenImmediateReplayCount).toBe(1);
+    expect(result.selection?.selections[0].ids).toContain("P4");
     expect(result.selection?.selections[0].socialStarvation).toMatchObject({
       idealRestGap: 1,
       availableOverdueCount: 0,

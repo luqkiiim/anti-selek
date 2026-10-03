@@ -15,16 +15,22 @@ specification records behavioral invariants used by regression tests.
   baseline, with fresh rest and arrival state; do not force catch-up.
 - Protect available overdue players using the full unpaused roster, even when
   ordinary cadence preference is off.
-- After fairness, arrival, structural schedule rank and starvation tie, Mixed
-  sessions compare match-type entropy first, then minimize the whole batch's
-  number of selected players with `restTurns === 0`, then compare relationship
-  entropy across courtmates, partners and opponents.
-- In MEXICANO, where match type is inactive, compare zero-rest count before
-  relationship entropy. In either mode, only when the active entropy layers
-  tie does the ascending sorted completed-match rest-turn vector act as a soft
-  cadence tie-break.
-- Social compares entropy layers exactly; Balanced applies its fixed `1e-12`
-  bucket independently to match-type and relationship scores.
+- After fairness, arrival, structural schedule rank and starvation tie, Social
+  certifies the lowest immediate-replay count across the whole batch and allows
+  at most one additional selected player with `restTurns === 0`. Balanced first
+  freezes its existing balance guardrail, then certifies that same global
+  replay minimum only inside the fixed envelope; the one-player allowance does
+  not expand it.
+- Within the certified replay allowance, compare the existing combined
+  normalized entropy across courtmates, partners, opponents and, in MIXICANO,
+  match type. Match type is one facet of the combined score, not a separate
+  priority tier. In MEXICANO that facet is inactive.
+- Only when combined entropy ties does the ascending sorted completed-match
+  rest-turn vector act as a soft cadence tie-break. Social compares combined
+  entropy exactly; Balanced applies its fixed `1e-12` bucket to the combined
+  score.
+- `respectPlayerRest: false` disables the replay allowance and soft cadence
+  layer while leaving starvation protection active.
 - Optimize whole disjoint batches globally, including asynchronous refills.
 
 ## Shared variety invariants
@@ -40,26 +46,27 @@ specification records behavioral invariants used by regression tests.
 
 ## Social policy
 
-Order Social by fairness/arrival, group schedule and starvation. For
-MIXICANO, compare match-type entropy, enabled zero-rest count, relationship
-entropy, then the enabled soft rest vector. For MEXICANO, omit match-type
-entropy and start with zero-rest count. Continue with actual balance, late
-partner/opponent repeats, exact rematch and seeded pairing ties. Entropy is
-exact. `respectPlayerRest: false` disables both cadence layers while starvation
-remains.
+Order Social by fairness/arrival, group schedule and starvation. When ordinary
+rest preferences are enabled, find the global minimum zero-rest count in that
+stronger class and admit candidates up to minimum plus one. Rank those batches
+by combined four-facet entropy, then the soft ascending rest vector. Continue
+with actual balance, late partner/opponent repeats, exact rematch and seeded
+pairing ties. Entropy is exact. `respectPlayerRest: false` skips the replay
+allowance and soft vector while starvation remains.
 
 ## Balanced policy
 
 1. Fairness and arrival priority.
 2. Applicable player-group schedule rules.
 3. Shared starvation protection.
-4. Balance admissibility within that stronger class.
-5. In MIXICANO, match-type entropy inside the fixed envelope.
-6. Enabled zero-rest count.
-7. Relationship entropy (courtmates, partners and opponents).
-8. Soft ascending rest vector for entropy ties.
-9. Actual worst-court gap, total gap, then Points point-difference gap.
-10. Exact-rematch avoidance and seeded/deterministic ties.
+4. Freeze balance admissibility within that stronger class.
+5. If rest preferences are enabled, certify the minimum global zero-rest count
+   inside the fixed envelope and allow at most one additional replay.
+6. Combined normalized entropy (courtmates, partners, opponents and, in
+   MIXICANO, match type).
+7. Soft ascending rest vector for entropy ties, when enabled.
+8. Actual worst-court gap, total gap, then Points point-difference gap.
+9. Exact-rematch avoidance and seeded/deterministic ties.
 
 The baseline pass minimizes worst-court balance and then total balance within
 one optimal stronger class. Entropy search uses a fixed inclusive envelope:
@@ -68,29 +75,35 @@ best achievable worst gap is above 50, admit only best worst and total gap.
 Starvation wins over a prettier baseline that excludes an overdue player.
 
 Balanced never compares candidates using a weighted balance/entropy sum or
-pairwise balance tolerance. Effective ties use fixed `1e-12` buckets
-independently for match-type and relationship entropy; Social retains exact
-ordering. Legacy debt, repeat, coverage and rest heuristics cannot prune legal
-candidates. For Mixed batches, search may prune by an optimistic type-entropy
-upper bound first, then by the zero-rest lower bound only when type gain ties,
-then by the relationship-entropy upper bound only when zero-rest count ties,
-and finally by the soft-rest bound only when relationship gain ties. MEXICANO
-skips the type layer. Exact rematches have no influence until all earlier
-metrics tie.
+pairwise balance tolerance. Effective ties use one fixed `1e-12` bucket on the
+combined entropy score; Social retains exact ordering. Legacy debt, repeat,
+coverage and rest heuristics cannot prune legal candidates. Search first
+certifies the replay minimum after stronger priorities and, for Balanced,
+inside its fixed guardrail. The final global search admits only batches within
+minimum plus one, then may prune by an optimistic combined-entropy upper bound
+and, only when that score ties, by the soft-rest bound. Whole-batch replay and
+entropy bounds include every court in the refill. Exact rematches have no
+influence until all earlier metrics tie.
 
 ## Search certification and explanation
 
 At most fourteen available players and at most two courts are exhaustive by
-default. Larger global search is bounded. Explicit limits can interrupt either
-pass. Returning a Balanced batch requires certified stronger priorities and a
-certified balance baseline; incomplete entropy optimization is reported.
+default. Larger global search is bounded. Explicit limits can interrupt the
+balance-baseline, replay-certification or final-optimization phase. Rest-
+sensitive selection requires a certified replay minimum and allowance; an
+incomplete replay-certification phase returns no selection. Returning a
+Balanced batch also requires certified stronger priorities and a certified
+balance baseline; incomplete final entropy optimization is reported.
 
-Debug/reason output must identify fairness state, schedule rank, starvation
-state, best achievable balance, allowed envelope, actual balance, raw entropy
-and facet gains, final tie-break and search certifications.
+Shared debug must identify fairness state, schedule rank, starvation state,
+certified best/allowed/chosen replay counts and envelope status, best
+achievable balance, allowed envelope, actual balance, raw entropy and facet
+gains, final tie-break and search certifications. Persisted reasons explain
+the policy and selection metrics without storing a per-court replay baseline.
 
-Behavior tests cover independent exhaustive batch comparison, type-entropy,
-zero-rest, relationship-entropy and soft-cadence ordering, awkward skills,
+Behavior tests cover independent exhaustive batch comparison, global
+best-plus-one replay envelopes, combined-entropy and soft-cadence ordering,
+awkward skills,
 starvation against balance, full roster opportunities, Mixed imbalance, late
 join/resume, cadence disabled, player groups/interclub, assignment history and
 long asynchronous sessions. Tests must check actual admissibility and rotation

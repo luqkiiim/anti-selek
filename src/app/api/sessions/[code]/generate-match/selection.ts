@@ -2345,9 +2345,11 @@ function compareGroupedBatchSelections(
     const leftV3 = getV3Selections(left);
     const rightV3 = getV3Selections(right);
     if (leftV3 && rightV3) {
+      const sessionMode = getEffectiveSessionMode(sessionData);
       return compareSocialBatchSelections(
-        summarizeSocialBatch(leftV3), summarizeSocialBatch(rightV3),
-        { respectPlayerRest: sessionData.respectPlayerRest }
+        summarizeSocialBatch(leftV3, undefined, sessionMode),
+        summarizeSocialBatch(rightV3, undefined, sessionMode),
+        { respectPlayerRest: sessionData.respectPlayerRest, sessionMode }
       );
     }
   }

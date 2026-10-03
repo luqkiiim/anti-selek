@@ -205,12 +205,17 @@ export interface V3SingleCourtDebug {
   chosenConsecutivePlayTotalBurden: number | null;
   chosenSocialVarietyGain?: number | null;
   chosenSocialVarietyGains?: SocialVarietyGains | null;
-  /** Raw entropy layers; priority comparison applies format-specific bucketing. */
+  /** Raw entropy facet diagnostics; policy compares the existing combined gain. */
   chosenMatchTypeEntropyGain?: number | null;
   chosenRelationshipEntropyGain?: number | null;
   /** Count of selected players with restTurns === 0, including first assignments. */
   chosenZeroRestPlayerCount?: number | null;
   chosenAscendingRestTurns?: number[] | null;
+  bestImmediateReplayCount?: number | null;
+  allowedImmediateReplayCount?: number | null;
+  chosenImmediateReplayCount?: number | null;
+  replayCertified?: boolean;
+  replayEnvelopeStatus?: V3ReplayEnvelopeStatus;
   fairnessOptimal?: boolean;
   fairnessCertified?: boolean;
   starvationCertified?: boolean;
@@ -255,7 +260,7 @@ export interface V3BatchSelection<
   totalExactRematchPenalty: number;
   totalSocialVarietyGain?: number;
   totalSocialVarietyGains?: SocialVarietyGains;
-  /** Raw (unbucketed) aggregate entropy gains used by separate priority layers. */
+  /** Raw entropy facet diagnostics; the shared engine compares their combined gain. */
   totalMatchTypeEntropyGain?: number;
   totalRelationshipEntropyGain?: number;
   balanceGuardrail?: V3BalanceGuardrail;
@@ -310,6 +315,11 @@ export interface V3BatchDebug {
   /** Count of selected players with restTurns === 0, including first assignments. */
   chosenZeroRestPlayerCount?: number | null;
   chosenAscendingRestTurns?: number[] | null;
+  bestImmediateReplayCount: number | null;
+  allowedImmediateReplayCount: number | null;
+  chosenImmediateReplayCount: number | null;
+  replayCertified: boolean;
+  replayEnvelopeStatus: V3ReplayEnvelopeStatus;
   fairnessOptimal?: boolean;
   fairnessCertified?: boolean;
   starvationCertified?: boolean;
@@ -326,6 +336,8 @@ export interface V3BatchDebug {
   highestLeftOutRestTurns?: number | null;
   totalLeftOutRestTurns?: number | null;
 }
+
+export type V3ReplayEnvelopeStatus = "DISABLED" | "CERTIFIED" | "UNCERTIFIED" | "NO_SELECTION";
 
 export interface V3BatchResult<
   T extends ActiveMatchmakerV3Player = ActiveMatchmakerV3Player,

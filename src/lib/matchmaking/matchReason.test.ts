@@ -173,7 +173,7 @@ describe("matchmaking reason", () => {
     expect(reason.summary.join(" ")).toContain("previous match");
   });
 
-  it("explains the Mixed Social order with match-type, zero-rest, relationship and soft-cadence layers", () => {
+  it("explains the shared replay envelope and combined-entropy order for Mixed Social", () => {
     const reason = buildV3MatchmakingReason(
       createSelection({ socialVarietyGain: 0.25 }),
       {
@@ -186,8 +186,9 @@ describe("matchmaking reason", () => {
     );
 
     expect(reason.summary.join(" ")).toContain("fair turns, arrival priority, applicable player-group rules and overdue-turn protection");
-    expect(reason.summary.join(" ")).toContain("Match-type entropy ranks first, then the matcher minimizes selected players with zero rest");
-    expect(reason.summary.join(" ")).toContain("Relationship entropy follows, and smoother completed-match rest cadence breaks entropy ties");
+    expect(reason.summary.join(" ")).toContain("certifies the lowest immediate-replay count for the whole refill batch, then allows up to one additional replay");
+    expect(reason.summary.join(" ")).toContain("maximizes combined normalized entropy across courtmates, partners, opponents and match type");
+    expect(reason.summary.join(" ")).toContain("smoother completed-match rest cadence breaks entropy ties");
     expect(reason.summary.join(" ")).toContain("completed-match rest turns");
   });
 
@@ -218,7 +219,8 @@ describe("matchmaking reason", () => {
     expect(reason.summary.join(" ")).toContain("2 of 2 available players");
     expect(reason.summary.join(" ")).toContain("Normalized entropy gain");
     expect(reason.summary.join(" ")).toContain("match type");
-    expect(reason.summary.join(" ")).toContain("Match-type entropy ranks first, followed by relationship entropy");
+    expect(reason.summary.join(" ")).toContain("Starvation protection remains active, while ordinary replay and cadence preferences are disabled");
+    expect(reason.summary.join(" ")).toContain("combined normalized entropy across courtmates, partners, opponents and match type");
     expect(reason.summary.join(" ")).toContain("Exact rematch avoidance decided only after");
     expect(reason.summary.join(" ")).not.toMatch(/coverage penalty|Partner repeat penalty|Opponent repeat penalty|Shared-court repeat penalty/);
     const parsed = parseMatchmakingReasonJson(JSON.stringify(reason));

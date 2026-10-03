@@ -30,6 +30,17 @@ describe("social relationship coverage benchmark", () => {
       const checkpoint = session.checkpoints["120"];
       expect(checkpoint.completedMatches).toBe(120);
       expect(checkpoint.partnerCoverage).toBeGreaterThan(0.75);
+      expect(checkpoint.replayEnvelope.policyApplied).toBe(true);
+      expect(checkpoint.replayEnvelope.productionReplayEnvelopeCertifiedDecisions)
+        .toBe(checkpoint.replayEnvelope.productionRefillDecisions);
+      expect(checkpoint.replayEnvelope.productionUncertifiedDecisions).toBe(0);
+      expect(checkpoint.replayEnvelope.noStarvationReplayEnvelopeCertifiedDecisions)
+        .toBe(checkpoint.replayEnvelope.noStarvationRefillDecisions);
+      expect(checkpoint.replayEnvelope.noStarvationUncertifiedDecisions).toBe(0);
+      for (const witness of checkpoint.replayEnvelope.witnesses) {
+        expect(witness.allowedImmediateReplayCount).toBe(witness.bestImmediateReplayCount + 1);
+        expect(witness.chosenImmediateReplayCount).toBeLessThanOrEqual(witness.allowedImmediateReplayCount);
+      }
       const lateTypes = session.completedMatchTypes.slice(-20);
       expect(lateTypes).toContain("MIXED");
       expect(lateTypes).toContain("OWN_SIDE");
@@ -127,12 +138,26 @@ describe("social relationship coverage benchmark", () => {
           expect(episode.cadenceSuboptimalAlternativeWitness?.bestCandidateVsChosenCadence).toBe("worse");
         }
       }
-      if (enginePolicy === "current") for (const episode of session.fiveGapEpisodes) {
-        if (episode.currentWaitClassification === "zero_rest_frontier_inclusion_available") {
-          expect(episode.cadenceOptimalAlternativeWitness?.bestCandidateVsChosenZeroRest).toBe("equal");
+      if (enginePolicy === "current") {
+        const replay = session.checkpoints["400"].replayEnvelope;
+        expect(replay.policyApplied).toBe(true);
+        expect(replay.productionReplayEnvelopeCertifiedDecisions).toBe(replay.productionRefillDecisions);
+        expect(replay.productionUncertifiedDecisions).toBe(0);
+        expect(replay.acceptedPlusOneDecisions).toBeLessThanOrEqual(replay.productionReplayEnvelopeCertifiedDecisions);
+        for (const witness of replay.witnesses) {
+          expect(witness.allowedImmediateReplayCount).toBe(witness.bestImmediateReplayCount + 1);
+          expect(witness.chosenImmediateReplayCount).toBeLessThanOrEqual(witness.allowedImmediateReplayCount);
+          expect(witness.selected.zeroRestCount).toBe(witness.chosenImmediateReplayCount);
+          if (witness.strongestRejectedCandidate) {
+            expect(witness.strongestRejectedCandidate.zeroRestCount).toBeGreaterThan(witness.allowedImmediateReplayCount);
+            expect(witness.strongestRejectedCandidate.effectiveCombinedEntropyGain).toBeGreaterThan(witness.selected.effectiveCombinedEntropyGain);
+          }
         }
-        if (episode.classification === "avoidable_equal_priority_zero_rest_alternative") {
-          expect(episode.initiatingReplay?.betterZeroRestSetsWithoutPlayer).toBeGreaterThan(0);
+        for (const episode of session.fiveGapEpisodes) {
+          if (episode.classification === "accepted_plus_one_replay_origin") {
+            expect(episode.initiatingReplay?.acceptedPlusOneReplay).toBe(true);
+            expect(episode.initiatingReplay?.marginalPlayerAttribution).toBe("decision_level_only");
+          }
         }
       }
     }

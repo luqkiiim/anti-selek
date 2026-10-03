@@ -799,7 +799,8 @@ describe("matchmaking v3 batch selection", () => {
     );
 
     expect(result.selection).not.toBeNull();
-    expect(result.debug.searchAttemptCount).toBe(2);
+    expect(result.debug.searchAttemptCount).toBe(3);
+    expect(result.debug.replayCertified).toBe(true);
     expect(result.debug.candidatePlayerIds).toHaveLength(13);
     expect(result.debug.candidateCap).toBeNull();
     expectLegalMixedBatch(result.selection, 2);
