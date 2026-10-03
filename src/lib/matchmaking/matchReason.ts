@@ -179,11 +179,17 @@ function buildReasonSummary({
       const rotationPriorities = metrics.courtGroupType
         ? "fair turns, arrival priority, applicable player-group rules and overdue-turn protection"
         : "fair turns, arrival priority and overdue-turn protection";
-      const priorities = `${rotationPriorities}${balanced ? " and the balance guardrail" : ""}`;
+      const tieBreakExplanation = balanced
+        ? respectPlayerRest === false
+          ? "The balance guardrail sets the admissible envelope before shared entropy ranks choices inside it."
+          : "The balance guardrail sets the admissible envelope, then smoother completed-match rest cadence ranks choices before shared entropy inside it."
+        : respectPlayerRest === false
+          ? "Shared entropy ranks choices after those rotation priorities."
+          : "Smoother completed-match rest cadence ranks choices before shared entropy.";
       summary.push(
         sessionMode === SessionMode.MIXICANO
-          ? `Selected for ongoing courtmate, partner, opponent and match-type variety after ${priorities}${respectPlayerRest === false ? "." : "; longer breaks only decide between equally varied choices."}`
-          : `Selected for ongoing courtmate, partner and opponent variety after ${priorities}${respectPlayerRest === false ? "." : "; longer breaks only decide between equally varied choices."}`
+          ? `Rotation priorities were ${rotationPriorities}. ${tieBreakExplanation} Ongoing variety includes courtmates, partners, opponents and match type.`
+          : `Rotation priorities were ${rotationPriorities}. ${tieBreakExplanation} Ongoing variety includes courtmates, partners and opponents.`
       );
       if (respectPlayerRest !== false && metrics.totalRestTurns > 0) {
         summary.push(
@@ -257,7 +263,7 @@ function buildReasonSummary({
     const gain = metrics.socialVarietyGain.toPrecision(5);
     const facets = metrics.socialVarietyGains;
     summary.push(`Normalized entropy gain is ${gain}${facets ? ` (courtmates ${facets.courtmates.toPrecision(5)}, partners ${facets.partners.toPrecision(5)}, opponents ${facets.opponents.toPrecision(5)}, match type ${facets.matchType.toPrecision(5)})` : ""}.`);
-    if (metrics.finalTieBreak === "EXACT_REMATCH") summary.push("Exact rematch avoidance decided only after entropy, ordinary rest and actual balance tied.");
+    if (metrics.finalTieBreak === "EXACT_REMATCH") summary.push("Exact rematch avoidance decided only after rotation, cadence, entropy and balance priorities tied.");
     else if (metrics.finalTieBreak === "RANDOM") summary.push("Randomness decided only the final tied choices.");
     else if (metrics.finalTieBreak === "DETERMINISTIC") summary.push("A deterministic final tie-break decided between equivalent choices.");
   }

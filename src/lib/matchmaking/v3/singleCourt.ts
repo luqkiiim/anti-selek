@@ -62,6 +62,10 @@ export function findBestSingleCourtSelectionV3<T extends MatchmakerV3Player>(
       chosenConsecutivePlayTotalBurden: selection?.consecutivePlayTotalBurden ?? null,
       chosenSocialVarietyGain: selection?.socialVarietyGain ?? null,
       chosenSocialVarietyGains: selection?.socialVarietyGains ?? null,
+      chosenZeroRestPlayerCount: selection?.restSummary.restTurnVector.filter((turns) => turns === 0).length ?? null,
+      chosenAscendingRestTurns: selection
+        ? [...selection.restSummary.restTurnVector].sort((left, right) => left - right)
+        : null,
       fairnessCertified: result.fairnessCertified,
       starvationCertified: result.starvationCertified,
       socialIdealRestGap: result.debug.socialIdealRestGap,

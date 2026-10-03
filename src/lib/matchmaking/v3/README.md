@@ -11,11 +11,25 @@ Legality, busy/paused availability, mandatory retained players and hard format
 constraints are enforced before ranking. Shared priorities are effective match
 counts, arrival priority, applicable structural schedule rank, then starvation.
 
-Social then ranks entropy, enabled ordinary rest, actual team balance, its
-existing late recent-repeat ties, exact rematches and seeded randomness.
-Balanced then applies a fixed balance envelope and ranks entropy, enabled
-ordinary rest, actual worst/total balance, Points point-difference balance,
-exact rematches and seeded randomness. Consecutive-play burden is diagnostic.
+After those priorities tie, Social prefers smoother completed-match rest
+cadence when `respectPlayerRest` is enabled, then ranks shared entropy, actual
+team balance, its existing late recent-repeat ties, exact rematches and seeded
+randomness. Balanced first establishes its fixed balance envelope inside the
+strongest rotation class, then ranks cadence, shared entropy, actual
+worst/total balance, Points point-difference balance, exact rematches and seeded
+randomness. Consecutive-play burden is diagnostic.
+
+Cadence compares the whole selected set for a refill batch. It first minimizes
+the number of selected players with zero rest turns, then compares selected
+players' ascending rest-turn vector lexicographically, maximizing the lowest
+rest, then the next-lowest, and so on. Total rest is not an objective. This
+uses completed-match events only. Setting `respectPlayerRest` to false disables
+this ordinary cadence preference; starvation protection remains enabled.
+Because cadence precedes entropy, a feasible relationship or MIXED/OWN_SIDE
+experience can remain underexplored when every equally fair, legal choice that
+adds it has a zero-rest assignment or a worse ascending rest vector. The shared
+structural opportunity vocabulary continues to report those limits rather
+than shrinking to the choices made by the current balance envelope.
 
 ## Shared variety and starvation
 
@@ -36,23 +50,74 @@ interpersonal history.
 
 The expected completed-match rest gap is `max(0, ceil((N - 4) / 4))`, using the
 full unpaused roster size. Available players above it are overdue. Before
-entropy or balance, minimize overdue players left out, their highest wait,
-then their total wait. This remains enabled when ordinary rest is disabled.
-Neutral entry/resume baselines preserve the existing no-catch-up behavior.
+cadence, entropy or balance, minimize overdue players left out, their highest
+wait, then their total wait. This remains enabled when ordinary cadence is
+disabled. Neutral entry/resume baselines preserve the existing no-catch-up
+behavior.
+
+## Running the relationship-coverage benchmark
+
+Run the full deterministic asynchronous benchmark manually with:
+
+```sh
+npm run benchmark:matchmaking
+```
+
+The default run uses five narrow-profile seeds (`1, 4729, 104729, 130363,
+2097593`) for Social, Balanced Points and Balanced Rating/Elo, plus three
+wide-profile sensitivity seeds (`30011, 65537, 999983`) for the two Balanced
+formats. It uses the same 14-player 7/7 roster and seeded court-completion
+schedule across formats. Each run records checkpoints after exactly 20 and 400
+completed matches; unfinished active assignments do not count toward coverage.
+All match point differences are zero because these runs measure matchmaking,
+not match outcomes. The full run writes
+`benchmarks/social-coverage-full-current.md` and
+`benchmarks/social-coverage-full-current.json`.
+
+Variety Coverage Score measures whether distinct relationships have occurred:
+for each player and facet, it divides experienced feasible courtmates,
+partners or opponents by that facet's structurally feasible opportunities.
+The player's relationship score is the equal-weight mean of the facets with
+opportunities; the session score averages those player scores. The opportunity
+sets use the same structural vocabulary as Social entropy and do not shrink to
+relationships admitted by a Balanced guardrail. A facet with zero opportunities
+has no score and is excluded from its means. A singleton facet is meaningful:
+it counts as 0% until its sole feasible relationship occurs, then 100%.
+Normalized Shannon entropy is reported separately because it measures how
+evenly repeated experiences are distributed; entropy omits facets with fewer
+than two possible experiences, so a singleton can affect coverage without
+entering entropy. MIXED and OWN_SIDE coverage are also reported separately and
+do not contribute to the relationship score.
+
+Use `--pilot` for the one-narrow-seed smoke run. `--seeds` and `--wide-seeds`
+accept comma-separated seed lists and override the corresponding defaults. For
+example:
+
+```sh
+npm run benchmark:matchmaking -- --seeds 1,4729,104729 --wide-seeds 30011,65537
+```
+
+To compare against a previously saved report, pass `--baseline-json <path>`.
+To generate a baseline report from an explicit worktree, pass
+`--baseline-worktree <path>`; the worktree must contain the benchmark test and
+measurement files. `--skip-baseline` runs only the current engine, and
+`--out-dir <path>` changes the output directory. The long benchmark case is
+skipped in the normal Vitest/CI run and is enabled by this script.
 
 ## Balance admissibility
 
 `balanceGuardrail.ts` contains the format policy. Balanced search first finds
 the strongest feasible fairness/arrival/schedule/starvation class and its
 lexicographic minimum `(maxBalanceGap, totalBalanceGap)`. It then freezes the
-envelope and searches whole batches for the best entropy within it.
+envelope and searches whole batches for the smoothest cadence, then the best
+entropy within it.
 
 Points admits `maxBalanceGap <= bestMaxBalanceGap + 1.5`. Rating admits
 `maxBalanceGap <= min(50, bestMaxBalanceGap + 30)`. The Rating window adapts the
 previous 30-rating rematch tolerance; it is deliberately separate from the
 absolute 50 ceiling. Both limits are explicit configurable policy inputs.
 The windows include the boundary. No pairwise tolerance comparator is used.
-Total gap is secondary actual balance quality after entropy/rest; several good
+Total gap is secondary actual balance quality after cadence and entropy; several good
 courts cannot conceal a court outside the worst-gap envelope.
 
 If Rating's stronger class cannot meet 50, fairness and starvation still win:
@@ -63,22 +128,32 @@ weaker starvation or fairness class cannot set the baseline.
 ## Search and diagnostics
 
 Balanced retires the old candidate caps, rest tie zones, quartet exemplars,
-anchor locks and repeat/coverage pruning. Every legal partition remains visible
-to entropy. Small one/two-court decisions with at most fourteen available
+anchor locks and repeat/coverage pruning. Every admissible partition remains
+visible to cadence and entropy. Small one/two-court decisions with at most fourteen available
 players are exhaustive by default. Larger decisions use bounded global search
 and admissible pruning, with separate 50,000-branch / two-second budgets for
-baseline and entropy passes. Baseline scoring defers entropy, and collapses
-only worse-balanced partitions of an identical quartet; the entropy pass
-restores every admissible partition. A Balanced timeout may return an incumbent only when
-fairness, schedule, starvation and the balance baseline are certified; otherwise
-it reports a search limit. It never grants an unproven envelope or falls back
-to greedy courts. Diagnostics distinguish incomplete entropy optimization.
+baseline and cadence/entropy passes. Baseline scoring defers cadence and
+entropy, and collapses only worse-balanced partitions of an identical quartet;
+the second pass restores every admissible partition. Its cadence bound is
+optimistic across all remaining players, and entropy pruning runs only after
+that bound ties the incumbent. A Balanced timeout may return an incumbent only
+when fairness, schedule, starvation and the balance baseline are certified;
+otherwise it reports a search limit. It never grants an unproven envelope or
+falls back to greedy courts. Diagnostics distinguish incomplete cadence or
+entropy optimization.
 
 Balanced entropy uses fixed 1e-12 score buckets for transitive effective ties;
 Social retains its existing exact score ordering. Raw total/facet gains remain
 available. Debug and persisted reasons expose fairness, starvation, baseline,
-allowed gap, chosen gap, entropy facets and whether a final exact-rematch,
+allowed gap, chosen gap, the chosen batch's zero-rest selected-player count
+(which can include first assignments) and ascending completed-match rest
+vector, entropy facets and whether a final exact-rematch,
 seeded-random or deterministic tie decided the result.
+The opt-in `measureRotationStarvationIntervention` benchmark helper runs the
+same search with starvation priority suppressed only in a private
+counterfactual, replaying identical random draws and reporting whether the
+selected player set changes. Ordinary production selection always enforces
+starvation protection.
 
 The old `mixedVariety.ts` target/debt engine is removed. Shared-court repetition,
 partner/opponent coverage and recent repeats no longer influence Balanced.
@@ -87,10 +162,11 @@ repeat ties and opportunity semantics remain unchanged.
 
 Player-group seat compositions and crossover schedule ranks remain stronger
 structural rules. Balanced no longer uses personal crossover debt or elapsed
-wait vectors to narrow equally fair selections; shared entropy decides those
-ties. Level Match retains its separate group-selection policy.
+wait vectors to narrow equally fair selections; shared cadence and entropy
+decide those ties. Level Match retains its separate group-selection policy.
 
-Observed rest bounds remain subject to stronger count fairness and legality:
-asynchronous 7/7 Mixed simulations can defer a player for five completed-court
-events when Mixed parity prevents their inclusion in the fairest count class.
-An independent legal oracle verifies starvation is optimal inside that class.
+Rest bounds remain subject to stronger count fairness and legality. Mixed
+parity, player groups, interclub restrictions and asynchronous availability can
+still make longer waits unavoidable even when cadence smoothing is enabled; the
+benchmark reports those cases separately from waits avoidable by another
+equally fair legal batch.

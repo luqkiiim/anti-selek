@@ -5,7 +5,7 @@ and behavioral invariants in [SPEC.md](./SPEC.md). The original staged rollout
 plan has been superseded by the shared rotation implementation.
 
 - `fairness.ts` / `entry.ts`: active roster and neutral effective counts.
-- `scoring.ts`: shared fairness, starvation, rest and transitive policy metrics.
+- `scoring.ts`: shared fairness, starvation, cadence and transitive policy metrics.
 - `socialVariety.ts`: full-roster constrained entropy and stable side history.
 - `balance.ts`: legal team partitions and strength/point-difference gaps.
 - `balanceGuardrail.ts`: explicit Points/Rating admissibility policy.
@@ -19,4 +19,6 @@ plan has been superseded by the shared rotation implementation.
 Do not reintroduce candidate compression using repeat/coverage heuristics, a
 Mixed target/debt system, a balance-weighted entropy score, or a moving pairwise
 tolerance. Balance baselines must be certified inside the optimal stronger
-rotation class before entropy is optimized.
+rotation class before cadence and entropy are optimized. Rest cadence uses a
+transitive global vector and completed-match events; starvation remains its
+recovery safety net.

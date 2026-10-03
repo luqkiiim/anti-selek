@@ -92,7 +92,7 @@ describe("matchmaking v3 simulation", () => {
     expect(Math.max(...matchCounts) - Math.min(...matchCounts)).toBeLessThanOrEqual(1);
   });
 
-  it("bounds waiting while organic variety precedes ordinary rest in seven-player Balanced", () => {
+  it("bounds waiting with cadence smoothing in seven-player Balanced", () => {
     const state = createSimulationState(
       createSimulationPlayers(7, { strengthStep: 0 }),
       {
@@ -113,7 +113,7 @@ describe("matchmaking v3 simulation", () => {
     expect(Math.max(...counts) - Math.min(...counts)).toBeLessThanOrEqual(1);
   });
 
-  it("keeps Social court time fair while variety precedes ordinary rest", () => {
+  it("keeps Social court time fair with cadence smoothing before variety", () => {
     const state = createSimulationState(
       createSimulationPlayers(7, { strengthStep: 0 }),
       {

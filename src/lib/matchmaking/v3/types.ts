@@ -205,6 +205,9 @@ export interface V3SingleCourtDebug {
   chosenConsecutivePlayTotalBurden: number | null;
   chosenSocialVarietyGain?: number | null;
   chosenSocialVarietyGains?: SocialVarietyGains | null;
+  /** Count of selected players with restTurns === 0, including first assignments. */
+  chosenZeroRestPlayerCount?: number | null;
+  chosenAscendingRestTurns?: number[] | null;
   fairnessOptimal?: boolean;
   fairnessCertified?: boolean;
   starvationCertified?: boolean;
@@ -295,6 +298,9 @@ export interface V3BatchDebug {
   chosenTotalSharedCourtEncounterFrequencyPenalty?: number | null;
   chosenTotalSocialVarietyGain?: number | null;
   chosenTotalSocialVarietyGains?: SocialVarietyGains | null;
+  /** Count of selected players with restTurns === 0, including first assignments. */
+  chosenZeroRestPlayerCount?: number | null;
+  chosenAscendingRestTurns?: number[] | null;
   fairnessOptimal?: boolean;
   fairnessCertified?: boolean;
   starvationCertified?: boolean;

@@ -186,13 +186,13 @@ function createBatchSelection({
 
 describe("matchmaking v3 scoring", () => {
   // The solver applies the fixed balance envelope before these comparisons.
-  it.each(BALANCED_SESSION_TYPES)("uses common entropy ahead of ordinary rest and actual admissible balance (%s)", (sessionType) => {
+  it.each(BALANCED_SESSION_TYPES)("uses cadence smoothing ahead of entropy and actual admissible balance (%s)", (sessionType) => {
     const varied = createSelection({ balanceGap: 1, socialVarietyGain: 1, restTurns: [0, 0, 0, 0], exactRematchPenalty: 10 });
     const rested = createSelection({ balanceGap: 0, socialVarietyGain: 0, restTurns: [3, 3, 3, 3], exactRematchPenalty: 0 });
-    expect(compareSingleCourtSelections(varied, rested, sessionType)).toBeLessThan(0);
+    expect(compareSingleCourtSelections(rested, varied, sessionType)).toBeLessThan(0);
     const variedBatch = createBatchSelection({ maxBalanceGap: 1, totalBalanceGap: 2, totalSocialVarietyGain: 1, restTurns: [0, 0, 0, 0] });
     const restedBatch = createBatchSelection({ maxBalanceGap: 0, totalBalanceGap: 0, totalSocialVarietyGain: 0, restTurns: [3, 3, 3, 3] });
-    expect(compareBatchSelections(variedBatch, restedBatch, sessionType)).toBeLessThan(0);
+    expect(compareBatchSelections(restedBatch, variedBatch, sessionType)).toBeLessThan(0);
   });
 
   it.each(BALANCED_SESSION_TYPES)("keeps fairness, arrival and overdue protection ahead of entropy (%s)", (sessionType) => {
@@ -218,7 +218,7 @@ describe("matchmaking v3 scoring", () => {
     expect(compareBatchSelections(legacyBatch, createBatchSelection({ maxBalanceGap: 0, totalBalanceGap: 0 }), sessionType)).toBe(0);
   });
 
-  it.each(BALANCED_SESSION_TYPES)("uses enabled ordinary rest after entropy, then actual balance, then exact rematch (%s)", (sessionType) => {
+  it.each(BALANCED_SESSION_TYPES)("uses enabled cadence before entropy, then actual balance and exact rematch (%s)", (sessionType) => {
     const rested = createSelection({ balanceGap: 1, restTurns: [3, 3, 3, 3], socialVarietyGain: 1, exactRematchPenalty: 0 });
     const balanced = createSelection({ balanceGap: 0, restTurns: [1, 1, 1, 1], socialVarietyGain: 1, exactRematchPenalty: 1 });
     expect(compareSingleCourtSelections(rested, balanced, sessionType)).toBeLessThan(0);
@@ -228,7 +228,7 @@ describe("matchmaking v3 scoring", () => {
     expect(compareSingleCourtSelections(fresh, exact, sessionType)).toBeLessThan(0);
   });
 
-  it.each(BALANCED_SESSION_TYPES)("uses minimax then total balance only after batch entropy and rest tie (%s)", (sessionType) => {
+  it.each(BALANCED_SESSION_TYPES)("uses batch minimax then total balance only after cadence and entropy tie (%s)", (sessionType) => {
     const safer = createBatchSelection({ maxBalanceGap: 1, totalBalanceGap: 2 });
     const lowerTotal = createBatchSelection({ maxBalanceGap: 1.5, totalBalanceGap: 1.5 });
     expect(compareBatchSelections(safer, lowerTotal, sessionType)).toBeLessThan(0);
@@ -254,7 +254,7 @@ describe("matchmaking v3 scoring", () => {
       if (ab <= 0 && bc <= 0) expect(compareSingleCourtSelections(a, c, sessionType)).toBeLessThanOrEqual(0);
     }
   });
-  it("uses ordinary rest only after Social variety ties, and skips it when disabled", () => {
+  it("uses cadence smoothing after Social starvation and before variety, and skips it when disabled", () => {
     const moreRest = createSelection({
       restTurns: [4, 4, 4, 4], balanceGap: 0, exactRematchPenalty: 0,
       socialVarietyGain: 2,
@@ -266,6 +266,24 @@ describe("matchmaking v3 scoring", () => {
 
     expect(compareSingleCourtSelections(moreRest, lessRest, SessionType.SOCIAL_MIX)).toBeLessThan(0);
     expect(compareSingleCourtSelections(moreRest, lessRest, SessionType.SOCIAL_MIX, { respectPlayerRest: false })).toBe(0);
+  });
+
+  it.each([SessionType.SOCIAL_MIX, ...BALANCED_SESSION_TYPES])("uses the ascending cadence vector for %s", (sessionType) => {
+    const uneven = createSelection({
+      restTurns: [0, 3, 3, 3], balanceGap: 0, socialVarietyGain: 0, exactRematchPenalty: 0,
+    });
+    const smoother = createSelection({
+      restTurns: [1, 1, 2, 2], balanceGap: 0, socialVarietyGain: 0, exactRematchPenalty: 0,
+    });
+    expect(compareSingleCourtSelections(smoother, uneven, sessionType)).toBeLessThan(0);
+
+    const compensated = createSelection({
+      restTurns: [1, 1, 4, 4], balanceGap: 0, socialVarietyGain: 0, exactRematchPenalty: 0,
+    });
+    const distributed = createSelection({
+      restTurns: [1, 2, 2, 2], balanceGap: 0, socialVarietyGain: 0, exactRematchPenalty: 0,
+    });
+    expect(compareSingleCourtSelections(distributed, compensated, sessionType)).toBeLessThan(0);
   });
 
   it("keeps court-time and arrival priority ahead of Social variety", () => {
@@ -288,6 +306,18 @@ describe("matchmaking v3 scoring", () => {
 
     expect(compareSingleCourtSelections(lowerCount, higherCount, SessionType.SOCIAL_MIX)).toBeLessThan(0);
     expect(compareSingleCourtSelections(earlierArrival, laterArrival, SessionType.SOCIAL_MIX)).toBeLessThan(0);
+  });
+
+  it.each([SessionType.SOCIAL_MIX, ...BALANCED_SESSION_TYPES])("never trades a better count-fairness class for rest cadence (%s)", (sessionType) => {
+    const fairer = createSelection({
+      matchesPlayed: [5, 5, 5, 5], restTurns: [0, 0, 0, 0],
+      balanceGap: 0, socialVarietyGain: 100, exactRematchPenalty: 0,
+    });
+    const lessFair = createSelection({
+      matchesPlayed: [5, 5, 5, 6], restTurns: [20, 20, 20, 20],
+      balanceGap: 0, socialVarietyGain: 0, exactRematchPenalty: 0,
+    });
+    expect(compareSingleCourtSelections(fairer, lessFair, sessionType)).toBeLessThan(0);
   });
 
   it("uses point-difference balance after points balance ties", () => {

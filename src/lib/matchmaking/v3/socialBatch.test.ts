@@ -29,7 +29,7 @@ describe("Social global batch solver", () => {
     expect(result.fairnessCertified).toBe(true);
   });
 
-  it.each([10, 14])("matches an independent exhaustive %i-player fairness/variety/balance oracle", (count) => {
+  it.each([10, 14])("matches an independent exhaustive %i-player fairness/cadence/variety/balance oracle", (count) => {
     const players = makePlayers(count).map((player, index) => ({ ...player, matchesPlayed: index % 3 === 0 ? 1 : 0, restTurns: index % 2, strength: 850 + index * 47 }));
     const history: V3CompletedMatch[] = [{ team1: ["P0", "P5"], team2: ["P1", "P6"] }];
     const context = buildSocialVarietyContext(players, history, { sessionMode: SessionMode.MIXICANO });
@@ -44,10 +44,10 @@ describe("Social global batch solver", () => {
     let optimum: number[] | null = null;
     const key = (left: typeof legal[number], right: typeof legal[number]) => {
       const selected = [...left.ids, ...right.ids].map((id) => byId.get(id)!);
-      const rests = selected.map((player) => player.restTurns).sort((a, b) => b - a);
+      const rests = selected.map((player) => player.restTurns).sort((a, b) => a - b);
       return [...selected.map((player) => player.matchesPlayed).sort((a, b) => a - b),
-        -(left.gain + right.gain), -rests.reduce((sum, rest) => sum + rest, 0),
-        -rests[rests.length - 1], ...rests.map((rest) => -rest), Math.max(left.balance, right.balance), left.balance + right.balance,
+        0, 0, 0, rests.filter((rest) => rest === 0).length, ...rests.map((rest) => -rest),
+        -(left.gain + right.gain), Math.max(left.balance, right.balance), left.balance + right.balance,
         Math.max(left.point, right.point), left.point + right.point];
     };
     for (let a = 0; a < legal.length; a++) for (let b = a + 1; b < legal.length; b++) {
@@ -60,11 +60,11 @@ describe("Social global batch solver", () => {
     expect(key(chosen[0], chosen[1])).toEqual(optimum);
   });
 
-  it("lets variety beat ordinary rest when court-time and arrival are tied", () => {
+  it("prefers smoother rest over variety when stronger rotation priorities tie", () => {
     const players = makePlayers(8).map((player, index) => ({ ...player, restTurns: index < 4 ? 1 : 0 }));
     const completedMatches: V3CompletedMatch[] = Array.from({ length: 10 }, () => ({ team1: ["P0", "P1"], team2: ["P2", "P3"] }));
     const result = findBestSingleCourtSelectionV3(players, { sessionMode: SessionMode.MEXICANO, sessionType: SessionType.SOCIAL_MIX, completedMatches, randomFn: () => 0 });
-    expect(result.selection?.ids.some((id) => Number(id.slice(1)) >= 4)).toBe(true);
+    expect(result.selection?.ids.every((id) => Number(id.slice(1)) < 4)).toBe(true);
     expect(result.selection?.socialStarvation).toMatchObject({ idealRestGap: 1, availableOverdueCount: 0 });
     const ignoreRest = findBestSingleCourtSelectionV3(players, { sessionMode: SessionMode.MEXICANO, sessionType: SessionType.SOCIAL_MIX, completedMatches, randomFn: () => 0, respectPlayerRest: false });
     expect(ignoreRest.selection?.ids.some((id) => Number(id.slice(1)) >= 4)).toBe(true);
@@ -312,7 +312,7 @@ describe("Social global batch solver", () => {
     expect(result.varietyOptimal).toBe(false);
   });
 
-  it("widens a supplied strict candidate pool so a normal shorter-rest player can earn better Social variety", () => {
+  it("widens a supplied strict candidate pool without letting variety beat smoother cadence", () => {
     const players = makePlayers(5).map((player, index) => ({
       ...player,
       restTurns: index < 4 ? 1 : 0,
@@ -336,7 +336,7 @@ describe("Social global batch solver", () => {
     });
 
     expect(result.debug.eligiblePlayerIds).toContain("P4");
-    expect(result.selection?.selections[0].ids).toContain("P4");
+    expect(result.selection?.selections[0].ids).not.toContain("P4");
     expect(result.selection?.selections[0].socialStarvation).toMatchObject({
       idealRestGap: 1,
       availableOverdueCount: 0,

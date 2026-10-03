@@ -4,6 +4,7 @@ import { PartnerPreference, PlayerGender, SessionMode } from "../../../types/enu
 import {
   buildSocialVarietyContext,
   buildSocialVarietySnapshot,
+  getSocialVarietyCoverage,
   getSocialVarietyGains,
   parseSocialVarietySnapshot,
   sumSocialVarietyGains,
@@ -39,6 +40,83 @@ function histogramEntropy(counts: ReadonlyMap<string, number>, opportunities: Re
 }
 
 describe("Social lifetime normalized diversity", () => {
+  it("measures relationship coverage against the structural vocabulary, separately from entropy", () => {
+    const players = createRoster(7, 7);
+    const context = buildSocialVarietyContext(players, [mixed], { sessionMode: SessionMode.MIXICANO });
+    const coverage = getSocialVarietyCoverage(context);
+    expect(coverage.score).toBeGreaterThan(0);
+    expect(coverage.partnerScore).toBe(2 / 91);
+    expect(coverage.courtmateScore).toBe(6 / 91);
+    expect(coverage.opponentScore).toBe(4 / 91);
+    expect(coverage.matchTypeScores).toEqual({ MIXED: 2 / 7, OWN_SIDE: 0 });
+    expect(coverage.players.get("U1")!.relationshipScore).toBeCloseTo((3 / 13 + 1 / 13 + 2 / 13) / 3);
+    // Seeing the same partner repeatedly changes entropy, but not coverage.
+    const repeated = buildSocialVarietyContext(players, [mixed, mixed, mixed], { sessionMode: SessionMode.MIXICANO });
+    expect(getSocialVarietyCoverage(repeated).partnerScore).toBe(2 / 91);
+    expect(context.playersByUserId.get("U1")!.partners.counts.get("L1")).toBe(1);
+  });
+
+  it("counts one feasible relationship as meaningful and excludes empty facets", () => {
+    const players = createRoster(2, 2);
+    const onlyPartition: V3DoublesPartition = { team1: ["U1", "U2"], team2: ["L1", "L2"] };
+    const constraints = [{
+      isQuartetAllowed: (quartet: Array<{ userId: string }>) => quartet.length === 4,
+      normalizePartition: () => onlyPartition,
+    }];
+    const empty = buildSocialVarietyContext(players, [], {
+      sessionMode: SessionMode.MEXICANO,
+      opportunityConstraints: constraints,
+    });
+    expect(empty.playersByUserId.get("U1")!.partners.opportunities).toEqual(new Set(["U2"]));
+    expect(getSocialVarietyCoverage(empty).players.get("U1")!.partners.score).toBe(0);
+    expect(getSocialVarietyCoverage(empty).players.get("U1")!.matchTypes.OWN_SIDE.score).toBeNull();
+    const seen = buildSocialVarietyContext(players, [onlyPartition], {
+      sessionMode: SessionMode.MEXICANO,
+      opportunityConstraints: constraints,
+    });
+    expect(getSocialVarietyCoverage(seen).players.get("U1")!.partners.score).toBe(1);
+    expect(getSocialVarietyCoverage(seen).score).toBe(1);
+  });
+
+  it("keeps the 14-player unconstrained partner coverage bound below 100% after 20 matches", () => {
+    const players = createRoster(7, 7);
+    const partitions: V3DoublesPartition[] = Array.from({ length: 20 }, (_value, index) => ({
+      team1: [`U${index % 7 + 1}`, `L${index % 7 + 1}`],
+      team2: [`U${(index + 1) % 7 + 1}`, `L${(index + 2) % 7 + 1}`],
+    }));
+    const context = buildSocialVarietyContext(players, partitions, { sessionMode: SessionMode.MIXICANO });
+    expect([...context.playersByUserId.values()].every((player) => player.partners.opportunities.size === 13)).toBe(true);
+    expect(getSocialVarietyCoverage(context).partnerScore!).toBeLessThanOrEqual(40 / 91);
+    expect(Math.ceil((14 * 13 / 2) / 2)).toBe(46);
+  });
+
+  it("can reach full partner coverage while normalized partner entropy remains below 100%", () => {
+    const players = createRoster(7, 7);
+    const ids = players.map((player) => player.userId);
+    const pairs: V3DoublesPartition[] = [];
+    for (let a = 0; a < ids.length; a += 1) {
+      for (let b = a + 1; b < ids.length; b += 1) {
+        const left = players[a];
+        const right = players[b];
+        if (left.gender === right.gender) {
+          const fillers = players.filter((player) => player.gender === left.gender && player.userId !== left.userId && player.userId !== right.userId).slice(0, 2);
+          pairs.push({ team1: [left.userId, right.userId], team2: [fillers[0].userId, fillers[1].userId] });
+        } else {
+          const male = left.gender === PlayerGender.MALE ? left : right;
+          const female = left.gender === PlayerGender.FEMALE ? left : right;
+          const otherMale = players.find((player) => player.gender === PlayerGender.MALE && player.userId !== male.userId)!;
+          const otherFemale = players.find((player) => player.gender === PlayerGender.FEMALE && player.userId !== female.userId)!;
+          pairs.push({ team1: [male.userId, female.userId], team2: [otherMale.userId, otherFemale.userId] });
+        }
+      }
+    }
+    const oneRepeatedPair = pairs.find((partition => partition.team1.includes("U1") && partition.team1.includes("L1")))!;
+    const context = buildSocialVarietyContext(players, [...pairs, oneRepeatedPair, oneRepeatedPair], { sessionMode: SessionMode.MIXICANO });
+    const coverage = getSocialVarietyCoverage(context);
+    expect(coverage.partnerScore).toBe(1);
+    expect(histogramEntropy(context.playersByUserId.get("U1")!.partners.counts, context.playersByUserId.get("U1")!.partners.opportunities)).toBeLessThan(1);
+  });
+
   it("uses the full unpaused roster, including busy players, and freezes its vocabulary", () => {
     const players = createRoster(7, 7);
     players[6].isBusy = true;

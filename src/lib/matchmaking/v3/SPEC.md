@@ -14,7 +14,10 @@ specification records behavioral invariants used by regression tests.
 - Late joiners and resumed players enter at the lowest eligible neutral
   baseline, with fresh rest and arrival state; do not force catch-up.
 - Protect available overdue players using the full unpaused roster, even when
-  ordinary rest preference is off.
+  ordinary cadence preference is off.
+- After fairness, arrival, structural schedule rank and starvation tie, minimize
+  selected players with zero completed-match rest turns; then lexicographically
+  maximize the ascending rest-turn vector before entropy.
 - Optimize whole disjoint batches globally, including asynchronous refills.
 
 ## Shared variety invariants
@@ -30,9 +33,11 @@ specification records behavioral invariants used by regression tests.
 
 ## Social policy
 
-Keep existing ordering: fairness/arrival, group schedule, starvation, entropy,
-enabled rest, actual balance, late partner/opponent repeats, exact rematch and
-seeded pairing ties. Preserve exact entropy ordering and existing search limits.
+Order Social by fairness/arrival, group schedule, starvation, enabled cadence,
+entropy, actual balance, late partner/opponent repeats, exact rematch and seeded
+pairing ties. Cadence is the whole-batch zero-rest count followed by the
+ascending rest-turn vector. Preserve the existing entropy comparison and search
+limits; `respectPlayerRest: false` disables cadence while starvation remains.
 
 ## Balanced policy
 
@@ -40,8 +45,8 @@ seeded pairing ties. Preserve exact entropy ordering and existing search limits.
 2. Applicable player-group schedule rules.
 3. Shared starvation protection.
 4. Balance admissibility within that stronger class.
-5. Shared entropy variety.
-6. Enabled ordinary rest.
+5. Enabled cadence smoothing inside the envelope.
+6. Shared entropy variety.
 7. Actual worst-court gap, total gap, then Points point-difference gap.
 8. Exact-rematch avoidance and seeded/deterministic ties.
 
@@ -54,7 +59,9 @@ Starvation wins over a prettier baseline that excludes an overdue player.
 Balanced never compares candidates using a weighted balance/entropy sum or
 pairwise balance tolerance. Effective entropy ties use fixed 1e-12 buckets.
 Legacy debt, repeat, coverage and rest heuristics cannot prune legal entropy
-candidates. Exact rematches have no influence until all earlier metrics tie.
+candidates. Cadence pruning uses an optimistic vector over all remaining players;
+entropy cannot prune a branch that could still improve cadence. Exact rematches
+have no influence until all earlier metrics tie.
 
 ## Search certification and explanation
 
@@ -69,6 +76,6 @@ and facet gains, final tie-break and search certifications.
 
 Behavior tests cover independent exhaustive batch comparison, awkward skills,
 starvation against balance, full roster opportunities, Mixed imbalance, late
-join/resume, ordinary rest disabled, player groups/interclub, assignment history
+join/resume, cadence disabled, player groups/interclub, assignment history
 and long asynchronous sessions. Tests must check actual admissibility and
 rotation outcomes rather than asserting retired penalty fields.

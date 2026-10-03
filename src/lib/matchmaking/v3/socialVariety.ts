@@ -45,6 +45,37 @@ export interface SocialVarietyContext {
   readonly playersByUserId: ReadonlyMap<string, SocialVarietyPlayerContext>;
 }
 
+export interface SocialVarietyCoverageFacet {
+  /** Number of structurally feasible relationships experienced at least once. */
+  readonly covered: number;
+  /** Number of structurally feasible relationships in this player's vocabulary. */
+  readonly possible: number;
+  /** covered / possible, or null when this facet has no feasible opportunities. */
+  readonly score: number | null;
+}
+
+export interface SocialVarietyPlayerCoverage {
+  readonly userId: string;
+  /** Equal-weight mean of courtmate, partner and opponent scores with opportunities. */
+  readonly relationshipScore: number | null;
+  readonly courtmates: SocialVarietyCoverageFacet;
+  readonly partners: SocialVarietyCoverageFacet;
+  readonly opponents: SocialVarietyCoverageFacet;
+  readonly matchTypes: Readonly<Record<SocialMatchType, SocialVarietyCoverageFacet>>;
+}
+
+export interface SocialVarietyCoverage {
+  /** Mean relationshipScore across players with at least one meaningful facet. */
+  readonly score: number | null;
+  /** Mean of each player's facet score, preserving equal weight per player. */
+  readonly courtmateScore: number | null;
+  readonly partnerScore: number | null;
+  readonly opponentScore: number | null;
+  /** Match-type coverage is reported separately from relationship coverage. */
+  readonly matchTypeScores: Readonly<Record<SocialMatchType, number | null>>;
+  readonly players: ReadonlyMap<string, SocialVarietyPlayerCoverage>;
+}
+
 type FacetMaps = Record<SocialFacet, Map<string, number>>;
 type FacetOpportunities = Record<SocialFacet, Set<string>>;
 
@@ -337,6 +368,56 @@ function buildHistogram(opportunities: Set<string>, allCounts: Map<string, numbe
     .sort((left, right) => left - right)
     .reduce((sum, count) => sum + countLogCount(count), 0);
   return { opportunities: new Set(opportunities), counts, total, countLogCountSum };
+}
+
+function getCoverageFacet(histogram: SocialVarietyHistogram): SocialVarietyCoverageFacet {
+  const possible = histogram.opportunities.size;
+  let covered = 0;
+  for (const opportunity of histogram.opportunities) {
+    if ((histogram.counts.get(opportunity) ?? 0) > 0) covered += 1;
+  }
+  return { covered, possible, score: possible > 0 ? covered / possible : null };
+}
+
+function meanPresent(values: Array<number | null>) {
+  const present = values.filter((value): value is number => value !== null);
+  return present.length ? present.reduce((sum, value) => sum + value, 0) / present.length : null;
+}
+
+/**
+ * Measures whether each player has experienced the structurally feasible
+ * relationship vocabulary. This is coverage, not normalized Shannon entropy:
+ * each distinct relationship contributes once regardless of repetition count.
+ */
+export function getSocialVarietyCoverage(context: SocialVarietyContext): SocialVarietyCoverage {
+  const players = new Map<string, SocialVarietyPlayerCoverage>();
+  for (const [userId, histograms] of context.playersByUserId) {
+    const courtmates = getCoverageFacet(histograms.courtmates);
+    const partners = getCoverageFacet(histograms.partners);
+    const opponents = getCoverageFacet(histograms.opponents);
+    const mixed = getCoverageFacet({
+      ...histograms.matchType,
+      opportunities: new Set(histograms.matchType.opportunities.has("MIXED") ? ["MIXED"] : []),
+    });
+    const ownSide = getCoverageFacet({
+      ...histograms.matchType,
+      opportunities: new Set(histograms.matchType.opportunities.has("OWN_SIDE") ? ["OWN_SIDE"] : []),
+    });
+    const relationshipScore = meanPresent([courtmates.score, partners.score, opponents.score]);
+    players.set(userId, { userId, relationshipScore, courtmates, partners, opponents, matchTypes: { MIXED: mixed, OWN_SIDE: ownSide } });
+  }
+  const playerCoverage = [...players.values()];
+  return {
+    score: meanPresent(playerCoverage.map((player) => player.relationshipScore)),
+    courtmateScore: meanPresent(playerCoverage.map((player) => player.courtmates.score)),
+    partnerScore: meanPresent(playerCoverage.map((player) => player.partners.score)),
+    opponentScore: meanPresent(playerCoverage.map((player) => player.opponents.score)),
+    matchTypeScores: {
+      MIXED: meanPresent(playerCoverage.map((player) => player.matchTypes.MIXED.score)),
+      OWN_SIDE: meanPresent(playerCoverage.map((player) => player.matchTypes.OWN_SIDE.score)),
+    },
+    players,
+  };
 }
 
 /**

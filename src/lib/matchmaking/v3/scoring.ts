@@ -49,15 +49,19 @@ export function getSocialFairnessVector(
   return vector;
 }
 
-/** Ordinary rest is a Social tie-break after group rules and ongoing variety. */
+/**
+ * Cadence is a tie-break after stronger rotation classes and before entropy.
+ * Minimize immediate replays first, then maximize the ascending rest vector.
+ */
 export function getSocialRestVector(
   players: readonly ActiveMatchmakerV3Player[]
 ) {
-  const rest = buildRestSummary([...players]);
+  const ascendingRestTurns = players
+    .map((player) => player.restTurns)
+    .sort((left, right) => left - right);
   return [
-    -rest.totalRestTurns,
-    -rest.minimumRestTurns,
-    ...rest.restTurnVector.map((turns) => -turns),
+    ascendingRestTurns.filter((turns) => turns === 0).length,
+    ...ascendingRestTurns.map((turns) => -turns),
   ];
 }
 
@@ -159,8 +163,8 @@ export function compareSocialBatchSelections<T extends ActiveMatchmakerV3Player>
   ) ||
     (options?.leftSchedulingRank ?? 0) - (options?.rightSchedulingRank ?? 0) ||
     (options?.starvationContext ? compareSocialStarvationPlayers(leftPlayers, rightPlayers, options.starvationContext) : 0) ||
-    (right.totalSocialVarietyGain ?? 0) - (left.totalSocialVarietyGain ?? 0) ||
     (options?.respectPlayerRest === false ? 0 : compareSocialRestPlayers(leftPlayers, rightPlayers)) ||
+    (right.totalSocialVarietyGain ?? 0) - (left.totalSocialVarietyGain ?? 0) ||
     left.maxBalanceGap - right.maxBalanceGap ||
     left.totalBalanceGap - right.totalBalanceGap ||
     left.maxPointDiffGap - right.maxPointDiffGap ||
@@ -326,9 +330,16 @@ export function getRotationVarietyScore(gain: number, sessionType: SessionType) 
 }
 
 export function compareRestSummaries(left: V3RestSummary, right: V3RestSummary) {
+  const cadenceVector = (summary: V3RestSummary) => {
+    const ascendingRestTurns = [...summary.restTurnVector].sort((a, b) => a - b);
+    return [
+      ascendingRestTurns.filter((turns) => turns === 0).length,
+      ...ascendingRestTurns.map((turns) => -turns),
+    ];
+  };
   return compareSocialNumberVectors(
-    [-left.totalRestTurns, -left.minimumRestTurns, ...left.restTurnVector.map((turns) => -turns)],
-    [-right.totalRestTurns, -right.minimumRestTurns, ...right.restTurnVector.map((turns) => -turns)]
+    cadenceVector(left),
+    cadenceVector(right)
   );
 }
 
@@ -346,8 +357,8 @@ export function compareSingleCourtSelections<T extends ActiveMatchmakerV3Player>
   const social = isSocialSession(sessionType);
   return compareSocialFairnessPlayers(left.players, right.players) ||
     (options?.starvationContext ? compareSocialStarvationPlayers(left.players, right.players, options.starvationContext) : 0) ||
-    getRotationVarietyScore(right.socialVarietyGain ?? 0, sessionType) - getRotationVarietyScore(left.socialVarietyGain ?? 0, sessionType) ||
     (options?.respectPlayerRest === false ? 0 : compareSocialRestPlayers(left.players, right.players)) ||
+    getRotationVarietyScore(right.socialVarietyGain ?? 0, sessionType) - getRotationVarietyScore(left.socialVarietyGain ?? 0, sessionType) ||
     left.balanceGap - right.balanceGap ||
     (social || sessionType === SessionType.POINTS ? left.pointDiffGap - right.pointDiffGap : 0) ||
     (social ? left.partnerRepeatPenalty - right.partnerRepeatPenalty : 0) ||
@@ -375,8 +386,8 @@ export function compareBatchSelections<T extends ActiveMatchmakerV3Player>(
   return compareSocialFairnessPlayers(leftPlayers, rightPlayers) ||
     (options?.leftSchedulingRank ?? 0) - (options?.rightSchedulingRank ?? 0) ||
     (options?.starvationContext ? compareSocialStarvationPlayers(leftPlayers, rightPlayers, options.starvationContext) : 0) ||
-    getRotationVarietyScore(right.totalSocialVarietyGain ?? 0, sessionType) - getRotationVarietyScore(left.totalSocialVarietyGain ?? 0, sessionType) ||
     (options?.respectPlayerRest === false ? 0 : compareSocialRestPlayers(leftPlayers, rightPlayers)) ||
+    getRotationVarietyScore(right.totalSocialVarietyGain ?? 0, sessionType) - getRotationVarietyScore(left.totalSocialVarietyGain ?? 0, sessionType) ||
     left.maxBalanceGap - right.maxBalanceGap ||
     left.totalBalanceGap - right.totalBalanceGap ||
     (sessionType === SessionType.POINTS ? left.maxPointDiffGap - right.maxPointDiffGap : 0) ||

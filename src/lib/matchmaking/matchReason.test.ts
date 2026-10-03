@@ -173,7 +173,7 @@ describe("matchmaking reason", () => {
     expect(reason.summary.join(" ")).toContain("previous match");
   });
 
-  it("explains the new Social order with rest after equally varied choices", () => {
+  it("explains the Social order with cadence before shared variety", () => {
     const reason = buildV3MatchmakingReason(
       createSelection({ socialVarietyGain: 0.25 }),
       {
@@ -186,7 +186,7 @@ describe("matchmaking reason", () => {
     );
 
     expect(reason.summary.join(" ")).toContain("fair turns, arrival priority, applicable player-group rules and overdue-turn protection");
-    expect(reason.summary.join(" ")).toContain("longer breaks only decide between equally varied choices");
+    expect(reason.summary.join(" ")).toContain("Smoother completed-match rest cadence ranks choices before shared entropy");
     expect(reason.summary.join(" ")).toContain("completed-match rest turns");
   });
 
@@ -212,7 +212,7 @@ describe("matchmaking reason", () => {
       finalTieBreak: "EXACT_REMATCH",
     });
     const reason = buildV3MatchmakingReason(selection, { sessionType, sessionMode: SessionMode.MIXICANO, respectPlayerRest: false });
-    expect(reason.summary.join(" ")).toContain("overdue-turn protection and the balance guardrail");
+    expect(reason.summary.join(" ")).toContain("The balance guardrail sets the admissible envelope");
     expect(reason.summary.join(" ")).toContain("best achievable worst-court balance gap was 2");
     expect(reason.summary.join(" ")).toContain("2 of 2 available players");
     expect(reason.summary.join(" ")).toContain("Normalized entropy gain");
@@ -301,8 +301,8 @@ describe("matchmaking reason", () => {
     expect(parsed?.metrics.socialVarietyGain).toBe(0.123456789);
     expect(parsed?.metrics.socialVarietyGains).toEqual(selection.socialVarietyGains);
     expect(parsed?.metrics.socialStarvation).toEqual(selection.socialStarvation);
-    expect(parsed?.summary.join(" ")).toContain("ongoing courtmate");
-    expect(parsed?.summary.join(" ")).toContain("match-type variety");
+    expect(parsed?.summary.join(" ")).toContain("Ongoing variety includes courtmates");
+    expect(parsed?.summary.join(" ")).toContain("match type");
     expect(parsed?.summary.join(" ")).toContain("2 of 3 available players beyond the 2-match usual rest gap were selected");
     expect(parsed?.summary.join(" ")).not.toContain("coverage penalty");
   });

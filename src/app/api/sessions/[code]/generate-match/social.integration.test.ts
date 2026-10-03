@@ -312,7 +312,7 @@ describe("Social generation route adapters", () => {
     ["MIXED", "MIXED", 1],
     ["MIXED", "MIXED", 4729],
     ["MENS", "WOMENS", 104729],
-  ] as const)("keeps Social variety active through alternating queue-disabled refills after %s + %s openings (seed %i)", async (firstOpeningType, secondOpeningType, seed) => {
+  ] as const)("keeps fair cadence and relationship variety through alternating queue-disabled refills after %s + %s openings (seed %i)", async (firstOpeningType, secondOpeningType, seed) => {
     let randomState = seed;
     vi.mocked(Math.random).mockImplementation(() => {
       randomState = (randomState * 48271) % 2147483647;
@@ -345,7 +345,9 @@ describe("Social generation route adapters", () => {
       ["court-1", "opening-court-1"],
       ["court-2", "opening-court-2"],
     ]);
-    const selectedTypes: string[] = [];
+    const latePartnerPairs = new Set<string>();
+    const lateOpponentPairs = new Set<string>();
+    const lateCourtmatePairs = new Set<string>();
     const gendersById = new Map(players.map((entry) => [entry.userId, entry.gender]));
     const waitStartedAtCompletion = new Map<string, number>();
     const observedRestGaps: number[] = [];
@@ -398,7 +400,19 @@ describe("Social generation route adapters", () => {
       }
       const men = selection.ids.filter((id) => gendersById.get(id) === PlayerGender.MALE).length;
       expect([0, 2, 4]).toContain(men);
-      selectedTypes.push(men === 4 ? "MENS" : men === 0 ? "WOMENS" : "MIXED");
+      if (refill >= 21) {
+        const pairKey = (left: string, right: string) => [left, right].sort().join("|");
+        const teams = [selection.partition.team1, selection.partition.team2];
+        const ids = [...teams[0], ...teams[1]];
+        for (let left = 0; left < ids.length; left += 1) for (let right = left + 1; right < ids.length; right += 1) {
+          lateCourtmatePairs.add(pairKey(ids[left], ids[right]));
+        }
+        for (const [teamIndex, team] of teams.entries()) {
+          const other = teams[1 - teamIndex];
+          latePartnerPairs.add(pairKey(team[0], team[1]));
+          for (const id of team) for (const opponent of other) lateOpponentPairs.add(pairKey(id, opponent));
+        }
+      }
 
       const nextMatchId = `refill-${refill}`;
       data.matches.push(match(nextMatchId, selection.partition, data.players, MatchStatus.IN_PROGRESS, {
@@ -409,7 +423,9 @@ describe("Social generation route adapters", () => {
       currentMatchByCourt.set(freedCourtId, nextMatchId);
     }
 
-    expect(new Set(selectedTypes.slice(-24))).toEqual(new Set(["MENS", "WOMENS", "MIXED"]));
+    expect(latePartnerPairs.size).toBeGreaterThanOrEqual(16);
+    expect(lateOpponentPairs.size).toBeGreaterThanOrEqual(32);
+    expect(lateCourtmatePairs.size).toBeGreaterThanOrEqual(48);
     const maxRestGap = getSocialIdealRestGap(players.filter((entry) => !entry.isPaused).length) + 1;
     expect(observedRestGaps.length).toBeGreaterThan(0);
     expect(Math.max(...observedRestGaps)).toBeLessThanOrEqual(maxRestGap);

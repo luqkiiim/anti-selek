@@ -22,6 +22,7 @@
     "pretest": "node scripts/ensure-node-lts.mjs",
     "test": "vitest run src",
     "test:file": "vitest run",
+    "benchmark:matchmaking": "node scripts/run-matchmaking-benchmark.mjs",
     "pretest:e2e": "node scripts/ensure-node-lts.mjs",
     "test:e2e": "playwright test",
     "postinstall": "prisma generate"
