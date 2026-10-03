@@ -2321,16 +2321,30 @@ export function summarizeBenchmarkGroup(report: BenchmarkReport, profile: Benchm
   };
 }
 
+export function matchBenchmarkBaselineToCurrentSessions(report: BenchmarkReport, baseline: BenchmarkReport): BenchmarkReport {
+  const currentSessionKeys = new Set(report.sessions.map((session) => `${session.profile}:${session.sessionType}:${session.seed}`));
+  const sessions = baseline.sessions.filter((session) =>
+    currentSessionKeys.has(`${session.profile}:${session.sessionType}:${session.seed}`));
+  return {
+    ...baseline,
+    seedCount: new Set(sessions.filter((session) => session.profile === "narrow").map((session) => session.seed)).size,
+    wideSeedCount: new Set(sessions.filter((session) => session.profile === "wide").map((session) => session.seed)).size,
+    sessions,
+  };
+}
+
 export function formatBenchmarkHuman(report: BenchmarkReport, baseline?: BenchmarkReport) {
   const formats = [
     [SessionType.SOCIAL_MIX, "Social"],
     [SessionType.POINTS, "Balanced Points"],
     [SessionType.ELO, "Balanced Rating/Elo"],
   ] as const;
+  const matchedBaseline = baseline ? matchBenchmarkBaselineToCurrentSessions(report, baseline) : undefined;
   const lines = [
     "# Matchmaking cadence and relationship coverage benchmark",
     "",
     `Generated ${report.generatedAt}; source commit ${report.sourceRevision}; policy ${report.sourceProvenance.policyLabel}; dirty worktree ${report.sourceProvenance.workingTreeDirty}. Primary seeds: ${report.seedCount}; wide-profile Balanced seeds: ${report.wideSeedCount}.`,
+    `Rendered from saved measurement data on ${new Date().toISOString()}; measurement source hashes below identify the code used for the benchmark run.`,
     `Worktree note: ${report.sourceProvenance.workingTreeNote}`,
     `Tracked source changes from commit: core engine ${report.sourceProvenance.coreEngineTrackedDiffPaths.length ? report.sourceProvenance.coreEngineTrackedDiffPaths.join(", ") : "clean"}; shared variety ${report.sourceProvenance.sharedVarietyTrackedDiffPaths.length ? report.sourceProvenance.sharedVarietyTrackedDiffPaths.join(", ") : "clean"}; measurement harness ${report.sourceProvenance.measurementHarnessTrackedDiffPaths.length ? report.sourceProvenance.measurementHarnessTrackedDiffPaths.join(", ") : "clean"}. Generated untracked artifacts can make the overall worktree dirty without changing these tracked source statuses.`,
     `Engine source SHA-256 ${report.sourceProvenance.engineSourceSha256 ?? "unavailable"}; measurement harness SHA-256 ${report.sourceProvenance.measurementHarnessSha256 ?? "unavailable"}.`,
@@ -2346,7 +2360,9 @@ export function formatBenchmarkHuman(report: BenchmarkReport, baseline?: Benchma
   ];
   for (const [type, label] of formats) for (const checkpoint of ["20", "400"] as const) {
     const summary = summarizeBenchmarkGroup(report, "narrow", type, checkpoint);
-    const base = baseline ? summarizeBenchmarkGroup(baseline, "narrow", type, checkpoint) : null;
+    const base = matchedBaseline?.sessions.some((session) => session.profile === "narrow" && session.sessionType === type)
+      ? summarizeBenchmarkGroup(matchedBaseline, "narrow", type, checkpoint)
+      : null;
     const fmtStats = (value: ReturnType<typeof stats>, percent = false) => value.mean === null ? "n/a" : percent
       ? `${formatPct(value.mean)}; ${formatPct(value.median)}; ${formatPct(value.min)}–${formatPct(value.max)}`
       : `${value.mean.toFixed(2)}; ${value.median!.toFixed(2)}; ${value.min!.toFixed(2)}–${value.max!.toFixed(2)}`;
@@ -2427,7 +2443,14 @@ export function formatBenchmarkHuman(report: BenchmarkReport, baseline?: Benchma
     const guardrail = type === SessionType.SOCIAL_MIX ? "No balance guardrail." : `${sessions.reduce((sum, session) => sum + session.missingRelationships.filter((relationship) => relationship.classification === "excluded_by_balance_envelope_in_observed_opportunities").length, 0)} unseen facet-pairs were in a strongest rotation class but outside every observed balance envelope.`;
     lines.push(`| ${label} | ${full}/${sessions.length} | ${missed} total facet-pairs across seeds | ${guardrail} |`);
   }
-  lines.push("", "The unseen relationship classification is finite-session evidence across successive opportunity layers: balance envelope, match-type entropy frontier, zero-rest frontier, relationship entropy frontier, and soft cadence frontier. The static balance-feasibility audit is reported separately and can show whether a relationship is structurally feasible while still outside a specific balance envelope. Finite simulation alone does not prove permanent exclusion.", "");
+  const unseenClassification = report.sourceProvenance.policyLabel === "replay-envelope-best-plus-one"
+    ? "The unseen relationship classification is finite-session evidence across successive opportunity layers: balance envelope, frozen replay minimum/allowance, combined-entropy frontier, and soft-cadence frontier."
+    : report.sourceProvenance.policyLabel === "type-entropy-first"
+      ? "The unseen relationship classification is finite-session evidence across successive opportunity layers: balance envelope, match-type entropy frontier, zero-rest frontier, relationship-entropy frontier, and soft-cadence frontier."
+      : report.sourceProvenance.policyLabel === "strict-cadence"
+        ? "The unseen relationship classification is finite-session evidence across successive opportunity layers: balance envelope, strict-cadence frontier, and later entropy/quality ties."
+        : "The unseen relationship classification is finite-session evidence across the balance envelope and the policy's entropy and late-selection frontiers.";
+  lines.push("", `${unseenClassification} The static balance-feasibility audit is reported separately and can show whether a relationship is structurally feasible while still outside a specific balance envelope. Finite simulation alone does not prove permanent exclusion.`, "");
   const longWaits = report.sessions.flatMap((session) => session.fiveGapEpisodes.map((episode) => ({ ...episode, format: session.sessionType, profile: session.profile, seed: session.seed })));
   const waitClassCounts = longWaits.reduce<Record<string, number>>((counts, episode) => {
     counts[episode.currentWaitClassification] = (counts[episode.currentWaitClassification] ?? 0) + 1;

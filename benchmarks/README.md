@@ -1,20 +1,39 @@
 # Matchmaking benchmark artifacts
 
-The canonical full comparison is the 400-completed-match, asynchronous Mixed benchmark using narrow seeds `1, 4729, 104729, 130363, 2097593` and wide-skill seeds `30011, 65537, 999983`. Each format at a seed shares the same 14-player roster and seeded court-completion schedule. The baseline, strict, and final policy reports contain 21 sessions apiece.
+The manual benchmark uses 14 fixed players (P1–P7 male and P8–P14 female with FEMALE_FLEX), two Mixed courts, and an independent seeded court-completion schedule. For each seed, all formats share the same roster, skill ranks, and completion schedule. The primary narrow profile uses Points/Social strength `10 + 0.1 × rank` and Rating `900 + 4 × rank`; the wide sensitivity profile uses `10 + 1 × rank` and `900 + 40 × rank`. `pointDiff` is zero because no match outcomes are modeled. Relationship coverage, rest, and match-type counts use completed matches only.
 
-| Files | Policy and source | Purpose |
+The canonical full benchmark uses five narrow seeds (`1, 4729, 104729, 130363, 2097593`) for Social, Balanced Points, and Balanced Rating/Elo, plus three wide seeds (`30011, 65537, 999983`) for the Balanced formats. Each report contains 21 sessions with exact 20- and 400-completion checkpoints. Full runs are manual and do not extend normal CI.
+
+| Files | Policy/source | Notes |
 |---|---|---|
-| `social-coverage-full-baseline.json` and `.md` | Entropy-first baseline at `de0254f84adef7414b512e3d3fd936033d65bef8`; engine source SHA-256 `2c84aa6ef5fad73662f9f05300fbc810eee3028ca956b200193be16496981a2c` | Historical baseline. `socialVariety.ts` includes only the coverage measurement API added for this run; the engine hash records the exact file content. |
-| `social-coverage-full-strict.json` and `.md` | Strict-cadence policy at `93262f36336b9533ba96b4e4bec5d7e8061eef6e`; engine source SHA-256 `5dd33ca48c7a7731883081792360f0a04e439b3ddd704f135ed3a63ed1bf2f36` | Preserved comparison that minimized the complete rest vector before entropy. |
-| `social-coverage-full-current.json` and `.md` | Final type-entropy-first policy at `bcf07fb22cded580c7e2c0c72d6a5a58bc4eb49d`; engine source SHA-256 `21c2b52a97ec90d86ac60148a3c5443e7074bd44d81f2a9358b13644d92ea643` | Current production policy: in Mixed sessions, match-type entropy → immediate replay count → relationship entropy → soft cadence; other modes start with immediate replay count. |
-| `social-coverage-full-policy-comparison.json` and `.md` | The three source identities above | Same-seed comparison including completed MIXED/OWN_SIDE counts in early and late windows. |
+| `social-coverage-full-baseline.json` and `.md` | Original entropy-first engine at `de0254f84adef7414b512e3d3fd936033d65bef8` | Benchmark coverage instrumentation was copied into the historical checkout. Its engine and harness source hashes are recorded in the JSON. |
+| `social-coverage-full-strict.json` and `.md` | Strict full-rest-vector policy at `93262f36336b9533ba96b4e4bec5d7e8061eef6e` | Preserved comparison showing the strict cadence policy’s effect on relationship and match-type coverage. |
+| `social-coverage-full-type-entropy-first.json` and `.md` | Match-type-entropy-first policy at `bcf07fb22cded580c7e2c0c72d6a5a58bc4eb49d` | Historical policy that prioritizes MIXED/OWN_SIDE entropy ahead of immediate replay count. |
+| `social-coverage-full-current.json` and `.md` | Current best-replay-plus-one policy at `7ab071ad0102ff8a2012a267d8cfe796a1f325a8` | The frozen replay envelope allows one immediate replay above the minimum after stronger fairness/starvation priorities and the Balanced envelope; combined entropy and soft rest optimize inside it. Tracked engine and measurement files were clean at measurement time; generated artifacts make the overall worktree dirty. |
+| `social-coverage-full-policy-comparison.json` and `.md` | Same seeds and profiles across the four policy reports | Reports actual completed MIXED/OWN_SIDE counts, coverage, entropy, rest, fairness, starvation, and replay-envelope measures. |
 
-The final current report's measurement-harness SHA-256 is `27e22fd7eb48ca8e2d96638583de3c75aa7f064e5c3e3aea136667d44a0599b0`. Its overall worktree dirty flag includes generated, untracked reports; the recorded tracked core-engine, shared-variety, and harness diffs are empty. The baseline's only shared-variety source diff is the added coverage API. The strict run changes only benchmark instrumentation files.
+Run the full current policy and compare it against the saved historical reports with:
 
-## Retained one-seed pilots
+```powershell
+npm run benchmark:matchmaking -- --baseline-json benchmarks/social-coverage-full-baseline.json --strict-json benchmarks/social-coverage-full-strict.json --type-first-json benchmarks/social-coverage-full-type-entropy-first.json
+```
 
-`split-cadence-pilot/` preserves the rejected immediate-replay-first split experiment and its baseline/strict comparisons (seed 1, narrow profile, 400 completions). That experiment substantially reduced back-to-back assignments but suppressed OWN_SIDE matches, so it is historical evidence rather than the final policy.
+The default run uses the five narrow and three wide seeds above and writes the current report and four-policy comparison into this directory. To run a one-seed narrow pilot while retaining the same historical comparisons:
 
-`type-entropy-first-pilot/` preserves the first successful type-entropy-first pilot (seed 1, narrow profile, 400 completions). It used the `93262f36336b9533ba96b4e4bec5d7e8061eef6e` source base plus the experimental policy change; its engine SHA-256 is `291da1b22ca83cfa515017424738dc1543b14c7169bd04957e96ac09e0b7d198`. It predates the optimized final source and is superseded by the canonical full current report.
+```powershell
+npm run benchmark:matchmaking -- --pilot --seeds 1 --baseline-json benchmarks/social-coverage-full-baseline.json --strict-json benchmarks/social-coverage-full-strict.json --type-first-json benchmarks/social-coverage-full-type-entropy-first.json --out-dir benchmarks/replay-envelope-pilot
+```
 
-The large benchmark is run manually with `npm run benchmark:matchmaking`; the 120-completion three-format regression probe runs in the ordinary Vitest suite.
+The final 5-seed narrow runs reached 100% relationship coverage for Social, Balanced Points, and Balanced Rating/Elo at 400 matches (5/5 seeds each). Mean coverage after 20 completed matches was 62.1% for all three. The report records each checkpoint, full seed range, entropy, rest, match-type, fairness, starvation, and wide-profile guardrail details.
+
+For presentation-only corrections, the saved-report render test accepts `BENCHMARK_RENDER_REPORT_JSON`, optional `BENCHMARK_RENDER_BASELINE_JSON`, and `BENCHMARK_RENDER_OUTPUT_MARKDOWN`. It formats saved JSON without simulating matches; `--current-json` and `--current-markdown` then rebuild the policy-comparison appendix while preserving the measurement provenance in JSON.
+
+The manual runner verifies the requested profile/format/seed set and setup definition for every historical artifact, then checks the seeded external completion schedule against the current run. Its one-court oracle independently enumerates legality, count/arrival fairness, starvation class, Balanced admissibility, and the best-zero-plus-one replay envelope. It records the number of selected +1 decisions, decisions with higher-entropy candidates outside the allowance, and witness candidates with IDs, partitions, gains, and rest vectors. The oracle also reruns the no-starvation counterfactual using its own strongest class and balance envelope. Uncertified historical counters remain `n/a`.
+
+The benchmark Markdown reports completed-only relationship coverage and actual match-type counts separately from normalized Shannon entropy. Assignment-rest samples are event turns while a player is available; inter-completion event gaps are reported separately because they include time spent playing. Refill and replay-envelope counters at checkpoint N cover assignments after completions 1 through N−1; the final refill may still be active, and the opening two-court decision is excluded. Long-rest linkage to a +1 replay is decision-level only and does not attribute a marginal replay to an individual selected player.
+
+## Preserved one-seed pilots
+
+`split-cadence-pilot/` preserves the rejected immediate-replay-first experiment, which reduced back-to-back assignments but suppressed OWN_SIDE matches. `type-entropy-first-pilot/` preserves its initial one-seed pilot. `replay-envelope-pilot/` records the one-seed 400-completion run for the current policy and its matched historical comparison. These pilot artifacts are behavioral evidence, not a substitute for the multi-seed full benchmark.
+
+The standard Vitest suite runs a bounded 120-completion regression probe for all three formats and asserts relationship coverage, recurring MIXED and OWN_SIDE matches, and certified best-plus-one replay envelopes. The multi-seed 400-completion benchmark remains an explicit manual run.

@@ -22,6 +22,7 @@ const suppliedBaselineJson = valueAfter("--baseline-json");
 const suppliedStrictJson = valueAfter("--strict-json");
 const suppliedTypeFirstJson = valueAfter("--type-first-json");
 const suppliedCurrentJson = valueAfter("--current-json");
+const suppliedCurrentMarkdown = valueAfter("--current-markdown");
 const skipBaseline = has("--skip-baseline");
 const outputDir = path.resolve(root, valueAfter("--out-dir", "benchmarks"));
 const vitest = path.join(root, "node_modules", "vitest", "vitest.mjs");
@@ -158,7 +159,7 @@ if (!strictJson && strictWorktree) {
 }
 
 const current = suppliedCurrentJson
-  ? { jsonPath: path.resolve(suppliedCurrentJson), markdownPath: null }
+  ? { jsonPath: path.resolve(suppliedCurrentJson), markdownPath: suppliedCurrentMarkdown ? path.resolve(suppliedCurrentMarkdown) : null }
   : runIn(root, "current", "current", baselineJson, "replay-envelope-best-plus-one");
 const report = JSON.parse(readFileSync(current.jsonPath, "utf8"));
 const baselineReport = baselineJson && existsSync(baselineJson) ? JSON.parse(readFileSync(baselineJson, "utf8")) : null;
@@ -460,7 +461,7 @@ const comparisonMarkdown = [
   "",
   "## Wide-profile unseen structurally feasible relationships",
   "",
-  "Exact names below come from each report’s unchanged structural opportunity denominator. `Replay allowance` means the relationship appeared in the strongest-class, balance-envelope opportunity set but not inside the frozen best-plus-one replay allowance; `admissible but unchosen` was available inside the observed policy frontier but never selected. The JSON retains directed player/facet opportunity counts and every per-seed record.",
+  "Exact names below come from each report’s unchanged structural opportunity denominator. `Replay allowance` means the relationship appeared in the strongest-class, balance-envelope opportunity set but not inside the frozen best-plus-one replay allowance; `admissible but unchosen` uses the policy frontier recorded for that run. Legacy reports retain their original missing-reason labels; the current replay-envelope oracle is not applied retroactively. The JSON retains directed player/facet opportunity counts and every per-seed record.",
   "",
   "| Policy | Format | Seed | Balance-envelope excluded | Replay allowance excluded | Admissible but unchosen | Combined entropy / relationship entropy / soft cadence exclusions |",
   "|---|---|---:|---|---|---|---|",
@@ -486,10 +487,30 @@ const appendix = [
   JSON.stringify({ sourceRevision: report.sourceRevision, sourceProvenance: report.sourceProvenance, primarySeeds: report.seedCount, wideSeeds: report.wideSeedCount, groups: aggregate }, null, 2),
   "```",
   "",
-  "## Exact unseen relationship list and traces",
-  "",
 ];
-appendix.splice(appendix.length - 2, 0,
+const replayEnvelopeWaitClasses = report.sourceProvenance?.policyLabel === "replay-envelope-best-plus-one";
+const waitClassColumns = replayEnvelopeWaitClasses
+  ? [
+      ["fairness_or_mixed_legality", "Fairness / legality"],
+      ["starvation_priority", "Starvation"],
+      ["balance_guardrail", "Balance envelope"],
+      ["immediate_replay_priority_exclusion", "Replay allowance"],
+      ["combined_entropy_priority_exclusion", "Combined entropy"],
+      ["soft_cadence_priority_exclusion", "Soft cadence"],
+      ["cadence_tie_later_tiebreak", "Later tie"],
+    ]
+  : [
+      ["fairness_or_mixed_legality", "Fairness / legality"],
+      ["starvation_priority", "Starvation"],
+      ["balance_guardrail", "Balance envelope"],
+      ["match_type_entropy_priority_exclusion", "Match-type entropy"],
+      ["immediate_replay_priority_exclusion", "Immediate replay"],
+      ["relationship_entropy_priority_exclusion", "Relationship entropy"],
+      ["soft_cadence_priority_exclusion", "Soft cadence"],
+      ["cadence_priority_exclusion", "Strict cadence"],
+      ["cadence_tie_later_tiebreak", "Later tie"],
+    ];
+appendix.push(
   "## Seed-to-seed coverage variation (population SD)",
   "",
   "| Profile | Format | Completed | Relationship VCS mean ± SD | Median | Min–max | Partner SD | Opponent SD | Courtmate SD |",
@@ -498,19 +519,22 @@ appendix.splice(appendix.length - 2, 0,
   "",
   "## Completed ≥5-rest gaps by cohort",
   "",
-  "| Profile | Format | Count | No stronger fair/rotation candidate | Match-type priority | Zero-rest priority | Relationship priority | Soft-rest priority | Linked prior rest-zero replay |",
-  "|---|---|---:|---:|---:|---:|---:|---:|---:|",
+  `| Profile | Format | Count | ${waitClassColumns.map(([, label]) => label).join(" | ")} | Linked prior rest-zero replay |`,
+  `|---|---|---:|${waitClassColumns.map(() => "---:").join("|")}|---:|`,
 );
 for (const profile of ["narrow", "wide"]) for (const sessionType of sessionTypes) {
   const sessions = report.sessions.filter((session) => session.profile === profile && session.sessionType === sessionType);
   if (!sessions.length) continue;
   const episodes = sessions.flatMap((session) => session.fiveGapEpisodes);
   const countClass = (classification) => episodes.filter((episode) => episode.currentWaitClassification === classification).length;
-  appendix.push(`| ${profile} | ${labels[sessionType]} | ${episodes.length} | ${countClass("fairness_or_mixed_legality")} | ${countClass("match_type_entropy_priority_exclusion")} | ${countClass("immediate_replay_priority_exclusion")} | ${countClass("relationship_entropy_priority_exclusion")} | ${countClass("soft_cadence_priority_exclusion")} | ${episodes.filter((episode) => episode.initiatingReplay !== null).length} |`);
+  appendix.push(`| ${profile} | ${labels[sessionType]} | ${episodes.length} | ${waitClassColumns.map(([classification]) => countClass(classification)).join(" | ")} | ${episodes.filter((episode) => episode.initiatingReplay !== null).length} |`);
 }
+const waitStageDescription = report.sourceProvenance?.policyLabel === "replay-envelope-best-plus-one"
+  ? "The wait stage columns identify the first active selection layer that lacked a candidate including the deferred player: fairness/legal availability, starvation, balance envelope, frozen replay allowance, combined entropy, soft cadence, or a later tie. Candidate gains and chosen sets/rest vectors are recorded per refill; these are observed finite-session opportunities, not proof of permanent impossibility."
+  : "The wait stage columns identify the first active selection layer that lacked a candidate including the deferred player under the recorded policy. Candidate gains and chosen sets/rest vectors are recorded per refill; these are observed finite-session opportunities, not proof of permanent impossibility.";
 appendix.push(
   "",
-  "The wait stage columns identify the first active selection layer that lacked a candidate including the deferred player: type entropy, zero-rest count, relationship entropy, or soft cadence. Candidate gains and chosen sets/rest vectors are recorded per refill; these are observed finite-session opportunities, not proof of permanent impossibility.",
+  waitStageDescription,
   "",
   "## Static balance-guardrail dominance for wide skill profile",
   "",
@@ -532,7 +556,7 @@ for (const sessionType of ["POINTS", "ELO"]) {
   for (const entry of pairs) appendix.push(`- ${entry.pair} ${entry.facet}: minimum gap ${entry.minimum} > ${allowed}.`);
   appendix.push("");
 }
-if (baselineReport) {
+if (matchedBaselineReport) {
   const sumOptimizer = (benchmark) => {
     const sessions = benchmark.sessions.filter((session) => session.profile === "narrow");
     const sum = (key) => sessions.reduce((total, session) => total + session.checkpoints["400"].optimizer[key], 0);
@@ -547,7 +571,7 @@ if (baselineReport) {
       harnessMs: sessions.reduce((total, session) => total + session.performanceMs, 0),
     };
   };
-  const baselineTiming = sumOptimizer(baselineReport);
+  const baselineTiming = sumOptimizer(matchedBaselineReport);
   const currentTiming = sumOptimizer(report);
   const baselineDecisions = baselineTiming.directCalls + baselineTiming.wrapperCalls;
   const currentDecisions = currentTiming.directCalls + currentTiming.wrapperCalls;
@@ -557,10 +581,10 @@ if (baselineReport) {
     "",
     "| Engine | Production decisions | Direct optimizer calls / time | Paired starvation diagnostics | Diagnostic-inclusive time per decision | Search-limit / certification failures |",
     "|---|---:|---:|---:|---:|---:|",
-    `| Baseline ${baselineReport.sourceRevision} | ${baselineDecisions} | ${baselineTiming.directCalls} / ${(baselineTiming.directMs / 1000).toFixed(1)} s | none available | ${(baselineTiming.directMs / Math.max(1, baselineDecisions)).toFixed(2)} ms | ${baselineTiming.searchLimitCalls} / ${baselineTiming.certificationFailures} |`,
+    `| Baseline ${matchedBaselineReport.sourceRevision} | ${baselineDecisions} | ${baselineTiming.directCalls} / ${(baselineTiming.directMs / 1000).toFixed(1)} s | none available | ${(baselineTiming.directMs / Math.max(1, baselineDecisions)).toFixed(2)} ms | ${baselineTiming.searchLimitCalls} / ${baselineTiming.certificationFailures} |`,
     `| Current ${report.sourceRevision} | ${currentDecisions} | ${currentTiming.directCalls} / ${(currentTiming.directMs / 1000).toFixed(1)} s | ${currentTiming.wrapperCalls} wrappers / ${(currentTiming.wrapperMs / 1000).toFixed(1)} s | ${(currentCombinedMs / Math.max(1, currentDecisions)).toFixed(2)} ms | ${currentTiming.searchLimitCalls} / ${currentTiming.certificationFailures} |`,
     "",
-    "Both rows cover the same five narrow seeds × three formats × 400 completed matches. On overdue decisions the current wrapper returns the production choice and runs one extra no-starvation search; its total time is included here, so the diagnostic-inclusive current number is a conservative instrumentation cost, not production-only latency. The baseline has no counterfactual API and its intervention count is unknown.",
+    `Both rows cover the same ${new Set(report.sessions.filter((session) => session.profile === "narrow").map((session) => session.seed)).size} narrow seed(s) × ${new Set(report.sessions.filter((session) => session.profile === "narrow").map((session) => session.sessionType)).size} formats × 400 completed matches. On overdue decisions the current wrapper returns the production choice and runs one extra no-starvation search; its total time is included here, so the diagnostic-inclusive current number is a conservative instrumentation cost, not production-only latency. The baseline has no counterfactual API and its intervention count is unknown.`,
     `Per-session harness totals including matcher, independent oracle, and report instrumentation were ${(baselineTiming.harnessMs / 1000).toFixed(1)} s baseline and ${(currentTiming.harnessMs / 1000).toFixed(1)} s current; this broader scope is not production-only matcher latency.`,
     "",
   );
@@ -583,6 +607,7 @@ for (const item of staticDominanceSummary) {
   const pairList = item.pairs.map((pair) => `${pair.pair} ${pair.facet} (min gap ${pair.minimum})`).join(", ");
   appendix.push(`## Fixed-wide-profile same-quartet balance proof: ${labels[item.sessionType]}`, "", `All ${item.pairs.length} structurally feasible excluded facet-pairs have a minimum legal Mixed single-court gap above the static envelope window (${minimum} minimum > ${item.staticReport.allowedMaxBalanceGap}); ${aboveWindow ? "the exhaustive same-quartet layout audit proves these relationships remain guardrail-inadmissible under this fixed profile" : "the static report alone does not establish a universal exclusion"}. Exact pairs: ${pairList}. The separate static equal-count two-court audit excludes these same pairs in the opening batch; the same-quartet dominance proof covers subsequent one-court refills. Together this is scoped to the fixed wide strength mapping, standard Mixed legality, a full-roster equal-count class, and no added partition-specific schedule restrictions. It does not extend to changing skills, other availability/history classes, or later multi-court refills.`, "");
 }
+appendix.push("## Exact unseen relationship list and traces", "");
 for (const session of report.sessions.filter((item) => item.profile === "narrow" && item.checkpoints["400"].completedMatches === 400)) {
   appendix.push(`### ${labels[session.sessionType]} narrow seed ${session.seed}: unseen at 400`);
   if (!session.missingRelationships.length) appendix.push("All structurally feasible player/facet relationships were observed.");

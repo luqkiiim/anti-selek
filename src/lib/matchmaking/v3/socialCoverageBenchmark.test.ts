@@ -8,12 +8,14 @@ import {
   classifyReplayOriginForBenchmark,
   findLowerZeroTypeGainCompetitor,
   formatBenchmarkHuman,
+  matchBenchmarkBaselineToCurrentSessions,
   runSocialCoverageRegressionProbe,
   runSocialCoverageBenchmark,
   type BenchmarkReport,
 } from "./socialCoverageBenchmark";
 
 const runManualBenchmark = process.env.RUN_SOCIAL_COVERAGE_BENCHMARK === "1";
+const renderSavedReport = process.env.RUN_SOCIAL_COVERAGE_REPORT_RENDER === "1";
 
 function parseSeeds(value: string | undefined, fallback: number[]) {
   if (!value?.trim()) return fallback;
@@ -21,6 +23,37 @@ function parseSeeds(value: string | undefined, fallback: number[]) {
 }
 
 describe("social relationship coverage benchmark", () => {
+  it("matches a presentation baseline to the current profile, format, and seed subset", () => {
+    const session = (profile: "narrow" | "wide", sessionType: SessionType, seed: number) => ({ profile, sessionType, seed });
+    const current = { sessions: [session("narrow", SessionType.SOCIAL_MIX, 1)] } as unknown as BenchmarkReport;
+    const baseline = {
+      seedCount: 2,
+      wideSeedCount: 1,
+      sessions: [
+        session("narrow", SessionType.SOCIAL_MIX, 1),
+        session("narrow", SessionType.SOCIAL_MIX, 4729),
+        session("narrow", SessionType.POINTS, 1),
+        session("wide", SessionType.POINTS, 30011),
+      ],
+    } as unknown as BenchmarkReport;
+
+    const matched = matchBenchmarkBaselineToCurrentSessions(current, baseline);
+    expect(matched.sessions).toEqual([session("narrow", SessionType.SOCIAL_MIX, 1)]);
+    expect(matched.seedCount).toBe(1);
+    expect(matched.wideSeedCount).toBe(0);
+  });
+
+  it.skipIf(!renderSavedReport)("renders a saved benchmark report without rerunning its simulation", () => {
+    const reportPath = process.env.BENCHMARK_RENDER_REPORT_JSON;
+    const outputPath = process.env.BENCHMARK_RENDER_OUTPUT_MARKDOWN;
+    if (!reportPath || !outputPath) throw new Error("Set BENCHMARK_RENDER_REPORT_JSON and BENCHMARK_RENDER_OUTPUT_MARKDOWN.");
+    const report = JSON.parse(readFileSync(resolve(reportPath), "utf8")) as BenchmarkReport;
+    const baselinePath = process.env.BENCHMARK_RENDER_BASELINE_JSON;
+    const baseline = baselinePath ? JSON.parse(readFileSync(resolve(baselinePath), "utf8")) as BenchmarkReport : undefined;
+    mkdirSync(dirname(resolve(outputPath)), { recursive: true });
+    writeFileSync(resolve(outputPath), `${formatBenchmarkHuman(report, baseline).trimEnd()}\n`, "utf8");
+  });
+
   it.skipIf(runManualBenchmark)("keeps partner variety and both match types recurring in late mixed-session events", () => {
     const sessionTypes = [SessionType.SOCIAL_MIX, SessionType.POINTS, SessionType.ELO] as const;
     const sessions = sessionTypes.map((sessionType) => runSocialCoverageRegressionProbe(sessionType, 4729, 120));
